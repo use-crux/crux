@@ -8,6 +8,7 @@ func runDetailDiagnostics(graph Graph) []RunDetailDiagnostic {
 
 func runDetailDiagnosticsAt(graph Graph, now time.Time) []RunDetailDiagnostic {
 	diagnostics := runDiagnosticsAt(graph.Run, now)
+	activityAt := graph.Run.lastActivityAt
 	if graph.Run.TraceID != "" {
 		for _, span := range graph.Spans {
 			if span.TraceID != "" && span.TraceID != graph.Run.TraceID {
@@ -40,6 +41,9 @@ func runDetailDiagnosticsAt(graph Graph, now time.Time) []RunDetailDiagnostic {
 			})
 		}
 	}
+	for _, span := range graph.Spans {
+		diagnostics = append(diagnostics, spanStalenessDiagnosticsAt(span, activityAt, now)...)
+	}
 	return diagnostics
 }
 
@@ -56,7 +60,7 @@ func runDiagnosticsAt(run RunSummary, now time.Time) []RunDetailDiagnostic {
 			SuggestedFix: "Flush or acknowledge terminal records from descendant operations before the Crux operation deadline expires.",
 		}}
 	}
-	if (run.Status == "running" || run.Status == "stale") && run.EndedAt == "" && isStaleTimestampAt(run.StartedAt, now) {
+	if (run.Status == "running" || run.Status == "stale") && run.EndedAt == "" && isStaleTimestampAt(staleTimestampAnchor(run.lastActivityAt, run.StartedAt), now) {
 		return []RunDetailDiagnostic{{
 			Code:         "stale-boundary",
 			Severity:     "warn",
@@ -99,7 +103,11 @@ func spanDiagnosticsAt(span SpanSummary, now time.Time) []RunDetailDiagnostic {
 			SuggestedFix: "Ensure the Convex runtime bridge sends terminal acknowledgements or increases the boundary lease for this action.",
 		}}
 	}
-	if (span.Status == "running" || span.Status == "stale") && span.EndedAt == "" && isStaleTimestampAt(span.StartedAt, now) {
+	return spanStalenessDiagnosticsAt(span, "", now)
+}
+
+func spanStalenessDiagnosticsAt(span SpanSummary, activityAt string, now time.Time) []RunDetailDiagnostic {
+	if (span.Status == "running" || span.Status == "stale") && span.EndedAt == "" && isStaleTimestampAt(staleTimestampAnchor(activityAt, span.StartedAt), now) {
 		return []RunDetailDiagnostic{{
 			Code:         "missing-span-end",
 			Severity:     "warn",

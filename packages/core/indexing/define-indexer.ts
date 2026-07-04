@@ -69,7 +69,6 @@ export function indexer(config: IndexerConfig): Indexer {
     const documents = await collect(documentsInput)
     const span = observe.openSpan({
       name: `${config.id}.chunk`,
-      family: 'indexing',
       primitive: 'indexing.pipeline',
       attributes: {
         indexerId: config.id,
@@ -97,7 +96,7 @@ export function indexer(config: IndexerConfig): Indexer {
         })
         return prepared.chunks
       })
-      span.end({ chunkCount: chunks.length })
+      span.end({ attributes: { chunkCount: chunks.length } })
       return chunks
     } catch (error) {
       span.error(error)
@@ -121,7 +120,6 @@ export function indexer(config: IndexerConfig): Indexer {
     const sourceCount = unique(documents.map((document) => document.sourceId)).length
     const span = observe.openSpan({
       name: `${config.id}.indexDocuments`,
-      family: 'indexing',
       primitive: 'indexing.pipeline',
       attributes: {
         indexerId: config.id,
@@ -168,7 +166,9 @@ export function indexer(config: IndexerConfig): Indexer {
         })
         return result
       })
-      span.end({ sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true })
+      span.end({
+        attributes: { sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true },
+      })
       return result
     } catch (error) {
       span.error(error)
@@ -192,7 +192,6 @@ export function indexer(config: IndexerConfig): Indexer {
     const sourceCount = unique(chunks.map((chunk) => chunk.sourceId)).length
     const span = observe.openSpan({
       name: `${config.id}.indexChunks`,
-      family: 'indexing',
       primitive: 'indexing.pipeline',
       attributes: {
         indexerId: config.id,
@@ -237,7 +236,9 @@ export function indexer(config: IndexerConfig): Indexer {
         })
         return result
       })
-      span.end({ sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true })
+      span.end({
+        attributes: { sourceCount: result.sourceCount, chunkCount: result.chunkCount, dryRun: options?.dryRun === true },
+      })
       return result
     } catch (error) {
       span.error(error)

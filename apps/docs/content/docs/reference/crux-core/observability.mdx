@@ -14,10 +14,13 @@ import {
   observe,
   observabilityDiagnostics,
   subscribeObservability,
+  teeObservabilityTransport,
 } from '@use-crux/core/observability'
 ```
 
 `@use-crux/core/observability` is the canonical graph contract for Crux execution traces. It defines the record shapes emitted by the TypeScript runtime and consumed by the local Go devtools backend.
+
+Wire records, branded IDs, and taxonomies live in the internal `contract.ts` module and are covered by the observability schema version. Presentation/read-model types such as `CruxRunDetail`, `CruxPresentationView`, and live notification payloads are exported from the root observability barrel through `presentation.ts`; those shapes are versioned independently so devtools UI projections can evolve without changing the wire record contract.
 
 The contract is lifecycle based:
 
@@ -111,18 +114,18 @@ is absent the existing detail tabs are unaffected. Run Insight is derived by the
 UI from per-turn reports that share the same `runId`; V1 does not define a
 separate run-level `decisionReport` projection.
 
-| Field        | Purpose                                                                                           |
-| ------------ | ------------------------------------------------------------------------------------------------- |
-| `turn`       | Turn metadata and a short, evidence-bound `readout` sentence.                                      |
-| `saw`        | Items that reached the model (`disposition: "active"`).                                            |
-| `considered` | Items checked but not sent (`checked` / `dropped` / `disabled` / `unknown`) with a reason.         |
-| `freshness`  | Whether evidence was current enough (`fresh` / `refreshed` / `stale-used` / `stale-rejected` / ...). |
-| `cache`      | Reuse/write/miss behavior, with `acceptedByFreshness` / `rejectedByFreshness` as the explicit join. |
-| `decisions`  | Routing, fallback, guardrail, security, constraint, cache, and compaction outcomes plus deep-tab targets. |
-| `source`     | Grouped source-definition joins ("what do I change?") with file:line and resolution fidelity.      |
+| Field        | Purpose                                                                                                           |
+| ------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `turn`       | Turn metadata and a short, evidence-bound `readout` sentence.                                                     |
+| `saw`        | Items that reached the model (`disposition: "active"`).                                                           |
+| `considered` | Items checked but not sent (`checked` / `dropped` / `disabled` / `unknown`) with a reason.                        |
+| `freshness`  | Whether evidence was current enough (`fresh` / `refreshed` / `stale-used` / `stale-rejected` / ...).              |
+| `cache`      | Reuse/write/miss behavior, with `acceptedByFreshness` / `rejectedByFreshness` as the explicit join.               |
+| `decisions`  | Routing, fallback, guardrail, security, constraint, cache, and compaction outcomes plus deep-tab targets.         |
+| `source`     | Grouped source-definition joins ("what do I change?") with file:line and resolution fidelity.                     |
 | `coverage`   | Quality coverage scorecard with stable area `id`, display `label`, status, and optional `suggestion` / `command`. |
-| `gaps`       | Missing or inferred evidence the report could not prove.                                           |
-| `chips`      | Optional stable scan/filter chips for Explain.                                                     |
+| `gaps`       | Missing or inferred evidence the report could not prove.                                                          |
+| `chips`      | Optional stable scan/filter chips for Explain.                                                                    |
 
 Cache and freshness are deliberately separate concepts and types: freshness is
 correctness (was the data current enough?), cache is efficiency (what did reuse
@@ -160,21 +163,22 @@ Generation and streaming orchestration record operation deadlines when a timeout
 
 Generation terminal span records also carry client-side performance metrics in the existing `metrics` field:
 
-| Metric key                         | Meaning                                                    |
-| ---------------------------------- | ---------------------------------------------------------- |
-| `gen.duration_ms`                  | End-to-end generation or stream span duration              |
-| `gen.time_to_first_token_ms`       | Time from stream start to the first observed output chunk  |
-| `gen.output_tokens_per_second`     | Provider token throughput when usage is available, or an observed stream-unit fallback |
-| `gen.time_per_output_chunk_ms`     | Mean interval between observed streamed output chunks      |
+| Metric key                     | Meaning                                                                                |
+| ------------------------------ | -------------------------------------------------------------------------------------- |
+| `gen.duration_ms`              | End-to-end generation or stream span duration                                          |
+| `gen.time_to_first_token_ms`   | Time from stream start to the first observed output chunk                              |
+| `gen.output_tokens_per_second` | Provider token throughput when usage is available, or an observed stream-unit fallback |
+| `gen.time_per_output_chunk_ms` | Mean interval between observed streamed output chunks                                  |
 
 These metrics are additive and do not change the graph schema version.
+Custom metric keys must use the `custom.*` namespace. Span families are derived from canonical primitive names at emit time, so `observe.span()` and `observe.openSpan()` do not accept a separate `family` option.
 
 Prompt and safety helpers emit the same graph contract automatically:
 
 - `prompt.resolve()` opens `prompt.resolve`, records conditional context inclusion/exclusion as `context.predicate`, and records resolved context text as `context.resolve` spans with `context.contribution` artifacts. Contributions that provide tools include `injectedTools`, including dropped text contributions whose tools still participate in the request. Direct injectables, retrievers/grounding, memory, and blackboards emit tool-only `context.contribution` previews when they contribute tools without resolved text. Segmented system content preserves `segments: { text, dynamic, source? }[]`, `staticTokens`, and `dynamicTokens` on context previews, inspect parts, and budget-dropped previews. Generation spans that consume the resolved prompt link back to included context artifacts and prompt-budget artifacts, and their `messages` artifact includes request `toolNames`; the Go read model projects those records into `RunDetailNode.request`. Token-budget decisions emit `prompt.budget` artifacts with dropped contribution previews.
 - Memory blocks and blackboards emit `memory.read` / `memory.write` spans, attach `memory.snapshot` artifacts when a read or write has inspectable state, attach `memory.recall` artifacts for non-empty read result previews, attach `memory.diff` artifacts for before/after write summaries, and connect those artifacts with semantic memory edges. Empty reads still emit the span but omit `memory.recall`, so UIs should not render a recalled-block card for zero-result reads. Raw namespaces are represented by `namespaceHash`; blackboard snapshots and diffs carry `memoryType: "blackboard"`. Budgeted composed-memory renders add `budgetMaxTokens`, `budgetIncludedBlocks`, `budgetTrimmedBlocks`, and `budgetDroppedBlocks` span attributes and mirror the same decision under `memory.snapshot.preview.budget`. Proposal-oriented writes can include `writeMode` and `proposalStatus` so review state remains visible in traces.
 - Adapter-managed tools, including live `@use-crux/ai` tool calls, emit `tool.call` spans, consume `tool.args` artifacts, produce raw and model-facing `tool.result` artifacts, and record thrown `execute()` failures as rich error evidence on the same tool span while preserving the model-facing error output. Model-emitted tool intents attach to the generation as `tool.request` artifacts and are linked to the eventual tool execution by tool call id. Convex Agent streams expose an outer `generation.stream` plus child `generation.call` spans for each AI SDK step, so tool-call turns and later text turns are visible as consecutive streamed generations. Convex Agent fallback tool-call parts follow the same contract, so stop-condition tools remain inspectable even when no handler executes. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans.
-- Retrieval calls emit `retrieval.retrieve` spans with bounded `retrieval.hits` artifacts and `retrieval.returned` edges. Retrieval recipes open a parent `retrieval.recipe` span and record fanout/retrieve/hit steps as child `retrieval.step` spans with inspectable step output artifacts.
+- Retrieval calls emit `retrieval.query` spans with bounded `retrieval.hits` artifacts and `retrieval.returned` edges. Retrieval recipes open a parent `retrieval.recipe` span and record fanout/retrieve/hit steps as child `retrieval.step` spans with inspectable step output artifacts.
 - Indexing and corpus helpers emit `indexing.pipeline`, `ingest.parse`, and `corpus.sync` spans. Document transforms, chunkers, chunk transforms, dry runs, cache outcomes, loader results, and source-ledger summaries are visible through child spans plus `indexing.report`, `ingest.report`, and `corpus.report` artifacts.
 - Embeddings emit `embedding.call` spans with provider name, kind, dimensions, batch shape, usage, cost, governance metrics, and bounded `embedding.report` artifacts. Configured embedding caches emit nested `cache.lookup` spans with hit/miss/write counts and per-entry hit/miss events.
 - Semantic cache middleware emits `cache.lookup` spans for lookup, write, and skip decisions. Hit, miss, write, and skip events carry prompt id, scope hash, version, query hash, score, result kind, and timing metadata; hit/write decisions also attach `cache.report` artifacts.
@@ -188,11 +192,20 @@ Prompt and safety helpers emit the same graph contract automatically:
 ```ts
 import { observe } from '@use-crux/core/observability'
 
-await observe.run({ name: 'support reply', rootPrimitive: 'agent.run' }, async () => {
-  await observe.span({ name: 'retrieve docs', family: 'retrieval', primitive: 'retrieval.retrieve' }, async () => {
-    observe.event({ name: 'query.built', attributes: { terms: ['refund', 'policy'] } })
-  })
-})
+await observe.run(
+  { name: 'support reply', rootPrimitive: 'agent.run' },
+  async () => {
+    await observe.span(
+      { name: 'retrieve docs', primitive: 'retrieval.query' },
+      async () => {
+        observe.event({
+          name: 'query.built',
+          attributes: { terms: ['refund', 'policy'] },
+        })
+      },
+    )
+  },
+)
 ```
 
 The runtime uses async context propagation on Node.js and preserves parent span stacks across normal async work. For async work that crosses a boundary where context is not preserved, pass an explicit captured context:
@@ -202,9 +215,12 @@ const context = observe.captureContext()
 
 queueMicrotask(() => {
   void observe.withContext(context, async () => {
-    await observe.span({ name: 'delegate', family: 'delegate', primitive: 'delegate.invoke' }, async () => {
-      // delegated work
-    })
+    await observe.span(
+      { name: 'delegate', primitive: 'delegate.invoke' },
+      async () => {
+        // delegated work
+      },
+    )
   })
 })
 ```
@@ -232,6 +248,19 @@ const unsubscribe = subscribeObservability((record) => {
 unsubscribe()
 ```
 
+Use the narrowed overload when you only need specific record variants:
+
+```ts
+const unsubscribeSpanEnds = subscribeObservability(
+  ['span:end'] as const,
+  (record) => {
+    console.log(record.spanId, record.status)
+  },
+)
+
+unsubscribeSpanEnds()
+```
+
 Use the diagnostics channel when an external Node integration wants to subscribe without depending on
 Crux plugin wiring:
 
@@ -257,7 +286,7 @@ The default runtime path is non-blocking: transport failures are captured as dia
 await observe.flush({ timeoutMs: 5000 })
 ```
 
-Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. HTTP delivery normalizes unknown preview values into JSON-safe shapes, sends `observability.token` / `CRUX_DEVTOOLS_TOKEN` as bearer auth when configured, and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
+Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. Failed batches retry on a capped backoff without waiting for another emitted record, while runtime reset and transport replacement count stale in-flight failures as dropped instead of requeueing them into a later transport. HTTP delivery normalizes unknown preview values into JSON-safe shapes, sends `observability.token` / `CRUX_DEVTOOLS_TOKEN` as bearer auth when configured, and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
 
 Convex actions can use the helpers from `@use-crux/convex`:
 
@@ -287,6 +316,27 @@ config({
 })
 ```
 
+Use `teeObservabilityTransport()` when a library needs its own capture sink while preserving an existing transport:
+
+```ts
+import {
+  createHttpObservabilityTransport,
+  createInMemoryObservabilityTransport,
+  setObservabilityTransport,
+  teeObservabilityTransport,
+} from '@use-crux/core/observability'
+
+const capture = createInMemoryObservabilityTransport()
+const auditSink = createHttpObservabilityTransport({
+  serverUrl: 'http://localhost:4400',
+})
+const restore = setObservabilityTransport(
+  teeObservabilityTransport(capture, auditSink),
+)
+
+restore()
+```
+
 ### Capture policy
 
 Input/output artifact previews are enabled by default for local inspection. Disable them centrally when traces leave a trusted boundary:
@@ -300,7 +350,7 @@ config({
 })
 ```
 
-When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts (`output`, `stream.timeline`, `tool.result`) are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`.
+When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`. Output-family artifacts include model outputs, stream timelines, tool results, retrieval hits, memory snapshots/recalls/diffs, guardrail and constraint reports, handoff payloads, delegate reports, composition outputs, compaction summaries, judge reasoning, citation quotes, rendered context, and raw error payloads. The runtime's canonical artifact-kind map is exhaustive, so adding a new built-in artifact kind requires an explicit `input`, `output`, or `exempt` privacy decision before it can compile. Custom artifact kinds default to captured payloads only when the active capture policy allows their declared direction.
 
 The `observability` domain is explicit export configuration. `config()` with no `observability`
 block does not install telemetry, cloud upload, or raw-content capture. Use `devtools` only for local
@@ -308,4 +358,4 @@ UI/control/tunnel/bridge behavior.
 
 The HTTP transport posts `{ records }` to `/api/observability/records`. The Go backend owns validation, persistence, read-model building, filtering, search, and subscriptions. Devtools keeps terminal run-detail pages refreshing for a short grace window, which catches late Convex/serverless flushes that arrive after the terminal run update. Convex Agent container streams fold into details in the Go read model, while step-level streamed generation turns, tools, handoffs, and delegated flows render as chronological agent children. Promoted tool executions preserve `source.canonicalParentSpanId` and sort after their request generation by relation, even when Convex action timestamps arrive slightly out of order.
 
-Live token visualization uses the same observability channel without turning every chunk into a whole-run refetch. `span:event` records named `token.delta` are persisted as canonical events and also broadcast as append-only `token.delta` notifications keyed by `runId`, `spanId`, and `eventId`.
+Live token visualization uses the same observability channel without turning every provider delta into a whole-run refetch. The SDK coalesces stream deltas into `span:event` records named `token.chunk`; the local server keeps a capped per-span ring, excludes those events from `RunDetail`, and broadcasts append-only `token.chunk` notifications keyed by `runId`, `spanId`, and `eventId`.

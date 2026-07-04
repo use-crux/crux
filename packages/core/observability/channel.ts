@@ -46,6 +46,14 @@ export function publishObservabilityChannel(record: CruxGraphRecord): void {
   }
 }
 
+/** Returns whether the Crux diagnostics channel currently has subscribers. */
+export function channelHasSubscribers(): boolean {
+  const diagnostics = getDiagnosticsChannelModule()
+  if (!diagnostics) return false
+  if (diagnostics.hasSubscribers) return diagnostics.hasSubscribers(CRUX_OBSERVABILITY_CHANNEL)
+  return getObservabilityChannel(diagnostics).hasSubscribers
+}
+
 function getObservabilityChannel(diagnostics: DiagnosticsChannelModuleLike): DiagnosticsChannelLike {
   if (observabilityChannel) return observabilityChannel
   observabilityChannel = diagnostics.channel(CRUX_OBSERVABILITY_CHANNEL)

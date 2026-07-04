@@ -16,6 +16,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
+import { expectBalancedGraph } from './helpers/expect-balanced-graph'
 
 const researchPrompt = makePrompt({
   id: 'research',
@@ -53,7 +54,6 @@ describe('canonical orchestration observability', () => {
       observe.span(
         {
           name: `${agent.id} generate`,
-          family: 'generation',
           primitive: 'generation.call',
           attributes: { agentId: agent.id },
         },
@@ -125,6 +125,7 @@ describe('canonical orchestration observability', () => {
         }),
       }),
     )
+    expectBalancedGraph(transport.records)
   })
 
   it('records pipeline steps as canonical flow.step children', async () => {

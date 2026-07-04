@@ -52,7 +52,6 @@ export async function observeConstraintCheck(
   const span = observe.openSpan(
     {
       name: c.name,
-      family: 'constraint',
       primitive: 'constraint.check',
       attributes: {
         constraintName: c.name,
@@ -118,10 +117,12 @@ export async function observeConstraintCheck(
         },
       })
       span.end({
-        pass: result.pass,
-        durationMs,
-        feedback: result.pass ? undefined : result.feedback,
-        metadata: result.metadata,
+        attributes: {
+          pass: result.pass,
+          durationMs,
+          feedback: result.pass ? undefined : result.feedback,
+          metadata: result.metadata,
+        },
       })
       return { constraint: c, result, durationMs }
     })
@@ -156,7 +157,6 @@ export async function runConstraints(
   return observe.span(
     {
       name: ctx.promptId ? `constraints:${ctx.promptId}` : 'constraints',
-      family: 'constraint',
       primitive: 'constraint.check',
       attributes: {
         promptId: ctx.promptId,
@@ -283,7 +283,6 @@ async function runConstraintsInternal(
     currentOutput = await observe.span(
       {
         name: 'constraint retry',
-        family: 'constraint',
         primitive: 'constraint.retry',
         attributes: {
           failedCount: failures.length,

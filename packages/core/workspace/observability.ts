@@ -48,7 +48,6 @@ export function emitWorkspaceVersion(event: {
   // let the devtools read model pick markers out of the workspace family.
   const span = observe.openSpan({
     name: "workspace.version",
-    family: "workspace",
     primitive: "workspace.operation",
     attributes,
   });
@@ -73,7 +72,6 @@ export async function instrument<T>(
   const start = Date.now();
   const span = observe.openSpan({
     name: `workspace.${event.operation}`,
-    family: "workspace",
     primitive: "workspace.operation",
     attributes: {
       workspaceId: event.workspaceId,

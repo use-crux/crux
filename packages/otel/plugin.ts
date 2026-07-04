@@ -15,6 +15,9 @@ import { createLightweightSpanManager, type SpanManager } from './span-manager'
 import { createOpenTelemetrySpanManager } from './otel-span-manager'
 import { createOtelRecordSubscriber } from './record-mapper'
 
+let telemetryInstalled = false
+let warnedAboutDoubleInstall = false
+
 // ─────────────────────────────────────────────────────────────────
 // Configuration types
 // ─────────────────────────────────────────────────────────────────
@@ -63,6 +66,24 @@ export interface TelemetryOptions {
   attributes?: Record<string, string>
 
   /**
+   * Emit generation message content as GenAI semconv attributes.
+   *
+   * Content capture is disabled by default. When enabled, generation input and
+   * output artifacts are projected to `gen_ai.input.messages`,
+   * `gen_ai.output.messages`, and `gen_ai.system_instructions`, capped at 32KB
+   * per attribute.
+   */
+  captureMessageContent?: boolean
+
+  /**
+   * Forward compatibility knob for the pinned GenAI semconv table.
+   *
+   * Only the current package table is accepted in this beta; future versions can
+   * widen this union without changing the rest of the telemetry surface.
+   */
+  semconvVersion?: typeof import('./semconv').SEMCONV_VERSION
+
+  /**
    * Export strategy. If omitted, uses the globally registered OTel TracerProvider
    * (standard path for Node.js servers with `@opentelemetry/sdk-node`).
    *
@@ -103,12 +124,21 @@ export function withTelemetry(options?: TelemetryOptions): CruxPlugin {
   return {
     name: 'crux:otel',
     install(runtime) {
+      if (telemetryInstalled) {
+        warnAboutDoubleInstall()
+        return {
+          dispose() {},
+        }
+      }
+
+      telemetryInstalled = true
       const spanManager = createSpanManager(opts)
       const unsubscribe = subscribeObservability(createOtelRecordSubscriber(spanManager, opts))
 
       return {
         dispose() {
           unsubscribe()
+          telemetryInstalled = false
           spanManager.shutdown()
         },
       }
@@ -140,4 +170,10 @@ function createSpanManager(options: TelemetryOptions): SpanManager {
       export: () => {},
       shutdown: async () => {},
     })
+}
+
+function warnAboutDoubleInstall(): void {
+  if (warnedAboutDoubleInstall) return
+  warnedAboutDoubleInstall = true
+  console.warn('[crux] @use-crux/otel telemetry is already installed; ignoring duplicate withTelemetry() install.')
 }

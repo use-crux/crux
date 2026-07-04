@@ -1,7 +1,9 @@
 /**
- * OpenTelemetry GenAI semantic convention attribute constants.
+ * Crux-specific OpenTelemetry attribute constants.
  *
- * @see https://opentelemetry.io/docs/specs/semconv/gen-ai/
+ * GenAI semantic convention names are re-exported from `semconv.ts`, the single
+ * versioned source of truth for development-status `gen_ai.*` keys.
+ *
  * @module
  */
 
@@ -9,35 +11,23 @@
 // GenAI Semantic Conventions
 // ─────────────────────────────────────────────────────────────────
 
-/** The GenAI system (e.g., 'openai', 'anthropic'). */
-export const GEN_AI_SYSTEM = 'gen_ai.system'
-
-/** The model requested by the caller. */
-export const GEN_AI_REQUEST_MODEL = 'gen_ai.request.model'
-
-/** The model actually used (may differ from requested). */
-export const GEN_AI_RESPONSE_MODEL = 'gen_ai.response.model'
-
-/** Number of input tokens consumed. */
-export const GEN_AI_USAGE_INPUT_TOKENS = 'gen_ai.usage.input_tokens'
-
-/** Number of output tokens generated. */
-export const GEN_AI_USAGE_OUTPUT_TOKENS = 'gen_ai.usage.output_tokens'
-
-/** Finish reason(s) for the generation. */
-export const GEN_AI_RESPONSE_FINISH_REASONS = 'gen_ai.response.finish_reasons'
-
-/** End-to-end client-side generation operation duration in milliseconds. */
-export const GEN_AI_CLIENT_DURATION_MS = 'gen_ai.client.duration_ms'
-
-/** Client-observed time to the first streamed output token in milliseconds. */
-export const GEN_AI_CLIENT_TIME_TO_FIRST_TOKEN_MS = 'gen_ai.client.time_to_first_token_ms'
-
-/** Client-observed output token throughput. */
-export const GEN_AI_CLIENT_OUTPUT_TOKENS_PER_SECOND = 'gen_ai.client.output_tokens_per_second'
-
-/** Mean client-observed interval between streamed output chunks in milliseconds. */
-export const GEN_AI_CLIENT_TIME_PER_OUTPUT_CHUNK_MS = 'gen_ai.client.time_per_output_chunk_ms'
+export {
+  CRUX_GEN_OUTPUT_TOKENS_PER_SECOND,
+  CRUX_GEN_TIME_PER_OUTPUT_CHUNK_MS,
+  GEN_AI_CLIENT_OPERATION_DURATION,
+  GEN_AI_INPUT_MESSAGES,
+  GEN_AI_OPERATION_NAME,
+  GEN_AI_OUTPUT_MESSAGES,
+  GEN_AI_PROVIDER_NAME,
+  GEN_AI_REQUEST_MODEL,
+  GEN_AI_RESPONSE_FINISH_REASONS,
+  GEN_AI_RESPONSE_MODEL,
+  GEN_AI_SERVER_TIME_TO_FIRST_TOKEN,
+  GEN_AI_SYSTEM_INSTRUCTIONS,
+  GEN_AI_USAGE_INPUT_TOKENS,
+  GEN_AI_USAGE_OUTPUT_TOKENS,
+  SEMCONV_VERSION,
+} from './semconv'
 
 // ─────────────────────────────────────────────────────────────────
 // Crux-specific attributes
@@ -89,7 +79,8 @@ export const CRUX_EMBEDDING_RETRY_COUNT = 'crux.embedding.retry_count'
 export const CRUX_EMBEDDING_TRUNCATED_COUNT = 'crux.embedding.truncated_count'
 
 /** Time spent waiting for embedding rate-limit capacity. */
-export const CRUX_EMBEDDING_RATE_LIMIT_WAIT_MS = 'crux.embedding.rate_limit_wait_ms'
+export const CRUX_EMBEDDING_RATE_LIMIT_WAIT_MS =
+  'crux.embedding.rate_limit_wait_ms'
 
 /** Retriever ID. */
 export const CRUX_RETRIEVER_ID = 'crux.retriever.id'
@@ -109,32 +100,66 @@ export const CRUX_RETRIEVAL_RESULT_COUNT = 'crux.retrieval.result_count'
 /** Retrieval fusion mode. */
 export const CRUX_RETRIEVAL_FUSION = 'crux.retrieval.fusion'
 
-/** Retrieval pipeline ID. */
+/** Retrieval recipe ID. */
+export const CRUX_RETRIEVAL_RECIPE_ID = 'crux.retrieval.recipe.id'
+
+/** Retrieval recipe step ID. */
+export const CRUX_RETRIEVAL_STEP_ID = 'crux.retrieval.step.id'
+
+/** Retrieval recipe step kind. */
+export const CRUX_RETRIEVAL_STEP_KIND = 'crux.retrieval.step.kind'
+
+/** Retrieval recipe step input query count. */
+export const CRUX_RETRIEVAL_STEP_INPUT_QUERY_COUNT =
+  'crux.retrieval.step.input_query_count'
+
+/** Retrieval recipe step output query count. */
+export const CRUX_RETRIEVAL_STEP_OUTPUT_QUERY_COUNT =
+  'crux.retrieval.step.output_query_count'
+
+/** Retrieval recipe step input hit count. */
+export const CRUX_RETRIEVAL_STEP_INPUT_HIT_COUNT =
+  'crux.retrieval.step.input_hit_count'
+
+/** Retrieval recipe step output hit count. */
+export const CRUX_RETRIEVAL_STEP_OUTPUT_HIT_COUNT =
+  'crux.retrieval.step.output_hit_count'
+
+/** Retrieval recipe step warning count. */
+export const CRUX_RETRIEVAL_STEP_WARNING_COUNT =
+  'crux.retrieval.step.warning_count'
+
+/** Legacy retrieval pipeline ID. */
 export const CRUX_RETRIEVAL_PIPELINE_ID = 'crux.retrieval.pipeline.id'
 
-/** Retrieval pipeline stage name. */
+/** Legacy retrieval pipeline stage name. */
 export const CRUX_RETRIEVAL_STAGE_NAME = 'crux.retrieval.stage.name'
 
-/** Retrieval pipeline stage kind. */
+/** Legacy retrieval pipeline stage kind. */
 export const CRUX_RETRIEVAL_STAGE_KIND = 'crux.retrieval.stage.kind'
 
-/** Retrieval pipeline stage phase. */
+/** Legacy retrieval pipeline stage phase. */
 export const CRUX_RETRIEVAL_STAGE_PHASE = 'crux.retrieval.stage.phase'
 
-/** Retrieval pipeline stage input query count. */
-export const CRUX_RETRIEVAL_STAGE_INPUT_QUERY_COUNT = 'crux.retrieval.stage.input_query_count'
+/** Legacy retrieval pipeline stage input query count. */
+export const CRUX_RETRIEVAL_STAGE_INPUT_QUERY_COUNT =
+  'crux.retrieval.stage.input_query_count'
 
-/** Retrieval pipeline stage output query count. */
-export const CRUX_RETRIEVAL_STAGE_OUTPUT_QUERY_COUNT = 'crux.retrieval.stage.output_query_count'
+/** Legacy retrieval pipeline stage output query count. */
+export const CRUX_RETRIEVAL_STAGE_OUTPUT_QUERY_COUNT =
+  'crux.retrieval.stage.output_query_count'
 
-/** Retrieval pipeline stage input hit count. */
-export const CRUX_RETRIEVAL_STAGE_INPUT_HIT_COUNT = 'crux.retrieval.stage.input_hit_count'
+/** Legacy retrieval pipeline stage input hit count. */
+export const CRUX_RETRIEVAL_STAGE_INPUT_HIT_COUNT =
+  'crux.retrieval.stage.input_hit_count'
 
-/** Retrieval pipeline stage output hit count. */
-export const CRUX_RETRIEVAL_STAGE_OUTPUT_HIT_COUNT = 'crux.retrieval.stage.output_hit_count'
+/** Legacy retrieval pipeline stage output hit count. */
+export const CRUX_RETRIEVAL_STAGE_OUTPUT_HIT_COUNT =
+  'crux.retrieval.stage.output_hit_count'
 
-/** Retrieval pipeline stage warning count. */
-export const CRUX_RETRIEVAL_STAGE_WARNING_COUNT = 'crux.retrieval.stage.warning_count'
+/** Legacy retrieval pipeline stage warning count. */
+export const CRUX_RETRIEVAL_STAGE_WARNING_COUNT =
+  'crux.retrieval.stage.warning_count'
 
 /** Workspace ID. */
 export const CRUX_WORKSPACE_ID = 'crux.workspace.id'
@@ -179,7 +204,8 @@ export const CRUX_INDEX_DELETED_COUNT = 'crux.index.deleted_count'
 export const CRUX_INDEX_STAGE_COUNT = 'crux.index.stage_count'
 
 /** Number of pipeline stage cache hits. */
-export const CRUX_INDEX_STAGE_CACHE_HIT_COUNT = 'crux.index.stage_cache_hit_count'
+export const CRUX_INDEX_STAGE_CACHE_HIT_COUNT =
+  'crux.index.stage_cache_hit_count'
 
 /** Corpus ID. */
 export const CRUX_CORPUS_ID = 'crux.corpus.id'
@@ -281,7 +307,8 @@ export const CRUX_TOOL_OUTPUT_SIZE = 'crux.tool.output.size'
 export const CRUX_TOOL_MODEL_OUTPUT_SIZE = 'crux.tool.model_output.size'
 
 /** Approximate raw minus model-output size. */
-export const CRUX_TOOL_TOKEN_SAVINGS_ESTIMATE = 'crux.tool.token_savings_estimate'
+export const CRUX_TOOL_TOKEN_SAVINGS_ESTIMATE =
+  'crux.tool.token_savings_estimate'
 
 /** Flow ID. */
 export const CRUX_FLOW_ID = 'crux.flow.id'

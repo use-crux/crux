@@ -1,0 +1,95 @@
+{
+  "records": [
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_dddddddddddddddd_1",
+      "type": "run:start",
+      "runId": "run_dddddddddddddddddddddddd",
+      "seq": 1,
+      "traceId": "44444444444444444444444444444444",
+      "name": "quality comparison",
+      "rootPrimitive": "eval.run",
+      "startedAt": "2026-07-03T12:02:00.000Z",
+      "status": "running"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_dddddddddddddddd_2",
+      "type": "artifact",
+      "runId": "run_dddddddddddddddddddddddd",
+      "seq": 2,
+      "traceId": "44444444444444444444444444444444",
+      "artifactId": "artifact_comparison_report",
+      "kind": "comparison.report",
+      "createdAt": "2026-07-03T12:02:00.010Z",
+      "contentType": "application/json",
+      "encoding": "json",
+      "preview": {
+        "kind": "comparison.report",
+        "comparisonKind": "promoted",
+        "baseline": "01KWMKEQD30GG1QWE24HRF6TN2",
+        "deltas": [
+          {
+            "variantName": "default",
+            "scoreName": "quality",
+            "meanDelta": -0.2,
+            "sem": 0,
+            "n": 2
+          }
+        ],
+        "unmatchedCases": {
+          "baselineOnly": [],
+          "candidateOnly": []
+        }
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_dddddddddddddddd_3",
+      "type": "edge",
+      "runId": "run_dddddddddddddddddddddddd",
+      "seq": 3,
+      "traceId": "44444444444444444444444444444444",
+      "edgeId": "edge_dddddddddddddddd",
+      "edgeType": "comparison.candidate",
+      "from": {
+        "kind": "artifact",
+        "id": "artifact_comparison_report"
+      },
+      "to": {
+        "kind": "run",
+        "id": "run_dddddddddddddddddddddddd"
+      },
+      "createdAt": "2026-07-03T12:02:00.020Z"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_dddddddddddddddd_4",
+      "type": "edge",
+      "runId": "run_dddddddddddddddddddddddd",
+      "seq": 4,
+      "traceId": "44444444444444444444444444444444",
+      "edgeId": "edge_eeeeeeeeeeeeeeee",
+      "edgeType": "comparison.baseline",
+      "from": {
+        "kind": "artifact",
+        "id": "artifact_comparison_report"
+      },
+      "to": {
+        "kind": "run",
+        "id": "run_eeeeeeeeeeeeeeeeeeeeeeee"
+      },
+      "createdAt": "2026-07-03T12:02:00.030Z"
+    },
+    {
+      "schemaVersion": 1,
+      "recordId": "rec_dddddddddddddddd_5",
+      "type": "run:end",
+      "runId": "run_dddddddddddddddddddddddd",
+      "seq": 5,
+      "traceId": "44444444444444444444444444444444",
+      "endedAt": "2026-07-03T12:02:00.040Z",
+      "status": "ok"
+    }
+  ]
+}

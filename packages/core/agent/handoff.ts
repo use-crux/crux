@@ -153,7 +153,6 @@ export function handoff<TInput extends z.ZodType, TOutput extends z.ZodType>(
     return observe.span(
       {
         name: id,
-        family: 'handoff',
         primitive: 'handoff.prepare',
         attributes: {
           handoffId: id,
@@ -194,7 +193,6 @@ export function handoff<TInput extends z.ZodType, TOutput extends z.ZodType>(
     return observe.span(
       {
         name: id,
-        family: 'handoff',
         primitive: 'handoff.prepare',
         attributes: {
           handoffId: id,

@@ -167,7 +167,6 @@ export function openToolCallSpan(
 ): ReturnType<typeof observe.openSpan> {
   return observe.openSpan({
     name: toolName,
-    family: 'tool',
     primitive: 'tool.call',
     attributes: {
       toolName,
@@ -421,11 +420,13 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
               })
             })
             span.end({
-              isError: false,
-              outputSize,
-              modelOutputSize,
-              modelOutputType: modelOutput.type,
-              tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+              attributes: {
+                isError: false,
+                outputSize,
+                modelOutputSize,
+                modelOutputType: modelOutput.type,
+                tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+              },
             })
           }
           return result
@@ -489,11 +490,13 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
                   })
                 })
                 pendingTool?.span.end({
-                  isError: false,
-                  outputSize,
-                  modelOutputSize,
-                  modelOutputType: modelOutput.type,
-                  tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+                  attributes: {
+                    isError: false,
+                    outputSize,
+                    modelOutputSize,
+                    modelOutputType: modelOutput.type,
+                    tokenSavingsEstimate: Math.max(0, outputSize - modelOutputSize),
+                  },
                 })
                 return modelOutput
               } catch (err) {

@@ -25,8 +25,10 @@ import type {
   ObservabilityRunDetail,
   ObservabilityRunDetailNode,
   ObservabilityRunSummary,
+  ObservabilitySpanEventSummary,
 } from '@/types'
 import type { SpanNode } from '@/features/observability/lib/span-tree'
+import { orderRunDetailChildren } from '@/features/observability/lib/run-detail-order'
 import { observabilityService } from '../services/observability'
 import { observabilityEventIds } from '@/app/runtime/observabilityEvents'
 
@@ -79,6 +81,12 @@ function compositionType(primitive: string): CompositionType | undefined {
   }
 }
 
+function optionalSeq(value: unknown): number | undefined {
+  if (!value || typeof value !== 'object') return undefined
+  const seq = (value as { seq?: unknown }).seq
+  return typeof seq === 'number' ? seq : undefined
+}
+
 function nodeKind(node: ObservabilityRunDetailNode): SpanNode['kind'] {
   switch (node.display?.kind) {
     case 'run':
@@ -98,6 +106,7 @@ function nodeKind(node: ObservabilityRunDetailNode): SpanNode['kind'] {
 
 export function nodeFromRunDetail(node: ObservabilityRunDetailNode, depth: number = 0): SpanNode {
   const comp = compositionType(node.primitive)
+  const seq = optionalSeq(node)
   // The model name belongs only to generation spans (shown as the model badge on
   // the generation row + in the generation card). Other span kinds — flow steps,
   // agents, compositions — must NOT carry a model.
@@ -109,6 +118,7 @@ export function nodeFromRunDetail(node: ObservabilityRunDetailNode, depth: numbe
   const label = !isGeneration && node.model && rawLabel === node.model ? node.name || node.primitive || rawLabel : rawLabel
   return {
     id: node.id,
+    seq,
     kind: nodeKind(node),
     primitive: node.primitive,
     compositionType: comp,
@@ -117,7 +127,7 @@ export function nodeFromRunDetail(node: ObservabilityRunDetailNode, depth: numbe
     durationMs: node.timing?.durationMs ?? node.durationMs,
     startedAt: timeMs(node.timing?.startedAt ?? node.startedAt),
     model: isGeneration ? node.model || undefined : undefined,
-    children: node.children.map((child: ObservabilityRunDetailNode) => nodeFromRunDetail(child, depth + 1)),
+    children: orderRunDetailChildren(node.children).map((child) => nodeFromRunDetail(child, depth + 1)),
     depth,
     composition: comp
       ? {
@@ -214,6 +224,32 @@ export function useObservabilityResourceActivity(family: string): {
 
   return {
     activity: q.data ?? [],
+    loading: q.isPending || q.isFetching,
+    error: q.error ?? null,
+  }
+}
+
+export function useObservabilitySpanEvents(
+  runId: string | undefined,
+  spanId: string | undefined,
+  options: { name?: string; limit?: number } = {},
+): {
+  events: ObservabilitySpanEventSummary[]
+  loading: boolean
+  error: Error | null
+} {
+  const key = qk.observability.spanEvents(runId, spanId, options)
+  useInvalidateOnObservabilityEvent(runId, key)
+
+  const q = useQuery<ObservabilitySpanEventSummary[], Error>({
+    queryKey: key,
+    queryFn: ({ signal }) =>
+      observabilityService.getSpanEvents(runId ?? '', spanId ?? '', { name: options.name, limit: options.limit }, signal),
+    enabled: Boolean(runId && spanId),
+  })
+
+  return {
+    events: q.data ?? [],
     loading: q.isPending || q.isFetching,
     error: q.error ?? null,
   }

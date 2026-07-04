@@ -25,7 +25,13 @@ import type {
   CruxRoutingReportPreview,
   CruxSpanStatus,
 } from '../../observability/contract'
-import { currentObservabilityTransport, observe, setObservabilityTransport } from '../../observability'
+import {
+  currentObservabilityTransport,
+  observe,
+  setObservabilityTransport,
+  teeObservabilityTransport,
+  type CruxObservabilityTransport,
+} from '../../observability'
 import type { TokenUsage } from '../../generation/types'
 import type { Capability } from '../target'
 import { extractTurnDecisionReportSignals, type TurnDecisionReportSignal } from './decision-report-signals'
@@ -205,16 +211,18 @@ export interface SignalCapture {
 export function installSignalCapture(): SignalCapture {
   const previous = currentObservabilityTransport()
   const byRun = new Map<string, CruxGraphRecord[]>()
-  const restore = setObservabilityTransport({
+  const captureTransport: CruxObservabilityTransport = {
     send(records) {
       for (const record of records) {
         const bucket = byRun.get(record.runId)
         if (bucket) bucket.push(record)
         else byRun.set(record.runId, [record])
       }
-      return previous?.send(records)
     },
-  })
+  }
+  const restore = setObservabilityTransport(
+    previous ? teeObservabilityTransport(captureTransport, previous) : captureTransport,
+  )
   return {
     take(runId) {
       return byRun.get(runId) ?? []

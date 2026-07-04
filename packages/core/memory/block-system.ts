@@ -337,7 +337,6 @@ function emitMemoryObservation(
   const metadata = memoryMetadata(ctx, block, attributes)
   const span = observe.openSpan({
     name: `${block.id}.${operation}`,
-    family: 'memory',
     primitive,
     attributes: {
       memoryId,
@@ -456,7 +455,7 @@ function emitMemoryObservation(
         },
       })
     })
-    span.end(omitSnapshot(attributes))
+    span.end({ attributes: omitSnapshot(attributes) })
   } catch (error) {
     span.error(error)
   }
@@ -621,7 +620,6 @@ function emitMemoryRenderObservation(
   }
   const span = observe.openSpan({
     name: `${memoryId}.render`,
-    family: 'memory',
     primitive: 'memory.read',
     attributes,
   })
@@ -662,7 +660,7 @@ function emitMemoryRenderObservation(
       }
       observe.event({ name: 'memory.read', attributes })
     })
-    span.end(attributes)
+    span.end({ attributes })
   } catch (error) {
     span.error(error)
   }

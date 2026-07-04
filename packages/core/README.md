@@ -28,27 +28,27 @@ pnpm add @use-crux/google @google/genai
 ## Start With One Prompt
 
 ```ts
-import { prompt } from "@use-crux/core";
-import { generate } from "@use-crux/ai";
-import { openai } from "@ai-sdk/openai";
-import { z } from "zod";
+import { prompt } from '@use-crux/core'
+import { generate } from '@use-crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
 
 const classify = prompt({
-  id: "classify",
+  id: 'classify',
   input: z.object({ text: z.string() }),
   output: z.object({
-    sentiment: z.enum(["positive", "negative", "neutral"]),
+    sentiment: z.enum(['positive', 'negative', 'neutral']),
   }),
-  system: "Classify the sentiment of the given text.",
+  system: 'Classify the sentiment of the given text.',
   prompt: ({ input }) => input.text,
-});
+})
 
 const result = await generate(classify, {
-  model: openai("gpt-4o"),
-  input: { text: "This is incredible." },
-});
+  model: openai('gpt-4o'),
+  input: { text: 'This is incredible.' },
+})
 
-result.object.sentiment; // 'positive' | 'negative' | 'neutral'
+result.object.sentiment // 'positive' | 'negative' | 'neutral'
 ```
 
 That is a complete Crux program: typed input, typed output, and your SDK still making the model call.
@@ -58,69 +58,69 @@ That is a complete Crux program: typed input, typed output, and your SDK still m
 The `use` array is the bus. Memory, retrieval, guardrails, skills, blackboards, and custom blocks all plug into the same prompt without forcing a framework or runtime around your app.
 
 ```ts
-import { prompt } from "@use-crux/core";
-import { memory, facts, recentMessages } from "@use-crux/core/memory";
-import { retriever } from "@use-crux/core/retrieval";
-import { constraint, guardrail } from "@use-crux/core/safety";
-import { generate } from "@use-crux/ai";
-import { openai } from "@ai-sdk/openai";
-import { z } from "zod";
+import { prompt } from '@use-crux/core'
+import { memory, facts, recentMessages } from '@use-crux/core/memory'
+import { retriever } from '@use-crux/core/retrieval'
+import { constraint, guardrail } from '@use-crux/core/safety'
+import { generate } from '@use-crux/ai'
+import { openai } from '@ai-sdk/openai'
+import { z } from 'zod'
 
 const chat = memory({
-  id: "assistant",
+  id: 'assistant',
   store,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [
-    recentMessages({ id: "recent", maxMessages: 12 }),
-    facts({ id: "about-user", embed }),
+    recentMessages({ id: 'recent', maxMessages: 12 }),
+    facts({ id: 'about-user', embed }),
   ],
-});
+})
 
 const docs = retriever({
-  id: "docs",
-  namespace: "product-docs",
+  id: 'docs',
+  namespace: 'product-docs',
   data,
   vectors,
   dense,
   context: { query: ({ question }) => question },
-});
+})
 
 const injection = guardrail({
-  name: "injection",
-  phase: "input",
+  name: 'injection',
+  phase: 'input',
   validate: detectPromptInjection,
-});
+})
 
 const grounded = constraint({
-  name: "grounded",
-  severity: "assert",
+  name: 'grounded',
+  severity: 'assert',
   check: async (output) =>
     output.parsed.citations.length > 0
       ? { pass: true }
-      : { pass: false, feedback: "Cite at least one source." },
-});
+      : { pass: false, feedback: 'Cite at least one source.' },
+})
 
 const reply = prompt({
-  id: "reply",
+  id: 'reply',
   use: [chat, docs],
   input: z.object({ userId: z.string(), question: z.string() }),
   output: z.object({
     answer: z.string(),
     citations: z.array(z.object({ title: z.string(), url: z.string() })),
   }),
-  system: "Answer from memory and product docs. Do not invent facts.",
+  system: 'Answer from memory and product docs. Do not invent facts.',
   prompt: ({ input }) => input.question,
-});
+})
 
 const result = await generate(reply, {
-  model: openai("gpt-4o"),
+  model: openai('gpt-4o'),
   input: {
-    userId: "user_123",
-    question: "What did we decide about the launch plan?",
+    userId: 'user_123',
+    question: 'What did we decide about the launch plan?',
   },
   guardrails: [injection],
   constraints: [grounded],
-});
+})
 ```
 
 Now the call has memory, retrieval, input screening, structured output, retryable quality checks, adapter execution, and traceable events.
@@ -133,12 +133,12 @@ for metadata and small text/JSON, plus an optional `BlobStore` for binary and
 oversized payloads.
 
 ```ts
-import { prompt } from "@use-crux/core";
-import { inMemoryStorage } from "@use-crux/core/storage";
-import { workspace } from "@use-crux/core/workspace";
+import { prompt } from '@use-crux/core'
+import { inMemoryStorage } from '@use-crux/core/storage'
+import { workspace } from '@use-crux/core/workspace'
 
 const ws = workspace({
-  id: "research",
+  id: 'research',
   namespace: ({ input }) => `thread:${input.threadId}`,
   storage: inMemoryStorage(),
   retention: { ttlMs: 1000 * 60 * 60 * 24 },
@@ -146,38 +146,38 @@ const ws = workspace({
     maxFileBytes: 1_000_000,
     maxNamespaceBytes: 25_000_000,
   },
-});
+})
 
 const analyst = prompt({
-  id: "analyst",
+  id: 'analyst',
   use: [ws],
-  system: "Use /workspace for notes and write final files to /outputs.",
-});
+  system: 'Use /workspace for notes and write final files to /outputs.',
+})
 
-await ws.write("/workspace/notes.md", "# Notes", { namespace: "thread:123" });
-await ws.append("/workspace/notes.md", "\nMore notes.", {
-  namespace: "thread:123",
-});
-await ws.rename("/workspace/notes.md", "/outputs/report.md", {
-  namespace: "thread:123",
-});
-await ws.move("/outputs/report.md", "/outputs/final-report.md", {
-  namespace: "thread:123",
-});
-await ws.finalize("/outputs/final-report.md", {
-  namespace: "thread:123",
-  kind: "report",
-});
+await ws.write('/workspace/notes.md', '# Notes', { namespace: 'thread:123' })
+await ws.append('/workspace/notes.md', '\nMore notes.', {
+  namespace: 'thread:123',
+})
+await ws.rename('/workspace/notes.md', '/outputs/report.md', {
+  namespace: 'thread:123',
+})
+await ws.move('/outputs/report.md', '/outputs/final-report.md', {
+  namespace: 'thread:123',
+})
+await ws.finalize('/outputs/final-report.md', {
+  namespace: 'thread:123',
+  kind: 'report',
+})
 ```
 
 Workspaces keep an append-only version history for every file. History is always
 recorded, so a destructive edit is recoverable even when no one planned ahead:
 
 ```ts
-await ws.history("/outputs/report.md"); // newest-first WorkspaceVersion[]
-await ws.read("/outputs/report.md", { version: 1 }); // read an older revision
-await ws.diff("/outputs/report.md", { from: 1, to: 2 }); // unified string + structured hunks
-await ws.undo("/outputs/report.md"); // restore the previous version as a new one
+await ws.history('/outputs/report.md') // newest-first WorkspaceVersion[]
+await ws.read('/outputs/report.md', { version: 1 }) // read an older revision
+await ws.diff('/outputs/report.md', { from: 1, to: 2 }) // unified string + structured hunks
+await ws.undo('/outputs/report.md') // restore the previous version as a new one
 ```
 
 Retention is unlimited by default; set `versioning: { maxVersions }` to bound how
@@ -198,12 +198,12 @@ mounts. Crash-proof multi-key durability still depends on the backing store.
 ```ts
 const artifact = await ws.transaction(
   async (tx) => {
-    await tx.write("/outputs/report.md", "# Report", { status: "draft" });
-    await tx.write("/outputs/data.csv", "name,value\nalpha,1\n");
-    return tx.finalize("/outputs/report.md", { kind: "report" });
+    await tx.write('/outputs/report.md', '# Report', { status: 'draft' })
+    await tx.write('/outputs/data.csv', 'name,value\nalpha,1\n')
+    return tx.finalize('/outputs/report.md', { kind: 'report' })
   },
-  { namespace: "thread:123" },
-);
+  { namespace: 'thread:123' },
+)
 ```
 
 Injected workspaces add a bounded manifest plus file tools for list, read, write,
@@ -224,60 +224,60 @@ using `access: "readwrite"` and implementing `write` and/or `delete`. Explicit
 local mounts or into provider mounts with write hooks.
 
 ```ts
-import { retrieverWorkspaceMountSource } from "@use-crux/core/workspace";
+import { retrieverWorkspaceMountSource } from '@use-crux/core/workspace'
 
 const wsWithSources = workspace({
-  id: "research",
-  namespace: "thread:123",
+  id: 'research',
+  namespace: 'thread:123',
   mounts: [
-    { path: "/workspace", access: "readwrite" },
+    { path: '/workspace', access: 'readwrite' },
     {
-      path: "/sources",
-      access: "read",
+      path: '/sources',
+      access: 'read',
       source: {
-        kind: "custom",
+        kind: 'custom',
         list: async () => ({
           entries: [
             {
-              kind: "file",
-              path: "/sources/brief.md",
-              mount: "/sources",
-              mimeType: "text/markdown",
+              kind: 'file',
+              path: '/sources/brief.md',
+              mount: '/sources',
+              mimeType: 'text/markdown',
               size: 128,
-              storage: "virtual",
+              storage: 'virtual',
               createdAt: Date.now(),
               updatedAt: Date.now(),
             },
           ],
         }),
         read: async (path) => ({
-          kind: "text",
+          kind: 'text',
           path,
-          mimeType: "text/markdown",
-          content: "# Brief",
+          mimeType: 'text/markdown',
+          content: '# Brief',
           size: 7,
         }),
       },
     },
     {
-      path: "/knowledge",
-      access: "read",
+      path: '/knowledge',
+      access: 'read',
       // myRetriever is any Retriever from @use-crux/core/retrieval.
       source: {
-        kind: "retriever",
+        kind: 'retriever',
         retriever: myRetriever,
-        query: "current project sources",
+        query: 'current project sources',
       },
     },
     {
-      path: "/legacy-knowledge",
-      access: "read",
+      path: '/legacy-knowledge',
+      access: 'read',
       source: retrieverWorkspaceMountSource(myRetriever, {
-        query: "legacy source mapping",
+        query: 'legacy source mapping',
       }),
     },
   ],
-});
+})
 ```
 
 Workspace operations are visible in devtools, OTel, and Project Index without
@@ -313,33 +313,62 @@ Every execution follows the same pipeline:
 define -> resolve -> adapt -> observe
 ```
 
-| Stage   | What happens                                                                                                                                      |
-| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Define  | Author pure TypeScript definitions: prompts, contexts, memory blocks, tools, agents, flows, tests, and settings.                                  |
-| Resolve | Crux validates input, filters conditional blocks, merges tools/settings, applies token budgets, and produces a provider-agnostic resolved prompt. |
-| Adapt   | An adapter maps that resolved prompt to Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex Agent, or another runner.                          |
-| Observe | Graph records emit once, then feed subscribers, the diagnostics channel, devtools transport, and telemetry sinks.                                 |
+| Stage   | What happens                                                                                                                                                     |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Define  | Author pure TypeScript definitions: prompts, contexts, memory blocks, tools, agents, flows, tests, and settings.                                                 |
+| Resolve | Crux validates input, filters conditional blocks, merges tools/settings, applies token budgets, and produces a provider-agnostic resolved prompt.                |
+| Adapt   | An adapter maps that resolved prompt to Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex Agent, or another runner.                                         |
+| Observe | Graph records emit once, are sanitized and validated fail-open, then feed subscribers, the diagnostics channel, bounded devtools transport, and telemetry sinks. |
 
 This separation lets you inspect what the model will see, run the same prompt through multiple providers, and keep quality checks tied to the definitions they protect.
 
 ## Observability Privacy
 
-Generation, streaming, and tool spans emit canonical graph records with latency and throughput metrics such as `gen.duration_ms`, `gen.time_to_first_token_ms`, `gen.output_tokens_per_second`, and `gen.time_per_output_chunk_ms`.
+Generation, streaming, and tool spans emit canonical graph records with latency and throughput metrics such as `gen.duration_ms`, `gen.time_to_first_token_ms`, `gen.output_tokens_per_second`, and `gen.time_per_output_chunk_ms`. Streaming text is coalesced into bounded `token.chunk` span events rather than one record per provider delta.
 
-By default, request and response artifacts include bounded previews for local inspection. Disable payload previews centrally when traces leave a trusted environment:
+Manual spans use an explicit terminal API: call `span.end({ attributes, metrics, status })` for terminal metadata, or `span.setAttributes(attributes)` for metadata discovered before the span closes. Raw attribute bags are not accepted by `span.end()`, so `{ error: value }` always means an error end instead of an ambiguous attribute object.
+
+Streaming spans close through a single finalizer. Raw stream drain and provider completion metadata are merged before the terminal `span:end` when both are available; if completion metadata is never awaited, the span closes after a bounded grace window with stream-derived metrics. Early stream cancellation ends the span as `cancelled`.
+
+Metric objects may include optional expressions that evaluate to `undefined`. The observability runtime strips `undefined`, `NaN`, and infinite metric values before records reach subscribers, diagnostics-channel consumers, devtools transports, or OTel, so malformed metrics do not interrupt application code.
+Custom metric keys must use the `custom.*` namespace; built-in generation and token keys are typed.
+
+`observe.span()` derives the span family from its canonical `primitive`, so callers only pass `name`, `primitive`, optional `attributes`, and lifecycle settings. `subscribeObservability()` can subscribe to the whole graph stream or to a narrowed list of record types, with the callback type narrowed to those discriminants.
+
+Observability IDs are W3C-compatible at the trace/span boundary: `traceId` is 32 lowercase hex characters and `spanId` is 16 lowercase hex characters. Every graph record also carries a per-run monotonic `seq` used by transports and the local read model for deterministic ordering.
+
+The observability wire contract is governed by `packages/core/observability/VERSIONING.md`. TypeScript producer fixtures stay closed over known graph record types, while the Go local runtime preserves unknown record types and extra JSON fields as raw records so newer SDKs can degrade gracefully against older read models.
+
+Use `propagateAttributes({ sessionId, userId, metadata }, fn)` to stamp logical correlators onto every record emitted inside `fn`. `sessionId` and `userId` become top-level graph fields, while `metadata` is copied into attributes as capped `meta.*` strings. Devtools `sessionId` config uses the same path as a default correlator for traces emitted while the devtools transport is active.
+
+The local Go runtime keeps observability history bounded. It marks abandoned running runs through a cheap activity-based lifecycle reconciler, treats fresh `last_activity_at` updates such as streaming `token.chunk` records as live activity, and persists reconciled lifecycle state so the same crashed run is not rebuilt every tick. Startup and periodic retention delete old runs after 14 days or beyond 2000 runs by default, with `CRUX_OBSERVABILITY_RETENTION_DAYS`, `CRUX_OBSERVABILITY_RETENTION_RUNS`, and `CRUX_OBSERVABILITY_PREVIEW_MAX_BYTES` overrides.
+
+The local devtools UI reads backend-owned observability rollups instead of recomputing counts in the browser. The runs list can group by root `sessionId`, shows token/cost/graph-count rollups from the list endpoint, and fetches focused-span `token.chunk` text through the lazy span-events endpoint so unfocused spans stay cheap.
+
+Quality evaluations emit an umbrella `eval.run` run around their case matrix. Case cells keep production-shaped `eval.case` runs, join the evaluation trace, and link back with `eval.case_of` edges. Promoted-baseline comparisons emit `comparison.report` artifacts with `comparison.candidate` and, when the baseline has persisted run identity, `comparison.baseline` edges. Cassette replay can link replayed case runs to the recorded run with `replay.of`; consumers treat edges to missing nodes as external references.
+
+Observability delivery is fail-open and bounded. When no subscribers, diagnostics-channel listeners, or transport are active, emitters skip graph-record construction. Active delivery batches records on `observability.delivery.scheduledDelayMs`, chunks requests with the transport's `maxRecordsPerRequest`, retries failed chunks on capped backoff without waiting for another emitted record, and caps queued records with oldest-record drop accounting in `droppedRecords`. The local HTTP ingest endpoint returns `202` with `{ accepted, rejected }` for valid JSON batches, `400` only for malformed JSON, and retryable `503` responses with `Retry-After: 1` for transient storage failures; the TypeScript HTTP transport retries 5xx responses as whole batches instead of bisecting them record-by-record. Synchronous or asynchronous transport failures are recorded in `observabilityDiagnostics().deliveryErrors` without escaping into application code.
+
+When `AsyncLocalStorage` is unavailable, such as in browser-like or edge runtimes, `observe.run()` and `observe.openRun()` still work. Explicit `withContext()` scopes preserve parent-child relationships for synchronous work, while contextless `event`, `artifact`, and `edge` attempts become counted no-ops via `observabilityDiagnostics().contextlessRecords` instead of throwing.
+
+The OTel plugin follows the same fail-open contract: duplicate `withTelemetry()` installs are ignored after a warn-once diagnostic, open span registries are bounded, and a missing OTel `TracerProvider` falls back to lightweight span tracking instead of producing invalid all-zero span contexts. GenAI export uses the pinned `genai-dev-2026-06` semconv table (`gen_ai.provider.name`, seconds-based client timings, array finish reasons), and message content remains opt-in through `captureMessageContent`.
+
+By default, request and response artifacts include bounded previews for local inspection. Configure capture centrally when traces leave a trusted environment:
 
 ```ts
-import { config } from "@use-crux/core";
+import { config } from '@use-crux/core'
 
 config({
   observability: {
-    recordInputs: false,
-    recordOutputs: false,
+    recordInputs: 'reference',
+    recordOutputs: 'off',
+    redactRecord: (record) =>
+      record.type === 'artifact' && record.kind === 'error.raw' ? null : record,
   },
-});
+})
 ```
 
-Disabled input/output artifacts are still emitted as references with `sizeBytes` and `hash`, so devtools, subscribers, diagnostics-channel consumers, and OTel all see the same privacy policy.
+`recordInputs` and `recordOutputs` accept `true | false | "inline" | "reference" | "off"`. `"reference"` keeps only size/hash metadata, while `"off"` removes preview, size, hash, and URI payload metadata. The emit path also strips payload-shaped span/event attributes such as `text`, `query`, `messages`, `output`, `body`, and `filter`. `redactRecord()` runs after capture policy; returning `null` or throwing drops the record and increments `observabilityDiagnostics().redactedRecords`.
 
 ## Runtime Engine
 
@@ -348,12 +377,12 @@ event waiters, wake delivery, and maintenance. For local development and tests,
 use the in-process `node()` composer:
 
 ```ts
-import { config } from "@use-crux/core";
-import { node } from "@use-crux/core/runtime";
+import { config } from '@use-crux/core'
+import { node } from '@use-crux/core/runtime'
 
 export default config({
   runtime: node(),
-});
+})
 ```
 
 With a runtime configured, flow handles can persist `flow.suspend()` and
@@ -367,13 +396,13 @@ Executable durable task targets are defined from the runtime subpath, not the
 root Plans & Tasks ledger `task()` helper:
 
 ```ts
-import { task } from "@use-crux/core/runtime";
+import { task } from '@use-crux/core/runtime'
 
-export const embedDocument = task("embed-document", {
+export const embedDocument = task('embed-document', {
   run: async ({ documentId }: { documentId: string }) => {
-    await embed(documentId);
+    await embed(documentId)
   },
-});
+})
 ```
 
 The `Crux` object returned by `config()` also exposes name-bound
@@ -389,21 +418,21 @@ Serverless entry files use the stable fetch-compatible handler API. Generated
 files target the same shape that users can write by hand:
 
 ```ts
-import { createRuntimeHandler, serverless } from "@use-crux/core/runtime";
-import { postgres } from "@use-crux/postgres/runtime";
-import { qstash } from "@use-crux/upstash/runtime";
-import { reviewFlow } from "@/flows/review";
-import { embedDocument } from "@/tasks/embed-document";
+import { createRuntimeHandler, serverless } from '@use-crux/core/runtime'
+import { postgres } from '@use-crux/postgres/runtime'
+import { qstash } from '@use-crux/upstash/runtime'
+import { reviewFlow } from '@/flows/review'
+import { embedDocument } from '@/tasks/embed-document'
 
 const runtime = serverless({
   store: postgres(),
   wake: qstash(),
-});
+})
 
 export const { GET, POST } = createRuntimeHandler({
   runtime,
   targets: [reviewFlow, embedDocument],
-});
+})
 ```
 
 Advanced and generated entry files can resolve a composer explicitly with
@@ -422,19 +451,19 @@ Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 
 `@use-crux/core` exposes SDK-agnostic primitives through focused subpaths:
 
-| Import                         | Area                                                                                                                                         |
-| ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@use-crux/core`               | Prompts, contexts, config, runtime helpers, common types.                                                                                    |
-| `@use-crux/core/memory`        | Memory blocks, stores, capture, recall, and compaction hooks.                                                                                |
-| `@use-crux/core/retrieval`     | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                                                                  |
-| `@use-crux/core/safety`        | Guardrails, constraints, safety plugins, and validation retry.                                                                               |
-| `@use-crux/core/quality`       | Evaluations, suites, assertions, scorers, gates, variants, and baselines.                                                                    |
-| `@use-crux/core/agent`         | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm.                                                          |
-| `@use-crux/core/flow`          | Suspendable typed workflows.                                                                                                                 |
-| `@use-crux/core/runtime`       | Runtime Engine composers, port contracts, diagnostics, wake envelopes, kernel composites, outbox dispatch, pure retry/state helpers, and the in-memory runtime store. |
-| `@use-crux/core/runtime/testing` | Runtime Engine store and kernel conformance suites for adapter authors.                                                                    |
-| `@use-crux/core/observability` | Canonical graph records, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
-| `@use-crux/core/project-index` | Public Project Index contracts for local devtools and source intelligence.                                                                   |
+| Import                           | Area                                                                                                                                                                        |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@use-crux/core`                 | Prompts, contexts, config, runtime helpers, common types.                                                                                                                   |
+| `@use-crux/core/memory`          | Memory blocks, stores, capture, recall, and compaction hooks.                                                                                                               |
+| `@use-crux/core/retrieval`       | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                                                                                                 |
+| `@use-crux/core/safety`          | Guardrails, constraints, safety plugins, and validation retry.                                                                                                              |
+| `@use-crux/core/quality`         | Evaluations, suites, assertions, scorers, gates, variants, and baselines.                                                                                                   |
+| `@use-crux/core/agent`           | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm.                                                                                         |
+| `@use-crux/core/flow`            | Suspendable typed workflows.                                                                                                                                                |
+| `@use-crux/core/runtime`         | Runtime Engine composers, port contracts, diagnostics, wake envelopes, kernel composites, outbox dispatch, pure retry/state helpers, and the in-memory runtime store.       |
+| `@use-crux/core/runtime/testing` | Runtime Engine store and kernel conformance suites for adapter authors.                                                                                                     |
+| `@use-crux/core/observability`   | Canonical graph records, presentation read-model types, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
+| `@use-crux/core/project-index`   | Public Project Index contracts for local devtools and source intelligence.                                                                                                  |
 
 See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) for every subpath and API.
 

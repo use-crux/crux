@@ -26,6 +26,7 @@ config({
   },
   devtools: {
     bridge: true, // optional live-runtime command plane for local Node apps
+    sessionId: process.env.CRUX_DEVTOOLS_SESSION_ID,
   },
 })
 ```
@@ -34,6 +35,15 @@ config({
   The `devtools` key is for local UI/control/tunnel/bridge behavior. Production telemetry and remote collectors stay
   explicit through `observability` config or telemetry plugins.
 </Callout>
+
+`devtools.sessionId` is applied as a default observability correlator. Every record emitted while the
+devtools transport is active carries that `sessionId`, and the local server can filter run lists by
+`sessionId`.
+
+`POST /api/observability/records` is intentionally partial-accepting. Parseable batches return `202`
+with accepted and rejected record counts; malformed JSON returns `400`; transient local storage
+failures return `503` with `Retry-After: 1`. The local read models keep broad dashboard/resource
+queries bounded, including latest-500 caps for full-history devtools pulls and resource activity.
 
 ## What gets instrumented
 
@@ -116,7 +126,7 @@ crux quality cell-evidence <experiment-id> --case simple-refund --variant defaul
 
 Run `crux dev` to open the web dashboard at `http://localhost:4400`. Everything updates in real-time over WebSocket — no page refreshes needed.
 
-The run inspector reads backend-owned `RunDetail` by default. The canonical graph remains lossless, but `RunDetail` classifies spans into visible nodes or attached details so low-level routing, prompt, context, memory, cache, and cost spans attach to the visible operation they explain instead of becoming misleading root rows. Explicit semantic ownership wins through `explains` edges and `presentation.ownerSpanId`; sibling chronology is only a fallback. Completion-only lifecycle fragments are retained as inspectable details rather than anonymous top-level trace rows. Convex Agent streams render as `AGENT -> GENERATE stream response -> GENERATE step / TOOL ...` when the stream container carries useful structure, while redundant single-step stream wrappers fold into details. Flow suspensions render as visible suspension markers rather than stuck generated spans. Attached spans remain inspectable in the detail panel, and streaming `token.delta` notifications let the UI append live tokens without refetching the whole run on every chunk.
+The run inspector reads backend-owned `RunDetail` by default. The canonical graph remains lossless, but `RunDetail` classifies spans into visible nodes or attached details so low-level routing, prompt, context, memory, cache, and cost spans attach to the visible operation they explain instead of becoming misleading root rows. Explicit semantic ownership wins through `explains` edges and `presentation.ownerSpanId`; sibling chronology is only a fallback. Completion-only lifecycle fragments are retained as inspectable details rather than anonymous top-level trace rows. Convex Agent streams render as `AGENT -> GENERATE stream response -> GENERATE step / TOOL ...` when the stream container carries useful structure, while redundant single-step stream wrappers fold into details. Flow suspensions render as visible suspension markers rather than stuck generated spans. Attached spans remain inspectable in the detail panel, and coalesced `token.chunk` notifications let the UI append live tokens without refetching the whole run on every chunk.
 
 The visible root should match the user's actual initiating work. Use `flow()` only for real Crux flows; external framework turns such as Convex Agent chat responses should open an `agent.run` root/span. For direct Convex Agent tools, use `wrapConvexTool(tool, { name })` so tool rows show names like `research`, `writer`, or `optimizeSeo` instead of provider-generated call ids while nested delegates remain correctly parented.
 
@@ -124,7 +134,7 @@ The visible root should match the user's actual initiating work. Use `flow()` on
 
 The main view is a live trace list showing every `generate()` and `stream()` call as it happens.
 
-- **Session grouping** — traces inside `withSession()` appear as collapsible groups; sessions are metadata/grouping, not execution nodes
+- **Session grouping** — traces with the same `sessionId` appear as collapsible groups; sessions are metadata/grouping, not execution nodes
 - **Flow nesting** — `flow().run()` adds sub-groups with labeled steps within sessions
 - **Status indicators** — running (spinner), success (green), error (red)
 - **Filtering** — filter by prompt ID, model, or session using the search bar
@@ -262,11 +272,13 @@ When you run `crux dev`:
 5. Builds canonical graph, `RunDetail`, and resource activity read models in Go services
 6. Broadcasts backend-owned read-model updates to connected UIs
 
-The Go process owns the server and read models. Node.js is spawned only for bounded helper workers: Project Index indexing, eval execution, and lazy source resolution.
+The Go process owns the server and read models. Node.js is spawned only for bounded helper workers: Project Index indexing, eval execution, and lazy source resolution. The server stores the raw payload for every accepted graph record, including forward-compatible unknown record types, so newer SDKs can preserve data even when an older local read model skips normalized projection. Local observability storage is retained by default for 14 days and 2000 runs, with 256KB artifact preview caps. Use `CRUX_OBSERVABILITY_RETENTION_DAYS`, `CRUX_OBSERVABILITY_RETENTION_RUNS`, and `CRUX_OBSERVABILITY_PREVIEW_MAX_BYTES` to tune those limits during local development.
+
+Quality evaluation graphs are first-class local traces. The embedded eval runner emits one `eval.run` umbrella run plus separate `eval.case` runs in the same trace, links them with `eval.case_of`, and represents baseline comparisons through `comparison.report` artifacts with `comparison.candidate` and `comparison.baseline` edges. Cassette replays link the replaying case run to the originally recorded run with `replay.of`. Edges may point at runs recorded in another local database or older baseline file; the server preserves those external references and does not treat absent target nodes as read-model errors.
 
 ### The SDK
 
-Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/index/snapshot` to enrich the Project Index. Delivery is non-blocking, starts immediately for live span updates, can have multiple bounded HTTP deliveries in flight, and swallows failures so devtools never slow down or break application code. For tunneled/cloud runtimes, prefer `observability.token` or `CRUX_DEVTOOLS_TOKEN`; the Go server accepts that bearer token only on the observability ingest route. Tokenized tunnel URLs such as `https://example.ngrok.app?t=...` are still supported as `serverUrl` values for compatibility; the token is preserved on the final ingest endpoint. The Go server keeps list/dashboard/lifecycle reads on cheap run-summary paths and reserves exact graph projection for single-run inspection. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@use-crux/convex` helpers before the action returns so queued records are not killed with the worker.
+Your application connects to the devtools server through `config()` or `enableDevtools()`. When `serverUrl` is set, the SDK installs the canonical observability transport, posts ordered graph record batches to `POST /api/observability/records`, and sends runtime prompt/context/tool snapshots through `POST /api/index/snapshot` to enrich the Project Index. Delivery is non-blocking, batches records on a short timer, chunks requests in the SDK delivery engine, caps queued records with oldest-record drops, retries only failed chunks on a capped backoff without waiting for another emitted record, and swallows synchronous or asynchronous transport failures so devtools never slow down or break application code. For tunneled/cloud runtimes, prefer `observability.token` or `CRUX_DEVTOOLS_TOKEN`; the Go server accepts that bearer token only on the observability ingest route. Tokenized tunnel URLs such as `https://example.ngrok.app?t=...` are still supported as `serverUrl` values for compatibility; the token is preserved on the final ingest endpoint. The Go server keeps list/dashboard/lifecycle reads on cheap run-summary paths and reserves exact graph projection for single-run inspection. Generation streams close their spans from the raw stream's completion or error signal, so stopped streams and failed streams do not stay visually running while later usage metadata is collected. In serverless runtimes, call `observe.flush()` or use the `@use-crux/convex` helpers before the action returns so queued records are not killed with the worker.
 
 The optional Runtime Bridge is the reverse command plane. With `devtools.bridge: true`, a long-lived Node runtime opens `/ws/runtime` so Go services can send typed local-dev commands such as `store.read` to the live app. Primitives register inspectable resources automatically, so devtools can ask for `memory:<id>` or `blackboard:<id>` and read the attached store instead of reconstructing state from traces. `eval.run` is also routed through the Go bridge service, using the embedded eval runner so quality persistence and observability stay on the normal eval path. Convex and serverless runtimes use framework-bound HTTP endpoints instead of long-lived sockets. Web devtools and the TUI still talk only to Go: they never call runtime peers directly.
 

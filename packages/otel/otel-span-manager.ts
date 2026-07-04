@@ -1,10 +1,20 @@
-import type { SpanStatus } from './types'
-import type { SpanManager } from './span-manager'
+import type { TraceAttributeValue, SpanStatus } from './types'
+import { createLightweightSpanManager, type SpanManager } from './span-manager'
+import type { SpanExporter } from './exporter'
+import { createBoundedRegistry } from './bounded-registry'
 
-type OtelAttributeValue = string | number | boolean
+type OtelPrimitiveAttributeValue = string | number | boolean
+type OtelAttributeValue = OtelPrimitiveAttributeValue | OtelPrimitiveAttributeValue[]
+type OtelSpanContextLike = { spanId: string; traceId: string }
+
+const ACTIVE_OTEL_SPAN_MAX_ENTRIES = 10_000
+const ACTIVE_OTEL_SPAN_MAX_AGE_MS = 10 * 60_000
+
+let forceLightweightFallback = false
+let warnedAboutMissingProvider = false
 
 interface OtelSpanLike {
-  spanContext(): { spanId: string; traceId: string }
+  spanContext(): OtelSpanContextLike
   setAttributes(attributes: Record<string, OtelAttributeValue>): void
   setStatus(status: { code: number; message?: string }): void
   recordException(error: Error | string): void
@@ -16,11 +26,13 @@ interface OtelApiLike {
   context: {
     active(): unknown
   }
+  isSpanContextValid?: (context: OtelSpanContextLike) => boolean
   trace: {
     getTracer(name: string): {
       startSpan(name: string, options?: { attributes?: Record<string, OtelAttributeValue> }, context?: unknown): OtelSpanLike
     }
     setSpan(context: unknown, span: OtelSpanLike): unknown
+    isSpanContextValid?: (context: OtelSpanContextLike) => boolean
   }
   SpanStatusCode: {
     UNSET: number
@@ -40,29 +52,63 @@ interface ActiveOtelSpan {
  * Returns `undefined` when `@opentelemetry/api` cannot be loaded
  * synchronously. That keeps the package usable in edge runtimes that configure
  * an explicit lightweight exporter and do not install the optional peer.
+ *
+ * @param serviceName - Tracer name.
+ * @param fallbackExporter - Optional lightweight exporter used after invalid
+ * OTel span context detection. Tests pass this to observe fallback spans.
+ * @returns A span manager when `@opentelemetry/api` can be loaded.
  */
-export function createOpenTelemetrySpanManager(serviceName = '@use-crux/otel'): SpanManager | undefined {
+export function createOpenTelemetrySpanManager(
+  serviceName = '@use-crux/otel',
+  fallbackExporter?: SpanExporter,
+): SpanManager | undefined {
   const api = loadOpenTelemetryApi()
   if (!api) return undefined
+  if (forceLightweightFallback) return createFallbackSpanManager(fallbackExporter)
 
   const tracer = api.trace.getTracer(serviceName)
-  const activeSpans = new Map<string, ActiveOtelSpan>()
+  const activeSpans = createBoundedRegistry<string, ActiveOtelSpan>({
+    maxEntries: ACTIVE_OTEL_SPAN_MAX_ENTRIES,
+    maxAgeMs: ACTIVE_OTEL_SPAN_MAX_AGE_MS,
+    onEvict: (_spanId, active) => {
+      expireOtelSpan(active)
+    },
+  })
+  let fallbackManager: SpanManager | undefined
 
   return {
-    startSpan(name, attributes, parentSpanId) {
+    startSpan(name, attributes, parentSpanId, identity) {
+      if (fallbackManager) return fallbackManager.startSpan(name, attributes, parentSpanId, identity)
+
       const parent = parentSpanId ? activeSpans.get(parentSpanId) : undefined
       const parentContext = parent ? api.trace.setSpan(api.context.active(), parent.span) : api.context.active()
-      const span = tracer.startSpan(name, attributes ? { attributes } : undefined, parentContext)
+      const span = tracer.startSpan(name, otelAttributesOption(attributes), parentContext)
       const context = span.spanContext()
+      if (!spanContextIsValid(api, context)) {
+        span.end()
+        warnAboutMissingProvider()
+        forceLightweightFallback = true
+        fallbackManager = createFallbackSpanManager(fallbackExporter)
+        return fallbackManager.startSpan(name, attributes, parentSpanId, identity)
+      }
       activeSpans.set(context.spanId, { span, statusSet: false })
       return { spanId: context.spanId, traceId: context.traceId }
     },
 
     setAttributes(ref, attributes) {
-      activeSpans.get(ref.spanId)?.span.setAttributes(attributes)
+      if (fallbackManager) {
+        fallbackManager.setAttributes(ref, attributes)
+        return
+      }
+      const normalized = otelAttributes(attributes)
+      if (normalized) activeSpans.get(ref.spanId)?.span.setAttributes(normalized)
     },
 
     setStatus(ref, status) {
+      if (fallbackManager) {
+        fallbackManager.setStatus(ref, status)
+        return
+      }
       const active = activeSpans.get(ref.spanId)
       if (!active) return
       active.statusSet = true
@@ -73,6 +119,10 @@ export function createOpenTelemetrySpanManager(serviceName = '@use-crux/otel'): 
     },
 
     recordError(ref, error) {
+      if (fallbackManager) {
+        fallbackManager.recordError(ref, error)
+        return
+      }
       const active = activeSpans.get(ref.spanId)
       if (!active) return
       active.statusSet = true
@@ -84,23 +134,94 @@ export function createOpenTelemetrySpanManager(serviceName = '@use-crux/otel'): 
     },
 
     addEvent(ref, name, attributes) {
-      activeSpans.get(ref.spanId)?.span.addEvent(name, attributes)
+      if (fallbackManager) {
+        fallbackManager.addEvent(ref, name, attributes)
+        return
+      }
+      activeSpans.get(ref.spanId)?.span.addEvent(name, otelAttributes(attributes))
     },
 
     endSpan(ref) {
-      const active = activeSpans.get(ref.spanId)
+      if (fallbackManager) {
+        fallbackManager.endSpan(ref)
+        return
+      }
+      const active = activeSpans.delete(ref.spanId)
       if (!active) return
-      activeSpans.delete(ref.spanId)
       if (!active.statusSet) {
         active.span.setStatus({ code: api.SpanStatusCode.OK })
       }
       active.span.end()
     },
 
+    expireSpan(ref) {
+      if (fallbackManager) {
+        fallbackManager.expireSpan(ref)
+        return
+      }
+      const active = activeSpans.delete(ref.spanId)
+      if (!active) return
+      expireOtelSpan(active)
+    },
+
     async shutdown() {
       activeSpans.clear()
+      await fallbackManager?.shutdown()
     },
   }
+}
+
+function expireOtelSpan(active: ActiveOtelSpan): void {
+  active.span.setAttributes({ 'crux.expired': true })
+  active.span.end()
+}
+
+function otelAttributesOption(
+  attributes: Record<string, TraceAttributeValue> | undefined,
+): { readonly attributes?: Record<string, OtelAttributeValue> } | undefined {
+  const normalized = otelAttributes(attributes)
+  return normalized ? { attributes: normalized } : undefined
+}
+
+function otelAttributes(
+  attributes: Record<string, TraceAttributeValue> | undefined,
+): Record<string, OtelAttributeValue> | undefined {
+  if (!attributes) return undefined
+  const normalized: Record<string, OtelAttributeValue> = {}
+  for (const [key, value] of Object.entries(attributes)) {
+    normalized[key] = isPrimitiveAttributeArray(value) ? [...value] : value
+  }
+  return normalized
+}
+
+function isPrimitiveAttributeArray(value: TraceAttributeValue): value is readonly OtelPrimitiveAttributeValue[] {
+  return Array.isArray(value)
+}
+
+function createFallbackSpanManager(exporter?: SpanExporter): SpanManager {
+  return createLightweightSpanManager(exporter ?? {
+    export: () => {},
+    shutdown: async () => {},
+  })
+}
+
+function spanContextIsValid(api: OtelApiLike, context: OtelSpanContextLike): boolean {
+  const isValid = api.isSpanContextValid ?? api.trace.isSpanContextValid
+  if (isValid) return isValid(context)
+  return context.spanId !== '0000000000000000' && context.traceId !== '00000000000000000000000000000000'
+}
+
+function warnAboutMissingProvider(): void {
+  if (warnedAboutMissingProvider) return
+  warnedAboutMissingProvider = true
+  console.warn(
+    '[crux] No OpenTelemetry TracerProvider registered — crux telemetry will be dropped. Register a provider or pass an exporter.',
+  )
+}
+
+export function __resetOpenTelemetryFallbackForTesting(): void {
+  forceLightweightFallback = false
+  warnedAboutMissingProvider = false
 }
 
 function statusCodeFor(api: OtelApiLike, status: SpanStatus['code']): number {

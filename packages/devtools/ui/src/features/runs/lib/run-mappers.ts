@@ -47,7 +47,7 @@ export function rowFromObservabilityRun(r: ObservabilityRunSummary): RunRow {
     id: `run:${r.runId}`,
     traceId: r.runId,
     target: r.name || r.rootPrimitive || r.runId,
-    sessionId: stringValue(attributes.sessionId) ?? stringValue(attributes.sessionID),
+    sessionId: r.sessionId ?? stringValue(attributes.sessionId) ?? stringValue(attributes.sessionID),
     model: r.model || undefined,
     provider: r.provider || undefined,
     status: r.status,
@@ -56,8 +56,41 @@ export function rowFromObservabilityRun(r: ObservabilityRunSummary): RunRow {
     tokenCount: numberValue(metrics.totalTokens),
     cost: numberValue(metrics.costUsd) ?? numberValue(metrics.cost),
     feedbackCount: 0,
+    recordCount: r.recordCount,
+    spanCount: r.spanCount,
+    eventCount: r.eventCount,
+    artifactCount: r.artifactCount,
+    edgeCount: r.edgeCount,
     childCount: r.spanCount,
     errorMessage,
+  }
+}
+
+/**
+ * Merge server-owned observability rollups onto a row sourced from Quality.
+ *
+ * Completed runs can arrive from the Quality read model first, while session
+ * correlators and graph/count rollups belong to the observability list
+ * endpoint. Keeping the merge here lets the runs table use one row shape
+ * without duplicating backend ownership rules in React components.
+ */
+export function enrichRunRowFromObservability(row: RunRow, r: ObservabilityRunSummary | undefined): RunRow {
+  if (!r) return row
+  const observability = rowFromObservabilityRun(r)
+  return {
+    ...row,
+    sessionId: observability.sessionId ?? row.sessionId,
+    model: row.model ?? observability.model,
+    provider: row.provider ?? observability.provider,
+    durationMs: row.durationMs ?? observability.durationMs,
+    tokenCount: observability.tokenCount ?? row.tokenCount,
+    cost: observability.cost ?? row.cost,
+    recordCount: observability.recordCount,
+    spanCount: observability.spanCount,
+    eventCount: observability.eventCount,
+    artifactCount: observability.artifactCount,
+    edgeCount: observability.edgeCount,
+    childCount: observability.childCount ?? row.childCount,
   }
 }
 

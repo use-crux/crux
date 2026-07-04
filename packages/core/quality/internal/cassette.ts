@@ -20,6 +20,7 @@
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { z } from 'zod'
+import { observe } from '../../observability'
 import type { InterceptedGeneration } from '../../adapter/interception'
 import type { NormalizedCall, ReplayMode } from '../replay'
 import { canonicalJson, sha256Hex } from './json'
@@ -41,6 +42,7 @@ interface CassetteEntry {
 interface CassetteFile {
   version: 1
   metadata: { recordedAt: string; sdkVersion: string; models: string[] }
+  recorded?: { runId: string; traceId: string; recordedAt: string }
   entries: Record<string, CassetteEntry>
 }
 
@@ -225,6 +227,8 @@ export interface CassetteSession {
   readonly staleSince: string | undefined
   /** Replay/record bookkeeping for reporting. */
   readonly stats: { hits: number; misses: number; recorded: number }
+  /** Observability identity of the run that originally recorded this cassette. */
+  readonly recorded: { runId: string; traceId: string; recordedAt: string } | undefined
   /** The cassette file path (for messages and reporting). */
   readonly path: string
 }
@@ -271,6 +275,14 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
     const result = await execute()
     const payload = project(result)
     if (payload !== undefined) {
+      const context = observe.captureContext()
+      if (file.recorded === undefined && context !== undefined) {
+        file.recorded = {
+          runId: context.runId,
+          traceId: context.traceId,
+          recordedAt: new Date().toISOString(),
+        }
+      }
       file.entries[key] = applyRedaction(
         {
           kind,
@@ -327,6 +339,9 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
     path,
     get staleSince() {
       return staleSince
+    },
+    get recorded() {
+      return file.recorded
     },
     stats,
 

@@ -17,11 +17,12 @@ describe('withDevtools — CruxPlugin', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     resetObservabilityRuntime()
   })
 
-    it('returns a CruxPlugin with name crux:devtools', () => {
+  it('returns a CruxPlugin with name crux:devtools', () => {
     const plugin = withDevtools({
       prompts: [],
       serverUrl: 'http://localhost:4400',
@@ -31,7 +32,7 @@ describe('withDevtools — CruxPlugin', () => {
     expect(typeof plugin.install).toBe('function')
   })
 
-    it('install() registers the index through the canonical index endpoint', async () => {
+  it('install() registers the index through the canonical index endpoint', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 204 }))
     vi.stubGlobal('fetch', fetchMock)
     const plugin = withDevtools({
@@ -51,7 +52,7 @@ describe('withDevtools — CruxPlugin', () => {
     )
   })
 
-    it('enableDevtools() still works for imperative use', async () => {
+  it('enableDevtools() still works for imperative use', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }))
     vi.stubGlobal('fetch', fetchMock)
     const cleanup = enableDevtools({
@@ -70,4 +71,67 @@ describe('withDevtools — CruxPlugin', () => {
     await observe.run({ name: 'after-cleanup', rootPrimitive: 'custom.operation' }, async () => undefined)
     await observe.flush()
     expect(fetchMock).not.toHaveBeenCalled()
-  })})
+  })
+
+  it('restores imperative devtools installs by cleanup token', () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 202 })))
+
+    const cleanupFirst = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4400',
+    })
+    const firstTransport = getRuntime().observabilityTransport
+
+    const cleanupSecond = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4401',
+    })
+    const secondTransport = getRuntime().observabilityTransport
+
+    expect(firstTransport).toBeDefined()
+    expect(secondTransport).toBeDefined()
+    expect(secondTransport).not.toBe(firstTransport)
+
+    cleanupSecond()
+    expect(getRuntime().observabilityTransport).toBe(firstTransport)
+
+    cleanupFirst()
+    expect(getRuntime().observabilityTransport).toBeUndefined()
+  })
+
+  it('passes the devtools sessionId through as an observability default correlator', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const cleanup = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4400',
+      sessionId: 'dev-session',
+    })
+
+    await observe.run({ name: 'devtools session', rootPrimitive: 'custom.operation' }, async () => undefined)
+    await observe.flush()
+    cleanup()
+
+    const recordsCall = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/api/observability/records'))
+    expect(recordsCall).toBeDefined()
+    const body = JSON.parse(String(recordsCall?.[1]?.body)) as { records: Array<{ sessionId?: string }> }
+    expect(body.records).not.toHaveLength(0)
+    expect(body.records.every((record) => record.sessionId === 'dev-session')).toBe(true)
+  })
+
+  it('flushes pending observability records before devtools restore', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202 }))
+    vi.stubGlobal('fetch', fetchMock)
+    const flushSpy = vi.spyOn(observe, 'flush')
+
+    const cleanup = enableDevtools({
+      prompts: [],
+      serverUrl: 'http://localhost:4400',
+    })
+
+    cleanup()
+
+    expect(flushSpy).toHaveBeenCalledWith({ timeoutMs: 2000 })
+  })
+})

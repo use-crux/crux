@@ -1,5 +1,5 @@
 import type { ChipTone } from '@/qw/shell/primitives'
-import type { RunKind } from '../types'
+import type { RunKind, RunRow } from '../types'
 
 // Runtime-plane family→tone, mirroring the canonical registry in
 // run-detail/components/atoms.tsx (KIND_TONE) and the design system §3:
@@ -71,4 +71,37 @@ export function formatCost(n: number | undefined): string {
   if (n < 0.001) return `$${n.toFixed(6)}`
   if (n < 0.01) return `$${n.toFixed(4)}`
   return `$${n.toFixed(3)}`
+}
+
+/** Format server-owned graph count rollups for the dense runs table. */
+export function formatGraphCounts(run: RunRow): string {
+  if (
+    run.spanCount == null &&
+    run.eventCount == null &&
+    run.artifactCount == null &&
+    run.edgeCount == null &&
+    run.childCount == null
+  ) {
+    return '-'
+  }
+  const spanCount = run.spanCount ?? run.childCount ?? 0
+  return [spanCount, run.eventCount ?? 0, run.artifactCount ?? 0, run.edgeCount ?? 0].map((n) => n.toLocaleString()).join(' / ')
+}
+
+/** Human-readable tooltip for the dense graph-count column. */
+export function graphCountsTitle(run: RunRow): string {
+  return [
+    countPart(run.recordCount, 'record'),
+    countPart(run.spanCount ?? run.childCount, 'span'),
+    countPart(run.eventCount, 'event'),
+    countPart(run.artifactCount, 'artifact'),
+    countPart(run.edgeCount, 'edge'),
+  ]
+    .filter((part): part is string => part != null)
+    .join(' · ')
+}
+
+function countPart(value: number | undefined, label: string): string | undefined {
+  if (value == null) return undefined
+  return `${value.toLocaleString()} ${label}${value === 1 ? '' : 's'}`
 }

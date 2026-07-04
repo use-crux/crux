@@ -68,7 +68,6 @@ export async function runCachedStage<T extends JsonObject | CruxDocument | Chunk
   const startedAt = Date.now()
   const span = observe.openSpan({
     name: `${args.stageKind}:${args.stageName}`,
-    family: 'indexing',
     primitive: 'indexing.pipeline',
     attributes: {
       namespace: args.namespace,
@@ -100,7 +99,7 @@ export async function runCachedStage<T extends JsonObject | CruxDocument | Chunk
       const record = baseRecord(value, 'success', args.cacheMode === 'bypass' ? 'bypass' : undefined)
       args.onStage?.(record)
       span.withContext(() => emitIndexingStageArtifact(span.spanId, record))
-      span.end(stageRecordAttributes(record))
+      span.end({ attributes: stageRecordAttributes(record) })
       return value
     } catch (error) {
       span.error(error)
@@ -116,7 +115,7 @@ export async function runCachedStage<T extends JsonObject | CruxDocument | Chunk
       const record = baseRecord(value, 'success', 'hit')
       args.onStage?.(record)
       span.withContext(() => emitIndexingStageArtifact(span.spanId, record))
-      span.end(stageRecordAttributes(record))
+      span.end({ attributes: stageRecordAttributes(record) })
       return value
     }
   }
@@ -139,7 +138,7 @@ export async function runCachedStage<T extends JsonObject | CruxDocument | Chunk
     const record = baseRecord(value, 'success', args.cacheMode === 'refresh' ? 'refresh' : 'miss')
     args.onStage?.(record)
     span.withContext(() => emitIndexingStageArtifact(span.spanId, record))
-    span.end(stageRecordAttributes(record))
+    span.end({ attributes: stageRecordAttributes(record) })
     return value
   } catch (error) {
     span.error(error)

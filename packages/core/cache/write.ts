@@ -63,7 +63,6 @@ export async function performWrite(call: SemanticCacheCall, result: MiddlewareRe
   const writeStarted = Date.now()
   const writeSpan = observe.openSpan({
     name: 'semantic-cache.write',
-    family: 'cache',
     primitive: 'cache.lookup',
     attributes: {
       cacheKind: 'semantic',
@@ -145,18 +144,20 @@ export async function performWrite(call: SemanticCacheCall, result: MiddlewareRe
       })
 
       writeSpan.end({
-        cacheKind: 'semantic',
-        cacheOperation: 'write',
-        cacheId,
-        promptId,
-        operation,
-        scopeHash,
-        version,
-        queryHash: entry.queryHash,
-        ttl,
-        resultKind,
-        written: true,
-        durationMs: Date.now() - writeStarted,
+        attributes: {
+          cacheKind: 'semantic',
+          cacheOperation: 'write',
+          cacheId,
+          promptId,
+          operation,
+          scopeHash,
+          version,
+          queryHash: entry.queryHash,
+          ttl,
+          resultKind,
+          written: true,
+          durationMs: Date.now() - writeStarted,
+        },
       })
     })
   } catch (error) {

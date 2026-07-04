@@ -30,6 +30,7 @@ type Record struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	Payload       json.RawMessage `json:"-"`
 }
@@ -50,7 +51,10 @@ type RunStartRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
+	SessionID     string          `json:"sessionId,omitempty"`
+	UserID        string          `json:"userId,omitempty"`
 	Name          string          `json:"name"`
 	RootPrimitive string          `json:"rootPrimitive"`
 	StartedAt     string          `json:"startedAt"`
@@ -63,6 +67,7 @@ type SpanStartRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	ParentSpanID  *string         `json:"parentSpanId,omitempty"`
@@ -89,6 +94,7 @@ type SpanRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	ParentSpanID  *string         `json:"parentSpanId,omitempty"`
@@ -119,6 +125,7 @@ type ArtifactRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	ArtifactID    string          `json:"artifactId"`
 	SpanID        string          `json:"spanId,omitempty"`
@@ -138,6 +145,7 @@ type EdgeRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	EdgeID        string          `json:"edgeId"`
 	EdgeType      string          `json:"edgeType"`
@@ -176,7 +184,10 @@ var primitiveFamilyByName = map[string]string{
 	"tool.approval":           "tool",
 	"retrieval.pipeline":      "retrieval",
 	"retrieval.query":         "retrieval",
+	"retrieval.recipe":        "retrieval",
+	"retrieval.retrieve":      "retrieval",
 	"retrieval.stage":         "retrieval",
+	"retrieval.step":          "retrieval",
 	"embedding.call":          "embedding",
 	"memory.read":             "memory",
 	"memory.write":            "memory",
@@ -185,6 +196,7 @@ var primitiveFamilyByName = map[string]string{
 	"guardrail.run":           "guardrail",
 	"routing.router":          "routing",
 	"routing.cascade":         "routing",
+	"fallback.attempt":        "routing",
 	"runtime.convex.action":   "runtime",
 	"runtime.convex.query":    "runtime",
 	"runtime.convex.mutation": "runtime",
@@ -192,6 +204,8 @@ var primitiveFamilyByName = map[string]string{
 	"runtime.convex.resume":   "runtime",
 	"runtime.convex.flush":    "runtime",
 	"cache.lookup":            "cache",
+	"compaction.run":          "compaction",
+	"eval.run":                "eval",
 	"eval.case":               "eval",
 	"scoring.judge":           "scoring",
 	"citation.check":          "citation",
@@ -247,6 +261,8 @@ var canonicalArtifactKinds = map[string]struct{}{
 	"tool.result":          {},
 	"retrieval.hits":       {},
 	"memory.snapshot":      {},
+	"memory.recall":        {},
+	"memory.diff":          {},
 	"handoff.payload":      {},
 	"delegate.report":      {},
 	"constraint.report":    {},
@@ -256,6 +272,7 @@ var canonicalArtifactKinds = map[string]struct{}{
 	"stream.timeline":      {},
 	"score.report":         {},
 	"citation.report":      {},
+	"comparison.report":    {},
 	"composition.report":   {},
 	"routing.report":       {},
 	"cache.report":         {},
@@ -323,9 +340,18 @@ func ValidateRecord(record Record) error {
 	case RecordRunEnd, RecordSpanEnd, RecordSpanEvent:
 		return nil
 	default:
-		return fmt.Errorf("record %s has unknown type %q", record.RecordID, record.Type)
+		return nil
 	}
 	return nil
+}
+
+func isKnownRecordType(recordType RecordType) bool {
+	switch recordType {
+	case RecordRunStart, RecordRunEnd, RecordSpanStart, RecordSpanEnd, RecordSpan, RecordSpanEvent, RecordEdge, RecordArtifact:
+		return true
+	default:
+		return false
+	}
 }
 
 func isCanonicalOrCustom(value string, canonical map[string]struct{}) bool {

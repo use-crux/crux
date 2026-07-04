@@ -40,8 +40,7 @@ export async function runRetrievalOperation(args: {
 
   const span = observe.openSpan({
     name: `${args.retrieverId}.retrieve`,
-    family: 'retrieval',
-    primitive: 'retrieval.retrieve',
+    primitive: 'retrieval.query',
     attributes: eventBase,
   })
 
@@ -53,7 +52,7 @@ export async function runRetrievalOperation(args: {
         hits,
       })
     })
-    span.end({ resultCount: hits.length })
+    span.end({ attributes: { resultCount: hits.length } })
     return hits
   } catch (error) {
     span.error(error, { resultCount: 0 })

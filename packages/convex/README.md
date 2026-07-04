@@ -203,11 +203,18 @@ without running Convex. Use `createInMemoryConvexStoreDocumentComponent()` when
 server writes and React reads should share one local backing record set:
 
 ```ts
-import { convexRecordStore, createConvexTransport, createInMemoryConvexStoreDocumentComponent } from '@use-crux/convex'
+import {
+  convexRecordStore,
+  createConvexTransport,
+  createInMemoryConvexStoreDocumentComponent,
+} from '@use-crux/convex'
 
 const component = createInMemoryConvexStoreDocumentComponent()
 const records = convexRecordStore({ component, ctx: component.ctx })
-const transport = createConvexTransport({ api: component.refs, useQuery: component.useQuery })
+const transport = createConvexTransport({
+  api: component.refs,
+  useQuery: component.useQuery,
+})
 
 await records.put('memory:alpha', { content: 'Alpha', namespace: 'kb' })
 
@@ -297,7 +304,13 @@ Thrown errors use the same evidence contract as core Crux: terminal spans keep a
 Use the server subpath for Crux-aware Convex function boundaries:
 
 ```ts
-import { action, internalAction, query, mutation, flow } from '@use-crux/convex/server'
+import {
+  action,
+  internalAction,
+  query,
+  mutation,
+  flow,
+} from '@use-crux/convex/server'
 ```
 
 `action()` and `internalAction()` use Convex's native function builders, add a hidden optional `__crux` propagation envelope, pass `ctx.crux` to handlers, restore incoming observability context, and await a bounded flush before returning. Public actions create a Run when no parent context exists; internal actions nest when called through `ctx.crux.runAction()` and create clearly marked standalone internal Runs when invoked directly.
@@ -309,7 +322,9 @@ export const chat = action({
   observabilityAttributes: { agentId: 'support-chat' },
   args: { threadId: v.string() },
   handler: async (ctx, args) => {
-    return ctx.crux.span({ name: 'chat', family: 'agent', primitive: 'agent.run' }, () => runChatTurn(ctx, args))
+    return ctx.crux.span({ name: 'chat', primitive: 'agent.run' }, () =>
+      runChatTurn(ctx, args),
+    )
   },
 })
 ```
@@ -436,7 +451,14 @@ const contextHandler = createContextHandler({
 Import Convex Agent integrations from `@use-crux/convex/agent`:
 
 ```ts
-import { Agent, convexAgent, createAgent, createTool, convexTools, wrapConvexTool } from '@use-crux/convex/agent'
+import {
+  Agent,
+  convexAgent,
+  createAgent,
+  createTool,
+  convexTools,
+  wrapConvexTool,
+} from '@use-crux/convex/agent'
 ```
 
 Use `Agent` when you want the normal `@convex-dev/agent` constructor and method shape with Crux tool/runtime propagation and observability. It subclasses Convex Agent, wraps tools passed through `tools`, and forwards `generateText()`, `streamText()`, `generateObject()`, and `streamObject()` arguments to the upstream Agent.
@@ -479,13 +501,17 @@ const draftState = z.object({
 
 const editorMemory = memory({
   id: 'editor-memory',
-  blocks: [recentMessages({ id: 'recent', maxMessages: 12 }), workingState({ id: 'draft-state', schema: draftState })],
+  blocks: [
+    recentMessages({ id: 'recent', maxMessages: 12 }),
+    workingState({ id: 'draft-state', schema: draftState }),
+  ],
 })
 
 const copyEditing = skill.inline({
   id: 'copy-editing',
   description: 'Copy editing guidance.',
-  instructions: 'Tighten prose, preserve factual claims, and explain material edits.',
+  instructions:
+    'Tighten prose, preserve factual claims, and explain material edits.',
 })
 
 const searchProject = tool({
@@ -556,7 +582,11 @@ await editorAgent.streamText(
 For threaded Convex Agent code, keep the normal Convex Agent flow and let the Crux wrapper prepare the prompt once:
 
 ```ts
-const { thread } = await editorAgent.continueThread(ctx, { threadId, userId, projectId })
+const { thread } = await editorAgent.continueThread(ctx, {
+  threadId,
+  userId,
+  projectId,
+})
 
 await thread.streamText({
   input: {
@@ -641,7 +671,8 @@ const research = wrapConvexTool(
   createTool({
     description: 'Run delegated research.',
     inputSchema,
-    execute: async (toolCtx, args, options) => runResearch(args, options.toolCallId),
+    execute: async (toolCtx, args, options) =>
+      runResearch(args, options.toolCallId),
   }),
   { name: 'research' },
 )

@@ -36,21 +36,26 @@ func (s *Service) Run(ctx context.Context, runID string) (RunSummary, error) {
 func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCounts bool) (RunSummary, error) {
 	var run RunSummary
 	countProjection := `
-			0, 0, 0, 0, 0`
+			0, 0, 0, 0, 0, 0, 0, 0`
 	if includeCounts {
 		countProjection = `
-			(SELECT count(*) FROM records WHERE run_id = r.run_id),
-			(SELECT count(*) FROM spans WHERE run_id = r.run_id),
-			(SELECT count(*) FROM span_events WHERE run_id = r.run_id),
-			(SELECT count(*) FROM artifacts WHERE run_id = r.run_id),
-			(SELECT count(*) FROM edges WHERE run_id = r.run_id)`
+			r.record_count,
+			r.span_count,
+			r.event_count,
+			r.artifact_count,
+			r.edge_count,
+			r.total_input_tokens,
+			r.total_output_tokens,
+			r.total_cost_usd`
 	}
 	row := s.db.QueryRowContext(ctx, `
 		SELECT
-			r.run_id, ifnull(r.trace_id, ''), ifnull(r.name, ''), ifnull(r.root_primitive, ''),
+			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
+			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
 			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',`+countProjection+`,
+			ifnull(r.last_activity_at, ''),
 			r.attributes_json, r.metrics_json, r.error_json
 		FROM runs r
 		WHERE r.run_id = ?
@@ -59,6 +64,8 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 	if err := row.Scan(
 		&run.RunID,
 		&run.TraceID,
+		&run.SessionID,
+		&run.UserID,
 		&run.Name,
 		&run.RootPrimitive,
 		&run.Status,
@@ -73,6 +80,10 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 		&run.EventCount,
 		&run.ArtifactCount,
 		&run.EdgeCount,
+		&run.inputTokens,
+		&run.outputTokens,
+		&run.costUSD,
+		&run.lastActivityAt,
 		&attributes,
 		&metrics,
 		&errorJSON,
@@ -96,15 +107,22 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 	limit, offset, limited := normalizeRunListOptions(opts)
 	query := `
 		SELECT
-			r.run_id, ifnull(r.trace_id, ''), ifnull(r.name, ''), ifnull(r.root_primitive, ''),
+			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
+			ifnull(r.name, ''), ifnull(r.root_primitive, ''),
 			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',
-			0, 0, 0, 0, 0,
-				r.attributes_json, r.metrics_json, r.error_json
-			FROM runs r
-			ORDER BY r.started_at DESC, r.run_id DESC`
+			r.record_count, r.span_count, r.event_count, r.artifact_count, r.edge_count,
+			r.total_input_tokens, r.total_output_tokens, r.total_cost_usd,
+			ifnull(r.last_activity_at, ''),
+			r.attributes_json, r.metrics_json, r.error_json
+			FROM runs r`
 	args := []any{}
+	if opts.SessionID != "" {
+		query += ` WHERE r.session_id = ?`
+		args = append(args, opts.SessionID)
+	}
+	query += ` ORDER BY r.started_at DESC, r.run_id DESC`
 	if limited {
 		query += ` LIMIT ? OFFSET ?`
 		args = append(args, limit, offset)
@@ -121,6 +139,8 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 		if err := rows.Scan(
 			&run.RunID,
 			&run.TraceID,
+			&run.SessionID,
+			&run.UserID,
 			&run.Name,
 			&run.RootPrimitive,
 			&run.Status,
@@ -135,6 +155,10 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 			&run.EventCount,
 			&run.ArtifactCount,
 			&run.EdgeCount,
+			&run.inputTokens,
+			&run.outputTokens,
+			&run.costUSD,
+			&run.lastActivityAt,
 			&attributes,
 			&metrics,
 			&errorJSON,
@@ -216,12 +240,6 @@ func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error
 		return nil, fmt.Errorf("commit observability run delete: %w", err)
 	}
 	committed = true
-
-	s.lifecycleMu.Lock()
-	for _, runID := range deleted {
-		delete(s.lifecycleSignatures, runID)
-	}
-	s.lifecycleMu.Unlock()
 
 	payload, _ := json.Marshal(map[string]any{"runIds": deleted})
 	s.events.Publish(Event{
@@ -371,6 +389,7 @@ func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary, inc
 	}
 	if !includeExpensiveRollups {
 		for i := range runs {
+			applyStoredUsageRollups(&runs[i], metricsByRunID[runs[i].RunID])
 			normalizeUsageTotals(metricsByRunID[runs[i].RunID])
 			runs[i].Metrics = metricsRawOrNil(metricsByRunID[runs[i].RunID])
 		}
@@ -451,64 +470,49 @@ func (s *Service) enrichRunSummaryIdentityBatch(ctx context.Context, runIDs []st
 }
 
 func (s *Service) enrichRunSummaryCounts(ctx context.Context, runIDs []string, byRunID map[string]*RunSummary) error {
-	specs := []struct {
-		table string
-		label string
-		apply func(*RunSummary, int)
-	}{
-		{table: "records", label: "record", apply: func(run *RunSummary, count int) { run.RecordCount = count }},
-		{table: "spans", label: "span", apply: func(run *RunSummary, count int) { run.SpanCount = count }},
-		{table: "span_events", label: "span event", apply: func(run *RunSummary, count int) { run.EventCount = count }},
-		{table: "artifacts", label: "artifact", apply: func(run *RunSummary, count int) { run.ArtifactCount = count }},
-		{table: "edges", label: "edge", apply: func(run *RunSummary, count int) { run.EdgeCount = count }},
-	}
-	for _, spec := range specs {
-		for _, batch := range runIDBatches(runIDs, runSummaryRollupBatchSize) {
-			batchCtx, cancel := s.queryContext(ctx)
-			err := s.enrichRunSummaryCountBatch(batchCtx, batch, byRunID, spec.table, spec.label, spec.apply)
+	for _, batch := range runIDBatches(runIDs, runSummaryRollupBatchSize) {
+		batchCtx, cancel := s.queryContext(ctx)
+		rows, err := s.db.QueryContext(batchCtx, `
+			SELECT run_id, record_count, span_count, event_count, artifact_count, edge_count,
+				total_input_tokens, total_output_tokens, total_cost_usd
+			FROM runs
+			WHERE run_id IN (`+queryPlaceholders(len(batch))+`)
+		`, queryArgs(batch)...)
+		if err != nil {
 			cancel()
-			if err != nil {
-				return err
+			return fmt.Errorf("query observability count rollups: %w", err)
+		}
+		for rows.Next() {
+			var runID string
+			var recordCount, spanCount, eventCount, artifactCount, edgeCount int
+			var inputTokens, outputTokens int
+			var costUSD float64
+			if err := rows.Scan(&runID, &recordCount, &spanCount, &eventCount, &artifactCount, &edgeCount, &inputTokens, &outputTokens, &costUSD); err != nil {
+				_ = rows.Close()
+				cancel()
+				return fmt.Errorf("scan observability count rollup: %w", err)
+			}
+			if run := byRunID[runID]; run != nil {
+				run.RecordCount = recordCount
+				run.SpanCount = spanCount
+				run.EventCount = eventCount
+				run.ArtifactCount = artifactCount
+				run.EdgeCount = edgeCount
+				run.inputTokens = inputTokens
+				run.outputTokens = outputTokens
+				run.costUSD = costUSD
 			}
 		}
-	}
-	return nil
-}
-
-func (s *Service) enrichRunSummaryCountBatch(
-	ctx context.Context,
-	runIDs []string,
-	byRunID map[string]*RunSummary,
-	table string,
-	label string,
-	apply func(*RunSummary, int),
-) error {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT run_id, count(*)
-		FROM `+table+`
-		WHERE run_id IN (`+queryPlaceholders(len(runIDs))+`)
-		GROUP BY run_id
-	`, queryArgs(runIDs)...)
-	if err != nil {
-		return fmt.Errorf("query observability %s count rollups: %w", label, err)
-	}
-	for rows.Next() {
-		var runID string
-		var count int
-		if err := rows.Scan(&runID, &count); err != nil {
+		if err := rows.Err(); err != nil {
 			_ = rows.Close()
-			return fmt.Errorf("scan observability %s count rollup: %w", label, err)
+			cancel()
+			return fmt.Errorf("iterate observability count rollups: %w", err)
 		}
-		if run := byRunID[runID]; run != nil {
-			apply(run, count)
+		if err := rows.Close(); err != nil {
+			cancel()
+			return fmt.Errorf("close observability count rollups rows: %w", err)
 		}
-	}
-	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return fmt.Errorf("iterate observability %s count rollups: %w", label, err)
-	}
-	if err := rows.Close(); err != nil {
-		return fmt.Errorf("close observability %s count rollups rows: %w", label, err)
+		cancel()
 	}
 	return nil
 }
@@ -671,7 +675,7 @@ func (s *Service) runSpanSummaryRollup(ctx context.Context, runID string) (map[s
 			attributes_json, metrics_json
 		FROM spans
 		WHERE run_id = ?
-		ORDER BY ifnull(started_at, ''), span_id
+		ORDER BY started_at, span_id
 	`, runID)
 	if err != nil {
 		return nil, "", "", "", err
@@ -851,7 +855,7 @@ func (s *Service) listSpans(ctx context.Context, runID string) ([]SpanSummary, e
 			attributes_json, metrics_json, error_json
 		FROM spans
 		WHERE run_id = ?
-		ORDER BY ifnull(started_at, ''), span_id
+		ORDER BY started_at, span_id
 	`, runID)
 	if err != nil {
 		return nil, err
@@ -925,31 +929,6 @@ func providerFromModelID(modelID string) string {
 	return ""
 }
 
-func (s *Service) listEvents(ctx context.Context, runID string) ([]SpanEventSummary, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT event_id, run_id, ifnull(trace_id, ''), span_id, name, timestamp, attributes_json
-		FROM span_events
-		WHERE run_id = ?
-		ORDER BY timestamp, event_id
-	`, runID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var events []SpanEventSummary
-	for rows.Next() {
-		var event SpanEventSummary
-		var attributes []byte
-		if err := rows.Scan(&event.EventID, &event.RunID, &event.TraceID, &event.SpanID, &event.Name, &event.Timestamp, &attributes); err != nil {
-			return nil, err
-		}
-		event.Attributes = json.RawMessage(attributes)
-		events = append(events, event)
-	}
-	return events, rows.Err()
-}
-
 func (s *Service) listArtifacts(ctx context.Context, runID string) ([]ArtifactSummary, error) {
 	rows, err := s.db.QueryContext(ctx, `
 		SELECT artifact_id, run_id, ifnull(trace_id, ''), ifnull(span_id, ''), kind, created_at,
@@ -1005,10 +984,10 @@ func (s *Service) listEdges(ctx context.Context, runID string) ([]EdgeSummary, e
 
 func (s *Service) listRecords(ctx context.Context, runID string) ([]StoredRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT record_id, run_id, ifnull(trace_id, ''), type, payload_json, received_at
+		SELECT record_id, run_id, ifnull(trace_id, ''), seq, type, payload_json, received_at
 		FROM records
 		WHERE run_id = ?
-		ORDER BY received_at, record_id
+		ORDER BY CASE WHEN seq > 0 THEN 0 ELSE 1 END, seq, received_at, record_id
 	`, runID)
 	if err != nil {
 		return nil, err
@@ -1018,7 +997,7 @@ func (s *Service) listRecords(ctx context.Context, runID string) ([]StoredRecord
 	var records []StoredRecord
 	for rows.Next() {
 		var record StoredRecord
-		if err := rows.Scan(&record.RecordID, &record.RunID, &record.TraceID, &record.Type, &record.PayloadJSON, &record.ReceivedAt); err != nil {
+		if err := rows.Scan(&record.RecordID, &record.RunID, &record.TraceID, &record.Seq, &record.Type, &record.PayloadJSON, &record.ReceivedAt); err != nil {
 			return nil, err
 		}
 		records = append(records, record)

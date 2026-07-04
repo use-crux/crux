@@ -7,6 +7,8 @@ When you run an agent that delegates work — to a subagent, a flow step, a para
 
 Crux models this on W3C `traceparent`: every span records `parentSpanId` when it is created. The Go backend parents the child directly under that span — no heuristics, no time-window guessing.
 
+When one workflow intentionally owns several run roots, pass `traceId` to `observe.openRun()` for the child roots. Quality uses this for evaluation traces: the `eval.run` umbrella and every `eval.case` run share one trace while staying separate runs.
+
 ## The contract
 
 Three rules keep the tree correct end-to-end:
@@ -20,7 +22,6 @@ import { observe } from '@use-crux/core/observability'
 
 return observe.span({
   name: 'delegate',
-  family: 'delegate',
   primitive: 'delegate.invoke',
   attributes: { delegateId },
 }, async () => {
@@ -40,14 +41,32 @@ The canonical observability runtime reads the active span stack when a `run` or 
 ```ts
 import { observe } from '@use-crux/core/observability'
 
-await observe.span({ name: 'handoff', family: 'handoff', primitive: 'handoff.prepare' }, async () => {
-  await observe.span({ name: 'delegate', family: 'delegate', primitive: 'delegate.invoke' }, async () => {
+await observe.span({ name: 'handoff', primitive: 'handoff.prepare' }, async () => {
+  await observe.span({ name: 'delegate', primitive: 'delegate.invoke' }, async () => {
     // The delegate span's parentSpanId points at the handoff span.
   })
 })
 ```
 
 In-process this works automatically via AsyncLocalStorage. You don't write code for this unless you are authoring a custom boundary primitive.
+
+When AsyncLocalStorage is not available, such as in browser-like or edge runtimes, Crux still records run lifecycles and synchronous `withContext()` spans. Contextless `observe.event()`, `observe.artifact()`, and `observe.edge()` calls are skipped and counted in `observabilityDiagnostics().contextlessRecords` instead of throwing.
+
+Correlators ride on the same context machinery but do not define execution parentage. Use
+`propagateAttributes({ sessionId, userId, metadata }, fn)` to group records by session or user
+without adding graph nodes:
+
+```ts
+import { observe, propagateAttributes } from '@use-crux/core/observability'
+
+await propagateAttributes(
+  { sessionId: 'checkout-123', userId: 'user-456', metadata: { plan: 'team' } },
+  () => observe.run({ name: 'checkout assistant', rootPrimitive: 'agent.run' }, runCheckout),
+)
+```
+
+Every record emitted inside the callback carries `sessionId` and `userId`. Metadata appears as
+attributes named `meta.plan`, `meta.<key>`, and so on, with values capped for transport safety.
 
 ### 3. Cross-boundary transports pack and unpack the context explicitly
 
@@ -119,7 +138,6 @@ export async function myBoundary<T>(input: Input, fn: () => Promise<T>): Promise
   return observe.span(
     {
       name: 'my-boundary',
-      family: 'custom',
       primitive: 'custom.operation',
       attributes: { inputKind: input.kind },
     },
@@ -135,7 +153,6 @@ import { observe } from '@use-crux/core/observability'
 
 const span = observe.openSpan({
   name: 'my-stream',
-  family: 'custom',
   primitive: 'custom.operation',
 })
 
@@ -143,14 +160,17 @@ try {
   await span.withContext(async () => {
     await streamWork()
   })
-  span.end()
+  span.setAttributes({ chunkCount: 12 })
+  span.end({ attributes: { streamCompleted: true } })
 } catch (error) {
   span.error(error)
   throw error
 }
 ```
 
-Custom primitive records must use canonical primitive names where possible, or the `custom.*` namespace for app-specific work. The `span:start` and `span:end` records share the same span id; the Go backend uses that id to pair lifecycle records and resolve children that name this span as their parent.
+`span.end()` accepts terminal options only. Use `span.setAttributes()` for metadata discovered during the span, or pass terminal metadata as `span.end({ attributes })`; raw attribute bags are rejected so `{ error }` consistently records an error end.
+
+Custom primitive records must use canonical primitive names where possible, or `custom.operation` for app-specific work. The runtime derives span family from the primitive. The `span:start` and `span:end` records share the same span id; the Go backend uses that id to pair lifecycle records and resolve children that name this span as their parent.
 
 ## Troubleshooting
 

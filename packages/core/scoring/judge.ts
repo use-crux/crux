@@ -131,7 +131,6 @@ export function llmJudge<TDetail = unknown>(config: JudgeConfig<TDetail>): Judge
     const userPrompt = buildUserPrompt(input)
     const span = observe.openSpan({
       name: `judge.${config.id}`,
-      family: 'scoring',
       primitive: 'scoring.judge',
       attributes: {
         metricId: config.id,
@@ -182,15 +181,17 @@ export function llmJudge<TDetail = unknown>(config: JudgeConfig<TDetail>): Judge
 
 
       span.end({
-        metricId: config.id,
-        score: clampedScore,
-        rawScore,
-        clamped: clampedScore !== rawScore,
-        scaleMin: config.scale.min,
-        scaleMax: config.scale.max,
-        hasReasoning: object.reasoning.length > 0,
-        hasDetail,
-        ...(options?.evalId ? { evalId: options.evalId } : {}),
+        attributes: {
+          metricId: config.id,
+          score: clampedScore,
+          rawScore,
+          clamped: clampedScore !== rawScore,
+          scaleMin: config.scale.min,
+          scaleMax: config.scale.max,
+          hasReasoning: object.reasoning.length > 0,
+          hasDetail,
+          ...(options?.evalId ? { evalId: options.evalId } : {}),
+        },
       })
       return result
     } catch (error) {

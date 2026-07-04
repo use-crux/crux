@@ -5,6 +5,7 @@ import type { CompositionType, RuntimeFlowRun, RuntimeFlowStepData, SpanPrimitiv
 // module intentionally does not build or infer execution hierarchy.
 export interface SpanNode {
   id: string
+  seq?: number
   kind: 'session' | 'flow' | 'step' | 'trace' | 'handoff' | 'composition'
   primitive?: SpanPrimitive | string
   compositionType?: CompositionType

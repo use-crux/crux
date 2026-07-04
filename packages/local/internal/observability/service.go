@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -24,6 +26,9 @@ const (
 	defaultMaintenanceTimeout = 15 * time.Second
 	inMemoryMaxOpenConns      = 1
 	fileDatabaseMaxOpenConns  = 8
+	tokenChunkEventName       = "token.chunk"
+	tokenChunkRingLimit       = 512
+	defaultSpanEventListLimit = 200
 	// DefaultRunListLimit is the server-side page size for observability run
 	// lists when callers do not request an explicit limit. Run detail and graph
 	// reads remain exact; only list endpoints use this protection.
@@ -37,8 +42,14 @@ type Service struct {
 	mutationTO    time.Duration
 	maintenanceTO time.Duration
 
-	lifecycleMu         sync.Mutex
-	lifecycleSignatures map[string]string
+	retentionSettings  retentionSettings
+	lifecycleRunDetail func(context.Context, string) (RunDetail, error)
+
+	tokenMu      sync.Mutex
+	tokenPending map[tokenChunkKey]pendingTokenChunk
+	tokenTimer   *time.Timer
+
+	unknownRecordTypes atomic.Int64
 }
 
 type Event struct {
@@ -53,11 +64,13 @@ type Event struct {
 }
 
 type lifecycleReconciliation struct {
-	RunID     string
-	Status    string
-	Reason    string
-	Severity  string
-	Signature string
+	RunID          string
+	Status         string
+	EndedAt        string
+	Reason         string
+	Severity       string
+	Signature      string
+	LastActivityAt string
 }
 
 type EventBus struct {
@@ -98,25 +111,31 @@ func (b *EventBus) Publish(event Event) {
 }
 
 type RunSummary struct {
-	RunID         string          `json:"runId"`
-	TraceID       string          `json:"traceId"`
-	Name          string          `json:"name"`
-	RootPrimitive string          `json:"rootPrimitive"`
-	Status        string          `json:"status"`
-	StartedAt     string          `json:"startedAt"`
-	EndedAt       string          `json:"endedAt"`
-	DurationMs    float64         `json:"durationMs"`
-	Model         string          `json:"model"`
-	Provider      string          `json:"provider"`
-	PromptID      string          `json:"promptId"`
-	RecordCount   int             `json:"recordCount"`
-	SpanCount     int             `json:"spanCount"`
-	EventCount    int             `json:"eventCount"`
-	ArtifactCount int             `json:"artifactCount"`
-	EdgeCount     int             `json:"edgeCount"`
-	Attributes    json.RawMessage `json:"attributes,omitempty"`
-	Metrics       json.RawMessage `json:"metrics,omitempty"`
-	Error         json.RawMessage `json:"error,omitempty"`
+	RunID          string          `json:"runId"`
+	TraceID        string          `json:"traceId"`
+	SessionID      string          `json:"sessionId,omitempty"`
+	UserID         string          `json:"userId,omitempty"`
+	Name           string          `json:"name"`
+	RootPrimitive  string          `json:"rootPrimitive"`
+	Status         string          `json:"status"`
+	StartedAt      string          `json:"startedAt"`
+	EndedAt        string          `json:"endedAt"`
+	DurationMs     float64         `json:"durationMs"`
+	Model          string          `json:"model"`
+	Provider       string          `json:"provider"`
+	PromptID       string          `json:"promptId"`
+	RecordCount    int             `json:"recordCount"`
+	SpanCount      int             `json:"spanCount"`
+	EventCount     int             `json:"eventCount"`
+	ArtifactCount  int             `json:"artifactCount"`
+	EdgeCount      int             `json:"edgeCount"`
+	inputTokens    int             `json:"-"`
+	outputTokens   int             `json:"-"`
+	costUSD        float64         `json:"-"`
+	lastActivityAt string          `json:"-"`
+	Attributes     json.RawMessage `json:"attributes,omitempty"`
+	Metrics        json.RawMessage `json:"metrics,omitempty"`
+	Error          json.RawMessage `json:"error,omitempty"`
 }
 
 type RunListOptions struct {
@@ -124,9 +143,22 @@ type RunListOptions struct {
 	// negative values request the full history for maintenance/CLI callers.
 	Limit  int
 	Offset int
+	// SessionID restricts the run list to runs that were started with this
+	// correlator. Empty means no session filter.
+	SessionID string
 	// IncludeExpensiveRollups asks list reads to scan span/event metric JSON.
 	// UI list endpoints leave this off; single-run detail reads remain exact.
 	IncludeExpensiveRollups bool
+}
+
+type SpanEventListOptions struct {
+	// Name restricts the result to one event name. Empty returns all lazy span
+	// events for the span.
+	Name string
+	// After restricts the result to events strictly after this event timestamp.
+	After string
+	// Limit caps the ordered result. Zero uses the lazy endpoint default.
+	Limit int
 }
 
 type Graph struct {
@@ -466,6 +498,7 @@ type StoredRecord struct {
 	RecordID    string     `json:"recordId"`
 	RunID       string     `json:"runId"`
 	TraceID     string     `json:"traceId"`
+	Seq         int        `json:"seq"`
 	Type        RecordType `json:"type"`
 	PayloadJSON string     `json:"payloadJson"`
 	ReceivedAt  string     `json:"receivedAt"`
@@ -540,6 +573,7 @@ type RunEndRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	EndedAt       string          `json:"endedAt"`
 	DurationMs    float64         `json:"durationMs,omitempty"`
@@ -554,6 +588,7 @@ type SpanEndRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	EndedAt       string          `json:"endedAt"`
@@ -569,6 +604,7 @@ type SpanEventRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
+	Seq           int             `json:"seq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	EventID       string          `json:"eventId"`
@@ -584,13 +620,14 @@ func NewService(db *sql.DB) (*Service, error) {
 func newService(ctx context.Context, db *sql.DB, maxOpenConns int) (*Service, error) {
 	configureConnectionPool(db, maxOpenConns)
 	service := &Service{
-		db:                  db,
-		events:              NewEventBus(),
-		queryTO:             defaultQueryTimeout,
-		mutationTO:          defaultMutationTimeout,
-		maintenanceTO:       defaultMaintenanceTimeout,
-		lifecycleSignatures: make(map[string]string),
+		db:                db,
+		events:            NewEventBus(),
+		queryTO:           defaultQueryTimeout,
+		mutationTO:        defaultMutationTimeout,
+		maintenanceTO:     defaultMaintenanceTimeout,
+		retentionSettings: retentionSettingsFromEnv(),
 	}
+	service.lifecycleRunDetail = service.RunDetail
 	ctx, cancel := service.maintenanceContext(ctx)
 	defer cancel()
 
@@ -656,7 +693,12 @@ func OpenService(ctx context.Context, path string) (*Service, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("initialize observability service: %w", err)
 	}
+	if _, err := service.runRetention(ctx, service.retentionSettings, time.Now().UTC()); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("run observability retention: %w", err)
+	}
 	service.StartLifecycleReconciler(ctx, time.Second)
+	service.StartRetention(ctx, 30*time.Minute)
 	return service, nil
 }
 
@@ -671,6 +713,12 @@ func observabilitySQLiteDSN(path string) string {
 }
 
 func (s *Service) Close() error {
+	s.tokenMu.Lock()
+	if s.tokenTimer != nil {
+		s.tokenTimer.Stop()
+		s.tokenTimer = nil
+	}
+	s.tokenMu.Unlock()
 	return s.db.Close()
 }
 
@@ -693,6 +741,7 @@ func (s *Service) StartLifecycleReconciler(ctx context.Context, interval time.Du
 				if err := s.PublishLifecycleReconciliations(ctx); err != nil {
 					// Reconciliation drives presentation freshness only; ingestion and reads
 					// remain the source of canonical data and should never be blocked by it.
+					slog.Debug("observability lifecycle reconciliation failed", "error", err)
 				}
 			}
 		}
@@ -711,15 +760,15 @@ func (s *Service) PublishLifecycleReconciliations(ctx context.Context) error {
 		return nil
 	}
 
-	s.lifecycleMu.Lock()
-	defer s.lifecycleMu.Unlock()
-
 	now := time.Now().UnixMilli()
 	for _, reconciliation := range reconciliations {
-		if s.lifecycleSignatures[reconciliation.RunID] == reconciliation.Signature {
+		persisted, err := s.persistLifecycleReconciliation(ctx, reconciliation)
+		if err != nil {
+			return err
+		}
+		if !persisted {
 			continue
 		}
-		s.lifecycleSignatures[reconciliation.RunID] = reconciliation.Signature
 		payload, _ := json.Marshal(map[string]any{
 			"runId":  reconciliation.RunID,
 			"status": reconciliation.Status,
@@ -746,7 +795,10 @@ func (s *Service) lifecycleReconciliations(ctx context.Context) ([]lifecycleReco
 	}
 	reconciliations := make([]lifecycleReconciliation, 0)
 	for _, run := range runs {
-		detail, err := s.RunDetail(ctx, run.RunID)
+		if lifecycleActivityIsFresh(run.LastActivityAt, time.Now()) {
+			continue
+		}
+		detail, err := s.lifecycleRunDetail(ctx, run.RunID)
 		if err != nil {
 			if errors.Is(err, ErrNotFound) {
 				continue
@@ -768,40 +820,32 @@ func (s *Service) lifecycleReconciliations(ctx context.Context) ([]lifecycleReco
 			severity = "error"
 		}
 		reconciliations = append(reconciliations, lifecycleReconciliation{
-			RunID:     run.RunID,
-			Status:    status,
-			Reason:    reason,
-			Severity:  severity,
-			Signature: strings.Join([]string{status, endedAt, reason}, "|"),
+			RunID:          run.RunID,
+			Status:         status,
+			EndedAt:        endedAt,
+			Reason:         reason,
+			Severity:       severity,
+			Signature:      strings.Join([]string{status, endedAt, reason}, "|"),
+			LastActivityAt: run.LastActivityAt,
 		})
 	}
 	return reconciliations, nil
 }
 
 type lifecycleRunSummary struct {
-	RunID   string
-	Status  string
-	EndedAt string
+	RunID          string
+	Status         string
+	EndedAt        string
+	LastActivityAt string
 }
 
 func (s *Service) lifecycleCandidateRuns(ctx context.Context) ([]lifecycleRunSummary, error) {
-	staleCutoff := time.Now().Add(-30 * time.Second).UTC().Format(time.RFC3339Nano)
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT run_id, status, ended_at
-		FROM (
-			SELECT run_id, ifnull(status, '') AS status, ifnull(ended_at, '') AS ended_at, ifnull(started_at, '') AS sort_started_at
-			FROM runs
-			WHERE status = 'running' AND (ended_at IS NULL OR ended_at = '')
-			UNION
-			SELECT DISTINCT r.run_id, ifnull(r.status, '') AS status, ifnull(r.ended_at, '') AS ended_at, ifnull(r.started_at, '') AS sort_started_at
-			FROM runs r
-			INNER JOIN spans s ON s.run_id = r.run_id
-			WHERE s.status = 'running'
-				AND (s.ended_at IS NULL OR s.ended_at = '')
-				AND ifnull(s.started_at, '') < ?
-		)
-		ORDER BY sort_started_at DESC, run_id DESC
-	`, staleCutoff)
+		SELECT run_id, ifnull(status, ''), ifnull(ended_at, ''), ifnull(last_activity_at, '')
+		FROM runs
+		WHERE status = 'running' AND lifecycle_status IS NULL
+		ORDER BY coalesce(last_activity_at, started_at, '') DESC, run_id DESC
+	`)
 	if err != nil {
 		return nil, err
 	}
@@ -810,12 +854,47 @@ func (s *Service) lifecycleCandidateRuns(ctx context.Context) ([]lifecycleRunSum
 	var runs []lifecycleRunSummary
 	for rows.Next() {
 		var run lifecycleRunSummary
-		if err := rows.Scan(&run.RunID, &run.Status, &run.EndedAt); err != nil {
+		if err := rows.Scan(&run.RunID, &run.Status, &run.EndedAt, &run.LastActivityAt); err != nil {
 			return nil, err
 		}
 		runs = append(runs, run)
 	}
 	return runs, rows.Err()
+}
+
+func (s *Service) persistLifecycleReconciliation(ctx context.Context, reconciliation lifecycleReconciliation) (bool, error) {
+	status := "reconciled-terminal"
+	if reconciliation.Status == "stale" {
+		status = "reconciled-stale"
+	}
+	checkedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE runs
+		SET lifecycle_status = ?, lifecycle_checked_at = ?
+		WHERE run_id = ? AND lifecycle_status IS NULL AND ifnull(last_activity_at, '') = ?
+	`, status, checkedAt, reconciliation.RunID, reconciliation.LastActivityAt)
+	if err != nil {
+		return false, fmt.Errorf("persist lifecycle reconciliation for %q: %w", reconciliation.RunID, err)
+	}
+	updated, err := rowsAffected(result)
+	if err != nil {
+		return false, fmt.Errorf("inspect lifecycle reconciliation update for %q: %w", reconciliation.RunID, err)
+	}
+	if !updated {
+		return false, nil
+	}
+	return true, nil
+}
+
+func lifecycleActivityIsFresh(timestamp string, now time.Time) bool {
+	if timestamp == "" {
+		return false
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, timestamp)
+	if err != nil {
+		return false
+	}
+	return now.Sub(parsed) <= 60*time.Second
 }
 
 func lifecyclePresentationStatus(run lifecycleRunSummary, detail RunDetail) (string, string) {

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { readFile } from 'node:fs/promises'
 import fixture from '../../observability/fixtures/generation-run.json'
 import goldenNodeRun from '../../observability/fixtures/golden-node-run.json'
 import {
@@ -14,11 +15,33 @@ import {
 } from '../../observability'
 
 describe('Crux observability graph contract', () => {
+  it('keeps presentation read-model exports out of the wire contract module', async () => {
+    const contractSource = await readFile(
+      new URL('../../observability/contract.ts', import.meta.url),
+      'utf8',
+    )
+    const presentationSource = await readFile(
+      new URL('../../observability/presentation.ts', import.meta.url),
+      'utf8',
+    )
+
+    expect(contractSource).not.toMatch(
+      /export\s+(?:interface|type)\s+Crux(?:Presentation|RunSummaryView|SpanSummaryView|RunDetail)/u,
+    )
+    expect(presentationSource).toContain(
+      'Presentation read-model — versioned independently of the wire contract; NOT covered by schema-version guarantees.',
+    )
+  })
+
   it('validates the shared generation run fixture', () => {
     const parsed = CruxGraphRecordBatchSchema.parse(fixture)
 
     expect(parsed.records).toHaveLength(13)
-    expect(parsed.records.every((record) => record.schemaVersion === CRUX_OBSERVABILITY_SCHEMA_VERSION)).toBe(true)
+    expect(
+      parsed.records.every(
+        (record) => record.schemaVersion === CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      ),
+    ).toBe(true)
     expect(parsed.records.map((record) => record.type)).toEqual([
       'run:start',
       'span:start',
@@ -55,17 +78,39 @@ describe('Crux observability graph contract', () => {
         }),
       }),
     )
+    expect(parsed.records[0]).toMatchObject({
+      type: 'run:start',
+      sessionId: 'session_support_001',
+      userId: 'user_support_001',
+      attributes: expect.objectContaining({ 'meta.ticketId': 'ticket_123' }),
+    })
   })
 
   it('validates the golden Node run fixture for RunDetail builders', () => {
     const parsed = CruxGraphRecordBatchSchema.parse(goldenNodeRun)
 
-    expect(parsed.records.some((record) => record.type === 'span:event' && record.name === 'token.delta')).toBe(true)
-    expect(parsed.records.some((record) => record.type === 'edge' && record.edgeType === 'explains')).toBe(true)
     expect(
-      parsed.records.filter((record) => record.type === 'span' && record.parentSpanId === 'span_golden_parallel'),
+      parsed.records.some(
+        (record) =>
+          record.type === 'span:event' && record.name === 'token.chunk',
+      ),
+    ).toBe(true)
+    expect(
+      parsed.records.some(
+        (record) => record.type === 'edge' && record.edgeType === 'explains',
+      ),
+    ).toBe(true)
+    expect(
+      parsed.records.filter(
+        (record) =>
+          record.type === 'span' && record.parentSpanId === '8f3227aa4c6f0565',
+      ),
     ).toHaveLength(4)
-    const artifactKinds = new Set(parsed.records.flatMap((record) => (record.type === 'artifact' ? [record.kind] : [])))
+    const artifactKinds = new Set(
+      parsed.records.flatMap((record) =>
+        record.type === 'artifact' ? [record.kind] : [],
+      ),
+    )
     expect([...artifactKinds]).toEqual(
       expect.arrayContaining([
         'retrieval.hits',
@@ -91,11 +136,14 @@ describe('Crux observability graph contract', () => {
 
   it('keeps generation span fields inspectable without opening artifact payloads', () => {
     const parsed = CruxGraphRecordBatchSchema.parse(fixture)
-    const spanStart = parsed.records.find((record) => record.type === 'span:start')
+    const spanStart = parsed.records.find(
+      (record) => record.type === 'span:start',
+    )
 
     expect(spanStart).toMatchObject({
-      runId: 'run_generation_fixture_01',
-      spanId: 'span_generation_fixture_01',
+      runId: 'run_d202cd4d27c2073026a950af',
+      seq: 2,
+      spanId: '841e9c04c4d09a6e',
       family: 'generation',
       primitive: 'generation.call',
       model: 'gpt-4o',
@@ -188,6 +236,7 @@ describe('Crux observability graph contract', () => {
         'retrieval.pipeline',
         'retrieval.recipe',
         'retrieval.retrieve',
+        'retrieval.query',
         'retrieval.stage',
         'retrieval.step',
         'tool.approval',
@@ -231,10 +280,11 @@ describe('Crux observability graph contract', () => {
     expect(
       CruxGraphRecordSchema.safeParse({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-        recordId: 'rec_blocked',
+        recordId: 'rec_1111111111111111_1',
         type: 'span',
-        runId: 'run_blocked',
-        spanId: 'span_blocked',
+        runId: 'run_111111111111111111111111',
+        seq: 1,
+        spanId: '1111111111111111',
         family: 'guardrail',
         primitive: 'guardrail.run',
         name: 'pii check',
@@ -247,11 +297,12 @@ describe('Crux observability graph contract', () => {
     expect(
       CruxGraphRecordSchema.safeParse({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-        recordId: 'rec_suspend',
+        recordId: 'rec_2222222222222222_2',
         type: 'span',
-        runId: 'run_suspend',
-        spanId: 'span_suspend',
-        parentSpanId: 'span_flow',
+        runId: 'run_222222222222222222222222',
+        seq: 1,
+        spanId: '2222222222222222',
+        parentSpanId: '3333333333333333',
         family: 'flow',
         primitive: 'flow.suspension',
         name: 'plan-approval',
@@ -264,16 +315,19 @@ describe('Crux observability graph contract', () => {
 
   it('keeps primitive names mapped to their canonical families', () => {
     for (const primitive of CRUX_PRIMITIVE_NAMES) {
-      expect(CRUX_PRIMITIVE_FAMILIES).toContain(CRUX_PRIMITIVE_FAMILY_BY_NAME[primitive])
+      expect(CRUX_PRIMITIVE_FAMILIES).toContain(
+        CRUX_PRIMITIVE_FAMILY_BY_NAME[primitive],
+      )
     }
 
     expect(
       CruxSpanStartRecordSchema.safeParse({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
-        recordId: 'rec_invalid_family',
+        recordId: 'rec_3333333333333333_3',
         type: 'span:start',
-        runId: 'run_invalid_family',
-        spanId: 'span_invalid_family',
+        runId: 'run_333333333333333333333333',
+        seq: 1,
+        spanId: '4444444444444444',
         family: 'tool',
         primitive: 'generation.call',
         name: 'bad family',

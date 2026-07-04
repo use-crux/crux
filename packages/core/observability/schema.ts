@@ -2,12 +2,19 @@ import { z } from 'zod'
 import {
   CRUX_CANONICAL_ARTIFACT_KINDS,
   CRUX_CANONICAL_EDGE_TYPES,
+  CRUX_GENERATION_METRIC_KEYS,
   CRUX_OBSERVABILITY_SCHEMA_VERSION,
   CRUX_PRIMITIVE_FAMILIES,
   CRUX_PRIMITIVE_FAMILY_BY_NAME,
   CRUX_PRIMITIVE_NAMES,
+  CRUX_TOKEN_METRIC_KEYS,
   type CruxArtifactId,
+  type CruxArtifactKind,
+  type CruxCustomArtifactKind,
+  type CruxCustomEdgeType,
   type CruxEdgeId,
+  type CruxEdgeType,
+  type CruxMetricKey,
   type CruxRecordId,
   type CruxRunId,
   type CruxSpanEventId,
@@ -19,11 +26,20 @@ const nonEmptyString = z.string().min(1)
 const isoTimestamp = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
   message: 'Expected an ISO-compatible timestamp',
 })
+const w3cTraceId = /^[0-9a-f]{32}$/
+const w3cSpanId = /^[0-9a-f]{16}$/
+const allZeroHex = /^0+$/
 
 export const CruxRecordIdSchema = nonEmptyString.transform((value) => value as CruxRecordId)
 export const CruxRunIdSchema = nonEmptyString.transform((value) => value as CruxRunId)
-export const CruxTraceIdSchema = nonEmptyString.transform((value) => value as CruxTraceId)
-export const CruxSpanIdSchema = nonEmptyString.transform((value) => value as CruxSpanId)
+export const CruxTraceIdSchema = nonEmptyString
+  .regex(w3cTraceId, 'Trace IDs must be 32 lowercase hexadecimal characters')
+  .refine((value) => !allZeroHex.test(value), { message: 'Trace IDs must not be all zeroes' })
+  .transform((value) => value as CruxTraceId)
+export const CruxSpanIdSchema = nonEmptyString
+  .regex(w3cSpanId, 'Span IDs must be 16 lowercase hexadecimal characters')
+  .refine((value) => !allZeroHex.test(value), { message: 'Span IDs must not be all zeroes' })
+  .transform((value) => value as CruxSpanId)
 export const CruxSpanEventIdSchema = nonEmptyString.transform((value) => value as CruxSpanEventId)
 export const CruxEdgeIdSchema = nonEmptyString.transform((value) => value as CruxEdgeId)
 export const CruxArtifactIdSchema = nonEmptyString.transform((value) => value as CruxArtifactId)
@@ -40,19 +56,37 @@ export const CruxPrimitiveNameSchema = z.enum(CRUX_PRIMITIVE_NAMES)
 const customPrefixed = (value: string) => value.startsWith('custom.') && value.length > 'custom.'.length
 
 export const CruxCanonicalEdgeTypeSchema = z.enum(CRUX_CANONICAL_EDGE_TYPES)
+export const CruxCustomEdgeTypeSchema = z
+  .string()
+  .refine(customPrefixed, { message: 'Custom edge types must use the custom.* namespace' })
+  .transform((value) => value as CruxCustomEdgeType)
 export const CruxEdgeTypeSchema = z.union([
   CruxCanonicalEdgeTypeSchema,
-  z.string().refine(customPrefixed, { message: 'Custom edge types must use the custom.* namespace' }),
-])
+  CruxCustomEdgeTypeSchema,
+]) satisfies z.ZodType<CruxEdgeType>
 
 export const CruxCanonicalArtifactKindSchema = z.enum(CRUX_CANONICAL_ARTIFACT_KINDS)
+export const CruxCustomArtifactKindSchema = z
+  .string()
+  .refine(customPrefixed, { message: 'Custom artifact kinds must use the custom.* namespace' })
+  .transform((value) => value as CruxCustomArtifactKind)
 export const CruxArtifactKindSchema = z.union([
   CruxCanonicalArtifactKindSchema,
-  z.string().refine(customPrefixed, { message: 'Custom artifact kinds must use the custom.* namespace' }),
-])
+  CruxCustomArtifactKindSchema,
+]) satisfies z.ZodType<CruxArtifactKind>
+
+const customMetricPrefixed = (value: string) => value.startsWith('custom.') && value.length > 'custom.'.length
 
 export const CruxAttributesSchema = z.record(z.string(), z.unknown())
-export const CruxMetricsSchema = z.record(z.string(), z.number())
+export const CruxMetricKeySchema = z.union([
+  z.enum(CRUX_TOKEN_METRIC_KEYS),
+  z.enum(CRUX_GENERATION_METRIC_KEYS),
+  z
+    .string()
+    .refine(customMetricPrefixed, { message: 'Custom metric keys must use the custom.* namespace' })
+    .transform((value) => value as `custom.${string}`),
+]) satisfies z.ZodType<CruxMetricKey>
+export const CruxMetricsSchema = z.partialRecord(CruxMetricKeySchema, z.number())
 
 export const CruxSourceLocationSchema = z.object({
   file: nonEmptyString,
@@ -73,6 +107,9 @@ const BaseRecordSchema = z.object({
   schemaVersion: z.literal(CRUX_OBSERVABILITY_SCHEMA_VERSION),
   recordId: CruxRecordIdSchema,
   runId: CruxRunIdSchema,
+  seq: z.number().int().positive(),
+  sessionId: z.string().optional(),
+  userId: z.string().optional(),
   traceId: CruxTraceIdSchema.optional(),
 })
 

@@ -28,7 +28,6 @@ export function fileSkill(filePath: string): Skill {
   const sourceId = basename(dirname(filePath))
   const span = observe.openSpan({
     name: 'skill.file.load',
-    family: 'skill',
     primitive: 'skill.load',
     attributes: {
       loader: 'file',
@@ -80,13 +79,15 @@ export function fileSkill(filePath: string): Skill {
     })
     span.withContext(() => emitSkillArtifact(span.spanId, skill))
     span.end({
-      loader: 'file',
-      sourceId,
-      skillId: skill.id,
-      referenceCount: references.length,
-      instructionChars: body.length,
-      tags: meta.tags,
-      version: meta.version,
+      attributes: {
+        loader: 'file',
+        sourceId,
+        skillId: skill.id,
+        referenceCount: references.length,
+        instructionChars: body.length,
+        tags: meta.tags,
+        version: meta.version,
+      },
     })
     return skill
   } catch (error) {

@@ -60,7 +60,6 @@ export async function executeFallbackLoop<M, R>(
     const attemptStart = Date.now()
     const attemptSpan = observe.openSpan({
       name: 'fallback.attempt',
-      family: 'routing',
       primitive: 'fallback.attempt',
       attributes: {
         attempt: i + 1,
@@ -116,14 +115,16 @@ export async function executeFallbackLoop<M, R>(
         tiers: details.map(fallbackTierPreview),
       })
       attemptSpan.end({
-        attempt: i + 1,
-        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
-        model: modelId,
-        totalModels: models.length,
-        attemptStatus: 'success',
-        durationMs,
-        cost: getMeta(result)?.cost,
-        fallbackOccurred: errors.length > 0,
+        attributes: {
+          attempt: i + 1,
+          ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
+          model: modelId,
+          totalModels: models.length,
+          attemptStatus: 'success',
+          durationMs,
+          cost: getMeta(result)?.cost,
+          fallbackOccurred: errors.length > 0,
+        },
       })
       return result
     } catch (error) {

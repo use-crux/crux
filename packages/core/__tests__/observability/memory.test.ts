@@ -216,7 +216,7 @@ describe('canonical memory observability', () => {
     })
 
     await observe.run({ name: 'hydrate memory', rootPrimitive: 'prompt.resolve' }, async () => {
-      await observe.span({ name: 'memory context', family: 'context', primitive: 'context.resolve' }, async () => {
+      await observe.span({ name: 'memory context', primitive: 'context.resolve' }, async () => {
         await mem.asContext().systemFn({})
       })
     })

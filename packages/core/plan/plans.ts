@@ -56,7 +56,6 @@ export interface PlanFactory {
 async function createPlan(input: CreatePlanInput): Promise<PlanHandle> {
   const span = observe.openSpan({
     name: 'plan.create',
-    family: 'plan',
     primitive: 'plan.operation',
     attributes: {
       operation: 'create',
@@ -90,12 +89,14 @@ async function createPlan(input: CreatePlanInput): Promise<PlanHandle> {
     })
     const ctx = getExecutionContext()
     span.end({
-      operation: 'create',
-      planId: data.id,
-      title: data.title,
-      version: data.version,
-      hasContent: data.content.length > 0,
-      traceId: ctx?.traceId,
+      attributes: {
+        operation: 'create',
+        planId: data.id,
+        title: data.title,
+        version: data.version,
+        hasContent: data.content.length > 0,
+        traceId: ctx?.traceId,
+      },
     })
     return createPlanHandle(data.id)
   } catch (error) {
@@ -182,7 +183,6 @@ export async function listPlans(options?: PlanListOptions): Promise<Plan[]> {
 export async function updatePlan(planId: string, update: PlanUpdate): Promise<Plan> {
   const span = observe.openSpan({
     name: 'plan.update',
-    family: 'plan',
     primitive: 'plan.operation',
     attributes: {
       operation: 'update',
@@ -223,11 +223,13 @@ export async function updatePlan(planId: string, update: PlanUpdate): Promise<Pl
     const ctx = getExecutionContext()
 
     span.end({
-      operation: 'update',
-      planId,
-      version: updated.version,
-      changes,
-      traceId: ctx?.traceId,
+      attributes: {
+        operation: 'update',
+        planId,
+        version: updated.version,
+        changes,
+        traceId: ctx?.traceId,
+      },
     })
     return updated
   } catch (error) {

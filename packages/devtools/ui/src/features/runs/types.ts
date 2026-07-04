@@ -81,6 +81,12 @@ export interface RunRow {
   toolCallCount?: number
   /** Number of nested traces if this is a flow rollup. */
   childCount?: number
+  /** Server-owned canonical graph rollups from the observability run list. */
+  recordCount?: number
+  spanCount?: number
+  eventCount?: number
+  artifactCount?: number
+  edgeCount?: number
   /** Cassette replay state: 'recorded' | 'missing' | 'mismatch' | etc. */
   cassetteStatus?: string
   /** Run-level diagnostics from the backend read model. */

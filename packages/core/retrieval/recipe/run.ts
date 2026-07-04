@@ -7,7 +7,11 @@
 import { observe } from '../../observability'
 import { RetrievalRunError } from '../errors'
 import { emitRetrievalHitsArtifact } from '../observability'
-import { normalizeRetrieveRequest, type RetrieveOptions, type RetrieveRequest } from '../request'
+import {
+  normalizeRetrieveRequest,
+  type RetrieveOptions,
+  type RetrieveRequest,
+} from '../request'
 import type { RetrieverHit } from '../types'
 import { runFederatedRetrieveStep } from './federation'
 import {
@@ -18,7 +22,12 @@ import {
   type RetrievalStepContext,
 } from './step'
 import type { NormalizedRecipeSource } from './source'
-import { countStepPayload, serializeRecipeError, type RecipeTrace, type StepTrace } from './trace'
+import {
+  countStepPayload,
+  serializeRecipeError,
+  type RecipeTrace,
+  type StepTrace,
+} from './trace'
 
 let recipeRunCounter = 0
 
@@ -41,23 +50,28 @@ export async function runRetrievalRecipe(
   const request = normalizeRetrieveRequest(queryOrRequest, options)
   const span = observe.openSpan({
     name: `${config.recipeId}.recipe`,
-    family: 'retrieval',
     primitive: 'retrieval.recipe',
     attributes: {
       recipeId: config.recipeId,
       sourceRetrieverIds: config.sources.map((source) => source.retriever.id),
-      namespaceCount: new Set(config.sources.map((source) => source.retriever.namespace)).size,
+      namespaceCount: new Set(
+        config.sources.map((source) => source.retriever.namespace),
+      ).size,
       stepCount: config.steps.length,
       query: request.query,
       ...(request.limit !== undefined ? { limit: request.limit } : {}),
-      ...(request.threshold !== undefined ? { threshold: request.threshold } : {}),
+      ...(request.threshold !== undefined
+        ? { threshold: request.threshold }
+        : {}),
       ...(request.filter ? { filter: request.filter } : {}),
       ...(request.mode ? { mode: request.mode } : {}),
       ...(request.fusion ? { fusion: request.fusion.strategy } : {}),
     },
   })
   try {
-    return await span.withContext(() => runRetrievalRecipeInternal(config, request, span))
+    return await span.withContext(() =>
+      runRetrievalRecipeInternal(config, request, span),
+    )
   } catch (error) {
     span.error(error)
     throw error
@@ -76,7 +90,9 @@ async function runRetrievalRecipeInternal(
 
   let state: RecipeState = {
     phase: 'queries',
-    queries: [normalizePlannedQuery({ query: request.query, filter: request.filter })],
+    queries: [
+      normalizePlannedQuery({ query: request.query, filter: request.filter }),
+    ],
   }
 
   try {
@@ -91,7 +107,15 @@ async function runRetrievalRecipeInternal(
     }
 
     const hits = state.phase === 'hits' ? [...state.hits] : []
-    const trace = buildTrace({ config, traceId, startedAt, request, steps, resultCount: hits.length, errors })
+    const trace = buildTrace({
+      config,
+      traceId,
+      startedAt,
+      request,
+      steps,
+      resultCount: hits.length,
+      errors,
+    })
     emitRetrievalHitsArtifact(recipeSpan.spanId, {
       retrievalId: trace.id,
       retrieverId: config.sources[0]?.retriever.id ?? '',
@@ -104,9 +128,11 @@ async function runRetrievalRecipeInternal(
       hits,
     })
     recipeSpan.end({
-      recipeId: config.recipeId,
-      resultCount: hits.length,
-      durationMs: trace.durationMs,
+      attributes: {
+        recipeId: config.recipeId,
+        resultCount: hits.length,
+        durationMs: trace.durationMs,
+      },
     })
     return { hits, trace }
   } catch (error) {
@@ -115,7 +141,15 @@ async function runRetrievalRecipeInternal(
     const code = error instanceof RetrievalRunError ? error.code : 'step_failed'
     throw new RetrievalRunError(code, serialized.message, {
       cause: error,
-      trace: buildTrace({ config, traceId, startedAt, request, steps, resultCount: 0, errors }),
+      trace: buildTrace({
+        config,
+        traceId,
+        startedAt,
+        request,
+        steps,
+        resultCount: 0,
+        errors,
+      }),
     })
   }
 }
@@ -159,15 +193,19 @@ async function runOneStep(args: {
   const inputCounts = countStepPayload(args.state)
   const span = observe.openSpan({
     name: `${args.state.phase}:${args.step.id}`,
-    family: 'retrieval',
     primitive: 'retrieval.step',
     attributes: {
       recipeId: args.config.recipeId,
       stepId: args.step.id,
+      stepKind: args.step.kind,
       kind: args.step.kind,
       status: 'running',
-      ...(inputCounts.queryCount !== undefined ? { inputQueryCount: inputCounts.queryCount } : {}),
-      ...(inputCounts.hitCount !== undefined ? { inputHitCount: inputCounts.hitCount } : {}),
+      ...(inputCounts.queryCount !== undefined
+        ? { inputQueryCount: inputCounts.queryCount }
+        : {}),
+      ...(inputCounts.hitCount !== undefined
+        ? { inputHitCount: inputCounts.hitCount }
+        : {}),
     },
   })
 
@@ -196,18 +234,32 @@ async function runOneStep(args: {
       kind: args.step.kind,
       status: 'success',
       durationMs: Date.now() - startedAt,
-      ...(inputCounts.queryCount !== undefined ? { inputQueryCount: inputCounts.queryCount } : {}),
-      ...(inputCounts.hitCount !== undefined ? { inputHitCount: inputCounts.hitCount } : {}),
-      ...(outputCounts.queryCount !== undefined ? { outputQueryCount: outputCounts.queryCount } : {}),
-      ...(outputCounts.hitCount !== undefined ? { outputHitCount: outputCounts.hitCount } : {}),
+      ...(inputCounts.queryCount !== undefined
+        ? { inputQueryCount: inputCounts.queryCount }
+        : {}),
+      ...(inputCounts.hitCount !== undefined
+        ? { inputHitCount: inputCounts.hitCount }
+        : {}),
+      ...(outputCounts.queryCount !== undefined
+        ? { outputQueryCount: outputCounts.queryCount }
+        : {}),
+      ...(outputCounts.hitCount !== undefined
+        ? { outputHitCount: outputCounts.hitCount }
+        : {}),
       warnings: output.warnings ?? [],
       ...(output.sources ? { sources: output.sources } : {}),
     })
     span.end({
-      status: 'success',
-      ...(outputCounts.queryCount !== undefined ? { outputQueryCount: outputCounts.queryCount } : {}),
-      ...(outputCounts.hitCount !== undefined ? { outputHitCount: outputCounts.hitCount } : {}),
-      warningCount: output.warnings?.length ?? 0,
+      status: 'ok',
+      attributes: {
+        ...(outputCounts.queryCount !== undefined
+          ? { outputQueryCount: outputCounts.queryCount }
+          : {}),
+        ...(outputCounts.hitCount !== undefined
+          ? { outputHitCount: outputCounts.hitCount }
+          : {}),
+        warningCount: output.warnings?.length ?? 0,
+      },
     })
     return stepOutput(args.step, output)
   } catch (error) {
@@ -216,8 +268,12 @@ async function runOneStep(args: {
       kind: args.step.kind,
       status: 'error',
       durationMs: Date.now() - startedAt,
-      ...(inputCounts.queryCount !== undefined ? { inputQueryCount: inputCounts.queryCount } : {}),
-      ...(inputCounts.hitCount !== undefined ? { inputHitCount: inputCounts.hitCount } : {}),
+      ...(inputCounts.queryCount !== undefined
+        ? { inputQueryCount: inputCounts.queryCount }
+        : {}),
+      ...(inputCounts.hitCount !== undefined
+        ? { inputHitCount: inputCounts.hitCount }
+        : {}),
       warnings: [],
       error: serializeRecipeError(error),
     })
@@ -231,7 +287,11 @@ async function runRetrieveStep(
   request: RetrieveRequest,
   state: RecipeState,
   step: RetrievalStep,
-): Promise<{ hits: readonly RetrieverHit[]; warnings?: readonly string[]; sources?: readonly RetrievalSourceTrace[] }> {
+): Promise<{
+  hits: readonly RetrieverHit[]
+  warnings?: readonly string[]
+  sources?: readonly RetrievalSourceTrace[]
+}> {
   if (state.phase !== 'queries') {
     throw new Error(`Step "${step.id}" cannot retrieve from hit input.`)
   }
@@ -239,8 +299,12 @@ async function runRetrieveStep(
   return runFederatedRetrieveStep(config, request, state.queries, stepConfig)
 }
 
-function stepInput(state: RecipeState): { queries: readonly PlannedQuery[] } | { hits: readonly RetrieverHit[] } {
-  return state.phase === 'queries' ? { queries: state.queries } : { hits: state.hits }
+function stepInput(
+  state: RecipeState,
+): { queries: readonly PlannedQuery[] } | { hits: readonly RetrieverHit[] } {
+  return state.phase === 'queries'
+    ? { queries: state.queries }
+    : { hits: state.hits }
 }
 
 function stepOutput(
@@ -249,16 +313,23 @@ function stepOutput(
 ): RecipeState {
   if (step.phase.out === 'queries') {
     if (!output.queries || output.queries.length === 0) {
-      throw new Error(`Retrieval step "${step.id}" returned no planned queries.`)
+      throw new Error(
+        `Retrieval step "${step.id}" returned no planned queries.`,
+      )
     }
-    return { phase: 'queries', queries: output.queries.map(normalizePlannedQuery) }
+    return {
+      phase: 'queries',
+      queries: output.queries.map(normalizePlannedQuery),
+    }
   }
   return { phase: 'hits', hits: [...(output.hits ?? [])] }
 }
 
 function assertStepAcceptsState(step: RetrievalStep, state: RecipeState): void {
   if (step.phase.in !== state.phase) {
-    throw new Error(`Retrieval step "${step.id}" expects ${step.phase.in} input but received ${state.phase}.`)
+    throw new Error(
+      `Retrieval step "${step.id}" expects ${step.phase.in} input but received ${state.phase}.`,
+    )
   }
 }
 

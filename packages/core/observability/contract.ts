@@ -1,5 +1,3 @@
-import type { TurnDecisionReport } from './turn-decision-report'
-
 export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 1
 
 export const CRUX_PRIMITIVE_FAMILIES = [
@@ -150,6 +148,7 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   'stream.timeline',
   'score.report',
   'citation.report',
+  'comparison.report',
   'composition.report',
   'routing.report',
   'cache.report',
@@ -416,6 +415,24 @@ export interface CruxScoreReportPreview {
   actual?: unknown
 }
 
+export interface CruxComparisonReportPreview {
+  kind: 'comparison.report'
+  comparisonKind: 'variant' | 'promoted'
+  baseline: string
+  deltas: readonly {
+    variantName: string
+    scoreName: string
+    meanDelta: number
+    sem: number
+    n: number
+  }[]
+  unmatchedCases: {
+    baselineOnly: readonly string[]
+    candidateOnly: readonly string[]
+  }
+  demoted?: { reason: string }
+}
+
 export interface CruxCompositionBranchPreview {
   id: string
   agentId?: string
@@ -673,20 +690,48 @@ export interface CruxSourceLocation {
   function?: string
 }
 
-export interface CruxTokenMetrics {
-  inputTokens?: number
-  outputTokens?: number
-  totalTokens?: number
-  cacheReadTokens?: number
-  cacheWriteTokens?: number
-  reasoningTokens?: number
-  costUsd?: number
-  ttftMs?: number
-  tokensPerSecond?: number
-}
+export const CRUX_TOKEN_METRIC_KEYS = [
+  'inputTokens',
+  'outputTokens',
+  'totalTokens',
+  'cacheReadTokens',
+  'cacheWriteTokens',
+  'reasoningTokens',
+  'costUsd',
+  'ttftMs',
+  'tokensPerSecond',
+] as const
+
+export const CRUX_GENERATION_METRIC_KEYS = [
+  'gen.duration_ms',
+  'gen.time_to_first_token_ms',
+  'gen.output_tokens_per_second',
+  'gen.time_per_output_chunk_ms',
+] as const
+
+export type CruxTokenMetricKey = (typeof CRUX_TOKEN_METRIC_KEYS)[number]
+export type CruxGenerationMetricKey = (typeof CRUX_GENERATION_METRIC_KEYS)[number]
+export type CruxCustomMetricKey = `custom.${string}`
+export type CruxMetricKey = CruxTokenMetricKey | CruxGenerationMetricKey | CruxCustomMetricKey
+export type CruxTokenMetrics = Partial<Record<CruxTokenMetricKey, number>>
+declare const cruxMetricsInputBrand: unique symbol
 
 export type CruxAttributes = Record<string, unknown>
-export type CruxMetrics = CruxTokenMetrics & Record<string, number | undefined>
+
+/**
+ * Numeric measurements attached to terminal run/span records.
+ *
+ * Metric values may be `undefined` at the TypeScript boundary so callers can
+ * pass natural optional expressions such as `{ inputTokens: usage?.input }`.
+ * The emit pipeline strips `undefined`, `NaN`, and infinite values before a
+ * record reaches subscribers, diagnostics channels, or transports.
+ */
+export type CruxMetrics = Partial<Record<CruxMetricKey, number | undefined>> & {
+  readonly [cruxMetricsInputBrand]?: true
+}
+
+/** Numeric measurements after runtime validation has stripped invalid values. */
+export type CruxParsedMetrics = Partial<Record<CruxMetricKey, number>>
 
 export interface CruxGenerationCallAttributes {
   mode?: 'text' | 'object' | 'messages'
@@ -715,6 +760,17 @@ export type CruxSpanAttributesByPrimitive = {
   'custom.operation': CruxAttributes
 }
 
+/**
+ * Attribute shape accepted by a span primitive.
+ *
+ * Known Crux primitives get their documented keys typed while still allowing
+ * integration-specific attributes. Primitives without a specialized attribute
+ * interface accept the general `CruxAttributes` record.
+ */
+export type AttributesFor<P extends CruxPrimitiveName> = P extends keyof CruxSpanAttributesByPrimitive
+  ? CruxSpanAttributesByPrimitive[P] & CruxAttributes
+  : CruxAttributes
+
 export interface CruxErrorSummary {
   message: string
   name?: string
@@ -727,6 +783,12 @@ interface CruxRecordBase {
   schemaVersion: typeof CRUX_OBSERVABILITY_SCHEMA_VERSION
   recordId: CruxRecordId
   runId: CruxRunId
+  /** Per-run monotonic record sequence used for deterministic graph ordering. */
+  seq: number
+  /** Logical session correlator stamped onto every record when configured. */
+  sessionId?: string
+  /** End-user or actor correlator stamped onto every record when configured. */
+  userId?: string
   traceId?: CruxTraceId
 }
 
@@ -745,7 +807,7 @@ export interface CruxRunEndRecord extends CruxRecordBase {
   endedAt: string
   durationMs?: number
   status: Exclude<CruxRunStatus, 'running'>
-  metrics?: CruxMetrics
+  metrics?: CruxParsedMetrics
   error?: CruxErrorSummary
   attributes?: CruxAttributes
 }
@@ -779,7 +841,7 @@ export interface CruxSpanEndRecord extends CruxRecordBase {
   endedAt: string
   durationMs?: number
   status: Exclude<CruxSpanStatus, 'running'>
-  metrics?: CruxMetrics
+  metrics?: CruxParsedMetrics
   error?: CruxErrorSummary
   attributes?: CruxAttributes
 }
@@ -795,7 +857,7 @@ export interface CruxSpanRecord extends CruxRecordBase {
   endedAt?: string
   durationMs?: number
   status: Exclude<CruxSpanStatus, 'running'>
-  metrics?: CruxMetrics
+  metrics?: CruxParsedMetrics
   error?: CruxErrorSummary
   attributes?: CruxAttributes
   source?: CruxSourceLocation
@@ -852,426 +914,4 @@ export type CruxGraphRecord =
 
 export interface CruxGraphRecordBatch {
   records: CruxGraphRecord[]
-}
-
-export type CruxPresentationDisplay = 'primary' | 'detail' | 'metadata'
-
-export interface CruxPresentationHint {
-  display?: CruxPresentationDisplay
-  ownerSpanId?: CruxSpanId | string
-  label?: string
-  groupId?: string
-}
-
-export interface CruxPresentationAttributes {
-  presentation?: CruxPresentationHint
-}
-
-export interface CruxRunSummaryView {
-  runId: CruxRunId
-  traceId: CruxTraceId | ''
-  name: string
-  rootPrimitive: CruxPrimitiveName | string
-  status: CruxRunStatus | string
-  startedAt: string
-  endedAt: string
-  durationMs: number
-  model: string
-  provider: string
-  promptId: string
-  recordCount: number
-  spanCount: number
-  eventCount: number
-  artifactCount: number
-  edgeCount: number
-  attributes?: CruxAttributes | null
-  metrics?: CruxMetrics | null
-  error?: CruxErrorSummary | string | null
-}
-
-export interface CruxSpanSummaryView {
-  spanId: CruxSpanId
-  runId: CruxRunId
-  traceId: CruxTraceId | ''
-  parentSpanId: CruxSpanId | ''
-  family: CruxPrimitiveFamily | string
-  primitive: CruxPrimitiveName | string
-  name: string
-  status: CruxSpanStatus | string
-  startedAt: string
-  endedAt: string
-  durationMs: number
-  model: string
-  provider: string
-  promptId?: string
-  contextId?: string
-  agentId?: string
-  toolName?: string
-  flowId?: string
-  stepId?: string
-  memoryId?: string
-  retrieverId?: string
-  attributes?: (CruxAttributes & CruxPresentationAttributes) | null
-  metrics?: CruxMetrics | null
-  error?: CruxErrorSummary | string | null
-}
-
-export interface CruxPresentationDetailView extends CruxSpanSummaryView {
-  display: Exclude<CruxPresentationDisplay, 'primary'>
-}
-
-export interface CruxPresentationNodeView extends CruxSpanSummaryView {
-  display: 'primary'
-  details?: CruxPresentationDetailView[]
-  children: CruxPresentationNodeView[]
-}
-
-export interface CruxPresentationView {
-  run: CruxRunSummaryView
-  displayMode: 'presentation'
-  spans: CruxPresentationNodeView[]
-  runDetails?: CruxPresentationDetailView[]
-  hiddenSpanCount: number
-  counts: {
-    primary: number
-    detail: number
-    metadata: number
-  }
-}
-
-export type CruxRunDetailStatus = CruxRunStatus | CruxSpanStatus | 'incomplete' | 'stale' | string
-export type CruxPresentationNodeKind =
-  | 'run'
-  | 'agent'
-  | 'generation'
-  | 'tool'
-  | 'flow'
-  | 'step'
-  | 'composition'
-  | 'transition'
-  | 'memory'
-  | 'retrieval'
-  | 'detail'
-  | 'operation'
-  | string
-
-export type CruxPresentationPlacement = 'node' | 'detail' | 'runDetail' | 'omitted'
-export type CruxPresentationPlacementReason =
-  | 'primary'
-  | 'explains-edge'
-  | 'owner-hint'
-  | 'dataflow-edge'
-  | 'chronology'
-  | 'wrapper-compact'
-  | 'run-root'
-  | 'unknown'
-  | string
-
-export interface CruxRunDetailDisplay {
-  kind: CruxPresentationNodeKind
-  label: string
-  description?: string
-  icon?: string
-  accent?: string
-  severity?: 'info' | 'ok' | 'warn' | 'error' | string
-}
-
-export interface CruxRunDetailTiming {
-  startedAt: string
-  endedAt?: string
-  durationMs: number
-  selfMs?: number
-  childrenMs?: number
-  detailsMs?: number
-}
-
-export interface CruxRunDetailMetricBuckets {
-  own?: CruxMetrics | null
-  children?: CruxMetrics | null
-  details?: CruxMetrics | null
-  total?: CruxMetrics | null
-}
-
-export interface CruxRunDetailInspectionItem {
-  type: 'span' | 'event' | 'artifact' | 'relation' | 'diagnostic' | 'metric' | 'raw' | string
-  id: string
-  label?: string
-  kind?: string
-  role?: string
-  sourceSpanId?: CruxSpanId | string
-  data?: unknown
-}
-
-export type CruxRunDetailInspectionSections = Record<string, CruxRunDetailInspectionItem[]>
-
-export interface CruxRunDetailDiagnostic {
-  code: string
-  severity: 'info' | 'warn' | 'error'
-  message: string
-  recordIds?: CruxRecordId[] | string[]
-  spanIds?: CruxSpanId[] | string[]
-  suggestedFix?: string
-}
-
-export interface CruxRunDetailArtifact {
-  artifactId: CruxArtifactId
-  runId: CruxRunId
-  traceId: CruxTraceId | ''
-  spanId: CruxSpanId | ''
-  kind: CruxArtifactKind | string
-  createdAt: string
-  contentType: string
-  encoding: string
-  sizeBytes: number
-  hash: string
-  uri: string
-  preview?: unknown
-  attributes?: CruxAttributes | null
-}
-
-export interface CruxRunDetailEvent {
-  eventId: CruxSpanEventId
-  runId: CruxRunId
-  traceId: CruxTraceId | ''
-  spanId: CruxSpanId
-  name: string
-  timestamp: string
-  attributes?: CruxAttributes | null
-}
-
-export interface CruxObservabilityRecordsNotification {
-  _tag: 'ObservabilityEvent'
-  id: string
-  timestamp: number
-  kind: 'observability.records'
-  action: 'ingested'
-  severity: 'info'
-  refId: CruxRunId | string
-  payload?: {
-    runId: CruxRunId | string
-  }
-}
-
-export interface CruxTokenDeltaNotification {
-  _tag: 'ObservabilityEvent'
-  id: string
-  timestamp: number
-  kind: 'token.delta'
-  action: 'appended'
-  severity: 'info'
-  refId: CruxRunId | string
-  payload: {
-    runId: CruxRunId | string
-    traceId?: CruxTraceId | string
-    spanId: CruxSpanId | string
-    eventId: CruxSpanEventId | string
-    timestamp: string
-    attributes?: CruxAttributes | null
-  }
-}
-
-export type CruxObservabilityNotification = CruxObservabilityRecordsNotification | CruxTokenDeltaNotification
-
-export interface CruxRunDetailRelation {
-  edgeId: CruxEdgeId
-  runId: CruxRunId
-  traceId: CruxTraceId | ''
-  edgeType: CruxEdgeType | string
-  from: CruxGraphNodeRef | { kind: string; id: string }
-  to: CruxGraphNodeRef | { kind: string; id: string }
-  createdAt: string
-  attributes?: CruxAttributes | null
-}
-
-export interface CruxRunDetailSource {
-  placementReason: CruxPresentationPlacementReason
-  ownerSpanId?: CruxSpanId | string
-  canonicalParentSpanId?: CruxSpanId | string
-}
-
-export interface CruxRunDetailRequestRepresentative {
-  spanId: CruxSpanId | string
-  strategy: 'self' | 'final-generation' | 'nearest-ancestor-request' | string
-  reason?: string
-}
-
-export interface CruxRunDetailRequestModel {
-  model?: string
-  provider?: string
-  spanIds: readonly (CruxSpanId | string)[]
-  count: number
-}
-
-export interface CruxRunDetailRequestModelSummary {
-  primaryModel?: string
-  primaryProvider?: string
-  mixed: boolean
-  models: readonly CruxRunDetailRequestModel[]
-}
-
-export interface CruxRunDetailRequestBasePrompt {
-  sourceId: 'prompt' | string
-  text?: string
-  segments?: CruxContextContributionPreview['segments']
-  tokens?: number
-  staticTokens?: number
-  dynamicTokens?: number
-}
-
-export interface CruxRunDetailRequestMessages {
-  artifactId?: CruxArtifactId | string
-  source?: string
-  phase?: string
-  input?: unknown
-  system?: unknown
-  prompt?: unknown
-  messages?: unknown
-  allMessages?: unknown
-  inputMessages?: unknown
-  inputPrompt?: unknown
-  recent?: unknown
-  existingResponses?: unknown
-  search?: unknown
-  previousStepMessages?: unknown
-}
-
-export interface CruxRunDetailRequestContribution extends CruxContextContributionPreview {
-  artifactId?: CruxArtifactId | string
-  order: number
-}
-
-export interface CruxRunDetailRequestBudget extends CruxPromptBudgetPreview {
-  artifactId?: CruxArtifactId | string
-}
-
-export interface CruxRunDetailRequestTool {
-  name: string
-  origin: 'request' | 'injected' | string
-  sourceId?: string
-  artifactId?: CruxArtifactId | string
-}
-
-export interface CruxRunDetailRequestTurn {
-  spanId: CruxSpanId | string
-  primitive: CruxPrimitiveName | string
-  label: string
-  startedAt?: string
-  status?: CruxSpanStatus | string
-  requestMode: 'exact' | 'inherited' | 'aggregate' | string
-  model?: string
-  provider?: string
-  promptId?: string
-}
-
-export interface CruxRunDetailRequest {
-  mode: 'exact' | 'inherited' | 'aggregate' | string
-  representative?: CruxRunDetailRequestRepresentative
-  modelSummary?: CruxRunDetailRequestModelSummary
-  basePrompt?: CruxRunDetailRequestBasePrompt
-  messages?: CruxRunDetailRequestMessages
-  contributions: CruxRunDetailRequestContribution[]
-  budget?: CruxRunDetailRequestBudget
-  tools: CruxRunDetailRequestTool[]
-  turns?: CruxRunDetailRequestTurn[]
-  diagnostics?: string[]
-}
-
-export interface CruxRunDetailDetail extends CruxSpanSummaryView {
-  id: string
-  kind: CruxPresentationNodeKind
-  role?: string
-  label: string
-  display: Exclude<CruxPresentationDisplay, 'primary'>
-  timing: CruxRunDetailTiming
-  summary?: string
-  events: CruxRunDetailEvent[]
-  artifacts: CruxRunDetailArtifact[]
-  relations: CruxRunDetailRelation[]
-  diagnostics: CruxRunDetailDiagnostic[]
-  source: CruxRunDetailSource
-  inspection?: CruxRunDetailInspectionSections
-  request?: CruxRunDetailRequest
-  /**
-   * Per-turn explanation read model projected onto a folded generation detail.
-   *
-   * Present only for generation details when the local projection has enough
-   * recorded evidence. Consumed by the Run Detail `Explain` tab; absent reports
-   * leave existing detail views unchanged.
-   */
-  decisionReport?: TurnDecisionReport
-}
-
-export interface CruxRunDetailNode extends CruxSpanSummaryView {
-  id: string
-  virtual: boolean
-  parentId: string
-  path: string[]
-  kind: CruxPresentationNodeKind
-  display: CruxRunDetailDisplay
-  timing: CruxRunDetailTiming
-  metricBuckets: CruxRunDetailMetricBuckets
-  source: CruxRunDetailSource
-  details: CruxRunDetailDetail[]
-  artifacts: CruxRunDetailArtifact[]
-  events: CruxRunDetailEvent[]
-  relations: CruxRunDetailRelation[]
-  diagnostics: CruxRunDetailDiagnostic[]
-  flow?: CruxAttributes | null
-  step?: CruxAttributes | null
-  composition?: CruxAttributes | null
-  transition?: CruxAttributes | null
-  inspection?: CruxRunDetailInspectionSections
-  request?: CruxRunDetailRequest
-  /**
-   * Per-turn explanation read model projected onto a generation node.
-   *
-   * The local Go projection emits one `TurnDecisionReport` per generation turn
-   * (and on the run root for run-level roll-up) when projection data is
-   * available. The Run Detail `Explain` tab treats it as authoritative when
-   * present and falls back to the existing tabs when it is absent.
-   */
-  decisionReport?: TurnDecisionReport
-  children: CruxRunDetailNode[]
-}
-
-export interface CruxRunDetailRow {
-  nodeId: string
-  spanId?: CruxSpanId | string
-  parentId: string
-  depth: number
-  path: string[]
-  hasChildren: boolean
-  expandedDefault: boolean
-  display: CruxRunDetailDisplay
-  status: CruxRunDetailStatus
-  model?: string
-  provider?: string
-  timing: CruxRunDetailTiming
-  match?: boolean
-}
-
-export interface CruxRunDetailSpanPlacement {
-  placement: CruxPresentationPlacement
-  nodeId?: string
-  ownerNodeId?: string
-  path: string[]
-  reason?: CruxPresentationPlacementReason
-}
-
-export interface CruxRunDetail {
-  schemaVersion: typeof CRUX_OBSERVABILITY_SCHEMA_VERSION
-  run: CruxRunSummaryView
-  root: CruxRunDetailNode
-  rows: CruxRunDetailRow[]
-  spanIndex: Record<string, CruxRunDetailSpanPlacement>
-  facets: Record<string, Record<string, number>>
-  matches?: Record<string, unknown>
-  diagnostics: CruxRunDetailDiagnostic[]
-  counts: {
-    primary: number
-    detail: number
-    metadata: number
-    attachedDetails: number
-  }
-  debug?: unknown
 }

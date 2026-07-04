@@ -1176,7 +1176,7 @@ func isStaleTimestampAt(timestamp string, now time.Time) bool {
 	if err != nil {
 		return false
 	}
-	return now.Sub(parsed) > 30*time.Second
+	return now.Sub(parsed) > 60*time.Second
 }
 
 func durationSinceTimestamp(timestamp string) float64 {

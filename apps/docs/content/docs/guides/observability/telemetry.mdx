@@ -59,6 +59,10 @@ config({
   `@opentelemetry/api` is an optional peer dependency. Install it alongside the OTel SDK when using the standard path.
 </Callout>
 
+<Callout type="warning">
+  Install and start your `TracerProvider` before `withTelemetry()`. If Crux sees invalid OTel span contexts, it warns once and falls back to lightweight span tracking so application code keeps running.
+</Callout>
+
 ### Lightweight (Lambda, Convex, Cloudflare Workers)
 
 For ephemeral runtimes where the full OTel SDK isn't available, pass an `exporter` option:
@@ -85,15 +89,17 @@ withTelemetry({
 
 The URL exporter uses fire-and-forget HTTP POST (5-second timeout) — failures are silently ignored so telemetry never impacts your application.
 
+`withTelemetry()` is safe to compose defensively: duplicate active installs warn once and become no-ops, and open span registries are bounded. Spans evicted because of registry pressure are force-ended with `crux.expired: true` and `UNSET` status.
+
 ## What gets traced
 
 Every instrumented Crux event produces a span:
 
 | Event                     | Span Name                         | Key Attributes                                                                                      |
 | ------------------------- | --------------------------------- | --------------------------------------------------------------------------------------------------- |
-| `generate()` / `stream()` | `crux.generate`                   | `gen_ai.system`, `gen_ai.request.model`, token usage, cost                                          |
+| `generate()` / `stream()` | `chat {model}`                    | `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, token usage, cost          |
 | Cost tracking             | `crux.cost.{report\|warn\|limit}` | `crux.cost`, `crux.cost.total`, `crux.cost.source`, `crux.cost.threshold`                           |
-| Tool execution            | `crux.tool.{name}`                | `crux.tool.name`, `crux.tool.call_id`, model-output type, raw/model-output sizes, estimated savings |
+| Tool execution            | `execute_tool {name}`             | `gen_ai.operation.name`, `crux.tool.name`, `crux.tool.call_id`, model-output sizes, estimated savings |
 | `flow().run()`            | `crux.flow`                       | `crux.flow.id`, `crux.flow.name`                                                                    |
 | `flow.step()`             | `crux.flow.step`                  | `crux.step.id`, `crux.step.label`                                                                   |
 | `flow.suspend()`          | Event on `crux.flow` + span end   | `crux.flow.suspend_point`                                                                           |
@@ -108,7 +114,7 @@ Every instrumented Crux event produces a span:
 
 Tool spans include privacy-safe `toModelOutput()` metadata only. OTel records the output shape and byte-size difference; it does not record raw tool results, model-facing tool content, queries, files, or metadata.
 
-Generate/stream spans follow the [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) — attributes like `gen_ai.system`, `gen_ai.request.model`, `gen_ai.usage.input_tokens` work with existing dashboards and alerting rules.
+Generate/stream spans follow Crux's pinned `genai-dev-2026-06` GenAI semantic convention table. Attributes like `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.client.operation.duration`, and `gen_ai.server.time_to_first_token` work with dashboards and alerting rules while keeping semconv churn isolated to one versioned table.
 
 ## Running alongside devtools
 
@@ -136,11 +142,29 @@ events, deliberately configured destinations.
 | `serviceName` | `string`                          | `'@use-crux/otel'` | Tracer name / service identifier              |
 | `attributes`  | `Record<string, string>`          | —                  | Custom attributes on every span               |
 | `exporter`    | `UrlExporter \| CallbackExporter` | —                  | Export strategy (omit for standard OTel path) |
+| `captureMessageContent` | `boolean`                | `false`            | Export GenAI input/output message attributes  |
+| `semconvVersion` | `'genai-dev-2026-06'`          | current table      | Forward compatibility knob for semconv names  |
 
 Payload capture is configured centrally with
-`config({ observability: { recordInputs, recordOutputs } })`, so devtools,
-subscribers, diagnostics-channel listeners, and OTel all observe the same
-redacted or full graph records.
+`config({ observability: { recordInputs, recordOutputs, redactRecord } })`.
+`recordInputs` and `recordOutputs` accept `inline`, `reference`, or `off`
+capture modes, so devtools, subscribers, diagnostics-channel listeners, and
+OTel all observe the same redacted or full graph records. The same central emit
+path strips payload-shaped attributes, converts JSON-hostile values, and strips
+invalid optional metrics before records reach those consumers. `redactRecord`
+can replace a graph record or return `null`; hook failures drop the record
+fail-closed.
+
+OTel message content is disabled by default, even when local graph capture is
+inline. Set `captureMessageContent: true` or
+`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true` to export
+`gen_ai.input.messages`, `gen_ai.output.messages`, and
+`gen_ai.system_instructions` from generation artifacts. Each content attribute is
+capped at 32KB.
+
+Crux emits W3C-format trace and span IDs. Lightweight OTel exports reuse those
+IDs directly; standard OTel exports keep provider-issued IDs and include Crux
+IDs as correlation attributes.
 
 ## Next steps
 

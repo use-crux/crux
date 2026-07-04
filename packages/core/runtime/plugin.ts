@@ -28,8 +28,13 @@ export { mergeRuntime } from './merge-runtime'
  * function for cleanup when the registry is torn down.
  */
 export interface CruxPluginResult extends Partial<CruxRuntime> {
-  /** Called when the plugin is uninstalled (registry.dispose()). */
-  dispose?: () => void
+  /**
+   * Called when the plugin is uninstalled.
+   *
+   * Return a promise when cleanup must drain asynchronous resources, such as
+   * telemetry transports, before restoring the previous runtime layer.
+   */
+  dispose?: () => void | Promise<void>
 }
 
 /**
@@ -74,7 +79,7 @@ export interface ApplyPluginsResult {
   /** The merged runtime after all plugins have been applied. */
   runtime: CruxRuntime
   /** Dispose all plugins in reverse order. */
-  dispose: () => void
+  dispose: () => Promise<void>
 }
 
 /**
@@ -98,8 +103,11 @@ export interface ApplyPluginsResult {
  * // later: dispose()
  * ```
  */
-export function applyPlugins(plugins: ReadonlyArray<CruxPlugin>, initialRuntime: CruxRuntime): ApplyPluginsResult {
-  const disposeFns: Array<() => void> = []
+export function applyPlugins(
+  plugins: ReadonlyArray<CruxPlugin>,
+  initialRuntime: CruxRuntime,
+): ApplyPluginsResult {
+  const disposeFns: Array<() => void | Promise<void>> = []
   let runtime = { ...initialRuntime }
 
   for (const plugin of plugins) {
@@ -114,9 +122,16 @@ export function applyPlugins(plugins: ReadonlyArray<CruxPlugin>, initialRuntime:
     runtime,
     dispose() {
       // Reverse order: last installed → first disposed
+      const pending: Promise<void>[] = []
       for (let i = disposeFns.length - 1; i >= 0; i--) {
-        disposeFns[i]()
+        try {
+          const result = disposeFns[i]()
+          if (result !== undefined) pending.push(Promise.resolve(result))
+        } catch (error) {
+          pending.push(Promise.reject(error))
+        }
       }
+      return Promise.all(pending).then(() => undefined)
     },
   }
 }

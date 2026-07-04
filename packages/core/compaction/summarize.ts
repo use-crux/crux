@@ -29,7 +29,6 @@ export async function summarizeMessages(config: SummarizeConfig): Promise<Compac
   const { messages, generate, model, maxTokens = 500, focus } = config
   const span = observe.openSpan({
     name: 'compaction.summarize',
-    family: 'compaction',
     primitive: 'compaction.run',
     attributes: {
       compactionKind: 'summary',
@@ -79,14 +78,16 @@ export async function summarizeMessages(config: SummarizeConfig): Promise<Compac
       return summary
     })
     span.end({
-      compactionKind: 'summary',
-      messageCount: messages.length,
-      model: modelLabel(model),
-      maxTokens,
-      focus,
-      tokensBefore: result.tokensBefore,
-      tokensAfter: result.tokensAfter,
-      compressionRatio: result.ratio,
+      attributes: {
+        compactionKind: 'summary',
+        messageCount: messages.length,
+        model: modelLabel(model),
+        maxTokens,
+        focus,
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        compressionRatio: result.ratio,
+      },
     })
     return result
   } catch (error) {

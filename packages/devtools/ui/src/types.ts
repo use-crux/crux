@@ -960,6 +960,8 @@ export interface Trace {
 export interface ObservabilityRunSummary {
   runId: string
   traceId: string
+  sessionId?: string
+  userId?: string
   name: string
   rootPrimitive: string
   status: string

@@ -6,6 +6,7 @@ import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '
 import { configure } from '../../core/runtime/configure'
 import { withTelemetry } from '../index'
 import { createCallbackExporter, createUrlExporter } from '../exporter'
+import { __resetOpenTelemetryFallbackForTesting, createOpenTelemetrySpanManager } from '../otel-span-manager'
 import type { TraceSpan } from '../types'
 
 function makePrompt(id: string) {
@@ -30,6 +31,7 @@ describe('withTelemetry', () => {
   beforeEach(() => {
     resetRuntime()
     resetObservabilityRuntime()
+    __resetOpenTelemetryFallbackForTesting()
     trace.disable()
   })
 
@@ -61,7 +63,6 @@ describe('withTelemetry', () => {
     await observe.span(
       {
         name: 'generate',
-        family: 'generation',
         primitive: 'generation.call',
         attributes: { provider: 'openai', model: 'gpt-4o' },
       },
@@ -70,12 +71,13 @@ describe('withTelemetry', () => {
     installed.dispose?.()
 
     const spans = exporter.getFinishedSpans()
-    expect(spans.map((span) => span.name)).toContain('crux.generate')
-    expect(spans.find((span) => span.name === 'crux.generate')?.attributes).toMatchObject({
-      'gen_ai.system': 'openai',
+    expect(spans.map((span) => span.name)).toContain('chat gpt-4o')
+    expect(spans.find((span) => span.name === 'chat gpt-4o')?.attributes).toMatchObject({
+      'gen_ai.operation.name': 'chat',
+      'gen_ai.provider.name': 'openai',
       'gen_ai.request.model': 'gpt-4o',
     })
-    expect(spans.find((span) => span.name === 'crux.generate')?.status.code).toBe(SpanStatusCode.OK)
+    expect(spans.find((span) => span.name === 'chat gpt-4o')?.status.code).toBe(SpanStatusCode.OK)
 
     trace.disable()
     await provider.shutdown()
@@ -90,14 +92,69 @@ describe('withTelemetry', () => {
 
     const reg = configure({
       prompts: [makePrompt('a')],
-      plugins: [withTelemetry(), otherPlugin],
+      plugins: [withTelemetry({ exporter: () => {} }), otherPlugin],
     })
 
-    await observe.span({ name: 'test', family: 'tool', primitive: 'tool.call' }, async () => {})
+    await observe.span({ name: 'test', primitive: 'tool.call' }, async () => {})
 
     expect(subscriber).toHaveBeenCalledWith(expect.objectContaining({ type: 'span:start', primitive: 'tool.call' }))
 
     reg.dispose()
+  })
+
+  it('guards against double telemetry installs so spans are exported once', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const firstSpans: TraceSpan[] = []
+    const secondSpans: TraceSpan[] = []
+    const first = withTelemetry({
+      exporter: (batch) => {
+        firstSpans.push(...batch)
+      },
+    }).install({})
+    const second = withTelemetry({
+      exporter: (batch) => {
+        secondSpans.push(...batch)
+      },
+    }).install({})
+
+    await observe.span({ name: 'double install', primitive: 'tool.call' }, async () => {})
+    second.dispose?.()
+    first.dispose?.()
+
+    expect(firstSpans.map((span) => span.name)).toEqual(['execute_tool double install', 'double install'])
+    expect(secondSpans).toEqual([])
+    expect(warn).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('already installed'))
+    warn.mockRestore()
+  })
+
+  it('falls back to lightweight spans when no TracerProvider is registered', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const spans: TraceSpan[] = []
+    const manager = createOpenTelemetrySpanManager(
+      'test-app',
+      createCallbackExporter((batch) => {
+        spans.push(...batch)
+      }),
+    )
+
+    const ref = manager?.startSpan('no provider span')
+    expect(ref).toBeDefined()
+    if (!ref) return
+    manager?.endSpan(ref)
+
+    expect(ref.spanId).not.toBe('0000000000000000')
+    expect(ref.traceId).not.toBe('00000000000000000000000000000000')
+    expect(spans).toEqual([
+      expect.objectContaining({
+        name: 'no provider span',
+        spanId: ref.spanId,
+        traceId: ref.traceId,
+      }),
+    ])
+    expect(warn).toHaveBeenCalledOnce()
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('No OpenTelemetry TracerProvider registered'))
+    warn.mockRestore()
   })
 })
 

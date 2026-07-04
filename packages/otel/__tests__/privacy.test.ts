@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { resetObservabilityRuntime } from "@use-crux/core/observability";
+import { observe, resetObservabilityRuntime } from "@use-crux/core/observability";
 import { inMemoryRecordStore, workspace } from "@use-crux/core";
 import { withTelemetry } from "../index";
 import type { TraceSpan } from "../types";
@@ -25,7 +25,7 @@ describe("workspace OTel privacy", () => {
     await ws.write("/workspace/secret-name.md", "classified");
     installed.dispose?.();
 
-    const workspaceSpan = spans.find((span) => span.name === "crux.workspace");
+    const workspaceSpan = spans.find((span) => span.name === "crux.workspace.operation");
 
     expect(workspaceSpan).toBeDefined();
     expect(Object.values(workspaceSpan?.attributes ?? {})).not.toContain(
@@ -33,6 +33,48 @@ describe("workspace OTel privacy", () => {
     );
     expect(workspaceSpan?.attributes).toMatchObject({
       "crux.workspace.path_hash": expect.stringMatching(/^fnv1a:/),
+    });
+  });
+
+  it("drops payload-shaped attributes even when local capture is inline", async () => {
+    const spans: TraceSpan[] = [];
+    const installed = withTelemetry({
+      exporter: (batch) => {
+        spans.push(...batch);
+      },
+    }).install({});
+
+    await observe.span(
+      {
+        name: "generate",
+        primitive: "generation.call",
+        attributes: {
+          text: "OTEL-SPAN-TEXT",
+          query: "OTEL-QUERY-TEXT",
+          messages: "OTEL-MESSAGES-TEXT",
+          output: "OTEL-OUTPUT-TEXT",
+          safeLabel: "safe label",
+        },
+      },
+      async () => {
+        observe.event({
+          name: "token.chunk",
+          attributes: {
+            text: "OTEL-TOKEN-TEXT",
+            charCount: 15,
+          },
+        });
+      },
+    );
+    installed.dispose?.();
+
+    expect(JSON.stringify(spans)).not.toContain("OTEL-SPAN-TEXT");
+    expect(JSON.stringify(spans)).not.toContain("OTEL-QUERY-TEXT");
+    expect(JSON.stringify(spans)).not.toContain("OTEL-MESSAGES-TEXT");
+    expect(JSON.stringify(spans)).not.toContain("OTEL-OUTPUT-TEXT");
+    expect(JSON.stringify(spans)).not.toContain("OTEL-TOKEN-TEXT");
+    expect(spans.find((span) => span.name === "chat generate")?.attributes).toMatchObject({
+      "crux.safeLabel": "safe label",
     });
   });
 
@@ -72,7 +114,7 @@ describe("workspace OTel privacy", () => {
 
     const byOperation = new Map(
       spans
-        .filter((span) => span.name === "crux.workspace")
+        .filter((span) => span.name === "crux.workspace.operation")
         .map((span) => [span.attributes["crux.workspace.operation"], span]),
     );
 

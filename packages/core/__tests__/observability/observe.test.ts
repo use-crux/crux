@@ -4,16 +4,22 @@ import {
   CRUX_OBSERVABILITY_CHANNEL,
   CRUX_OBSERVABILITY_SCHEMA_VERSION,
   type CruxObservabilityChannelMessage,
+  type CruxGraphRecord,
+  configureObservability,
   createHttpObservabilityTransport,
+  createCruxTraceId,
   createCruxArtifactId,
   createInMemoryObservabilityTransport,
   observe,
   observabilityDiagnostics,
   observabilityDeliveryErrors,
+  propagateAttributes,
   resetObservabilityRuntime,
   setObservabilityTransport,
   subscribeObservability,
 } from '../../observability'
+import { chaosTransport } from './helpers/chaos-transport'
+import { expectBalancedGraph } from './helpers/expect-balanced-graph'
 
 describe('observe runtime', () => {
   afterEach(() => {
@@ -24,22 +30,34 @@ describe('observe runtime', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
-    const result = await observe.run({ name: 'support reply', rootPrimitive: 'custom.operation' }, async () => {
-      return await observe.span(
-        { name: 'prepare context', family: 'custom', primitive: 'custom.operation' },
-        async () => {
-          return 'done'
-        },
-      )
-    })
+    const result = await observe.run(
+      { name: 'support reply', rootPrimitive: 'custom.operation' },
+      async () => {
+        return await observe.span(
+          { name: 'prepare context', primitive: 'custom.operation' },
+          async () => {
+            return 'done'
+          },
+        )
+      },
+    )
 
     await observe.flush()
 
     expect(result).toBe('done')
-    expect(transport.records.map((record) => record.type)).toEqual(['run:start', 'span:start', 'span:end', 'run:end'])
+    expect(transport.records.map((record) => record.type)).toEqual([
+      'run:start',
+      'span:start',
+      'span:end',
+      'run:end',
+    ])
 
     const [runStart, spanStart, spanEnd, runEnd] = transport.records
-    expect(runStart).toMatchObject({ type: 'run:start', name: 'support reply', status: 'running' })
+    expect(runStart).toMatchObject({
+      type: 'run:start',
+      name: 'support reply',
+      status: 'running',
+    })
     expect(spanStart).toMatchObject({
       type: 'span:start',
       runId: runStart.runId,
@@ -48,8 +66,18 @@ describe('observe runtime', () => {
       primitive: 'custom.operation',
       status: 'running',
     })
-    expect(spanEnd).toMatchObject({ type: 'span:end', runId: runStart.runId, spanId: spanStart.spanId, status: 'ok' })
-    expect(runEnd).toMatchObject({ type: 'run:end', runId: runStart.runId, traceId: runStart.traceId, status: 'ok' })
+    expect(spanEnd).toMatchObject({
+      type: 'span:end',
+      runId: runStart.runId,
+      spanId: spanStart.spanId,
+      status: 'ok',
+    })
+    expect(runEnd).toMatchObject({
+      type: 'run:end',
+      runId: runStart.runId,
+      traceId: runStart.traceId,
+      status: 'ok',
+    })
   })
 
   it('delivers records to subscribers without a configured transport', async () => {
@@ -58,7 +86,10 @@ describe('observe runtime', () => {
       records.push(record.type)
     })
 
-    await observe.run({ name: 'subscriber only', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'subscriber only', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
 
     expect(records).toEqual(['run:start', 'run:end'])
     expect(observabilityDiagnostics()).toMatchObject({
@@ -68,28 +99,203 @@ describe('observe runtime', () => {
     })
   })
 
+  it('uses the provided trace id for callback runs', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    const traceId = createCruxTraceId()
+    setObservabilityTransport(transport)
+
+    await observe.run(
+      { name: 'joined workflow', rootPrimitive: 'custom.operation', traceId },
+      async () => 'ok',
+    )
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'run:start', traceId }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'run:end', traceId }),
+    )
+  })
+
+  it('filters narrowed subscribers before invoking them', async () => {
+    const records: string[] = []
+    subscribeObservability(['span:start', 'span:end'] as const, (record) => {
+      records.push(record.type)
+    })
+
+    await observe.run(
+      { name: 'subscriber filtered', rootPrimitive: 'custom.operation' },
+      async () => {
+        await observe.span(
+          { name: 'filtered span', primitive: 'custom.operation' },
+          async () => 'ok',
+        )
+      },
+    )
+
+    expect(records).toEqual(['span:start', 'span:end'])
+    expect(observabilityDiagnostics()).toMatchObject({
+      subscriberErrors: 0,
+    })
+  })
+
+  it('propagates correlators onto every record and lets nested scopes override shallow fields', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    await propagateAttributes(
+      {
+        sessionId: 'session-1',
+        userId: 'user-outer',
+        metadata: {
+          requestId: 'request-1',
+          phase: 'outer',
+          long: 'x'.repeat(240),
+        },
+      },
+      async () => {
+        await observe.run(
+          {
+            name: 'correlated run',
+            rootPrimitive: 'custom.operation',
+            attributes: { local: 'run' },
+          },
+          async () => {
+            await propagateAttributes(
+              { userId: 'user-inner', metadata: { phase: 'inner' } },
+              async () => {
+                await observe.span(
+                  {
+                    name: 'correlated span',
+                    primitive: 'custom.operation',
+                    attributes: { local: 'span' },
+                  },
+                  async () => undefined,
+                )
+              },
+            )
+          },
+        )
+      },
+    )
+    await observe.flush()
+
+    expect(
+      transport.records.every((record) => record.sessionId === 'session-1'),
+    ).toBe(true)
+
+    const [runStart, spanStart, spanEnd, runEnd] = transport.records
+    expect(runStart).toMatchObject({
+      type: 'run:start',
+      userId: 'user-outer',
+      attributes: {
+        local: 'run',
+        'meta.requestId': 'request-1',
+        'meta.phase': 'outer',
+        'meta.long': 'x'.repeat(200),
+      },
+    })
+    expect(spanStart).toMatchObject({
+      type: 'span:start',
+      userId: 'user-inner',
+      attributes: {
+        local: 'span',
+        'meta.requestId': 'request-1',
+        'meta.phase': 'inner',
+      },
+    })
+    expect(spanEnd).toMatchObject({
+      type: 'span:end',
+      userId: 'user-inner',
+      attributes: {
+        'meta.requestId': 'request-1',
+        'meta.phase': 'inner',
+      },
+    })
+    expect(runEnd).toMatchObject({
+      type: 'run:end',
+      userId: 'user-outer',
+      attributes: {
+        'meta.requestId': 'request-1',
+        'meta.phase': 'outer',
+      },
+    })
+  })
+
+  it('applies configured default correlators only when no active scope provides correlators', async () => {
+    const records: Array<
+      Parameters<Parameters<typeof subscribeObservability>[0]>[0]
+    > = []
+    subscribeObservability((record) => {
+      records.push(record)
+    })
+    const restore = configureObservability({
+      defaultCorrelators: {
+        sessionId: 'default-session',
+        userId: 'default-user',
+      },
+    })
+
+    await observe.run(
+      { name: 'default correlated run', rootPrimitive: 'custom.operation' },
+      async () => undefined,
+    )
+    await propagateAttributes({ sessionId: 'scoped-session' }, async () => {
+      await observe.run(
+        { name: 'scoped correlated run', rootPrimitive: 'custom.operation' },
+        async () => undefined,
+      )
+    })
+    restore()
+    await observe.run(
+      { name: 'after restore', rootPrimitive: 'custom.operation' },
+      async () => undefined,
+    )
+
+    const runStarts = records.filter((record) => record.type === 'run:start')
+    expect(runStarts).toHaveLength(3)
+    expect(runStarts[0]).toMatchObject({
+      sessionId: 'default-session',
+      userId: 'default-user',
+    })
+    expect(runStarts[1]).toMatchObject({ sessionId: 'scoped-session' })
+    expect(runStarts[1]).not.toHaveProperty('userId')
+    expect(runStarts[2]).not.toHaveProperty('sessionId')
+    expect(runStarts[2]).not.toHaveProperty('userId')
+  })
+
   it('delivers every graph record type to subscribers in emission order', async () => {
     const recordTypes: string[] = []
     subscribeObservability((record) => {
       recordTypes.push(record.type)
     })
 
-    await observe.run({ name: 'subscriber graph', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
-        observe.event({ name: 'phase' })
-        const artifactId = observe.artifact({
-          kind: 'output',
-          contentType: 'application/json',
-          encoding: 'json',
-          preview: { ok: true },
-        })
-        observe.edge({
-          edgeType: 'produced',
-          from: { kind: 'span', id: observe.captureContext()!.currentSpanId! },
-          to: { kind: 'artifact', id: artifactId! },
-        })
-      })
-    })
+    await observe.run(
+      { name: 'subscriber graph', rootPrimitive: 'custom.operation' },
+      async () => {
+        await observe.span(
+          { name: 'producer', primitive: 'custom.operation' },
+          async () => {
+            observe.event({ name: 'phase' })
+            const artifactId = observe.artifact({
+              kind: 'output',
+              contentType: 'application/json',
+              encoding: 'json',
+              preview: { ok: true },
+            })
+            observe.edge({
+              edgeType: 'produced',
+              from: {
+                kind: 'span',
+                id: observe.captureContext()!.currentSpanId!,
+              },
+              to: { kind: 'artifact', id: artifactId! },
+            })
+          },
+        )
+      },
+    )
 
     expect(recordTypes).toEqual([
       'run:start',
@@ -110,7 +316,10 @@ describe('observe runtime', () => {
 
     unsubscribe()
     unsubscribe()
-    await observe.run({ name: 'after unsubscribe', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'after unsubscribe', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
 
     expect(records).toEqual([])
   })
@@ -122,7 +331,10 @@ describe('observe runtime', () => {
     })
 
     resetObservabilityRuntime()
-    await observe.run({ name: 'after reset', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'after reset', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
 
     expect(records).toEqual([])
     expect(observabilityDiagnostics().subscriberErrors).toBe(0)
@@ -139,11 +351,17 @@ describe('observe runtime', () => {
       siblingRecords.push(record.type)
     })
 
-    await observe.run({ name: 'safe publish', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'safe publish', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
     await observe.flush()
 
     expect(siblingRecords).toEqual(['run:start', 'run:end'])
-    expect(transport.records.map((record) => record.type)).toEqual(['run:start', 'run:end'])
+    expect(transport.records.map((record) => record.type)).toEqual([
+      'run:start',
+      'run:end',
+    ])
     expect(observabilityDiagnostics()).toMatchObject({
       subscriberErrors: 2,
       deliveryErrors: [],
@@ -159,9 +377,15 @@ describe('observe runtime', () => {
     diagnosticsChannel.subscribe(onMessage)
 
     try {
-      await observe.run({ name: 'channel subscriber', rootPrimitive: 'custom.operation' }, async () => {
-        await observe.span({ name: 'channel span', family: 'custom', primitive: 'custom.operation' }, async () => 'ok')
-      })
+      await observe.run(
+        { name: 'channel subscriber', rootPrimitive: 'custom.operation' },
+        async () => {
+          await observe.span(
+            { name: 'channel span', primitive: 'custom.operation' },
+            async () => 'ok',
+          )
+        },
+      )
     } finally {
       diagnosticsChannel.unsubscribe(onMessage)
     }
@@ -172,7 +396,12 @@ describe('observe runtime', () => {
       CRUX_OBSERVABILITY_SCHEMA_VERSION,
       CRUX_OBSERVABILITY_SCHEMA_VERSION,
     ])
-    expect(messages.map((message) => message.record.type)).toEqual(['run:start', 'span:start', 'span:end', 'run:end'])
+    expect(messages.map((message) => message.record.type)).toEqual([
+      'run:start',
+      'span:start',
+      'span:end',
+      'run:end',
+    ])
     expect(messages[0].record).toMatchObject({
       type: 'run:start',
       name: 'channel subscriber',
@@ -183,18 +412,29 @@ describe('observe runtime', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
-    await observe.run({ name: 'async run', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'parent', family: 'custom', primitive: 'custom.operation' }, async () => {
-        const captured = observe.captureContext()
-        await new Promise((resolve) => setTimeout(resolve, 0))
-        await observe.withContext(captured, async () => {
-          await observe.span({ name: 'child', family: 'custom', primitive: 'custom.operation' }, async () => undefined)
-        })
-      })
-    })
+    await observe.run(
+      { name: 'async run', rootPrimitive: 'custom.operation' },
+      async () => {
+        await observe.span(
+          { name: 'parent', primitive: 'custom.operation' },
+          async () => {
+            const captured = observe.captureContext()
+            await new Promise((resolve) => setTimeout(resolve, 0))
+            await observe.withContext(captured, async () => {
+              await observe.span(
+                { name: 'child', primitive: 'custom.operation' },
+                async () => undefined,
+              )
+            })
+          },
+        )
+      },
+    )
     await observe.flush()
 
-    const spanStarts = transport.records.filter((record) => record.type === 'span:start')
+    const spanStarts = transport.records.filter(
+      (record) => record.type === 'span:start',
+    )
     expect(spanStarts).toHaveLength(2)
     expect(spanStarts[1].parentSpanId).toBe(spanStarts[0].spanId)
   })
@@ -203,11 +443,22 @@ describe('observe runtime', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
-    await observe.span({ name: 'standalone', family: 'custom', primitive: 'custom.operation' }, async () => 'ok')
+    await observe.span(
+      { name: 'standalone', primitive: 'custom.operation' },
+      async () => 'ok',
+    )
     await observe.flush()
 
-    expect(transport.records.map((record) => record.type)).toEqual(['run:start', 'span:start', 'span:end', 'run:end'])
-    expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'custom.operation' })
+    expect(transport.records.map((record) => record.type)).toEqual([
+      'run:start',
+      'span:start',
+      'span:end',
+      'run:end',
+    ])
+    expect(transport.records[0]).toMatchObject({
+      type: 'run:start',
+      rootPrimitive: 'custom.operation',
+    })
   })
 
   it('can run standalone detail spans without creating a visible run', async () => {
@@ -215,12 +466,15 @@ describe('observe runtime', () => {
     setObservabilityTransport(transport)
 
     const result = await observe.span(
-      { name: 'router.resolve', family: 'routing', primitive: 'routing.router', implicitRun: false },
+      {
+        name: 'router.resolve',
+        primitive: 'routing.router',
+        implicitRun: false,
+      },
       async () => 'resolved',
     )
     const openSpan = observe.openSpan({
       name: 'cascade.resolve',
-      family: 'routing',
       primitive: 'routing.cascade',
       implicitRun: false,
     })
@@ -237,18 +491,21 @@ describe('observe runtime', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
-    const run = observe.openRun({ name: 'serverless swarm', rootPrimitive: 'composition.swarm' })
+    const run = observe.openRun({
+      name: 'serverless swarm',
+      rootPrimitive: 'composition.swarm',
+    })
     const captured = run.captureContext()
     await run.withContext(async () => {
       await observe.span(
-        { name: 'first turn', family: 'composition', primitive: 'composition.swarm' },
+        { name: 'first turn', primitive: 'composition.swarm' },
         async () => undefined,
       )
     })
 
     await observe.withContext(captured, async () => {
       await observe.span(
-        { name: 'second turn', family: 'composition', primitive: 'composition.swarm' },
+        { name: 'second turn', primitive: 'composition.swarm' },
         async () => undefined,
       )
     })
@@ -264,33 +521,216 @@ describe('observe runtime', () => {
       'run:end',
     ])
     const [runStart, firstStart, , secondStart, , runEnd] = transport.records
-    expect(firstStart).toMatchObject({ type: 'span:start', runId: runStart.runId, parentSpanId: null })
-    expect(secondStart).toMatchObject({ type: 'span:start', runId: runStart.runId, parentSpanId: null })
-    expect(runEnd).toMatchObject({ type: 'run:end', runId: runStart.runId, status: 'ok' })
+    expect(firstStart).toMatchObject({
+      type: 'span:start',
+      runId: runStart.runId,
+      parentSpanId: null,
+    })
+    expect(secondStart).toMatchObject({
+      type: 'span:start',
+      runId: runStart.runId,
+      parentSpanId: null,
+    })
+    expect(runEnd).toMatchObject({
+      type: 'run:end',
+      runId: runStart.runId,
+      status: 'ok',
+    })
+  })
+
+  it('emits captured run ends once with captured duration', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-07-03T00:00:00.000Z'))
+    try {
+      const transport = createInMemoryObservabilityTransport()
+      setObservabilityTransport(transport)
+
+      const run = observe.openRun({
+        name: 'serverless once',
+        rootPrimitive: 'custom.operation',
+      })
+      const captured = run.captureContext()
+
+      vi.advanceTimersByTime(42)
+      observe.endRun(captured)
+      observe.endRun(captured, {
+        status: 'error',
+        error: new Error('late duplicate'),
+      })
+      await observe.flush()
+
+      const runEnds = transport.records.filter(
+        (record) => record.type === 'run:end',
+      )
+      expect(runEnds).toHaveLength(1)
+      expect(runEnds[0]).toMatchObject({
+        type: 'run:end',
+        runId: run.runId,
+        status: 'ok',
+        durationMs: 42,
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('deduplicates captured and owner run end calls across both orders', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const first = observe.openRun({
+      name: 'owner first',
+      rootPrimitive: 'custom.operation',
+    })
+    const firstCaptured = first.captureContext()
+    first.end()
+    observe.endRun(firstCaptured, {
+      status: 'error',
+      error: new Error('duplicate'),
+    })
+
+    const second = observe.openRun({
+      name: 'captured first',
+      rootPrimitive: 'custom.operation',
+    })
+    const secondCaptured = second.captureContext()
+    observe.endRun(secondCaptured)
+    second.end({ status: 'error', error: new Error('duplicate') })
+
+    await observe.flush()
+
+    const runEnds = transport.records.filter(
+      (record) => record.type === 'run:end',
+    )
+    expect(runEnds).toHaveLength(2)
+    expect(runEnds.map((record) => record.status)).toEqual(['ok', 'ok'])
+    expect(runEnds.map((record) => record.runId)).toEqual([
+      first.runId,
+      second.runId,
+    ])
+  })
+
+  it('allows a suspended captured run to emit one resumed terminal end', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const run = observe.openRun({
+      name: 'resumable flow',
+      rootPrimitive: 'flow.run',
+    })
+    const captured = run.captureContext()
+    observe.endRun(captured, { status: 'suspended' })
+    observe.endRun(captured, { status: 'ok' })
+    observe.endRun(captured, {
+      status: 'error',
+      error: new Error('duplicate terminal end'),
+    })
+    await observe.flush()
+
+    const runEnds = transport.records.filter(
+      (record) => record.type === 'run:end',
+    )
+    expect(runEnds).toHaveLength(2)
+    expect(runEnds.map((record) => record.status)).toEqual(['suspended', 'ok'])
+    expect(runEnds.every((record) => record.runId === run.runId)).toBe(true)
+  })
+
+  it('merges open span attributes with setAttributes and explicit end attributes', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const run = observe.openRun({
+      name: 'manual attrs',
+      rootPrimitive: 'custom.operation',
+    })
+    run.withContext(() => {
+      const span = observe.openSpan({
+        name: 'manual span',
+        primitive: 'custom.operation',
+        attributes: { initial: true, phase: 'start' },
+      })
+      span.setAttributes({ phase: 'middle', accumulated: 1 })
+      span.end({ attributes: { final: true } })
+    })
+    run.end()
+    await observe.flush()
+
+    const spanEnd = transport.records.find(
+      (record) => record.type === 'span:end',
+    )
+    expect(spanEnd).toMatchObject({
+      type: 'span:end',
+      attributes: {
+        initial: true,
+        phase: 'middle',
+        accumulated: 1,
+        final: true,
+      },
+    })
+  })
+
+  it('treats an untyped end error field as an error end instead of raw attributes', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const run = observe.openRun({
+      name: 'manual error option',
+      rootPrimitive: 'custom.operation',
+    })
+    run.withContext(() => {
+      const span = observe.openSpan({
+        name: 'manual span',
+        primitive: 'custom.operation',
+      })
+      span.end({ error: 'someString' })
+    })
+    run.end()
+    await observe.flush()
+
+    const spanEnd = transport.records.find(
+      (record) => record.type === 'span:end',
+    )
+    expect(spanEnd).toMatchObject({
+      type: 'span:end',
+      status: 'error',
+      error: { message: 'someString' },
+    })
+    expect(spanEnd).not.toMatchObject({
+      attributes: expect.objectContaining({ error: 'someString' }),
+    })
   })
 
   it('emits events, artifacts, and edges inside the active span', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
-    await observe.run({ name: 'artifact run', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
-        observe.event({ name: 'phase', attributes: { value: 'started' } })
-        const artifactId = createCruxArtifactId('test_output')
-        observe.artifact({
-          artifactId,
-          kind: 'output',
-          contentType: 'application/json',
-          encoding: 'json',
-          preview: { ok: true },
-        })
-        observe.edge({
-          edgeType: 'produced',
-          from: { kind: 'span', id: observe.captureContext().currentSpanId! },
-          to: { kind: 'artifact', id: artifactId },
-        })
-      })
-    })
+    await observe.run(
+      { name: 'artifact run', rootPrimitive: 'custom.operation' },
+      async () => {
+        await observe.span(
+          { name: 'producer', primitive: 'custom.operation' },
+          async () => {
+            observe.event({ name: 'phase', attributes: { value: 'started' } })
+            const artifactId = createCruxArtifactId()
+            observe.artifact({
+              artifactId,
+              kind: 'output',
+              contentType: 'application/json',
+              encoding: 'json',
+              preview: { ok: true },
+            })
+            observe.edge({
+              edgeType: 'produced',
+              from: {
+                kind: 'span',
+                id: observe.captureContext().currentSpanId!,
+              },
+              to: { kind: 'artifact', id: artifactId },
+            })
+          },
+        )
+      },
+    )
     await observe.flush()
 
     expect(transport.records.map((record) => record.type)).toEqual([
@@ -302,9 +742,19 @@ describe('observe runtime', () => {
       'span:end',
       'run:end',
     ])
-    expect(transport.records[2]).toMatchObject({ type: 'span:event', name: 'phase' })
-    expect(transport.records[3]).toMatchObject({ type: 'artifact', kind: 'output' })
-    expect(transport.records[4]).toMatchObject({ type: 'edge', edgeType: 'produced' })
+    expect(transport.records[2]).toMatchObject({
+      type: 'span:event',
+      name: 'phase',
+    })
+    expect(transport.records[3]).toMatchObject({
+      type: 'artifact',
+      kind: 'output',
+    })
+    expect(transport.records[4]).toMatchObject({
+      type: 'edge',
+      edgeType: 'produced',
+    })
+    expectBalancedGraph(transport.records)
   })
 
   it('records transport failures without throwing user code', async () => {
@@ -315,7 +765,10 @@ describe('observe runtime', () => {
     })
 
     await expect(
-      observe.run({ name: 'non throwing', rootPrimitive: 'custom.operation' }, async () => 'still works'),
+      observe.run(
+        { name: 'non throwing', rootPrimitive: 'custom.operation' },
+        async () => 'still works',
+      ),
     ).resolves.toBe('still works')
     await observe.flush()
 
@@ -330,11 +783,17 @@ describe('observe runtime', () => {
     Object.assign(error, { token: 'secret-token' })
 
     await expect(
-      observe.run({ name: 'failing run', rootPrimitive: 'custom.operation' }, async () => {
-        await observe.span({ name: 'failing span', family: 'custom', primitive: 'custom.operation' }, async () => {
-          throw error
-        })
-      }),
+      observe.run(
+        { name: 'failing run', rootPrimitive: 'custom.operation' },
+        async () => {
+          await observe.span(
+            { name: 'failing span', primitive: 'custom.operation' },
+            async () => {
+              throw error
+            },
+          )
+        },
+      ),
     ).rejects.toThrow('bad plan')
     await observe.flush()
 
@@ -392,9 +851,15 @@ describe('observe runtime', () => {
     const error = new Error('manual failure')
     error.stack = 'Error: manual failure\n    at open span'
 
-    const run = observe.openRun({ name: 'manual run', rootPrimitive: 'custom.operation' })
+    const run = observe.openRun({
+      name: 'manual run',
+      rootPrimitive: 'custom.operation',
+    })
     run.withContext(() => {
-      const span = observe.openSpan({ name: 'manual span', family: 'custom', primitive: 'custom.operation' })
+      const span = observe.openSpan({
+        name: 'manual span',
+        primitive: 'custom.operation',
+      })
       span.error(error, { phase: 'manual.finish', errorKind: 'manual_error' })
     })
     run.end()
@@ -423,7 +888,11 @@ describe('observe runtime', () => {
     expect(transport.records[5]).toMatchObject({
       type: 'span:end',
       status: 'error',
-      error: { message: 'manual failure', name: 'Error', category: 'manual_error' },
+      error: {
+        message: 'manual failure',
+        name: 'Error',
+        category: 'manual_error',
+      },
       attributes: { phase: 'manual.finish', errorKind: 'manual_error' },
     })
   })
@@ -437,40 +906,85 @@ describe('observe runtime', () => {
       },
     })
 
-    await observe.run({ name: 'serverless', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'serverless', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
 
     expect(delivered).toEqual([])
     await expect(observe.flush()).resolves.toBe(true)
     expect(delivered).toEqual(['run:start', 'run:end'])
   })
 
-  it('starts the first delivery immediately for live devtools updates', () => {
-    const send = vi.fn()
-    setObservabilityTransport({ send })
+  it('calls the transport flush hook after queued records drain', async () => {
+    const delivered: string[] = []
+    const flush = vi.fn<() => Promise<void>>(async () => {
+      delivered.push('flush')
+    })
+    setObservabilityTransport({
+      send(records) {
+        delivered.push(...records.map((record) => record.type))
+      },
+      flush,
+    })
 
-    observe.openRun({ name: 'live run', rootPrimitive: 'custom.operation' })
+    await observe.run(
+      { name: 'flush hook', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
 
-    expect(send).toHaveBeenCalledTimes(1)
-    expect(send.mock.calls[0][0]).toEqual([expect.objectContaining({ type: 'run:start', name: 'live run' })])
+    await expect(observe.flush()).resolves.toBe(true)
+    expect(flush).toHaveBeenCalledTimes(1)
+    expect(delivered).toEqual(['run:start', 'run:end', 'flush'])
+  })
+
+  it('starts the first delivery after the batching window', async () => {
+    vi.useFakeTimers()
+    try {
+      const send = vi.fn()
+      setObservabilityTransport({ send })
+
+      observe.openRun({ name: 'live run', rootPrimitive: 'custom.operation' })
+
+      expect(send).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(199)
+      expect(send).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(1)
+      expect(send).toHaveBeenCalledTimes(1)
+      expect(send.mock.calls[0][0]).toEqual([
+        expect.objectContaining({ type: 'run:start', name: 'live run' }),
+      ])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('dispatches queued live deliveries while an earlier send is still in flight', async () => {
     let resolveFirstSend!: () => void
     const sentBatches: string[][] = []
-    setObservabilityTransport({
-      async send(records) {
-        sentBatches.push(records.map((record) => record.type))
-        if (sentBatches.length === 1) {
-          await new Promise<void>((resolve) => {
-            resolveFirstSend = resolve
-          })
-        }
+    setObservabilityTransport(
+      {
+        async send(records) {
+          sentBatches.push(records.map((record) => record.type))
+          if (sentBatches.length === 1) {
+            await new Promise<void>((resolve) => {
+              resolveFirstSend = resolve
+            })
+          }
+        },
       },
-    })
+      { scheduledDelayMs: 0 },
+    )
 
-    const run = observe.openRun({ name: 'live stream', rootPrimitive: 'custom.operation' })
+    const run = observe.openRun({
+      name: 'live stream',
+      rootPrimitive: 'custom.operation',
+    })
     run.withContext(() => {
-      const span = observe.openSpan({ name: 'child', family: 'custom', primitive: 'custom.operation' })
+      const span = observe.openSpan({
+        name: 'child',
+        primitive: 'custom.operation',
+      })
       span.end()
     })
     await new Promise((resolve) => queueMicrotask(resolve))
@@ -481,39 +995,28 @@ describe('observe runtime', () => {
     expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
   })
 
-  it('flushes queued deliveries when queueMicrotask is unavailable', async () => {
-    const queueMicrotaskDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'queueMicrotask')
-    Object.defineProperty(globalThis, 'queueMicrotask', { value: undefined, configurable: true })
-
-    let resolveFirstSend!: () => void
+  it('flushes queued deliveries before the batching window elapses', async () => {
     const sentBatches: string[][] = []
     setObservabilityTransport({
-      async send(records) {
+      send(records) {
         sentBatches.push(records.map((record) => record.type))
-        if (sentBatches.length === 1) {
-          await new Promise<void>((resolve) => {
-            resolveFirstSend = resolve
-          })
-        }
       },
     })
 
-    try {
-      const run = observe.openRun({ name: 'convex cleanup', rootPrimitive: 'runtime.convex.action' })
-      run.withContext(() => {
-        const span = observe.openSpan({ name: 'cleanup', family: 'runtime', primitive: 'runtime.convex.action' })
-        span.end()
+    const run = observe.openRun({
+      name: 'convex cleanup',
+      rootPrimitive: 'runtime.convex.action',
+    })
+    run.withContext(() => {
+      const span = observe.openSpan({
+        name: 'cleanup',
+        primitive: 'runtime.convex.action',
       })
-      resolveFirstSend()
-      await expect(observe.flush()).resolves.toBe(true)
-      expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
-    } finally {
-      if (queueMicrotaskDescriptor) {
-        Object.defineProperty(globalThis, 'queueMicrotask', queueMicrotaskDescriptor)
-      } else {
-        Reflect.deleteProperty(globalThis, 'queueMicrotask')
-      }
-    }
+      span.end()
+    })
+    await expect(observe.flush()).resolves.toBe(true)
+
+    expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
   })
 
   it('keeps live delivery concurrency bounded while allowing progress behind slow sends', async () => {
@@ -530,16 +1033,22 @@ describe('observe runtime', () => {
           activeSends -= 1
         },
       },
-      { maxPendingDeliveries: 3 },
+      { maxPendingDeliveries: 3, scheduledDelayMs: 0 },
     )
 
-    await observe.run({ name: 'fanout', rootPrimitive: 'custom.operation' }, async () => {
-      await Promise.all(
-        Array.from({ length: 8 }, (_, index) =>
-          observe.span({ name: `branch ${index}`, family: 'custom', primitive: 'custom.operation' }, async () => index),
-        ),
-      )
-    })
+    await observe.run(
+      { name: 'fanout', rootPrimitive: 'custom.operation' },
+      async () => {
+        await Promise.all(
+          Array.from({ length: 8 }, (_, index) =>
+            observe.span(
+              { name: `branch ${index}`, primitive: 'custom.operation' },
+              async () => index,
+            ),
+          ),
+        )
+      },
+    )
     await observe.flush()
 
     expect(maxActiveSends).toBeGreaterThan(1)
@@ -557,7 +1066,10 @@ describe('observe runtime', () => {
       },
     })
 
-    await observe.run({ name: 'hung collector', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'hung collector', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
 
     await expect(observe.flush({ timeoutMs: 1 })).resolves.toBe(false)
     expect(observabilityDiagnostics().pendingDeliveries).toBeGreaterThan(0)
@@ -579,11 +1091,45 @@ describe('observe runtime', () => {
       { maxPendingDeliveries: 1 },
     )
 
-    await observe.run({ name: 'retry queued batch', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'retry queued batch', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
 
     await expect(observe.flush()).resolves.toBe(true)
     expect(delivered).toEqual(['run:start', 'run:end'])
     expect(observabilityDiagnostics().deliveryErrors).toHaveLength(1)
+  })
+
+  it('contains synchronous transport throws and keeps the failed batch queued', async () => {
+    const chaos = chaosTransport('sync-throw')
+    setObservabilityTransport(chaos.transport, {
+      maxPendingDeliveries: 1,
+      scheduledDelayMs: 0,
+    })
+
+    await expect(
+      observe.run(
+        { name: 'sync throw transport', rootPrimitive: 'custom.operation' },
+        async () => 'ok',
+      ),
+    ).resolves.toBe('ok')
+
+    expect(chaos.sendCount).toBeGreaterThan(0)
+    expect(observabilityDiagnostics().deliveryErrors).toHaveLength(
+      chaos.sendCount,
+    )
+
+    chaos.setMode('slow')
+    const flushed = observe.flush()
+    await Promise.resolve()
+    chaos.resolveSlowDeliveries()
+
+    await expect(flushed).resolves.toBe(true)
+    expect(chaos.batches.at(-1)?.map((record) => record.type)).toEqual([
+      'run:start',
+      'run:end',
+    ])
   })
 
   it('cancels bounded flush timers when delivery completes before the deadline', async () => {
@@ -598,7 +1144,10 @@ describe('observe runtime', () => {
         },
       })
 
-      observe.openRun({ name: 'bounded flush', rootPrimitive: 'custom.operation' })
+      observe.openRun({
+        name: 'bounded flush',
+        rootPrimitive: 'custom.operation',
+      })
       const flushed = observe.flush({ timeoutMs: 60_000 })
       await Promise.resolve()
       resolveSend()
@@ -610,28 +1159,142 @@ describe('observe runtime', () => {
     }
   })
 
-  it('drops records instead of growing an unbounded delivery queue', async () => {
-    setObservabilityTransport(
-      {
-        async send() {
-          await new Promise(() => undefined)
-        },
-      },
-      { maxPendingDeliveries: 1 },
-    )
+  it('drops the oldest queued records when a hung transport fills the bounded queue', async () => {
+    const chaos = chaosTransport('hang')
+    setObservabilityTransport(chaos.transport, {
+      maxPendingDeliveries: 1,
+      maxQueuedRecords: 2048,
+      scheduledDelayMs: 0,
+    })
 
-    await observe.run({ name: 'pressure', rootPrimitive: 'custom.operation' }, async () => {
-      observe.event({ name: 'ignored-outside-span' })
+    const run = observe.openRun({
+      name: 'pressure',
+      rootPrimitive: 'custom.operation',
+    })
+    run.withContext(() => {
+      const span = observe.openSpan({
+        name: 'buffered span',
+        primitive: 'custom.operation',
+      })
+      span.withContext(() => {
+        for (let index = 0; index < 4997; index += 1) {
+          observe.event({ name: `event ${index}` })
+        }
+      })
+      span.end()
     })
 
     expect(observabilityDiagnostics()).toMatchObject({
       pendingDeliveries: 1,
-      droppedRecords: 0,
+      droppedRecords: 2952,
+    })
+
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport, {
+      maxPendingDeliveries: 2,
+      maxQueuedRecords: 2048,
+      scheduledDelayMs: 0,
+    })
+
+    await expect(observe.flush({ timeoutMs: 1 })).resolves.toBe(false)
+    expect(transport.records).toHaveLength(2047)
+    expect(transport.records[0]).toMatchObject({
+      type: 'span:event',
+      name: 'event 2951',
+    })
+    expect(transport.records.at(-1)).toMatchObject({ type: 'span:end' })
+  })
+
+  it('counts queued records discarded after the transport is removed', async () => {
+    const chaos = chaosTransport('hang')
+    setObservabilityTransport(chaos.transport, {
+      maxPendingDeliveries: 1,
+      maxQueuedRecords: 16,
+      scheduledDelayMs: 0,
+    })
+
+    const run = observe.openRun({
+      name: 'remove transport',
+      rootPrimitive: 'custom.operation',
+    })
+    run.withContext(() => {
+      const span = observe.openSpan({
+        name: 'queued',
+        primitive: 'custom.operation',
+      })
+      span.end()
+    })
+    setObservabilityTransport(undefined)
+
+    await expect(observe.flush({ timeoutMs: 1 })).resolves.toBe(false)
+    expect(observabilityDiagnostics()).toMatchObject({
+      pendingDeliveries: 1,
+      droppedRecords: 2,
     })
   })
 
+  it('counts queued records discarded by runtime reset', () => {
+    const chaos = chaosTransport('hang')
+    setObservabilityTransport(chaos.transport, {
+      maxPendingDeliveries: 1,
+      maxQueuedRecords: 16,
+      scheduledDelayMs: 0,
+    })
+
+    const run = observe.openRun({
+      name: 'reset drops',
+      rootPrimitive: 'custom.operation',
+    })
+    run.withContext(() => {
+      const span = observe.openSpan({
+        name: 'queued reset span',
+        primitive: 'custom.operation',
+      })
+      span.end()
+    })
+
+    resetObservabilityRuntime()
+    expect(observabilityDiagnostics()).toMatchObject({
+      pendingDeliveries: 0,
+      droppedRecords: 2,
+    })
+  })
+
+  it('keeps memory bounded during a 100k-record hung-transport soak', () => {
+    const chaos = chaosTransport('hang')
+    setObservabilityTransport(chaos.transport, {
+      maxPendingDeliveries: 1,
+      maxQueuedRecords: 2048,
+      scheduledDelayMs: 0,
+    })
+
+    const run = observe.openRun({
+      name: 'soak',
+      rootPrimitive: 'custom.operation',
+    })
+    run.withContext(() => {
+      const span = observe.openSpan({
+        name: 'soak span',
+        primitive: 'custom.operation',
+      })
+      span.withContext(() => {
+        for (let index = 0; index < 99_997; index += 1) {
+          observe.event({ name: `event ${index}` })
+        }
+      })
+      span.end()
+    })
+
+    expect(observabilityDiagnostics()).toMatchObject({
+      pendingDeliveries: 1,
+      droppedRecords: 97_952,
+    })
+  }, 10_000)
+
   it('posts canonical batches through the HTTP transport', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response('{}', { status: 202 }),
+    )
     const transport = createHttpObservabilityTransport({
       serverUrl: 'ws://localhost:4400/',
       fetch: fetchImpl,
@@ -640,11 +1303,16 @@ describe('observe runtime', () => {
     })
     setObservabilityTransport(transport)
 
-    await observe.run({ name: 'http run', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'http run', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
     await observe.flush()
 
-    expect(fetchImpl).toHaveBeenCalledTimes(2)
-    expect(fetchImpl.mock.calls[0][0]).toBe('http://localhost:4400/api/observability/records')
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      'http://localhost:4400/api/observability/records',
+    )
     expect(fetchImpl.mock.calls[0][1]).toMatchObject({
       method: 'POST',
       headers: {
@@ -654,12 +1322,14 @@ describe('observe runtime', () => {
       },
     })
     expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))).toMatchObject({
-      records: [{ type: 'run:start', name: 'http run' }],
+      records: [{ type: 'run:start', name: 'http run' }, { type: 'run:end' }],
     })
   })
 
   it('preserves tokenized tunnel query params on HTTP transport endpoints', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response('{}', { status: 202 }),
+    )
     const transport = createHttpObservabilityTransport({
       serverUrl: 'https://example.ngrok.app?t=session-token',
       fetch: fetchImpl,
@@ -667,15 +1337,22 @@ describe('observe runtime', () => {
     })
     setObservabilityTransport(transport)
 
-    await observe.run({ name: 'tunnel run', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'tunnel run', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
     await observe.flush()
 
     expect(fetchImpl).toHaveBeenCalled()
-    expect(fetchImpl.mock.calls[0][0]).toBe('https://example.ngrok.app/api/observability/records?t=session-token')
+    expect(fetchImpl.mock.calls[0][0]).toBe(
+      'https://example.ngrok.app/api/observability/records?t=session-token',
+    )
   })
 
   it('sends bearer auth from an HTTP transport token option', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response('{}', { status: 202 }),
+    )
     const transport = createHttpObservabilityTransport({
       serverUrl: 'https://example.ngrok.app',
       token: 'project-ingest-token',
@@ -684,7 +1361,10 @@ describe('observe runtime', () => {
     })
     setObservabilityTransport(transport)
 
-    await observe.run({ name: 'bearer run', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'bearer run', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
     await observe.flush()
 
     expect(fetchImpl).toHaveBeenCalled()
@@ -697,7 +1377,9 @@ describe('observe runtime', () => {
     const previous = process.env.CRUX_DEVTOOLS_TOKEN
     process.env.CRUX_DEVTOOLS_TOKEN = 'env-ingest-token'
     try {
-      const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+      const fetchImpl = vi.fn<typeof fetch>(
+        async () => new Response('{}', { status: 202 }),
+      )
       const transport = createHttpObservabilityTransport({
         serverUrl: 'https://example.ngrok.app',
         fetch: fetchImpl,
@@ -705,7 +1387,10 @@ describe('observe runtime', () => {
       })
       setObservabilityTransport(transport)
 
-      await observe.run({ name: 'env bearer run', rootPrimitive: 'custom.operation' }, async () => 'ok')
+      await observe.run(
+        { name: 'env bearer run', rootPrimitive: 'custom.operation' },
+        async () => 'ok',
+      )
       await observe.flush()
 
       expect(fetchImpl).toHaveBeenCalled()
@@ -735,20 +1420,72 @@ describe('observe runtime', () => {
     })
     setObservabilityTransport(transport)
 
-    await observe.run({ name: 'retry run', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'retry run', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
     await expect(observe.flush()).resolves.toBe(true)
 
-    expect(fetchImpl).toHaveBeenCalledTimes(3)
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(observabilityDeliveryErrors()).toHaveLength(0)
     const deliveredRecordTypes = fetchImpl.mock.calls
       .slice(1)
-      .flatMap((call) => JSON.parse(String(call[1]?.body)).records.map((record: { type: string }) => record.type))
+      .flatMap((call) =>
+        JSON.parse(String(call[1]?.body)).records.map(
+          (record: { type: string }) => record.type,
+        ),
+      )
     expect(deliveredRecordTypes).toContain('run:start')
     expect(deliveredRecordTypes).toContain('run:end')
   })
 
+  it('does not isolate HTTP records one-by-one for retryable 5xx responses', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response('busy', { status: 503 }),
+    )
+    const transport = createHttpObservabilityTransport({
+      serverUrl: 'http://localhost:4400',
+      fetch: fetchImpl,
+      retryAttempts: 0,
+    })
+    const firstRecord = {
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: 'rec_5xx_first',
+      seq: 1,
+      type: 'run:start',
+      runId: 'run_5xx_retry',
+      traceId: 'trace_5xx_retry',
+      name: 'retryable',
+      rootPrimitive: 'custom.operation',
+      startedAt: '2026-05-16T18:00:00.000Z',
+      status: 'running',
+    } as unknown as CruxGraphRecord
+    const secondRecord = {
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: 'rec_5xx_second',
+      seq: 2,
+      type: 'run:end',
+      runId: 'run_5xx_retry',
+      traceId: 'trace_5xx_retry',
+      endedAt: '2026-05-16T18:00:00.010Z',
+      durationMs: 10,
+      status: 'error',
+    } as unknown as CruxGraphRecord
+
+    await expect(
+      transport.send([firstRecord, secondRecord]),
+    ).rejects.toMatchObject({ status: 503 })
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      records: [firstRecord, secondRecord],
+    })
+  })
+
   it('keeps terminal lifecycle records deliverable when late previews contain JSON-hostile values', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response('{}', { status: 202 }),
+    )
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
       fetch: fetchImpl,
@@ -756,27 +1493,41 @@ describe('observe runtime', () => {
     })
     setObservabilityTransport(transport)
 
-    await observe.run({ name: 'json hostile preview', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
-        const cyclic: Record<string, unknown> = { id: 'cyclic' }
-        cyclic.self = cyclic
-        observe.artifact({
-          kind: 'output',
-          contentType: 'application/json',
-          encoding: 'json',
-          preview: {
-            count: 1n,
-            cyclic,
+    await observe.run(
+      { name: 'json hostile preview', rootPrimitive: 'custom.operation' },
+      async () => {
+        await observe.span(
+          { name: 'producer', primitive: 'custom.operation' },
+          async () => {
+            const cyclic: Record<string, unknown> = { id: 'cyclic' }
+            cyclic.self = cyclic
+            observe.artifact({
+              kind: 'output',
+              contentType: 'application/json',
+              encoding: 'json',
+              preview: {
+                count: 1n,
+                cyclic,
+              },
+            })
           },
-        })
-      })
-    })
+        )
+      },
+    )
     await expect(observe.flush()).resolves.toBe(true)
 
-    const deliveredRecords = fetchImpl.mock.calls.flatMap((call) => JSON.parse(String(call[1]?.body)).records)
-    expect(deliveredRecords.map((record: { type: string }) => record.type)).toContain('span:end')
-    expect(deliveredRecords.map((record: { type: string }) => record.type)).toContain('run:end')
-    const artifact = deliveredRecords.find((record: { type: string }) => record.type === 'artifact')
+    const deliveredRecords = fetchImpl.mock.calls.flatMap(
+      (call) => JSON.parse(String(call[1]?.body)).records,
+    )
+    expect(
+      deliveredRecords.map((record: { type: string }) => record.type),
+    ).toContain('span:end')
+    expect(
+      deliveredRecords.map((record: { type: string }) => record.type),
+    ).toContain('run:end')
+    const artifact = deliveredRecords.find(
+      (record: { type: string }) => record.type === 'artifact',
+    )
     expect(artifact.preview).toMatchObject({
       count: '1',
       cyclic: { id: 'cyclic', self: '[Circular]' },
@@ -786,8 +1537,14 @@ describe('observe runtime', () => {
 
   it('isolates rejected HTTP records so one bad detail cannot strand terminal records', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
-      const records = JSON.parse(String(init?.body)).records as Array<{ type: string; name?: string }>
-      if (records.length > 1 && records.some((record) => record.type === 'artifact')) {
+      const records = JSON.parse(String(init?.body)).records as Array<{
+        type: string
+        name?: string
+      }>
+      if (
+        records.length > 1 &&
+        records.some((record) => record.type === 'artifact')
+      ) {
         return new Response('bad artifact', { status: 400 })
       }
       if (records.length === 1 && records[0].type === 'artifact') {
@@ -803,48 +1560,101 @@ describe('observe runtime', () => {
     })
     setObservabilityTransport(transport)
 
-    await observe.run({ name: 'partially bad batch', rootPrimitive: 'custom.operation' }, async () => {
-      await observe.span({ name: 'producer', family: 'custom', primitive: 'custom.operation' }, async () => {
-        observe.artifact({
-          kind: 'output',
-          contentType: 'application/json',
-          encoding: 'json',
-          preview: { validClientSide: true },
-        })
-      })
-    })
+    await observe.run(
+      { name: 'partially bad batch', rootPrimitive: 'custom.operation' },
+      async () => {
+        await observe.span(
+          { name: 'producer', primitive: 'custom.operation' },
+          async () => {
+            observe.artifact({
+              kind: 'output',
+              contentType: 'application/json',
+              encoding: 'json',
+              preview: { validClientSide: true },
+            })
+          },
+        )
+      },
+    )
     await expect(observe.flush()).resolves.toBe(true)
 
     const deliveredRecords = fetchImpl.mock.calls
-      .map((call) => JSON.parse(String(call[1]?.body)).records as Array<{ type: string }>)
-      .filter((records) => records.length === 1 || records.every((record) => record.type !== 'artifact'))
+      .map(
+        (call) =>
+          JSON.parse(String(call[1]?.body)).records as Array<{ type: string }>,
+      )
+      .filter(
+        (records) =>
+          records.length === 1 ||
+          records.every((record) => record.type !== 'artifact'),
+      )
       .flat()
     expect(deliveredRecords.map((record) => record.type)).toContain('span:end')
     expect(deliveredRecords.map((record) => record.type)).toContain('run:end')
+    expect(observabilityDiagnostics().droppedRecords).toBe(1)
     expect(observabilityDeliveryErrors()).toHaveLength(0)
   })
 
-  it('chunks large HTTP deliveries without treating the record list as a preview array', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(async () => new Response('{}', { status: 202 }))
+  it('does not locally Zod-parse HTTP batches before posting them', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response('{}', { status: 202 }),
+    )
+    const transport = createHttpObservabilityTransport({
+      serverUrl: 'http://localhost:4400',
+      fetch: fetchImpl,
+      retryAttempts: 0,
+    })
+    const malformedButAlreadyAcceptedRecord = {
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: 'rec_invalid_local_parse',
+      seq: 1,
+      type: 'run:start',
+      runId: 'run_invalid_local_parse',
+      traceId: 'trace-not-w3c',
+      name: 'invalid local parse',
+      rootPrimitive: 'custom.operation',
+      startedAt: '2026-05-16T18:00:00.000Z',
+      status: 'running',
+    } as unknown as CruxGraphRecord
+
+    await expect(
+      transport.send([malformedButAlreadyAcceptedRecord]),
+    ).resolves.toBeUndefined()
+
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      records: [malformedButAlreadyAcceptedRecord],
+    })
+  })
+
+  it('chunks large HTTP deliveries in the engine without treating the record list as a preview array', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response('{}', { status: 202 }),
+    )
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
       fetch: fetchImpl,
       retryAttempts: 0,
       maxRecordsPerRequest: 50,
     })
-    const endedAt = new Date().toISOString()
+    setObservabilityTransport(transport)
 
-    await transport.send(
-      Array.from({ length: 205 }, (_, index) => ({
-        schemaVersion: 1,
-        recordId: `rec_chunk_${index}`,
-        type: 'run:end',
-        runId: `run_chunk_${index}`,
-        traceId: `trace_chunk_${index}`,
-        endedAt,
-        status: 'ok',
-      })),
-    )
+    const run = observe.openRun({
+      name: 'chunked http run',
+      rootPrimitive: 'custom.operation',
+    })
+    run.withContext(() => {
+      for (let index = 0; index < 203; index += 1) {
+        observe.artifact({
+          kind: 'output',
+          contentType: 'application/json',
+          encoding: 'json',
+          preview: { index },
+        })
+      }
+    })
+    run.end()
+    await observe.flush()
 
     const deliveredCount = fetchImpl.mock.calls.reduce((count, call) => {
       return count + JSON.parse(String(call[1]?.body)).records.length
@@ -854,14 +1664,27 @@ describe('observe runtime', () => {
   })
 
   it('shutdown flushes bounded deliveries and disables later sends', async () => {
-    const transport = createInMemoryObservabilityTransport()
+    const transport = {
+      ...createInMemoryObservabilityTransport(),
+      shutdown: vi.fn(async () => undefined),
+    }
     setObservabilityTransport(transport)
 
-    await observe.run({ name: 'before shutdown', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'before shutdown', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
     await expect(observe.shutdown()).resolves.toBe(true)
-    await observe.run({ name: 'after shutdown', rootPrimitive: 'custom.operation' }, async () => 'ok')
+    await observe.run(
+      { name: 'after shutdown', rootPrimitive: 'custom.operation' },
+      async () => 'ok',
+    )
     await observe.flush()
 
-    expect(transport.records.map((record) => record.type)).toEqual(['run:start', 'run:end'])
+    expect(transport.shutdown).toHaveBeenCalledTimes(1)
+    expect(transport.records.map((record) => record.type)).toEqual([
+      'run:start',
+      'run:end',
+    ])
   })
 })

@@ -26,6 +26,7 @@ import type {
 interface PersistedExperiment {
   readonly evaluationId: string
   readonly configFingerprint: string
+  readonly observability?: { readonly runId: string; readonly traceId: string }
   readonly filteredRun: boolean
   readonly variants: readonly { readonly name: string }[]
   readonly cases: readonly ExperimentCell[]
@@ -76,6 +77,7 @@ export async function promoteQualityExperiment(
     baselineId: ulid(),
     evaluationId: identity.evaluationId,
     experimentId: input.experimentId,
+    ...(record.observability !== undefined ? { observability: record.observability } : {}),
     ...(variant.variantsDeclared ? { variantName: variant.variantName } : {}),
     promotedAt: new Date().toISOString(),
     ...(gitUserName(rootDir) !== undefined ? { promotedBy: gitUserName(rootDir) } : {}),

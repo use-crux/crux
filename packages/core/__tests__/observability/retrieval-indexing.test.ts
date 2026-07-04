@@ -6,7 +6,12 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { retrievalRecipe, retrievalStep, retrieve, retriever } from '../../retrieval'
+import {
+  retrievalRecipe,
+  retrievalStep,
+  retrieve,
+  retriever,
+} from '../../retrieval'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { RetrieverHit } from '../../retrieval'
 
@@ -26,13 +31,15 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     resetObservabilityRuntime()
   })
 
-  it('records standalone retriever calls as retrieval.retrieve spans with hit artifacts and relation edges', async () => {
+  it('records standalone retriever calls as retrieval.query spans with hit artifacts and relation edges', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const docs = retriever({
       id: 'docs',
       namespace: 'kb',
-      retrieve: async () => [hit('refund/a', 'Refunds are issued within 14 days.', 0.92)],
+      retrieve: async () => [
+        hit('refund/a', 'Refunds are issued within 14 days.', 0.92),
+      ],
     })
 
     await docs.retrieve('refund policy', { limit: 1 })
@@ -41,7 +48,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'span:start',
-        primitive: 'retrieval.retrieve',
+        primitive: 'retrieval.query',
         name: 'docs.retrieve',
         attributes: expect.objectContaining({
           retrieverId: 'docs',
@@ -50,7 +57,9 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
         }),
       }),
     )
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'artifact', kind: 'retrieval.hits' }))
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'artifact', kind: 'retrieval.hits' }),
+    )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
@@ -73,7 +82,9 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
         }),
       }),
     )
-    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'retrieval.returned' }))
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'edge', edgeType: 'retrieval.returned' }),
+    )
   })
 
   it('records retrieval recipes and every step as canonical child spans', async () => {
@@ -82,7 +93,10 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     const base = retriever({
       id: 'docs',
       namespace: 'kb',
-      retrieve: async () => [hit('refund/a', 'Refund overview', 0.8), hit('billing/b', 'Billing policy', 0.7)],
+      retrieve: async () => [
+        hit('refund/a', 'Refund overview', 0.8),
+        hit('billing/b', 'Billing policy', 0.7),
+      ],
     })
     const recipe = retrievalRecipe({
       id: 'docs-recipe',
@@ -100,7 +114,9 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     await recipe.retrieveWithTrace('refund')
     await observe.flush()
 
-    const starts = transport.records.filter((record) => record.type === 'span:start')
+    const starts = transport.records.filter(
+      (record) => record.type === 'span:start',
+    )
     expect(starts).toContainEqual(
       expect.objectContaining({
         primitive: 'retrieval.recipe',
@@ -114,7 +130,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     )
     expect(starts).toContainEqual(
       expect.objectContaining({
-        primitive: 'retrieval.retrieve',
+        primitive: 'retrieval.query',
         name: 'docs.retrieve',
       }),
     )
@@ -179,10 +195,15 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
       }),
     })
 
-    await docs.indexDocuments([{ namespace: 'kb', sourceId: 'intro', content: '  Hello indexing  ' }], { dryRun: true })
+    await docs.indexDocuments(
+      [{ namespace: 'kb', sourceId: 'intro', content: '  Hello indexing  ' }],
+      { dryRun: true },
+    )
     await observe.flush()
 
-    const starts = transport.records.filter((record) => record.type === 'span:start')
+    const starts = transport.records.filter(
+      (record) => record.type === 'span:start',
+    )
     expect(starts).toContainEqual(
       expect.objectContaining({
         primitive: 'indexing.pipeline',
@@ -272,8 +293,12 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     ])
     await observe.flush()
 
-    const starts = transport.records.filter((record) => record.type === 'span:start')
-    const corpusSpan = starts.find((record) => record.primitive === 'corpus.sync')
+    const starts = transport.records.filter(
+      (record) => record.type === 'span:start',
+    )
+    const corpusSpan = starts.find(
+      (record) => record.primitive === 'corpus.sync',
+    )
     expect(corpusSpan).toMatchObject({
       name: 'docs.sync',
       attributes: expect.objectContaining({ corpusId: 'docs', sourceCount: 1 }),

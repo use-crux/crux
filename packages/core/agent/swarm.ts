@@ -613,7 +613,6 @@ export function createSwarm(executor: AgentExecutor) {
           await observe.span(
             {
               name: `${currentAgentId} -> ${handoffTarget}`,
-              family: 'handoff',
               primitive: 'handoff.prepare',
               attributes: {
                 compositionId: runtime.compositionId,

@@ -51,7 +51,6 @@ export async function runEmbeddingOperation<T>(args: {
   }
   const span = observe.openSpan({
     name: `${args.name}.${args.operation}`,
-    family: 'embedding',
     primitive: 'embedding.call',
     attributes: {
       embedId,
@@ -79,16 +78,18 @@ export async function runEmbeddingOperation<T>(args: {
       return executionResult
     })
     span.end({
-      embeddingName: args.name,
-      embeddingKind: args.kind,
-      operation: args.operation,
-      inputCount: args.texts.length,
-      outputCount: result.embeddings.length,
-      durationMs: Date.now() - startedAt,
-      ...(result.usage?.inputTokens !== undefined ? { inputTokens: result.usage.inputTokens } : {}),
-      ...(result.usage?.totalTokens !== undefined ? { totalTokens: result.usage.totalTokens } : {}),
-      ...(result.cost !== undefined ? { cost: result.cost } : {}),
-      ...eventGovernance(result.governance),
+      attributes: {
+        embeddingName: args.name,
+        embeddingKind: args.kind,
+        operation: args.operation,
+        inputCount: args.texts.length,
+        outputCount: result.embeddings.length,
+        durationMs: Date.now() - startedAt,
+        ...(result.usage?.inputTokens !== undefined ? { inputTokens: result.usage.inputTokens } : {}),
+        ...(result.usage?.totalTokens !== undefined ? { totalTokens: result.usage.totalTokens } : {}),
+        ...(result.cost !== undefined ? { cost: result.cost } : {}),
+        ...eventGovernance(result.governance),
+      },
     })
     return result
   } catch (error) {
@@ -155,7 +156,6 @@ async function executeWithCache<T>(args: {
 
   const span = observe.openSpan({
     name: `${args.name}.embedding-cache`,
-    family: 'cache',
     primitive: 'cache.lookup',
     attributes: {
       cacheKind: 'embedding',
@@ -233,16 +233,18 @@ async function executeWithCache<T>(args: {
       }
     })
     span.end({
-      cacheKind: 'embedding',
-      cacheOperation: 'lookup',
-      cacheNamespace: cache.namespace,
-      embeddingName: args.name,
-      embeddingKind: args.kind,
-      inputCount: args.texts.length,
-      hitCount: args.metrics.cacheHitCount ?? 0,
-      missCount: args.metrics.cacheMissCount ?? 0,
-      allHit: (args.metrics.cacheHitCount ?? 0) === args.texts.length,
-      writeCount: args.metrics.cacheMissCount ?? 0,
+      attributes: {
+        cacheKind: 'embedding',
+        cacheOperation: 'lookup',
+        cacheNamespace: cache.namespace,
+        embeddingName: args.name,
+        embeddingKind: args.kind,
+        inputCount: args.texts.length,
+        hitCount: args.metrics.cacheHitCount ?? 0,
+        missCount: args.metrics.cacheMissCount ?? 0,
+        allHit: (args.metrics.cacheHitCount ?? 0) === args.texts.length,
+        writeCount: args.metrics.cacheMissCount ?? 0,
+      },
     })
     return result
   } catch (error) {

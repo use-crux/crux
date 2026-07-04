@@ -31,6 +31,7 @@ func TestServiceRunsUsesObservabilityWhenAvailable(t *testing.T) {
 	if err := json.Unmarshal(raw, &batch); err != nil {
 		t.Fatal(err)
 	}
+	fixtureRunID, _ := generationFixtureIdentity(t, batch)
 	if err := obs.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +45,7 @@ func TestServiceRunsUsesObservabilityWhenAvailable(t *testing.T) {
 		t.Fatalf("runs len = %d, want 1", len(runs))
 	}
 	run := runs[0]
-	if run.TraceID != "run_generation_fixture_01" || run.PromptID == nil || *run.PromptID != "support.reply" {
+	if run.TraceID != fixtureRunID || run.PromptID == nil || *run.PromptID != "support.reply" {
 		t.Fatalf("run identity = %#v", run)
 	}
 	if run.Model != "gpt-4o" || run.Provider != "openai" || run.TokenCount != 60 {
@@ -57,7 +58,7 @@ func TestServiceRunsUsesObservabilityWhenAvailable(t *testing.T) {
 		t.Fatalf("run cost = %#v", run.Cost)
 	}
 
-	detail, found, err := service.RunDetail(ctx, "run_generation_fixture_01")
+	detail, found, err := service.RunDetail(ctx, fixtureRunID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,6 +68,14 @@ func TestServiceRunsUsesObservabilityWhenAvailable(t *testing.T) {
 	if len(detail.Spans) != 1 || len(detail.Narrative) == 0 || detail.Trace.Input["messages"] == nil {
 		t.Fatalf("detail = %#v", detail)
 	}
+}
+
+func generationFixtureIdentity(t *testing.T, batch observability.Batch) (runID string, traceID string) {
+	t.Helper()
+	if len(batch.Records) == 0 || batch.Records[0].RunID == "" || batch.Records[0].TraceID == "" {
+		t.Fatal("generation fixture is missing its run or trace id")
+	}
+	return batch.Records[0].RunID, batch.Records[0].TraceID
 }
 
 func TestServiceRunsWithOptionsFiltersByRunRowRollups(t *testing.T) {

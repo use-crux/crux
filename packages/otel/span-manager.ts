@@ -7,8 +7,9 @@
  * @module
  */
 
-import type { TraceSpan, SpanStatus } from './types'
+import type { TraceAttributeValue, TraceSpan, SpanStatus } from './types'
 import type { SpanExporter } from './exporter'
+import { createBoundedRegistry } from './bounded-registry'
 
 let spanCounter = 0
 
@@ -24,14 +25,17 @@ interface MutableSpan {
   parentSpanId?: string
   name: string
   startTime: number
-  attributes: Record<string, string | number | boolean>
+  attributes: Record<string, TraceAttributeValue>
   status: SpanStatus
   events: Array<{
     name: string
     time: number
-    attributes?: Record<string, string | number | boolean>
+    attributes?: Record<string, TraceAttributeValue>
   }>
 }
+
+const ACTIVE_SPAN_MAX_ENTRIES = 10_000
+const ACTIVE_SPAN_MAX_AGE_MS = 10 * 60_000
 
 /** Handle to an active span. */
 export interface SpanRef {
@@ -41,20 +45,33 @@ export interface SpanRef {
   readonly traceId: string
 }
 
+/** Preferred W3C identifiers from the upstream Crux graph record. */
+export interface SpanIdentity {
+  /** W3C span ID to use when the manager owns span identity. */
+  readonly spanId?: string
+  /** W3C trace ID to use when the manager owns trace identity. */
+  readonly traceId?: string
+}
+
 /** Span manager for creating and managing spans. */
 export interface SpanManager {
   /**
    * Start a new span.
    *
-   * @param name - Span name (e.g., 'crux.generate').
+   * @param name - Span name (e.g., 'chat gpt-4o').
    * @param attributes - Initial attributes.
    * @param parentSpanId - Parent span ID for nesting.
    * @returns A reference to the active span.
    */
-  startSpan(name: string, attributes?: Record<string, string | number | boolean>, parentSpanId?: string): SpanRef
+  startSpan(
+    name: string,
+    attributes?: Record<string, TraceAttributeValue>,
+    parentSpanId?: string,
+    identity?: SpanIdentity,
+  ): SpanRef
 
   /** Set attributes on an active span. */
-  setAttributes(ref: SpanRef, attributes: Record<string, string | number | boolean>): void
+  setAttributes(ref: SpanRef, attributes: Record<string, TraceAttributeValue>): void
 
   /** Set the span status. */
   setStatus(ref: SpanRef, status: SpanStatus): void
@@ -63,10 +80,18 @@ export interface SpanManager {
   recordError(ref: SpanRef, error: Error | string): void
 
   /** Add a point-in-time event to the span. */
-  addEvent(ref: SpanRef, name: string, attributes?: Record<string, string | number | boolean>): void
+  addEvent(ref: SpanRef, name: string, attributes?: Record<string, TraceAttributeValue>): void
 
   /** End the span and export it. */
   endSpan(ref: SpanRef): void
+
+  /**
+   * Force-end a span evicted from bounded telemetry registries.
+   *
+   * Expired spans are exported with `crux.expired: true` and `UNSET` status so
+   * collectors can distinguish registry pressure from successful work.
+   */
+  expireSpan(ref: SpanRef): void
 
   /** Shut down the span manager and flush any pending exports. */
   shutdown(): Promise<void>
@@ -80,12 +105,19 @@ export interface SpanManager {
  * @returns A `SpanManager` backed by internal tracking.
  */
 export function createLightweightSpanManager(exporter: SpanExporter): SpanManager {
-  const activeSpans = new Map<string, MutableSpan>()
+  const activeSpans = createBoundedRegistry<string, MutableSpan>({
+    maxEntries: ACTIVE_SPAN_MAX_ENTRIES,
+    maxAgeMs: ACTIVE_SPAN_MAX_AGE_MS,
+    onEvict: (_spanId, span) => {
+      exportSpan(exporter, span, { expired: true, preserveUnsetStatus: true })
+    },
+  })
 
   return {
-    startSpan(name, attributes, parentSpanId) {
-      const spanId = generateId()
-      const traceId = parentSpanId ? (activeSpans.get(parentSpanId)?.traceId ?? generateId()) : generateId()
+    startSpan(name, attributes, parentSpanId, identity) {
+      const parent = parentSpanId ? activeSpans.get(parentSpanId) : undefined
+      const spanId = identity?.spanId ?? generateId()
+      const traceId = identity?.traceId ?? parent?.traceId ?? generateId()
 
       const span: MutableSpan = {
         spanId,
@@ -142,27 +174,16 @@ export function createLightweightSpanManager(exporter: SpanExporter): SpanManage
     },
 
     endSpan(ref) {
-      const span = activeSpans.get(ref.spanId)
+      const span = activeSpans.delete(ref.spanId)
       if (!span) return
 
-      activeSpans.delete(ref.spanId)
+      exportSpan(exporter, span, { expired: false, preserveUnsetStatus: false })
+    },
 
-      const endTime = Date.now()
-      const traceSpan: TraceSpan = {
-        spanId: span.spanId,
-        traceId: span.traceId,
-        parentSpanId: span.parentSpanId,
-        name: span.name,
-        startTime: span.startTime,
-        endTime,
-        durationMs: endTime - span.startTime,
-        attributes: span.attributes,
-        status: span.status.code === 'UNSET' ? { code: 'OK' } : span.status,
-        events: span.events.length > 0 ? span.events : undefined,
-      }
-
-      // Fire-and-forget
-      exporter.export([traceSpan])
+    expireSpan(ref) {
+      const span = activeSpans.delete(ref.spanId)
+      if (!span) return
+      exportSpan(exporter, span, { expired: true, preserveUnsetStatus: true })
     },
 
     async shutdown() {
@@ -170,4 +191,28 @@ export function createLightweightSpanManager(exporter: SpanExporter): SpanManage
       await exporter.shutdown()
     },
   }
+}
+
+function exportSpan(
+  exporter: SpanExporter,
+  span: MutableSpan,
+  options: { readonly expired: boolean; readonly preserveUnsetStatus: boolean },
+): void {
+  const endTime = Date.now()
+  const attributes = options.expired ? { ...span.attributes, 'crux.expired': true } : span.attributes
+  const traceSpan: TraceSpan = {
+    spanId: span.spanId,
+    traceId: span.traceId,
+    parentSpanId: span.parentSpanId,
+    name: span.name,
+    startTime: span.startTime,
+    endTime,
+    durationMs: endTime - span.startTime,
+    attributes,
+    status: span.status.code === 'UNSET' && !options.preserveUnsetStatus ? { code: 'OK' } : span.status,
+    events: span.events.length > 0 ? span.events : undefined,
+  }
+
+  // Fire-and-forget.
+  exporter.export([traceSpan])
 }

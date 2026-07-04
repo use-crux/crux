@@ -20,7 +20,7 @@ export function rowsForTab(rows: readonly RunRow[], tab: RunsTab): readonly RunR
 }
 
 export function groupRuns(rows: readonly RunRow[], groupBy: RunsGroupBy): readonly RunGroup[] {
-  if (groupBy === 'none') return [{ key: '', rows }]
+  if (groupBy === 'none') return [{ key: '', rows: sortRowsNewestFirst(rows) }]
   const map = new Map<string, RunRow[]>()
   for (const run of rows) {
     const key =
@@ -35,7 +35,9 @@ export function groupRuns(rows: readonly RunRow[], groupBy: RunsGroupBy): readon
     groupRows.push(run)
     map.set(key, groupRows)
   }
-  return Array.from(map.entries()).map(([key, rows]) => ({ key, rows }))
+  return Array.from(map.entries())
+    .map(([key, rows]) => ({ key, rows: sortRowsNewestFirst(rows) }))
+    .sort((a, b) => newestStartedAt(b.rows) - newestStartedAt(a.rows))
 }
 
 export function summarizeRunGroup(rows: readonly RunRow[]): RunGroupSummary {
@@ -86,4 +88,12 @@ export function exportableRunRows(rows: readonly RunRow[]) {
 
 function isFailureStatus(run: RunRow): boolean {
   return run.status === 'error' || run.status === 'fail' || run.status === 'failed'
+}
+
+function sortRowsNewestFirst(rows: readonly RunRow[]): readonly RunRow[] {
+  return [...rows].sort((a, b) => b.startedAt - a.startedAt)
+}
+
+function newestStartedAt(rows: readonly RunRow[]): number {
+  return rows[0]?.startedAt ?? 0
 }

@@ -16,12 +16,13 @@ func TestSharedGenerationFixtureDecodes(t *testing.T) {
 	if err := json.Unmarshal(raw, &batch); err != nil {
 		t.Fatal(err)
 	}
+	runID := batch.Records[0].RunID
 
 	if got, want := len(batch.Records), 13; got != want {
 		t.Fatalf("record count = %d, want %d", got, want)
 	}
 	for _, record := range batch.Records {
-		assertValidFixtureRecord(t, record)
+		assertValidFixtureRecord(t, record, runID)
 	}
 
 	var span SpanStartRecord
@@ -119,12 +120,12 @@ func TestValidateRecordRejectsInvalidSemantics(t *testing.T) {
 	}
 }
 
-func assertValidFixtureRecord(t *testing.T, record Record) {
+func assertValidFixtureRecord(t *testing.T, record Record, runID string) {
 	t.Helper()
 	if record.SchemaVersion != SchemaVersion {
 		t.Fatalf("record %s schemaVersion = %d, want %d", record.RecordID, record.SchemaVersion, SchemaVersion)
 	}
-	if record.RunID != "run_generation_fixture_01" {
+	if record.RunID != runID {
 		t.Fatalf("record %s runId = %q", record.RecordID, record.RunID)
 	}
 	if len(record.Payload) == 0 {

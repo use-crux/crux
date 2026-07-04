@@ -77,7 +77,6 @@ async function resolveRouter<M, R>(
   const availableRoutes = Object.keys(config.routes)
   const span = observe.openSpan({
     name: 'router.resolve',
-    family: 'routing',
     primitive: 'routing.router',
     implicitRun: false,
     attributes: {
@@ -148,12 +147,14 @@ async function resolveRouter<M, R>(
 
       result._meta = { ...result._meta, router: routerMeta }
       span.end({
-        classifiedAs,
-        ...(config.id ? { routingId: config.id } : {}),
-        selectedModel: selectedModelId,
-        usedDefaultRoute,
-        overridden,
-        routeCount: availableRoutes.length,
+        attributes: {
+          classifiedAs,
+          ...(config.id ? { routingId: config.id } : {}),
+          selectedModel: selectedModelId,
+          usedDefaultRoute,
+          overridden,
+          routeCount: availableRoutes.length,
+        },
       })
       return result
     })
@@ -186,7 +187,6 @@ async function resolveCascade<M, R>(
   let lastResultWithMeta: (R & { _meta: Record<string, unknown> }) | undefined
   const cascadeSpan = observe.openSpan({
     name: 'cascade.resolve',
-    family: 'routing',
     primitive: 'routing.cascade',
     implicitRun: false,
     attributes: {
@@ -252,7 +252,6 @@ async function resolveCascade<M, R>(
         const modelId = extractModelId(tier.model)
         const tierSpan = observe.openSpan({
           name: 'cascade.tier',
-          family: 'routing',
           primitive: 'routing.cascade',
           implicitRun: false,
           attributes: {
@@ -317,15 +316,17 @@ async function resolveCascade<M, R>(
               ...(evaluation.budget !== undefined ? { budget: evaluation.budget } : {}),
             })
             tierSpan.end({
-              tierIndex: i,
-              model: modelId,
-              tierStatus: accepted ? 'accepted' : 'rejected',
-              cost: tierCost,
-              totalCost,
-              durationMs,
-              ...(evaluation.note ? { note: evaluation.note } : {}),
-              ...(evaluation.confidence !== undefined ? { confidence: evaluation.confidence } : {}),
-              ...(evaluation.budget !== undefined ? { budget: evaluation.budget } : {}),
+              attributes: {
+                tierIndex: i,
+                model: modelId,
+                tierStatus: accepted ? 'accepted' : 'rejected',
+                cost: tierCost,
+                totalCost,
+                durationMs,
+                ...(evaluation.note ? { note: evaluation.note } : {}),
+                ...(evaluation.confidence !== undefined ? { confidence: evaluation.confidence } : {}),
+                ...(evaluation.budget !== undefined ? { budget: evaluation.budget } : {}),
+              },
             })
 
             if (accepted) {
@@ -367,14 +368,16 @@ async function resolveCascade<M, R>(
               ...(tier.budget !== undefined ? { budget: tier.budget } : {}),
             })
             tierSpan.end({
-              tierIndex: i,
-              model: modelId,
-              tierStatus: 'accepted',
-              cost: tierCost,
-              totalCost,
-              durationMs,
-              note: tier.note ?? 'accepted without evaluator',
-              ...(tier.budget !== undefined ? { budget: tier.budget } : {}),
+              attributes: {
+                tierIndex: i,
+                model: modelId,
+                tierStatus: 'accepted',
+                cost: tierCost,
+                totalCost,
+                durationMs,
+                note: tier.note ?? 'accepted without evaluator',
+                ...(tier.budget !== undefined ? { budget: tier.budget } : {}),
+              },
             })
 
             markSkippedTiers(tierDetails, tiers, i + 1, extractModelId, 'not reached')
@@ -477,12 +480,14 @@ function endCascadeSpan(
     })),
   })
   span.end({
-    totalTiers: cascadeMeta.totalTiers,
-    ...(routingId ? { routingId } : {}),
-    tiersAttempted: cascadeMeta.tiersAttempted,
-    acceptedAtTier: cascadeMeta.acceptedAtTier,
-    budgetExceeded: cascadeMeta.budgetExceeded,
-    durationMs,
+    attributes: {
+      totalTiers: cascadeMeta.totalTiers,
+      ...(routingId ? { routingId } : {}),
+      tiersAttempted: cascadeMeta.tiersAttempted,
+      acceptedAtTier: cascadeMeta.acceptedAtTier,
+      budgetExceeded: cascadeMeta.budgetExceeded,
+      durationMs,
+    },
   })
 }
 

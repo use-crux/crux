@@ -20,12 +20,13 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	batch := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, batch)
 
 	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
 
-	run, err := service.Run(ctx, "run_generation_fixture_01")
+	run, err := service.Run(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -49,7 +50,7 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 		t.Fatalf("counts = spans:%d events:%d artifacts:%d edges:%d", run.SpanCount, run.EventCount, run.ArtifactCount, run.EdgeCount)
 	}
 
-	graph, err := service.Graph(ctx, "run_generation_fixture_01")
+	graph, err := service.Graph(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +118,7 @@ func TestServiceIngestsSharedFixtureIntoGraphReadModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(runs) != 1 || runs[0].RunID != "run_generation_fixture_01" {
+	if len(runs) != 1 || runs[0].RunID != runID {
 		t.Fatalf("runs = %#v", runs)
 	}
 	if runs[0].PromptID != "support.reply" || len(runs[0].Metrics) == 0 {
@@ -313,6 +314,36 @@ func TestServiceRunsWithOptionsLimitsBeforeRollups(t *testing.T) {
 	}
 	if runs[0].Model != "model-2" || runs[0].PromptID != "prompt-2" {
 		t.Fatalf("limited run was not enriched: %#v", runs[0])
+	}
+}
+
+func TestServiceRunsWithOptionsFiltersBySessionID(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	if err := service.Ingest(ctx, mustBatch(t,
+		`{"schemaVersion":1,"recordId":"session-a-start","type":"run:start","runId":"run_session_a","traceId":"trace_session_a","sessionId":"session-a","userId":"user-a","name":"session a","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"session-b-start","type":"run:start","runId":"run_session_b","traceId":"trace_session_b","sessionId":"session-b","userId":"user-b","name":"session b","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:01:00.000Z","status":"running"}`,
+	)); err != nil {
+		t.Fatal(err)
+	}
+
+	runs, err := service.RunsWithOptions(ctx, RunListOptions{SessionID: "session-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(runs), 1; got != want {
+		t.Fatalf("runs len = %d, want %d: %#v", got, want, runs)
+	}
+	if runs[0].RunID != "run_session_a" || runs[0].SessionID != "session-a" || runs[0].UserID != "user-a" {
+		t.Fatalf("filtered run = %#v", runs[0])
+	}
+
+	allRuns, err := service.RunsWithOptions(ctx, RunListOptions{Limit: -1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := len(allRuns), 2; got != want {
+		t.Fatalf("all runs len = %d, want %d", got, want)
 	}
 }
 
@@ -930,7 +961,7 @@ func TestServiceRunDetailIsRootedTotalAndDumbClientReady(t *testing.T) {
 		`{"schemaVersion":1,"recordId":"rec_prompt","type":"span","runId":"run_detail","traceId":"trace_detail","spanId":"span_prompt","parentSpanId":"span_agent","family":"prompt","primitive":"prompt.resolve","name":"main prompt","startedAt":"2026-05-16T18:00:00.002Z","endedAt":"2026-05-16T18:00:00.012Z","durationMs":10,"status":"ok","promptId":"chat.prompt","attributes":{"presentation":{"ownerSpanId":"span_generate","label":"Chat prompt"}}}`,
 		`{"schemaVersion":1,"recordId":"rec_memory","type":"span","runId":"run_detail","traceId":"trace_detail","spanId":"span_memory","parentSpanId":"span_agent","family":"memory","primitive":"memory.read","name":"facts.find","startedAt":"2026-05-16T18:00:00.013Z","endedAt":"2026-05-16T18:00:00.018Z","durationMs":5,"status":"ok","memoryId":"facts","attributes":{"presentation":{"display":"detail","ownerSpanId":"span_generate"}}}`,
 		`{"schemaVersion":1,"recordId":"rec_generate","type":"span","runId":"run_detail","traceId":"trace_detail","spanId":"span_generate","parentSpanId":"span_agent","family":"generation","primitive":"generation.stream","name":"generate chat","startedAt":"2026-05-16T18:00:00.020Z","endedAt":"2026-05-16T18:00:01.020Z","durationMs":1000,"status":"ok","model":"gpt-4o","provider":"openai","metrics":{"inputTokens":10,"outputTokens":20,"totalTokens":30,"costUsd":0.01}}`,
-		`{"schemaVersion":1,"recordId":"rec_token","type":"span:event","runId":"run_detail","traceId":"trace_detail","spanId":"span_generate","eventId":"event_token_1","name":"token.delta","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"sequence":1,"text":"Hello"}}`,
+		`{"schemaVersion":1,"recordId":"rec_token","type":"span:event","runId":"run_detail","traceId":"trace_detail","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":5,"text":"Hello","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`,
 		`{"schemaVersion":1,"recordId":"rec_tool","type":"span","runId":"run_detail","traceId":"trace_detail","spanId":"span_tool","parentSpanId":"span_agent","family":"tool","primitive":"tool.call","name":"call_abc123","toolName":"searchDocs","startedAt":"2026-05-16T18:00:01.030Z","endedAt":"2026-05-16T18:00:01.130Z","durationMs":100,"status":"ok"}`,
 		`{"schemaVersion":1,"recordId":"rec_late_context","type":"span","runId":"run_detail","traceId":"trace_detail","spanId":"span_late_context","parentSpanId":"span_agent","family":"context","primitive":"context.resolve","name":"late context","startedAt":"2026-05-16T18:00:01.140Z","endedAt":"2026-05-16T18:00:01.145Z","durationMs":5,"status":"ok","contextId":"late.context"}`,
 		`{"schemaVersion":1,"recordId":"rec_artifact","type":"artifact","runId":"run_detail","traceId":"trace_detail","spanId":"span_generate","artifactId":"artifact_output","kind":"output","createdAt":"2026-05-16T18:00:01.020Z","contentType":"text/plain","encoding":"text","sizeBytes":11,"preview":"Hello world"}`,
@@ -985,8 +1016,8 @@ func TestServiceRunDetailIsRootedTotalAndDumbClientReady(t *testing.T) {
 	if generation.Details[2].SpanID != "span_late_context" || generation.Details[2].Source.PlacementReason != "explains-edge" {
 		t.Fatalf("late context detail = %#v, want explains-edge ownership", generation.Details[2])
 	}
-	if generation.Events[0].Name != "token.delta" {
-		t.Fatalf("generation events = %#v, want token delta", generation.Events)
+	if len(generation.Events) != 0 {
+		t.Fatalf("generation events = %#v, want token chunks excluded from run detail", generation.Events)
 	}
 	if generation.Artifacts[0].ArtifactID != "artifact_output" {
 		t.Fatalf("generation artifacts = %#v", generation.Artifacts)
@@ -1038,26 +1069,28 @@ func TestServiceRunDetailFoldsCompletionOnlySpansAsDetails(t *testing.T) {
 func TestServiceRunDetailConsumesGoldenNodeFixture(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
-	if err := service.Ingest(ctx, loadGoldenNodeFixture(t)); err != nil {
+	batch := loadGoldenNodeFixture(t)
+	runID := batch.Records[0].RunID
+	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
 
-	detail, err := service.RunDetail(ctx, "run_golden_node_01")
+	detail, err := service.RunDetail(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if detail.Root.Display.Label != "chat" {
 		t.Fatalf("root label = %q, want chat", detail.Root.Display.Label)
 	}
-	if detail.SpanIndex["span_golden_prompt"].Placement != "detail" {
-		t.Fatalf("prompt placement = %#v, want folded detail", detail.SpanIndex["span_golden_prompt"])
+	if detail.SpanIndex["f354f3b6b1e5eeaa"].Placement != "detail" {
+		t.Fatalf("prompt placement = %#v, want folded detail", detail.SpanIndex["f354f3b6b1e5eeaa"])
 	}
-	if detail.SpanIndex["span_golden_parallel"].Placement != "node" {
-		t.Fatalf("parallel placement = %#v, want visible node", detail.SpanIndex["span_golden_parallel"])
+	if detail.SpanIndex["8f3227aa4c6f0565"].Placement != "node" {
+		t.Fatalf("parallel placement = %#v, want visible node", detail.SpanIndex["8f3227aa4c6f0565"])
 	}
 	var parallel *RunDetailNode
 	for i := range detail.Root.Children {
-		if detail.Root.Children[i].SpanID == "span_golden_parallel" {
+		if detail.Root.Children[i].SpanID == "8f3227aa4c6f0565" {
 			parallel = &detail.Root.Children[i]
 			break
 		}
@@ -1712,6 +1745,47 @@ func TestServiceBuildsResourceActivityReadModel(t *testing.T) {
 	}
 }
 
+func TestServiceResourceActivityLimitsLatestWithAttachments(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	started := time.Date(2026, 5, 16, 18, 0, 0, 0, time.UTC)
+	records := []string{
+		`{"schemaVersion":1,"recordId":"rec_activity_limit_run","type":"run:start","runId":"run_activity_limit","traceId":"trace_activity_limit","name":"activity limit","rootPrimitive":"memory.write","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+	}
+	for i := 0; i < 501; i++ {
+		spanID := fmt.Sprintf("span_activity_%03d", i)
+		artifactID := fmt.Sprintf("artifact_activity_%03d", i)
+		timestamp := started.Add(time.Duration(i) * time.Millisecond).Format("2006-01-02T15:04:05.000Z")
+		records = append(records,
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_activity_span_%03d","type":"span","runId":"run_activity_limit","traceId":"trace_activity_limit","spanId":%q,"family":"memory","primitive":"memory.write","name":"activity","startedAt":%q,"endedAt":%q,"durationMs":1,"status":"ok","memoryId":"profile-%03d","attributes":{"memoryId":"profile-%03d"}}`, i, spanID, timestamp, timestamp, i, i),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_activity_artifact_%03d","type":"artifact","runId":"run_activity_limit","traceId":"trace_activity_limit","spanId":%q,"artifactId":%q,"kind":"memory.snapshot","createdAt":%q,"contentType":"application/json","encoding":"json","preview":{"index":%d}}`, i, spanID, artifactID, timestamp, i),
+			fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_activity_edge_%03d","type":"edge","runId":"run_activity_limit","traceId":"trace_activity_limit","edgeId":"edge_activity_%03d","edgeType":"memory.write","from":{"kind":"span","id":%q},"to":{"kind":"artifact","id":%q},"createdAt":%q}`, i, i, spanID, artifactID, timestamp),
+		)
+	}
+	if err := service.Ingest(ctx, mustBatch(t, records...)); err != nil {
+		t.Fatal(err)
+	}
+
+	activity, err := service.ResourceActivity(ctx, "memory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(activity) != 500 {
+		t.Fatalf("activity count = %d, want latest 500", len(activity))
+	}
+	if activity[0].SpanID != "span_activity_500" {
+		t.Fatalf("first activity span = %q, want latest span_activity_500", activity[0].SpanID)
+	}
+	for _, item := range activity {
+		if item.SpanID == "span_activity_000" {
+			t.Fatalf("activity includes oldest span outside latest limit: %#v", item)
+		}
+		if len(item.Artifacts) != 1 || len(item.Edges) != 1 {
+			t.Fatalf("activity %q attachments = artifacts:%d edges:%d, want 1/1", item.SpanID, len(item.Artifacts), len(item.Edges))
+		}
+	}
+}
+
 func TestServiceMergesSpanStartAndEndAttributesForResourceActivity(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
@@ -1765,6 +1839,7 @@ func TestServiceIngestIsIdempotent(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	batch := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, batch)
 
 	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
@@ -1773,7 +1848,7 @@ func TestServiceIngestIsIdempotent(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	run, err := service.Run(ctx, "run_generation_fixture_01")
+	run, err := service.Run(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1790,8 +1865,11 @@ func TestServicePublishesIngestEvents(t *testing.T) {
 	defer cancel()
 	service := newTestService(t)
 	events := service.Events().Subscribe(ctx)
+	batch := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, batch)
+	traceID := generationFixtureTraceID(t, batch)
 
-	if err := service.Ingest(ctx, loadGenerationFixture(t)); err != nil {
+	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
 
@@ -1800,14 +1878,14 @@ func TestServicePublishesIngestEvents(t *testing.T) {
 		if event.Kind != "observability.records" || event.Action != "ingested" {
 			t.Fatalf("event = %#v", event)
 		}
-		if event.RefID != "run_generation_fixture_01" {
+		if event.RefID != runID {
 			t.Fatalf("event ref = %q", event.RefID)
 		}
 		var payload map[string]any
 		if err := json.Unmarshal(event.Payload, &payload); err != nil {
 			t.Fatal(err)
 		}
-		if payload["runId"] != "run_generation_fixture_01" || payload["traceId"] != "trace_generation_fixture_01" {
+		if payload["runId"] != runID || payload["traceId"] != traceID {
 			t.Fatalf("payload = %#v", payload)
 		}
 	case <-time.After(time.Second):
@@ -1864,7 +1942,7 @@ func TestServicePublishesLifecycleReconciliationEvents(t *testing.T) {
 	}
 }
 
-func TestServicePublishesLifecycleForCompletedRunWithStaleDescendant(t *testing.T) {
+func TestServiceLifecycleIgnoresCompletedRunWithStaleDescendant(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	service := newTestService(t)
@@ -1885,25 +1963,14 @@ func TestServicePublishesLifecycleForCompletedRunWithStaleDescendant(t *testing.
 	if err := service.PublishLifecycleReconciliations(ctx); err != nil {
 		t.Fatal(err)
 	}
-
 	select {
 	case event := <-events:
-		if event.Kind != "observability.lifecycle" || event.Action != "reconciled" || event.RefID != "run_completed_with_open_child" {
-			t.Fatalf("event = %#v", event)
-		}
-		var payload map[string]any
-		if err := json.Unmarshal(event.Payload, &payload); err != nil {
-			t.Fatal(err)
-		}
-		if payload["status"] != "stale" {
-			t.Fatalf("payload = %#v, want stale lifecycle status", payload)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("timed out waiting for stale descendant lifecycle reconciliation event")
+		t.Fatalf("completed run produced lifecycle event = %#v", event)
+	default:
 	}
 }
 
-func TestServicePublishesTokenDeltaEvents(t *testing.T) {
+func TestServicePublishesCoalescedTokenChunkEvents(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	service := newTestService(t)
@@ -1911,7 +1978,8 @@ func TestServicePublishesTokenDeltaEvents(t *testing.T) {
 	batch := mustBatch(t,
 		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_tokens","traceId":"trace_tokens","name":"tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
 		`{"schemaVersion":1,"recordId":"rec_generate","type":"span:start","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"rec_token","type":"span:event","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","eventId":"event_token_1","name":"token.delta","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"sequence":1,"text":"Hello"}}`,
+		`{"schemaVersion":1,"recordId":"rec_token_1","type":"span:event","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":3,"text":"Hi👍","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`,
+		`{"schemaVersion":1,"recordId":"rec_token_2","type":"span:event","runId":"run_tokens","traceId":"trace_tokens","spanId":"span_generate","eventId":"event_token_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}`,
 	)
 
 	if err := service.Ingest(ctx, batch); err != nil {
@@ -1922,14 +1990,14 @@ func TestServicePublishesTokenDeltaEvents(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		select {
 		case event := <-events:
-			if event.Kind == "token.delta" {
+			if event.Kind == "token.chunk" {
 				tokenEvent = event
 			}
 		case <-time.After(time.Second):
-			t.Fatal("timed out waiting for token delta event")
+			t.Fatal("timed out waiting for token chunk event")
 		}
 	}
-	if tokenEvent.Kind != "token.delta" || tokenEvent.Action != "appended" || tokenEvent.RefID != "run_tokens" {
+	if tokenEvent.Kind != "token.chunk" || tokenEvent.Action != "appended" || tokenEvent.RefID != "run_tokens" {
 		t.Fatalf("token event = %#v", tokenEvent)
 	}
 	var payload map[string]any
@@ -1937,8 +2005,56 @@ func TestServicePublishesTokenDeltaEvents(t *testing.T) {
 		t.Fatal(err)
 	}
 	attrs, ok := payload["attributes"].(map[string]any)
-	if !ok || attrs["text"] != "Hello" || attrs["sequence"] != float64(1) {
+	if !ok || attrs["text"] != "Hi👍!" || attrs["charCount"] != float64(4) {
 		t.Fatalf("token payload = %#v", payload)
+	}
+	select {
+	case event := <-events:
+		if event.Kind == "token.chunk" {
+			t.Fatalf("received uncoalesced token event: %#v", event)
+		}
+	default:
+	}
+}
+
+func TestServiceCapsTokenChunkEventsPerSpan(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	records := []string{
+		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_token_ring","traceId":"trace_token_ring","name":"tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":1,"recordId":"rec_generate","type":"span:start","runId":"run_token_ring","traceId":"trace_token_ring","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`,
+	}
+	for i := 0; i < 600; i++ {
+		records = append(records, fmt.Sprintf(
+			`{"schemaVersion":1,"recordId":"rec_token_%03d","type":"span:event","runId":"run_token_ring","traceId":"trace_token_ring","spanId":"span_generate","eventId":"event_token_%03d","name":"token.chunk","timestamp":"2026-05-16T18:00:%02d.%03dZ","attributes":{"chunkIndex":%d,"charCount":1,"text":"x","firstDeltaAt":"2026-05-16T18:00:%02d.%03dZ","lastDeltaAt":"2026-05-16T18:00:%02d.%03dZ"}}`,
+			i,
+			i,
+			i/1000,
+			i%1000,
+			i,
+			i/1000,
+			i%1000,
+			i/1000,
+			i%1000,
+		))
+	}
+
+	if err := service.Ingest(ctx, mustBatch(t, records...)); err != nil {
+		t.Fatal(err)
+	}
+
+	events, err := service.SpanEvents(ctx, "run_token_ring", "span_generate", SpanEventListOptions{
+		Name:  "token.chunk",
+		Limit: 600,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 512 {
+		t.Fatalf("event count = %d, want 512", len(events))
+	}
+	if events[0].EventID != "event_token_088" || events[len(events)-1].EventID != "event_token_599" {
+		t.Fatalf("event range = %s..%s, want newest capped ring", events[0].EventID, events[len(events)-1].EventID)
 	}
 }
 
@@ -1956,18 +2072,19 @@ func TestServiceReconcilesOutOfOrderLifecycleRecords(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	fixture := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, fixture)
 	reordered := Batch{Records: []Record{
-		fixtureRecordByID(t, fixture, "rec_run_end_01"),  // run:end before run:start
-		fixtureRecordByID(t, fixture, "rec_span_end_01"), // span:end before span:start
-		fixtureRecordByID(t, fixture, "rec_span_start_01"),
-		fixtureRecordByID(t, fixture, "rec_run_start_01"),
+		fixtureRecordByID(t, fixture, "rec_164c0d7c7e272dd7_d"), // run:end before run:start
+		fixtureRecordByID(t, fixture, "rec_30087e99fc7dcf3b_c"), // span:end before span:start
+		fixtureRecordByID(t, fixture, "rec_c89e3f639b60b2b2_2"),
+		fixtureRecordByID(t, fixture, "rec_b7862451676111a8_1"),
 	}}
 
 	if err := service.Ingest(ctx, reordered); err != nil {
 		t.Fatal(err)
 	}
 
-	run, err := service.Run(ctx, "run_generation_fixture_01")
+	run, err := service.Run(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1975,7 +2092,7 @@ func TestServiceReconcilesOutOfOrderLifecycleRecords(t *testing.T) {
 		t.Fatalf("run = %#v", run)
 	}
 
-	graph, err := service.Graph(ctx, "run_generation_fixture_01")
+	graph, err := service.Graph(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1991,6 +2108,7 @@ func TestServiceRejectsInvalidBatchTransactionally(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	fixture := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, fixture)
 	batch := Batch{Records: []Record{fixture.Records[0], fixture.Records[1]}}
 	batch.Records[1].Payload = []byte(`{
 		"schemaVersion": 1,
@@ -2008,7 +2126,7 @@ func TestServiceRejectsInvalidBatchTransactionally(t *testing.T) {
 	if err := service.Ingest(ctx, batch); err == nil {
 		t.Fatal("expected invalid batch to fail")
 	}
-	if _, err := service.Run(ctx, "run_generation_fixture_01"); !errors.Is(err, ErrNotFound) {
+	if _, err := service.Run(ctx, runID); !errors.Is(err, ErrNotFound) {
 		t.Fatal("expected transactional rollback to leave no run")
 	}
 }
@@ -2036,6 +2154,7 @@ func TestServiceErrorsPreserveCauseWithContext(t *testing.T) {
 }
 
 func TestOpenServicePersistsSQLiteDatabase(t *testing.T) {
+	t.Setenv("CRUX_OBSERVABILITY_RETENTION_DAYS", "36500")
 	ctx := context.Background()
 	path := t.TempDir() + "/observability.sqlite"
 
@@ -2043,7 +2162,9 @@ func TestOpenServicePersistsSQLiteDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := service.Ingest(ctx, loadGenerationFixture(t)); err != nil {
+	batch := loadGenerationFixture(t)
+	runID := generationFixtureRunID(t, batch)
+	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
 	}
 	if err := service.Close(); err != nil {
@@ -2060,7 +2181,7 @@ func TestOpenServicePersistsSQLiteDatabase(t *testing.T) {
 		}
 	})
 
-	run, err := reopened.Run(ctx, "run_generation_fixture_01")
+	run, err := reopened.Run(ctx, runID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2216,6 +2337,22 @@ func loadGenerationFixture(t *testing.T) Batch {
 		t.Fatal(err)
 	}
 	return batch
+}
+
+func generationFixtureRunID(t *testing.T, batch Batch) string {
+	t.Helper()
+	if len(batch.Records) == 0 || batch.Records[0].RunID == "" {
+		t.Fatal("generation fixture is missing its run id")
+	}
+	return batch.Records[0].RunID
+}
+
+func generationFixtureTraceID(t *testing.T, batch Batch) string {
+	t.Helper()
+	if len(batch.Records) == 0 || batch.Records[0].TraceID == "" {
+		t.Fatal("generation fixture is missing its trace id")
+	}
+	return batch.Records[0].TraceID
 }
 
 func fixtureRecordByID(t *testing.T, batch Batch, recordID string) Record {

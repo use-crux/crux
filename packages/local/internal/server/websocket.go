@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
-	"reflect"
 	"sync"
 
 	"github.com/gorilla/websocket"
@@ -30,7 +29,7 @@ var upgrader = websocket.Upgrader{
 // WSHub manages WebSocket client connections and broadcasts.
 type WSHub struct {
 	mu                  sync.Mutex
-	clients             map[*websocket.Conn]bool
+	clients             map[*wsClient]struct{}
 	ctx                 context.Context
 	devtools            *devtools.Service
 	qualityEvents       *quality.EventBus
@@ -41,7 +40,7 @@ type WSHub struct {
 // NewWSHub creates a WebSocket hub for the given store.
 func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, qualityEvents *quality.EventBus, observabilityEvents *observability.EventBus, runtimeBridge *runtimebridge.Service) *WSHub {
 	h := &WSHub{
-		clients:       make(map[*websocket.Conn]bool),
+		clients:       make(map[*wsClient]struct{}),
 		ctx:           ctx,
 		devtools:      devtoolsSvc,
 		runtimeBridge: runtimeBridge,
@@ -71,25 +70,24 @@ func (h *WSHub) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	client := newWSClient(h, conn)
 	h.mu.Lock()
-	h.clients[conn] = true
+	h.clients[client] = struct{}{}
 	clientCount := len(h.clients)
 	h.mu.Unlock()
 
+	go client.writePump()
+
 	// Register before the snapshot so a caller that mutates immediately after
 	// receiving the snapshot cannot miss the live event.
-	h.sendSnapshot(conn)
+	h.sendSnapshot(client)
 
 	slog.Info("websocket client connected", "clients", clientCount)
 
 	// Read pump — just drain messages (we don't expect client→server messages)
 	go func() {
 		defer func() {
-			h.mu.Lock()
-			delete(h.clients, conn)
-			remaining := len(h.clients)
-			h.mu.Unlock()
-			conn.Close()
+			remaining := client.close()
 			slog.Info("websocket client disconnected", "clients", remaining)
 		}()
 		for {
@@ -102,16 +100,28 @@ func (h *WSHub) HandleUpgrade(w http.ResponseWriter, r *http.Request) {
 
 // Broadcast sends raw JSON to all connected WebSocket clients.
 func (h *WSHub) Broadcast(data []byte) {
+	clients := h.snapshotClients()
+	for _, client := range clients {
+		client.enqueue(data)
+	}
+}
+
+func (h *WSHub) snapshotClients() []*wsClient {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
-	for conn := range h.clients {
-		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-			slog.Debug("websocket write failed, removing client", "error", err)
-			conn.Close()
-			delete(h.clients, conn)
-		}
+	clients := make([]*wsClient, 0, len(h.clients))
+	for client := range h.clients {
+		clients = append(clients, client)
 	}
+	return clients
+}
+
+func (h *WSHub) removeClient(client *wsClient) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	delete(h.clients, client)
+	return len(h.clients)
 }
 
 // BroadcastJSON sends a marshaled JSON event to all connected clients.
@@ -183,138 +193,4 @@ func (h *WSHub) forwardRuntimeBridgeEvents(events <-chan runtimebridge.Event) {
 			})
 		}
 	}
-}
-
-// sendSnapshot sends the full store state to a newly connected client.
-// Sends multiple separate messages matching the Node.js server format
-// expected by the UI reducer (index, snapshot, eval:snapshot, etc.).
-func (h *WSHub) sendSnapshot(conn *websocket.Conn) {
-	// Index — always send, even if empty. The UI needs the index
-	// message to set indexReceived=true and exit the "Waiting" screen.
-	if !h.sendRegisteredIndexSnapshot(conn) {
-		h.sendJSON(conn, apiIndexMessage(api.IndexData{}))
-	}
-
-	// Eval runs
-	if message, ok := registeredSnapshotMessage(h, "eval:snapshot"); ok {
-		h.sendJSON(conn, message)
-	}
-
-	if message, ok := registeredSnapshotMessage(h, "rag-eval:snapshot"); ok {
-		h.sendJSON(conn, message)
-	}
-
-	// Flow runs
-	if message, ok := registeredSnapshotMessage(h, "flow:snapshot"); ok {
-		h.sendJSON(conn, message)
-	}
-
-	// Runtime events
-	if message, ok := registeredSnapshotMessage(h, "runtime:snapshot"); ok {
-		message["memoryEvents"] = []any{}
-		h.sendJSON(conn, message)
-	}
-}
-
-func registeredSnapshotMessage(h *WSHub, message string) (map[string]any, bool) {
-	out := map[string]any{"type": message}
-	hasPayload := false
-	for _, snapshot := range endpoints.Registry.SnapshotValues(context.Background(), endpoints.Deps{Devtools: h.devtools}, message) {
-		if snapshot.Spec.Field == "" {
-			continue
-		}
-		if snapshot.Err != nil {
-			continue
-		}
-		out[snapshot.Spec.Field] = snapshot.Value
-		hasPayload = hasPayload || hasItems(snapshot.Value)
-	}
-	return out, hasPayload
-}
-
-func (h *WSHub) sendRegisteredIndexSnapshot(conn *websocket.Conn) bool {
-	for _, snapshot := range endpoints.Registry.Snapshots() {
-		if snapshot.Spec.Message != "index" {
-			continue
-		}
-		index, err := endpoints.ProjectIndex.Call(context.Background(), endpoints.Deps{Devtools: h.devtools})
-		if err != nil {
-			if snapshot.Spec.AlwaysSend {
-				h.sendJSON(conn, apiIndexMessage(api.IndexData{}))
-				return true
-			}
-			return false
-		}
-		h.sendJSON(conn, apiIndexMessage(index))
-		return true
-	}
-	return false
-}
-
-func indexMessage(index store.IndexData) map[string]any {
-	payload := map[string]any{}
-	if raw, err := json.Marshal(index); err == nil {
-		_ = json.Unmarshal(raw, &payload)
-	}
-	payload["type"] = "index"
-	return payload
-}
-
-func apiIndexMessage(index api.IndexData) map[string]any {
-	payload := map[string]any{}
-	if raw, err := json.Marshal(index); err == nil {
-		_ = json.Unmarshal(raw, &payload)
-	}
-	payload["type"] = "index"
-	return payload
-}
-
-// sendJSON marshals and sends a single JSON message to a WebSocket connection.
-func (h *WSHub) sendJSON(conn *websocket.Conn, v any) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		slog.Error("snapshot marshal failed", "error", err)
-		return
-	}
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
-		slog.Error("snapshot write failed", "error", err)
-		conn.Close()
-		delete(h.clients, conn)
-	}
-}
-
-func hasItems(value any) bool {
-	if value == nil {
-		return false
-	}
-	v := reflect.ValueOf(value)
-	switch v.Kind() {
-	case reflect.Array, reflect.Chan, reflect.Map, reflect.Slice, reflect.String:
-		return v.Len() > 0
-	default:
-		return true
-	}
-}
-
-func fieldValue(value any, field string) any {
-	if value == nil {
-		return nil
-	}
-	v := reflect.ValueOf(value)
-	if v.Kind() == reflect.Pointer {
-		if v.IsNil() {
-			return nil
-		}
-		v = v.Elem()
-	}
-	if v.Kind() != reflect.Struct {
-		return nil
-	}
-	f := v.FieldByName(field)
-	if !f.IsValid() || !f.CanInterface() {
-		return nil
-	}
-	return f.Interface()
 }

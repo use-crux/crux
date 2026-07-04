@@ -2,25 +2,29 @@
   "records": [
     {
       "schemaVersion": 1,
-      "recordId": "rec_run_start_01",
+      "recordId": "rec_b7862451676111a8_1",
       "type": "run:start",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "sessionId": "session_support_001",
+      "userId": "user_support_001",
       "name": "support reply",
       "rootPrimitive": "generation.call",
       "startedAt": "2026-05-16T18:00:00.000Z",
       "status": "running",
       "attributes": {
-        "environment": "test"
-      }
+        "environment": "test",
+        "meta.ticketId": "ticket_123"
+      },
+      "seq": 1
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_span_start_01",
+      "recordId": "rec_c89e3f639b60b2b2_2",
       "type": "span:start",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "spanId": "span_generation_fixture_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "spanId": "841e9c04c4d09a6e",
       "parentSpanId": null,
       "family": "generation",
       "primitive": "generation.call",
@@ -33,16 +37,17 @@
       "attributes": {
         "mode": "object",
         "temperature": 0.2
-      }
+      },
+      "seq": 2
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_artifact_input_01",
+      "recordId": "rec_4d7b79403627c9b6_3",
       "type": "artifact",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "artifactId": "artifact_generation_input_01",
-      "spanId": "span_generation_fixture_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "artifactId": "artifact_8ae65ffeda275825",
+      "spanId": "841e9c04c4d09a6e",
       "kind": "messages",
       "createdAt": "2026-05-16T18:00:00.015Z",
       "contentType": "application/json",
@@ -56,34 +61,36 @@
             "content": "Can I get a refund for my monthly plan?"
           }
         ]
-      }
+      },
+      "seq": 3
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_edge_consumed_01",
+      "recordId": "rec_ccf410890aa9bfaa_4",
       "type": "edge",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "edgeId": "edge_generation_consumed_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "edgeId": "edge_9325f34086dc0905",
       "edgeType": "consumed",
       "from": {
         "kind": "span",
-        "id": "span_generation_fixture_01"
+        "id": "841e9c04c4d09a6e"
       },
       "to": {
         "kind": "artifact",
-        "id": "artifact_generation_input_01"
+        "id": "artifact_8ae65ffeda275825"
       },
-      "createdAt": "2026-05-16T18:00:00.016Z"
+      "createdAt": "2026-05-16T18:00:00.016Z",
+      "seq": 4
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_artifact_context_contribution_01",
+      "recordId": "rec_9160416e1794b6ff_5",
       "type": "artifact",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "artifactId": "artifact_generation_context_contribution_01",
-      "spanId": "span_generation_fixture_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "artifactId": "artifact_d7574595f8c307ac",
+      "spanId": "841e9c04c4d09a6e",
       "kind": "context.contribution",
       "createdAt": "2026-05-16T18:00:00.020Z",
       "contentType": "application/json",
@@ -95,42 +102,46 @@
         "included": true,
         "sourceId": "context:refund-policy",
         "injectableKind": "context",
-        "injects": ["system"],
+        "injects": [
+          "system"
+        ],
         "priority": 50,
         "tokens": 12,
         "cacheStatus": "disabled",
         "text": "Refunds are available within 14 days."
-      }
+      },
+      "seq": 5
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_edge_context_consumed_01",
+      "recordId": "rec_4eec8269d07131c0_6",
       "type": "edge",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "edgeId": "edge_generation_context_consumed_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "edgeId": "edge_bdf40479ea6e8b58",
       "edgeType": "consumed",
       "from": {
         "kind": "artifact",
-        "id": "artifact_generation_context_contribution_01"
+        "id": "artifact_d7574595f8c307ac"
       },
       "to": {
         "kind": "span",
-        "id": "span_generation_fixture_01"
+        "id": "841e9c04c4d09a6e"
       },
       "createdAt": "2026-05-16T18:00:00.021Z",
       "attributes": {
         "source": "context:refund-policy"
-      }
+      },
+      "seq": 6
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_artifact_prompt_budget_01",
+      "recordId": "rec_15b7848b79914e00_7",
       "type": "artifact",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "artifactId": "artifact_generation_prompt_budget_01",
-      "spanId": "span_generation_fixture_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "artifactId": "artifact_f357626b26538e36",
+      "spanId": "841e9c04c4d09a6e",
       "kind": "prompt.budget",
       "createdAt": "2026-05-16T18:00:00.022Z",
       "contentType": "application/json",
@@ -151,50 +162,53 @@
             "tokens": 80
           }
         ]
-      }
+      },
+      "seq": 7
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_edge_prompt_budget_produced_01",
+      "recordId": "rec_080e127174af34dd_8",
       "type": "edge",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "edgeId": "edge_generation_prompt_budget_produced_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "edgeId": "edge_217e76100cec1942",
       "edgeType": "produced",
       "from": {
         "kind": "span",
-        "id": "span_generation_fixture_01"
+        "id": "841e9c04c4d09a6e"
       },
       "to": {
         "kind": "artifact",
-        "id": "artifact_generation_prompt_budget_01"
+        "id": "artifact_f357626b26538e36"
       },
-      "createdAt": "2026-05-16T18:00:00.023Z"
+      "createdAt": "2026-05-16T18:00:00.023Z",
+      "seq": 8
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_span_event_01",
+      "recordId": "rec_55e9a5123cb9077d_9",
       "type": "span:event",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "spanId": "span_generation_fixture_01",
-      "eventId": "event_generation_tokens_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "spanId": "841e9c04c4d09a6e",
+      "eventId": "event_af43f6d4d23893c4",
       "name": "usage.observed",
       "timestamp": "2026-05-16T18:00:00.400Z",
       "attributes": {
         "inputTokens": 42,
         "outputTokens": 18,
         "totalTokens": 60
-      }
+      },
+      "seq": 9
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_artifact_output_01",
+      "recordId": "rec_4fa4397ded2ee80c_a",
       "type": "artifact",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "artifactId": "artifact_generation_output_01",
-      "spanId": "span_generation_fixture_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "artifactId": "artifact_92678937d69b54b5",
+      "spanId": "841e9c04c4d09a6e",
       "kind": "output",
       "createdAt": "2026-05-16T18:00:00.500Z",
       "contentType": "application/json",
@@ -203,33 +217,35 @@
       "hash": "sha256:fixture-output",
       "preview": {
         "answer": "Monthly plans are refundable within 14 days."
-      }
+      },
+      "seq": 10
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_edge_produced_01",
+      "recordId": "rec_9c797405918fd24c_b",
       "type": "edge",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "edgeId": "edge_generation_produced_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "edgeId": "edge_246e25264d749aa1",
       "edgeType": "produced",
       "from": {
         "kind": "span",
-        "id": "span_generation_fixture_01"
+        "id": "841e9c04c4d09a6e"
       },
       "to": {
         "kind": "artifact",
-        "id": "artifact_generation_output_01"
+        "id": "artifact_92678937d69b54b5"
       },
-      "createdAt": "2026-05-16T18:00:00.501Z"
+      "createdAt": "2026-05-16T18:00:00.501Z",
+      "seq": 11
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_span_end_01",
+      "recordId": "rec_30087e99fc7dcf3b_c",
       "type": "span:end",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
-      "spanId": "span_generation_fixture_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
+      "spanId": "841e9c04c4d09a6e",
       "endedAt": "2026-05-16T18:00:00.520Z",
       "durationMs": 510,
       "status": "ok",
@@ -241,14 +257,15 @@
       },
       "attributes": {
         "finishReason": "stop"
-      }
+      },
+      "seq": 12
     },
     {
       "schemaVersion": 1,
-      "recordId": "rec_run_end_01",
+      "recordId": "rec_164c0d7c7e272dd7_d",
       "type": "run:end",
-      "runId": "run_generation_fixture_01",
-      "traceId": "trace_generation_fixture_01",
+      "runId": "run_d202cd4d27c2073026a950af",
+      "traceId": "ef8278b8eb637b41075b5bd2cca3f561",
       "endedAt": "2026-05-16T18:00:00.530Z",
       "durationMs": 530,
       "status": "ok",
@@ -257,7 +274,8 @@
         "outputTokens": 18,
         "totalTokens": 60,
         "costUsd": 0.00042
-      }
+      },
+      "seq": 13
     }
   ]
 }

@@ -1,8 +1,30 @@
 import type { CruxGraphRecord } from './contract'
-import { CruxGraphRecordBatchSchema } from './schema'
 
 export interface CruxObservabilityTransport {
+  /**
+   * Deliver a batch of canonical graph records.
+   *
+   * The delivery engine may call this with records that were delivered in an
+   * earlier attempt. Implementations must therefore be idempotent by
+   * `recordId`. The engine does not call a single delivery attempt
+   * re-entrantly.
+   */
   send(records: readonly CruxGraphRecord[]): void | Promise<void>
+  /**
+   * Maximum records the engine should pass to one `send()` call for this
+   * transport. Defaults to 50 when omitted.
+   */
+  maxRecordsPerRequest?: number
+  /**
+   * Drain transport-owned buffers. Called after the engine drains queued and
+   * in-flight records from `observe.flush()`.
+   */
+  flush?(): Promise<void>
+  /**
+   * Final drain and resource release. Called from `observe.shutdown()` after
+   * queued records have been flushed.
+   */
+  shutdown?(): Promise<void>
 }
 
 export interface HttpObservabilityTransportOptions {
@@ -97,61 +119,6 @@ function defaultDevtoolsToken(): string | undefined {
   return normalizeToken(runtime.process?.env?.CRUX_DEVTOOLS_TOKEN)
 }
 
-const MAX_PREVIEW_STRING_LENGTH = 64_000
-const MAX_PREVIEW_ARRAY_LENGTH = 200
-const MAX_PREVIEW_OBJECT_KEYS = 200
-const MAX_PREVIEW_DEPTH = 8
-
-function toJsonSafe(value: unknown, seen = new WeakSet<object>(), depth = 0): unknown {
-  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    if (typeof value === 'string' && value.length > MAX_PREVIEW_STRING_LENGTH) {
-      return `${value.slice(0, MAX_PREVIEW_STRING_LENGTH)}...[truncated ${value.length - MAX_PREVIEW_STRING_LENGTH} chars]`
-    }
-    if (typeof value === 'number' && !Number.isFinite(value)) return String(value)
-    return value
-  }
-  if (typeof value === 'bigint') return value.toString()
-  if (typeof value === 'undefined') return null
-  if (typeof value === 'function') return `[Function${value.name ? `: ${value.name}` : ''}]`
-  if (typeof value === 'symbol') return String(value)
-
-  if (depth >= MAX_PREVIEW_DEPTH) return '[MaxDepth]'
-
-  if (value instanceof Date) return value.toISOString()
-
-  if (typeof value === 'object') {
-    if (seen.has(value)) return '[Circular]'
-    seen.add(value)
-    try {
-      if (Array.isArray(value)) {
-        const items = value.slice(0, MAX_PREVIEW_ARRAY_LENGTH).map((item) => toJsonSafe(item, seen, depth + 1))
-        if (value.length > MAX_PREVIEW_ARRAY_LENGTH) {
-          items.push(`...[truncated ${value.length - MAX_PREVIEW_ARRAY_LENGTH} items]`)
-        }
-        return items
-      }
-
-      const output: Record<string, unknown> = {}
-      const entries = Object.entries(value as Record<string, unknown>)
-      for (const [key, entryValue] of entries.slice(0, MAX_PREVIEW_OBJECT_KEYS)) {
-        output[key] = toJsonSafe(entryValue, seen, depth + 1)
-      }
-      if (entries.length > MAX_PREVIEW_OBJECT_KEYS) {
-        output.__crux_truncated_keys = entries.length - MAX_PREVIEW_OBJECT_KEYS
-      }
-      return output
-    } finally {
-      seen.delete(value)
-    }
-  }
-
-  return String(value)
-}
-
-function sanitizeRecords(records: readonly CruxGraphRecord[]): CruxGraphRecord[] {
-  return records.map((record) => toJsonSafe(record) as CruxGraphRecord)
-}
-
 class CruxObservabilityHttpError extends Error {
   constructor(
     message: string,
@@ -159,6 +126,27 @@ class CruxObservabilityHttpError extends Error {
   ) {
     super(message)
     this.name = 'CruxObservabilityHttpError'
+  }
+}
+
+/**
+ * Reports poison records found by per-record HTTP isolation.
+ *
+ * Delivery treats these failed isolated records as permanently dropped and
+ * continues with later chunks, while preserving at-least-once retry behavior
+ * for ordinary transport failures.
+ */
+export class CruxObservabilityIngestError extends Error {
+  readonly delivered: number
+  readonly failed: number
+  readonly firstError: unknown
+
+  constructor(options: { delivered: number; failed: number; firstError: unknown }) {
+    super(`Crux observability ingest isolated ${options.failed} rejected record(s)`)
+    this.name = 'CruxObservabilityIngestError'
+    this.delivered = options.delivered
+    this.failed = options.failed
+    this.firstError = options.firstError
   }
 }
 
@@ -174,22 +162,13 @@ export function createHttpObservabilityTransport(
   const authHeaders = token ? { Authorization: `Bearer ${token}` } : undefined
 
   return {
+    maxRecordsPerRequest,
     async send(records) {
       if (!fetchImpl) throw new Error('No fetch implementation available for Crux observability transport')
-
-      const sanitizedRecords = sanitizeRecords(records)
-      const chunks: CruxGraphRecord[][] = []
-      for (let index = 0; index < sanitizedRecords.length; index += maxRecordsPerRequest) {
-        chunks.push(sanitizedRecords.slice(index, index + maxRecordsPerRequest))
-      }
-
-      for (const chunk of chunks) {
-        await postChunk(chunk)
-      }
+      await postChunk(records)
 
       async function postChunk(chunk: readonly CruxGraphRecord[]): Promise<void> {
-        const body = CruxGraphRecordBatchSchema.parse({ records: chunk })
-        const payload = JSON.stringify(body)
+        const payload = JSON.stringify({ records: chunk })
         let lastError: unknown
 
         for (let attempt = 0; attempt <= retryAttempts; attempt++) {
@@ -241,12 +220,11 @@ export function createHttpObservabilityTransport(
               isolatedErrors.push(error)
             }
           }
-          if (deliveredRecords > 0) {
-            return
-          }
-          throw isolatedErrors[0] instanceof Error
-            ? isolatedErrors[0]
-            : new Error(`Crux observability ingest failed: ${String(isolatedErrors[0])}`)
+          throw new CruxObservabilityIngestError({
+            delivered: deliveredRecords,
+            failed: isolatedErrors.length,
+            firstError: isolatedErrors[0],
+          })
         }
 
         throw lastError instanceof Error

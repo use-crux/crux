@@ -31,7 +31,6 @@ export function createBudgetManager(config: BudgetConfig): BudgetManager {
   function check(): BudgetState {
     const span = observe.openSpan({
       name: 'budget.check',
-      family: 'prompt',
       primitive: 'prompt.budget',
       attributes: {
         limit,
@@ -62,15 +61,17 @@ export function createBudgetManager(config: BudgetConfig): BudgetManager {
         })
       })
       span.end({
-        limit,
-        warningThreshold,
-        criticalThreshold,
-        sourceCount: sources.size,
-        used,
-        available,
-        pressure,
-        level,
-        breakdown,
+        attributes: {
+          limit,
+          warningThreshold,
+          criticalThreshold,
+          sourceCount: sources.size,
+          used,
+          available,
+          pressure,
+          level,
+          breakdown,
+        },
       })
 
       return {

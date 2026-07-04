@@ -53,7 +53,6 @@ export function createCompositionRuntime(
       return observe.span(
         {
           name: config.kind,
-          family: 'composition',
           primitive: `composition.${config.kind}`,
           attributes: {
             compositionId,

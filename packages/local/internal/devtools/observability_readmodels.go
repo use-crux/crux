@@ -389,7 +389,7 @@ func observabilityTimeline(ctx context.Context, obs *observability.Service, sess
 }
 
 func observabilityReadModelRuns(ctx context.Context, obs *observability.Service) ([]observability.RunSummary, error) {
-	return obs.RunsWithOptions(ctx, observability.RunListOptions{Limit: -1})
+	return obs.RunsWithOptions(ctx, observability.RunListOptions{Limit: 500})
 }
 
 func flattenObservabilityDetailNodes(root observability.RunDetailNode) []observability.RunDetailNode {

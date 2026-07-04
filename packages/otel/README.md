@@ -69,15 +69,23 @@ withTelemetry({
 
 The lightweight path uses internal `TraceSpan` objects instead of the OTel SDK. `@opentelemetry/api` is an optional peer dependency — only needed for the standard path.
 
+## Runtime Safety
+
+`withTelemetry()` is guarded against duplicate installation. If the plugin is installed twice in the same process, the second install warns once and becomes a no-op so traces are not exported twice.
+
+Span registries are bounded and lazily swept. Open run/span references and active span managers cap in-memory entries and force-end evicted spans with `crux.expired: true` and `UNSET` status instead of growing without bound.
+
+If the standard OTel path is selected but no `TracerProvider` is registered, Crux detects the invalid OTel span context, warns once, and falls back to the lightweight manager. Register a provider before installing `withTelemetry()` or pass an explicit `exporter` option.
+
 ## Spans
 
 Every instrumented Crux event produces a span:
 
 | Event                     | Span Name                       | Key Attributes                                                                                                  |
 | ------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `generate()` / `stream()` | `crux.generate`                 | `gen_ai.system`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.client.duration_ms`, `gen_ai.client.time_to_first_token_ms`, `gen_ai.client.output_tokens_per_second`, `gen_ai.client.time_per_output_chunk_ms`, `crux.cost` |
-| Tool execution            | `crux.tool.{name}`              | `crux.tool.name`, `crux.tool.call_id`, `crux.tool.model_output.type`, `crux.tool.output.size`, `crux.tool.model_output.size`, `crux.tool.token_savings_estimate`, `crux.tool.estimated` |
-| `flow().run()`            | `crux.flow`                     | `crux.flow.id`, `crux.flow.name`, `crux.flow.parent_id`                                                         |
+| `generate()` / `stream()` | `chat {model}`                  | `gen_ai.operation.name`, `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.client.operation.duration`, `gen_ai.server.time_to_first_token`, `crux.cost` |
+| Tool execution            | `execute_tool {name}`           | `gen_ai.operation.name`, `crux.tool.name`, `crux.tool.call_id`, `crux.tool.model_output.type`, `crux.tool.output.size`, `crux.tool.model_output.size`, `crux.tool.token_savings_estimate`, `crux.tool.estimated` |
+| `flow().run()`            | `invoke_workflow {name}`        | `gen_ai.operation.name`, `crux.flow.id`, `crux.flow.name`, `crux.flow.parent_id`                                |
 | `flow.step()`             | `crux.flow.step`                | `crux.step.id`, `crux.step.label`                                                                               |
 | `flow.suspend()`          | Event on `crux.flow` + span end | `crux.flow.suspend_point`                                                                                       |
 | Resume                    | `crux.flow.resume`              | `crux.flow.id`, `crux.flow.name` (fresh span, correlated by flow ID)                                            |
@@ -89,9 +97,10 @@ Every instrumented Crux event produces a span:
 | Judge score               | `crux.judge`                    | `crux.judge.metric`, `crux.judge.score`                                                                         |
 | Delegation                | `crux.delegate`                 | `crux.delegate.id`                                                                                              |
 
-Generate/stream spans follow the [OpenTelemetry GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/).
-Crux generation span metrics are projected from the canonical graph metrics into `gen_ai.client.*`
-attributes so custom subscribers, devtools, and OTel see one source of truth.
+Generate/stream spans follow the pinned `genai-dev-2026-06` GenAI semantic convention table.
+Crux generation span metrics are projected from the canonical graph metrics into seconds-based
+GenAI attributes such as `gen_ai.client.operation.duration` and `gen_ai.server.time_to_first_token`
+so custom subscribers, devtools, and OTel see one source of truth.
 
 Tool spans intentionally record only shape and size metadata for `toModelOutput()` conversions. Raw tool output and model-facing tool output are not emitted to OTel.
 
@@ -107,13 +116,27 @@ interface TelemetryOptions {
 
   /** Export strategy. Omit for standard OTel TracerProvider path. */
   exporter?: UrlExporter | CallbackExporter
+
+  /** Opt into GenAI message-content attributes. Default: false. */
+  captureMessageContent?: boolean
+
+  /** Forward compatibility knob for the pinned table. */
+  semconvVersion?: typeof SEMCONV_VERSION
 }
 ```
 
 Payload capture is configured centrally on the canonical graph stream with
-`config({ observability: { recordInputs, recordOutputs } })`. `@use-crux/otel`
-projects metadata from those graph records and does not expose a separate
-content-recording switch.
+`config({ observability: { recordInputs, recordOutputs, redactRecord } })`.
+`recordInputs` and `recordOutputs` accept `inline`, `reference`, or `off`
+capture modes. `@use-crux/otel` projects metadata from those graph records and
+also drops known payload attribute keys such as `text`, `query`, `messages`,
+`output`, `body`, and `filter` by default as defense in depth.
+
+OTel message content is disabled by default even when local graph capture is
+inline. Set `captureMessageContent: true` or
+`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true` to export
+`gen_ai.input.messages`, `gen_ai.output.messages`, and
+`gen_ai.system_instructions` from generation artifacts, capped at 32KB each.
 
 ## Coexistence with Devtools
 
@@ -138,3 +161,5 @@ config({
 - **`createOtelRecordSubscriber()`** maps graph records to span lifecycle calls
 - **`SpanManager`** abstracts span lifecycle over both OTel tracer and lightweight `TraceSpan` tracking
 - **Exporters**: `createUrlExporter()` (HTTP POST) and `createCallbackExporter()` (user function)
+
+The lightweight exporter path uses Crux W3C trace/span IDs directly for exported `TraceSpan` objects. The standard OTel provider path keeps provider-issued span context and records Crux IDs as attributes for correlation.

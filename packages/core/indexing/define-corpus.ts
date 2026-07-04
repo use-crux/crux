@@ -72,7 +72,6 @@ export function corpus(config: CorpusConfig): Corpus {
     const inputs = await collect(documentsInput)
     const span = observe.openSpan({
       name: `${config.id}.sync`,
-      family: 'corpus',
       primitive: 'corpus.sync',
       attributes: {
         syncId,
@@ -372,16 +371,18 @@ export function corpus(config: CorpusConfig): Corpus {
 
         emitCorpusSyncArtifact(span.spanId, result)
         span.end({
-          added: result.added,
-          changed: result.changed,
-          unchanged: result.unchanged,
-          stale: result.stale,
-          skipped: result.skipped,
-          deleted: result.deleted,
-          failed: result.failed,
-          chunkCount: result.chunkCount,
-          sourceCount: result.sources.length,
-          dryRun: result.dryRun,
+          attributes: {
+            added: result.added,
+            changed: result.changed,
+            unchanged: result.unchanged,
+            stale: result.stale,
+            skipped: result.skipped,
+            deleted: result.deleted,
+            failed: result.failed,
+            chunkCount: result.chunkCount,
+            sourceCount: result.sources.length,
+            dryRun: result.dryRun,
+          },
         })
 
         return result

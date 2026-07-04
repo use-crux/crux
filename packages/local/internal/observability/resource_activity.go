@@ -6,6 +6,8 @@ import (
 	"fmt"
 )
 
+const resourceActivityLimit = 500
+
 func (s *Service) ResourceActivity(ctx context.Context, family string) ([]ResourceActivity, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
@@ -22,8 +24,9 @@ func (s *Service) ResourceActivity(ctx context.Context, family string) ([]Resour
 			attributes_json, metrics_json, error_json
 		FROM spans
 		WHERE family = ?
-		ORDER BY ifnull(started_at, '') DESC, span_id DESC
-	`, family)
+		ORDER BY started_at DESC, span_id DESC
+		LIMIT ?
+	`, family, resourceActivityLimit)
 	if err != nil {
 		return nil, fmt.Errorf("query observability resource activity %q: %w", family, err)
 	}
@@ -74,85 +77,26 @@ func (s *Service) ResourceActivity(ctx context.Context, family string) ([]Resour
 		return nil, fmt.Errorf("close observability resource activity rows %q: %w", family, err)
 	}
 
+	if len(activities) == 0 {
+		return activities, nil
+	}
+	spanIDs := make([]string, 0, len(activities))
+	for _, activity := range activities {
+		spanIDs = append(spanIDs, activity.SpanID)
+	}
+	artifactsBySpan, err := s.listResourceArtifactsBySpan(ctx, spanIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list observability resource artifacts %q: %w", family, err)
+	}
+	edgesBySpan, err := s.listResourceEdgesBySpan(ctx, spanIDs)
+	if err != nil {
+		return nil, fmt.Errorf("list observability resource edges %q: %w", family, err)
+	}
 	for i := range activities {
-		artifacts, err := s.listResourceArtifacts(ctx, activities[i].SpanID)
-		if err != nil {
-			return nil, fmt.Errorf("list observability resource artifacts %q: %w", family, err)
-		}
-		activities[i].Artifacts = artifacts
-		edges, err := s.listResourceEdges(ctx, activities[i].SpanID)
-		if err != nil {
-			return nil, fmt.Errorf("list observability resource edges %q: %w", family, err)
-		}
-		activities[i].Edges = edges
+		activities[i].Artifacts = artifactsBySpan[activities[i].SpanID]
+		activities[i].Edges = edgesBySpan[activities[i].SpanID]
 	}
 	return activities, nil
-}
-
-func (s *Service) listResourceArtifacts(ctx context.Context, spanID string) ([]ResourceArtifact, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT artifact_id, run_id, ifnull(trace_id, ''), ifnull(span_id, ''), kind, created_at,
-			content_type, encoding, ifnull(size_bytes, 0), ifnull(hash, ''), preview_json, ifnull(uri, ''), attributes_json
-		FROM artifacts
-		WHERE span_id = ?
-		ORDER BY created_at, artifact_id
-	`, spanID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var artifacts []ResourceArtifact
-	for rows.Next() {
-		var artifact ResourceArtifact
-		var preview, attributes []byte
-		if err := rows.Scan(
-			&artifact.ArtifactID,
-			&artifact.RunID,
-			&artifact.TraceID,
-			&artifact.SpanID,
-			&artifact.Kind,
-			&artifact.CreatedAt,
-			&artifact.ContentType,
-			&artifact.Encoding,
-			&artifact.SizeBytes,
-			&artifact.Hash,
-			&preview,
-			&artifact.URI,
-			&attributes,
-		); err != nil {
-			return nil, err
-		}
-		artifact.Preview = json.RawMessage(preview)
-		artifact.Attributes = json.RawMessage(attributes)
-		artifacts = append(artifacts, artifact)
-	}
-	return artifacts, rows.Err()
-}
-
-func (s *Service) listResourceEdges(ctx context.Context, spanID string) ([]EdgeSummary, error) {
-	rows, err := s.db.QueryContext(ctx, `
-		SELECT edge_id, run_id, ifnull(trace_id, ''), edge_type, from_kind, from_id, to_kind, to_id, created_at, attributes_json
-		FROM edges
-		WHERE from_id = ? OR to_id = ?
-		ORDER BY created_at, edge_id
-	`, spanID, spanID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var edges []EdgeSummary
-	for rows.Next() {
-		var edge EdgeSummary
-		var attributes []byte
-		if err := rows.Scan(&edge.EdgeID, &edge.RunID, &edge.TraceID, &edge.EdgeType, &edge.From.Kind, &edge.From.ID, &edge.To.Kind, &edge.To.ID, &edge.CreatedAt, &attributes); err != nil {
-			return nil, err
-		}
-		edge.Attributes = json.RawMessage(attributes)
-		edges = append(edges, edge)
-	}
-	return edges, rows.Err()
 }
 
 func isResourceFamily(family string) bool {

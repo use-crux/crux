@@ -81,7 +81,6 @@ async function runGuards<TPhase extends GuardrailPhase>(
   return observe.span(
     {
       name: `${ctx.phase ?? 'unknown'} guardrails`,
-      family: 'guardrail',
       primitive: 'guardrail.run',
       attributes: {
         phase: ctx.phase,
@@ -108,7 +107,6 @@ async function runGuardsInternal<TPhase extends GuardrailPhase>(
     const span = observe.openSpan(
       {
         name: guard.name,
-        family: 'guardrail',
         primitive: 'guardrail.run',
         attributes: {
           guardrailName: guard.name,
@@ -127,7 +125,7 @@ async function runGuardsInternal<TPhase extends GuardrailPhase>(
       span.withContext(() =>
         recordGuardrailReport(guard, result.action, durationMs, result, currentContent),
       )
-      span.end({ action: result.action, durationMs })
+      span.end({ attributes: { action: result.action, durationMs } })
     } catch (error) {
       span.error(error)
       throw error

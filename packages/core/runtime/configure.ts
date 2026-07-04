@@ -70,6 +70,11 @@ export interface ConfigureOptions {
      * endpoints from their setup helpers. Explicit bridge config wins.
      */
     bridge?: RuntimeBridgeOptions
+    /**
+     * Optional session ID applied as a default observability correlator while
+     * the devtools transport is active.
+     */
+    sessionId?: string
   }
 
   /** Global middleware wrapping every adapter `generate()` call. */
@@ -203,7 +208,8 @@ export function configure(options: ConfigureOptions): PromptRegistry {
   // Apply globals
   _autoEscape = options.autoEscape !== false // default: true
   _securityWarnings =
-    options.securityWarnings ?? (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production')
+    options.securityWarnings ??
+    (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production')
   if (options.tokenizer) setTokenizer(options.tokenizer)
 
   // Build initial runtime from explicit options
@@ -234,6 +240,7 @@ export function configure(options: ConfigureOptions): PromptRegistry {
         contexts,
         serverUrl: dt.serverUrl,
         bridge: dt.bridge,
+        sessionId: dt.sessionId,
         paths: paths.size > 0 ? paths : undefined,
         tools: options.tools,
       }),
@@ -244,7 +251,7 @@ export function configure(options: ConfigureOptions): PromptRegistry {
   }
 
   // Apply all plugins — each sees the cumulative runtime from prior plugins
-  let pluginDispose: (() => void) | undefined
+  let pluginDispose: (() => Promise<void>) | undefined
   if (plugins.length > 0) {
     const result = applyPlugins(plugins, getRuntime())
     setRuntime(result.runtime)
@@ -284,7 +291,7 @@ export function configure(options: ConfigureOptions): PromptRegistry {
     },
 
     dispose() {
-      pluginDispose?.()
+      void pluginDispose?.()
       resetRuntime()
     },
   })
