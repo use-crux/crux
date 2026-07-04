@@ -47,12 +47,14 @@ import type {
   ArgumentReader,
   ConfigCallReader,
   ConfigReader,
+  ConfiguredObjectReader,
 } from './indexer/extensions'
 
 export type {
   ArgumentReader,
   ConfigCallReader,
   ConfigReader,
+  ConfiguredObjectReader,
   DefinitionBuilder,
   DefinitionBuilderInput,
   ExtensionIdentity,

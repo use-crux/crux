@@ -109,6 +109,7 @@ export const INDEX_KINDS: Record<string, KindDef> = {
   'rag.recipe.step': { label: 'RAG step', family: 'capability', glyph: 'stage', child: true },
   'rag.pipeline': { label: 'RAG pipeline', family: 'capability', glyph: 'pipeline' },
   'rag.pipeline.stage': { label: 'RAG stage', family: 'capability', glyph: 'stage', child: true },
+  'rag.reranker': { label: 'Reranker', family: 'capability', glyph: 'spark' },
   'rag.retriever': { label: 'Retriever', family: 'capability', glyph: 'search' },
   memory: { label: 'Memory', family: 'state', glyph: 'brain' },
   'memory.store': { label: 'Store', family: 'state', glyph: 'db', child: true },

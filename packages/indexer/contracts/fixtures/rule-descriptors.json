@@ -1115,6 +1115,41 @@
       "fidelity": "safe"
     },
     {
+      "id": "rag.recipe_step_unresolved_target",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "composition",
+      "maturity": "preview",
+      "confidence": "high",
+      "profiles": [
+        "recommended",
+        "strict"
+      ],
+      "title": "RAG recipe step target is unresolved",
+      "description": "Recipe steps are only explainable in devtools when retriever, scorer, and reranker targets resolve to indexed definitions.",
+      "rationale": "Recipe steps are only explainable in devtools when retriever, scorer, and reranker targets resolve to indexed definitions.",
+      "impact": "The recipe may still run, but the Project Index cannot show or validate the step dependency that authored code appears to reference.",
+      "docsUrl": "/docs/reference/crux-core/index-lints/rag-recipe-step-unresolved-target",
+      "fixes": [
+        {
+          "title": "Export or define the step target",
+          "description": "Reference an indexed retriever, scorer, or reranker definition from the recipe step, or suppress this rule if the dependency is intentionally external.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line rag.recipe_step_unresolved_target -- reason"
+      },
+      "phase": "index",
+      "requires": [
+        "definitions",
+        "relations"
+      ],
+      "fidelity": "safe"
+    },
+    {
       "id": "runtime.duplicate_target_name",
       "source": "builtin",
       "severity": "error",

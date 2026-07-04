@@ -25,6 +25,7 @@
     "memory-long-lived-without-retention",
     "consensus-missing-judge",
     "shared-blackboard-without-policy",
+    "rag-recipe-step-unresolved-target",
     "routing-missing-stable-id",
     "routing-router-missing-default",
     "routing-unresolved-target",

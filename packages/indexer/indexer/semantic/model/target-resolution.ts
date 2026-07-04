@@ -146,6 +146,13 @@ function semanticTargetForDefinitionExpression(
       const name = object ? semanticStringLiteralProperty(object, 'id', view.syntax) : undefined
       return { id: `rag.recipe:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'rag.recipe' }
     }
+    if (callName === 'reranker') {
+      const name = object
+        ? (semanticStringLiteralProperty(object, 'id', view.syntax) ??
+          semanticStringLiteralProperty(object, 'name', view.syntax))
+        : undefined
+      return { id: `rag.reranker:${safeId(name ?? variableName ?? 'anonymous')}`, kind: 'rag.reranker' }
+    }
     if (callName === 'scorer' || callName === 'llmJudge') {
       const name = object
         ? (semanticStringLiteralProperty(object, 'id', view.syntax) ??

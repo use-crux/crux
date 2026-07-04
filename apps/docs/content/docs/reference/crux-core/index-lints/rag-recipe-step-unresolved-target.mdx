@@ -1,0 +1,41 @@
+---
+title: rag.recipe_step_unresolved_target
+---
+
+## What it checks
+
+Crux emits this finding when a `retrievalRecipe()` step references a retriever, scorer, or reranker target that is not visible as an index definition.
+
+## Why it matters
+
+Recipe steps are most useful in devtools when their dependencies resolve to concrete nodes. Resolved targets let the Project Index render recipe structure, show step-level edges, and connect runtime behavior back to authored retrievers, scorers, and rerankers.
+
+## How to fix
+
+Reference an exported, index-visible Crux primitive from the recipe step.
+
+```ts
+export const answerRanker = reranker({ name: 'answer-ranker', model })
+
+export const docsRecipe = retrievalRecipe({
+  id: 'docs',
+  steps: [rerank({ engine: answerRanker })],
+})
+```
+
+## When to suppress
+
+Suppress only when the target is intentionally external and reduced index visibility is acceptable.
+
+```ts
+// crux-lint-disable-next-line rag.recipe_step_unresolved_target -- external ranking engine is injected by the host
+export const docsRecipe = retrievalRecipe({ id: 'docs', steps: [rerank({ engine: hostRanker })] })
+```
+
+## Rule metadata
+
+- Rule id: `rag.recipe_step_unresolved_target`
+- Category: `composition`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

@@ -173,6 +173,7 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
         "rag.retriever",
         &[
             "knowledgeBase",
+            "reranker",
             "retriever",
             "retrievalRecipe",
             "retrievalStep",
@@ -186,12 +187,14 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
         &[],
         &[
             "rag.knowledgeBase",
+            "rag.reranker",
             "rag.retriever",
             "rag.recipe",
             "rag.recipe.step",
         ],
         &[
             "rag.knowledgeBase:",
+            "rag.reranker:",
             "rag.retriever:",
             "rag.recipe:",
             "rag.recipe.step:",

@@ -445,6 +445,14 @@ export const indexRelationPolicies = [
     runtimeJoin: true,
   },
   {
+    type: 'rag.recipe.step.uses_reranker',
+    fromKinds: ['rag.recipe.step'],
+    toKinds: ['rag.reranker'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
     type: 'rag.pipeline.uses_retriever',
     fromKinds: ['rag.pipeline'],
     toKinds: ['rag.retriever'],

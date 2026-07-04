@@ -319,6 +319,7 @@ describe('public indexer extension surface', () => {
       'ArgumentReader',
       'ConfigCallReader',
       'ConfigReader',
+      'ConfiguredObjectReader',
       'DefinitionBuilder',
       'DefinitionBuilderInput',
       'ExtensionIdentity',

@@ -4,7 +4,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Map, Value, json};
 
-use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput, definition_evidence};
+use crate::builder::{
+    StaticIndexLintBuilder, StaticIndexLintFindingInput, definition_evidence, relation_evidence,
+};
 use crate::emit::push_definition_finding;
 use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding, StaticIndexRelation};
 use crate::helpers::{
@@ -18,6 +20,7 @@ use crate::rules::routing::{
 pub(crate) struct DefinitionTailContext<'a> {
     pub(crate) guardrail_targets: &'a BTreeSet<String>,
     pub(crate) consensus_policies: &'a BTreeSet<String>,
+    pub(crate) by_id: &'a BTreeMap<&'a str, &'a StaticIndexDefinition>,
     pub(crate) outgoing: &'a [&'a StaticIndexRelation],
     pub(crate) cascade_tiers: &'a BTreeMap<String, Vec<&'a StaticIndexDefinition>>,
 }
@@ -30,6 +33,7 @@ pub(crate) fn definition_tail_findings(
     let mut findings = Vec::new();
     append_state_findings(builder, definition, &context, &mut findings);
     append_routing_findings(builder, definition, &context, &mut findings);
+    append_rag_findings(builder, definition, &context, &mut findings);
     findings
 }
 
@@ -211,6 +215,51 @@ fn append_routing_child_findings(
     }) {
         findings.push(finding);
     }
+}
+
+fn append_rag_findings(
+    builder: &StaticIndexLintBuilder,
+    definition: &StaticIndexDefinition,
+    context: &DefinitionTailContext<'_>,
+    findings: &mut Vec<StaticIndexLintFinding>,
+) {
+    if definition.kind != "rag.recipe.step" {
+        return;
+    }
+    for relation in context.outgoing {
+        if !is_rag_recipe_step_target_relation(&relation.r#type)
+            || context.by_id.contains_key(relation.to.as_str())
+        {
+            continue;
+        }
+        if let Some(finding) = builder.finding(StaticIndexLintFindingInput {
+            rule_id: "rag.recipe_step_unresolved_target",
+            key: &format!("{}:{}:{}", definition.id, relation.r#type, relation.to),
+            message: format!(
+                "RAG recipe step \"{}\" points at \"{}\" but no index-visible target was resolved.",
+                definition.name, relation.to
+            ),
+            source: relation.source.as_ref().or(definition.source.as_ref()),
+            primary_definition_id: Some(definition.id.as_str()),
+            related_definition_ids: vec![definition.id.clone()],
+            evidence: vec![
+                definition_evidence(definition, "Recipe step has an unresolved dependency edge"),
+                relation_evidence(relation, "Unresolved recipe step dependency"),
+            ],
+            fixes: Vec::new(),
+        }) {
+            findings.push(finding);
+        }
+    }
+}
+
+fn is_rag_recipe_step_target_relation(relation_type: &str) -> bool {
+    matches!(
+        relation_type,
+        "rag.recipe.step.uses_retriever"
+            | "rag.recipe.step.uses_scorer"
+            | "rag.recipe.step.uses_reranker"
+    )
 }
 
 fn metadata_bool(definition: &StaticIndexDefinition, key: &str) -> Option<bool> {

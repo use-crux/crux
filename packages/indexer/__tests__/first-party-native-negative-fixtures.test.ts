@@ -15,7 +15,7 @@ interface NegativeFixtureCase {
 const negativeFixtureCases: readonly NegativeFixtureCase[] = [
   {
     family: 'rag.retriever',
-    callNames: ['knowledgeBase', 'retriever', 'retrievalRecipe', 'retrieve', 'rerank'],
+    callNames: ['knowledgeBase', 'retriever', 'retrievalRecipe', 'retrieve', 'rerank', 'reranker'],
   },
   { family: 'safety', callNames: ['constraint', 'guardrail'] },
   { family: 'scorer', callNames: ['llmJudge'] },

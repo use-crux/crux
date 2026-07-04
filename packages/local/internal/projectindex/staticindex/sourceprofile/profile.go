@@ -36,6 +36,7 @@ var semanticCallNames = []string{
 	"fanout",
 	"knowledgeBase",
 	"rerank",
+	"reranker",
 	"retrievalRecipe",
 	"retrievalStep",
 	"retrieve",

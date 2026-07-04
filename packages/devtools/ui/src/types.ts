@@ -496,10 +496,12 @@ export type PrimitiveSpecificFacts =
         | 'rag.recipe.step'
         | 'rag.pipeline'
         | 'rag.pipeline.stage'
+        | 'rag.reranker'
         | 'rag.retriever'
       knowledgeBaseId?: string
       recipeId?: string
       stepId?: string
+      rerankerId?: string
       retrieverId?: string
       stageId?: string
       stageKind?: string

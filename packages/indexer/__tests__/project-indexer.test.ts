@@ -2607,7 +2607,8 @@ describe('project indexer', () => {
         import { flow as cruxFlow } from '@use-crux/convex/server'
         import { Agent } from '@use-crux/convex/agent'
         import { memory, workingState } from '@use-crux/core/memory'
-        import { retriever, retrievalRecipe } from '@use-crux/core/retrieval'
+        import { retriever, retrievalRecipe, rerank } from '@use-crux/core/retrieval'
+        import { reranker } from '@use-crux/ai'
         import { constraint } from '@use-crux/core/safety/constraint'
         import { guardrail } from '@use-crux/core/safety/guardrail'
         import { llmJudge } from '@use-crux/core/scoring'
@@ -2692,10 +2693,11 @@ describe('project indexer', () => {
           })
         }
         export const docsRetriever = retriever({ id: 'docs', namespace: 'kb', retrieve: async () => [] })
+        export const answerRanker = reranker({ name: 'answer-ranker', model: 'rerank-model' as never })
         export const docsRag = retrievalRecipe({
           id: 'docsRag',
           retriever: docsRetriever,
-          steps: [{ id: 'rerank', scorer: factuality }],
+          steps: [{ id: 'judge', scorer: factuality }, rerank({ engine: answerRanker })],
         })
         const sessionState = workingState({ id: 'state', schema: z.object({ user_name: z.string(), turn_count: z.number().optional() }) })
         const memoryStore = cruxConvexStore({ component: components.crux, ctx })
@@ -2992,6 +2994,29 @@ describe('project indexer', () => {
     )
     expect(byId.get('rag.retriever:docs')).toMatchObject({ kind: 'rag.retriever', name: 'docs' })
     expect(byId.get('rag.recipe:docsRag')).toMatchObject({ kind: 'rag.recipe', name: 'docsRag' })
+    expect(byId.get('rag.reranker:answer-ranker')).toMatchObject({
+      kind: 'rag.reranker',
+      name: 'answer-ranker',
+      metadata: expect.objectContaining({
+        facts: expect.objectContaining({ kind: 'rag.reranker', rerankerId: 'answer-ranker' }),
+      }),
+    })
+    expect(byId.get('rag.recipe:docsRag:step:judge')).toMatchObject({
+      kind: 'rag.recipe.step',
+      name: 'judge',
+      metadata: expect.objectContaining({
+        recipeId: 'rag.recipe:docsRag',
+        stepId: 'judge',
+        indexPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'rag.recipe:docsRag',
+          parentRelationType: 'rag.recipe.includes_step',
+          role: 'step',
+          order: 0,
+        }),
+        scorerVariable: 'factuality',
+      }),
+    })
     expect(byId.get('rag.recipe:docsRag:step:rerank')).toMatchObject({
       kind: 'rag.recipe.step',
       name: 'rerank',
@@ -3003,9 +3028,9 @@ describe('project indexer', () => {
           parentDefinitionId: 'rag.recipe:docsRag',
           parentRelationType: 'rag.recipe.includes_step',
           role: 'step',
-          order: 0,
+          order: 1,
         }),
-        scorerVariable: 'factuality',
+        rerankerVariable: 'answerRanker',
       }),
     })
     expect(byId.get('memory:session-memory')).toMatchObject({ kind: 'memory', name: 'session-memory' })
@@ -3288,8 +3313,18 @@ describe('project indexer', () => {
           to: 'rag.recipe:docsRag:step:rerank',
         }),
         expect.objectContaining({
-          type: 'rag.recipe.step.uses_scorer',
+          type: 'rag.recipe.step.uses_reranker',
           from: 'rag.recipe:docsRag:step:rerank',
+          to: 'rag.reranker:answer-ranker',
+        }),
+        expect.objectContaining({
+          type: 'rag.recipe.includes_step',
+          from: 'rag.recipe:docsRag',
+          to: 'rag.recipe:docsRag:step:judge',
+        }),
+        expect.objectContaining({
+          type: 'rag.recipe.step.uses_scorer',
+          from: 'rag.recipe:docsRag:step:judge',
           to: 'scorer:factuality',
         }),
         expect.objectContaining({

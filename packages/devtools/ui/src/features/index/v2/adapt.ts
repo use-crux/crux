@@ -165,6 +165,8 @@ export interface IndexFacts {
   hasEvaluate?: boolean
   // rag
   topK?: number
+  index?: number
+  rerankerId?: string
   // memory / blackboard
   backend?: string
   variableName?: string

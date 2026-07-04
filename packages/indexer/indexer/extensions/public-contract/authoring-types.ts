@@ -40,6 +40,13 @@ export interface StaticObjectReader {
   callObject(property: string): StaticCallObjectReader | undefined
   /** Reads an array of factory calls whose first argument is an object literal. */
   callObjectArray(property: string): readonly StaticCallObjectReader[]
+  /**
+   * Reads an ordered array of object literals and configured helper calls.
+   *
+   * Use this for config arrays that allow both `{ ... }` entries and helpers such as
+   * `rerank({ ... })`. Unsupported entries are skipped, but supported entries keep source order.
+   */
+  objectOrCallObjectArray(property: string): readonly StaticConfiguredObjectReader[]
   /** Reads a string literal through a nested object path such as `['write', 'mode']`. */
   nestedString(path: readonly string[]): string | undefined
   /** Reads object-map values that are identifier references, useful for tool maps and agent maps. */
@@ -104,6 +111,19 @@ export interface StaticCallObjectReader {
 }
 
 /**
+ * Stable reader for an ordered config-array entry.
+ *
+ * Object-literal entries have no `name`; configured helper calls expose the helper/factory name and
+ * the first object/config argument.
+ */
+export interface StaticConfiguredObjectReader {
+  /** Factory/callee name for helper-call entries, or `undefined` for object-literal entries. */
+  readonly name: string | undefined
+  /** Reader for the object/config entry. */
+  readonly config: StaticObjectReader
+}
+
+/**
  * Author-facing alias for the positional argument reader.
  *
  * The older `StaticArgumentReader` name remains for internal compatibility during migration, but new
@@ -128,6 +148,14 @@ export type ConfigReader = StaticObjectReader
  * calls such as memory blocks or pipeline stages.
  */
 export type ConfigCallReader = StaticCallObjectReader
+
+/**
+ * Author-facing alias for object-or-helper config array entries.
+ *
+ * Use this for ordered DSL arrays where `{ ... }` and `helper({ ... })` are equivalent configured
+ * entries with optional helper identity.
+ */
+export type ConfiguredObjectReader = StaticConfiguredObjectReader
 
 /**
  * Builder for source references that point from index definitions back into authored code.

@@ -49,6 +49,7 @@ const KIND_GLYPH: Record<string, KindGlyph> = {
   'rag.recipe.step': { icon: 'arrowRight', tone: 'ok', color: 'var(--qw-ok)', label: 'step' },
   'rag.pipeline': { icon: 'db', tone: 'ok', color: 'var(--qw-ok)', label: 'rag pipeline' },
   'rag.pipeline.stage': { icon: 'arrowRight', tone: 'ok', color: 'var(--qw-ok)', label: 'stage' },
+  'rag.reranker': { icon: 'spark', tone: 'ok', color: 'var(--qw-ok)', label: 'reranker' },
   'rag.retriever': { icon: 'search', tone: 'ok', color: 'var(--qw-ok)', label: 'retriever' },
   workspace: { icon: 'folder', tone: 'ok', color: 'var(--qw-ok)', label: 'workspace' },
   constraint: { icon: 'alert', tone: 'warn', color: 'var(--qw-warn)', label: 'constraint' },

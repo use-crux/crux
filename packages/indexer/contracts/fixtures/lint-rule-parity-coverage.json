@@ -172,6 +172,11 @@
       "negativeFixture": "index-lint-native-parity.test.ts"
     },
     {
+      "ruleId": "rag.recipe_step_unresolved_target",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
       "ruleId": "runtime.duplicate_target_name",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "negativeFixture": "index-lint-native-parity.test.ts"

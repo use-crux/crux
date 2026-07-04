@@ -27,6 +27,7 @@ const firstPartySemanticCallNames = [
   'fanout',
   'knowledgeBase',
   'rerank',
+  'reranker',
   'retrievalRecipe',
   'retrievalStep',
   'retrieve',

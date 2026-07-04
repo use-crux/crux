@@ -297,22 +297,23 @@ describe("first-party Phase 5 native fixtures", () => {
       const source = [
         "export const docs = knowledgeBase({ id: 'docs' })",
         "export const docsRetriever = retriever({ id: 'docs', namespace: 'public' })",
+        "export const answerRanker = reranker({ name: 'answer-ranker', model })",
         "export const configuredRetriever = docs.retriever({ filter: { section: 'guide' } })",
         "",
         "export const docsRag = retrievalRecipe({",
         "  id: 'docsRag',",
         "  retriever: configuredRetriever,",
-        "  steps: [{ id: 'lookup', retriever: docsRetriever }],",
+        "  steps: [rerank({ engine: answerRanker }), { id: 'lookup', retriever: docsRetriever }],",
         "})",
       ].join("\n");
       const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
         {
           source,
-          callNames: ["knowledgeBase", "retriever", "retrievalRecipe"],
+          callNames: ["knowledgeBase", "rerank", "reranker", "retriever", "retrievalRecipe"],
         },
       );
 
-      expect(record.nativeFacts ?? []).toHaveLength(4);
+      expect(record.nativeFacts ?? []).toHaveLength(5);
       expectNativeExtractionParity(nativeOut, fallbackOut);
     },
     30_000,

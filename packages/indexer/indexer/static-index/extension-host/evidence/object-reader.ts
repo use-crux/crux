@@ -9,7 +9,12 @@ import {
   stringProperty,
 } from '../../../ast/literals'
 import { schemaProperty } from '../../../ast/schemas'
-import type { StaticArgumentReader, StaticCallObjectReader, StaticObjectReader } from '../../../extensions/public-contract/types'
+import type {
+  StaticArgumentReader,
+  StaticCallObjectReader,
+  StaticConfiguredObjectReader,
+  StaticObjectReader,
+} from '../../../extensions/public-contract/types'
 
 /** Projects a TypeScript object literal into the stable, JSON-like reader exposed to extractors. */
 export function createStaticObjectReader(
@@ -46,6 +51,8 @@ export function createStaticObjectReader(
         .filter(isDefined),
     callObject: (property) => callObjectProperty(object, property, localInitializers),
     callObjectArray: (property) => callObjectArrayProperty(object, property, localInitializers),
+    objectOrCallObjectArray: (property) =>
+      objectOrCallObjectArrayProperty(object, property, localInitializers),
     nestedString: (path) => nestedStringProperty(object, path, localInitializers),
     objectMapIdentifiers: (property) => objectMapIdentifiers(object, property),
     objectMapIdentifierEntries: (property) => objectMapIdentifierEntries(object, property),
@@ -95,6 +102,34 @@ function callObjectArrayProperty(
   return expression.elements.flatMap((element): readonly StaticCallObjectReader[] => {
     const resolved = resolveIdentifierExpression(element as ts.Expression, localInitializers)
     if (!resolved || !ts.isCallExpression(resolved)) return []
+    const firstArg = resolved.arguments[0]
+    if (!firstArg || !ts.isObjectLiteralExpression(firstArg)) return []
+    const config = createStaticObjectReader(firstArg, localInitializers)
+    return config ? [{ name: expressionName(resolved.expression), config }] : []
+  })
+}
+
+/**
+ * Reads an array of object literals and configured helper/factory calls in source order.
+ *
+ * Object literal entries and `helper({ ... })` entries share the same reader shape so extractors can
+ * model ordered DSL arrays without seeing TypeScript nodes.
+ */
+function objectOrCallObjectArrayProperty(
+  object: ts.ObjectLiteralExpression,
+  property: string,
+  localInitializers: ReadonlyMap<string, ts.Expression>,
+): readonly StaticConfiguredObjectReader[] {
+  const expression = resolvedPropertyExpression(object, property, localInitializers)
+  if (!expression || !ts.isArrayLiteralExpression(expression)) return []
+  return expression.elements.flatMap((element): readonly StaticConfiguredObjectReader[] => {
+    const resolved = resolveIdentifierExpression(element as ts.Expression, localInitializers)
+    if (!resolved) return []
+    if (ts.isObjectLiteralExpression(resolved)) {
+      const config = createStaticObjectReader(resolved, localInitializers)
+      return config ? [{ name: undefined, config }] : []
+    }
+    if (!ts.isCallExpression(resolved)) return []
     const firstArg = resolved.arguments[0]
     if (!firstArg || !ts.isObjectLiteralExpression(firstArg)) return []
     const config = createStaticObjectReader(firstArg, localInitializers)

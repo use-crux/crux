@@ -193,6 +193,7 @@ var cruxSignalPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\bfanout\s*\(`),
 	regexp.MustCompile(`\bretrieve\s*\(`),
 	regexp.MustCompile(`\brerank\s*\(`),
+	regexp.MustCompile(`\breranker\s*\(`),
 	regexp.MustCompile(`\bexpandParents\s*\(`),
 	regexp.MustCompile(`\bcompressToBudget\s*\(`),
 	regexp.MustCompile(`\bretriever\s*\(`),

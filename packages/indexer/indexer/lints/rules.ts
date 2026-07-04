@@ -45,6 +45,7 @@ export const indexLintRuleIds = [
   'routing.router_missing_default',
   'routing.unresolved_target',
   'routing.cascade_unreachable_tier',
+  'rag.recipe_step_unresolved_target',
   'runtime.duplicate_target_name',
   'runtime.non_literal_target_name',
   'runtime.target_not_exported',
@@ -834,6 +835,29 @@ export const indexLintRules = {
         title: 'Add evaluator or reorder tiers',
         description:
           'Add evaluate to non-terminal tiers, or move unconditional accept tiers to the end of the cascade.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'rag.recipe_step_unresolved_target': defineIndexLintRule({
+    id: 'rag.recipe_step_unresolved_target',
+    severity: 'warning',
+    category: 'composition',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'RAG recipe step target is unresolved',
+    rationale:
+      'Recipe steps are only explainable in devtools when retriever, scorer, and reranker targets resolve to indexed definitions.',
+    impact:
+      'The recipe may still run, but the Project Index cannot show or validate the step dependency that authored code appears to reference.',
+    docsSlug: 'rag-recipe-step-unresolved-target',
+    fixes: [
+      {
+        title: 'Export or define the step target',
+        description:
+          'Reference an indexed retriever, scorer, or reranker definition from the recipe step, or suppress this rule if the dependency is intentionally external.',
         kind: 'manual',
       },
     ],

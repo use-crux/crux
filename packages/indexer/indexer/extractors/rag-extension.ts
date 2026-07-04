@@ -1,5 +1,5 @@
 import type { ProjectDefinition } from '@use-crux/core/project-index'
-import type { IndexExtractor, ConfigReader } from '../extensions'
+import type { IndexExtractor, ConfigReader, ConfiguredObjectReader } from '../extensions'
 import { facts } from '../extensions'
 import { foldedIndexChild } from '../index-presentation'
 import { storageConfigReferences, storageDependencyFacts, storageRelationRefs } from './storage-dependencies'
@@ -15,6 +15,7 @@ export const ragRetrieverIndexExtractor: IndexExtractor = {
   name: 'rag.retriever',
   patterns: [
     { kind: 'call', name: 'knowledgeBase' },
+    { kind: 'call', name: 'reranker' },
     { kind: 'call', name: 'retriever' },
     { kind: 'call', name: 'retrievalRecipe' },
   ],
@@ -35,6 +36,31 @@ export const ragRetrieverIndexExtractor: IndexExtractor = {
               facts: {
                 kind: 'rag.knowledgeBase',
                 knowledgeBaseId: explicitId ?? ctx.source.variableName,
+              },
+              intelligence: {
+                confidence: 'static',
+              },
+            },
+          }),
+        ],
+      })
+    }
+
+    if (ctx.match.name === 'reranker' && ctx.config) {
+      const explicitName = ctx.config.string('id') ?? ctx.config.string('name')
+      const name = explicitName ?? ctx.source.variableName
+      return facts({
+        definitions: [
+          ctx.define.definition({
+            variableName: ctx.source.variableName,
+            id: `rag.reranker:${ctx.source.safeId(explicitName ?? ctx.source.localName)}`,
+            kind: 'rag.reranker',
+            name,
+            metadata: {
+              exportName: ctx.source.variableName,
+              facts: {
+                kind: 'rag.reranker',
+                rerankerId: explicitName ?? ctx.source.variableName,
               },
               intelligence: {
                 confidence: 'static',
@@ -83,6 +109,7 @@ export const ragRetrieverIndexExtractor: IndexExtractor = {
       const steps = ragRecipeStepDefinitions(ctx, id)
       const retrievers = uniqueDefined([retrieverRef, ...steps.map((step) => step.retrieverVariable)])
       const scorers = uniqueDefined(steps.map((step) => step.scorerVariable))
+      const rerankers = uniqueDefined(steps.map((step) => step.rerankerVariable))
       const recipeDefinition = ctx.define.definition({
         variableName: ctx.source.variableName,
         id,
@@ -101,11 +128,12 @@ export const ragRetrieverIndexExtractor: IndexExtractor = {
               ordering: 'ordered',
               ...(steps.length > 0 ? { children: steps.map((step) => step.definition.id) } : {}),
             },
-            ...(retrievers.length > 0 || scorers.length > 0
+            ...(retrievers.length > 0 || scorers.length > 0 || rerankers.length > 0
               ? {
                   dependencies: {
                     ...(retrievers.length > 0 ? { retrievers } : {}),
                     ...(scorers.length > 0 ? { scorers } : {}),
+                    ...(rerankers.length > 0 ? { rerankers } : {}),
                   },
                 }
               : {}),
@@ -140,6 +168,14 @@ export const ragRetrieverIndexExtractor: IndexExtractor = {
                   },
                 ]
               : []),
+            ...(step.rerankerVariable
+              ? [
+                  {
+                    ...ctx.ref.variable('rag.recipe.step.uses_reranker', step.rerankerVariable),
+                    fromId: step.definition.id,
+                  },
+                ]
+              : []),
           ]),
         ],
       })
@@ -159,6 +195,7 @@ interface RagRecipeStep {
   readonly definition: ProjectDefinition
   readonly retrieverVariable?: string
   readonly scorerVariable?: string
+  readonly rerankerVariable?: string
 }
 
 /**
@@ -171,9 +208,20 @@ function ragRecipeStepDefinitions(
   ctx: Parameters<IndexExtractor['extract']>[0],
   recipeDefinitionId: string,
 ): RagRecipeStep[] {
-  return (ctx.config?.objectArray('steps') ?? []).map((stepConfig, index) =>
-    stepDefinition(ctx, recipeDefinitionId, stepConfig, index),
+  return recipeStepReaders(ctx.config).map((step, index) =>
+    stepDefinition(ctx, recipeDefinitionId, step.config, index, step.callName),
   )
+}
+
+/**
+ * Reads both object-literal steps and configured helper calls such as
+ * `rerank({ engine })` through the stable extractor API.
+ */
+function recipeStepReaders(
+  config: ConfigReader | undefined,
+): Array<{ readonly config: ConfigReader; readonly callName?: string }> {
+  if (!config) return []
+  return config.objectOrCallObjectArray('steps').map((step) => ({ config: step.config, callName: step.name }))
 }
 
 /** Deduplicates optional step refs while dropping unsupported/missing values. */
@@ -192,11 +240,12 @@ function stepDefinition(
   recipeDefinitionId: string,
   stepConfig: ConfigReader,
   index: number,
+  callName?: ConfiguredObjectReader['name'],
 ): RagRecipeStep {
-  const stepId = stepConfig.string('id') ?? stepConfig.string('name') ?? `step-${index + 1}`
+  const stepId = stepConfig.string('id') ?? stepConfig.string('name') ?? callName ?? `step-${index + 1}`
   const retrieverVariable = stepConfig.identifier('retriever')
-  const scorerVariable =
-    stepConfig.identifier('scorer') ?? stepConfig.identifier('judge') ?? stepConfig.identifier('reranker')
+  const scorerVariable = stepConfig.identifier('scorer') ?? stepConfig.identifier('judge')
+  const rerankerVariable = stepConfig.identifier('engine') ?? stepConfig.identifier('reranker')
   return {
     definition: ctx.define.definition({
       variableName: ctx.source.variableName,
@@ -209,6 +258,7 @@ function stepDefinition(
         index,
         ...(retrieverVariable ? { retrieverVariable } : {}),
         ...(scorerVariable ? { scorerVariable } : {}),
+        ...(rerankerVariable ? { rerankerVariable } : {}),
         indexPresentation: foldedIndexChild({
           parentDefinitionId: recipeDefinitionId,
           parentRelationType: 'rag.recipe.includes_step',
@@ -220,15 +270,17 @@ function stepDefinition(
           stepId,
           index,
           ...(retrieverVariable ? { retrieverId: retrieverVariable } : {}),
+          ...(rerankerVariable ? { rerankerId: rerankerVariable } : {}),
         },
         intelligence: {
           confidence: 'static',
           control: { mode: 'sequential', ordering: 'ordered' },
-          ...(retrieverVariable || scorerVariable
+          ...(retrieverVariable || scorerVariable || rerankerVariable
             ? {
                 dependencies: {
                   ...(retrieverVariable ? { retrievers: [retrieverVariable] } : {}),
                   ...(scorerVariable ? { scorers: [scorerVariable] } : {}),
+                  ...(rerankerVariable ? { rerankers: [rerankerVariable] } : {}),
                 },
               }
             : {}),
@@ -237,5 +289,6 @@ function stepDefinition(
     }).definition,
     retrieverVariable,
     scorerVariable,
+    rerankerVariable,
   }
 }

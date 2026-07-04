@@ -67,6 +67,7 @@ export type SemanticDefinitionKind = Extract<
   | 'workspace'
   | 'rag.knowledgeBase'
   | 'rag.recipe'
+  | 'rag.reranker'
   | 'rag.retriever'
   | 'storage.recordStore'
   | 'storage.vectorStore'

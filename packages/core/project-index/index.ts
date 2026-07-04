@@ -428,6 +428,7 @@ export type ProjectDefinitionKind =
   | "rag.recipe.step"
   | "rag.pipeline"
   | "rag.pipeline.stage"
+  | "rag.reranker"
   | "rag.retriever"
   | "registry"
   | "skill"
@@ -655,10 +656,12 @@ export interface RagFacts {
     | "rag.recipe.step"
     | "rag.pipeline"
     | "rag.pipeline.stage"
+    | "rag.reranker"
     | "rag.retriever";
   knowledgeBaseId?: string;
   recipeId?: string;
   stepId?: string;
+  rerankerId?: string;
   retrieverId?: string;
   stageId?: string;
   stageKind?: string;
@@ -1233,6 +1236,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "rag.recipe.step",
   "rag.pipeline",
   "rag.pipeline.stage",
+  "rag.reranker",
   "rag.retriever",
   "registry",
   "skill",

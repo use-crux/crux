@@ -29,6 +29,7 @@ const CRUX_SIGNAL_PATTERNS = [
   /\bfanout\s*\(/,
   /\bretrieve\s*\(/,
   /\brerank\s*\(/,
+  /\breranker\s*\(/,
   /\bexpandParents\s*\(/,
   /\bcompressToBudget\s*\(/,
   /\bworkspace\s*\(/,

@@ -48,6 +48,7 @@ pub(crate) fn core_lint_findings(
                 covered: &covered,
                 guardrail_targets: &guardrail_targets,
                 consensus_policies: &consensus_policies,
+                by_id,
                 outgoing: outgoing
                     .get(definition.id.as_str())
                     .map(Vec::as_slice)
@@ -66,6 +67,7 @@ struct DefinitionRuleContext<'a> {
     covered: &'a BTreeSet<String>,
     guardrail_targets: &'a BTreeSet<String>,
     consensus_policies: &'a BTreeSet<String>,
+    by_id: &'a BTreeMap<&'a str, &'a StaticIndexDefinition>,
     outgoing: &'a [&'a StaticIndexRelation],
     cascade_tiers: &'a BTreeMap<String, Vec<&'a StaticIndexDefinition>>,
 }
@@ -253,6 +255,7 @@ fn append_definition_findings(
         DefinitionTailContext {
             guardrail_targets: context.guardrail_targets,
             consensus_policies: context.consensus_policies,
+            by_id: context.by_id,
             outgoing: context.outgoing,
             cascade_tiers: context.cascade_tiers,
         },
