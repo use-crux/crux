@@ -1,9 +1,9 @@
 ---
-"@use-crux/core": minor
-"@use-crux/convex": minor
-"@use-crux/indexer": minor
-"@use-crux/postgres": minor
-"@use-crux/upstash": minor
+'@use-crux/core': minor
+'@use-crux/convex': minor
+'@use-crux/indexer': minor
+'@use-crux/postgres': minor
+'@use-crux/upstash': minor
 ---
 
 Add the `@use-crux/core/runtime` subpath with Runtime Engine port contracts, typed runtime diagnostics, wake envelope validation, retry helpers, the pure work state-machine surface, kernel composite operations, outbox dispatch, the in-memory runtime store, and the `@use-crux/core/runtime/testing` conformance suites for adapter authors.
@@ -47,3 +47,7 @@ Complete native Project Index parity for runtime task targets and missing-runtim
 Fix npm release staging so exported package subpaths, including `@use-crux/core/runtime`, are typechecked through their declared public entry files.
 
 Make the public Runtime Engine barrels isolate-safe for Convex and edge-style bundlers by moving custom wake HMAC signing/verification to WebCrypto, run the Convex runtime store through the shared adapter conformance suite with declared substrate-atomic exclusions, and keep caller-provided Convex event IDs from colliding with internal event cursors.
+
+Improve Convex runtime generation DX: `crux dev` now refreshes runtime artifacts on startup and watched source changes, generated writes are idempotent, Convex no longer emits a top-level `convex/crux.ts` shim, generated target imports run behind a Node action boundary via `@use-crux/convex/runtime/node`, and Convex-native `flow()` handles can execute as generated Runtime Engine targets.
+
+Fix Convex direct flow starts under `createCruxConvex().run()`: core runtime-backed flow APIs now resolve host-bound declarations through an active request-scoped host binding, and the Convex profile bridge installs that binding before user code starts runtime-backed work.

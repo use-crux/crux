@@ -2,13 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import {
-  transition,
-  type FlowId,
-  type RuntimeTargetId,
-  type TaskId,
-  type WorkId,
-} from '@use-crux/core/runtime'
+import { transition, type FlowId, type RuntimeTargetId, type TaskId, type WorkId } from '@use-crux/core/runtime'
 import { flow } from '@use-crux/core/flow'
 import { postgres, type PostgresRuntimeStore } from '@use-crux/postgres/runtime'
 import { runRuntimeOperation } from '../indexer/runtime-ops'
@@ -53,12 +47,18 @@ describe('runtime operations', () => {
     schemas.push(schema)
     const root = await runtimeOpsFixtureRoot({ schema })
 
-    await expect(runRuntimeOperation({ root, operation: 'setup-check' }))
-      .resolves.toMatchObject({ operation: 'setup-check', ok: false })
-    await expect(runRuntimeOperation({ root, operation: 'setup-apply' }))
-      .resolves.toMatchObject({ operation: 'setup-apply', ok: true })
-    await expect(runRuntimeOperation({ root, operation: 'setup-check' }))
-      .resolves.toMatchObject({ operation: 'setup-check', ok: true })
+    await expect(runRuntimeOperation({ root, operation: 'setup-check' })).resolves.toMatchObject({
+      operation: 'setup-check',
+      ok: false,
+    })
+    await expect(runRuntimeOperation({ root, operation: 'setup-apply' })).resolves.toMatchObject({
+      operation: 'setup-apply',
+      ok: true,
+    })
+    await expect(runRuntimeOperation({ root, operation: 'setup-check' })).resolves.toMatchObject({
+      operation: 'setup-check',
+      ok: true,
+    })
 
     const seedStore = postgres({
       url: database.url,
@@ -134,11 +134,13 @@ describe('runtime operations', () => {
       ]),
     })
 
-    await expect(runRuntimeOperation({
-      root,
-      operation: 'inspect',
-      workId: 'work_runtime_ops_replay',
-    })).resolves.toMatchObject({
+    await expect(
+      runRuntimeOperation({
+        root,
+        operation: 'inspect',
+        workId: 'work_runtime_ops_replay',
+      }),
+    ).resolves.toMatchObject({
       operation: 'inspect',
       ok: true,
       work: {
@@ -169,11 +171,13 @@ describe('runtime operations', () => {
       dispatch: { delivered: 1, failed: 0 },
     })
 
-    await expect(runRuntimeOperation({
-      root,
-      operation: 'inspect',
-      workId: 'work_runtime_ops_replay',
-    })).resolves.toMatchObject({
+    await expect(
+      runRuntimeOperation({
+        root,
+        operation: 'inspect',
+        workId: 'work_runtime_ops_replay',
+      }),
+    ).resolves.toMatchObject({
       operation: 'inspect',
       ok: true,
       work: {
@@ -183,11 +187,13 @@ describe('runtime operations', () => {
       },
     })
 
-    await expect(runRuntimeOperation({
-      root,
-      operation: 'cancel',
-      workId: 'work_runtime_ops_cancel',
-    })).resolves.toMatchObject({
+    await expect(
+      runRuntimeOperation({
+        root,
+        operation: 'cancel',
+        workId: 'work_runtime_ops_cancel',
+      }),
+    ).resolves.toMatchObject({
       operation: 'cancel',
       ok: true,
       cancelled: true,
@@ -199,8 +205,10 @@ describe('runtime operations', () => {
     schemas.push(schema)
     const root = await runtimeOpsFixtureRoot({ schema })
 
-    await expect(runRuntimeOperation({ root, operation: 'setup-apply' }))
-      .resolves.toMatchObject({ operation: 'setup-apply', ok: true })
+    await expect(runRuntimeOperation({ root, operation: 'setup-apply' })).resolves.toMatchObject({
+      operation: 'setup-apply',
+      ok: true,
+    })
 
     const seedStore = postgres({
       url: database.url,
@@ -256,7 +264,7 @@ async function runtimeOpsFixtureRoot(options: { readonly schema: string }): Prom
       "import { postgres } from '@use-crux/postgres/runtime'",
       "import { Pool } from 'pg'",
       '',
-      "const globalPools = globalThis as typeof globalThis & { __cruxRuntimeOpsPools?: Pool[] }",
+      'const globalPools = globalThis as typeof globalThis & { __cruxRuntimeOpsPools?: Pool[] }',
       'globalPools.__cruxRuntimeOpsPools ??= []',
       `const pool = new Pool({ connectionString: ${JSON.stringify(database.url)}, allowExitOnIdle: true })`,
       'globalPools.__cruxRuntimeOpsPools.push(pool)',
@@ -279,17 +287,21 @@ async function runtimeOpsFixtureRoot(options: { readonly schema: string }): Prom
   )
   await writeFile(
     join(root, '.crux/generated/runtime/manifest.json'),
-    `${JSON.stringify({
-      version: 1,
-      targets: [
-        {
-          name: 'runtime-ops-review',
-          kind: 'flow',
-          module: './src/runtime-targets.ts',
-          export: 'reviewFlow',
-        },
-      ],
-    }, null, 2)}\n`,
+    `${JSON.stringify(
+      {
+        version: 1,
+        targets: [
+          {
+            name: 'runtime-ops-review',
+            kind: 'flow',
+            module: './src/runtime-targets.ts',
+            export: 'reviewFlow',
+          },
+        ],
+      },
+      null,
+      2,
+    )}\n`,
   )
   return root
 }
@@ -346,9 +358,10 @@ async function seedCancellableWork(store: PostgresRuntimeStore): Promise<void> {
 }
 
 async function seedTimerAndOutbox(store: PostgresRuntimeStore): Promise<void> {
+  const pendingAt = new Date('2999-07-04T00:00:00.000Z')
   await store.timers.put({
     namespace: 'local',
-    fireAt: new Date('2026-07-04T00:00:00.000Z'),
+    fireAt: pendingAt,
     work: {
       kind: 'task.run',
       taskId: 'task_runtime_ops_timer' as TaskId,
@@ -366,6 +379,6 @@ async function seedTimerAndOutbox(store: PostgresRuntimeStore): Promise<void> {
       idempotencyKey: 'task:work_runtime_ops_cancel',
       attempt: 1,
     },
-    { deliverAt: new Date('2026-07-04T00:00:00.000Z') },
+    { deliverAt: pendingAt },
   )
 }

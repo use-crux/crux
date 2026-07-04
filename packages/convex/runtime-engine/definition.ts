@@ -5,8 +5,7 @@ import {
 } from '@use-crux/core/runtime'
 
 /** Default generated Convex runtime entry point for host-bound execution. */
-export const CONVEX_RUNTIME_ENTRY =
-  'createConvexRuntimeHandlers({ targets }) in convex/crux.ts'
+export const CONVEX_RUNTIME_ENTRY = 'createConvexRuntimeHandlers({ targetExecutor }) in convex/_crux/generated.ts'
 
 /** Options accepted by {@link convex}. */
 export interface ConvexRuntimeEngineOptions {
@@ -20,8 +19,7 @@ export interface ConvexRuntimeEngineOptions {
 }
 
 /** Host-bound Runtime Engine declaration for Convex. */
-export type ConvexRuntimeEngineDefinition =
-  HostBoundRuntimeEngineDefinition<ConvexRuntimeEngineOptions>
+export type ConvexRuntimeEngineDefinition = HostBoundRuntimeEngineDefinition<ConvexRuntimeEngineOptions>
 
 /**
  * Declare Convex as the Runtime Engine host.
@@ -29,12 +27,10 @@ export type ConvexRuntimeEngineDefinition =
  * The returned value is intentionally inert in ordinary Node/serverless
  * processes. Generated or hand-written Convex functions bind request-scoped
  * `ctx`, component refs, and `ctx.scheduler` through
- * `createConvexRuntimeHandlers({ targets })`, then core composes the kernel via
- * `bindHostRuntime()`.
+ * `createConvexRuntimeHandlers({ targetExecutor })`, then core composes the
+ * kernel via `bindHostRuntime()`.
  */
-export function convex(
-  options: ConvexRuntimeEngineOptions = {},
-): ConvexRuntimeEngineDefinition {
+export function convex(options: ConvexRuntimeEngineOptions = {}): ConvexRuntimeEngineDefinition {
   return Object.freeze({
     kind: 'host-bound' as const,
     id: 'convex',

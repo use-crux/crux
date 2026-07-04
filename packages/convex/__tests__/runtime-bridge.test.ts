@@ -1,7 +1,9 @@
-import { config } from '@use-crux/core'
-import { describe, expect, it, vi } from 'vitest'
+import { config, resetRuntime } from '@use-crux/core'
+import { createRuntimeWithHostContext } from '@use-crux/core/runtime'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { convexRuntimeRecords, createConvexRuntimeBridge, getConvexCruxRuntime, type ConvexCtxPort } from '../index'
 import { inMemoryRecordStore, memory, memoryBlock } from '../memory'
+import { convex } from '../runtime'
 
 interface TenantCtx extends ConvexCtxPort {
   tenantId: string
@@ -24,6 +26,10 @@ class FakeHttpRouter {
 type TestHttpAction = {
   _handler: (ctx: unknown, request: Request) => Promise<Response>
 }
+
+afterEach(() => {
+  resetRuntime()
+})
 
 describe('Convex runtime bridge', () => {
   it('binds one ctx-scoped storage bundle and namespace for a run', async () => {
@@ -76,6 +82,47 @@ describe('Convex runtime bridge', () => {
       activeTarget: { threadId: 'thread-1', attempt: 2 },
     })
     expect(createStore).toHaveBeenCalledTimes(1)
+  })
+
+  it('binds configured Convex Runtime Engine declarations during a run', async () => {
+    const records = inMemoryRecordStore()
+    const runtimeDefinition = convex()
+    config({ runtime: runtimeDefinition })
+    const ctx = {
+      tenantId: 'tenant-1',
+      runQuery: vi.fn(),
+      runMutation: vi.fn(),
+      scheduler: {
+        runAfter: vi.fn(async () => undefined),
+      },
+    } satisfies TenantCtx & {
+      scheduler: {
+        runAfter(delayMs: number, ref: unknown, args: Record<string, unknown>): Promise<unknown>
+      }
+    }
+    const bridge = createConvexRuntimeBridge<TenantCtx>({
+      component: { marker: 'crux' } as never,
+      storage: {
+        create: () => records,
+      },
+    })
+
+    expect(() =>
+      createRuntimeWithHostContext({
+        runtime: runtimeDefinition,
+        startMaintenance: false,
+      }),
+    ).toThrowError(/RUNTIME_HOST_ONLY/)
+
+    const runtime = await bridge.run(ctx, undefined, () =>
+      createRuntimeWithHostContext({
+        runtime: runtimeDefinition,
+        startMaintenance: false,
+      }),
+    )
+
+    expect(runtime.id).toBe('convex')
+    runtime.dispose()
   })
 
   it('executes bridge commands through the runtime bridge store path', async () => {

@@ -22,6 +22,10 @@ Run the operation inside the host boundary, such as a generated Convex entry:
 ```ts
 createConvexRuntimeHandlers({
   component: components.crux,
-  targets: [reviewFlow, embedDocument],
+  targetExecutor,
 })
 ```
+
+For app code that starts runtime-backed work directly from a Convex action, run
+that call inside `createCruxConvex(...).run(ctx, target, fn)` so Crux can bind the
+current `ctx`, component, and scheduler before the flow starts.

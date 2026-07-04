@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -9,7 +11,9 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/projectwatch"
@@ -19,19 +23,20 @@ import (
 
 // DevServer wraps the Go HTTP server for the "crux dev" command.
 type DevServer struct {
-	ctx             context.Context
-	cancel          context.CancelFunc
-	Store           *store.Store
-	Quality         *quality.Service
-	Devtools        *devtools.Service
-	Observability   *observability.Service
-	Port            int
-	TunnelURL       string
-	IngestToken     string
-	IngestTokenPath string
-	tunnel          bool
-	handler         http.Handler
-	httpServer      *http.Server
+	ctx                   context.Context
+	cancel                context.CancelFunc
+	Store                 *store.Store
+	Quality               *quality.Service
+	Devtools              *devtools.Service
+	Observability         *observability.Service
+	Port                  int
+	TunnelURL             string
+	IngestToken           string
+	IngestTokenPath       string
+	tunnel                bool
+	handler               http.Handler
+	httpServer            *http.Server
+	closeRuntimeArtifacts func() error
 	// token gates the server whenever it is reachable beyond loopback (tunnel
 	// or CRUX_HOST). Empty on a plain loopback server, where no auth is needed.
 	token string
@@ -49,9 +54,15 @@ type DevServerOptions struct {
 	QualityDir           string
 	ObservabilityDBPath  string
 	IngestTokenPath      string
+	RuntimeArtifacts     RuntimeArtifactGenerator
 	// Quiet suppresses slog output (for TUI mode where stdout/stderr is owned by Bubbletea).
 	Quiet bool
 }
+
+// RuntimeArtifactGenerator refreshes Runtime Engine generated files for root.
+type RuntimeArtifactGenerator func(ctx context.Context, root string) error
+
+const runtimeArtifactGenerationTimeout = 120 * time.Second
 
 // NewDevServer creates a devtools server that listens on the given port.
 func NewDevServer(opts DevServerOptions) *DevServer {
@@ -76,6 +87,11 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	if serverOpts.ObservabilityDBPath == "" {
 		serverOpts.ObservabilityDBPath = ".crux/observability.sqlite"
 	}
+	runtimeArtifacts := opts.RuntimeArtifacts
+	var closeRuntimeArtifacts func() error
+	if runtimeArtifacts == nil {
+		runtimeArtifacts, closeRuntimeArtifacts = newRuntimeArtifactGeneratorForDev(opts.ProjectIndexerScript)
+	}
 	qualitySvc := quality.NewService(s, quality.Dir(serverOpts.QualityDir))
 	devtoolsSvc := devtools.NewService(s, qualitySvc)
 	observabilitySvc, err := observability.OpenService(ctx, serverOpts.ObservabilityDBPath)
@@ -90,13 +106,16 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 			slog.Warn("project index startup reindex skipped", "error", err)
 			return
 		}
+		if err := runtimeArtifacts(ctx, cwd); err != nil {
+			slog.Warn("runtime artifact startup generation failed", "error", err)
+		}
 		if _, err := devtoolsSvc.ReindexProjectWithOptions(ctx, cwd, "", "", devtools.ProjectReindexOptions{
 			Semantic: devtools.ProjectSemanticBackground,
 		}); err != nil {
 			slog.Warn("project index startup reindex failed", "error", err)
 			return
 		}
-		startProjectIndexWatcher(ctx, cwd, devtoolsSvc)
+		startProjectIndexWatcher(ctx, cwd, devtoolsSvc, runtimeArtifacts)
 	}()
 
 	// Mint a session token and gate the primary listener only when it is
@@ -138,6 +157,7 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 			Addr:    fmt.Sprintf("%s:%d", host, opts.Port),
 			Handler: mainHandler,
 		},
+		closeRuntimeArtifacts: closeRuntimeArtifacts,
 	}
 }
 
@@ -165,7 +185,7 @@ func hostIsLoopback(host string) bool {
 	return false
 }
 
-func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *devtools.Service) {
+func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *devtools.Service, runtimeArtifacts RuntimeArtifactGenerator) {
 	runner := projectwatch.NewRunner(func(runCtx context.Context, run projectwatch.Run) {
 		if _, err := devtoolsSvc.ReindexProjectIncrementalWithOptions(runCtx, root, "", "", run.Delta.Files, run.Delta.DeletedFiles, devtools.ProjectReindexOptions{
 			Semantic: devtools.ProjectSemanticBackground,
@@ -184,6 +204,17 @@ func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *dev
 				"deletedFiles", len(run.Delta.DeletedFiles),
 			)
 		}
+		if runtimeArtifacts != nil {
+			if err := runtimeArtifacts(runCtx, root); err != nil {
+				slog.Warn(
+					"runtime artifact watch generation failed",
+					"error", err,
+					"watchRunId", run.ID,
+					"files", len(run.Delta.Files),
+					"deletedFiles", len(run.Delta.DeletedFiles),
+				)
+			}
+		}
 	})
 	watcher, err := projectwatch.New(projectwatch.Options{
 		Root: root,
@@ -201,6 +232,31 @@ func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *dev
 			slog.Warn("project index watcher stopped", "error", err)
 		}
 	}()
+}
+
+type runtimeArtifactWorker interface {
+	GenerateRuntimeArtifacts(ctx context.Context, root string) (json.RawMessage, error)
+}
+
+func newRuntimeArtifactGeneratorForDev(projectIndexerScript string) (RuntimeArtifactGenerator, func() error) {
+	worker := assets.NewEmbeddedProjectIndexer(projectIndexerScript)
+	return runtimeArtifactGeneratorForWorker(worker), worker.Close
+}
+
+func runtimeArtifactGeneratorForWorker(worker runtimeArtifactWorker) RuntimeArtifactGenerator {
+	return func(ctx context.Context, root string) error {
+		return generateRuntimeArtifactsWithWorker(ctx, root, worker)
+	}
+}
+
+func generateRuntimeArtifactsWithWorker(ctx context.Context, root string, worker runtimeArtifactWorker) error {
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, runtimeArtifactGenerationTimeout)
+		defer cancel()
+	}
+	_, err := worker.GenerateRuntimeArtifacts(ctx, root)
+	return err
 }
 
 // Start begins listening. Returns immediately. Use Shutdown to stop.
@@ -268,7 +324,16 @@ func (d *DevServer) Shutdown(ctx context.Context) error {
 	if d.Observability != nil {
 		_ = d.Observability.Close()
 	}
-	return d.httpServer.Shutdown(ctx)
+	var shutdownErrs []error
+	if d.closeRuntimeArtifacts != nil {
+		if err := d.closeRuntimeArtifacts(); err != nil {
+			shutdownErrs = append(shutdownErrs, err)
+		}
+	}
+	if err := d.httpServer.Shutdown(ctx); err != nil {
+		shutdownErrs = append(shutdownErrs, err)
+	}
+	return errors.Join(shutdownErrs...)
 }
 
 // URL returns the server's local URL.

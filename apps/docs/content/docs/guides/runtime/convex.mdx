@@ -20,22 +20,41 @@ export default config({
 
 ## Runtime handlers
 
-Generated `convex/crux.ts` files wire component refs and targets:
+Generated Convex runtime files wire component refs without importing target modules into isolate handlers:
 
-```ts
+```ts title="convex/_crux/generated.ts"
+import { makeFunctionReference } from 'convex/server'
 import { createConvexRuntimeHandlers } from '@use-crux/convex/runtime'
-import { components } from './_generated/api'
-import { reviewFlow } from '../src/review'
-import { embedDocument } from '../src/embed'
+import { components } from '../_generated/api'
 
-export const { handleWake, deliverSignal, resumeFlow, runTask, fireTimer } =
-  createConvexRuntimeHandlers({
-    component: components.crux,
-    targets: [reviewFlow, embedDocument],
-  })
+const targetExecutor = makeFunctionReference<'action', { envelope: unknown }, unknown>('_crux/targets:executeTarget')
+
+export const { handleWake, deliverSignal, resumeFlow, runTask, fireTimer } = createConvexRuntimeHandlers({
+  component: components.crux,
+  targetExecutor,
+})
+```
+
+```ts title="convex/_crux/targets.ts"
+'use node'
+
+import { createConvexRuntimeTargetExecutor } from '@use-crux/convex/runtime/node'
+import { components } from '../_generated/api'
+import { reviewFlow } from '../../src/review'
+import { embedDocument } from '../../src/embed'
+
+export const { executeTarget } = createConvexRuntimeTargetExecutor({
+  component: components.crux,
+  targets: [reviewFlow, embedDocument],
+})
 ```
 
 Convex scheduler calls these handlers for wake, signal, resume, task, and timer delivery. App-facing APIs stay in your own Convex functions.
+
+When app code starts runtime-backed work directly from a Convex action, wrap the
+call in `createCruxConvex(...).run(ctx, target, fn)` or the equivalent
+`createConvexRuntimeBridge(...).run(...)` helper. The bridge binds the current
+Convex `ctx`, component refs, and scheduler before core starts the durable flow.
 
 ## Rules
 
