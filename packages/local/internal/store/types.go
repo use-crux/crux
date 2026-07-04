@@ -184,6 +184,8 @@ type WorkspaceEventData struct {
 	Operation      string  `json:"operation"`
 	Path           string  `json:"path"`
 	PathHash       string  `json:"pathHash,omitempty"`
+	FromPath       string  `json:"fromPath,omitempty"`
+	FromPathHash   string  `json:"fromPathHash,omitempty"`
 	Status         string  `json:"status"`
 	DurationMs     float64 `json:"durationMs"`
 	Mount          string  `json:"mount,omitempty"`

@@ -16,6 +16,7 @@ import { normalizePath } from "./path";
 import { purgeVersions } from "./version-store";
 import { instrument } from "./observability";
 import { assertLocalTransactionMutationPath } from "./transaction-mounts";
+import { suppressWorkspaceChangeEvents } from "./watch";
 import {
   captureRollbackState,
   currentRecord,
@@ -115,10 +116,11 @@ function transactionScope(
   touched: Set<string>,
 ): WorkspaceTransaction {
   const ops = config.ops;
-  const scoped = (options?: WorkspaceNamespaceOption) => ({
-    ...options,
-    namespace,
-  });
+  const scoped = (options?: WorkspaceNamespaceOption) =>
+    suppressWorkspaceChangeEvents({
+      ...options,
+      namespace,
+    });
   const touch = (path: string): void => {
     assertLocalTransactionMutationPath(config.mounts, path);
     touched.add(normalizePath(path));
@@ -178,7 +180,7 @@ async function seedNamespace(
       toNamespace,
       record.path,
       await snapshotContent(record, config.blobs),
-      writeOptionsFromRecord(record),
+      suppressWorkspaceChangeEvents(writeOptionsFromRecord(record)),
       record.producedBy,
     );
   }

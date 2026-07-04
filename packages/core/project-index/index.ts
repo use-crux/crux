@@ -221,6 +221,7 @@ export interface DataAccessFact {
     | "exists"
     | "stat"
     | "grep"
+    | "watch"
     | "artifacts"
     | "rename"
     | "move"
@@ -1481,6 +1482,7 @@ export const DataAccessFactSchema = z.object({
       "exists",
       "stat",
       "grep",
+      "watch",
       "artifacts",
       "rename",
       "move",

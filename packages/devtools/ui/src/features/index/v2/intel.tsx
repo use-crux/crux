@@ -853,6 +853,7 @@ export function IndexData({ def }: { def: ViewDef }) {
     update: 'warn',
     append: 'iris',
     query: 'crux',
+    watch: 'ok',
     delete: 'danger',
     transaction: 'danger',
   }

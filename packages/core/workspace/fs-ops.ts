@@ -39,6 +39,10 @@ import {
   withWorkspaceWriteLock,
   workspaceSetOptions,
 } from "./limits";
+import {
+  shouldSuppressWorkspaceChangeEvents,
+  type WorkspaceChangeEmitter,
+} from "./watch";
 import type {
   NormalizedMount,
   WorkspaceAppendOptions,
@@ -69,6 +73,7 @@ export interface WorkspaceFilesystemOpsConfig {
   readonly retention?: WorkspaceRetention;
   readonly versioning?: WorkspaceVersioning;
   readonly resolveNamespace: () => Promise<string>;
+  readonly emitChange?: WorkspaceChangeEmitter;
 }
 
 /** Public filesystem-style operations mixed into a {@link Workspace}. */
@@ -195,12 +200,22 @@ export function createWorkspaceFilesystemOps(
                   `workspace.append(): source-backed file "${path}" was truncated and cannot be appended.`,
                 );
               }
-              return writeWorkspaceMountSource(
+              const file = await writeWorkspaceMountSource(
                 mount,
                 normalized,
                 `${current?.content ?? ""}${content}`,
                 mountAppendOptions(current, options),
               );
+              if (!shouldSuppressWorkspaceChangeEvents(options)) {
+                await config.emitChange?.({
+                  type: current ? "update" : "create",
+                  workspaceId: config.workspaceId,
+                  namespace,
+                  path: normalized,
+                  at: file.updatedAt,
+                });
+              }
+              return file;
             }
             assertWorkspaceMountIsLocal(mount, "append");
             const existing = await getRecord(
@@ -262,6 +277,15 @@ export function createWorkspaceFilesystemOps(
               versioning: config.versioning,
               setOptions,
             });
+            if (!shouldSuppressWorkspaceChangeEvents(options)) {
+              await config.emitChange?.({
+                type: existing ? "update" : "create",
+                workspaceId: config.workspaceId,
+                namespace,
+                path: normalized,
+                at: record.updatedAt,
+              });
+            }
             return recordToFile(record);
           },
         );
@@ -370,6 +394,16 @@ export function createWorkspaceFilesystemOps(
               fromPath,
               { currentBlobUri: source.uri },
             );
+            if (!shouldSuppressWorkspaceChangeEvents(options)) {
+              await config.emitChange?.({
+                type: "rename",
+                workspaceId: config.workspaceId,
+                namespace,
+                from: fromPath,
+                path: toPath,
+                at: moved.updatedAt,
+              });
+            }
             return recordToFile(moved);
           },
         );
@@ -446,7 +480,7 @@ export function createWorkspaceFilesystemOps(
                 sourceInput.kind === "read"
                   ? sourceInput.result.artifactKind
                   : sourceInput.record.kind;
-              return writeWorkspaceMountSource(
+              const copied = await writeWorkspaceMountSource(
                 destinationMount,
                 toPath,
                 sourceContent,
@@ -460,6 +494,16 @@ export function createWorkspaceFilesystemOps(
                   operation: "copy",
                 },
               );
+              if (!shouldSuppressWorkspaceChangeEvents(options)) {
+                await config.emitChange?.({
+                  type: destinationExists ? "update" : "create",
+                  workspaceId: config.workspaceId,
+                  namespace,
+                  path: toPath,
+                  at: copied.updatedAt,
+                });
+              }
+              return copied;
             }
             const destination = await getRecord(
               config.store,
@@ -510,6 +554,15 @@ export function createWorkspaceFilesystemOps(
               copied,
               destination,
             );
+            if (!shouldSuppressWorkspaceChangeEvents(options)) {
+              await config.emitChange?.({
+                type: destination ? "update" : "create",
+                workspaceId: config.workspaceId,
+                namespace,
+                path: toPath,
+                at: copied.updatedAt,
+              });
+            }
             return recordToFile(copied);
           },
         );

@@ -26,7 +26,10 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 		}
 		attrs := rawMap(item.Attributes)
 		artifactAttrs := firstWorkspaceArtifactAttributes(item.Artifacts)
+		artifactPreview := firstWorkspaceArtifactPreview(item.Artifacts)
 		pathHash := stringValue(attrs, "pathHash", stringValue(artifactAttrs, "pathHash", ""))
+		sourcePath := workspaceActivitySourcePathLabel(attrs, pathHash)
+		operation := stringValue(attrs, "operation", operationFromActivity(item))
 		status := "success"
 		if item.Status == "error" || len(item.Error) > 0 && string(item.Error) != "null" {
 			status = "error"
@@ -36,8 +39,8 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 			Timestamp:      parseUnixMillis(item.StartedAt),
 			WorkspaceID:    stringValue(attrs, "workspaceId", item.ResourceID),
 			Namespace:      stringValue(attrs, "namespaceHash", stringValue(attrs, "namespace", "")),
-			Operation:      stringValue(attrs, "operation", operationFromActivity(item)),
-			Path:           workspaceActivityPathLabel(attrs, pathHash),
+			Operation:      operation,
+			Path:           workspaceActivityPathLabel(attrs, artifactPreview, pathHash),
 			PathHash:       pathHash,
 			Status:         status,
 			DurationMs:     item.DurationMs,
@@ -46,6 +49,13 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 			ArtifactStatus: stringValue(attrs, "artifactStatus", stringValue(artifactAttrs, "artifactStatus", "")),
 			ArtifactKind:   stringValue(attrs, "artifactKind", stringValue(artifactAttrs, "artifactKind", "")),
 			URI:            stringValue(attrs, "uri", stringValue(artifactAttrs, "uri", firstWorkspaceArtifactURI(item.Artifacts))),
+		}
+		if operation == "rename" || operation == "move" {
+			if destination := stringValue(artifactPreview, "path", ""); destination != "" && destination != sourcePath {
+				event.FromPath = sourcePath
+				event.FromPathHash = pathHash
+				event.Path = destination
+			}
 		}
 		if size, ok := optionalIntValue(attrs, "size"); ok {
 			event.Size = &size
@@ -66,12 +76,25 @@ func workspaceEventsFromActivity(activity []observability.ResourceActivity) []st
 	return out
 }
 
-func workspaceActivityPathLabel(attrs map[string]any, pathHash string) string {
+func workspaceActivityPathLabel(attrs map[string]any, preview map[string]any, pathHash string) string {
+	if path := stringValue(attrs, "path", ""); path != "" {
+		return path
+	}
+	if path := stringValue(preview, "path", ""); path != "" {
+		return path
+	}
 	if pathHash != "" {
 		return "hash:" + pathHash
 	}
+	return "/"
+}
+
+func workspaceActivitySourcePathLabel(attrs map[string]any, pathHash string) string {
 	if path := stringValue(attrs, "path", ""); path != "" {
 		return path
+	}
+	if pathHash != "" {
+		return "hash:" + pathHash
 	}
 	return "/"
 }
@@ -81,6 +104,16 @@ func firstWorkspaceArtifactAttributes(artifacts []observability.ResourceArtifact
 		attrs := rawMap(artifact.Attributes)
 		if len(attrs) > 0 {
 			return attrs
+		}
+	}
+	return map[string]any{}
+}
+
+func firstWorkspaceArtifactPreview(artifacts []observability.ResourceArtifact) map[string]any {
+	for _, artifact := range artifacts {
+		preview := rawMap(artifact.Preview)
+		if len(preview) > 0 {
+			return preview
 		}
 	}
 	return map[string]any{}
@@ -136,7 +169,7 @@ func workspaceVersionEventsFromActivity(activity []observability.ResourceActivit
 		pathHash := stringValue(attrs, "pathHash", "")
 		out = append(out, workspaceVersionEvent{
 			WorkspaceID: stringValue(attrs, "workspaceId", item.ResourceID),
-			Path:        workspaceActivityPathLabel(attrs, pathHash),
+			Path:        workspaceActivityPathLabel(attrs, firstWorkspaceArtifactPreview(item.Artifacts), pathHash),
 			PathHash:    pathHash,
 			Version:     version,
 			Operation:   stringValue(attrs, "operation", ""),

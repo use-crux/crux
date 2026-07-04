@@ -556,6 +556,90 @@ func TestWorkspaceDetailUsesPathHashAndArtifactMetadataFromObservedActivity(t *t
 	}
 }
 
+func TestWorkspaceDetailRemovesDeletedFilesFromTree(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewStore()
+	size := 42
+	st.WorkspaceOperation(store.WorkspaceOperationEvent{
+		WorkspaceID: "drafts",
+		Namespace:   "thread:1",
+		Operation:   "write",
+		Path:        "/outputs/report.md",
+		Status:      "success",
+		Timestamp:   1,
+		MimeType:    "text/markdown",
+		Size:        &size,
+	})
+	st.WorkspaceOperation(store.WorkspaceOperationEvent{
+		WorkspaceID: "drafts",
+		Namespace:   "thread:1",
+		Operation:   "delete",
+		Path:        "/outputs/report.md",
+		Status:      "success",
+		Timestamp:   2,
+	})
+
+	service := NewService(st, quality.NewService(st, t.TempDir()))
+	value, found, err := service.WorkspaceDetail(ctx, "drafts")
+	if err != nil || !found {
+		t.Fatalf("workspace detail found=%v err=%v", found, err)
+	}
+	detail := value.(workspaceDetail)
+	if len(detail.Files) != 0 {
+		t.Fatalf("files = %#v, want deleted file removed", detail.Files)
+	}
+	for _, mount := range detail.Mounts {
+		if mount.FileCount != 0 {
+			t.Fatalf("mounts = %#v, want deleted file removed from mount counts", detail.Mounts)
+		}
+	}
+	if len(detail.RecentOps) != 2 {
+		t.Fatalf("recent ops = %#v, want write and delete retained", detail.RecentOps)
+	}
+}
+
+func TestWorkspaceDetailMovesRenamedFilesFromObservedActivity(t *testing.T) {
+	ctx := context.Background()
+	st := store.NewStore()
+	db, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	obs, err := observability.NewService(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var batch observability.Batch
+	if err := json.Unmarshal([]byte(`{
+		"records": [
+			{"schemaVersion":1,"recordId":"rec_write","type":"span","runId":"run_ws","traceId":"trace_ws","spanId":"span_write","family":"workspace","primitive":"workspace.operation","name":"workspace.write","startedAt":"2026-06-30T10:00:00.000Z","endedAt":"2026-06-30T10:00:00.012Z","durationMs":12,"status":"ok","attributes":{"workspaceId":"drafts","operation":"write","pathHash":"fnv1a:old111","namespaceHash":"ns1","mimeType":"text/markdown","size":42}},
+			{"schemaVersion":1,"recordId":"artifact_write","type":"artifact","runId":"run_ws","traceId":"trace_ws","artifactId":"artifact_write","spanId":"span_write","kind":"output","createdAt":"2026-06-30T10:00:00.012Z","contentType":"application/json","encoding":"json","sizeBytes":42,"preview":{"resultKind":"file","path":"/workspace/old.md","mimeType":"text/markdown","size":42,"storage":"inline"},"attributes":{"workspaceId":"drafts","operation":"write","pathHash":"fnv1a:old111","mimeType":"text/markdown","size":42}},
+			{"schemaVersion":1,"recordId":"rec_rename","type":"span","runId":"run_ws","traceId":"trace_ws","spanId":"span_rename","family":"workspace","primitive":"workspace.operation","name":"workspace.rename","startedAt":"2026-06-30T10:00:01.000Z","endedAt":"2026-06-30T10:00:01.009Z","durationMs":9,"status":"ok","attributes":{"workspaceId":"drafts","operation":"rename","pathHash":"fnv1a:old111","namespaceHash":"ns1","mimeType":"text/markdown","size":42}},
+			{"schemaVersion":1,"recordId":"artifact_rename","type":"artifact","runId":"run_ws","traceId":"trace_ws","artifactId":"artifact_rename","spanId":"span_rename","kind":"output","createdAt":"2026-06-30T10:00:01.009Z","contentType":"application/json","encoding":"json","sizeBytes":42,"preview":{"resultKind":"file","path":"/workspace/new.md","mimeType":"text/markdown","size":42,"storage":"inline"},"attributes":{"workspaceId":"drafts","operation":"rename","pathHash":"fnv1a:old111","mimeType":"text/markdown","size":42}}
+		]
+	}`), &batch); err != nil {
+		t.Fatal(err)
+	}
+	if err := obs.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	service := NewService(st, quality.NewService(st, t.TempDir())).WithObservability(obs)
+	value, found, err := service.WorkspaceDetail(ctx, "drafts")
+	if err != nil || !found {
+		t.Fatalf("workspace detail found=%v err=%v", found, err)
+	}
+	detail := value.(workspaceDetail)
+	if len(detail.Files) != 1 {
+		t.Fatalf("files = %#v, want one renamed file", detail.Files)
+	}
+	file := detail.Files[0]
+	if file.Path != "/workspace/new.md" || file.Op != "rename" {
+		t.Fatalf("file = %#v, want renamed destination", file)
+	}
+}
+
 func TestWorkspaceFileDetailReconstructsVersionHistoryWithoutDoubleCounting(t *testing.T) {
 	ctx := context.Background()
 	st := store.NewStore()

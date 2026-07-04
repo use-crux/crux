@@ -52,6 +52,10 @@ import type {
   WorkspaceVersioning,
 } from "./version-types";
 import type { WorkspaceRetrieverMountSource } from "./retriever-source-types";
+import type {
+  WorkspaceWatchHandle,
+  WorkspaceWatchOptions,
+} from "./watch/types";
 
 export type {
   WorkspaceAppendOptions,
@@ -83,6 +87,15 @@ export type {
   WorkspaceVersioning,
   WorkspaceVersionOperation,
 } from "./version-types";
+export type {
+  WorkspaceChangeEvent,
+  WorkspaceChangeType,
+  WorkspacePathChangeEvent,
+  WorkspaceRenameChangeEvent,
+  WorkspaceWatchCallback,
+  WorkspaceWatchHandle,
+  WorkspaceWatchOptions,
+} from "./watch/types";
 
 /** Default inline storage cutoff: text/JSON at or below this size is stored inline. */
 export const DEFAULT_INLINE_TEXT_BYTES = 64_000;
@@ -108,6 +121,7 @@ export type WorkspaceOperation =
   | "move"
   | "copy"
   | "grep"
+  | "watch"
   | "history"
   | "diff"
   | "undo"
@@ -514,6 +528,32 @@ export interface Workspace<
     query: string,
     options?: WorkspaceGrepOptions,
   ): Promise<WorkspaceGrepResult>;
+  /**
+   * Subscribe to durable workspace file changes.
+   *
+   * `watch()` requires a configured Runtime Engine so changes can be appended to
+   * the durable event log before they are delivered. Direct workspace reads and
+   * writes still work without a runtime; only this subscription API is
+   * runtime-bound.
+   *
+   * @param options - Namespace, cursor, and polling controls. Omitting a path
+   *   watches the whole workspace tree.
+   * @returns A handle for registering callbacks, stopping delivery, and reading
+   *   the latest delivered cursor.
+   */
+  watch(options?: WorkspaceWatchOptions): WorkspaceWatchHandle;
+  /**
+   * Subscribe to durable workspace file changes under a path.
+   *
+   * Set `recursive: true` to receive descendants of `path`; otherwise only
+   * exact-path changes are delivered. Rename events match either the source or
+   * destination path.
+   *
+   * @param path - Absolute workspace path to observe.
+   * @param options - Namespace, cursor, recursive, and polling controls.
+   * @returns A handle for registering callbacks and stopping delivery.
+   */
+  watch(path: string, options?: WorkspaceWatchOptions): WorkspaceWatchHandle;
   /**
    * List a file's revision history, newest first.
    *

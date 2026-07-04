@@ -98,6 +98,41 @@ await ws.grep("launch", { path: "/workspace/**/*.md", ignoreCase: true });
 
 `rename`, `move`, and `copy` preserve metadata, including artifact status and kind.
 
+## Watching Changes
+
+Use `watch()` when an app needs to react to workspace file changes outside the
+model loop, such as refreshing a file tree or syncing generated outputs. It uses
+the Runtime Engine durable event log, so configure a runtime first:
+
+```ts
+import { config } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+
+config({ runtime: node() });
+
+const handle = ws.watch("/outputs", { recursive: true });
+
+const off = handle.on((event) => {
+  if (event.type === "rename") {
+    console.log(event.from, "->", event.path);
+    return;
+  }
+
+  console.log(event.type, event.path);
+});
+
+off();
+handle.stop();
+```
+
+Events have `type`, `workspaceId`, `namespace`, `path`, `at`, and `cursor`.
+Rename events also include `from`. Store `handle.cursor` after processing events
+and pass it back as `{ cursor }` to resume after the last delivered change.
+
+Without a configured runtime, direct workspace reads and writes still work, but
+`watch()` throws `RUNTIME_REQUIRED`. Transaction staging writes are internal;
+watchers see only the committed live-namespace changes.
+
 ## Reading Files
 
 `read()` returns a discriminated union:
@@ -598,6 +633,6 @@ research
    └─ report.pdf
 ```
 
-OTel receives privacy-safe operation metadata only. Raw file contents and full paths are not emitted to OTel. Workspace OTel spans use `crux.workspace.operation` and `crux.workspace.path_hash`; devtools use the same path hash as a stable file label when no local-only raw path is available. Finalized artifacts expose bounded metadata such as status, artifact kind, MIME type, size, and download ref. Project Index data-access facts preserve exact workspace operations, including `grep`, `history`, `diff`, `undo`, `artifacts`, `rename`, and `finalize`.
+OTel receives privacy-safe operation metadata only. Raw file contents and full paths are not emitted to OTel. Workspace OTel spans use `crux.workspace.operation` and `crux.workspace.path_hash`; devtools use the same path hash as a stable file label when no local-only raw path is available. Finalized artifacts expose bounded metadata such as status, artifact kind, MIME type, size, and download ref. Project Index data-access facts preserve exact workspace operations, including `grep`, `watch`, `history`, `diff`, `undo`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
 
 The file inspector also has a **Versions** tab showing a file's revision timeline (version number, when, the operation that produced it, and a trace link). Each version is announced by a single privacy-safe marker emitted when the version is recorded, so the timeline counts one entry per content change even though an `edit` or `undo` internally performs a nested write.

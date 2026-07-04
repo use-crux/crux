@@ -15,6 +15,10 @@ import { fileKey, getRequiredRecord, listFileRecords } from "./store";
 import { getVersionRecord } from "./version-store";
 import { workspaceSetOptions } from "./limits";
 import { assertWorkspaceMountIsLocal } from "./virtual-source";
+import {
+  shouldSuppressWorkspaceChangeEvents,
+  type WorkspaceChangeEmitter,
+} from "./watch";
 import type {
   WorkspaceArtifact,
   WorkspaceArtifactsQuery,
@@ -34,6 +38,7 @@ export interface WorkspaceArtifactOpsConfig {
   readonly mounts: readonly NormalizedMount[];
   readonly retention?: WorkspaceRetention;
   readonly resolveNamespace: () => Promise<string>;
+  readonly emitChange?: WorkspaceChangeEmitter;
 }
 
 /** Public artifact lifecycle operations mixed into a {@link Workspace}. */
@@ -122,6 +127,15 @@ export function createWorkspaceArtifactOps(
           finalized as unknown as JsonObject,
           workspaceSetOptions(config.store, config.retention),
         );
+        if (!shouldSuppressWorkspaceChangeEvents(options)) {
+          await config.emitChange?.({
+            type: "update",
+            workspaceId: config.workspaceId,
+            namespace,
+            path: normalized,
+            at: finalized.updatedAt,
+          });
+        }
         return resolveArtifact({
           record: finalized,
           store: config.store,
