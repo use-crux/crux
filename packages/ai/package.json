@@ -1,6 +1,6 @@
 {
   "name": "@use-crux/ai",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "license": "Apache-2.0",
   "description": "Vercel AI SDK adapter for Crux — run Crux prompts, agents, and flows against any AI SDK model (generate & stream).",
   "keywords": [
