@@ -488,17 +488,17 @@ describe('contributor() entries', () => {
 })
 
 describe('family classification', () => {
-  it('classifies injectable entries by _tag, including retrieval pipelines', async () => {
+  it('classifies injectable retriever entries by _tag', async () => {
     const f = fakePorts()
     const resolver = compiledResolver(f.ports)
-    const pipeline = {
-      _tag: 'RetrievalPipeline',
-      id: 'docs-pipeline',
+    const retriever = {
+      _tag: 'Retriever',
+      id: 'docs-retriever',
       inject: async () => ({ tools: { search_docs: 'tool' } }),
     }
-    await resolver.resolve({ system: 'S', use: [pipeline] } as AnyConfig, {})
+    await resolver.resolve({ system: 'S', use: [retriever] } as AnyConfig, {})
 
-    const facts = f.observability.contributionPreviews('active').find((p) => p.sourceId === 'injectable:docs-pipeline')
+    const facts = f.observability.contributionPreviews('active').find((p) => p.sourceId === 'injectable:docs-retriever')
     expect(facts).toMatchObject({ injectableKind: 'retriever', injectedTools: ['search_docs'] })
   })
 

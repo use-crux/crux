@@ -339,6 +339,24 @@ const lintParityCases = [
     ],
   },
   {
+    name: 'rag recipe step unresolved target findings',
+    profile: 'strict',
+    definitions: [
+      definition({ id: 'rag.recipe:docs', kind: 'rag.recipe', name: 'docs' }),
+      definition({
+        id: 'rag.recipe:docs:step:rerank',
+        kind: 'rag.recipe.step',
+        name: 'rerank',
+        metadata: { recipeId: 'rag.recipe:docs', stepId: 'rerank', rerankerVariable: 'answerRanker' },
+      }),
+    ],
+    relations: [
+      relation('rag.recipe.includes_step', 'rag.recipe:docs', 'rag.recipe:docs:step:rerank'),
+      relation('rag.recipe.step.uses_reranker', 'rag.recipe:docs:step:rerank', 'rag.reranker:answerRanker'),
+    ],
+    expectedRuleIds: ['definition.missing_eval_coverage', 'rag.recipe_step_unresolved_target'],
+  },
+  {
     name: 'experimental unused injection findings',
     profile: 'experimental',
     definitions: [

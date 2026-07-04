@@ -9,7 +9,7 @@
  */
 
 export { createGoogle, googleProviderRuntime } from './native'
-export type { CreateGoogleOptions } from './native'
+export type { CreateGoogleOptions, GoogleRerankerConfig, GoogleRetrievalModelConfig } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { embedding } from './embedding'
 export { fromMessages, googleTranscript, toMessages } from './message-codec'

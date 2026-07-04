@@ -1,42 +1,64 @@
 /**
- * Retrieval: queryable knowledge sources, rerankers, and multi-stage pipelines.
+ * Retrieval & RAG beta: knowledge bases, retrievers, recipes, and grounding.
  *
- * Build a {@link retriever} over a vector/data store (or a custom function),
- * compose {@link reranker}s, and wrap it in a {@link retrievalPipeline} with
- * query- and hit-phase {@link retrievalStage}s such as {@link queryPlanner},
- * {@link multiQuery}, {@link parentExpand}, {@link compress}, {@link diversify},
- * and {@link decay}.
+ * Start with {@link knowledgeBase} for common RAG flows, drop down to
+ * {@link retriever} for custom read paths, and compose retrieval work with
+ * named recipes when retrieval needs fanout, federation, ranking, or
+ * compression.
  *
  * @module
  */
 
+export { knowledgeBase } from './knowledge-base'
 export { retriever } from './define-retriever'
-export { reranker } from './reranker'
-export { retrievalStage } from './stage'
-export { retrievalPipeline } from './pipeline'
-export { queryPlanner, multiQuery, parentExpand, compress, diversify, decay } from './built-in-stages'
+export { retrievalRecipe } from './recipe/recipe'
+export { retrievalStep } from './recipe/step'
+export { compressToBudget, expandParents, fanout, rerank, retrieve, rewriteQuery } from './recipe/steps/built-ins'
+export { judgeReranker } from './reranker'
+export { RetrievalConfigError, RetrievalNotImplementedError, RetrievalRunError } from './errors'
+export { RETRIEVAL_HITS_KIND, isRetrievalToolPayload } from './tools'
+export { grounding } from '../citations'
 
+export type { Grounding } from '../citations'
+export type { RetrievalConfigErrorCode, RetrievalRunErrorCode } from './errors'
 export type {
-  HitRetrievalStage,
-  HitStageInput,
-  PlannedRetrievalQuery,
-  QueryRetrievalStage,
-  QueryStageInput,
-  RerankerInput,
+  KnowledgeBase,
+  KnowledgeBaseConfig,
+  KnowledgeBaseGroundingConfig,
+  KnowledgeBaseInspection,
+  KnowledgeBaseRecipeConfig,
+  KnowledgeBaseScopeConfig,
+  ScopedKnowledgeBase,
+} from './knowledge-base'
+export type { RetrievalModel } from './model'
+export type { JudgeRerankerConfig, Reranker } from './reranker'
+export type { MetadataFilter, RetrieveOptions, RetrieveRequest } from './request'
+export type {
+  RecipeTrace,
+  RetrievalRecipe,
+  RetrievalRecipeConfig,
+  RetrievalRecipeGroundingConfig,
+  RetrievalRecipeSource,
+  StepTrace,
+} from './recipe/recipe'
+export type {
+  PlannedQuery,
+  RetrievalSourceTrace,
+  RetrievalStep,
+  RetrievalStepConfig,
+  RetrievalStepContext,
+  RetrievalStepKind,
+  StepInput,
+  StepOutput,
+  StepPhase,
+} from './recipe/step'
+export type {
   RetrievalInjectMode,
-  RetrievalPipeline,
-  RetrievalPipelineStage,
-  RetrievalPipelineTrace,
-  RetrievalStageKind,
-  RetrievalStagePhase,
-  RetrievalStagePreview,
-  RetrievalStageTrace,
   RetrievalToolConfig,
   RetrievalToolName,
   Retriever,
   RetrieverHit,
   RetrieverMode,
-  RetrieverReranker,
   RetrieverTools,
-  RetrieveOptions,
 } from './types'
+export type { RetrievalToolDef, RetrievalToolHit, RetrievalToolPayload } from './tools'

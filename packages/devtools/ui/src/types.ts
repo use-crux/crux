@@ -490,7 +490,18 @@ export type PrimitiveSpecificFacts =
       isDefault?: boolean
     }
   | {
-      kind: 'rag.pipeline' | 'rag.pipeline.stage' | 'rag.retriever'
+      kind:
+        | 'rag.knowledgeBase'
+        | 'rag.recipe'
+        | 'rag.recipe.step'
+        | 'rag.pipeline'
+        | 'rag.pipeline.stage'
+        | 'rag.reranker'
+        | 'rag.retriever'
+      knowledgeBaseId?: string
+      recipeId?: string
+      stepId?: string
+      rerankerId?: string
       retrieverId?: string
       stageId?: string
       stageKind?: string
@@ -1227,6 +1238,7 @@ export type SpanPrimitive =
   | 'handoff'
   | 'retrieval'
   | 'retrieval.stage'
+  | 'retrieval.step'
   | 'embed'
   | 'judge'
   | 'plan'

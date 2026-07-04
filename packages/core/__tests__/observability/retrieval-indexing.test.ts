@@ -6,7 +6,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { retrievalPipeline, retrievalStage, retriever } from '../../retrieval'
+import { retrievalRecipe, retrievalStep, retrieve, retriever } from '../../retrieval'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { RetrieverHit } from '../../retrieval'
 
@@ -26,7 +26,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     resetObservabilityRuntime()
   })
 
-    it('records standalone retriever calls as retrieval.query spans with hit artifacts and relation edges', async () => {
+  it('records standalone retriever calls as retrieval.retrieve spans with hit artifacts and relation edges', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const docs = retriever({
@@ -41,9 +41,13 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'span:start',
-        primitive: 'retrieval.query',
+        primitive: 'retrieval.retrieve',
         name: 'docs.retrieve',
-        attributes: expect.objectContaining({ retrieverId: 'docs', namespace: 'kb', query: 'refund policy' }),
+        attributes: expect.objectContaining({
+          retrieverId: 'docs',
+          namespace: 'kb',
+          query: 'refund policy',
+        }),
       }),
     )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'artifact', kind: 'retrieval.hits' }))
@@ -72,7 +76,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'retrieval.returned' }))
   })
 
-    it('records retrieval pipelines and every stage as canonical child spans', async () => {
+  it('records retrieval recipes and every step as canonical child spans', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const base = retriever({
@@ -80,36 +84,60 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
       namespace: 'kb',
       retrieve: async () => [hit('refund/a', 'Refund overview', 0.8), hit('billing/b', 'Billing policy', 0.7)],
     })
-    const pipeline = retrievalPipeline(base, [
-      retrievalStage({
-        name: 'top-one',
-        phase: 'hits',
-        run: ({ hits }) => hits.slice(0, 1),
-      }),
-    ])
+    const recipe = retrievalRecipe({
+      id: 'docs-recipe',
+      retriever: base,
+      steps: [
+        retrieve(),
+        retrievalStep({
+          id: 'top-one',
+          phase: { in: 'hits', out: 'hits' },
+          run: ({ hits }) => ({ hits: hits.slice(0, 1) }),
+        }),
+      ],
+    })
 
-    await pipeline.retrieveWithTrace('refund')
+    await recipe.retrieveWithTrace('refund')
     await observe.flush()
 
     const starts = transport.records.filter((record) => record.type === 'span:start')
     expect(starts).toContainEqual(
-      expect.objectContaining({ primitive: 'retrieval.pipeline', name: 'docs.pipeline', parentSpanId: null }),
-    )
-    expect(starts).toContainEqual(
-      expect.objectContaining({ primitive: 'retrieval.query', name: 'docs.retrieve' }),
-    )
-    expect(starts).toContainEqual(
       expect.objectContaining({
-        primitive: 'retrieval.stage',
-        name: 'hits:fanout',
-        attributes: expect.objectContaining({ stageName: 'fanout', phase: 'hits' }),
+        primitive: 'retrieval.recipe',
+        name: 'docs-recipe.recipe',
+        parentSpanId: null,
+        attributes: expect.objectContaining({
+          recipeId: 'docs-recipe',
+          sourceRetrieverIds: ['docs'],
+        }),
       }),
     )
     expect(starts).toContainEqual(
       expect.objectContaining({
-        primitive: 'retrieval.stage',
+        primitive: 'retrieval.retrieve',
+        name: 'docs.retrieve',
+      }),
+    )
+    expect(starts).toContainEqual(
+      expect.objectContaining({
+        primitive: 'retrieval.step',
+        name: 'queries:retrieve',
+        attributes: expect.objectContaining({
+          recipeId: 'docs-recipe',
+          stepId: 'retrieve',
+          kind: 'retrieve',
+        }),
+      }),
+    )
+    expect(starts).toContainEqual(
+      expect.objectContaining({
+        primitive: 'retrieval.step',
         name: 'hits:top-one',
-        attributes: expect.objectContaining({ stageName: 'top-one', phase: 'hits' }),
+        attributes: expect.objectContaining({
+          recipeId: 'docs-recipe',
+          stepId: 'top-one',
+          kind: 'custom',
+        }),
       }),
     )
     expect(transport.records).toContainEqual(
@@ -118,26 +146,16 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
         kind: 'retrieval.hits',
         preview: expect.objectContaining({
           kind: 'retrieval.hits',
-          mode: 'pipeline',
+          mode: 'recipe',
+          recipeId: 'docs-recipe',
           query: 'refund',
           returned: 1,
-          stages: expect.arrayContaining([
-            expect.objectContaining({ name: 'fanout', phase: 'hits' }),
-            expect.objectContaining({ name: 'top-one', phase: 'hits', outHits: 1 }),
-          ]),
         }),
-      }),
-    )
-    expect(transport.records).toContainEqual(
-      expect.objectContaining({
-        type: 'artifact',
-        kind: 'output',
-        attributes: expect.objectContaining({ primitive: 'retrieval.stage', stageName: 'top-one' }),
       }),
     )
   })
 
-    it('records indexing operations and pipeline stages as inspectable spans and artifacts', async () => {
+  it('records indexing operations and pipeline stages as inspectable spans and artifacts', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const records = inMemoryRecordStore()
@@ -152,7 +170,10 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
           transform.document({
             name: 'trim',
             version: '1',
-            run: (document) => ({ ...document, content: document.content.trim() }),
+            run: (document) => ({
+              ...document,
+              content: document.content.trim(),
+            }),
           }),
         ],
       }),
@@ -166,47 +187,77 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
       expect.objectContaining({
         primitive: 'indexing.pipeline',
         name: 'docs.indexDocuments',
-        attributes: expect.objectContaining({ indexerId: 'docs', operation: 'indexDocuments', dryRun: true }),
+        attributes: expect.objectContaining({
+          indexerId: 'docs',
+          operation: 'indexDocuments',
+          dryRun: true,
+        }),
       }),
     )
     expect(starts).toContainEqual(
       expect.objectContaining({
         primitive: 'indexing.pipeline',
         name: 'document-transform:trim',
-        attributes: expect.objectContaining({ stageKind: 'document-transform', stageName: 'trim' }),
+        attributes: expect.objectContaining({
+          stageKind: 'document-transform',
+          stageName: 'trim',
+        }),
       }),
     )
     expect(starts).toContainEqual(
       expect.objectContaining({
         primitive: 'indexing.pipeline',
         name: 'chunker:structured',
-        attributes: expect.objectContaining({ stageKind: 'chunker', stageName: 'structured' }),
+        attributes: expect.objectContaining({
+          stageKind: 'chunker',
+          stageName: 'structured',
+        }),
       }),
     )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
         kind: 'indexing.report',
-        attributes: expect.objectContaining({ primitive: 'indexing.pipeline', operation: 'indexDocuments' }),
+        attributes: expect.objectContaining({
+          primitive: 'indexing.pipeline',
+          operation: 'indexDocuments',
+        }),
         preview: expect.objectContaining({
           kind: 'indexing.report',
           operation: 'indexDocuments',
           indexerId: 'docs',
           namespace: 'kb',
-          totals: expect.objectContaining({ sources: 1, chunks: expect.any(Number) }),
-          stageCounts: expect.objectContaining({ 'document-transform': 1, chunker: 1 }),
+          totals: expect.objectContaining({
+            sources: 1,
+            chunks: expect.any(Number),
+          }),
+          stageCounts: expect.objectContaining({
+            'document-transform': 1,
+            chunker: 1,
+          }),
         }),
       }),
     )
   })
 
-    it('records corpus sync, ingest load results, and nested indexing work in one trace', async () => {
+  it('records corpus sync, ingest load results, and nested indexing work in one trace', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const records = inMemoryRecordStore()
     const vectors = inMemoryVectorStore()
-    const docsIndexer = indexer({ id: 'docs', namespace: 'kb', records, vectors })
-    const docs = corpus({ id: 'docs', namespace: 'kb', records, vectors, indexer: docsIndexer })
+    const docsIndexer = indexer({
+      id: 'docs',
+      namespace: 'kb',
+      records,
+      vectors,
+    })
+    const docs = corpus({
+      id: 'docs',
+      namespace: 'kb',
+      records,
+      vectors,
+      indexer: docsIndexer,
+    })
 
     await docs.sync([
       {
@@ -232,7 +283,10 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
         primitive: 'ingest.parse',
         name: 'docs.ingest:intro',
         parentSpanId: corpusSpan?.spanId,
-        attributes: expect.objectContaining({ sourceId: 'intro', warningCount: 1 }),
+        attributes: expect.objectContaining({
+          sourceId: 'intro',
+          warningCount: 1,
+        }),
       }),
     )
     expect(starts).toContainEqual(
@@ -258,14 +312,25 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
       expect.objectContaining({
         type: 'artifact',
         kind: 'corpus.report',
-        attributes: expect.objectContaining({ primitive: 'corpus.sync', corpusId: 'docs', sourceCount: 1 }),
+        attributes: expect.objectContaining({
+          primitive: 'corpus.sync',
+          corpusId: 'docs',
+          sourceCount: 1,
+        }),
         preview: expect.objectContaining({
           kind: 'corpus.report',
           corpusId: 'docs',
           namespace: 'kb',
-          totals: expect.objectContaining({ added: 1, chunks: expect.any(Number) }),
+          totals: expect.objectContaining({
+            added: 1,
+            chunks: expect.any(Number),
+          }),
           sources: expect.arrayContaining([
-            expect.objectContaining({ id: 'intro', action: 'added', chunks: expect.any(Number) }),
+            expect.objectContaining({
+              id: 'intro',
+              action: 'added',
+              chunks: expect.any(Number),
+            }),
           ]),
         }),
       }),

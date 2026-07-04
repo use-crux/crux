@@ -105,21 +105,33 @@ export function detectTask(task: unknown): DetectedTask {
     }
     if (tag === 'Prompt') {
       const id = task.id
-      return { kind: 'prompt', ...(typeof id === 'string' ? { ref: id } : {}), capabilities: PROMPT_CAPABILITIES }
+      return {
+        kind: 'prompt',
+        ...(typeof id === 'string' ? { ref: id } : {}),
+        capabilities: PROMPT_CAPABILITIES,
+      }
     }
     if (tag === 'Agent') {
       const id = task.id
-      return { kind: 'agent', ...(typeof id === 'string' ? { ref: id } : {}), capabilities: AGENT_CAPABILITIES }
+      return {
+        kind: 'agent',
+        ...(typeof id === 'string' ? { ref: id } : {}),
+        capabilities: AGENT_CAPABILITIES,
+      }
     }
-    if (tag === 'Retriever' || tag === 'RetrievalPipeline') {
+    if (tag === 'Retriever' || tag === 'RetrievalRecipe') {
       const id = task.id
-      return { kind: 'retriever', ...(typeof id === 'string' ? { ref: id } : {}), capabilities: RETRIEVER_CAPABILITIES }
+      return {
+        kind: 'retriever',
+        ...(typeof id === 'string' ? { ref: id } : {}),
+        capabilities: RETRIEVER_CAPABILITIES,
+      }
     }
     if (typeof task.run === 'function' && typeof task.signal === 'function' && typeof task.name === 'string') {
       return { kind: 'flow', ref: task.name, capabilities: FLOW_CAPABILITIES }
     }
   }
   throw new TypeError(
-    'evaluate(): `task` must be a Crux prompt, flow, agent, retriever, a target built with target.*, or a plain function.',
+    'evaluate(): `task` must be a Crux prompt, flow, agent, retriever, retrieval recipe, a target built with target.*, or a plain function.',
   )
 }

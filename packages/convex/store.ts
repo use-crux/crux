@@ -10,6 +10,7 @@
  */
 
 import type { ConvexCruxStorageComponent } from './store-component'
+import type { ExactFilter } from '@use-crux/core/storage'
 import {
   STORE_DOC_COMPONENT_SPEC,
   type ComponentDocumentPort,
@@ -37,7 +38,7 @@ export interface ConvexCtxPort {
   vectorSearch?(
     table: string,
     index: string,
-    opts: { vector: readonly number[]; limit?: number },
+    opts: { vector: readonly number[]; limit?: number; filter?: ExactFilter },
   ): Promise<readonly StoreDocRecord[]>
 }
 
@@ -109,7 +110,12 @@ export function convexComponentDocumentPort<TCtx extends ConvexCtxPort = ConvexC
       await ctx.runMutation(fns.remove, { key })
     },
     searchDense: vectorSearch
-      ? ({ vector, limit }) => vectorSearch(STORE_DOC_COMPONENT_SPEC.table, vectorIndexName, { vector, limit })
+      ? ({ vector, limit, filter }) =>
+          vectorSearch(STORE_DOC_COMPONENT_SPEC.table, vectorIndexName, {
+            vector,
+            limit,
+            ...(filter === undefined ? {} : { filter }),
+          })
       : undefined,
   }
 }

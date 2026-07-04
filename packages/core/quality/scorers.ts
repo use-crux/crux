@@ -20,6 +20,16 @@ import { canonicalJson } from './internal/json'
 import { SCORER_INTERNAL, type ContextualScorerRun } from './internal/scorer-runtime'
 import { runJudgeScorer } from './internal/judge-scorer'
 import { createRagScorerRun } from './internal/rag-scorers'
+import {
+  ragCitationValidity,
+  ragContextPrecision,
+  ragExpectedSourceCoverage,
+  ragMrr,
+  ragRecallAtK,
+  ragTraceShapeSnapshot,
+  type RagContextPrecisionOptions,
+  type RagMetricOptions,
+} from './internal/rag-metrics'
 import { MissingQualityModelBindingError } from './internal/errors'
 import type { GenerateFn, ModelRef } from './target'
 
@@ -188,14 +198,41 @@ export interface ScorerLibrary {
   /** Cosine similarity between output and `expected` embeddings. Model-backed. */
   embeddingSimilarity(opts?: { name?: string; embed?: EmbedFn }): Scorer<unknown, unknown, unknown, string>
 
-  /** Judge-backed RAG quality scorers (RAGAS-style). */
+  /**
+   * Retrieval-grounded RAG quality scorers.
+   *
+   * The beta metrics (`recallAtK`, `mrr`, `expectedSourceCoverage`,
+   * `contextPrecision`, `citationValidity`, and `traceShapeSnapshot`) are
+   * deterministic code scorers. For model-judged answer relevance or
+   * groundedness, use `scorers.judge()` or the generic judge-backed helpers
+   * below with an eval-local `generate`/`model`; provider-specific judges stay
+   * outside `@use-crux/core`.
+   */
   rag: {
+    /** Recall over expected sources in the first `k` retrieved hits. */
+    recallAtK(k: number): Scorer<unknown, unknown, unknown, `rag.recall@${number}`>
+    /** Mean reciprocal rank of the first expected source. */
+    mrr<const N extends string = 'rag.mrr'>(opts?: RagMetricOptions<N>): Scorer<unknown, unknown, unknown, N>
+    /** Fraction of expected sources retrieved anywhere in the result set. */
+    expectedSourceCoverage<const N extends string = 'rag.expectedSourceCoverage'>(
+      opts?: RagMetricOptions<N>,
+    ): Scorer<unknown, unknown, unknown, N>
+    /** Fraction of returned contexts that match expected source identity. */
+    contextPrecision<const N extends string = 'rag.contextPrecision'>(
+      opts?: RagContextPrecisionOptions<N>,
+    ): Scorer<unknown, unknown, unknown, N>
+    /** Fraction of cited sources that are grounded and match expected sources when provided. */
+    citationValidity<const N extends string = 'rag.citationValidity'>(
+      opts?: RagMetricOptions<N>,
+    ): Scorer<unknown, unknown, unknown, N>
+    /** Validates the serializable recipe trace shape used for snapshot-style evals. */
+    traceShapeSnapshot<const N extends string = 'rag.traceShapeSnapshot'>(
+      opts?: RagMetricOptions<N>,
+    ): Scorer<unknown, unknown, unknown, N>
     /** Is every claim in the answer supported by the retrieved context? */
     faithfulness(opts?: JudgeBacked): Scorer<unknown, unknown, unknown, string>
     /** Does the answer address the question? */
     answerRelevancy(opts?: JudgeBacked): Scorer<unknown, unknown, unknown, string>
-    /** Are the retrieved chunks relevant to the question? */
-    contextPrecision(opts?: JudgeBacked): Scorer<unknown, unknown, unknown, string>
     /** Did retrieval surface everything the reference answer needs? */
     contextRecall(opts?: JudgeBacked): Scorer<unknown, unknown, unknown, string>
   }
@@ -238,10 +275,25 @@ export interface BoundScorerLib<I, O, E> {
   jsonValid(opts?: { name?: string }): Scorer<I, O, E, string>
   jsonDiff(opts?: { name?: string }): Scorer<I, O, E, string>
   embeddingSimilarity(opts?: { name?: string; embed?: EmbedFn }): Scorer<I, O, E, string>
+  /**
+   * Retrieval-grounded RAG quality scorers. Deterministic metrics are
+   * code-class; model-judged hooks require explicit eval-local bindings.
+   */
   rag: {
+    recallAtK(k: number): Scorer<I, O, E, `rag.recall@${number}`>
+    mrr<const N extends string = 'rag.mrr'>(opts?: RagMetricOptions<N>): Scorer<I, O, E, N>
+    expectedSourceCoverage<const N extends string = 'rag.expectedSourceCoverage'>(
+      opts?: RagMetricOptions<N>,
+    ): Scorer<I, O, E, N>
+    contextPrecision<const N extends string = 'rag.contextPrecision'>(
+      opts?: RagContextPrecisionOptions<N>,
+    ): Scorer<I, O, E, N>
+    citationValidity<const N extends string = 'rag.citationValidity'>(opts?: RagMetricOptions<N>): Scorer<I, O, E, N>
+    traceShapeSnapshot<const N extends string = 'rag.traceShapeSnapshot'>(
+      opts?: RagMetricOptions<N>,
+    ): Scorer<I, O, E, N>
     faithfulness(opts?: JudgeBacked): Scorer<I, O, E, string>
     answerRelevancy(opts?: JudgeBacked): Scorer<I, O, E, string>
-    contextPrecision(opts?: JudgeBacked): Scorer<I, O, E, string>
     contextRecall(opts?: JudgeBacked): Scorer<I, O, E, string>
   }
   retrieval: {
@@ -272,9 +324,16 @@ function makeScorer<N extends string>(
  * contextual run with no context (standalone/autoevals path), while the
  * engine invokes the {@link SCORER_INTERNAL} form with ambient providers.
  */
-function makeContextualScorer<N extends string>(name: N, run: ContextualScorerRun): Scorer<unknown, unknown, unknown, N> {
+function makeContextualScorer<N extends string>(
+  name: N,
+  run: ContextualScorerRun,
+): Scorer<unknown, unknown, unknown, N> {
   const plain: AnyScorerFn = (args) => run(args, undefined)
-  return Object.assign(plain, { scorerName: name, costClass: 'model' as const, [SCORER_INTERNAL]: run })
+  return Object.assign(plain, {
+    scorerName: name,
+    costClass: 'model' as const,
+    [SCORER_INTERNAL]: run,
+  })
 }
 
 function outputText(output: unknown): string {
@@ -399,7 +458,10 @@ export const scorers: ScorerLibrary = {
     const name = opts?.name ?? ('exact' as NonNullable<typeof opts>['name'] & string)
     return makeScorer(name, 'code', ({ output, expected }) => {
       if (expected === undefined) return { name, score: null }
-      return { name, score: canonicalJson(output) === canonicalJson(expected) ? 1 : 0 }
+      return {
+        name,
+        score: canonicalJson(output) === canonicalJson(expected) ? 1 : 0,
+      }
     })
   },
 
@@ -472,12 +534,16 @@ export const scorers: ScorerLibrary = {
   },
 
   rag: {
+    recallAtK: ragRecallAtK,
+    mrr: ragMrr,
+    expectedSourceCoverage: ragExpectedSourceCoverage,
+    contextPrecision: ragContextPrecision,
+    citationValidity: ragCitationValidity,
+    traceShapeSnapshot: ragTraceShapeSnapshot,
     faithfulness: (opts) =>
       makeContextualScorer(opts?.name ?? 'faithfulness', createRagScorerRun('faithfulness', opts ?? {})),
     answerRelevancy: (opts) =>
       makeContextualScorer(opts?.name ?? 'answerRelevancy', createRagScorerRun('answerRelevancy', opts ?? {})),
-    contextPrecision: (opts) =>
-      makeContextualScorer(opts?.name ?? 'contextPrecision', createRagScorerRun('contextPrecision', opts ?? {})),
     contextRecall: (opts) =>
       makeContextualScorer(opts?.name ?? 'contextRecall', createRagScorerRun('contextRecall', opts ?? {})),
   },
@@ -603,7 +669,9 @@ function retrievalScorer<N extends string>(
       return {
         name,
         score: null,
-        metadata: { reason: 'output is not a ranked hit list (expected an array of { sourceId } or { hits })' },
+        metadata: {
+          reason: 'output is not a ranked hit list (expected an array of { sourceId } or { hits })',
+        },
       }
     }
     return { name, score: metric(hits, sources) }

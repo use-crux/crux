@@ -116,7 +116,7 @@ fn manifest_identity_is_aligned_with_static_index_cache_identity() {
         FIRST_PARTY_PRIMITIVE_MANIFEST_NAME,
         "crux-first-party-primitives"
     );
-    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "3");
+    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "5");
 }
 
 #[test]
@@ -126,6 +126,6 @@ fn manifest_digest_is_stable() {
     // Static Index primitive-manifest cache identity in the same change.
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:6c3074f7bb11d1ac8ee10c72e9fe554f59fd47068434eb678bbe17ceb97a66f3"
+        "sha256:1320b999763cbd9241f6fafc41366108c9c8bfd0017a24319c1b75c4d15a6c1d"
     );
 }

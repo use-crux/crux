@@ -1,6 +1,7 @@
 import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import { defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
 import type { NativeProviderPort, SingleTurnProviderBundleSpec } from '@use-crux/core/adapter'
+import { judgeReranker, type Reranker, type RetrievalModel, type RetrieverHit } from '@use-crux/core/retrieval'
 import { disabledCachedContentLifecycle, resolveCachedContentLifecycle } from './cached-content'
 import type { GoogleCachedContentLifecycle, GoogleCachedContentOption } from './cached-content'
 import { googleTranscript } from './message-codec'
@@ -14,6 +15,18 @@ import {
 import { googleResponseMeta, googleResponseText } from './response'
 import { googleTextDelta } from './stream'
 import type { GoogleExtra, GoogleRequest } from './types'
+
+/** Configuration for `google.retrievalModel()`. */
+export interface GoogleRetrievalModelConfig {
+  model: string
+}
+
+/** Configuration for `google.reranker()`. */
+export interface GoogleRerankerConfig extends GoogleRetrievalModelConfig {
+  name?: string
+  topN?: number
+  document?: (hit: RetrieverHit) => string
+}
 
 interface GoogleNativeDeps extends Record<string, unknown> {
   readonly cachedContentLifecycle?: GoogleCachedContentLifecycle
@@ -71,6 +84,7 @@ const google = defineSingleTurnProviderBundle({
     // blocks, so they leave caching off via the disabled fallback.
     helpers: (): GoogleNativeDeps => ({}),
   },
+  extend: ({ client }) => createGoogleRuntimeExtensions(client),
 })
 
 /**
@@ -97,3 +111,28 @@ export const createGoogle = google.create
 
 /** Lightweight helper factory generated from the Google provider runtime. */
 export const googleHelpers = google.helpers()
+
+function createGoogleRuntimeExtensions(client: GoogleGenAI): {
+  retrievalModel(config: GoogleRetrievalModelConfig): RetrievalModel
+  reranker(config: GoogleRerankerConfig): Reranker
+} {
+  const retrievalModel = (config: GoogleRetrievalModelConfig): RetrievalModel => {
+    const generateText = googleHelpers.createGenerateTextFn(client, config.model)
+    const generateObject = googleHelpers.createGenerateObjectFn(client, config.model)
+    return {
+      generateText: (args) => generateText({ ...args, model: config.model }),
+      generateObject: (args) => generateObject({ ...args, model: config.model }),
+    }
+  }
+  return {
+    retrievalModel,
+    reranker(config) {
+      return judgeReranker({
+        model: retrievalModel(config),
+        name: config.name ?? 'google-judge',
+        topN: config.topN,
+        document: config.document,
+      })
+    },
+  }
+}

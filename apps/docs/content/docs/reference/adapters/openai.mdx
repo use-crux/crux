@@ -30,6 +30,8 @@ Create an adapter bound to an OpenAI client.
 | ---------------------------- | ------------------------------------------------------------------------------ |
 | `.generate(prompt, options)` | Execute a prompt via `chat.completions.parse` (structured) or `.create` (text) |
 | `.stream(prompt, options)`   | Stream a prompt execution                                                      |
+| `.retrievalModel(config)`    | Bind OpenAI generation to core retrieval recipe steps                          |
+| `.reranker(config)`          | Create a judge-backed core `Reranker`                                          |
 
 ```ts
 import { createOpenAI } from '@use-crux/openai'
@@ -82,6 +84,29 @@ Stream a prompt execution.
 | `options.extra.parallel_tool_calls` | `boolean?`                                     | Allow parallel tool calls                                                           |
 
 **Returns:** OpenAI stream.
+
+### `adapter.retrievalModel(config)`
+
+Create a core `RetrievalModel` from the adapter instance.
+
+```ts
+const retrievalModel = adapter.retrievalModel({ model: 'gpt-4o-mini' })
+```
+
+Use it as a recipe-level `model` or step-level `model`.
+
+### `adapter.reranker(config)`
+
+Create a core `Reranker` for `rerank({ engine })`.
+
+```ts
+const engine = adapter.reranker({
+  model: 'gpt-4o-mini',
+  topN: 12,
+})
+```
+
+OpenAI's direct SDK adapter does not expose a native rerank endpoint. `adapter.reranker()` uses Crux's `judgeReranker()` over the configured OpenAI model, so each rerank call spends generation tokens.
 
 ### `toMessages(sdkMessages)`
 

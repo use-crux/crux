@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { embedding as makeEmbedding } from '../../embedding'
 import { indexer as makeIndexer } from '../../indexing'
-import { retriever as makeRetriever, reranker as makeReranker } from '../../retrieval'
+import { retriever as makeRetriever } from '../../retrieval'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 import type { JsonObject, VectorHit } from '../../storage'
 
@@ -100,114 +100,6 @@ describe('retriever', () => {
         content: 'Alpha',
       }),
     ])
-  })
-
-    it('applies rerankers after retrieval', async () => {
-    const reranker = makeReranker({
-      name: 'reverse-top-1',
-      rerank: async ({ query, hits }) => {
-        expect(query).toBe('launch')
-        return [...hits].reverse().slice(0, 1)
-      },
-    })
-
-    const retriever = makeRetriever({
-      id: 'r1',
-      namespace: 'docs',
-      retrieve: async () => [
-        {
-          namespace: 'docs',
-          sourceId: 'doc-1',
-          chunkId: '0',
-          content: 'First result',
-          metadata: {},
-          score: 0.9,
-        },
-        {
-          namespace: 'docs',
-          sourceId: 'doc-2',
-          chunkId: '1',
-          content: 'Second result',
-          metadata: {},
-          score: 0.8,
-        },
-      ],
-      rerank: reranker,
-    })
-
-    const hits = await retriever.retrieve('launch')
-
-    expect(hits).toEqual([
-      {
-        namespace: 'docs',
-        sourceId: 'doc-2',
-        chunkId: '1',
-        content: 'Second result',
-        metadata: {},
-        score: 0.8,
-      },
-    ])
-  })
-
-    it('applies multiple rerankers sequentially', async () => {
-    const addMarker = makeReranker({
-      name: 'add-marker',
-      rerank: ({ hits }) =>
-        hits.map((hit) => ({
-          ...hit,
-          metadata: { ...hit.metadata, reranked: true },
-        })),
-    })
-    const trim = makeReranker({
-      name: 'trim',
-      rerank: ({ hits }) => hits.slice(0, 1),
-    })
-
-    const retriever = makeRetriever({
-      id: 'r1',
-      namespace: 'docs',
-      retrieve: async () => [
-        {
-          namespace: 'docs',
-          sourceId: 'doc-1',
-          chunkId: '0',
-          content: 'First result',
-          metadata: {},
-          score: 0.9,
-        },
-        {
-          namespace: 'docs',
-          sourceId: 'doc-2',
-          chunkId: '1',
-          content: 'Second result',
-          metadata: {},
-          score: 0.8,
-        },
-      ],
-      rerank: [addMarker, trim],
-    })
-
-    const hits = await retriever.retrieve('launch')
-
-    expect(hits).toEqual([
-      {
-        namespace: 'docs',
-        sourceId: 'doc-1',
-        chunkId: '0',
-        content: 'First result',
-        metadata: { reranked: true },
-        score: 0.9,
-      },
-    ])
-  })
-
-    it('reranker requires a non-empty name', () => {
-    expect(() =>
-      makeReranker({
-        name: '   ',
-        rerank: ({ hits }) => hits,
-      }),
-    ).toThrow('Reranker name must be non-empty')
   })
 
     it('retrieves dense hits via vectors.search and forwards user filters', async () => {
@@ -332,31 +224,6 @@ describe('retriever', () => {
     expect(system).toContain('Release notes')
   })
 
-    it('injects search tools by default when used directly in a prompt', async () => {
-    const { prompt } = await import('../../prompt/prompt')
-    const retriever = makeRetriever({
-      id: 'docs',
-      namespace: 'docs',
-      retrieve: async () => [
-        {
-          namespace: 'docs',
-          sourceId: 'doc-1',
-          chunkId: '0',
-          content: 'Release notes',
-          metadata: {},
-          score: 0.93,
-        },
-      ],
-    })
-    const answer = prompt({ use: [retriever], system: 'Base.' })
-
-    const resolved = await answer.resolve({})
-
-    expect(resolved.system).toBe('Base.')
-    expect(resolved.tools?.search).toBeDefined()
-    expect(await (resolved.tools?.search as any).execute({ query: 'release', limit: 1 })).toContain('Release notes')
-  })
-
     it('injects context by default when context query is configured', async () => {
     const { prompt } = await import('../../prompt/prompt')
     const retriever = makeRetriever({
@@ -425,40 +292,6 @@ describe('retriever', () => {
     })
 
     await expect(retriever.asContext().systemFn({})).rejects.toThrow('requires a query')
-  })
-
-    it('exposes query and source tools', async () => {
-    const retriever = makeRetriever({
-      id: 'r1',
-      namespace: 'docs',
-      retrieve: async (query, options) => [
-        {
-          namespace: 'docs',
-          sourceId: 'doc-4',
-          chunkId: '1',
-          content: `${query}:${options.limit}`,
-          metadata: { kind: 'note' },
-          score: 0.7,
-        },
-      ],
-    })
-
-    const tools = retriever.asTools({ include: ['search', 'getSource'] })
-    expect(Object.keys(tools)).toEqual(['search', 'getSource'])
-    expect(tools.search.parameters.safeParse({ query: 'ops', limit: 2 }).success).toBe(true)
-
-    const result = JSON.parse(await tools.search.execute({ query: 'ops', limit: 2 }))
-    expect(result).toEqual([
-      {
-        namespace: 'docs',
-        sourceId: 'doc-4',
-        chunkId: '1',
-        content: 'ops:2',
-        metadata: { kind: 'note' },
-        score: 0.7,
-      },
-    ])
-    await expect(tools.getSource.execute({ sourceId: 'doc-4', chunkId: '1' })).resolves.toContain('ops:2')
   })
 
     it('supports a fully custom retriever', async () => {

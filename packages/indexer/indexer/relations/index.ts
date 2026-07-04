@@ -981,10 +981,15 @@ function fallbackRelationTargetId(type: string, variableName: string | undefined
     case 'pipeline.stage.uses_routing':
       return `routing.router:${safeVariableId(variableName)}`
     case 'consensus.uses_scorer':
+    case 'rag.recipe.step.uses_scorer':
     case 'rag.pipeline.stage.uses_scorer':
       return `scorer:${safeVariableId(variableName)}`
+    case 'rag.recipe.step.uses_reranker':
+      return `rag.reranker:${safeVariableId(variableName)}`
     case 'consensus.uses_judge':
       return `agent:${safeVariableId(variableName)}`
+    case 'rag.recipe.uses_retriever':
+    case 'rag.recipe.step.uses_retriever':
     case 'rag.pipeline.uses_retriever':
     case 'rag.pipeline.stage.uses_retriever':
       return `rag.retriever:${safeVariableId(variableName)}`

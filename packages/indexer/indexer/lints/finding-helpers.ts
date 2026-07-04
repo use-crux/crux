@@ -8,6 +8,7 @@ const COVERAGE_TARGET_KINDS = new Set<ProjectDefinitionKind>([
   'prompt',
   'agent',
   'flow',
+  'rag.recipe',
   'rag.pipeline',
   'composition.parallel',
   'composition.pipeline',

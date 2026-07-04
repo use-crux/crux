@@ -367,7 +367,7 @@ Behavior:
 - Persists active searchable child chunks through the same read model.
 - Child chunks include parent refs and optional parent title.
 - Store-backed retrievers search active child chunks only through the read-model boundary.
-- `parentExpand({ records })` resolves parent refs through the indexed read model to enrich hits with parent content while preserving child identity and score.
+- `expandParents({ records })` resolves parent refs through the indexed read model to enrich hits with parent content while preserving child identity and score.
 
 ### `chunker.semantic(options)`
 

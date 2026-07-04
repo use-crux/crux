@@ -11,7 +11,7 @@ use crate::{
     routing::output::extracted_facts,
     storage::{
         capabilities::{StorageFactoryDescriptor, storage_factory_descriptor},
-        dependencies::{StorageReferences, storage_config_references},
+        dependencies::{StorageReferences, storage_config_references, storage_relation_refs},
         metadata::{bundle_metadata, factory_metadata, scope_metadata},
     },
 };
@@ -165,16 +165,15 @@ fn storage_factory_definition(
 }
 
 fn bundle_relation_refs(refs: &StorageReferences) -> Vec<Value> {
-    [
-        ("storage.bundle.uses_record_store", refs.records.as_deref()),
-        ("storage.bundle.uses_vector_store", refs.vectors.as_deref()),
-        ("storage.bundle.uses_blob_store", refs.blobs.as_deref()),
-    ]
-    .into_iter()
-    .filter_map(|(relation_type, to_variable)| {
-        to_variable.map(|to_variable| json!({ "type": relation_type, "toVariable": to_variable }))
-    })
-    .collect()
+    storage_relation_refs("storage.bundle", refs)
+        .into_iter()
+        .filter(|reference| {
+            reference
+                .get("type")
+                .and_then(Value::as_str)
+                .is_some_and(|relation_type| relation_type != "storage.bundle.uses_storage")
+        })
+        .collect()
 }
 
 fn has_bundle_fields(config: &StaticSyntaxValue) -> bool {

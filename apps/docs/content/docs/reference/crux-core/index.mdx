@@ -45,7 +45,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   />
   <Card
     title="Retrieval"
-    description="retriever, reranker, query-time context and tools."
+    description="knowledgeBase, retriever, retrievalRecipe, grounding, and retrieval tools."
     href="/docs/reference/crux-core/retrieval"
   />
   <Card
@@ -151,7 +151,7 @@ import { llmJudge, metrics, judgeConstraint } from '@use-crux/core/scoring'
 import { constraintScorer, expect, quality, suite, target } from '@use-crux/core/quality'
 import { createSemanticCache, semanticCachePolicies } from '@use-crux/core/cache'
 import { embedding } from '@use-crux/core/embedding'
-import { retriever, reranker } from '@use-crux/core/retrieval'
+import { knowledgeBase, retriever, retrievalRecipe, retrieve, rerank } from '@use-crux/core/retrieval'
 import { grounding, citationSchema } from '@use-crux/core/citations'
 import { corpus, indexer } from '@use-crux/core/indexing'
 import { CruxProvider, usePlan, useTasks, createSSETransport, createPollingTransport } from '@use-crux/react'
@@ -457,7 +457,7 @@ const dense = embedding({
 ## Retrieval
 
 ```ts
-import { retriever, reranker } from '@use-crux/core/retrieval'
+import { knowledgeBase, retriever, retrievalRecipe, retrieve, rerank } from '@use-crux/core/retrieval'
 ```
 
 Creates a query-first retriever that turns text into scored hits, prompt context, and query tools. See the [Retrieval guide](/docs/guides/retrieval) for the full architecture.
@@ -500,7 +500,7 @@ Retrievers expose:
 - `inject: 'context' | 'tool' | 'both'` when used in `prompt({ use })`
 - `asContext()` and `asTools()` for advanced/manual integrations
 
-`reranker()` creates a provider-agnostic reranking stage that can be attached to a retriever through `rerank`.
+Use `retrievalRecipe()` with the `rerank()` step when retrieved candidates need model-backed ordering before they reach a prompt, tool, or grounding flow.
 
 Use `grounding()` from `@use-crux/core/citations` when retrieval context must become a cited answer contract.
 

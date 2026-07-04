@@ -168,6 +168,22 @@ function semanticDefinitionCandidateForCall<
       const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
       return { definitionId: `workspace:${safeId(name)}`, kind: 'workspace', name, object }
     }
+    case 'knowledgeBase': {
+      const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `rag.knowledgeBase:${safeId(name)}`, kind: 'rag.knowledgeBase', name, object }
+    }
+    case 'retrievalRecipe': {
+      const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
+      return { definitionId: `rag.recipe:${safeId(name)}`, kind: 'rag.recipe', name, object }
+    }
+    case 'reranker': {
+      const name =
+        semanticStringLiteralProperty(object, 'id', syntax) ??
+        semanticStringLiteralProperty(object, 'name', syntax) ??
+        variableName ??
+        'anonymous'
+      return { definitionId: `rag.reranker:${safeId(name)}`, kind: 'rag.reranker', name, object }
+    }
     case 'retriever': {
       const name = semanticStringLiteralProperty(object, 'id', syntax) ?? variableName ?? 'anonymous'
       return { definitionId: `rag.retriever:${safeId(name)}`, kind: 'rag.retriever', name, object }

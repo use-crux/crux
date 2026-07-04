@@ -16,6 +16,8 @@ export async function resolvedDefinitionFromExport(
       return resolvedFlowDefinition(root, file, exportName, value, expected)
     case 'rag.retriever':
       return resolvedRetrieverDefinition(root, file, exportName, value, expected)
+    case 'rag.recipe':
+      return resolvedRetrievalRecipeDefinition(root, file, exportName, value, expected)
     case 'rag.pipeline':
       return resolvedRetrievalPipelineDefinition(root, file, exportName, value, expected)
     case 'memory':
@@ -177,6 +179,43 @@ async function resolvedRetrievalPipelineDefinition(
   )
   if (retrieverId)
     relations.push(relation('rag.pipeline.uses_retriever', id, `rag.retriever:${safeId(retrieverId)}`, file))
+  return { definition: definitionItem, relations }
+}
+
+async function resolvedRetrievalRecipeDefinition(
+  root: string,
+  file: string,
+  exportName: string,
+  value: unknown,
+  expected: ProjectDefinition,
+): Promise<{ definition: ProjectDefinition; relations: ProjectRelation[] } | undefined> {
+  if (!isTaggedObject(value, 'RetrievalRecipe')) return undefined
+  const recipeValue = value as {
+    id: string
+    inspect?: () => { retrieverIds?: readonly string[]; stepCount?: number }
+  }
+  const inspected = typeof recipeValue.inspect === 'function' ? recipeValue.inspect() : undefined
+  const id = `rag.recipe:${safeId(recipeValue.id)}`
+  const definitionItem = await resolvedDefinition(
+    root,
+    file,
+    id,
+    'rag.recipe',
+    recipeValue.id,
+    expected.description,
+    {
+      exportName,
+      retrieverIds: inspected?.retrieverIds,
+      stepCount: inspected?.stepCount,
+    },
+    expected,
+  )
+  const relations = relationsFromExpected(expected, id, file).filter(
+    (relationItem) => relationItem.type !== 'rag.recipe.uses_retriever',
+  )
+  for (const retrieverId of inspected?.retrieverIds ?? []) {
+    relations.push(relation('rag.recipe.uses_retriever', id, `rag.retriever:${safeId(retrieverId)}`, file))
+  }
   return { definition: definitionItem, relations }
 }
 

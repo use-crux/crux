@@ -1021,6 +1021,8 @@ const DEP_KIND: Record<string, string> = {
   stores: 'memory.store',
   blocks: 'memory.block',
   routers: 'routing.router',
+  knowledgeBases: 'rag.knowledgeBase',
+  ragRecipes: 'rag.recipe',
   ragPipelines: 'rag.pipeline',
   retrievers: 'rag.retriever',
   guardrails: 'guardrail',

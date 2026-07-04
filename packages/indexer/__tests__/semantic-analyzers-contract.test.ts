@@ -54,6 +54,42 @@ describe('semantic analyzer syntax contract', () => {
       }),
     ])
   })
+
+  it('discovers retrieval beta definitions through semantic candidates', () => {
+    const sourceFile = fakeSourceFile()
+    const knowledgeBaseObject = objectWithStringId(sourceFile, 'docs')
+    const recipeObject = objectWithStringId(sourceFile, 'docs-answer')
+    const retrieverObject = objectWithStringId(sourceFile, 'docs-retriever')
+    const knowledgeBaseCall = node({
+      kind: 'callExpression',
+      text: 'knowledgeBase',
+      arguments: [knowledgeBaseObject],
+      parent: sourceFile,
+    })
+    const recipeCall = node({
+      kind: 'callExpression',
+      text: 'retrievalRecipe',
+      arguments: [recipeObject],
+      parent: sourceFile,
+    })
+    const retrieverCall = node({
+      kind: 'callExpression',
+      text: 'retriever',
+      arguments: [retrieverObject],
+      parent: sourceFile,
+    })
+    link(sourceFile, { children: [knowledgeBaseCall, recipeCall, retrieverCall] })
+
+    const candidates = semanticDefinitionCandidates(sourceFile, fakeSyntaxView)
+
+    expect(candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ definitionId: 'rag.knowledgeBase:docs', kind: 'rag.knowledgeBase' }),
+        expect.objectContaining({ definitionId: 'rag.recipe:docs-answer', kind: 'rag.recipe' }),
+        expect.objectContaining({ definitionId: 'rag.retriever:docs-retriever', kind: 'rag.retriever' }),
+      ]),
+    )
+  })
 })
 
 const fakeSyntaxView: SemanticSyntaxView<FakeNode, FakeSourceFile> = {
@@ -189,6 +225,18 @@ function node(input: Omit<FakeNode, 'pos' | 'end'> & Partial<Pick<FakeNode, 'pos
     sourceFile: input.parent && isFakeSourceFile(input.parent) ? input.parent : input.parent?.sourceFile,
     ...input,
   }
+}
+
+function objectWithStringId(parent: FakeNode, id: string): FakeNode {
+  const idName = node({ kind: 'identifier', text: 'id', parent })
+  const idValue = node({ kind: 'stringLiteral', text: id, parent })
+  const idProperty = node({
+    kind: 'propertyAssignment',
+    name: idName,
+    initializer: idValue,
+    parent,
+  })
+  return node({ kind: 'objectLiteral', properties: [idProperty], parent })
 }
 
 function link(target: FakeSourceFile, updates: Partial<FakeSourceFile>): void {

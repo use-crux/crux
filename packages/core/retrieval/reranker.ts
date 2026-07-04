@@ -1,47 +1,114 @@
 /**
- * Reranker authoring and application.
+ * Provider-agnostic retrieval reranking contracts.
  *
- * A reranker reorders retrieved hits (e.g. via a cross-encoder). Rerankers run
- * in sequence after the base retrieve, each receiving the prior reranker's hits.
+ * `Reranker` is the small public contract used by recipe `rerank()` steps.
+ * Adapter packages bind provider-specific rerank or generation capabilities
+ * into this shape; core also provides the shared LLM-judge implementation.
  *
  * @module
  */
 
-import type { RerankerInput, RetrieverHit, RetrieverReranker } from './types'
+import { z } from 'zod'
+import type { RetrievalModel } from './model'
+import type { RetrieverHit } from './types'
 
-/**
- * Define a reranker.
- *
- * @param config.name - Non-empty reranker name.
- * @param config.rerank - Reorders the input hits.
- * @returns A frozen {@link RetrieverReranker}.
- */
-export function reranker(config: {
+/** A provider-agnostic reranking engine for retrieved hits. */
+export interface Reranker {
+  /** Stable reranker name for inspection, docs, and traces. */
   name: string
-  rerank(input: RerankerInput): Promise<RetrieverHit[]> | RetrieverHit[]
-}): RetrieverReranker {
-  if (!config.name.trim()) {
-    throw new Error('Reranker name must be non-empty.')
-  }
+  /** Return hits ranked best-first for the query. */
+  rerank(args: { query: string; hits: readonly RetrieverHit[] }): Promise<RetrieverHit[]>
+}
 
+/** Configuration for {@link judgeReranker}. */
+export interface JudgeRerankerConfig {
+  /** Bound retrieval model used as the LLM judge. */
+  model: RetrievalModel
+  /** Stable reranker name. Defaults to `judge`. */
+  name?: string
+  /** Maximum ranked items requested from the judge. Omitted hits are appended. */
+  topN?: number
+  /** Project a hit into the document text shown to the judge. Defaults to `hit.content`. */
+  document?: (hit: RetrieverHit) => string
+}
+
+/** Create the shared LLM-judge reranker used when a recipe has no explicit engine. */
+export function judgeReranker(config: JudgeRerankerConfig): Reranker {
+  const name = config.name ?? 'judge'
   return Object.freeze({
-    _tag: 'Reranker' as const,
-    name: config.name,
-    rerank: config.rerank,
+    name,
+    async rerank(args: { query: string; hits: readonly RetrieverHit[] }): Promise<RetrieverHit[]> {
+      const { query, hits } = args
+      if (hits.length === 0) return []
+      const rankedCount = config.topN ?? hits.length
+      const result = await config.model.generateObject({
+        system:
+          'Rerank retrieved chunks for relevance to the query. Return hit indexes ranked best-first with optional relevance scores from 0 to 1.',
+        prompt: renderJudgePrompt({
+          query,
+          topN: rankedCount,
+          hits,
+          document: config.document,
+        }),
+        schema: z.object({
+          rankings: z.array(
+            z.object({
+              index: z.number().int(),
+              score: z.number().finite().min(0).max(1).nullable(),
+            }),
+          ),
+        }),
+      })
+
+      return materializeRankings(hits, result.object.rankings.slice(0, rankedCount))
+    },
   })
 }
 
-/** Normalize a reranker or reranker array into an array. */
-export function normalizeRerankers(rerank?: RetrieverReranker | RetrieverReranker[]): RetrieverReranker[] {
-  if (!rerank) return []
-  return Array.isArray(rerank) ? rerank : [rerank]
+function renderJudgePrompt(args: {
+  query: string
+  topN: number
+  hits: readonly RetrieverHit[]
+  document: ((hit: RetrieverHit) => string) | undefined
+}): string {
+  return [
+    `Query: ${args.query}`,
+    `Return up to ${args.topN} hit indexes ranked best-first.`,
+    '',
+    ...args.hits.map((hit, index) => `[${index}] ${args.document ? args.document(hit) : hit.content}`),
+  ].join('\n')
 }
 
-/** Apply rerankers in sequence, threading hits through each. */
-export async function applyRerankers(rerankers: RetrieverReranker[], input: RerankerInput): Promise<RetrieverHit[]> {
-  let hits = input.hits
-  for (const reranker of rerankers) {
-    hits = await reranker.rerank({ ...input, hits })
-  }
-  return hits
+function materializeRankings(
+  hits: readonly RetrieverHit[],
+  rankings: readonly { index: number; score: number | null }[],
+): RetrieverHit[] {
+  const seen = new Set<number>()
+  const reranked: RetrieverHit[] = []
+  const validRankings = rankings.filter((ranking) => ranking.index >= 0 && ranking.index < hits.length)
+
+  validRankings.forEach((ranking, rankIndex) => {
+    if (seen.has(ranking.index)) return
+    const hit = hits[ranking.index]
+    if (!hit) return
+    seen.add(ranking.index)
+    const score = ranking.score ?? fallbackScore(rankIndex, validRankings.length)
+    reranked.push({
+      ...hit,
+      score,
+      provenance: {
+        ...hit.provenance,
+        rerankScore: score,
+      },
+    })
+  })
+
+  hits.forEach((hit, index) => {
+    if (!seen.has(index)) reranked.push(hit)
+  })
+  return reranked
+}
+
+function fallbackScore(index: number, length: number): number {
+  return 1 - index / Math.max(1, length)
 }

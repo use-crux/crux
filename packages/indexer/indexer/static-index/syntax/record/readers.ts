@@ -1,4 +1,9 @@
-import type { StaticArgumentReader, StaticCallObjectReader, StaticObjectReader } from '../../../extensions/public-contract/types'
+import type {
+  StaticArgumentReader,
+  StaticCallObjectReader,
+  StaticConfiguredObjectReader,
+  StaticObjectReader,
+} from '../../../extensions/public-contract/types'
 import type { StaticObjectValue, StaticSyntaxValue } from './types'
 import {
   resolveStaticSyntaxValue,
@@ -61,6 +66,8 @@ export function createStaticRecordObjectReader(
     ),
     callObject: (property) => callObjectValue(propertyValue(property), initializers),
     callObjectArray: (property) => callObjectArrayValue(propertyValue(property), initializers),
+    objectOrCallObjectArray: (property) =>
+      objectOrCallObjectArrayValue(propertyValue(property), initializers),
     nestedString: (path) => nestedStringValue(object, path, initializers),
     objectMapIdentifiers: (property) => objectMapIdentifierValues(propertyValue(property), initializers),
     objectMapIdentifierEntries: (property) =>
@@ -152,6 +159,22 @@ function callObjectArrayValue(
   const resolved = resolveStaticSyntaxValue(value, initializers)
   if (resolved?.kind !== 'array') return []
   return resolved.elements.flatMap((element) => {
+    const call = callObjectValue(element, initializers)
+    return call ? [call] : []
+  })
+}
+
+function objectOrCallObjectArrayValue(
+  value: StaticSyntaxValue | undefined,
+  initializers: StaticSyntaxInitializerMap,
+): readonly StaticConfiguredObjectReader[] {
+  const resolved = resolveStaticSyntaxValue(value, initializers)
+  if (resolved?.kind !== 'array') return []
+  return resolved.elements.flatMap((element) => {
+    const object = staticObjectValue(element, initializers)
+    if (object) {
+      return [{ name: undefined, config: createStaticRecordObjectReader(object, initializers) }]
+    }
     const call = callObjectValue(element, initializers)
     return call ? [call] : []
   })

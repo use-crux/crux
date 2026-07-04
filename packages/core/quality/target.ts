@@ -21,7 +21,7 @@ import type { MergeContextInputs, Simplify } from '../prompt/type-utils'
 import type { Prompt, AnyPrompt } from '../prompt/prompt-types'
 import type { Agent, AnyAgent } from '../agent/agent'
 import type { FlowHandle } from '../flow/types'
-import type { Retriever, RetrieveOptions, RetrieverHit } from '../retrieval'
+import type { RetrievalRecipe, Retriever, RetrieveOptions, RetrieverHit } from '../retrieval'
 
 // ─────────────────────────────────────────────────────────────────
 // Capabilities
@@ -66,14 +66,7 @@ export type Capability =
 export type PromptCapability = 'modelCalls' | 'citations' | 'safety' | 'decisionReports'
 
 /** The capability set of a flow task. */
-export type FlowCapability =
-  | 'modelCalls'
-  | 'steps'
-  | 'toolCalls'
-  | 'routing'
-  | 'safety'
-  | 'memory'
-  | 'decisionReports'
+export type FlowCapability = 'modelCalls' | 'steps' | 'toolCalls' | 'routing' | 'safety' | 'memory' | 'decisionReports'
 
 /** The capability set of an agent task — all nine families. */
 export type AgentCapability = Capability
@@ -364,6 +357,24 @@ export interface RetrieverTargetOptions<R extends AnyRetriever = AnyRetriever, T
   options?: RetrieveOptions
 }
 
+/**
+ * Options for `target.recipe()`.
+ *
+ * @typeParam R      - The wrapped retrieval recipe.
+ * @typeParam TInput - The case input shape. Defaults to `{ query: string }`.
+ */
+export interface RetrievalRecipeTargetOptions<
+  R extends AnyRetrievalRecipe = AnyRetrievalRecipe,
+  TInput = { query: string },
+> {
+  /** Stable target id. Defaults to the recipe's own id. */
+  id?: string
+  /** Maps case input to the recipe query. Required when `TInput` is not `{ query: string }`. */
+  query?: (input: TInput) => string
+  /** Retrieve options forwarded to every call (limit, threshold, mode, ...). */
+  options?: RetrieveOptions
+}
+
 // ─────────────────────────────────────────────────────────────────
 // TaskLike + inference utilities
 // ─────────────────────────────────────────────────────────────────
@@ -373,6 +384,9 @@ export type AnyFlowHandle = FlowHandle<unknown, never>
 
 /** Widest retriever type (retrievers are not generic). */
 export type AnyRetriever = Retriever
+
+/** Widest retrieval recipe type. */
+export type AnyRetrievalRecipe = RetrievalRecipe
 
 /**
  * What `evaluate()` accepts as `task`. Crux primitives are tasks directly —
@@ -391,6 +405,7 @@ export type TaskLike =
   | AnyAgent // _tag: 'Agent'          → kind 'agent'
   | AnyFlowHandle // flow() handle     → kind 'flow'
   | AnyRetriever // retriever()        → kind 'retriever'
+  | AnyRetrievalRecipe // retrievalRecipe() → kind 'retriever'
   | AnyTarget // anything built by target.*
   // Plain fn → kind 'fn'. The second parameter is required-`never` so that
   // BOTH `(input) => out` and `(input, params) => out` are assignable
@@ -481,11 +496,13 @@ export type InputOf<T extends TaskLike> = T extends AnyTarget
       ? AgentTaskInput<T>
       : T extends AnyRetriever
         ? { query: string }
-        : T extends AnyFlowHandle
-          ? FlowTaskInput<T>
-          : T extends (input: infer I, ...rest: never[]) => unknown
-            ? I
-            : never
+        : T extends AnyRetrievalRecipe
+          ? { query: string }
+          : T extends AnyFlowHandle
+            ? FlowTaskInput<T>
+            : T extends (input: infer I, ...rest: never[]) => unknown
+              ? I
+              : never
 
 /**
  * The output type of a task — what `ctx.output` and scorer `output` are typed
@@ -506,11 +523,13 @@ export type OutputOf<T extends TaskLike> = T extends AnyTarget
       ? AgentTaskOutput<T>
       : T extends AnyRetriever
         ? readonly RetrieverHit[]
-        : T extends AnyFlowHandle
-          ? FlowTaskOutput<T>
-          : T extends (...args: never[]) => infer R
-            ? Awaited<R>
-            : never
+        : T extends AnyRetrievalRecipe
+          ? readonly RetrieverHit[]
+          : T extends AnyFlowHandle
+            ? FlowTaskOutput<T>
+            : T extends (...args: never[]) => infer R
+              ? Awaited<R>
+              : never
 
 /**
  * The variant-overridable parameter surface of a task. Variant entries are
@@ -531,11 +550,13 @@ export type ParamsOf<T extends TaskLike> = T extends AnyTarget
       ? AgentParams<T>
       : T extends AnyRetriever
         ? { options?: RetrieveOptions }
-        : T extends AnyFlowHandle
-          ? FlowParams<T>
-          : T extends (...args: never[]) => unknown
-            ? FnTaskParams<T>
-            : never
+        : T extends AnyRetrievalRecipe
+          ? { options?: RetrieveOptions }
+          : T extends AnyFlowHandle
+            ? FlowParams<T>
+            : T extends (...args: never[]) => unknown
+              ? FnTaskParams<T>
+              : never
 
 /**
  * The capability union of a task — which `ctx.expect.*` signal namespaces
@@ -554,9 +575,11 @@ export type CapsOf<T extends TaskLike> = T extends AnyTarget
       ? AgentCapability
       : T extends AnyRetriever
         ? RetrieverCapability
-        : T extends AnyFlowHandle
-          ? FlowCapability
-          : never
+        : T extends AnyRetrievalRecipe
+          ? RetrieverCapability
+          : T extends AnyFlowHandle
+            ? FlowCapability
+            : never
 
 /**
  * The expected-value type associated with a task. `expected` is opaque data
@@ -677,35 +700,77 @@ export interface TargetConstructor {
     r: R,
     opts?: RetrieverTargetOptions<R, TInput>,
   ): Target<TInput, readonly RetrieverHit[], { options?: RetrieveOptions }, RetrieverCapability>
+
+  /**
+   * Wrap a retrieval recipe. Case input defaults to `{ query: string }`; pass
+   * a `query` mapper for any other input shape.
+   *
+   * @example
+   * ```ts
+   * target.recipe(docsRecipe, {
+   *   query: (input: { question: string }) => input.question,
+   *   options: { limit: 8 },
+   * })
+   * ```
+   */
+  recipe<R extends AnyRetrievalRecipe, TInput = { query: string }>(
+    r: R,
+    opts?: RetrievalRecipeTargetOptions<R, TInput>,
+  ): Target<TInput, readonly RetrieverHit[], { options?: RetrieveOptions }, RetrieverCapability>
 }
 
 function customTarget(spec: CustomTargetSpec<Record<string, unknown>, unknown, object>): AnyTarget {
   if (typeof spec.run !== 'function') {
     throw new TypeError('target(): `run` must be a function.')
   }
-  return createTarget('fn', spec.id, Object.freeze([]), { run: spec.run as TargetInternal['run'] })
+  return createTarget('fn', spec.id, Object.freeze([]), {
+    run: spec.run as TargetInternal['run'],
+  })
 }
 
 function promptTarget(p: AnyPrompt, defaults?: object): AnyTarget {
   if (p?._tag !== 'Prompt') throw new TypeError('target.prompt(): expected a Crux prompt.')
-  return createTarget('prompt', p.id, PROMPT_CAPABILITIES, { primitive: p, defaults })
+  return createTarget('prompt', p.id, PROMPT_CAPABILITIES, {
+    primitive: p,
+    defaults,
+  })
 }
 
 function flowTarget(f: AnyFlowHandle, defaults?: object): AnyTarget {
   if (typeof f?.run !== 'function' || typeof f.name !== 'string') {
     throw new TypeError('target.flow(): expected a Crux flow handle.')
   }
-  return createTarget('flow', f.name, FLOW_CAPABILITIES, { primitive: f, defaults })
+  return createTarget('flow', f.name, FLOW_CAPABILITIES, {
+    primitive: f,
+    defaults,
+  })
 }
 
 function agentTarget(a: AnyAgent, defaults?: object): AnyTarget {
   if (a?._tag !== 'Agent') throw new TypeError('target.agent(): expected a Crux agent.')
-  return createTarget('agent', a.id, AGENT_CAPABILITIES, { primitive: a, defaults })
+  return createTarget('agent', a.id, AGENT_CAPABILITIES, {
+    primitive: a,
+    defaults,
+  })
 }
 
 function retrieverTarget(r: AnyRetriever, opts?: RetrieverTargetOptions<AnyRetriever, never>): AnyTarget {
-  if (r?._tag !== 'Retriever' && r?._tag !== 'RetrievalPipeline') {
+  if (r?._tag !== 'Retriever') {
     throw new TypeError('target.retriever(): expected a Crux retriever.')
+  }
+  return createTarget('retriever', opts?.id ?? r.id, RETRIEVER_CAPABILITIES, {
+    primitive: r,
+    query: opts?.query,
+    options: opts?.options,
+  })
+}
+
+function recipeTarget(
+  r: AnyRetrievalRecipe,
+  opts?: RetrievalRecipeTargetOptions<AnyRetrievalRecipe, never>,
+): AnyTarget {
+  if (r?._tag !== 'RetrievalRecipe') {
+    throw new TypeError('target.recipe(): expected a Crux retrieval recipe.')
   }
   return createTarget('retriever', opts?.id ?? r.id, RETRIEVER_CAPABILITIES, {
     primitive: r,
@@ -738,4 +803,5 @@ export const target: TargetConstructor = Object.assign(customTarget, {
   flow: flowTarget,
   agent: agentTarget,
   retriever: retrieverTarget,
+  recipe: recipeTarget,
 }) as unknown as TargetConstructor

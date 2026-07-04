@@ -7,10 +7,16 @@
  * @module
  */
 
-import type { EmbeddingModel, RerankingModel } from 'ai'
+import type { EmbeddingModel, LanguageModel, RerankingModel } from 'ai'
+import type { z } from 'zod'
 import { embedding as coreEmbedding, type DenseEmbedding } from '@use-crux/core/embedding'
-import { reranker as coreReranker, type RetrieverHit, type RetrieverReranker } from '@use-crux/core/retrieval'
+import type { Reranker, RetrievalModel, RetrieverHit } from '@use-crux/core/retrieval'
 import type { SdkGateway } from './gateway'
+
+export interface AIRetrievalModelConfig {
+  model: LanguageModel
+  maxRetries?: number
+}
 
 export interface AIRerankerConfig {
   name: string
@@ -39,8 +45,10 @@ export interface AIEmbeddingConfig {
 export interface AiSdkRuntimeExtensions {
   /** Create a dense Crux embedding backed by AI SDK `embedMany()`. */
   embedding(config: AIEmbeddingConfig): DenseEmbedding
+  /** Create a bound retrieval model backed by AI SDK generation helpers. */
+  retrievalModel(config: AIRetrievalModelConfig): RetrievalModel
   /** Create a Crux retriever reranker backed by AI SDK `rerank()`. */
-  reranker(config: AIRerankerConfig): RetrieverReranker
+  reranker(config: AIRerankerConfig): Reranker
 }
 
 /** Bind AI SDK non-generation capabilities to a scripted or live gateway. */
@@ -76,11 +84,36 @@ export function createAiSdkRuntimeExtensions(gateway: SdkGateway): AiSdkRuntimeE
         },
       })
     },
+    retrievalModel(config: AIRetrievalModelConfig) {
+      const model: RetrievalModel = {
+        generateText: async (args: { system?: string; prompt: string }) => {
+          const result = await gateway.generateText({
+            model: config.model,
+            system: args.system,
+            prompt: args.prompt,
+            maxRetries: config.maxRetries,
+          } as Parameters<SdkGateway['generateText']>[0])
+          return { text: result.text }
+        },
+        generateObject: async <T>(args: { system?: string; prompt: string; schema: z.ZodType<T> }) => {
+          const result = await gateway.generateObject({
+            model: config.model,
+            system: args.system,
+            prompt: args.prompt,
+            schema: args.schema,
+            maxRetries: config.maxRetries,
+          } as Parameters<SdkGateway['generateObject']>[0])
+          return { object: result.object as T }
+        },
+      }
+      return model
+    },
     reranker(config: AIRerankerConfig) {
-      return coreReranker({
+      const engine: Reranker = {
         name: config.name,
-        async rerank({ query, hits }) {
-          if (hits.length === 0) return hits
+        async rerank(args: { query: string; hits: readonly RetrieverHit[] }) {
+          const { query, hits } = args
+          if (hits.length === 0) return []
 
           const result = await gateway.rerank({
             model: config.model,
@@ -90,12 +123,13 @@ export function createAiSdkRuntimeExtensions(gateway: SdkGateway): AiSdkRuntimeE
             maxRetries: config.maxRetries,
           })
 
-          return result.ranking.map(({ originalIndex, score }) => ({
-            ...hits[originalIndex],
-            score,
-          }))
+          return result.ranking.flatMap((ranking) => {
+            const hit = hits[ranking.originalIndex]
+            return hit ? [{ ...hit, score: ranking.score }] : []
+          })
         },
-      })
+      }
+      return engine
     },
   })
 }

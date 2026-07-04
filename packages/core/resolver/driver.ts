@@ -30,6 +30,7 @@ import type { CruxArtifactId } from '../observability/contract'
 import type { CruxContextContributionPreview } from '../observability/contract'
 import type { AnyToolSet } from '../types'
 import type { ContextEntry } from '../prompt/context-types'
+import type { ToolMiddleware } from '../tools/types'
 import {
   emptyMergedResolution,
   type ContributionFacts,
@@ -115,6 +116,7 @@ function mergeNested(out: MergedResolution, nested: MergedResolution, sourceId: 
   out.memories.push(...nested.memories)
   out.blackboards.push(...nested.blackboards)
   mergeInjectedTools(out.tools, nested.tools, sourceId)
+  out.toolMiddleware.push(...nested.toolMiddleware)
   out.constraints.push(...nested.constraints)
   out.guardrails.push(...nested.guardrails)
   out.metadata = { ...out.metadata, ...nested.metadata }
@@ -214,9 +216,20 @@ async function runContributor(
 
   if (contribution.contexts) out.active.push(...contribution.contexts)
   if (contribution.tools) mergeInjectedTools(out.tools, contribution.tools, contributor.mergeSourceId)
+  if (contribution.toolMiddleware) out.toolMiddleware.push(...normalizeToolMiddleware(contribution.toolMiddleware))
   if (contribution.constraints) out.constraints.push(...contribution.constraints)
   if (contribution.guardrails) out.guardrails.push(...contribution.guardrails)
   if (contribution.metadata) out.metadata = { ...out.metadata, ...contribution.metadata }
 
   if (contribution.facts) emitFacts(ports, contribution.facts)
+}
+
+function normalizeToolMiddleware(middleware: ToolMiddleware | readonly ToolMiddleware[]): ToolMiddleware[] {
+  return isToolMiddlewareArray(middleware) ? [...middleware] : [middleware]
+}
+
+function isToolMiddlewareArray(
+  middleware: ToolMiddleware | readonly ToolMiddleware[],
+): middleware is readonly ToolMiddleware[] {
+  return Array.isArray(middleware)
 }

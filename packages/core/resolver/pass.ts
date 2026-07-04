@@ -16,6 +16,7 @@ import type { AnyToolSet, AnyMessage, ModelInfo } from '../types'
 import type { AnyPromptConfig } from '../prompt/prompt-types'
 import type { ContextEntry } from '../prompt/context-types'
 import type { ResolvedPrompt } from './types'
+import type { ToolMiddleware } from '../tools/types'
 import { LOAD_REFERENCE_TOOL_NAME, LOAD_SKILL_TOOL_NAME } from '../skill/tools'
 import { detectSuspiciousPatterns, escapeXml } from '../shared/sanitize'
 import { resolveUse } from './driver'
@@ -208,7 +209,8 @@ export async function runPromptPass(
   }
 
   if (Object.keys(merged).length > 0) resolved.tools = merged
-  if (config.toolMiddleware !== undefined) resolved.toolMiddleware = config.toolMiddleware
+  const toolMiddleware = mergeToolMiddleware(postMerge.injectedToolMiddleware, config.toolMiddleware)
+  if (toolMiddleware !== undefined) resolved.toolMiddleware = toolMiddleware
   if (config.toolChoice !== undefined) resolved.toolChoice = config.toolChoice
   if (config.stopWhen !== undefined) resolved.stopWhen = config.stopWhen
 
@@ -260,4 +262,26 @@ export async function runPromptPass(
       tools: toolNames.length > 0 ? toolNames : undefined,
     },
   }
+}
+
+function mergeToolMiddleware(
+  injected: readonly ToolMiddleware[],
+  configured: ToolMiddleware | readonly ToolMiddleware[] | undefined,
+): ToolMiddleware | readonly ToolMiddleware[] | undefined {
+  const chain = [...injected, ...normalizeToolMiddleware(configured)]
+  if (chain.length === 0) return undefined
+  return chain
+}
+
+function normalizeToolMiddleware(
+  middleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
+): ToolMiddleware[] {
+  if (middleware === undefined) return []
+  return isToolMiddlewareArray(middleware) ? [...middleware] : [middleware]
+}
+
+function isToolMiddlewareArray(
+  middleware: ToolMiddleware | readonly ToolMiddleware[],
+): middleware is readonly ToolMiddleware[] {
+  return Array.isArray(middleware)
 }

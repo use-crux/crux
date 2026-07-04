@@ -2607,7 +2607,8 @@ describe('project indexer', () => {
         import { flow as cruxFlow } from '@use-crux/convex/server'
         import { Agent } from '@use-crux/convex/agent'
         import { memory, workingState } from '@use-crux/core/memory'
-        import { retriever, retrievalPipeline } from '@use-crux/core/retrieval'
+        import { retriever, retrievalRecipe, rerank } from '@use-crux/core/retrieval'
+        import { reranker } from '@use-crux/ai'
         import { constraint } from '@use-crux/core/safety/constraint'
         import { guardrail } from '@use-crux/core/safety/guardrail'
         import { llmJudge } from '@use-crux/core/scoring'
@@ -2692,7 +2693,12 @@ describe('project indexer', () => {
           })
         }
         export const docsRetriever = retriever({ id: 'docs', namespace: 'kb', retrieve: async () => [] })
-        export const docsRag = retrievalPipeline(docsRetriever, [{ name: 'rerank', scorer: factuality }])
+        export const answerRanker = reranker({ name: 'answer-ranker', model: 'rerank-model' as never })
+        export const docsRag = retrievalRecipe({
+          id: 'docsRag',
+          retriever: docsRetriever,
+          steps: [{ id: 'judge', scorer: factuality }, rerank({ engine: answerRanker })],
+        })
         const sessionState = workingState({ id: 'state', schema: z.object({ user_name: z.string(), turn_count: z.number().optional() }) })
         const memoryStore = cruxConvexStore({ component: components.crux, ctx })
         const boardStore = cruxConvexStore({ component: components.crux, ctx })
@@ -2987,21 +2993,44 @@ describe('project indexer', () => {
       }),
     )
     expect(byId.get('rag.retriever:docs')).toMatchObject({ kind: 'rag.retriever', name: 'docs' })
-    expect(byId.get('rag.pipeline:docsRag')).toMatchObject({ kind: 'rag.pipeline', name: 'docsRag' })
-    expect(byId.get('rag.pipeline:docsRag:stage:rerank')).toMatchObject({
-      kind: 'rag.pipeline.stage',
-      name: 'rerank',
+    expect(byId.get('rag.recipe:docsRag')).toMatchObject({ kind: 'rag.recipe', name: 'docsRag' })
+    expect(byId.get('rag.reranker:answer-ranker')).toMatchObject({
+      kind: 'rag.reranker',
+      name: 'answer-ranker',
       metadata: expect.objectContaining({
-        pipelineId: 'rag.pipeline:docsRag',
-        stageId: 'rerank',
+        facts: expect.objectContaining({ kind: 'rag.reranker', rerankerId: 'answer-ranker' }),
+      }),
+    })
+    expect(byId.get('rag.recipe:docsRag:step:judge')).toMatchObject({
+      kind: 'rag.recipe.step',
+      name: 'judge',
+      metadata: expect.objectContaining({
+        recipeId: 'rag.recipe:docsRag',
+        stepId: 'judge',
         indexPresentation: expect.objectContaining({
           standalone: false,
-          parentDefinitionId: 'rag.pipeline:docsRag',
-          parentRelationType: 'rag.pipeline.includes_stage',
-          role: 'stage',
+          parentDefinitionId: 'rag.recipe:docsRag',
+          parentRelationType: 'rag.recipe.includes_step',
+          role: 'step',
           order: 0,
         }),
         scorerVariable: 'factuality',
+      }),
+    })
+    expect(byId.get('rag.recipe:docsRag:step:rerank')).toMatchObject({
+      kind: 'rag.recipe.step',
+      name: 'rerank',
+      metadata: expect.objectContaining({
+        recipeId: 'rag.recipe:docsRag',
+        stepId: 'rerank',
+        indexPresentation: expect.objectContaining({
+          standalone: false,
+          parentDefinitionId: 'rag.recipe:docsRag',
+          parentRelationType: 'rag.recipe.includes_step',
+          role: 'step',
+          order: 1,
+        }),
+        rerankerVariable: 'answerRanker',
       }),
     })
     expect(byId.get('memory:session-memory')).toMatchObject({ kind: 'memory', name: 'session-memory' })
@@ -3274,18 +3303,28 @@ describe('project indexer', () => {
           to: 'signal:plan-approval',
         }),
         expect.objectContaining({
-          type: 'rag.pipeline.uses_retriever',
-          from: 'rag.pipeline:docsRag',
+          type: 'rag.recipe.uses_retriever',
+          from: 'rag.recipe:docsRag',
           to: 'rag.retriever:docs',
         }),
         expect.objectContaining({
-          type: 'rag.pipeline.includes_stage',
-          from: 'rag.pipeline:docsRag',
-          to: 'rag.pipeline:docsRag:stage:rerank',
+          type: 'rag.recipe.includes_step',
+          from: 'rag.recipe:docsRag',
+          to: 'rag.recipe:docsRag:step:rerank',
         }),
         expect.objectContaining({
-          type: 'rag.pipeline.stage.uses_scorer',
-          from: 'rag.pipeline:docsRag:stage:rerank',
+          type: 'rag.recipe.step.uses_reranker',
+          from: 'rag.recipe:docsRag:step:rerank',
+          to: 'rag.reranker:answer-ranker',
+        }),
+        expect.objectContaining({
+          type: 'rag.recipe.includes_step',
+          from: 'rag.recipe:docsRag',
+          to: 'rag.recipe:docsRag:step:judge',
+        }),
+        expect.objectContaining({
+          type: 'rag.recipe.step.uses_scorer',
+          from: 'rag.recipe:docsRag:step:judge',
           to: 'scorer:factuality',
         }),
         expect.objectContaining({
@@ -3332,7 +3371,7 @@ describe('project indexer', () => {
         expect.objectContaining({
           type: 'eval.covers_definition',
           from: 'evaluation:docs-rag-eval',
-          to: 'rag.pipeline:docsRag',
+          to: 'rag.recipe:docsRag',
         }),
         expect.objectContaining({
           type: 'composition.uses_agent',
@@ -4901,7 +4940,7 @@ describe('project indexer', () => {
         import { agent, blackboard } from '@use-crux/core/agent'
         import { flow } from '@use-crux/core/flow'
         import { memory } from '@use-crux/core/memory'
-        import { retriever, retrievalPipeline, retrievalStage } from '@use-crux/core/retrieval'
+        import { retriever, retrievalRecipe } from '@use-crux/core/retrieval'
         import { constraint } from '@use-crux/core/safety'
         import { guardrail } from '@use-crux/core/safety'
         import { llmJudge } from '@use-crux/core/scoring'
@@ -4921,8 +4960,11 @@ describe('project indexer', () => {
         })
         export const writerFlow = flow('writer-flow', async (flow) => flow.step('draft', async () => 'done'))
         export const docsRetriever = retriever({ id: 'docs', namespace: 'kb', retrieve: async () => [] })
-        export const queryStage = retrievalStage({ name: 'rewrite', phase: 'query', run: ({ query }) => ({ query }) })
-        export const docsRag = retrievalPipeline(docsRetriever, [queryStage])
+        export const docsRag = retrievalRecipe({
+          id: 'docsRag',
+          retriever: docsRetriever,
+          steps: [{ id: 'rewrite' }],
+        })
         export const sessionMemory = memory({ id: 'session-memory', blocks: [] })
         export const notes = blackboard({ id: 'notes', schema: z.object({ summary: z.string().optional() }) })
         export const factuality = llmJudge({
@@ -4965,12 +5007,12 @@ describe('project indexer', () => {
       fidelity: 'resolved',
       metadata: expect.objectContaining({ namespace: 'kb' }),
     })
-    expect(byId.get('rag.pipeline:docsRag')).toMatchObject({
-      kind: 'rag.pipeline',
+    expect(byId.get('rag.recipe:docsRag')).toMatchObject({
+      kind: 'rag.recipe',
       fidelity: 'resolved',
       metadata: expect.objectContaining({
         static: true,
-        facts: expect.objectContaining({ kind: 'rag.pipeline' }),
+        facts: expect.objectContaining({ kind: 'rag.recipe' }),
         intelligence: expect.objectContaining({
           dependencies: expect.objectContaining({ retrievers: ['docsRetriever'] }),
         }),
@@ -5051,8 +5093,8 @@ describe('project indexer', () => {
           fidelity: 'resolved',
         }),
         expect.objectContaining({
-          type: 'rag.pipeline.uses_retriever',
-          from: 'rag.pipeline:docsRag',
+          type: 'rag.recipe.uses_retriever',
+          from: 'rag.recipe:docsRag',
           to: 'rag.retriever:docs',
           fidelity: 'resolved',
         }),

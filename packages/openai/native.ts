@@ -9,6 +9,7 @@ import type {
   NativeProviderPort,
   SingleTurnProviderBundleSpec,
 } from '@use-crux/core/adapter'
+import { judgeReranker, type Reranker, type RetrievalModel, type RetrieverHit } from '@use-crux/core/retrieval'
 import { openAITranscript } from './message-codec'
 import {
   asOpenAINonStreamingParams,
@@ -21,6 +22,18 @@ import {
 import { openAIResponseMeta, openAIResponseText } from './response'
 import { openAITextDelta } from './stream'
 import type { OpenAIChatRequest, OpenAIExtra } from './types'
+
+/** Configuration for `openai.retrievalModel()`. */
+export interface OpenAIRetrievalModelConfig {
+  model: string
+}
+
+/** Configuration for `openai.reranker()`. */
+export interface OpenAIRerankerConfig extends OpenAIRetrievalModelConfig {
+  name?: string
+  topN?: number
+  document?: (hit: RetrieverHit) => string
+}
 
 /** OpenAI single-turn provider bundle compiled by core. */
 const openAI = defineSingleTurnProviderBundle({
@@ -48,6 +61,7 @@ const openAI = defineSingleTurnProviderBundle({
     Record<string, never>,
     OpenAI.ChatCompletionMessageParam
   >['profile'],
+  extend: ({ client }) => createOpenAIRuntimeExtensions(client),
 })
 
 /**
@@ -82,3 +96,28 @@ export const createOpenAI = openAI.create
 
 /** Lightweight helper factory generated from the OpenAI provider runtime. */
 export const openAIHelpers = openAI.helpers()
+
+function createOpenAIRuntimeExtensions(client: OpenAI): {
+  retrievalModel(config: OpenAIRetrievalModelConfig): RetrievalModel
+  reranker(config: OpenAIRerankerConfig): Reranker
+} {
+  const retrievalModel = (config: OpenAIRetrievalModelConfig): RetrievalModel => {
+    const generateText = openAIHelpers.createGenerateTextFn(client, config.model)
+    const generateObject = openAIHelpers.createGenerateObjectFn(client, config.model)
+    return {
+      generateText: (args) => generateText({ ...args, model: config.model }),
+      generateObject: (args) => generateObject({ ...args, model: config.model }),
+    }
+  }
+  return {
+    retrievalModel,
+    reranker(config) {
+      return judgeReranker({
+        model: retrievalModel(config),
+        name: config.name ?? 'openai-judge',
+        topN: config.topN,
+        document: config.document,
+      })
+    },
+  }
+}

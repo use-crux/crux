@@ -8,6 +8,7 @@ import {
   type IndexExtractor,
   type ConfigCallReader,
   type ConfigReader,
+  type ConfiguredObjectReader,
   type DefinitionBuilder,
   type ExtractContext,
   type ExtractResult,
@@ -70,6 +71,11 @@ type NestedString = Expect<Equal<typeof nestedString, string | undefined>>
 const callObjects = config.callObjectArray('blocks')
 type CallObjects = Expect<Equal<typeof callObjects, readonly ConfigCallReader[]>>
 type CallObjectName = Expect<Equal<(typeof callObjects)[number]['name'], string | undefined>>
+
+const configuredObjects = config.objectOrCallObjectArray('steps')
+type ConfiguredObjects = Expect<Equal<typeof configuredObjects, readonly ConfiguredObjectReader[]>>
+type ConfiguredObjectName = Expect<Equal<(typeof configuredObjects)[number]['name'], string | undefined>>
+type ConfiguredObjectConfig = Expect<Equal<(typeof configuredObjects)[number]['config'], ConfigReader>>
 
 const jsonValue = args.json(0)
 type JsonArgument = Expect<Equal<typeof jsonValue, unknown>>

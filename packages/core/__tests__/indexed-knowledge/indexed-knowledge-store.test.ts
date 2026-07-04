@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { createIndexedKnowledgeStore } from '../../indexed-knowledge'
+import { indexedChunkKey } from '../../indexed-knowledge/keys'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
 
 describe('indexed knowledge store', () => {
@@ -216,5 +217,39 @@ describe('indexed knowledge store', () => {
         filter: { namespace: 'kb' },
       }),
     ).rejects.toThrow('Indexed knowledge search requires vectors')
+  })
+
+  it('fails with a hydration diagnostic when vector hits cannot be read from records', async () => {
+    const data = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    const records = createIndexedKnowledgeStore({
+      indexerId: 'docs',
+      namespace: 'kb',
+      records: data,
+      vectors,
+    })
+
+    await records.persistGeneration({
+      chunks: [
+        {
+          namespace: 'kb',
+          sourceId: 'orphan',
+          chunkId: 'a',
+          ordinal: 0,
+          content: 'orphaned vector',
+          metadata: { topic: 'diagnostics' },
+        },
+      ],
+      parents: [],
+      dense: [[1, 0]],
+      replaceSources: true,
+    })
+    await data.delete(indexedChunkKey('docs', 'kb', 'orphan', 'a'))
+
+    await expect(records.searchChunks({ mode: 'dense', dense: [1, 0], threshold: 0.8 })).rejects.toMatchObject({
+      name: 'RetrievalRunError',
+      code: 'hydration_miss',
+      message: expect.stringContaining('Vector hits could not be hydrated'),
+    })
   })
 })

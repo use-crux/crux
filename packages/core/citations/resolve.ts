@@ -12,6 +12,7 @@
 import { observe } from '../observability'
 import type { RetrieverHit } from '../retrieval'
 import { citationSchema, type Citation } from './schema'
+import { groundingHitKey } from './session'
 import type {
   CitationQuotePolicy,
   CitationResolveOptions,
@@ -41,6 +42,7 @@ export function resolveCitations(
   options: CitationResolveOptions = {},
 ): CitationValidationResult {
   const quotePolicy = options.quotes ?? 'optional'
+  const allowedHits = dedupeHits(hits)
   const span = observe.openSpan({
     name: 'citation.resolve',
     family: 'citation',
@@ -55,7 +57,7 @@ export function resolveCitations(
   try {
     let result: CitationValidationResult | undefined
     span.withContext(() => {
-      result = resolveCitationsInner(citations, hits, quotePolicy)
+      result = resolveCitationsInner(citations, allowedHits, quotePolicy)
     })
     if (!result) throw new Error('citation.resolve did not produce a validation result.')
     const validationResult = result
@@ -117,7 +119,7 @@ function resolveCitationsInner(
       continue
     }
 
-    if (citation.namespace === undefined && matches.length > 1) {
+    if (citation.namespace === undefined && distinctNamespaces(matches).length > 1) {
       issues.push(
         issue(
           'ambiguous_hit',
@@ -175,6 +177,19 @@ function resolveCitationsInner(
     issues,
     artifact,
   }
+}
+
+function dedupeHits(hits: readonly RetrieverHit[]): RetrieverHit[] {
+  const deduped = new Map<string, RetrieverHit>()
+  for (const hit of hits) {
+    const key = groundingHitKey(hit)
+    if (!deduped.has(key)) deduped.set(key, hit)
+  }
+  return [...deduped.values()]
+}
+
+function distinctNamespaces(hits: readonly RetrieverHit[]): string[] {
+  return Array.from(new Set(hits.map((hit) => hit.namespace)))
 }
 
 /** Emit the citation report artifact and link it to the active span. */

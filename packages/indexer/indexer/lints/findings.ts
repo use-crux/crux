@@ -55,6 +55,12 @@ import {
 } from './finding-helpers'
 import { qualityMissingBaselineFinding } from './quality'
 
+const RAG_RECIPE_STEP_TARGET_RELATIONS = new Set([
+  'rag.recipe.step.uses_retriever',
+  'rag.recipe.step.uses_scorer',
+  'rag.recipe.step.uses_reranker',
+])
+
 /**
  * Evaluates all built-in index lint findings over resolved definitions and
  * relations.
@@ -334,6 +340,26 @@ export function indexLintFindings(input: {
           evidence: [definitionEvidence(definition, 'Routing target variable has no resolved target relation')],
         }),
       )
+    }
+
+    if (definition.kind === 'rag.recipe.step') {
+      for (const relation of outgoingRelations.get(definition.id) ?? []) {
+        if (!RAG_RECIPE_STEP_TARGET_RELATIONS.has(relation.type) || byId.has(relation.to)) continue
+        findings.push(
+          indexLintFinding({
+            ruleId: 'rag.recipe_step_unresolved_target',
+            key: `${definition.id}:${relation.type}:${relation.to}`,
+            message: `RAG recipe step "${definition.name}" points at "${relation.to}" but no index-visible target was resolved.`,
+            ...((relation.source ?? definition.source) ? { source: relation.source ?? definition.source } : {}),
+            primaryDefinitionId: definition.id,
+            relatedDefinitionIds: [definition.id],
+            evidence: [
+              definitionEvidence(definition, 'Recipe step has an unresolved dependency edge'),
+              relationEvidence(relation, 'Unresolved recipe step dependency'),
+            ],
+          }),
+        )
+      }
     }
 
     if (definition.kind === 'routing.cascade') {

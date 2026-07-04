@@ -12,6 +12,7 @@ import type { z } from 'zod'
 import type { Retriever, RetrieverHit, RetrievalInjectMode, RetrievalToolConfig } from '../retrieval'
 import type { InjectableEntry, PromptInjection } from '../prompt/context-types'
 import type { Citation } from './schema'
+import type { GroundingSession } from './session'
 
 /** Whether a citation quote is forbidden, optional, or required. */
 export type CitationQuotePolicy = false | 'optional' | 'required'
@@ -40,7 +41,7 @@ export interface ResolvedCitation extends Citation {
   url?: string
   path?: string
   metadata?: Record<string, unknown>
-  provenance?: Record<string, unknown>
+  provenance?: RetrieverHit['provenance']
   hit: {
     namespace: string
     sourceId: string
@@ -50,7 +51,7 @@ export interface ResolvedCitation extends Citation {
     metadata: Record<string, unknown>
     sourceUrl?: string
     sourcePath?: string
-    provenance?: Record<string, unknown>
+    provenance?: RetrieverHit['provenance']
   }
 }
 
@@ -88,7 +89,8 @@ export interface CitationValidationResult {
 
 /** Config for {@link citationConstraint}: the grounded-citation safety check. */
 export interface CitationConstraintConfig<TSchema extends z.ZodType = z.ZodType<unknown>> {
-  hits: readonly RetrieverHit[]
+  hits?: readonly RetrieverHit[]
+  session?: GroundingSession
   required?: boolean
   quotes?: CitationQuotePolicy
   name?: string
@@ -102,7 +104,7 @@ export interface CitationConstraintConfig<TSchema extends z.ZodType = z.ZodType<
 export interface GroundingConfig {
   id: string
   retriever: Retriever
-  query: string | ((args: { input: Record<string, unknown> }) => string)
+  query?: string | ((args: { input: Record<string, unknown> }) => string)
   limit?: number
   inject?: RetrievalInjectMode
   render?: (args: {
@@ -136,6 +138,6 @@ export interface Grounding extends InjectableEntry {
 export interface GroundingResolution {
   groundingId: string
   retrieverId: string
-  query: string
+  query?: string
   hits: RetrieverHit[]
 }

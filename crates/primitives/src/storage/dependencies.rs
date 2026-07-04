@@ -2,15 +2,21 @@ use serde_json::{Map, Value, json};
 
 use crate::{
     protocol::{StaticInitializerRecord, StaticSyntaxValue},
-    record_values::reference_property,
+    record_values::{property_value, resolve_static_value},
 };
 
 #[derive(Clone, Default)]
 pub(crate) struct StorageReferences {
-    pub storage: Option<String>,
-    pub records: Option<String>,
-    pub vectors: Option<String>,
-    pub blobs: Option<String>,
+    pub storage: Option<StorageReference>,
+    pub records: Option<StorageReference>,
+    pub vectors: Option<StorageReference>,
+    pub blobs: Option<StorageReference>,
+}
+
+#[derive(Clone)]
+pub(crate) struct StorageReference {
+    pub name: String,
+    pub(crate) bindable: bool,
 }
 
 pub(crate) fn storage_config_references(
@@ -21,10 +27,10 @@ pub(crate) fn storage_config_references(
         return StorageReferences::default();
     };
     StorageReferences {
-        storage: reference_property(config, "storage", initializers),
-        records: reference_property(config, "records", initializers),
-        vectors: reference_property(config, "vectors", initializers),
-        blobs: reference_property(config, "blobs", initializers),
+        storage: storage_reference_property(config, "storage", initializers),
+        records: storage_reference_property(config, "records", initializers),
+        vectors: storage_reference_property(config, "vectors", initializers),
+        blobs: storage_reference_property(config, "blobs", initializers),
     }
 }
 
@@ -40,22 +46,22 @@ pub(crate) fn storage_relation_refs(owner: &str, refs: &StorageReferences) -> Ve
     push_relation(
         &mut references,
         format!("{owner}.uses_storage"),
-        refs.storage.as_deref(),
+        refs.storage.as_ref(),
     );
     push_relation(
         &mut references,
         format!("{owner}.uses_record_store"),
-        refs.records.as_deref(),
+        refs.records.as_ref(),
     );
     push_relation(
         &mut references,
         format!("{owner}.uses_vector_store"),
-        refs.vectors.as_deref(),
+        refs.vectors.as_ref(),
     );
     push_relation(
         &mut references,
         format!("{owner}.uses_blob_store"),
-        refs.blobs.as_deref(),
+        refs.blobs.as_ref(),
     );
     references
 }
@@ -69,21 +75,111 @@ pub(crate) fn has_storage_references(refs: &StorageReferences) -> bool {
 
 pub(crate) fn storage_dependency_map(refs: &StorageReferences) -> Map<String, Value> {
     let mut dependencies = Map::new();
-    insert_dependency(&mut dependencies, "storage", refs.storage.as_deref());
-    insert_dependency(&mut dependencies, "recordStores", refs.records.as_deref());
-    insert_dependency(&mut dependencies, "vectorStores", refs.vectors.as_deref());
-    insert_dependency(&mut dependencies, "blobStores", refs.blobs.as_deref());
+    insert_dependency(&mut dependencies, "storage", refs.storage.as_ref());
+    insert_dependency(&mut dependencies, "recordStores", refs.records.as_ref());
+    insert_dependency(&mut dependencies, "vectorStores", refs.vectors.as_ref());
+    insert_dependency(&mut dependencies, "blobStores", refs.blobs.as_ref());
     dependencies
 }
 
-fn insert_dependency(dependencies: &mut Map<String, Value>, key: &str, value: Option<&str>) {
+fn insert_dependency(
+    dependencies: &mut Map<String, Value>,
+    key: &str,
+    value: Option<&StorageReference>,
+) {
     if let Some(value) = value {
-        dependencies.insert(key.to_string(), json!([value]));
+        dependencies.insert(key.to_string(), json!([value.name]));
     }
 }
 
-fn push_relation(references: &mut Vec<Value>, relation_type: String, to_variable: Option<&str>) {
-    if let Some(to_variable) = to_variable {
-        references.push(json!({ "type": relation_type, "toVariable": to_variable }));
+fn push_relation(
+    references: &mut Vec<Value>,
+    relation_type: String,
+    reference: Option<&StorageReference>,
+) {
+    if let Some(reference) = reference {
+        if reference.bindable {
+            references.push(json!({ "type": relation_type, "toVariable": reference.name }));
+        } else if let Some(fallback_to_id) = storage_fallback_id(&relation_type, &reference.name) {
+            references.push(json!({ "type": relation_type, "fallbackToId": fallback_to_id }));
+        }
     }
+}
+
+fn storage_reference_property(
+    object: &StaticSyntaxValue,
+    name: &str,
+    initializers: &std::collections::HashMap<&str, &StaticInitializerRecord>,
+) -> Option<StorageReference> {
+    storage_reference_name(property_value(object, name)).or_else(|| {
+        storage_reference_name(Some(resolve_static_value(
+            property_value(object, name)?,
+            initializers,
+            &mut std::collections::HashSet::new(),
+        )))
+    })
+}
+
+fn storage_reference_name(value: Option<&StaticSyntaxValue>) -> Option<StorageReference> {
+    match value {
+        Some(StaticSyntaxValue::Identifier { name }) => Some(StorageReference {
+            name: name.clone(),
+            bindable: true,
+        }),
+        Some(StaticSyntaxValue::PropertyAccess { name, .. }) => Some(StorageReference {
+            name: name.clone(),
+            bindable: false,
+        }),
+        Some(StaticSyntaxValue::Call { callee, .. }) => Some(StorageReference {
+            name: callee
+                .local_name
+                .clone()
+                .unwrap_or_else(|| callee.name.clone()),
+            bindable: false,
+        }),
+        _ => None,
+    }
+}
+
+fn storage_fallback_id(relation_type: &str, name: &str) -> Option<String> {
+    match relation_type {
+        "storage.bundle.uses_record_store"
+        | "rag.retriever.uses_record_store"
+        | "workspace.uses_record_store" => {
+            Some(format!("storage.recordStore:{}", safe_reference_id(name)))
+        }
+        "storage.bundle.uses_vector_store"
+        | "rag.retriever.uses_vector_store"
+        | "workspace.uses_vector_store" => {
+            Some(format!("storage.vectorStore:{}", safe_reference_id(name)))
+        }
+        "storage.bundle.uses_blob_store"
+        | "rag.retriever.uses_blob_store"
+        | "workspace.uses_blob_store" => {
+            Some(format!("storage.blobStore:{}", safe_reference_id(name)))
+        }
+        "storage.scope.wraps_storage" | "rag.retriever.uses_storage" | "workspace.uses_storage" => {
+            Some(format!("storage.bundle:{}", safe_reference_id(name)))
+        }
+        _ => None,
+    }
+}
+
+fn safe_reference_id(value: &str) -> String {
+    let mut output = String::new();
+    let mut previous_was_lower_or_digit = false;
+    for character in value.chars() {
+        if character.is_ascii_uppercase() && previous_was_lower_or_digit {
+            output.push('-');
+        }
+        if character.is_ascii_alphanumeric() || character == '_' || character == '-' {
+            output.push(character.to_ascii_lowercase());
+            previous_was_lower_or_digit =
+                character.is_ascii_lowercase() || character.is_ascii_digit();
+        } else {
+            output.push('-');
+            previous_was_lower_or_digit = false;
+        }
+    }
+    output.trim_matches('-').to_string()
 }

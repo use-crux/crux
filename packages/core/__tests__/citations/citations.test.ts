@@ -3,6 +3,7 @@ import { z } from 'zod'
 import {
   citationConstraint,
   citationSchema,
+  createGroundingSession,
   renderCitationContext,
   resolveCitations,
 } from '../../citations'
@@ -52,7 +53,7 @@ describe('resolveCitations()', () => {
     })
   })
 
-    it('requires namespace when source and chunk are ambiguous', () => {
+  it('requires namespace when source and chunk are ambiguous', () => {
     const result = resolveCitations(
       [{ sourceId: 'guide.md', chunkId: 'chunk-1', quote: 'retrieval' }],
       [hit({ namespace: 'public' }), hit({ namespace: 'internal' })],
@@ -65,6 +66,25 @@ describe('resolveCitations()', () => {
       sourceId: 'guide.md',
       chunkId: 'chunk-1',
     })
+  })
+
+  it('deduplicates duplicate allowed hits before ambiguity checks', () => {
+    const result = resolveCitations(
+      [{ sourceId: 'guide.md', chunkId: 'chunk-1', quote: 'retrieval' }],
+      [hit(), hit({ score: 0.8 })],
+      { quotes: 'optional' },
+    )
+
+    expect(result.valid).toBe(true)
+    expect(result.citations).toHaveLength(1)
+    expect(result.artifact.allowedHits).toEqual([
+      {
+        namespace: 'docs',
+        sourceId: 'guide.md',
+        chunkId: 'chunk-1',
+        score: 0.9,
+      },
+    ])
   })
 
     it('fails when required quotes are missing or not found in the hit content', () => {
@@ -139,6 +159,45 @@ describe('citationConstraint()', () => {
           invalidCitationCount: 0,
         },
       },
+    })
+  })
+
+  it('reads allowed hits from a grounding session at validation time', async () => {
+    const session = createGroundingSession({ generationId: 'gen-test' })
+    const check = citationConstraint({
+      session,
+      required: true,
+      quotes: 'required',
+    })
+
+    await session.recordHits([hit(), hit({ score: 0.7 })], 'tool')
+
+    const result = await check.check(
+      {
+        text: '',
+        parsed: {
+          citations: [
+            {
+              sourceId: 'guide.md',
+              chunkId: 'chunk-1',
+              quote: 'dense and sparse retrieval',
+            },
+          ],
+        },
+      },
+      { promptId: 'answer', model: 'test', traceId: undefined, attempt: 0, metadata: {} },
+    )
+
+    expect(result.pass).toBe(true)
+    expect(result.metadata?.grounding).toMatchObject({
+      allowedHits: [
+        {
+          namespace: 'docs',
+          sourceId: 'guide.md',
+          chunkId: 'chunk-1',
+          score: 0.9,
+        },
+      ],
     })
   })
 

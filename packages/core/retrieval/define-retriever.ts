@@ -3,12 +3,11 @@
  *
  * Dispatches between a custom retriever (user-supplied `retrieve`) and a
  * store-backed dense/sparse/hybrid retriever, validating the config and wiring
- * search, reranking, instrumentation, and the shared retriever entity.
+ * search, instrumentation, and the shared retriever entity.
  *
  * @module
  */
 
-import { applyRerankers, normalizeRerankers } from './reranker'
 import { createRetrieverEntity } from './entity'
 import { runRetrievalOperation } from './observability'
 import {
@@ -17,8 +16,10 @@ import {
   getRetrieverVectorStore,
 } from './search'
 import { createIndexedKnowledgeStore } from '../indexed-knowledge'
+import { indexedChunkKey } from '../indexed-knowledge/keys'
+import { indexedChunkToHit } from '../indexed-knowledge/records'
 import type { IndexedChunkSearchQuery } from '../indexed-knowledge'
-import type { CustomRetrieverConfig, DenseStoreBackedRetrieverConfig, RetrieveOptions, Retriever } from './types'
+import type { CustomRetrieverConfig, DenseStoreBackedRetrieverConfig, RetrieveOptions, Retriever, RetrieverHit } from './types'
 
 /**
  * Create a retriever from a store-backed or custom configuration.
@@ -98,16 +99,16 @@ function validateDenseStoreBackedConfig(
 
 function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig): Retriever {
   const defaultMode = deriveStoreBackedMode(config)
-  const rerankers = normalizeRerankers(config.rerank)
   const recordStore = getRetrieverRecordStore(config)
+  const indexerId = config.indexerId ?? config.id
   const records = createIndexedKnowledgeStore({
-    indexerId: config.indexerId ?? config.id,
+    indexerId,
     namespace: config.namespace,
     records: recordStore!,
     vectors: getRetrieverVectorStore(config),
   })
 
-  const retrieve: Retriever['retrieve'] = async (query, options = {}) => {
+  const retrieve = async (query: string, options: RetrieveOptions = {}): Promise<RetrieverHit[]> => {
     const mode: IndexedChunkSearchQuery['mode'] = options.mode ?? config.search?.mode ?? defaultMode
     const limit = options.limit ?? config.search?.limit
     const threshold = options.threshold ?? config.search?.threshold
@@ -115,7 +116,7 @@ function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig
       ...(config.search?.filter ?? {}),
       ...(options.filter ?? {}),
     }
-    const fusion = options.fusion ?? config.search?.fusion
+    const fusion = normalizeFusion(options.fusion) ?? config.search?.fusion
 
     return runRetrievalOperation({
       retrieverId: config.id,
@@ -127,14 +128,7 @@ function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig
       filter,
       fusion,
       run: async () => {
-        const hits = [...(await records.searchChunks(await prepareIndexedChunkSearch(config, query, options, mode)))]
-        return applyRerankers(rerankers, {
-          retrieverId: config.id,
-          namespace: config.namespace,
-          mode,
-          query,
-          hits,
-        })
+        return [...(await records.searchChunks(await prepareIndexedChunkSearch(config, query, options, mode)))]
       },
     })
   }
@@ -144,6 +138,11 @@ function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig
     namespace: config.namespace,
     mode: defaultMode,
     retrieve,
+    getSource: async (lookup) => {
+      if (lookup.namespace !== config.namespace) return null
+      const value = await recordStore!.get(indexedChunkKey(indexerId, config.namespace, lookup.sourceId, lookup.chunkId))
+      return indexedChunkToHit({ value: value ?? {}, score: 1 })
+    },
     defaultContext: config.context,
     defaultInject: config.inject,
     defaultTools: config.tools,
@@ -162,7 +161,7 @@ async function prepareIndexedChunkSearch(
     ...(config.search?.filter ?? {}),
     ...(options.filter ?? {}),
   }
-  const fusion = options.fusion ?? config.search?.fusion
+  const fusion = normalizeFusion(options.fusion) ?? config.search?.fusion
 
   if (mode === 'dense') {
     return {
@@ -196,8 +195,12 @@ async function prepareIndexedChunkSearch(
   }
 }
 
+function normalizeFusion(fusion: RetrieveOptions['fusion']): 'rrf' | undefined {
+  if (!fusion) return undefined
+  return fusion.strategy
+}
+
 function createCustomRetriever(config: CustomRetrieverConfig): Retriever {
-  const rerankers = normalizeRerankers(config.rerank)
   return createRetrieverEntity({
     id: config.id,
     namespace: config.namespace,
@@ -211,15 +214,8 @@ function createCustomRetriever(config: CustomRetrieverConfig): Retriever {
         limit: options.limit,
         threshold: options.threshold,
         filter: options.filter,
-        fusion: options.fusion,
-        run: async () =>
-          applyRerankers(rerankers, {
-            retrieverId: config.id,
-            namespace: config.namespace,
-            mode: 'custom',
-            query,
-            hits: await config.retrieve(query, options),
-          }),
+        fusion: normalizeFusion(options.fusion),
+        run: async () => config.retrieve(query, options),
       }),
     defaultContext: config.context,
     defaultInject: config.inject,

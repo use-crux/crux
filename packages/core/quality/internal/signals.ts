@@ -28,10 +28,7 @@ import type {
 import { currentObservabilityTransport, observe, setObservabilityTransport } from '../../observability'
 import type { TokenUsage } from '../../generation/types'
 import type { Capability } from '../target'
-import {
-  extractTurnDecisionReportSignals,
-  type TurnDecisionReportSignal,
-} from './decision-report-signals'
+import { extractTurnDecisionReportSignals, type TurnDecisionReportSignal } from './decision-report-signals'
 
 // ─────────────────────────────────────────────────────────────────
 // Signal model
@@ -277,7 +274,10 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
   for (const record of records) {
     if (record.type === 'span:start' || record.type === 'span') {
       const existing = spans.get(record.spanId)
-      const attributes = { ...(existing?.attributes ?? {}), ...asRecord(record.attributes) }
+      const attributes = {
+        ...(existing?.attributes ?? {}),
+        ...asRecord(record.attributes),
+      }
       // Record-level fields when present; adapters commonly carry model and
       // provider in span attributes (orchestrateGenerate), so fall back.
       const recordModel = record.type === 'span:start' ? record.model : undefined
@@ -303,7 +303,10 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
       if (existing) {
         existing.status = record.status
         existing.durationMs = record.durationMs ?? existing.durationMs
-        existing.attributes = { ...existing.attributes, ...asRecord(record.attributes) }
+        existing.attributes = {
+          ...existing.attributes,
+          ...asRecord(record.attributes),
+        }
         if (record.metrics) existing.metrics = { ...existing.metrics, ...record.metrics }
       }
     } else if (record.type === 'span:event') {
@@ -429,17 +432,24 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         handoffs.push({
           spanId: span.spanId,
           ...(stringOrUndefined(payload?.fromAgent ?? span.attributes.fromAgent) !== undefined
-            ? { from: stringOrUndefined(payload?.fromAgent ?? span.attributes.fromAgent) }
+            ? {
+                from: stringOrUndefined(payload?.fromAgent ?? span.attributes.fromAgent),
+              }
             : {}),
           ...(stringOrUndefined(payload?.toAgent ?? span.attributes.toAgent) !== undefined
-            ? { to: stringOrUndefined(payload?.toAgent ?? span.attributes.toAgent) }
+            ? {
+                to: stringOrUndefined(payload?.toAgent ?? span.attributes.toAgent),
+              }
             : {}),
         })
         break
       }
       case 'retrieval.pipeline':
+      case 'retrieval.recipe':
+      case 'retrieval.retrieve':
       case 'retrieval.query':
-      case 'retrieval.stage': {
+      case 'retrieval.stage':
+      case 'retrieval.step': {
         captured.add('retrieval')
         const preview = artifactPreview(span.spanId, 'retrieval.hits') as CruxRetrievalHitsPreview | undefined
         if (preview?.hits !== undefined) {
@@ -478,7 +488,9 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         constraints.push({
           spanId: span.spanId,
           ...(stringOrUndefined(preview?.constraint ?? span.attributes.constraintId) !== undefined
-            ? { id: stringOrUndefined(preview?.constraint ?? span.attributes.constraintId) }
+            ? {
+                id: stringOrUndefined(preview?.constraint ?? span.attributes.constraintId),
+              }
             : { id: span.name }),
           pass: preview?.pass ?? span.status === 'ok',
         })
@@ -518,10 +530,14 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
         routing.push({
           spanId: span.spanId,
           ...(stringOrUndefined(preview?.chosen ?? span.attributes.chosen) !== undefined
-            ? { chosen: stringOrUndefined(preview?.chosen ?? span.attributes.chosen) }
+            ? {
+                chosen: stringOrUndefined(preview?.chosen ?? span.attributes.chosen),
+              }
             : {}),
           ...(stringOrUndefined(preview?.classifiedAs ?? span.attributes.classifiedAs) !== undefined
-            ? { classifiedAs: stringOrUndefined(preview?.classifiedAs ?? span.attributes.classifiedAs) }
+            ? {
+                classifiedAs: stringOrUndefined(preview?.classifiedAs ?? span.attributes.classifiedAs),
+              }
             : {}),
           ...(stringOrUndefined(preview?.selectedModel ?? span.attributes.selectedModel ?? span.attributes.model) !==
           undefined

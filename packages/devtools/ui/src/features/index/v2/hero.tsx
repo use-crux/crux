@@ -857,12 +857,32 @@ export function IndexHero({ def }: { def: ViewDef }) {
     )
   }
 
-  // RAG pipeline
-  if (k === 'rag.pipeline') {
-    const ret = rels.outgoing.find((r) => r.type === 'rag.pipeline.uses_retriever')
+  // RAG recipe / historical pipeline snapshots
+  if (k === 'rag.recipe' || k === 'rag.pipeline') {
+    const ret = rels.outgoing.find((r) => r.type === 'rag.recipe.uses_retriever' || r.type === 'rag.pipeline.uses_retriever')
+    const stepKinds = k === 'rag.recipe' ? new Set(['rag.recipe.step']) : new Set(['rag.pipeline.stage'])
+    const steps = kids
+      .filter((child) => stepKinds.has(child.kind))
+      .slice()
+      .sort((a, b) => (a.presentation?.order ?? a.facts?.index ?? 0) - (b.presentation?.order ?? b.facts?.index ?? 0))
+    const stepDependencyRelations = steps.flatMap((step) =>
+      idx
+        .relationsOf(step.id)
+        .outgoing.filter((r) =>
+          [
+            'rag.recipe.step.uses_retriever',
+            'rag.recipe.step.uses_scorer',
+            'rag.recipe.step.uses_reranker',
+            'rag.pipeline.stage.uses_retriever',
+            'rag.pipeline.stage.uses_scorer',
+          ].includes(r.type),
+        )
+        .map((r) => ({ step, relation: r, target: lookup(r.to) })),
+    )
+    const fallbackStages = ['plan', 'retrieve', 'rerank', 'assemble']
     return (
       <HeroFrame
-        title="Retrieval pipeline"
+        title={k === 'rag.recipe' ? 'Retrieval recipe' : 'Retrieval pipeline'}
         tone="ok"
         right={
           <Chip tone="muted" mono>
@@ -870,18 +890,41 @@ export function IndexHero({ def }: { def: ViewDef }) {
           </Chip>
         }
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {['embed', 'search', 'rerank', 'assemble'].map((stage, i, a) => (
-            <Fragment key={stage}>
-              <HNode label={stage} tone="ok" />
-              {i < a.length - 1 && <HArrow />}
-            </Fragment>
-          ))}
-          {ret && (
-            <>
-              <span style={{ width: 1, height: 24, background: T.border, margin: '0 6px' }} />
-              <HNode kind="rag.retriever" label={ret.to} onClick={navTo(ret.to)} />
-            </>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            {steps.length > 0
+              ? steps.map((step, i) => (
+                  <Fragment key={step.id}>
+                    <HNode kind={step.kind} label={step.name} sub={`step ${step.facts?.index ?? i}`} onClick={navTo(step.id)} />
+                    {i < steps.length - 1 && <HArrow />}
+                  </Fragment>
+                ))
+              : fallbackStages.map((stage, i, a) => (
+                  <Fragment key={stage}>
+                    <HNode label={stage} tone="ok" />
+                    {i < a.length - 1 && <HArrow />}
+                  </Fragment>
+                ))}
+            {ret && (
+              <>
+                <span style={{ width: 1, height: 24, background: T.border, margin: '0 6px' }} />
+                <HNode kind="rag.retriever" label={ret.to} onClick={navTo(ret.to)} />
+              </>
+            )}
+          </div>
+          {stepDependencyRelations.length > 0 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {stepDependencyRelations.map(({ step, relation, target }) => (
+                <HNode
+                  key={`${step.id}:${relation.type}:${relation.to}`}
+                  kind={target?.kind ?? (relation.type.endsWith('uses_reranker') ? 'rag.reranker' : relation.type.endsWith('uses_scorer') ? 'scorer' : 'rag.retriever')}
+                  label={`${step.name} -> ${target?.name ?? relation.to}`}
+                  sub={relation.type.split('.').at(-1)}
+                  onClick={target ? navTo(target.id) : undefined}
+                  external={!target}
+                />
+              ))}
+            </div>
           )}
         </div>
       </HeroFrame>

@@ -165,6 +165,8 @@ export interface IndexFacts {
   hasEvaluate?: boolean
   // rag
   topK?: number
+  index?: number
+  rerankerId?: string
   // memory / blackboard
   backend?: string
   variableName?: string
@@ -968,6 +970,7 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
     case 'routing.fallback':
       push('options', f.optionCount)
       break
+    case 'rag.recipe':
     case 'rag.pipeline':
     case 'rag.retriever':
       push('topK', f.topK)

@@ -154,6 +154,15 @@ pub(crate) fn routing_runtime_join(
             );
             runtime_join.insert("retrieverId".to_string(), Value::String(retriever_id));
         }
+        "rag.recipe" => {
+            let recipe_id = strip_definition_prefix(id, "rag.recipe:").to_string();
+            span_attributes.insert("recipeId".to_string(), Value::String(recipe_id.clone()));
+            runtime_join.insert(
+                "primitive".to_string(),
+                Value::String("retrieval.recipe".to_string()),
+            );
+            runtime_join.insert("recipeId".to_string(), Value::String(recipe_id));
+        }
         "rag.pipeline" => {
             let rag_pipeline_id = strip_definition_prefix(id, "rag.pipeline:").to_string();
             span_attributes.insert(

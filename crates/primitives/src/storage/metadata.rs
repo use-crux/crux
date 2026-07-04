@@ -2,7 +2,7 @@ use serde_json::{Map, Value, json};
 
 use crate::storage::{
     capabilities::StorageFactoryDescriptor,
-    dependencies::{StorageReferences, storage_dependency_map},
+    dependencies::{StorageReference, StorageReferences, storage_dependency_map},
 };
 
 pub(crate) fn factory_metadata(
@@ -48,9 +48,24 @@ pub(crate) fn bundle_metadata(
                 "backend",
                 backend.map(|value| Value::String(value.to_string())),
             ),
-            ("recordsVariable", refs.records.clone().map(Value::String)),
-            ("vectorsVariable", refs.vectors.clone().map(Value::String)),
-            ("blobsVariable", refs.blobs.clone().map(Value::String)),
+            (
+                "recordsVariable",
+                refs.records
+                    .clone()
+                    .map(|reference| Value::String(reference.name)),
+            ),
+            (
+                "vectorsVariable",
+                refs.vectors
+                    .clone()
+                    .map(|reference| Value::String(reference.name)),
+            ),
+            (
+                "blobsVariable",
+                refs.blobs
+                    .clone()
+                    .map(|reference| Value::String(reference.name)),
+            ),
             (
                 "facts",
                 Some(storage_facts(
@@ -78,7 +93,10 @@ pub(crate) fn scope_metadata(
     prefix: Option<&str>,
 ) -> Map<String, Value> {
     let refs = StorageReferences {
-        storage: base_storage.map(str::to_string),
+        storage: base_storage.map(|name| StorageReference {
+            name: name.to_string(),
+            bindable: true,
+        }),
         ..StorageReferences::default()
     };
     storage_metadata(
@@ -153,10 +171,26 @@ fn storage_facts(
     );
     insert_string(&mut facts, "backend", backend);
     insert_value(&mut facts, "capabilities", capabilities);
-    insert_string(&mut facts, "records", refs.records);
-    insert_string(&mut facts, "vectors", refs.vectors);
-    insert_string(&mut facts, "blobs", refs.blobs);
-    insert_string(&mut facts, "storage", refs.storage);
+    insert_string(
+        &mut facts,
+        "records",
+        refs.records.map(|reference| reference.name),
+    );
+    insert_string(
+        &mut facts,
+        "vectors",
+        refs.vectors.map(|reference| reference.name),
+    );
+    insert_string(
+        &mut facts,
+        "blobs",
+        refs.blobs.map(|reference| reference.name),
+    );
+    insert_string(
+        &mut facts,
+        "storage",
+        refs.storage.map(|reference| reference.name),
+    );
     insert_string(&mut facts, "prefix", prefix.map(str::to_string));
     Value::Object(facts)
 }

@@ -7,6 +7,7 @@ import {
   arrayProperty,
   arrayPropertyExpressions,
   branchRelationType,
+  callExpressionName,
   compositionRelationType,
   flowStepRelationType,
   isRoutingTargetKind,
@@ -62,6 +63,8 @@ export function semanticRelationsForCandidate(
     case 'composition.swarm':
     case 'composition.consensus':
       return semanticCompositionRelations(candidate, view)
+    case 'rag.recipe':
+      return semanticRetrievalRecipeRelations(candidate, view)
     case 'routing.router':
       return [...semanticRouterRelations(candidate, view), ...accessRelations]
     case 'routing.cascade':
@@ -414,6 +417,71 @@ function semanticPipelineRelations(candidate: SemanticDefinitionCandidate, view:
     }
   })
   return relations
+}
+
+/**
+ * Resolves retrieval recipe source and step dependencies.
+ */
+function semanticRetrievalRecipeRelations(
+  candidate: SemanticDefinitionCandidate,
+  view: SemanticAnalyzerView,
+): ProjectRelation[] {
+  const relations: ProjectRelation[] = []
+  const retriever = propertyInitializer(candidate.object, 'retriever', view)
+  const retrieverTarget = retriever ? semanticTargetForExpression(retriever, view) : undefined
+  if (retrieverTarget?.kind === 'rag.retriever') {
+    relations.push(semanticRelation(candidate, 'rag.recipe.uses_retriever', candidate.definitionId, retrieverTarget.id, view))
+  }
+
+  const steps = arrayProperty(candidate.object, 'steps', view)
+  if (!steps) return relations
+  view.syntax.arrayElements(steps).forEach((element, index) => {
+    const step = retrievalRecipeStepObject(element, view)
+    if (!step) return
+    const { object: stepObject, callName } = step
+    const stepName =
+      semanticStringLiteralProperty(stepObject, 'id', view.syntax) ??
+      semanticStringLiteralProperty(stepObject, 'name', view.syntax) ??
+      callName ??
+      `step-${index + 1}`
+    const stepId = `${candidate.definitionId}:step:${safeId(stepName)}`
+    relations.push(semanticRelation(candidate, 'rag.recipe.includes_step', candidate.definitionId, stepId, view))
+
+    const stepRetriever = propertyInitializer(stepObject, 'retriever', view)
+    const stepRetrieverTarget = stepRetriever ? semanticTargetForExpression(stepRetriever, view) : undefined
+    if (stepRetrieverTarget?.kind === 'rag.retriever') {
+      relations.push(semanticRelation(candidate, 'rag.recipe.step.uses_retriever', stepId, stepRetrieverTarget.id, view))
+    }
+
+    for (const property of ['scorer', 'judge'] as const) {
+      const scorer = propertyInitializer(stepObject, property, view)
+      const scorerTarget = scorer ? semanticTargetForExpression(scorer, view) : undefined
+      if (scorerTarget?.kind === 'scorer') {
+        relations.push(semanticRelation(candidate, 'rag.recipe.step.uses_scorer', stepId, scorerTarget.id, view))
+      }
+    }
+    for (const property of ['engine', 'reranker'] as const) {
+      const reranker = propertyInitializer(stepObject, property, view)
+      const rerankerTarget = reranker ? semanticTargetForExpression(reranker, view) : undefined
+      if (rerankerTarget?.kind === 'rag.reranker') {
+        relations.push(semanticRelation(candidate, 'rag.recipe.step.uses_reranker', stepId, rerankerTarget.id, view))
+      }
+    }
+  })
+  return relations
+}
+
+function retrievalRecipeStepObject(
+  element: SemanticAnalyzerNode<SemanticAnalyzerView>,
+  view: SemanticAnalyzerView,
+): { readonly object: SemanticAnalyzerNode<SemanticAnalyzerView>; readonly callName?: string } | undefined {
+  if (view.syntax.isKind(element, 'objectLiteral')) return { object: element }
+  if (!view.syntax.isKind(element, 'callExpression')) return undefined
+  const callName = callExpressionName(element, view)
+  if (!callName) return undefined
+  const [firstArg] = view.syntax.callArguments(element)
+  if (!firstArg || !view.syntax.isKind(firstArg, 'objectLiteral')) return undefined
+  return { object: firstArg, callName }
 }
 
 /**

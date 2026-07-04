@@ -135,6 +135,13 @@ func TestProjectStaticIndexSourceInputUsesFilesToParse(t *testing.T) {
 	}
 }
 
+func TestCruxCallNamesIncludesRagBetaPrimitives(t *testing.T) {
+	source := []byte("knowledgeBase({}); retrievalRecipe({ steps: [retrieve(), rerank({ engine })] }); const ranker = reranker({ name: 'answer' }); retriever({})")
+	if got, want := fmt.Sprint(CruxCallNames(source)), "[knowledgeBase rerank reranker retrievalRecipe retrieve retriever]"; got != want {
+		t.Fatalf("CruxCallNames = %s, want %s", got, want)
+	}
+}
+
 func TestProjectStaticIndexSourceInputKeepsPrimaryFilesSeparateFromSupportFiles(t *testing.T) {
 	root := t.TempDir()
 	files := []string{

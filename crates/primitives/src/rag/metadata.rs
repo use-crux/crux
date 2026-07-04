@@ -1,12 +1,19 @@
 use serde_json::{Map, Value, json};
 
-pub(crate) fn dependency_metadata(retrievers: &[String], scorers: &[String]) -> Value {
+pub(crate) fn dependency_metadata(
+    retrievers: &[String],
+    scorers: &[String],
+    rerankers: &[String],
+) -> Value {
     let mut dependencies = Map::new();
     if !retrievers.is_empty() {
         dependencies.insert("retrievers".to_string(), json!(retrievers));
     }
     if !scorers.is_empty() {
         dependencies.insert("scorers".to_string(), json!(scorers));
+    }
+    if !rerankers.is_empty() {
+        dependencies.insert("rerankers".to_string(), json!(rerankers));
     }
     Value::Object(dependencies)
 }

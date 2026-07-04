@@ -335,6 +335,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "routing.router_missing_default",
             "routing.unresolved_target",
             "routing.cascade_unreachable_tier",
+            "rag.recipe_step_unresolved_target",
             "runtime.duplicate_target_name",
             "runtime.non_literal_target_name",
             "runtime.target_not_exported",

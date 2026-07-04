@@ -29,6 +29,7 @@ app.use(crux)
 import { createCruxConvex, prompt } from '@use-crux/convex'
 import { context } from '@use-crux/convex/context'
 import { memory, recentMessages, workingState } from '@use-crux/convex/memory'
+import { knowledgeBase, retrievalRecipe } from '@use-crux/convex/retrieval'
 import { skill } from '@use-crux/convex/skill'
 import { tool } from '@use-crux/convex/tools'
 ```
@@ -40,6 +41,7 @@ The mirrored subpaths intentionally stay close to `@use-crux/core`:
 | `@use-crux/convex/context`    | Identical re-export  | Re-exports core context helpers.                                                                                 |
 | `@use-crux/convex/skill`      | Identical re-export  | Re-exports core skill helpers.                                                                                   |
 | `@use-crux/convex/memory`     | Convex-bound drop-in | Same block API; `memory()` late-binds the active Convex Crux store and defaults to the current thread namespace. |
+| `@use-crux/convex/retrieval`  | Convex-bound drop-in | Same Retrieval/RAG beta API; `knowledgeBase()` and store-backed `retriever()` late-bind active Convex storage.   |
 | `@use-crux/convex/tools`      | Convex-bound drop-in | Same tool authoring shape; `execute()` receives Convex runtime metadata.                                         |
 | `convexAgent()`               | Convex-only API      | Profile-backed helper that resolves a Crux prompt per Convex Agent turn.                                         |
 | `createCruxConvex()`          | Convex-only API      | Creates a reusable Convex runtime profile from `components.crux` and `components.agent`.                         |

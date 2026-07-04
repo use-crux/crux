@@ -507,6 +507,7 @@ function spanToReplay(s: QualityRunSpan, startMs: number): ReplayEvent | null {
       }
     }
     case 'retrieval':
+    case 'retrieval.step':
     case 'retrieval.stage': {
       const query = spanField(s, 'query') as string | undefined
       const hits = spanField(s, 'hits')
@@ -778,7 +779,13 @@ function narrativeToReplay(n: QualityRunNarrativeEvent): ReplayEvent {
 function canonicalKind(rawKind: string, label: string, primitive: string | undefined): string {
   if (primitive === 'tool.call' || primitive === 'tool' || rawKind === 'tool') return 'tool'
   if (primitive === 'memory' || rawKind === 'memory' || label.startsWith('memory.')) return 'memory'
-  if (primitive === 'retrieval' || primitive === 'retrieval.stage' || rawKind === 'retrieval' || rawKind === 'retrieve')
+  if (
+    primitive === 'retrieval' ||
+    primitive === 'retrieval.stage' ||
+    primitive === 'retrieval.step' ||
+    rawKind === 'retrieval' ||
+    rawKind === 'retrieve'
+  )
     return 'retrieval'
   if (
     primitive === 'generation' ||

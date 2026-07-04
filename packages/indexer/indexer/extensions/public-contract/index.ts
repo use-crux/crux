@@ -18,6 +18,7 @@ export type {
   ArgumentReader,
   ConfigCallReader,
   ConfigReader,
+  ConfiguredObjectReader,
   DefinitionBuilder,
   DefinitionBuilderInput,
   ExtensionIdentity,
@@ -58,6 +59,7 @@ export type {
   StaticCallbackSummaryInput,
   StaticCallInterest,
   StaticCallObjectReader,
+  StaticConfiguredObjectReader,
   StaticConstructorEvidenceQuery,
   StaticConstructorInterest,
   StaticEvidenceCompatibility,
@@ -71,4 +73,3 @@ export type {
   StaticObjectReader,
   UnresolvedReference,
 } from './types'
-

@@ -10,6 +10,7 @@ import type {
   ExecutorModelArg,
   ExecutorStreamHandle,
 } from '@use-crux/core/adapter'
+import type { Reranker, RetrievalModel } from '@use-crux/core/retrieval'
 import { aiSdkProviderRuntime } from '../index'
 import type { SdkLoopResultLike, SdkStreamResultLike } from '../src/executor'
 import type { AiSdkRuntimeExtensions } from '../src/extensions'
@@ -29,3 +30,5 @@ expectTypeOf<Awaited<ReturnType<AiRuntime['stream']>>>().toEqualTypeOf<
   ExecutorStreamHandle<SdkStreamResultLike>
 >()
 expectTypeOf<AiGenerateOptions['model']>().toEqualTypeOf<ExecutorModelArg<LanguageModel>>()
+expectTypeOf<ReturnType<AiRuntime['retrievalModel']>>().toEqualTypeOf<RetrievalModel>()
+expectTypeOf<ReturnType<AiRuntime['reranker']>>().toEqualTypeOf<Reranker>()

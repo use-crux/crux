@@ -61,7 +61,10 @@ pub(crate) fn fallback_relation_target_id(
         | "flow.step.writes_workspace" => {
             Some(format!("workspace:{}", safe_use_entry_id(variable)))
         }
-        "rag.pipeline.uses_retriever" | "rag.pipeline.stage.uses_retriever" => {
+        "rag.recipe.uses_retriever"
+        | "rag.recipe.step.uses_retriever"
+        | "rag.pipeline.uses_retriever"
+        | "rag.pipeline.stage.uses_retriever" => {
             Some(format!("rag.retriever:{}", safe_use_entry_id(variable)))
         }
         "storage.bundle.uses_record_store"

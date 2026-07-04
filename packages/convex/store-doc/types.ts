@@ -63,6 +63,8 @@ export interface StoreDocDenseSearchQuery {
   vector: number[]
   /** Maximum number of hits to request. */
   limit: number
+  /** Exact top-level scalar filter applied before vector result limiting. */
+  filter?: ExactFilter
 }
 
 /** Small component-facing I/O port used by the deep store implementation. */

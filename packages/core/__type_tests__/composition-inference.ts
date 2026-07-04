@@ -4,10 +4,9 @@ import { context } from '../prompt/context'
 import { citationSchema, grounding } from '../citations'
 import { prompt } from '../prompt/prompt'
 import { embedding, embeddingCache, normalizeText } from '../embedding'
-import { retriever, retrievalPipeline, retrievalStage } from '../retrieval'
+import { retriever, retrievalRecipe, retrievalStep, retrieve } from '../retrieval'
 import { inMemoryRecordStore } from '../storage'
-import type { RetrieverTools } from '../retrieval'
-import type { ToolDef } from '../types/tool'
+import type { RetrievalToolDef, RetrieverTools } from '../retrieval'
 
 const localeContext = context({
   id: 'locale',
@@ -34,23 +33,44 @@ const docs = retriever({
   },
 })
 
-const pipeline = retrievalPipeline(docs, [
-  retrievalStage({
-    name: 'only-public',
-    phase: 'hits',
-    run: ({ hits }) => hits,
-  }),
-])
+const recipe = retrievalRecipe({
+  id: 'product-docs-answer',
+  retriever: docs,
+  steps: [
+    retrieve({ limit: 4 }),
+    retrievalStep({
+      id: 'only-public',
+      phase: { in: 'hits', out: 'hits' },
+      run: ({ hits }) => ({ hits }),
+    }),
+  ],
+})
+
+expectTypeOf(recipe.inspect()).toMatchTypeOf<{
+  id: string
+  stepCount: number
+  retrieverIds: readonly string[]
+}>()
+
+const recipeRetriever = recipe.asRetriever()
 
 const groundedDocs = grounding({
   id: 'docs',
-  retriever: pipeline,
+  retriever: recipeRetriever,
   query: ({ input }) => String(input.question),
   citations: {
     required: true,
     quotes: 'required',
   },
 })
+
+const recipeGrounding = recipe.asGrounding({
+  citations: {
+    required: true,
+    quotes: 'required',
+  },
+})
+void recipeGrounding
 
 const answer = prompt({
   id: 'answer',
@@ -80,15 +100,15 @@ answer.resolve({
 })
 
 const defaultTools = docs.asTools()
-expectTypeOf(defaultTools).toMatchTypeOf<{ search: ToolDef }>()
+expectTypeOf(defaultTools).toMatchTypeOf<{ search: RetrievalToolDef }>()
 expectTypeOf(defaultTools).not.toHaveProperty('getSource')
 
 const selectedTools = docs.asTools({
   include: ['search', 'getSource'],
 })
 expectTypeOf(selectedTools).toMatchTypeOf<{
-  search: ToolDef
-  getSource: ToolDef
+  search: RetrievalToolDef
+  getSource: RetrievalToolDef
 }>()
 
 const prefixedTools = docs.asTools({
@@ -96,12 +116,12 @@ const prefixedTools = docs.asTools({
   include: ['search', 'getSource'],
 })
 expectTypeOf(prefixedTools).toMatchTypeOf<{
-  docsSearch: ToolDef
-  docsGetSource: ToolDef
+  docsSearch: RetrievalToolDef
+  docsGetSource: RetrievalToolDef
 }>()
 
 expectTypeOf<RetrieverTools<{ prefix: 'kb'; include: readonly ['search'] }>>().toEqualTypeOf<{
-  kbSearch: ToolDef
+  kbSearch: RetrievalToolDef
 }>()
 
 const cache = embeddingCache({ records: inMemoryRecordStore(), namespace: 'type-test' })

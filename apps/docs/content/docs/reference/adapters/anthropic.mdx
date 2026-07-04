@@ -30,6 +30,8 @@ Create an adapter bound to an Anthropic client.
 | ---------------------------- | ---------------------------------------------------------------------- |
 | `.generate(prompt, options)` | Execute a prompt via `messages.parse` (structured) or `.create` (text) |
 | `.stream(prompt, options)`   | Stream a prompt execution                                              |
+| `.retrievalModel(config)`    | Bind Anthropic generation to core retrieval recipe steps               |
+| `.reranker(config)`          | Create a judge-backed core `Reranker`                                  |
 
 ```ts
 import { createAnthropic } from '@use-crux/anthropic'
@@ -85,6 +87,29 @@ Stream a prompt execution.
 
 **Returns:** Anthropic `MessageStream` (async iterable of `MessageStreamEvent`).
 
+### `adapter.retrievalModel(config)`
+
+Create a core `RetrievalModel` from the adapter instance.
+
+```ts
+const retrievalModel = adapter.retrievalModel({ model: 'claude-haiku-4-5' })
+```
+
+Use it as a recipe-level `model` or step-level `model`.
+
+### `adapter.reranker(config)`
+
+Create a core `Reranker` for `rerank({ engine })`.
+
+```ts
+const engine = adapter.reranker({
+  model: 'claude-haiku-4-5',
+  topN: 12,
+})
+```
+
+Anthropic does not expose a native rerank endpoint in this adapter. `adapter.reranker()` uses Crux's `judgeReranker()` over the configured Anthropic model, so each rerank call spends generation tokens.
+
 ### `toMessages(sdkMessages)`
 
 Convert Anthropic `MessageParam[]` to canonical `Message[]`.
@@ -139,7 +164,7 @@ Create a `GenerateTextFn` bound to a client and model.
 
 This helper is also generated from the native chat profile, so text helper calls and adapter calls share request construction and response extraction.
 
-### Embeddings and rerankers
+### Embeddings
 
 `@use-crux/anthropic` is a generation adapter. It does not export a provider-native `embedding()` helper because Anthropic's direct SDK surface here does not provide the dense embedding API that Crux needs for `embedding()`.
 
@@ -147,9 +172,7 @@ When you want Anthropic for generation plus retrieval/indexing around it, use on
 
 - pair `createAnthropic()` with `embedding()` from `@use-crux/ai`
 - pair it with `embedding()` from `@use-crux/openai` or `@use-crux/google` for the write/query vector side
-- keep Anthropic as the chat model while another provider handles embeddings or reranking
-
-For model-based reranking, use `reranker()` from [`@use-crux/ai`](/docs/reference/adapters/ai).
+- keep Anthropic as the chat model while another provider handles embeddings
 
 ### Types
 

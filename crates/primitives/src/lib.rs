@@ -57,6 +57,7 @@ pub mod projection;
 mod rag {
     pub(crate) mod facts;
     pub(crate) mod metadata;
+    pub(crate) mod recipe_steps;
 }
 mod record_values;
 mod registry {

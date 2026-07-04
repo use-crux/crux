@@ -1,15 +1,21 @@
 import { StorageError } from '@use-crux/core/storage'
-import { describeVectorStoreConformance } from '@use-crux/core/storage/testing/vitest'
+import { inMemoryRecordStore } from '@use-crux/core/storage'
+import { vectorStoreConformanceSuite } from '@use-crux/core/storage/testing/vitest'
 import { describe, expect, it } from 'vitest'
 import { upstashVectorStore } from '../vector-store'
 import { createFakeUpstashVectorIndex } from './fake-upstash-vector'
 
-describeVectorStoreConformance({
+vectorStoreConformanceSuite({
   name: 'upstashVectorStore',
-  prepare: () => {
+  create: () => {
     const { index } = createFakeUpstashVectorIndex()
-    return upstashVectorStore({ index, namespace: 'docs' })
+    return {
+      records: inMemoryRecordStore(),
+      vectors: upstashVectorStore({ index, namespace: 'docs' }),
+      cleanup: async () => {},
+    }
   },
+  capabilities: { sparse: false, hybrid: false, delete: true },
 })
 
 describe('upstashVectorStore', () => {

@@ -31,8 +31,10 @@ describe('aiSdkProviderRuntime', () => {
     expect(scripted.calls.generateText[0]?.model).toBe(model)
   })
 
-  it('binds embedding and reranking extensions through the provider runtime', async () => {
+  it('binds embedding, retrieval model, and reranking extensions through the provider runtime', async () => {
     const scripted = scriptedGateway({
+      generateText: [{ text: 'retrieval text' }],
+      generateObject: [{ object: { answer: 'retrieval object' } }],
       embedMany: [{ embeddings: [[0.5, 0.5]], tokens: 6 }],
       rerank: [{ ranking: [{ originalIndex: 1, score: 0.9 }] }],
     })
@@ -45,13 +47,18 @@ describe('aiSdkProviderRuntime', () => {
       maxInputTokens: 128,
     })
     const reranker = runtime.reranker({ name: 'runtime-rerank', model: 'rerank-model' as never })
+    const retrieval = runtime.retrievalModel({ model: 'language-model' as never })
 
     await expect(dense.embedMany(['hello'])).resolves.toEqual([[0.5, 0.5]])
+    await expect(retrieval.generateText({ prompt: 'retrieve text' })).resolves.toEqual({ text: 'retrieval text' })
+    await expect(
+      retrieval.generateObject({
+        prompt: 'retrieve object',
+        schema: z.object({ answer: z.string() }),
+      }),
+    ).resolves.toEqual({ object: { answer: 'retrieval object' } })
     await expect(
       reranker.rerank({
-        retrieverId: 'r',
-        namespace: 'n',
-        mode: 'dense',
         query: 'needle',
         hits: [
           { namespace: 'n', sourceId: 'a', chunkId: 'a1', content: 'first', metadata: {}, score: 0.1 },
@@ -62,6 +69,8 @@ describe('aiSdkProviderRuntime', () => {
       { namespace: 'n', sourceId: 'b', chunkId: 'b1', content: 'second', metadata: {}, score: 0.9 },
     ])
     expect(scripted.calls.embedMany[0]?.values).toEqual(['hello'])
+    expect(scripted.calls.generateText[0]?.model).toBe('language-model')
+    expect(scripted.calls.generateObject[0]?.model).toBe('language-model')
     expect(scripted.calls.rerank[0]?.query).toBe('needle')
   })
 })

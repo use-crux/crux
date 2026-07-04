@@ -3,7 +3,7 @@ import { inMemoryBlobStore, inMemoryRecordStore, inMemoryVectorStore } from '../
 import {
   describeBlobStoreConformance,
   describeRecordStoreConformance,
-  describeVectorStoreConformance,
+  vectorStoreConformanceSuite,
 } from '../../storage/testing/vitest'
 import type { RecordEvent } from '../../storage'
 
@@ -12,9 +12,14 @@ describeRecordStoreConformance({
   prepare: () => inMemoryRecordStore(),
 })
 
-describeVectorStoreConformance({
+vectorStoreConformanceSuite({
   name: 'inMemoryVectorStore',
-  prepare: () => inMemoryVectorStore(),
+  create: () => ({
+    records: inMemoryRecordStore(),
+    vectors: inMemoryVectorStore(),
+    cleanup: async () => {},
+  }),
+  capabilities: { sparse: true, hybrid: true, delete: true },
 })
 
 describeBlobStoreConformance({
