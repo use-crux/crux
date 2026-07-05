@@ -6,6 +6,7 @@ import {
   workspace,
 } from "@use-crux/core";
 import { node } from "@use-crux/core/runtime";
+import { createWorkspaceWatchHandle } from "../../workspace/watch/handle";
 import { createWorkspaceChangeEmitter } from "../../workspace/watch/runtime";
 import type {
   WorkspaceChangeEvent,
@@ -95,6 +96,45 @@ describe("workspace watch", () => {
       await waitForPoll();
       expect(events).toHaveLength(1);
     } finally {
+      handle.stop();
+    }
+  });
+
+  it("reports retryable poll failures without stopping the watch", async () => {
+    config({
+      runtime: node({ namespace: "test-watch", autoStartMaintenance: false }),
+    });
+    const failures: number[] = [];
+    let namespaceAttempts = 0;
+    const handle = createWorkspaceWatchHandle({
+      workspaceId: "research",
+      path: "/outputs",
+      resolveNamespace: async () => {
+        namespaceAttempts += 1;
+        if (namespaceAttempts <= 2) {
+          throw new Error(`namespace unavailable ${namespaceAttempts}`);
+        }
+        return "thread:default";
+      },
+      options: {
+        pollIntervalMs: 5,
+        onError: ({ failures: count }) => {
+          failures.push(count);
+        },
+      },
+    });
+    const off = handle.on(() => undefined);
+
+    try {
+      await eventually(() => {
+        expect(failures).toEqual([1, 2]);
+      });
+      await eventually(() => {
+        expect(namespaceAttempts).toBeGreaterThan(2);
+      });
+      expect(handle.stopped).toBe(false);
+    } finally {
+      off();
       handle.stop();
     }
   });

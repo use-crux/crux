@@ -83,6 +83,11 @@ expectTypeOf<{
   recursive: true;
   cursor: "evt_1";
   pollIntervalMs: 50;
+  onError(error: {
+    readonly error: unknown;
+    readonly failures: number;
+    readonly retryDelayMs: number;
+  }): void;
 }>().toExtend<WorkspaceWatchOptions>();
 
 declare const workspaceEvent: WorkspaceChangeEvent;

@@ -112,9 +112,10 @@ export function createWorkspaceWatchHandle(
         if (matchesWorkspaceWatchScope(event, scope)) deliver(event);
       }
       consecutiveFailures = 0;
-    } catch {
+    } catch (error) {
       consecutiveFailures += 1;
       nextDelayMs = retryDelayMs(consecutiveFailures, pollIntervalMs);
+      reportError(error, consecutiveFailures, nextDelayMs);
     } finally {
       polling = false;
       schedule(nextDelayMs);
@@ -128,6 +129,18 @@ export function createWorkspaceWatchHandle(
       } catch {
         // Watch callbacks are user code; one listener must not stop delivery.
       }
+    }
+  }
+
+  function reportError(
+    error: unknown,
+    failures: number,
+    retryDelayMs: number,
+  ): void {
+    try {
+      input.options?.onError?.({ error, failures, retryDelayMs });
+    } catch {
+      // Error observers are user code and must not stop retry scheduling.
     }
   }
 

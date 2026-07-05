@@ -49,19 +49,22 @@ async function withOptionalWorkspaceRuntime(
   let runtime: ResolvedRuntimeEngine | undefined;
   try {
     runtime = createWorkspaceRuntime(runtimeDefinition);
-  } catch {
+  } catch (error) {
+    logWorkspaceRuntimeWarning("create runtime", error);
     return;
   }
 
   try {
     await fn(runtime);
-  } catch {
+  } catch (error) {
+    logWorkspaceRuntimeWarning("emit change event", error);
     // Workspace mutations have already succeeded by the time change events are
     // emitted. Watch delivery is best-effort and must not reject the mutation.
   } finally {
     try {
       runtime.dispose();
-    } catch {
+    } catch (error) {
+      logWorkspaceRuntimeWarning("dispose runtime", error);
       // Best-effort emitters should not surface cleanup failures to callers.
     }
   }
@@ -78,4 +81,11 @@ function createWorkspaceRuntime(
   });
   runtimeRef.current = runtime;
   return runtime;
+}
+
+function logWorkspaceRuntimeWarning(phase: string, error: unknown): void {
+  console.warn(
+    `[crux] workspace watch event dispatch failed during ${phase}; continuing without interrupting the workspace mutation.`,
+    error,
+  );
 }

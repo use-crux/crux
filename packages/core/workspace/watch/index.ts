@@ -20,6 +20,8 @@ export type {
   WorkspacePathChangeEvent,
   WorkspaceRenameChangeEvent,
   WorkspaceWatchCallback,
+  WorkspaceWatchError,
+  WorkspaceWatchErrorCallback,
   WorkspaceWatchHandle,
   WorkspaceWatchOptions,
 } from "./types";

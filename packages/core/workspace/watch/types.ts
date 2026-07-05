@@ -49,6 +49,19 @@ export type WorkspaceChangeEvent =
 /** Callback registered with {@link WorkspaceWatchHandle.on}. */
 export type WorkspaceWatchCallback = (event: WorkspaceChangeEvent) => void;
 
+/** Retryable failure observed by a `workspace.watch()` handle. */
+export interface WorkspaceWatchError {
+  /** Error thrown while resolving the watch namespace or reading runtime events. */
+  readonly error: unknown;
+  /** Consecutive poll failures observed by this handle. Resets after a successful poll. */
+  readonly failures: number;
+  /** Delay, in milliseconds, before the next retry attempt. */
+  readonly retryDelayMs: number;
+}
+
+/** Callback for retryable `workspace.watch()` poll failures. */
+export type WorkspaceWatchErrorCallback = (error: WorkspaceWatchError) => void;
+
 /** Options for `workspace.watch()`. */
 export interface WorkspaceWatchOptions extends WorkspaceNamespaceOption {
   /**
@@ -68,6 +81,13 @@ export interface WorkspaceWatchOptions extends WorkspaceNamespaceOption {
   readonly pollIntervalMs?: number;
   /** Maximum runtime events to read per poll. */
   readonly limit?: number;
+  /**
+   * Observe retryable poll failures.
+   *
+   * The watch stays alive and retries with backoff; throwing from this callback
+   * does not stop delivery.
+   */
+  readonly onError?: WorkspaceWatchErrorCallback;
   /** Stop the watch when this signal aborts. */
   readonly signal?: AbortSignal;
 }

@@ -137,6 +137,8 @@ match either the source path or destination path.
 work without a runtime, but `watch()` throws `RUNTIME_REQUIRED` because delivery
 depends on durable event cursors. Store `handle.cursor` after processing events
 and pass it back as `{ cursor }` to resume after the last delivered change.
+Pass `onError` to observe retryable namespace or event-read failures; the watch
+stays alive and continues polling with backoff.
 
 Transactions emit only committed live-namespace changes. Private staging writes
 are not delivered.
