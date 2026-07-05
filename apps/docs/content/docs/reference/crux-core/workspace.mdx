@@ -3,6 +3,8 @@ title: Workspaces
 description: API reference for durable, path-addressed agent workspaces.
 ---
 
+For workflow guidance, start with the [Workspaces guide](/docs/guides/workspaces). This page is the API reference for imports, methods, option shapes, defaults, and behavior notes.
+
 Import from `@use-crux/core/workspace`:
 
 ```ts
@@ -30,12 +32,21 @@ const ws = workspace({
 });
 ```
 
-Defaults:
+Default mounts:
 
 ```txt
 /workspace
 /outputs
 ```
+
+Common guide pages:
+
+- [Files and artifacts](/docs/guides/workspaces/files-and-artifacts)
+- [Tools and safety](/docs/guides/workspaces/tools-and-safety)
+- [Sources and mounts](/docs/guides/workspaces/sources-and-mounts)
+- [Versions and transactions](/docs/guides/workspaces/versions-and-transactions)
+- [Watching changes](/docs/guides/workspaces/watching)
+- [Storage and limits](/docs/guides/workspaces/storage-and-limits)
 
 ## Methods
 
@@ -65,8 +76,9 @@ await ws.transaction(async (tx) => {
 await ws.delete("/outputs/report.md");
 ```
 
-Every method accepts a `{ namespace }` option. Use it for direct calls or manually
-created tools when the workspace namespace is normally resolved from prompt input:
+Every method accepts a `{ namespace }` option. Use it for direct calls or
+manually created tools when the workspace namespace normally resolves from
+prompt input:
 
 ```ts
 await ws.write("/workspace/notes.md", "# Notes", { namespace: "thread:123" });
@@ -75,7 +87,51 @@ const tools = ws.asTools({ namespace: "thread:123", prefix: "research" });
 ```
 
 `deleteWorkspaceFile` and `undoWorkspaceFile` are not auto-injected unless
-`tools.delete` / `tools.undo` are enabled.
+`tools.delete` or `tools.undo` are enabled.
+
+## Prompt Injection
+
+```ts
+prompt({
+  id: "agent",
+  use: [ws],
+  system: "Use the workspace for durable files.",
+});
+```
+
+Manual control:
+
+```ts
+use: [ws.asContext()];
+tools: ws.asTools({ prefix: "research" });
+```
+
+Injected tools include:
+
+```txt
+listWorkspace
+readWorkspaceFile
+writeWorkspaceFile
+editWorkspaceFile
+renameWorkspaceFile
+grepWorkspace
+```
+
+`exists`, `stat`, `append`, and `copy` are programmatic methods by default.
+
+## Tool Names
+
+```ts
+const names = workspaceToolNames({ prefix: "research" });
+
+names.list; // listResearchWorkspace
+names.writeFile; // writeResearchWorkspaceFile
+names.renameFile; // renameResearchWorkspaceFile
+names.grep; // grepResearchWorkspace
+names.undoFile; // undoResearchWorkspaceFile
+```
+
+Use this helper when matching workspace tools in middleware.
 
 ## Watching Changes
 
@@ -91,19 +147,10 @@ config({ runtime: node() });
 const handle = ws.watch("/outputs", {
   recursive: true,
   pollIntervalMs: 250,
+  onError: (error) => {
+    console.warn("workspace watch retrying", error);
+  },
 });
-
-const off = handle.on((event) => {
-  if (event.type === "rename") {
-    console.log(event.from, "->", event.path);
-    return;
-  }
-
-  console.log(event.type, event.path);
-});
-
-off();
-handle.stop();
 ```
 
 Events are delivered as:
@@ -133,15 +180,15 @@ Omit the path to watch the whole workspace tree, or pass a specific path for
 exact-path matching. Set `recursive: true` to include descendants. Rename events
 match either the source path or destination path.
 
-`watch()` requires `config({ runtime })`. Direct workspace reads and writes still
-work without a runtime, but `watch()` throws `RUNTIME_REQUIRED` because delivery
-depends on durable event cursors. Store `handle.cursor` after processing events
-and pass it back as `{ cursor }` to resume after the last delivered change.
-Pass `onError` to observe retryable namespace or event-read failures; the watch
-stays alive and continues polling with backoff.
+`watch()` requires `config({ runtime })`. Direct workspace reads and writes
+still work without a runtime, but `watch()` throws `RUNTIME_REQUIRED` because
+delivery depends on durable event cursors. Store `handle.cursor` after
+processing events and pass it back as `{ cursor }` to resume after the last
+delivered change.
 
-Transactions emit only committed live-namespace changes. Private staging writes
-are not delivered.
+Pass `onError` to observe retryable namespace or event-read failures. The watch
+stays alive and continues polling with backoff. Transactions emit only committed
+live-namespace changes; private staging writes are not delivered.
 
 ## Transactions
 
@@ -181,56 +228,15 @@ type WorkspaceTransaction = Pick<
 >;
 ```
 
-Transactions are namespace-local and accept the same `{ namespace }` override:
+Transactions are namespace-local and accept the same `{ namespace }` override.
+Transaction mutations are local-workspace only. Source-backed mounts are
+rejected before their provider `write()` or `delete()` hooks run.
 
-```ts
-await ws.transaction(
-  async (tx) => {
-    await tx.write("/outputs/report.md", "# Report");
-  },
-  { namespace: "thread:123" },
-);
-```
-
-Transaction mutations are local-workspace only. Source-backed mounts are rejected
-before their provider `write()` or `delete()` hooks run.
-
-The implementation uses only the generic `RecordStore` contract for local
-workspace mounts, so it works with the in-memory store, Convex record store,
-Upstash Redis record store, and custom conforming stores. Observed commit
-failures roll back touched live paths. Crash-proof multi-key durability depends
-on the backing store/runtime; `transaction()` is not a distributed transaction
-across stores.
-
-## Prompt Injection
-
-```ts
-prompt({
-  id: "agent",
-  use: [ws],
-  system: "Use the workspace for durable files.",
-});
-```
-
-Manual control:
-
-```ts
-use: [ws.asContext()];
-tools: ws.asTools({ prefix: "research" });
-```
-
-Injected tools include:
-
-```txt
-listWorkspace
-readWorkspaceFile
-writeWorkspaceFile
-editWorkspaceFile
-renameWorkspaceFile
-grepWorkspace
-```
-
-`exists`, `stat`, `append`, and `copy` are programmatic methods by default.
+The implementation uses the generic `RecordStore` contract for local workspace
+mounts, so it works with in-memory stores, Convex record stores, Upstash Redis
+record stores, and custom conforming stores. Crash-proof multi-key durability
+depends on the backing store/runtime; `transaction()` is not a distributed
+transaction across stores.
 
 ## Source-Backed Mounts
 
@@ -297,51 +303,21 @@ source: retrieverWorkspaceMountSource(docs, {
 });
 ```
 
-Custom source:
-
-```ts
-source: {
-  kind: "custom",
-  list: async (path) => ({ entries: await provider.list(path) }),
-  read: async (path) => provider.readWorkspaceText(path),
-}
-```
-
 For source-backed paths, `list`, `read`, `grep`, `exists`, and `stat` delegate
 to the provider. If a custom source omits `grep`, Crux falls back to
 `list + read`; if it omits `stat`, Crux derives file metadata from `read`.
-Source-backed `list()` results are still bounded by the workspace `limit` even
-when the provider ignores the hint.
 
 Mutation operations are provider opt-ins. Retriever sources and custom sources
 without hooks are read-only. `write`, `edit`, `append`, and provider-destination
 `copy` require both `access: "readwrite"` on the mount and a custom source
-`write()` hook; `delete` requires `access: "readwrite"` and `delete()`. `edit`
-and `append` read the provider text first, then call `write()` with the updated
-content.
-
-```ts
-await ws.write("/sources/new.md", "draft"); // delegates to source.write()
-await ws.edit("/sources/brief.md", { find: "x", replace: "y" }); // read + source.write()
-await ws.copy("/workspace/brief.md", "/sources/brief.md"); // delegates to source.write()
-await ws.delete("/sources/brief.md"); // delegates to source.delete()
-await ws.finalize("/sources/brief.md"); // throws
-```
+`write()` hook. `delete` requires `access: "readwrite"` and `delete()`.
+`edit` and `append` read the provider text first, then call `write()` with the
+updated content.
 
 Version history, `undo`, `diff`, `finalize`, and artifact manifests remain
-local workspace features. A provider-backed source can expose its own history or
-conflict policy through its wrapper, but Crux does not invent local versions for
-provider-owned bytes.
-
-`copy()` is the one bridge from provider-backed bytes to local workspace state:
-
-```ts
-await ws.copy("/sources/brief.md", "/workspace/brief.md");
-```
-
-It can materialize readable virtual text and JSON files into writable local
-mounts. Binary provider resources need a custom app-side copy flow until the
-provider exposes readable bytes.
+local workspace features. `copy()` can materialize readable virtual text and
+JSON files into writable local mounts. Binary provider resources need a custom
+app-side copy flow until the provider exposes readable bytes.
 
 ## Artifacts
 
@@ -358,12 +334,10 @@ const artifact = await ws.finalize("/outputs/report.md");
 const finals = await ws.artifacts({ status: "final" });
 ```
 
-`finalize()` pins the current version as the published artifact (`artifact.version`).
-Editing the file afterwards creates new draft versions, but `artifacts()` and the
-manifest keep surfacing the pinned revision until you `finalize()` again. `read()`
-returns the live working copy; `read(path, { version })` reads a specific
-retained snapshot, whether that version is the pinned artifact revision or any
-other retained revision.
+`finalize()` pins the current version as the published artifact
+(`artifact.version`). Editing the file afterwards creates new draft versions,
+but `artifacts()` and the manifest keep surfacing the pinned revision until you
+`finalize()` again.
 
 Small inline artifacts expose a `workspace-inline://...` reference. Blob-backed
 artifacts expose the blob URI.
@@ -399,37 +373,20 @@ const ws = workspace({
 });
 ```
 
-See [Storage](/docs/guides/storage) for the difference between `RecordStore`, `VectorStore`, and `BlobStore`, and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.
+See [Storage](/docs/guides/storage) for the difference between `RecordStore`,
+`VectorStore`, and `BlobStore`, and [BlobStore](/docs/guides/storage/blob-storage)
+for custom S3/R2/GCS-style blob stores.
 
 ## Versioning And History
 
 Every content change (`write`, `edit`, `append`, `undo`) appends an immutable
-version. History is always recorded — there is no flag to turn it on — so a
-destructive edit is recoverable even when no one planned ahead.
-
-```ts
-await ws.write("/outputs/report.md", "draft one");
-await ws.write("/outputs/report.md", "draft two");
-
-const history = await ws.history("/outputs/report.md");
-// → [{ version: 2, operation: "write", ... }, { version: 1, ... }]  (newest first)
-
-await ws.read("/outputs/report.md", { version: 1 }); // "draft one"
-
-const diff = await ws.diff("/outputs/report.md", { from: 1, to: 2 });
-diff.unified; // git-style unified-diff string
-diff.hunks; // structured add/remove/context lines
-
-await ws.undo("/outputs/report.md"); // restores v1 as a new v3 (history is never rewritten)
-```
-
-`diff` defaults to the most recent change (previous version → current) and
-applies to text files; binary files throw. `undo` reverts the last content
-change; `rename`/`move`/`copy` start fresh history at the destination path, and
-`delete` purges a file's history.
+version. History is always recorded. `diff` defaults to the most recent change
+and applies to text files; binary files throw. `undo` restores the previous
+content as a new version.
 
 Versioning is on by default with unlimited retention. Bound it per file with
-`versioning.maxVersions`, which GCs the oldest snapshots (and their blobs):
+`versioning.maxVersions`, which garbage collects the oldest snapshots and their
+blobs:
 
 ```ts
 workspace({
@@ -441,13 +398,7 @@ workspace({
 ```
 
 Quota (`limits.maxNamespaceBytes`) counts live files only, not historical
-snapshots — use `maxVersions` to bound history storage.
-
-The `undoWorkspaceFile` tool is opt-in, like `deleteWorkspaceFile`:
-
-```ts
-ws.asTools({ undo: true }); // adds undoWorkspaceFile
-```
+snapshots.
 
 ## Retention And Limits
 
@@ -464,28 +415,25 @@ workspace({
 });
 ```
 
-`retention.ttlMs` is passed to `RecordStore.put(..., { ttlMs })` only when the store
-supports TTL. `maxFileBytes` rejects a single oversized write, and
+`retention.ttlMs` is passed to `RecordStore.put(..., { ttlMs })` only when the
+store supports TTL. `maxFileBytes` rejects a single oversized write, and
 `maxNamespaceBytes` rejects writes that would push the namespace over its cap.
-
-## Tool Names
-
-```ts
-const names = workspaceToolNames({ prefix: "research" });
-
-names.list; // listResearchWorkspace
-names.writeFile; // writeResearchWorkspaceFile
-names.renameFile; // renameResearchWorkspaceFile
-names.grep; // grepResearchWorkspace
-names.undoFile; // undoResearchWorkspaceFile
-```
-
-Use this helper when matching workspace tools in middleware.
 
 ## Observability and Project Index
 
-Workspace operations emit `workspace.operation` spans with privacy-safe OTel attributes, including `crux.workspace.operation` and `crux.workspace.path_hash`. Raw paths and file contents are not exported to OTel. Local devtools can show artifact metadata and use a stable `hash:<pathHash>` file label when no local-only raw path is available.
+Workspace operations emit `workspace.operation` spans with privacy-safe OTel
+attributes, including `crux.workspace.operation` and
+`crux.workspace.path_hash`. Raw paths and file contents are not exported to
+OTel. Local devtools can show artifact metadata and use a stable
+`hash:<pathHash>` file label when no local-only raw path is available.
 
-Each recorded version also emits a single privacy-safe version marker (path hash, version number, and operation only). The devtools file inspector reconstructs a file's **version history** from these markers — one entry per content change, even when an `edit`/`undo` performs a nested write internally.
+Each recorded version emits one privacy-safe version marker with path hash,
+version number, and operation. The devtools file inspector reconstructs version
+history from those markers.
 
-Project Index workspace metadata includes mounts, generated tool names, blob-storage posture, `retention.ttlMs`, and quota limits. Workspace method calls inside indexed owners are represented through workspace read/write relations, and workspace-specific data-access facts preserve exact operations such as `grep`, `watch`, `history`, `diff`, `undo`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
+Project Index workspace metadata includes mounts, generated tool names,
+blob-storage posture, `retention.ttlMs`, and quota limits. Workspace method
+calls inside indexed owners are represented through workspace read/write
+relations, and workspace-specific data-access facts preserve exact operations
+such as `grep`, `watch`, `history`, `diff`, `undo`, `artifacts`, `rename`,
+`move`, `copy`, and `finalize`.

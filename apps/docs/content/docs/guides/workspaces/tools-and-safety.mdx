@@ -1,0 +1,175 @@
+---
+title: Tools and Safety
+description: Configure workspace tool names, prefixes, approvals, and write guardrails.
+---
+
+`use: [ws]` gives the model a compact workspace manifest and a default set of
+file tools:
+
+```txt
+listWorkspace
+readWorkspaceFile
+writeWorkspaceFile
+editWorkspaceFile
+renameWorkspaceFile
+grepWorkspace
+```
+
+`exists`, `stat`, `append`, and `copy` are programmatic methods by default.
+`deleteWorkspaceFile` and `undoWorkspaceFile` are opt-in.
+
+## Multiple Workspaces
+
+One unprefixed workspace can be injected directly:
+
+```ts
+prompt({
+  id: "writer",
+  use: [ws],
+  system: "Write the report.",
+});
+```
+
+Multiple workspaces need prefixes so tool names do not collide:
+
+```ts
+const research = workspace({
+  id: "research",
+  namespace,
+  storage: storage({ records, blobs }),
+  tools: { prefix: "research" },
+});
+
+const drafts = workspace({
+  id: "drafts",
+  namespace,
+  storage: storage({ records, blobs }),
+  tools: { prefix: "drafts" },
+});
+
+prompt({
+  id: "writer",
+  use: [research, drafts],
+  system: "Use research files to produce drafts.",
+});
+```
+
+That produces names such as `listResearchWorkspace` and
+`writeDraftsWorkspaceFile`.
+
+## Manual Injection
+
+Use manual helpers when a framework needs context and tools wired separately:
+
+```ts
+prompt({
+  id: "agent",
+  use: [ws.asContext()],
+  tools: ws.asTools({ prefix: "research" }),
+  system: "Use the workspace for durable files.",
+});
+```
+
+When the workspace namespace normally resolves from prompt input, pass a
+namespace override for direct tool creation:
+
+```ts
+const tools = ws.asTools({
+  namespace: "thread:123",
+  prefix: "research",
+});
+```
+
+## Delete And Undo Are Opt-In
+
+Delete is intentionally not injected by default:
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace,
+  storage: storage({ records, blobs }),
+  tools: {
+    delete: true,
+  },
+});
+```
+
+Undo is also opt-in:
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace,
+  storage,
+  tools: {
+    undo: true,
+  },
+});
+```
+
+Keep delete and undo disabled for most general-purpose agents. Enable them when
+the user experience makes those actions clear and recoverable.
+
+## Match Generated Tool Names
+
+Use `workspaceToolNames()` when matching workspace tools in middleware:
+
+```ts
+import { workspaceToolNames } from "@use-crux/core/workspace";
+
+const names = workspaceToolNames({ prefix: "research" });
+
+names.list; // listResearchWorkspace
+names.writeFile; // writeResearchWorkspaceFile
+names.renameFile; // renameResearchWorkspaceFile
+names.grep; // grepResearchWorkspace
+names.undoFile; // undoResearchWorkspaceFile
+```
+
+Prefixes change final tool names, so middleware should match generated names
+instead of hardcoding unprefixed defaults.
+
+## Approvals
+
+Use tool middleware for policy and approval:
+
+```ts
+import { approvalMiddleware } from "@use-crux/core";
+import { workspaceToolNames } from "@use-crux/core/workspace";
+
+const names = workspaceToolNames({ prefix: "research" });
+
+const approvals = approvalMiddleware({
+  id: "workspace-writes",
+  match: [names.writeFile, names.editFile],
+  onRequest: async ({ input }) => {
+    await notifyUser(input);
+  },
+});
+
+const writer = prompt({
+  id: "writer",
+  use: [ws],
+  middleware: [approvals],
+  system: "Read before editing. Ask before changing final outputs.",
+});
+```
+
+Approval middleware is a good default for user-visible documents, destructive
+edits, and provider-backed writes.
+
+## Guardrails
+
+Workspace writes mutate durable files, so production agents should have an
+inspectable policy boundary for write-capable workspaces or write tools. Common
+guards include:
+
+- require approval before changing `/outputs`.
+- reject writes outside expected mounts.
+- block binary writes unless the app requested a generated file.
+- require the agent to read a file before editing it.
+- validate generated filenames, MIME types, and artifact kinds.
+
+The Project Index can report `workspace.write_without_guardrail` when a
+write-capable workspace has no visible guardrail relation.

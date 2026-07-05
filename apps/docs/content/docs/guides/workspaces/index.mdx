@@ -3,9 +3,21 @@ title: Workspaces
 description: Give agents durable scratch space and generated output files without writing custom file tools.
 ---
 
-`workspace()` is the Crux primitive for files an agent can inspect and create while it works.
+Most agents need somewhere to work. Without a workspace, intermediate notes,
+drafts, generated files, uploaded material, and final deliverables usually end
+up in one of two bad places: stuffed back into the prompt, or hidden behind
+custom file tools that every app has to design from scratch.
 
-Use it when the model needs a durable working area: notes, intermediate drafts, generated reports, CSVs, PDFs, images, or app-uploaded files. Do not use it for learned user memory, shared coordination state, or searchable knowledge. Those are `memory()`, `blackboard()`, and `retriever()`.
+`workspace()` gives the model a durable, path-addressed file tree with a compact
+manifest and safe file tools. The model sees what files exist, reads only the
+files it needs, writes drafts and outputs to known folders, and leaves your app
+with inspectable files instead of a long hidden transcript.
+
+Use workspaces for notes, intermediate drafts, generated reports, CSVs, PDFs,
+images, and uploaded or mounted task files. Do not use them for learned user
+memory, shared coordination state, or searchable knowledge. Those are
+[`memory()`](/docs/guides/memory), [blackboards](/docs/guides/agents/blackboard),
+and [retrieval](/docs/guides/retrieval).
 
 ## Basic Usage
 
@@ -27,15 +39,20 @@ const analyst = prompt({
 });
 ```
 
-`use: [ws]` injects two things:
+`use: [ws]` injects a compact workspace manifest and file tools:
 
 ```txt
-1. A compact workspace manifest in the system prompt.
-2. File tools: listWorkspace, readWorkspaceFile, writeWorkspaceFile, editWorkspaceFile,
-   renameWorkspaceFile, grepWorkspace.
+listWorkspace
+readWorkspaceFile
+writeWorkspaceFile
+editWorkspaceFile
+renameWorkspaceFile
+grepWorkspace
 ```
 
-The manifest shows paths and metadata, not file contents. The model calls read tools when it needs contents.
+The manifest shows paths and metadata, not full file contents. The model calls
+read tools when it needs content, which keeps large work products out of the
+prompt until they are relevant.
 
 ## Default Folders
 
@@ -52,8 +69,16 @@ await ws.write("/workspace/notes.md", "# Research notes");
 await ws.write("/outputs/report.md", "# Final report");
 ```
 
+This convention is intentionally simple:
+
+| Path | Use it for |
+| --- | --- |
+| `/workspace` | Notes, plans, intermediate files, extracted data, draft fragments |
+| `/outputs` | User-facing deliverables, generated downloads, published artifacts |
+| `/sources` | Optional mounted reference files from uploads, retrievers, MCP, or app data |
+
 Outputs are regular files under `/outputs`. Mark generated deliverables with
-`status` and `kind` when the app needs an artifacts view.
+`status` and `kind` when the app needs an artifact view:
 
 ```ts
 await ws.write("/outputs/report.md", "# Final report", {
@@ -64,234 +89,50 @@ await ws.write("/outputs/report.md", "# Final report", {
 const artifact = await ws.finalize("/outputs/report.md");
 ```
 
-## Listing Files
+## What Your App Can Do
 
-`list()` and `listWorkspace` support directory paths and simple globs:
+Apps can use the same workspace directly:
 
 ```ts
-await ws.list("/workspace");
 await ws.list("/workspace/**/*.md");
-await ws.list("/outputs/*.pdf");
-```
-
-Supported in V0:
-
-- `*` within one path segment.
-- `**` across path segments.
-- extension patterns such as `/**/*.md`.
-- `limit`.
-
-## File Operations
-
-The model gets rename and grep tools by default. Apps also get direct methods for
-common filesystem checks and mutations:
-
-```ts
+await ws.read("/workspace/notes.md");
+await ws.write("/outputs/report.md", "# Report");
+await ws.edit("/outputs/report.md", { find: "draft", replace: "final" });
 await ws.exists("/workspace/notes.md");
 await ws.stat("/workspace/notes.md");
-await ws.append("/workspace/notes.md", "\nMore notes.");
-await ws.rename("/workspace/notes.md", "/outputs/report.md");
-await ws.move("/outputs/report.md", "/outputs/final-report.md");
-await ws.copy("/outputs/final-report.md", "/workspace/report-copy.md");
+await ws.append("/outputs/report.md", "\nAppendix");
+await ws.copy("/sources/brief.md", "/workspace/brief.md");
 await ws.grep("launch", { path: "/workspace/**/*.md", ignoreCase: true });
+await ws.finalize("/outputs/report.md");
 ```
 
-`rename`, `move`, and `copy` preserve metadata, including artifact status and kind.
-
-## Watching Changes
-
-Use `watch()` when an app needs to react to workspace file changes outside the
-model loop, such as refreshing a file tree or syncing generated outputs. It uses
-the Runtime Engine durable event log, so configure a runtime first:
+Every method accepts a `{ namespace }` override for direct calls outside prompt
+resolution:
 
 ```ts
-import { config } from "@use-crux/core";
-import { node } from "@use-crux/core/runtime";
-
-config({ runtime: node() });
-
-const handle = ws.watch("/outputs", { recursive: true });
-
-const off = handle.on((event) => {
-  if (event.type === "rename") {
-    console.log(event.from, "->", event.path);
-    return;
-  }
-
-  console.log(event.type, event.path);
-});
-
-off();
-handle.stop();
+await ws.write("/workspace/notes.md", "# Notes", { namespace: "thread:123" });
 ```
 
-Events have `type`, `workspaceId`, `namespace`, `path`, `at`, and `cursor`.
-Rename events also include `from`. Store `handle.cursor` after processing events
-and pass it back as `{ cursor }` to resume after the last delivered change.
+## Production Shape
 
-Without a configured runtime, direct workspace reads and writes still work, but
-`watch()` throws `RUNTIME_REQUIRED`. Transaction staging writes are internal;
-watchers see only the committed live-namespace changes.
-
-## Reading Files
-
-`read()` returns a discriminated union:
-
-```ts
-const file = await ws.read("/workspace/notes.md");
-
-if (file.kind === "text") {
-  console.log(file.content);
-}
-```
-
-Binary files return metadata and a URI instead of raw bytes:
-
-```ts
-const file = await ws.read("/outputs/report.pdf");
-
-if (file.kind === "binary") {
-  console.log(file.uri, file.mimeType, file.size);
-}
-```
-
-Models see paths, metadata, previews when available, and blob URIs. Apps and devtools can fetch full bytes through the blob store.
-
-Blob-backed text and JSON still read back as `text` and `json`; the workspace
-fetches their payload from the blob store. `maxInlineBytes` windows text reads
-instead of throwing when a caller asks for a smaller preview.
-
-## Versioning And History
-
-Every content change (`write`, `edit`, `append`, `undo`) appends an immutable
-version. History is always recorded — there is no flag to enable — so a
-destructive edit is recoverable even when nobody planned ahead.
-
-```ts
-await ws.write("/outputs/report.md", "draft one");
-await ws.write("/outputs/report.md", "draft two");
-
-const history = await ws.history("/outputs/report.md");
-// → [{ version: 2, operation: "write", ... }, { version: 1, ... }]  (newest first)
-
-const old = await ws.read("/outputs/report.md", { version: 1 }); // "draft one"
-
-const diff = await ws.diff("/outputs/report.md", { from: 1, to: 2 });
-diff.unified; // git-style unified-diff string
-diff.hunks; // structured add/remove/context lines
-
-await ws.undo("/outputs/report.md"); // restores v1 as a new v3; history is never rewritten
-```
-
-`diff` defaults to the most recent change (previous version → current) and
-applies to text files; binary files throw. `undo` reverts the last content
-change. `rename`, `move`, and `copy` start fresh history at the destination
-path, and `delete` purges a file's history.
-
-Retention is unlimited by default. Bound it per file with `versioning.maxVersions`,
-which GCs the oldest snapshots (and their blobs):
-
-```ts
-const ws = workspace({
-  id: "research",
-  namespace,
-  storage: storage({ records, blobs }),
-  versioning: { maxVersions: 20 },
-});
-```
-
-The `undoWorkspaceFile` tool is opt-in via `tools: { undo: true }`, like
-`deleteWorkspaceFile`.
-
-## Transactions
-
-Use `transaction()` when one deliverable spans several files and partial output
-would be misleading. The callback writes to a staged workspace view first. If
-the callback throws, the live namespace is unchanged; when it returns, Crux
-commits the touched paths and returns the callback result.
-
-```ts
-const artifact = await ws.transaction(async (tx) => {
-  await tx.write("/outputs/report.md", "# Report", { status: "draft" });
-  await tx.write("/outputs/data.csv", "name,value\nalpha,1\n");
-
-  return tx.finalize("/outputs/report.md", { kind: "report" });
-});
-```
-
-Reads inside the callback see staged changes, while ordinary `ws` reads still
-see the live namespace until commit:
-
-```ts
-await ws.write("/workspace/notes.md", "draft");
-
-await ws.transaction(async (tx) => {
-  await tx.edit("/workspace/notes.md", {
-    find: "draft",
-    replace: "final",
-  });
-
-  await tx.read("/workspace/notes.md"); // "final"
-  await ws.read("/workspace/notes.md"); // "draft"
-});
-
-await ws.read("/workspace/notes.md"); // "final"
-```
-
-The transaction surface is file-focused: `list`, `read`, `write`, `edit`,
-`delete`, `exists`, `stat`, `append`, `rename`, `move`, `copy`, `grep`,
-`artifacts`, and `finalize`. It intentionally does not include prompt adapters
-such as `asContext()`, `asTools()`, or `inject()`.
-
-Transactions are namespace-local. Pass `{ namespace }` to target a specific
-namespace outside prompt resolution:
-
-```ts
-await ws.transaction(
-  async (tx) => {
-    await tx.write("/outputs/report.md", "# Report");
-  },
-  { namespace: "thread:123" },
-);
-```
-
-Source-backed mount mutations are rejected before provider hooks run. Copy a
-provider-backed file into `/workspace` or `/outputs` first if you need it inside
-a transaction.
-
-Transactions are implemented over the generic `RecordStore` contract, so the
-same API works with in-memory storage, Convex record storage, Upstash Redis, and
-custom conforming stores. The generic implementation rolls back touched live
-paths when it observes a commit failure. Crash-proof multi-key durability still
-depends on the underlying store or runtime; `transaction()` is not a distributed
-transaction across stores.
-
-## Storage Rules
-
-Workspaces use two storage layers:
+For production, pass durable storage. `records` holds metadata and small inline
+text or JSON. `blobs` holds binary and large payloads:
 
 ```ts
 import { storage } from "@use-crux/core/storage";
 
 workspace({
+  id: "research",
+  namespace,
   storage: storage({
-    records, // metadata + small inline text/json
-    blobs, // binary and large payloads
+    records,
+    blobs,
   }),
   content: {
     inlineTextBelowBytes: 64_000,
   },
 });
 ```
-
-Rules:
-
-- Small text and JSON can live inline in `RecordStore`.
-- Large text goes to `BlobStore`.
-- Binary always goes to `BlobStore`.
-- Writing binary or oversized content without `blobs` throws clearly.
-
-For bundled storage options and custom S3/R2/GCS-style blob stores, see [Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage).
 
 ## Namespaces
 
@@ -314,325 +155,39 @@ const tools = ws.asTools({ namespace: "thread:123" });
 The override is also useful when running workspace operations outside a prompt
 resolution.
 
-## Retention And Quotas
+## Where To Go Next
 
-Operator controls live on the workspace config:
+<Cards>
+  <Card
+    title="Files and artifacts"
+    description="Read, write, list, copy, finalize, and publish generated files."
+    href="/docs/guides/workspaces/files-and-artifacts"
+  />
+  <Card
+    title="Tools and safety"
+    description="Tool injection, prefixes, delete and undo opt-ins, approvals, and guardrails."
+    href="/docs/guides/workspaces/tools-and-safety"
+  />
+  <Card
+    title="Sources and mounts"
+    description="Expose retrievers, MCP resources, app documents, uploads, and provider-owned files as workspace paths."
+    href="/docs/guides/workspaces/sources-and-mounts"
+  />
+  <Card
+    title="Versions and transactions"
+    description="Use history, diff, undo, pinned artifact versions, and staged multi-file writes."
+    href="/docs/guides/workspaces/versions-and-transactions"
+  />
+  <Card
+    title="Watching changes"
+    description="Subscribe to workspace changes with durable cursors and update app views outside the model loop."
+    href="/docs/guides/workspaces/watching"
+  />
+  <Card
+    title="Storage and limits"
+    description="Choose records and blobs, configure TTL, quotas, inline thresholds, and namespace isolation."
+    href="/docs/guides/workspaces/storage-and-limits"
+  />
+</Cards>
 
-```ts
-const ws = workspace({
-  id: "research",
-  namespace,
-  storage: storage({ records, blobs }),
-  retention: { ttlMs: 1000 * 60 * 60 * 24 },
-  limits: {
-    maxFileBytes: 1_000_000,
-    maxNamespaceBytes: 25_000_000,
-  },
-});
-```
-
-`retention.ttlMs` is passed to the record store only when the store supports TTL.
-`maxFileBytes` rejects one oversized write, and `maxNamespaceBytes` rejects writes
-that would push the namespace total over its cap. The namespace quota counts live
-files only, not historical snapshots — bound history storage with
-`versioning.maxVersions` (see [Versioning And History](#versioning-and-history)).
-
-## Artifacts
-
-Artifacts are a view over normal workspace files:
-
-```ts
-await ws.write("/outputs/chart.png", imageBytes, {
-  mimeType: "image/png",
-  status: "final",
-  kind: "chart",
-});
-
-const charts = await ws.artifacts({ status: "final", kind: "chart" });
-```
-
-Inline artifacts expose a `workspace-inline://...` reference. Blob-backed
-artifacts expose the blob URI.
-
-### Finalize pins a version
-
-`finalize()` **pins** the current version as the published artifact, like
-publishing in a CMS. The agent can keep editing the working file afterwards —
-those edits create new draft versions — but `artifacts()` and the manifest keep
-surfacing the pinned revision until you `finalize()` again.
-
-```ts
-await ws.write("/outputs/report.md", "published copy", { kind: "report" });
-const pinned = await ws.finalize("/outputs/report.md");
-pinned.version; // 1 — the published version
-
-await ws.edit("/outputs/report.md", { find: "published", replace: "wip" });
-
-await ws.read("/outputs/report.md"); // "wip copy" — read() is the working surface
-(await ws.artifacts({ status: "final" }))[0].version; // still 1 — published artifact unmoved
-await ws.read("/outputs/report.md", { version: 1 }); // "published copy" — the pinned content
-
-await ws.finalize("/outputs/report.md"); // re-publish → pins the latest version
-```
-
-`read()` always returns the live working copy; the published artifact resolves
-to the pinned version. (A file only created by `copy`/`rename` and never written
-or edited has no snapshot to pin; finalizing then editing it falls back to the
-working copy.)
-
-## Source Files
-
-`/sources` is explicit because source ownership differs per app.
-
-```ts
-const ws = workspace({
-  id: "research",
-  namespace,
-  storage: storage({ records, blobs }),
-  mounts: [
-    {
-      path: "/sources",
-      access: "read",
-      description: "Uploaded reference material for this task.",
-    },
-    { path: "/workspace", access: "readwrite" },
-    { path: "/outputs", access: "readwrite" },
-  ],
-});
-```
-
-Use `/sources` for uploaded files, mounted MCP resources, app-owned documents, or material produced by ingestion.
-
-## Source-Backed Mounts
-
-A mount can be backed by a provider instead of the workspace `RecordStore`. This
-lets the workspace present one file tree where `/workspace` and `/outputs` are
-local writable files, while `/sources` resolves lazily from retrieval results,
-an app document service, an MCP resource server, a project index, or another
-connected system.
-
-Source-backed mounts are read-only by default. The workspace owns path
-normalization and verifies that providers cannot return paths outside their
-mount root. A custom source can opt into provider writes by mounting with
-`access: "readwrite"` and implementing `write()` and/or `delete()`. Retriever
-sources stay read-only.
-
-```ts
-import { retriever, workspace } from "@use-crux/core";
-import { storage } from "@use-crux/core/storage";
-
-const docs = retriever({
-  id: "docs",
-  namespace,
-  retrieve: async (query, options) => {
-    // Return RetrieverHit[] from your corpus.
-    return searchDocs(query, options);
-  },
-});
-
-const ws = workspace({
-  id: "research",
-  namespace,
-  storage: storage({ records, blobs }),
-  mounts: [
-    { path: "/workspace", access: "readwrite" },
-    { path: "/outputs", access: "readwrite" },
-    {
-      path: "/sources",
-      access: "read",
-      source: {
-        kind: "retriever",
-        retriever: docs,
-        query: "current task source documents",
-      },
-    },
-  ],
-});
-```
-
-A retriever mount projects hits as virtual text files. The default path is
-`hit.sourcePath` when present, otherwise `${sourceId}/${chunkId}.md`. Use
-`pathForHit`, `contentForHit`, or `mimeType` when your corpus needs a different
-mapping.
-
-```ts
-{
-  path: "/sources",
-  access: "read",
-  source: {
-    kind: "retriever",
-    retriever: docs,
-    query: ({ operation, query, path }) =>
-      operation === "grep" ? query ?? "" : path ?? "source docs",
-    pathForHit: (hit) => `${hit.sourceId}.md`,
-    contentForHit: (hit) => hit.parent?.content ?? hit.content,
-  },
-}
-```
-
-Custom sources expose any provider as files by implementing `list()` and
-`read()`. Optional `grep`, `exists`, and `stat` hooks let providers avoid
-fallback work; if `stat` is omitted, Crux derives file metadata from `read()`.
-
-```ts
-const uploadedSources = {
-  kind: "custom" as const,
-  list: async (path) => ({
-    entries: await appFiles.listWorkspaceEntries(path),
-  }),
-  read: async (path) => {
-    const file = await appFiles.readText(path);
-    return file
-      ? {
-          kind: "text" as const,
-          path,
-          mimeType: file.mimeType,
-          content: file.text,
-          size: file.size,
-          metadata: file.metadata,
-        }
-      : null;
-  },
-};
-```
-
-Read methods delegate to source-backed mounts:
-
-```ts
-await ws.list("/sources");
-await ws.read("/sources/brief.md");
-await ws.exists("/sources/brief.md");
-await ws.stat("/sources/brief.md");
-await ws.grep("needle", { path: "/sources/**/*.md" });
-```
-
-Unscoped `grep()` searches local files first and then source-backed mounts until
-`maxResults` is reached. `copy()` can materialize readable virtual text and JSON
-files into writable local mounts, or into provider-backed mounts that implement
-`write()`:
-
-```ts
-await ws.copy("/sources/brief.md", "/workspace/brief.md");
-```
-
-Version history is local to stored workspace files. `read(path, { version })`,
-`history`, `diff`, and `undo` are for local files, not live provider resources.
-To preserve a source-backed file, copy it into a writable mount and version the
-copy.
-
-Provider writes do not create Crux-managed versions or artifacts for the
-provider resource. The provider wrapper owns authorization, conflict handling,
-revision ids, and native history. `rename`, `move`, `undo`, and `finalize` stay
-local-only.
-
-### Provider patterns
-
-Providers that are not bundled as first-class workspace source kinds should be
-wrapped as `kind: "custom"`:
-
-- MCP resources: map resource URIs to stable `/sources/...` paths, authorize
-  before each call, and return normalized text or binary references.
-- Project Index snapshots: expose selected definitions or source summaries as
-  generated markdown files, not raw compiler objects.
-- Connected drives or CMS media: list only the app-authorized folder, map opaque
-  provider ids to workspace paths, and put provider ids in metadata instead of
-  leaking them into paths.
-
-See [Federated workspace sources](/docs/cookbook/basics/workspace-source-mounts)
-for read-mostly custom-source recipes and
-[Editable workspace sources](/docs/cookbook/basics/workspace-editable-source-mounts)
-for provider write hooks.
-
-## Multiple Workspaces
-
-One unprefixed workspace can be injected directly:
-
-```ts
-prompt({
-  id: "writer",
-  use: [ws],
-  system: "Write the report.",
-});
-```
-
-Multiple workspaces need prefixes so tool names do not collide:
-
-```ts
-const research = workspace({
-  id: "research",
-  namespace,
-  storage: storage({ records, blobs }),
-  tools: { prefix: "research" },
-});
-
-const drafts = workspace({
-  id: "drafts",
-  namespace,
-  storage: storage({ records, blobs }),
-  tools: { prefix: "drafts" },
-});
-
-prompt({
-  id: "writer",
-  use: [research, drafts],
-  system: "Use research files to produce drafts.",
-});
-```
-
-That produces names such as `listResearchWorkspace` and `writeDraftsWorkspaceFile`.
-
-## Delete Is Opt-In
-
-Delete is intentionally not injected by default:
-
-```ts
-const ws = workspace({
-  id: "research",
-  namespace,
-  storage: storage({ records, blobs }),
-  tools: {
-    delete: true,
-  },
-});
-```
-
-## Approvals
-
-Use tool middleware for policy and approval.
-
-```ts
-import { approvalMiddleware } from "@use-crux/core";
-import { workspaceToolNames } from "@use-crux/core/workspace";
-
-const names = workspaceToolNames({ prefix: "research" });
-
-const approvals = approvalMiddleware({
-  id: "workspace-writes",
-  match: [names.writeFile, names.editFile],
-  onRequest: async ({ input }) => {
-    await notifyUser(input);
-  },
-});
-```
-
-Prefixes change the final tool names, so match the generated names.
-
-## Convex
-
-Convex apps use `convexRecordStore({ component, ctx })` for workspace metadata and `convexWorkspaceBlobStore()` for binary/large payloads. See the [Convex guide](/docs/guides/convex) for the complete setup and runtime caveats.
-
-## Devtools
-
-Devtools include a Workspaces view that reconstructs a filesystem-like tree from workspace operations:
-
-```txt
-research
-├─ /workspace
-│  └─ notes.md
-└─ /outputs
-   └─ report.pdf
-```
-
-OTel receives privacy-safe operation metadata only. Raw file contents and full paths are not emitted to OTel. Workspace OTel spans use `crux.workspace.operation` and `crux.workspace.path_hash`; devtools use the same path hash as a stable file label when no local-only raw path is available. Finalized artifacts expose bounded metadata such as status, artifact kind, MIME type, size, and download ref. Project Index data-access facts preserve exact workspace operations, including `grep`, `watch`, `history`, `diff`, `undo`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
-
-The file inspector also has a **Versions** tab showing a file's revision timeline (version number, when, the operation that produced it, and a trace link). Each version is announced by a single privacy-safe marker emitted when the version is recorded, so the timeline counts one entry per content change even though an `edit` or `undo` internally performs a nested write.
+For exact method signatures and option names, use the [Workspace API reference](/docs/reference/crux-core/workspace).

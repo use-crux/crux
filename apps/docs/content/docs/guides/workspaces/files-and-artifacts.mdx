@@ -1,0 +1,135 @@
+---
+title: Files and Artifacts
+description: Read, write, list, copy, finalize, and publish generated workspace files.
+---
+
+Workspace files are path-addressed records. The model can use tools to inspect
+and create them, while your app can call the same workspace methods directly.
+
+## Listing Files
+
+`list()` and `listWorkspace` support directory paths and simple globs:
+
+```ts
+await ws.list("/workspace");
+await ws.list("/workspace/**/*.md");
+await ws.list("/outputs/*.pdf");
+```
+
+Supported patterns:
+
+- `*` within one path segment.
+- `**` across path segments.
+- extension patterns such as `/**/*.md`.
+- `limit`.
+
+## Reading Files
+
+`read()` returns a discriminated union:
+
+```ts
+const file = await ws.read("/workspace/notes.md");
+
+if (file.kind === "text") {
+  console.log(file.content);
+}
+```
+
+Binary files return metadata and a URI instead of raw bytes:
+
+```ts
+const file = await ws.read("/outputs/report.pdf");
+
+if (file.kind === "binary") {
+  console.log(file.uri, file.mimeType, file.size);
+}
+```
+
+Models see paths, metadata, previews when available, and blob URIs. Apps and
+devtools can fetch full bytes through the configured blob store.
+
+Blob-backed text and JSON still read back as `text` and `json`; the workspace
+fetches their payload from the blob store. `maxInlineBytes` windows text reads
+instead of throwing when a caller asks for a smaller preview.
+
+## Writing And Editing
+
+Use `/workspace` for notes and intermediate files. Use `/outputs` for final
+deliverables:
+
+```ts
+await ws.write("/workspace/outline.md", "# Outline");
+await ws.append("/workspace/outline.md", "\n- Add pricing section");
+
+await ws.write("/outputs/report.md", "# Report", {
+  status: "draft",
+  kind: "report",
+});
+
+await ws.edit("/outputs/report.md", {
+  find: "draft",
+  replace: "final",
+});
+```
+
+`rename`, `move`, and `copy` preserve metadata, including artifact status and
+kind:
+
+```ts
+await ws.rename("/workspace/outline.md", "/workspace/notes.md");
+await ws.move("/workspace/notes.md", "/outputs/notes.md");
+await ws.copy("/outputs/notes.md", "/workspace/notes-copy.md");
+```
+
+Use `grep()` when the app or model needs to find a term across workspace files:
+
+```ts
+await ws.grep("launch", {
+  path: "/workspace/**/*.md",
+  ignoreCase: true,
+});
+```
+
+## Artifacts
+
+Artifacts are normal file records with lifecycle metadata. They are not stored
+in a separate table:
+
+```ts
+await ws.write("/outputs/chart.png", imageBytes, {
+  mimeType: "image/png",
+  status: "final",
+  kind: "chart",
+});
+
+const charts = await ws.artifacts({ status: "final", kind: "chart" });
+```
+
+Small inline artifacts expose a `workspace-inline://...` reference. Blob-backed
+artifacts expose the blob URI.
+
+## Finalize Pins A Version
+
+`finalize()` pins the current version as the published artifact, like publishing
+in a CMS. The agent can keep editing the working file afterwards. Those edits
+create new draft versions, but `artifacts()` and the manifest keep surfacing
+the pinned revision until you finalize again.
+
+```ts
+await ws.write("/outputs/report.md", "published copy", { kind: "report" });
+const pinned = await ws.finalize("/outputs/report.md");
+pinned.version; // 1
+
+await ws.edit("/outputs/report.md", { find: "published", replace: "wip" });
+
+await ws.read("/outputs/report.md"); // "wip copy"
+(await ws.artifacts({ status: "final" }))[0].version; // still 1
+await ws.read("/outputs/report.md", { version: 1 }); // "published copy"
+
+await ws.finalize("/outputs/report.md"); // publish latest version
+```
+
+`read()` returns the live working copy. The published artifact resolves to the
+pinned version. A file only created by `copy` or `rename` and never written or
+edited has no snapshot to pin; finalizing then editing it falls back to the
+working copy.

@@ -1,0 +1,132 @@
+---
+title: Versions and Transactions
+description: Use workspace history, diff, undo, pinned artifact versions, and staged multi-file writes.
+---
+
+Workspaces keep a version history for local files. They also support staged
+multi-file transactions for deliverables that should commit as one coherent
+change.
+
+## Versioning And History
+
+Every content change (`write`, `edit`, `append`, `undo`) appends an immutable
+version. History is always recorded; there is no flag to enable.
+
+```ts
+await ws.write("/outputs/report.md", "draft one");
+await ws.write("/outputs/report.md", "draft two");
+
+const history = await ws.history("/outputs/report.md");
+// [{ version: 2, operation: "write", ... }, { version: 1, ... }]
+
+const old = await ws.read("/outputs/report.md", { version: 1 }); // "draft one"
+
+const diff = await ws.diff("/outputs/report.md", { from: 1, to: 2 });
+diff.unified; // git-style unified diff string
+diff.hunks; // structured add/remove/context lines
+
+await ws.undo("/outputs/report.md"); // restores v1 as a new v3
+```
+
+`diff` defaults to the most recent change and applies to text files; binary
+files throw. `undo` reverts the last content change without rewriting history.
+`rename`, `move`, and `copy` start fresh history at the destination path.
+`delete` purges a file's history.
+
+Versioning is on by default with unlimited retention. Bound it per file with
+`versioning.maxVersions`, which garbage collects the oldest snapshots and their
+blobs:
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace,
+  storage: storage({ records, blobs }),
+  versioning: { maxVersions: 20 },
+});
+```
+
+Quota (`limits.maxNamespaceBytes`) counts live files only, not historical
+snapshots. Use `maxVersions` to bound history storage.
+
+## Pinned Artifact Versions
+
+`finalize()` pins the current version as the published artifact. Editing the
+file afterwards creates new draft versions, but `artifacts()` and the workspace
+manifest keep surfacing the pinned revision until you finalize again.
+
+```ts
+await ws.write("/outputs/report.md", "published copy", { kind: "report" });
+const published = await ws.finalize("/outputs/report.md");
+
+await ws.edit("/outputs/report.md", { find: "published", replace: "wip" });
+
+await ws.read("/outputs/report.md"); // working copy
+await ws.read("/outputs/report.md", { version: published.version }); // published copy
+```
+
+Use this when the user needs a stable final output while the agent continues
+iterating.
+
+## Transactions
+
+Use `transaction()` when one deliverable spans several files and partial output
+would be misleading. The callback writes to a staged workspace view first. If
+the callback throws, the live namespace is unchanged. When it returns, Crux
+commits the touched paths and returns the callback result.
+
+```ts
+const artifact = await ws.transaction(async (tx) => {
+  await tx.write("/outputs/report.md", "# Report", { status: "draft" });
+  await tx.write("/outputs/data.csv", "name,value\nalpha,1\n");
+
+  return tx.finalize("/outputs/report.md", { kind: "report" });
+});
+```
+
+Reads inside the callback see staged changes. Ordinary `ws` reads still see the
+live namespace until commit:
+
+```ts
+await ws.write("/workspace/notes.md", "draft");
+
+await ws.transaction(async (tx) => {
+  await tx.edit("/workspace/notes.md", {
+    find: "draft",
+    replace: "final",
+  });
+
+  await tx.read("/workspace/notes.md"); // "final"
+  await ws.read("/workspace/notes.md"); // "draft"
+});
+
+await ws.read("/workspace/notes.md"); // "final"
+```
+
+The transaction surface is file-focused: `list`, `read`, `write`, `edit`,
+`delete`, `exists`, `stat`, `append`, `rename`, `move`, `copy`, `grep`,
+`artifacts`, and `finalize`. It intentionally does not include prompt adapters
+such as `asContext()`, `asTools()`, or `inject()`.
+
+Transactions are namespace-local. Pass `{ namespace }` to target a specific
+namespace outside prompt resolution:
+
+```ts
+await ws.transaction(
+  async (tx) => {
+    await tx.write("/outputs/report.md", "# Report");
+  },
+  { namespace: "thread:123" },
+);
+```
+
+Source-backed mount mutations are rejected before provider hooks run. Copy a
+provider-backed file into `/workspace` or `/outputs` first if you need it inside
+a transaction.
+
+Transactions are implemented over the generic `RecordStore` contract, so the
+same API works with in-memory storage, Convex record storage, Upstash Redis, and
+custom conforming stores. The generic implementation rolls back touched live
+paths when it observes a commit failure. Crash-proof multi-key durability still
+depends on the underlying store or runtime; `transaction()` is not a distributed
+transaction across stores.
