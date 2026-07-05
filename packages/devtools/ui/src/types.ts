@@ -256,6 +256,7 @@ export interface DataAccessFact {
     | 'exists'
     | 'stat'
     | 'grep'
+    | 'watch'
     | 'artifacts'
     | 'rename'
     | 'move'

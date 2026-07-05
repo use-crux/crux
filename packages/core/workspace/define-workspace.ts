@@ -35,7 +35,13 @@ import { createWorkspaceArtifactOps } from "./artifacts";
 import { createWorkspaceContextAdapters } from "./context-adapters";
 import { createWorkspaceTransaction } from "./transaction";
 import {
+  createWorkspaceChangeEmitter,
+  createWorkspaceWatchHandle,
+  shouldSuppressWorkspaceChangeEvents,
+} from "./watch";
+import {
   assertWorkspaceMountIsLocal,
+  existsWorkspaceMountSource,
   hasWorkspaceMountSource,
   listWorkspaceMountSource,
   readWorkspaceMountSource,
@@ -71,6 +77,8 @@ import {
   type WorkspaceToolPrefixWithDefaults,
   type WorkspaceTools,
   type WorkspaceToolUndoWithDefaults,
+  type WorkspaceWatchHandle,
+  type WorkspaceWatchOptions,
   type WorkspaceWriteOptions,
 } from "./types";
 
@@ -90,6 +98,7 @@ export function workspace<const Config extends WorkspaceConfig>(
   const mounts = normalizeMounts(config.mounts ?? defaultMounts());
   const inlineTextBelowBytes =
     config.content?.inlineTextBelowBytes ?? DEFAULT_INLINE_TEXT_BYTES;
+  const emitChange = createWorkspaceChangeEmitter();
 
   async function resolveNamespace(
     input?: Record<string, unknown>,
@@ -253,12 +262,27 @@ export function workspace<const Config extends WorkspaceConfig>(
           const normalized = normalizePath(path);
           const mount = mountForPath(normalized, mounts, "write");
           if (hasWorkspaceMountSource(mount)) {
-            return writeWorkspaceMountSource(
+            const shouldEmitChange =
+              !shouldSuppressWorkspaceChangeEvents(options);
+            const existed = shouldEmitChange
+              ? await existsWorkspaceMountSource(mount, normalized)
+              : false;
+            const file = await writeWorkspaceMountSource(
               mount,
               normalized,
               content,
               mountWriteOptions(options, mountWriteOperation(operation)),
             );
+            if (shouldEmitChange) {
+              await emitChange({
+                type: existed ? "update" : "create",
+                workspaceId: config.id,
+                namespace,
+                path: normalized,
+                at: file.updatedAt,
+              });
+            }
+            return file;
           }
           const analysis = await analyzeContent(content, options?.mimeType);
           const existing = await getRecord(
@@ -319,6 +343,15 @@ export function workspace<const Config extends WorkspaceConfig>(
               await store.delete(key);
             }
             throw error;
+          }
+          if (!shouldSuppressWorkspaceChangeEvents(options)) {
+            await emitChange({
+              type: existing ? "update" : "create",
+              workspaceId: config.id,
+              namespace,
+              path: normalized,
+              at: record.updatedAt,
+            });
           }
           return recordToFile(record);
         });
@@ -407,7 +440,19 @@ export function workspace<const Config extends WorkspaceConfig>(
         const normalized = normalizePath(path);
         const mount = mountForPath(normalized, mounts, "write");
         if (hasWorkspaceMountSource(mount)) {
+          const shouldEmitChange = !shouldSuppressWorkspaceChangeEvents(options);
+          const existed = shouldEmitChange
+            ? await existsWorkspaceMountSource(mount, normalized)
+            : false;
           await deleteWorkspaceMountSource(mount, normalized);
+          if (shouldEmitChange && existed) {
+            await emitChange({
+              type: "delete",
+              workspaceId: config.id,
+              namespace,
+              path: normalized,
+            });
+          }
           return;
         }
         assertWorkspaceMountIsLocal(mount, "delete");
@@ -417,8 +462,37 @@ export function workspace<const Config extends WorkspaceConfig>(
           deleteBlob: options?.deleteBlob,
           currentBlobUri: record?.uri,
         });
+        if (record && !shouldSuppressWorkspaceChangeEvents(options)) {
+          await emitChange({
+            type: "delete",
+            workspaceId: config.id,
+            namespace,
+            path: normalized,
+          });
+        }
       },
     );
+  }
+
+  function watch(options?: WorkspaceWatchOptions): WorkspaceWatchHandle;
+  function watch(
+    path: string,
+    options?: WorkspaceWatchOptions,
+  ): WorkspaceWatchHandle;
+  function watch(
+    pathOrOptions?: string | WorkspaceWatchOptions,
+    options?: WorkspaceWatchOptions,
+  ): WorkspaceWatchHandle {
+    const watchPath =
+      typeof pathOrOptions === "string" ? normalizePath(pathOrOptions) : "/";
+    const watchOptions =
+      typeof pathOrOptions === "string" ? options : pathOrOptions;
+    return createWorkspaceWatchHandle({
+      workspaceId: config.id,
+      path: watchPath,
+      options: watchOptions,
+      resolveNamespace: () => namespaceFor(watchOptions),
+    });
   }
 
   const fsOps = createWorkspaceFilesystemOps({
@@ -431,6 +505,7 @@ export function workspace<const Config extends WorkspaceConfig>(
     retention: config.retention,
     versioning: config.versioning,
     resolveNamespace,
+    emitChange,
   });
   const versionOps = createWorkspaceVersionOps({
     workspaceId: config.id,
@@ -454,6 +529,7 @@ export function workspace<const Config extends WorkspaceConfig>(
     mounts,
     retention: config.retention,
     resolveNamespace,
+    emitChange,
   });
   const transaction = createWorkspaceTransaction({
     workspaceId: config.id,
@@ -521,6 +597,7 @@ export function workspace<const Config extends WorkspaceConfig>(
     move: fsOps.move,
     copy: fsOps.copy,
     grep: fsOps.grep,
+    watch,
     history: versionOps.history,
     diff: versionOps.diff,
     undo: versionOps.undo,

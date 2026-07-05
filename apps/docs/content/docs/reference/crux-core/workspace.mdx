@@ -51,6 +51,7 @@ await ws.rename("/outputs/report.md", "/outputs/final-report.md");
 await ws.move("/outputs/final-report.md", "/workspace/final-report.md");
 await ws.copy("/workspace/final-report.md", "/workspace/report-copy.md");
 await ws.grep("revenue", { path: "/workspace/**/*.md", ignoreCase: true });
+const handle = ws.watch("/outputs", { recursive: true });
 await ws.history("/outputs/report.md");
 await ws.read("/outputs/report.md", { version: 1 });
 await ws.diff("/outputs/report.md", { from: 1, to: 2 });
@@ -75,6 +76,72 @@ const tools = ws.asTools({ namespace: "thread:123", prefix: "research" });
 
 `deleteWorkspaceFile` and `undoWorkspaceFile` are not auto-injected unless
 `tools.delete` / `tools.undo` are enabled.
+
+## Watching Changes
+
+`watch()` subscribes to durable workspace changes through the configured Runtime
+Engine event log:
+
+```ts
+import { config } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
+
+config({ runtime: node() });
+
+const handle = ws.watch("/outputs", {
+  recursive: true,
+  pollIntervalMs: 250,
+});
+
+const off = handle.on((event) => {
+  if (event.type === "rename") {
+    console.log(event.from, "->", event.path);
+    return;
+  }
+
+  console.log(event.type, event.path);
+});
+
+off();
+handle.stop();
+```
+
+Events are delivered as:
+
+```ts
+type WorkspaceChangeEvent =
+  | {
+      type: "create" | "update" | "delete";
+      workspaceId: string;
+      namespace: string;
+      path: string;
+      at: number;
+      cursor: string;
+    }
+  | {
+      type: "rename";
+      workspaceId: string;
+      namespace: string;
+      from: string;
+      path: string;
+      at: number;
+      cursor: string;
+    };
+```
+
+Omit the path to watch the whole workspace tree, or pass a specific path for
+exact-path matching. Set `recursive: true` to include descendants. Rename events
+match either the source path or destination path.
+
+`watch()` requires `config({ runtime })`. Direct workspace reads and writes still
+work without a runtime, but `watch()` throws `RUNTIME_REQUIRED` because delivery
+depends on durable event cursors. Store `handle.cursor` after processing events
+and pass it back as `{ cursor }` to resume after the last delivered change.
+Pass `onError` to observe retryable namespace or event-read failures; the watch
+stays alive and continues polling with backoff.
+
+Transactions emit only committed live-namespace changes. Private staging writes
+are not delivered.
 
 ## Transactions
 
@@ -421,4 +488,4 @@ Workspace operations emit `workspace.operation` spans with privacy-safe OTel att
 
 Each recorded version also emits a single privacy-safe version marker (path hash, version number, and operation only). The devtools file inspector reconstructs a file's **version history** from these markers — one entry per content change, even when an `edit`/`undo` performs a nested write internally.
 
-Project Index workspace metadata includes mounts, generated tool names, blob-storage posture, `retention.ttlMs`, and quota limits. Workspace method calls inside indexed owners are represented through workspace read/write relations, and workspace-specific data-access facts preserve exact operations such as `grep`, `history`, `diff`, `undo`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
+Project Index workspace metadata includes mounts, generated tool names, blob-storage posture, `retention.ttlMs`, and quota limits. Workspace method calls inside indexed owners are represented through workspace read/write relations, and workspace-specific data-access facts preserve exact operations such as `grep`, `watch`, `history`, `diff`, `undo`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.

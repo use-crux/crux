@@ -198,12 +198,13 @@ fn analyze_relation_refs_are_finalize_compatible() {
 }
 
 #[test]
-fn analyze_rust_workspace_transaction_as_write_access() {
+fn analyze_rust_workspace_watch_as_read_and_transaction_as_write_access() {
     let source = [
         "const scratch = workspace({ id: 'scratch' })",
         "export const writer = tool({",
         "  name: 'writer',",
         "  execute: async () => {",
+        "    scratch.watch('/workspace').stop()",
         "    await scratch.transaction(async (tx) => {",
         "      await tx.write('/draft.md', 'draft')",
         "    })",
@@ -223,6 +224,16 @@ fn analyze_rust_workspace_transaction_as_write_access() {
         .find(|fact| fact["definitions"][0]["id"] == "tool:writer")
         .expect("tool fact group");
 
+    assert!(
+        tool_group["definitions"][0]["metadata"]["intelligence"]["data"]["reads"]
+            .as_array()
+            .is_some_and(|reads| {
+                reads
+                    .iter()
+                    .any(|read| read["targetVariable"] == "scratch" && read["operation"] == "watch")
+            }),
+        "Rust extraction should classify workspace.watch() as a read operation"
+    );
     assert!(
         tool_group["definitions"][0]["metadata"]["intelligence"]["data"]["writes"]
             .as_array()

@@ -10,6 +10,7 @@ import type { Context } from "../prompt/context-types";
 import type { Retriever } from "../retrieval";
 import type {
   WorkspaceArtifact,
+  WorkspaceChangeEvent,
   WorkspaceCustomMountSource,
   WorkspaceContent,
   WorkspaceJsonContent,
@@ -23,6 +24,8 @@ import type {
   WorkspaceTransaction,
   WorkspaceTransactionOptions,
   WorkspaceTools,
+  WorkspaceWatchHandle,
+  WorkspaceWatchOptions,
 } from "../workspace";
 
 const ws = workspace({ id: "research", namespace: "thread:1" });
@@ -74,6 +77,25 @@ expectTypeOf<
 expectTypeOf<Awaited<ReturnType<typeof ws.artifacts>>>().toEqualTypeOf<
   readonly WorkspaceArtifact[]
 >();
+expectTypeOf<ReturnType<typeof ws.watch>>().toEqualTypeOf<WorkspaceWatchHandle>();
+expectTypeOf<{
+  namespace: "thread:2";
+  recursive: true;
+  cursor: "evt_1";
+  pollIntervalMs: 50;
+  onError(error: {
+    readonly error: unknown;
+    readonly failures: number;
+    readonly retryDelayMs: number;
+  }): void;
+}>().toExtend<WorkspaceWatchOptions>();
+
+declare const workspaceEvent: WorkspaceChangeEvent;
+if (workspaceEvent.type === "rename") {
+  expectTypeOf(workspaceEvent.from).toEqualTypeOf<string>();
+} else {
+  expectTypeOf(workspaceEvent.from).toEqualTypeOf<undefined>();
+}
 
 expectTypeOf<string>().toExtend<WorkspaceContent>();
 expectTypeOf<{ readonly ok: true }>().toExtend<WorkspaceContent>();

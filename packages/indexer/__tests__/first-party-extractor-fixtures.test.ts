@@ -351,6 +351,7 @@ describe("first-party extractor fixtures", () => {
             await scratch.exists('/workspace/a.md')
             await scratch.stat('/workspace/a.md')
             await scratch.grep('alpha')
+            scratch.watch('/workspace', { recursive: true }).stop()
             await scratch.history('/workspace/a.md')
             await scratch.diff('/workspace/a.md')
             await scratch.artifacts({ status: 'final' })
@@ -469,6 +470,10 @@ describe("first-party extractor fixtures", () => {
             expect.objectContaining({
               targetVariable: "scratch",
               operation: "grep",
+            }),
+            expect.objectContaining({
+              targetVariable: "scratch",
+              operation: "watch",
             }),
             expect.objectContaining({
               targetVariable: "scratch",

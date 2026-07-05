@@ -21,6 +21,7 @@ const readMethods = new Set([
   "artifacts",
   "stat",
   "exists",
+  "watch",
   "history",
   "diff",
 ]);
@@ -49,6 +50,7 @@ const exactOperations = new Set([
   "artifacts",
   "stat",
   "exists",
+  "watch",
   "rename",
   "move",
   "copy",

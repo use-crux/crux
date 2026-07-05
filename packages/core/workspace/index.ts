@@ -82,3 +82,12 @@ export type {
   WorkspaceVersioning,
   WorkspaceVersionOperation,
 } from './types'
+export type {
+  WorkspaceChangeEvent,
+  WorkspaceChangeType,
+  WorkspacePathChangeEvent,
+  WorkspaceRenameChangeEvent,
+  WorkspaceWatchCallback,
+  WorkspaceWatchHandle,
+  WorkspaceWatchOptions,
+} from './watch'
