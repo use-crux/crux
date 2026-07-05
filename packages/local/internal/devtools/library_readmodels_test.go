@@ -573,10 +573,20 @@ func TestWorkspaceDetailRemovesDeletedFilesFromTree(t *testing.T) {
 	st.WorkspaceOperation(store.WorkspaceOperationEvent{
 		WorkspaceID: "drafts",
 		Namespace:   "thread:1",
+		Operation:   "write",
+		Path:        "/outputs/summary.md",
+		Status:      "success",
+		Timestamp:   2,
+		MimeType:    "text/markdown",
+		Size:        &size,
+	})
+	st.WorkspaceOperation(store.WorkspaceOperationEvent{
+		WorkspaceID: "drafts",
+		Namespace:   "thread:1",
 		Operation:   "delete",
 		Path:        "/outputs/report.md",
 		Status:      "success",
-		Timestamp:   2,
+		Timestamp:   3,
 	})
 
 	service := NewService(st, quality.NewService(st, t.TempDir()))
@@ -585,16 +595,23 @@ func TestWorkspaceDetailRemovesDeletedFilesFromTree(t *testing.T) {
 		t.Fatalf("workspace detail found=%v err=%v", found, err)
 	}
 	detail := value.(workspaceDetail)
-	if len(detail.Files) != 0 {
-		t.Fatalf("files = %#v, want deleted file removed", detail.Files)
+	if len(detail.Files) != 1 || detail.Files[0].Path != "/outputs/summary.md" {
+		t.Fatalf("files = %#v, want only surviving file", detail.Files)
 	}
+	foundOutputsMount := false
 	for _, mount := range detail.Mounts {
-		if mount.FileCount != 0 {
-			t.Fatalf("mounts = %#v, want deleted file removed from mount counts", detail.Mounts)
+		if mount.Path == "/outputs" {
+			foundOutputsMount = true
+			if mount.FileCount != 1 {
+				t.Fatalf("mounts = %#v, want deleted file removed from mount counts", detail.Mounts)
+			}
 		}
 	}
-	if len(detail.RecentOps) != 2 {
-		t.Fatalf("recent ops = %#v, want write and delete retained", detail.RecentOps)
+	if !foundOutputsMount {
+		t.Fatalf("mounts = %#v, want surviving /outputs mount", detail.Mounts)
+	}
+	if len(detail.RecentOps) != 3 {
+		t.Fatalf("recent ops = %#v, want writes and delete retained", detail.RecentOps)
 	}
 }
 

@@ -132,7 +132,15 @@ function isWorkspaceChangeType(value: unknown): value is WorkspaceChangeType {
 }
 
 function pathMatches(path: string, scope: WorkspaceWatchScope): boolean {
-  if (scope.path === "/") return scope.recursive || path === "/";
+  if (scope.path === "/") {
+    if (scope.recursive || path === "/") return true;
+    return isDirectRootChild(path);
+  }
   if (path === scope.path) return true;
   return scope.recursive && path.startsWith(`${scope.path}/`);
+}
+
+function isDirectRootChild(path: string): boolean {
+  if (!path.startsWith("/") || path === "/") return false;
+  return !path.slice(1).includes("/");
 }

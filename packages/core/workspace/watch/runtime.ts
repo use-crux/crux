@@ -49,15 +49,21 @@ async function withOptionalWorkspaceRuntime(
   let runtime: ResolvedRuntimeEngine | undefined;
   try {
     runtime = createWorkspaceRuntime(runtimeDefinition);
-  } catch (error) {
-    if (isRuntimeHostOnlyError(error)) return;
-    throw error;
+  } catch {
+    return;
   }
 
   try {
     await fn(runtime);
+  } catch {
+    // Workspace mutations have already succeeded by the time change events are
+    // emitted. Watch delivery is best-effort and must not reject the mutation.
   } finally {
-    runtime.dispose();
+    try {
+      runtime.dispose();
+    } catch {
+      // Best-effort emitters should not surface cleanup failures to callers.
+    }
   }
 }
 
@@ -72,13 +78,4 @@ function createWorkspaceRuntime(
   });
   runtimeRef.current = runtime;
   return runtime;
-}
-
-function isRuntimeHostOnlyError(error: unknown): boolean {
-  return (
-    typeof error === "object" &&
-    error !== null &&
-    "code" in error &&
-    (error as { readonly code?: unknown }).code === "RUNTIME_HOST_ONLY"
-  );
 }

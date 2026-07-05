@@ -21,6 +21,7 @@ import type {
 
 const DEFAULT_POLL_INTERVAL_MS = 250;
 const DEFAULT_EVENT_LIMIT = 100;
+const MAX_RETRY_DELAY_MS = 5_000;
 
 /** Dependencies for creating a watch handle for one workspace instance. */
 export interface CreateWorkspaceWatchHandleOptions {
@@ -42,11 +43,11 @@ export function createWorkspaceWatchHandle(
     input.options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS,
   );
   const limit = Math.max(1, input.options?.limit ?? DEFAULT_EVENT_LIMIT);
-  const namespacePromise = input.resolveNamespace();
   let latestCursor = normalizeCursor(input.options?.cursor);
   let timer: ReturnType<typeof setTimeout> | undefined;
   let polling = false;
   let stopped = false;
+  let consecutiveFailures = 0;
 
   const handle: WorkspaceWatchHandle = Object.freeze({
     get cursor() {
@@ -88,8 +89,9 @@ export function createWorkspaceWatchHandle(
   async function poll(): Promise<void> {
     if (stopped || polling || listeners.size === 0) return;
     polling = true;
+    let nextDelayMs = pollIntervalMs;
     try {
-      const namespace = await namespacePromise;
+      const namespace = await input.resolveNamespace();
       const scopePath = normalizePath(input.path);
       const scope: WorkspaceWatchScope = {
         workspaceId: input.workspaceId,
@@ -109,11 +111,13 @@ export function createWorkspaceWatchHandle(
         if (!input.options?.cursor && event.at < createdAt) continue;
         if (matchesWorkspaceWatchScope(event, scope)) deliver(event);
       }
+      consecutiveFailures = 0;
     } catch {
-      stop();
+      consecutiveFailures += 1;
+      nextDelayMs = retryDelayMs(consecutiveFailures, pollIntervalMs);
     } finally {
       polling = false;
-      schedule();
+      schedule(nextDelayMs);
     }
   }
 
@@ -138,6 +142,11 @@ export function createWorkspaceWatchHandle(
     input.options?.signal?.removeEventListener("abort", stop);
     runtime.dispose();
   }
+}
+
+function retryDelayMs(failures: number, baseDelayMs: number): number {
+  const exponent = Math.min(failures - 1, 6);
+  return Math.min(MAX_RETRY_DELAY_MS, baseDelayMs * 2 ** exponent);
 }
 
 function normalizeCursor(

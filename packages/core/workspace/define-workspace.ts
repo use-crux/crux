@@ -262,14 +262,18 @@ export function workspace<const Config extends WorkspaceConfig>(
           const normalized = normalizePath(path);
           const mount = mountForPath(normalized, mounts, "write");
           if (hasWorkspaceMountSource(mount)) {
-            const existed = await existsWorkspaceMountSource(mount, normalized);
+            const shouldEmitChange =
+              !shouldSuppressWorkspaceChangeEvents(options);
+            const existed = shouldEmitChange
+              ? await existsWorkspaceMountSource(mount, normalized)
+              : false;
             const file = await writeWorkspaceMountSource(
               mount,
               normalized,
               content,
               mountWriteOptions(options, mountWriteOperation(operation)),
             );
-            if (!shouldSuppressWorkspaceChangeEvents(options)) {
+            if (shouldEmitChange) {
               await emitChange({
                 type: existed ? "update" : "create",
                 workspaceId: config.id,
@@ -436,8 +440,12 @@ export function workspace<const Config extends WorkspaceConfig>(
         const normalized = normalizePath(path);
         const mount = mountForPath(normalized, mounts, "write");
         if (hasWorkspaceMountSource(mount)) {
+          const shouldEmitChange = !shouldSuppressWorkspaceChangeEvents(options);
+          const existed = shouldEmitChange
+            ? await existsWorkspaceMountSource(mount, normalized)
+            : false;
           await deleteWorkspaceMountSource(mount, normalized);
-          if (!shouldSuppressWorkspaceChangeEvents(options)) {
+          if (shouldEmitChange && existed) {
             await emitChange({
               type: "delete",
               workspaceId: config.id,

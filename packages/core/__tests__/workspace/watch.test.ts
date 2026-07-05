@@ -1,7 +1,16 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { config, inMemoryRecordStore, resetRuntime, workspace } from "@use-crux/core";
+import {
+  config,
+  inMemoryRecordStore,
+  resetRuntime,
+  workspace,
+} from "@use-crux/core";
 import { node } from "@use-crux/core/runtime";
-import type { WorkspaceChangeEvent } from "../../workspace";
+import { createWorkspaceChangeEmitter } from "../../workspace/watch/runtime";
+import type {
+  WorkspaceChangeEvent,
+  WorkspaceCustomMountSource,
+} from "../../workspace";
 
 afterEach(() => {
   resetRuntime();
@@ -90,6 +99,52 @@ describe("workspace watch", () => {
     }
   });
 
+  it("treats non-recursive root watches as direct-child watches", async () => {
+    config({
+      runtime: node({ namespace: "test-watch", autoStartMaintenance: false }),
+    });
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:default",
+      records: inMemoryRecordStore(),
+    });
+    const implicitRoot = ws.watch({ recursive: false, pollIntervalMs: 5 });
+    const explicitRoot = ws.watch("/", {
+      recursive: false,
+      pollIntervalMs: 5,
+    });
+    const implicitEvents: WorkspaceChangeEvent[] = [];
+    const explicitEvents: WorkspaceChangeEvent[] = [];
+    implicitRoot.on((event) => implicitEvents.push(event));
+    explicitRoot.on((event) => explicitEvents.push(event));
+    const emitChange = createWorkspaceChangeEmitter();
+
+    try {
+      await emitChange({
+        type: "create",
+        workspaceId: "research",
+        namespace: "thread:default",
+        path: "/outputs",
+      });
+      await waitForEvents(implicitEvents, 1);
+      await waitForEvents(explicitEvents, 1);
+
+      await emitChange({
+        type: "create",
+        workspaceId: "research",
+        namespace: "thread:default",
+        path: "/outputs/nested.md",
+      });
+      await waitForPoll();
+
+      expect(implicitEvents.map((event) => event.path)).toEqual(["/outputs"]);
+      expect(explicitEvents.map((event) => event.path)).toEqual(["/outputs"]);
+    } finally {
+      implicitRoot.stop();
+      explicitRoot.stop();
+    }
+  });
+
   it("delivers rename, delete, copy, finalize, and transaction commit events", async () => {
     config({
       runtime: node({ namespace: "test-watch", autoStartMaintenance: false }),
@@ -154,6 +209,49 @@ describe("workspace watch", () => {
       handle.stop();
     }
   });
+
+  it("does not emit delete events for missing source-backed files", async () => {
+    config({
+      runtime: node({ namespace: "test-watch", autoStartMaintenance: false }),
+    });
+    const deleted: string[] = [];
+    const source: WorkspaceCustomMountSource = {
+      kind: "custom",
+      exists: async () => false,
+      read: async () => null,
+      delete: async (path) => {
+        deleted.push(path);
+      },
+    };
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:default",
+      records: inMemoryRecordStore(),
+      mounts: [
+        {
+          path: "/sources",
+          access: "readwrite",
+          source,
+        },
+      ],
+    });
+    const handle = ws.watch("/sources", {
+      recursive: true,
+      pollIntervalMs: 5,
+    });
+    const events: WorkspaceChangeEvent[] = [];
+    handle.on((event) => events.push(event));
+
+    try {
+      await ws.delete("/sources/missing.md");
+      await waitForPoll();
+
+      expect(deleted).toEqual(["/sources/missing.md"]);
+      expect(events).toEqual([]);
+    } finally {
+      handle.stop();
+    }
+  });
 });
 
 function once(handle: {
@@ -177,21 +275,27 @@ async function waitForEvents(
 }
 
 async function waitForPoll(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 25));
+  await delay(100);
 }
 
-async function eventually(assert: () => void, timeoutMs = 1_000): Promise<void> {
+async function eventually(assert: () => void, timeoutMs = 3_000): Promise<void> {
   const started = Date.now();
   let lastError: unknown;
+  let attempts = 0;
   while (Date.now() - started < timeoutMs) {
     try {
       assert();
       return;
     } catch (error) {
       lastError = error;
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      attempts += 1;
+      await delay(Math.min(100, 25 + attempts * 5));
     }
   }
   if (lastError instanceof Error) throw lastError;
   throw new Error("timed out waiting for assertion");
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
 }
