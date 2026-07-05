@@ -1,0 +1,138 @@
+---
+title: Storage and Limits
+description: Choose workspace records and blobs, configure namespaces, TTL, quotas, and inline thresholds.
+---
+
+Workspaces use records for file metadata and small inline content, and blobs for
+binary or oversized content.
+
+```ts
+import { storage } from "@use-crux/core/storage";
+
+const ws = workspace({
+  id: "research",
+  namespace,
+  storage: storage({
+    records, // metadata plus small inline text/json
+    blobs, // binary and large payloads
+  }),
+  content: {
+    inlineTextBelowBytes: 64_000,
+  },
+});
+```
+
+Rules:
+
+- Small text and JSON can live inline in `RecordStore`.
+- Large text goes to `BlobStore`.
+- Binary always goes to `BlobStore`.
+- Writing binary or oversized content without `blobs` throws clearly.
+
+For bundled storage options and custom S3/R2/GCS-style blob stores, see
+[Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage).
+
+## Blob Stores
+
+Use `BlobStore` for binary and oversized workspace files. Blob-backed text and
+JSON read back as `text` or `json`; binary files return a URI.
+
+Custom stores implement:
+
+```ts
+interface BlobStore {
+  put(input: BlobPutInput): Promise<BlobRef>;
+  get(uri: string): Promise<BlobReadResult>;
+  delete?(uri: string): Promise<void>;
+}
+```
+
+Convex apps use `convexRecordStore({ component, ctx })` for workspace metadata
+and `convexWorkspaceBlobStore()` for binary or large payloads:
+
+```ts
+import { storage } from "@use-crux/core/storage";
+import { convexRecordStore, convexWorkspaceBlobStore } from "@use-crux/convex";
+
+const ws = workspace({
+  id: "research",
+  namespace: threadId,
+  storage: storage({
+    records: convexRecordStore({ component: components.crux, ctx }),
+    blobs: convexWorkspaceBlobStore({ ctx }),
+  }),
+});
+```
+
+See the [Convex guide](/docs/guides/convex) for complete setup and runtime
+caveats.
+
+## Namespaces
+
+Namespaces isolate files for tenants, users, threads, or runs. Static namespaces
+work directly:
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace: `thread:${threadId}`,
+  storage,
+});
+```
+
+Dynamic namespaces resolve during prompt injection:
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace: ({ input }) => `thread:${input.threadId}`,
+  storage,
+});
+```
+
+Pass an override when calling the workspace directly outside prompt resolution:
+
+```ts
+await ws.write("/workspace/notes.md", "# Notes", {
+  namespace: "thread:123",
+});
+
+const tools = ws.asTools({
+  namespace: "thread:123",
+  prefix: "research",
+});
+```
+
+## Retention And Quotas
+
+Operator controls live on the workspace config:
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace,
+  storage: storage({ records, blobs }),
+  retention: { ttlMs: 1000 * 60 * 60 * 24 },
+  limits: {
+    maxFileBytes: 1_000_000,
+    maxNamespaceBytes: 25_000_000,
+  },
+});
+```
+
+`retention.ttlMs` is passed to `RecordStore.put(..., { ttlMs })` only when the
+store supports TTL. `maxFileBytes` rejects one oversized write, and
+`maxNamespaceBytes` rejects writes that would push the namespace total over its
+cap.
+
+The namespace quota counts live files only, not historical snapshots. Bound
+history storage with `versioning.maxVersions`:
+
+```ts
+const ws = workspace({
+  id: "research",
+  namespace,
+  storage,
+  versioning: { maxVersions: 20 },
+});
+```
