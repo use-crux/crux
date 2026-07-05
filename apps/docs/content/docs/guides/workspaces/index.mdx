@@ -101,7 +101,7 @@ await ws.edit("/outputs/report.md", { find: "draft", replace: "final" });
 await ws.exists("/workspace/notes.md");
 await ws.stat("/workspace/notes.md");
 await ws.append("/outputs/report.md", "\nAppendix");
-await ws.copy("/sources/brief.md", "/workspace/brief.md");
+await ws.copy("/workspace/notes.md", "/outputs/notes.md");
 await ws.grep("launch", { path: "/workspace/**/*.md", ignoreCase: true });
 await ws.finalize("/outputs/report.md");
 ```

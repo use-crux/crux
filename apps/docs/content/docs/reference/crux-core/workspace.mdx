@@ -117,7 +117,9 @@ renameWorkspaceFile
 grepWorkspace
 ```
 
-`exists`, `stat`, `append`, and `copy` are programmatic methods by default.
+`exists`, `stat`, `append`, `copy`, and `move` are programmatic methods by
+default. There is no separate `moveWorkspaceFile`; use `renameWorkspaceFile`
+for model-driven renames or moves.
 
 ## Tool Names
 
@@ -147,8 +149,8 @@ config({ runtime: node() });
 const handle = ws.watch("/outputs", {
   recursive: true,
   pollIntervalMs: 250,
-  onError: (error) => {
-    console.warn("workspace watch retrying", error);
+  onError: (watchError) => {
+    console.warn("workspace watch retrying", watchError.error);
   },
 });
 ```
@@ -335,7 +337,7 @@ const finals = await ws.artifacts({ status: "final" });
 ```
 
 `finalize()` pins the current version as the published artifact
-(`artifact.version`). Editing the file afterwards creates new draft versions,
+(`artifact.version`). Editing the file afterward creates new draft versions,
 but `artifacts()` and the manifest keep surfacing the pinned revision until you
 `finalize()` again.
 
