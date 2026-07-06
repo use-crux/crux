@@ -104,11 +104,13 @@ describe('project index worker protocol', () => {
     })
 
     expect(events.map((event) => event.type)).toEqual(['phase:start', 'sourceProfile:batch', 'phase:done'])
+    const semanticSourceProfile = patch.semanticSourceProfile
+    if (!semanticSourceProfile) throw new Error('Expected semantic source profile fixture')
     const sourceProfileBatch = events.find((event) => event.type === 'sourceProfile:batch')
-    expect(sourceProfileBatch).toMatchObject({ type: 'sourceProfile:batch', files: patch.semanticSourceProfile.files })
+    expect(sourceProfileBatch).toMatchObject({ type: 'sourceProfile:batch', files: semanticSourceProfile.files })
     expect(sourceProfileBatch).not.toHaveProperty('complete')
     expect(events.find((event) => event.type === 'phase:done')).toMatchObject({
-      patch: { semanticSourceProfile: patch.semanticSourceProfile },
+      patch: { semanticSourceProfile },
     })
     expect(indexPatchFromWorkerEvents(events)).toEqual(patch)
   })

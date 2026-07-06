@@ -148,54 +148,56 @@ async function extractFilesWithBatchFrontendAndCache(
   const projectionCache = createStaticRecordProjectionCache()
   const cacheKeyContext = createStaticParseCacheKeyContext(input.root)
   const cacheWriteQueue = createStaticCacheWriteQueue(staticCacheWriteConcurrency(input.concurrency))
-  const prepared = await mapBounded(input.files, input.concurrency, (file, index) =>
-    prepareBatchFile(input, parseMemo, file, index),
-  )
-  const results = new Array<StaticFileExtraction | undefined>(input.files.length)
-  const misses: PreparedBatchFile[] = []
+  try {
+    const prepared = await mapBounded(input.files, input.concurrency, (file, index) =>
+      prepareBatchFile(input, parseMemo, file, index),
+    )
+    const results = new Array<StaticFileExtraction | undefined>(input.files.length)
+    const misses: PreparedBatchFile[] = []
 
-  for (const item of prepared) {
-    if (item.cached) {
-      results[item.index] = item.cached
-    } else {
-      misses.push(item)
+    for (const item of prepared) {
+      if (item.cached) {
+        results[item.index] = item.cached
+      } else {
+        misses.push(item)
+      }
     }
-  }
-  if (misses.length > 0) {
-    for (const chunk of chunksOf(misses, cacheMissRecordBatchSize(input.cache))) {
-      const records = await parseBatchRecords(
-        input,
-        chunk.map((item) => item.file),
-        parseMemo,
-      )
-      const recordsByFile = new Map(records.map((record) => [record.file, record] as const))
-      const providedFrontend = createProvidedStaticSyntaxFrontend({
-        records,
-        identity: input.syntaxFrontend.identity,
-        fallback: input.syntaxFrontend,
-      })
-      const parsedMisses = await mapBounded(chunk, input.concurrency, (item) =>
-        parseBatchMiss(
+    if (misses.length > 0) {
+      for (const chunk of chunksOf(misses, cacheMissRecordBatchSize(input.cache))) {
+        const records = await parseBatchRecords(
           input,
+          chunk.map((item) => item.file),
           parseMemo,
-          providedFrontend,
-          item,
-          recordsByFile,
-          cacheKeyContext,
-          cacheWriteQueue,
-          projectionCache,
-        ),
-      )
-      for (const item of parsedMisses) results[item.index] = item.result
+        )
+        const recordsByFile = new Map(records.map((record) => [record.file, record] as const))
+        const providedFrontend = createProvidedStaticSyntaxFrontend({
+          records,
+          identity: input.syntaxFrontend.identity,
+          fallback: input.syntaxFrontend,
+        })
+        const parsedMisses = await mapBounded(chunk, input.concurrency, (item) =>
+          parseBatchMiss(
+            input,
+            parseMemo,
+            providedFrontend,
+            item,
+            recordsByFile,
+            cacheKeyContext,
+            cacheWriteQueue,
+            projectionCache,
+          ),
+        )
+        for (const item of parsedMisses) results[item.index] = item.result
+      }
     }
+
+    return results.map((result, index) => {
+      if (!result) throw new Error(`Static batch extraction did not produce a result for ${input.files[index]}`)
+      return result
+    })
+  } finally {
+    await cacheWriteQueue.drain()
   }
-
-  await cacheWriteQueue.drain()
-
-  return results.map((result, index) => {
-    if (!result) throw new Error(`Static batch extraction did not produce a result for ${input.files[index]}`)
-    return result
-  })
 }
 
 async function prepareBatchFile(

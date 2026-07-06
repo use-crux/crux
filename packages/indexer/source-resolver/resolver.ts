@@ -51,7 +51,7 @@ export interface SourceResolverOptions {
 export class SourceResolver {
   private readonly fileSystem: SourceResolverFileSystem
   private readonly projectRoot: string | undefined
-  private mapCache = new Map<string, TraceMap | null>()
+  private mapCache = new Map<string, TraceMap>()
   private locationCache = new Map<LocationCacheKey, ResolvedLocation>()
 
   /** Create a source resolver with optional filesystem dependency injection. */
@@ -72,10 +72,10 @@ export class SourceResolver {
     if (cached) return cached
 
     const traceMap = await this.loadTraceMap(file)
-    if (!traceMap) return this.cacheAndReturn(key, unresolvedLocation(file, line, column, fn))
+    if (!traceMap) return unresolvedLocation(file, line, column, fn)
 
     const resolved = resolveOriginalPosition(traceMap, line, column)
-    if (resolved.kind === 'unresolved') return this.cacheAndReturn(key, unresolvedLocation(file, line, column, fn))
+    if (resolved.kind === 'unresolved') return unresolvedLocation(file, line, column, fn)
 
     return this.cacheAndReturn(key, {
       file: resolved.file,
@@ -210,12 +210,10 @@ export class SourceResolver {
     if (cached !== undefined) return cached
 
     const discovered = await discoverSourceMap(normalized, this.fileSystem, this.containmentOptions())
-    if (discovered.kind === 'not-found') {
-      this.mapCache.set(normalized, null)
-      return null
-    }
+    if (discovered.kind === 'not-found') return null
 
     const traceMap = parseTraceMap(discovered.mapJson)
+    if (!traceMap) return null
     this.mapCache.set(normalized, traceMap)
     return traceMap
   }

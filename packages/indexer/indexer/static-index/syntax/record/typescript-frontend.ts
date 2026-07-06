@@ -24,7 +24,6 @@ import {
 } from './typescript-matches'
 import {
   staticCalleeRecordFromExpression,
-  staticFunctionInitializersFromNode,
   staticFunctionValueFromNode,
   staticInitializerRecordsFromDeclaration,
 } from './typescript-values'
@@ -34,6 +33,8 @@ const DEFAULT_CONSTRUCTOR_NAMES = ['Agent'] as const
 type ParsedSourceFile = ts.SourceFile & {
   readonly parseDiagnostics?: readonly ts.Diagnostic[]
 }
+
+type StatementAncestor = ts.Block | ts.SourceFile
 
 /**
  * Creates the TypeScript-backed syntax-record frontend.
@@ -162,19 +163,7 @@ function collectLocalInitializers(
 ): readonly StaticInitializerRecord[] {
   const records: StaticInitializerRecord[] = []
   for (const statement of sourceFile.statements) {
-    if (ts.isFunctionDeclaration(statement) && statement.name) {
-      records.push({
-        name: statement.name.text,
-        value: staticFunctionValueFromNode(sourceFile, statement, importsByLocalName),
-        source: sourceForNode(sourceFile, statement),
-        snippet: sourceSnippetForNode(sourceFile, statement),
-      })
-      continue
-    }
-    if (!ts.isVariableStatement(statement)) continue
-    for (const declaration of statement.declarationList.declarations) {
-      records.push(...staticInitializerRecordsFromDeclaration(sourceFile, declaration, importsByLocalName))
-    }
+    records.push(...initializerRecordsFromStatement(sourceFile, statement, importsByLocalName))
   }
   return records
 }
@@ -182,36 +171,106 @@ function collectLocalInitializers(
 function collectMatches(input: TypeScriptStaticSyntaxMatchInput): readonly StaticSourceMatch[] {
   const matches: StaticSourceMatch[] = []
 
-  const visit = (node: ts.Node, scopedInitializers: readonly StaticInitializerRecord[] = []): void => {
+  const visit = (node: ts.Node): void => {
     if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node)) {
-      const functionInitializers = staticFunctionInitializersFromNode(input.sourceFile, node, input.importsByLocalName)
-      ts.forEachChild(node, (child) => visit(child, [...scopedInitializers, ...functionInitializers]))
+      ts.forEachChild(node, visit)
       return
     }
     if (ts.isVariableStatement(node)) {
       const exported = hasExportModifier(node)
       for (const declaration of node.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue
-        const match = matchFromInitializer(input, declaration.name.text, declaration.initializer, exported, scopedInitializers)
-        if (match) matches.push(match)
+        let matchedInitializer = false
+        if (ts.isIdentifier(declaration.name) && declaration.initializer) {
+          const match = matchFromInitializer(
+            input,
+            declaration.name.text,
+            declaration.initializer,
+            exported,
+            scopedInitializerRecordsForNode(input.sourceFile, declaration, input.importsByLocalName),
+          )
+          if (match) {
+            matches.push(match)
+            matchedInitializer = true
+          }
+        }
+        if (!matchedInitializer) {
+          ts.forEachChild(declaration, visit)
+        }
       }
       return
     }
     if (ts.isCallExpression(node)) {
       const callee = staticCalleeRecordFromExpression(node.expression, input.importsByLocalName)
       if (input.callMatcher.allows(callee)) {
-        matches.push(callMatch(input, `${callee.name}-${sourceForNode(input.sourceFile, node).line}`, node, false, scopedInitializers))
+        matches.push(
+          callMatch(
+            input,
+            `${callee.name}-${sourceForNode(input.sourceFile, node).line}`,
+            node,
+            false,
+            scopedInitializerRecordsForNode(input.sourceFile, node, input.importsByLocalName),
+          ),
+        )
       }
     }
     if (ts.isNewExpression(node)) {
-      const match = newMatch(input, `new-${sourceForNode(input.sourceFile, node).line}`, node, false, scopedInitializers)
+      const match = newMatch(
+        input,
+        `new-${sourceForNode(input.sourceFile, node).line}`,
+        node,
+        false,
+        scopedInitializerRecordsForNode(input.sourceFile, node, input.importsByLocalName),
+      )
       if (match) matches.push(match)
     }
-    ts.forEachChild(node, (child) => visit(child, scopedInitializers))
+    ts.forEachChild(node, visit)
   }
 
   visit(input.sourceFile)
   return matches
+}
+
+function scopedInitializerRecordsForNode(
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+  importsByLocalName: ReadonlyMap<string, StaticImportRecord>,
+): readonly StaticInitializerRecord[] {
+  const records: StaticInitializerRecord[] = []
+  const ancestors: StatementAncestor[] = []
+  let current = node.parent
+  while (current) {
+    if (ts.isBlock(current) || ts.isSourceFile(current)) ancestors.unshift(current)
+    current = current.parent
+  }
+  const nodeStart = node.getStart(sourceFile)
+  for (const ancestor of ancestors) {
+    for (const statement of ancestor.statements) {
+      if (statement.getStart(sourceFile) >= nodeStart) break
+      records.push(...initializerRecordsFromStatement(sourceFile, statement, importsByLocalName))
+    }
+  }
+  return records
+}
+
+function initializerRecordsFromStatement(
+  sourceFile: ts.SourceFile,
+  statement: ts.Statement,
+  importsByLocalName: ReadonlyMap<string, StaticImportRecord>,
+): readonly StaticInitializerRecord[] {
+  if (ts.isFunctionDeclaration(statement) && statement.name) {
+    return [
+      {
+        name: statement.name.text,
+        value: staticFunctionValueFromNode(sourceFile, statement, importsByLocalName),
+        source: sourceForNode(sourceFile, statement),
+        snippet: sourceSnippetForNode(sourceFile, statement),
+      },
+    ]
+  }
+  if (!ts.isVariableStatement(statement)) return []
+  return statement.declarationList.declarations.flatMap((declaration) =>
+    staticInitializerRecordsFromDeclaration(sourceFile, declaration, importsByLocalName),
+  )
 }
 
 function hasExportModifier(node: ts.Node): boolean {

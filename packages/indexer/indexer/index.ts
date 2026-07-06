@@ -167,7 +167,11 @@ export async function indexProjectAstFromSyntaxRecords(
     staticCacheHits: options.staticCacheHits,
     nativeFactProjection: options.nativeFactProjection,
   })
-  return astIndexPatchFromCompilerResult(result)
+  return astIndexPatchFromCompilerResult(result, { status: providedRecordPatchStatus(result.diagnostics) })
+}
+
+function providedRecordPatchStatus(diagnostics: readonly { readonly code: string }[]): IndexPatch['status'] | undefined {
+  return diagnostics.some((diagnostic) => diagnostic.code === 'index.static_record_integrity') ? 'degraded' : undefined
 }
 
 /**
@@ -195,7 +199,7 @@ export async function indexProjectAstFromSyntaxRecordProvider(
     staticCacheHits: options.staticCacheHits,
     nativeFactProjection: options.nativeFactProjection,
   })
-  return astIndexPatchFromCompilerResult(result)
+  return astIndexPatchFromCompilerResult(result, { status: providedRecordPatchStatus(result.diagnostics) })
 }
 
 /**

@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises'
+import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import type { ExtractedFacts, IndexerExtensionRuntime } from '../../../extensions'
+import { staticRecordIntegrityDiagnostic } from '../../../diagnostics'
 import { staticFoundDefinitionFromExtractedFacts } from '../../compatibility/syntax-record-bridge/normalizer'
 import type { StaticFoundDefinition } from '../../../types'
 import type { ParseMemo } from '../../../static/extraction/source-io'
@@ -17,6 +19,7 @@ import {
   type NativeFactIndex,
   type NativeFactProjectionMode,
 } from './native-facts'
+import { isStaticSyntaxRecordIntegrityError, type StaticSyntaxRecordIntegrityError } from './provided-frontend'
 
 /** Input for the syntax-record-backed static fact parser. */
 export interface StaticRecordFactParseInput {
@@ -63,8 +66,12 @@ export async function parseStaticFactsFromSyntaxRecords(
     () => syntaxRecordForFile(input.root, input.file, frontend, input.parseMemo),
   )
   const cache = cachedRecordReader(input.root, frontend, input.parseMemo, record)
+  const recordReadDiagnostics = new Map<string, IndexDiagnostic>()
+  const reportRecordReadError = (file: string, error: StaticSyntaxRecordIntegrityError): void => {
+    recordReadDiagnostics.set(file, staticRecordIntegrityDiagnostic(input.root, file, error.message))
+  }
   await withStaticExtractionTiming(input.instrumentation, 'static.syntax_record.preload_imports', input.file, () =>
-    preloadImportedRecords(record, cache.readRecord),
+    preloadImportedRecords(record, cache.readRecord, reportRecordReadError),
   )
   const nativeFactsByMatchIndex = createNativeFactIndex(record)
   const { exported, discovered } = await withStaticExtractionTiming(
@@ -110,6 +117,7 @@ export async function parseStaticFactsFromSyntaxRecords(
         runtime: input.runtime,
         found: foundForPathProjection,
         readRecord: cache.readRecord,
+        onRecordReadError: reportRecordReadError,
       }),
   )
   const importedDefinitions = await withStaticExtractionTiming(
@@ -124,9 +132,14 @@ export async function parseStaticFactsFromSyntaxRecords(
         readRecord: cache.readRecord,
         projectionCache: input.projectionCache,
         nativeFactProjection,
+        onRecordReadError: reportRecordReadError,
       }),
   )
-  const diagnostics = [...record.diagnostics, ...facts.flatMap((fact) => fact.diagnostics ?? [])]
+  const diagnostics = [
+    ...record.diagnostics,
+    ...recordReadDiagnostics.values(),
+    ...facts.flatMap((fact) => fact.diagnostics ?? []),
+  ]
   const dependencies = [
       ...new Set([
       ...record.imports.flatMap((item) => (item.importKind === 'type' ? [] : (item.resolvedFile ?? []))),
@@ -226,10 +239,11 @@ function extractRecordMatches(
 async function preloadImportedRecords(
   record: StaticSyntaxFileRecord,
   readRecord: (file: string) => Promise<StaticSyntaxFileRecord>,
+  onRecordReadError?: (file: string, error: StaticSyntaxRecordIntegrityError) => void,
 ): Promise<void> {
   await Promise.all(
     record.imports.flatMap((importRecord) =>
-      importRecord.resolvedFile ? [safeReadRecord(readRecord, importRecord.resolvedFile)] : [],
+      importRecord.resolvedFile ? [safeReadRecord(readRecord, importRecord.resolvedFile, onRecordReadError)] : [],
     ),
   )
 }
@@ -237,10 +251,14 @@ async function preloadImportedRecords(
 async function safeReadRecord(
   readRecord: (file: string) => Promise<StaticSyntaxFileRecord>,
   file: string,
+  onRecordReadError?: (file: string, error: StaticSyntaxRecordIntegrityError) => void,
 ): Promise<StaticSyntaxFileRecord | undefined> {
   try {
     return await readRecord(file)
-  } catch {
+  } catch (error) {
+    if (isStaticSyntaxRecordIntegrityError(error)) {
+      onRecordReadError?.(error.file, error)
+    }
     return undefined
   }
 }

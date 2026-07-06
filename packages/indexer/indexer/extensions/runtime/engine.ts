@@ -28,7 +28,8 @@ import {
   type ExtensionRegistry,
 } from './registry'
 import { createNativeSyntaxHandle } from '../../static-index/compatibility/syntax-record-bridge/native-context'
-import { extensionIdentity, runtimeResultFromExtractResult } from './results'
+import { extensionIdentity, runtimeResultFromExtractResult, runtimeResultFromExtractorError } from './results'
+import { ruleFailedDiagnostic } from './diagnostics'
 import { indexRuleAvailability } from './rule-availability'
 import { staticFoundDefinitionFromExtractedFacts } from '../../static-index/compatibility/syntax-record-bridge/normalizer'
 import { extractStaticRecordWithRegistry, type StaticRecordExtractionInput } from '../../static-index/compatibility/syntax-record-bridge/runtime'
@@ -84,6 +85,8 @@ export interface ExtensionRuntimeManifest {
   readonly relationSpecs: readonly RelationSpec[]
   readonly cacheInputs: readonly IndexDependency[]
   readonly capabilities: readonly ExtensionRuntimeCapability[]
+  /** Recoverable extension declaration diagnostics that should be surfaced with index results. */
+  readonly diagnostics: readonly IndexDiagnostic[]
 }
 
 /**
@@ -194,10 +197,10 @@ export function createIndexerExtensionRuntime(input: {
   const registry = createExtensionRegistry(input.extensions)
   return {
     manifest: manifestFromRegistry(registry),
-    ruleDescriptors: extensionRuleDescriptors(registry.extensions),
+    ruleDescriptors: extensionRuleDescriptorsFromRegistry(registry),
     extractStatic: (staticInput) => extractStaticWithRegistry(registry, staticInput),
     extractStaticRecord: (recordInput) => extractStaticRecordWithRegistry(registry, recordInput),
-    checkRules: (ruleInput) => checkExtensionRules({ extensions: registry.extensions, ...ruleInput }),
+    checkRules: (ruleInput) => checkExtensionRulesWithRegistry(registry, ruleInput),
   }
 }
 
@@ -209,9 +212,14 @@ export function createIndexerExtensionRuntime(input: {
  */
 export function extensionRuleDescriptors(extensions: readonly IndexerExtension[]): readonly IndexRuleDescriptor[] {
   const registry = createExtensionRegistry(extensions)
+  return extensionRuleDescriptorsFromRegistry(registry)
+}
+
+function extensionRuleDescriptorsFromRegistry(registry: ExtensionRegistry): readonly IndexRuleDescriptor[] {
   return registry.extensions.flatMap((extension) =>
     [...(extension.rules ?? [])]
       .filter((rule) => !isInternalIndexLintAdapter(extension, rule.manifest.id))
+      .filter((rule) => !registry.conflictedRuleIds.has(rule.manifest.id))
       .sort((a, b) => compareCodepoint(a.manifest.id, b.manifest.id))
       .map((rule) => {
         const messageIds = Object.keys(rule.messages).sort()
@@ -318,23 +326,32 @@ export function checkExtensionRules(
   },
 ): ExtensionRuleResult {
   const registry = createExtensionRegistry(input.extensions)
+  return checkExtensionRulesWithRegistry(registry, input)
+}
+
+function checkExtensionRulesWithRegistry(registry: ExtensionRegistry, input: ExtensionRuleInput): ExtensionRuleResult {
   const outputs: IndexLintFinding[] = []
-  const diagnostics: IndexDiagnostic[] = []
+  const diagnostics: IndexDiagnostic[] = [...registry.diagnostics]
   for (const extension of registry.extensions) {
     const rules = [...(extension.rules ?? [])].sort((a, b) => compareCodepoint(a.manifest.id, b.manifest.id))
     for (const rule of rules) {
+      if (registry.conflictedRuleIds.has(rule.manifest.id)) continue
       const availability = indexRuleAvailability(rule, input)
       if (!availability.available) {
         diagnostics.push(availability.diagnostic)
         continue
       }
-      outputs.push(
-        ...rule.check({
-          definitions: input.definitions,
-          relations: input.relations,
-          ...(input.semantic ? { semantic: input.semantic } : {}),
-        }),
-      )
+      try {
+        outputs.push(
+          ...rule.check({
+            definitions: input.definitions,
+            relations: input.relations,
+            ...(input.semantic ? { semantic: input.semantic } : {}),
+          }),
+        )
+      } catch (error) {
+        diagnostics.push(ruleFailedDiagnostic(extension, rule.manifest.id, error))
+      }
     }
   }
   return {
@@ -392,6 +409,7 @@ function manifestFromRegistry(registry: ExtensionRegistry): ExtensionRuntimeMani
     capabilities: registry.extensions.some((extension) => (extension.rules ?? []).length > 0)
       ? ['static-extraction', 'index-rules']
       : ['static-extraction'],
+    diagnostics: registry.diagnostics,
   }
 }
 
@@ -416,10 +434,15 @@ function extractStaticWithRegistry(
 
   let noneResult: Extract<StaticExtractionResult, { readonly kind: 'none' }> | undefined
   for (const item of registered) {
-    const result = item.extractor.extract(
-      createExtractContext(item.extension, item.extractor, staticInputForExtractor(staticInput, item.extractor)),
-    )
-    const runtimeResult = runtimeResultFromExtractResult(item, result)
+    let result: unknown
+    try {
+      result = item.extractor.extract(
+        createExtractContext(item.extension, item.extractor, staticInputForExtractor(staticInput, item.extractor)),
+      )
+    } catch (error) {
+      return runtimeResultFromExtractorError(item, staticInput.source, error)
+    }
+    const runtimeResult = runtimeResultFromExtractResult(item, result, { source: staticInput.source })
     if (runtimeResult.kind !== 'none') return runtimeResult
     noneResult ??= runtimeResult
   }

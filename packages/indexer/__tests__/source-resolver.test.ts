@@ -81,25 +81,43 @@ describe('SourceResolver', () => {
     expect(reads).toEqual(['/project/dist/bundle.js.map'])
   })
 
-  it('caches missing source maps after the first unresolved lookup', async () => {
+  it('retries missing source maps so rebuild races recover', async () => {
+    let sourceMapAvailable = false
+    const files: Record<string, string> = {
+      '/project/dist/bundle.js': 'function original(){return"from-original"}\n',
+      '/project/dist/bundle.js.map': JSON.stringify({
+        version: 3,
+        file: 'bundle.js',
+        sources: ['../src/original.ts'],
+        sourcesContent: ['export const original = true\n'],
+        names: [],
+        mappings: 'AAAA',
+      }),
+    }
     const reads: string[] = []
     const fileSystem: SourceResolverFileSystem = {
-      exists: () => false,
+      exists: (path) => sourceMapAvailable && path === '/project/dist/bundle.js.map',
       readFile: async (path) => {
         reads.push(path)
-        throw new Error(`missing ${path}`)
+        const value = files[path]
+        if (value === undefined) throw new Error(`missing ${path}`)
+        return value
       },
     }
     const resolver = new SourceResolver({ fileSystem })
 
-    await expect(resolver.resolveLocation('/project/dist/missing-map.js', 1, 0)).resolves.toMatchObject({
+    await expect(resolver.resolveLocation('/project/dist/bundle.js', 1, 0)).resolves.toMatchObject({
       resolved: false,
     })
-    await expect(resolver.resolveLocation('/project/dist/missing-map.js', 2, 0)).resolves.toMatchObject({
-      resolved: false,
+    sourceMapAvailable = true
+    await expect(resolver.resolveLocation('/project/dist/bundle.js', 1, 0)).resolves.toMatchObject({
+      file: '../src/original.ts',
+      line: 1,
+      column: 0,
+      resolved: true,
     })
 
-    expect(reads).toEqual(['/project/dist/missing-map.js'])
+    expect(reads).toEqual(['/project/dist/bundle.js', '/project/dist/bundle.js.map'])
   })
 
   it('resolves narrow authored source-frame snapshots from source-map content', async () => {

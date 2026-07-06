@@ -1,4 +1,5 @@
-import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, readdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -11,12 +12,17 @@ import { facts, type IndexerExtension } from '../indexer/extensions'
 import { createStaticExtraction } from '../indexer/static/extraction/engine'
 
 const roots: string[] = []
-const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+const packageRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
+const packageNodeModules = join(packageRoot, 'node_modules')
 const importSafeDiscoveryTimeoutMs = 15_000
 
 async function fixtureRoot(): Promise<string> {
-  const root = await mkdtemp(join(testWorkspaceRoot, '.tmp-index-'))
-  roots.push(root)
+  const parent = await mkdtemp(join(tmpdir(), 'crux-indexer-'))
+  const root = join(parent, 'project')
+  await mkdir(root)
+  await writeFile(join(parent, 'package.json'), JSON.stringify({ private: true, type: 'module' }))
+  await symlink(packageNodeModules, join(parent, 'node_modules'), 'dir')
+  roots.push(parent)
   return root
 }
 

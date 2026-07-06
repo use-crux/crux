@@ -1,9 +1,12 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
+import { facts, type IndexerExtension } from '../indexer/extensions'
 import { cacheKeyInputFromSyntaxRecord } from '../indexer/static/extraction/cache-key'
 import { createStaticExtraction, type SourceReader } from '../indexer/static/extraction/engine'
 import { createParseMemo } from '../indexer/static/extraction/source-io'
 import { createProvidedStaticSyntaxFrontend, createStaticRecordProjectionCache } from '../indexer/static-index/syntax'
+import { createProvidedStaticSyntaxRecordCache } from '../indexer/static-index/syntax/record/provided-record-cache'
 import type {
   ProvidedStaticSyntaxRecordProvider,
   StaticSyntaxFileInput,
@@ -225,6 +228,53 @@ describe('static extraction batch frontend', () => {
     expect(timings).not.toContain('static.semantic_profile')
   })
 
+  it('isolates throwing extractors to the affected file during batch extraction', async () => {
+    const root = '/fixture'
+    const badFile = '/fixture/src/bad.ts'
+    const goodFile = '/fixture/src/good.ts'
+    const sources = {
+      [badFile]: "export const bad = defineWorkflow({ id: 'bad' })",
+      [goodFile]: "export const good = defineWorkflow({ id: 'good' })",
+    }
+    const workflowExtension: IndexerExtension = {
+      name: '@acme/workflows',
+      version: '1',
+      extractors: [
+        {
+          name: 'workflow.define',
+          patterns: [{ kind: 'call', name: 'defineWorkflow' }],
+          extract: (ctx) => {
+            const id = ctx.config?.string('id') ?? ctx.source.localName
+            if (id === 'bad') throw new Error('bad workflow')
+            return facts({
+              definitions: [
+                ctx.define.definition({
+                  variableName: ctx.source.variableName,
+                  id: `workflow:${id}`,
+                  kind: 'workflow' as ProjectDefinitionKind,
+                  name: id,
+                }),
+              ],
+            })
+          },
+        },
+      ],
+    }
+    const extraction = createStaticExtraction({
+      root,
+      cache: 'none',
+      sources: memorySourceReader(sources),
+      extensions: [workflowExtension],
+    })
+
+    const [bad, good] = await extraction.extractFiles([badFile, goodFile], { concurrency: 2 })
+
+    expect(bad?.definitions).toEqual([])
+    expect(bad?.diagnostics).toEqual([expect.objectContaining({ code: 'index.extractor_failed' })])
+    expect(good?.diagnostics).toEqual([])
+    expect(good?.definitions.map((definition) => definition.id)).toEqual(['workflow:good'])
+  })
+
   it('derives cache metadata from syntax-record imports without TypeScript AST input', async () => {
     const root = '/fixture'
     const file = '/fixture/src/a.ts'
@@ -343,6 +393,58 @@ describe('static extraction batch frontend', () => {
     await expect(extraction.extractFiles(files, { concurrency: 1 })).rejects.toThrow('cache write failed')
   })
 
+  it('drains queued cache writes before rejecting a later batch failure', async () => {
+    const root = '/fixture'
+    const files = ['/fixture/src/a.ts', '/fixture/src/b.ts']
+    const sources = {
+      [files[0]]: "export const a = 'a'",
+      [files[1]]: "export const b = 'b'",
+    }
+    const writes: string[] = []
+    let releaseFirstWrite: (() => void) | undefined
+    const firstWrite = new Promise<void>((resolve) => {
+      releaseFirstWrite = resolve
+    })
+    const frontend: StaticSyntaxFrontend & {
+      parseFiles(inputs: readonly StaticSyntaxFileInput[]): Promise<readonly StaticSyntaxFileRecord[]>
+    } = {
+      name: 'oxc-rust',
+      identity: { name: 'oxc-rust', version: 'test-batch' },
+      parseFile: emptyRecord,
+      parseFiles: async (inputs) => inputs.map(emptyRecord),
+    }
+    const extraction = createStaticExtraction({
+      root,
+      cache: {
+        get: async (key) => {
+          if (key.includes('"file":"src/b.ts"')) throw new Error('cache read failed')
+          return undefined
+        },
+        set: async (_key, value) => {
+          writes.push(value.file)
+          if (value.file === files[0]) await firstWrite
+        },
+      },
+      sources: memorySourceReader(sources),
+      syntaxFrontend: frontend,
+    })
+
+    const extractionPromise = extraction.extractFiles(files, { concurrency: 1 })
+    extractionPromise.catch(() => undefined)
+    let settled = false
+    extractionPromise.finally(() => {
+      settled = true
+    }).catch(() => undefined)
+
+    await waitUntil(() => writes.includes(files[0]))
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(settled).toBe(false)
+
+    releaseFirstWrite?.()
+    await expect(extractionPromise).rejects.toThrow('cache read failed')
+    expect(settled).toBe(true)
+  })
+
   it('coalesces pass-local imported definition projection work', async () => {
     const cache = createStaticRecordProjectionCache()
     let loads = 0
@@ -377,6 +479,32 @@ describe('static extraction batch frontend', () => {
         return { id: 'prompt:other', kind: 'prompt', name: 'otherPrompt', fidelity: 'resolved' }
       },
     })
+    expect(loads).toBe(2)
+  })
+
+  it('evicts rejected provided record loads so rebuild races recover', async () => {
+    const root = '/fixture'
+    const file = '/fixture/src/shared.ts'
+    const record = emptyRecord({ root, file, source: "export const shared = 'ready'" })
+    const cache = createProvidedStaticSyntaxRecordCache(10)
+    let loads = 0
+    let ready = false
+
+    await expect(
+      cache.read(file, async () => {
+        loads += 1
+        if (!ready) throw new Error('record still being written')
+        return record
+      }),
+    ).rejects.toThrow(/still being written/)
+
+    ready = true
+    await expect(
+      cache.read(file, async () => {
+        loads += 1
+        return record
+      }),
+    ).resolves.toBe(record)
     expect(loads).toBe(2)
   })
 })

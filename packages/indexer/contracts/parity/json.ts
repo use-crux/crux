@@ -137,13 +137,13 @@ function normalizeParityValue(value: JsonValue, context: NormalizeContext): Json
       normalizeParityValue(item, { ...context, path: normalizeArrayItemPath(context.path) }),
     )
     if (!isUnorderedArrayPath(context.path)) return normalized
-    return [...normalized].sort((left, right) => sortKey(left).localeCompare(sortKey(right)))
+    return [...normalized].sort((left, right) => compareCodepoint(sortKey(left), sortKey(right)))
   }
   if (!isJsonObject(value)) return normalizePrimitive(value, context.path)
 
   validateObjectKeys(value, context)
   const sorted: Record<string, JsonValue> = {}
-  for (const key of Object.keys(value).sort()) {
+  for (const key of Object.keys(value).sort(compareCodepoint)) {
     sorted[key] = normalizeParityValue(value[key], { ...context, path: childPath(context.path, key) })
   }
   return sorted
@@ -228,6 +228,10 @@ function sortKey(value: JsonValue): string {
     }
   }
   return JSON.stringify(value)
+}
+
+function compareCodepoint(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function sourceRefSortKey(value: JsonObject): string | undefined {

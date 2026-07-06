@@ -14,6 +14,7 @@ type IndexDiagnosticInput =
   | { kind: 'module-import-failed'; root: string; file: string; message: string }
   | { kind: 'rich-import-failed'; root: string; file: string; message: string }
   | { kind: 'static-parse-failed'; root: string; file: string; message: string }
+  | { kind: 'static-record-integrity'; root: string; file: string; message: string }
   | { kind: 'source-too-large'; root: string; file: string; bytes: number }
 
 function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
@@ -107,6 +108,15 @@ function indexDiagnostic(input: IndexDiagnosticInput): IndexDiagnostic {
         message: `Could not statically inspect ${relative(input.root, input.file)}: ${input.message}`,
         source: sourceForFile(input.file),
       }
+    case 'static-record-integrity':
+      return {
+        id: `diagnostic:index:static-record:${fingerprint(input.file)}`,
+        severity: 'warning',
+        code: 'index.static_record_integrity',
+        message: `Could not use provided static syntax record for ${relative(input.root, input.file)}: ${input.message}`,
+        source: sourceForFile(input.file),
+        suggestedFix: 'Regenerate the static syntax record from the current source text before reusing it.',
+      }
     case 'source-too-large':
       return {
         id: `diagnostic:index:source-too-large:${fingerprint(input.file)}`,
@@ -150,6 +160,10 @@ export function richImportFailedDiagnostic(root: string, file: string, message: 
 
 export function staticParseFailedDiagnostic(root: string, file: string, message: string): IndexDiagnostic {
   return indexDiagnostic({ kind: 'static-parse-failed', root, file, message })
+}
+
+export function staticRecordIntegrityDiagnostic(root: string, file: string, message: string): IndexDiagnostic {
+  return indexDiagnostic({ kind: 'static-record-integrity', root, file, message })
 }
 
 export function sourceTooLargeDiagnostic(root: string, file: string, bytes: number): IndexDiagnostic {

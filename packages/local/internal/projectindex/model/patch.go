@@ -156,7 +156,7 @@ func ApplyPatch(state PatchState, patch IndexPatch) PatchState {
 	if patch.Facts.RuleDescriptors != nil {
 		next.Index.RuleDescriptors = append([]store.IndexRuleDescriptor(nil), patch.Facts.RuleDescriptors...)
 	}
-	next.Index.Sources = mergePatchSources(next.Index.Sources, next.SourcePhases, patch.Phase, patch.Facts.Sources)
+	next.Index.Sources = mergePatchSources(next.Index.Sources, next.SourcePhases, patch.Phase, patch.Facts.Sources, patch.Invalidates)
 	next.SourcePhases = updatePatchPhases(next.SourcePhases, patch.Phase, sourceIDs(patch.Facts.Sources))
 	if patch.Facts.SourceGraph != nil {
 		next.Index.SourceGraph = patch.Facts.SourceGraph

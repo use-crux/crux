@@ -351,6 +351,124 @@ describe('indexer extension record runtime', () => {
     expect(projectedCore(ast)).toEqual(projectedCore(record))
   })
 
+  it('matches the TypeScript parser for nested calls inside variable initializers', async () => {
+    const root = '/project'
+    const file = '/project/src/prompt.ts'
+    const runtime = createIndexerExtensionRuntime({ extensions: [cruxCoreExtension] })
+    const files = {
+      [file]: [
+        "const local = withRetry(prompt({ id: 'local' }))",
+        "export const exported = withRetry(prompt({ id: 'exported' }))",
+        "const { nested = prompt({ id: 'destructured' }) } = config",
+      ].join('\n'),
+    }
+
+    const ast = await parseStaticDefinitionsFromFacts(
+      root,
+      file,
+      createStaticExtractionParser(runtime),
+      createParseMemo(memorySourceReader(files)),
+    )
+    const record = staticParseResultFromFacts(
+      await parseStaticFactsFromSyntaxRecords({
+        root,
+        file,
+        runtime,
+        parseMemo: createParseMemo(memorySourceReader(files)),
+      }),
+    )
+
+    expect(projectedCore(record)).toEqual(projectedCore(ast))
+    expect(projectedCore(record).definitions.map((definition) => definition.id)).toEqual([
+      'prompt:destructured',
+      'prompt:exported',
+      'prompt:local',
+    ])
+  })
+
+  it('matches the TypeScript parser for anonymous agent fallback names', async () => {
+    const root = '/project'
+    const file = '/project/src/agent.ts'
+    const runtime = createIndexerExtensionRuntime({ extensions: [cruxCoreExtension] })
+    const files = {
+      [file]: 'agent({ prompt: writerPrompt })',
+    }
+
+    const ast = await parseStaticDefinitionsFromFacts(
+      root,
+      file,
+      createStaticExtractionParser(runtime),
+      createParseMemo(memorySourceReader(files)),
+    )
+    const record = staticParseResultFromFacts(
+      await parseStaticFactsFromSyntaxRecords({
+        root,
+        file,
+        runtime,
+        parseMemo: createParseMemo(memorySourceReader(files)),
+      }),
+    )
+
+    expect(projectedAgentNames(record)).toEqual(projectedAgentNames(ast))
+    expect(projectedAgentNames(record)).toEqual([{ id: 'agent:src-agent.ts:agent-1', name: 'agent-1' }])
+  })
+
+  it('resolves record initializers by lexical scope and source position', async () => {
+    const root = '/project'
+    const file = '/project/src/workflow.ts'
+    const runtime = createIndexerExtensionRuntime({
+      extensions: [
+        extension({
+          name: '@acme/workflows',
+          version: '1',
+          extractors: [
+            {
+              name: 'workflow.define',
+              patterns: [{ kind: 'call', name: 'defineWorkflow', configArg: 0 }],
+              extract: (ctx) => {
+                const id = ctx.config?.string('id') ?? 'missing'
+                return facts({
+                  definitions: [
+                    ctx.define.definition({
+                      variableName: ctx.source.variableName,
+                      id: `workflow:${id}`,
+                      kind: 'workflow' as ProjectDefinitionKind,
+                      name: id,
+                    }),
+                  ],
+                })
+              },
+            },
+          ],
+        }),
+      ],
+    })
+    const files = {
+      [file]: [
+        'export function buildWorkflow() {',
+        "  const config = { id: 'outer' }",
+        '  const workflow = defineWorkflow(config)',
+        '  items.map(() => {',
+        "    const config = { id: 'inner' }",
+        '    return config',
+        '  })',
+        '  return workflow',
+        '}',
+      ].join('\n'),
+    }
+
+    const record = staticParseResultFromFacts(
+      await parseStaticFactsFromSyntaxRecords({
+        root,
+        file,
+        runtime,
+        parseMemo: createParseMemo(memorySourceReader(files)),
+      }),
+    )
+
+    expect(projectedCore(record).definitions.map((definition) => definition.id)).toEqual(['workflow:outer'])
+  })
+
   it('matches the TypeScript parser for prompt and context tree path projections', async () => {
     const root = '/project'
     const file = '/project/src/index.ts'
@@ -590,6 +708,19 @@ function projectedCore(result: {
       .map((relation) => ({ type: relation.type, from: relation.from, to: relation.to }))
       .sort((a, b) => `${a.type}:${a.from}:${a.to}`.localeCompare(`${b.type}:${b.from}:${b.to}`)),
   }
+}
+
+function projectedAgentNames(result: {
+  readonly definitions: readonly {
+    readonly id: string
+    readonly kind: string
+    readonly name: string
+  }[]
+}) {
+  return result.definitions
+    .filter((definition) => definition.kind === 'agent')
+    .map((definition) => ({ id: definition.id, name: definition.name }))
+    .sort((a, b) => a.id.localeCompare(b.id))
 }
 
 function projectedPaths(result: {

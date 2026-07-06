@@ -1,4 +1,3 @@
-import { relative } from 'node:path'
 import ts from 'typescript'
 import type { ProjectDefinitionKind, SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
 import { schemaProperty } from '../../ast/schemas'
@@ -8,6 +7,7 @@ import { safeId } from '../../definitions'
 import { extractedFactsFromStaticExtractionResult, type IndexerExtensionRuntime } from '../../extensions'
 import type { ExtractedFacts } from '../../extensions'
 import { staticDefinition } from '../definition-builder'
+import { staticCallsiteVariableName, staticFallbackLocalName } from '../local-name'
 
 /**
  * Extracts fact contributions from one variable initializer.
@@ -30,7 +30,7 @@ export function staticFactsFromInitializer(
   if (ts.isObjectLiteralExpression(initializer)) {
     const source = sourceForNode(sourceFile, initializer)
     const snippet = sourceSnippetForNode(sourceFile, initializer)
-    const localName = fallbackStaticName(root, file, variableName)
+    const localName = staticFallbackLocalName(root, file, variableName)
     return extractedFactsFromStaticExtractionResult(
       extensionRuntime.extractStatic({
         root,
@@ -62,7 +62,7 @@ export function staticFactsFromInitializer(
     )
     const source = sourceForNode(sourceFile, initializer)
     const snippet = sourceSnippetForNode(sourceFile, initializer)
-    const localName = fallbackStaticName(root, file, variableName)
+    const localName = staticFallbackLocalName(root, file, variableName)
     return extractedFactsFromStaticExtractionResult(
       extensionRuntime.extractStatic({
         root,
@@ -94,7 +94,7 @@ export function staticFactsFromInitializer(
   const objectArg = firstArg && ts.isObjectLiteralExpression(firstArg) ? firstArg : undefined
   const source = sourceForNode(sourceFile, initializer)
   const snippet = sourceSnippetForNode(sourceFile, initializer)
-  const localName = fallbackStaticName(root, file, variableName)
+  const localName = staticFallbackLocalName(root, file, variableName)
   const importBinding = importBindings.get(callName)
   return extractedFactsFromStaticExtractionResult(
     extensionRuntime.extractStatic({
@@ -138,7 +138,7 @@ export function staticFactsFromCall(
   importBindings = new Map<string, ImportBinding>(),
 ): ExtractedFacts | undefined {
   const source = sourceForNode(sourceFile, call)
-  const fallbackName = fallbackStaticName(root, file, `${callName}-${source.line}`)
+  const fallbackName = staticCallsiteVariableName(callName, source.line)
   return staticFactsFromInitializer(
     extensionRuntime,
     root,
@@ -201,14 +201,4 @@ function staticContextHelpers(
     ) => staticDefinition(file, id, kind, name, objectArgValue, source, snippet, metadata),
     relationRef: (type: string, target: { toVariable?: string; toId?: string }) => ({ type, ...target }),
   }
-}
-
-/**
- * Builds a deterministic local fallback name from file path and variable/call-site name.
- *
- * Fallback names are intentionally rooted in the project-relative path so anonymous call-site
- * discoveries remain stable across machines while still changing when the authored location changes.
- */
-function fallbackStaticName(root: string, file: string, variableName: string): string {
-  return `${relative(root, file).replace(/\\/g, '/')}:${variableName}`
 }

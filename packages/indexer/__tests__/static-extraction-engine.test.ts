@@ -1,9 +1,16 @@
 import { createHash } from 'node:crypto'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import ts from 'typescript'
 import type { IndexDiagnostic, ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
+import { createProjectIndexCompilerRuntime, cruxCoreCompilerProfile } from '../indexer/compiler/profile'
 import { facts, type ExtractedFacts, type IndexerExtension } from '../indexer/extensions'
-import { createStaticExtraction, type SourceReader } from '../indexer/static/extraction/engine'
+import { createStaticExtraction, type SourceReader, type StaticFileExtraction } from '../indexer/static/extraction/engine'
+import { createStaticExtractionParser } from '../indexer/static/extraction/parser'
+import { createParseMemo } from '../indexer/static/extraction/source-io'
+import { parseStaticFacts } from '../indexer/static/file'
 import {
   createProvidedStaticSyntaxFrontend,
   createTypeScriptStaticSyntaxFrontend,
@@ -124,6 +131,47 @@ describe('static extraction engine', () => {
     expect(extraction.identity.cacheInputs).toEqual(
       expect.arrayContaining([{ kind: 'syntax-frontend', name: 'typescript', version: ts.version }]),
     )
+  })
+
+  it('orders tree path projections deterministically when async leaf resolution races', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'crux-static-tree-order-'))
+    try {
+      const sourceDir = join(root, 'src')
+      const file = join(sourceDir, 'prompts.ts')
+      const importedFile = join(sourceDir, 'imported.ts')
+      const files = {
+        [importedFile]: [
+          "import { prompt } from '@use-crux/core'",
+          "export const importedPrompt = prompt({ id: 'imported' })",
+        ].join('\n'),
+        [file]: [
+          "import { createPrompts, prompt } from '@use-crux/core'",
+          "import { importedPrompt } from './imported'",
+          '',
+          "export const localPrompt = prompt({ id: 'local' })",
+          'export const importedTree = createPrompts({ a: importedPrompt })',
+          'export const localTree = createPrompts({ z: localPrompt })',
+        ].join('\n'),
+      }
+      await mkdir(sourceDir, { recursive: true })
+      await Promise.all(Object.entries(files).map(([path, source]) => writeFile(path, source)))
+      const runtime = createProjectIndexCompilerRuntime(cruxCoreCompilerProfile).extensionRuntime
+      const parser = createStaticExtractionParser(runtime)
+      const sources = delayedMemorySourceReader(files, new Set([importedFile]))
+
+      const first = await parseStaticFacts(root, file, parser, createParseMemo(sources))
+      const second = await parseStaticFacts(root, file, parser, createParseMemo(sources))
+      const firstTreePaths = pathBackedDefinitions(first.pathDefinitions)
+      const secondTreePaths = pathBackedDefinitions(second.pathDefinitions)
+
+      expect(firstTreePaths).toEqual([
+        { id: 'prompt:imported', path: ['a'] },
+        { id: 'prompt:local', path: ['z'] },
+      ])
+      expect(JSON.stringify(secondTreePaths)).toBe(JSON.stringify(firstTreePaths))
+    } finally {
+      await rm(root, { recursive: true, force: true })
+    }
   })
 
   it('uses native facts from syntax records before invoking matching TypeScript extractors', async () => {
@@ -576,6 +624,23 @@ function memorySourceReader(files: Readonly<Record<string, string>>): SourceRead
       return source
     },
   }
+}
+
+function delayedMemorySourceReader(files: Readonly<Record<string, string>>, delayedFiles: ReadonlySet<string>): SourceReader {
+  return {
+    read: async (file) => {
+      if (delayedFiles.has(file)) await new Promise((resolve) => setTimeout(resolve, 10))
+      const source = files[file]
+      if (source === undefined) throw new Error(`Missing fixture source: ${file}`)
+      return source
+    },
+  }
+}
+
+function pathBackedDefinitions(definitions: StaticFileExtraction['definitions']) {
+  return definitions.flatMap((definition) =>
+    definition.path ? [{ id: definition.id, path: definition.path }] : [],
+  )
 }
 
 function nativeFingerprint(value: unknown): string {

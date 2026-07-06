@@ -182,6 +182,41 @@ describe('provided static syntax record indexing', () => {
     expect(normalizedPatchFacts(provided)).toEqual(normalizedPatchFacts(baseline))
   })
 
+  it('surfaces stale imported provided records as degraded diagnostics', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const file = join(root, 'src/writer.ts')
+    const helperFile = join(root, 'src/helper.ts')
+    const source = [
+      "import { helper } from './helper'",
+      "import { prompt } from '@use-crux/core'",
+      '',
+      "export const writerPrompt = prompt({ id: 'writer', prompt: helper })",
+    ].join('\n')
+    const helperSource = "export const helper = 'draft'"
+    await writeFile(file, source)
+    await writeFile(helperFile, helperSource)
+
+    const frontend = createTypeScriptStaticSyntaxFrontend({ callNames: ['prompt'] })
+    const record = await frontend.parseFile({ root, file, source })
+    const staleHelperRecord = await frontend.parseFile({ root, file: helperFile, source: helperSource })
+    await writeFile(helperFile, "export const helper = 'changed'")
+
+    const provided = await indexProjectAstFromSyntaxRecords({
+      root,
+      projectName: 'stale-provided-records',
+      records: [record, staleHelperRecord],
+    })
+
+    expect(provided.status).toBe('degraded')
+    expect(provided.facts.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'index.static_record_integrity',
+        source: expect.objectContaining({ file: helperFile }),
+      }),
+    )
+  })
+
   it('builds the same AST patch facts from a lazy syntax record provider', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })

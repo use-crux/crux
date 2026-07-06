@@ -1,4 +1,3 @@
-import { relative } from 'node:path'
 import ts from 'typescript'
 import type {
   StaticImportRecord,
@@ -15,6 +14,7 @@ import {
   staticObjectValueFromExpression,
   staticSyntaxValueFromExpression,
 } from './typescript-values'
+import { staticFallbackLocalName } from '../../../static/local-name'
 
 /**
  * TypeScript parser helpers for converting declarations and expressions into
@@ -49,7 +49,7 @@ export function matchFromInitializer(
     return {
       kind: 'object',
       variableName,
-      localName: fallbackLocalName(input.root, input.file, variableName),
+      localName: staticFallbackLocalName(input.root, input.file, variableName),
       exported,
       object: staticObjectValueFromExpression(input.sourceFile, initializer, input.importsByLocalName),
       source: sourceForNode(input.sourceFile, initializer),
@@ -84,7 +84,7 @@ export function callMatch(
   return {
     kind: 'call',
     variableName,
-    localName: fallbackLocalName(input.root, input.file, variableName),
+    localName: staticFallbackLocalName(input.root, input.file, variableName),
     exported,
     callee,
     args: call.arguments.map((arg) => staticSyntaxValueFromExpression(input.sourceFile, arg, input.importsByLocalName)),
@@ -115,7 +115,7 @@ export function newMatch(
   return {
     kind: 'new',
     variableName,
-    localName: fallbackLocalName(input.root, input.file, variableName),
+    localName: staticFallbackLocalName(input.root, input.file, variableName),
     exported,
     callee,
     args: [...(node.arguments ?? [])].map((arg) =>
@@ -149,8 +149,4 @@ function slicedObjectValue(
     ...object,
     properties: object.properties.filter((property) => !property.spread && evidence.properties.has(property.name)),
   }
-}
-
-function fallbackLocalName(root: string, file: string, variableName: string): string {
-  return `${relative(root, file).replace(/\\/g, '/')}:${variableName}`
 }

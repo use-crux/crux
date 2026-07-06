@@ -98,6 +98,14 @@ pub(crate) fn visit_expression(
                 matches,
             );
         }
+        Expression::LogicalExpression(logical) => {
+            visit_expression(context, &logical.left, scoped_initializers, matches);
+            visit_expression(context, &logical.right, scoped_initializers, matches);
+        }
+        Expression::BinaryExpression(binary) => {
+            visit_expression(context, &binary.left, scoped_initializers, matches);
+            visit_expression(context, &binary.right, scoped_initializers, matches);
+        }
         Expression::UnaryExpression(unary_expression) => {
             visit_expression(
                 context,

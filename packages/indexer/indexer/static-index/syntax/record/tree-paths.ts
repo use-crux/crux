@@ -1,9 +1,11 @@
 import type { ProjectDefinition, ProjectDefinitionKind } from '@use-crux/core/project-index'
 import type { IndexerExtensionRuntime } from '../../../extensions'
 import { staticFoundDefinitionsFromExtractedFacts } from '../../compatibility/syntax-record-bridge/normalizer'
+import { compareTreePathDefinitions } from '../../../static/tree-path-order'
 import type { StaticFoundDefinition } from '../../../types'
 import type { StaticSyntaxFileRecord, StaticSyntaxValue } from './types'
 import { createNativeFactIndex, extractedFacts } from './native-facts'
+import { isStaticSyntaxRecordIntegrityError, type StaticSyntaxRecordIntegrityError } from './provided-frontend'
 
 /** Runtime inputs for record-backed prompt/context tree path projection. */
 export interface StaticRecordTreePathInput {
@@ -17,6 +19,8 @@ export interface StaticRecordTreePathInput {
   readonly found: readonly StaticFoundDefinition[]
   /** Reads a syntax record for an imported source file. */
   readonly readRecord: (file: string) => Promise<StaticSyntaxFileRecord>
+  /** Reports provided-record integrity failures without making optional imports fatal. */
+  readonly onRecordReadError?: (file: string, error: StaticSyntaxRecordIntegrityError) => void
 }
 
 /**
@@ -41,7 +45,7 @@ export async function staticRecordTreePathDefinitions(input: StaticRecordTreePat
     )
   }
 
-  return definitions
+  return definitions.sort(compareTreePathDefinitions)
 }
 
 interface TreeContainer {
@@ -123,7 +127,7 @@ async function staticExportDefinitions(
   input: StaticRecordTreePathInput,
   file: string,
 ): Promise<Map<string, ProjectDefinition>> {
-  const record = await safeReadRecord(input.readRecord, file)
+  const record = await safeReadRecord(input.readRecord, file, input.onRecordReadError)
   if (!record) return new Map()
   const definitions = new Map<string, ProjectDefinition>()
   const nativeFactsByMatchIndex = createNativeFactIndex(record)
@@ -153,10 +157,14 @@ async function staticExportDefinitions(
 async function safeReadRecord(
   readRecord: (file: string) => Promise<StaticSyntaxFileRecord>,
   file: string,
+  onRecordReadError?: (file: string, error: StaticSyntaxRecordIntegrityError) => void,
 ): Promise<StaticSyntaxFileRecord | undefined> {
   try {
     return await readRecord(file)
-  } catch {
+  } catch (error) {
+    if (isStaticSyntaxRecordIntegrityError(error)) {
+      onRecordReadError?.(error.file, error)
+    }
     return undefined
   }
 }

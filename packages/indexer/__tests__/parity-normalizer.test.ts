@@ -238,4 +238,23 @@ describe('Project Index parity normalizer', () => {
       'sourceGraph',
     ])
   })
+
+  it('sorts unordered parity arrays independently of host locale collation', () => {
+    const facts = {
+      definitions: [
+        { id: 'prompt:zeta', kind: 'prompt', name: 'zeta', fidelity: 'partial' },
+        { id: 'prompt:Alpha', kind: 'prompt', name: 'Alpha', fidelity: 'partial' },
+      ],
+    } satisfies IndexPatchFacts
+    const expected = canonicalIndexPatchFactsJson(facts)
+    const original = String.prototype.localeCompare
+    String.prototype.localeCompare = function reversedLocaleCompare(this: string, other: string): number {
+      return this < other ? 1 : this > other ? -1 : 0
+    }
+    try {
+      expect(canonicalIndexPatchFactsJson(facts)).toBe(expected)
+    } finally {
+      String.prototype.localeCompare = original
+    }
+  })
 })

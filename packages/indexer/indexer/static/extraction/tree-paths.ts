@@ -10,6 +10,7 @@ import { readSourceFile } from '../../ast/parse'
 import type { IndexerExtensionRuntime } from '../../extensions'
 import { staticFoundDefinitionFromExtractedFacts } from '../../static-index/compatibility/syntax-record-bridge/normalizer'
 import type { StaticFoundDefinition } from '../../types'
+import { compareTreePathDefinitions } from '../tree-path-order'
 import type { ParseMemo } from './source-io'
 import { expressionName, hasExportModifier, staticFactsFromInitializer } from './match'
 
@@ -67,7 +68,7 @@ export async function staticTreePathDefinitions(
   }
 
   await visit(sourceFile)
-  return definitions
+  return definitions.sort(compareTreePathDefinitions)
 }
 
 /**
