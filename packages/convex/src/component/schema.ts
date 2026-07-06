@@ -51,7 +51,8 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index('by_work_id', ['workId'])
-    .index('by_namespace_status_updated', ['namespace', 'status', 'updatedAt']),
+    .index('by_namespace_status_updated', ['namespace', 'status', 'updatedAt'])
+    .index('by_status_updated', ['status', 'updatedAt']),
 
   runtimeSnapshots: defineTable({
     flowId: v.string(),
@@ -66,7 +67,10 @@ export default defineSchema({
     deliveredSuspends: v.optional(v.any()),
     scheduledEffects: v.optional(v.any()),
     updatedAt: v.number(),
-  }).index('by_flow', ['namespace', 'flowId']),
+  })
+    .index('by_flow', ['namespace', 'flowId'])
+    .index('by_namespace_status_updated', ['namespace', 'status', 'updatedAt'])
+    .index('by_status_updated', ['status', 'updatedAt']),
 
   runtimeEvents: defineTable({
     eventId: v.number(),
@@ -78,6 +82,8 @@ export default defineSchema({
     appendedAt: v.number(),
   })
     .index('by_namespace_event_id', ['namespace', 'eventId'])
+    .index('by_namespace_appended', ['namespace', 'appendedAt'])
+    .index('by_appended', ['appendedAt'])
     .index('by_namespace_event_key', ['namespace', 'eventKey'])
     .index('by_namespace_idempotency_key', ['namespace', 'idempotencyKey'])
     .index('by_namespace_name', ['namespace', 'name']),
@@ -92,11 +98,14 @@ export default defineSchema({
     timeoutAt: v.optional(v.number()),
     timerId: v.optional(v.string()),
     state: v.string(),
+    settledAt: v.optional(v.number()),
   })
     .index('by_waiter_id', ['waiterId'])
     .index('by_namespace_event_state', ['namespace', 'eventName', 'state'])
     .index('by_work', ['workId'])
-    .index('by_namespace_state_timeout', ['namespace', 'state', 'timeoutAt']),
+    .index('by_namespace_state_timeout', ['namespace', 'state', 'timeoutAt'])
+    .index('by_namespace_state_settled', ['namespace', 'state', 'settledAt'])
+    .index('by_state_settled', ['state', 'settledAt']),
 
   runtimeTimers: defineTable({
     timerId: v.string(),
@@ -108,10 +117,13 @@ export default defineSchema({
     work: v.any(),
     state: v.string(),
     idempotencyKey: v.optional(v.string()),
+    settledAt: v.optional(v.number()),
   })
     .index('by_timer_id', ['timerId'])
     .index('by_namespace_state_fire', ['namespace', 'state', 'fireAt'])
-    .index('by_work', ['workId']),
+    .index('by_work', ['workId'])
+    .index('by_namespace_state_settled', ['namespace', 'state', 'settledAt'])
+    .index('by_state_settled', ['state', 'settledAt']),
 
   runtimeOutbox: defineTable({
     outboxId: v.string(),
@@ -120,15 +132,21 @@ export default defineSchema({
     state: v.string(),
     attempts: v.number(),
     nextAttemptAt: v.number(),
+    confirmedAt: v.optional(v.number()),
   })
     .index('by_outbox_id', ['outboxId'])
-    .index('by_namespace_state_next', ['namespace', 'state', 'nextAttemptAt']),
+    .index('by_namespace_state_next', ['namespace', 'state', 'nextAttemptAt'])
+    .index('by_namespace_state_confirmed', ['namespace', 'state', 'confirmedAt'])
+    .index('by_state_confirmed', ['state', 'confirmedAt']),
 
   runtimeIdempotency: defineTable({
     namespace: v.string(),
     key: v.string(),
     completedAt: v.number(),
-  }).index('by_namespace_key', ['namespace', 'key']),
+  })
+    .index('by_namespace_key', ['namespace', 'key'])
+    .index('by_namespace_completed', ['namespace', 'completedAt'])
+    .index('by_completed', ['completedAt']),
 
   runtimeLeases: defineTable({
     resource: v.string(),

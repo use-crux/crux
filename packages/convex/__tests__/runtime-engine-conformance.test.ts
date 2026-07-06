@@ -81,13 +81,16 @@ function runtimeComponent(): ConvexRuntimeComponent {
         getWork: mutationRef('runtime/state:getWork'),
         putWork: mutationRef('runtime/state:putWork'),
         listWork: mutationRef('runtime/state:listWork'),
+        pruneTerminalWork: mutationRef('runtime/state:pruneTerminalWork'),
         countWork: mutationRef('runtime/state:countWork'),
         setWorkPending: mutationRef('runtime/state:setWorkPending'),
         getSnapshot: mutationRef('runtime/state:getSnapshot'),
         putSnapshot: mutationRef('runtime/state:putSnapshot'),
+        pruneTerminalSnapshots: mutationRef('runtime/state:pruneTerminalSnapshots'),
         markSnapshotDelivered: mutationRef('runtime/state:markSnapshotDelivered'),
         hasIdempotencyKey: mutationRef('runtime/state:hasIdempotencyKey'),
         putIdempotencyKey: mutationRef('runtime/state:putIdempotencyKey'),
+        pruneIdempotencyKeys: mutationRef('runtime/state:pruneIdempotencyKeys'),
         incrementIdle: mutationRef('runtime/state:incrementIdle'),
         decrementIdle: mutationRef('runtime/state:decrementIdle'),
         getIdleCount: mutationRef('runtime/state:getIdleCount'),
@@ -95,6 +98,7 @@ function runtimeComponent(): ConvexRuntimeComponent {
       events: {
         append: mutationRef('runtime/events:append'),
         read: mutationRef('runtime/events:read'),
+        prune: mutationRef('runtime/events:prune'),
       },
       waiters: {
         register: mutationRef('runtime/waiters:register'),
@@ -104,6 +108,7 @@ function runtimeComponent(): ConvexRuntimeComponent {
         listByWork: mutationRef('runtime/waiters:listByWork'),
         claimExpired: mutationRef('runtime/waiters:claimExpired'),
         transition: mutationRef('runtime/waiters:transition'),
+        prune: mutationRef('runtime/waiters:prune'),
       },
       timers: {
         put: mutationRef('runtime/timers:put'),
@@ -112,6 +117,7 @@ function runtimeComponent(): ConvexRuntimeComponent {
         list: mutationRef('runtime/timers:list'),
         listByWork: mutationRef('runtime/timers:listByWork'),
         transition: mutationRef('runtime/timers:transition'),
+        prune: mutationRef('runtime/timers:prune'),
       },
       outbox: {
         put: mutationRef('runtime/outbox:put'),
@@ -120,6 +126,7 @@ function runtimeComponent(): ConvexRuntimeComponent {
         list: mutationRef('runtime/outbox:list'),
         confirm: mutationRef('runtime/outbox:confirm'),
         retryLater: mutationRef('runtime/outbox:retryLater'),
+        prune: mutationRef('runtime/outbox:prune'),
       },
       leases: {
         claim: mutationRef('runtime/leases:claim'),

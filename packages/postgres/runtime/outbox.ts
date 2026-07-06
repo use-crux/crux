@@ -7,6 +7,7 @@ import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
 import { decodeOutbox, encodeJson } from './codec'
 import { newRuntimeId } from './ids'
+import { pruneNamespaceFilters, prunePostgresRows } from './prune'
 import type { PgExecutor } from './sql'
 import { table } from './sql'
 
@@ -108,7 +109,10 @@ export function createPostgresOutboxPort(
       }
       recordWrite(faults)
       await db.query(
-        `UPDATE ${outbox} SET state = 'confirmed' WHERE outbox_id = $1`,
+        `UPDATE ${outbox}
+            SET state = 'confirmed',
+                confirmed_at = now()
+          WHERE outbox_id = $1`,
         [outboxId],
       )
     },
@@ -123,6 +127,20 @@ export function createPostgresOutboxPort(
             AND state <> 'confirmed'`,
         [outboxId, nextAttemptAt],
       )
+    },
+
+    async prune(options) {
+      const { filters, values } = pruneNamespaceFilters(options)
+      filters.push(`state = 'confirmed'`)
+      filters.push(`(confirmed_at < $1 OR confirmed_at IS NULL)`)
+      recordWrite(faults)
+      return await prunePostgresRows(db, {
+        table: outbox,
+        filters,
+        values,
+        orderBy: 'confirmed_at ASC NULLS FIRST, outbox_id ASC',
+        limit: options.limit,
+      })
     },
   }
 }

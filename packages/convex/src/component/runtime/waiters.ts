@@ -1,7 +1,7 @@
 import { v } from 'convex/values'
 import { mutation } from '../_generated/server.js'
 import type { MutationCtx } from '../_generated/server.js'
-import { limitRows, matchesTopLevel, randomId } from './shared'
+import { limitRows, matchesTopLevel, pruneBatch, randomId } from './shared'
 
 export const register = mutation({
   args: { waiter: v.any() },
@@ -43,7 +43,7 @@ export const cancel = mutation({
   returns: v.null(),
   handler: async (ctx, { waiterId }) => {
     const waiter = await byId(ctx, waiterId)
-    if (waiter?.state === 'armed') await ctx.db.patch(waiter._id, { state: 'cancelled' })
+    if (waiter?.state === 'armed') await ctx.db.patch(waiter._id, { state: 'cancelled', settledAt: Date.now() })
     return null
   },
 })
@@ -89,8 +89,29 @@ export const transition = mutation({
   handler: async (ctx, { waiterId, from, to }) => {
     const waiter = await byId(ctx, waiterId)
     if (!waiter || waiter.state !== from) return false
-    await ctx.db.patch(waiter._id, { state: to })
+    await ctx.db.patch(waiter._id, {
+      state: to,
+      ...(to !== 'armed' ? { settledAt: Date.now() } : {}),
+    })
     return true
+  },
+})
+
+export const prune = mutation({
+  args: {
+    namespace: v.optional(v.string()),
+    before: v.number(),
+    limit: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, { namespace, before, limit }) => {
+    const rows = await rowsByStates(ctx, namespace, ['fired', 'timed-out', 'cancelled'], limit)
+    const batch = pruneBatch(
+      rows.filter((row) => row.settledAt === undefined || row.settledAt < before),
+      limit,
+    )
+    for (const row of batch.selected) await ctx.db.delete(row._id)
+    return { removed: batch.selected.length, truncated: batch.truncated }
   },
 })
 
@@ -99,4 +120,24 @@ async function byId(ctx: MutationCtx, waiterId: string) {
     .query('runtimeWaiters')
     .withIndex('by_waiter_id', (q) => q.eq('waiterId', waiterId))
     .first()
+}
+
+async function rowsByStates(ctx: MutationCtx, namespace: string | undefined, states: readonly string[], limit: number) {
+  const take = Math.max(0, Math.floor(limit)) + 1
+  const rows = (
+    await Promise.all(
+      states.map((state) =>
+        namespace
+          ? ctx.db
+              .query('runtimeWaiters')
+              .withIndex('by_namespace_state_settled', (q) => q.eq('namespace', namespace).eq('state', state))
+              .take(take)
+          : ctx.db
+              .query('runtimeWaiters')
+              .withIndex('by_state_settled', (q) => q.eq('state', state))
+              .take(take),
+      ),
+    )
+  ).flat()
+  return rows.sort((left, right) => (left.settledAt ?? 0) - (right.settledAt ?? 0))
 }

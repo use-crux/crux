@@ -16,6 +16,7 @@ import type { TimerId, WaiterId, WorkId } from './ports/ids'
 import type { RuntimeStatePort } from './ports/state'
 import type { RuntimeWork } from './ports/work'
 import type { RuntimeWaiter, WaiterPort } from './ports/waiters'
+import type { RuntimePruneOptions, RuntimePruneResult } from './ports/retention'
 
 /** Timer record lifecycle stored by a runtime store adapter. */
 export type RuntimeTimerState = 'scheduled' | 'fired' | 'cancelled'
@@ -89,6 +90,8 @@ export interface RuntimeTimerStorePort {
     from: RuntimeTimerState,
     to: RuntimeTimerState,
   ): Promise<boolean>
+  /** Delete a bounded batch of fired or cancelled timers before a cutoff. */
+  prune(options: RuntimePruneOptions): Promise<RuntimePruneResult>
 }
 
 /** Runtime outbox row written inside a store transaction. */
@@ -152,6 +155,8 @@ export interface RuntimeOutboxPort {
   confirm(outboxId: string): Promise<void>
   /** Requeue a row after a delivery failure. */
   retryLater(outboxId: string, nextAttemptAt: Date): Promise<void>
+  /** Delete a bounded batch of confirmed outbox rows before a cutoff. */
+  prune(options: RuntimePruneOptions): Promise<RuntimePruneResult>
 }
 
 /** Waiter store operations needed in addition to the public waiter port. */
@@ -168,6 +173,8 @@ export interface RuntimeWaiterStorePort extends WaiterPort {
     from: RuntimeWaiter['state'],
     to: RuntimeWaiter['state'],
   ): Promise<boolean>
+  /** Delete a bounded batch of resolved, timed-out, or cancelled waiters. */
+  prune(options: RuntimePruneOptions): Promise<RuntimePruneResult>
 }
 
 /** Options for claiming expired waiter registrations. */

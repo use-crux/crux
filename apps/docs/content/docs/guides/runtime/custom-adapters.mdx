@@ -62,6 +62,18 @@ Use `verify: allowUnsignedDevWake` only for trusted local endpoints.
 
 When `state.markSnapshotDelivered()` is called, persist the delivered suspend with both the durable `eventId` and the copied JSON `payload`. Runtime-backed flow replay reads that snapshot payload directly and must not need to scan the event log after delivery.
 
+## Store retention rules
+
+Store ports expose bounded prune methods for their own record classes:
+
+- `events.prune()` deletes events appended before the cutoff.
+- `state.pruneTerminalWork()` deletes completed, cancelled, and dead-lettered work.
+- `state.pruneTerminalSnapshots()` deletes completed, blocked, and cancelled snapshots.
+- `state.pruneIdempotencyKeys()` deletes completed idempotency markers.
+- `timers.prune()`, `waiters.prune()`, and `outbox.prune()` delete only settled/confirmed records.
+
+Every prune method must respect `limit` and return `{ removed, truncated }`. Adapters may keep settled timestamps internally; Postgres-style adapters should add nullable settled/confirmed columns and treat older already-settled rows with null stamps as eligible.
+
 ## Related
 
 - Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)

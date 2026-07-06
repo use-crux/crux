@@ -39,6 +39,12 @@ export type {
   RuntimeFailureClassification,
   RuntimeFailureClassificationOptions,
 } from './engine/retry'
+export type {
+  ResolvedRuntimeRetentionConfig,
+  ResolveRuntimeRetentionOptions,
+  RuntimeRetentionConfig,
+  RuntimeRetentionDurationInput,
+} from './engine/retention'
 
 export { transition } from './engine/work'
 export type {
@@ -227,6 +233,7 @@ export type {
   RuntimeSetupPort,
   RuntimeSetupResult,
 } from './ports/setup'
+export type { RuntimePruneOptions, RuntimePruneResult } from './ports/retention'
 export type {
   CountWorkOptions,
   FlowSnapshot,

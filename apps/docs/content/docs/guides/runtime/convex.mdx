@@ -12,7 +12,12 @@ import { config } from '@use-crux/core'
 import { convex } from '@use-crux/convex/runtime'
 
 export default config({
-  runtime: convex(),
+  runtime: convex({
+    retention: {
+      terminalWork: '7d',
+      terminalSnapshots: '30d',
+    },
+  }),
 })
 ```
 
@@ -61,6 +66,7 @@ Convex `ctx`, component refs, and scheduler before core starts the durable flow.
 - Import targets statically; generated files should not rely on dynamic import.
 - Use top-level named exports and literal target names.
 - Do not call runtime-backed APIs from a Next server process configured with `runtime: convex()`.
+- Configure retention on `convex({ retention })`; the component prunes terminal runtime rows during host-bound maintenance.
 - Use Convex setup/deploy flow for component tables; Crux setup commands report host-specific diagnostics rather than creating paid resources.
 
 ## Related

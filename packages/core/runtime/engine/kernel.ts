@@ -27,6 +27,7 @@ import type {
   ScheduleTimerInput,
 } from './kernel-types'
 import { handleWake } from './kernel-wake'
+import { resolveRuntimeRetentionConfig } from './retention'
 
 const DEFAULT_LEASE_TTL_MS = 60_000
 
@@ -66,6 +67,9 @@ export function createRuntimeKernel(
   const now = options.now ?? (() => new Date())
   const verifyWake = options.verifyWake ?? (() => true)
   const leaseTtlMs = options.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS
+  const retention = resolveRuntimeRetentionConfig(options.retention, {
+    redeliveryHorizonMs: options.redeliveryHorizonMs,
+  })
   const deps = Object.freeze({
     store: options.store,
     targets: options.targets,
@@ -74,6 +78,7 @@ export function createRuntimeKernel(
     now,
     rng: options.rng,
     leaseTtlMs,
+    retention,
   })
 
   return Object.freeze({

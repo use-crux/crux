@@ -24,8 +24,8 @@ The Runtime Engine is the durable execution layer for event waits, timers, backg
 
 | Export | Use |
 | --- | --- |
-| `node(options?)` | In-process local/test runtime. Defaults to an in-memory store and microtask wake. Pass `store: postgres()` for long-lived Node processes that need durable state. |
-| `serverless({ store, wake, endpoint, publicUrl, namespace })` | Durable store plus HTTP wake adapter for Next/Vercel-style deployments. `endpoint` defaults to `/api/crux`; production requires a stable public URL. |
+| `node(options?)` | In-process local/test runtime. Defaults to an in-memory store and microtask wake. Pass `store: postgres()` for long-lived Node processes that need durable state. Accepts `retention`. |
+| `serverless({ store, wake, endpoint, publicUrl, namespace, retention })` | Durable store plus HTTP wake adapter for Next/Vercel-style deployments. `endpoint` defaults to `/api/crux`; production requires a stable public URL. |
 | `genericQueue({ enqueue, secret, devSecret, maxDelayMs })` | Dependency-free wake adapter for user-owned queues. With `secret`, messages include `x-crux-signature: sha256=<hmac>` headers for HTTP forwarding. |
 | `createRuntime({ runtime, targets })` | Resolve an in-process runtime definition for advanced host code and tests. Host-bound declarations such as `convex()` throw `RUNTIME_HOST_ONLY` here. |
 | `bindHostRuntime(definition, binding)` | Host adapter path for platforms whose store/wake require request context, such as Convex. It delegates through the same kernel as `createRuntime()`. |
@@ -111,6 +111,27 @@ Durable payloads must be JSON-compatible. Complex data should live in applicatio
 
 Delivered event payloads are embedded in the flow snapshot at delivery time. Runtime-backed replay reads the snapshot payload, not the event log, so delivered flows do not depend on unbounded event history.
 
+## Retention
+
+Runtime composers accept:
+
+```ts
+interface RuntimeRetentionConfig {
+  events?: string | number | false
+  terminalWork?: string | number | false
+  confirmedOutbox?: string | number | false
+  idempotencyKeys?: string | number | false
+  settledTimers?: string | number | false
+  settledWaiters?: string | number | false
+  terminalSnapshots?: string | number | false
+  sweepLimit?: number
+}
+```
+
+Duration strings use the same shape as `flow.after()` delays, such as `'24h'`, `'30m'`, or `'100ms'`; numbers are milliseconds. Defaults are events 24h, terminal work 7d, confirmed outbox 24h, idempotency keys 7d, settled timers 24h, settled waiters 24h, terminal snapshots 30d, and sweep limit 200 per class per maintenance tick. `false` disables pruning for that class.
+
+Maintenance reports `retainedRecordsRemoved` and `retentionTruncated`. `retention.idempotencyKeys` must be at least the wake adapter's advertised max delay/horizon, or `false`.
+
 ## Diagnostics
 
 Public runtime failures throw `CruxRuntimeError` with a stable `code`, a user-facing explanation, the exact next step, and a docs URL. Current runtime codes are documented under [Errors](/docs/errors).
@@ -149,6 +170,8 @@ crux runtime cancel <workId>
 
 Store adapters must persist the full delivered-suspend record written by `state.markSnapshotDelivered()`, including both `eventId` and the copied JSON `payload`.
 
+Store adapters also implement bounded `prune()` methods on the owning ports: events, terminal work/snapshots/idempotency keys, timers, waiters, and outbox. Prune methods must delete only records already terminal or settled before the cutoff, respect `limit`, and return `truncated: true` when more eligible rows remain.
+
 The conformance helpers live on `@use-crux/core/runtime/testing`:
 
 ```ts
@@ -158,7 +181,7 @@ import {
 } from '@use-crux/core/runtime/testing'
 ```
 
-Use them for store adapters and full runtime adapters. Tests cover namespace isolation, idempotency, leases, waiter races, timers, outbox recovery, retry source guards, and idle-counter invariants.
+Use them for store adapters and full runtime adapters. Tests cover namespace isolation, idempotency, leases, waiter races, timers, outbox recovery, retention pruning, retry source guards, and idle-counter invariants.
 
 ## Related
 

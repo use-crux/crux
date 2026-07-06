@@ -21,3 +21,14 @@ export function matchesTopLevel(
 export function limitRows<T>(rows: readonly T[], limit?: number): readonly T[] {
   return rows.slice(0, Math.max(0, Math.floor(limit ?? rows.length)))
 }
+
+export function pruneBatch<T>(
+  rows: readonly T[],
+  limit: number,
+): { readonly selected: readonly T[]; readonly truncated: boolean } {
+  const normalized = Math.max(0, Math.floor(limit))
+  return {
+    selected: rows.slice(0, normalized),
+    truncated: rows.length > normalized,
+  }
+}

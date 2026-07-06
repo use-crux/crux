@@ -10,6 +10,7 @@ import type { EventCursor } from '../../ports/ids'
 import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
 import { scopedKey } from './data'
 import { cloneJsonValue } from './json'
+import { matchesPruneNamespace, olderThan, pruneArray } from './retention'
 
 export function createMemoryEventPort(
   data: MemoryRuntimeData,
@@ -60,6 +61,23 @@ export function createMemoryEventPort(
       const events = limited.map((event) => cloneRuntimeEvent(event))
       const cursor = events.at(-1)?.eventId
       return cursor ? { events, cursor } : { events }
+    },
+
+    async prune(options) {
+      const result = pruneArray(
+        data.events,
+        options,
+        (event) =>
+          matchesPruneNamespace(event, options.namespace) &&
+          olderThan(event.appendedAt, options.before),
+        (event) => {
+          for (const [key, value] of data.eventsByDuplicateKey.entries()) {
+            if (value === event) data.eventsByDuplicateKey.delete(key)
+          }
+        },
+      )
+      if (result.removed > 0) recordWrite?.()
+      return result
     },
   }
 }

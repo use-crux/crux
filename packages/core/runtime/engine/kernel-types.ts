@@ -25,6 +25,7 @@ import type {
   RuntimeStoreAdapter,
   RuntimeTimerRecord,
 } from '../store'
+import type { RuntimeRetentionConfig } from './retention'
 import type { WakeEnvelope } from './envelope'
 import type { RuntimeWakeDeliver } from './outbox'
 import type { WorkItem, WorkItemError } from './work'
@@ -90,6 +91,10 @@ export interface RuntimeKernelOptions {
   readonly leaseTtlMs?: number
   /** Retry jitter source for deterministic tests. */
   readonly rng?: () => number
+  /** Retention policy for terminal runtime records. Defaults are production-safe. */
+  readonly retention?: RuntimeRetentionConfig
+  /** Longest wake delay/redelivery horizon known to the composer. */
+  readonly redeliveryHorizonMs?: number
 }
 
 /** Input for enqueuing task work. */
@@ -317,6 +322,8 @@ export interface MaintenanceTickResult {
   readonly pendingRequeued: number
   /** Retention records removed. I4 has no retention policy yet. */
   readonly retainedRecordsRemoved: number
+  /** True when a bounded retention sweep left eligible records behind. */
+  readonly retentionTruncated?: boolean
 }
 
 /** Outcome of a wake handling attempt. */

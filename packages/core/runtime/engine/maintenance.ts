@@ -16,14 +16,18 @@ import type {
   MaintenanceTickOptions,
   MaintenanceTickResult,
 } from './kernel-types'
+import { pruneRetainedRecords } from './maintenance-retention'
 import { scanTimers, type KernelTimerDeps } from './kernel-timers'
 import { transition, type WorkItem } from './work'
 import type { RuntimeWaiter } from '../ports/waiters'
+import type { ResolvedRuntimeRetentionConfig } from './retention'
 
 /** Dependencies for runtime maintenance. */
 export interface KernelMaintenanceDeps extends KernelTimerDeps {
   /** Lease TTL in milliseconds. */
   readonly leaseTtlMs: number
+  /** Resolved retention policy for terminal runtime records. */
+  readonly retention: ResolvedRuntimeRetentionConfig
 }
 
 /** Run one kernel-owned maintenance pass. */
@@ -59,6 +63,10 @@ export async function maintenanceTick(
     now,
     limit: options.workLimit,
   })
+  const retention = await pruneRetainedRecords(deps, {
+    namespace: options.namespace,
+    now,
+  })
 
   return {
     outboxDelivered: outbox.delivered,
@@ -68,7 +76,8 @@ export async function maintenanceTick(
     leasesReclaimed,
     waitersExpired,
     pendingRequeued,
-    retainedRecordsRemoved: 0,
+    retainedRecordsRemoved: retention.removed,
+    retentionTruncated: retention.truncated,
   }
 }
 

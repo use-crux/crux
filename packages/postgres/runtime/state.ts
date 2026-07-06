@@ -16,6 +16,7 @@ import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
 import { decodeFlowSnapshot, decodeWorkItem, encodeJson } from './codec'
 import { createPostgresIdleCounterPort } from './idle'
+import { pruneNamespaceFilters, prunePostgresRows } from './prune'
 import type { PgExecutor } from './sql'
 import { table } from './sql'
 
@@ -125,6 +126,20 @@ export function createPostgresStatePort(
       return result.rows.map(decodeWorkItem)
     },
 
+    async pruneTerminalWork(options) {
+      const { filters, values } = pruneNamespaceFilters(options)
+      filters.push(`updated_at < $1`)
+      filters.push(`status = ANY($${values.length + 1}::text[])`)
+      recordWrite(faults)
+      return await prunePostgresRows(db, {
+        table: workTable,
+        filters,
+        values: [...values, ['completed', 'cancelled', 'dead-letter']],
+        orderBy: 'updated_at ASC, work_id ASC',
+        limit: options.limit,
+      })
+    },
+
     async countWork(options): Promise<readonly WorkStatusCount[]> {
       const result = await db.query(
         `SELECT namespace, status, target_id, COUNT(*)::int AS count
@@ -223,6 +238,20 @@ export function createPostgresStatePort(
       )
     },
 
+    async pruneTerminalSnapshots(options) {
+      const { filters, values } = pruneNamespaceFilters(options)
+      filters.push(`updated_at < $1`)
+      filters.push(`status = ANY($${values.length + 1}::text[])`)
+      recordWrite(faults)
+      return await prunePostgresRows(db, {
+        table: snapshotTable,
+        filters,
+        values: [...values, ['completed', 'blocked', 'cancelled']],
+        orderBy: 'updated_at ASC, flow_id ASC',
+        limit: options.limit,
+      })
+    },
+
     async markSnapshotDelivered(
       workId: WorkId,
       options: MarkSnapshotDeliveredOptions,
@@ -273,6 +302,19 @@ export function createPostgresStatePort(
          ON CONFLICT (namespace, key) DO NOTHING`,
         [record.namespace, record.key, record.completedAt],
       )
+    },
+
+    async pruneIdempotencyKeys(options) {
+      const { filters, values } = pruneNamespaceFilters(options)
+      filters.push(`completed_at < $1`)
+      recordWrite(faults)
+      return await prunePostgresRows(db, {
+        table: idempotencyTable,
+        filters,
+        values,
+        orderBy: 'completed_at ASC, key ASC',
+        limit: options.limit,
+      })
     },
 
     ...idleCounters,

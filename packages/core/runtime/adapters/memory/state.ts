@@ -18,6 +18,7 @@ import type { RuntimeWork } from '../../ports/work'
 import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
 import { scopedKey } from './data'
 import { cloneJsonValue } from './json'
+import { matchesPruneNamespace, olderThan, pruneMapValues } from './retention'
 
 export function createMemoryStatePort(
   data: MemoryRuntimeData,
@@ -78,6 +79,19 @@ export function createMemoryStatePort(
       return work.map((item) => cloneWorkItem(item))
     },
 
+    async pruneTerminalWork(options) {
+      const result = pruneMapValues(
+        data.work,
+        options,
+        (work) =>
+          matchesPruneNamespace(work, options.namespace) &&
+          isPrunableWorkStatus(work.status) &&
+          olderThan(work.updatedAt, options.before),
+      )
+      if (result.removed > 0) recordWrite?.()
+      return result
+    },
+
     async countWork(options): Promise<readonly WorkStatusCount[]> {
       const counts = new Map<string, WorkStatusCount>()
       for (const item of data.work.values()) {
@@ -136,6 +150,19 @@ export function createMemoryStatePort(
       )
     },
 
+    async pruneTerminalSnapshots(options) {
+      const result = pruneMapValues(
+        data.snapshots,
+        options,
+        (snapshot) =>
+          matchesPruneNamespace(snapshot, options.namespace) &&
+          isPrunableSnapshotStatus(snapshot.status) &&
+          olderThan(snapshot.updatedAt, options.before),
+      )
+      if (result.removed > 0) recordWrite?.()
+      return result
+    },
+
     async markSnapshotDelivered(
       workId: WorkId,
       options: MarkSnapshotDeliveredOptions,
@@ -174,6 +201,18 @@ export function createMemoryStatePort(
       data.idempotency.set(key, cloneIdempotencyRecord(record))
     },
 
+    async pruneIdempotencyKeys(options) {
+      const result = pruneMapValues(
+        data.idempotency,
+        options,
+        (record) =>
+          matchesPruneNamespace(record, options.namespace) &&
+          olderThan(record.completedAt, options.before),
+      )
+      if (result.removed > 0) recordWrite?.()
+      return result
+    },
+
     async incrementIdle(namespace: string, scope: string): Promise<number> {
       recordWrite?.()
       return incrementCounter(data, namespace, scope)
@@ -198,6 +237,14 @@ export function createMemoryStatePort(
       return data.idleCounters.get(scopedKey(namespace, scope)) ?? 0
     },
   }
+}
+
+function isPrunableWorkStatus(status: WorkItem['status']): boolean {
+  return status === 'completed' || status === 'cancelled' || status === 'dead-letter'
+}
+
+function isPrunableSnapshotStatus(status: FlowSnapshot['status']): boolean {
+  return status === 'completed' || status === 'blocked' || status === 'cancelled'
 }
 
 export function cloneWorkItem(work: WorkItem): WorkItem {

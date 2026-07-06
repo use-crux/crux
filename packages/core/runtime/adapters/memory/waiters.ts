@@ -9,8 +9,13 @@ import type {
   ResolveWaiterOptions,
   RuntimeWaiter,
 } from '../../ports/waiters'
-import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
+import type {
+  MemoryRuntimeData,
+  MemoryRuntimeWaiter,
+  MemoryWriteRecorder,
+} from './data'
 import { cloneJsonValue } from './json'
+import { matchesPruneNamespace, olderThan, pruneMapValues } from './retention'
 import { cloneRuntimeWork } from './state'
 
 export type RuntimeWaiterState = RuntimeWaiter['state']
@@ -29,7 +34,7 @@ export function createMemoryWaiterPort(
 ): MemoryWaiterPort {
   return {
     async register(waiter: NewRuntimeWaiter): Promise<RuntimeWaiter> {
-      const stored: RuntimeWaiter = Object.freeze({
+      const stored: MemoryRuntimeWaiter = Object.freeze({
         namespace: waiter.namespace,
         eventName: waiter.eventName,
         match: cloneJsonValue(waiter.match, 'waiter match'),
@@ -113,6 +118,19 @@ export function createMemoryWaiterPort(
       data.waiters.set(waiterId, cloneWithState(waiter, to))
       return true
     },
+
+    async prune(options) {
+      const result = pruneMapValues(
+        data.waiters,
+        options,
+        (waiter) =>
+          matchesPruneNamespace(waiter, options.namespace) &&
+          waiter.state !== 'armed' &&
+          olderThan(waiter.settledAt, options.before),
+      )
+      if (result.removed > 0) recordWrite?.()
+      return result
+    },
   }
 }
 
@@ -129,13 +147,34 @@ function matchesTopLevel(
 }
 
 function cloneWithState(
-  waiter: RuntimeWaiter,
+  waiter: RuntimeWaiter | MemoryRuntimeWaiter,
   state: RuntimeWaiterState,
-): RuntimeWaiter {
-  return Object.freeze({ ...cloneRuntimeWaiter(waiter), state })
+): MemoryRuntimeWaiter {
+  return Object.freeze({
+    ...cloneStoredRuntimeWaiter(waiter),
+    state,
+    ...(state === 'armed' ? {} : { settledAt: new Date() }),
+  })
 }
 
 function cloneRuntimeWaiter(waiter: RuntimeWaiter): RuntimeWaiter {
+  const stored = cloneStoredRuntimeWaiter(waiter)
+  return Object.freeze({
+    namespace: stored.namespace,
+    eventName: stored.eventName,
+    match: stored.match,
+    workId: stored.workId,
+    work: stored.work,
+    timeoutAt: stored.timeoutAt,
+    waiterId: stored.waiterId,
+    timerId: stored.timerId,
+    state: stored.state,
+  })
+}
+
+function cloneStoredRuntimeWaiter(
+  waiter: RuntimeWaiter | MemoryRuntimeWaiter,
+): MemoryRuntimeWaiter {
   return Object.freeze({
     namespace: waiter.namespace,
     eventName: waiter.eventName,
@@ -146,6 +185,10 @@ function cloneRuntimeWaiter(waiter: RuntimeWaiter): RuntimeWaiter {
     waiterId: waiter.waiterId,
     timerId: waiter.timerId,
     state: waiter.state,
+    settledAt:
+      'settledAt' in waiter && waiter.settledAt
+        ? new Date(waiter.settledAt)
+        : undefined,
   })
 }
 

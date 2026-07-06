@@ -65,6 +65,7 @@ export function bindHostRuntime<TStore extends RuntimeStoreAdapter>(
     store: binding.store,
     capabilities: definition.capabilities,
     namespace: binding.namespace ?? definition.namespace,
+    ...(definition.retention ? { retention: definition.retention } : {}),
     ...(binding.verifyWakeRequest
       ? { verifyWakeRequest: binding.verifyWakeRequest }
       : {}),

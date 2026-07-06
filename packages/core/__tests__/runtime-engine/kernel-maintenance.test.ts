@@ -311,6 +311,7 @@ describe('RuntimeKernel maintenance and cancellation composites', () => {
       ],
     })
   })
+
 })
 
 function makeFlowWork(overrides: Partial<WorkItem> = {}): WorkItem {

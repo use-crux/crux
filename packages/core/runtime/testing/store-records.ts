@@ -306,4 +306,5 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
       store.state.decrementIdle('tenant-a', 'flow:flow_1'),
     ).rejects.toThrow('went negative')
   })
+
 }

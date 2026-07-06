@@ -13,6 +13,7 @@ import type { RuntimeStoreAdapter } from '../store'
 import type { RuntimeKernel } from '../engine/kernel'
 import type { RuntimeWakeDeliver } from '../engine/outbox'
 import type { RuntimeWakeRequestVerifier } from '../handler/verify'
+import type { RuntimeRetentionConfig } from '../engine/retention'
 import { createRuntimeError } from '../engine/errors'
 
 /** Options passed to a composer when `createRuntime()` builds wake delivery. */
@@ -53,6 +54,8 @@ export interface InProcessRuntimeEngineDefinition<
   readonly namespace?: string
   /** Optional automatic maintenance-loop defaults. */
   readonly maintenance?: RuntimeMaintenanceLoopOptions
+  /** Retention policy for terminal Runtime Engine records. */
+  readonly retention?: RuntimeRetentionConfig
   /** Optional HTTP wake verifier supplied by a wake adapter such as QStash. */
   readonly verifyWakeRequest?: RuntimeWakeRequestVerifier
   /** Create wake delivery for this runtime. */
@@ -77,6 +80,8 @@ export interface HostBoundRuntimeEngineDefinition<
   readonly entry?: string
   /** Adapter-specific declaration options. Core stores these inertly. */
   readonly options?: TOptions
+  /** Retention policy for terminal Runtime Engine records. */
+  readonly retention?: RuntimeRetentionConfig
 }
 
 /** Runtime composer output accepted by `config({ runtime })`. */

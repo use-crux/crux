@@ -11,6 +11,7 @@ import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
 import { decodeTimer, encodeJson } from './codec'
 import { newRuntimeId } from './ids'
+import { pruneNamespaceFilters, prunePostgresRows } from './prune'
 import type { PgExecutor } from './sql'
 import { table } from './sql'
 
@@ -116,12 +117,30 @@ export function createPostgresTimerStore(
       recordWrite(faults)
       const result = await db.query(
         `UPDATE ${timers}
-            SET state = $3
+            SET state = $3,
+                settled_at = CASE
+                  WHEN $3 = ANY(ARRAY['fired', 'cancelled']::text[]) THEN now()
+                  ELSE settled_at
+                END
           WHERE timer_id = $1
             AND state = $2`,
         [timerId, from, to],
       )
       return (result.rowCount ?? 0) > 0
+    },
+
+    async prune(options) {
+      const { filters, values } = pruneNamespaceFilters(options)
+      filters.push(`state = ANY(ARRAY['fired', 'cancelled']::text[])`)
+      filters.push(`(settled_at < $1 OR settled_at IS NULL)`)
+      recordWrite(faults)
+      return await prunePostgresRows(db, {
+        table: timers,
+        filters,
+        values,
+        orderBy: 'settled_at ASC NULLS FIRST, timer_id ASC',
+        limit: options.limit,
+      })
     },
   }
 }

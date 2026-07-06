@@ -123,6 +123,8 @@ export function createRuntime<TStore extends RuntimeStoreAdapter>(
     newWorkId: options.newWorkId ?? createDefaultWorkIdGenerator(),
     now,
     leaseTtlMs: options.leaseTtlMs,
+    retention: options.runtime.retention,
+    redeliveryHorizonMs: options.runtime.capabilities.timers.maxDelayMs,
   })
   const deliver = options.runtime.createWake({
     store: options.runtime.store,

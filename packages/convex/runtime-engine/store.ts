@@ -78,6 +78,11 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
         ...query,
         updatedBefore: query.updatedBefore?.getTime(),
       })).map(decodeWork),
+    pruneTerminalWork: (query) =>
+      run(refs.state.pruneTerminalWork, {
+        ...query,
+        before: query.before.getTime(),
+      }),
     countWork: (query) => run(refs.state.countWork, { ...query }),
     setWorkPending: async (workId, pending) => {
       const result = await run<unknown>(refs.state.setWorkPending, {
@@ -95,11 +100,21 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
       return result ? decodeSnapshot(result) : null
     },
     putSnapshot: (snapshot) => run(refs.state.putSnapshot, { snapshot: encodeSnapshot(snapshot) }).then(noop),
+    pruneTerminalSnapshots: (query) =>
+      run(refs.state.pruneTerminalSnapshots, {
+        ...query,
+        before: query.before.getTime(),
+      }),
     markSnapshotDelivered: (workId, delivery) =>
       run(refs.state.markSnapshotDelivered, { workId, ...delivery }).then(noop),
     hasIdempotencyKey: (namespace, key) => run(refs.state.hasIdempotencyKey, { namespace, key }),
     putIdempotencyKey: (record) =>
       run(refs.state.putIdempotencyKey, { record: encodeIdempotency(record) }).then(noop),
+    pruneIdempotencyKeys: (query) =>
+      run(refs.state.pruneIdempotencyKeys, {
+        ...query,
+        before: query.before.getTime(),
+      }),
     incrementIdle: (namespace, scope) => run(refs.state.incrementIdle, { namespace, scope }),
     decrementIdle: (namespace, scope) => run(refs.state.decrementIdle, { namespace, scope }),
     getIdleCount: (namespace, scope) => run(refs.state.getIdleCount, { namespace, scope }),
@@ -117,6 +132,11 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
       const result = await run<{ events: readonly unknown[]; cursor?: string }>(refs.events.read, { ...query })
       return { events: result.events.map(decodeEvent), cursor: result.cursor as EventCursor | undefined }
     },
+    prune: (query) =>
+      run(refs.events.prune, {
+        ...query,
+        before: query.before.getTime(),
+      }),
   }
 
   const waiters: RuntimeWaiterStorePort = {
@@ -134,6 +154,11 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
         now: query.now.getTime(),
       })).map(decodeWaiter),
     transition: (waiterId, from, to) => run(refs.waiters.transition, { waiterId, from, to }),
+    prune: (query) =>
+      run(refs.waiters.prune, {
+        ...query,
+        before: query.before.getTime(),
+      }),
   }
 
   const timers: RuntimeTimerStorePort = {
@@ -147,6 +172,11 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     list: async (query) => (await run<readonly unknown[]>(refs.timers.list, { ...query })).map(decodeTimer),
     listByWork: async (workId) => (await run<readonly unknown[]>(refs.timers.listByWork, { workId })).map(decodeTimer),
     transition: (timerId, from, to) => run(refs.timers.transition, { timerId, from, to }),
+    prune: (query) =>
+      run(refs.timers.prune, {
+        ...query,
+        before: query.before.getTime(),
+      }),
   }
 
   const outbox: RuntimeOutboxPort = {
@@ -169,6 +199,11 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     confirm: (outboxId) => run(refs.outbox.confirm, { outboxId }).then(noop),
     retryLater: (outboxId, nextAttemptAt) =>
       run(refs.outbox.retryLater, { outboxId, nextAttemptAt: encodeOutboxDate(nextAttemptAt) }).then(noop),
+    prune: (query) =>
+      run(refs.outbox.prune, {
+        ...query,
+        before: query.before.getTime(),
+      }),
   }
 
   const leases: LeasePort = {

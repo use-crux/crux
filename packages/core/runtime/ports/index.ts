@@ -24,6 +24,7 @@ export type {
   WorkId,
 } from './ids'
 export type { ClaimOptions, Lease, LeasePort, LeaseResource } from './leases'
+export type { RuntimePruneOptions, RuntimePruneResult } from './retention'
 export type {
   RuntimeSetupApplyOptions,
   RuntimeSetupFinding,

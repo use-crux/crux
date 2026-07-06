@@ -2,6 +2,7 @@ import {
   MAX_WAKE_ENVELOPE_BYTES,
   type CruxEngineCapabilities,
   type HostBoundRuntimeEngineDefinition,
+  type RuntimeRetentionConfig,
 } from '@use-crux/core/runtime'
 
 /** Default generated Convex runtime entry point for host-bound execution. */
@@ -16,6 +17,8 @@ export interface ConvexRuntimeEngineOptions {
    * back to `local` for development.
    */
   readonly namespace?: string
+  /** Retention policy for terminal Runtime Engine records. */
+  readonly retention?: RuntimeRetentionConfig
 }
 
 /** Host-bound Runtime Engine declaration for Convex. */
@@ -38,6 +41,7 @@ export function convex(options: ConvexRuntimeEngineOptions = {}): ConvexRuntimeE
     capabilities: CONVEX_RUNTIME_CAPABILITIES,
     entry: CONVEX_RUNTIME_ENTRY,
     ...(options.namespace ? { namespace: options.namespace } : {}),
+    ...(options.retention ? { retention: options.retention } : {}),
     options: Object.freeze({ ...options }),
   })
 }

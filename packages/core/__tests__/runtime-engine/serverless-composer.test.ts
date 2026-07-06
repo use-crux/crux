@@ -108,6 +108,68 @@ describe('serverless() Runtime Engine composer', () => {
     ).toThrow(/Code: WAKE_UNVERIFIED/)
   })
 
+  it('passes retention config through serverless runtime resolution', async () => {
+    const store = inMemoryRuntimeStore()
+    const runtime = createRuntime({
+      runtime: serverless({
+        store,
+        publicUrl: 'https://app.example.com',
+        wake: genericQueue({ enqueue: async () => undefined }),
+        retention: { events: '1ms', sweepLimit: 10 },
+      }),
+      targets: {},
+      newWorkId: () => 'work_1',
+      startMaintenance: false,
+    })
+
+    await store.events.append({
+      namespace: runtime.namespace,
+      name: 'document.approved',
+      payload: { documentId: 'doc_1' },
+    })
+
+    await expect(
+      runtime.maintenance.tick({
+        now: new Date('2999-01-01T00:00:00.000Z'),
+      }),
+    ).resolves.toMatchObject({ retainedRecordsRemoved: 1 })
+  })
+
+  it('rejects idempotency retention shorter than the wake horizon', () => {
+    expect(() =>
+      createRuntime({
+        runtime: serverless({
+          store: inMemoryRuntimeStore(),
+          publicUrl: 'https://app.example.com',
+          wake: genericQueue({
+            maxDelayMs: 7 * 24 * 60 * 60 * 1_000,
+            enqueue: async () => undefined,
+          }),
+          retention: { idempotencyKeys: '1d' },
+        }),
+        targets: {},
+        newWorkId: () => 'work_1',
+        startMaintenance: false,
+      }),
+    ).toThrow(CruxRuntimeError)
+    expect(() =>
+      createRuntime({
+        runtime: serverless({
+          store: inMemoryRuntimeStore(),
+          publicUrl: 'https://app.example.com',
+          wake: genericQueue({
+            maxDelayMs: 7 * 24 * 60 * 60 * 1_000,
+            enqueue: async () => undefined,
+          }),
+          retention: { idempotencyKeys: '1d' },
+        }),
+        targets: {},
+        newWorkId: () => 'work_1',
+        startMaintenance: false,
+      }),
+    ).toThrow(/retention\.idempotencyKeys/)
+  })
+
   it('fails production setup when no stable public URL can be resolved', () => {
     expect(() =>
       serverless({

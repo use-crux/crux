@@ -33,6 +33,27 @@ Durable payloads must be JSON-compatible. Pass ids, URLs, or application storage
 
 When a durable event resumes a waiting flow, the Runtime Engine copies the event payload into the flow snapshot. Replay reads that snapshot payload directly instead of scanning the event log.
 
+## Retention
+
+Maintenance prunes retained runtime records in bounded batches. Configure TTLs on the runtime composer:
+
+```ts
+runtime: node({
+  retention: {
+    events: '24h',
+    terminalWork: '7d',
+    confirmedOutbox: '24h',
+    idempotencyKeys: '7d',
+    settledTimers: '24h',
+    settledWaiters: '24h',
+    terminalSnapshots: '30d',
+    sweepLimit: 200,
+  },
+})
+```
+
+Set a class to `false` to keep it indefinitely. Pruning never deletes pending work, leased work, suspended work, armed waiters, scheduled timers, pending outbox rows, or running/suspended flow snapshots. Older Postgres/Convex rows that were already settled before the retention stamp columns existed are eligible once their class TTL expires.
+
 ## Related
 
 - Guide: [Next/Vercel Runtime](/docs/guides/runtime/next-vercel)

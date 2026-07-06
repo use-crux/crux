@@ -1,7 +1,7 @@
 import { v } from 'convex/values'
 import { mutation } from '../_generated/server.js'
 import type { MutationCtx } from '../_generated/server.js'
-import { limitRows } from './shared'
+import { limitRows, pruneBatch } from './shared'
 
 export const append = mutation({
   args: { event: v.any(), idempotencyKey: v.optional(v.string()) },
@@ -44,6 +44,34 @@ export const read = mutation({
       limit,
     )
     return { events, cursor: events.at(-1)?.eventId ?? after }
+  },
+})
+
+export const prune = mutation({
+  args: {
+    namespace: v.optional(v.string()),
+    before: v.number(),
+    limit: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, { namespace, before, limit }) => {
+    const rows = namespace
+      ? await ctx.db
+          .query('runtimeEvents')
+          .withIndex('by_namespace_appended', (q) => q.eq('namespace', namespace))
+          .take(Math.max(0, Math.floor(limit)) + 1)
+      : await ctx.db
+          .query('runtimeEvents')
+          .withIndex('by_appended')
+          .take(Math.max(0, Math.floor(limit)) + 1)
+    const batch = pruneBatch(
+      rows
+        .filter((row) => row.appendedAt < before)
+        .sort((left, right) => left.appendedAt - right.appendedAt),
+      limit,
+    )
+    for (const row of batch.selected) await ctx.db.delete(row._id)
+    return { removed: batch.selected.length, truncated: batch.truncated }
   },
 })
 

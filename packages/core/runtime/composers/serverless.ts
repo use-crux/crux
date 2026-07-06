@@ -13,6 +13,7 @@ import type { RuntimeStoreAdapter } from '../store'
 import { MAX_WAKE_ENVELOPE_BYTES } from '../engine/envelope'
 import { createRuntimeError } from '../engine/errors'
 import type { InProcessRuntimeEngineDefinition } from '../api/runtime-definition'
+import type { RuntimeRetentionConfig } from '../engine/retention'
 import type { RuntimeWakeAdapter } from './wake-adapter'
 
 /** Environment values used by serverless public URL resolution. */
@@ -39,6 +40,8 @@ export interface ServerlessRuntimeOptions<
   readonly namespace?: string
   /** Environment override for tests and non-Node hosts. */
   readonly env?: ServerlessRuntimeEnvironment
+  /** Retention policy for terminal Runtime Engine records. */
+  readonly retention?: RuntimeRetentionConfig
 }
 
 /** Create a serverless Runtime Engine composer from store and wake adapters. */
@@ -63,6 +66,7 @@ export function serverless<TStore extends RuntimeStoreAdapter>(
       readStringEnv(env, 'CRUX_RUNTIME_NAMESPACE') ??
       'local',
     maintenance: { autoStart: false },
+    ...(options.retention ? { retention: options.retention } : {}),
     ...(options.wake.verify
       ? { verifyWakeRequest: options.wake.verify }
       : {}),

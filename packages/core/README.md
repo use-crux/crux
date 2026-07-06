@@ -458,7 +458,14 @@ import { config } from "@use-crux/core";
 import { node } from "@use-crux/core/runtime";
 
 export default config({
-  runtime: node(),
+  runtime: node({
+    retention: {
+      events: "24h",
+      terminalWork: "7d",
+      terminalSnapshots: "30d",
+      sweepLimit: 200,
+    },
+  }),
 });
 ```
 
@@ -471,8 +478,12 @@ work with `flow.defer(task, input)`, schedule task timers with
 
 Delivered event payloads are copied into the durable flow snapshot when a waiter
 fires. Flow replay reads those snapshot payloads directly instead of scanning
-the event log, so adapter retention can prune old events after later phases add
-retention policy.
+the event log, so maintenance can prune old events without breaking replay.
+Runtime composers accept a `retention` block for events, terminal work,
+confirmed outbox rows, idempotency keys, settled timers/waiters, terminal
+snapshots, and per-class `sweepLimit`. Defaults keep events for 24h, terminal
+work and idempotency keys for 7d, confirmed outbox/timers/waiters for 24h, and
+terminal snapshots for 30d. Set a class to `false` to keep it indefinitely.
 
 Executable durable task targets are defined from the runtime subpath, not the
 root Plans & Tasks ledger `task()` helper:

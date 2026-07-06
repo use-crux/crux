@@ -18,6 +18,7 @@ import type {
   InProcessRuntimeEngineDefinition,
   RuntimeWakeFactoryInput,
 } from '../api/runtime-definition'
+import type { RuntimeRetentionConfig } from '../engine/retention'
 
 /** Options for the in-process Node runtime composer. */
 export interface NodeRuntimeOptions<
@@ -36,6 +37,8 @@ export interface NodeRuntimeOptions<
   readonly maintenanceIntervalMs?: number
   /** Start the maintenance interval when `createRuntime()` resolves this composer. */
   readonly autoStartMaintenance?: boolean
+  /** Retention policy for terminal Runtime Engine records. */
+  readonly retention?: RuntimeRetentionConfig
 }
 
 /** Create the default in-process runtime using the in-memory reference store. */
@@ -61,6 +64,7 @@ export function node<TStore extends RuntimeStoreAdapter>(
       intervalMs: options?.maintenanceIntervalMs ?? 1_000,
       autoStart: options?.autoStartMaintenance ?? true,
     },
+    ...(options?.retention ? { retention: options.retention } : {}),
     createWake: createMicrotaskWake,
   })
 }

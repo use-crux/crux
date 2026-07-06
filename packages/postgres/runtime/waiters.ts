@@ -12,6 +12,7 @@ import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
 import { decodeWaiter, encodeJson } from './codec'
 import { newRuntimeId } from './ids'
+import { pruneNamespaceFilters, prunePostgresRows } from './prune'
 import type { PgExecutor } from './sql'
 import { table } from './sql'
 
@@ -79,7 +80,8 @@ export function createPostgresWaiterPort(
       recordWrite(faults)
       await db.query(
         `UPDATE ${waiters}
-            SET state = 'cancelled'
+            SET state = 'cancelled',
+                settled_at = now()
           WHERE waiter_id = $1
             AND state = 'armed'`,
         [waiterId],
@@ -134,12 +136,30 @@ export function createPostgresWaiterPort(
       recordWrite(faults)
       const result = await db.query(
         `UPDATE ${waiters}
-            SET state = $3
+            SET state = $3,
+                settled_at = CASE
+                  WHEN $3 <> 'armed' THEN now()
+                  ELSE settled_at
+                END
           WHERE waiter_id = $1
             AND state = $2`,
         [waiterId, from, to],
       )
       return (result.rowCount ?? 0) > 0
+    },
+
+    async prune(options) {
+      const { filters, values } = pruneNamespaceFilters(options)
+      filters.push(`state <> 'armed'`)
+      filters.push(`(settled_at < $1 OR settled_at IS NULL)`)
+      recordWrite(faults)
+      return await prunePostgresRows(db, {
+        table: waiters,
+        filters,
+        values,
+        orderBy: 'settled_at ASC NULLS FIRST, waiter_id ASC',
+        limit: options.limit,
+      })
     },
   }
 }

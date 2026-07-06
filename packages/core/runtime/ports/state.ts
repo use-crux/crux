@@ -20,6 +20,7 @@ import type {
 } from './ids'
 import type { RuntimeWork } from './work'
 import type { WorkStatus } from '../engine/work'
+import type { RuntimePruneOptions, RuntimePruneResult } from './retention'
 
 /** Flow snapshot shape persisted by runtime-backed flow replay. */
 export interface FlowSnapshot {
@@ -234,6 +235,15 @@ export interface RuntimeStatePort {
   listWork(options: ListWorkOptions): Promise<readonly WorkItem[]>
 
   /**
+   * Delete completed, cancelled, and dead-lettered work updated before a cutoff.
+   *
+   * Pending, leased, suspended, and blocked work is never pruned by retention.
+   */
+  pruneTerminalWork(
+    options: RuntimePruneOptions,
+  ): Promise<RuntimePruneResult>
+
+  /**
    * Count work records for operator/devtools status without sampling rows.
    *
    * SQL-style adapters should return exact grouped counts. Bounded platforms may
@@ -275,6 +285,15 @@ export interface RuntimeStatePort {
   putSnapshot(snapshot: FlowSnapshot): Promise<void>
 
   /**
+   * Delete terminal flow snapshots updated before a cutoff.
+   *
+   * Running and suspended snapshots are never pruned by retention.
+   */
+  pruneTerminalSnapshots(
+    options: RuntimePruneOptions,
+  ): Promise<RuntimePruneResult>
+
+  /**
    * Record which durable event delivered a pending suspend point.
    *
    * Called inside the same transaction that fires the waiter and resumes the
@@ -300,6 +319,11 @@ export interface RuntimeStatePort {
    * crash can never record one without the other.
    */
   putIdempotencyKey(record: IdempotencyRecord): Promise<void>
+
+  /** Delete completed idempotency markers older than the retention cutoff. */
+  pruneIdempotencyKeys(
+    options: RuntimePruneOptions,
+  ): Promise<RuntimePruneResult>
 
   /**
    * Increment a scoped-idle counter and return the new count.
