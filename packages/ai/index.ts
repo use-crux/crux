@@ -50,6 +50,7 @@ import type {
   MergedInput,
   GenerationSettings,
   Message,
+  TimeoutOptions,
 } from "@use-crux/core";
 import type {
   Constraint,
@@ -138,12 +139,8 @@ export type AIGenerateOptions<
   activeTools?: string[];
   /** Token budget for system message. */
   tokenBudget?: number;
-  /**
-   * Optional hard timeout for the provider call in milliseconds.
-   * Crux passes an AbortSignal to the AI SDK and rejects with AbortError
-   * if the provider does not settle before the deadline.
-   */
-  timeoutMs?: number;
+  /** Structured timeout budgets for this managed call. */
+  timeout?: TimeoutOptions;
   /**
    * Validation-feedback retry for structured output.
    * Uses AI SDK's `experimental_repairText` for cheap text fixes first,
@@ -251,8 +248,9 @@ export class CruxAIError extends Error {
 
   /**
    * Classify any thrown error into a `CruxAIError`, preserving the
-   * original as `cause`. Timeouts and aborts map from `AbortError`s,
-   * exhausted validation retries from `ValidationExhaustedError`;
+   * original as `cause`. Crux timeouts map from `TimeoutError`, provider
+   * aborts map from `AbortError`, exhausted validation retries from
+   * `ValidationExhaustedError`;
    * everything else is `'provider'`.
    */
   static classify(error: unknown): CruxAIError {
@@ -260,6 +258,9 @@ export class CruxAIError extends Error {
     const message = error instanceof Error ? error.message : String(error);
     if (isValidationExhaustedError(error)) {
       return new CruxAIError("validation_exhausted", message, { cause: error });
+    }
+    if (error instanceof Error && error.name === "TimeoutError") {
+      return new CruxAIError("timeout", message, { cause: error });
     }
     if (error instanceof Error && error.name === "AbortError") {
       const code: CruxAIErrorCode = /tim(ed)? ?out/i.test(message)
@@ -327,7 +328,7 @@ type CallOpts = Record<string, unknown> & {
   providerOptions?: AiProviderOptions;
   activeTools?: string[];
   tokenBudget?: number;
-  timeoutMs?: number;
+  timeout?: TimeoutOptions;
   validationRetry?: ValidationRetryOptions;
   constraints?: Constraint[];
   constraintMaxRetries?: number;
@@ -370,7 +371,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       extra,
       activeTools,
       tokenBudget,
-      timeoutMs,
+      timeout,
       validationRetry,
       constraints,
       constraintMaxRetries,
@@ -387,7 +388,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       toolMiddleware,
       messages: messages as Message[] | undefined,
       tokenBudget,
-      timeoutMs,
+      timeout,
       validationRetry,
       constraints,
       constraintMaxRetries,
@@ -436,7 +437,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       extra,
       activeTools,
       tokenBudget,
-      timeoutMs,
+      timeout,
       validationRetry: _validationRetry,
       constraints,
       constraintMaxRetries,
@@ -453,7 +454,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       toolMiddleware,
       messages: messages as Message[] | undefined,
       tokenBudget,
-      timeoutMs,
+      timeout,
       constraints,
       constraintMaxRetries,
       guardrails,
@@ -551,7 +552,7 @@ const defaultAi = createCruxAi();
  *   model: openrouter('anthropic/claude-sonnet-4-5'),
  *   input: { instruction },
  *   validationRetry: { maxRetries: 2 },
- *   timeoutMs: 60_000,
+ *   timeout: { totalMs: 60_000 },
  * })
  * result.object // typed from the prompt's output schema
  * ```

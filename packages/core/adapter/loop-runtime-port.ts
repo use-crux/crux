@@ -108,7 +108,7 @@ export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = un
    *
    * Contract highlights (verified by `loopRuntimePortConformance()`):
    * - Stop at `request.maxSteps`, plus any steps refunded via directives.
-   * - After every step, await `request.observer?.onStepFinish(step)` and
+   * - After every step, await `request.observer?.onStepEnd(step)` and
    *   apply the directive *before* the next step starts (`stop` ends the
    *   loop; `amend` swaps system/tools for subsequent steps; `refundStep`
    *   returns the step to the budget).

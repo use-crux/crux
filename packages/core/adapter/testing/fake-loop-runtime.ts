@@ -201,7 +201,7 @@ export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRun
 
         if (toolCalls.length === 0) {
           messages = [...messages, { role: 'assistant', content: lastResponse.text }]
-          await request.observer?.onStepFinish({
+          await request.observer?.onStepEnd({
             index: steps - 1,
             text: lastResponse.text,
             toolCalls: [],
@@ -259,7 +259,7 @@ export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRun
           ...toolMessages,
         ]
 
-        const directive: StepDirective = (await request.observer?.onStepFinish({
+        const directive: StepDirective = (await request.observer?.onStepEnd({
           index: steps - 1,
           text: lastResponse.text,
           toolCalls,

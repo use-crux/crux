@@ -203,7 +203,7 @@ export interface StepObserver {
    * @param step - The step that just finished.
    * @returns The directive to apply before the next step.
    */
-  onStepFinish(step: ExecutorStep): Promise<StepDirective>;
+  onStepEnd(step: ExecutorStep): Promise<StepDirective>;
 }
 
 // ─────────────────────────────────────────────────────────────────

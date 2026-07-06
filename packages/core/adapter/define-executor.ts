@@ -21,6 +21,7 @@
 
 import type { AnyPrompt } from '../prompt/prompt-types'
 import type { GenerationSettings, TraceMeta } from '../generation/types'
+import type { TimeoutOptions } from '../generation/timeout'
 import type { Message } from '../generation/messages'
 import type { LoopRuntimePort } from './loop-runtime-port'
 import type { ExecutorStreamHandle, StepObserver } from './executor-types'
@@ -73,12 +74,8 @@ export interface ExecutorGenerateOptions<TModel> {
   settings?: GenerationSettings
   /** Token budget for the system message. */
   tokenBudget?: number
-  /**
-   * Hard wall-clock timeout in milliseconds. Enforced by core (the call
-   * rejects with an `AbortError`) and forwarded to the SDK as an
-   * `AbortSignal` so the underlying request is cancelled too.
-   */
-  timeoutMs?: number
+  /** Structured timeout budgets for this managed call. */
+  timeout?: TimeoutOptions
   /**
    * Validation-feedback retry for structured output. Each retry makes one
    * additional `attemptStructured` call with the Zod errors injected as a
@@ -199,7 +196,7 @@ export interface CruxExecutor<TModel, TRawResponse = unknown, TRawStream = unkno
  *   model: 'fake:m-1',
  *   input: { instruction: 'Say hello' },
  *   validationRetry: { maxRetries: 2 },
- *   timeoutMs: 30_000,
+   *   timeout: { totalMs: 30_000 },
  * })
  * ```
  */
@@ -251,7 +248,7 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       maxSteps: opts.maxSteps,
       settings: opts.settings,
       tokenBudget: opts.tokenBudget,
-      timeoutMs: opts.timeoutMs,
+      timeout: opts.timeout,
       validationRetry: opts.validationRetry,
       constraints: opts.constraints,
       constraintMaxRetries: opts.constraintMaxRetries,
@@ -306,7 +303,7 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       maxSteps: opts.maxSteps,
       settings: opts.settings,
       tokenBudget: opts.tokenBudget,
-      timeoutMs: opts.timeoutMs,
+      timeout: opts.timeout,
       validationRetry: opts.validationRetry,
       constraints: opts.constraints,
       constraintMaxRetries: opts.constraintMaxRetries,

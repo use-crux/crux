@@ -352,7 +352,7 @@ Classifies an error into an `ErrorCategory` or `null`.
 | HTTP 429                    | `rate_limit`           |
 | HTTP 500–599                | `server_error`         |
 | HTTP 401/403                | `auth_error`           |
-| `ETIMEDOUT`, `AbortError`   | `timeout`              |
+| `TimeoutError`, `ETIMEDOUT`, `AbortError` | `timeout`              |
 | `ECONNREFUSED`, `ENOTFOUND` | `connection_error`     |
 | `ValidationExhaustedError`  | `validation_exhausted` |
 | HTTP 400, unknown           | `null` (no fallback)   |
@@ -537,7 +537,7 @@ Indexers expose:
 
 ## Internal orchestration
 
-`@use-crux/core` exports orchestration primitives (`orchestrateGenerate`, `orchestrateStream`, `executeFallbackLoop`, `wrapStreamIterable`, `withAttemptTimeout`) used by adapter packages. They're stable for adapter authors but not intended for general application code. See [Building custom adapters](/docs/guides/advanced/building-adapters).
+`@use-crux/core` exports orchestration primitives (`orchestrateGenerate`, `orchestrateStream`, `executeFallbackLoop`, `wrapStreamIterable`, `withBudget`) used by adapter packages. They're stable for adapter authors but not intended for general application code. See [Building custom adapters](/docs/guides/advanced/building-adapters).
 
 ## Types
 

@@ -1,10 +1,10 @@
 ---
-"@use-crux/core": patch
-"@use-crux/ai": patch
-"@use-crux/anthropic": patch
-"@use-crux/convex": patch
-"@use-crux/google": patch
-"@use-crux/openai": patch
+"@use-crux/core": minor
+"@use-crux/ai": minor
+"@use-crux/anthropic": minor
+"@use-crux/convex": minor
+"@use-crux/google": minor
+"@use-crux/openai": minor
 ---
 
 Adopt parsed Zod input throughout prompt resolution, run `sanitize` before top-level auto-escape, warn when nested string input cannot be auto-escaped, and collect nested `when()`/`match()`/contributor schemas consistently for prompt input validation.
@@ -32,5 +32,7 @@ Tighten adapter parity and trust behavior: usage metadata no longer fabricates z
 Add adapter contract harness scaffolding for the pre-launch API cleanup: target type assertions, a canonical result validator for shared conformance tests, canonical options fixtures, and headless equivalence TODO rows for the handle/transport phases.
 
 Nest normalized generation usage details under `inputTokenDetails` and `outputTokenDetails`, preserving no-fabricated-zero usage semantics while exposing cache-read/cache-write/reasoning token classes consistently. Add the portable `GenerationSettings.reasoning` hint and map it across AI SDK, Anthropic, OpenAI, and Google adapters.
+
+Replace generation `timeoutMs` with structured `timeout` budgets: `totalMs` for the whole managed call, `stepMs` for provider attempts, `chunkMs` for stalled streams, and `toolMs`/`tools[name]` for tool execution. Crux timeouts now reject with typed `TimeoutError`, and loop-runtime step observers use `onStepEnd`.
 
 Document the `@use-crux/core` stable beta contract in `packages/core/STABILITY.md`, add the `0.4.0-beta.0` changelog entry, and align prompt/context/adapter docs with the stabilized composition, caching, freshness, and tool-control surfaces.

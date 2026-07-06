@@ -75,7 +75,7 @@ export function createLoopCallPlan(
       finishReason?: string;
       usage?: SdkUsageLike;
     }) => {
-      const directive = await observer.onStepFinish({
+      const directive = await observer.onStepEnd({
         index: stepIndex,
         text: step.text,
         toolCalls: step.toolCalls.map((tc) => ({

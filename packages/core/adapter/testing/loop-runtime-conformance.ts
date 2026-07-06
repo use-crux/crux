@@ -125,7 +125,7 @@ export async function loopRuntimePortConformance<TModel>(
       baseRequest(runtime, model, {
         tools: { echo: echoTool },
         observer: {
-          onStepFinish: async (step) => {
+          onStepEnd: async (step) => {
             seen.push(step.index)
             return { kind: 'continue' }
           },
@@ -156,7 +156,7 @@ export async function loopRuntimePortConformance<TModel>(
     const outcome = await runtime.runTextLoop(
       baseRequest(runtime, model, {
         tools: { echo: echoTool },
-        observer: { onStepFinish: async () => ({ kind: 'stop', reason: 'conformance' }) },
+        observer: { onStepEnd: async () => ({ kind: 'stop', reason: 'conformance' }) },
       }),
     )
     if (outcome.status !== 'complete') fail('stop directive', `expected complete, got ${outcome.status}`)
@@ -173,7 +173,7 @@ export async function loopRuntimePortConformance<TModel>(
         tools: { echo: echoTool },
         maxSteps: 2,
         observer: {
-          onStepFinish: async () => {
+          onStepEnd: async () => {
             if (!refunded) {
               refunded = true
               return { kind: 'amend', refundStep: true }

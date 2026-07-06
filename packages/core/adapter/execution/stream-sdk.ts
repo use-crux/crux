@@ -13,6 +13,7 @@ import type { z } from "zod";
 import type { MiddlewareResult } from "../../runtime/types";
 import { createSafety } from "../../safety/session";
 import { orchestrateStream } from "../../generation/orchestrate";
+import { createBudgetSignal } from "../../generation/timeout";
 import { withDefaultResolverPorts } from "../../resolver/ports";
 import type {
   ExecutorRequest,
@@ -24,7 +25,6 @@ import type { AdapterExecutionStreamArgs, SdkLoopDialect } from "./types";
 import { initialMessageState } from "./messages";
 import {
   buildResolveOpts,
-  createTimeoutSignal,
   DEFAULT_MAX_STEPS,
   inspectForDevtools,
   withSkillActivationInput,
@@ -63,6 +63,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     call: { tools: args.tools, toolMiddleware: args.toolMiddleware },
     promptId: prompt.id,
     input: args.input ?? {},
+    timeout: args.timeout,
     reresolve: (skillSession) =>
       prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
   });
@@ -92,7 +93,10 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
 
-  const { signal, dispose } = createTimeoutSignal(args.timeoutMs);
+  const stepBudget = createBudgetSignal({
+    budget: "step",
+    limitMs: args.timeout?.stepMs,
+  });
   const request: ExecutorRequest<TModel> & { schema?: z.ZodType } = {
     model: args.model,
     modelInfo,
@@ -105,7 +109,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     activeTools: args.activeTools,
     maxSteps: args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
     observer: args.observer,
-    abortSignal: signal,
+    abortSignal: stepBudget.signal,
     extra: args.extra,
     diagnostics,
     ...(safety.enabled && !resolved.schema
@@ -140,7 +144,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
         model: args.model,
         resolved,
         outputMode: resolved.schema ? "object" : "text",
-        timeoutMs: args.timeoutMs,
+        timeout: args.timeout,
         ...(dialect.replayStream
           ? {
               createCachedStreamResult: (cached: {
@@ -154,7 +158,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       async () => dialect.runStream(request),
     );
   } catch (error) {
-    dispose();
+    stepBudget.dispose();
     throw error;
   }
 
@@ -172,7 +176,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       });
       return stamped;
     } finally {
-      dispose();
+      stepBudget.dispose();
     }
   };
 

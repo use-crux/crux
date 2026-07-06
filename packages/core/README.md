@@ -386,6 +386,11 @@ controls that are not portable belong in that adapter's typed `extra` option.
 reasoning-effort hint; exact provider budgets, summaries, and disable controls
 also belong in `extra`.
 
+Managed `generate()` / `stream()` calls use structured `timeout` budgets:
+`totalMs` for the whole call, `stepMs` for provider attempts, `chunkMs` for
+stream inactivity, and `toolMs` / `tools[name]` for tool execution. Expired
+budgets reject with `TimeoutError`.
+
 ## How It Works
 
 Every execution follows the same pipeline:

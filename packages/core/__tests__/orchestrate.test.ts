@@ -3,10 +3,11 @@ import type { FallbackModel } from '../generation/fallback'
 import { fallback } from '../generation/fallback'
 
 import {
-  withAttemptTimeout,
+  TimeoutError,
   executeFallbackLoop,
   orchestrateGenerate,
   orchestrateStream,
+  withBudget,
   wrapStreamIterable,
 } from '../generation'
 import type { OrchestrationSpec, TextDeltaExtractor } from '../generation'
@@ -93,39 +94,39 @@ function mockErrorStream(chunks: any[], errorAtIndex: number, error: Error) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// withAttemptTimeout
+// withBudget
 // ─────────────────────────────────────────────────────────────────
 
-describe('withAttemptTimeout', () => {
+describe('withBudget', () => {
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
     it('returns result when fn completes before timeout', async () => {
-    const result = await withAttemptTimeout(() => Promise.resolve('ok'), 5000)
+    const result = await withBudget(() => Promise.resolve('ok'), { budget: 'step', limitMs: 5000 })
     expect(result).toBe('ok')
   })
 
-    it('throws AbortError when fn exceeds timeout', async () => {
-    await expect(withAttemptTimeout(() => new Promise((resolve) => setTimeout(resolve, 5000)), 50)).rejects.toThrow(
-      'Fallback attempt timed out',
-    )
+    it('throws TimeoutError when fn exceeds timeout', async () => {
+    await expect(
+      withBudget(() => new Promise((resolve) => setTimeout(resolve, 5000)), { budget: 'step', limitMs: 50 }),
+    ).rejects.toBeInstanceOf(TimeoutError)
 
-    // Verify it's a DOMException with name AbortError
     try {
-      await withAttemptTimeout(() => new Promise((resolve) => setTimeout(resolve, 5000)), 50)
+      await withBudget(() => new Promise((resolve) => setTimeout(resolve, 5000)), { budget: 'step', limitMs: 50 })
     } catch (err: any) {
-      expect(err.name).toBe('AbortError')
+      expect(err.name).toBe('TimeoutError')
+      expect(err.budget).toBe('step')
     }
   })
 
-    it('no-ops when timeoutMs is undefined', async () => {
-    const result = await withAttemptTimeout(() => Promise.resolve(42))
+    it('no-ops when limitMs is undefined', async () => {
+    const result = await withBudget(() => Promise.resolve(42), { budget: 'step' })
     expect(result).toBe(42)
   })
 
-    it('no-ops when timeoutMs is 0', async () => {
-    const result = await withAttemptTimeout(() => Promise.resolve(42), 0)
+    it('no-ops when limitMs is 0', async () => {
+    const result = await withBudget(() => Promise.resolve(42), { budget: 'step', limitMs: 0 })
     expect(result).toBe(42)
   })
 })

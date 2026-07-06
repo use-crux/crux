@@ -12,6 +12,7 @@
 import type { MiddlewareResult } from '../../runtime/types'
 import { createSafety } from '../../safety/session'
 import { orchestrateStream } from '../../generation/orchestrate'
+import { withBudget } from '../../generation/timeout'
 import type { CallArgs, StreamHandle } from '../types'
 import { createToolLifecycle } from '../tool/session'
 import type { AdapterExecutionStreamArgs, CoreStepDialect } from './types'
@@ -52,6 +53,7 @@ export async function streamCore<TClient, TRawResponse, TRawStream, TExtra exten
     call: { tools: args.tools, toolMiddleware: args.toolMiddleware },
     promptId: prompt.id,
     input: args.input ?? {},
+    timeout: args.timeout,
     appendToolRound: dialect.appendToolRound,
     sanitizeToolSchema: dialect.sanitizeToolSchema,
   })
@@ -99,9 +101,14 @@ export async function streamCore<TClient, TRawResponse, TRawStream, TExtra exten
       model: modelInfo.modelId,
       resolved,
       outputMode: resolved.schema ? 'object' : 'text',
+      timeout: args.timeout,
       createCachedStreamResult: (cached) => createCachedStreamHandle(cached) as unknown as MiddlewareResult,
     },
-    async () => dialect.stream(dialect.client, callArgs),
+    async () =>
+      withBudget(() => dialect.stream(dialect.client, callArgs), {
+        budget: 'step',
+        limitMs: args.timeout?.stepMs,
+      }),
   )
 
   const safetyStream = safety.enabled ? safety.openStream() : undefined

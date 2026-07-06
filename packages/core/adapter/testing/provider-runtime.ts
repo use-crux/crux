@@ -470,7 +470,7 @@ export async function providerRuntimeConformance<
         maxSteps: 5,
         tools: { echo: echoTool() },
         observer: {
-          onStepFinish: async () => {
+          onStepEnd: async () => {
             observed++;
             return { kind: "stop", reason: "conformance" };
           },

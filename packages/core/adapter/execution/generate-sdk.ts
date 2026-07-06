@@ -14,6 +14,7 @@ import type { Message } from "../../generation/messages";
 import { createSafety } from "../../safety/session";
 import type { Safety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
+import { createBudgetSignal, type BudgetSignal } from "../../generation/timeout";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -35,7 +36,6 @@ import { initialMessageState } from "./messages";
 import { buildTraceMeta } from "./metadata";
 import {
   buildResolveOpts,
-  createTimeoutSignal,
   DEFAULT_MAX_STEPS,
   inspectForDevtools,
   mergeDirectives,
@@ -81,6 +81,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     call: { tools: args.tools, toolMiddleware: args.toolMiddleware },
     promptId: prompt.id,
     input: args.input ?? {},
+    timeout: args.timeout,
     reresolve: (skillSession) =>
       prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
   });
@@ -112,8 +113,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     systemPrompt: resolved.system,
   });
 
+  let stepBudget: BudgetSignal = createBudgetSignal(undefined);
   const loopObserver: StepObserver = {
-    onStepFinish: async (step) => {
+    onStepEnd: async (step) => {
+      stepBudget.refresh();
       const amendment = await lifecycle.applySkillLoads(step.toolCalls);
       let factoryDirective: StepDirective = { kind: "continue" };
       if (amendment) {
@@ -131,7 +134,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           refundStep: true,
         };
       }
-      const callerDirective = await args.observer?.onStepFinish(step);
+      const callerDirective = await args.observer?.onStepEnd(step);
       return mergeDirectives(factoryDirective, callerDirective);
     },
   };
@@ -178,10 +181,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       provider: modelInfo.provider || dialect.id,
       resolved,
       outputMode: resolved.schema ? "object" : "text",
-      timeoutMs: args.timeoutMs,
+      timeout: args.timeout,
     },
     async () => {
-      const { signal, dispose } = createTimeoutSignal(args.timeoutMs);
       try {
         const guardedInput = await safety.guardInput({
           messages,
@@ -189,7 +191,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         });
         messages = [...guardedInput.messages];
         promptText = guardedInput.prompt;
-        const request = buildRequest(signal);
+        stepBudget = createBudgetSignal({
+          budget: "step",
+          limitMs: args.timeout?.stepMs,
+        });
+        const request = buildRequest(stepBudget.signal);
         const result = resolved.schema
           ? await generateSdkStructured({
               dialect,
@@ -205,7 +211,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         result._meta = safety.stamp(result._meta);
         return result;
       } finally {
-        dispose();
+        stepBudget.dispose();
       }
     },
   );

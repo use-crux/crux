@@ -724,10 +724,19 @@ export type {
   orchestrateGenerate,
   orchestrateStream,
   executeFallbackLoop,
-  withAttemptTimeout,
   wrapStreamIterable,
+  TimeoutError,
+  normalizeBudgetMs,
+  toolBudgetMs,
+  createBudgetSignal,
+  withBudget,
 } from "./generation";
 /** @internal */ export type {
+  TimeoutBudget,
+  TimeoutOptions,
+  TimeoutErrorOptions,
+  BudgetOptions,
+  BudgetSignal,
   OrchestrationSpec,
   TextDeltaExtractor,
 } from "./generation";

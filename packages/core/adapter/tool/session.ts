@@ -34,6 +34,8 @@
 
 import { z } from 'zod'
 import type { ResolvedPrompt } from '../../resolver/types'
+import type { TimeoutOptions } from '../../generation/timeout'
+import { TimeoutError, toolBudgetMs, withBudget } from '../../generation/timeout'
 import type { Message } from '../../generation/messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
 import type { SystemBlock } from '../../resolver/types'
@@ -113,6 +115,8 @@ export interface ToolLifecycleOptions {
   /** Identity threaded into spans, hooks, and memory capture. */
   readonly promptId: string | undefined
   readonly input?: Record<string, unknown>
+  /** Structured timeout budgets for tool execution in this session. */
+  readonly timeout?: TimeoutOptions
   /**
    * Dialect-owned re-resolution closure: how to resolve the prompt again
    * after `LoadSkill` activates a skill. The session owns everything else
@@ -577,7 +581,13 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     try {
       span.withContext(() => emitToolArgsArtifact(span.spanId, toolCall.name, toolCall.id, toolCall.args))
       const execute = tool.execute ?? (() => undefined)
-      const result = await span.withContext(() => execute(toolCall.args, { toolCallId: toolCall.id, messages }))
+      const result = await span.withContext(() =>
+        withBudget(() => Promise.resolve(execute(toolCall.args, { toolCallId: toolCall.id, messages })), {
+          budget: 'tool',
+          limitMs: toolBudgetMs(options.timeout, toolCall.name),
+          toolName: toolCall.name,
+        }),
+      )
       const modelOutput = await span.withContext(() =>
         createToolModelOutput({
           tool,
@@ -623,6 +633,14 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         modelOutputSize,
       }
     } catch (err) {
+      if (err instanceof TimeoutError) {
+        span.error(err, {
+          isError: true,
+          phase: 'tool.execute',
+          errorKind: 'timeout',
+        })
+        throw err
+      }
       const modelOutput: ToolModelOutput = {
         type: 'error-json',
         value: { error: err instanceof Error ? err.message : String(err) },

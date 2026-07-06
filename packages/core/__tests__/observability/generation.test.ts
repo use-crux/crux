@@ -112,7 +112,7 @@ describe('generation observability', () => {
     await orchestrateGenerate(
       {
         ...generationSpec('generate'),
-        timeoutMs: 60_000,
+        timeout: { totalMs: 60_000 },
       },
       async () => ({
         text: 'hello',
@@ -126,7 +126,7 @@ describe('generation observability', () => {
     const start = transport.records.find((record) => record.type === 'span:start')
     expect(start).toMatchObject({
       attributes: expect.objectContaining({
-        timeoutMs: 60_000,
+        totalTimeoutMs: 60_000,
         deadlineAt: expect.any(String),
       }),
     })
@@ -135,7 +135,7 @@ describe('generation observability', () => {
     )
     expect(deadline).toMatchObject({
       attributes: expect.objectContaining({
-        timeoutMs: 60_000,
+        totalTimeoutMs: 60_000,
         deadlineAt: expect.any(String),
       }),
     })
@@ -149,11 +149,11 @@ describe('generation observability', () => {
       orchestrateGenerate(
         {
           ...generationSpec('generate'),
-          timeoutMs: 10,
+          timeout: { totalMs: 10 },
         },
         async () => new Promise<never>(() => {}),
       ),
-    ).rejects.toThrow('Fallback attempt timed out')
+    ).rejects.toMatchObject({ name: 'TimeoutError', budget: 'total' })
     await observe.flush()
 
     const generationEnd = transport.records.find((record) => record.type === 'span:end')
@@ -161,7 +161,7 @@ describe('generation observability', () => {
       type: 'span:end',
       status: 'error',
       error: expect.objectContaining({
-        name: 'AbortError',
+        name: 'TimeoutError',
       }),
     })
   })

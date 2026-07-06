@@ -12,6 +12,7 @@
 import type { ModelInfo } from '../../types'
 import type { AnyPrompt } from '../../prompt/prompt-types'
 import type { GenerationSettings, TraceMeta } from '../../generation/types'
+import type { TimeoutOptions } from '../../generation/timeout'
 import type { Message } from '../../generation/messages'
 import type { ValidationRetryOptions } from '../../generation/validation-retry'
 import type { Constraint } from '../../safety/constraint/types'
@@ -90,8 +91,8 @@ export interface AdapterExecutionGenerateArgs<
   /** Per-call safety posture overrides keyed by policy id. */
   readonly safety?: SafetyTuneOptions
 
-  /** Cooperative timeout used by SDK-loop executions. */
-  readonly timeoutMs?: number
+  /** Structured timeout budgets for managed execution. */
+  readonly timeout?: TimeoutOptions
 
   /** Optional observer for SDK-loop step events. */
   readonly observer?: StepObserver

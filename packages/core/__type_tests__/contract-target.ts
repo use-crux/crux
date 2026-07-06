@@ -8,8 +8,10 @@
 
 import type { ApprovalRequestInfo } from '../adapter/tool/approval'
 import type { Message } from '../generation/messages'
+import type { TimeoutBudget, TimeoutOptions } from '../generation/timeout'
 import type { StopCondition, ToolChoice } from '../generation/tool-control'
 import type { GenerationSettings, TokenUsage, TraceMeta } from '../generation/types'
+import { TimeoutError } from '../generation/timeout'
 
 type AssertEqual<T, U> = (<G>() => G extends T ? 1 : 2) extends <G>() => G extends U ? 1 : 2
   ? (<G>() => G extends U ? 1 : 2) extends <G>() => G extends T ? 1 : 2
@@ -54,22 +56,9 @@ type _TokenUsageOutputDetails = Expect<
   >
 >
 
-// Phase 3 replaces these with the real timeout exports.
-type TargetTimeoutBudget = 'total' | 'step' | 'chunk' | 'tool'
-
-interface TargetTimeoutOptions {
-  totalMs?: number
-  stepMs?: number
-  chunkMs?: number
-  toolMs?: number
-  tools?: Readonly<Record<string, number>>
-}
-
-interface TargetTimeoutError extends Error {
-  readonly budget: TargetTimeoutBudget
-  readonly limitMs: number
-  readonly toolName?: string
-}
+type TargetTimeoutBudget = TimeoutBudget
+type TargetTimeoutOptions = TimeoutOptions
+type TargetTimeoutError = TimeoutError
 
 type _TimeoutOptionsKeys = Expect<
   AssertEqual<keyof TargetTimeoutOptions, 'totalMs' | 'stepMs' | 'chunkMs' | 'toolMs' | 'tools'>

@@ -13,6 +13,7 @@
  */
 
 import type { GenerationSettings, TraceMeta } from '../generation/types'
+import type { TimeoutOptions } from '../generation/timeout'
 import type { AnyPrompt } from '../prompt/prompt-types'
 import type { ResolvedPrompt } from '../resolver/types'
 import type { AnyToolSet } from '../types'
@@ -116,6 +117,8 @@ export interface AdapterGenerateOptions<TExtra extends Record<string, unknown> =
    * enabled for this call without replacing the policy logic.
    */
   safety?: SafetyTuneOptions
+  /** Structured timeout budgets for this managed call. */
+  timeout?: TimeoutOptions
 }
 
 /** Options for adapter `stream()` calls. */
@@ -241,6 +244,7 @@ export function adapter<
         constraintMaxRetries: opts.constraintMaxRetries,
         guardrails: opts.guardrails,
         safety: opts.safety,
+        timeout: opts.timeout,
       })) as AdapterGenerateResult<TRawResponse>
     }
 
@@ -265,6 +269,7 @@ export function adapter<
         constraintMaxRetries: opts.constraintMaxRetries,
         guardrails: opts.guardrails,
         safety: opts.safety,
+        timeout: opts.timeout,
       })) as StreamHandle<TRawStream>
     }
 

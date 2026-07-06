@@ -19,6 +19,7 @@ import { getRuntime } from "../../runtime/runtime";
 import { ValidationExhaustedError } from "../../generation/validation-retry";
 import { createSafety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
+import { withBudget } from "../../generation/timeout";
 import type { AdapterResponse, CallArgs } from "../types";
 import {
   formatValidationFeedback,
@@ -79,6 +80,7 @@ export async function generateCore<
     call: { tools: args.tools, toolMiddleware: args.toolMiddleware },
     promptId: prompt.id,
     input: args.input ?? {},
+    timeout: args.timeout,
     reresolve: (skillSession) =>
       prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
     appendToolRound: dialect.appendToolRound,
@@ -149,6 +151,7 @@ export async function generateCore<
       provider: modelInfo.provider,
       resolved,
       outputMode: resolved.schema ? "object" : "text",
+      timeout: args.timeout,
     },
     async () => {
       messages = [...(await safety.guardInput({ messages })).messages];
@@ -169,7 +172,10 @@ export async function generateCore<
         };
         lastCallArgs = callArgs;
 
-        const { raw, extracted } = await dialect.call(dialect.client, callArgs);
+        const { raw, extracted } = await withBudget(() => dialect.call(dialect.client, callArgs), {
+          budget: "step",
+          limitMs: args.timeout?.stepMs,
+        });
         lastRaw = raw;
         lastExtracted = extracted;
 
@@ -266,10 +272,14 @@ export async function generateCore<
           async (corrective) => {
             messages = dialect.appendToolRound(messages, lastExtracted!, []);
             messages = [...messages, ...corrective];
-            const regen = await dialect.call(dialect.client, {
-              ...lastCallArgs!,
-              messages,
-            });
+            const regen = await withBudget(
+              () =>
+                dialect.call(dialect.client, {
+                  ...lastCallArgs!,
+                  messages,
+                }),
+              { budget: "step", limitMs: args.timeout?.stepMs },
+            );
             lastRaw = regen.raw;
             lastExtracted = regen.extracted;
             steps++;

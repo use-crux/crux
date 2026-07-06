@@ -100,7 +100,7 @@ describe('loopRuntimeAdapter — text generation', () => {
       model: 'fake:m-1',
       input: { instruction: 'go' },
       tools: { noop: { execute: async () => 'ok' } },
-      observer: { onStepFinish: async () => directives.shift() ?? { kind: 'continue' } },
+      observer: { onStepEnd: async () => directives.shift() ?? { kind: 'continue' } },
     })
 
     expect(result.steps).toBe(1)
@@ -343,7 +343,7 @@ describe('loopRuntimeAdapter — streaming', () => {
         executor.stream(textPrompt(), {
           model: 'fake:m-1',
           input: { instruction: 'stream it' },
-          timeoutMs: 1_000,
+          timeout: { stepMs: 1_000 },
         }),
       ).rejects.toThrow(setupError)
       expect(clearTimeoutSpy).toHaveBeenCalled()

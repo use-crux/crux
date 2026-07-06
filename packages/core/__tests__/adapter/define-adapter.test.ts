@@ -6,7 +6,7 @@
  * schema sanitization, and composition methods.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { afterEach, describe, it, expect, vi } from "vitest";
 import { adapter as makeAdapter } from "../../adapter/define-adapter";
 import type { AdapterSpec } from "../../adapter/spec";
 import type {
@@ -17,6 +17,7 @@ import type {
 } from "../../adapter/types";
 import type { Message } from "../../generation/messages";
 import type { GenerationSettings, TraceMeta } from "../../generation/types";
+import { TimeoutError } from "../../generation/timeout";
 import { hasToolCall } from "../../generation/tool-control";
 import { prompt as makePrompt } from "../../prompt/prompt";
 import { agent as makeAgent } from "../../agent";
@@ -27,6 +28,10 @@ import {
   appendToolApprovalResponse,
   findToolApprovalRequests,
 } from "../../tools/approvals";
+
+afterEach(() => {
+  vi.useRealTimers();
+})
 
 // ─────────────────────────────────────────────────────────────────
 // Mock Types
@@ -196,6 +201,88 @@ describe("adapter", () => {
       expect(callSpy).toHaveBeenCalledOnce();
       expect(result.text).toBe("hello");
       expect(result.raw).toEqual({ id: "raw_123", content: "hello" });
+    });
+
+    it("rejects with TimeoutError when a provider step exceeds stepMs", async () => {
+      vi.useFakeTimers();
+      const spec = createMockSpec({
+        call: async () => new Promise<never>(() => {}),
+      });
+      const adapter = makeAdapter(spec)(mockClient);
+      const prompt = createTestPrompt();
+
+      const result = adapter.generate(prompt, {
+        model: "test-model",
+        input: { instruction: "Wait" },
+        timeout: { stepMs: 50 },
+      });
+      const assertion = expect(result).rejects.toMatchObject({
+        budget: "step",
+        limitMs: 50,
+      });
+      const instanceAssertion = expect(result).rejects.toBeInstanceOf(TimeoutError);
+
+      await vi.advanceTimersByTimeAsync(50);
+
+      await assertion;
+      await instanceAssertion;
+    });
+
+    it("uses totalMs as a ceiling across provider and tool work", async () => {
+      vi.useFakeTimers();
+      const spec = createMockSpec({
+        call: async () => ({
+          raw: { id: "raw_123", content: "tool" },
+          extracted: createMockResponse("", [{ id: "tc_1", name: "lookup", args: { q: "x" } }]),
+        }),
+      });
+      const adapter = makeAdapter(spec)(mockClient);
+      const prompt = createTestPrompt({
+        tools: { lookup: { description: "lookup", execute: async () => new Promise<never>(() => {}) } },
+      });
+
+      const result = adapter.generate(prompt, {
+        model: "test-model",
+        input: { instruction: "Use tool" },
+        timeout: { totalMs: 75 },
+      });
+      const assertion = expect(result).rejects.toMatchObject({
+        budget: "total",
+        limitMs: 75,
+      });
+
+      await vi.advanceTimersByTimeAsync(75);
+
+      await assertion;
+    });
+
+    it("uses a per-tool override before the default toolMs budget", async () => {
+      vi.useFakeTimers();
+      const spec = createMockSpec({
+        call: async () => ({
+          raw: { id: "raw_123", content: "tool" },
+          extracted: createMockResponse("", [{ id: "tc_1", name: "lookup", args: { q: "x" } }]),
+        }),
+      });
+      const adapter = makeAdapter(spec)(mockClient);
+      const prompt = createTestPrompt({
+        tools: { lookup: { description: "lookup", execute: async () => new Promise<never>(() => {}) } },
+      });
+
+      const result = adapter.generate(prompt, {
+        model: "test-model",
+        input: { instruction: "Use tool" },
+        timeout: { toolMs: 1_000, tools: { lookup: 25 } },
+      });
+      const assertion = expect(result).rejects.toMatchObject({
+        budget: "tool",
+        limitMs: 25,
+        toolName: "lookup",
+      });
+
+      await vi.advanceTimersByTimeAsync(25);
+
+      await assertion;
     });
 
     it("returns raw response with _meta", async () => {
@@ -733,6 +820,42 @@ describe("adapter", () => {
       }
 
       expect(chunks).toEqual(["hel", "lo"]);
+    });
+
+    it("rejects stream reads when chunkMs expires before the next chunk", async () => {
+      vi.useFakeTimers();
+      const spec = createMockSpec({
+        stream: async () => ({
+          rawStream: {
+            [Symbol.asyncIterator]() {
+              return {
+                async next() {
+                  return new Promise<IteratorResult<{ text: string }>>(() => {});
+                },
+              };
+            },
+          } as MockStream & AsyncIterable<unknown>,
+          extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+          completion: async () => undefined,
+        }),
+      });
+      const adapter = makeAdapter(spec)(mockClient);
+      const prompt = createTestPrompt();
+
+      const handle = await adapter.stream(prompt, {
+        model: "test-model",
+        input: { instruction: "stream slowly" },
+        timeout: { chunkMs: 40 },
+      });
+      const read = handle.rawStream[Symbol.asyncIterator]().next();
+      const assertion = expect(read).rejects.toMatchObject({
+        budget: "chunk",
+        limitMs: 40,
+      });
+
+      await vi.advanceTimersByTimeAsync(40);
+
+      await assertion;
     });
   });
 
