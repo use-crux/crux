@@ -49,7 +49,7 @@ export const assistant = prompt({
 ## Route
 
 ```ts title="app/api/chat/route.ts"
-import { stream } from '@use-crux/ai'
+import { createUIMessageStreamResponse, stream } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { assistant } from '@/lib/assistant'
 
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     messages,
   })
 
-  return result.toUIMessageStreamResponse()
+  return createUIMessageStreamResponse(result)
 }
 ```
 

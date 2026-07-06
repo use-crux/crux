@@ -40,8 +40,8 @@ export function extractCost(providerMetadata: unknown): number | undefined {
 
 /** Structural shape of AI SDK usage objects we normalize from. */
 export interface SdkUsageLike {
-  inputTokens?: number
-  outputTokens?: number
+  inputTokens?: number | { total?: number; cacheRead?: number; cacheWrite?: number }
+  outputTokens?: number | { total?: number; reasoning?: number }
   totalTokens?: number
   inputTokenDetails?: { cacheReadTokens?: number; cacheWriteTokens?: number }
   outputTokenDetails?: { reasoningTokens?: number }
@@ -54,22 +54,56 @@ export interface SdkUsageLike {
  * of fabricating zeros. Detail fields are included only when reported.
  */
 export function normalizeUsage(usage: SdkUsageLike | undefined): AdapterResponse['usage'] {
-  if (usage?.inputTokens === undefined || usage.outputTokens === undefined) return undefined
+  const inputTokens = normalizeTokenTotal(usage?.inputTokens)
+  const outputTokens = normalizeTokenTotal(usage?.outputTokens)
+  if (!usage || inputTokens === undefined || outputTokens === undefined) return undefined
 
   return {
-    inputTokens: usage.inputTokens,
-    outputTokens: usage.outputTokens,
+    inputTokens,
+    outputTokens,
     totalTokens:
       usage.totalTokens ??
-      usage.inputTokens + usage.outputTokens,
+      inputTokens + outputTokens,
     inputTokenDetails: {
-      ...optionalTokenDetail('cacheReadTokens', usage.inputTokenDetails?.cacheReadTokens),
-      ...optionalTokenDetail('cacheWriteTokens', usage.inputTokenDetails?.cacheWriteTokens),
+      ...optionalTokenDetail(
+        'cacheReadTokens',
+        usage.inputTokenDetails?.cacheReadTokens ??
+          normalizeInputDetail(usage?.inputTokens, 'cacheRead'),
+      ),
+      ...optionalTokenDetail(
+        'cacheWriteTokens',
+        usage.inputTokenDetails?.cacheWriteTokens ??
+          normalizeInputDetail(usage?.inputTokens, 'cacheWrite'),
+      ),
     },
     outputTokenDetails: {
-      ...optionalTokenDetail('reasoningTokens', usage.outputTokenDetails?.reasoningTokens),
+      ...optionalTokenDetail(
+        'reasoningTokens',
+        usage.outputTokenDetails?.reasoningTokens ??
+          normalizeOutputDetail(usage?.outputTokens, 'reasoning'),
+      ),
     },
   }
+}
+
+function normalizeTokenTotal(
+  value: SdkUsageLike['inputTokens'] | SdkUsageLike['outputTokens'],
+): number | undefined {
+  return typeof value === 'number' ? value : value?.total
+}
+
+function normalizeInputDetail(
+  value: SdkUsageLike['inputTokens'],
+  key: 'cacheRead' | 'cacheWrite',
+): number | undefined {
+  return typeof value === 'number' ? undefined : value?.[key]
+}
+
+function normalizeOutputDetail(
+  value: SdkUsageLike['outputTokens'],
+  key: 'reasoning',
+): number | undefined {
+  return typeof value === 'number' ? undefined : value?.[key]
 }
 
 function optionalTokenDetail<K extends string>(key: K, value: number | undefined): Partial<Record<K, number>> {

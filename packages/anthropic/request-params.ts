@@ -143,6 +143,7 @@ export function mapAnthropicSettings(
     "maxTokens",
     "topP",
     "topK",
+    "seed",
     "frequencyPenalty",
     "presencePenalty",
     "stopSequences",

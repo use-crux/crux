@@ -18,6 +18,7 @@ import type { SystemBlock } from "../resolver/types";
 import type { DiagnosticsPort } from "../resolver/ports";
 import type { Message } from "../generation/messages";
 import type { JsonValue } from "../types/tool";
+import type { ResultStepFacts } from "./result-accumulator";
 import type { AdapterResponse } from "./types";
 
 // ─────────────────────────────────────────────────────────────────
@@ -258,6 +259,14 @@ export type ExecutorOutcome<TRawResponse> =
       readonly messages: readonly Message[];
       /** Budget-consuming steps taken (refunds excluded). */
       readonly steps: number;
+      /**
+       * Exact provider-call facts reported by loop-owning SDKs.
+       *
+       * When supplied, core uses these for canonical envelope accumulation
+       * instead of deriving step facts from observer callbacks or the final
+       * aggregate response.
+       */
+      readonly stepFacts?: readonly ResultStepFacts[];
       /** Provider metadata (cost, etc.). */
       readonly meta: ExecutorMeta;
     }

@@ -44,6 +44,8 @@ export interface GenerationSettings {
   topK?: number;
   /** Sequences that stop generation. */
   stopSequences?: readonly string[];
+  /** Deterministic sampling seed, when supported by the selected provider. */
+  seed?: number;
   /**
    * Portable reasoning-effort hint.
    *

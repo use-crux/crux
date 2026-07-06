@@ -54,11 +54,13 @@ export function mapAiSdkSettings(
   }
   if (settings.temperature !== undefined)
     mapped.temperature = settings.temperature;
-  if (settings.maxTokens !== undefined) mapped.maxTokens = settings.maxTokens;
+  if (settings.maxTokens !== undefined)
+    mapped.maxOutputTokens = settings.maxTokens;
   if (settings.topP !== undefined) mapped.topP = settings.topP;
   if (settings.topK !== undefined) mapped.topK = settings.topK;
   if (settings.stopSequences !== undefined)
     mapped.stopSequences = settings.stopSequences;
+  if (settings.seed !== undefined) mapped.seed = settings.seed;
   if (settings.frequencyPenalty !== undefined)
     mapped.frequencyPenalty = settings.frequencyPenalty;
   if (settings.presencePenalty !== undefined)
@@ -85,6 +87,7 @@ const AI_SDK_MAPPED_SETTING_KEYS = new Set([
   "topP",
   "topK",
   "stopSequences",
+  "seed",
   "frequencyPenalty",
   "presencePenalty",
   "toolChoice",

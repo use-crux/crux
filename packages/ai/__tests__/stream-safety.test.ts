@@ -58,11 +58,8 @@ describe('streaming safety through real streamText', () => {
     }
     expect(streamed).toBe('import x from @/components/Button — done')
 
-    const meta = await (
-      result as unknown as {
-        completion: Promise<{ guardrails?: { applied: unknown[] } }>
-      }
-    ).completion
+    const meta = await result.completion
+    expect(meta.text).toBe('import x from @/components/Button — done')
     expect(meta?.guardrails?.applied).toContainEqual(
       expect.objectContaining({ guard: 'import-fixer', action: 'transform' }),
     )

@@ -1036,9 +1036,11 @@ describe('dialect parity — clean tool round protocol', () => {
         modelOutputType: 'text',
         error: undefined,
       },
-    ])
-    expect(nativeResult.text).toBe('done')
-    expect(executorResult.text).toBe('done')
+    ]);
+    expect(nativeResult.text).toBe("callingdone");
+    expect(nativeResult.finalStep.text).toBe("done");
+    expect(executorResult.text).toBe("callingdone");
+    expect(executorResult.finalStep.text).toBe("done");
 
     // The tool round the model saw is identical.
     const toolRound = (messages: readonly Message[]) =>

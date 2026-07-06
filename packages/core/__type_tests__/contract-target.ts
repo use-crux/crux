@@ -106,21 +106,7 @@ type _ReasoningSetting = Expect<
   >
 >;
 
-// Phase 5 replaces this target with the real GenerationSettings import.
-interface TargetGenerationSettings {
-  temperature?: number;
-  maxTokens?: number;
-  topP?: number;
-  topK?: number;
-  stopSequences?: readonly string[];
-  seed?: number;
-  reasoning?: "low" | "medium" | "high";
-  toolChoice?: ToolChoice;
-  stopWhen?: StopCondition | readonly StopCondition[];
-  maxSteps?: number;
-  frequencyPenalty?: number;
-  presencePenalty?: number;
-}
+type TargetGenerationSettings = GenerationSettings;
 
 type _GenerationSettingsKeys = Expect<
   AssertEqual<

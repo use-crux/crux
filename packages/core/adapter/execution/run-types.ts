@@ -12,6 +12,7 @@
 import type { ModelInfo } from '../../types'
 import type { AnyPrompt } from '../../prompt/prompt-types'
 import type { GenerationSettings, TraceMeta } from '../../generation/types'
+import type { TokenUsage } from '../../generation/types'
 import type { TimeoutOptions } from '../../generation/timeout'
 import type { Message } from '../../generation/messages'
 import type { ValidationRetryOptions } from '../../generation/validation-retry'
@@ -22,6 +23,7 @@ import type { ToolMiddleware } from '../../tools/types'
 import type { StreamHandle } from '../types'
 import type { ExecutorStreamHandle, StepObserver } from '../executor-types'
 import type { ApprovalRequestInfo } from '../tool/approval'
+import type { FinalStepInfo } from '../result-accumulator'
 
 export type ExecutionResolveOpts = Parameters<AnyPrompt['resolve']>[0]
 
@@ -134,8 +136,17 @@ export interface AdapterExecutionGenerateResult<TRawResponse> {
   /** Trace metadata stamped with safety and provider information. */
   _meta: TraceMeta
 
+  /** Usage accumulated across all provider-call steps, when fully metered. */
+  readonly usage?: TokenUsage
+
+  /** Provider-reported cost promoted from `_meta`, when present. */
+  readonly cost?: TraceMeta['cost']
+
   /** Number of model attempts or loop steps consumed by the run. */
   readonly steps: number
+
+  /** Facts from the final provider-call step. */
+  readonly finalStep: FinalStepInfo
 
   /** Provider-agnostic Crux message history for resume or memory capture. */
   readonly messages: Message[]

@@ -40,6 +40,7 @@ export function openAISettings(
     result.temperature = settings.temperature;
   if (settings.maxTokens !== undefined) result.max_tokens = settings.maxTokens;
   if (settings.topP !== undefined) result.top_p = settings.topP;
+  if (settings.seed !== undefined) result.seed = settings.seed;
   if (settings.frequencyPenalty !== undefined)
     result.frequency_penalty = settings.frequencyPenalty;
   if (settings.presencePenalty !== undefined)
@@ -56,6 +57,7 @@ export function openAISettings(
     "maxTokens",
     "topP",
     "topK",
+    "seed",
     "frequencyPenalty",
     "presencePenalty",
     "stopSequences",

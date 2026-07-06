@@ -7,6 +7,8 @@ description: Vercel AI SDK adapter — generate, stream, dense embedding helpers
 import {
   generate,
   stream,
+  createUIMessageStreamResponse,
+  pipeUIMessageStreamToResponse,
   embedding,
   retrievalModel,
   reranker,
@@ -70,9 +72,16 @@ Execute a prompt using the Vercel AI SDK.
 | `options.toolChoice`           | `ToolChoice?`                                                                                                   | Portable Crux tool choice strategy from `GenerationSettings`                                                                                                       |
 | `options.stopWhen`             | `StopCondition \| readonly StopCondition[]?`                                                                    | Portable Crux stop condition(s), OR-composed with the `maxSteps` budget (e.g. `hasToolCall(name)`)                                                                 |
 | `options.maxSteps`             | `number?`                                                                                                       | Maximum tool-loop steps, identical across all Crux adapters. Enforced natively via AI SDK `stopWhen`. Default: `10`                                                |
+| `options.maxTokens`            | `number?`                                                                                                       | Portable maximum output tokens. Lowered to AI SDK `maxOutputTokens`.                                                                                                |
+| `options.topK`                 | `number?`                                                                                                       | Portable top-K sampling.                                                                                                                                            |
+| `options.stopSequences`        | `readonly string[]?`                                                                                            | Portable stop sequences.                                                                                                                                            |
+| `options.seed`                 | `number?`                                                                                                       | Portable deterministic sampling seed when the model supports it.                                                                                                     |
 | `options.reasoning`            | `'low' \| 'medium' \| 'high'?`                                                                                  | Portable reasoning effort. Lowered to AI SDK v6 provider options for OpenAI, Anthropic, and Google models.                                                         |
 | `options.extra.toolChoice`     | `ToolChoice<ToolSet>?`                                                                                          | AI SDK-native, non-portable tool choice strategy                                                                                                                   |
 | `options.extra.stopWhen`       | `StopCondition<ToolSet> \| StopCondition<ToolSet>[]?`                                                           | AI SDK-native, non-portable stop conditions                                                                                                                        |
+| `options.extra.providerOptions` | `ProviderOptions?`                                                                                              | AI SDK provider-specific options. Merged with Crux-generated provider options such as portable `reasoning`.                                                         |
+| `options.extra.headers`        | `Record<string, string \| undefined>?`                                                                          | AI SDK HTTP headers for HTTP-based providers.                                                                                                                       |
+| `options.extra.maxRetries`     | `number?`                                                                                                       | AI SDK retry policy.                                                                                                                                                |
 | `options.activeTools`          | `string[]?`                                                                                                     | Restrict available tools                                                                                                                                           |
 | `options.messages`             | `ModelMessage[]?`                                                                                               | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                                                                          |
 | `options.tokenBudget`          | `number?`                                                                                                       | Token budget for context dropping                                                                                                                                  |
@@ -82,10 +91,7 @@ Execute a prompt using the Vercel AI SDK.
 | `options.constraintMaxRetries` | `number?`                                                                                                       | Shared cap on total constraint retries across all constraints                                                                                                      |
 | `options.guardrails`           | [`Guardrail[]?`](/docs/guides/safety/guardrails)                                                                | Per-call guardrails (highest precedence in the safety merge)                                                                                                       |
 
-**Returns:**
-
-- With `output` schema: `GenerateObjectResult<T>` — `.object` (typed)
-- Without `output`: `GenerateTextResult` — `.text`
+**Returns:** `GenerateResult<TRaw, TOutput>` — accumulated `.text`, optional complete `.usage`, optional `.cost`, `.steps`, `.finalStep`, provider-neutral `.messages`, retained `._meta`, and typed `.raw` for the AI SDK result. With an `output` schema, `.object` is typed from the prompt schema.
 
 ### `stream(prompt, options)`
 
@@ -108,17 +114,14 @@ Stream a prompt execution. Same options as `generate()`, except `cascade()` is n
 | `options.messages`         | `ModelMessage[]?`                                                                | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                         |
 | `options.tokenBudget`      | `number?`                                                                        | Token budget for context dropping                                                                                 |
 
-**Returns:**
-
-- With `output`: `ObjectStreamResult<T>` — `.partialObjectStream`
-- Without `output`: `TextStreamResult` — `.textStream`
+**Returns:** `StreamResult<TRawStream, TOutput>` — canonical `.textStream`, typed `.raw` for the AI SDK stream result, and `.completion`, which resolves to the canonical completion envelope.
 
 ```ts
 const result = await stream(editDraft, {
   model: openai("gpt-4o"),
   input: { instruction: "Fix the intro" },
 });
-for await (const partial of result.partialObjectStream) {
+for await (const partial of result.raw.partialObjectStream) {
   console.log(partial);
 }
 ```
@@ -128,9 +131,18 @@ Stream results additionally carry a typed `completion` promise:
 ```ts
 const result = await stream(chatPrompt, { model, input: { message } });
 for await (const delta of result.textStream) process.stdout.write(delta);
-const meta = await result.completion;
-// { usage, cost, finishReason, text, streaming: { ttftMs, tokensPerSecond, totalChunks } }
+const completion = await result.completion;
+// { text, usage?, cost?, steps, finalStep, messages }
 ```
+
+For AI SDK UI routes, pass the canonical result to the helper:
+
+```ts
+const result = await stream(chatPrompt, { model, input: { message } });
+return createUIMessageStreamResponse(result);
+```
+
+Use `pipeUIMessageStreamToResponse(result, options)` for Node `ServerResponse` targets.
 
 ### `createCruxAi(options?)`
 
@@ -296,7 +308,6 @@ import type {
   CruxAi,
   CruxAiOptions,
   CruxAIErrorCode,
-  CruxStreamExtensions,
   SdkGateway,
   TextStreamResult,
   ObjectStreamResult,

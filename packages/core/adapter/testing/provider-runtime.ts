@@ -297,46 +297,44 @@ export async function providerRuntimeConformance<
   }
 
   if (capabilities?.toolCalls) {
-    if (runtime.ownership === "single-turn") {
-      await run("canonical envelope accumulation", async () => {
-        const prepared = await harness.prepare({
-          emissions: [
-            {
-              text: "checking ",
-              usage: FIRST_STEP_USAGE,
-              toolCalls: [
-                { id: "call_echo", name: "echo", args: { value: "hello" } },
-              ],
-            },
-            { text: "done", usage: FINAL_STEP_USAGE },
-          ],
-        });
-        const result = await bindRuntime(runtime, prepared).generate(
-          textPrompt,
+    await run("canonical envelope accumulation", async () => {
+      const prepared = await harness.prepare({
+        emissions: [
           {
-            ...baseOptions(prepared.model),
-            input: TOOL_INPUT,
-            maxSteps: 5,
-            tools: {
-              echo: echoTool(),
-            },
+            text: "checking ",
+            usage: FIRST_STEP_USAGE,
+            toolCalls: [
+              { id: "call_echo", name: "echo", args: { value: "hello" } },
+            ],
           },
-        );
-
-        assertCanonicalResult(result, {
-          steps: [
-            {
-              text: "checking ",
-              usage: FIRST_STEP_USAGE,
-            },
-            {
-              text: "done",
-              usage: FINAL_STEP_USAGE,
-            },
-          ],
-        });
+          { text: "done", usage: FINAL_STEP_USAGE },
+        ],
       });
-    }
+      const result = await bindRuntime(runtime, prepared).generate(
+        textPrompt,
+        {
+          ...baseOptions(prepared.model),
+          input: TOOL_INPUT,
+          maxSteps: 5,
+          tools: {
+            echo: echoTool(),
+          },
+        },
+      );
+
+      assertCanonicalResult(result, {
+        steps: [
+          {
+            text: "checking ",
+            usage: FIRST_STEP_USAGE,
+          },
+          {
+            text: "done",
+            usage: FINAL_STEP_USAGE,
+          },
+        ],
+      });
+    });
 
     await run("tool-call continuation", async () => {
       const prepared = await harness.prepare({

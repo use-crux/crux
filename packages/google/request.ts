@@ -39,6 +39,7 @@ export function googleSettings(settings: GenerationSettings): Record<string, unk
   if (settings.topP !== undefined) config.topP = settings.topP
   if (settings.topK !== undefined) config.topK = settings.topK
   if (settings.stopSequences !== undefined) config.stopSequences = settings.stopSequences
+  if (settings.seed !== undefined) config.seed = settings.seed
   if (settings.reasoning !== undefined) {
     config.thinkingConfig = { thinkingLevel: googleThinkingLevel(settings.reasoning) }
   }
@@ -48,6 +49,7 @@ export function googleSettings(settings: GenerationSettings): Record<string, unk
     'maxTokens',
     'topP',
     'topK',
+    'seed',
     'stopSequences',
     'frequencyPenalty',
     'presencePenalty',

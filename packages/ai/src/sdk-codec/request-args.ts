@@ -38,8 +38,27 @@ export function buildBaseArgs(request: ExecutorRequest<LanguageModel>, options: 
     if (toolChoice !== undefined) args.toolChoice = toolChoice
   }
 
+  if (request.extra?.providerOptions !== undefined) {
+    args.providerOptions = mergeProviderOptions(args.providerOptions, request.extra.providerOptions)
+  }
+  if (request.extra?.headers !== undefined) args.headers = request.extra.headers
+  if (request.extra?.maxRetries !== undefined) args.maxRetries = request.extra.maxRetries
   if (request.abortSignal) args.abortSignal = request.abortSignal
   return args
+}
+
+function mergeProviderOptions(current: unknown, next: unknown): unknown {
+  if (!isRecord(current) || !isRecord(next)) return next
+  const merged: Record<string, unknown> = { ...current }
+  for (const [provider, options] of Object.entries(next)) {
+    const existing = isRecord(merged[provider]) ? merged[provider] : {}
+    merged[provider] = isRecord(options) ? { ...existing, ...options } : options
+  }
+  return merged
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 /**

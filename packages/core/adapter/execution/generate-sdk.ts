@@ -32,8 +32,14 @@ import type {
   AdapterExecutionGenerateResult,
   SdkLoopDialect,
 } from "./types";
+import type { ResultStepFacts } from "../result-accumulator";
 import { initialMessageState } from "./messages";
 import { buildTraceMeta } from "./metadata";
+import {
+  finalizeSdkResultEnvelope,
+  sdkResponseFacts,
+  sdkStepFacts,
+} from "./sdk-result-envelope";
 import {
   buildResolveOpts,
   DEFAULT_MAX_STEPS,
@@ -114,9 +120,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   });
 
   let stepBudget: BudgetSignal = createBudgetSignal(undefined);
+  const stepFacts: ResultStepFacts[] = [];
   const loopObserver: StepObserver = {
     onStepEnd: async (step) => {
       stepBudget.refresh();
+      stepFacts.push(sdkStepFacts(step));
       const amendment = await lifecycle.applySkillLoads(step.toolCalls);
       let factoryDirective: StepDirective = { kind: "continue" };
       if (amendment) {
@@ -206,6 +214,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
               retryId,
               promptId: prompt.id,
               describeCall,
+              stepFacts,
             })
           : await generateLoop(request);
         result._meta = safety.stamp(result._meta);
@@ -263,8 +272,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       return result;
     }
 
-    let steps = outcome.steps;
     let finalText = outcome.response.text;
+    let finalRaw = outcome.raw;
+    let finalResponse = outcome.response;
+    let finalCostUsd = outcome.meta.costUsd;
+    const resultStepFacts = [...(outcome.stepFacts ?? stepFacts)];
     let resultMessages = [...outcome.messages];
     const finalOutput = await safety.finalizeOutput(
       { text: finalText, parsed: undefined },
@@ -281,28 +293,49 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           describeCall("loop", regenRequest),
           () => dialect.runTextLoop(regenRequest),
         );
-        steps++;
         if (regen.status === "complete") {
+          if (resultStepFacts.length > 0) {
+            const previous = resultStepFacts[resultStepFacts.length - 1]!;
+            resultStepFacts[resultStepFacts.length - 1] = {
+              ...previous,
+              text: "",
+            };
+          }
           finalText = regen.response.text;
+          finalRaw = regen.raw;
+          finalResponse = regen.response;
+          finalCostUsd = regen.meta.costUsd;
           resultMessages = [...regen.messages];
+          resultStepFacts.push(sdkResponseFacts(regen.response));
           return { text: regen.response.text, parsed: undefined };
         }
         return { text: finalText, parsed: undefined };
       },
       { messages: resultMessages },
     );
-    if (finalOutput.text !== finalText) finalText = finalOutput.text;
+    if (finalOutput.text !== finalText) {
+      finalText = finalOutput.text;
+      if (resultStepFacts.length > 0) {
+        const previous = resultStepFacts[resultStepFacts.length - 1]!;
+        resultStepFacts[resultStepFacts.length - 1] = {
+          ...previous,
+          text: finalText,
+        };
+      }
+    }
 
-    return {
-      raw: outcome.raw,
+    return finalizeSdkResultEnvelope({
+      raw: finalRaw,
+      response: finalResponse,
       text: finalText,
       _meta: buildTraceMeta({
-        response: { ...outcome.response, text: finalText },
-        costUsd: outcome.meta.costUsd,
+        response: { ...finalResponse, text: finalText },
+        costUsd: finalCostUsd,
       }),
-      steps,
       messages: resultMessages,
-    };
+      stepFacts: resultStepFacts,
+      finalStepMode: "preserve",
+    });
   }
 
   /** Convert an SDK approval suspension into the shared adapter result shape. */
@@ -314,8 +347,12 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       outcome.assistantResponse,
       outcome.messages,
     );
-    return {
+    return finalizeSdkResultEnvelope<TRawResponse>({
       raw: undefined,
+      response: {
+        ...outcome.assistantResponse,
+        finishReason: "tool_approval_required",
+      },
       text: outcome.assistantResponse.text,
       _meta: buildTraceMeta({
         response: {
@@ -323,9 +360,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           finishReason: "tool_approval_required",
         },
       }),
-      steps: outcome.steps,
       messages: sealed.messages,
       pendingApprovals: sealed.requests,
-    };
+      stepFacts,
+    });
   }
 }

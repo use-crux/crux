@@ -382,7 +382,10 @@ function optionalNumber(
 }
 
 function assertEqual(actual: unknown, expected: unknown, path: string): void {
-  if (actual !== expected) fail(path, JSON.stringify(expected));
+  if (actual !== expected)
+    throw new Error(
+      `Expected canonical result ${path} to be ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.`,
+    );
 }
 
 function fail(path: string, expected: string): never {

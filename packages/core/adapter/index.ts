@@ -36,6 +36,7 @@ export type { AdapterSpec } from "./spec";
 
 // Factory + result/option types (core-driven loop)
 export { adapter } from "./define-adapter";
+export { createResultAccumulator } from "./result-accumulator";
 export type {
   CruxAdapter,
   AdapterGenerateOptions,

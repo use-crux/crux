@@ -59,7 +59,6 @@ export interface CanonicalOptionsParityCase {
 export const CANONICAL_OPTIONS_PARITY_CASES = [
   { phase: 2, name: 'all adapters map canonical reasoning with the same call-site field' },
   { phase: 3, name: 'all adapters accept structured timeout and reject timeoutMs' },
-  { phase: 5, name: '@use-crux/ai rejects SDK call settings outside extra' },
   { phase: 6, name: 'toolApproval is resolved from the canonical call option' },
   { phase: 7, name: 'toolsContext is conditionally required from composed tool schemas' },
   { phase: 9, name: 'transport receives provider params derived from the same canonical options' },
@@ -116,4 +115,3 @@ export function createCanonicalOptionsFixture(
     ...overrides,
   }
 }
-

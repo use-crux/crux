@@ -18,9 +18,11 @@ import { ValidationExhaustedError } from '../../generation/validation-retry'
 import type { ExecutorRequest } from '../executor-types'
 import { interceptGeneration, type InterceptedGeneration } from '../interception'
 import { formatValidationFeedback } from '../policy/validation-retry'
+import type { ResultStepFacts } from '../result-accumulator'
 import type { AdapterExecutionGenerateArgs, AdapterExecutionGenerateResult, SdkLoopDialect } from './types'
 import { appendCorrectiveExchange, appendCorrectiveMessages } from './messages'
 import { buildTraceMeta } from './metadata'
+import { finalizeSdkResultEnvelope, sdkResponseFacts } from './sdk-result-envelope'
 
 /** Inputs shared by the SDK-loop structured retry helper. */
 interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
@@ -40,6 +42,8 @@ interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
   readonly promptId: string | undefined
   /** Produces interception metadata for each SDK structured attempt. */
   readonly describeCall: (kind: 'structured', request: ExecutorRequest<TModel>) => InterceptedGeneration
+  /** Step facts collected by the parent SDK-loop execution. */
+  readonly stepFacts: ResultStepFacts[]
 }
 
 /**
@@ -55,7 +59,7 @@ interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
 export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
   ctx: GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream>,
 ): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
-  const { dialect, args, request, schema, safety, retryId, promptId, describeCall } = ctx
+  const { dialect, args, request, schema, safety, retryId, promptId, describeCall, stepFacts } = ctx
   const validationRetry = args.validationRetry
   const maxRetries = validationRetry?.maxRetries ?? 0
   let attempts = 0
@@ -77,6 +81,8 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
       let steps = 1 + attempts
       let finalText = attempt.response.text
       let finalObject = attempt.object
+      let finalRaw = attempt.raw
+      let finalResponse = attempt.response
       const finalOutput = await safety.finalizeOutput(
         { text: finalText, parsed: finalObject },
         async (corrective) => {
@@ -94,8 +100,15 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
           )
           steps++
           if (regen.status === 'ok') {
+            if (stepFacts.length > 0) {
+              const previous = stepFacts[stepFacts.length - 1]!
+              stepFacts[stepFacts.length - 1] = { ...previous, text: '' }
+            }
             finalText = regen.response.text
             finalObject = regen.object
+            finalRaw = regen.raw
+            finalResponse = regen.response
+            stepFacts.push(sdkResponseFacts(regen.response))
             return { text: regen.response.text, parsed: regen.object }
           }
           return { text: regen.rawText, parsed: undefined }
@@ -114,19 +127,27 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
         { role: 'assistant' as const, content: finalText },
       ]
 
-      return {
-        raw: attempt.raw,
+      return finalizeSdkResultEnvelope({
+        raw: finalRaw,
+        response: finalResponse,
         text: finalText,
         object: finalObject,
-        _meta: buildTraceMeta({ response: { ...attempt.response, text: finalText } }),
-        steps,
+        _meta: buildTraceMeta({ response: { ...finalResponse, text: finalText } }),
         messages: resultMessages,
-      }
+        stepFacts,
+        finalStepMode: stepFacts.length < steps ? 'append' : 'replace',
+      })
     }
 
     if (attempts < maxRetries) {
       attempts++
       validationRetry?.onRetry?.(attempts, attempt.error)
+      stepFacts.push({
+        text: '',
+        finishReason: undefined,
+        responseId: undefined,
+        modelId: undefined,
+      })
       currentMessages = appendCorrectiveExchange(
         currentPrompt,
         currentMessages,

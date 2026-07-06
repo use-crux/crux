@@ -51,7 +51,13 @@ describe('generate — replayed (raw: undefined) result shape', () => {
       raw: undefined,
       response: {
         text: '{"title":"Replayed","count":2}',
-        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          totalTokens: 15,
+          inputTokenDetails: {},
+          outputTokenDetails: {},
+        },
         finishReason: 'stop',
       },
       object: { title: 'Replayed', count: 2 },
@@ -77,7 +83,13 @@ describe('generate — replayed (raw: undefined) result shape', () => {
       raw: undefined,
       response: {
         text: 'replayed answer',
-        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        usage: {
+          inputTokens: 10,
+          outputTokens: 5,
+          totalTokens: 15,
+          inputTokenDetails: {},
+          outputTokenDetails: {},
+        },
         finishReason: 'stop',
       },
       messages: [
