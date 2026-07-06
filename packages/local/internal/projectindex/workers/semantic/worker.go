@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	maxResponseBytes = 16 * 1024 * 1024
-	producer         = "@use-crux/indexer/project-indexer"
+	maxResponseLineBytes   = 16 * 1024 * 1024
+	maxResponseStreamBytes = 128 * 1024 * 1024
+	producer               = "@use-crux/indexer/project-indexer"
 )
 
 // Options configures the semantic worker process.
@@ -34,12 +35,13 @@ type Worker struct {
 func New(options Options) *Worker {
 	return &Worker{
 		phase: source.Client{
-			Name:          "project-semantic-indexer",
-			ScriptContent: options.ScriptContent,
-			ScriptPath:    options.ScriptPath,
-			Worker:        node.NewWorker("project-semantic-indexer", options.ScriptContent, options.ScriptPath, maxResponseBytes),
-			MaxBytes:      maxResponseBytes,
-			Producer:      producer,
+			Name:           "project-semantic-indexer",
+			ScriptContent:  options.ScriptContent,
+			ScriptPath:     options.ScriptPath,
+			Worker:         node.NewWorker("project-semantic-indexer", options.ScriptContent, options.ScriptPath, maxResponseLineBytes),
+			MaxLineBytes:   maxResponseLineBytes,
+			MaxStreamBytes: maxResponseStreamBytes,
+			Producer:       producer,
 		},
 	}
 }

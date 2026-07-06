@@ -4,6 +4,7 @@ import type {
   ProjectDefinitionKind,
   ProjectRelation,
 } from '@use-crux/core/project-index'
+import { compareCodepoint } from '../sort'
 const COVERAGE_TARGET_KINDS = new Set<ProjectDefinitionKind>([
   'prompt',
   'agent',
@@ -454,14 +455,14 @@ export function propagateFindings(
       ...finding,
       affectedDefinitionIds,
       propagatedDefinitionIds: [...propagated].sort(),
-      propagationPaths: paths.sort((a, b) => a.fromDefinitionId.localeCompare(b.fromDefinitionId)),
+      propagationPaths: paths.sort((a, b) => compareCodepoint(a.fromDefinitionId, b.fromDefinitionId)),
     }
   })
 }
 
 /** Stable sort comparator for lint findings. */
 export function compareFindings(a: IndexLintFinding, b: IndexLintFinding): number {
-  return a.ruleId.localeCompare(b.ruleId) || a.id.localeCompare(b.id)
+  return compareCodepoint(a.ruleId, b.ruleId) || compareCodepoint(a.id, b.id)
 }
 
 /** Builds evidence that points at a definition and its source location. */

@@ -8,7 +8,7 @@ import (
 func staticPatchOptions(root string) session.PatchOptions {
 	return session.PatchOptions{
 		Root:             root,
-		MaxBytes:         workerMaxResponseBytes,
+		MaxBytes:         workerMaxResponseStreamBytes,
 		MaxFactsPerBatch: requestwire.MaxFactsPerBatch("indexProjectAst"),
 		Producer:         workerProducer,
 	}

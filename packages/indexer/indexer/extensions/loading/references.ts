@@ -1,5 +1,6 @@
 import { pathToFileURL } from 'node:url'
 import type { IndexDiagnostic } from '@use-crux/core/project-index'
+import { compareCodepoint } from '../../sort'
 import { isIndexerExtensionAllowed, validateIndexerExtensionManifest } from './manifest'
 import {
   hasTraversalSegment,
@@ -160,7 +161,7 @@ export function resolveIndexerExtensionReferences(
   }
 
   return {
-    extensions: extensions.sort((a, b) => a.extension.name.localeCompare(b.extension.name)),
+    extensions: extensions.sort((a, b) => compareCodepoint(a.extension.name, b.extension.name)),
     diagnostics,
   }
 }
@@ -301,7 +302,7 @@ function normalizeExtensionReferences(references: readonly ExtensionReference[])
   return references
     .filter((reference) => reference.enabled !== false)
     .map((reference) => ({ ...reference, export: reference.export ?? 'default' }))
-    .sort((a, b) => extensionReferenceKey(a).localeCompare(extensionReferenceKey(b)))
+    .sort((a, b) => compareCodepoint(extensionReferenceKey(a), extensionReferenceKey(b)))
 }
 
 /**

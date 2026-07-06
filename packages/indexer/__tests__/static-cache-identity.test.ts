@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 import { facts, type IndexerExtension } from '../indexer/extensions'
 import { STATIC_PARSE_CACHE_EPOCH } from '../indexer/cache-identity'
@@ -58,6 +58,31 @@ describe('static cache identity', () => {
     expect(namedDigestDependency(base.identity.cacheInputs, 'relation-policy', 'runtime-relation-specs')).not.toBe(
       namedDigestDependency(changedRelation.identity.cacheInputs, 'relation-policy', 'runtime-relation-specs'),
     )
+  })
+
+  it('keeps manifest cache inputs stable when locale collation changes', () => {
+    const extension = workflowExtension({ relationType: '@acme/workflows/starts_tool' })
+    const base = createStaticExtraction({ root: '/fixture', cache: 'none', extensions: [extension] }).identity.cacheInputs
+    const localeCompare = String.prototype.localeCompare
+    const spy = vi.spyOn(String.prototype, 'localeCompare').mockImplementation(function (
+      this: string,
+      compareString: string,
+      locales?: Intl.LocalesArgument,
+      options?: Intl.CollatorOptions,
+    ): number {
+      return localeCompare.call(compareString, this, locales, options)
+    })
+
+    try {
+      const underDifferentCollation = createStaticExtraction({
+        root: '/fixture',
+        cache: 'none',
+        extensions: [extension],
+      }).identity.cacheInputs
+      expect(underDifferentCollation).toEqual(base)
+    } finally {
+      spy.mockRestore()
+    }
   })
 
   it('invalidates warm native cache status when static compiler manifest identity changes', async () => {

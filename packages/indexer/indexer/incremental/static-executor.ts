@@ -12,6 +12,7 @@ import { astIndexPatchFromCompilerResult, type ProjectIndexCompilerResult } from
 import { createIndexGraphBuilder, graphSources } from '../graph/builder'
 import type { IndexPatch } from '../patches'
 import { createStaticExtraction } from '../static/extraction/engine'
+import { compareCodepoint } from '../sort'
 import { indexInvalidationFromDecision } from './invalidation'
 import type { DependencyClosureReindexDecision, SourceFileReindexDecision } from './types'
 import type { SemanticSourceProfile, SemanticSourceProfileFile } from '../semantic/source-profile'
@@ -158,7 +159,7 @@ function semanticSourceProfileForPartial(
     ...new Set([...affectedFiles, ...[...dependenciesByFile.values()].flatMap((dependencies) => [...dependencies])]),
   ].sort()
   const profiledFiles = new Set(profiles.map((profile) => profile.file))
-  const sortedProfiles = [...profiles].sort((left, right) => left.file.localeCompare(right.file))
+  const sortedProfiles = [...profiles].sort((left, right) => compareCodepoint(left.file, right.file))
   return {
     files: sortedProfiles,
     dependencyClosure,

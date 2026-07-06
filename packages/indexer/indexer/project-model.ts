@@ -32,6 +32,7 @@ import { findConfigFiles } from './files'
 import { projectModelDiagnostics } from './project-model-diagnostics'
 import { projectModelDefinitionMetadata } from './project-model-metadata'
 import { DEFAULT_PROJECT_MODEL_RESOLUTION_MODE } from './resolution-mode'
+import { compareCodepoint } from './sort'
 
 const DEFAULT_QUALITY_INCLUDE = ['evals/**/*.eval.ts', '**/*.eval.ts'] as const
 const DEFAULT_IGNORED_PATHS = [
@@ -193,7 +194,7 @@ function evaluationFiles(definitions: readonly ProjectModelDefinition[]): readon
     if (definition.kind !== 'evaluation' || !definition.source?.file) continue
     files.set(definition.source.file, field(definition.source.file, sourceProvenance(definition.source)))
   }
-  return [...files.values()].sort((left, right) => left.value.localeCompare(right.value))
+  return [...files.values()].sort((left, right) => compareCodepoint(left.value, right.value))
 }
 
 function projectModelDefinition(definition: ProjectDefinition): ProjectModelDefinition {

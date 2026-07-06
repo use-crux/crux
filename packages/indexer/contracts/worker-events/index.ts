@@ -11,6 +11,7 @@
 
 export type {
   IndexPatchToWorkerEventsOptions,
+  ProjectIndexArtifactChunkEvent,
   ProjectIndexArtifactDoneEvent,
   ProjectIndexArtifactErrorEvent,
   ProjectIndexArtifactKind,
@@ -37,6 +38,7 @@ export {
   indexPatchToWorkerEventStream,
   indexPatchToWorkerEvents,
   projectIndexArtifactToWorkerEvent,
+  projectIndexArtifactToWorkerEvents,
 } from './schema'
 export {
   workerEventFixtureOptions,

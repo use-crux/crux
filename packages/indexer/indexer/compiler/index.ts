@@ -37,6 +37,7 @@ import { backfillDefinitionPaths } from '../paths'
 import { relationDiagnosticsFromReport, resolveRelationModel } from '../relations'
 import { backfillDefinitionSources, mergeSources } from '../sources'
 import { discoverProjectShards, shardIdForSourceFile, staticFileBatchesForShards } from '../shards/discovery'
+import { compareCodepoint } from '../sort'
 import type { ProjectShardFileBatch } from '../shards/types'
 import {
   createStaticExtraction,
@@ -759,7 +760,7 @@ function semanticSourceProfileFromGraph(graph: SourceGraph): SemanticSourceProfi
 }
 
 function compareSemanticProfileFiles(left: SemanticSourceProfileFile, right: SemanticSourceProfileFile): number {
-  return left.file.localeCompare(right.file)
+  return compareCodepoint(left.file, right.file)
 }
 
 function dependenciesFromSourceRefs(

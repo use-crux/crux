@@ -1,7 +1,7 @@
 import type { IndexPatch } from '@use-crux/indexer'
 import {
   indexPatchToWorkerEventStream,
-  projectIndexArtifactToWorkerEvent,
+  projectIndexArtifactToWorkerEvents,
   PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
   type ProjectIndexArtifactKind,
   type ProjectIndexArtifactMap,
@@ -96,12 +96,12 @@ export async function writeArtifactEvent<TKind extends ProjectIndexArtifactKind>
   payload: ProjectIndexArtifactMap[TKind],
   root: string,
 ): Promise<void> {
-  await write(
-    projectIndexArtifactToWorkerEvent(artifact, payload, {
-      root,
-      transactionId: `artifact:${artifact}`,
-    }),
-  )
+  for (const event of projectIndexArtifactToWorkerEvents(artifact, payload, {
+    root,
+    transactionId: `artifact:${artifact}`,
+  })) {
+    await write(event)
+  }
 }
 
 /** Writes all patches from an incremental indexing run as ordered V2 events. */

@@ -32,7 +32,7 @@ func (w *Bundle) indexProjectAstPatchFromNativeSyntaxRecordStream(
 	collector := projectindex.NewProjectIndexPatchStreamCollector(projectindex.ProjectIndexPatchStreamOptions{
 		Root:             req.Root,
 		Budget:           projectindex.IndexPatchBudget{},
-		MaxBytes:         workerMaxResponseBytes,
+		MaxBytes:         workerMaxResponseStreamBytes,
 		MaxFactsPerBatch: requestwire.MaxFactsPerBatch(req.Method),
 		Producer:         workerProducer,
 	})

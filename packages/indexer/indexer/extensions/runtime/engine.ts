@@ -19,6 +19,7 @@ import {
 } from '../../ast/source-refs'
 import { createDefinitionBuilder, createReferenceBuilder } from '../public-contract/builders'
 import { createStaticArgumentReader, createStaticObjectReader } from '../../static-index/extension-host/evidence/object-reader'
+import { compareCodepoint } from '../../sort'
 import {
   createExtensionRegistry,
   extractorsForCall,
@@ -211,7 +212,7 @@ export function extensionRuleDescriptors(extensions: readonly IndexerExtension[]
   return registry.extensions.flatMap((extension) =>
     [...(extension.rules ?? [])]
       .filter((rule) => !isInternalIndexLintAdapter(extension, rule.manifest.id))
-      .sort((a, b) => a.manifest.id.localeCompare(b.manifest.id))
+      .sort((a, b) => compareCodepoint(a.manifest.id, b.manifest.id))
       .map((rule) => {
         const messageIds = Object.keys(rule.messages).sort()
         return {
@@ -320,7 +321,7 @@ export function checkExtensionRules(
   const outputs: IndexLintFinding[] = []
   const diagnostics: IndexDiagnostic[] = []
   for (const extension of registry.extensions) {
-    const rules = [...(extension.rules ?? [])].sort((a, b) => a.manifest.id.localeCompare(b.manifest.id))
+    const rules = [...(extension.rules ?? [])].sort((a, b) => compareCodepoint(a.manifest.id, b.manifest.id))
     for (const rule of rules) {
       const availability = indexRuleAvailability(rule, input)
       if (!availability.available) {
@@ -370,7 +371,7 @@ function manifestFromRegistry(registry: ExtensionRegistry): ExtensionRuntimeMani
     staticHost,
     relationSpecs: registry.extensions
       .flatMap((extension) => extension.relations ?? [])
-      .sort((a, b) => a.type.localeCompare(b.type)),
+      .sort((a, b) => compareCodepoint(a.type, b.type)),
     cacheInputs: registry.extensions.flatMap((extension) => [
       { kind: 'extension' as const, name: extension.name, version: extension.version },
       ...registry.extractors
@@ -386,7 +387,7 @@ function manifestFromRegistry(registry: ExtensionRegistry): ExtensionRuntimeMani
           extension: extension.name,
           name: rule.manifest.id,
         }))
-        .sort((a, b) => a.name.localeCompare(b.name)),
+        .sort((a, b) => compareCodepoint(a.name, b.name)),
     ]),
     capabilities: registry.extensions.some((extension) => (extension.rules ?? []).length > 0)
       ? ['static-extraction', 'index-rules']

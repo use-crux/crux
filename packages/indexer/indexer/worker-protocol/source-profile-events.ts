@@ -14,7 +14,15 @@ export function sourceProfileBatches<TValue>(
   return batches
 }
 
-/** Reconstructs transient semantic source-profile metadata from streamed rows. */
+/**
+ * Reconstructs source-profile metadata for legacy worker streams.
+ *
+ * Current streams carry aggregate completeness, dependency-closure, and byte
+ * totals on the terminal `phase:done.patch.semanticSourceProfile` object. This
+ * fallback keeps older row-only streams decodable, but cannot prove
+ * completeness because `sourceProfile:batch` intentionally contains only file
+ * rows.
+ */
 export function semanticSourceProfileFromStreamFiles(
   files: readonly StreamedSourceProfileFile[],
 ): NonNullable<IndexPatch['semanticSourceProfile']> {

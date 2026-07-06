@@ -1,6 +1,7 @@
 import type { IndexDependency, IndexerExtensionRuntime } from '../../extensions'
 import { compilerProfileCacheInputs, type ProjectIndexCompilerProfile } from '../../compiler/profile'
 import { runtimeManifestCacheInputs } from '../../extensions/runtime/manifest-cache-inputs'
+import { compareCodepoint } from '../../sort'
 import type { NativeFactProjectionMode, StaticSyntaxFrontendIdentity } from '../../static-index/syntax/record'
 
 /**
@@ -102,6 +103,6 @@ function stableDependencies(dependencies: readonly IndexDependency[]): readonly 
     byKey.set(JSON.stringify(dependency), dependency)
   }
   return Object.freeze(
-    [...byKey.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([, value]) => value),
+    [...byKey.entries()].sort(([left], [right]) => compareCodepoint(left, right)).map(([, value]) => value),
   )
 }

@@ -1,4 +1,5 @@
 import { resolveSemanticSourceImportFile } from './source-import-resolver'
+import { compareCodepoint } from '../sort'
 
 export interface SemanticSourceImportDependency {
   /** Absolute local source file resolved from the import specifier. */
@@ -34,7 +35,7 @@ export function collectSemanticSourceImportDependencies(
     dependencies.set(file, { file, moduleSpecifier })
   }
 
-  return [...dependencies.values()].sort((left, right) => left.file.localeCompare(right.file))
+  return [...dependencies.values()].sort((left, right) => compareCodepoint(left.file, right.file))
 }
 
 /**

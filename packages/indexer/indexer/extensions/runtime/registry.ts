@@ -9,6 +9,7 @@ import {
   type ExtractorDispatchIndex,
   type RegisteredExtractor,
 } from './registry-index'
+import { compareCodepoint } from '../../sort'
 import type { IndexRule, IndexerExtension } from '../public-contract/types'
 
 export type { RegisteredExtractor } from './registry-index'
@@ -36,7 +37,7 @@ export interface ExtensionRegistry {
  * makes cache keys, diagnostics, and first-match extractor behavior reproducible.
  */
 export function createExtensionRegistry(extensions: readonly IndexerExtension[]): ExtensionRegistry {
-  const normalizedExtensions = [...extensions].sort((a, b) => a.name.localeCompare(b.name))
+  const normalizedExtensions = [...extensions].sort((a, b) => compareCodepoint(a.name, b.name))
   const relationSpecErrors = validateRelationSpecs(
     normalizedExtensions.flatMap((extension) => extension.relations ?? []),
   )
@@ -56,7 +57,7 @@ export function createExtensionRegistry(extensions: readonly IndexerExtension[])
   }
   const extractors = normalizedExtensions.flatMap((extension) =>
     [...(extension.extractors ?? [])]
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => compareCodepoint(a.name, b.name))
       .map((extractor) => ({ extension, extractor })),
   )
   const dispatchIndex = createExtractorDispatchIndex(extractors)

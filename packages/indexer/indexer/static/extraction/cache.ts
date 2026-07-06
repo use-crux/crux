@@ -2,6 +2,7 @@ import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { cacheFileForIdentity, STATIC_PARSE_CACHE_EPOCH } from '../../cache-identity'
 import { mapBounded } from '../../pipeline'
+import { compareCodepoint } from '../../sort'
 import type { StaticParseResult } from '../types'
 import type {
   StaticFileExtraction,
@@ -162,7 +163,7 @@ function sourceHashesEqual(
 }
 
 function compareSourceHash(left: StaticParseCacheSourceHash, right: StaticParseCacheSourceHash): number {
-  return left.file.localeCompare(right.file)
+  return compareCodepoint(left.file, right.file)
 }
 
 /**

@@ -253,6 +253,7 @@ describe('public indexer extension surface', () => {
       'indexPatchToWorkerEventStream',
       'indexPatchToWorkerEvents',
       'projectIndexArtifactToWorkerEvent',
+      'projectIndexArtifactToWorkerEvents',
       'workerEventFixtureOptions',
       'workerEventFixturePatch',
     ])

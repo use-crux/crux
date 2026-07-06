@@ -10,7 +10,8 @@ import {
   type ProjectIndexWorkerEvent,
 } from './types'
 import type { ProjectModelProvenance } from '@use-crux/core/project-index'
-import { semanticSourceProfileFromStreamFiles, sourceProfileBatches } from './source-profile-events'
+import { projectIndexFactBatchEvents, projectIndexSourceProfileBatchEvents } from './event-batches'
+import { semanticSourceProfileFromStreamFiles } from './source-profile-events'
 
 const patchFactKinds = [
   'prompts',
@@ -39,6 +40,13 @@ export interface IndexPatchToWorkerEventsOptions {
   readonly provenance?: ProjectModelProvenance
   /** Maximum facts per `fact:batch` event. Defaults to 100. */
   readonly maxFactsPerBatch?: number
+  /**
+   * Maximum serialized bytes per worker event.
+   *
+   * This guards the host's per-line reader limit independently from the total
+   * stream budget. Individual facts larger than this limit are emitted alone.
+   */
+  readonly maxEventBytes?: number
 }
 
 /**
@@ -63,10 +71,7 @@ export function* indexPatchToWorkerEventStream(
   options: IndexPatchToWorkerEventsOptions,
 ): Iterable<ProjectIndexWorkerEvent> {
   const maxFactsPerBatch = Math.max(1, options.maxFactsPerBatch ?? 100)
-  let sequence = 0
-  let sourceProfileSequence = 0
   let factCount = 0
-  let batch: ProjectIndexFactEnvelope[] = []
 
   yield {
     protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
@@ -77,43 +82,24 @@ export function* indexPatchToWorkerEventStream(
     startedAt: patch.startedAt,
   }
 
-  for (const fact of factEnvelopesForIndexPatch(patch, options)) {
-    batch.push(fact)
-    factCount += 1
-    if (batch.length < maxFactsPerBatch) continue
-    yield {
-      protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
-      type: 'fact:batch',
-      transactionId: options.transactionId,
-      sequence,
-      facts: batch,
-    }
-    sequence += 1
-    batch = []
+  for (const event of projectIndexFactBatchEvents(factEnvelopesForIndexPatch(patch, options), {
+    transactionId: options.transactionId,
+    maxItemsPerBatch: maxFactsPerBatch,
+    maxEventBytes: options.maxEventBytes,
+  })) {
+    factCount += event.facts.length
+    yield event
   }
 
-  if (batch.length > 0) {
-    yield {
-      protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
-      type: 'fact:batch',
-      transactionId: options.transactionId,
-      sequence,
-      facts: batch,
-    }
+  for (const event of projectIndexSourceProfileBatchEvents(patch.semanticSourceProfile?.files ?? [], {
+    transactionId: options.transactionId,
+    maxItemsPerBatch: maxFactsPerBatch,
+    maxEventBytes: options.maxEventBytes,
+  })) {
+    yield event
   }
 
-  for (const files of sourceProfileBatches(patch.semanticSourceProfile?.files ?? [], maxFactsPerBatch)) {
-    yield {
-      protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
-      type: 'sourceProfile:batch',
-      transactionId: options.transactionId,
-      sequence: sourceProfileSequence,
-      files,
-    }
-    sourceProfileSequence += 1
-  }
-
-  const { facts: _facts, semanticSourceProfile: _semanticSourceProfile, ...patchMetadata } = patch
+  const { facts: _facts, ...patchMetadata } = patch
   yield {
     protocolVersion: PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
     type: 'phase:done',
@@ -149,12 +135,14 @@ export function indexPatchFromWorkerEvents(events: readonly ProjectIndexWorkerEv
     }
   }
 
+  const semanticSourceProfile =
+    done.patch.semanticSourceProfile ??
+    (sourceProfileFiles.length > 0 ? semanticSourceProfileFromStreamFiles(sourceProfileFiles) : undefined)
+
   return {
     ...done.patch,
     facts,
-    ...(sourceProfileFiles.length > 0
-      ? { semanticSourceProfile: semanticSourceProfileFromStreamFiles(sourceProfileFiles) }
-      : {}),
+    ...(semanticSourceProfile ? { semanticSourceProfile } : {}),
   }
 }
 

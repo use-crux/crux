@@ -1,6 +1,7 @@
 import type { IndexerExtensionRuntime } from '../../extensions'
 import type { IndexerExtension } from '../../extensions'
 import type { ProjectIndexCompilerProfile } from '../../compiler/profile'
+import { compareCodepoint } from '../../sort'
 import type { StaticSyntaxCallInterest, StaticSyntaxConstructorInterest } from '../../static-index/syntax/record'
 
 const nativeRoutingPruneCalls = new Set(['router', 'cascade', 'fallback'])
@@ -99,7 +100,7 @@ function uniqueConstructorInterests(
 function normalizeInterest<T extends StaticSyntaxCallInterest | StaticSyntaxConstructorInterest>(interest: T): T {
   return {
     ...interest,
-    ...(interest.importFrom ? { importFrom: [...interest.importFrom].sort() } : {}),
+    ...(interest.importFrom ? { importFrom: [...interest.importFrom].sort(compareCodepoint) } : {}),
   }
 }
 
@@ -111,5 +112,5 @@ function compareInterests(
   left: StaticSyntaxCallInterest | StaticSyntaxConstructorInterest,
   right: StaticSyntaxCallInterest | StaticSyntaxConstructorInterest,
 ): number {
-  return interestKey(left).localeCompare(interestKey(right))
+  return compareCodepoint(interestKey(left), interestKey(right))
 }

@@ -5,6 +5,7 @@ import type {
   ProjectRelation,
 } from '@use-crux/core/project-index'
 import { mergeDefinitionsById } from '../merge'
+import { compareCodepoint } from '../sort'
 import type {
   AddDefinitionInput,
   AddRelationInput,
@@ -172,7 +173,7 @@ export function graphRelations(graph: IndexGraph): ProjectRelation[] {
 
 export function graphSources(graph: IndexGraph): IndexSourceFile[] {
   return [...graph.files.values()]
-    .sort((a, b) => a.file.localeCompare(b.file))
+    .sort((a, b) => compareCodepoint(a.file, b.file))
     .map((source) => ({
       file: source.file,
       status: source.status,
