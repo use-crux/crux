@@ -26,7 +26,7 @@ runStoreAdapterTests({
 })
 ```
 
-Full runtime adapters can use `runRuntimeEngineAdapterTests()` to verify wake, retry, leases, timers, waiter races, and idempotency through the public kernel.
+Full runtime adapters can use `runRuntimeEngineAdapterTests()` to verify wake, retry, leases, stale-lease fencing, timers, waiter races, and idempotency through the public kernel.
 
 ## Capability rules
 
@@ -73,6 +73,10 @@ Store ports expose bounded prune methods for their own record classes:
 - `timers.prune()`, `waiters.prune()`, and `outbox.prune()` delete only settled/confirmed records.
 
 Every prune method must respect `limit` and return `{ removed, truncated }`. Adapters may keep settled timestamps internally; Postgres-style adapters should add nullable settled/confirmed columns and treat older already-settled rows with null stamps as eligible.
+
+## Lease rules
+
+`leases.extend()` must preserve the token returned by `leases.claim()`. The kernel records that token on leased work and checks it inside final commit transactions; a stale token becomes `LEASE_LOST` instead of a retry or dead letter.
 
 ## Related
 

@@ -54,6 +54,12 @@ runtime: node({
 
 Set a class to `false` to keep it indefinitely. Pruning never deletes pending work, leased work, suspended work, armed waiters, scheduled timers, pending outbox rows, or running/suspended flow snapshots. Older Postgres/Convex rows that were already settled before the retention stamp columns existed are eligible once their class TTL expires.
 
+## Lease fencing
+
+Wake execution records the worker's lease token on the work row and checks that token again inside every final commit. If maintenance reclaims an expired lease and another worker finishes the item first, the stale worker exits with `LEASE_LOST` instead of retrying, dead-lettering, or overwriting the current owner.
+
+Node and HTTP handler paths heartbeat the lease while target code runs. Hosts without timer support still get fencing correctness; size `leaseTtlMs` so normal target execution finishes before reclaim.
+
 ## Related
 
 - Guide: [Next/Vercel Runtime](/docs/guides/runtime/next-vercel)

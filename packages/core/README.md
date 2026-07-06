@@ -485,6 +485,12 @@ snapshots, and per-class `sweepLimit`. Defaults keep events for 24h, terminal
 work and idempotency keys for 7d, confirmed outbox/timers/waiters for 24h, and
 terminal snapshots for 30d. Set a class to `false` to keep it indefinitely.
 
+Wake execution fences every final commit with the worker's lease token. If
+maintenance reclaims a long-running item and another worker finishes it first,
+the stale worker exits with `LEASE_LOST` instead of retrying, dead-lettering, or
+overwriting the winner. Hosts that can schedule timers heartbeat leases while
+targets run; timerless hosts should size `leaseTtlMs` for their longest target.
+
 Executable durable task targets are defined from the runtime subpath, not the
 root Plans & Tasks ledger `task()` helper:
 
@@ -537,7 +543,7 @@ Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`,
 `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`,
 `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`,
-`SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`,
+`SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `LEASE_LOST`,
 `NAMESPACE_AMBIGUOUS`, and `RUNTIME_HOST_ONLY`.
 
 ## Import Paths

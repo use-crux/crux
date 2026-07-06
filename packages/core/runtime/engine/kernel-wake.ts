@@ -4,30 +4,26 @@
  * @module
  */
 
-import type { Lease } from '../ports/leases'
 import type { WorkId } from '../ports/ids'
 import type { RuntimeStoreAdapter } from '../store'
 import type { WakeEnvelope } from './envelope'
 import type {
   RuntimeKernelOptions,
   RuntimeTargetMap,
-  RuntimeTargetOutcome,
   RuntimeWakeResult,
 } from './kernel-types'
-import { recordSuspensionInTransaction } from './kernel-events'
-import {
-  flushScheduledEffectsInTransaction,
-  mergeScheduledEffectRecords,
-} from './kernel-effects'
 import {
   isTerminalWork,
-  runtimeErrorMessage,
   targetNotFoundError,
   wakeEnvelopeForWork,
 } from './kernel-shared'
 import { putWorkWithIdleAccounting } from './kernel-idle'
-import { classifyRuntimeFailure } from './retry'
-import { transition, type WorkItem } from './work'
+import {
+  isLeaseLostError,
+  startLeaseExtensionHeartbeat,
+} from './kernel-leases'
+import { completeWork, failWork } from './kernel-wake-commits'
+import { transition } from './work'
 
 /** Dependencies for wake handling. */
 export interface HandleWakeDeps {
@@ -45,6 +41,8 @@ export interface HandleWakeDeps {
   readonly rng?: () => number
   /** Lease TTL in milliseconds. */
   readonly leaseTtlMs: number
+  /** Lease heartbeat options. */
+  readonly leaseExtension?: RuntimeKernelOptions['leaseExtension']
 }
 
 /** Handle one verified wake envelope through lease, execution, and commit. */
@@ -96,6 +94,7 @@ export async function handleWake(
     ttlMs: deps.leaseTtlMs,
   })
   if (!lease) return { status: 409, outcome: 'busy' }
+  let activeLease = lease
 
   try {
     if (
@@ -129,11 +128,23 @@ export async function handleWake(
     })
     await deps.store.state.putWork(leased)
 
+    const heartbeat = startLeaseExtensionHeartbeat(
+      {
+        store: deps.store,
+        leaseTtlMs: deps.leaseTtlMs,
+        leaseExtension: deps.leaseExtension,
+      },
+      lease,
+      (extended) => {
+        activeLease = extended
+      },
+    )
     try {
       const outcome = await target.execute({ work: leased, lease })
       await completeWork({
         store: deps.store,
         work: leased,
+        leaseToken: lease.token,
         outcome,
         idempotencyKey: envelope.idempotencyKey,
         now: deps.now,
@@ -141,39 +152,24 @@ export async function handleWake(
       })
       return { status: 200, outcome: 'processed' }
     } catch (error) {
+      if (isLeaseLostError(error)) {
+        return { status: 200, outcome: 'lease-lost' }
+      }
       return await failWork({
         store: deps.store,
-        work: await loadLeasedWork(deps.store, envelope, lease),
+        work: leased,
+        leaseToken: lease.token,
         error,
         now: deps.now,
         newWorkId: deps.newWorkId,
         rng: deps.rng,
       })
+    } finally {
+      heartbeat.stop()
     }
   } finally {
-    await deps.store.leases.release(lease)
+    await deps.store.leases.release(activeLease)
   }
-}
-
-interface LoadLeasedWorkOptions {
-  readonly ns: string
-  readonly workId: WorkId
-}
-
-async function loadLeasedWork(
-  store: RuntimeStoreAdapter,
-  envelope: LoadLeasedWorkOptions,
-  lease: Lease,
-): Promise<WorkItem> {
-  const work = await store.state.getWork(envelope.workId, {
-    namespace: envelope.ns,
-  })
-  if (!work) {
-    throw new Error(`Runtime work item ${envelope.workId} disappeared.`)
-  }
-  return work.status === 'leased'
-    ? work
-    : transition(work, { status: 'leased', leaseToken: lease.token })
 }
 
 interface BlockMissingTargetOptions {
@@ -209,139 +205,6 @@ async function blockMissingTarget(
     await tx.state.putIdempotencyKey({
       namespace: options.envelope.ns,
       key: options.envelope.idempotencyKey,
-      completedAt: options.now(),
-    })
-  })
-}
-
-interface FailWorkOptions {
-  readonly store: RuntimeStoreAdapter
-  readonly work: WorkItem
-  readonly error: unknown
-  readonly now: () => Date
-  readonly newWorkId: () => WorkId
-  readonly rng?: () => number
-}
-
-async function failWork(
-  options: FailWorkOptions,
-): Promise<Extract<RuntimeWakeResult, { readonly status: 200 }>> {
-  const classification = classifyRuntimeFailure(options.error, {
-    attempt: options.work.attempt,
-    maxAttempts: options.work.maxAttempts,
-    rng: options.rng,
-  })
-
-  if (classification.kind === 'retry') {
-    await options.store.transact(async (tx) => {
-      const retryAt = new Date(options.now().getTime() + classification.delayMs)
-      const retryWork = transition(options.work, {
-        status: 'pending',
-        attempt: options.work.attempt + 1,
-        notBefore: retryAt,
-      })
-      await tx.state.putWork(retryWork)
-      await tx.outbox.put(wakeEnvelopeForWork(retryWork), {
-        deliverAt: retryAt,
-      })
-    })
-    return { status: 200, outcome: 'retry-scheduled' }
-  }
-
-  const failedWork =
-    classification.kind === 'dead-letter'
-      ? transition(options.work, {
-          status: 'dead-letter',
-          lastError: {
-            code: 'WORK_DEAD_LETTERED',
-            message: runtimeErrorMessage(options.error),
-            at: options.now(),
-          },
-        })
-      : transition(options.work, {
-          status: 'blocked',
-          lastError: {
-            code: classification.code,
-            message: runtimeErrorMessage(options.error),
-            at: options.now(),
-          },
-        })
-
-  await options.store.transact(async (tx) => {
-    await putWorkWithIdleAccounting(
-      tx,
-      { newWorkId: options.newWorkId, now: options.now },
-      options.work,
-      failedWork,
-    )
-  })
-  return {
-    status: 200,
-    outcome:
-      classification.kind === 'dead-letter' ? 'dead-lettered' : 'blocked',
-  }
-}
-
-interface CompleteWorkOptions {
-  readonly store: RuntimeStoreAdapter
-  readonly work: WorkItem
-  readonly outcome: RuntimeTargetOutcome
-  readonly idempotencyKey: string
-  readonly now: () => Date
-  readonly newWorkId: () => WorkId
-}
-
-async function completeWork(options: CompleteWorkOptions): Promise<void> {
-  await options.store.transact(async (tx) => {
-    if (options.outcome.status === 'suspended') {
-      await recordSuspensionInTransaction(
-        tx,
-        { newWorkId: options.newWorkId, now: options.now },
-        options.outcome.suspension,
-      )
-      await tx.state.putIdempotencyKey({
-        namespace: options.work.namespace,
-        key: options.idempotencyKey,
-        completedAt: options.now(),
-      })
-      return
-    }
-
-    const completed =
-      options.outcome.status === 'completed'
-        ? transition(options.work, { status: 'completed' })
-        : options.outcome.status === 'cancelled'
-          ? transition(options.work, { status: 'cancelled' })
-          : transition(options.work, {
-              status: 'blocked',
-              lastError: options.outcome.error,
-            })
-    if (
-      (options.outcome.status === 'completed' || options.outcome.status === 'cancelled') &&
-      'flowSnapshot' in options.outcome
-    ) {
-      const flushedEffects = await flushScheduledEffectsInTransaction(
-        tx,
-        options.outcome.scheduledEffects,
-        options.now,
-      )
-      await tx.state.putSnapshot({
-        ...options.outcome.flowSnapshot,
-        scheduledEffects: mergeScheduledEffectRecords(
-          options.outcome.flowSnapshot.scheduledEffects,
-          flushedEffects,
-        ),
-      })
-    }
-    await putWorkWithIdleAccounting(
-      tx,
-      { newWorkId: options.newWorkId, now: options.now },
-      options.work,
-      completed,
-    )
-    await tx.state.putIdempotencyKey({
-      namespace: options.work.namespace,
-      key: options.idempotencyKey,
       completedAt: options.now(),
     })
   })

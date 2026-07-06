@@ -75,6 +75,20 @@ export interface RuntimeTarget {
 /** Map of target names to executable runtime targets. */
 export type RuntimeTargetMap = Readonly<Record<string, RuntimeTarget>>
 
+/** Schedule repeated lease heartbeat attempts and return a cancel function. */
+export type RuntimeLeaseExtensionSchedule = (
+  fn: () => void,
+  intervalMs: number,
+) => () => void
+
+/** Options for extending a wake lease while a target is executing. */
+export interface RuntimeLeaseExtensionOptions {
+  /** Heartbeat interval. Defaults to one third of the lease TTL. */
+  readonly intervalMs?: number
+  /** Scheduler used by tests and hosts that need custom interval mechanics. */
+  readonly schedule?: RuntimeLeaseExtensionSchedule
+}
+
 /** Options for constructing a runtime kernel. */
 export interface RuntimeKernelOptions {
   /** Durable store used for state, events, waiters, timers, outbox, and leases. */
@@ -89,6 +103,8 @@ export interface RuntimeKernelOptions {
   readonly now?: () => Date
   /** Lease TTL for wake processing. Defaults to 60 seconds. */
   readonly leaseTtlMs?: number
+  /** Extend the wake lease while target code runs. Pass `false` to disable. */
+  readonly leaseExtension?: false | RuntimeLeaseExtensionOptions
   /** Retry jitter source for deterministic tests. */
   readonly rng?: () => number
   /** Retention policy for terminal runtime records. Defaults are production-safe. */
@@ -337,6 +353,7 @@ export type RuntimeWakeResult =
         | 'blocked'
         | 'retry-scheduled'
         | 'dead-lettered'
+        | 'lease-lost'
     }
   | { readonly status: 401; readonly outcome: 'unverified' }
   | { readonly status: 409; readonly outcome: 'busy' }

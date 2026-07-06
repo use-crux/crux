@@ -48,6 +48,8 @@ export interface CreateRuntimeOptions<
   readonly verifyWake?: RuntimeKernelOptions['verifyWake']
   /** Lease TTL for wake processing. Defaults to the kernel default. */
   readonly leaseTtlMs?: number
+  /** Extend the wake lease while target code runs. Pass `false` to disable. */
+  readonly leaseExtension?: RuntimeKernelOptions['leaseExtension']
   /** Override whether the composer maintenance loop starts immediately. */
   readonly startMaintenance?: boolean
 }
@@ -123,6 +125,7 @@ export function createRuntime<TStore extends RuntimeStoreAdapter>(
     newWorkId: options.newWorkId ?? createDefaultWorkIdGenerator(),
     now,
     leaseTtlMs: options.leaseTtlMs,
+    leaseExtension: options.leaseExtension,
     retention: options.runtime.retention,
     redeliveryHorizonMs: options.runtime.capabilities.timers.maxDelayMs,
   })

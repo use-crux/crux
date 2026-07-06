@@ -67,6 +67,8 @@ export type {
   RetryWorkInput,
   RetryWorkResult,
   RuntimeKernel,
+  RuntimeLeaseExtensionOptions,
+  RuntimeLeaseExtensionSchedule,
   RuntimeKernelOptions,
   RuntimeScheduledEffectFlushRecord,
   RuntimeScheduledEffectIntent,

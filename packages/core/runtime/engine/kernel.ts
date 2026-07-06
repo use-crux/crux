@@ -21,6 +21,8 @@ import type {
   RetryWorkInput,
   RecordSuspensionInput,
   RuntimeKernel,
+  RuntimeLeaseExtensionOptions,
+  RuntimeLeaseExtensionSchedule,
   RuntimeKernelOptions,
   MaintenanceTickOptions,
   ScanTimersOptions,
@@ -51,6 +53,8 @@ export type {
   RuntimeSuspensionSnapshotInput,
   RuntimeScheduledEffectIntent,
   RuntimeScheduledEffectFlushRecord,
+  RuntimeLeaseExtensionOptions,
+  RuntimeLeaseExtensionSchedule,
   RuntimeTarget,
   RuntimeTargetContext,
   RuntimeTargetMap,
@@ -78,6 +82,7 @@ export function createRuntimeKernel(
     now,
     rng: options.rng,
     leaseTtlMs,
+    leaseExtension: options.leaseExtension,
     retention,
   })
 
