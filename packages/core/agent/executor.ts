@@ -12,6 +12,7 @@
 import type { AnyAgent } from './agent'
 import type { AnyModel, AnyToolSet } from '../types'
 import type { ValidationRetryOptions } from '../generation/validation-retry'
+import type { TokenUsage } from '../generation/types'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -24,7 +25,7 @@ export interface AgentResult<TOutput = unknown> {
   /** Duration in milliseconds. */
   durationMs: number
   /** Token usage if available. */
-  usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
+  usage?: TokenUsage
 }
 
 /** Options passed to the executor for a single agent invocation. */

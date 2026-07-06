@@ -47,18 +47,33 @@ export interface SdkUsageLike {
   outputTokenDetails?: { reasoningTokens?: number }
 }
 
-/** Normalize AI SDK usage to the canonical `AdapterResponse` usage shape. */
+/**
+ * Normalize AI SDK usage to Crux's canonical nested usage shape.
+ *
+ * When the SDK omits top-level token counts, Crux omits usage entirely instead
+ * of fabricating zeros. Detail fields are included only when reported.
+ */
 export function normalizeUsage(usage: SdkUsageLike | undefined): AdapterResponse['usage'] {
+  if (usage?.inputTokens === undefined || usage.outputTokens === undefined) return undefined
+
   return {
-    inputTokens: usage?.inputTokens,
-    outputTokens: usage?.outputTokens,
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
     totalTokens:
-      usage?.totalTokens ??
-      (usage?.inputTokens != null && usage.outputTokens != null ? usage.inputTokens + usage.outputTokens : undefined),
-    cacheReadTokens: usage?.inputTokenDetails?.cacheReadTokens,
-    cacheWriteTokens: usage?.inputTokenDetails?.cacheWriteTokens,
-    reasoningTokens: usage?.outputTokenDetails?.reasoningTokens,
+      usage.totalTokens ??
+      usage.inputTokens + usage.outputTokens,
+    inputTokenDetails: {
+      ...optionalTokenDetail('cacheReadTokens', usage.inputTokenDetails?.cacheReadTokens),
+      ...optionalTokenDetail('cacheWriteTokens', usage.inputTokenDetails?.cacheWriteTokens),
+    },
+    outputTokenDetails: {
+      ...optionalTokenDetail('reasoningTokens', usage.outputTokenDetails?.reasoningTokens),
+    },
   }
+}
+
+function optionalTokenDetail<K extends string>(key: K, value: number | undefined): Partial<Record<K, number>> {
+  return value === undefined ? {} : ({ [key]: value } as Record<K, number>)
 }
 
 // ─────────────────────────────────────────────────────────────────

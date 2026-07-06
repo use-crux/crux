@@ -1514,7 +1514,13 @@ Each adapter attaches `_meta` to the result with a consistent shape. This allows
 
 ```ts
 result._meta = {
-  usage: { inputTokens, outputTokens, totalTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens },
+  usage: {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+    inputTokenDetails: { cacheReadTokens, cacheWriteTokens },
+    outputTokenDetails: { reasoningTokens },
+  },
   finishReason: string,
   toolCalls: { id, name, args }[],
   responseId: string,

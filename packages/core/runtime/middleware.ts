@@ -11,6 +11,7 @@
  */
 
 import type { InspectResult } from '../resolver/types'
+import type { TokenUsage } from '../generation/types'
 
 // ─────────────────────────────────────────────────────────────────
 // Resolve Hook (for agent adapters)
@@ -47,7 +48,7 @@ export interface ExecutionHookArgs {
   durationMs: number
   model: string
   provider: string
-  usage?: { inputTokens?: number; outputTokens?: number }
+  usage?: TokenUsage
   cost?: number
   modelId?: string
   toolCalls?: Array<{ id?: string; name: string; args: unknown }>

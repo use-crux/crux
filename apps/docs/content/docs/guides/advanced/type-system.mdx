@@ -95,7 +95,7 @@ result.text // string
 
 ## Generation settings
 
-`GenerationSettings` provides SDK-agnostic fields (`temperature`, `maxTokens`, `topP`, `topK`, `stopSequences`, `frequencyPenalty`, `presencePenalty`) plus portable tool-loop controls (`toolChoice`, `stopWhen`, `maxSteps`). Each adapter maps these to its SDK's naming conventions. Provider-specific options belong in that adapter's typed `extra` object, not in prompt settings.
+`GenerationSettings` provides SDK-agnostic fields (`temperature`, `maxTokens`, `topP`, `topK`, `stopSequences`, `frequencyPenalty`, `presencePenalty`, `reasoning`) plus portable tool-loop controls (`toolChoice`, `stopWhen`, `maxSteps`). Each adapter maps these to its SDK's naming conventions. Provider-specific options belong in that adapter's typed `extra` object, not in prompt settings.
 
 ## Resolution & inspection
 

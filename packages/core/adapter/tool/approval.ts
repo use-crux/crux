@@ -113,7 +113,7 @@ export function createApprovalRequestMessage(response: AdapterResponse, request:
  *
  * When a conversation resumes after an approval decision, the original
  * provider response is gone — only the message history survived. This
- * reconstructs a minimal response (zero usage, no text) carrying the
+ * reconstructs a minimal response (no provider usage, no text) carrying the
  * approved tool calls so the tool executor can replay them through the
  * exact same code path as live tool calls.
  */
@@ -121,7 +121,7 @@ export function createSyntheticToolCallResponse(toolCalls: NonNullable<AdapterRe
   return {
     text: '',
     toolCalls,
-    usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+    usage: undefined,
     finishReason: 'tool_calls',
     responseId: undefined,
     actualModelId: undefined,

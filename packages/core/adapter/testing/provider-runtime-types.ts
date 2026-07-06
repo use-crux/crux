@@ -10,7 +10,7 @@
  */
 
 import type { AnyPrompt } from '../../prompt/prompt-types'
-import type { GenerationSettings, TraceMeta } from '../../generation/types'
+import type { GenerationSettings, TokenUsage, TraceMeta } from '../../generation/types'
 import type { Message } from '../../generation/messages'
 import type { ProviderOwnership } from '../provider-runtime'
 import type { StepObserver } from '../executor-types'
@@ -52,11 +52,8 @@ export interface ProviderConformanceEmission {
     readonly args: unknown
   }>
   /** Optional usage data for harnesses that support per-emission usage. */
-  readonly usage?: {
-    readonly inputTokens?: number
-    readonly outputTokens?: number
-    readonly totalTokens?: number
-  }
+  /** Use `null` when the scripted provider response intentionally omits usage. */
+  readonly usage?: TokenUsage | null
 }
 
 /** Abstract provider behavior for one isolated conformance case. */

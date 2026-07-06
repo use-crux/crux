@@ -164,7 +164,10 @@ describe('canonical embedding and cache observability', () => {
     const doGenerate = vi.fn().mockResolvedValue({
       object: { intent: 'billing' },
       text: '{"intent":"billing"}',
-      _meta: { finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+      _meta: {
+        finishReason: 'stop',
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
+      },
     })
     const buildArgs = async (message: string) => ({
       promptId: p.id,

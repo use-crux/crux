@@ -183,7 +183,7 @@ export async function providerRuntimeConformance<
 
   await run("usage honesty", async () => {
     const prepared = await harness.prepare({
-      emissions: [{ text: "unmetered response", usage: {} }],
+      emissions: [{ text: "unmetered response", usage: null }],
     });
     const result = await bindRuntime(runtime, prepared).generate(
       textPrompt,

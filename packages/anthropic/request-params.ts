@@ -135,6 +135,8 @@ export function mapAnthropicSettings(
     result.stop_sequences = settings.stopSequences;
   if (settings.toolChoice !== undefined)
     result.tool_choice = anthropicToolChoice(settings.toolChoice);
+  if (settings.reasoning !== undefined)
+    result.thinking = anthropicReasoningConfig(settings.reasoning);
 
   const knownKeys = new Set([
     "temperature",
@@ -147,6 +149,7 @@ export function mapAnthropicSettings(
     "toolChoice",
     "stopWhen",
     "maxSteps",
+    "reasoning",
   ]);
   for (const [key, value] of Object.entries(settings)) {
     if (value !== undefined && !knownKeys.has(key) && !(key in result)) {
@@ -155,6 +158,27 @@ export function mapAnthropicSettings(
   }
 
   return result;
+}
+
+/**
+ * Crux's portable reasoning levels are budgeted for Claude thinking models.
+ *
+ * These defaults intentionally stay coarse: callers that need exact budgets,
+ * adaptive thinking, or thought-output controls should use Anthropic `extra`.
+ */
+const ANTHROPIC_REASONING_BUDGET_TOKENS = {
+  low: 2000,
+  medium: 8000,
+  high: 24000,
+} as const satisfies Record<NonNullable<GenerationSettings["reasoning"]>, number>;
+
+function anthropicReasoningConfig(
+  reasoning: NonNullable<GenerationSettings["reasoning"]>,
+): Anthropic.ThinkingConfigParam {
+  return {
+    type: "enabled",
+    budget_tokens: ANTHROPIC_REASONING_BUDGET_TOKENS[reasoning],
+  };
 }
 
 function anthropicToolChoice(toolChoice: ToolChoice): Anthropic.ToolChoice {

@@ -25,7 +25,7 @@ describe('generation observability', () => {
     const result = await orchestrateGenerate(spec, async () => ({
       text: 'hello',
       _meta: {
-        usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
+        usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7, inputTokenDetails: {}, outputTokenDetails: {} },
         cost: 0.00042,
         finishReason: 'stop',
       },
@@ -83,7 +83,7 @@ describe('generation observability', () => {
     await orchestrateGenerate(generationSpec('generate'), async () => ({
       text: 'hello',
       _meta: {
-        usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
+        usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7, inputTokenDetails: {}, outputTokenDetails: {} },
       },
     }))
     await observe.flush()
@@ -117,7 +117,7 @@ describe('generation observability', () => {
       async () => ({
         text: 'hello',
         _meta: {
-          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
         },
       }),
     )
@@ -176,7 +176,7 @@ describe('generation observability', () => {
       },
       text: 'plan ready',
       _meta: {
-        usage: { inputTokens: 3, outputTokens: 8, totalTokens: 11 },
+        usage: { inputTokens: 3, outputTokens: 8, totalTokens: 11, inputTokenDetails: {}, outputTokenDetails: {} },
       },
     }))
     await observe.flush()
@@ -280,7 +280,7 @@ describe('generation observability', () => {
       rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
       extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
       completion: async () => ({
-        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, inputTokenDetails: {}, outputTokenDetails: {} },
         finishReason: 'stop',
       }),
     }))
@@ -360,7 +360,7 @@ describe('generation observability', () => {
         rawStream: delayedStreamChunks([{ text: 'hel' }, { text: 'lo' }], 1_000),
         extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
         completion: async () => ({
-          usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+          usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, inputTokenDetails: {}, outputTokenDetails: {} },
         }),
       }))
 
@@ -402,7 +402,7 @@ describe('generation observability', () => {
       rawStream: streamChunks([{ text: first }, { text: second }]),
       extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
       completion: async () => ({
-        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, inputTokenDetails: {}, outputTokenDetails: {} },
       }),
     }))
 
@@ -434,7 +434,7 @@ describe('generation observability', () => {
       rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
       extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
       completion: async () => ({
-        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, inputTokenDetails: {}, outputTokenDetails: {} },
         streaming: { tokensPerSecond: 12, totalChunks: 2 },
       }),
     }))
@@ -471,7 +471,13 @@ describe('generation observability', () => {
       rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
       extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
       completion: async () => ({
-        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, cacheReadTokens: 2 },
+        usage: {
+          inputTokens: 5,
+          outputTokens: 6,
+          totalTokens: 11,
+          inputTokenDetails: { cacheReadTokens: 2 },
+          outputTokenDetails: {},
+        },
         cost: 0.00071,
         streaming: { ttftMs: 125, tokensPerSecond: 12, totalChunks: 2 },
       }),
@@ -521,7 +527,7 @@ describe('generation observability', () => {
       rawStream: throwingStream(),
       extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
       completion: async () => ({
-        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, inputTokenDetails: {}, outputTokenDetails: {} },
         finishReason: 'error',
       }),
     }))
@@ -574,7 +580,7 @@ describe('generation observability', () => {
       rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
       extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
       completion: async () => ({
-        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, inputTokenDetails: {}, outputTokenDetails: {} },
       }),
     }))
 
@@ -606,7 +612,7 @@ describe('generation observability', () => {
         rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
         extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
         completion: async () => ({
-          usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
+          usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, inputTokenDetails: {}, outputTokenDetails: {} },
         }),
       }))
 

@@ -1350,14 +1350,8 @@ async function assembleCell(args: {
   }
 }
 
-function usageOf(
-  signals: CellSignals,
-): { inputTokens: number; outputTokens: number } | undefined {
-  if (signals.usage === undefined) return undefined
-  return {
-    inputTokens: signals.usage.inputTokens ?? 0,
-    outputTokens: signals.usage.outputTokens ?? 0,
-  }
+function usageOf(signals: CellSignals): CellSignals['usage'] {
+  return signals.usage
 }
 
 // ─────────────────────────────────────────────────────────────────

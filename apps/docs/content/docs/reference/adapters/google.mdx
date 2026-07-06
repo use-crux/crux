@@ -130,7 +130,7 @@ await adapter.generate(prompt, {
 - `result.text` — extracted assistant text
 - `result.raw` — raw Google SDK response
 - `result._meta` — normalized usage, finish reason, tool calls, and model metadata
-- `result._meta.usage.cacheReadTokens` — tokens served from cache when available
+- `result._meta.usage.inputTokenDetails.cacheReadTokens` — tokens served from cache when available
 
 <Callout type="warn">
   Structured output is validated with Zod after generation. Invalid JSON from the model produces a Zod error, not a

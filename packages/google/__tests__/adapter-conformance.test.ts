@@ -146,7 +146,9 @@ function googleResponse(emission: ProviderConformanceEmission, sequence: number)
     text: emission.text ?? '',
     modelVersion: 'gemini-conformance-actual',
     usageMetadata:
-      emission.usage !== undefined
+      emission.usage === null
+        ? undefined
+        : emission.usage !== undefined
         ? {
             promptTokenCount: emission.usage.inputTokens,
             candidatesTokenCount: emission.usage.outputTokens,

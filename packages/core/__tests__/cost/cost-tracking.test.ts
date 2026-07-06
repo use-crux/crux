@@ -48,6 +48,8 @@ async function generateOnce(options: {
           inputTokens: options.inputTokens ?? 1_000,
           outputTokens: options.outputTokens ?? 2_000,
           totalTokens: (options.inputTokens ?? 1_000) + (options.outputTokens ?? 2_000),
+          inputTokenDetails: {},
+          outputTokenDetails: {},
         },
       },
     }),

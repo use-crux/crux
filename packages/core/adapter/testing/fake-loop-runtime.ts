@@ -89,7 +89,13 @@ export interface FakeLoopRuntime {
   }
 }
 
-const FAKE_USAGE = { inputTokens: 10, outputTokens: 20, totalTokens: 30 } as const
+const FAKE_USAGE = {
+  inputTokens: 10,
+  outputTokens: 20,
+  totalTokens: 30,
+  inputTokenDetails: {},
+  outputTokenDetails: {},
+} as const
 
 interface FakeToolLike {
   execute?: (input: unknown, options: { toolCallId?: string; messages?: readonly unknown[] }) => unknown
@@ -330,11 +336,7 @@ export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRun
         raw: { kind: 'fake-stream', chunks, text },
         completion: async () => ({
           text,
-          usage: {
-            inputTokens: FAKE_USAGE.inputTokens,
-            outputTokens: FAKE_USAGE.outputTokens,
-            totalTokens: FAKE_USAGE.totalTokens,
-          },
+          usage: FAKE_USAGE,
           finishReason: 'stop',
           streaming: { totalChunks: chunks.length, ttftMs: 1 },
         }),

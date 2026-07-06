@@ -339,13 +339,7 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       agentId: agent.id,
       output: result.object ?? result.text,
       durationMs: Date.now() - start,
-      usage: result._meta.usage
-        ? {
-            inputTokens: result._meta.usage.inputTokens,
-            outputTokens: result._meta.usage.outputTokens,
-            totalTokens: result._meta.usage.totalTokens,
-          }
-        : undefined,
+      usage: result._meta.usage,
     }
   }
 

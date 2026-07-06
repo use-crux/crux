@@ -294,13 +294,7 @@ export function adapter<
         agentId: agent.id,
         output: result.text,
         durationMs: Date.now() - start,
-        usage: result._meta.usage
-          ? {
-              inputTokens: result._meta.usage.inputTokens,
-              outputTokens: result._meta.usage.outputTokens,
-              totalTokens: result._meta.usage.totalTokens,
-            }
-          : undefined,
+        usage: result._meta.usage,
       }
     }
 

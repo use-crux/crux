@@ -41,7 +41,7 @@ result.raw; // raw Anthropic.Message
 
 The package exports `anthropicProviderRuntime` for advanced adapter composition. Internally, Anthropic uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; adapter authors building similar single-turn providers should start there.
 
-Crux maps portable `GenerationSettings.toolChoice` values to Anthropic `tool_choice`: `'auto'` → `{ type: 'auto' }`, `'none'` → `{ type: 'none' }`, `'required'` → `{ type: 'any' }`, and `{ tool }` → `{ type: 'tool', name }`. Anthropic-native options that Crux does not model portably belong in the typed `extra` option.
+Crux maps portable `GenerationSettings.toolChoice` values to Anthropic `tool_choice`: `'auto'` → `{ type: 'auto' }`, `'none'` → `{ type: 'none' }`, `'required'` → `{ type: 'any' }`, and `{ tool }` → `{ type: 'tool', name }`. Portable `reasoning` maps to Claude thinking budgets (`low` 2k, `medium` 8k, `high` 24k tokens). Anthropic-native options that Crux does not model portably belong in the typed `extra` option.
 
 For provider prompt caching, Crux resolves cached contexts into a stable prefix and marks the final cached `SystemBlock` with `cacheBoundary`. This adapter places Anthropic `cache_control: { type: 'ephemeral' }` on that boundary block only.
 

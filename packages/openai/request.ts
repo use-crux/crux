@@ -48,6 +48,8 @@ export function openAISettings(
     result.stop = settings.stopSequences;
   if (settings.toolChoice !== undefined)
     result.tool_choice = openAIToolChoice(settings.toolChoice);
+  if (settings.reasoning !== undefined)
+    result.reasoning_effort = settings.reasoning;
 
   const knownKeys = new Set([
     "temperature",
@@ -60,6 +62,7 @@ export function openAISettings(
     "toolChoice",
     "stopWhen",
     "maxSteps",
+    "reasoning",
   ]);
   for (const [key, value] of Object.entries(settings)) {
     if (value !== undefined && !knownKeys.has(key) && !(key in result)) {

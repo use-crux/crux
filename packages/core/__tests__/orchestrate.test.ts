@@ -20,7 +20,7 @@ function mockResult(text: string, cost?: number) {
   return {
     text,
     _meta: {
-      usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+      usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15, inputTokenDetails: {}, outputTokenDetails: {} },
       cost,
     },
   }

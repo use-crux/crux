@@ -267,6 +267,67 @@ function stringOrUndefined(value: unknown): string | undefined {
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
+function numberOrUndefined(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined
+}
+
+/** Build a complete usage record from span metrics without inventing missing counts. */
+function usageFromMetrics(metrics: CruxMetrics): TokenUsage | undefined {
+  const inputTokens = numberOrUndefined(metrics.inputTokens)
+  const outputTokens = numberOrUndefined(metrics.outputTokens)
+  if (inputTokens === undefined || outputTokens === undefined) return undefined
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: numberOrUndefined(metrics.totalTokens) ?? inputTokens + outputTokens,
+    inputTokenDetails: {
+      ...optionalDetail('cacheReadTokens', numberOrUndefined(metrics.cacheReadTokens)),
+      ...optionalDetail('cacheWriteTokens', numberOrUndefined(metrics.cacheWriteTokens)),
+    },
+    outputTokenDetails: {
+      ...optionalDetail('reasoningTokens', numberOrUndefined(metrics.reasoningTokens)),
+    },
+  }
+}
+
+/** Add one complete usage record into an aggregate usage record. */
+function addUsage(total: TokenUsage | undefined, next: TokenUsage): TokenUsage {
+  return {
+    inputTokens: (total?.inputTokens ?? 0) + next.inputTokens,
+    outputTokens: (total?.outputTokens ?? 0) + next.outputTokens,
+    totalTokens: (total?.totalTokens ?? 0) + next.totalTokens,
+    inputTokenDetails: {
+      ...addOptionalDetail('cacheReadTokens', total?.inputTokenDetails.cacheReadTokens, next.inputTokenDetails.cacheReadTokens),
+      ...addOptionalDetail(
+        'cacheWriteTokens',
+        total?.inputTokenDetails.cacheWriteTokens,
+        next.inputTokenDetails.cacheWriteTokens,
+      ),
+    },
+    outputTokenDetails: {
+      ...addOptionalDetail(
+        'reasoningTokens',
+        total?.outputTokenDetails.reasoningTokens,
+        next.outputTokenDetails.reasoningTokens,
+      ),
+    },
+  }
+}
+
+function optionalDetail<K extends string>(key: K, value: number | undefined): Partial<Record<K, number>> {
+  return value === undefined ? {} : ({ [key]: value } as Record<K, number>)
+}
+
+function addOptionalDetail<K extends string>(
+  key: K,
+  left: number | undefined,
+  right: number | undefined,
+): Partial<Record<K, number>> {
+  if (left === undefined && right === undefined) return {}
+  return { [key]: (left ?? 0) + (right ?? 0) } as Record<K, number>
+}
+
 /**
  * Extract the typed per-cell signal model from one observed run's records.
  * Reads ONLY the canonical span/artifact contract — no output-shape guessing.
@@ -376,25 +437,18 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
       case 'generation.stream': {
         captured.add('modelCalls')
         const metrics = span.metrics ?? {}
-        const callUsage: TokenUsage = {
-          ...(metrics.inputTokens !== undefined ? { inputTokens: metrics.inputTokens } : {}),
-          ...(metrics.outputTokens !== undefined ? { outputTokens: metrics.outputTokens } : {}),
-          ...(metrics.totalTokens !== undefined ? { totalTokens: metrics.totalTokens } : {}),
-        }
+        const callUsage = usageFromMetrics(metrics)
         modelCalls.push({
           spanId: span.spanId,
           ...(span.model !== undefined ? { model: span.model } : {}),
           ...(span.provider !== undefined ? { provider: span.provider } : {}),
           durationMs: span.durationMs,
           ...(metrics.costUsd !== undefined ? { costUsd: metrics.costUsd } : {}),
-          ...(Object.keys(callUsage).length > 0 ? { usage: callUsage } : {}),
+          ...(callUsage !== undefined ? { usage: callUsage } : {}),
         })
         if (metrics.costUsd !== undefined) costUsd = (costUsd ?? 0) + metrics.costUsd
-        if (Object.keys(callUsage).length > 0) {
-          usage = {
-            inputTokens: (usage?.inputTokens ?? 0) + (callUsage.inputTokens ?? 0),
-            outputTokens: (usage?.outputTokens ?? 0) + (callUsage.outputTokens ?? 0),
-          }
+        if (callUsage !== undefined) {
+          usage = addUsage(usage, callUsage)
         }
         break
       }

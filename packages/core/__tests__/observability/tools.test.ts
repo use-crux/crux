@@ -31,7 +31,7 @@ function response(text: string, toolCalls?: AdapterResponse['toolCalls']): Adapt
   return {
     text,
     toolCalls,
-    usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 },
+    usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8, inputTokenDetails: {}, outputTokenDetails: {} },
     finishReason: toolCalls ? 'tool_calls' : 'stop',
     responseId: 'resp_1',
     actualModelId: 'mock-model',

@@ -541,9 +541,9 @@ export function createSwarm(executor: AgentExecutor) {
 
         // Accumulate usage and call onCost
         if (result.usage) {
-          accumulatedUsage.inputTokens += result.usage.inputTokens ?? 0
-          accumulatedUsage.outputTokens += result.usage.outputTokens ?? 0
-          accumulatedUsage.totalTokens += result.usage.totalTokens ?? 0
+          accumulatedUsage.inputTokens += result.usage.inputTokens
+          accumulatedUsage.outputTokens += result.usage.outputTokens
+          accumulatedUsage.totalTokens += result.usage.totalTokens
         }
         if (onCost) {
           onCost({

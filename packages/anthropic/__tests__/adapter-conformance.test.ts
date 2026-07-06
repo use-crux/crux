@@ -119,7 +119,9 @@ function anthropicMessage(emission: ProviderConformanceEmission, sequence: numbe
     stop_reason: toolBlocks.length > 0 ? 'tool_use' : 'end_turn',
     stop_sequence: null,
     usage:
-      emission.usage !== undefined
+      emission.usage === null
+        ? undefined
+        : emission.usage !== undefined
         ? { input_tokens: emission.usage.inputTokens, output_tokens: emission.usage.outputTokens }
         : { input_tokens: 13, output_tokens: 8 },
   } as AnthropicParsedMessage

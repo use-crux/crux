@@ -29,7 +29,7 @@ function mockResponse(text: string, toolCalls?: AdapterResponse['toolCalls']): A
   return {
     text,
     toolCalls,
-    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
     finishReason: 'stop',
     responseId: 'response-1',
     actualModelId: 'model-1',
@@ -52,7 +52,9 @@ function testAdapter(text = 'assistant answer') {
       return {
         rawStream: chunks(),
         extractTextDelta: (chunk) => (chunk as { text: string }).text,
-        completion: async () => ({ usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } }),
+        completion: async () => ({
+          usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
+        }),
       }
     },
     appendToolRound(messages, response, toolResults) {

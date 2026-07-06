@@ -12,7 +12,7 @@
 import { jsonSchema as wrapJsonSchema } from "ai";
 import type { LanguageModel } from "ai";
 import type { z } from "zod";
-import type { ModelInfo, SystemBlock } from "@use-crux/core";
+import type { GenerationSettings, ModelInfo, SystemBlock } from "@use-crux/core";
 import { sanitizeJsonSchema } from "@use-crux/core";
 
 /**
@@ -49,6 +49,71 @@ export function isAnthropicModel(modelInfo: ModelInfo): boolean {
     modelInfo.modelId.startsWith("anthropic/")
   );
 }
+
+/** Detect OpenAI models, including AI Gateway/OpenRouter namespaced ids. */
+export function isOpenAIModel(modelInfo: ModelInfo): boolean {
+  return (
+    modelInfo.provider.startsWith("openai") ||
+    modelInfo.modelId.startsWith("openai/")
+  );
+}
+
+/** Detect Google Vertex models whose AI SDK provider options key is `vertex`. */
+export function isGoogleVertexModel(modelInfo: ModelInfo): boolean {
+  return (
+    modelInfo.provider.startsWith("vertex") ||
+    modelInfo.provider.startsWith("google-vertex") ||
+    modelInfo.modelId.startsWith("vertex/")
+  );
+}
+
+/** Detect Google Generative AI models, including Gateway namespaced ids. */
+export function isGoogleModel(modelInfo: ModelInfo): boolean {
+  return (
+    modelInfo.provider.startsWith("google") ||
+    modelInfo.modelId.startsWith("google/") ||
+    modelInfo.modelId.startsWith("gemini-")
+  );
+}
+
+/**
+ * Build AI SDK v6 provider options for Crux's portable reasoning setting.
+ *
+ * AI SDK v7 has a common `reasoning` option. This adapter currently targets
+ * AI SDK v6, so the neutral setting is lowered into provider-specific option
+ * bags while keeping exact budgets and summaries available through `extra`.
+ */
+export function aiSdkReasoningProviderOptions(
+  modelInfo: ModelInfo,
+  reasoning: NonNullable<GenerationSettings["reasoning"]>,
+): Record<string, Record<string, unknown>> | undefined {
+  if (isOpenAIModel(modelInfo)) {
+    return { openai: { reasoningEffort: reasoning } };
+  }
+  if (isAnthropicModel(modelInfo)) {
+    return {
+      anthropic: {
+        thinking: {
+          type: "enabled",
+          budgetTokens: ANTHROPIC_REASONING_BUDGET_TOKENS[reasoning],
+        },
+      },
+    };
+  }
+  if (isGoogleVertexModel(modelInfo)) {
+    return { vertex: { thinkingConfig: { thinkingLevel: reasoning } } };
+  }
+  if (isGoogleModel(modelInfo)) {
+    return { google: { thinkingConfig: { thinkingLevel: reasoning } } };
+  }
+  return undefined;
+}
+
+const ANTHROPIC_REASONING_BUDGET_TOKENS = {
+  low: 2000,
+  medium: 8000,
+  high: 24000,
+} as const satisfies Record<NonNullable<GenerationSettings["reasoning"]>, number>;
 
 /**
  * For Anthropic models: convert Zod schema → JSON Schema, strip

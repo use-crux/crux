@@ -198,6 +198,8 @@ const createMyAdapter = adapter({
           inputTokens: response.usage.input,
           outputTokens: response.usage.output,
           totalTokens: response.usage.input + response.usage.output,
+          inputTokenDetails: {},
+          outputTokenDetails: {},
         },
         finishReason: response.stop_reason,
         responseId: response.id,
@@ -302,7 +304,7 @@ Canonical response extracted by the adapter from the provider's raw response. Us
 | --------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | `text`          | `string`                                                     | Extracted text                                                                                    |
 | `toolCalls`     | `Array<{ id, name, args }> \| undefined`                     | Tool call requests                                                                                |
-| `usage`         | `{ inputTokens?, outputTokens?, totalTokens? } \| undefined` | Token usage. Fields stay `undefined` when the provider omits usage instead of fabricating zeroes. |
+| `usage`         | `TokenUsage \| undefined`                                  | Token usage with `inputTokenDetails` and `outputTokenDetails`. Omit `usage` when the provider omits token counts; do not fabricate zeroes. |
 | `finishReason`  | `string \| undefined`                                        | Why generation stopped                                                                            |
 | `responseId`    | `string \| undefined`                                        | Provider response ID                                                                              |
 | `actualModelId` | `string \| undefined`                                        | Actual model used (may differ from requested)                                                     |

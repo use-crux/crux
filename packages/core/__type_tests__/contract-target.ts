@@ -9,7 +9,7 @@
 import type { ApprovalRequestInfo } from '../adapter/tool/approval'
 import type { Message } from '../generation/messages'
 import type { StopCondition, ToolChoice } from '../generation/tool-control'
-import type { TraceMeta } from '../generation/types'
+import type { GenerationSettings, TokenUsage, TraceMeta } from '../generation/types'
 
 type AssertEqual<T, U> = (<G>() => G extends T ? 1 : 2) extends <G>() => G extends U ? 1 : 2
   ? (<G>() => G extends U ? 1 : 2) extends <G>() => G extends T ? 1 : 2
@@ -27,19 +27,7 @@ type OptionalKeys<T> = {
   [K in keyof T]-?: Record<string, never> extends Pick<T, K> ? K : never
 }[keyof T]
 
-// Phase 2 replaces this with the real TokenUsage import.
-interface TargetTokenUsage {
-  inputTokens: number
-  outputTokens: number
-  totalTokens: number
-  inputTokenDetails: {
-    cacheReadTokens?: number
-    cacheWriteTokens?: number
-  }
-  outputTokenDetails: {
-    reasoningTokens?: number
-  }
-}
+type TargetTokenUsage = TokenUsage
 
 type _TokenUsageRequiredKeys = Expect<
   AssertEqual<
@@ -93,7 +81,13 @@ type _TimeoutErrorBudget = Expect<AssertEqual<TargetTimeoutError['budget'], Targ
 type _TimeoutErrorLimit = Expect<AssertEqual<TargetTimeoutError['limitMs'], number>>
 type _TimeoutErrorToolName = Expect<AssertEqual<TargetTimeoutError['toolName'], string | undefined>>
 
-// Phases 2 and 5 replace this target with the real GenerationSettings import.
+type Phase2GenerationSettings = GenerationSettings
+
+type _ReasoningSetting = Expect<
+  AssertEqual<Phase2GenerationSettings['reasoning'], 'low' | 'medium' | 'high' | undefined>
+>
+
+// Phase 5 replaces this target with the real GenerationSettings import.
 interface TargetGenerationSettings {
   temperature?: number
   maxTokens?: number
@@ -126,7 +120,6 @@ type _GenerationSettingsKeys = Expect<
     | 'presencePenalty'
   >
 >
-type _ReasoningSetting = Expect<AssertEqual<TargetGenerationSettings['reasoning'], 'low' | 'medium' | 'high' | undefined>>
 type _SeedSetting = Expect<AssertEqual<TargetGenerationSettings['seed'], number | undefined>>
 type _StopSequencesSetting = Expect<AssertEqual<TargetGenerationSettings['stopSequences'], readonly string[] | undefined>>
 
@@ -187,4 +180,3 @@ type _StreamRaw = Expect<AssertEqual<TargetStreamResult<{ readonly stream: true 
 type _StreamCompletion = Expect<
   AssertEqual<TargetStreamResult<unknown, { readonly ok: true }>['completion'], Promise<TargetStreamCompletion<{ readonly ok: true }>>>
 >
-

@@ -56,7 +56,7 @@ function createMockResponse(
   return {
     text,
     toolCalls,
-    usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+    usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30, inputTokenDetails: {}, outputTokenDetails: {} },
     finishReason: toolCalls ? "tool_calls" : "stop",
     responseId: "resp_123",
     actualModelId: "test-model",
@@ -96,7 +96,7 @@ function createMockSpec(
         rawStream,
         extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
         completion: async () => ({
-          usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30 },
+          usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30, inputTokenDetails: {}, outputTokenDetails: {} },
           finishReason: "stop",
         }),
       };
@@ -213,6 +213,8 @@ describe("adapter", () => {
         inputTokens: 10,
         outputTokens: 20,
         totalTokens: 30,
+        inputTokenDetails: {},
+        outputTokenDetails: {},
       });
       expect(result._meta.finishReason).toBe("stop");
       expect(result._meta.responseId).toBe("resp_123");
@@ -695,7 +697,7 @@ describe("adapter", () => {
         },
         extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
         completion: async () => ({
-          usage: { inputTokens: 5, outputTokens: 10, totalTokens: 15 },
+          usage: { inputTokens: 5, outputTokens: 10, totalTokens: 15, inputTokenDetails: {}, outputTokenDetails: {} },
         }),
       });
 

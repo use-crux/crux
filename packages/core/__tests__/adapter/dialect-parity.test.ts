@@ -62,7 +62,7 @@ function scriptedAdapterSpec(script: ScriptedCall[]) {
       const extracted: AdapterResponse = {
         text: scripted.text ?? '',
         toolCalls: scripted.toolCalls,
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
         finishReason: scripted.toolCalls?.length ? 'tool_calls' : 'stop',
         responseId: undefined,
         actualModelId: undefined,

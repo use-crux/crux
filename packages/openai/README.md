@@ -40,6 +40,6 @@ The adapter also exposes `stream()` and agent composition methods (parallel, pip
 
 The package exports `openaiProviderRuntime` for advanced adapter composition. Internally, OpenAI uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; adapter authors building similar single-turn providers should start there.
 
-Crux maps portable `GenerationSettings.toolChoice` values to OpenAI `tool_choice`: `'auto'`, `'none'`, `'required'`, and `{ tool }` → `{ type: 'function', function: { name } }`. OpenAI-native options that Crux does not model portably belong in the typed `extra` option.
+Crux maps portable `GenerationSettings.toolChoice` values to OpenAI `tool_choice`: `'auto'`, `'none'`, `'required'`, and `{ tool }` → `{ type: 'function', function: { name } }`. Portable `reasoning` maps to OpenAI `reasoning_effort`. OpenAI-native options that Crux does not model portably belong in the typed `extra` option.
 
 See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) and the [Crux docs](https://cruxjs.dev) for the full API.

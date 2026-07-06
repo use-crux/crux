@@ -382,6 +382,9 @@ Portable tool-loop controls live in `GenerationSettings`: `toolChoice`,
 `stopWhen`, `maxSteps`, plus the `maxSteps(n)` and `hasToolCall(name)` helpers.
 Adapters map those settings to provider-native fields. Provider-specific tool
 controls that are not portable belong in that adapter's typed `extra` option.
+`GenerationSettings.reasoning` provides a portable `'low' | 'medium' | 'high'`
+reasoning-effort hint; exact provider budgets, summaries, and disable controls
+also belong in `extra`.
 
 ## How It Works
 

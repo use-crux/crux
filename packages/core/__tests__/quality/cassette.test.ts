@@ -42,7 +42,7 @@ function loopOutcome(text: string) {
     response: {
       text,
       toolCalls: undefined,
-      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, inputTokenDetails: {}, outputTokenDetails: {} },
       finishReason: 'stop',
       responseId: 'volatile-response-id',
       actualModelId: 'm1',

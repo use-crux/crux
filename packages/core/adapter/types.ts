@@ -8,7 +8,7 @@
  */
 
 import type { z } from "zod";
-import type { TraceMeta, GenerationSettings } from "../generation/types";
+import type { TraceMeta, GenerationSettings, TokenUsage } from "../generation/types";
 import type { SystemBlock } from "../resolver/types";
 import type { Message } from "../generation/messages";
 import type { ToolModelOutput } from "../types/tool";
@@ -21,14 +21,8 @@ import type { ToolModelOutput } from "../types/tool";
 export interface AdapterResponse {
   text: string;
   toolCalls: Array<{ id: string; name: string; args: unknown }> | undefined;
-  usage: {
-    inputTokens?: number;
-    outputTokens?: number;
-    totalTokens?: number;
-    cacheReadTokens?: number;
-    cacheWriteTokens?: number;
-    reasoningTokens?: number;
-  };
+  /** Provider-reported usage, omitted when the provider did not return enough counts to build a real usage record. */
+  usage: TokenUsage | undefined;
   finishReason: string | undefined;
   responseId: string | undefined;
   actualModelId: string | undefined;

@@ -53,14 +53,7 @@ const anthropic = defineSingleTurnProviderBundle({
       completion: async (stream) => {
         try {
           const finalMsg = await stream.finalMessage()
-          return {
-            usage: {
-              inputTokens: finalMsg.usage.input_tokens,
-              outputTokens: finalMsg.usage.output_tokens,
-              totalTokens:
-                finalMsg.usage.input_tokens + finalMsg.usage.output_tokens,
-            },
-          }
+          return anthropicResponseMeta(finalMsg)
         } catch {
           return undefined
         }

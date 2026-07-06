@@ -303,16 +303,7 @@ export async function generateCore<
       }
 
       const meta: TraceMeta = safety.stamp({
-        usage: lastExtracted
-          ? {
-              inputTokens: lastExtracted.usage.inputTokens,
-              outputTokens: lastExtracted.usage.outputTokens,
-              totalTokens: lastExtracted.usage.totalTokens,
-              cacheReadTokens: lastExtracted.usage.cacheReadTokens,
-              cacheWriteTokens: lastExtracted.usage.cacheWriteTokens,
-              reasoningTokens: lastExtracted.usage.reasoningTokens,
-            }
-          : undefined,
+        usage: lastExtracted?.usage,
         finishReason: lastExtracted?.finishReason,
         stoppedBy,
         toolCalls: lastExtracted?.toolCalls?.map((tc) => ({

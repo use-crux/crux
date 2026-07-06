@@ -157,6 +157,39 @@ describe("generate — text mapping", () => {
     );
     expect(args.stopWhen).toHaveLength(3);
   });
+
+  it("maps portable reasoning to AI SDK v6 provider options", async () => {
+    const scripted = scriptedGateway({ generateText: [{ text: "reasoned" }] });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+
+    await ai.generate(textPrompt, {
+      model: model("gpt-5", "openai"),
+      input: { message: "go" },
+      reasoning: "high",
+      providerOptions: { openai: { store: false } },
+    });
+    expect(scripted.calls.generateText[0]!.providerOptions).toEqual({
+      openai: { store: false, reasoningEffort: "high" },
+    });
+
+    await ai.generate(textPrompt, {
+      model: model("claude-sonnet-4-5", "anthropic"),
+      input: { message: "go" },
+      reasoning: "medium",
+    });
+    expect(scripted.calls.generateText[1]!.providerOptions).toEqual({
+      anthropic: { thinking: { type: "enabled", budgetTokens: 8000 } },
+    });
+
+    await ai.generate(textPrompt, {
+      model: model("gemini-3-pro-preview", "google"),
+      input: { message: "go" },
+      reasoning: "low",
+    });
+    expect(scripted.calls.generateText[2]!.providerOptions).toEqual({
+      google: { thinkingConfig: { thinkingLevel: "low" } },
+    });
+  });
 });
 
 describe("generate — structured output + validation retry", () => {

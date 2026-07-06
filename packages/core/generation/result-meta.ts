@@ -3,7 +3,7 @@
  *
  * Adapters attach a `_meta` object to their results carrying usage, cost,
  * streaming, and fallback metadata. This module centralizes reading and merging
- * that convention field, plus normalizing the nested usage shape into flat
+ * that convention field, plus projecting nested usage details into flat
  * observability attributes.
  *
  * @module
@@ -11,21 +11,14 @@
  */
 
 import type { FallbackMeta } from './fallback'
+import type { TokenUsage } from './types'
 
 /** Metadata attached to generate/stream results by adapters. */
 export interface ResultMeta {
   _meta?: {
     cost?: number
     costUsd?: number
-    usage?: {
-      inputTokens?: number
-      outputTokens?: number
-      totalTokens?: number
-      cacheReadTokens?: number
-      cachedInputTokens?: number
-      cacheWriteTokens?: number
-      reasoningTokens?: number
-    }
+    usage?: TokenUsage
     streaming?: {
       ttftMs?: number
       tokensPerSecond?: number
@@ -68,12 +61,20 @@ export function generationUsageAttributes(
     copyNumberMetric(attributes, usage, 'inputTokens', ['inputTokens'])
     copyNumberMetric(attributes, usage, 'outputTokens', ['outputTokens'])
     copyNumberMetric(attributes, usage, 'totalTokens', ['totalTokens'])
-    copyNumberMetric(attributes, usage, 'cacheReadTokens', ['cacheReadTokens', 'cachedInputTokens'])
-    copyNumberMetric(attributes, usage, 'cacheWriteTokens', ['cacheWriteTokens'])
-    copyNumberMetric(attributes, usage, 'reasoningTokens', ['reasoningTokens'])
     copyNumberMetric(attributes, usage, 'costUsd', ['costUsd', 'cost', 'totalCost'])
     copyNumberMetric(attributes, usage, 'ttftMs', ['ttftMs'])
     copyNumberMetric(attributes, usage, 'tokensPerSecond', ['tokensPerSecond'])
+
+    const inputTokenDetails = isRecord(usage.inputTokenDetails) ? usage.inputTokenDetails : undefined
+    if (inputTokenDetails) {
+      copyNumberMetric(attributes, inputTokenDetails, 'cacheReadTokens', ['cacheReadTokens'])
+      copyNumberMetric(attributes, inputTokenDetails, 'cacheWriteTokens', ['cacheWriteTokens'])
+    }
+
+    const outputTokenDetails = isRecord(usage.outputTokenDetails) ? usage.outputTokenDetails : undefined
+    if (outputTokenDetails) {
+      copyNumberMetric(attributes, outputTokenDetails, 'reasoningTokens', ['reasoningTokens'])
+    }
   }
 
   copyNumberMetric(attributes, meta, 'costUsd', ['costUsd', 'cost', 'totalCost'])

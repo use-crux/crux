@@ -252,7 +252,13 @@ describe('trace-backed signals — captured-pass for every namespace', () => {
     )
     // Cost/usage flow from the usage.observed event into the cell record.
     expect(cell.costUsd).toBeCloseTo(0.002, 6)
-    expect(cell.usage).toEqual({ inputTokens: 10, outputTokens: 5 })
+    expect(cell.usage).toEqual({
+      inputTokens: 10,
+      outputTokens: 5,
+      totalTokens: 15,
+      inputTokenDetails: {},
+      outputTokenDetails: {},
+    })
   })
 })
 
