@@ -16,6 +16,7 @@ import type { Message } from '../../generation/messages'
 import type { ValidationRetryOptions } from '../../generation/validation-retry'
 import type { Constraint } from '../../safety/constraint/types'
 import type { Guardrail } from '../../safety/guardrail/types'
+import type { SafetyTuneOptions } from '../../safety/tune'
 import type { ToolMiddleware } from '../../tools/types'
 import type { StreamHandle } from '../types'
 import type { ExecutorStreamHandle, StepObserver } from '../executor-types'
@@ -85,6 +86,9 @@ export interface AdapterExecutionGenerateArgs<
 
   /** Per-call guardrails merged with prompt/context guardrails. */
   readonly guardrails?: Guardrail[]
+
+  /** Per-call safety posture overrides keyed by policy id. */
+  readonly safety?: SafetyTuneOptions
 
   /** Cooperative timeout used by SDK-loop executions. */
   readonly timeoutMs?: number

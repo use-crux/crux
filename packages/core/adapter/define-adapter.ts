@@ -35,6 +35,7 @@ import type { AgentExecutor } from '../agent/executor'
 import type { ValidationRetryOptions } from '../generation/validation-retry'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
+import type { SafetyTuneOptions } from '../safety/tune'
 import type { ToolMiddleware } from '../tools/types'
 import { coreStepDialect, createAdapterExecution } from './execution/session'
 
@@ -105,6 +106,13 @@ export interface AdapterGenerateOptions<TExtra extends Record<string, unknown> =
    * Merged with per-prompt, context-level, and global guardrails (per-call wins).
    */
   guardrails?: Guardrail[]
+  /**
+   * Per-call safety posture overrides keyed by policy id.
+   *
+   * Tune enforcement/reporting, stream posture, or whether a policy is
+   * enabled for this call without replacing the policy logic.
+   */
+  safety?: SafetyTuneOptions
 }
 
 /** Options for adapter `stream()` calls. */
@@ -229,6 +237,7 @@ export function adapter<
         constraints: opts.constraints,
         constraintMaxRetries: opts.constraintMaxRetries,
         guardrails: opts.guardrails,
+        safety: opts.safety,
       })) as AdapterGenerateResult<TRawResponse>
     }
 
@@ -252,6 +261,7 @@ export function adapter<
         constraints: opts.constraints,
         constraintMaxRetries: opts.constraintMaxRetries,
         guardrails: opts.guardrails,
+        safety: opts.safety,
       })) as StreamHandle<TRawStream>
     }
 

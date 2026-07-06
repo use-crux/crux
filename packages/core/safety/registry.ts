@@ -2,6 +2,7 @@ import type { BoundaryDef, SafetyTargetId } from './boundary'
 import { SafetyConfigError } from './errors'
 import type { Constraint } from './constraint/types'
 import type { Guardrail } from './guardrail/types'
+import type { GuardrailStreamOption } from './stream/types'
 import type { SafetyTuneOptions, SafetyTunePolicyOptions } from './tune'
 import { validateSafetyTuneOptions } from './tune'
 
@@ -31,6 +32,7 @@ export interface SafetyBinding<TPolicy = Guardrail | Constraint> {
   readonly boundary: BoundaryDef
   readonly scope: SafetyPolicyScope
   readonly mode: 'enforce' | 'report'
+  readonly stream?: GuardrailStreamOption | Guardrail['stream']
   readonly enabled: boolean
   readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
 }
@@ -134,6 +136,7 @@ function expandBindings(
     boundary,
     scope: source.scope,
     mode: tune?.mode ?? (source.kind === 'guardrail' ? source.policy.mode : 'enforce'),
+    ...(source.kind === 'guardrail' ? { stream: tune?.stream ?? source.policy.stream } : {}),
     enabled: tune?.enabled ?? true,
     ...(tuned.length > 0 ? { tuned } : {}),
   }))

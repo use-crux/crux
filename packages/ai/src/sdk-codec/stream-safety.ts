@@ -20,6 +20,7 @@ interface SafetyTransformPart {
  */
 export function createSafetyStreamTransform(
   safety: SafetyStream,
+  options?: { readonly onError?: (error: unknown, source: 'feed' | 'finish') => void },
 ): () => TransformStream<SafetyTransformPart, SafetyTransformPart> {
   return () => {
     let sealed = false
@@ -38,18 +39,35 @@ export function createSafetyStreamTransform(
     return new TransformStream<SafetyTransformPart, SafetyTransformPart>({
       async transform(part, controller) {
         if (part?.type === 'text-delta' && typeof part.text === 'string') {
-          const directive = await safety.feed(part.text)
-          if (directive.kind === 'hold') return
-          if (directive.content.length > 0) controller.enqueue({ ...part, text: directive.content })
-          return
+          try {
+            const directive = await safety.feed(part.text)
+            if (directive.kind === 'hold') return
+            if (directive.content.length > 0) controller.enqueue({ ...part, text: directive.content })
+            return
+          } catch (error) {
+            options?.onError?.(error, 'feed')
+            controller.error(error)
+            return
+          }
         }
         if (part?.type === 'finish-step' && part.finishReason !== 'tool-calls') {
-          await releasePending(controller)
+          try {
+            await releasePending(controller)
+          } catch (error) {
+            options?.onError?.(error, 'finish')
+            controller.error(error)
+            return
+          }
         }
         controller.enqueue(part)
       },
       async flush(controller) {
-        await releasePending(controller)
+        try {
+          await releasePending(controller)
+        } catch (error) {
+          options?.onError?.(error, 'finish')
+          controller.error(error)
+        }
       },
     })
   }

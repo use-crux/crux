@@ -6,6 +6,7 @@ import type {
   ConstraintFailure,
   ConstraintOutput,
 } from './types'
+import { validateConstraintRunResult } from './types'
 import { ConstraintViolationError } from './errors'
 import { observe } from '../../observability'
 
@@ -67,7 +68,10 @@ export async function observeConstraintCheck(
   try {
     return await span.withContext(async () => {
       const start = performance.now()
-      const result = await c.check(output, ctx)
+      const result = validateConstraintRunResult(await c.check(output, ctx), {
+        policyId: c.id,
+        boundary: c.on.id,
+      })
       const durationMs = performance.now() - start
       const activeSpanId = observe.captureContext()?.currentSpanId
       const artifactId = observe.artifact({

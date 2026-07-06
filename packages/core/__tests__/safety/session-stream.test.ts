@@ -174,6 +174,82 @@ describe('openStream — stable beta stream contract', () => {
     expect(seal.pending).toBe('')
   })
 
+  it('applies safety.tune stream overrides before opening the stream', async () => {
+    const seen: string[] = []
+    const guard = guardrail({
+      name: 'tuned-final',
+      phase: 'output',
+      validate: async (content) => {
+        seen.push(content)
+        return { action: 'pass' as const }
+      },
+    })
+    const stream = session({
+      call: { guardrails: [guard] },
+      safety: { tune: { 'tuned-final': { stream: 'final' } } },
+    }).openStream()
+
+    expect(await stream.feed('raw segment. ')).toEqual({
+      kind: 'emit',
+      content: 'raw segment. ',
+    })
+    expect(seen).toEqual([])
+
+    await stream.finish()
+    expect(seen).toEqual(['raw segment. '])
+  })
+
+  it('records report-mode stream guardrail findings without changing released text', async () => {
+    const reporter = guardrail({
+      name: 'shadow-stream',
+      phase: 'output',
+      stream: { buffer: 'none' },
+      validate: async (content) => ({
+        action: 'transform' as const,
+        content: content.replace('secret', '[REDACTED]'),
+      }),
+    })
+    const safety = session({
+      call: { guardrails: [reporter] },
+      safety: { tune: { 'shadow-stream': { mode: 'report' } } },
+    })
+    const stream = safety.openStream()
+
+    expect(await stream.feed('secret')).toEqual({
+      kind: 'emit',
+      content: 'secret',
+    })
+    expect(safety.audit.guardrails?.applied).toContainEqual(
+      expect.objectContaining({ guard: 'shadow-stream', action: 'transform' }),
+    )
+    expect((await stream.finish()).text).toBe('secret')
+  })
+
+  it('runs report-mode constraints at stream finish', async () => {
+    const reportOnly = constraint({
+      name: 'shadow-stream-judge',
+      check: async () => ({ pass: false as const, feedback: 'shadow finding' }),
+    })
+    const safety = session({
+      call: { constraints: [reportOnly] },
+      safety: { tune: { 'shadow-stream-judge': { mode: 'report' } } },
+    })
+    const stream = safety.openStream()
+
+    expect(await stream.feed('candidate')).toEqual({
+      kind: 'emit',
+      content: 'candidate',
+    })
+    expect(await stream.finish()).toMatchObject({ text: 'candidate' })
+    expect(safety.audit.constraints?.entries).toContainEqual(
+      expect.objectContaining({
+        constraint: 'shadow-stream-judge',
+        pass: false,
+        feedback: 'shadow finding',
+      }),
+    )
+  })
+
   it('records an audited skip for stream:false guardrails', async () => {
     const disabled = guardrail({
       name: 'skip-stream',
@@ -226,6 +302,32 @@ describe('openStream — stable beta stream contract', () => {
       content: '[X]',
     })
     expect(seen).toEqual(['[X]'])
+  })
+
+  it('records report-mode stream blocks without stopping live output', async () => {
+    const blocker = guardrail({
+      name: 'shadow-stream-block',
+      phase: 'output',
+      stream: 'chunk' as never,
+      validate: async () => ({ action: 'block' as const, reason: 'shadow block' }),
+    })
+    const safety = session({
+      call: { guardrails: [blocker] },
+      safety: { tune: { 'shadow-stream-block': { mode: 'report' } } },
+    })
+    const stream = safety.openStream()
+
+    expect(await stream.feed('visible')).toEqual({
+      kind: 'emit',
+      content: 'visible',
+    })
+    expect(safety.audit.guardrails?.applied).toContainEqual(
+      expect.objectContaining({
+        guard: 'shadow-stream-block',
+        action: 'block',
+        reason: 'shadow block',
+      }),
+    )
   })
 
   it('fails closed when a held segment exceeds maxHold and remains held', async () => {

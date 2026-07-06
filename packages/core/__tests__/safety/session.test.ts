@@ -127,6 +127,42 @@ describe('createSafety — policy identity', () => {
   })
 })
 
+// ── safety.tune ───────────────────────────────────────────────────
+
+describe('createSafety — safety.tune', () => {
+  it('rejects tune entries for unknown policy ids', () => {
+    expect(() =>
+      identity({
+        call: { guardrails: [passGuard('known', 'input')] },
+        safety: { tune: { missing: { enabled: false } } },
+      }),
+    ).toThrow(/unknown|missing/i)
+  })
+
+  it('audits enabled:false and skips the disabled guardrail', async () => {
+    const blocker = guardrail({
+      name: 'disable-me',
+      phase: 'input',
+      validate: async () => ({ action: 'block' as const, reason: 'would block' }),
+    })
+    const safety = identity({
+      call: { guardrails: [blocker] },
+      safety: { tune: { 'disable-me': { enabled: false } } },
+    })
+
+    const result = await safety.guardInput({ messages: [userMessage('leave unchanged')] })
+
+    expect(result.messages).toEqual([userMessage('leave unchanged')])
+    expect(safety.audit.guardrails?.applied).toContainEqual(
+      expect.objectContaining({
+        guard: 'disable-me',
+        action: 'allow',
+        reason: 'disabled by call site',
+      }),
+    )
+  })
+})
+
 // ── guardInput ─────────────────────────────────────────────────────
 
 describe('createSafety — guardInput', () => {

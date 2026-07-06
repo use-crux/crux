@@ -6,7 +6,10 @@ import type {
   GuardrailAudit,
   GuardrailAuditEntry,
 } from './types'
+import { validateLegacyGuardrailResult } from './types'
 import { GuardrailBlockedError } from './errors'
+import type { SafetyDecision } from '../decision'
+import { safeCaptureSummary } from '../errors'
 import { observe } from '../../observability'
 
 // ── Pipeline Config ────────────────────────────────────────────────
@@ -120,10 +123,18 @@ async function runGuardsInternal(
     let result: GuardrailResult<GuardrailPhase>
     let durationMs = 0
     try {
-      result = await span.withContext(async () => guard.validate(currentContent, ctx))
+      result = validateLegacyGuardrailResult(
+        await span.withContext(async () => guard.validate(currentContent, { ...ctx, mode: guard.mode })),
+        {
+          streaming: false,
+          last: true,
+          policyId: guard.id,
+          boundary: ctx.phase === 'input' ? 'user.input' : 'model.output.text',
+        },
+      ) as GuardrailResult<GuardrailPhase>
       durationMs = performance.now() - start
       span.withContext(() =>
-        recordGuardrailReport(guard, result.action, durationMs, result, currentContent),
+        recordGuardrailReport(guard, result.action, durationMs, result),
       )
       span.end({ attributes: { action: result.action, durationMs } })
     } catch (error) {
@@ -146,24 +157,30 @@ async function runGuardsInternal(
 
       case 'block':
         entries.push(entry)
+        if (guard.mode === 'report') break
         config?.onBlock?.(guard, { reason: result.reason })
         span.withContext(() => recordGuardrailBlockedEdge(guard.name, result.reason))
         throw new GuardrailBlockedError({
           guardrailId: guard.name,
           phase: guard.phase,
           reason: result.reason,
+          decisions: [guardDecision(guard, result, currentContent, durationMs, ctx.phase)],
         })
 
       case 'redact':
-        entries.push({ ...entry, original: currentContent })
-        config?.onRedact?.(guard, { original: currentContent, content: result.content })
-        currentContent = result.content
+        entries.push(entry)
+        if (guard.mode !== 'report') {
+          config?.onRedact?.(guard, { original: currentContent, content: result.content })
+          currentContent = result.content
+        }
         break
 
       case 'transform':
-        entries.push({ ...entry, original: currentContent })
-        config?.onTransform?.(guard, { original: currentContent, content: result.content })
-        currentContent = result.content
+        entries.push(entry)
+        if (guard.mode !== 'report') {
+          config?.onTransform?.(guard, { original: currentContent, content: result.content })
+          currentContent = result.content
+        }
         break
 
       case 'warn':
@@ -183,12 +200,36 @@ async function runGuardsInternal(
   }
 }
 
+function guardDecision(
+  guard: Guardrail,
+  result: GuardrailResult<GuardrailPhase>,
+  content: string,
+  durationMs: number,
+  phase: GuardrailPhase,
+): SafetyDecision {
+  return {
+    policyId: guard.id,
+    kind: 'guardrail',
+    boundary: phase === 'input' ? 'user.input' : 'model.output.text',
+    mode: guard.mode,
+    action: safetyAction(result.action),
+    ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
+    durationMs,
+    captured: safeCaptureSummary(result.action === 'block' ? '' : content),
+  }
+}
+
+function safetyAction(action: GuardrailResult<GuardrailPhase>['action']): SafetyDecision['action'] {
+  if (action === 'pass') return 'allow'
+  if (action === 'redact' || action === 'transform') return 'rewrite'
+  return action
+}
+
 function recordGuardrailReport(
   guard: Guardrail,
   action: string,
   durationMs: number,
   result: unknown,
-  beforeContent: string,
 ): void {
   const guardrailName = guard.name
   const phase = guard.phase
@@ -197,7 +238,7 @@ function recordGuardrailReport(
     kind: 'guardrail.report',
     contentType: 'application/json',
     encoding: 'json',
-    preview: guardrailReportPreview(phase, action, result, beforeContent),
+    preview: guardrailReportPreview(phase, action, result),
     attributes: {
       guardrailName,
       category: guard.category,
@@ -247,13 +288,11 @@ function guardrailReportPreview(
   phase: GuardrailPhase,
   action: string,
   result: unknown,
-  beforeContent: string,
 ): Record<string, unknown> {
   const base = {
     kind: 'guardrail.report',
     phase,
     action,
-    beforePreview: beforeContent.slice(0, 500),
   }
   if (!result || typeof result !== 'object') {
     return base

@@ -19,11 +19,12 @@ export function isPolicyTerminal(error: unknown): error is Error & PolicyTermina
 
 /** Create a safe evidence summary for compatibility paths that still pass strings. */
 export function safeCaptureSummary(content: string): SafetyCaptureSummary {
+  const preview = redactPreview(content).slice(0, 500)
   return {
     level: 'safe',
     sizeBytes: new TextEncoder().encode(content).byteLength,
     hash: fnv1a64(content),
-    preview: content.slice(0, 500),
+    preview,
   }
 }
 
@@ -40,6 +41,13 @@ function fnv1a64(input: string): string {
     hash = BigInt.asUintN(64, hash * prime)
   }
   return hash.toString(16).padStart(16, '0')
+}
+
+function redactPreview(content: string): string {
+  return content
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{1,}/gi, '[redacted-email]')
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[redacted-ssn]')
+    .replace(/\b(?:sk|pk|rk|key|token)-[A-Za-z0-9_-]{3,}\b/g, '[redacted-secret]')
 }
 
 interface SafetyErrorInit {

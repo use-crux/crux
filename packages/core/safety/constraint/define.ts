@@ -93,9 +93,16 @@ function defineLegacyConstraint<TSchema extends z.ZodType>(
     severity: config.severity ?? 'assert',
     maxRetries: config.maxRetries ?? 2,
     run: async (subject: ConstraintOutput): Promise<ConstraintCheckResult> =>
-      config.check(subject as ConstraintOutput<TSchema>, legacyContext()),
+      validateConstraintRunResult(await config.check(subject as ConstraintOutput<TSchema>, legacyContext()), {
+        policyId: config.name,
+        boundary: on.id,
+      }),
     name: config.name,
-    check: config.check,
+    check: async (output: ConstraintOutput<TSchema>, ctx: ConstraintContext) =>
+      validateConstraintRunResult(await config.check(output, ctx), {
+        policyId: config.name,
+        boundary: on.id,
+      }),
     onChunk: config.onChunk,
   }) as unknown as Constraint<TSchema>
 }

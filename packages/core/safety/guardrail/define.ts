@@ -11,7 +11,7 @@ import type {
   GuardrailRunResult,
   LegacyGuardrailConfig,
 } from './types'
-import { validateGuardrailRunResult } from './types'
+import { validateGuardrailRunResult, validateLegacyGuardrailResult } from './types'
 
 /** Module-scoped map: frozen guardrail -> definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()
@@ -60,6 +60,7 @@ function defineBoundaryGuardrail<B extends BoundaryInput>(config: GuardrailConfi
 
   const guard = Object.freeze({
     _tag: 'Guardrail' as const,
+    authoring: 'boundary' as const,
     id: config.id,
     on: config.on,
     category: config.category,
@@ -71,7 +72,7 @@ function defineBoundaryGuardrail<B extends BoundaryInput>(config: GuardrailConfi
     phase,
     validate: async (content: string, ctx: GuardrailContext): Promise<GuardrailResult<GuardrailPhase>> => {
       const primaryBoundary = firstBoundary(config.on)
-      const runCtx = contextForGuard(config.id, mode, primaryBoundary, ctx)
+      const runCtx = contextForGuard(config.id, ctx.mode ?? mode, primaryBoundary, ctx)
       const result = validateGuardrailRunResult(await config.run(content as never, runCtx as never), {
         streaming: false,
         last: true,
@@ -92,19 +93,39 @@ function defineLegacyGuardrail<TPhase extends GuardrailPhase>(
   const on = config.phase === 'input' ? boundary.input.text() : boundary.output.text()
   return Object.freeze({
     _tag: 'Guardrail' as const,
+    authoring: 'legacy' as const,
     id: config.name,
     on,
     category: config.category,
     mode: 'enforce' as const,
     stream: config.stream,
     run: async (subject: unknown): Promise<GuardrailRunResult<string>> => {
-      const result = await config.validate(String(subject), legacyContext(config.phase))
+      const result = validateLegacyGuardrailResult(await config.validate(String(subject), legacyContext(config.phase)), {
+        streaming: false,
+        last: true,
+        policyId: config.name,
+        boundary: on.id,
+      }) as GuardrailResult<TPhase>
       return fromLegacyGuardrailResult(result)
     },
     name: config.name,
     phase: config.phase,
-    validate: config.validate as Guardrail<BoundaryDef>['validate'],
-    onChunk: config.onChunk,
+    validate: async (content: string, context: GuardrailContext) =>
+      validateLegacyGuardrailResult(await config.validate(content, context), {
+        streaming: false,
+        last: true,
+        policyId: config.name,
+        boundary: on.id,
+      }) as GuardrailResult<TPhase>,
+    onChunk: config.onChunk
+      ? async (chunk: string, accumulated: string, context: GuardrailContext) =>
+          validateLegacyGuardrailResult(await config.onChunk!(chunk, accumulated, context), {
+            streaming: true,
+            last: false,
+            policyId: config.name,
+            boundary: on.id,
+          }) as Awaited<ReturnType<NonNullable<Guardrail<BoundaryDef>['onChunk']>>>
+      : undefined,
   }) satisfies Guardrail<BoundaryDef>
 }
 
@@ -156,6 +177,7 @@ function contextForGuard<B extends BoundaryDef>(
     attempt: { index: 0, kind: 'initial' },
     metadata: ctx.metadata,
     findings: { add() {} },
+    ...(ctx.stream ? { stream: ctx.stream } : {}),
     ...(on.path ? { path: on.path } : {}),
   }
 }

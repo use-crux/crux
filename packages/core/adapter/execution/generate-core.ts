@@ -112,6 +112,7 @@ export async function generateCore<
       guardrails: args.guardrails,
       constraintMaxRetries: args.constraintMaxRetries,
     },
+    safety: args.safety,
     resolved: {
       constraints: resolved.constraints,
       guardrails: resolved.guardrails,

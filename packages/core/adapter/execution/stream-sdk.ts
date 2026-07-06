@@ -75,6 +75,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
       guardrails: args.guardrails,
       constraintMaxRetries: args.constraintMaxRetries,
     },
+    safety: args.safety,
     resolved: {
       constraints: resolved.constraints,
       guardrails: resolved.guardrails,

@@ -51,7 +51,11 @@ import type {
   GenerationSettings,
   Message,
 } from "@use-crux/core";
-import type { Constraint, Guardrail } from "@use-crux/core/safety";
+import type {
+  Constraint,
+  Guardrail,
+  SafetyTuneOptions,
+} from "@use-crux/core/safety";
 import { isValidationExhaustedError } from "@use-crux/core";
 import type { DenseEmbedding } from "@use-crux/core/embedding";
 import type { Reranker, RetrievalModel } from "@use-crux/core/retrieval";
@@ -152,6 +156,8 @@ export type AIGenerateOptions<
   constraintMaxRetries?: number;
   /** Per-call guardrails (highest precedence in the safety merge). */
   guardrails?: Guardrail[];
+  /** Per-call safety posture overrides keyed by policy id. */
+  safety?: SafetyTuneOptions;
 } & Omit<CallSettings, "toolChoice" | "stopWhen"> &
   GenerationSettings &
   ([keyof MergedInput<TOwnInput, TContexts>] extends [never]
@@ -326,6 +332,7 @@ type CallOpts = Record<string, unknown> & {
   constraints?: Constraint[];
   constraintMaxRetries?: number;
   guardrails?: Guardrail[];
+  safety?: SafetyTuneOptions;
   input?: Record<string, unknown>;
 };
 
@@ -368,6 +375,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       constraints,
       constraintMaxRetries,
       guardrails,
+      safety,
       input,
       ...settings
     } = opts;
@@ -384,6 +392,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       constraints,
       constraintMaxRetries,
       guardrails,
+      safety,
       activeTools,
       // The Crux-wide default budget (10, from loopRuntimeAdapter) — identical
       // across every adapter, enforced natively via the AI SDK's stopWhen.
@@ -432,6 +441,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       constraints,
       constraintMaxRetries,
       guardrails,
+      safety,
       input,
       ...settings
     } = opts;
@@ -447,6 +457,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       constraints,
       constraintMaxRetries,
       guardrails,
+      safety,
       activeTools,
       maxSteps,
       settings: settings as GenerationSettings,
@@ -455,6 +466,12 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
     const raw = handle.raw as Record<string, unknown>;
     const completion = handle.completion();
+    completion.catch(() => {
+      // Stream consumers may rely solely on `textStream`. Keep `completion`
+      // rejecting for callers that await it, but mark the public promise as
+      // observed so stream errors do not become process-level unhandled
+      // rejections.
+    });
     const existingMeta =
       (raw._meta as Record<string, unknown> | undefined) ?? {};
     // Typed completion plus the legacy `_meta._streamCompletion` location.

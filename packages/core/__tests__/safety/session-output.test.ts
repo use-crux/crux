@@ -283,6 +283,51 @@ describe('finalizeOutput — output guardrails', () => {
     expect(seenByConstraint).toEqual(['contact [EMAIL]'])
   })
 
+  it('records report-mode output guardrails without changing the final text', async () => {
+    const redactor = guardrail({
+      name: 'shadow-pii',
+      phase: 'output',
+      validate: async (content) => ({
+        action: 'redact' as const,
+        content: content.replace('a@b.c', '[EMAIL]'),
+      }),
+    })
+    const safety = session({
+      call: { guardrails: [redactor] },
+      safety: { tune: { 'shadow-pii': { mode: 'report' } } },
+    })
+
+    const final = await safety.finalizeOutput({ text: 'contact a@b.c' }, noRegen)
+
+    expect(final.text).toBe('contact a@b.c')
+    expect(safety.audit.guardrails?.applied).toContainEqual(
+      expect.objectContaining({ guard: 'shadow-pii', action: 'redact' }),
+    )
+  })
+
+  it('records report-mode constraints without retrying or throwing', async () => {
+    const reportOnly = constraint({
+      name: 'shadow-judge',
+      maxRetries: 3,
+      check: async () => ({ pass: false as const, feedback: 'shadow finding' }),
+    })
+    const safety = session({
+      call: { constraints: [reportOnly] },
+      safety: { tune: { 'shadow-judge': { mode: 'report' } } },
+    })
+
+    const final = await safety.finalizeOutput({ text: 'unchanged' }, noRegen)
+
+    expect(final.text).toBe('unchanged')
+    expect(safety.audit.constraints?.entries).toContainEqual(
+      expect.objectContaining({
+        constraint: 'shadow-judge',
+        pass: false,
+        feedback: 'shadow finding',
+      }),
+    )
+  })
+
   it('fails closed when an output guardrail returns an unknown action', async () => {
     const malformed = guardrail({
       name: 'unknown-action',

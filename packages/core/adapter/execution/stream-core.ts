@@ -64,6 +64,7 @@ export async function streamCore<TClient, TRawResponse, TRawStream, TExtra exten
       guardrails: args.guardrails,
       constraintMaxRetries: args.constraintMaxRetries,
     },
+    safety: args.safety,
     resolved: { constraints: resolved.constraints, guardrails: resolved.guardrails, metadata: resolved.metadata },
     promptId: prompt.id,
     model: modelInfo.modelId,
