@@ -51,14 +51,14 @@ export interface Constraint<T = z.ZodType<unknown>> {
     readonly config: Readonly<Record<string, unknown>>
   }
 
-  /** @internal transitional adapter for the current Phase 1/3 runner. */
+  /** @internal Legacy compatibility adapter for session internals. */
   readonly name: string
-  /** @internal transitional adapter for the current Phase 1/3 runner. */
+  /** @internal Legacy compatibility adapter for session internals. */
   check(
     output: ConstraintOutput<ConstraintSchema<T>>,
     ctx: ConstraintContext,
   ): ConstraintCheckResult | Promise<ConstraintCheckResult>
-  /** @internal transitional adapter for the current Phase 1/3 stream code. */
+  /** @internal Legacy compatibility adapter for stream internals. */
   onChunk?(chunk: string, accumulated: string, ctx: ConstraintContext): ChunkCheckResult | Promise<ChunkCheckResult>
 }
 

@@ -57,13 +57,13 @@ export interface Guardrail<B extends BoundaryInput = BoundaryDef> {
     readonly config: Readonly<Record<string, unknown>>
   }
 
-  /** @internal transitional adapter for the current Phase 1/3 session code. */
+  /** @internal Legacy compatibility adapter for session internals. */
   readonly name: string
-  /** @internal transitional adapter for the current Phase 1/3 session code. */
+  /** @internal Legacy compatibility adapter for session internals. */
   readonly phase: GuardrailPhase
-  /** @internal transitional adapter for the current Phase 1/3 session code. */
+  /** @internal Legacy compatibility adapter for session internals. */
   readonly validate: (content: string, context: GuardrailContext) => Promise<GuardrailResult<GuardrailPhase>>
-  /** @internal transitional adapter for the current Phase 1/3 stream code. */
+  /** @internal Legacy compatibility adapter for stream internals. */
   readonly onChunk:
     | ((chunk: string, accumulated: string, context: GuardrailContext) => Promise<ChunkGuardrailResult>)
     | undefined

@@ -93,7 +93,8 @@ export interface AdapterGenerateOptions<TExtra extends Record<string, unknown> =
   /**
    * Semantic constraints to check after structural (Zod) validation passes.
    * All constraints run in parallel; combined feedback is injected on retry.
-   * Merged with per-prompt, context-level, and global constraints (per-call wins).
+   * Composed with prompt/context/global constraints by the Safety registry.
+   * Duplicate policy ids throw; use `safety.tune` for per-call posture changes.
    */
   constraints?: Constraint[]
   /**
@@ -103,7 +104,9 @@ export interface AdapterGenerateOptions<TExtra extends Record<string, unknown> =
   constraintMaxRetries?: number
   /**
    * Guardrails to run on input/output during generation.
-   * Merged with per-prompt, context-level, and global guardrails (per-call wins).
+   * Composed with prompt/context/global guardrails by the Safety registry.
+   * Duplicate policy ids throw; bind one guardrail to multiple boundaries when
+   * the same policy should apply in several places.
    */
   guardrails?: Guardrail[]
   /**

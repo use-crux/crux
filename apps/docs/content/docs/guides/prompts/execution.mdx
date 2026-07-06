@@ -258,15 +258,22 @@ const sdkMessages = fromMessages(messages);
 
 ## Framework-agnostic generate functions
 
-Some `@use-crux/core` APIs (like `llmJudge`, `extractKeyFacts`, `summarizeMessages`) accept a generic `GenerateObjectFn` or `GenerateTextFn` instead of being tied to a specific SDK. Each adapter exports these wrappers:
+Some `@use-crux/core` APIs (like `judge`, `extractKeyFacts`, `summarizeMessages`) accept a generic `GenerateObjectFn` or `GenerateTextFn` instead of being tied to a specific SDK. Each adapter exports these wrappers:
 
 <Tabs items={['Vercel AI SDK', 'OpenAI SDK', 'Google GenAI', 'Anthropic SDK']}>
 <Tab value="Vercel AI SDK">
 
 ```ts
 import { generateObjectFn, generateTextFn } from "@use-crux/ai";
+import { judge } from "@use-crux/core/scoring";
 
-const judge = llmJudge({ generate: generateObjectFn, model /* ... */ });
+const evaluator = judge({
+  id: "helpfulness",
+  criteria: "Does the answer resolve the request?",
+  scale: { min: 1, max: 5 },
+  generate: generateObjectFn,
+  model,
+});
 const result = await summarizeMessages({
   generate: generateTextFn,
   model,

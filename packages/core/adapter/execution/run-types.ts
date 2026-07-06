@@ -78,13 +78,13 @@ export interface AdapterExecutionGenerateArgs<
   /** Corrective retry policy for structured-output validation failures. */
   readonly validationRetry?: ValidationRetryOptions
 
-  /** Per-call semantic constraints merged with prompt/context constraints. */
+  /** Per-call semantic constraints composed by the Safety registry. */
   readonly constraints?: Constraint[]
 
   /** Shared retry cap for semantic constraint corrections. */
   readonly constraintMaxRetries?: number
 
-  /** Per-call guardrails merged with prompt/context guardrails. */
+  /** Per-call guardrails composed by the Safety registry. */
   readonly guardrails?: Guardrail[]
 
   /** Per-call safety posture overrides keyed by policy id. */

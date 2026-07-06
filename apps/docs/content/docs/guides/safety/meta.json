@@ -6,6 +6,7 @@
     "guardrails",
     "constraints",
     "validation-retry",
+    "beta-readiness",
     "security"
   ]
 }

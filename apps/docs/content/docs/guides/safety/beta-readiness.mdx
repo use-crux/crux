@@ -1,0 +1,78 @@
+---
+title: Safety beta readiness
+description: Stable beta migration notes, verification status, and known roadmap items for the Safety module.
+---
+
+Safety beta turns guardrails, constraints, tool policies, validation feedback,
+memory writes, observability, Devtools, and Quality assertions into one runtime
+policy boundary system.
+
+## What changed
+
+- Guardrails and constraints are authored with `{ id, on, run }`.
+- Boundaries are typed with `boundary.*`, including text, structured object,
+  structured path, tool, approval, retrieval, memory, and validation feedback
+  targets.
+- Guardrails can allow, block, warn, rewrite, or hold streaming segments.
+- Constraints judge guarded output candidates and retry with safe feedback.
+- `toolPolicy()` is the Safety-owned surface for tool blocking, approval,
+  argument screening, and result screening.
+- `safety.tune` can set `mode`, `stream`, or `enabled` per policy id for one
+  call.
+- Safety decisions are safe by default: public audit, observability, errors,
+  and validation feedback use safe capture summaries instead of raw sensitive
+  content.
+
+## Migration stance
+
+The Safety subpath is pre-launch beta, so this release intentionally hard
+migrates the weak phase-first authoring model. Existing prompt and context
+`guardrails` / `constraints` keys remain, but their element shape now uses the
+stable beta policy model:
+
+```ts
+// Before
+guardrail({ name: 'pii', phase: 'output', validate })
+constraint({ name: 'grounded', check })
+
+// After
+guardrail({ id: 'pii', on: boundary.output.text(), run })
+constraint({ id: 'grounded', on: boundary.output.text(), run })
+```
+
+Duplicate policy ids now throw. If the same logic should apply to several
+places, attach one guardrail to several boundaries:
+
+```ts
+guardrail({
+  id: 'pii',
+  on: [boundary.input.text(), boundary.output.text()],
+  run: guardrail.pii(),
+})
+```
+
+`llmJudge()` was renamed to `judge()`. The old `judgeConstraint()` bridge was
+removed from the public scoring surface; use `constraint.judge(...)` from
+`@use-crux/core/safety`.
+
+## Verification status
+
+The beta hardening pass runs the Safety session tests, adjacent validation and
+tool/memory/quality tests, AI stream safety tests, Project Index Safety tests,
+Devtools signal tests, package typechecks, and `make build`.
+
+## Known limitations and RFCs
+
+These items were deliberately excluded from the beta contract:
+
+| Area | RFC |
+| --- | --- |
+| Stream release pacing and richer segmenters | [#171](https://github.com/use-crux/crux/issues/171) |
+| Provisional stream emission and patch events | [#172](https://github.com/use-crux/crux/issues/172) |
+| Incremental structured-output path guardrails | [#173](https://github.com/use-crux/crux/issues/173) |
+| Per-boundary tuning and explicit policy replacement | [#174](https://github.com/use-crux/crux/issues/174) |
+| Additional boundary targets | [#175](https://github.com/use-crux/crux/issues/175) |
+| Capture anonymizers and per-boundary capture overrides | [#176](https://github.com/use-crux/crux/issues/176) |
+
+The current beta behavior stays fail-closed, provider-agnostic, and
+safe-by-default while those RFCs are resolved.

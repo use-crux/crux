@@ -150,11 +150,11 @@ export type AIGenerateOptions<
    * then falls back to LLM retry with corrective messages.
    */
   validationRetry?: ValidationRetryOptions;
-  /** Per-call semantic constraints (highest precedence in the safety merge). */
+  /** Per-call semantic constraints composed by the Safety registry. */
   constraints?: Constraint[];
   /** Shared cap on total constraint retries across all constraints. */
   constraintMaxRetries?: number;
-  /** Per-call guardrails (highest precedence in the safety merge). */
+  /** Per-call guardrails composed by the Safety registry. */
   guardrails?: Guardrail[];
   /** Per-call safety posture overrides keyed by policy id. */
   safety?: SafetyTuneOptions;

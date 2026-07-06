@@ -74,6 +74,23 @@ Built-in text guardrails such as `guardrail.pii()`, `guardrail.secrets()`, and
 `guardrail.injection()` default to sentence-level streaming checks. Classifier
 guardrails and object/path guardrails run at final output unless you tune them.
 
+## Beta limitations and roadmap
+
+Safety beta deliberately ships the correctness-critical boundary model first.
+The following follow-ups are tracked as RFCs:
+
+| Limitation | RFC |
+| --- | --- |
+| Stream release pacing and richer segmenters such as `Intl.Segmenter` | [#171](https://github.com/use-crux/crux/issues/171) |
+| Provisional stream emission with later patch/revision events | [#172](https://github.com/use-crux/crux/issues/172) |
+| Incremental structured-output path guardrails while object streams are still partial | [#173](https://github.com/use-crux/crux/issues/173) |
+| Per-boundary `safety.tune` and explicit policy replacement | [#174](https://github.com/use-crux/crux/issues/174) |
+| Additional boundaries such as system prompts, context injection, memory reads, tool definitions, and handoffs | [#175](https://github.com/use-crux/crux/issues/175) |
+| Capture anonymizer patterns and per-boundary capture overrides | [#176](https://github.com/use-crux/crux/issues/176) |
+
+For the release status and migration summary, see
+[Safety beta readiness](/docs/guides/safety/beta-readiness).
+
 ## When should I use a guardrail?
 
 - You need to **redact PII** before logging, before sending to a tool, or before showing output
@@ -122,6 +139,6 @@ ctx.expect.decisionReport.safety.toHaveOutcome('pii', 'rewrite', {
 
 ## How this fits with the rest of Crux
 
-- **[Quality](/docs/guides/quality)** validates output quality *during testing*. Guardrails and constraints validate it *during execution*. `judgeConstraint()` (`@use-crux/core/scoring`) bridges the two by enforcing an LLM-judge score as a constraint.
+- **[Quality](/docs/guides/quality)** validates output quality *during testing*. Guardrails and constraints validate it *during execution*. `constraint.judge(...)` bridges a scoring judge into runtime Safety enforcement, while `constraintScorer()` runs production constraints in eval suites.
 - **[Tools](/docs/guides/tools)** can implement domain-specific safety checks that need external data.
 - **[Devtools](/docs/guides/observability/devtools)** trace every guardrail hit and constraint retry.

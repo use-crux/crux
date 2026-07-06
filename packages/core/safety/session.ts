@@ -7,17 +7,18 @@
  * {@link createSafety}. The session owns everything the adapter dialects
  * used to coordinate by hand:
  *
- * - Three-scope policy merge (per-call > per-prompt > global) including
- *   reading runtime globals — callers never touch the registry.
- * - Phase splitting and guarded-content selection (last user message with
- *   prompt-text fallback), including redaction write-back.
- * - The constraint retry state machine and corrective-message phrasing
- *   (injectable via {@link ConstraintFeedbackFormatter}).
+ * - Policy registry construction across global, prompt, and call scopes.
+ *   Duplicate policy ids fail fast, and callers tune posture explicitly with
+ *   `safety.tune` instead of relying on implicit override precedence.
+ * - Boundary splitting and input guarding for every user message, including
+ *   redaction/rewrite write-back before provider execution.
+ * - The guardrails-before-constraints convergence loop and corrective-message
+ *   phrasing (injectable via {@link ConstraintFeedbackFormatter}).
  * - Suspension policy: output safety is skipped on tool-approval suspension.
  * - Instrumentation hook fan-out and all safety observability emission.
  * - Audit accumulation across phases and `TraceMeta` shaping via `stamp()`.
- * - The streaming sub-protocol ("LLM Suspense"): per-chunk guard evaluation
- *   with hold buffers, mid-stream transforms, and flush-time validation.
+ * - The streaming sub-protocol: sentence-gated stage cascades, explicit
+ *   hold/final/disabled modes, and final constraint reporting.
  *
  * Adapter dialects must contain zero safety policy: construct a session,
  * call `guardInput()` before the first provider call, call
@@ -147,11 +148,13 @@ export interface SafetyStreamSeal extends SafetyOutput {
 }
 
 /**
- * Streaming sub-protocol ("LLM Suspense"): per-chunk guard evaluation with
- * hold buffers and mid-stream transforms. Owns `buffer: 'none'` vs `'full'`
- * routing, held-content accumulation/release, and flush-time validation.
- * Constraints run report-only at `finish()` — a live stream cannot
- * regenerate. Constraint `onChunk` may abort a stream that is going wrong.
+ * Streaming sub-protocol for one model output stream.
+ *
+ * Text flows through a gated stage cascade: each stage consumes the cleared
+ * output of the previous stage, and content is emitted only after every
+ * enforcing stream guard has allowed, rewritten, or warned on the segment.
+ * Constraints run report-only at `finish()` because a live stream cannot
+ * regenerate earlier text.
  */
 export interface SafetyStream {
   /**
@@ -165,8 +168,8 @@ export interface SafetyStream {
   feed(chunk: string): Promise<SafetyStreamDirective>
 
   /**
-   * End of stream: release held content, run `buffer: 'full'` guards on the
-   * accumulated text, run constraints report-only, return the final seal.
+   * End of stream: flush held segments, run final-only guards and
+   * report-mode constraints, then return the final seal.
    */
   finish(): Promise<SafetyStreamSeal>
 
@@ -184,10 +187,12 @@ export interface Safety {
   readonly enabled: boolean
 
   /**
-   * Input phase. Owns last-user-message extraction (with prompt-text
-   * fallback) and writes redacted/transformed content back into the
-   * returned messages (or prompt). Throws {@link GuardrailBlockedError} on
-   * block.
+   * Input boundary pass.
+   *
+   * Runs input guardrails over every user message in order. Rewrites are
+   * written back into the returned messages before the provider sees them.
+   * If no user message exists, the optional prompt fallback is guarded.
+   * Throws {@link GuardrailBlockedError} on block.
    */
   guardInput(input: {
     readonly messages: readonly Message[]
@@ -195,10 +200,13 @@ export interface Safety {
   }): Promise<{ readonly messages: readonly Message[]; readonly prompt?: string }>
 
   /**
-   * Output phase, fixed order: constraints (parallel check,
-   * combined-feedback retries via `regenerate`) then output guardrails on
-   * the surviving text. `suspended: true` (tool-approval) skips output
-   * safety — that policy is owned here, not by dialects. Throws
+   * Output boundary pass.
+   *
+   * Fixed order: output guardrails first, then constraints over the guarded
+   * candidate. Constraint retries call `regenerate`, guard the regenerated
+   * candidate, and then re-check constraints. `suspended: true`
+   * (tool-approval) skips output safety because the response is an approval
+   * request, not final model output. Throws
    * {@link ConstraintViolationError} / {@link GuardrailBlockedError}.
    *
    * `regenerate` is the only dialect-specific concern: append the
