@@ -21,9 +21,14 @@ import { scanTimers, type KernelTimerDeps } from './kernel-timers'
 import { transition, type WorkItem } from './work'
 import type { RuntimeWaiter } from '../ports/waiters'
 import type { ResolvedRuntimeRetentionConfig } from './retention'
+import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
 
 /** Dependencies for runtime maintenance. */
 export interface KernelMaintenanceDeps extends KernelTimerDeps {
+  /** Durable runtime store. */
+  readonly store: RuntimeStoreAdapter
+  /** Execute a named composite through the store default or adapter override. */
+  readonly runComposite: RuntimeCompositeRunner
   /** Lease TTL in milliseconds. */
   readonly leaseTtlMs: number
   /** Resolved retention policy for terminal runtime records. */
@@ -82,7 +87,7 @@ export async function maintenanceTick(
 }
 
 async function reclaimExpiredLeases(
-  deps: Pick<KernelMaintenanceDeps, 'store' | 'leaseTtlMs'>,
+  deps: Pick<KernelMaintenanceDeps, 'store' | 'runComposite' | 'leaseTtlMs'>,
   options: {
     readonly namespace?: string
     readonly limit?: number
@@ -101,7 +106,7 @@ async function reclaimExpiredLeases(
     })
     if (!lease) continue
     try {
-      if (await reclaimLeasedWork(deps.store, work)) {
+      if (await reclaimLeasedWork(deps, work)) {
         reclaimedCount += 1
       }
     } finally {
@@ -112,23 +117,30 @@ async function reclaimExpiredLeases(
 }
 
 async function reclaimLeasedWork(
-  store: RuntimeStoreAdapter,
+  deps: Pick<KernelMaintenanceDeps, 'runComposite'>,
   work: WorkItem,
 ): Promise<boolean> {
-  return await store.transact(async (tx) => {
-    const current = await tx.state.getWork(work.workId, {
-      namespace: work.namespace,
-    })
-    if (!current || current.status !== 'leased') return false
-    const pending = transition(current, { status: 'pending' })
-    await tx.state.putWork(pending)
-    await tx.outbox.put(wakeEnvelopeForWork(pending))
-    return true
+  return await deps.runComposite('maintenance.reclaim-lease', { work })
+}
+
+/** Reclaim one leased work row inside a transaction. */
+export async function reclaimLeasedWorkInTransaction(
+  tx: RuntimeStoreTransaction,
+  _deps: RuntimeCompositeDeps,
+  input: { readonly work: WorkItem },
+): Promise<boolean> {
+  const current = await tx.state.getWork(input.work.workId, {
+    namespace: input.work.namespace,
   })
+  if (!current || current.status !== 'leased') return false
+  const pending = transition(current, { status: 'pending' })
+  await tx.state.putWork(pending)
+  await tx.outbox.put(wakeEnvelopeForWork(pending))
+  return true
 }
 
 async function requeueOrphanedPendingWork(
-  deps: Pick<KernelMaintenanceDeps, 'store'>,
+  deps: Pick<KernelMaintenanceDeps, 'store' | 'runComposite'>,
   options: {
     readonly namespace?: string
     readonly now: Date
@@ -147,7 +159,7 @@ async function requeueOrphanedPendingWork(
     if (work.notBefore && work.notBefore.getTime() > options.now.getTime()) {
       continue
     }
-    if (await requeuePendingWorkIfStillOrphaned(deps.store, work)) {
+    if (await requeuePendingWorkIfStillOrphaned(deps, work)) {
       requeued += 1
     }
   }
@@ -155,34 +167,41 @@ async function requeueOrphanedPendingWork(
 }
 
 async function requeuePendingWorkIfStillOrphaned(
-  store: RuntimeStoreAdapter,
+  deps: Pick<KernelMaintenanceDeps, 'runComposite'>,
   work: WorkItem,
 ): Promise<boolean> {
-  return await store.transact(async (tx) => {
-    const current = await tx.state.getWork(work.workId, {
-      namespace: work.namespace,
-    })
-    if (!current || current.status !== 'pending') return false
-    const before = await tx.outbox.list({
-      namespace: current.namespace,
-      state: 'pending',
-      limit: 1_000,
-    })
-    const hasPendingWake = before.some(
-      (item) =>
-        item.envelope.workId === current.workId &&
-        item.envelope.idempotencyKey === current.idempotencyKey,
-    )
-    if (hasPendingWake) return false
-    await tx.outbox.put(wakeEnvelopeForWork(current), {
-      deliverAt: current.notBefore ?? current.updatedAt,
-    })
-    return true
+  return await deps.runComposite('maintenance.requeue-orphan', { work })
+}
+
+/** Requeue one pending work row if no pending wake remains. */
+export async function requeuePendingWorkIfStillOrphanedInTransaction(
+  tx: RuntimeStoreTransaction,
+  _deps: RuntimeCompositeDeps,
+  input: { readonly work: WorkItem },
+): Promise<boolean> {
+  const current = await tx.state.getWork(input.work.workId, {
+    namespace: input.work.namespace,
   })
+  if (!current || current.status !== 'pending') return false
+  const before = await tx.outbox.list({
+    namespace: current.namespace,
+    state: 'pending',
+    limit: 1_000,
+  })
+  const hasPendingWake = before.some(
+    (item) =>
+      item.envelope.workId === current.workId &&
+      item.envelope.idempotencyKey === current.idempotencyKey,
+  )
+  if (hasPendingWake) return false
+  await tx.outbox.put(wakeEnvelopeForWork(current), {
+    deliverAt: current.notBefore ?? current.updatedAt,
+  })
+  return true
 }
 
 async function expireWaiters(
-  deps: Pick<KernelMaintenanceDeps, 'store' | 'newWorkId' | 'now'>,
+  deps: Pick<KernelMaintenanceDeps, 'store' | 'runComposite'>,
   options: {
     readonly namespace?: string
     readonly now: Date
@@ -195,23 +214,32 @@ async function expireWaiters(
     limit: options.limit,
   })
 
-  return await deps.store.transact(async (tx) => {
-    let expiredCount = 0
-    for (const waiter of expired) {
-      const producedWork = await expireWaiterInTransaction({
-        tx,
-        deps,
-        waiter,
-      })
-      if (producedWork) expiredCount += 1
-    }
-    return expiredCount
+  return await deps.runComposite('maintenance.expire-waiters', {
+    waiters: expired,
   })
+}
+
+/** Expire claimed waiter rows inside a transaction. */
+export async function expireWaitersInTransaction(
+  tx: RuntimeStoreTransaction,
+  deps: RuntimeCompositeDeps,
+  input: { readonly waiters: readonly RuntimeWaiter[] },
+): Promise<number> {
+  let expiredCount = 0
+  for (const waiter of input.waiters) {
+    const producedWork = await expireWaiterInTransaction({
+      tx,
+      deps,
+      waiter,
+    })
+    if (producedWork) expiredCount += 1
+  }
+  return expiredCount
 }
 
 async function expireWaiterInTransaction(options: {
   readonly tx: RuntimeStoreTransaction
-  readonly deps: Pick<KernelMaintenanceDeps, 'newWorkId' | 'now'>
+  readonly deps: RuntimeCompositeDeps
   readonly waiter: RuntimeWaiter
 }): Promise<boolean> {
   const won = await options.tx.waiters.transition(

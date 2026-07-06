@@ -14,6 +14,8 @@ import type {
   WorkItem,
 } from '@use-crux/core/runtime'
 
+const COMPOSITE_DATE_TAG = '$cruxRuntimeDate'
+
 export function encodeWorkForCreate(input: NewWorkItem): Record<string, unknown> {
   const now = input.now ?? new Date()
   return clean({
@@ -124,6 +126,52 @@ export function encodeLease(lease: Lease): Record<string, unknown> {
 
 export function encodeWakeEnvelope(envelope: WakeEnvelope): Record<string, unknown> {
   return { ...envelope }
+}
+
+/** Encode a composite payload for transport through Convex `v.any()`. */
+export function encodeCompositeValue(value: unknown): unknown {
+  if (value instanceof Date) {
+    return { [COMPOSITE_DATE_TAG]: value.getTime() }
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => encodeCompositeValue(item))
+  }
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
+      key,
+      encodeCompositeValue(entry),
+    ]),
+  )
+}
+
+/** Decode a composite payload transported through Convex `v.any()`. */
+export function decodeCompositeValue<T>(value: unknown): T {
+  return decodeCompositeUnknown(value) as T
+}
+
+function decodeCompositeUnknown(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((item) => decodeCompositeUnknown(item))
+  }
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+  const record = value as Record<string, unknown>
+  if (
+    Object.keys(record).length === 1 &&
+    typeof record[COMPOSITE_DATE_TAG] === 'number'
+  ) {
+    return new Date(record[COMPOSITE_DATE_TAG])
+  }
+  return Object.fromEntries(
+    Object.entries(record).map(([key, entry]) => [
+      key,
+      decodeCompositeUnknown(entry),
+    ]),
+  )
 }
 
 function decodeLastError(value: unknown): WorkItem['lastError'] {

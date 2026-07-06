@@ -11,7 +11,6 @@
 import type { WorkId } from '../ports/ids'
 import type {
   RuntimeOutboxItem,
-  RuntimeStoreAdapter,
   RuntimeStoreTransaction,
   RuntimeTimerRecord,
 } from '../store'
@@ -23,15 +22,19 @@ import type {
   ScanTimersResult,
   ScheduleTimerInput,
 } from './kernel-types'
+import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
 
 /** Dependencies for timer kernel operations. */
-export interface KernelTimerDeps {
-  /** Durable runtime store. */
-  readonly store: RuntimeStoreAdapter
-  /** Kernel-owned work id generator for timer-minted work. */
-  readonly newWorkId: () => WorkId
-  /** Current time source. */
-  readonly now: () => Date
+export interface KernelTimerDeps extends RuntimeCompositeDeps {
+  /** Store-backed timer port used for pre-transaction claims and single puts. */
+  readonly store: {
+    readonly timers: {
+      readonly claimDue: RuntimeStoreTransaction['timers']['claimDue']
+      readonly put: RuntimeStoreTransaction['timers']['put']
+    }
+  }
+  /** Execute a named composite through the store default or adapter override. */
+  readonly runComposite: RuntimeCompositeRunner
 }
 
 /** Persist a store-backed timer record. */
@@ -39,7 +42,14 @@ export async function scheduleTimer(
   deps: KernelTimerDeps,
   input: ScheduleTimerInput,
 ): Promise<RuntimeTimerRecord> {
-  return await deps.store.transact((tx) => scheduleTimerInTransaction(tx, input))
+  return await deps.store.timers.put({
+    namespace: input.namespace,
+    fireAt: input.fireAt,
+    workId: input.workId,
+    waiterId: input.waiterId,
+    idleScope: input.idleScope,
+    work: input.work,
+  })
 }
 
 /** Persist a timer record inside an existing composite transaction. */
@@ -69,29 +79,38 @@ export async function scanTimers(
     limit: options.limit,
   })
 
-  return await deps.store.transact(async (tx) => {
-    const results = await due.reduce<Promise<readonly FireTimerRecordResult[]>>(
-      async (previous, timer) => [
-        ...(await previous),
-        await fireTimerRecord({ tx, deps, timer }),
-      ],
-      Promise.resolve([]),
-    )
-    const outboxItems = results
-      .map((result) => result.outboxItem)
-      .filter((item): item is RuntimeOutboxItem => item !== undefined)
-    return {
-      fired: outboxItems.length,
-      skipped: results.length - outboxItems.length,
-      outboxItems,
-    }
-  })
+  return await deps.runComposite('timers.fire-due', { timers: due })
+}
+
+/** Fire claimed timer records inside a transaction. */
+export async function fireDueTimersInTransaction(
+  tx: RuntimeStoreTransaction,
+  deps: RuntimeCompositeDeps,
+  input: { readonly timers: readonly RuntimeTimerRecord[] },
+): Promise<ScanTimersResult> {
+  const results = await input.timers.reduce<
+    Promise<readonly FireTimerRecordResult[]>
+  >(
+    async (previous, timer) => [
+      ...(await previous),
+      await fireTimerRecord({ tx, deps, timer }),
+    ],
+    Promise.resolve([]),
+  )
+  const outboxItems = results
+    .map((result) => result.outboxItem)
+    .filter((item): item is RuntimeOutboxItem => item !== undefined)
+  return {
+    fired: outboxItems.length,
+    skipped: results.length - outboxItems.length,
+    outboxItems,
+  }
 }
 
 /** Fire one timer record inside a transaction. */
 export async function fireTimerRecord(options: {
   readonly tx: RuntimeStoreTransaction
-  readonly deps: KernelTimerDeps
+  readonly deps: RuntimeCompositeDeps
   readonly timer: RuntimeTimerRecord
 }): Promise<FireTimerRecordResult> {
   const transitioned = await options.tx.timers.transition(
@@ -127,7 +146,7 @@ export async function fireTimerRecord(options: {
 
 async function createTimerMintedWork(options: {
   readonly tx: RuntimeStoreTransaction
-  readonly deps: KernelTimerDeps
+  readonly deps: RuntimeCompositeDeps
   readonly timer: RuntimeTimerRecord
 }) {
   const workId = options.deps.newWorkId()

@@ -5,7 +5,7 @@
  */
 
 import type { WorkId } from '../ports/ids'
-import type { RuntimeStoreAdapter } from '../store'
+import type { RuntimeStoreAdapter, RuntimeStoreTransaction } from '../store'
 import type { WakeEnvelope } from './envelope'
 import type {
   RuntimeKernelOptions,
@@ -23,12 +23,15 @@ import {
   startLeaseExtensionHeartbeat,
 } from './kernel-leases'
 import { completeWork, failWork } from './kernel-wake-commits'
+import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
 import { transition } from './work'
 
 /** Dependencies for wake handling. */
 export interface HandleWakeDeps {
   /** Durable runtime store. */
   readonly store: RuntimeStoreAdapter
+  /** Execute a named composite through the store default or adapter override. */
+  readonly runComposite: RuntimeCompositeRunner
   /** Runtime target registry. */
   readonly targets: RuntimeTargetMap
   /** Wake verifier. */
@@ -82,10 +85,8 @@ export async function handleWake(
   const target = deps.targets[envelope.target]
   if (!target) {
     await blockMissingTarget({
-      store: deps.store,
+      runComposite: deps.runComposite,
       envelope,
-      now: deps.now,
-      newWorkId: deps.newWorkId,
     })
     return { status: 200, outcome: 'blocked' }
   }
@@ -142,7 +143,7 @@ export async function handleWake(
     try {
       const outcome = await target.execute({ work: leased, lease })
       await completeWork({
-        store: deps.store,
+        runComposite: deps.runComposite,
         work: leased,
         leaseToken: lease.token,
         outcome,
@@ -156,7 +157,7 @@ export async function handleWake(
         return { status: 200, outcome: 'lease-lost' }
       }
       return await failWork({
-        store: deps.store,
+        runComposite: deps.runComposite,
         work: leased,
         leaseToken: lease.token,
         error,
@@ -173,39 +174,46 @@ export async function handleWake(
 }
 
 interface BlockMissingTargetOptions {
-  readonly store: RuntimeStoreAdapter
+  readonly runComposite: RuntimeCompositeRunner
   readonly envelope: WakeEnvelope
-  readonly now: () => Date
-  readonly newWorkId: () => WorkId
 }
 
 async function blockMissingTarget(
   options: BlockMissingTargetOptions,
 ): Promise<void> {
-  const error = targetNotFoundError(options.envelope.target)
-  await options.store.transact(async (tx) => {
-    const current = await tx.state.getWork(options.envelope.workId, {
-      namespace: options.envelope.ns,
-    })
-    if (current && !isTerminalWork(current)) {
-      await putWorkWithIdleAccounting(
-        tx,
-        { newWorkId: options.newWorkId, now: options.now },
-        current,
-        transition(current, {
-          status: 'blocked',
-          lastError: {
-            code: error.code,
-            message: error.message,
-            at: options.now(),
-          },
-        }),
-      )
-    }
-    await tx.state.putIdempotencyKey({
-      namespace: options.envelope.ns,
-      key: options.envelope.idempotencyKey,
-      completedAt: options.now(),
-    })
+  await options.runComposite('wake.block-missing-target', {
+    envelope: options.envelope,
+  })
+}
+
+/** Block missing-target work inside a transaction. */
+export async function blockMissingTargetInTransaction(
+  tx: RuntimeStoreTransaction,
+  deps: RuntimeCompositeDeps,
+  input: { readonly envelope: WakeEnvelope },
+): Promise<void> {
+  const error = targetNotFoundError(input.envelope.target)
+  const current = await tx.state.getWork(input.envelope.workId, {
+    namespace: input.envelope.ns,
+  })
+  if (current && !isTerminalWork(current)) {
+    await putWorkWithIdleAccounting(
+      tx,
+      { newWorkId: deps.newWorkId, now: deps.now },
+      current,
+      transition(current, {
+        status: 'blocked',
+        lastError: {
+          code: error.code,
+          message: error.message,
+          at: deps.now(),
+        },
+      }),
+    )
+  }
+  await tx.state.putIdempotencyKey({
+    namespace: input.envelope.ns,
+    key: input.envelope.idempotencyKey,
+    completedAt: deps.now(),
   })
 }

@@ -9,7 +9,6 @@ import type { RuntimePendingSuspend } from '../ports/state'
 import type { RuntimeWaiter } from '../ports/waiters'
 import type {
   RuntimeOutboxItem,
-  RuntimeStoreAdapter,
   RuntimeStoreTransaction,
 } from '../store'
 import { flowEventResumeKey, taskRunKey } from './idempotency'
@@ -23,6 +22,7 @@ import type {
   RecordSuspensionInput,
   RuntimeSuspendRegistration,
 } from './kernel-types'
+import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
 import {
   isTerminalWork,
   targetIdForNewWork,
@@ -32,17 +32,12 @@ import { scheduleTimerInTransaction } from './kernel-timers'
 import { transition, type WorkItem } from './work'
 
 /** Dependencies for event/suspension kernel operations. */
-export interface EmitEventInTransactionDeps {
-  /** Kernel-owned work id generator for unowned waiter firings. */
-  readonly newWorkId: () => WorkId
-  /** Current time source. */
-  readonly now: () => Date
-}
+export interface EmitEventInTransactionDeps extends RuntimeCompositeDeps {}
 
 /** Dependencies for event/suspension kernel operations. */
 export interface KernelEventDeps extends EmitEventInTransactionDeps {
-  /** Durable runtime store. */
-  readonly store: RuntimeStoreAdapter
+  /** Execute a named composite through the store default or adapter override. */
+  readonly runComposite: RuntimeCompositeRunner
 }
 
 /** Persist a flow suspension and owned waiter registrations atomically. */
@@ -50,9 +45,7 @@ export async function recordSuspension(
   deps: KernelEventDeps,
   input: RecordSuspensionInput,
 ): Promise<void> {
-  await deps.store.transact(async (tx) => {
-    await recordSuspensionInTransaction(tx, deps, input)
-  })
+  await deps.runComposite('suspension.record', input)
 }
 
 /** Persist a flow suspension inside an existing kernel transaction. */
@@ -107,9 +100,7 @@ export async function emitEvent(
   deps: KernelEventDeps,
   input: EmitEventInput,
 ): Promise<EmitEventResult> {
-  return await deps.store.transact((tx) =>
-    emitEventInTransaction(tx, deps, input),
-  )
+  return await deps.runComposite('event.emit', input)
 }
 
 /** Append an event and fire matching waiters inside an existing transaction. */

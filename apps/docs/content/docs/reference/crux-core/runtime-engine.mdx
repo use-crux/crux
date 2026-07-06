@@ -178,6 +178,8 @@ Store adapters must persist the full delivered-suspend record written by `state.
 
 Store adapters also implement bounded `prune()` methods on the owning ports: events, terminal work/snapshots/idempotency keys, timers, waiters, and outbox. Prune methods must delete only records already terminal or settled before the cutoff, respect `limit`, and return `truncated: true` when more eligible rows remain.
 
+Store adapters may also implement `runComposite(kind, input)`. This optional method runs one named kernel composite atomically and returns the typed result for that composite. If omitted, core calls `transact()` and executes the same kernel-owned body in-process. Adapters should override it only when the platform needs a native atomic boundary, such as Convex running `runtime.composites.run` as one component mutation.
+
 The conformance helpers live on `@use-crux/core/runtime/testing`:
 
 ```ts

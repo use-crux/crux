@@ -84,6 +84,19 @@ export type {
   ScheduleTimerInput,
 } from './engine/kernel'
 
+export {
+  runDefaultRuntimeComposite,
+  runtimeCompositeBodies,
+} from './engine/composites'
+export type {
+  RuntimeCompositeBody,
+  RuntimeCompositeDeps,
+  RuntimeCompositeInput,
+  RuntimeCompositeKind,
+  RuntimeCompositeResult,
+  RuntimeCompositeRunner,
+} from './engine/composites'
+
 export { bindHostRuntime } from './api/bind-host-runtime'
 export { createRuntime } from './api/create-runtime'
 export {

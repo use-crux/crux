@@ -9,6 +9,7 @@
  */
 
 import type * as memory from "../memory.js";
+import type * as runtime_composites from "../runtime/composites.js";
 import type * as runtime_events from "../runtime/events.js";
 import type * as runtime_leases from "../runtime/leases.js";
 import type * as runtime_outbox from "../runtime/outbox.js";
@@ -27,6 +28,7 @@ import { anyApi, componentsGeneric } from "convex/server";
 
 const fullApi: ApiFromModules<{
   memory: typeof memory;
+  "runtime/composites": typeof runtime_composites;
   "runtime/events": typeof runtime_events;
   "runtime/leases": typeof runtime_leases;
   "runtime/outbox": typeof runtime_outbox;

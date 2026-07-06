@@ -67,6 +67,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     runtime: {
+      composites: {
+        run: FunctionReference<
+          "mutation",
+          "internal",
+          { input: any; kind: string },
+          any,
+          Name
+        >;
+      };
       events: {
         append: FunctionReference<
           "mutation",

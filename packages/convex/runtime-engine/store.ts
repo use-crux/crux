@@ -1,3 +1,4 @@
+import { createRuntimeError } from '@use-crux/core/runtime'
 import type {
   ClaimDueTimersOptions,
   ClaimExpiredWaitersOptions,
@@ -7,6 +8,9 @@ import type {
   LeasePort,
   RuntimeOutboxPort,
   RuntimeOutboxItem,
+  RuntimeCompositeInput,
+  RuntimeCompositeKind,
+  RuntimeCompositeResult,
   RuntimeStatePort,
   RuntimeStoreAdapter,
   RuntimeStoreTransaction,
@@ -31,6 +35,8 @@ import {
   encodeTimer,
   encodeWaiter,
   encodeWakeEnvelope,
+  decodeCompositeValue,
+  encodeCompositeValue,
   encodeWork,
   encodeWorkForCreate,
 } from './codec'
@@ -44,6 +50,9 @@ export interface ConvexRuntimeComponent {
     readonly timers: Record<string, unknown>
     readonly outbox: Record<string, unknown>
     readonly leases: Record<string, unknown>
+    readonly composites?: {
+      readonly run?: unknown
+    }
   }
 }
 
@@ -227,6 +236,27 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     id: 'convex',
     ...transaction,
     leases,
+    runComposite: async <K extends RuntimeCompositeKind>(
+      kind: K,
+      input: RuntimeCompositeInput[K],
+    ): Promise<RuntimeCompositeResult[K]> => {
+      const ref = refs.composites?.run
+      if (!ref) {
+        throw createRuntimeError({
+          code: 'SETUP_REQUIRED',
+          whatFailed:
+            'Convex Runtime Engine component is missing runtime.composites.run.',
+          why: 'Runtime Engine composites must execute inside one Convex component mutation for host-bound atomicity.',
+          whatStillWorks:
+            'Non-runtime Convex storage and already deployed older runtime functions can still run until they hit a composite commit.',
+          nextStep:
+            'Regenerate or update the Crux Convex component so components.crux.runtime.composites.run is available.',
+        })
+      }
+      return decodeCompositeValue<RuntimeCompositeResult[K]>(
+        await run(ref, { kind, input: encodeCompositeValue(input) }),
+      )
+    },
     transact: <T>(fn: (tx: RuntimeStoreTransaction) => Promise<T>) => fn(transaction),
   })
 }

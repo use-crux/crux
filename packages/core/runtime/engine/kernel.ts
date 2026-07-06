@@ -30,6 +30,7 @@ import type {
 } from './kernel-types'
 import { handleWake } from './kernel-wake'
 import { resolveRuntimeRetentionConfig } from './retention'
+import { runDefaultRuntimeComposite } from './composites'
 
 const DEFAULT_LEASE_TTL_MS = 60_000
 
@@ -74,8 +75,17 @@ export function createRuntimeKernel(
   const retention = resolveRuntimeRetentionConfig(options.retention, {
     redeliveryHorizonMs: options.redeliveryHorizonMs,
   })
+  const compositeDeps = {
+    now,
+    newWorkId: options.newWorkId,
+  }
+  const runComposite =
+    options.store.runComposite ??
+    ((kind, input) =>
+      runDefaultRuntimeComposite(options.store, compositeDeps, kind, input))
   const deps = Object.freeze({
     store: options.store,
+    runComposite,
     targets: options.targets,
     verifyWake,
     newWorkId: options.newWorkId,

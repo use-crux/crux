@@ -11,6 +11,14 @@ import type { ConvexCtxPort } from '../store'
 
 const modules = {
   '../src/component/_generated/server.ts': () => import('../src/component/_generated/server'),
+  '../src/component/runtime/composite-events.ts': () => import('../src/component/runtime/composite-events'),
+  '../src/component/runtime/composite-outbox.ts': () => import('../src/component/runtime/composite-outbox'),
+  '../src/component/runtime/composite-state.ts': () => import('../src/component/runtime/composite-state'),
+  '../src/component/runtime/composite-timers.ts': () => import('../src/component/runtime/composite-timers'),
+  '../src/component/runtime/composite-transaction.ts': () => import('../src/component/runtime/composite-transaction'),
+  '../src/component/runtime/composite-utils.ts': () => import('../src/component/runtime/composite-utils'),
+  '../src/component/runtime/composite-waiters.ts': () => import('../src/component/runtime/composite-waiters'),
+  '../src/component/runtime/composites.ts': () => import('../src/component/runtime/composites'),
   '../src/component/runtime/events.ts': () => import('../src/component/runtime/events'),
   '../src/component/runtime/leases.ts': () => import('../src/component/runtime/leases'),
   '../src/component/runtime/outbox.ts': () => import('../src/component/runtime/outbox'),
@@ -132,6 +140,9 @@ function runtimeComponent(): ConvexRuntimeComponent {
         claim: mutationRef('runtime/leases:claim'),
         extend: mutationRef('runtime/leases:extend'),
         release: mutationRef('runtime/leases:release'),
+      },
+      composites: {
+        run: mutationRef('runtime/composites:run'),
       },
     },
   }

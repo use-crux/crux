@@ -78,6 +78,14 @@ Every prune method must respect `limit` and return `{ removed, truncated }`. Ada
 
 `leases.extend()` must preserve the token returned by `leases.claim()`. The kernel records that token on leased work and checks it inside final commit transactions; a stale token becomes `LEASE_LOST` instead of a retry or dead letter.
 
+## Composite commit rules
+
+Kernel operations that need multiple writes use named composites such as `task.enqueue`, `event.emit`, `wake.complete`, and `maintenance.reclaim-lease`.
+
+Most store adapters only need `transact(fn)`. Core's default composite runner executes the kernel-owned body inside that transaction, so retry policy, waiter races, idempotency, lease fencing, and idle accounting stay in core.
+
+Implement `runComposite(kind, input)` only when your platform has a stronger native atomic boundary than a direct function callback. Convex uses this path to run each composite inside one component mutation while importing the same core body registry. Custom `runComposite` implementations must preserve the exact named composite inputs/results and should be covered by `runStoreAdapterTests()`.
+
 ## Related
 
 - Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)

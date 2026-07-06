@@ -10,6 +10,11 @@
  */
 
 import type { WakeEnvelope } from './engine/envelope'
+import type {
+  RuntimeCompositeInput,
+  RuntimeCompositeKind,
+  RuntimeCompositeResult,
+} from './engine/composites'
 import type { DurableEventPort } from './ports/events'
 import type { LeasePort } from './ports/leases'
 import type { TimerId, WaiterId, WorkId } from './ports/ids'
@@ -202,6 +207,16 @@ export interface RuntimeStoreAdapter extends RuntimeStoreTransaction {
   readonly id: string
   /** Durable leases for concurrent workers. */
   readonly leases: LeasePort
+  /**
+   * Run one named kernel composite as an adapter-native atomic operation.
+   *
+   * Adapters can omit this method to use the core default, which wraps the
+   * kernel-owned composite body in {@link RuntimeStoreAdapter.transact}.
+   */
+  runComposite?<K extends RuntimeCompositeKind>(
+    kind: K,
+    input: RuntimeCompositeInput[K],
+  ): Promise<RuntimeCompositeResult[K]>
   /** Run a function against an atomic transaction scope. */
   transact<T>(fn: (tx: RuntimeStoreTransaction) => Promise<T>): Promise<T>
 }
