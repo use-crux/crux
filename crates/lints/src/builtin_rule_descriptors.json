@@ -834,6 +834,41 @@
     "fidelity": "safe"
   },
   {
+    "id": "safety.duplicate_policy_id",
+    "source": "builtin",
+    "severity": "warning",
+    "category": "safety",
+    "maturity": "preview",
+    "confidence": "high",
+    "profiles": [
+      "recommended",
+      "strict"
+    ],
+    "title": "Safety policy id is duplicated",
+    "description": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
+    "rationale": "Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.",
+    "impact": "Duplicate policy ids can make Devtools, observability, and quality assertions point at the wrong safety policy.",
+    "docsUrl": "/docs/reference/crux-core/index-lints/safety-duplicate-policy-id",
+    "fixes": [
+      {
+        "title": "Rename one policy",
+        "description": "Give each guardrail, constraint, and tool policy a unique id within the project safety surface.",
+        "kind": "manual"
+      }
+    ],
+    "suppression": {
+      "supported": true,
+      "scope": "next-line",
+      "directive": "// crux-lint-disable-next-line safety.duplicate_policy_id -- reason"
+    },
+    "phase": "index",
+    "requires": [
+      "definitions",
+      "relations"
+    ],
+    "fidelity": "safe"
+  },
+  {
     "id": "memory.long_lived_without_retention",
     "source": "builtin",
     "severity": "info",

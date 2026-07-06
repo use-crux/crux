@@ -23,15 +23,13 @@ pub(crate) fn safety_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
 
 fn constraint_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     let config = parts.object_arg?;
-    let explicit_name = direct_string_property(config, "name");
-    let local_id = explicit_name
-        .clone()
-        .unwrap_or_else(|| parts.local_name.to_string());
-    let id = format!("constraint:{}", safe_id(&local_id));
+    let policy_id = policy_id_for(config, parts);
+    let id = format!("constraint:{}", safe_id(&policy_id));
     let targets = applies_to_refs(config, context);
 
     let mut facts = Map::new();
     facts.insert("kind".to_string(), Value::String("constraint".to_string()));
+    facts.insert("policyId".to_string(), Value::String(policy_id.clone()));
     insert_string(
         &mut facts,
         "severity",
@@ -46,6 +44,7 @@ fn constraint_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Op
         "exportName".to_string(),
         Value::String(parts.variable_name.to_string()),
     );
+    metadata.insert("policyId".to_string(), Value::String(policy_id.clone()));
     insert_string(
         &mut metadata,
         "severity",
@@ -62,7 +61,7 @@ fn constraint_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Op
         config,
         id,
         "constraint",
-        explicit_name.unwrap_or_else(|| parts.variable_name.to_string()),
+        policy_id,
         "validator",
         targets.refs,
     )
@@ -87,16 +86,14 @@ fn constraint_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Op
 
 fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     let config = parts.object_arg?;
-    let explicit_name = direct_string_property(config, "name");
-    let local_id = explicit_name
-        .clone()
-        .unwrap_or_else(|| parts.local_name.to_string());
-    let id = format!("guardrail:{}", safe_id(&local_id));
+    let policy_id = policy_id_for(config, parts);
+    let id = format!("guardrail:{}", safe_id(&policy_id));
     let targets = applies_to_refs(config, context);
     let phase = direct_string_property(config, "phase");
 
     let mut facts = Map::new();
     facts.insert("kind".to_string(), Value::String("guardrail".to_string()));
+    facts.insert("policyId".to_string(), Value::String(policy_id.clone()));
     insert_string(&mut facts, "policy", phase.clone());
     if let Some(applies_to) = targets.metadata.clone() {
         facts.insert("appliesTo".to_string(), applies_to);
@@ -107,6 +104,7 @@ fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
         "exportName".to_string(),
         Value::String(parts.variable_name.to_string()),
     );
+    metadata.insert("policyId".to_string(), Value::String(policy_id.clone()));
     insert_string(&mut metadata, "phase", phase);
     if let Some(applies_to) = targets.metadata {
         metadata.insert("appliesTo".to_string(), applies_to);
@@ -119,7 +117,7 @@ fn guardrail_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Opt
         config,
         id,
         "guardrail",
-        explicit_name.unwrap_or_else(|| parts.variable_name.to_string()),
+        policy_id,
         "policy",
         targets.refs,
     )
@@ -218,6 +216,12 @@ fn applies_to_refs(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -
         refs,
         metadata: (!metadata.is_empty()).then_some(Value::Array(metadata)),
     }
+}
+
+fn policy_id_for(config: &StaticSyntaxValue, parts: &CallParts<'_>) -> String {
+    direct_string_property(config, "id")
+        .or_else(|| direct_string_property(config, "name"))
+        .unwrap_or_else(|| parts.local_name.to_string())
 }
 
 fn identifier_property(config: &StaticSyntaxValue, property: &str) -> Option<String> {
