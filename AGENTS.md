@@ -2,6 +2,10 @@
 
 Crux is a TypeScript context engineering SDK with adapters, devtools, docs, and a native Go local runtime.
 
+## Code style
+- Always strive for concise, simple solutions
+- If a problem can be solved in a simpler way, propose it.
+
 ## Architecture
 
 - Monorepo: pnpm workspaces + Turborepo.
