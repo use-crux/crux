@@ -79,6 +79,7 @@ mod runtime {
 }
 mod safety {
     pub(crate) mod facts;
+    pub(crate) mod metadata;
 }
 mod schema;
 mod scorer {

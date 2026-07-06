@@ -141,11 +141,18 @@ func analyzeFileSet(files []string) map[string]bool {
 }
 
 func primaryFileSet(plan projectindex.ProjectStaticSyntaxPlan) map[string]bool {
+	if len(plan.PrimaryFiles) > 0 {
+		return fileSet(plan.PrimaryFiles)
+	}
 	files := append([]string(nil), plan.CacheHits...)
 	files = append(files, plan.CacheMisses...)
 	if plan.FilesToParse == nil || len(files) == 0 {
 		files = plan.Files
 	}
+	return fileSet(files)
+}
+
+func fileSet(files []string) map[string]bool {
 	selected := make(map[string]bool, len(files))
 	for _, file := range files {
 		if file != "" {
