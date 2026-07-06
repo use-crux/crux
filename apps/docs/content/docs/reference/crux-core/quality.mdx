@@ -187,6 +187,7 @@ thresholds such as `0.58 >= 0.7 => false` without parsing messages.
   - `memory` — `toHaveRead(key?)`, `toHaveWritten(key?)`, `toHaveValue(key, value)`
   - `routing` — `toHaveSelected(route)`, `toHaveClassifiedAs(label)`, `toHaveSelectedModel(id)`
   - `modelCalls` — `count()`, `toHaveUsedModel(id)`, `toHaveNoFallback()`
+  - `decisionReport.safety` — `toHaveOutcome(policyId, outcome, { reasonCode? })`
 
 Signals are read from the observability trace. Asserting on a signal that was
 not captured in this execution throws `UncapturedSignalError` (naming the

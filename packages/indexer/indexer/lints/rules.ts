@@ -37,6 +37,7 @@ export const indexLintRuleIds = [
   'flow.duplicate_suspend_name',
   'flow.undeclared_suspend_signal',
   'workspace.write_without_guardrail',
+  'safety.duplicate_policy_id',
   'memory.long_lived_without_retention',
   'resource.write_without_read',
   'consensus.missing_judge',
@@ -652,6 +653,29 @@ export const indexLintRules = {
         title: 'Attach a guardrail',
         description:
           'Attach a guardrail to the workspace or its write/delete tools so mutations are inspectable and policy-checked.',
+        kind: 'manual',
+      },
+    ],
+    suppression: { supported: true, scope: 'next-line' },
+  }),
+  'safety.duplicate_policy_id': defineIndexLintRule({
+    id: 'safety.duplicate_policy_id',
+    severity: 'warning',
+    category: 'safety',
+    maturity: 'preview',
+    confidence: 'high',
+    profiles: ['recommended', 'strict'],
+    title: 'Safety policy id is duplicated',
+    rationale:
+      'Safety policy ids are used in decisions, traces, Project Index rows, and test matchers. Reusing an id makes it hard to tell which policy blocked, rewrote, or retried a turn.',
+    impact:
+      'Duplicate policy ids can make Devtools, observability, and quality assertions point at the wrong safety policy.',
+    docsSlug: 'safety-duplicate-policy-id',
+    fixes: [
+      {
+        title: 'Rename one policy',
+        description:
+          'Give each guardrail, constraint, and tool policy a unique id within the project safety surface.',
         kind: 'manual',
       },
     ],

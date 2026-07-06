@@ -115,4 +115,25 @@ describe('turnHasWarningSignal', () => {
     ]
     expect(turnHasWarningSignal(r)).toBe(true)
   })
+
+  it('is true when a safety guardrail rewrote output', () => {
+    const r = cleanReport()
+    r.decisions = [
+      {
+        id: 'decision:safety:1:pii:model.output.text',
+        phase: 'checks',
+        kind: 'safety.guardrail',
+        subject: { kind: 'guardrail', id: 'pii', name: 'pii' },
+        outcome: 'rewrite',
+        reason: {
+          code: 'guardrail.redacted',
+          text: 'Guardrail pii rewrite on model.output.text.',
+          source: 'artifact',
+          evidenceLevel: 'declared',
+        },
+      },
+    ]
+    expect(turnInitialTab(r)).toBe('explain')
+    expect(turnHasWarningSignal(r)).toBe(true)
+  })
 })

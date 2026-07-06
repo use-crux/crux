@@ -149,12 +149,28 @@ function semanticDefinitionCandidateForCall<
       return { definitionId: `routing.cascade:${safeId(name)}`, kind: 'routing.cascade', name, object }
     }
     case 'constraint': {
-      const name = semanticStringLiteralProperty(object, 'name', syntax) ?? variableName ?? 'anonymous'
+      const name =
+        semanticStringLiteralProperty(object, 'id', syntax) ??
+        semanticStringLiteralProperty(object, 'name', syntax) ??
+        variableName ??
+        'anonymous'
       return { definitionId: `constraint:${safeId(name)}`, kind: 'constraint', name, object }
     }
     case 'guardrail': {
-      const name = semanticStringLiteralProperty(object, 'name', syntax) ?? variableName ?? 'anonymous'
+      const name =
+        semanticStringLiteralProperty(object, 'id', syntax) ??
+        semanticStringLiteralProperty(object, 'name', syntax) ??
+        variableName ??
+        'anonymous'
       return { definitionId: `guardrail:${safeId(name)}`, kind: 'guardrail', name, object }
+    }
+    case 'toolPolicy': {
+      const name =
+        semanticStringLiteralProperty(object, 'id', syntax) ??
+        semanticStringLiteralProperty(object, 'name', syntax) ??
+        variableName ??
+        'anonymous'
+      return { definitionId: `toolPolicy:${safeId(name)}`, kind: 'toolPolicy', name, object }
     }
     case 'memory': {
       const name = semanticAuthoredResourceName(object, variableName, syntax)

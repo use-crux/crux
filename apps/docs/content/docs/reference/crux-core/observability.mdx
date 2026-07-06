@@ -346,11 +346,26 @@ config({
   observability: {
     recordInputs: false,
     recordOutputs: false,
+    capture: {
+      default: "evidence",
+      overrides: {
+        "guardrail.report": "safe",
+        "constraint.report": "safe",
+        "tool.args": "off",
+      },
+      redactRecord: (record) => record,
+    },
   },
 });
 ```
 
-When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`. Output-family artifacts include model outputs, stream timelines, tool results, retrieval hits, memory snapshots/recalls/diffs, guardrail and constraint reports, handoff payloads, delegate reports, composition outputs, compaction summaries, judge reasoning, citation quotes, rendered context, and raw error payloads. The runtime's canonical artifact-kind map is exhaustive, so adding a new built-in artifact kind requires an explicit `input`, `output`, or `exempt` privacy decision before it can compile. Custom artifact kinds default to captured payloads only when the active capture policy allows their declared direction.
+`capture.default` accepts `"full"`, `"safe"`, `"evidence"`, or `"off"`.
+Per-artifact overrides use canonical artifact kinds. The Safety family includes
+`guardrail.report`, `constraint.report`, `score.report`, `approval.request`,
+`validation.feedback`, `memory.write`, `quality.snapshot`, `tool.args`, and
+`tool.result`.
+
+When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`. Output-family artifacts include model outputs, stream timelines, tool results, retrieval hits, memory snapshots/recalls/diffs, guardrail and constraint reports, handoff payloads, delegate reports, composition outputs, compaction summaries, judge reasoning, citation quotes, rendered context, and raw error payloads. The runtime's canonical artifact-kind map is exhaustive, so adding a new built-in artifact kind requires an explicit `input`, `output`, `safety`, or `exempt` privacy decision before it can compile. Custom artifact kinds default to captured payloads only when the active capture policy allows their declared direction.
 
 The `observability` domain is explicit export configuration. `config()` with no `observability`
 block does not install telemetry, cloud upload, or raw-content capture. Use `devtools` only for local

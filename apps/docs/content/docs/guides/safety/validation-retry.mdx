@@ -59,6 +59,26 @@ await adapter.generate(prompt, {
 
 If `maxSteps` is exhausted before `maxRetries`, the retry stops early.
 
+## Feedback sanitization
+
+Validation retry feeds corrective text back to the model. Crux builds that text
+from the parse failure and schema issues, not from arbitrary prompt prose, but
+your schema messages and failed output can still contain user-controlled data.
+
+Use normal prompt sanitization for any user text you place in custom messages.
+When you need to inspect or redact corrective feedback itself, attach a
+guardrail to `boundary.validation.feedback()`:
+
+```ts
+import { boundary, guardrail } from '@use-crux/core/safety'
+
+const redactFeedback = guardrail({
+  id: 'validation-feedback-pii',
+  on: boundary.validation.feedback(),
+  run: guardrail.pii({ strategy: 'mask' }),
+})
+```
+
 ## Error handling
 
 When all retries are exhausted, `ValidationExhaustedError` is thrown with context for debugging:

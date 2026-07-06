@@ -87,6 +87,28 @@ const blockProdMutations = toolMiddleware({
 
 Use [Tool approvals](/docs/guides/tools/approvals) when the block should be resumable by a user decision.
 
+## `toolPolicy()` vs `toolMiddleware()`
+
+Use `toolPolicy()` when the behavior is a Safety decision: blocking a risky
+tool, requesting human approval, screening tool arguments, or screening tool
+results. Tool policies emit Safety decisions, appear in Devtools Explain, and
+are indexed as Safety definitions.
+
+```ts
+import { toolPolicy } from '@use-crux/core/safety'
+
+const requireApproval = toolPolicy.approval({
+  id: 'refund-approval',
+  match: { tool: 'createRefund' },
+  reason: 'Refunds require operator approval.',
+})
+```
+
+Use `toolMiddleware()` when the behavior is execution plumbing: logging,
+timing, caching, retry wrapping, argument normalization, or attaching
+application metadata. Middleware can still block by throwing, but that block is
+not a Safety policy unless it came from `toolPolicy()`.
+
 ## Modify arguments
 
 `aroundExecute(call, next)` receives the original call and a `next(input, options)` function. Pass replacement input to `next()` when middleware should normalize or enrich arguments before the tool runs.

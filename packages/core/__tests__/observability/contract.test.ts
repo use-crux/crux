@@ -251,13 +251,16 @@ describe('Crux observability graph contract', () => {
     expect(CRUX_CANONICAL_EDGE_TYPES).toContain('explains')
     expect(CRUX_CANONICAL_ARTIFACT_KINDS).toEqual(
       expect.arrayContaining([
+        'approval.request',
         'tool.request',
         'stream.timeline',
         'context.contribution',
         'prompt.budget',
+        'validation.feedback',
         'retrieval.hits',
         'citation.report',
         'score.report',
+        'quality.snapshot',
         'composition.report',
         'handoff.payload',
         'delegate.report',
@@ -267,6 +270,7 @@ describe('Crux observability graph contract', () => {
         'cache.report',
         'compaction.report',
         'memory.snapshot',
+        'memory.write',
         'embedding.report',
         'indexing.report',
         'ingest.report',

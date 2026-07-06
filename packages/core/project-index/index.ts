@@ -445,6 +445,7 @@ export type ProjectDefinitionKind =
   | "storage.scope"
   | "constraint"
   | "guardrail"
+  | "toolPolicy"
   | "scorer"
   | "dataset"
   | "evaluation"
@@ -764,11 +765,25 @@ export interface StorageFacts {
   prefix?: string
 }
 
+export interface SafetyStrategyFacts extends Readonly<Record<string, unknown>> {
+  kind: string;
+}
+
+export interface SafetyToolPolicyMatchFacts extends Readonly<Record<string, unknown>> {
+  tool?: string;
+}
+
 export interface SafetyFacts {
-  kind: "constraint" | "guardrail";
-  appliesTo?: string[];
+  kind: "constraint" | "guardrail" | "toolPolicy";
+  policyId?: string;
+  boundaries?: readonly string[];
+  boundary?: string;
+  appliesTo?: readonly string[];
   policy?: string;
   severity?: string;
+  strategy?: SafetyStrategyFacts;
+  action?: string;
+  match?: SafetyToolPolicyMatchFacts;
 }
 
 export interface ScorerFacts {
@@ -1253,6 +1268,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "storage.scope",
   "constraint",
   "guardrail",
+  "toolPolicy",
   "scorer",
   "dataset",
   "evaluation",

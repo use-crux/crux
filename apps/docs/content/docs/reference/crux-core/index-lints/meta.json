@@ -22,6 +22,7 @@
     "runtime-missing-runtime-config",
     "runtime-non-serializable-payload",
     "workspace-write-without-guardrail",
+    "safety-duplicate-policy-id",
     "memory-long-lived-without-retention",
     "consensus-missing-judge",
     "shared-blackboard-without-policy",

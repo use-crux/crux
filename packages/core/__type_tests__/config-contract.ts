@@ -60,6 +60,17 @@ const explicitObservabilityExport = {
 
 const observabilityCapturePolicy = {
   observability: {
+    capture: {
+      default: 'safe',
+      overrides: {
+        'guardrail.report': 'evidence',
+        'validation.feedback': 'off',
+      },
+      redactRecord: (record) =>
+        record.type === 'artifact' && record.kind === 'validation.feedback'
+          ? null
+          : record,
+    },
     recordInputs: 'reference',
     recordOutputs: 'off',
     redactRecord: (record) => (record.type === 'span:event' ? null : record),
