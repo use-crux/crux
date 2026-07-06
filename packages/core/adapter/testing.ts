@@ -18,8 +18,16 @@
  */
 
 export { adapterSpecConformance } from './testing/native'
+export { assertCanonicalResult } from './testing/canonical-result'
 export { providerRuntimeConformance } from './testing/provider-runtime'
 export { transcriptCodecConformance } from './testing/transcript'
+export type {
+  CanonicalFinalStepInfo,
+  CanonicalGenerateResultLike,
+  CanonicalResultExpectation,
+  CanonicalResultStepExpectation,
+  CanonicalTokenUsage,
+} from './testing/canonical-result'
 export type {
   AdapterConformanceCapabilities,
   AdapterConformanceEmission,

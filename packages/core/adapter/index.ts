@@ -153,6 +153,7 @@ export type { GenerationInterceptor, InterceptedGeneration } from './interceptio
 
 // Testing utilities for public provider runtimes and lower-level execution IR.
 export {
+  assertCanonicalResult,
   adapterSpecConformance,
   fakeLoopRuntime,
   loopRuntimePortConformance,
@@ -166,6 +167,11 @@ export type {
   AdapterConformanceInspector,
   AdapterConformancePrepared,
   AdapterConformanceScript,
+  CanonicalFinalStepInfo,
+  CanonicalGenerateResultLike,
+  CanonicalResultExpectation,
+  CanonicalResultStepExpectation,
+  CanonicalTokenUsage,
   FakeLoopRuntime,
   FakeLoopRuntimeConfig,
   FakeLoopEmission,
