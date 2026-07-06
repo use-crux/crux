@@ -17,3 +17,4 @@ export type {
   ConstraintAuditEntry,
   ConstraintFailure,
 } from './types'
+export { validateConstraintRunResult } from './types'

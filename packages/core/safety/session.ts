@@ -46,6 +46,7 @@ import type {
   GuardrailAuditEntry,
   GuardrailContext,
   GuardrailPhase,
+  GuardrailStreamConfig,
 } from './guardrail/types'
 import { createGuardrailPipeline } from './guardrail/pipeline'
 import { GuardrailBlockedError } from './guardrail/errors'
@@ -429,8 +430,8 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
   function openStream(): SafetyStream {
     const outputGuards = phaseGuards('output')
-    const noneGuards = outputGuards.filter((g) => g.stream?.buffer === 'none' && g.onChunk)
-    const fullGuards = outputGuards.filter((g) => g.stream?.buffer === 'full')
+    const noneGuards = outputGuards.filter((g) => isLegacyStreamConfig(g.stream) && g.stream.buffer === 'none' && g.onChunk)
+    const fullGuards = outputGuards.filter((g) => isLegacyStreamConfig(g.stream) && g.stream.buffer === 'full')
     const chunkConstraints = constraints.filter((c) => c.onChunk)
     const streamCtx = (): GuardrailContext => guardContext('output', lastMessages)
 
@@ -681,4 +682,8 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
     transcript,
   }
+}
+
+function isLegacyStreamConfig(value: Guardrail['stream']): value is GuardrailStreamConfig {
+  return typeof value === 'object' && value !== null && 'buffer' in value
 }

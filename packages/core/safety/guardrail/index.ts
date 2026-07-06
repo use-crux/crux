@@ -2,6 +2,7 @@
 export { guardrail, isGuardrail, getGuardrailDefinitionSource } from './define'
 export { evaluateGuardrail } from './evaluate'
 export { GuardrailBlockedError } from './errors'
+export { validateGuardrailRunResult } from './types'
 
 // ── Types ──────────────────────────────────────────────────────────
 export type {
@@ -9,8 +10,11 @@ export type {
   GuardrailConfig,
   GuardrailContext,
   GuardrailPhase,
+  GuardrailMode,
   GuardrailStreamConfig,
   GuardrailResult,
+  GuardrailRunResult,
+  GuardrailRewriteKind,
   InputGuardrailResult,
   OutputGuardrailResult,
   ChunkGuardrailResult,

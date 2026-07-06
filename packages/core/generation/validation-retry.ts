@@ -9,6 +9,12 @@
  */
 
 import type { z } from 'zod'
+import type { SafetyCaptureSummary } from '../safety/decision'
+import {
+  POLICY_TERMINAL,
+  toSafetyCaptureSummary,
+  type PolicyTerminalError,
+} from '../safety/errors'
 
 // ── Options ────────────────────────────────────────────────────────
 
@@ -32,7 +38,8 @@ export interface ValidationRetryOptions {
 
 /** Constructor arguments for {@link ValidationExhaustedError}. */
 export interface ValidationExhaustedErrorInit {
-  readonly lastRawOutput: string
+  readonly lastRawOutput?: string
+  readonly lastOutput?: SafetyCaptureSummary
   readonly zodErrors: z.ZodError
   readonly attempts: number
   readonly maxAttempts: number
@@ -46,11 +53,12 @@ export interface ValidationExhaustedErrorInit {
  * Carries enough context for debugging: the last raw output,
  * the Zod errors, attempt count, and prompt identifier.
  */
-export class ValidationExhaustedError extends Error {
+export class ValidationExhaustedError extends Error implements PolicyTerminalError {
   override readonly name = 'ValidationExhaustedError' as const
+  readonly [POLICY_TERMINAL] = true
 
-  /** The model's last raw text output that failed validation. */
-  readonly lastRawOutput: string
+  /** Safe summary of the model output that failed validation. */
+  readonly lastOutput: SafetyCaptureSummary
 
   /** The Zod validation errors from the last attempt. */
   readonly zodErrors: z.ZodError
@@ -68,7 +76,7 @@ export class ValidationExhaustedError extends Error {
     super(
       `Validation failed after ${init.attempts}/${init.maxAttempts} attempts for prompt "${init.promptId}": ${init.zodErrors.message}`,
     )
-    this.lastRawOutput = init.lastRawOutput
+    this.lastOutput = init.lastOutput ?? toSafetyCaptureSummary(init.lastRawOutput ?? '')
     this.zodErrors = init.zodErrors
     this.attempts = init.attempts
     this.maxAttempts = init.maxAttempts

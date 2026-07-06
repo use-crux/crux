@@ -9,8 +9,10 @@
 
 import { describe, it, expect } from 'vitest'
 import { constraint as makeConstraint, isConstraint } from '../safety/constraint/define'
+import { validateConstraintRunResult } from '../safety/constraint'
 import { evaluateConstraint } from '../safety/constraint/evaluate'
 import { ConstraintViolationError } from '../safety/constraint/errors'
+import { SafetyResultError } from '../safety'
 import type { ConstraintContext } from '../safety/constraint/types'
 
 const makeCtx = (overrides?: Partial<ConstraintContext>): ConstraintContext => ({
@@ -151,6 +153,37 @@ describe('evaluateConstraint', () => {
   })
 })
 
+describe('validateConstraintRunResult', () => {
+  it('accepts pass/fail results with safe metadata', () => {
+    expect(
+      validateConstraintRunResult(
+        { pass: true, metadata: { risk: 'none' } },
+        { policyId: 'quality', boundary: 'model.output.text' },
+      ),
+    ).toEqual({ pass: true, metadata: { risk: 'none' } })
+
+    expect(
+      validateConstraintRunResult(
+        { pass: false, feedback: 'Add citations.', metadata: { reason: 'missing-citation' } },
+        { policyId: 'citations', boundary: 'model.output.object' },
+      ),
+    ).toEqual({
+      pass: false,
+      feedback: 'Add citations.',
+      metadata: { reason: 'missing-citation' },
+    })
+  })
+
+  it('fails closed when a failed result omits feedback', () => {
+    expect(() =>
+      validateConstraintRunResult(
+        { pass: false },
+        { policyId: 'malformed', boundary: 'model.output.text' },
+      ),
+    ).toThrow(SafetyResultError)
+  })
+})
+
 // ── ConstraintViolationError ──────────────────────────────────────
 
 describe('ConstraintViolationError', () => {
@@ -167,7 +200,12 @@ describe('ConstraintViolationError', () => {
 
     expect(err.name).toBe('ConstraintViolationError')
     expect(err.failedConstraints).toHaveLength(2)
-    expect(err.lastOutput).toBe('bad output')
+    expect(err.lastOutput).toMatchObject({
+      level: 'safe',
+      preview: 'bad output',
+      sizeBytes: 10,
+    })
+    expect(err.lastOutput.raw).toBeUndefined()
     expect(err.totalAttempts).toBe(3)
     expect(err.message).toContain('a')
     expect(err.message).toContain('b')

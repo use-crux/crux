@@ -54,8 +54,8 @@ export function createGuardrailPipeline(
   guards: readonly Guardrail[],
   config?: GuardrailPipelineConfig,
 ): GuardrailPipeline {
-  const inputGuards = guards.filter((g): g is Guardrail<'input'> => g.phase === 'input')
-  const outputGuards = guards.filter((g): g is Guardrail<'output'> => g.phase === 'output')
+  const inputGuards = guards.filter((g) => g.phase === 'input')
+  const outputGuards = guards.filter((g) => g.phase === 'output')
 
   return {
     guards,
@@ -72,8 +72,8 @@ export function createGuardrailPipeline(
 
 // ── Internal: Run a list of guards sequentially ────────────────────
 
-async function runGuards<TPhase extends GuardrailPhase>(
-  guards: readonly Guardrail<TPhase>[],
+async function runGuards(
+  guards: readonly Guardrail[],
   content: string,
   ctx: GuardrailContext,
   config?: GuardrailPipelineConfig,
@@ -93,8 +93,8 @@ async function runGuards<TPhase extends GuardrailPhase>(
   )
 }
 
-async function runGuardsInternal<TPhase extends GuardrailPhase>(
-  guards: readonly Guardrail<TPhase>[],
+async function runGuardsInternal(
+  guards: readonly Guardrail[],
   content: string,
   ctx: GuardrailContext,
   config?: GuardrailPipelineConfig,
@@ -117,7 +117,7 @@ async function runGuardsInternal<TPhase extends GuardrailPhase>(
         },
       },
     )
-    let result: GuardrailResult<TPhase>
+    let result: GuardrailResult<GuardrailPhase>
     let durationMs = 0
     try {
       result = await span.withContext(async () => guard.validate(currentContent, ctx))
@@ -184,7 +184,7 @@ async function runGuardsInternal<TPhase extends GuardrailPhase>(
 }
 
 function recordGuardrailReport(
-  guard: Guardrail<GuardrailPhase>,
+  guard: Guardrail,
   action: string,
   durationMs: number,
   result: unknown,

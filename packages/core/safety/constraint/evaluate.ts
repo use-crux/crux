@@ -17,6 +17,7 @@ export interface ConstraintEvalCaseResult {
   readonly actualPass: boolean
   readonly matched: boolean
   readonly feedback?: string
+  readonly metadata?: Readonly<Record<string, unknown>>
   readonly durationMs: number
   readonly error?: string
 }
@@ -75,6 +76,7 @@ export async function evaluateConstraint(
         actualPass: result.pass,
         matched: result.pass === evalCase.expect,
         feedback: result.pass ? undefined : result.feedback,
+        metadata: result.metadata,
         durationMs,
       })
     } catch (err) {

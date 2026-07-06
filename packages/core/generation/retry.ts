@@ -7,9 +7,7 @@
  */
 
 import { observe } from '../observability'
-import { ConstraintViolationError } from '../safety/constraint/errors'
-import { GuardrailBlockedError } from '../safety/guardrail/errors'
-import { ValidationExhaustedError } from './validation-retry'
+import { isPolicyTerminal } from '../safety/errors'
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -44,11 +42,7 @@ export interface RetryDecisionContext {
 // ── Implementation ──────────────────────────────────────────────────
 
 export function isNonRetryableCruxPolicyError(error: unknown): boolean {
-  return (
-    error instanceof GuardrailBlockedError ||
-    error instanceof ConstraintViolationError ||
-    error instanceof ValidationExhaustedError
-  )
+  return isPolicyTerminal(error)
 }
 
 /**

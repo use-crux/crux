@@ -8,7 +8,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { guardrail as makeGuardrail, isGuardrail } from '../safety/guardrail'
+import { guardrail as makeGuardrail, isGuardrail, validateGuardrailRunResult } from '../safety/guardrail'
+import { SafetyResultError } from '../safety'
 import { evaluateGuardrail } from '../safety/guardrail/evaluate'
 import type { GuardrailContext } from '../safety/guardrail'
 
@@ -203,6 +204,43 @@ describe('stable beta boundary authoring', () => {
       on: [expect.objectContaining({ id: 'user.input' }), expect.objectContaining({ id: 'model.output.text' })],
     })
     expect(Object.isFrozen(guard)).toBe(true)
+  })
+})
+
+describe('validateGuardrailRunResult', () => {
+  it('accepts the stable beta rewrite shape', () => {
+    expect(
+      validateGuardrailRunResult(
+        {
+          action: 'rewrite',
+          value: '[redacted]',
+          rewrite: { kind: 'redact' },
+          findings: [{ type: 'email', count: 1 }],
+        },
+        { streaming: false, last: true, policyId: 'pii', boundary: 'model.output.text' },
+      ),
+    ).toMatchObject({
+      action: 'rewrite',
+      value: '[redacted]',
+      rewrite: { kind: 'redact' },
+      findings: [{ type: 'email', count: 1 }],
+    })
+  })
+
+  it('fails closed for unknown actions and invalid stream holds', () => {
+    expect(() =>
+      validateGuardrailRunResult(
+        { action: 'approve' },
+        { streaming: false, last: true, policyId: 'bad', boundary: 'model.output.text' },
+      ),
+    ).toThrow(SafetyResultError)
+
+    expect(() =>
+      validateGuardrailRunResult(
+        { action: 'hold' },
+        { streaming: true, last: true, policyId: 'hold', boundary: 'model.output.text' },
+      ),
+    ).toThrow(SafetyResultError)
   })
 })
 

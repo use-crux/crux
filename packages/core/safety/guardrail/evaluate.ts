@@ -1,4 +1,4 @@
-import type { Guardrail, GuardrailContext, GuardrailPhase } from './types'
+import type { Guardrail, GuardrailContext } from './types'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -6,7 +6,7 @@ export interface GuardrailEvalCase {
   /** The content to validate. */
   readonly input: string
   /** The expected action from the guard. */
-  readonly expect: 'pass' | 'block' | 'redact' | 'transform' | 'warn'
+  readonly expect: 'allow' | 'pass' | 'block' | 'rewrite' | 'redact' | 'transform' | 'warn'
 }
 
 export interface GuardrailEvalCaseResult {
@@ -22,6 +22,8 @@ export interface GuardrailEvalCaseResult {
   readonly durationMs: number
   /** Error message if the guard threw. */
   readonly error?: string
+  /** Rewritten content when the guard transformed the input. */
+  readonly output?: string
 }
 
 export interface GuardrailEvalReport {
@@ -48,8 +50,8 @@ export interface GuardrailEvalReport {
  * ])
  * ```
  */
-export async function evaluateGuardrail<TPhase extends GuardrailPhase>(
-  guard: Guardrail<TPhase>,
+export async function evaluateGuardrail(
+  guard: Guardrail,
   cases: readonly GuardrailEvalCase[],
 ): Promise<GuardrailEvalReport> {
   const results: GuardrailEvalCaseResult[] = []
@@ -70,13 +72,15 @@ export async function evaluateGuardrail<TPhase extends GuardrailPhase>(
     try {
       const result = await guard.validate(evalCase.input, ctx)
       const durationMs = performance.now() - start
+      const action = normalizeAction(result.action)
 
       results.push({
         input: evalCase.input,
-        passed: result.action === evalCase.expect,
+        passed: action === normalizeAction(evalCase.expect),
         action: result.action,
         expected: evalCase.expect,
         durationMs,
+        ...(result.action === 'redact' || result.action === 'transform' ? { output: result.content } : {}),
       })
     } catch (err) {
       const durationMs = performance.now() - start
@@ -102,4 +106,10 @@ export async function evaluateGuardrail<TPhase extends GuardrailPhase>(
       failed,
     },
   }
+}
+
+function normalizeAction(action: string): string {
+  if (action === 'pass') return 'allow'
+  if (action === 'redact' || action === 'transform') return 'rewrite'
+  return action
 }
