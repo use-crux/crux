@@ -1,9 +1,11 @@
-import { readFile } from 'node:fs/promises'
-import { createRequire } from 'node:module'
-import { dirname, join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { IndexDiagnostic } from '@use-crux/core/project-index'
 import { isIndexerExtensionAllowed, validateIndexerExtensionManifest } from './manifest'
+import {
+  hasTraversalSegment,
+  isPackageReferenceAllowed,
+  resolveTrustedExtensionPackage,
+} from './package-provenance'
 import type { ExtensionReference, ExtensionTrustPolicy, IndexerExtension, IndexerExtensionConfig } from '../public-contract/types'
 
 /**
@@ -169,15 +171,17 @@ export function resolveIndexerExtensionReferences(
  * This is the dynamic counterpart to `resolveIndexerExtensionReferences(...)`. It performs only the
  * minimum effects needed to obtain manifests:
  *
- * - preflight trust by configured package name before import
+ * - reject traversal-shaped package specifiers before import
  * - resolve packages from the project root with Node's normal package resolver
- * - read the package version from the nearest package.json
+ * - read package identity and version from the nearest package.json
+ * - verify the resolved entry stays inside the package root, including realpath checks
  * - import the selected package export
  * - hand the resulting manifests to the pure resolver for manifest-name trust, compatibility, and
  *   declaration validation
  *
- * There is no sandbox here. A package that passes preflight trust is trusted JavaScript code. Stronger
- * isolation would need a separate worker/process policy rather than a different helper in this file.
+ * There is no sandbox here. A package that passes provenance and trust preflight is trusted JavaScript
+ * code. Stronger isolation would need a separate worker/process policy rather than a different helper
+ * in this file.
  */
 export async function loadIndexerExtensionReferences(
   input: LoadIndexerExtensionReferencesInput,
@@ -189,7 +193,9 @@ export async function loadIndexerExtensionReferences(
     preflight.filter((result) => result.diagnostic).map((result) => extensionReferenceKey(result.reference)),
   )
   const loadableReferences = references.filter((reference) => !deniedReferences.has(extensionReferenceKey(reference)))
-  const loaded = await Promise.all(loadableReferences.map((reference) => loadOneIndexerExtension(input.root, reference)))
+  const loaded = await Promise.all(
+    loadableReferences.map((reference) => loadOneIndexerExtension(input.root, reference, input.config?.trust)),
+  )
   const installed = loaded.flatMap((result) => (result.installed ? [result.installed] : []))
   const installedKeys = new Set(installed.map(extensionReferenceKey))
   const resolvedReferences = loadableReferences.filter((reference) => installedKeys.has(extensionReferenceKey(reference)))
@@ -211,13 +217,17 @@ export async function loadIndexerExtensionReferences(
 async function loadOneIndexerExtension(
   root: string,
   reference: ExtensionReference,
+  policy: ExtensionTrustPolicy | undefined,
 ): Promise<{ readonly installed?: InstalledIndexerExtension; readonly diagnostic?: IndexDiagnostic }> {
   try {
-    const requireFromProject = createRequire(join(root, 'package.json'))
-    const entry = requireFromProject.resolve(reference.package)
-    const packageRoot = await nearestPackageRoot(entry)
-    const packageVersion = await readPackageVersion(packageRoot)
-    const mod = (await import(pathToFileURL(entry).href)) as Record<string, unknown>
+    const trustedPackage = await resolveTrustedExtensionPackage({ root, reference, policy })
+    if (!trustedPackage.ok) {
+      return {
+        diagnostic: extensionLoadingDiagnostic('index.extension_not_allowed', reference, trustedPackage.message),
+      }
+    }
+
+    const mod = (await import(pathToFileURL(trustedPackage.package.entry).href)) as Record<string, unknown>
     const exportName = reference.export ?? 'default'
     const extension = mod[exportName]
     if (!isIndexerExtensionManifest(extension)) {
@@ -233,7 +243,7 @@ async function loadOneIndexerExtension(
       installed: {
         package: reference.package,
         export: exportName,
-        packageVersion,
+        ...(trustedPackage.package.packageVersion ? { packageVersion: trustedPackage.package.packageVersion } : {}),
         extension,
       },
     }
@@ -259,6 +269,16 @@ function trustPreflight(
   reference: ExtensionReference,
   policy: ExtensionTrustPolicy | undefined,
 ): { readonly reference: ExtensionReference; readonly diagnostic?: IndexDiagnostic } {
+  if (hasTraversalSegment(reference.package)) {
+    return {
+      reference,
+      diagnostic: extensionLoadingDiagnostic(
+        'index.extension_not_allowed',
+        reference,
+        `Indexer extension package ${reference.package} is not allowed because package specifiers cannot contain '..' path segments.`,
+      ),
+    }
+  }
   if (isPackageReferenceAllowed(reference.package, policy)) return { reference }
   return {
     reference,
@@ -268,17 +288,6 @@ function trustPreflight(
       `Indexer extension package ${reference.package} is not allowed by the active trust policy.`,
     ),
   }
-}
-
-/**
- * Applies the extension trust policy to one package name.
- */
-function isPackageReferenceAllowed(packageName: string, policy: ExtensionTrustPolicy | undefined): boolean {
-  const effective = policy ?? { mode: 'first-party-only' }
-  if (effective.deny?.includes(packageName)) return false
-  if (effective.mode === 'unsafe-local-dev') return true
-  if (effective.mode === 'allowlisted') return effective.allow?.includes(packageName) ?? false
-  return packageName === '@use-crux/indexer' || packageName.startsWith('@use-crux/')
 }
 
 /**
@@ -371,35 +380,6 @@ function parseVersion(version: string): { readonly major: number; readonly minor
   return {
     major: Number.parseInt(major, 10) || 0,
     minor: Number.parseInt(minor, 10) || 0,
-  }
-}
-
-/**
- * Walks upward from an entry file until it finds the owning package root.
- */
-async function nearestPackageRoot(entry: string): Promise<string> {
-  let current = dirname(entry)
-  while (true) {
-    try {
-      await readFile(join(current, 'package.json'), 'utf8')
-      return current
-    } catch {
-      const parent = dirname(current)
-      if (parent === current) return dirname(entry)
-      current = parent
-    }
-  }
-}
-
-/**
- * Reads the package version from a package root when available.
- */
-async function readPackageVersion(packageRoot: string): Promise<string | undefined> {
-  try {
-    const parsed = JSON.parse(await readFile(join(packageRoot, 'package.json'), 'utf8')) as { version?: unknown }
-    return typeof parsed.version === 'string' ? parsed.version : undefined
-  } catch {
-    return undefined
   }
 }
 

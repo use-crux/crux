@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -25,6 +25,39 @@ afterEach(async () => {
 })
 
 describe('provided static syntax record indexing', () => {
+  it('keeps source-only static syntax planning from importing user config modules', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const file = join(root, 'src/writer.ts')
+    const sentinel = join(root, 'config-imported.txt')
+    await writeFile(
+      file,
+      ["import { prompt } from '@use-crux/core'", '', "export const writerPrompt = prompt({ id: 'writer.plan' })"].join(
+        '\n',
+      ),
+    )
+    await writeFile(
+      join(root, 'crux.config.ts'),
+      [
+        "import { writeFileSync } from 'node:fs'",
+        "import { config } from '@use-crux/core'",
+        '',
+        `writeFileSync(${JSON.stringify(sentinel)}, 'imported')`,
+        '',
+        'export default config({',
+        "  experimental: { indexer: { nativeAst: { frontend: 'oxc' } } },",
+        '})',
+      ].join('\n'),
+    )
+
+    const plan = await inspectProjectStaticSyntaxPlan({ root, projectName: 'provided-records' })
+
+    expect(plan.files).toContain(file)
+    expect(plan.configFile).toBe(join(root, 'crux.config.ts'))
+    expect(plan.staticSyntaxEnabled).toBe(false)
+    await expect(fileExists(sentinel)).resolves.toBe(false)
+  })
+
   it('reports the static syntax plan needed by a native parser host', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
@@ -36,7 +69,11 @@ describe('provided static syntax record indexing', () => {
       ),
     )
 
-    const plan = await inspectProjectStaticSyntaxPlan({ root, projectName: 'provided-records' })
+    const plan = await inspectProjectStaticSyntaxPlan({
+      root,
+      projectName: 'provided-records',
+      resolutionMode: 'config-policy',
+    })
 
     expect(plan.root).toBe(root)
     expect(plan.files).toEqual([file])
@@ -85,7 +122,11 @@ describe('provided static syntax record indexing', () => {
       ].join('\n'),
     )
 
-    const plan = await inspectProjectStaticSyntaxPlan({ root, projectName: 'provided-records' })
+    const plan = await inspectProjectStaticSyntaxPlan({
+      root,
+      projectName: 'provided-records',
+      resolutionMode: 'config-policy',
+    })
 
     expect(plan.files).toContain(file)
     expect(plan.staticSyntaxEnabled).toBe(true)
@@ -237,5 +278,14 @@ function normalizedPatchFacts(patch: IndexPatch) {
     ruleDescriptors: patch.facts.ruleDescriptors,
     sources: patch.facts.sources,
     sourceGraph: patch.facts.sourceGraph,
+  }
+}
+
+async function fileExists(file: string): Promise<boolean> {
+  try {
+    await access(file)
+    return true
+  } catch {
+    return false
   }
 }

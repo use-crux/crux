@@ -134,12 +134,14 @@ export async function inspectProjectStaticSyntaxPlan(
   options: InspectProjectStaticSyntaxPlanOptions,
 ): Promise<ProjectStaticSyntaxPlan> {
   const root = resolve(options.root)
-  const loaded = await loadProjectConfig(root, options.configPath, options.resolutionMode ?? 'source-only')
+  const resolutionMode = options.resolutionMode ?? 'source-only'
+  const loaded = await loadProjectConfig(root, options.configPath, resolutionMode)
   const shardGraph = discoverProjectShards(root)
   const staticSyntaxSelection = await staticIndexSyntaxSelectionForPlan(
     root,
     options.configPath,
     loaded.loaded.experimental,
+    resolutionMode,
   )
   const runtimeResult = await projectIndexCompilerRuntimeForPlan(root, loaded.loaded.indexer)
   const runtime = runtimeResult.runtime
@@ -210,9 +212,11 @@ async function staticIndexSyntaxSelectionForPlan(
   root: string,
   configPath: string | undefined,
   loadedExperimental: Awaited<ReturnType<typeof loadProjectConfig>>['loaded']['experimental'],
+  resolutionMode: ProjectModelResolutionMode,
 ) {
   const loadedSelection = staticIndexSyntaxSelectionFromConfig(loadedExperimental)
   if (loadedSelection.enabled) return loadedSelection
+  if (resolutionMode === 'source-only') return loadedSelection
   const result = await loadConfigPolicyProjectConfig(root, configPath)
   return staticIndexSyntaxSelectionFromConfig(result.loaded.experimental)
 }

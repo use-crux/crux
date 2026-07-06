@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -13,6 +13,68 @@ afterEach(async () => {
 })
 
 describe('indexer extension loading', () => {
+  it('rejects package specifier traversal before importing extension code', async () => {
+    const root = await fixtureRoot()
+    const sentinel = join(root, 'traversal-imported.txt')
+    await mkdir(join(root, 'node_modules', '@use-crux', 'x'), { recursive: true })
+    await writeFile(
+      join(root, 'node_modules', '@use-crux', 'x', 'package.json'),
+      JSON.stringify({ name: '@use-crux/x', version: '1.0.0', type: 'module' }),
+    )
+    await writeFile(join(root, 'node_modules', '@use-crux', 'x', 'index.mjs'), 'export default {}')
+    await writeFile(
+      join(root, 'node_modules', 'evil.js'),
+      [
+        `require('node:fs').writeFileSync(${JSON.stringify(sentinel)}, 'imported')`,
+        'module.exports = {',
+        "  name: '@use-crux/evil',",
+        "  version: '1',",
+        "  crux: { indexer: '^0.1.0', projectIndexSchema: 1 }",
+        '}',
+      ].join('\n'),
+    )
+
+    const result = await loadIndexerExtensionReferences({
+      root,
+      config: { extensions: [{ package: '@use-crux/x/../../evil.js' }] },
+    })
+
+    expect(result.extensions).toEqual([])
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['index.extension_not_allowed'])
+    expect(result.diagnostics[0]?.message).toContain('..')
+    await expect(fileExists(sentinel)).resolves.toBe(false)
+  })
+
+  it('verifies resolved package identity before trusting first-party-looking references', async () => {
+    const root = await fixtureRoot()
+    const sentinel = join(root, 'mismatched-package-imported.txt')
+    await writePackage(root, '@use-crux/fake-indexer', {
+      packageName: '@evil/fake-indexer',
+      packageVersion: '1.0.0',
+      source: `
+        import { writeFileSync } from 'node:fs'
+
+        writeFileSync(${JSON.stringify(sentinel)}, 'imported')
+
+        export default {
+          name: '@use-crux/fake-indexer',
+          version: '1',
+          crux: { indexer: '^0.1.0', projectIndexSchema: 1 }
+        }
+      `,
+    })
+
+    const result = await loadIndexerExtensionReferences({
+      root,
+      config: { extensions: [{ package: '@use-crux/fake-indexer' }] },
+    })
+
+    expect(result.extensions).toEqual([])
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['index.extension_not_allowed'])
+    expect(result.diagnostics[0]?.message).toContain('@evil/fake-indexer')
+    await expect(fileExists(sentinel)).resolves.toBe(false)
+  })
+
   it('loads allowlisted package exports and validates package metadata before compiler use', async () => {
     const root = await fixtureRoot()
     await writePackage(root, '@acme/crux-indexer', {
@@ -175,6 +237,7 @@ async function writePackage(
   root: string,
   name: string,
   input: {
+    readonly packageName?: string
     readonly packageVersion: string
     readonly source: string
   },
@@ -183,9 +246,18 @@ async function writePackage(
   await mkdir(packageRoot, { recursive: true })
   await writeFile(
     join(packageRoot, 'package.json'),
-    JSON.stringify({ name, version: input.packageVersion, type: 'module', exports: './index.mjs' }),
+    JSON.stringify({ name: input.packageName ?? name, version: input.packageVersion, type: 'module', exports: './index.mjs' }),
   )
   await writeFile(join(packageRoot, 'index.mjs'), input.source)
+}
+
+async function fileExists(file: string): Promise<boolean> {
+  try {
+    await access(file)
+    return true
+  } catch {
+    return false
+  }
 }
 
 async function linkWorkspacePackage(root: string, name: string, workspaceRelativePath: string): Promise<void> {

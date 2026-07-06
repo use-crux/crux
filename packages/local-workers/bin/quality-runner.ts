@@ -159,7 +159,7 @@ async function main(): Promise<number> {
 
   // ── Execute ────────────────────────────────────────────────────
   if (persist) await ensureQualityGitignore(settings.dir)
-  const sourceResolver = new SourceResolver()
+  const sourceResolver = new SourceResolver({ projectRoot: project.configDir })
 
   try {
     const result = await executeEvaluations({

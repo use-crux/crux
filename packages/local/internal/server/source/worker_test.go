@@ -24,7 +24,7 @@ func TestWorker_resolveLocationsReportsMalformedJSONResponse(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 
-	worker := New(script, nil)
+	worker := New(script, nil, "")
 	defer worker.Close()
 
 	_, err := worker.ResolveLocations(context.Background(), []Location{{File: "/bundle.js", Line: 1}})
@@ -52,7 +52,7 @@ func TestWorker_resolveLocationsReportsWorkerErrorResponse(t *testing.T) {
 		t.Fatalf("write script: %v", err)
 	}
 
-	worker := New(script, nil)
+	worker := New(script, nil, "")
 	defer worker.Close()
 
 	_, err := worker.ResolveLocations(context.Background(), []Location{{File: "/bundle.js", Line: 1}})
@@ -89,14 +89,14 @@ func TestWorker_resolveSourceFrame(t *testing.T) {
 				contentHash: 'sha256:test-frame',
 				capturedAt: req.capturedAt,
 				stale: false,
-				resolver: 'source-map'
+				resolver: req.projectRoot
 			}) + '\n')
 		})
 	`); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 
-	worker := New(script, nil)
+	worker := New(script, nil, "/project")
 	defer worker.Close()
 
 	column := 8
@@ -115,6 +115,9 @@ func TestWorker_resolveSourceFrame(t *testing.T) {
 	}
 	if result.Kind != "source-frame" || result.AuthoredFile != "/project/evals/support.eval.ts" {
 		t.Fatalf("ResolveFrame result = %#v", result)
+	}
+	if result.Resolver != "/project" {
+		t.Fatalf("ResolveFrame resolver/projectRoot = %q, want /project", result.Resolver)
 	}
 	if len(result.Lines) != 1 || result.Lines[0].Role != "failed" {
 		t.Fatalf("ResolveFrame lines = %#v", result.Lines)

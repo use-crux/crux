@@ -160,6 +160,37 @@ describe('SourceResolver', () => {
     expect(frame.kind === 'source-frame' ? frame.contentHash : '').toMatch(/^sha256:[a-f0-9]{64}$/)
   })
 
+  it('refuses source-map disk fallback outside the project root', async () => {
+    const files: Record<string, string> = {
+      '/project/dist/eval.js': 'ctx.expect(result).toBe("wrong")\n',
+      '/project/dist/eval.js.map': JSON.stringify({
+        version: 3,
+        file: 'eval.js',
+        sources: ['../../outside/secret.eval.ts'],
+        names: [],
+        mappings: 'AAAA',
+      }),
+      '/outside/secret.eval.ts': 'export const secret = true\n',
+    }
+    const reads: string[] = []
+    const fileSystem: SourceResolverFileSystem = {
+      exists: (path) => Object.prototype.hasOwnProperty.call(files, path),
+      readFile: async (path) => {
+        reads.push(path)
+        const value = files[path]
+        if (value === undefined) throw new Error(`missing ${path}`)
+        return value
+      },
+    }
+    const resolver = new SourceResolver({ fileSystem, projectRoot: '/project' })
+
+    await expect(resolver.resolveSourceFrame('/project/dist/eval.js', 1, 0)).resolves.toEqual({
+      kind: 'unavailable',
+      reason: 'source-outside-project',
+    })
+    expect(reads).toEqual(['/project/dist/eval.js.map'])
+  })
+
   it('resolves direct authored source-frame snapshots from disk when no source map is needed', async () => {
     const files: Record<string, string> = {
       '/project/evals/support.eval.ts': [

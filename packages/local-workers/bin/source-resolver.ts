@@ -14,7 +14,7 @@ import {
   serializeSourceResolverWorkerResponse,
 } from '@use-crux/indexer/source-resolver'
 
-const resolver = new SourceResolver()
+const resolvers = new Map<string, SourceResolver>()
 
 const rl = createInterface({
   input: process.stdin,
@@ -61,6 +61,7 @@ async function handleLine(line: string): Promise<void> {
 
     switch (req.method) {
       case 'resolveLocations': {
+        const resolver = resolverForProjectRoot(req.projectRoot)
         const locations = await Promise.all(
           req.locations.map((loc) => resolver.resolveLocation(loc.file, loc.line, loc.column, loc.function)),
         )
@@ -68,11 +69,13 @@ async function handleLine(line: string): Promise<void> {
         break
       }
       case 'resolveFnSource': {
+        const resolver = resolverForProjectRoot(req.projectRoot)
         const fnSource = await resolver.resolveFnSource(req.file, req.line, req.column)
         result = fnSource ?? { source: null, resolved: false }
         break
       }
       case 'resolveSourceFrame': {
+        const resolver = resolverForProjectRoot(req.projectRoot)
         result = await resolver.resolveSourceFrame(req.file, req.line, req.column, {
           ...(req.sourceRef !== undefined ? { sourceRef: req.sourceRef } : {}),
           ...(req.frameRadius !== undefined ? { frameRadius: req.frameRadius } : {}),
@@ -89,6 +92,16 @@ async function handleLine(line: string): Promise<void> {
     process.stderr.write(`[source-resolver] error: ${message}\n`)
     await writeResponse({ error: message })
   }
+}
+
+function resolverForProjectRoot(projectRoot: string | undefined): SourceResolver {
+  const key = projectRoot ?? ''
+  const cached = resolvers.get(key)
+  if (cached) return cached
+
+  const resolver = new SourceResolver(projectRoot ? { projectRoot } : {})
+  resolvers.set(key, resolver)
+  return resolver
 }
 
 rl.on('close', () => {

@@ -11,6 +11,7 @@
 import { dirname, resolve as resolvePath } from 'node:path'
 import { sourceContentFor, type TraceMap } from '@jridgewell/trace-mapping'
 import type { SourceResolverFileSystem } from './filesystem'
+import { isReadablePathInsideRoot } from './path-containment'
 
 /** Original source text plus the resolver path that loaded it. */
 export interface LoadedOriginalSource {
@@ -18,6 +19,12 @@ export interface LoadedOriginalSource {
   readonly content: string
   /** Whether content came from `sourcesContent` or disk fallback. */
   readonly source: 'source-map' | 'disk'
+}
+
+/** Options for source-map original source disk fallback. */
+export interface OriginalSourceLoadOptions {
+  /** Project root that all disk fallback reads must stay inside. */
+  readonly projectRoot?: string
 }
 
 /** Resolve an original source-map source path relative to a bundled file. */
@@ -41,8 +48,9 @@ export async function loadOriginalSource(
   bundledFile: string,
   sourcePath: string,
   fileSystem: SourceResolverFileSystem,
+  options: OriginalSourceLoadOptions = {},
 ): Promise<string | null> {
-  const loaded = await loadOriginalSourceWithKind(traceMap, bundledFile, sourcePath, fileSystem)
+  const loaded = await loadOriginalSourceWithKind(traceMap, bundledFile, sourcePath, fileSystem, options)
   return loaded?.content ?? null
 }
 
@@ -57,6 +65,7 @@ export async function loadOriginalSourceWithKind(
   bundledFile: string,
   sourcePath: string,
   fileSystem: SourceResolverFileSystem,
+  options: OriginalSourceLoadOptions = {},
 ): Promise<LoadedOriginalSource | null> {
   try {
     const sourceContent = sourceContentFor(traceMap, sourcePath)
@@ -67,6 +76,7 @@ export async function loadOriginalSourceWithKind(
 
   const originalPath = resolveOriginalPath(bundledFile, sourcePath)
   if (!originalPath || !fileSystem.exists(originalPath)) return null
+  if (options.projectRoot && !(await isReadablePathInsideRoot(options.projectRoot, originalPath, fileSystem))) return null
 
   try {
     return { content: await fileSystem.readFile(originalPath), source: 'disk' }
