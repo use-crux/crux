@@ -148,6 +148,16 @@ Index indexing is wrapped by the Project Index Compiler boundary in `indexer/com
 
 `@use-crux/indexer/extensions` is an experimental extension boundary. It models the Project Index compiler with role-based slots such as extractors, resolvers, rules, and emitters. Extractors return immutable intermediate facts and unresolved references; Crux resolves, validates, merges, projects, caches, and emits index snapshots or patches. Explicit allowlisted package loading is supported for extractor/relation-spec manifests. Compiler profiles, compiler-owned projections, runtime construction details, custom third-party rules, resolvers, emitters, sources, parsers, and sandboxing remain internal/reserved.
 
+## Stability
+
+Stable beta surfaces are granular. The package root, `@use-crux/indexer/testing`,
+`@use-crux/indexer/source-resolver`, and JSON-safe `contracts/*` subpaths are intended to avoid
+breaking shape changes after the pre-launch rename/cache-bump phase. `@use-crux/indexer/extensions`
+remains experimental: its `ExtractContext` reader/builder object is frozen, but third-party loading,
+trust UX, custom rule execution, and fixture package contracts are not stable plugin ecosystem
+promises yet. `@use-crux/indexer/host/*` subpaths are Crux-owned worker bridges and should not be
+treated as application SDK APIs.
+
 The loading model is config-first and trust-aware. `@use-crux/core` accepts inert `indexer`
 configuration for extension references, trust policy, and rule options. The indexer exposes
 `loadIndexerExtensionReferences(...)` for package-resolution/import and
@@ -169,14 +179,16 @@ so resolved semantic facts replace provisional static facts instead of producing
 Relation types are expected to be declared in the active policy table before they reach compiler
 output. Undeclared relation refs or pre-resolved relations are preserved as evidence but reported
 through `RelationResolutionReport.policyGaps` and `relation.policy_gap` diagnostics.
+Runtime `use` entries that name ambient resources are resolved from `RuntimeUseTargetRules`; app or
+host-specific aliases belong in that data rather than in SDK resolver code.
 Use `@use-crux/indexer/testing` for extension tests; it wraps that same engine with an in-memory source
 reader and disabled cache.
 
-The experimental extractor context exposes compiler-owned readers and builders for the current migration path: argument reads, static object reads, schema projection, definition/reference builders, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript nodes remain an unstable first-party escape hatch.
+The experimental extractor context exposes compiler-owned readers and builders for the current migration path: argument reads, static object reads, schema projection, definition/reference builders, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Its public shape is frozen as `extension`, `extractor`, `match`, `source`, `args`, `config`, `define`, `ref`, and `sourceRef`. Raw TypeScript nodes remain an unstable first-party escape hatch on internal module paths only.
 
 See [Writing an Indexer Extension](/docs/guides/advanced/writing-indexer-extension) for the author walkthrough and [`@use-crux/indexer/extensions`](/docs/reference/indexer-extensions) for the API reference.
 
-`indexProjectIncremental` consumes the graph-backed planner and emits index patches for planner-approved source closures. In `ast` mode it produces exact-invalidation AST patches. In `ast-and-semantic` mode it follows the AST patch with TypeScript semantic enrichment for known index-owning source files and semantic source-ref support files. Unknown files, config changes, old snapshots, unresolved imports, and first-run support files without durable source graph evidence fall back to full indexing.
+`indexProjectIncremental` consumes the graph-backed planner and emits index patches for planner-approved source closures. In `ast` mode it produces exact-invalidation AST patches. In `ast-and-semantic` mode it follows the AST patch with TypeScript semantic enrichment for known index-owning source files and semantic source-ref support files. Unknown files, config changes, old snapshots, unresolved imports, and first-run support files without durable source graph evidence fall back to full indexing. A fallback from an empty previous snapshot is equivalent to `indexProject({ resolutionMode: 'source-only' })` projected as an AST patch.
 
 The local Go service can now call the incremental worker with a previous index plus changed/deleted file sets and apply the returned ordered patches to the live index state. The Go patch applier honors exact file/definition invalidation and unions source-row evidence across AST and semantic phases. `POST /api/project/index/reindex` and `POST /api/index/reindex` accept optional `files` and `deletedFiles` arrays for delta-triggered incremental refreshes. During `crux dev`, a Go `fsnotify` watcher debounces source/config changes and feeds the same incremental bridge.
 

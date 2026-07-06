@@ -133,6 +133,9 @@ describe('public indexer extension surface', () => {
       'RelationModelInput',
       'RelationPolicyTable',
       'RelationResolutionReport',
+      'RuntimeUseTargetExactRule',
+      'RuntimeUseTargetRules',
+      'RuntimeUseTargetSuffixRule',
       'UnresolvedRelationReason',
       'UnresolvedRelationRef',
     ])
@@ -158,6 +161,8 @@ describe('public indexer extension surface', () => {
       'createStaticExtraction',
       'staticDefinitionFiles',
       'createTypeScriptStaticSyntaxFrontend',
+      'indexProjectAstFromSyntaxRecordProviderForHost',
+      'indexProjectAstFromSyntaxRecordsForHost',
     ])
     expect(namedTypeExports(staticIndex)).toEqual([
       'ProjectIndexCompileMode',
@@ -173,7 +178,12 @@ describe('public indexer extension surface', () => {
       'StaticFileExtraction',
       'StaticParseCacheHit',
       'StaticParseCacheStore',
+      'IndexProjectAstFromSyntaxRecordProviderHostOptions',
+      'IndexProjectAstFromSyntaxRecordsHostOptions',
+      'NativeFactProjectionMode',
       'ProvidedStaticSyntaxRecordProvider',
+      'StaticSyntaxFileRecord',
+      'StaticSyntaxFrontendIdentity',
       'StaticSyntaxFrontendFactory',
     ])
     expect(namedValueExports(semantic)).toEqual([

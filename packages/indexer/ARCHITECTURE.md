@@ -65,6 +65,18 @@ enrichment, runtime patch conversion, and Static Index compatibility-host calls.
 release, each host-only surface must be removed, made intentionally public, or kept package-private
 through build output.
 
+The stability promise is granular:
+
+- `@use-crux/indexer`, `@use-crux/indexer/testing`, `@use-crux/indexer/source-resolver`, and
+  JSON-safe `contracts/*` subpaths are stable-beta surfaces once this kit finishes. Breaking shape
+  changes are not planned after the pre-launch rename/cache-bump phase.
+- `@use-crux/indexer/extensions` remains experimental. Its `ExtractContext` reader/builder shape is
+  frozen, but third-party loading, trust UX, rule execution, and fixture package contracts are not
+  stable plugin ecosystem promises yet.
+- `@use-crux/indexer/host/*` is host-only. `host/static-index` owns worker controls such as
+  `indexProjectAstFromSyntaxRecordsForHost`, validated static cache hits, provided-record cache
+  sizing, and native fact projection mode so root options do not expose host knobs.
+
 Local TypeScript worker bundles are owned by the private `packages/local-workers` package.
 `@use-crux/devtools` owns only the React/Vite UI and UI-local tests.
 
@@ -310,6 +322,10 @@ discovery, or background side-effect hook.
 that already have extension objects. `loadIndexerExtensionReferences(...)` is the only public helper
 that performs package resolution/import, and it should stay explicit about trust because importing a
 Node package is code execution, not a sandbox.
+
+Relation read-model projection is public compiler data, not app policy. Runtime `use` entries that
+name ambient resources are matched through `RuntimeUseTargetRules`; product-specific ids or aliases
+must be supplied as data by the host/profile instead of hardcoded in `relations/index.ts`.
 
 The package export map intentionally separates public authoring surfaces from host/internal bridges:
 `@use-crux/indexer`, `@use-crux/indexer/extensions`, `@use-crux/indexer/testing`, and

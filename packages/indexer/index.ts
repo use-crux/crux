@@ -113,6 +113,9 @@ export type {
   RelationModelInput,
   RelationPolicyTable,
   RelationResolutionReport,
+  RuntimeUseTargetExactRule,
+  RuntimeUseTargetRules,
+  RuntimeUseTargetSuffixRule,
   UnresolvedRelationReason,
   UnresolvedRelationRef,
 } from './indexer/relations'

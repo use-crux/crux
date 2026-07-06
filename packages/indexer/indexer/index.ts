@@ -47,18 +47,6 @@ interface IndexProjectAstOptions {
   readonly projectName?: string
   /** Optional timing hook for AST/static indexing benchmarks and worker diagnostics. */
   readonly staticInstrumentation?: StaticExtractionInstrumentation
-  /** Internal max size for provided syntax-record memoization. */
-  readonly providedRecordCacheSize?: number
-  /**
-   * Internal native syntax-record fact lane to project.
-   *
-   * Defaults to `inline`, the existing combined native + TypeScript path.
-   * Native hosts can request `external` or `native-only` for split-lane
-   * experiments without changing public project config.
-   *
-   * @internal
-   */
-  readonly nativeFactProjection?: NativeFactProjectionMode
 }
 
 /** Options for projecting externally produced static syntax records. */
@@ -73,8 +61,6 @@ export interface IndexProjectAstFromSyntaxRecordsOptions extends IndexProjectAst
   readonly records: readonly StaticSyntaxFileRecord[]
   /** Frontend identity to use when `records` is empty. */
   readonly frontendIdentity?: StaticSyntaxFrontendIdentity
-  /** Internal validated static cache hits supplied by a native parser host. */
-  readonly staticCacheHits?: readonly StaticParseCacheHit[]
 }
 
 /** Options for projecting externally produced records through a lazy provider. */
@@ -88,9 +74,32 @@ export interface IndexProjectAstFromSyntaxRecordProviderOptions extends IndexPro
   readonly recordProvider: ProvidedStaticSyntaxRecordProvider
   /** Frontend identity to use when the provider does not expose one directly. */
   readonly frontendIdentity?: StaticSyntaxFrontendIdentity
+}
+
+interface IndexProjectAstHostControls {
   /** Internal validated static cache hits supplied by a native parser host. */
   readonly staticCacheHits?: readonly StaticParseCacheHit[]
+  /** Internal max size for provided syntax-record memoization. */
+  readonly providedRecordCacheSize?: number
+  /**
+   * Internal native syntax-record fact lane to project.
+   *
+   * Defaults to `inline`, the existing combined native + TypeScript path.
+   * Native hosts can request `external` or `native-only` for split-lane experiments without changing
+   * public project config.
+   */
+  readonly nativeFactProjection?: NativeFactProjectionMode
 }
+
+/** Host-only options for projecting externally produced static syntax records. */
+export interface IndexProjectAstFromSyntaxRecordsHostOptions
+  extends IndexProjectAstFromSyntaxRecordsOptions,
+    IndexProjectAstHostControls {}
+
+/** Host-only options for projecting externally produced records through a lazy provider. */
+export interface IndexProjectAstFromSyntaxRecordProviderHostOptions
+  extends IndexProjectAstFromSyntaxRecordProviderOptions,
+    IndexProjectAstHostControls {}
 
 /** Options for explicit runtime-rich Project Index enrichment. */
 export interface IndexProjectRuntimeOptions {
@@ -152,6 +161,18 @@ export async function indexProjectAst(options: IndexProjectAstOptions): Promise<
 export async function indexProjectAstFromSyntaxRecords(
   options: IndexProjectAstFromSyntaxRecordsOptions,
 ): Promise<IndexPatch> {
+  return indexProjectAstFromSyntaxRecordsForHost(options)
+}
+
+/**
+ * Projects caller-provided syntax records with host-only cache and native-projection controls.
+ *
+ * This is intentionally exported only from `@use-crux/indexer/host/static-index`; root callers get
+ * `indexProjectAstFromSyntaxRecords(...)`, which omits worker-owned knobs from its public type.
+ */
+export async function indexProjectAstFromSyntaxRecordsForHost(
+  options: IndexProjectAstFromSyntaxRecordsHostOptions,
+): Promise<IndexPatch> {
   const result = await compileProjectIndex({
     root: options.root,
     configPath: options.configPath,
@@ -183,6 +204,18 @@ function providedRecordPatchStatus(diagnostics: readonly { readonly code: string
  */
 export async function indexProjectAstFromSyntaxRecordProvider(
   options: IndexProjectAstFromSyntaxRecordProviderOptions,
+): Promise<IndexPatch> {
+  return indexProjectAstFromSyntaxRecordProviderForHost(options)
+}
+
+/**
+ * Projects lazy syntax records with host-only cache and native-projection controls.
+ *
+ * Worker bundles use this host facade when records arrive as chunks, cache-hit metadata is already
+ * validated, or the native fact lane is split for parity experiments.
+ */
+export async function indexProjectAstFromSyntaxRecordProviderForHost(
+  options: IndexProjectAstFromSyntaxRecordProviderHostOptions,
 ): Promise<IndexPatch> {
   const result = await compileProjectIndex({
     root: options.root,

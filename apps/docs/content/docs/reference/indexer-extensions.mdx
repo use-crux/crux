@@ -137,6 +137,11 @@ export const extractor: IndexExtractor = {
 
 `extract(ctx)` should be a pure function of its context. It should read source-local values through `ctx.args`, `ctx.config`, and `ctx.source`; build values with `ctx.define`, `ctx.ref`, and `ctx.sourceRef`; and return `facts(...)`, `none()`, or a degraded result. Do not mutate index graphs, caches, diagnostics arrays, registries, or snapshots.
 
+The public `ExtractContext` shape is frozen as a reader/builder object. Extension code should treat
+`extension`, `extractor`, `match`, `source`, `args`, `config`, `define`, `ref`, and `sourceRef` as the
+stable context members; raw parser or TypeScript-native payloads are intentionally not part of this
+barrel.
+
 ## Context Members
 
 - `ctx.extension` and `ctx.extractor` identify the contribution that is running.

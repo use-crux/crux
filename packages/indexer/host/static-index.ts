@@ -18,6 +18,10 @@ export {
 export { createStaticExtraction } from '../indexer/static/extraction/engine'
 export { staticDefinitionFiles } from '../indexer/files'
 export { createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
+export {
+  indexProjectAstFromSyntaxRecordProviderForHost,
+  indexProjectAstFromSyntaxRecordsForHost,
+} from '../indexer'
 
 export type {
   ProjectIndexCompileMode,
@@ -38,7 +42,13 @@ export type {
   StaticParseCacheStore,
 } from '../indexer/static/extraction/types'
 export type {
+  IndexProjectAstFromSyntaxRecordProviderHostOptions,
+  IndexProjectAstFromSyntaxRecordsHostOptions,
+} from '../indexer'
+export type {
+  NativeFactProjectionMode,
   ProvidedStaticSyntaxRecordProvider,
+  StaticSyntaxFileRecord,
+  StaticSyntaxFrontendIdentity,
   StaticSyntaxFrontendFactory,
 } from '../indexer/static-index/syntax'
-

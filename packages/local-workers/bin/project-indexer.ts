@@ -9,8 +9,6 @@
 import { createInterface } from 'node:readline'
 import {
   indexProjectAst,
-  indexProjectAstFromSyntaxRecordProvider,
-  indexProjectAstFromSyntaxRecords,
   indexProjectIncremental,
   inspectProjectStaticIndexConfig,
   inspectProjectStaticSyntaxPlan,
@@ -20,6 +18,10 @@ import {
   runRuntimeOperation,
   type RuntimeOperationKind,
 } from '@use-crux/indexer'
+import {
+  indexProjectAstFromSyntaxRecordProviderForHost,
+  indexProjectAstFromSyntaxRecordsForHost,
+} from '@use-crux/indexer/host/static-index'
 import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@use-crux/core/project-index'
 import {
   createProjectIndexWorkerRequestAssembler,
@@ -219,7 +221,7 @@ async function runAssembledRequest(
           assertProjectIndexWorkerProtocolV2(req.protocolVersion)
           const staticTimings = createStaticTimingCollector()
           const patch = req.syntaxRecordProvider
-            ? await indexProjectAstFromSyntaxRecordProvider({
+            ? await indexProjectAstFromSyntaxRecordProviderForHost({
                 root: req.root,
                 configPath: req.configPath,
                 projectName: req.projectName,
@@ -230,7 +232,7 @@ async function runAssembledRequest(
                 providedRecordCacheSize: providedRecordCacheSizeFromEnv(),
                 nativeFactProjection: req.nativeFactProjection,
               })
-            : await indexProjectAstFromSyntaxRecords({
+            : await indexProjectAstFromSyntaxRecordsForHost({
                 root: req.root,
                 configPath: req.configPath,
                 projectName: req.projectName,

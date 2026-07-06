@@ -49,7 +49,7 @@ registration and no implicit package discovery.
 
 Extension authors can test manifests with `@use-crux/indexer/testing`. `defineIndexerExtensionFixture` plus `extractFixtureSource` runs the production static extraction engine against in-memory source text with cache disabled, and `assertDeterministicExtraction` double-runs the same fixture to guard stable output and cache identity.
 
-The current extension context includes the shared migration helpers needed by most remaining static extractors: factory argument reads, static object reads, object-literal compatibility matches, schema projection, definition/reference builders, constructor matches, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript access remains an unstable first-party adapter while the migration finishes.
+The public extension context is frozen as a reader/builder object: `extension`, `extractor`, `match`, `source`, `args`, `config`, `define`, `ref`, and `sourceRef`. It exposes factory argument reads, static object reads, schema projection, definition/reference builders, constructor matches, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript access remains an unstable first-party adapter on internal module paths only.
 
 Semantic backends are backend-neutral. The JavaScript TypeScript backend is the correctness baseline,
 and the experimental native backend must emit the same projected semantic facts. Native projectors
@@ -78,7 +78,9 @@ marker. When the worker and project can produce semantic enrichment, the Go serv
 semantic patch and clears that marker; if semantic enrichment is unavailable or degraded, the marker
 is preserved so clients can explain the current fidelity honestly.
 
-`indexProjectIncremental` consumes the graph-backed planner and emits index patches instead of a complete snapshot. In `ast` mode it produces exact-invalidation AST patches for planner-approved source-file and dependency-closure changes through the shared compiler-result AST emitter. In `ast-and-semantic` mode it follows the AST patch with semantic enrichment for known index-owning files and semantic source-ref support files in the affected closure. AST patches carry a semantic source-profile handoff so scoped semantic requests can reuse already-read source fingerprints instead of rescanning the same files. When graph evidence is incomplete, stale, or unsupported, it falls back to the existing full indexing paths.
+`indexProjectIncremental` consumes the graph-backed planner and emits index patches instead of a complete snapshot. In `ast` mode it produces exact-invalidation AST patches for planner-approved source-file and dependency-closure changes through the shared compiler-result AST emitter. In `ast-and-semantic` mode it follows the AST patch with semantic enrichment for known index-owning files and semantic source-ref support files in the affected closure. AST patches carry a semantic source-profile handoff so scoped semantic requests can reuse already-read source fingerprints instead of rescanning the same files. When graph evidence is incomplete, stale, or unsupported, it falls back to the existing full indexing paths. A fallback from an empty previous snapshot is equivalent to `indexProject({ resolutionMode: 'source-only' })` projected as an AST patch.
+
+Relation read-model projection accepts optional runtime-use target rules. Product-specific runtime aliases, such as a local app's tool-context id, belong in that data instead of in SDK resolver code. The built-in defaults cover generic Crux runtime resources (`tools`, `*.memory`, `*.retriever`, and `blackboard`).
 
 `@use-crux/local` applies those incremental patches through the Go-owned index patch state. That applier honors exact file/definition invalidation, preserves unrelated runtime and quality facts, merges diagnostics by id, and unions source-row graph evidence across AST and semantic phases. The local service has an incremental bridge that falls back to full reindex when there is no previous source graph or no incremental-capable worker. During `crux dev`, a Go `fsnotify` watcher debounces source/config changes, assigns a monotonic watch run id, coalesces changed/deleted file sets, and feeds a single-flight incremental bridge. Background semantic patches are generation-checked before commit so a slow semantic result cannot overwrite a newer AST generation. The latest bounded watch report is available from the local read model at `GET /api/project/index/watch`.
 
@@ -113,6 +115,12 @@ If a feature spans static facts, semantic facts, and the Go-owned index snapshot
 
 ## Public Entry Points
 
+Stable beta root APIs are the package root, `testing`, `source-resolver`, and the JSON-safe
+`contracts/*` subpaths. Breaking shape changes are not planned for those surfaces after the
+pre-launch rename phase. `@use-crux/indexer/extensions` remains experimental until third-party
+loading, trust UX, rule execution, and fixture package contracts are ready. `host/*` subpaths are
+Crux-owned worker bridges, not general SDK APIs.
+
 ```ts
 import {
   indexProject,
@@ -128,8 +136,12 @@ import { defineIndexerExtensionFixture, extractFixtureSource } from '@use-crux/i
 Crux-owned worker hosts can use private host subpaths while the package remains private:
 
 ```ts
-import { compileProjectIndex, createStaticExtraction } from '@use-crux/indexer/host/static-index'
+import {
+  compileProjectIndex,
+  createStaticExtraction,
+  indexProjectAstFromSyntaxRecordsForHost,
+} from '@use-crux/indexer/host/static-index'
 import { indexPatchFromWorkerEvents } from '@use-crux/indexer/contracts/worker-events'
 ```
 
-Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `createStaticExtraction` is a Crux-owned static extraction boundary for bundled tools that need source-file facts, and `@use-crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party extension support is stabilized. Internal `indexer/*` modules are not package exports; `host/*` subpaths are Crux-owned worker bridges, and `contracts/*` subpaths are JSON-safe cross-runtime contracts rather than general SDK entry points.
+Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `createStaticExtraction` and `indexProjectAstFromSyntaxRecordsForHost` are Crux-owned host boundaries for bundled tools and workers that need source-file facts, validated native cache hits, or native projection controls. `@use-crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party extension support is stabilized. Internal `indexer/*` modules are not package exports; `host/*` subpaths are Crux-owned worker bridges, and `contracts/*` subpaths are JSON-safe cross-runtime contracts rather than general SDK entry points.

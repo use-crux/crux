@@ -9,7 +9,94 @@
  * @module
  */
 
-export * from './static-index'
-export * from './semantic'
-export * from './runtime'
-export * from './static-compat'
+export {
+  astIndexPatchFromCompilerResult,
+  compileProjectIndex,
+  createProjectIndexCompiler,
+  projectIndexSnapshotFromCompilerResult,
+  createStaticExtraction,
+  staticDefinitionFiles,
+  createTypeScriptStaticSyntaxFrontend,
+  indexProjectAstFromSyntaxRecordProviderForHost,
+  indexProjectAstFromSyntaxRecordsForHost,
+} from './static-index'
+export type {
+  CompilerOwnedProjection,
+  IndexProjectAstFromSyntaxRecordProviderHostOptions,
+  IndexProjectAstFromSyntaxRecordsHostOptions,
+  NativeFactProjectionMode,
+  ProjectIndexCompileMode,
+  ProjectIndexCompiler,
+  ProjectIndexCompilerInput,
+  ProjectIndexCompilerProfile,
+  ProjectIndexCompilerResult,
+  ProvidedStaticSyntaxRecordProvider,
+  SourceReader,
+  StaticExtractionEngine,
+  StaticExtractionInstrumentation,
+  StaticExtractionOptions,
+  StaticFileExtraction,
+  StaticParseCacheHit,
+  StaticParseCacheStore,
+  StaticSyntaxFileRecord,
+  StaticSyntaxFrontendFactory,
+  StaticSyntaxFrontendIdentity,
+} from './static-index'
+export {
+  createNativeSemanticBackend,
+  createSemanticIndexService,
+  createTypeScriptSemanticBackend,
+  nativeSemanticBackendCapabilities,
+  nativeSemanticBackendIdentity,
+  typescriptSemanticBackendCapabilities,
+  typescriptSemanticBackendIdentity,
+} from './semantic'
+export type {
+  NativeSemanticBackendOptions,
+  SemanticAnalyzeInput,
+  SemanticAnalyzeResult,
+  SemanticBackend,
+  SemanticBackendCapabilities,
+  SemanticBackendIdentity,
+  SemanticBackendOption,
+  SemanticBackendSelectionEnv,
+  SemanticBackendSession,
+  SemanticBackendSessionInput,
+  SemanticCompilerDeclaration,
+  SemanticCompilerNode,
+  SemanticCompilerSourceFile,
+  SemanticCompilerSymbol,
+  SemanticCompilerType,
+  SemanticCompilerView,
+  SemanticEvidenceBatch,
+  SemanticEvidenceBatchKind,
+  SemanticEvidenceBatchSource,
+  SemanticIndexService,
+  SemanticIndexServiceOptions,
+  SemanticProjectSessionIdentity,
+  SemanticSyntaxKind,
+  SemanticSyntaxNode,
+  SemanticSyntaxNodeOf,
+  SemanticSyntaxSourceFile,
+  SemanticSyntaxView,
+  TypeScriptSemanticBackendOptions,
+} from './semantic'
+export { runtimeIndexPatchFromCompilerResult } from './runtime'
+export {
+  checkStaticRulesForProject,
+  extractStaticEvidenceBatchForProject,
+  loadStaticExtensionHostManifestForProject,
+} from './static-compat'
+export type {
+  CheckStaticRulesForProjectInput,
+  CheckStaticRulesInput,
+  CheckStaticRulesResult,
+  ExtractStaticEvidenceBatchForProjectInput,
+  ExtractStaticEvidenceBatchInput,
+  ExtractStaticEvidenceBatchResult,
+  LoadStaticExtensionHostManifestForProjectInput,
+  LoadStaticExtensionHostManifestInput,
+  LoadStaticExtensionHostManifestResult,
+  StaticIndexExtensionHostProjectInput,
+  StaticExtensionWorkerProjectInput,
+} from './static-compat'

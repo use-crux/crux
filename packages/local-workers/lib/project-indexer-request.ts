@@ -1,10 +1,15 @@
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import type {
   IncrementalExecutionMode,
-  IndexProjectAstFromSyntaxRecordsOptions,
   SemanticBackendSelection,
 } from '@use-crux/indexer'
-import type { ProvidedStaticSyntaxRecordProvider, StaticParseCacheHit } from '@use-crux/indexer/host/static-index'
+import type {
+  NativeFactProjectionMode,
+  ProvidedStaticSyntaxRecordProvider,
+  StaticParseCacheHit,
+  StaticSyntaxFileRecord,
+  StaticSyntaxFrontendIdentity,
+} from '@use-crux/indexer/host/static-index'
 import type {
   CheckStaticRulesInput,
   ExtractStaticEvidenceBatchInput,
@@ -15,9 +20,7 @@ import {
   type ProjectIndexSyntaxRecordSpool,
 } from './project-indexer-syntax-record-spool'
 
-export type StaticSyntaxFileRecord = IndexProjectAstFromSyntaxRecordsOptions['records'][number]
-export type StaticSyntaxFrontendIdentity = NonNullable<IndexProjectAstFromSyntaxRecordsOptions['frontendIdentity']>
-export type NativeFactProjectionMode = NonNullable<IndexProjectAstFromSyntaxRecordsOptions['nativeFactProjection']>
+export type { NativeFactProjectionMode, StaticSyntaxFileRecord, StaticSyntaxFrontendIdentity }
 
 /** Chunk event names accepted by the Project Index worker request assembler. */
 export type ProjectIndexWorkerRequestKind =
