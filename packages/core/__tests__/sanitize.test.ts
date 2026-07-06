@@ -363,7 +363,7 @@ describe('sanitize hook', () => {
     configure({ prompts: [p], autoEscape: false })
   })
 
-    it('runs after auto-escape and receives escaped input', async () => {
+  it('runs before auto-escape and receives unescaped input', async () => {
     let receivedInput: any = null
     const config: PromptConfig<any, any, any> = {
       input: z.object({ query: z.string() }),
@@ -374,9 +374,8 @@ describe('sanitize hook', () => {
       system: ({ input }: any) => input.query,
     }
     const resolved = await resolveCompiled(config, { input: { query: '<test>' } })
-    // auto-escape runs first: <test> → &lt;test&gt;
-    expect(receivedInput.query).toBe('&lt;test&gt;')
-    // then sanitize hook appends
+    // sanitize runs first, then auto-escape covers the returned top-level string.
+    expect(receivedInput.query).toBe('<test>')
     expect(resolved.system).toBe('&lt;test&gt; [sanitized]')
   })
 })

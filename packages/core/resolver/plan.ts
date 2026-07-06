@@ -13,12 +13,21 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { AnyPromptConfig } from '../prompt/prompt-types'
-import { runPromptPass } from './pass'
-import type { ResolverPorts } from './ports'
-import { compileInputSchema } from './schema'
-import type { ProjectionMode, PromptResolutionPass, ResolveCallOptions } from './compiler-types'
+import type { z } from "zod";
+import type { AnyPromptConfig } from "../prompt/prompt-types";
+import { runPromptPass } from "./pass";
+import {
+  quietDiagnostics,
+  quietInstrumentation,
+  quietObservability,
+  type ResolverPorts,
+} from "./ports";
+import { compileInputSchema } from "./schema";
+import type {
+  ProjectionMode,
+  PromptResolutionPass,
+  ResolveCallOptions,
+} from "./compiler-types";
 
 /**
  * A prompt config bound to its schema and ports, ready to run resolution passes.
@@ -30,9 +39,12 @@ import type { ProjectionMode, PromptResolutionPass, ResolveCallOptions } from '.
  */
 export interface PromptResolverPlan {
   /** Merged input schema (own + context contributions), or undefined when no fields exist. */
-  readonly inputSchema: z.ZodType | undefined
+  readonly inputSchema: z.ZodType | undefined;
   /** Run one ordered pass in the given projection mode. */
-  run(opts: ResolveCallOptions | undefined, mode: ProjectionMode): Promise<PromptResolutionPass>
+  run(
+    opts: ResolveCallOptions | undefined,
+    mode: ProjectionMode,
+  ): Promise<PromptResolutionPass>;
 }
 
 /**
@@ -40,27 +52,43 @@ export interface PromptResolverPlan {
  *
  * Definition-time work (schema merge) happens once here; per-call work happens
  * in `run()`. `'resolve'` wraps the pass in the prompt-resolution observability
- * scope; `'inspect'` runs the identical pass quietly so debug inspection never
- * emits resolve spans or artifacts.
+ * scope; `'inspect'` runs the identical pass with quiet observability and
+ * instrumentation, and diagnostics ports. Inspect still consults and warms the memo cache so
+ * future freshness facts reflect the same cache path as resolve; only emission
+ * is suppressed.
  *
  * The config must already be validated (see `validatePromptConfig`) — the
  * public `compilePrompt()` boundary validates before binding.
  */
-export function createPromptResolverPlan(config: AnyPromptConfig, ports: ResolverPorts): PromptResolverPlan {
-  const inputSchema = compileInputSchema(config.use ?? [], config.input)
+export function createPromptResolverPlan(
+  config: AnyPromptConfig,
+  ports: ResolverPorts,
+): PromptResolverPlan {
+  const inputSchema = compileInputSchema(config.use ?? [], config.input);
 
   return {
     inputSchema,
     run(opts, mode) {
-      const call = opts ?? {}
-      if (mode === 'inspect') {
-        return runPromptPass(config, call, inputSchema, ports, 'inspect')
+      const call = opts ?? {};
+      if (mode === "inspect") {
+        return runPromptPass(
+          config,
+          call,
+          inputSchema,
+          {
+            ...ports,
+            observability: quietObservability(),
+            instrumentation: quietInstrumentation(),
+            diagnostics: quietDiagnostics(),
+          },
+          "inspect",
+        );
       }
       return ports.observability.scope(
         {
-          name: config.id ?? 'prompt.resolve',
-          family: 'prompt',
-          primitive: 'prompt.resolve',
+          name: config.id ?? "prompt.resolve",
+          family: "prompt",
+          primitive: "prompt.resolve",
           attributes: {
             promptId: config.id,
             contextEntryCount: (config.use ?? []).length,
@@ -68,8 +96,8 @@ export function createPromptResolverPlan(config: AnyPromptConfig, ports: Resolve
             hasOutput: !!config.output,
           },
         },
-        () => runPromptPass(config, call, inputSchema, ports, 'resolve'),
-      )
+        () => runPromptPass(config, call, inputSchema, ports, "resolve"),
+      );
     },
-  }
+  };
 }

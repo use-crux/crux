@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { context, match, when } from '../../prompt/context'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import { blackboard } from '../../agent/blackboard'
-import { injectable } from '../../prompt/injectable'
+import { contributor } from '../../prompt/contributor'
 import { memory, memoryBlock } from '../../memory'
 import type {
   CruxContextContributionPreview,
@@ -292,9 +292,9 @@ describe('canonical context and safety observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
-    const directRetriever = injectable({
+    const directRetriever = contributor({
       id: 'project-search',
-      inject: () => ({
+      contribute: () => ({
         tools: { projectSearch: 'tool' },
       }),
     })
@@ -335,7 +335,7 @@ describe('canonical context and safety observability', () => {
     )
     expect(contextContributions).toContainEqual(
       expect.objectContaining({
-        sourceId: 'injectable:project-search',
+        sourceId: 'contributor:project-search',
         injectableKind: 'injectable',
         injects: ['tools'],
         injectedTools: ['projectSearch'],

@@ -74,7 +74,7 @@ const branch = match({
   cases: { terse: localeCtx, verbose: [localeCtx, brandCtx] },
   default: tone,
 })
-expectTypeOf(branch).toEqualTypeOf<MatchSpec>()
+expectTypeOf(branch).toExtend<MatchSpec>()
 
 // `use[]` accepts every legal member shape through the public `ContextEntry`.
 const entries: readonly ContextEntry[] = [localeCtx, brandCtx, conditional, branch, tone, false, null, undefined]

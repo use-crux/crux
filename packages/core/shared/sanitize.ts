@@ -3,7 +3,7 @@
  *
  * Provides two complementary approaches:
  * - **`safe` tagged template** — explicit, per-value control with composable helpers
- * - **Auto-escape pipeline** — secure by default, all string inputs escaped before templates
+ * - **Auto-escape pipeline** — secure by default, top-level string input fields escaped before templates
  *
  * @module
  */

@@ -15,6 +15,7 @@ import type { Message } from '../../generation/messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
 import type { AdapterResponse } from '../types'
 import { emitToolArgsArtifact, emitToolResultArtifact, measureModelOutput } from './emission'
+import { collectToolApprovalDecisions } from '../../tools/internal/message-parsing'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -41,6 +42,15 @@ export interface ApprovalRequestInfo {
   readonly input: JsonValue
   /** Random token that must round-trip through the approval response. */
   readonly approvalToken: string
+}
+
+/** Invalid approval response paired with the tool call it tried to decide. */
+export interface InvalidApprovalToolCall {
+  readonly id: string
+  readonly name: string
+  readonly args: unknown
+  readonly approvalId: string
+  readonly message: string
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -125,8 +135,10 @@ export function createSyntheticToolCallResponse(toolCalls: NonNullable<AdapterRe
 /**
  * Find the decision for an approval request, verifying the approval token.
  *
- * @throws {Error} When a decision exists but its token does not match the
- *   request's token — a forged or replayed approval response.
+ * Returns `undefined` when a decision exists but its token does not match the
+ * request's token. Invalid decisions are handled by
+ * {@link findInvalidApprovalToolCalls} so generation can continue with a
+ * model-visible denial.
  */
 export function findValidApprovalDecision(
   messages: readonly Message[],
@@ -136,7 +148,7 @@ export function findValidApprovalDecision(
   const decision = findToolApprovalDecision(messages, request.approvalId)
   if (!decision) return undefined
   if (request.approvalToken && decision.approvalToken !== request.approvalToken) {
-    throw new Error(`Approval response token mismatch for approval "${request.approvalId}".`)
+    return undefined
   }
   return decision
 }
@@ -150,9 +162,8 @@ export function findValidApprovalDecision(
  * `toolCallId` exists, so replays are idempotent: running this twice over
  * the same history never re-executes a tool.
  *
- * @throws {Error} When a decision's approval token does not match its
- *   request — the mismatch is also emitted as a `token-mismatch`
- *   observability event before throwing.
+ * Invalid approval responses are excluded here and returned by
+ * {@link findInvalidApprovalToolCalls} instead.
  */
 export function findApprovedOrDeniedToolCalls(messages: readonly Message[]): NonNullable<AdapterResponse['toolCalls']> {
   const completedToolCallIds = new Set(
@@ -165,19 +176,7 @@ export function findApprovedOrDeniedToolCalls(messages: readonly Message[]): Non
 
   return findToolApprovalRequests(messages).flatMap((request) => {
     if (completedToolCallIds.has(request.toolCallId)) return []
-    let decision: ReturnType<typeof findToolApprovalDecision>
-    try {
-      decision = findValidApprovalDecision(messages, request)
-    } catch (error) {
-      emitToolApprovalObservation('token-mismatch', {
-        approvalId: request.approvalId,
-        toolCallId: request.toolCallId,
-        toolName: request.toolName,
-        input: request.input,
-        error,
-      })
-      throw error
-    }
+    const decision = findValidApprovalDecision(messages, request)
     if (!decision) return []
     return [
       {
@@ -187,6 +186,83 @@ export function findApprovedOrDeniedToolCalls(messages: readonly Message[]): Non
       },
     ]
   })
+}
+
+/** Find invalid approval responses that must be fed back to the model as denials. */
+export function findInvalidApprovalToolCalls(messages: readonly Message[]): readonly InvalidApprovalToolCall[] {
+  const completedToolCallIds = new Set(
+    messages.flatMap((message) => {
+      if (message.role !== 'tool') return []
+      if (typeof message.metadata?.toolCallId !== 'string') return []
+      return [message.metadata.toolCallId]
+    }),
+  )
+  const requests = new Map(findToolApprovalRequests(messages).map((request) => [request.approvalId, request]))
+  const toolCalls = collectAssistantToolCalls(messages)
+
+  return collectToolApprovalDecisions(messages).flatMap((decision) => {
+    const request = requests.get(decision.approvalId)
+    const toolCallId = request?.toolCallId ?? toolCallIdFromApprovalId(decision.approvalId)
+    if (!toolCallId || completedToolCallIds.has(toolCallId)) return []
+
+    const call = toolCalls.get(toolCallId)
+    const toolName = request?.toolName || call?.name
+    if (!toolName) return []
+
+    const valid = request && (!request.approvalToken || decision.approvalToken === request.approvalToken)
+    if (valid) return []
+
+    return [
+      {
+        id: toolCallId,
+        name: toolName,
+        args: request?.input ?? call?.args,
+        approvalId: decision.approvalId,
+        message: invalidApprovalMessage(toolName, decision.approvalId),
+      },
+    ]
+  })
+}
+
+function invalidApprovalMessage(toolName: string, approvalId: string): string {
+  return `Tool approval response for "${toolName}" (${approvalId}) has no matching request or an invalid token; treating as denied.`
+}
+
+function toolCallIdFromApprovalId(approvalId: string): string | undefined {
+  return approvalId.startsWith('approval_') ? approvalId.slice('approval_'.length) : undefined
+}
+
+function collectAssistantToolCalls(messages: readonly Message[]): Map<string, { readonly name: string; readonly args: unknown }> {
+  const calls = new Map<string, { readonly name: string; readonly args: unknown }>()
+  for (const message of messages) {
+    if (message.role !== 'assistant') continue
+    const metadataCalls = message.metadata?.toolCalls
+    if (Array.isArray(metadataCalls)) {
+      for (const call of metadataCalls) {
+        const id = readString(call, 'id') ?? readString(call, 'toolCallId')
+        const name = readString(call, 'name') ?? readString(call, 'toolName')
+        if (id && name) calls.set(id, { name, args: readProperty(call, 'args') ?? readProperty(call, 'input') })
+      }
+    }
+    if (!Array.isArray(message.content)) continue
+    for (const part of message.content) {
+      if (readString(part, 'type') !== 'tool-call') continue
+      const id = readString(part, 'toolCallId')
+      const name = readString(part, 'toolName')
+      if (id && name) calls.set(id, { name, args: readProperty(part, 'input') ?? readProperty(part, 'args') })
+    }
+  }
+  return calls
+}
+
+function readProperty(value: unknown, key: string): unknown {
+  if (typeof value !== 'object' || value === null) return undefined
+  return (value as Record<string, unknown>)[key]
+}
+
+function readString(value: unknown, key: string): string | undefined {
+  const property = readProperty(value, key)
+  return typeof property === 'string' ? property : undefined
 }
 
 // ─────────────────────────────────────────────────────────────────

@@ -11,21 +11,32 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { ContextEntry, ContextSystemContent, ContextSystemResult } from './context-types'
-import type { MergedInput } from './type-utils'
-import type { AnyMessage, AnyToolSet } from '../types'
-import type { AdapterMap, GenerationSettings, TokenUsage, TraceMeta } from '../generation/types'
-import type { DroppedContext, InspectResult, ResolveOptions, ResolvedPrompt } from '../resolver/types'
-import type { ToolMiddleware } from '../tools/types'
-import type { Constraint } from '../safety/constraint/types'
-import type { Guardrail } from '../safety/guardrail/types'
+import type { z } from "zod";
+import type { ContextEntry } from "./context-types";
+import type { PromptCallback, PromptContent } from "./content-types";
+import type { MergedInput } from "./type-utils";
+import type { AnyToolSet } from "../types";
+import type {
+  ProviderAdaptations,
+  GenerationSettings,
+  TokenUsage,
+  TraceMeta,
+} from "../generation/types";
+import type {
+  DroppedContext,
+  InspectResult,
+  ResolveOptions,
+  ResolvedPrompt,
+} from "../resolver/types";
+import type { ToolMiddleware } from "../tools/types";
+import type { Constraint } from "../safety/constraint/types";
+import type { Guardrail } from "../safety/guardrail/types";
 
 // ─────────────────────────────────────────────────────────────────
 // Semantic Response Cache
 // ─────────────────────────────────────────────────────────────────
 
-export type SemanticCacheMode = 'readwrite' | 'readonly' | 'writeonly' | 'off'
+export type SemanticCacheMode = "readwrite" | "readonly" | "writeonly" | "off";
 
 /**
  * Context passed to a prompt-level semantic cache `query` callback.
@@ -34,23 +45,28 @@ export type SemanticCacheMode = 'readwrite' | 'readonly' | 'writeonly' | 'off'
  * autocompletes when the option is set inline on a `prompt()`.
  */
 export interface SemanticCacheQueryContext<TInput = Record<string, unknown>> {
-  promptId: string | undefined
-  input: TInput
-  resolved: ResolvedPrompt
-  preparedArgs: Record<string, unknown>
-  operation: 'generate' | 'stream'
+  promptId: string | undefined;
+  input: TInput;
+  resolved: ResolvedPrompt;
+  preparedArgs: Record<string, unknown>;
+  operation: "generate" | "stream";
 }
 
 export interface SemanticCachePromptOptions<TInput = Record<string, unknown>> {
-  mode?: SemanticCacheMode
-  version?: string
-  ttl?: number
-  threshold?: number
-  query?: (ctx: SemanticCacheQueryContext<TInput>) => string | Promise<string>
+  mode?: SemanticCacheMode;
+  version?: string;
+  ttl?: number;
+  threshold?: number;
+  query?: PromptCallback<
+    [ctx: SemanticCacheQueryContext<TInput>],
+    string | Promise<string>
+  >;
 }
 
 export interface PromptCacheOptions<TInput = Record<string, unknown>> {
-  semantic?: boolean | SemanticCachePromptOptions<TInput>
+  semantic?: boolean | SemanticCachePromptOptions<TInput>;
+  /** Provider cache hint for the prompt-owned system block. Used by provider-prefix composition. */
+  provider?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -60,68 +76,49 @@ export interface PromptCacheOptions<TInput = Record<string, unknown>> {
 /** Argument passed to a prompt's dynamic `system` and `prompt` functions. */
 export interface PromptInputArg<TInput> {
   /** The fully merged input object (prompt's own fields + all context fields). */
-  input: TInput
+  input: TInput;
 }
 
 /**
- * Configuration object for `prompt()`.
+ * Shared prompt configuration fields, excluding the mutually exclusive content
+ * mode represented by {@link PromptContent}.
  *
  * @template TOwnInput  - Zod schema for this prompt's own input fields.
  * @template TOutput    - Zod schema for structured output, or `undefined` for text mode.
  * @template TContexts  - Tuple of contexts referenced via `use`.
  */
-export interface PromptConfig<
+export interface PromptBaseConfig<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
   TContexts extends readonly ContextEntry[],
 > {
   /** Unique identifier for registry lookup and introspection. */
-  id?: string
+  id?: string;
   /** Human-readable description (surfaces in IDE hover). */
-  description?: string
+  description?: string;
   /** Tags for categorization and registry filtering. */
-  tags?: readonly string[]
+  tags?: readonly string[];
   /**
    * Contexts to compose into this prompt. Their input schemas merge into
    * the prompt's input type, and their system contributions are appended
    * to the system message in array order.
    */
-  use?: TContexts
+  use?: TContexts;
   /** Zod schema for this prompt's own input fields. */
-  input?: TOwnInput
+  input?: TOwnInput;
   /**
    * Zod schema for structured output. Adapters use this to determine
    * whether to call structured generation (e.g. `generateObject`) or
    * text generation (e.g. `generateText`).
    */
-  output?: TOutput
-
-  /**
-   * System message — role/identity text that appears first.
-   * Mutually exclusive with `messages`.
-   */
-  system?:
-    | string
-    | ContextSystemContent
-    | ((arg: PromptInputArg<MergedInput<TOwnInput, TContexts>>) => ContextSystemResult | Promise<ContextSystemResult>)
-  /**
-   * User prompt text.
-   * Mutually exclusive with `messages`.
-   */
-  prompt?: string | ((arg: PromptInputArg<MergedInput<TOwnInput, TContexts>>) => string)
-  /**
-   * Multi-turn / few-shot messages array. Context system text is prepended
-   * to the first system message (or inserted at the start).
-   * Mutually exclusive with `system` and `prompt`.
-   */
-  messages?: (arg: PromptInputArg<MergedInput<TOwnInput, TContexts>>) => AnyMessage[]
+  output?: TOutput;
 
   /** Default generation settings. Overridden by `adapt` settings and call-site settings. */
-  settings?: GenerationSettings
+  settings?: GenerationSettings;
   /** Provider-specific prompt/settings adaptations. */
-  adapt?: AdapterMap
+  adapt?: ProviderAdaptations;
   /** Lifecycle hooks for observability and debugging. */
-  hooks?: PromptHooks<TOutput>
+  hooks?: PromptHooks<TOutput>;
   /**
    * Prompt-level cache intent.
    *
@@ -130,36 +127,36 @@ export interface PromptConfig<
    * development warning when a prompt declares semantic cache but no plugin is
    * installed.
    */
-  cache?: PromptCacheOptions<MergedInput<TOwnInput, TContexts>>
+  cache?: PromptCacheOptions<MergedInput<TOwnInput, TContexts>>;
 
   /**
    * Tools available to the model during generation.
-   * Tools from contexts (via `use`) and call-site tools are merged in at resolve time.
+   *
+   * Prompt-level tools are merged after skill, context, contributor, and
+   * blackboard tools. Any same-name prompt-time collision throws with both
+   * owners named. Call-site `generate()`/`stream()` tools are the only
+   * override path and intentionally win after prompt resolution.
    */
-  tools?: AnyToolSet
+  tools?: AnyToolSet;
   /** Middleware applied to tools before adapter execution. */
-  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
-  /** Default tool choice strategy. Adapter-specific format. */
-  toolChoice?: unknown
-  /** Stop condition(s) for multi-step tool use. Adapter-specific format. */
-  stopWhen?: unknown
+  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
 
   /**
    * Constraints to check after structural (Zod) validation passes during generation.
    * Combined with context-level and per-call constraints via union merge (per-call wins).
    * For I/O safety filtering, use guardrails instead.
    */
-  constraints?: Constraint[]
+  constraints?: Constraint[];
 
   /**
    * Guardrails to run on input/output during generation.
    * Combined with context-level and per-call guardrails via union merge (per-call wins).
    * For semantic output quality validation with retry, use constraints instead.
    */
-  guardrails?: Guardrail[]
+  guardrails?: Guardrail[];
 
   /**
-   * Input fields that contain trusted, pre-formatted content (HTML, Markdown)
+   * Top-level input fields that contain trusted, pre-formatted content (HTML, Markdown)
    * and should NOT be auto-escaped. Only relevant when auto-escape is enabled.
    *
    * Field names are typed against the merged input — IDE autocomplete shows
@@ -174,11 +171,14 @@ export interface PromptConfig<
    * })
    * ```
    */
-  rawFields?: readonly Extract<keyof MergedInput<TOwnInput, TContexts>, string>[]
+  rawFields?: readonly Extract<
+    keyof MergedInput<TOwnInput, TContexts>,
+    string
+  >[];
 
   /**
-   * Custom sanitization hook — runs after Zod validation and auto-escape,
-   * before system/prompt functions. Use for truncation, domain-specific
+   * Custom sanitization hook — runs after Zod validation and before auto-escape,
+   * system/prompt functions, and context resolution. Use for truncation, domain-specific
    * validation, or additional transforms.
    *
    * @example
@@ -192,7 +192,10 @@ export interface PromptConfig<
    * })
    * ```
    */
-  sanitize?: (input: MergedInput<TOwnInput, TContexts>) => MergedInput<TOwnInput, TContexts>
+  sanitize?: PromptCallback<
+    [input: MergedInput<TOwnInput, TContexts>],
+    MergedInput<TOwnInput, TContexts>
+  >;
 
   /**
    * Colocated test cases for this prompt — Quality rung 0.
@@ -220,13 +223,26 @@ export interface PromptConfig<
    */
   tests?: Array<{
     /** Descriptive name for this test case. Defaults to a content hash of `input`. */
-    name?: string
+    name?: string;
     /** Input to pass to the generate call — typed from the prompt's merged input. */
-    input: MergedInput<TOwnInput, TContexts>
+    input: MergedInput<TOwnInput, TContexts>;
     /** Opaque expected payload — reported alongside results, never matched implicitly. */
-    expected?: unknown
-  }>
+    expected?: unknown;
+  }>;
 }
+
+/**
+ * Configuration object for `prompt()`.
+ *
+ * The common authoring fields are intersected with a content-mode union so
+ * `messages` is exclusive with `system`/`prompt` at compile time.
+ */
+export type PromptConfig<
+  TOwnInput extends z.ZodType,
+  TOutput extends z.ZodType | undefined,
+  TContexts extends readonly ContextEntry[],
+> = PromptBaseConfig<TOwnInput, TOutput, TContexts> &
+  PromptContent<PromptInputArg<MergedInput<TOwnInput, TContexts>>>;
 
 // ─────────────────────────────────────────────────────────────────
 // Lifecycle Hooks
@@ -235,31 +251,31 @@ export interface PromptConfig<
 /** Arguments passed to `onPrepare` hooks. */
 export interface PrepareHookArgs {
   /** The prompt ID (if set). */
-  promptId: string | undefined
+  promptId: string | undefined;
   /** The assembled system message. */
-  system: string | undefined
+  system: string | undefined;
   /** The user prompt text (if using system+prompt mode). */
-  prompt: string | undefined
+  prompt: string | undefined;
   /** Estimated token count of the system message. */
-  systemTokens: number
+  systemTokens: number;
   /** Contexts that were dropped due to token budget. */
-  droppedContexts: DroppedContext[]
+  droppedContexts: DroppedContext[];
 }
 
 /** Arguments passed to `onGenerate` hooks, alongside the result. */
 export interface GenerateHookArgs {
   /** The prompt ID (if set). */
-  promptId: string | undefined
+  promptId: string | undefined;
   /** Wall-clock duration in milliseconds. */
-  durationMs: number
+  durationMs: number;
 }
 
 /** Arguments passed to `onError` hooks. */
 export interface ErrorHookArgs {
   /** The prompt ID (if set). */
-  promptId: string | undefined
+  promptId: string | undefined;
   /** The error that was thrown. */
-  error: unknown
+  error: unknown;
 }
 
 /**
@@ -271,11 +287,11 @@ export interface ErrorHookArgs {
  * the index signature.
  */
 export type PromptResult<TOutput extends z.ZodType | undefined = undefined> = {
-  text?: string
-  usage?: TokenUsage
-  _meta?: TraceMeta
-  [key: string]: unknown
-} & (TOutput extends z.ZodType<infer O> ? { object: O } : { text: string })
+  text?: string;
+  usage?: TokenUsage;
+  _meta?: TraceMeta;
+  [key: string]: unknown;
+} & (TOutput extends z.ZodType<infer O> ? { object: O } : { text: string });
 
 /**
  * Lifecycle hooks for a single prompt instance.
@@ -292,18 +308,20 @@ export type PromptResult<TOutput extends z.ZodType | undefined = undefined> = {
  * })
  * ```
  */
-export interface PromptHooks<TOutput extends z.ZodType | undefined = undefined> {
+export interface PromptHooks<
+  TOutput extends z.ZodType | undefined = undefined,
+> {
   /** Called after the system message is assembled. */
-  onPrepare?: (args: PrepareHookArgs) => void
+  onPrepare?: (args: PrepareHookArgs) => void;
   /**
    * Called after generation completes successfully.
    *
    * `result.object` is typed from the prompt's output schema when set;
    * text-only prompts receive a typed `result.text`.
    */
-  onGenerate?: (args: GenerateHookArgs, result: PromptResult<TOutput>) => void
+  onGenerate?: (args: GenerateHookArgs, result: PromptResult<TOutput>) => void;
   /** Called when generation throws an error. */
-  onError?: (args: ErrorHookArgs) => void
+  onError?: (args: ErrorHookArgs) => void;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -327,23 +345,23 @@ export interface Prompt<
   TContexts extends readonly ContextEntry[],
 > {
   /** Discriminant tag for runtime type checking. */
-  readonly _tag: 'Prompt'
+  readonly _tag: "Prompt";
   /** Unique identifier for registry lookup and introspection. */
-  readonly id: string | undefined
+  readonly id: string | undefined;
   /** Human-readable description. */
-  readonly description: string | undefined
+  readonly description: string | undefined;
   /** Tags for categorization. */
-  readonly tags: readonly string[]
+  readonly tags: readonly string[];
   /** The contexts this prompt composes via `use`. */
-  readonly contexts: TContexts
+  readonly contexts: TContexts;
   /** The merged Zod input schema (prompt's own + all context inputs), for runtime validation. */
-  readonly inputSchema: z.ZodType | undefined
+  readonly inputSchema: z.ZodType | undefined;
   /** The Zod output schema, or `undefined` for text mode. */
-  readonly outputSchema: TOutput
+  readonly outputSchema: TOutput;
   /** `true` if this prompt has an `output` schema (structured mode), `false` otherwise. */
-  readonly hasOutput: TOutput extends z.ZodType ? true : false
+  readonly hasOutput: TOutput extends z.ZodType ? true : false;
   /** The raw prompt configuration — exposed for adapters and the inspector. */
-  readonly config: PromptConfig<TOwnInput, TOutput, TContexts>
+  readonly config: PromptConfig<TOwnInput, TOutput, TContexts>;
 
   /**
    * Resolve the prompt into SDK-agnostic data without executing.
@@ -357,7 +375,7 @@ export interface Prompt<
    * // → { system, prompt, schema, tools, settings }
    * ```
    */
-  resolve(opts: ResolveOptions<TOwnInput, TContexts>): Promise<ResolvedPrompt>
+  resolve(opts: ResolveOptions<TOwnInput, TContexts>): Promise<ResolvedPrompt>;
 
   /**
    * Inspect the assembled prompt without executing.
@@ -373,17 +391,39 @@ export interface Prompt<
    * debug.droppedContexts  // what was dropped for budget
    * ```
    */
-  inspect(opts: ResolveOptions<TOwnInput, TContexts>): Promise<InspectResult>
+  inspect(opts: ResolveOptions<TOwnInput, TContexts>): Promise<InspectResult>;
 }
 
 /**
  * Base prompt type for heterogeneous collections (e.g., swarm agent maps).
  * Any `Prompt<TInput, TOutput, TContexts>` is assignable to `AnyPrompt`.
  */
-export type AnyPrompt = Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>
+export type AnyPrompt = Prompt<
+  z.ZodType,
+  z.ZodType | undefined,
+  readonly ContextEntry[]
+>;
 
 /**
  * Base prompt config for heterogeneous collections and middleware contexts.
  * Any `PromptConfig<TInput, TOutput, TContexts>` is assignable to `AnyPromptConfig`.
  */
-export type AnyPromptConfig = PromptConfig<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>
+type ErasedPromptBaseConfig = Omit<
+  PromptBaseConfig<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
+  "cache" | "rawFields" | "sanitize" | "tests"
+> & {
+  cache?: PromptCacheOptions<Record<string, unknown>>;
+  rawFields?: readonly string[];
+  sanitize?: PromptCallback<
+    [input: Record<string, unknown>],
+    Record<string, unknown>
+  >;
+  tests?: Array<{
+    name?: string;
+    input: Record<string, unknown>;
+    expected?: unknown;
+  }>;
+};
+
+export type AnyPromptConfig = ErasedPromptBaseConfig &
+  PromptContent<PromptInputArg<Record<string, unknown>>>;

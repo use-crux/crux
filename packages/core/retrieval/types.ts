@@ -11,7 +11,8 @@
 import type { z } from 'zod'
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
 import type { ExactFilter, RecordStore, Storage, VectorStore } from '../storage'
-import type { Context, PromptInjection } from '../prompt/context-types'
+import type { Context } from '../prompt/context-types'
+import type { InternalPromptInjection } from '../prompt/internal-injection'
 import type { QueryableCruxEntity } from '../tools/entity'
 import type { RetrieveOptions, RetrieveRequest } from './request'
 import type { RetrievalToolDef } from './tools'
@@ -101,7 +102,7 @@ export interface Retriever<TFilter extends ExactFilter = ExactFilter> extends Qu
     renderContext?: (hits: RetrieverHit[], meta: { query: string; mode: RetrieverMode; namespace: string }) => string
   }): Context<z.ZodType<{}>>
   asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(options?: TConfig): RetrieverTools<TConfig>
-  inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<PromptInjection>
+  inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection>
 }
 
 /** Defaults for {@link Retriever.asContext}. Internal. */

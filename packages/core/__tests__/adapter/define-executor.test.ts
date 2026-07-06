@@ -273,4 +273,30 @@ describe('loopRuntimeAdapter — streaming', () => {
     expect(meta?.text).toBe('hello')
     expect(meta?.streaming?.totalChunks).toBe(2)
   })
+
+  it('cleans up timeout timers when stream setup fails before a handle is returned', async () => {
+    const fake = fakeLoopRuntime()
+    const setupError = new Error('stream setup failed')
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+    const executor = loopRuntimeAdapter({
+      ...fake.runtime,
+      async runStream(request) {
+        fake.calls.runStream.push(request)
+        throw setupError
+      },
+    })
+
+    try {
+      await expect(
+        executor.stream(textPrompt(), {
+          model: 'fake:m-1',
+          input: { instruction: 'stream it' },
+          timeoutMs: 1_000,
+        }),
+      ).rejects.toThrow(setupError)
+      expect(clearTimeoutSpy).toHaveBeenCalled()
+    } finally {
+      clearTimeoutSpy.mockRestore()
+    }
+  })
 })

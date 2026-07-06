@@ -163,7 +163,7 @@ prompt({
   use: [
     localeCtx,
     when((input) => input.brand !== '', brandCtx),
-    match({ on: () => 'a', cases: { a: flag } }),
+    match({ on: () => 'a' as const, cases: { a: flag } }),
     flag,
     regionContributor,
   ],

@@ -61,6 +61,7 @@ export type PromptTreeResult<T> = DeepReadonlyPrompts<T> & {
  */
 export function createPrompts<const T extends PromptTree>(tree: T): PromptTreeResult<T> {
   const all: AnyPrompt[] = []
+  const seenIds = new Map<string, string>()
 
   function validate(node: unknown, path: string): void {
     if (
@@ -69,7 +70,15 @@ export function createPrompts<const T extends PromptTree>(tree: T): PromptTreeRe
       '_tag' in node &&
       (node as { _tag: unknown })._tag === 'Prompt'
     ) {
-      all.push(node as AnyPrompt)
+      const prompt = node as AnyPrompt
+      if (prompt.id) {
+        const existingPath = seenIds.get(prompt.id)
+        if (existingPath) {
+          throw new Error(`createPrompts: duplicate prompt id "${prompt.id}" at "${existingPath}" and "${path}".`)
+        }
+        seenIds.set(prompt.id, path)
+      }
+      all.push(prompt)
       return
     }
     if (node && typeof node === 'object' && !Array.isArray(node)) {

@@ -52,7 +52,12 @@ const branch = match({
   cases: { english: localeCtx, branded: [localeCtx, brandCtx] },
   default: tone,
 })
-expectTypeOf(branch).toEqualTypeOf<MatchSpec>()
+expectTypeOf(branch).toEqualTypeOf<
+  MatchSpec<{
+    readonly english: typeof localeCtx
+    readonly branded: readonly [typeof localeCtx, typeof brandCtx]
+  }>
+>()
 
 // match() rejects typos: discriminator return must match one of the case keys.
 match({
@@ -61,7 +66,7 @@ match({
 })
 // The narrowing happens at the function-type level: a `() => string` is wider
 // than `() => 'a' | 'b'` and won't satisfy the constraint.
-const wideOn: () => string = () => 'a'
+const wideOn = (_input: { mode: string }): string => 'a'
 // @ts-expect-error — discriminator return must be one of the declared case keys
 match({ on: wideOn, cases: { a: localeCtx, b: localeCtx } })
 

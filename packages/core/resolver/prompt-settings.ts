@@ -9,26 +9,36 @@
  */
 
 import type { ModelInfo } from '../types'
-import type { AdapterMap, GenerationSettings, PromptAdaptation } from '../generation/types'
+import type { ProviderAdaptations, GenerationSettings, PromptAdaptation } from '../generation/types'
+
+/** Selected provider/model adaptation with the map key used for source attribution. */
+export interface SelectedPromptAdaptation {
+  readonly key: string
+  readonly adaptation: PromptAdaptation
+}
 
 /** Select the provider/model adaptation block that applies to a call. */
-export function selectAdaptation(adapt: AdapterMap | undefined, modelInfo: ModelInfo): PromptAdaptation | undefined {
+export function selectAdaptation(
+  adapt: ProviderAdaptations | undefined,
+  modelInfo: ModelInfo,
+): SelectedPromptAdaptation | undefined {
   if (!adapt) return undefined
   const { provider, modelId } = modelInfo
 
   if (provider && adapt[provider]) {
-    return adapt[provider]
+    return { key: provider, adaptation: adapt[provider] }
   }
 
   const slashIdx = modelId.indexOf('/')
   if (slashIdx > 0) {
     const prefix = modelId.slice(0, slashIdx)
     if (adapt[prefix]) {
-      return adapt[prefix]
+      return { key: prefix, adaptation: adapt[prefix] }
     }
   }
 
-  return adapt['*']
+  const wildcard = adapt['*']
+  return wildcard ? { key: '*', adaptation: wildcard } : undefined
 }
 
 /**

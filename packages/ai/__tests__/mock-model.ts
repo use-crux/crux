@@ -10,6 +10,7 @@ import type { LanguageModel } from 'ai'
 export interface MockEmission {
   text?: string
   toolCalls?: ReadonlyArray<{ id?: string; name: string; args?: unknown }>
+  usage?: { inputTokens?: number; outputTokens?: number; totalTokens?: number }
 }
 
 function v3Result(emission: MockEmission, sequence: number) {
@@ -29,10 +30,21 @@ function v3Result(emission: MockEmission, sequence: number) {
       unified: (emission.toolCalls?.length ? 'tool-calls' : 'stop') as 'tool-calls' | 'stop',
       raw: undefined,
     },
-    usage: {
-      inputTokens: { total: 5, noCache: 5, cacheRead: undefined, cacheWrite: undefined },
-      outputTokens: { total: 7, text: 7, reasoning: undefined },
-    },
+    usage:
+      emission.usage !== undefined
+        ? {
+            inputTokens: {
+              total: emission.usage.inputTokens,
+              noCache: emission.usage.inputTokens,
+              cacheRead: undefined,
+              cacheWrite: undefined,
+            },
+            outputTokens: { total: emission.usage.outputTokens, text: emission.usage.outputTokens, reasoning: undefined },
+          }
+        : {
+            inputTokens: { total: 5, noCache: 5, cacheRead: undefined, cacheWrite: undefined },
+            outputTokens: { total: 7, text: 7, reasoning: undefined },
+          },
     warnings: [],
   }
 }

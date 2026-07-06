@@ -50,9 +50,11 @@ export interface SdkUsageLike {
 /** Normalize AI SDK usage to the canonical `AdapterResponse` usage shape. */
 export function normalizeUsage(usage: SdkUsageLike | undefined): AdapterResponse['usage'] {
   return {
-    inputTokens: usage?.inputTokens ?? 0,
-    outputTokens: usage?.outputTokens ?? 0,
-    totalTokens: usage?.totalTokens ?? 0,
+    inputTokens: usage?.inputTokens,
+    outputTokens: usage?.outputTokens,
+    totalTokens:
+      usage?.totalTokens ??
+      (usage?.inputTokens != null && usage.outputTokens != null ? usage.inputTokens + usage.outputTokens : undefined),
     cacheReadTokens: usage?.inputTokenDetails?.cacheReadTokens,
     cacheWriteTokens: usage?.inputTokenDetails?.cacheWriteTokens,
     reasoningTokens: usage?.outputTokenDetails?.reasoningTokens,

@@ -6,8 +6,10 @@
 
 Your app still owns product logic, routing, deployment, and data. Your model SDK still makes the call. Crux makes the harness around that call deliberate, inspectable, testable, and portable across adapters.
 
-> [!WARNING]
-> Crux is in alpha development. APIs may change before the first stable release.
+> [!NOTE]
+> `@use-crux/core` is in stable beta for its core composition and adapter
+> contracts. See [STABILITY.md](./STABILITY.md) for the exact surface and
+> compatibility promise.
 
 ## Install
 
@@ -28,99 +30,157 @@ pnpm add @use-crux/google @google/genai
 ## Start With One Prompt
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 const classify = prompt({
-  id: 'classify',
+  id: "classify",
   input: z.object({ text: z.string() }),
   output: z.object({
-    sentiment: z.enum(['positive', 'negative', 'neutral']),
+    sentiment: z.enum(["positive", "negative", "neutral"]),
   }),
-  system: 'Classify the sentiment of the given text.',
+  system: "Classify the sentiment of the given text.",
   prompt: ({ input }) => input.text,
-})
+});
 
 const result = await generate(classify, {
-  model: openai('gpt-4o'),
-  input: { text: 'This is incredible.' },
-})
+  model: openai("gpt-4o"),
+  input: { text: "This is incredible." },
+});
 
-result.object.sentiment // 'positive' | 'negative' | 'neutral'
+result.object.sentiment; // 'positive' | 'negative' | 'neutral'
 ```
 
 That is a complete Crux program: typed input, typed output, and your SDK still making the model call.
+
+## Input Escaping
+
+Prompt resolution uses the parsed Zod output as the source of truth. Defaults
+and transforms apply before contexts, gates, tools, memo keys, and prompt
+functions read input.
+
+When auto-escape is enabled, Crux escapes top-level string input fields after
+your optional `sanitize` hook runs. Nested strings inside objects or arrays are
+not rewritten; Crux emits a diagnostic so you can escape nested content
+explicitly, flatten the field, or mark trusted top-level fields with
+`rawFields`.
+
+```ts
+const summarize = prompt({
+  input: z.object({
+    title: z.string(),
+    bodyHtml: z.string(),
+  }),
+  rawFields: ["bodyHtml"],
+  sanitize: (input) => ({
+    ...input,
+    title: input.title.trim(),
+  }),
+  system: ({ input }) => `Summarize ${input.title}.`,
+  prompt: ({ input }) => input.bodyHtml,
+});
+```
+
+## Context Memoization And Provider Caching
+
+Context caching has two explicit layers. Use `memo: { ttl }` when a dynamic
+context resolver is expensive and its resolved text may be reused app-side for
+that many milliseconds. Use `cache: true` when the resolved block is stable
+enough for provider prompt caching. The two can be combined, but `memo` requires
+an `id` and only applies to dynamic context systems.
+
+Resolved contexts also carry freshness facts. `.inspect().system.parts[]` and
+`context.contribution` artifacts report whether a contribution was served live
+or from resolver memo, when it was originally resolved, and the age of memo
+hits. Structured segments may also carry `observedAt` and `sourceVersion`
+metadata from primitives that already know source timestamps, such as
+retriever hits.
+
+The prompt's own system text always comes first. Cached contexts (`cache: true`)
+follow it as a stable prefix, then uncached contexts; each group keeps `use`
+array order. Token-budget pressure can drop only uncached contexts, never the
+cached prefix.
+
+```ts
+const brand = context({
+  id: "brand-voice",
+  input: z.object({ orgId: z.string() }),
+  system: async ({ input }) => fetchBrandProfile(input.orgId),
+  memo: { ttl: 300_000 },
+  cache: true,
+});
+```
 
 ## Add Blocks As You Need Them
 
 The `use` array is the bus. Memory, retrieval, guardrails, skills, blackboards, and custom blocks all plug into the same prompt without forcing a framework or runtime around your app.
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { memory, facts, recentMessages } from '@use-crux/core/memory'
-import { retriever } from '@use-crux/core/retrieval'
-import { constraint, guardrail } from '@use-crux/core/safety'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { memory, facts, recentMessages } from "@use-crux/core/memory";
+import { retriever } from "@use-crux/core/retrieval";
+import { constraint, guardrail } from "@use-crux/core/safety";
+import { generate } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
+import { z } from "zod";
 
 const chat = memory({
-  id: 'assistant',
+  id: "assistant",
   store,
   namespace: ({ input }) => `user:${input.userId}`,
   blocks: [
-    recentMessages({ id: 'recent', maxMessages: 12 }),
-    facts({ id: 'about-user', embed }),
+    recentMessages({ id: "recent", maxMessages: 12 }),
+    facts({ id: "about-user", embed }),
   ],
-})
+});
 
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   data,
   vectors,
   dense,
   context: { query: ({ question }) => question },
-})
+});
 
 const injection = guardrail({
-  name: 'injection',
-  phase: 'input',
+  name: "injection",
+  phase: "input",
   validate: detectPromptInjection,
-})
+});
 
 const grounded = constraint({
-  name: 'grounded',
-  severity: 'assert',
+  name: "grounded",
+  severity: "assert",
   check: async (output) =>
     output.parsed.citations.length > 0
       ? { pass: true }
-      : { pass: false, feedback: 'Cite at least one source.' },
-})
+      : { pass: false, feedback: "Cite at least one source." },
+});
 
 const reply = prompt({
-  id: 'reply',
+  id: "reply",
   use: [chat, docs],
   input: z.object({ userId: z.string(), question: z.string() }),
   output: z.object({
     answer: z.string(),
     citations: z.array(z.object({ title: z.string(), url: z.string() })),
   }),
-  system: 'Answer from memory and product docs. Do not invent facts.',
+  system: "Answer from memory and product docs. Do not invent facts.",
   prompt: ({ input }) => input.question,
-})
+});
 
 const result = await generate(reply, {
-  model: openai('gpt-4o'),
+  model: openai("gpt-4o"),
   input: {
-    userId: 'user_123',
-    question: 'What did we decide about the launch plan?',
+    userId: "user_123",
+    question: "What did we decide about the launch plan?",
   },
   guardrails: [injection],
   constraints: [grounded],
-})
+});
 ```
 
 Now the call has memory, retrieval, input screening, structured output, retryable quality checks, adapter execution, and traceable events.
@@ -133,12 +193,12 @@ for metadata and small text/JSON, plus an optional `BlobStore` for binary and
 oversized payloads.
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { inMemoryStorage } from '@use-crux/core/storage'
-import { workspace } from '@use-crux/core/workspace'
+import { prompt } from "@use-crux/core";
+import { inMemoryStorage } from "@use-crux/core/storage";
+import { workspace } from "@use-crux/core/workspace";
 
 const ws = workspace({
-  id: 'research',
+  id: "research",
   namespace: ({ input }) => `thread:${input.threadId}`,
   storage: inMemoryStorage(),
   retention: { ttlMs: 1000 * 60 * 60 * 24 },
@@ -146,38 +206,38 @@ const ws = workspace({
     maxFileBytes: 1_000_000,
     maxNamespaceBytes: 25_000_000,
   },
-})
+});
 
 const analyst = prompt({
-  id: 'analyst',
+  id: "analyst",
   use: [ws],
-  system: 'Use /workspace for notes and write final files to /outputs.',
-})
+  system: "Use /workspace for notes and write final files to /outputs.",
+});
 
-await ws.write('/workspace/notes.md', '# Notes', { namespace: 'thread:123' })
-await ws.append('/workspace/notes.md', '\nMore notes.', {
-  namespace: 'thread:123',
-})
-await ws.rename('/workspace/notes.md', '/outputs/report.md', {
-  namespace: 'thread:123',
-})
-await ws.move('/outputs/report.md', '/outputs/final-report.md', {
-  namespace: 'thread:123',
-})
-await ws.finalize('/outputs/final-report.md', {
-  namespace: 'thread:123',
-  kind: 'report',
-})
+await ws.write("/workspace/notes.md", "# Notes", { namespace: "thread:123" });
+await ws.append("/workspace/notes.md", "\nMore notes.", {
+  namespace: "thread:123",
+});
+await ws.rename("/workspace/notes.md", "/outputs/report.md", {
+  namespace: "thread:123",
+});
+await ws.move("/outputs/report.md", "/outputs/final-report.md", {
+  namespace: "thread:123",
+});
+await ws.finalize("/outputs/final-report.md", {
+  namespace: "thread:123",
+  kind: "report",
+});
 ```
 
 Workspaces keep an append-only version history for every file. History is always
 recorded, so a destructive edit is recoverable even when no one planned ahead:
 
 ```ts
-await ws.history('/outputs/report.md') // newest-first WorkspaceVersion[]
-await ws.read('/outputs/report.md', { version: 1 }) // read an older revision
-await ws.diff('/outputs/report.md', { from: 1, to: 2 }) // unified string + structured hunks
-await ws.undo('/outputs/report.md') // restore the previous version as a new one
+await ws.history("/outputs/report.md"); // newest-first WorkspaceVersion[]
+await ws.read("/outputs/report.md", { version: 1 }); // read an older revision
+await ws.diff("/outputs/report.md", { from: 1, to: 2 }); // unified string + structured hunks
+await ws.undo("/outputs/report.md"); // restore the previous version as a new one
 ```
 
 Retention is unlimited by default; set `versioning: { maxVersions }` to bound how
@@ -198,12 +258,12 @@ mounts. Crash-proof multi-key durability still depends on the backing store.
 ```ts
 const artifact = await ws.transaction(
   async (tx) => {
-    await tx.write('/outputs/report.md', '# Report', { status: 'draft' })
-    await tx.write('/outputs/data.csv', 'name,value\nalpha,1\n')
-    return tx.finalize('/outputs/report.md', { kind: 'report' })
+    await tx.write("/outputs/report.md", "# Report", { status: "draft" });
+    await tx.write("/outputs/data.csv", "name,value\nalpha,1\n");
+    return tx.finalize("/outputs/report.md", { kind: "report" });
   },
-  { namespace: 'thread:123' },
-)
+  { namespace: "thread:123" },
+);
 ```
 
 Injected workspaces add a bounded manifest plus file tools for list, read, write,
@@ -224,60 +284,60 @@ using `access: "readwrite"` and implementing `write` and/or `delete`. Explicit
 local mounts or into provider mounts with write hooks.
 
 ```ts
-import { retrieverWorkspaceMountSource } from '@use-crux/core/workspace'
+import { retrieverWorkspaceMountSource } from "@use-crux/core/workspace";
 
 const wsWithSources = workspace({
-  id: 'research',
-  namespace: 'thread:123',
+  id: "research",
+  namespace: "thread:123",
   mounts: [
-    { path: '/workspace', access: 'readwrite' },
+    { path: "/workspace", access: "readwrite" },
     {
-      path: '/sources',
-      access: 'read',
+      path: "/sources",
+      access: "read",
       source: {
-        kind: 'custom',
+        kind: "custom",
         list: async () => ({
           entries: [
             {
-              kind: 'file',
-              path: '/sources/brief.md',
-              mount: '/sources',
-              mimeType: 'text/markdown',
+              kind: "file",
+              path: "/sources/brief.md",
+              mount: "/sources",
+              mimeType: "text/markdown",
               size: 128,
-              storage: 'virtual',
+              storage: "virtual",
               createdAt: Date.now(),
               updatedAt: Date.now(),
             },
           ],
         }),
         read: async (path) => ({
-          kind: 'text',
+          kind: "text",
           path,
-          mimeType: 'text/markdown',
-          content: '# Brief',
+          mimeType: "text/markdown",
+          content: "# Brief",
           size: 7,
         }),
       },
     },
     {
-      path: '/knowledge',
-      access: 'read',
+      path: "/knowledge",
+      access: "read",
       // myRetriever is any Retriever from @use-crux/core/retrieval.
       source: {
-        kind: 'retriever',
+        kind: "retriever",
         retriever: myRetriever,
-        query: 'current project sources',
+        query: "current project sources",
       },
     },
     {
-      path: '/legacy-knowledge',
-      access: 'read',
+      path: "/legacy-knowledge",
+      access: "read",
       source: retrieverWorkspaceMountSource(myRetriever, {
-        query: 'legacy source mapping',
+        query: "legacy source mapping",
       }),
     },
   ],
-})
+});
 ```
 
 Workspace operations are visible in devtools, OTel, and Project Index without
@@ -291,19 +351,32 @@ data-access facts preserve exact operations such as `grep`, `history`, `diff`,
 
 ## What Core Gives You
 
-| Capability         | What it is for                                                                                                              |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
-| Prompt definitions | Typed `prompt()` objects with input/output schemas, settings, tags, tests, and provider overrides.                          |
-| Composable context | `context()` blocks for brand voice, policies, retrieved docs, formatting rules, and shared tools.                           |
-| Workspaces         | Durable namespace-scoped files, generated artifacts, blob-backed outputs, and model-safe file tools.                        |
-| Memory             | Recent messages, working state, episodes, facts, procedures, proposals, policies, and pluggable stores.                     |
-| Retrieval          | Indexers, corpora, retrievers, rerankers, grounding, citations, and custom RAG pipelines.                                   |
-| Tools              | Prompt tools, context tools, middleware, approval flows, and audit events.                                                  |
-| Safety             | Guardrails for input/output filtering plus constraints for semantic output validation and retry.                            |
-| Routing and cost   | Model routers, fallback, semantic cache, pricing tables, budgets, and cost spans.                                           |
-| Evaluation         | Quality suites, prompt tests, judges, variants, cassettes, baselines, and CI-friendly runs.                                 |
-| Agents and flows   | Agents, pipelines, parallel runs, consensus, swarms, blackboards, handoffs, delegates, suspendable flows, plans, and tasks. |
-| Observability      | Trace records, local devtools, subscribers, diagnostics channel export, source catalog, and OpenTelemetry export.           |
+| Capability         | What it is for                                                                                                                       |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| Prompt definitions | Typed `prompt()` objects with input/output schemas, settings, tags, tests, and provider overrides.                                   |
+| Composable context | `context()` blocks and custom `contributor()` entries for brand voice, policies, retrieved docs, formatting rules, and shared tools. |
+| Workspaces         | Durable namespace-scoped files, generated artifacts, blob-backed outputs, and model-safe file tools.                                 |
+| Memory             | Recent messages, working state, episodes, facts, procedures, proposals, policies, and pluggable stores.                              |
+| Retrieval          | Indexers, corpora, retrievers, rerankers, grounding, citations, and custom RAG pipelines.                                            |
+| Tools              | Prompt tools, context tools, middleware, approval flows, and audit events.                                                           |
+| Safety             | Guardrails for input/output filtering plus constraints for semantic output validation and retry.                                     |
+| Routing and cost   | Model routers, fallback, semantic cache, pricing tables, budgets, and cost spans.                                                    |
+| Evaluation         | Quality suites, prompt tests, judges, variants, cassettes, baselines, and CI-friendly runs.                                          |
+| Agents and flows   | Agents, pipelines, parallel runs, consensus, swarms, blackboards, handoffs, delegates, suspendable flows, plans, and tasks.          |
+| Observability      | Trace records, local devtools, subscribers, diagnostics channel export, source catalog, and OpenTelemetry export.                    |
+
+### Tool Merge Policy
+
+Prompt-time tool names must be unique. Crux merges skill tools, context tools,
+contributor tools, blackboard tools, and prompt-level `tools` in that order; if
+two prompt-time owners contribute the same name, resolution throws and names
+both owners. Call-site `generate()`/`stream()` tools are the only override path
+and intentionally win after prompt resolution.
+
+Portable tool-loop controls live in `GenerationSettings`: `toolChoice`,
+`stopWhen`, `maxSteps`, plus the `maxSteps(n)` and `hasToolCall(name)` helpers.
+Adapters map those settings to provider-native fields. Provider-specific tool
+controls that are not portable belong in that adapter's typed `extra` option.
 
 ## How It Works
 
@@ -316,7 +389,7 @@ define -> resolve -> adapt -> observe
 | Stage   | What happens                                                                                                                                                     |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Define  | Author pure TypeScript definitions: prompts, contexts, memory blocks, tools, agents, flows, tests, and settings.                                                 |
-| Resolve | Crux validates input, filters conditional blocks, merges tools/settings, applies token budgets, and produces a provider-agnostic resolved prompt.                |
+| Resolve | Crux validates input, filters conditional blocks, applies token budgets and provider adaptations, then produces a provider-agnostic resolved prompt.             |
 | Adapt   | An adapter maps that resolved prompt to Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex Agent, or another runner.                                         |
 | Observe | Graph records emit once, are sanitized and validated fail-open, then feed subscribers, the diagnostics channel, bounded devtools transport, and telemetry sinks. |
 
@@ -356,16 +429,16 @@ The OTel plugin follows the same fail-open contract: duplicate `withTelemetry()`
 By default, request and response artifacts include bounded previews for local inspection. Configure capture centrally when traces leave a trusted environment:
 
 ```ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 config({
   observability: {
-    recordInputs: 'reference',
-    recordOutputs: 'off',
+    recordInputs: "reference",
+    recordOutputs: "off",
     redactRecord: (record) =>
-      record.type === 'artifact' && record.kind === 'error.raw' ? null : record,
+      record.type === "artifact" && record.kind === "error.raw" ? null : record,
   },
-})
+});
 ```
 
 `recordInputs` and `recordOutputs` accept `true | false | "inline" | "reference" | "off"`. `"reference"` keeps only size/hash metadata, while `"off"` removes preview, size, hash, and URI payload metadata. The emit path also strips payload-shaped span/event attributes such as `text`, `query`, `messages`, `output`, `body`, and `filter`. `redactRecord()` runs after capture policy; returning `null` or throwing drops the record and increments `observabilityDiagnostics().redactedRecords`.
@@ -377,12 +450,12 @@ event waiters, wake delivery, and maintenance. For local development and tests,
 use the in-process `node()` composer:
 
 ```ts
-import { config } from '@use-crux/core'
-import { node } from '@use-crux/core/runtime'
+import { config } from "@use-crux/core";
+import { node } from "@use-crux/core/runtime";
 
 export default config({
   runtime: node(),
-})
+});
 ```
 
 With a runtime configured, flow handles can persist `flow.suspend()` and
@@ -396,13 +469,13 @@ Executable durable task targets are defined from the runtime subpath, not the
 root Plans & Tasks ledger `task()` helper:
 
 ```ts
-import { task } from '@use-crux/core/runtime'
+import { task } from "@use-crux/core/runtime";
 
-export const embedDocument = task('embed-document', {
+export const embedDocument = task("embed-document", {
   run: async ({ documentId }: { documentId: string }) => {
-    await embed(documentId)
+    await embed(documentId);
   },
-})
+});
 ```
 
 The `Crux` object returned by `config()` also exposes name-bound
@@ -418,21 +491,21 @@ Serverless entry files use the stable fetch-compatible handler API. Generated
 files target the same shape that users can write by hand:
 
 ```ts
-import { createRuntimeHandler, serverless } from '@use-crux/core/runtime'
-import { postgres } from '@use-crux/postgres/runtime'
-import { qstash } from '@use-crux/upstash/runtime'
-import { reviewFlow } from '@/flows/review'
-import { embedDocument } from '@/tasks/embed-document'
+import { createRuntimeHandler, serverless } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { qstash } from "@use-crux/upstash/runtime";
+import { reviewFlow } from "@/flows/review";
+import { embedDocument } from "@/tasks/embed-document";
 
 const runtime = serverless({
   store: postgres(),
   wake: qstash(),
-})
+});
 
 export const { GET, POST } = createRuntimeHandler({
   runtime,
   targets: [reviewFlow, embedDocument],
-})
+});
 ```
 
 Advanced and generated entry files can resolve a composer explicitly with
@@ -470,6 +543,11 @@ See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux
 ## TypeScript Compatibility
 
 `@use-crux/core` is verified against TypeScript `>=5.5 <7`. TypeScript 7 is tracked with `@typescript/native-preview` / `tsgo` as a preview lane, not a stable support promise yet.
+
+Prompt authoring types are part of the runtime contract: `messages` mode is
+exclusive with `system`/`prompt`, `when()` wrapper inputs are partial,
+`match()` branch inputs surface as optional merged input fields, and concrete
+prompts expose literal `hasOutput` values.
 
 ## Learn More
 

@@ -84,7 +84,7 @@ export interface ConfigureOptions {
   tokenizer?: TokenizerFn
 
   /**
-   * Auto-escape all string input values before they reach system/prompt functions.
+   * Auto-escape top-level string input fields before they reach system/prompt functions.
    * Enabled by default. Set to `false` to disable (e.g., when using `safe` tag exclusively).
    * @default true
    */

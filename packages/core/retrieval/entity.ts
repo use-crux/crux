@@ -8,9 +8,10 @@
  */
 
 import { z } from 'zod'
-import { context } from '../prompt/context'
+import { contextWithFamily, contextWithFullPromptInput } from '../prompt/context'
 import type { AnyToolSet } from '../types'
-import type { Context, PromptInjection } from '../prompt/context-types'
+import type { Context, ContextSystemContent, ContextTextSegment } from '../prompt/context-types'
+import type { InternalPromptInjection } from '../prompt/internal-injection'
 import { createRetrieverTools } from './tools'
 import { normalizeRetrieveRequest } from './request'
 import type {
@@ -60,10 +61,9 @@ export function createRetrieverEntity(args: {
       const limit = options?.limit ?? args.defaultContext?.limit ?? 5
       const renderContext = options?.renderContext ?? args.defaultContext?.renderContext ?? defaultRenderContext
 
-      return context({
+      return contextWithFullPromptInput({
         id: `retriever:${args.id}`,
         description: `Retriever context for ${args.id}`,
-        family: 'retriever',
         priority,
         system: async ({ input }) => {
           const query = resolveQuery(querySource, input)
@@ -75,9 +75,12 @@ export function createRetrieverEntity(args: {
 
           const hits = await retrieve(query, { limit })
           if (hits.length === 0) return ''
-          return renderContext(hits, { query, mode: args.mode, namespace: args.namespace })
+          const meta = { query, mode: args.mode, namespace: args.namespace }
+          return renderContext === defaultRenderContext && hits.some(hasRetrieverHitFreshness)
+            ? defaultRenderContextContent(hits, meta)
+            : renderContext(hits, meta)
         },
-      })
+      }, 'retriever')
     },
 
     asTools<const TConfig extends RetrievalToolConfig | undefined = undefined>(
@@ -92,7 +95,7 @@ export function createRetrieverEntity(args: {
       }) as RetrieverTools<TConfig>
     },
 
-    async inject({ input }: { input: Record<string, unknown>; promptId?: string }): Promise<PromptInjection> {
+    async inject({ input }: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection> {
       const injectMode = args.defaultInject ?? (args.defaultContext?.query ? 'context' : 'tool')
       const contexts: Context[] = []
       let tools: AnyToolSet | undefined
@@ -105,17 +108,19 @@ export function createRetrieverEntity(args: {
         }
         initialHits = await retrieve(query, { limit: args.defaultContext?.limit })
         const renderContext = args.defaultContext?.renderContext ?? defaultRenderContext
+        const meta = { query, mode: args.mode, namespace: args.namespace }
         const rendered = initialHits.length
-          ? renderContext(initialHits, { query, mode: args.mode, namespace: args.namespace })
+          ? renderContext === defaultRenderContext && initialHits.some(hasRetrieverHitFreshness)
+            ? defaultRenderContextContent(initialHits, meta)
+            : renderContext(initialHits, meta)
           : ''
         contexts.push(
-          context({
+          contextWithFamily({
             id: `retriever:${args.id}`,
             description: `Retriever context for ${args.id}`,
-            family: 'retriever',
             priority: args.defaultContext?.priority ?? 50,
             system: rendered,
-          }),
+          }, 'retriever'),
         )
       }
 
@@ -154,4 +159,32 @@ function defaultRenderContext(
 ): string {
   const lines = hits.map((hit) => `- [${hit.sourceId}/${hit.chunkId}] (score: ${hit.score.toFixed(2)}) ${hit.content}`)
   return `## Retrieved Context (${meta.query})\n${lines.join('\n')}`
+}
+
+function defaultRenderContextContent(
+  hits: RetrieverHit[],
+  meta: { query: string; mode: RetrieverMode; namespace: string },
+): ContextSystemContent {
+  return {
+    segments: [
+      { text: `## Retrieved Context (${meta.query})\n`, dynamic: false },
+      ...hits.map((hit, index) => ({
+        text: `${index > 0 ? '\n' : ''}- [${hit.sourceId}/${hit.chunkId}] (score: ${hit.score.toFixed(2)}) ${hit.content}`,
+        dynamic: true,
+        source: `${meta.namespace}:${hit.sourceId}/${hit.chunkId}`,
+        ...retrieverHitFreshness(hit),
+      })),
+    ],
+  }
+}
+
+function retrieverHitFreshness(hit: RetrieverHit): Pick<ContextTextSegment, 'observedAt' | 'sourceVersion'> {
+  return {
+    ...(typeof hit.metadata.observedAt === 'number' ? { observedAt: hit.metadata.observedAt } : {}),
+    ...(typeof hit.metadata.sourceVersion === 'string' ? { sourceVersion: hit.metadata.sourceVersion } : {}),
+  }
+}
+
+function hasRetrieverHitFreshness(hit: RetrieverHit): boolean {
+  return typeof hit.metadata.observedAt === 'number' || typeof hit.metadata.sourceVersion === 'string'
 }

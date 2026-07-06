@@ -10,12 +10,12 @@
  * @module
  */
 
-import { context } from '../prompt/context'
+import { contextWithFamily } from '../prompt/context'
 import { createRetrieverTools, isRetrievalToolPayload } from '../retrieval/tools'
 import type { RetrievalToolHit } from '../retrieval/tools'
 import type { RetrieverHit } from '../retrieval'
 import { toolMiddleware } from '../tools/middleware'
-import type { PromptInjection } from '../prompt/context-types'
+import type { InternalPromptInjection } from '../prompt/internal-injection'
 import { citationConstraint } from './constraint'
 import { createGroundingSession } from './session'
 import type { Grounding, GroundingConfig, GroundingResolution } from './types'
@@ -50,12 +50,12 @@ export function grounding(config: GroundingConfig): Grounding {
     _tag: 'Grounding' as const,
     id: config.id,
     retriever: config.retriever,
-    async inject({ input }: { input: Record<string, unknown>; promptId?: string }): Promise<PromptInjection> {
+    async inject({ input }: { input: Record<string, unknown>; promptId?: string }): Promise<InternalPromptInjection> {
       const query = config.query ? resolveGroundingQuery(config.query, input) : undefined
       const session = createGroundingSession()
       let initialHits: RetrieverHit[] = []
       const contexts = []
-      let tools: PromptInjection['tools']
+      let tools: InternalPromptInjection['tools']
 
       if (injectMode === 'context' || injectMode === 'both') {
         if (!query) {
@@ -68,12 +68,11 @@ export function grounding(config: GroundingConfig): Grounding {
           renderCitationContext(initialHits)
         if (rendered) {
           contexts.push(
-            context({
+            contextWithFamily({
               id: `grounding:${config.id}`,
               description: `Grounding context for ${config.id}`,
-              family: 'retriever',
               system: rendered,
-            }),
+            }, 'retriever'),
           )
         }
       }

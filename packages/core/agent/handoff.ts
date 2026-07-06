@@ -16,8 +16,8 @@
 import { z } from 'zod'
 import type { JsonObject, RecordStore } from '../storage'
 import type { Context } from '../prompt/context-types'
+import { contextWithFamily } from '../prompt/context'
 import type { GenerateTextFn } from '../compaction/types'
-import { context } from '../prompt/context'
 import { getRuntime } from '../runtime/runtime'
 import { observe } from '../observability'
 
@@ -325,10 +325,9 @@ export function handoff<TInput extends z.ZodType, TOutput extends z.ZodType>(
   ): Context<z.ZodType<{}>> {
     const priority = options?.priority ?? 80
 
-    return context({
+    return contextWithFamily({
       id: `handoff:${id}`,
       description: `Handoff context from ${id}`,
-      family: 'handoff',
       priority,
       system: async () => {
         const lines = [`## Handoff Context (${id})`]
@@ -346,7 +345,7 @@ export function handoff<TInput extends z.ZodType, TOutput extends z.ZodType>(
 
         return lines.join('\n')
       },
-    })
+    }, 'handoff')
   }
 
   return {

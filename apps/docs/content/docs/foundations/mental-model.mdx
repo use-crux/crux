@@ -77,17 +77,17 @@ resolved.systemBlocks // structured blocks for provider-cache hints
 resolved.prompt // user prompt text
 resolved.messages // alternative to system+prompt for multi-turn
 resolved.schema // output Zod schema (if any)
-resolved.tools // merged tool set from contexts + prompt
+resolved.tools // prompt-time tool set from skills, contexts, contributors, blackboards, and prompt config
 resolved.settings // merged settings (config < adapt < call-site)
 ```
 
 What happens during resolution:
 
-1. **Validate input** against the prompt's merged Zod schema (prompt input + context inputs)
-2. **Filter contexts** — drop ones with `when` returning false, falsy entries in `use`, and unmatched `match()` cases
-3. **Sanitize input** — auto-escape XML characters in user-provided strings (configurable)
-4. **Resolve contexts** — call each context's `system` function in priority order, with caching (`cacheTtl`) when configured
-5. **Build system blocks** — concatenate the pieces of context, attaching provider-cache markers per block
+1. **Validate input** against the prompt's merged Zod schema (prompt input + context inputs), adopting defaults and transforms
+2. **Sanitize input** with the optional prompt `sanitize` hook, then auto-escape top-level string fields (configurable)
+3. **Filter contexts** — drop ones with `when` returning false, falsy entries in `use`, and unmatched `match()` cases
+4. **Resolve contexts** — call each context's `system` function in `use` order, with resolver memoization when `memo.ttl` is configured
+5. **Build system blocks** — compose provider-cached contexts as a stable cached prefix before the uncached tail, attaching provider-cache markers per block
 6. **Apply token budget** — if a budget is set, drop lowest-priority contexts until total fits. The prompt's own system is always kept.
 7. **Merge tools and settings** — collect tools from active contexts + prompt + call-site; merge settings with later layers winning
 
@@ -122,13 +122,14 @@ Per-prompt provider overrides live on the `Prompt` itself via `adapt`:
 prompt({
   // ...
   adapt: {
-    'gpt-4o': { settings: { temperature: 0.1 } },
-    'claude-*': { system: 'Override for all Claude models' },
+    openai: { settings: { temperature: 0.1 } },
+    anthropic: { appendSystem: 'Return concise JSON only.' },
+    '*': { appendSystem: 'Respond with valid JSON only.' },
   },
 })
 ```
 
-Adapt is matched by exact model ID first, then prefix wildcard, then `'*'` fallback. The adapter merges the override into resolution before translation.
+Adapt is matched by exact provider first, then a slash-prefixed `modelId` provider such as `openai/gpt-4o`, then the `'*'` fallback. System adaptations become typed system blocks before messages are folded; prompt text and settings adaptations are merged before translation.
 
 ## 4. Observe
 

@@ -9,7 +9,8 @@
 
 import { z } from "zod";
 import { context } from "../prompt/context";
-import type { Context, PromptInjection } from "../prompt/context-types";
+import type { Context } from "../prompt/context-types";
+import type { InternalPromptInjection } from "../prompt/internal-injection";
 import type { BlobStore, RecordStore } from "../storage";
 import { renderWorkspaceManifest } from "./manifest";
 import type {
@@ -54,7 +55,7 @@ export interface WorkspaceContextAdapters {
   readonly inject: (args: {
     input: Record<string, unknown>;
     promptId?: string;
-  }) => Promise<PromptInjection>;
+  }) => Promise<InternalPromptInjection>;
 }
 
 /** Create prompt-facing adapters for a workspace instance. */
@@ -84,7 +85,7 @@ export function createWorkspaceContextAdapters<
   async function inject(args: {
     input: Record<string, unknown>;
     promptId?: string;
-  }): Promise<PromptInjection> {
+  }): Promise<InternalPromptInjection> {
     const namespace = await config.resolveNamespace(args.input, args.promptId);
     return {
       contexts: [

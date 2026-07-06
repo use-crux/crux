@@ -1,24 +1,34 @@
 ---
-title: '@use-crux/anthropic'
+title: "@use-crux/anthropic"
 description: Anthropic SDK adapter — factory pattern with native options.
 ---
 
 Peer dependency: `@anthropic-ai/sdk`
 
 ```ts
-import { createAnthropic, anthropicProviderRuntime, anthropicTranscript, toMessages, fromMessages } from '@use-crux/anthropic'
-import { createGenerateObjectFn, createGenerateTextFn } from '@use-crux/anthropic'
+import {
+  createAnthropic,
+  anthropicProviderRuntime,
+  anthropicTranscript,
+  toMessages,
+  fromMessages,
+} from "@use-crux/anthropic";
+import {
+  createGenerateObjectFn,
+  createGenerateTextFn,
+} from "@use-crux/anthropic";
 ```
 
 <Callout type="info">
-  For usage examples and provider comparison, see the [Execution guide](/docs/guides/prompts/execution).
+  For usage examples and provider comparison, see the [Execution
+  guide](/docs/guides/prompts/execution).
 </Callout>
 
 ### `createAnthropic(client)`
 
 Create an adapter bound to an Anthropic client.
 
-`createAnthropic()` is `anthropicProviderRuntime.create`. The package-owned `anthropicTranscript` owns `tool_use` / `tool_result` conversion plus assistant text/tool-call extraction. Anthropic-specific request params, cache-control system blocks, and response metadata normalization stay owned by `@use-crux/anthropic`; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
+`createAnthropic()` is `anthropicProviderRuntime.create`. The package-owned `anthropicTranscript` owns `tool_use` / `tool_result` conversion plus assistant text/tool-call extraction. Anthropic-specific request params, cache-control system blocks, and response metadata normalization stay owned by `@use-crux/anthropic`; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability. Provider prompt caching uses Crux's `cacheBoundary` marker: the adapter places one Anthropic `cache_control` breakpoint at the end of the stable cached prefix.
 
 | Field    | Type        | Description                   |
 | -------- | ----------- | ----------------------------- |
@@ -34,17 +44,19 @@ Create an adapter bound to an Anthropic client.
 | `.reranker(config)`          | Create a judge-backed core `Reranker`                                  |
 
 ```ts
-import { createAnthropic } from '@use-crux/anthropic'
-import Anthropic from '@anthropic-ai/sdk'
+import { createAnthropic } from "@use-crux/anthropic";
+import Anthropic from "@anthropic-ai/sdk";
 
-const adapter = createAnthropic(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }))
+const adapter = createAnthropic(
+  new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }),
+);
 
 const result = await adapter.generate(editDraft, {
-  model: 'claude-sonnet-4-5-20250929',
-  input: { instruction: 'Fix the intro' },
-})
-result.text
-result._meta.usage
+  model: "claude-sonnet-4-5-20250929",
+  input: { instruction: "Fix the intro" },
+});
+result.text;
+result._meta.usage;
 ```
 
 ### `adapter.generate(prompt, options)`
@@ -68,7 +80,8 @@ result._meta.usage
 When the prompt has an `output` schema, Anthropic's parsed value remains available on `result.raw.parsed_output`.
 
 <Callout type="info">
-  Anthropic requires `max_tokens`. If not set in your prompt's `settings`, the adapter defaults to `4096`.
+  Anthropic requires `max_tokens`. If not set in your prompt's `settings`, the
+  adapter defaults to `4096`.
 </Callout>
 
 ### `adapter.stream(prompt, options)`
@@ -92,7 +105,7 @@ Stream a prompt execution.
 Create a core `RetrievalModel` from the adapter instance.
 
 ```ts
-const retrievalModel = adapter.retrievalModel({ model: 'claude-haiku-4-5' })
+const retrievalModel = adapter.retrievalModel({ model: "claude-haiku-4-5" });
 ```
 
 Use it as a recipe-level `model` or step-level `model`.
@@ -103,9 +116,9 @@ Create a core `Reranker` for `rerank({ engine })`.
 
 ```ts
 const engine = adapter.reranker({
-  model: 'claude-haiku-4-5',
+  model: "claude-haiku-4-5",
   topN: 12,
-})
+});
 ```
 
 Anthropic does not expose a native rerank endpoint in this adapter. `adapter.reranker()` uses Crux's `judgeReranker()` over the configured Anthropic model, so each rerank call spends generation tokens.
@@ -131,7 +144,8 @@ Convert canonical `Message[]` to Anthropic `MessageParam[]`.
 **Returns:** `MessageParam[]`
 
 <Callout type="warn">
-  Anthropic has no `tool` role. Tool results are converted to `user` messages with `tool_result` content blocks.
+  Anthropic has no `tool` role. Tool results are converted to `user` messages
+  with `tool_result` content blocks.
 </Callout>
 
 `anthropicTranscript` is the lower-level `NativeTranscriptCodec` used by `createAnthropic()`. `toMessages()` and `fromMessages()` are provider-history converters, not a generic cross-provider transcript API; they delegate to the same Anthropic-owned codec that request assembly, assistant `tool_use` extraction, and second-call tool-loop payloads use.
@@ -177,7 +191,7 @@ When you want Anthropic for generation plus retrieval/indexing around it, use on
 ### Types
 
 ```ts
-import type { AnthropicExtra, AnthropicRequest } from '@use-crux/anthropic'
+import type { AnthropicExtra, AnthropicRequest } from "@use-crux/anthropic";
 ```
 
 ## Related

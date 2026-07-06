@@ -53,14 +53,14 @@ Think of the fields this way:
 | `system` | The prompt's role, policy, and high-level instructions |
 | `prompt` | The user/task message for single-turn calls |
 | `messages` | Full message history for chat or few-shot calls |
-| `use` | Reusable capabilities: [contexts](/docs/guides/contexts), [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [blackboards](/docs/guides/agents/blackboard), [skills](/docs/guides/skills), and [custom injectables](/docs/reference/crux-core/prompts#custom-injectable-entries) |
+| `use` | Reusable capabilities: [contexts](/docs/guides/contexts), [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [blackboards](/docs/guides/agents/blackboard), [skills](/docs/guides/skills), and [custom contributors](/docs/reference/crux-core/prompts#custom-contributor-entries) |
 | `tools` | Prompt-local tools for this call |
 | `settings` | Default generation settings such as temperature and max tokens |
 | `tests` | Inline eval cases for CI and local regression checks |
 
 The normal path is composition through `use`. Manual helpers like `asContext()` and `asTools()` exist for advanced or framework-specific wiring, but users should not need them for ordinary Crux prompts.
 
-Every entry in `use` is injectable in the product sense: it can add instructions, tools, constraints, metadata, or lifecycle behavior during prompt resolution. Some entries use the generic [`injectable()`](/docs/reference/crux-core/prompts#custom-injectable-entries) API; others, such as [skills](/docs/guides/skills), [memory](/docs/guides/memory), [blackboards](/docs/guides/agents/blackboard), [retrieval](/docs/guides/retrieval), and [grounding](/docs/guides/retrieval/grounding), have dedicated first-class APIs.
+Entries in `use` can add instructions, tools, constraints, metadata, or lifecycle behavior during prompt resolution. Custom entries use [`contributor()`](/docs/reference/crux-core/prompts#custom-contributor-entries); dedicated primitives such as [skills](/docs/guides/skills), [memory](/docs/guides/memory), [blackboards](/docs/guides/agents/blackboard), [retrieval](/docs/guides/retrieval), and [grounding](/docs/guides/retrieval/grounding) have first-class APIs.
 
 ## Text Output
 
@@ -233,8 +233,8 @@ const chatReply = prompt({
   input: z.object({
     userMessage: z.string(),
   }),
-  system: 'Answer as a careful assistant.',
   messages: ({ input }) => [
+    { role: 'system', content: 'Answer as a careful assistant.' },
     { role: 'user', content: 'Answer in one sentence.' },
     { role: 'assistant', content: 'I will keep responses concise.' },
     { role: 'user', content: input.userMessage },
@@ -242,7 +242,7 @@ const chatReply = prompt({
 })
 ```
 
-Do not define both `prompt` and `messages` unless the adapter guide explicitly documents that combination. `messages` is for cases where the message list is the source of truth.
+Do not define `system` or `prompt` together with `messages` unless the adapter guide explicitly documents that combination. `messages` is for cases where the message list is the source of truth.
 
 ## Inspect Before You Run
 

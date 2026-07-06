@@ -68,6 +68,7 @@ import {
   createSyntheticToolCallResponse,
   findValidApprovalDecision,
   findApprovedOrDeniedToolCalls,
+  findInvalidApprovalToolCalls,
   emitToolApprovalObservation,
 } from './approval'
 import type { ApprovalRequestInfo } from './approval'
@@ -380,12 +381,22 @@ function canonicalAppendToolRound(
       content: response.text,
       ...(response.toolCalls ? { metadata: { toolCalls: response.toolCalls } } : {}),
     },
-    ...results.map((result) => ({
-      role: 'tool' as const,
-      content: result.content,
-      metadata: { toolCallId: result.toolCallId, toolName: result.name },
-    })),
+    ...results.map(canonicalToolResultMessage),
   ]
+}
+
+function canonicalToolResultMessage(result: ToolResultEntry): Message {
+  return {
+    role: 'tool' as const,
+    content: result.content,
+    metadata: {
+      toolCallId: result.toolCallId,
+      toolName: result.name,
+      modelOutput: result.modelOutput,
+      ...(result.modelOutputError !== undefined ? { modelOutputError: result.modelOutputError } : {}),
+      ...(result.isError !== undefined ? { isError: result.isError } : {}),
+    },
+  }
 }
 
 /**
@@ -507,6 +518,44 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       outputSize: 0,
       modelOutputSize,
       modelOutputError: `Tool "${toolCall.name}" not found`,
+      isError: true,
+    }
+  }
+
+  function settleInvalidApproval(toolCall: {
+    readonly id: string
+    readonly name: string
+    readonly args: unknown
+    readonly approvalId: string
+    readonly message: string
+  }): ToolResultEntry {
+    const modelOutput: ToolModelOutput = {
+      type: 'error-json',
+      value: {
+        status: 'error',
+        reason: 'approval-invalid',
+        message: toolCall.message,
+      },
+    }
+    const modelOutputSize = measureModelOutput(modelOutput)
+    emitToolApprovalObservation('token-mismatch', {
+      approvalId: toolCall.approvalId,
+      toolCallId: toolCall.id,
+      toolName: toolCall.name,
+      input: toolCall.args,
+      modelOutput,
+      modelOutputSize,
+      error: new Error(toolCall.message),
+    })
+    transcript.push({ t: 'gate', toolCallId: toolCall.id, toolName: toolCall.name, verdict: 'denied', origin: 'replay' })
+    return {
+      toolCallId: toolCall.id,
+      name: toolCall.name,
+      modelOutput,
+      content: renderToolModelOutput(modelOutput),
+      outputSize: 0,
+      modelOutputSize,
+      modelOutputError: toolCall.message,
       isError: true,
     }
   }
@@ -747,12 +796,16 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     async resume(messages) {
       if (!enabled) return { messages: [...messages], replayed: 0 }
       await notifyDecisions(messages)
-      // Token mismatch emits the observation and throws inside the scan.
+      const invalidApprovalCalls = findInvalidApprovalToolCalls(messages)
       const replayCalls = findApprovedOrDeniedToolCalls(messages)
-      transcript.push({ t: 'resume', replayed: replayCalls.length })
-      if (replayCalls.length === 0) return { messages: [...messages], replayed: 0 }
+      const replayed = invalidApprovalCalls.length + replayCalls.length
+      transcript.push({ t: 'resume', replayed })
+      if (replayed === 0) return { messages: [...messages], replayed: 0 }
 
       const results: ToolResultEntry[] = []
+      for (const toolCall of invalidApprovalCalls) {
+        results.push(settleInvalidApproval(toolCall))
+      }
       for (const toolCall of replayCalls) {
         const verdict = await gate(toolCall, messages, 'replay')
         // `suspend` is unreachable here: the scan only returns decided calls
@@ -761,8 +814,8 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         else if (verdict.kind !== 'suspend') results.push(verdict.settled)
       }
       rememberToolResults(results)
-      const synthetic = createSyntheticToolCallResponse(replayCalls)
-      return { messages: appendRound([...messages], synthetic, results), replayed: replayCalls.length }
+      const synthetic = createSyntheticToolCallResponse([...invalidApprovalCalls, ...replayCalls])
+      return { messages: appendRound([...messages], synthetic, results), replayed }
     },
 
     async executeRound(response, messages) {
@@ -790,11 +843,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
           // the approval-request message (which carries the assistant turn
           // and tool calls) so the model hears about the side effects and
           // resume() treats them as completed.
-          const siblingMessages: Message[] = results.map((result) => ({
-            role: 'tool' as const,
-            content: result.content,
-            metadata: { toolCallId: result.toolCallId, toolName: result.name },
-          }))
+          const siblingMessages = results.map(canonicalToolResultMessage)
           return {
             kind: 'suspended',
             request: verdict.request,

@@ -13,8 +13,8 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
 import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
-import { context, when, match } from '../prompt/context'
-import { injectable } from '../prompt/injectable'
+import { context, contextWithFamily, when, match } from '../prompt/context'
+import { contributor } from '../prompt/contributor'
 import {
   createInMemoryObservabilityTransport,
   observe,
@@ -60,7 +60,7 @@ function fakeMemory(id: string, text: string, tools: AnyToolSet = {}): MemoryEnt
   return {
     _tag: 'Memory',
     id,
-    asContext: () => context({ id: `memory:${id}`, family: 'memory', system: text }),
+    asContext: () => contextWithFamily({ id: `memory:${id}`, system: text }, 'memory'),
     asTools: () => tools,
     captureTurn: async () => undefined,
     flush: async () => undefined,
@@ -71,7 +71,7 @@ function fakeBlackboard(id: string, tools: AnyToolSet): BlackboardEntry {
   return {
     _tag: 'Blackboard',
     id,
-    asContext: () => context({ id: `blackboard:${id}`, family: 'blackboard', system: `Board ${id} state.` }),
+    asContext: () => contextWithFamily({ id: `blackboard:${id}`, system: `Board ${id} state.` }, 'blackboard'),
     asTools: () => tools,
   }
 }
@@ -175,13 +175,13 @@ describe('entry resolution via compilePrompt', () => {
 // Injectable entries
 // ─────────────────────────────────────────────────────────────────
 
-describe('injectable resolution', () => {
+describe('contributor resolution', () => {
   it('lands contexts, tools, constraints, guardrails, and metadata in their channels', async () => {
     const constraint = { id: 'c1' } as unknown as Constraint
     const guardrail = { id: 'g1' } as unknown as Guardrail
-    const inj = injectable({
+    const inj = contributor({
       id: 'retrieval',
-      inject: () => ({
+      contribute: () => ({
         contexts: [context({ id: 'docs', system: 'Doc snippets.' })],
         tools: { search_docs: 'tool' },
         constraints: [constraint],
@@ -200,28 +200,29 @@ describe('injectable resolution', () => {
   })
 
     it('injected contexts re-enter the pipeline (when respected, exclusion attributed)', async () => {
-    const inj = injectable({
+    const inj = contributor({
       id: 'cond-inject',
-      inject: () => ({ contexts: [context({ id: 'maybe', when: () => false, system: 'no' })] }),
+      contribute: () => ({ contexts: [context({ id: 'maybe', when: () => false, system: 'no' })] }),
     })
     const result = await inspectCompiled({ system: 'S', use: [inj] } as AnyConfig, {}, undefined)
     expect(result.excludedContexts).toEqual([{ source: 'context:maybe', reason: 'context-level when returned false' }])
   })
 
     it('throws the exact injected-tool collision message', async () => {
-    const a = injectable({ id: 'first', inject: () => ({ tools: { dup: 1 } }) })
-    const b = injectable({ id: 'second', inject: () => ({ tools: { dup: 2 } }) })
+    const a = contributor({ id: 'first', contribute: () => ({ tools: { dup: 1 } }) })
+    const b = contributor({ id: 'second', contribute: () => ({ tools: { dup: 2 } }) })
 
     await expect(resolveCompiled({ system: 'S', use: [a, b] } as AnyConfig, {}, undefined)).rejects.toThrow(
-      'Injected tool name collision for "dup". Injectable "second" generated a tool name that already exists.',
+      'Tool name collision for "dup": contributed by both contributor:first and contributor:second. ' +
+        'Rename one of them, or pass the overriding tool at the call site (call-site tools intentionally win).',
     )
   })
 
-    it('passes input and promptId to inject()', async () => {
+    it('passes input and promptId to contribute()', async () => {
     const seen: unknown[] = []
-    const inj = injectable({
+    const inj = contributor({
       id: 'spy',
-      inject: (args) => {
+      contribute: (args) => {
         seen.push(args)
         return {}
       },
@@ -280,9 +281,8 @@ describe('blackboard resolution', () => {
     const config: AnyConfig = { system: 'S', use: [board], tools: { dup: 'config-tool' } }
 
     await expect(resolveCompiled(config, {}, undefined)).rejects.toThrow(
-      'Blackboard tool name collision for "dup". ' +
-        'Blackboard "plan" generated a tool name that already exists. ' +
-        'Configure a tool prefix, e.g. blackboard({ id: "plan", ..., tools: { prefix: "plan" } }).',
+      'Tool name collision for "dup": contributed by both blackboard:plan and prompt config. ' +
+        'Rename one of them, or pass the overriding tool at the call site (call-site tools intentionally win).',
     )
   })
 })
@@ -314,6 +314,22 @@ describe('skill resolution', () => {
     const result = await resolveCompiled(config, { input: { _crux_activeSkills: ['writer'] } }, undefined)
     const loaded = result.systemBlocks?.find((b) => b.source === 'context:__crux_skill_loaded:writer')
     expect(loaded?.text).toBe('## Skill: writer\n\nWrite well.')
+  })
+
+  it('preserves active skill ids across prompt input schema parsing', async () => {
+    const s = fakeSkill('writer', 'Writing skill', 'Write well.')
+    const config: AnyConfig = {
+      input: z.object({ query: z.string() }),
+      system: ({ input }: { input: { query: string } }) => `OWN ${input.query}`,
+      use: [s],
+    }
+
+    const result = await resolveCompiled(config, {
+      input: { query: 'draft', _crux_activeSkills: ['writer'] },
+    })
+    const loaded = result.systemBlocks?.find((b) => b.source === 'context:__crux_skill_loaded:writer')
+    expect(loaded?.text).toBe('## Skill: writer\n\nWrite well.')
+    expect(result.system).toContain('OWN draft')
   })
 
     it('degrades a failing lazy registry fetch to the placeholder with a console.warn', async () => {
@@ -455,26 +471,26 @@ describe('observability emission', () => {
     })
   })
 
-    it('emits tool-injection artifacts for injectable and blackboard entries (memory contributes none)', async () => {
+    it('emits tool-injection artifacts for contributor and blackboard entries (memory contributes none)', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
     const mem = fakeMemory('m1', 'mem text', { memory_recall: 'tool' })
     const board = fakeBlackboard('b1', { write_b1: 'tool' })
-    const inj = injectable({ id: 'i1', inject: () => ({ tools: { injected_tool: 'tool' } }) })
+    const inj = contributor({ id: 'i1', contribute: () => ({ tools: { injected_tool: 'tool' } }) })
     await resolveCompiled({ system: 'S', use: [inj, mem, board] } as AnyConfig, {}, undefined)
     await observe.flush()
 
     const previews = artifactPreviews(transport.records, 'context.contribution').filter((p) => p.state === 'active')
     const direct = previews.filter((p) =>
-      ['injectable:i1', 'memory:m1', 'blackboard:b1'].includes(p.sourceId as string),
+      ['contributor:i1', 'memory:m1', 'blackboard:b1'].includes(p.sourceId as string),
     )
     expect(direct).toEqual([
       {
         kind: 'context.contribution',
         state: 'active',
         included: true,
-        sourceId: 'injectable:i1',
+        sourceId: 'contributor:i1',
         injectableKind: 'injectable',
         injects: ['tools'],
         injectedTools: ['injected_tool'],
@@ -580,8 +596,8 @@ describe('observability emission', () => {
 // ─────────────────────────────────────────────────────────────────
 
 describe('compilePrompt input schema shape collection', () => {
-  it('injectable schemas contribute required keys', () => {
-    const inj = injectable({ id: 'inj', input: z.object({ topK: z.number() }), inject: () => ({}) })
+  it('contributor schemas contribute required keys', () => {
+    const inj = contributor({ id: 'inj', input: z.object({ topK: z.number() }), contribute: () => ({}) })
     const merged = inputSchemaFor([inj], undefined)!
     expect(merged.safeParse({ topK: 3 }).success).toBe(true)
     expect(merged.safeParse({}).success).toBe(false)

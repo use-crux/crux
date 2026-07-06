@@ -95,7 +95,10 @@ describe('blackboard prompt use integration', () => {
     const second = blackboard({ id: 'second', schema: boardSchema })
     const assistant = prompt({ use: [first, second], system: 'Base.' })
 
-    await expect(assistant.resolve({})).rejects.toThrow(/Blackboard tool name collision/)
+    await expect(assistant.resolve({})).rejects.toThrow(
+      'Tool name collision for "readBlackboard": contributed by both blackboard:first and blackboard:second. ' +
+        'Rename one of them, or pass the overriding tool at the call site (call-site tools intentionally win).',
+    )
   })
 
     it('supports prefixed blackboard tools for multiple boards', async () => {

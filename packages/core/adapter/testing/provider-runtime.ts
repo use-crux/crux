@@ -10,16 +10,19 @@
  * @module
  */
 
-import { z } from 'zod'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { appendToolApprovalResponse } from '../../tools/approvals'
-import type { DefinedProviderRuntime, ProviderRuntimeDepsArg } from '../provider-runtime'
-import type { ConformanceViolation } from '../testing'
+import { z } from "zod";
+import { context, prompt as makePrompt } from "../../prompt";
+import { appendToolApprovalResponse } from "../../tools/approvals";
+import type {
+  DefinedProviderRuntime,
+  ProviderRuntimeDepsArg,
+} from "../provider-runtime";
+import type { ConformanceViolation } from "../testing";
 import type {
   ProviderRuntimeConformanceGenerateOptions,
   ProviderRuntimeConformanceHarness,
   ProviderRuntimeConformanceRuntime,
-} from './provider-runtime-types'
+} from "./provider-runtime-types";
 
 export type {
   ProviderConformanceEmission,
@@ -31,26 +34,60 @@ export type {
   ProviderRuntimeConformanceHarness,
   ProviderRuntimeConformanceRuntime,
   ProviderRuntimeConformanceStreamHandle,
-} from './provider-runtime-types'
+} from "./provider-runtime-types";
 
-const TEXT_INPUT = { instruction: 'Run the conformance scenario.' } as const
-const TOOL_INPUT = { instruction: 'Use the echo tool.' } as const
-const STREAM_INPUT = { instruction: 'Stream a greeting.' } as const
+const TEXT_INPUT = { instruction: "Run the conformance scenario." } as const;
+const TOOL_INPUT = { instruction: "Use the echo tool." } as const;
+const STREAM_INPUT = { instruction: "Stream a greeting." } as const;
 
 const textPrompt = makePrompt({
-  id: 'crux-provider-conformance-text',
-  system: 'You are a provider-runtime conformance test.',
+  id: "crux-provider-conformance-text",
+  system: "You are a provider-runtime conformance test.",
   prompt: ({ input }) => input.instruction,
   input: z.object({ instruction: z.string() }),
-})
+});
 
 const structuredPrompt = makePrompt({
-  id: 'crux-provider-conformance-structured',
-  system: 'Return a JSON object.',
+  id: "crux-provider-conformance-structured",
+  system: "Return a JSON object.",
   prompt: ({ input }) => input.instruction,
   input: z.object({ instruction: z.string() }),
   output: z.object({ ok: z.boolean() }),
-})
+});
+
+const cachedRules = context({
+  id: "crux-provider-conformance-cache-rules",
+  system: "Cached rule A.",
+  cache: true,
+});
+
+const cachedPolicy = context({
+  id: "crux-provider-conformance-cache-policy",
+  system: "Cached rule B.",
+  cache: true,
+});
+
+const dynamicTail = context({
+  id: "crux-provider-conformance-dynamic-tail",
+  input: z.object({ instruction: z.string() }),
+  system: ({ input }) => `Dynamic tail: ${input.instruction}`,
+});
+
+const providerCachePrompt = makePrompt({
+  id: "crux-provider-conformance-provider-cache",
+  system: "Stable identity.",
+  use: [cachedRules, cachedPolicy, dynamicTail],
+  prompt: ({ input }) => input.instruction,
+  input: z.object({ instruction: z.string() }),
+});
+
+const noToolChoicePrompt = makePrompt({
+  id: "crux-provider-conformance-tool-choice-none",
+  system: "Do not call tools.",
+  prompt: ({ input }) => input.instruction,
+  input: z.object({ instruction: z.string() }),
+  settings: { toolChoice: "none" },
+});
 
 /**
  * Run the provider-runtime contract suite against a public provider runtime.
@@ -76,79 +113,186 @@ export async function providerRuntimeConformance<
   TRawStream = unknown,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
   TDeps extends Record<string, unknown> = Record<string, never>,
-  TRuntime extends ProviderRuntimeConformanceRuntime<TModel> = ProviderRuntimeConformanceRuntime<TModel>,
+  TRuntime extends ProviderRuntimeConformanceRuntime<TModel> =
+    ProviderRuntimeConformanceRuntime<TModel>,
   TExtensions extends object = object,
 >(
-  runtime: DefinedProviderRuntime<TClient, TModel, TRawResponse, TRawStream, TExtra, TDeps, TRuntime, TExtensions>,
+  runtime: DefinedProviderRuntime<
+    TClient,
+    TModel,
+    TRawResponse,
+    TRawStream,
+    TExtra,
+    TDeps,
+    TRuntime,
+    TExtensions
+  >,
   harness: ProviderRuntimeConformanceHarness<TClient, TModel, TDeps>,
 ): Promise<ConformanceViolation[]> {
-  const violations: ConformanceViolation[] = []
-  const capabilities = harness.capabilities
-  const fail = (rule: string, detail: string) => violations.push({ rule, detail })
+  const violations: ConformanceViolation[] = [];
+  const capabilities = harness.capabilities;
+  const fail = (rule: string, detail: string) =>
+    violations.push({ rule, detail });
   const run = async (rule: string, check: () => Promise<void>) => {
     try {
-      await check()
+      await check();
     } catch (error) {
-      fail(rule, error instanceof Error ? error.message : String(error))
+      fail(rule, error instanceof Error ? error.message : String(error));
     }
-  }
+  };
 
   if (capabilities?.ownership && capabilities.ownership !== runtime.ownership) {
-    fail('runtime ownership', `expected ${capabilities.ownership}, got ${runtime.ownership}`)
-    return violations
+    fail(
+      "runtime ownership",
+      `expected ${capabilities.ownership}, got ${runtime.ownership}`,
+    );
+    return violations;
   }
 
-  await run('text generation', async () => {
-    const prepared = await harness.prepare({ emissions: [{ text: 'plain response' }] })
-    const result = await bindRuntime(runtime, prepared).generate(textPrompt, baseOptions(prepared.model))
+  await run("text generation", async () => {
+    const prepared = await harness.prepare({
+      emissions: [{ text: "plain response" }],
+    });
+    const result = await bindRuntime(runtime, prepared).generate(
+      textPrompt,
+      baseOptions(prepared.model),
+    );
 
-    if (result.text !== 'plain response') fail('text generation', `expected "plain response", got "${result.text}"`)
-    if (result.steps < 1) fail('text generation', `expected at least one step, got ${result.steps}`)
-    if (!result._meta.finishReason) fail('text generation', 'finishReason was not normalized')
-    if (typeof result._meta.usage?.totalTokens !== 'number') {
-      fail('text generation', 'usage was not normalized')
+    if (result.text !== "plain response")
+      fail(
+        "text generation",
+        `expected "plain response", got "${result.text}"`,
+      );
+    if (result.steps < 1)
+      fail(
+        "text generation",
+        `expected at least one step, got ${result.steps}`,
+      );
+    if (!result._meta.finishReason)
+      fail("text generation", "finishReason was not normalized");
+    if (typeof result._meta.usage?.totalTokens !== "number") {
+      fail("text generation", "usage was not normalized");
     }
     if (prepared.inspect && prepared.inspect.bodyForCall(0) === undefined) {
-      fail('provider request capture', 'first provider request body is missing')
+      fail(
+        "provider request capture",
+        "first provider request body is missing",
+      );
     }
-  })
+  });
+
+  await run("usage honesty", async () => {
+    const prepared = await harness.prepare({
+      emissions: [{ text: "unmetered response", usage: {} }],
+    });
+    const result = await bindRuntime(runtime, prepared).generate(
+      textPrompt,
+      baseOptions(prepared.model),
+    );
+
+    if (result._meta.usage?.inputTokens !== undefined) {
+      fail(
+        "usage honesty",
+        `expected missing input usage to stay undefined, got ${result._meta.usage.inputTokens}`,
+      );
+    }
+    if (result._meta.usage?.outputTokens !== undefined) {
+      fail(
+        "usage honesty",
+        `expected missing output usage to stay undefined, got ${result._meta.usage.outputTokens}`,
+      );
+    }
+    if (result._meta.usage?.totalTokens !== undefined) {
+      fail(
+        "usage honesty",
+        `expected missing total usage to stay undefined, got ${result._meta.usage.totalTokens}`,
+      );
+    }
+  });
+
+  await run("neutral toolChoice none mapping", async () => {
+    const prepared = await harness.prepare({
+      emissions: [{ text: "no tools used" }],
+    });
+    await bindRuntime(runtime, prepared).generate(noToolChoicePrompt, {
+      ...baseOptions(prepared.model),
+      tools: { echo: echoTool() },
+    });
+
+    const body = prepared.inspect?.bodyForCall(0);
+    if (body === undefined) return;
+    const serialized = JSON.stringify(body);
+    if (!serialized.includes('"none"')) {
+      fail(
+        "neutral toolChoice none mapping",
+        `provider request did not carry neutral "none" intent: ${serialized}`,
+      );
+    }
+  });
 
   if (capabilities?.structuredOutput) {
-    await run('structured output', async () => {
-      const prepared = await harness.prepare({ structuredTexts: ['{"ok":true}'] })
-      const result = await bindRuntime(runtime, prepared).generate(structuredPrompt, baseOptions(prepared.model))
+    await run("structured output", async () => {
+      const prepared = await harness.prepare({
+        structuredTexts: ['{"ok":true}'],
+      });
+      const result = await bindRuntime(runtime, prepared).generate(
+        structuredPrompt,
+        baseOptions(prepared.model),
+      );
 
       if (JSON.stringify(result.object) !== '{"ok":true}') {
-        fail('structured output', `expected parsed object {"ok":true}, got ${JSON.stringify(result.object)}`)
+        fail(
+          "structured output",
+          `expected parsed object {"ok":true}, got ${JSON.stringify(result.object)}`,
+        );
       }
-    })
+    });
 
-    await run('structured validation retry', async () => {
-      const prepared = await harness.prepare({ structuredTexts: ['{"ok":"no"}', '{"ok":true}'] })
-      const result = await bindRuntime(runtime, prepared).generate(structuredPrompt, {
-        ...baseOptions(prepared.model),
-        validationRetry: { maxRetries: 2 },
-      })
+    await run("structured validation retry", async () => {
+      const prepared = await harness.prepare({
+        structuredTexts: ['{"ok":"no"}', '{"ok":true}'],
+      });
+      const result = await bindRuntime(runtime, prepared).generate(
+        structuredPrompt,
+        {
+          ...baseOptions(prepared.model),
+          validationRetry: { maxRetries: 2 },
+        },
+      );
 
       if (JSON.stringify(result.object) !== '{"ok":true}') {
-        fail('structured validation retry', `expected parsed object {"ok":true}, got ${JSON.stringify(result.object)}`)
+        fail(
+          "structured validation retry",
+          `expected parsed object {"ok":true}, got ${JSON.stringify(result.object)}`,
+        );
       }
 
-      const retryMessages = prepared.inspect?.messagesForCall(1)
-      if (retryMessages !== undefined && !JSON.stringify(retryMessages).includes('Validation failed')) {
-        fail('structured validation retry', 'retry request did not include validation feedback')
+      const retryMessages = prepared.inspect?.messagesForCall(1);
+      if (
+        retryMessages !== undefined &&
+        !JSON.stringify(retryMessages).includes("Validation failed")
+      ) {
+        fail(
+          "structured validation retry",
+          "retry request did not include validation feedback",
+        );
       }
-    })
+    });
   }
 
   if (capabilities?.toolCalls) {
-    await run('tool-call continuation', async () => {
+    await run("tool-call continuation", async () => {
       const prepared = await harness.prepare({
         emissions: [
-          { text: '', toolCalls: [{ id: 'call_echo', name: 'echo', args: { value: 'hello' } }] },
-          { text: 'tool complete' },
+          {
+            text: "",
+            toolCalls: [
+              { id: "call_echo", name: "echo", args: { value: "hello" } },
+            ],
+          },
+          { text: "tool complete" },
         ],
-      })
+      });
       const result = await bindRuntime(runtime, prepared).generate(textPrompt, {
         ...baseOptions(prepared.model),
         input: TOOL_INPUT,
@@ -156,58 +300,78 @@ export async function providerRuntimeConformance<
         tools: {
           echo: echoTool(),
         },
-      })
+      });
 
-      if (result.text !== 'tool complete') {
-        fail('tool-call continuation', `expected "tool complete", got "${result.text}"`)
+      if (result.text !== "tool complete") {
+        fail(
+          "tool-call continuation",
+          `expected "tool complete", got "${result.text}"`,
+        );
       }
-      if (result.steps < 2) fail('tool-call continuation', `expected at least 2 steps, got ${result.steps}`)
-      if (!result.messages.some((message) => message.role === 'tool')) {
-        fail('tool-call continuation', 'canonical transcript did not include a tool result message')
+      if (result.steps < 2)
+        fail(
+          "tool-call continuation",
+          `expected at least 2 steps, got ${result.steps}`,
+        );
+      if (!result.messages.some((message) => message.role === "tool")) {
+        fail(
+          "tool-call continuation",
+          "canonical transcript did not include a tool result message",
+        );
       }
-    })
+    });
   }
 
   if (capabilities?.approvalSuspension) {
-    await run('approval suspension', async () => {
-      let executed = false
+    await run("approval suspension", async () => {
+      let executed = false;
       const prepared = await harness.prepare({
         emissions: [
-          { text: 'approval needed', toolCalls: [{ id: 'call_guarded', name: 'guarded', args: {} }] },
-          { text: 'approved complete' },
+          {
+            text: "approval needed",
+            toolCalls: [{ id: "call_guarded", name: "guarded", args: {} }],
+          },
+          { text: "approved complete" },
         ],
-      })
-      const bound = bindRuntime(runtime, prepared)
+      });
+      const bound = bindRuntime(runtime, prepared);
       const guardedTools = {
         guarded: {
           ...echoTool(),
           needsApproval: true,
           execute: async () => {
-            executed = true
-            return 'approved output'
+            executed = true;
+            return "approved output";
           },
         },
-      }
+      };
       const result = await bound.generate(textPrompt, {
         ...baseOptions(prepared.model),
         tools: guardedTools,
-      })
+      });
 
-      if (executed) fail('approval suspension', 'approval-needing tool executed before approval')
-      if (!result.pendingApprovals || result.pendingApprovals.length === 0) {
-        fail('approval suspension', 'expected pending approval requests')
-      }
-      if (result._meta.finishReason !== 'tool_approval_required') {
+      if (executed)
         fail(
-          'approval suspension',
+          "approval suspension",
+          "approval-needing tool executed before approval",
+        );
+      if (!result.pendingApprovals || result.pendingApprovals.length === 0) {
+        fail("approval suspension", "expected pending approval requests");
+      }
+      if (result._meta.finishReason !== "tool_approval_required") {
+        fail(
+          "approval suspension",
           `expected finishReason "tool_approval_required", got "${result._meta.finishReason}"`,
-        )
+        );
       }
 
-      const approval = firstApproval(result.pendingApprovals)
+      const approval = firstApproval(result.pendingApprovals);
       if (!approval) {
-        fail('approval resume', 'pending approval did not expose approvalId and approvalToken')
-        return
+        fail(
+          "approval resume",
+          "pending approval did not expose approvalId and approvalToken",
+        );
+        return;
       }
 
       const resumed = await bound.generate(textPrompt, {
@@ -218,87 +382,218 @@ export async function providerRuntimeConformance<
           approved: true,
           approvalToken: approval.approvalToken,
         }),
-      })
+      });
 
-      if (!executed) fail('approval resume', 'approved tool did not execute on resume')
-      if (resumed.text !== 'approved complete') {
-        fail('approval resume', `expected "approved complete", got "${resumed.text}"`)
+      if (!executed)
+        fail("approval resume", "approved tool did not execute on resume");
+      if (resumed.text !== "approved complete") {
+        fail(
+          "approval resume",
+          `expected "approved complete", got "${resumed.text}"`,
+        );
       }
-    })
+    });
+
+    await run("approval invalid-token resume", async () => {
+      let executed = false;
+      const prepared = await harness.prepare({
+        emissions: [
+          {
+            text: "approval needed",
+            toolCalls: [{ id: "call_guarded", name: "guarded", args: {} }],
+          },
+          { text: "invalid approval handled" },
+        ],
+      });
+      const bound = bindRuntime(runtime, prepared);
+      const guardedTools = {
+        guarded: {
+          ...echoTool(),
+          needsApproval: true,
+          execute: async () => {
+            executed = true;
+            return "approved output";
+          },
+        },
+      };
+      const result = await bound.generate(textPrompt, {
+        ...baseOptions(prepared.model),
+        tools: guardedTools,
+      });
+      const approval = firstApproval(result.pendingApprovals);
+      if (!approval) {
+        fail("approval invalid-token resume", "pending approval did not expose approval id");
+        return;
+      }
+
+      const resumed = await bound.generate(textPrompt, {
+        ...baseOptions(prepared.model),
+        tools: guardedTools,
+        messages: appendToolApprovalResponse(result.messages, {
+          approvalId: approval.approvalId,
+          approved: true,
+          approvalToken: "forged-token",
+        }),
+      });
+
+      if (executed) {
+        fail("approval invalid-token resume", "tool executed after invalid approval token");
+      }
+      if (resumed.text !== "invalid approval handled") {
+        fail(
+          "approval invalid-token resume",
+          `expected generation to continue after invalid approval, got "${resumed.text}"`,
+        );
+      }
+      if (!JSON.stringify(resumed.messages).includes("approval-invalid")) {
+        fail("approval invalid-token resume", "transcript did not include an approval-invalid tool result");
+      }
+    });
   }
 
   if (capabilities?.observerDirectives) {
-    await run('observer stop directive', async () => {
-      let observed = 0
+    await run("observer stop directive", async () => {
+      let observed = 0;
       const prepared = await harness.prepare({
         emissions: [
-          { text: 'stop here', toolCalls: [{ id: 'call_observe', name: 'echo', args: { value: 'observed' } }] },
-          { text: 'should not run' },
+          {
+            text: "stop here",
+            toolCalls: [
+              { id: "call_observe", name: "echo", args: { value: "observed" } },
+            ],
+          },
+          { text: "should not run" },
         ],
-      })
+      });
       const result = await bindRuntime(runtime, prepared).generate(textPrompt, {
         ...baseOptions(prepared.model),
         maxSteps: 5,
         tools: { echo: echoTool() },
         observer: {
           onStepFinish: async () => {
-            observed++
-            return { kind: 'stop', reason: 'conformance' }
+            observed++;
+            return { kind: "stop", reason: "conformance" };
           },
         },
-      })
+      });
 
-      if (observed !== 1) fail('observer stop directive', `expected one observed step, got ${observed}`)
-      if (result.steps !== 1) fail('observer stop directive', `expected one step, got ${result.steps}`)
-      if (result.text !== 'stop here') {
-        fail('observer stop directive', `expected stopped text "stop here", got "${result.text}"`)
+      if (observed !== 1)
+        fail(
+          "observer stop directive",
+          `expected one observed step, got ${observed}`,
+        );
+      if (result.steps !== 1)
+        fail(
+          "observer stop directive",
+          `expected one step, got ${result.steps}`,
+        );
+      if (result.text !== "stop here") {
+        fail(
+          "observer stop directive",
+          `expected stopped text "stop here", got "${result.text}"`,
+        );
       }
-    })
+    });
+  }
+
+  if (capabilities?.providerCache) {
+    await run("provider cache boundary", async () => {
+      const prepared = await harness.prepare({
+        providerCache: true,
+        emissions: [{ text: "cached response" }],
+      });
+      await bindRuntime(runtime, prepared).generate(providerCachePrompt, {
+        ...baseOptions(prepared.model),
+        input: TEXT_INPUT,
+      });
+
+      const body = prepared.inspect?.bodyForCall(0);
+      if (body === undefined) {
+        fail("provider cache boundary", "provider request body is missing");
+        return;
+      }
+
+      const providerFailure = harness.providerCache?.assertRequest(body);
+      if (providerFailure) {
+        fail("provider cache boundary", providerFailure);
+        return;
+      }
+
+      if (!harness.providerCache) {
+        const serialized = JSON.stringify(body);
+        for (const expected of [
+          "Stable identity.",
+          "Cached rule A.",
+          "Cached rule B.",
+          "Dynamic tail: Run the conformance scenario.",
+        ]) {
+          if (!serialized.includes(expected)) {
+            fail(
+              "provider cache boundary",
+              `provider request omitted expected system text ${JSON.stringify(expected)}: ${serialized}`,
+            );
+          }
+        }
+      }
+    });
   }
 
   if (capabilities?.streaming) {
-    await run('streaming', async () => {
-      const prepared = await harness.prepare({ streamChunks: ['he', 'llo'] })
+    await run("streaming", async () => {
+      const prepared = await harness.prepare({ streamChunks: ["he", "llo"] });
       const handle = await bindRuntime(runtime, prepared).stream(textPrompt, {
         ...baseOptions(prepared.model),
         input: STREAM_INPUT,
-      })
+      });
 
       if (handle.rawStream && handle.extractTextDelta) {
-        const text = await drainText(handle.rawStream, handle.extractTextDelta)
-        if (text !== 'hello') fail('streaming', `expected streamed text "hello", got "${text}"`)
-      } else if (!('raw' in handle)) {
-        fail('streaming', 'stream handle exposed neither rawStream nor raw')
+        const text = await drainText(handle.rawStream, handle.extractTextDelta);
+        if (text !== "hello")
+          fail("streaming", `expected streamed text "hello", got "${text}"`);
+      } else if (!("raw" in handle)) {
+        fail("streaming", "stream handle exposed neither rawStream nor raw");
       }
 
-      if (typeof handle.completion !== 'function') fail('streaming', 'stream handle is missing completion()')
-      const consumedRawText = await consumeKnownRawStream(handle.raw)
-      const completion = handle.rawStream || consumedRawText ? await handle.completion() : undefined
-      if (completion !== undefined && (typeof completion !== 'object' || completion === null)) {
-        fail('streaming completion metadata', 'completion metadata must be object-shaped when present')
+      if (typeof handle.completion !== "function")
+        fail("streaming", "stream handle is missing completion()");
+      const consumedRawText = await consumeKnownRawStream(handle.raw);
+      const completion =
+        handle.rawStream || consumedRawText
+          ? await handle.completion()
+          : undefined;
+      if (
+        completion !== undefined &&
+        (typeof completion !== "object" || completion === null)
+      ) {
+        fail(
+          "streaming completion metadata",
+          "completion metadata must be object-shaped when present",
+        );
       }
-    })
+    });
   }
 
-  return violations
+  return violations;
 }
 
-function baseOptions<TModel>(model: TModel): ProviderRuntimeConformanceGenerateOptions<TModel> {
+function baseOptions<TModel>(
+  model: TModel,
+): ProviderRuntimeConformanceGenerateOptions<TModel> {
   return {
     model,
     input: TEXT_INPUT,
     settings: { temperature: 0.2, maxTokens: 64 },
-  }
+  };
 }
 
 function echoTool() {
-  const inputSchema = z.object({ value: z.string().optional() })
+  const inputSchema = z.object({ value: z.string().optional() });
   return {
-    description: 'Echo a value back to the model.',
+    description: "Echo a value back to the model.",
     inputSchema,
     parameters: inputSchema,
     execute: async (input: unknown) => input,
-  }
+  };
 }
 
 function bindRuntime<
@@ -311,59 +606,83 @@ function bindRuntime<
   TRuntime extends ProviderRuntimeConformanceRuntime<TModel>,
   TExtensions extends object,
 >(
-  runtime: DefinedProviderRuntime<TClient, TModel, TRawResponse, TRawStream, TExtra, TDeps, TRuntime, TExtensions>,
+  runtime: DefinedProviderRuntime<
+    TClient,
+    TModel,
+    TRawResponse,
+    TRawStream,
+    TExtra,
+    TDeps,
+    TRuntime,
+    TExtensions
+  >,
   prepared: {
-    readonly client: TClient
-    readonly deps?: TDeps
+    readonly client: TClient;
+    readonly deps?: TDeps;
   },
 ): TRuntime & TExtensions {
   if (prepared.deps === undefined) {
-    return runtime.create(prepared.client, ...([] as unknown as ProviderRuntimeDepsArg<TDeps>))
+    return runtime.create(
+      prepared.client,
+      ...([] as unknown as ProviderRuntimeDepsArg<TDeps>),
+    );
   }
-  return runtime.create(prepared.client, ...([prepared.deps] as unknown as ProviderRuntimeDepsArg<TDeps>))
+  return runtime.create(
+    prepared.client,
+    ...([prepared.deps] as unknown as ProviderRuntimeDepsArg<TDeps>),
+  );
 }
 
 function firstApproval(values: readonly unknown[] | undefined):
   | {
-      readonly approvalId: string
-      readonly approvalToken?: string
+      readonly approvalId: string;
+      readonly approvalToken?: string;
     }
   | undefined {
-  const first = values?.[0]
-  if (!isRecord(first) || typeof first.approvalId !== 'string') return undefined
+  const first = values?.[0];
+  if (!isRecord(first) || typeof first.approvalId !== "string")
+    return undefined;
   return {
     approvalId: first.approvalId,
-    ...(typeof first.approvalToken === 'string' ? { approvalToken: first.approvalToken } : {}),
-  }
+    ...(typeof first.approvalToken === "string"
+      ? { approvalToken: first.approvalToken }
+      : {}),
+  };
 }
 
 async function drainText(
   stream: AsyncIterable<unknown>,
   extractTextDelta: (chunk: unknown) => string | undefined,
 ): Promise<string> {
-  let text = ''
+  let text = "";
   for await (const chunk of stream) {
-    text += extractTextDelta(chunk) ?? ''
+    text += extractTextDelta(chunk) ?? "";
   }
-  return text
+  return text;
 }
 
-async function consumeKnownRawStream(raw: unknown): Promise<string | undefined> {
-  const textStream = isRecord(raw) ? raw.textStream : undefined
-  if (!isAsyncIterable(textStream)) return undefined
+async function consumeKnownRawStream(
+  raw: unknown,
+): Promise<string | undefined> {
+  const textStream = isRecord(raw) ? raw.textStream : undefined;
+  if (!isAsyncIterable(textStream)) return undefined;
 
-  let text = ''
+  let text = "";
   for await (const chunk of textStream) {
-    if (typeof chunk === 'string') text += chunk
+    if (typeof chunk === "string") text += chunk;
   }
-  return text
+  return text;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
-  if (typeof value !== 'object' || value === null) return false
-  return typeof (value as { readonly [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === 'function'
+  if (typeof value !== "object" || value === null) return false;
+  return (
+    typeof (value as { readonly [Symbol.asyncIterator]?: unknown })[
+      Symbol.asyncIterator
+    ] === "function"
+  );
 }

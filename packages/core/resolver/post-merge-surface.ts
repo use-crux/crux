@@ -19,6 +19,7 @@ import type { ToolMiddleware } from '../tools/types'
 import type { MergedResolution } from './contract'
 import type { ResolverPorts } from './ports'
 import { resolveSkillSurface } from './skills'
+import type { ToolOwnerLabel } from './tool-merge'
 
 /** Runtime surface ready for system composition and prompt arg projection. */
 export interface PostMergeSurface {
@@ -28,6 +29,7 @@ export interface PostMergeSurface {
   readonly memories: MemoryEntry[]
   readonly blackboards: BlackboardEntry[]
   readonly injectedTools: AnyToolSet
+  readonly injectedToolOwners: ReadonlyMap<string, ToolOwnerLabel>
   readonly injectedToolMiddleware: ToolMiddleware[]
   readonly injectedConstraints: Constraint[]
   readonly injectedGuardrails: Guardrail[]
@@ -57,6 +59,7 @@ export async function resolvePostMergeSurface(
     memories: merged.memories,
     blackboards: merged.blackboards,
     injectedTools: merged.tools,
+    injectedToolOwners: merged.toolOwners,
     injectedToolMiddleware: merged.toolMiddleware,
     injectedConstraints: merged.constraints,
     injectedGuardrails: merged.guardrails,

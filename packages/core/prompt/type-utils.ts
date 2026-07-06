@@ -11,7 +11,7 @@
  */
 
 import type { z } from 'zod'
-import type { Context, ContextEntry, ConditionalContext, ContributorEntry } from './context-types'
+import type { Context, ContextEntry, ConditionalContext, ContributorEntry, MatchSpec } from './context-types'
 
 /** Flatten intersection types into a single object for clean IDE tooltips. */
 export type Simplify<T> = { [K in keyof T]: T[K] } & {}
@@ -22,7 +22,19 @@ export type DeepReadonly<T> = {
 }
 
 /** Extract inferred type from a Context's input, or `{}` if no input declared. */
-type InferContextInput<C> = C extends Context<infer S> ? (S extends z.ZodType ? z.infer<S> : {}) : {}
+export type InferContextInput<C> = C extends Context<infer S> ? (S extends z.ZodType ? z.infer<S> : {}) : {}
+
+type UnionToIntersection<U> = (U extends unknown ? (value: U) => void : never) extends (value: infer I) => void
+  ? I
+  : never
+
+type BranchInput<B> = B extends readonly (infer C)[]
+  ? UnionToIntersection<InferContextInput<C>>
+  : InferContextInput<B>
+
+type InferMatchInput<M> = M extends MatchSpec<infer TCases>
+  ? Partial<Simplify<UnionToIntersection<BranchInput<TCases[keyof TCases]>>>>
+  : {}
 
 /**
  * Extract inferred type from a ContextEntry.
@@ -30,7 +42,7 @@ type InferContextInput<C> = C extends Context<infer S> ? (S extends z.ZodType ? 
  * - `Context<T>` → required (`z.infer<T>`)
  * - `ConditionalContext<Context<T>>` → optional (`Partial<z.infer<T>>`)
  * - `ContributorEntry<T>` → required (`z.infer<T>`; contributors declare schemas like injectables)
- * - `MatchSpec` → `{}` (no type-level contribution; declare fields on prompt input)
+ * - `MatchSpec` → optional branch inputs (only the selected branch is active)
  * - `false | null | undefined` → `{}` (filtered out at runtime)
  */
 type InferContextEntryInput<E> =
@@ -42,7 +54,9 @@ type InferContextEntryInput<E> =
         ? S extends z.ZodType
           ? z.infer<S>
           : {}
-        : {} // MatchSpec, false, null, undefined
+        : E extends MatchSpec
+          ? InferMatchInput<E>
+          : {} // false, null, undefined
 
 /**
  * Recursively intersect all context entry input types from a tuple.

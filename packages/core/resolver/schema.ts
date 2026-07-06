@@ -11,7 +11,7 @@
 
 import { z } from 'zod'
 import type { ContextEntry } from '../prompt/context-types'
-import { collectSchemaContributions } from './lower'
+import { collectSchemaContributions, schemaContributionSource } from './schema-collection'
 
 /** Result shape returned by Zod's `safeParse` for resolve-time validation. */
 export interface SafeParseResult {
@@ -47,7 +47,7 @@ export function compileInputSchema(
   entries: readonly ContextEntry[],
   ownInput: z.ZodType | undefined,
 ): z.ZodType | undefined {
-  const seenKeys = new Map<string, string>()
+  const seenKeys = new Map<string, { label: string; source: object | undefined }>()
   let mergedShape: Record<string, z.ZodType> = {}
 
   const contributions = collectSchemaContributions(entries)
@@ -61,14 +61,21 @@ export function compileInputSchema(
 
     for (const key of Object.keys(shape)) {
       const source = id ?? `context[${i}]`
+      const sourceIdentity = schemaContributionSource(contributions[i])
       const existing = seenKeys.get(key)
       if (existing) {
+        if (existing.source && existing.source === sourceIdentity) {
+          if (!optional) {
+            mergedShape[key] = shape[key]
+          }
+          continue
+        }
         throw new Error(
-          `Input key "${key}" is defined by both "${existing}" and "${source}". ` +
+          `Input key "${key}" is defined by both "${existing.label}" and "${source}". ` +
             `Context input keys must not overlap.`,
         )
       }
-      seenKeys.set(key, source)
+      seenKeys.set(key, { label: source, source: sourceIdentity })
       mergedShape[key] = optional ? shape[key].optional() : shape[key]
     }
   }

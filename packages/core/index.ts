@@ -60,12 +60,11 @@ export {
   createContexts,
   when,
   match,
-  injectable,
   contributor,
   isContributorEntry,
 } from "./prompt";
 export type { ContributorConfig } from "./prompt";
-export type { ContributorContribution, ContributorEntry } from "./prompt";
+export type { Contribution, ContributorEntry } from "./prompt";
 export { compilePrompt } from "./resolver/compile";
 export type {
   CompiledPrompt,
@@ -132,7 +131,7 @@ export type {
 export { CONTRIBUTOR } from "./resolver/contract";
 export type {
   ContributeArgs,
-  Contribution,
+  Contribution as LoweredContribution,
   ContributionFacts,
   GateResult,
   InclusionStep,
@@ -450,8 +449,6 @@ export type { SafetyPolicy } from "./safety/plugin";
 
 // Type exports — prompt authoring domain
 export type {
-  PromptInjection,
-  InjectableEntry,
   // Context
   Context,
   ContextDef,
@@ -461,6 +458,7 @@ export type {
   ContextTextSegment,
   ContextEntry,
   ConditionalContext,
+  MatchCases,
   MatchSpec,
   ContextTree,
   DeepReadonly,
@@ -468,7 +466,11 @@ export type {
   Prompt,
   AnyPrompt,
   PromptConfig,
+  PromptCallback,
+  PromptContent,
+  PromptField,
   PromptInputArg,
+  SystemField,
   // Input merging
   MergedInput,
   MergeContextInputs,
@@ -506,11 +508,16 @@ export type {
 // Type exports — generation lifecycle domain (settings, adaptation, usage)
 export type {
   GenerationSettings,
+  HasToolCallStopCondition,
+  MaxStepsStopCondition,
   PromptAdaptation,
-  AdapterMap,
+  ProviderAdaptations,
+  StopCondition,
   TokenUsage,
   TraceMeta,
+  ToolChoice,
 } from "./generation";
+export { hasToolCall, maxSteps } from "./generation";
 export type { TokenizerFn } from "./shared/tokenizer";
 
 // Memory

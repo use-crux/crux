@@ -10,7 +10,7 @@
  * 2. **children** — which entries does it nest, resolved before itself? (sync)
  * 3. **contribute** — what does it add to the prompt? (async; the only I/O point)
  * 4. **shape** — what does it contribute at definition time? (covered by
- *    {@link SchemaContribution}, collected via `collectSchemaContributions`)
+ *    {@link SchemaContribution}, collected via `schema-collection.ts`)
  *
  * The driver in `./driver.ts` is the primary consumer. It knows nothing
  * about the entry union — `lowerEntry()` in `./lower.ts` is the single place
@@ -39,6 +39,7 @@ import type { ExcludedContext } from './types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
+import type { ToolOwnerLabel } from './tool-merge'
 import type {
   CruxContextContributionPreview,
   CruxContextInjectableKind,
@@ -63,6 +64,11 @@ export interface ResolvedSystemContent {
   segments?: readonly ContextTextSegment[]
   staticTokens?: number
   dynamicTokens?: number
+  servedFrom?: 'live' | 'memo'
+  resolvedAt?: number
+  age?: number
+  observedAt?: number
+  sourceVersion?: string
 }
 
 /**
@@ -166,8 +172,9 @@ export interface ContributeArgs {
  * `optional: true` marks entries that may not participate at resolve time
  * (conditional contexts, match branches) — their keys merge as `.optional()`.
  *
- * The flat collection order is part of the contract: anonymous entries are
- * attributed as `context[<flat index>]` in conflict errors.
+ * Collection order is part of the contract: anonymous entries are attributed
+ * as `context[<use index>]` in conflict errors, and entries without schemas
+ * still occupy slots so those labels remain stable.
  */
 export interface SchemaContribution {
   id: string | undefined
@@ -195,6 +202,12 @@ export interface LoweredContributor {
    * tools and its nested entries' tools.
    */
   readonly mergeSourceId: string
+  /**
+   * Owner label for tools this entry contributes directly.
+   *
+   * Owner label used in tool-collision diagnostics.
+   */
+  readonly toolOwnerLabel: ToolOwnerLabel | undefined
   gate?(input: Record<string, unknown>): GateResult
   children?(input: Record<string, unknown>): readonly ContextEntry[]
   contribute?(args: ContributeArgs): Contribution | Promise<Contribution>
@@ -213,6 +226,7 @@ export interface MergedResolution {
   memories: MemoryEntry[]
   blackboards: BlackboardEntry[]
   tools: AnyToolSet
+  toolOwners: Map<string, ToolOwnerLabel>
   toolMiddleware: ToolMiddleware[]
   constraints: Constraint[]
   guardrails: Guardrail[]
@@ -228,6 +242,7 @@ export function emptyMergedResolution(): MergedResolution {
     memories: [],
     blackboards: [],
     tools: {},
+    toolOwners: new Map(),
     toolMiddleware: [],
     constraints: [],
     guardrails: [],

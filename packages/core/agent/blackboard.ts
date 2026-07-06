@@ -13,7 +13,7 @@ import type { JsonObject, RecordStore } from '../storage'
 import type { Context } from '../prompt/context-types'
 import type { ToolDef } from '../types/tool'
 import { inMemoryRecordStore } from '../storage'
-import { context } from '../prompt/context'
+import { contextWithFamily } from '../prompt/context'
 import { observe } from '../observability'
 import { registerInspectableResource } from '../runtime-bridge/resources'
 
@@ -410,17 +410,16 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
     asContext(options?: BlackboardContextOptions): Context<z.ZodType<{}>> {
       const priority = options?.priority ?? 70
 
-      return context({
+      return contextWithFamily({
         id: `blackboard:${config.id}`,
         description: `Blackboard: ${config.id}`,
-        family: 'blackboard',
         priority,
         system: async () => {
           const state = await rawGetAll()
           if (!state || Object.keys(state).length === 0) return ''
           return `## Shared Blackboard (${config.id})\n\`\`\`json\n${JSON.stringify(state, null, 2)}\n\`\`\``
         },
-      })
+      }, 'blackboard')
     },
 
     asTools(options?: BlackboardToolOptions) {

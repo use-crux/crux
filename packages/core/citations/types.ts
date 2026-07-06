@@ -10,7 +10,7 @@
 
 import type { z } from 'zod'
 import type { Retriever, RetrieverHit, RetrievalInjectMode, RetrievalToolConfig } from '../retrieval'
-import type { InjectableEntry, PromptInjection } from '../prompt/context-types'
+import type { InternalInjectableEntry } from '../prompt/internal-injection'
 import type { Citation } from './schema'
 import type { GroundingSession } from './session'
 
@@ -128,7 +128,7 @@ export interface GroundingConfig {
 }
 
 /** A grounding injectable: injects retrieved context/tools and citation checks. */
-export interface Grounding extends InjectableEntry {
+export interface Grounding extends InternalInjectableEntry {
   readonly _tag: 'Grounding'
   readonly retriever: Retriever
   resolve(input: Record<string, unknown>): Promise<GroundingResolution>

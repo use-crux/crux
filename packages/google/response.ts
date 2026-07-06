@@ -19,9 +19,13 @@ export function googleResponseMeta(response: GenerateContentResponse): NativeRes
 
   return {
     usage: {
-      inputTokens: response.usageMetadata?.promptTokenCount ?? 0,
-      outputTokens: response.usageMetadata?.candidatesTokenCount ?? 0,
-      totalTokens: response.usageMetadata?.totalTokenCount ?? 0,
+      inputTokens: response.usageMetadata?.promptTokenCount ?? undefined,
+      outputTokens: response.usageMetadata?.candidatesTokenCount ?? undefined,
+      totalTokens:
+        response.usageMetadata?.totalTokenCount ??
+        (response.usageMetadata?.promptTokenCount != null && response.usageMetadata.candidatesTokenCount != null
+          ? response.usageMetadata.promptTokenCount + response.usageMetadata.candidatesTokenCount
+          : undefined),
       cacheReadTokens: response.usageMetadata?.cachedContentTokenCount,
     },
     finishReason: candidate?.finishReason?.toLowerCase(),

@@ -28,7 +28,6 @@
 
 import type { CruxArtifactId } from '../observability/contract'
 import type { CruxContextContributionPreview } from '../observability/contract'
-import type { AnyToolSet } from '../types'
 import type { ContextEntry } from '../prompt/context-types'
 import type { ToolMiddleware } from '../tools/types'
 import {
@@ -40,6 +39,7 @@ import {
 } from './contract'
 import { lowerContext, lowerEntry } from './lower'
 import type { ResolverPorts } from './ports'
+import { mergeOwnedToolSet, mergeToolSet } from './tool-merge'
 
 const INCLUDED: GateResult = Object.freeze({ include: true })
 
@@ -90,32 +90,14 @@ function emitFacts(ports: ResolverPorts, facts: ContributionFacts): void {
   })
 }
 
-/**
- * Merge `tools` into `target`, throwing on name collisions.
- *
- * The error message names the contributing entry so a collision in a prompt
- * with a dozen entries is attributable. Exported for the pipeline's own
- * injected-tool merging; the message text is part of the pinned contract.
- */
-export function mergeInjectedTools(target: AnyToolSet, tools: AnyToolSet, sourceId: string): void {
-  for (const [name, tool] of Object.entries(tools)) {
-    if (name in target) {
-      throw new Error(
-        `Injected tool name collision for "${name}". Injectable "${sourceId}" generated a tool name that already exists.`,
-      )
-    }
-    target[name] = tool
-  }
-}
-
-/** Fold a child resolution into the accumulator, attributing nested tool collisions to `sourceId`. */
-function mergeNested(out: MergedResolution, nested: MergedResolution, sourceId: string): void {
+/** Fold a child resolution into the accumulator while preserving per-tool owners. */
+function mergeNested(out: MergedResolution, nested: MergedResolution): void {
   out.active.push(...nested.active)
   out.excluded.push(...nested.excluded)
   out.skills.push(...nested.skills)
   out.memories.push(...nested.memories)
   out.blackboards.push(...nested.blackboards)
-  mergeInjectedTools(out.tools, nested.tools, sourceId)
+  mergeOwnedToolSet(out.tools, out.toolOwners, nested.tools, nested.toolOwners)
   out.toolMiddleware.push(...nested.toolMiddleware)
   out.constraints.push(...nested.constraints)
   out.guardrails.push(...nested.guardrails)
@@ -147,12 +129,25 @@ export async function resolveUse(
   promptId: string | undefined,
   ports: ResolverPorts,
   depth = 0,
+  seenContextIds = new Set<string>(),
+  dynamicSourceId?: string,
+  staticEntryIds: ReadonlySet<string> = new Set(),
 ): Promise<MergedResolution> {
   const out = emptyMergedResolution()
   for (let index = 0; index < entries.length; index++) {
     const contributor = lowerEntry(entries[index], index)
     if (!contributor) continue
-    await runContributor(contributor, out, input, promptId, ports, depth)
+    await runContributor(
+      contributor,
+      out,
+      input,
+      promptId,
+      ports,
+      depth,
+      seenContextIds,
+      dynamicSourceId,
+      staticEntryIds,
+    )
   }
   return out
 }
@@ -164,6 +159,9 @@ async function runContributor(
   promptId: string | undefined,
   ports: ResolverPorts,
   depth: number,
+  seenContextIds: Set<string>,
+  dynamicSourceId: string | undefined,
+  staticEntryIds: ReadonlySet<string>,
 ): Promise<void> {
   if (depth >= MAX_RESOLVE_DEPTH) {
     throw new Error(
@@ -171,6 +169,17 @@ async function runContributor(
         `A contributor or injectable is likely re-entering itself via its use/contexts contribution.`,
     )
   }
+
+  if (contributor.family === 'context' && contributor.id) {
+    if (dynamicSourceId && (seenContextIds.has(contributor.id) || staticEntryIds.has(contributor.id))) {
+      throw new Error(
+        `resolve(${promptId ?? 'unknown'}): contributor "${dynamicSourceId}" injected context id ` +
+          `"${contributor.id}" which already exists in this prompt.`,
+      )
+    }
+    seenContextIds.add(contributor.id)
+  }
+
   const gate = contributor.gate ? contributor.gate(input) : INCLUDED
 
   if (gate.steps) {
@@ -191,7 +200,10 @@ async function runContributor(
 
   const children = gate.children ?? contributor.children?.(input)
   if (children && children.length > 0) {
-    mergeNested(out, await resolveUse(children, input, promptId, ports, depth + 1), contributor.mergeSourceId)
+    mergeNested(
+      out,
+      await resolveUse(children, input, promptId, ports, depth + 1, seenContextIds, dynamicSourceId, staticEntryIds),
+    )
   }
 
   const contribution = contributor.contribute ? await contributor.contribute({ input, promptId }) : {}
@@ -203,19 +215,43 @@ async function runContributor(
   if (contribution.blackboard) out.blackboards.push(contribution.blackboard)
 
   if (contribution.use && contribution.use.length > 0) {
-    mergeNested(out, await resolveUse(contribution.use, input, promptId, ports, depth + 1), contributor.mergeSourceId)
+    mergeNested(
+      out,
+      await resolveUse(
+        contribution.use,
+        input,
+        promptId,
+        ports,
+        depth + 1,
+        seenContextIds,
+        contributor.mergeSourceId,
+        staticEntryIds,
+      ),
+    )
   }
 
   if (contribution.appendContexts) {
     // Memory/blackboard context expansions run through the identical
     // plain-context path (own `when`, nested entries) at this entry's index.
     for (const ctx of contribution.appendContexts) {
-      await runContributor(lowerContext(ctx, contributor.index), out, input, promptId, ports, depth + 1)
+      await runContributor(
+        lowerContext(ctx, contributor.index),
+        out,
+        input,
+        promptId,
+        ports,
+        depth + 1,
+        seenContextIds,
+        contributor.mergeSourceId,
+        staticEntryIds,
+      )
     }
   }
 
   if (contribution.contexts) out.active.push(...contribution.contexts)
-  if (contribution.tools) mergeInjectedTools(out.tools, contribution.tools, contributor.mergeSourceId)
+  if (contribution.tools && contributor.toolOwnerLabel) {
+    mergeToolSet(out.tools, out.toolOwners, contribution.tools, contributor.toolOwnerLabel)
+  }
   if (contribution.toolMiddleware) out.toolMiddleware.push(...normalizeToolMiddleware(contribution.toolMiddleware))
   if (contribution.constraints) out.constraints.push(...contribution.constraints)
   if (contribution.guardrails) out.guardrails.push(...contribution.guardrails)

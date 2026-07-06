@@ -1,5 +1,22 @@
 # @use-crux/core
 
+## 0.4.0-beta.0
+
+### Core stable beta
+
+- Promote the core prompt composition and adapter contracts to stable beta, documented in `STABILITY.md`.
+
+### Breaking changes
+
+- Prompt resolution now uses parsed Zod output throughout the pipeline, so defaults and transforms are visible to contexts, gates, tools, memo keys, and prompt callbacks.
+- Context resolver memoization is split from provider prefix caching: use `memo: { ttl }` for app-side freshness tolerance and `cache: true` for provider cache hints.
+- Messages-mode provider adaptations fold the final system text into `messages` without returning parallel `system` or `systemBlocks` fields.
+- Prompt-time tool names must be unique across skills, contexts, contributors, blackboards, and prompt config; call-site tools remain the intentional override path.
+- Prompt content modes are now compile-time exclusive: `messages` cannot be combined with `system` or `prompt` in typed code.
+- Custom prompt composition is consolidated on `contributor()`. The public `injectable()` factory and related public types are removed, `ContributorContribution` is renamed to `Contribution`, and `AdapterMap` is renamed to `ProviderAdaptations`.
+- Portable tool controls now live in `GenerationSettings` through `toolChoice`, `stopWhen`, `maxSteps`, `maxSteps()`, and `hasToolCall()`. Provider-native controls belong in each adapter's typed `extra` option.
+- Provider-cache blocks now form a stable prefix before the uncached tail. Token budgets only drop uncached blocks, and `SystemBlock.cacheBoundary` marks the single native provider-cache breakpoint.
+
 ## 0.4.0
 
 ### Minor Changes

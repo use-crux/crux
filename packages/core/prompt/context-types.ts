@@ -3,10 +3,10 @@
  *
  * Everything a prompt can compose through `use` is described here: plain
  * {@link Context} fragments, the {@link ConditionalContext} / {@link MatchSpec}
- * gating wrappers, and the lowered entry contracts ({@link InjectableEntry},
- * {@link ContributorEntry}) that built-in primitives (memory, skill, retriever)
- * resolve through. The runtime factories that build these shapes live in
- * `prompt/context.ts`, `prompt/contributor.ts`, and `prompt/injectable.ts`.
+ * gating wrappers, and the lowered {@link ContributorEntry} contract. Built-in
+ * primitives can also participate through a private structural lowering shape.
+ * The runtime factories that build these shapes live in `prompt/context.ts`
+ * and `prompt/contributor.ts`.
  *
  * @module
  */
@@ -18,38 +18,17 @@ import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
 import type { AnyToolSet } from '../types'
+import type { InternalInjectableEntry } from './internal-injection'
 
 // ─────────────────────────────────────────────────────────────────
-// Cache
+// Definition warnings
 // ─────────────────────────────────────────────────────────────────
 
-/**
- * Cache configuration for a context.
- *
- * Controls both application-level resolver caching (TTL) and
- * provider-level token caching (e.g., Anthropic `cache_control`).
- *
- * Shorthands:
- * - `number` — TTL in ms, `providerCache` defaults to `true`
- * - `true` — 5-minute TTL, `providerCache` defaults to `true`
- * - `false` — no caching
- *
- * Object form for fine-grained control:
- * - `{ ttl?: number; providerCache?: boolean }`
- */
-export type CacheOption =
-  | number
-  | boolean
-  | {
-      /** TTL in ms for caching the resolver output. */
-      ttl?: number
-      /**
-       * Whether to hint the LLM provider to cache this content block.
-       * Anthropic: emits `cache_control` breakpoint. OpenAI: no-op (automatic).
-       * @default true (when cache is set)
-       */
-      providerCache?: boolean
-    }
+/** @internal Definition-time fact emitted by prompt compilation. */
+export interface ContextDefinitionWarning {
+  readonly code: 'memo-cache-contradiction'
+  readonly message: string
+}
 
 // ─────────────────────────────────────────────────────────────────
 // System content segmentation
@@ -63,6 +42,10 @@ export interface ContextTextSegment {
   dynamic: boolean
   /** Optional source key for dynamic spans, such as `account.plan` or `workspace.name`. */
   source?: string
+  /** Source-observation timestamp in milliseconds since Unix epoch, when a primitive knows it. */
+  observedAt?: number
+  /** Source version identifier, when a primitive can report one. */
+  sourceVersion?: string
 }
 
 /** Structured system/context content for precise observability segmentation. */
@@ -129,8 +112,9 @@ export interface ContextDef<TInput extends z.ZodType = z.ZodType> {
   /**
    * Tools to contribute to any prompt that `use`s this context.
    * Either a static tool set or a function that receives the resolved input
-   * and returns a tool set. Tools from contexts are merged (lowest precedence)
-   * with prompt-level and call-site tools.
+   * and returns a tool set. Context tool names must be unique across the
+   * prompt-time tool surface; collisions throw with both owners named. Only
+   * call-site `generate()`/`stream()` tools intentionally override.
    */
   tools?: AnyToolSet | ((arg: ContextSystemArg<z.infer<TInput>>) => AnyToolSet)
   /**
@@ -159,18 +143,11 @@ export interface ContextDef<TInput extends z.ZodType = z.ZodType> {
    */
   when?: (arg: ContextSystemArg<z.infer<TInput>>) => boolean
 
-  /**
-   * Cache configuration for this context.
-   *
-   * - `number` — TTL in ms. Enables both resolver caching and provider cache hints.
-   * - `true` — 5-minute TTL with provider caching.
-   * - `{ ttl?, providerCache? }` — Fine-grained control over each layer.
-   * - `false` / omitted — No caching.
-   *
-   * Requires `id` when `ttl > 0` (needed for cache key derivation).
-   * Static string `system` contexts silently skip TTL caching (nothing to cache).
-   */
-  cache?: CacheOption
+  /** Provider cache hint: request a prompt-cache breakpoint for this block. Nothing app-side. */
+  cache?: boolean
+
+  /** Memoize this context's resolution app-side. Requires `id`. Dynamic `system` only. */
+  memo?: { ttl: number }
 
   /**
    * Constraints contributed by this context. Merged into any prompt that
@@ -186,15 +163,6 @@ export interface ContextDef<TInput extends z.ZodType = z.ZodType> {
    */
   guardrails?: Guardrail[]
 
-  /**
-   * Family label for observability grouping (`memory`, `blackboard`,
-   * `retriever`, `skill`, …). Set by primitive factories whose `asContext()`
-   * expands into a plain context, so devtools can attribute the contribution
-   * to its source primitive. Plain application contexts should omit it.
-   *
-   * @default 'context'
-   */
-  family?: CruxContextInjectableKind
 }
 
 /**
@@ -235,10 +203,12 @@ export interface Context<TInput extends z.ZodType = z.ZodType> {
    * `undefined` means the context is always active.
    */
   readonly when: ((input: Record<string, unknown>) => boolean) | undefined
-  /** Cache TTL in milliseconds for resolver output. `0` means no caching. */
-  readonly cacheTtl: number
+  /** Memo TTL in milliseconds for resolver output. `0` means no memoization. */
+  readonly memoTtl: number
   /** Whether to hint the LLM provider to cache this content block. */
   readonly providerCache: boolean
+  /** @internal Definition facts emitted by prompt compilation. */
+  readonly definitionWarnings: readonly ContextDefinitionWarning[]
   /**
    * Family label for observability grouping, declared by the primitive
    * factory that produced this context (`memory`, `blackboard`, `retriever`,
@@ -273,25 +243,28 @@ export interface ConditionalContext<TCtx extends Context<z.ZodType> = Context<z.
   readonly predicate: (input: Record<string, unknown>) => boolean
 }
 
+/** Case map accepted by `match()`: one context or an ordered context tuple per discriminator value. */
+export type MatchCases = Record<string, Context<z.ZodType> | readonly Context<z.ZodType>[]>
+
 /**
  * A multi-way context switch created by `match()`.
  *
  * Selects which context(s) to include based on a discriminator value
  * derived from the input. Only the matching branch is resolved.
  */
-export interface MatchSpec {
+export interface MatchSpec<TCases extends MatchCases = MatchCases> {
   /** Discriminant tag for runtime type checking. */
   readonly _tag: 'MatchSpec'
   /** Extracts the discriminator value from the merged input. */
   readonly on: (input: Record<string, unknown>) => string
   /** Map of discriminator values to context(s). */
-  readonly cases: Readonly<Record<string, Context<z.ZodType> | readonly Context<z.ZodType>[]>>
+  readonly cases: Readonly<TCases>
   /** Fallback context(s) when no case matches. */
   readonly default?: Context<z.ZodType> | readonly Context<z.ZodType>[]
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Use-entry contracts (injectable / contributor / primitive entries)
+// Use-entry contracts (contributor / primitive entries)
 // ─────────────────────────────────────────────────────────────────
 
 /**
@@ -307,38 +280,20 @@ export type ContextEntry =
   | SkillEntry
   | MemoryEntry
   | BlackboardEntry
-  | InjectableEntry
+  | InternalInjectableEntry
   | ContributorEntry<z.ZodType>
   | false
   | null
   | undefined
 
-export interface PromptInjection {
-  contexts?: readonly Context<z.ZodType>[]
-  tools?: AnyToolSet
-  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
-  constraints?: readonly Constraint[]
-  guardrails?: readonly Guardrail[]
-  metadata?: Readonly<Record<string, unknown>>
-}
-
-export interface InjectableEntry {
-  readonly _tag: string
-  readonly id: string
-  readonly inputSchema?: z.ZodType | undefined
-  readonly inputKeys?: readonly string[]
-  inject(args: { input: Record<string, unknown>; promptId?: string }): PromptInjection | Promise<PromptInjection>
-}
-
 /**
  * What a custom contributor adds to a prompt.
  *
- * Like {@link PromptInjection}, but with one extra channel: `use` re-enters
- * the resolution pipeline with *any* entry kind (skills, memories,
- * blackboards, further contributors), not just plain contexts. Re-entered
- * entries are gated and recursed exactly like top-level `use:` entries.
+ * Returned `use` entries re-enter the resolution pipeline with *any* entry kind
+ * (skills, memories, blackboards, further contributors). Re-entered entries are
+ * gated and recursed exactly like top-level `use:` entries.
  */
-export interface ContributorContribution {
+export interface Contribution {
   /** Contexts to resolve and append (re-entered through the pipeline, like injectable contexts). */
   contexts?: readonly Context<z.ZodType>[]
   /** Arbitrary entries to re-enter the pipeline with (gated, recursive). */
@@ -358,15 +313,13 @@ export interface ContributorContribution {
  *
  * A first-class citizen of the `use:` array: it can gate itself with `when`,
  * bundle nested entries via `useEntries`, and write to every prompt channel
- * from `contribute()`. Structurally also a valid {@link InjectableEntry} —
- * the `inject` adapter exposes the `PromptInjection`-compatible subset of
- * its contribution — so code paths that predate contributors keep working.
+ * from `contribute()`.
  */
-export interface ContributorEntry<TInput extends z.ZodType = z.ZodType> extends InjectableEntry {
+export interface ContributorEntry<TInput extends z.ZodType = z.ZodType> {
   readonly _tag: 'Contributor'
-  /** Family label for observability grouping. Defaults to `injectable`. */
-  readonly family: string
+  readonly id: string
   readonly inputSchema?: TInput | undefined
+  readonly inputKeys?: readonly string[]
   /** Predicate gating participation, evaluated against the merged input at resolve time. */
   readonly when?: (input: Record<string, unknown>) => boolean
   /** Nested entries resolved before this contributor's own contribution. */
@@ -374,7 +327,7 @@ export interface ContributorEntry<TInput extends z.ZodType = z.ZodType> extends 
   contribute(args: {
     input: Record<string, unknown>
     promptId?: string
-  }): ContributorContribution | Promise<ContributorContribution>
+  }): Contribution | Promise<Contribution>
 }
 
 /**

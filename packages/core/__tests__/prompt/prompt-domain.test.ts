@@ -22,15 +22,13 @@ import {
   createPrompts,
   when,
   match,
-  injectable,
-  isInjectableEntry,
   contributor,
   isContributorEntry,
 } from '../../prompt'
 
 describe('prompt domain barrel (../prompt)', () => {
   it('exposes the documented authoring entry points', () => {
-    for (const fn of [prompt, context, createContexts, createPrompts, when, match, injectable, contributor]) {
+    for (const fn of [prompt, context, createContexts, createPrompts, when, match, contributor]) {
       expect(typeof fn).toBe('function')
     }
   })
@@ -83,13 +81,8 @@ describe('prompt domain barrel (../prompt)', () => {
     expect(promptTree.greet.id).toBe('greet')
   })
 
-    it('injectable()/contributor() produce recognizable use-entries', () => {
-    const inj = injectable({ id: 'inj', inject: () => ({ metadata: { from: 'inj' } }) })
-    expect(isInjectableEntry(inj)).toBe(true)
-
+    it('contributor() produces a recognizable use-entry', () => {
     const contrib = contributor({ id: 'contrib', contribute: () => ({ metadata: { from: 'contrib' } }) })
     expect(isContributorEntry(contrib)).toBe(true)
-    // A contributor is structurally also an injectable entry.
-    expect(isInjectableEntry(contrib)).toBe(true)
   })
 })

@@ -35,7 +35,7 @@ This keeps the SDK readable at call sites: users define nouns once, execute verb
 
 ## Workspace Storage Model
 
-`workspace()` is an injectable primitive, not a sandbox or host filesystem wrapper. It composes through the existing `InjectableEntry` path: `use: [ws]` expands to a manifest context plus safe file tools.
+`workspace()` is a prompt composition primitive, not a sandbox or host filesystem wrapper. It composes through the private inject-shaped lowering path: `use: [ws]` expands to a manifest context plus safe file tools.
 
 Workspace records use explicit storage capabilities:
 
@@ -96,13 +96,13 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── tools.ts            Compatibility shim for the ./tools subpath (re-exports tools/define-tool + tool types)
 ├── tool-middleware.ts  Compatibility shim for the ./tool-middleware subpath (re-exports tools/middleware + tools/approvals)
 ├── prompt/             Prompt + context authoring domain
-│   ├── index.ts        Curated barrel: prompt(), context(), createPrompts(), createContexts(), when(), match(), contributor(), injectable() + authoring types
+│   ├── index.ts        Curated barrel: prompt(), context(), createPrompts(), createContexts(), when(), match(), contributor() + authoring types
 │   ├── prompt.ts       prompt() — public .resolve()/.inspect() wrapper over compilePrompt(); prompt definition-source capture
 │   ├── context.ts      context(), createContexts(), when(), match(); Context definition-source capture
 │   ├── prompts-tree.ts createPrompts() — nested prompt tree builder
 │   ├── contributor.ts  contributor() authoring + lowering-facing contract
-│   ├── injectable.ts   injectable() authoring primitive
-│   ├── context-types.ts  Context/use-entry authoring types (Context, ContextEntry, PromptInjection, InjectableEntry, MemoryEntry, …)
+│   ├── internal-injection.ts Private inject-shaped lowering contract for first-party primitives
+│   ├── context-types.ts  Context/use-entry authoring types (Context, ContextEntry, Contribution, MemoryEntry, …)
 │   ├── prompt-types.ts   prompt() config/instance/hooks/result + semantic-cache intent types
 │   ├── type-utils.ts     Prompt/context inference helpers (Simplify, DeepReadonly, MergeContextInputs, MergedInput)
 │   └── types.ts          Curated type barrel over context-types + prompt-types
@@ -131,7 +131,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── fallback.ts / retry.ts / validation-retry.ts   fallback policy, retry-with-backoff, validation-feedback retry types
 │   ├── repair-json.ts  repairJsonText() — zero-cost JSON text repair (markdown fences, trailing commas, bracket extraction)
 │   ├── messages.ts     canonical Message type + helpers
-│   └── types.ts        Generation policy types (GenerationSettings, PromptAdaptation, AdapterMap, TokenUsage, TraceMeta)
+│   └── types.ts        Generation policy types (GenerationSettings, PromptAdaptation, ProviderAdaptations, TokenUsage, TraceMeta)
 ├── tools/              SDK-agnostic tool authoring, tool middleware, approval helpers
 │   ├── index.ts        Curated barrel (leaf-consumer entrypoint; domains import specific tools/<file> to stay cycle-free)
 │   ├── define-tool.ts  tool() — SDK-agnostic tool factory
@@ -377,7 +377,15 @@ Compile prompt config (compile.ts → createPromptResolverPlan)
   ├── input schema merge + conflict detection
   └── resolver port binding (withDefaultResolverPorts)
   ↓
-Input validation (Zod)
+Input validation (Zod parse output adopted)
+  ↓
+Custom sanitize hook
+  ↓
+Auto-escape top-level string inputs (if enabled)
+  ├── `rawFields` skip trusted top-level fields
+  └── nested string values warn because they are not rewritten
+  ↓
+Input guard (Proxy) — wraps objects to throw on string interpolation
   ↓
 Resolve context entries (resolver/ — contributor lowering + driver)
   ├── lowerEntry(): each use entry → a lowered contributor (the ONLY union-aware code)
@@ -394,33 +402,33 @@ Internal post-merge collectors
   ├── Skill index context unshifted (priority 90), loaded-skill contexts appended from a SkillActivationSession (priority 85)
   └── Blackboard tool-dedupe checks run against the merged tool surface
   ↓
-Auto-escape string inputs (if enabled)
-  ↓
-Custom sanitize hook
-  ↓
-Input guard (Proxy) — wraps objects to throw on string interpolation
-  ↓
 System message assembly (with return type validation on systemFn)
   ├── Prompt's own system text (always included)
   ├── Active context contributions (resolved in `use` array order)
   │     ├── Normalize string or segmented `{ segments }` content
-  │     └── Context resolver cache: skip systemFn() on cache hit (by contextId + inputHash)
+  │     └── Context memo cache: skip systemFn() on memo hit (by contextId + declared input hash)
   ├── Token budget enforcement (drop lowest-priority contexts)
   └── SystemBlock[] construction (per-block providerCache hints for adapters)
   ↓
+Provider system adaptation
+  ├── Match: exact provider > modelId slash-prefix > '*' wildcard
+  └── Insert prepend/append system text as `SystemBlock { source: "adaptation:<key>", providerCache: false }`
+  ↓
 Prompt text / messages resolution (with [object Object] safety net)
   ├── String prompt: resolve static or dynamic
-  └── Messages array: inject context system + scan for [object Object]
+  └── Messages array: fold the final post-adaptation system text, then scan for [object Object]
   ↓
-Provider adaptation
-  ├── Match: exact provider > modelId prefix > '*' wildcard
-  └── Apply: prepend/append system/prompt, override settings
+Provider prompt/settings adaptation
+  └── Apply prepend/append prompt text and override settings
   ↓
 Settings merge
   config.settings < adapt.settings < call-site overrides
+  neutral toolChoice/stopWhen/maxSteps stay in GenerationSettings until the adapter maps them
   ↓
 Tool collection (only from active contexts)
-  active context tools + prompt tools + call-site tools (last-write-wins)
+  skill tools → context tools → contributor tools → blackboard tools → prompt tools
+  prompt-time name collisions throw with both owners named
+  call-site tools are applied later by adapter execution and intentionally win
   ↓
 PromptResolution
   ├── args: ResolvedPrompt { system, systemBlocks, prompt, messages, schema, tools, toolMiddleware, settings }
@@ -435,7 +443,7 @@ Adapter execution
 
 The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29):
 
-- **`resolver/lower.ts`** — `lowerEntry(entry, index)` turns each member of the `ContextEntry` union (context, `when()` wrapper, `match()` spec, skill, memory, blackboard, injectable, `contributor()` entry, falsy) into an internal `LoweredContributor` answering up to four questions: `gate` (sync include/exclude with reason + observability facts), `children` (sync nesting), `contribute` (async, the only I/O point), and — at definition time — `collectSchemaContributions()` (the "shape" question for input-schema merging). This is the only module that knows the union; family classification lives here too and reads `Context.family`, declared by the primitive factory that produced the context — memory, blackboard, retriever/grounding, handoff, and the skill surface (no id sniffing).
+- **`resolver/lower.ts`** — `lowerEntry(entry, index)` turns each member of the `ContextEntry` union (context, `when()` wrapper, `match()` spec, skill, memory, blackboard, private inject-shaped primitives, `contributor()` entry, falsy) into an internal `LoweredContributor` answering up to four questions: `gate` (sync include/exclude with reason + observability facts), `children` (sync nesting), `contribute` (async, the only I/O point), and — at definition time — `collectSchemaContributions()` (the "shape" question for input-schema merging). This is the only module that knows the union; family classification lives here too and reads `Context.family`, declared through internal helpers by primitive factories — memory, blackboard, retriever/grounding, handoff, and the skill surface (no id sniffing).
 - **`resolver/driver.ts`** — `resolveUse()` walks lowered contributors: gate facts emit first, children merge before the entry's own contribution, `Contribution.use` re-enters the pipeline with branch-local indices, tool collisions throw with the owning entry attributed, and all `context.contribution` artifact emission happens at exactly two sites (gate steps + contribution facts).
 - **`resolver/skills.ts`** — the cross-entry collector for skills. The shared pass calls it from the post-merge phase before either `PromptResolution.args` or `PromptResolution.inspect()` is projected, so skill indexing, lazy registry fetches, and loaded-skill contexts cannot drift between resolve and inspect. Registry fetch, skill-index generation, and activation-session creation all flow through the `SkillSourcePort` (no direct skill-module imports in the pass). Resolve-mode skill tools are bound to a `SkillActivationSession` and the resolved prompt carries `_skillSession` as the explicit activation boundary.
 - **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports (pure contracts): `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + index + activation-session creation), `ContextCachePort`, `ClockPort`, `TokenizerPort` (every reported token count flows through it, so a deterministic counter pins budget behavior), `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. The production adapters live in `resolver/default-ports.ts`; `withDefaultResolverPorts()` wraps the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` / `setTokenizer()` keep their install-takes-effect-immediately semantics. `compilePrompt(config, { ports })` binds the pipeline to explicit ports; in-memory fakes for every port — plus the one-call `createResolverFakes()` bundle — ship from `@use-crux/core` (`resolver/fakes.ts`).
@@ -448,23 +456,30 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 The internal system composer handles the token budget:
 
 1. Prompt's own system text is always included and its tokens are subtracted from the budget.
-2. Context contributions are collected in `use` array order.
-3. When a budget is set, contexts are sorted by priority (ascending) and the lowest-priority ones are dropped first until the total fits.
-4. Dropped contexts are tracked in the `InspectResult` with their source, text, token count, and priority.
+2. Context contributions marked with `cache: true` form a stable provider-cache prefix after the prompt's own system text, preserving their `use` array order.
+3. Uncached context contributions form the dynamic tail, also preserving their `use` array order.
+4. When a budget is set, only the uncached tail is sorted by priority (ascending) and dropped until the total fits. Cached prefix blocks are never dropped; if the prefix alone exceeds the budget, the resolver keeps it, warns, and records `prefixOverflow: true` on the `prompt.budget` artifact.
+5. Dropped contexts are tracked in the `InspectResult` with their source, text, token count, and priority.
 
-The observability graph mirrors the same state. Resolved context artifacts use the canonical `context.contribution` artifact kind and carry source, state, inclusion, priority, token, cache, and injection metadata. Prompt resolution emits a redacted `prompt.input` preview under the canonical `input` artifact kind; it contains top-level provided/schema/required/missing/unexpected keys and validation status, but never input values. Segmented system content preserves `segments: { text, dynamic, source? }[]` plus `staticTokens` / `dynamicTokens` on contribution previews, prompt inspect parts, system blocks, and budget-dropped previews. When a prompt or context function returns a plain string, direct interpolation of unambiguous primitive input values is inferred into static/dynamic segments; transformed values still require explicit `{ segments }` for perfect provenance. Predicate failures and unmatched `match()` branches emit `state: "checked-not-included"` with `reason` and `branch` when available. Budgeted resolution emits a `prompt.budget` artifact containing `usedTokens`, `totalTokens`, and the dropped contribution payloads, then generation spans link that artifact as consumed. Generation `messages` artifacts include request tool names. The Go RunDetail projection composes these records into `RunDetailNode.request`, using exact generation requests for generation nodes, inherited nearest-ancestor requests for nested framework agent steps that only emit output-shaped message artifacts, and a final-descendant representative with `turns[]` for run/stream/agent/flow/composition aggregators. Contribution artifacts referenced from `messages.systemBlocks[].artifactId` are recovered through the graph index even when the producer span, not the generation span, owns the artifact. For framework agents whose prompt resolves under `agent.run` before the model stream, the projection also collects context contributions and prompt budgets produced under the nearest request scope before the generation starts; later child tool/flow generations are outside that time window. Convex Agent `thread-context` message artifacts are preferred over `call-args` when both are available, their prior-turn fields remain on `request.messages`, and inherited agent steps add earlier sibling generation outputs as `previousStepMessages`. Base-prompt provenance uses the concrete generation `promptId` where known, falling back to `messages.system` / `messages.prompt` for raw request fields. Model provenance is projected into `request.modelSummary`, per-turn `model` / `provider`, and flattened `RunDetail.rows[]`, preferring output artifact `meta.actualModelId` over selected/requested model attributes. Convex Agent wrapper spans emit the configured Agent `languageModel` on the aggregate stream/call and each AI SDK step span so framework turns are modelled even when no nested Crux generation exists; child tool/flow generations keep their own model provenance. UI clients should render that projection instead of walking descendant artifacts.
+The observability graph mirrors the same state. Resolved context artifacts use the canonical `context.contribution` artifact kind and carry source, state, inclusion, priority, token, cache, injection, and freshness metadata. Prompt resolution emits a redacted `prompt.input` preview under the canonical `input` artifact kind; it contains top-level provided/schema/required/missing/unexpected keys and validation status, but never input values. Segmented system content preserves `segments: { text, dynamic, source?, observedAt?, sourceVersion? }[]` plus `staticTokens` / `dynamicTokens` on contribution previews, prompt inspect parts, system blocks, and budget-dropped previews. Inspect parts and contribution previews also report `servedFrom`, `resolvedAt`, and memo-hit `age`; part-level `observedAt` is the oldest segment observation time, and `sourceVersion` is the first segment version. When a prompt or context function returns a plain string, direct interpolation of unambiguous primitive input values is inferred into static/dynamic segments; transformed values still require explicit `{ segments }` for perfect provenance. Predicate failures and unmatched `match()` branches emit `state: "checked-not-included"` with `reason` and `branch` when available. Budgeted resolution emits a `prompt.budget` artifact containing `usedTokens`, `totalTokens`, dropped contribution payloads, and `prefixOverflow: true` when the stable provider-cache prefix is larger than the requested budget, then generation spans link that artifact as consumed. Generation `messages` artifacts include request tool names. The Go RunDetail projection composes these records into `RunDetailNode.request`, using exact generation requests for generation nodes, inherited nearest-ancestor requests for nested framework agent steps that only emit output-shaped message artifacts, and a final-descendant representative with `turns[]` for run/stream/agent/flow/composition aggregators. Contribution artifacts referenced from `messages.systemBlocks[].artifactId` are recovered through the graph index even when the producer span, not the generation span, owns the artifact. For framework agents whose prompt resolves under `agent.run` before the model stream, the projection also collects context contributions and prompt budgets produced under the nearest request scope before the generation starts; later child tool/flow generations are outside that time window. Convex Agent `thread-context` message artifacts are preferred over `call-args` when both are available, their prior-turn fields remain on `request.messages`, and inherited agent steps add earlier sibling generation outputs as `previousStepMessages`. Base-prompt provenance uses the concrete generation `promptId` where known, falling back to `messages.system` / `messages.prompt` for raw request fields. Model provenance is projected into `request.modelSummary`, per-turn `model` / `provider`, and flattened `RunDetail.rows[]`, preferring output artifact `meta.actualModelId` over selected/requested model attributes. Convex Agent wrapper spans emit the configured Agent `languageModel` on the aggregate stream/call and each AI SDK step span so framework turns are modelled even when no nested Crux generation exists; child tool/flow generations keep their own model provenance. UI clients should render that projection instead of walking descendant artifacts.
 
 The tokenizer is pluggable via `setTokenizer()` or `configure({ tokenizer })` for the ambient runtime; inside the pipeline every token count flows through the `TokenizerPort`, whose default adapter wraps that global. The default estimates tokens as `Math.ceil(text.length / 4)`. Tests pass a deterministic counter (e.g. `staticTokenizer()`, word count) through the port to pin budget decisions without depending on the estimate.
 
-### Context Resolver Caching
+### Context Resolver Memoization
 
-System composition includes a cache layer for expensive context resolvers:
+System composition includes a memo layer for expensive dynamic context resolvers:
 
-1. Before calling `ctx.systemFn(input)`, if `ctx.cacheTtl > 0` and `ctx.id` is set, compute a cache key: `cache:ctx:{id}:{stableHash(inputFields)}`.
-2. Check the `ContextCachePort` (default adapter: the module-level map that has always backed this cache). On hit, return cached content and fire `onContextCacheHit` through the `InstrumentationPort` with the entry’s age.
-3. On miss, call `systemFn(input)`, store the result with TTL, and fire `onContextCacheMiss` (timings from the `ClockPort`).
+1. Before calling `ctx.systemFn(input)`, if `ctx.memoTtl > 0` and `ctx.id` is set, compute a cache key: `cache:ctx:{id}:{stableHash(inputFields)}`.
+2. Check the `ContextCachePort` (default adapter: the module-level map that has always backed this memo cache). On hit, return cached content, preserve the original `resolvedAt`, report `servedFrom: "memo"` plus `age`, and fire `onContextCacheHit` through the `InstrumentationPort` with the entry’s age.
+3. On miss, call `systemFn(input)`, stamp the result with `servedFrom: "live"` and `resolvedAt` from the `ClockPort`, store the result with `memo.ttl`, and fire `onContextCacheMiss` (timings from the `ClockPort`).
 4. Cache key only includes input fields declared in the context's `inputSchema` (sorted alphabetically), so unrelated prompt-level fields don't pollute the key.
-5. Static string contexts silently skip caching (nothing to cache).
+5. Static string contexts reject `memo` at definition time because there is no resolver call to memoize.
+
+Provider prompt caching is separate: `context({ cache: true })` marks the
+resolved block with `providerCache: true` so adapters can emit native cache
+markers. If a context sets `cache: true` but `memo.ttl` is shorter than the
+provider cache window, prompt compilation emits an advisory diagnostic through
+`DiagnosticsPort`.
 
 ### Semantic Response Caching
 
@@ -492,14 +507,15 @@ Stores must explicitly advertise `capabilities().semanticCache.isolatedVectorNam
 
 After composing the system string, the same internal pass also builds a `SystemBlock[]` array:
 
-- Each non-skipped, non-dropped part becomes a `SystemBlock { source, text, providerCache }`.
-- `providerCache` is read from the context's parsed `cache` option (true when `cache` is set).
-- The prompt's own system block always has `providerCache: false`.
+- Each non-skipped, non-dropped part becomes a `SystemBlock { source, text, providerCache, cacheBoundary? }`.
+- `providerCache` is read from `context({ cache: true })`.
+- The prompt's own system block has `providerCache: true` when `cache.provider === true`, or when it is static text and at least one contribution block joins the cached prefix.
+- `cacheBoundary: true` is set on the last provider-cache block. Adapters place exactly one native breakpoint there.
 - `SystemBlock` is re-exported from `@use-crux/core` (alongside `ResolvedPrompt`) so adapter authors can annotate the `systemBlocks` field without reaching into internal modules.
 - Adapters use `systemBlocks` to emit provider-native cache markers:
-  - `@use-crux/anthropic`: Converts to `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` on blocks where `providerCache: true` (max 4 breakpoints).
+  - `@use-crux/anthropic`: Converts to `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` on the `cacheBoundary` block.
   - `@use-crux/google`: a single `GoogleCachedContentLifecycle` owns CachedContent end to end. `prepare()` returns a request-ready config patch that both `call()` and `stream()` merge, so neither path knows about cache internals. The built-in lifecycle composes a pure prefix planner, an in-memory store (SHA-256 content+TTL hashing, concurrency dedup via promise sharing, per-call TTL expiry, LRU eviction), and a narrow `GoogleCachedContentCachePort` adapting `client.caches.create()`/`delete()`. The cached prefix goes into `config.cachedContent`, the uncached remainder into `config.systemInstruction`, and `onError` selects graceful inline fallback (default) versus rethrow.
-  - `@use-crux/ai` (Vercel): Anthropic-only — converts blocks to `SystemModelMessage[]` with `providerOptions.anthropic.cacheControl` when the model is Anthropic.
+  - `@use-crux/ai` (Vercel): Anthropic-only — converts blocks to `SystemModelMessage[]` with `providerOptions.anthropic.cacheControl` on the `cacheBoundary` block when the model is Anthropic.
   - OpenAI: No action needed — prefix caching is automatic with stable ordering.
 
 ### Conditional Context Resolution
@@ -525,6 +541,11 @@ At `compilePrompt()` time (and therefore at `prompt()` definition time), input s
 - If two contexts declare the same key, an error is thrown at definition time.
 - The prompt's own fields silently override context fields (no error).
 - The merged schema is used for input validation in `.resolve()`.
+
+The public TypeScript surface mirrors those runtime rules: `when()` wrapper
+predicates see partial context input, `match()` branch fields are optional in
+`MergedInput`, `messages` mode is exclusive with `system`/`prompt`, and concrete
+prompts expose literal `hasOutput` values for adapter branching.
 
 ### Provider Adaptation
 
@@ -608,9 +629,9 @@ Parent expansion relies on write-side metadata but does not duplicate the writer
 
 Retrieval observability writes the canonical graph directly. Direct retriever calls open `retrieval.query` spans with `retrieval.hits` artifacts and `retrieval.returned` edges. Retrieval recipes open a parent `retrieval.recipe` span, and each query/retrieve/hit step opens a `retrieval.step` child span with bounded recipe-step metadata. Devtools, the TUI, subscribers, diagnostics-channel listeners, and OTel all read from the same graph records; payload capture is controlled centrally by `observability.recordInputs` / `observability.recordOutputs`.
 
-Prompt composition uses a generic injectable `use` contract. Plain contexts still contribute system text, but richer primitives can inject context, tools, constraints, guardrails, and metadata in one resolution pass. `context.contribution` artifacts include the specific `injectedTools` names contributed by that context when tools are present, including contexts whose text is later dropped by a token budget. Direct tool producers such as custom injectables, retrievers/grounding, memory, and blackboards also emit tool-only `context.contribution` previews with their source kind, so backend read models can join request tools back to the primitive that supplied them without parsing tool names. Runtime prompt input validation is represented separately by redacted `prompt.input` previews, allowing local read models to compare observed input keys with effective prompt schemas without storing raw values. `context({ use })` nests the same composition model, so product teams can build reusable contexts that bundle retrieval, grounding, memory, and coordination state without forcing prompt authors to call `asContext()` or `asTools()` manually.
+Prompt composition uses a generic `use` contract. Plain contexts still contribute system text, but richer primitives and custom contributors can inject context, tools, constraints, guardrails, and metadata in one resolution pass. `context.contribution` artifacts include the specific `injectedTools` names contributed by that context when tools are present, including contexts whose text is later dropped by a token budget. Direct tool producers such as contributors, retrievers/grounding, memory, and blackboards also emit tool-only `context.contribution` previews with their source kind, so backend read models can join request tools back to the primitive that supplied them without parsing tool names. Runtime prompt input validation is represented separately by redacted `prompt.input` previews, allowing local read models to compare observed input keys with effective prompt schemas without storing raw values. `context({ use })` nests the same composition model, so product teams can build reusable contexts that bundle retrieval, grounding, memory, and coordination state without forcing prompt authors to call `asContext()` or `asTools()` manually.
 
-Retrievers and retrieval recipes are injectable. `use: [retriever]`, a recipe's `asRetriever()`, or `grounding()` makes retrieval context and/or tools available according to the configured surface. Raw retrieval injection never enforces answer citations. Citation and provenance guarantees live in `grounding()`, which wraps a retriever or recipe, injects retrieved evidence, and contributes a citation constraint bound to the exact allowed hits for that generation.
+Retrievers and retrieval recipes are composable `use` entries. `use: [retriever]`, a recipe's `asRetriever()`, or `grounding()` makes retrieval context and/or tools available according to the configured surface. Raw retrieval injection never enforces answer citations. Citation and provenance guarantees live in `grounding()`, which wraps a retriever or recipe, injects retrieved evidence, and contributes a citation constraint bound to the exact allowed hits for that generation.
 
 Citation validation is exposed as pure APIs (`resolveCitations()`, `renderCitationContext()`) plus `citationConstraint()` for the generation retry loop. Structured citations are canonical. `resolveCitations()` owns the canonical `citation.check` span and bounded `citation.report` artifact, so citation validity, missing/ambiguous hits, quote failures, optional output-text anchors, and valid/invalid counts are inspectable without UI-specific citation parsing.
 
@@ -946,7 +967,7 @@ The run graph (waterfall in devtools / CLI) is built from canonical observabilit
 
 ### Index Injection Intelligence
 
-Prompt/context injection intelligence is represented as ordinary Project Index facts, not as a separate compiler path. The Crux Indexer emits first-party `injectable` definitions, attributed `useEntries`, context/injectable tool contribution facts, safety/metadata contribution facts, and relations such as `prompt.uses_injectable`, `context.uses_context`, `context.uses_tool`, `context.uses_memory`, `context.uses_blackboard`, `injectable.uses_context`, and `injectable.uses_tool`. The static pass only records authored possibilities from source-local shapes such as plain refs, local arrays/spreads, `when(...)`, `match(...)`, guarded refs, simple context `tools` objects, and simple `inject()` return objects. The semantic pass can upgrade imported `injectable(...)` definitions, imported injectable input schemas and callback source refs, import-safe prompt/context/injectable `use` arrays with spreads, resolved `useEntries` for imported/spread arrays and helper-shaped conditional entries, condition-specific source refs for `when(...)`, `match(...)`, and guarded `&&` expressions, imported/spread tool maps, simple injectable `inject` functions that return tool maps, and returned constraints/guardrails/metadata keys into resolved Project Index facts. Computed semantic use/tool shapes are preserved as dynamic or partial facts, including dynamic `useEntries` and `tools` facts that keep resolved names while marking unresolved pieces with `dynamic: true`. Exact activation, dynamic tool sets, and dynamic metadata remain runtime observability/inspection concerns.
+Prompt/context injection intelligence is represented as ordinary Project Index facts, not as a separate compiler path. The Crux Indexer emits first-party contributor-family definitions serialized under the legacy `injectable` taxonomy value, attributed `useEntries`, context/injectable tool contribution facts, safety/metadata contribution facts, and relations such as `prompt.uses_injectable`, `context.uses_context`, `context.uses_tool`, `context.uses_memory`, `context.uses_blackboard`, `injectable.uses_context`, and `injectable.uses_tool`. The taxonomy name is retained for cross-runtime persisted contracts; the stable authoring API for custom contributions is `contributor()`. The static pass only records authored possibilities from source-local shapes such as plain refs, local arrays/spreads, `when(...)`, `match(...)`, guarded refs, simple context `tools` objects, and simple `inject()` return objects. The semantic pass can upgrade imported contributor-family definitions, imported injectable input schemas and callback source refs, import-safe prompt/context/injectable `use` arrays with spreads, resolved `useEntries` for imported/spread arrays and helper-shaped conditional entries, condition-specific source refs for `when(...)`, `match(...)`, and guarded `&&` expressions, imported/spread tool maps, simple injectable `inject` functions that return tool maps, and returned constraints/guardrails/metadata keys into resolved Project Index facts. Computed semantic use/tool shapes are preserved as dynamic or partial facts, including dynamic `useEntries` and `tools` facts that keep resolved names while marking unresolved pieces with `dynamic: true`. Exact activation, dynamic tool sets, and dynamic metadata remain runtime observability/inspection concerns.
 
 The indexer projects a shared injection read model over merged definitions and relations. It keeps authored `inputSchema` separate from derived `expandedInputSchema`, records field-level `inputContributions` with source definition, path, conditionality, and branch metadata, and re-runs this projection in the TypeScript patch state after patch merges. Built-in Project Index lints consume the same read model to surface hidden required prompt input, conflicting injected field schemas, branch-specific required input, runtime-dependent injection dependencies, and dynamic injected tool surfaces.
 
@@ -1038,7 +1059,7 @@ Native adapters read the structured `modelOutput` stored on tool-result message 
 
 Tool middleware is intentionally separate from prompt middleware. `PromptMiddleware` wraps the whole generate/stream operation; `ToolMiddleware` wraps each tool definition before execution. The final chain is prompt-level middleware first, then call-site middleware, applied after context/prompt/call-site tool merging so policies see the actual executable tool set — both rules are owned by the `ToolLifecycle` session, not by dialect code. `toolMiddleware()` is the generic wrapper for before/after/error hooks. `approvalMiddleware()` is a convenience wrapper that sets provider-compatible `needsApproval` on matched tools and stores callback metadata for resume; after a `LoadSkill` rebuild the session re-arms the tool map, marks newly activated skills injected through the explicit `SkillActivationSession`, and re-notifies against the rebuilt instances.
 
-Approval is return-and-resume, not a blocking await and not flow suspension. On the first request, the adapter returns an approval request in message history. When the core-driven dialect suspends mid-round, sibling tools gated _before_ the approval point have already executed; their results are persisted as tool messages right after the approval-request message, so the model hears about side effects that happened and `resume()` treats them as completed instead of replaying them. The AI SDK adapter uses AI SDK `tool-approval-request` parts; native OpenAI/Google/Anthropic adapters use Crux message metadata exposed through `result.messages`. The client records the id and sends a later `tool-approval-response` via `appendToolApprovalResponse()` or an equivalent message. Native approval requests include an `approvalToken`, and resume rejects decisions that do not echo that token — the session's gate checks the history decision (and its token) before `needsApproval`, so a forged token throws even for tools that no longer require approval. On resume, `ToolLifecycle.resume()` notifies `onApproved`/`onDenied` exactly once per approval id, replays approved calls through the same gate→execute→settle pipeline as live calls (full spans/artifacts/hooks in both dialects), and settles denied calls as execution-denied output. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans, so devtools can explain why a tool ran, did not run, or failed trust validation. This keeps approvals compatible with serverless and Convex actions because no long-lived promise or in-memory modal state is required. Server code must resume from server-issued message history or trusted session storage for mutating tools; approval is a human-in-the-loop execution gate, not a replacement for tool-level authorization.
+Approval is return-and-resume, not a blocking await and not flow suspension. On the first request, the adapter returns an approval request in message history. When the core-driven dialect suspends mid-round, sibling tools gated _before_ the approval point have already executed; their results are persisted as tool messages right after the approval-request message, so the model hears about side effects that happened and `resume()` treats them as completed instead of replaying them. The AI SDK adapter uses AI SDK `tool-approval-request` parts; native OpenAI/Google/Anthropic adapters use Crux message metadata exposed through `result.messages`. The client records the id and sends a later `tool-approval-response` via `appendToolApprovalResponse()` or an equivalent message. Native approval requests include an `approvalToken`, and resume treats decisions that do not echo that token as model-visible `approval-invalid` denials — the session's gate checks the history decision (and its token) before `needsApproval`, so a forged token never executes the tool even if the tool no longer requires approval. On resume, `ToolLifecycle.resume()` notifies `onApproved`/`onDenied` exactly once per approval id, replays approved calls through the same gate→execute→settle pipeline as live calls (full spans/artifacts/hooks in both dialects), and settles denied calls as execution-denied output. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans, so devtools can explain why a tool ran, did not run, or failed trust validation. This keeps approvals compatible with serverless and Convex actions because no long-lived promise or in-memory modal state is required. Server code must resume from server-issued message history or trusted session storage for mutating tools; approval is a human-in-the-loop execution gate, not a replacement for tool-level authorization.
 
 ## Memory Primitives
 
@@ -1086,7 +1107,7 @@ The `ToolConfig` type is exported from `@use-crux/core/memory`:
 
 ```ts
 interface ToolConfig {
-  description: string
+  description: string;
 }
 ```
 
@@ -1313,7 +1334,7 @@ Internally, all four composition utilities route shared lifecycle through `agent
 
 **Type utilities**: `InferAgentInput<T>` and `InferAgentOutput<T>` extract the input/output Zod inferred types from an `Agent` instance. `StepName<S>` and `StepOutput<S>` extract name and output types from pipeline step definitions. `AnyPrompt` (from `@use-crux/core`) is the non-generic prompt equivalent.
 
-**Executor interface**: `AgentExecutor(agent, options) → AgentResult`. `ExecuteOptions` includes `maxSteps?: number` for multi-step tool loops — the AI SDK adapter passes it through as `stopWhen: stepCountIs(N)`, while OpenAI/Anthropic/Google adapters implement manual tool loops.
+**Executor interface**: `AgentExecutor(agent, options) → AgentResult`. `ExecuteOptions` includes `maxSteps?: number` for multi-step tool loops. SDK-loop adapters map the neutral budget to their native loop controls, while OpenAI/Anthropic/Google adapters implement manual tool loops.
 
 **Test fake**: `agent/fakes.ts` exports `createFakeAgentExecutor(config?)` — a conformant in-memory executor for testing how compositions drive the executor without an SDK (the agent-layer analogue of `resolver/fakes.ts`). Re-exported from `agent/index.ts` and the package root. `config.agents` maps agent id → behavior (`{ output }` | `{ transfer, reason }` | `{ throws }`, each optionally with `usage`); a behavior may instead be a `(agent, options, callIndex) => behavior` resolver for call-order-dependent fakes; `config.fallback` is a behavior, a resolver, or `'echo'`. It resolves `agent.model ?? options.model`, executes the generated `transfer_to_<id>` tool on a `transfer` behavior, and records every invocation (`agent`, `options`, `resolvedModel`, observed `executionContext`) on `executor.calls` for assertions.
 
@@ -1419,7 +1440,8 @@ Map to SDK-specific args:
   - system message → SDK's system format
   - output schema → SDK's schema format (zodResponseFormat, JSON Schema, etc.)
   - tools → SDK's tool format
-  - settings → SDK's parameter names (temperature, max_tokens, etc.)
+  - settings → SDK's parameter names (temperature, max_tokens, tool_choice/stopWhen, etc.)
+  - provider-native exotica → typed adapter `extra`
   ↓
 Call SDK function through the provider port/profile
   ↓
@@ -1545,7 +1567,7 @@ The Go backend stores `session_id` and `user_id` from `run:start`; run-list read
 
 Built-in orchestration primitives write the graph contract through the shared agent composition runtime. `parallel()` opens `composition.parallel` with sibling `agent.run` children. `pipeline()` opens `composition.pipeline`, one `flow.step` per executable step, and nested `agent.run` spans for agent steps. Runtime `flow()` opens `flow.run`, emits `flow.step` children, and records intentional waits as `flow.suspension` markers linked to the causing step. Successful `flow.step` spans also record the step result as an `output` artifact, so step outputs are inspectable from the trace (and back Quality `ctx.step()` access) without re-running the flow. `consensus()` opens `composition.consensus` with voter `agent.run` children directly under that composition span. `swarm()` records agent turns, `handoff.prepare`, `handoff.payload` artifacts, and `triggered` edges between turns. `delegate().run()` records `delegate.invoke`, canonical input/output artifacts, and links its handoff preparation with `delegate.invoked`.
 
-Prompt/context and safety primitives also write the graph contract directly. `prompt.resolve()` opens `prompt.resolve`; conditional context evaluation emits `context.predicate` spans with `included`, `predicate`, discriminator/branch, and exclusion reason attributes; context text resolution emits `context.resolve` spans plus `context.contribution` artifacts and `produced` edges. Context contributions that provide tools carry `injectedTools` so readers can explain which contribution supplied each request tool; direct injectable, memory, blackboard, and retriever tool producers emit the same preview shape even when they have no resolved text. Included context artifacts are carried through `systemBlocks` and linked to each generation span with `consumed` edges, so the backend can expose the exact context for a call in `inspection.context`. Token-budget drops are recorded in `prompt.budget` artifacts. Generation orchestration emits consumed `messages` artifacts for the prepared request payload. The Safety session's constraint phase opens a grouped `constraint.check` span, runs each constraint check as a child span with pass/fail attributes, records `constraint.report` artifacts, and emits `constraint.retry` spans/edges for combined-feedback regeneration. Its guardrail phases open grouped and per-guard `guardrail.run` spans, record each action as span attributes plus `guardrail.report` artifacts with before/after previews when content changes, and emit `guardrail.blocked` edges for blocking decisions.
+Prompt/context and safety primitives also write the graph contract directly. `prompt.resolve()` opens `prompt.resolve`; conditional context evaluation emits `context.predicate` spans with `included`, `predicate`, discriminator/branch, and exclusion reason attributes; context text resolution emits `context.resolve` spans plus `context.contribution` artifacts and `produced` edges. Context contributions that provide tools carry `injectedTools` so readers can explain which contribution supplied each request tool; contributor, memory, blackboard, and retriever tool producers emit the same preview shape even when they have no resolved text. Included context artifacts are carried through `systemBlocks` and linked to each generation span with `consumed` edges, so the backend can expose the exact context for a call in `inspection.context`. Token-budget drops are recorded in `prompt.budget` artifacts. Generation orchestration emits consumed `messages` artifacts for the prepared request payload. The Safety session's constraint phase opens a grouped `constraint.check` span, runs each constraint check as a child span with pass/fail attributes, records `constraint.report` artifacts, and emits `constraint.retry` spans/edges for combined-feedback regeneration. Its guardrail phases open grouped and per-guard `guardrail.run` spans, record each action as span attributes plus `guardrail.report` artifacts with before/after previews when content changes, and emit `guardrail.blocked` edges for blocking decisions.
 
 Memory primitives write the graph contract from the shared block hook path. `recentMessages`, `workingState`, `episodes`, `facts`, `procedures`, proposal lifecycle operations, `blackboard()`, and custom blocks that use the standard context helpers emit `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, recalled-result `memory.recall` artifacts, write-summary `memory.diff` artifacts, and semantic memory edges. Empty reads keep the `memory.read` span and omit `memory.recall` so clients do not render empty recalled-block cards. The raw namespace is never emitted; traces receive `namespaceHash`.
 
