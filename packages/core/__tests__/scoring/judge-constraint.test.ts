@@ -9,6 +9,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { judge as createJudge } from '../../scoring'
 import { boundary, constraint } from '../../safety'
+import type { BoundaryDef, Constraint, SafetyRunContext, SubjectOf } from '../../safety'
 import { ConstraintViolationError } from '../../safety/constraint'
 import { createSafety, type SafetyOutput } from '../../safety/session'
 import type { GenerateObjectFn } from '../../compaction/types'
@@ -37,6 +38,24 @@ function brandJudge(generate: GenerateObjectFn, id = 'brand-voice') {
   })
 }
 
+function makeRunCtx<B extends BoundaryDef>(c: Constraint<B>): SafetyRunContext<B> {
+  return {
+    policy: { id: c.id, mode: 'enforce' },
+    boundary: { id: c.on.id as never, kind: c.on.id as never },
+    prompt: {},
+    model: {},
+    trace: {},
+    attempt: { index: 0, kind: 'initial' },
+    metadata: {},
+    findings: { add() {} },
+    ...(c.on.path ? { path: c.on.path } : {}),
+  }
+}
+
+async function runConstraint<B extends BoundaryDef>(c: Constraint<B>, subject: SubjectOf<B>) {
+  return c.run(subject, makeRunCtx(c))
+}
+
 const noRegen = async (): Promise<SafetyOutput> => {
   throw new Error('regenerate must not be called')
 }
@@ -50,13 +69,7 @@ describe('constraint.judge', () => {
       run,
     })
 
-    const result = await c.check({ text: 'on-brand copy', parsed: undefined }, {
-      promptId: undefined,
-      model: undefined,
-      traceId: undefined,
-      attempt: 0,
-      metadata: {},
-    })
+    const result = await runConstraint(c, { text: 'on-brand copy', object: undefined })
 
     expect(result.pass).toBe(true)
     expect(c.strategy).toEqual({
@@ -75,13 +88,7 @@ describe('constraint.judge', () => {
       }),
     })
 
-    const result = await c.check({ text: 'off-brand copy', parsed: undefined }, {
-      promptId: undefined,
-      model: undefined,
-      traceId: undefined,
-      attempt: 0,
-      metadata: {},
-    })
+    const result = await runConstraint(c, { text: 'off-brand copy', object: undefined })
 
     expect(result.pass).toBe(false)
     if (result.pass) throw new Error('unreachable')
@@ -115,13 +122,7 @@ describe('constraint.judge', () => {
       }),
     })
 
-    const result = await c.check({ text: 'anything', parsed: undefined }, {
-      promptId: undefined,
-      model: undefined,
-      traceId: undefined,
-      attempt: 0,
-      metadata: {},
-    })
+    const result = await runConstraint(c, { text: 'anything', object: undefined })
 
     expect(result.pass).toBe(false)
     if (result.pass) throw new Error('unreachable')

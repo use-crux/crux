@@ -5,6 +5,8 @@ import { grounding, citationSchema } from '../../citations'
 import { prompt } from '../../prompt/prompt'
 import { retriever } from '../../retrieval'
 import type { RetrieverHit } from '../../retrieval'
+import type { SafetyRunContext } from '../../safety'
+import type { Constraint } from '../../safety/constraint'
 
 function makeHit(content = 'Hybrid search combines dense and sparse retrieval.'): RetrieverHit {
   return {
@@ -15,6 +17,24 @@ function makeHit(content = 'Hybrid search combines dense and sparse retrieval.')
     metadata: {},
     score: 0.9,
   }
+}
+
+function makeRunCtx(c: Constraint): SafetyRunContext {
+  return {
+    policy: { id: c.id, mode: 'enforce' },
+    boundary: { id: c.on.id as never, kind: c.on.id as never },
+    prompt: { id: 'answer' },
+    model: { id: 'test' },
+    trace: {},
+    attempt: { index: 0, kind: 'initial' },
+    metadata: {},
+    findings: { add() {} },
+    ...(c.on.path ? { path: c.on.path } : {}),
+  }
+}
+
+async function runConstraint(c: Constraint, subject: unknown) {
+  return c.run(subject as never, makeRunCtx(c) as never)
 }
 
 describe('grounding()', () => {
@@ -47,10 +67,11 @@ describe('grounding()', () => {
     expect(retrieve).toHaveBeenCalledWith('what is hybrid search?', { limit: undefined })
     expect(resolved.system).toContain('Hybrid search combines')
     expect(resolved.constraints).toHaveLength(1)
-    const result = await resolved.constraints![0].check(
+    const result = await runConstraint(
+      resolved.constraints![0],
       {
         text: '',
-        parsed: {
+        object: {
           answer: 'Hybrid search combines retrieval modes.',
           citations: [
             {
@@ -61,7 +82,6 @@ describe('grounding()', () => {
           ],
         },
       },
-      { promptId: 'answer', model: 'test', traceId: undefined, attempt: 0, metadata: {} },
     )
     expect(result.pass).toBe(true)
     expect(result.metadata?.grounding).toMatchObject({
@@ -114,10 +134,11 @@ describe('grounding()', () => {
       ],
     })
 
-    const result = await resolved.constraints![0].check(
+    const result = await runConstraint(
+      resolved.constraints![0],
       {
         text: '',
-        parsed: {
+        object: {
           answer: 'Hybrid search combines retrieval modes.',
           citations: [
             {
@@ -128,7 +149,6 @@ describe('grounding()', () => {
           ],
         },
       },
-      { promptId: 'answer', model: 'test', traceId: undefined, attempt: 0, metadata: {} },
     )
 
     expect(result.pass).toBe(true)
@@ -167,10 +187,11 @@ describe('grounding()', () => {
     })
 
     const resolved = await answer.resolve({})
-    const result = await resolved.constraints![0].check(
+    const result = await runConstraint(
+      resolved.constraints![0],
       {
         text: '',
-        parsed: {
+        object: {
           answer: 'Hybrid search combines retrieval modes.',
           citations: [
             {
@@ -181,7 +202,6 @@ describe('grounding()', () => {
           ],
         },
       },
-      { promptId: 'answer', model: 'test', traceId: undefined, attempt: 0, metadata: {} },
     )
 
     expect(result.pass).toBe(false)

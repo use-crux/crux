@@ -3,19 +3,14 @@ import type { Constraint, ConstraintAudit, ConstraintContext } from '../constrai
 import { StreamHoldLimitError } from '../errors'
 import { GuardrailBlockedError } from '../guardrail/errors'
 import { createGuardrailPipeline } from '../guardrail/pipeline'
-import type { ChunkGuardrailResult, Guardrail, GuardrailAudit, GuardrailContext } from '../guardrail/types'
+import type { Guardrail, GuardrailAudit, GuardrailContext, GuardrailRunResult } from '../guardrail/types'
+import { validateGuardrailRunResult } from '../guardrail/types'
 import type { SafetyProtocolEvent, SafetyStream, SafetyStreamDirective, SafetyStreamSeal } from '../session'
 import { auditDisabledStreamGuards, recordStreamChunkAction } from './audit'
 import { firstBoundaryId, runFinalBoundaryGuard } from './boundary'
 import { runFinalStreamConstraints, runStreamChunkConstraints } from './constraints'
 import { heldMs, streamGuardDecision } from './decision'
-import {
-  isLegacyStreamConfig,
-  segmenterFor,
-  streamMaxHoldChars,
-  streamOnHoldLimit,
-  type StreamSegment,
-} from './segment'
+import { segmenterFor, streamMaxHoldChars, streamOnHoldLimit, type StreamSegment } from './segment'
 
 export interface CreateSafetyStreamOptions {
   readonly outputGuards: readonly Guardrail[]
@@ -31,7 +26,6 @@ export interface CreateSafetyStreamOptions {
 
 interface StreamStage {
   readonly guard: Guardrail
-  readonly mode: 'legacy' | 'validate'
   readonly segment: StreamSegment
   readonly maxHoldChars: number
   readonly onHoldLimit: 'block' | 'release'
@@ -49,15 +43,11 @@ interface StreamStage {
 export function createSafetyStream(options: CreateSafetyStreamOptions): SafetyStream {
   const outputGuards = options.outputGuards
   const disabledGuards = outputGuards.filter((guard) => guard.stream === false)
-  const legacyFullGuards = outputGuards.filter(
-    (guard) => isLegacyStreamConfig(guard.stream) && guard.stream.buffer === 'full',
-  )
   const finalTextGuards = outputGuards.filter((guard) => guard.stream === 'final')
   const finalBoundaryGuards = outputGuards.filter((guard) => firstBoundaryId(guard) === 'model.output.object')
   const stagedGuards = outputGuards.filter(
     (guard) =>
       !disabledGuards.includes(guard) &&
-      !legacyFullGuards.includes(guard) &&
       !finalTextGuards.includes(guard) &&
       !finalBoundaryGuards.includes(guard) &&
       (firstBoundaryId(guard) === 'model.output.text' || firstBoundaryId(guard) === 'model.output'),
@@ -66,7 +56,6 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
 
   const stages: StreamStage[] = stagedGuards.map((guard) => ({
     guard,
-    mode: guard.onChunk && isLegacyStreamConfig(guard.stream) && guard.stream.buffer === 'none' ? 'legacy' : 'validate',
     segment: segmenterFor(guard.stream),
     maxHoldChars: streamMaxHoldChars(guard.stream),
     onHoldLimit: streamOnHoldLimit(guard.stream),
@@ -81,11 +70,6 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
   async function feed(chunk: string): Promise<SafetyStreamDirective> {
     auditDisabled()
     sourceText += chunk
-
-    if (legacyFullGuards.length > 0) {
-      options.transcript.push({ t: 'stream.chunk', directive: 'hold' })
-      return { kind: 'hold' }
-    }
 
     const content = await runStages(chunk, false)
     if (content.length === 0) {
@@ -111,16 +95,8 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
     let pending = ''
     let text = releasedText
 
-    if (legacyFullGuards.length > 0) {
-      const pipeline = createGuardrailPipeline(legacyFullGuards)
-      const result = await pipeline.runOutput(sourceText, streamContext(true, sourceText.length, 0))
-      options.appendGuardrailAudit(result.audit)
-      text = result.content
-      pending = text
-    } else {
-      pending = await runStages('', true)
-      text += pending
-    }
+    pending = await runStages('', true)
+    text += pending
 
     if (finalTextGuards.length > 0) {
       const pipeline = createGuardrailPipeline(finalTextGuards)
@@ -187,7 +163,7 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
       }
       if (!stage.buffer.startsWith(segment)) {
         throw new StreamHoldLimitError({
-          message: `Stream segmenter for "${stage.guard.name}" returned non-prefix content.`,
+          message: `Stream segmenter for "${stage.guard.id}" returned non-prefix content.`,
           policyId: stage.guard.id,
           heldChars: stage.buffer.length,
           heldMs: heldMs(stage),
@@ -199,7 +175,7 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
       const reportOnly = stage.guard.mode === 'report'
 
       switch (result.action) {
-        case 'pass':
+        case 'allow':
           stage.heldStartedAt = undefined
           output += segment
           break
@@ -208,11 +184,10 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
           recordStreamChunkAction(options.appendGuardrailAudit, stage.guard, result, result.reason)
           output += segment
           break
-        case 'redact':
-        case 'transform':
+        case 'rewrite':
           stage.heldStartedAt = undefined
           recordStreamChunkAction(options.appendGuardrailAudit, stage.guard, result)
-          output += reportOnly ? segment : result.content
+          output += reportOnly ? segment : stringifyGuardrailValue(result.value)
           break
         case 'block':
           recordStreamChunkAction(options.appendGuardrailAudit, stage.guard, result, result.reason, {
@@ -224,7 +199,7 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
             break
           }
           throw new GuardrailBlockedError({
-            guardrailId: stage.guard.name,
+            guardrailId: stage.guard.id,
             phase: 'output',
             reason: result.reason,
             decisions: [streamGuardDecision(stage.guard, result, segment)],
@@ -239,7 +214,7 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
           stage.heldStartedAt ??= performance.now()
           if (last) {
             throw new StreamHoldLimitError({
-              message: `Stream guardrail "${stage.guard.name}" held content at end of stream.`,
+              message: `Stream guardrail "${stage.guard.id}" held content at end of stream.`,
               policyId: stage.guard.id,
               heldChars: stage.buffer.length,
               heldMs: heldMs(stage),
@@ -251,12 +226,29 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
     }
   }
 
-  async function runStageGuard(stage: StreamStage, segment: string, last: boolean): Promise<ChunkGuardrailResult> {
+  async function runStageGuard(stage: StreamStage, segment: string, last: boolean): Promise<GuardrailRunResult<unknown>> {
     const context = streamContext(last, stage.buffer.length + segment.length, heldMs(stage))
-    if (stage.mode === 'legacy' && stage.guard.onChunk) {
-      return stage.guard.onChunk(segment, sourceText, { ...context, mode: stage.guard.mode })
-    }
-    return stage.guard.validate(segment, { ...context, mode: stage.guard.mode })
+    const boundary = Array.isArray(stage.guard.on) ? (stage.guard.on[0] ?? { id: 'model.output.text' }) : stage.guard.on
+    return validateGuardrailRunResult(
+      await stage.guard.run(segment as never, {
+        policy: { id: stage.guard.id, mode: stage.guard.mode },
+        boundary: { id: boundary.id as never, kind: boundary.id as never },
+        prompt: { id: context.promptId },
+        model: { id: context.model },
+        trace: { id: context.traceId },
+        attempt: { index: 0, kind: 'initial' },
+        metadata: context.metadata,
+        findings: { add() {} },
+        stream: context.stream,
+        ...(boundary.path ? { path: boundary.path } : {}),
+      } as never),
+      {
+        streaming: true,
+        last,
+        policyId: stage.guard.id,
+        boundary: boundary.id,
+      },
+    )
   }
 
   function streamContext(
@@ -288,7 +280,7 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
     if (stage.buffer.length <= stage.maxHoldChars) return
     if (stage.onHoldLimit === 'release') return
     throw new StreamHoldLimitError({
-      message: `Stream guardrail "${stage.guard.name}" exceeded maxHold.`,
+      message: `Stream guardrail "${stage.guard.id}" exceeded maxHold.`,
       policyId: stage.guard.id,
       heldChars: stage.buffer.length,
       heldMs: heldMs(stage),
@@ -296,4 +288,8 @@ export function createSafetyStream(options: CreateSafetyStreamOptions): SafetySt
   }
 
   return { feed, finish, transform }
+}
+
+function stringifyGuardrailValue(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value)
 }

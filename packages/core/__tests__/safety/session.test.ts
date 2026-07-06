@@ -8,7 +8,7 @@
  */
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../safety'
+import { boundary, createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../safety'
 import type { SafetyOutput } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
@@ -24,20 +24,21 @@ afterEach(() => {
 const identity = (options?: Partial<Parameters<typeof createSafety>[0]>) =>
   createSafety({ promptId: 'p1', model: 'm1', ...options })
 
-const passGuard = (name: string, phase: 'input' | 'output', spy?: ReturnType<typeof vi.fn>) =>
+const passGuard = (id: string, target: 'input' | 'output', spy?: ReturnType<typeof vi.fn>) =>
   guardrail({
-    name,
-    phase,
-    validate: async (content) => {
+    id,
+    on: target === 'input' ? boundary.input.text() : boundary.output.text(),
+    run: async (content) => {
       spy?.(content)
-      return { action: 'pass' as const }
+      return { action: 'allow' as const }
     },
   })
 
-const passingConstraint = (name: string, spy?: ReturnType<typeof vi.fn>) =>
+const passingConstraint = (id: string, spy?: ReturnType<typeof vi.fn>) =>
   constraint({
-    name,
-    check: async (output) => {
+    id,
+    on: boundary.output.both(),
+    run: async (output) => {
       spy?.(output)
       return { pass: true as const }
     },
@@ -141,9 +142,9 @@ describe('createSafety — safety.tune', () => {
 
   it('audits enabled:false and skips the disabled guardrail', async () => {
     const blocker = guardrail({
-      name: 'disable-me',
-      phase: 'input',
-      validate: async () => ({ action: 'block' as const, reason: 'would block' }),
+      id: 'disable-me',
+      on: boundary.input.text(),
+      run: async () => ({ action: 'block' as const, reason: 'would block' }),
     })
     const safety = identity({
       call: { guardrails: [blocker] },
@@ -168,9 +169,9 @@ describe('createSafety — safety.tune', () => {
 describe('createSafety — guardInput', () => {
   it('throws GuardrailBlockedError when an input guard blocks', async () => {
     const blocker = guardrail({
-      name: 'no-secrets',
-      phase: 'input',
-      validate: async () => ({
+      id: 'no-secrets',
+      on: boundary.input.text(),
+      run: async () => ({
         action: 'block' as const,
         reason: 'secret detected',
       }),
@@ -184,11 +185,12 @@ describe('createSafety — guardInput', () => {
 
   it('writes redacted content back into the returned messages', async () => {
     const redactor = guardrail({
-      name: 'pii',
-      phase: 'input',
-      validate: async (content) => ({
-        action: 'redact' as const,
-        content: content.replace('123-45-6789', '[SSN]'),
+      id: 'pii',
+      on: boundary.input.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('123-45-6789', '[SSN]'),
+        rewrite: { kind: 'redact' as const },
       }),
     })
     const safety = identity({ call: { guardrails: [redactor] } })
@@ -211,11 +213,12 @@ describe('createSafety — guardInput', () => {
 
   it('falls back to prompt text when history has no user message', async () => {
     const redactor = guardrail({
-      name: 'pii',
-      phase: 'input',
-      validate: async () => ({
-        action: 'redact' as const,
-        content: 'clean prompt',
+      id: 'pii',
+      on: boundary.input.text(),
+      run: async () => ({
+        action: 'rewrite' as const,
+        value: 'clean prompt',
+        rewrite: { kind: 'redact' as const },
       }),
     })
     const safety = identity({ call: { guardrails: [redactor] } })
@@ -253,7 +256,7 @@ describe('createSafety — guardInput', () => {
     expect(safety.transcript).toContainEqual({
       t: 'input.guard',
       guards: 1,
-      actions: ['pass'],
+      actions: ['allow'],
     })
   })
 })

@@ -5,7 +5,7 @@
  */
 
 import { afterEach, describe, it, expect } from 'vitest'
-import { createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../safety'
+import { boundary, createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../safety'
 import type { SafetyCallOptions } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
@@ -23,11 +23,10 @@ describe('openStream — hold and release', () => {
   it('a hold verdict buffers and emits nothing; the next verdict releases held + new content in order', async () => {
     // Holds any chunk ending mid-word (no trailing space), passes otherwise.
     const sentenceGuard = guardrail({
-      name: 'sentence',
-      phase: 'output',
-      validate: async () => ({ action: 'pass' as const }),
-      stream: { buffer: 'none' },
-      onChunk: async (chunk) => (chunk.endsWith(' ') ? { action: 'pass' as const } : { action: 'hold' as const }),
+      id: 'sentence',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (chunk) => (chunk.endsWith(' ') ? { action: 'allow' as const } : { action: 'hold' as const }),
     })
     const stream = session({
       call: { guardrails: [sentenceGuard] },
@@ -44,20 +43,20 @@ describe('openStream — hold and release', () => {
     // The v0 LLM Suspense pattern: hold a suspicious import line, look up
     // the real path "asynchronously", release the corrected content.
     const importFixer = guardrail({
-      name: 'import-fixer',
-      phase: 'output',
-      validate: async () => ({ action: 'pass' as const }),
-      stream: { buffer: 'none' },
-      onChunk: async (chunk) => {
+      id: 'import-fixer',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (chunk) => {
         if (chunk.includes('@/comps/')) {
           await new Promise((resolve) => setTimeout(resolve, 1))
           return {
-            action: 'transform' as const,
-            content: chunk.replace('@/comps/', '@/components/'),
+            action: 'rewrite' as const,
+            value: chunk.replace('@/comps/', '@/components/'),
+            rewrite: { kind: 'normalize' as const },
           }
         }
         if (chunk.includes('@/co') && !chunk.includes(' ')) return { action: 'hold' as const }
-        return { action: 'pass' as const }
+        return { action: 'allow' as const }
       },
     })
     const safety = session({ call: { guardrails: [importFixer] } })
@@ -81,11 +80,10 @@ describe('openStream — hold and release', () => {
 
   it('fails closed instead of releasing held content unchanged when the stream ends mid-hold', async () => {
     const holdAll = guardrail({
-      name: 'hold-all',
-      phase: 'output',
-      validate: async () => ({ action: 'pass' as const }),
-      stream: { buffer: 'none' },
-      onChunk: async () => ({ action: 'hold' as const }),
+      id: 'hold-all',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async () => ({ action: 'hold' as const }),
     })
     const stream = session({ call: { guardrails: [holdAll] } }).openStream()
 
@@ -101,17 +99,17 @@ describe('openStream — hold and release', () => {
 describe('openStream — chunk rewrites', () => {
   it('redacted chunks reach the consumer without exposing the original in audit', async () => {
     const redactor = guardrail({
-      name: 'key-redactor',
-      phase: 'output',
-      validate: async () => ({ action: 'pass' as const }),
-      stream: { buffer: 'none' },
-      onChunk: async (chunk) =>
+      id: 'key-redactor',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (chunk) =>
         chunk.includes('sk-123')
           ? {
-              action: 'redact' as const,
-              content: chunk.replace('sk-123', '[KEY]'),
+              action: 'rewrite' as const,
+              value: chunk.replace('sk-123', '[KEY]'),
+              rewrite: { kind: 'redact' as const },
             }
-          : { action: 'pass' as const },
+          : { action: 'allow' as const },
     })
     const safety = session({ call: { guardrails: [redactor] } })
     const stream = safety.openStream()
@@ -133,11 +131,12 @@ describe('openStream — chunk rewrites', () => {
 describe('openStream — stable beta stream contract', () => {
   it('runs ordinary output guardrails on streams by default', async () => {
     const redactor = guardrail({
-      name: 'default-stream-redactor',
-      phase: 'output',
-      validate: async (content) => ({
-        action: 'redact' as const,
-        content: content.replace('sk-123', '[KEY]'),
+      id: 'default-stream-redactor',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('sk-123', '[KEY]'),
+        rewrite: { kind: 'redact' as const },
       }),
     })
     const stream = session({ call: { guardrails: [redactor] } }).openStream()
@@ -153,12 +152,12 @@ describe('openStream — stable beta stream contract', () => {
   it('runs stream:"final" guardrails exactly once at finish', async () => {
     const seen: string[] = []
     const finalOnly = guardrail({
-      name: 'final-only',
-      phase: 'output',
-      stream: 'final' as never,
-      validate: async (content) => {
+      id: 'final-only',
+      on: boundary.output.text(),
+      stream: 'final',
+      run: async (content) => {
         seen.push(content)
-        return { action: 'pass' as const }
+        return { action: 'allow' as const }
       },
     })
     const stream = session({ call: { guardrails: [finalOnly] } }).openStream()
@@ -177,11 +176,11 @@ describe('openStream — stable beta stream contract', () => {
   it('applies safety.tune stream overrides before opening the stream', async () => {
     const seen: string[] = []
     const guard = guardrail({
-      name: 'tuned-final',
-      phase: 'output',
-      validate: async (content) => {
+      id: 'tuned-final',
+      on: boundary.output.text(),
+      run: async (content) => {
         seen.push(content)
-        return { action: 'pass' as const }
+        return { action: 'allow' as const }
       },
     })
     const stream = session({
@@ -201,12 +200,13 @@ describe('openStream — stable beta stream contract', () => {
 
   it('records report-mode stream guardrail findings without changing released text', async () => {
     const reporter = guardrail({
-      name: 'shadow-stream',
-      phase: 'output',
-      stream: { buffer: 'none' },
-      validate: async (content) => ({
-        action: 'transform' as const,
-        content: content.replace('secret', '[REDACTED]'),
+      id: 'shadow-stream',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('secret', '[REDACTED]'),
+        rewrite: { kind: 'normalize' as const },
       }),
     })
     const safety = session({
@@ -227,8 +227,9 @@ describe('openStream — stable beta stream contract', () => {
 
   it('runs report-mode constraints at stream finish', async () => {
     const reportOnly = constraint({
-      name: 'shadow-stream-judge',
-      check: async () => ({ pass: false as const, feedback: 'shadow finding' }),
+      id: 'shadow-stream-judge',
+      on: boundary.output.both(),
+      run: async () => ({ pass: false as const, feedback: 'shadow finding' }),
     })
     const safety = session({
       call: { constraints: [reportOnly] },
@@ -252,10 +253,10 @@ describe('openStream — stable beta stream contract', () => {
 
   it('records an audited skip for stream:false guardrails', async () => {
     const disabled = guardrail({
-      name: 'skip-stream',
-      phase: 'output',
-      stream: false as never,
-      validate: async () => {
+      id: 'skip-stream',
+      on: boundary.output.text(),
+      stream: false,
+      run: async () => {
         throw new Error('stream:false guard must not run')
       },
     })
@@ -276,21 +277,22 @@ describe('openStream — stable beta stream contract', () => {
   it('cascades multiple stream guards so later guards see earlier rewrites', async () => {
     const seen: string[] = []
     const redactor = guardrail({
-      name: 'redactor',
-      phase: 'output',
-      stream: 'chunk' as never,
-      validate: async (content) => ({
-        action: 'redact' as const,
-        content: content.replace('secret', '[X]'),
+      id: 'redactor',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('secret', '[X]'),
+        rewrite: { kind: 'redact' as const },
       }),
     })
     const inspector = guardrail({
-      name: 'inspector',
-      phase: 'output',
-      stream: 'chunk' as never,
-      validate: async (content) => {
+      id: 'inspector',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (content) => {
         seen.push(content)
-        return { action: 'pass' as const }
+        return { action: 'allow' as const }
       },
     })
     const stream = session({
@@ -306,10 +308,10 @@ describe('openStream — stable beta stream contract', () => {
 
   it('records report-mode stream blocks without stopping live output', async () => {
     const blocker = guardrail({
-      name: 'shadow-stream-block',
-      phase: 'output',
-      stream: 'chunk' as never,
-      validate: async () => ({ action: 'block' as const, reason: 'shadow block' }),
+      id: 'shadow-stream-block',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async () => ({ action: 'block' as const, reason: 'shadow block' }),
     })
     const safety = session({
       call: { guardrails: [blocker] },
@@ -332,14 +334,14 @@ describe('openStream — stable beta stream contract', () => {
 
   it('fails closed when a held segment exceeds maxHold and remains held', async () => {
     const holdUntilLimit = guardrail({
-      name: 'hold-limit',
-      phase: 'output',
+      id: 'hold-limit',
+      on: boundary.output.text(),
       stream: {
         segment: 'chunk',
         maxHold: { chars: 3 },
         onHoldLimit: 'block',
-      } as never,
-      validate: async () => ({ action: 'hold' }) as never,
+      },
+      run: async () => ({ action: 'hold' as const }),
     })
     const stream = session({
       call: { guardrails: [holdUntilLimit] },
@@ -351,15 +353,15 @@ describe('openStream — stable beta stream contract', () => {
   it('flushes null-segmenter buffers at EOS with last:true', async () => {
     const seen: Array<{ content: string; last: unknown }> = []
     const finalSegmenter = guardrail({
-      name: 'null-segmenter',
-      phase: 'output',
-      stream: { segment: () => null } as never,
-      validate: async (content, ctx) => {
+      id: 'null-segmenter',
+      on: boundary.output.text(),
+      stream: { segment: () => null },
+      run: async (content, ctx) => {
         seen.push({
           content,
-          last: (ctx as unknown as { stream?: { last?: unknown } }).stream?.last,
+          last: ctx.stream?.last,
         })
-        return { action: 'pass' as const }
+        return { action: 'allow' as const }
       },
     })
     const stream = session({
@@ -375,27 +377,18 @@ describe('openStream — stable beta stream contract', () => {
   })
 
   it('runs output object/path guardrails only at stream finalization', async () => {
-    const safetyModule = (await import('../../safety')) as typeof import('../../safety') & {
-      readonly boundary?: {
-        readonly output: {
-          readonly path: <T>() => (path: string) => unknown
-        }
-      }
-    }
-    expect(safetyModule.boundary).toBeDefined()
-
     const seen: Array<{ subject: unknown; last: unknown }> = []
-    const pathGuard = (guardrail as unknown as (config: unknown) => unknown)({
+    const pathGuard = guardrail({
       id: 'customer-email',
-      on: safetyModule.boundary!.output.path<{ customer: { email: string } }>()('customer.email'),
+      on: boundary.output.path<{ customer: { email: string } }>()('customer.email'),
       stream: 'chunk',
-      run: async (subject: unknown, ctx: { readonly stream?: { readonly last?: unknown } }) => {
+      run: async (subject, ctx) => {
         seen.push({ subject, last: ctx.stream?.last })
         return { action: 'allow' as const }
       },
     })
     const stream = session({
-      call: { guardrails: [pathGuard as never] },
+      call: { guardrails: [pathGuard] },
     }).openStream()
 
     expect(await stream.feed('{"customer":')).toEqual({
@@ -413,18 +406,19 @@ describe('openStream — stable beta stream contract', () => {
   })
 })
 
-// ── buffer: 'full' ─────────────────────────────────────────────────
+// ── null segmenter full buffering ─────────────────────────────────
 
-describe("openStream — buffer: 'full'", () => {
+describe('openStream — null segmenter buffering', () => {
   it('holds every chunk and validates the accumulated text at finish', async () => {
     const finalCheck = guardrail({
-      name: 'final-transform',
-      phase: 'output',
-      validate: async (content) => ({
-        action: 'transform' as const,
-        content: content.toUpperCase(),
+      id: 'final-transform',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.toUpperCase(),
+        rewrite: { kind: 'normalize' as const },
       }),
-      stream: { buffer: 'full' },
+      stream: { segment: () => null },
     })
     const stream = session({ call: { guardrails: [finalCheck] } }).openStream()
 
@@ -439,13 +433,13 @@ describe("openStream — buffer: 'full'", () => {
 
   it('a full-buffer block at finish throws GuardrailBlockedError', async () => {
     const blocker = guardrail({
-      name: 'final-block',
-      phase: 'output',
-      validate: async () => ({
+      id: 'final-block',
+      on: boundary.output.text(),
+      run: async () => ({
         action: 'block' as const,
         reason: 'unacceptable',
       }),
-      stream: { buffer: 'full' },
+      stream: { segment: () => null },
     })
     const stream = session({ call: { guardrails: [blocker] } }).openStream()
 
@@ -459,14 +453,13 @@ describe("openStream — buffer: 'full'", () => {
 describe('openStream — block', () => {
   it('a block verdict mid-stream throws GuardrailBlockedError from feed', async () => {
     const blocker = guardrail({
-      name: 'live-block',
-      phase: 'output',
-      validate: async () => ({ action: 'pass' as const }),
-      stream: { buffer: 'none' },
-      onChunk: async (chunk) =>
+      id: 'live-block',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (chunk) =>
         chunk.includes('forbidden')
           ? { action: 'block' as const, reason: 'forbidden token' }
-          : { action: 'pass' as const },
+          : { action: 'allow' as const },
     })
     const stream = session({ call: { guardrails: [blocker] } }).openStream()
 
@@ -483,8 +476,9 @@ describe('openStream — block', () => {
 describe('openStream — constraints', () => {
   it('constraints run report-only at finish — failing asserts audit without throwing', async () => {
     const neverPasses = constraint({
-      name: 'impossible',
-      check: async () => ({
+      id: 'impossible',
+      on: boundary.output.both(),
+      run: async () => ({
         pass: false as const,
         feedback: 'cannot satisfy on a live stream',
       }),
@@ -509,8 +503,9 @@ describe('openStream — constraints', () => {
 
   it('a constraint onChunk abort stops the stream early with ConstraintViolationError', async () => {
     const abortOnRamble = constraint({
-      name: 'no-ramble',
-      check: async () => ({ pass: true as const }),
+      id: 'no-ramble',
+      on: boundary.output.both(),
+      run: async () => ({ pass: true as const }),
       onChunk: async (_chunk, accumulated) =>
         accumulated.length > 10 ? { abort: true as const, feedback: 'rambling' } : { abort: false as const },
     })
@@ -531,11 +526,10 @@ describe('openStream — constraints', () => {
 describe('openStream — transcript and transform()', () => {
   it('records stream.chunk directives and stream.finish in the transcript', async () => {
     const holdFirst = guardrail({
-      name: 'hold-first',
-      phase: 'output',
-      validate: async () => ({ action: 'pass' as const }),
-      stream: { buffer: 'none' },
-      onChunk: async (chunk) => (chunk.length < 4 ? { action: 'hold' as const } : { action: 'pass' as const }),
+      id: 'hold-first',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (chunk) => (chunk.length < 4 ? { action: 'hold' as const } : { action: 'allow' as const }),
     })
     const safety = session({ call: { guardrails: [holdFirst] } })
     const stream = safety.openStream()
@@ -553,13 +547,14 @@ describe('openStream — transcript and transform()', () => {
 
   it('transform() pipes chunks through the protocol, releasing pending content at flush', async () => {
     const upper = guardrail({
-      name: 'upper',
-      phase: 'output',
-      validate: async (content) => ({
-        action: 'transform' as const,
-        content: content.toUpperCase(),
+      id: 'upper',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.toUpperCase(),
+        rewrite: { kind: 'normalize' as const },
       }),
-      stream: { buffer: 'full' },
+      stream: { segment: () => null },
     })
     const stream = session({ call: { guardrails: [upper] } }).openStream()
 
@@ -583,9 +578,9 @@ describe('openStream — transcript and transform()', () => {
 
   it('passthrough when no streaming guards or constraints are configured', async () => {
     const inputOnly = guardrail({
-      name: 'in',
-      phase: 'input',
-      validate: async () => ({ action: 'pass' as const }),
+      id: 'in',
+      on: boundary.input.text(),
+      run: async () => ({ action: 'allow' as const }),
     })
     const stream = session({ call: { guardrails: [inputOnly] } }).openStream()
 

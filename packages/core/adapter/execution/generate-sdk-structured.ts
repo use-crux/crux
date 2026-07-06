@@ -100,9 +100,10 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
           }
           return { text: regen.rawText, parsed: undefined }
         },
-        { messages: currentMessages },
+        { messages: currentMessages, schema },
       )
-      if (finalOutput.text !== finalText) finalText = finalOutput.text
+      finalText = finalOutput.text
+      finalObject = finalOutput.parsed
 
       const resultMessages: Message[] = [
         ...(currentMessages.length > 0

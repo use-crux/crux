@@ -8,6 +8,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { z } from 'zod'
 import { prompt as makePrompt, guardrail, resetRuntime } from '@use-crux/core'
+import { boundary } from '@use-crux/core/safety'
 import { createCruxAi } from '../index'
 import { streamingModel } from './mock-model'
 
@@ -24,19 +25,19 @@ const textPrompt = makePrompt({
 
 const importFixer = () =>
   guardrail({
-    name: 'import-fixer',
-    phase: 'output',
-    validate: async () => ({ action: 'pass' as const }),
-    stream: { buffer: 'none' },
-    onChunk: async (chunk) => {
+    id: 'import-fixer',
+    on: boundary.output.text(),
+    stream: 'chunk',
+    run: async (chunk) => {
       if (chunk.includes('@/comps/')) {
         return {
-          action: 'transform' as const,
-          content: chunk.replace('@/comps/', '@/components/'),
+          action: 'rewrite' as const,
+          value: chunk.replace('@/comps/', '@/components/'),
+          rewrite: { kind: 'normalize' as const },
         }
       }
       if (chunk.endsWith('@/co')) return { action: 'hold' as const }
-      return { action: 'pass' as const }
+      return { action: 'allow' as const }
     },
   })
 
@@ -96,11 +97,12 @@ describe('streaming safety through real streamText', () => {
     const ai = createCruxAi()
     const model = streamingModel(['api key sk-', '123.'])
     const redactor = guardrail({
-      name: 'default-stream-redactor',
-      phase: 'output',
-      validate: async (content) => ({
-        action: 'redact' as const,
-        content: content.replace('sk-123', '[KEY]'),
+      id: 'default-stream-redactor',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('sk-123', '[KEY]'),
+        rewrite: { kind: 'redact' as const },
       }),
     })
 
@@ -122,12 +124,11 @@ describe('streaming safety through real streamText', () => {
 
   it('a mid-stream block surfaces as a stream error', async () => {
     const blocker = guardrail({
-      name: 'live-block',
-      phase: 'output',
-      validate: async () => ({ action: 'pass' as const }),
-      stream: { buffer: 'none' },
-      onChunk: async (chunk) =>
-        chunk.includes('forbidden') ? { action: 'block' as const, reason: 'nope' } : { action: 'pass' as const },
+      id: 'live-block',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (chunk) =>
+        chunk.includes('forbidden') ? { action: 'block' as const, reason: 'nope' } : { action: 'allow' as const },
     })
     const ai = createCruxAi()
     const model = streamingModel(['fine ', 'forbidden tail'])

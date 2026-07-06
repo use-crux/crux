@@ -30,7 +30,9 @@
 
 import type { Message } from '../generation/messages'
 import type { TraceMeta } from '../generation/types'
+import type { z } from 'zod'
 import { getRuntime } from '../runtime/runtime'
+import type { BoundaryDef } from './boundary'
 import { buildSafetyRegistry, type SafetyBinding } from './registry'
 import type { SafetyTuneOptions } from './tune'
 import type {
@@ -46,7 +48,6 @@ import type {
   GuardrailAudit,
   GuardrailAuditEntry,
   GuardrailContext,
-  GuardrailPhase,
 } from './guardrail/types'
 import { createGuardrailPipeline } from './guardrail/pipeline'
 import { createSafetyStream } from './stream/engine'
@@ -216,7 +217,7 @@ export interface Safety {
   finalizeOutput(
     output: SafetyOutput,
     regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
-    opts?: { readonly suspended?: boolean; readonly messages?: readonly Message[] },
+    opts?: { readonly suspended?: boolean; readonly messages?: readonly Message[]; readonly schema?: z.ZodType },
   ): Promise<SafetyOutput>
 
   /** Audits accumulated so far (exact `GuardrailAudit` / `ConstraintAudit` shapes). */
@@ -306,9 +307,9 @@ function disabledGuardrailEntries(bindings: readonly SafetyBinding[]): Guardrail
     if (seen.has(guard)) continue
     seen.add(guard)
     entries.push({
-      guard: guard.name,
+      guard: guard.id,
       ...(guard.category !== undefined ? { category: guard.category } : {}),
-      phase: guard.phase,
+      phase: guardPhase(guard),
       action: 'allow',
       reason: 'disabled by call site',
       durationMs: 0,
@@ -380,13 +381,14 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
   // Phase dispatch is keyed, not branched — the phase vocabulary can grow
   // (tool-args, tool-result, context-inject) without session surgery.
-  const guardsByPhase = new Map<GuardrailPhase, Guardrail[]>()
+  const guardsByPhase = new Map<'input' | 'output', Guardrail[]>()
   for (const guard of guardrails) {
-    const list = guardsByPhase.get(guard.phase) ?? []
+    const phase = guardPhase(guard)
+    const list = guardsByPhase.get(phase) ?? []
     list.push(guard)
-    guardsByPhase.set(guard.phase, list)
+    guardsByPhase.set(phase, list)
   }
-  const phaseGuards = (phase: GuardrailPhase): readonly Guardrail[] => guardsByPhase.get(phase) ?? []
+  const phaseGuards = (phase: 'input' | 'output'): readonly Guardrail[] => guardsByPhase.get(phase) ?? []
 
   const enabled =
     constraints.length > 0 ||
@@ -402,8 +404,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
   let constraintAudit: ConstraintAudit | undefined
   let lastMessages: readonly Message[] = []
 
-  const guardContext = (phase: GuardrailPhase, messages: readonly Message[]): GuardrailContext => ({
-    phase,
+  const guardContext = (_phase: 'input' | 'output', messages: readonly Message[]): GuardrailContext => ({
     promptId: options.promptId,
     model: options.model,
     messages,
@@ -485,7 +486,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
       ),
     )
     const entries: ConstraintAuditEntry[] = checks.map((check) => ({
-      constraint: check.constraint.name,
+      constraint: check.constraint.id,
       ...(check.constraint.category !== undefined ? { category: check.constraint.category } : {}),
       severity: check.constraint.severity,
       pass: check.result.pass,
@@ -504,7 +505,11 @@ export function createSafety(options: SafetyCallOptions): Safety {
     }
   }
 
-  async function applyOutputGuards(output: SafetyOutput, messages: readonly Message[]): Promise<SafetyOutput> {
+  async function applyOutputGuards(
+    output: SafetyOutput,
+    messages: readonly Message[],
+    schema: z.ZodType | undefined,
+  ): Promise<SafetyOutput> {
     const outputGuards = phaseGuards('output')
     const pipeline = createGuardrailPipeline(outputGuards)
     const result = await pipeline.runOutput(output.text, guardContext('output', messages))
@@ -514,7 +519,10 @@ export function createSafety(options: SafetyCallOptions): Safety {
       guards: outputGuards.length,
       actions: result.audit.applied.map((entry) => entry.action),
     })
-    return resyncStructuredText(output, result.content)
+    return resyncStructuredText(output, result.content, {
+      schema,
+      policyId: latestRewritePolicyId(result.audit.applied),
+    })
   }
 
   // ── Streaming sub-protocol ─────────────────────────────────────
@@ -597,7 +605,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
       }
 
       const guardCandidate = async (candidate: SafetyOutput): Promise<SafetyOutput> =>
-        phaseGuards('output').length > 0 ? applyOutputGuards(candidate, lastMessages) : candidate
+        phaseGuards('output').length > 0 ? applyOutputGuards(candidate, lastMessages, opts?.schema) : candidate
 
       let current = await guardCandidate(output)
       if (constraints.length > 0) {
@@ -630,4 +638,24 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
     transcript,
   }
+}
+
+function latestRewritePolicyId(entries: readonly GuardrailAuditEntry[]): string | undefined {
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index]
+    if (!entry) continue
+    if (entry.action === 'redact' || entry.action === 'transform' || entry.action === 'rewrite') {
+      return entry.guard
+    }
+  }
+  return undefined
+}
+
+function guardPhase(guard: Guardrail): 'input' | 'output' {
+  const boundaries = Array.isArray(guard.on) ? guard.on : [guard.on]
+  return boundaries.some(isInputBoundary) ? 'input' : 'output'
+}
+
+function isInputBoundary(boundary: BoundaryDef): boolean {
+  return boundary.id === 'user.input' || boundary.id === 'model.input'
 }

@@ -21,48 +21,36 @@ export interface ConstraintRun<B extends BoundaryDef> {
   }
 }
 
-/** Public constraint authoring config. Constraints bind to one boundary. */
-type ConstraintBoundary<T> = T extends BoundaryDef
-  ? T
-  : BoundaryDef
-
-type ConstraintSchema<T> = T extends z.ZodType ? T : z.ZodType<unknown>
-
-export interface ConstraintConfig<B extends BoundaryDef = BoundaryDef<'model.output', ConstraintOutput>> {
+export interface ConstraintConfig<B extends BoundaryDef = BoundaryDef> {
   readonly id: string
   readonly on: B
   readonly category?: string
   readonly severity?: ConstraintSeverity
   readonly maxRetries?: number
   readonly run: ConstraintRun<B>
+  readonly onChunk?: (
+    chunk: string,
+    accumulated: string,
+    ctx: ConstraintContext,
+  ) => ChunkCheckResult | Promise<ChunkCheckResult>
 }
 
 /** Frozen constraint object. */
-export interface Constraint<T = z.ZodType<unknown>> {
+export interface Constraint<B extends BoundaryDef = BoundaryDef> {
   readonly _tag: 'Constraint'
   readonly id: string
-  readonly on: ConstraintBoundary<T>
+  readonly on: B
   readonly category: string | undefined
   readonly severity: ConstraintSeverity
   readonly maxRetries: number
-  readonly run: ConstraintConfig<ConstraintBoundary<T>>['run']
+  readonly run: ConstraintConfig<B>['run']
   readonly strategy?: {
     readonly kind: string
     readonly config: Readonly<Record<string, unknown>>
   }
 
-  /** @internal Legacy compatibility adapter for session internals. */
-  readonly name: string
-  /** @internal Legacy compatibility adapter for session internals. */
-  check(
-    output: ConstraintOutput<ConstraintSchema<T>>,
-    ctx: ConstraintContext,
-  ): ConstraintCheckResult | Promise<ConstraintCheckResult>
-  /** @internal Legacy compatibility adapter for stream internals. */
   onChunk?(chunk: string, accumulated: string, ctx: ConstraintContext): ChunkCheckResult | Promise<ChunkCheckResult>
 }
-
-// ── Legacy runtime compatibility types (not exported from @use-crux/core/safety) ──
 
 export interface ConstraintContext {
   readonly promptId: string | undefined
@@ -75,22 +63,6 @@ export interface ConstraintContext {
 export interface ConstraintOutput<TSchema extends z.ZodType = z.ZodType<unknown>> {
   readonly text: string
   readonly parsed: z.infer<TSchema> | undefined
-}
-
-export interface LegacyConstraintConfig<TSchema extends z.ZodType = z.ZodType<unknown>> {
-  readonly name: string
-  readonly category?: string
-  readonly severity?: ConstraintSeverity
-  readonly maxRetries?: number
-  readonly check: (
-    output: ConstraintOutput<TSchema>,
-    ctx: ConstraintContext,
-  ) => ConstraintCheckResult | Promise<ConstraintCheckResult>
-  readonly onChunk?: (
-    chunk: string,
-    accumulated: string,
-    ctx: ConstraintContext,
-  ) => ChunkCheckResult | Promise<ChunkCheckResult>
 }
 
 export interface ConstraintAuditEntry {

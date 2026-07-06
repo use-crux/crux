@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { createSafety, ConstraintViolationError, GuardrailBlockedError, createSafetyPlugin } from '../../safety'
+import { boundary, createSafety, ConstraintViolationError, GuardrailBlockedError, createSafetyPlugin } from '../../safety'
 import type { SafetyCallOptions, SafetyOutput } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
@@ -26,12 +26,13 @@ const noRegen = async (): Promise<SafetyOutput> => {
 }
 
 /** A constraint that fails until the output text contains `needle`. */
-const needsNeedle = (name: string, needle: string, opts?: { severity?: 'assert' | 'suggest'; maxRetries?: number }) =>
+const needsNeedle = (id: string, needle: string, opts?: { severity?: 'assert' | 'suggest'; maxRetries?: number }) =>
   constraint({
-    name,
+    id,
+    on: boundary.output.both(),
     severity: opts?.severity,
     maxRetries: opts?.maxRetries,
-    check: async (output) =>
+    run: async (output) =>
       output.text.includes(needle)
         ? { pass: true as const }
         : { pass: false as const, feedback: `must mention ${needle}` },
@@ -87,9 +88,10 @@ describe('finalizeOutput — constraints', () => {
       call: {
         constraints: [
           constraint({
-            name: 'no-secret',
+            id: 'no-secret',
+            on: boundary.output.both(),
             maxRetries: 0,
-            check: async () => ({
+            run: async () => ({
               pass: false as const,
               feedback: 'raw secret output rejected',
             }),
@@ -191,11 +193,12 @@ describe('finalizeOutput — constraints', () => {
 describe('finalizeOutput — output guardrails', () => {
   it('redacts the final text via output guards after constraints pass', async () => {
     const redactor = guardrail({
-      name: 'no-emails',
-      phase: 'output',
-      validate: async (content) => ({
-        action: 'redact' as const,
-        content: content.replace('a@b.c', '[EMAIL]'),
+      id: 'no-emails',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('a@b.c', '[EMAIL]'),
+        rewrite: { kind: 'redact' as const },
       }),
     })
     const safety = session({
@@ -216,9 +219,9 @@ describe('finalizeOutput — output guardrails', () => {
 
   it('throws GuardrailBlockedError with safe decision metadata when an output guard blocks', async () => {
     const blocker = guardrail({
-      name: 'toxicity',
-      phase: 'output',
-      validate: async () => ({ action: 'block' as const, reason: 'toxic' }),
+      id: 'toxicity',
+      on: boundary.output.text(),
+      run: async () => ({ action: 'block' as const, reason: 'toxic' }),
     })
     const safety = session({ call: { guardrails: [blocker] } })
 
@@ -241,11 +244,12 @@ describe('finalizeOutput — output guardrails', () => {
 
   it('resynchronizes the parsed object when a structured text guard rewrites JSON', async () => {
     const transformer = guardrail({
-      name: 'email-redactor',
-      phase: 'output',
-      validate: async (content) => ({
-        action: 'transform' as const,
-        content: content.replace('a@b.c', '[EMAIL]'),
+      id: 'email-redactor',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('a@b.c', '[EMAIL]'),
+        rewrite: { kind: 'normalize' as const },
       }),
     })
     const safety = session({ call: { guardrails: [transformer] } })
@@ -259,16 +263,18 @@ describe('finalizeOutput — output guardrails', () => {
   it('runs output guardrails before constraints so constraints see guarded content', async () => {
     const seenByConstraint: string[] = []
     const redactor = guardrail({
-      name: 'pii',
-      phase: 'output',
-      validate: async (content) => ({
-        action: 'redact' as const,
-        content: content.replace('a@b.c', '[EMAIL]'),
+      id: 'pii',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('a@b.c', '[EMAIL]'),
+        rewrite: { kind: 'redact' as const },
       }),
     })
     const noRawEmail = constraint({
-      name: 'judge-safe',
-      check: async (output) => {
+      id: 'judge-safe',
+      on: boundary.output.both(),
+      run: async (output) => {
         seenByConstraint.push(output.text)
         return { pass: true as const }
       },
@@ -285,11 +291,12 @@ describe('finalizeOutput — output guardrails', () => {
 
   it('records report-mode output guardrails without changing the final text', async () => {
     const redactor = guardrail({
-      name: 'shadow-pii',
-      phase: 'output',
-      validate: async (content) => ({
-        action: 'redact' as const,
-        content: content.replace('a@b.c', '[EMAIL]'),
+      id: 'shadow-pii',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('a@b.c', '[EMAIL]'),
+        rewrite: { kind: 'redact' as const },
       }),
     })
     const safety = session({
@@ -307,9 +314,10 @@ describe('finalizeOutput — output guardrails', () => {
 
   it('records report-mode constraints without retrying or throwing', async () => {
     const reportOnly = constraint({
-      name: 'shadow-judge',
+      id: 'shadow-judge',
+      on: boundary.output.both(),
       maxRetries: 3,
-      check: async () => ({ pass: false as const, feedback: 'shadow finding' }),
+      run: async () => ({ pass: false as const, feedback: 'shadow finding' }),
     })
     const safety = session({
       call: { constraints: [reportOnly] },
@@ -330,9 +338,9 @@ describe('finalizeOutput — output guardrails', () => {
 
   it('fails closed when an output guardrail returns an unknown action', async () => {
     const malformed = guardrail({
-      name: 'unknown-action',
-      phase: 'output',
-      validate: async () => ({ action: 'approve' }) as never,
+      id: 'unknown-action',
+      on: boundary.output.text(),
+      run: async () => ({ action: 'approve' }) as never,
     })
     const safety = session({ call: { guardrails: [malformed] } })
 
@@ -345,8 +353,9 @@ describe('finalizeOutput — output guardrails', () => {
 describe('finalizeOutput — malformed constraint results', () => {
   it('fails closed when a constraint returns a non-boolean pass field', async () => {
     const malformed = constraint({
-      name: 'malformed',
-      check: async () => ({ pass: 'maybe' }) as never,
+      id: 'malformed',
+      on: boundary.output.both(),
+      run: async () => ({ pass: 'maybe' }) as never,
     })
     const safety = session({ call: { constraints: [malformed] } })
 
@@ -364,8 +373,9 @@ describe('finalizeOutput — suspension', () => {
       call: {
         constraints: [
           constraint({
-            name: 'c',
-            check: async () => {
+            id: 'c',
+            on: boundary.output.both(),
+            run: async () => {
               checkSpy()
               return { pass: true as const }
             },
@@ -373,11 +383,11 @@ describe('finalizeOutput — suspension', () => {
         ],
         guardrails: [
           guardrail({
-            name: 'g',
-            phase: 'output',
-            validate: async (content) => {
+            id: 'g',
+            on: boundary.output.text(),
+            run: async () => {
               guardSpy()
-              return { action: 'pass' as const, content } as never
+              return { action: 'allow' as const }
             },
           }),
         ],
@@ -405,9 +415,9 @@ describe('stamp', () => {
       call: {
         guardrails: [
           guardrail({
-            name: 'g',
-            phase: 'input',
-            validate: async () => ({ action: 'pass' as const }),
+            id: 'g',
+            on: boundary.input.text(),
+            run: async () => ({ action: 'allow' as const }),
           }),
         ],
         constraints: [needsNeedle('c', 'fine')],
@@ -442,17 +452,18 @@ describe('category metadata', () => {
       call: {
         guardrails: [
           guardrail({
-            name: 'pii-scan',
+            id: 'pii-scan',
+            on: boundary.input.text(),
             category: 'pii',
-            phase: 'input',
-            validate: async () => ({ action: 'pass' as const }),
+            run: async () => ({ action: 'allow' as const }),
           }),
         ],
         constraints: [
           constraint({
-            name: 'grounded',
+            id: 'grounded',
+            on: boundary.output.both(),
             category: 'grounding',
-            check: async () => ({ pass: true as const }),
+            run: async () => ({ pass: true as const }),
           }),
         ],
       },
@@ -480,18 +491,19 @@ describe('createSafetyPlugin', () => {
     const plugin = createSafetyPlugin({
       guardrails: [
         guardrail({
-          name: 'global-guard',
-          phase: 'input',
-          validate: async () => {
+          id: 'global-guard',
+          on: boundary.input.text(),
+          run: async () => {
             guardSpy()
-            return { action: 'pass' as const }
+            return { action: 'allow' as const }
           },
         }),
       ],
       constraints: [
         constraint({
-          name: 'global-constraint',
-          check: async () => {
+          id: 'global-constraint',
+          on: boundary.output.both(),
+          run: async () => {
             checkSpy()
             return { pass: true as const }
           },
@@ -513,14 +525,14 @@ describe('createSafetyPlugin', () => {
 
   it('multiple safety plugins compose — policies concatenate', () => {
     const g1 = guardrail({
-      name: 'g1',
-      phase: 'input',
-      validate: async () => ({ action: 'pass' as const }),
+      id: 'g1',
+      on: boundary.input.text(),
+      run: async () => ({ action: 'allow' as const }),
     })
     const g2 = guardrail({
-      name: 'g2',
-      phase: 'input',
-      validate: async () => ({ action: 'pass' as const }),
+      id: 'g2',
+      on: boundary.input.text(),
+      run: async () => ({ action: 'allow' as const }),
     })
 
     const { runtime } = applyPlugins(
@@ -528,7 +540,7 @@ describe('createSafetyPlugin', () => {
       getRuntime(),
     )
 
-    expect(runtime.globalGuardrails?.map((g) => g.name)).toEqual(['g1', 'g2'])
+    expect(runtime.globalGuardrails?.map((g) => g.id)).toEqual(['g1', 'g2'])
   })
 })
 
@@ -537,15 +549,16 @@ describe('createSafetyPlugin', () => {
 describe('finalizeOutput — output guardrail pipeline', () => {
   it('runs output guards in declaration order, threading each guard output into the next', async () => {
     const seen: string[] = []
-    const tagging = (name: string, suffix: string) =>
+    const tagging = (id: string, suffix: string) =>
       guardrail({
-        name,
-        phase: 'output' as const,
-        validate: async (content) => {
-          seen.push(`${name}:${content}`)
+        id,
+        on: boundary.output.text(),
+        run: async (content) => {
+          seen.push(`${id}:${content}`)
           return {
-            action: 'transform' as const,
-            content: `${content}${suffix}`,
+            action: 'rewrite' as const,
+            value: `${content}${suffix}`,
+            rewrite: { kind: 'normalize' as const },
           }
         },
       })
@@ -563,16 +576,16 @@ describe('finalizeOutput — output guardrail pipeline', () => {
   it('stops at the first blocking output guard — a later guard never runs', async () => {
     const later = vi.fn()
     const blocker = guardrail({
-      name: 'blk',
-      phase: 'output',
-      validate: async () => ({ action: 'block' as const, reason: 'bad' }),
+      id: 'blk',
+      on: boundary.output.text(),
+      run: async () => ({ action: 'block' as const, reason: 'bad' }),
     })
     const after = guardrail({
-      name: 'aft',
-      phase: 'output',
-      validate: async () => {
+      id: 'aft',
+      on: boundary.output.text(),
+      run: async () => {
         later()
-        return { action: 'pass' as const }
+        return { action: 'allow' as const }
       },
     })
 
@@ -584,9 +597,9 @@ describe('finalizeOutput — output guardrail pipeline', () => {
 
   it('throws a GuardrailBlockedError carrying phase "output"', async () => {
     const blocker = guardrail({
-      name: 'toxicity',
-      phase: 'output',
-      validate: async () => ({ action: 'block' as const, reason: 'toxic' }),
+      id: 'toxicity',
+      on: boundary.output.text(),
+      run: async () => ({ action: 'block' as const, reason: 'toxic' }),
     })
     const safety = session({ call: { guardrails: [blocker] } })
 
@@ -642,14 +655,14 @@ describe('audit accumulation across phases', () => {
       call: {
         guardrails: [
           guardrail({
-            name: 'in',
-            phase: 'input',
-            validate: async () => ({ action: 'pass' as const }),
+            id: 'in',
+            on: boundary.input.text(),
+            run: async () => ({ action: 'allow' as const }),
           }),
           guardrail({
-            name: 'out',
-            phase: 'output',
-            validate: async () => ({ action: 'pass' as const }),
+            id: 'out',
+            on: boundary.output.text(),
+            run: async () => ({ action: 'allow' as const }),
           }),
         ],
       },

@@ -1,17 +1,13 @@
 import type { z } from 'zod'
 import type { BoundaryDef } from '../boundary'
-import { boundary } from '../boundary'
 import type { SafetyRunContext } from '../decision'
 import { captureSource } from '../../project-index/source'
 import type {
   Constraint,
-  ConstraintCheckResult,
   ConstraintConfig,
   ConstraintContext,
   ConstraintOutput,
-  LegacyConstraintConfig,
 } from './types'
-import { validateConstraintRunResult } from './types'
 import { citations } from './strategies/citations'
 import { judge } from './strategies/judge'
 
@@ -33,10 +29,6 @@ export function getConstraintDefinitionSource(
  */
 interface ConstraintFactory {
   <B extends BoundaryDef>(config: ConstraintConfig<B>): Constraint<B>
-  /** @internal Transitional overload for pre-migration source files. */
-  <TSchema extends z.ZodType = z.ZodType<unknown>>(
-    config: LegacyConstraintConfig<TSchema>,
-  ): Constraint<TSchema>
   /** Built-in LLM-as-a-judge constraint strategy. */
   readonly judge: typeof judge
   /** Built-in grounded-citation constraint strategy. */
@@ -44,14 +36,9 @@ interface ConstraintFactory {
 }
 
 function defineConstraint<B extends BoundaryDef>(config: ConstraintConfig<B>): Constraint<B>
-function defineConstraint<TSchema extends z.ZodType = z.ZodType<unknown>>(
-  config: LegacyConstraintConfig<TSchema>,
-): Constraint<TSchema>
-function defineConstraint<B extends BoundaryDef>(
-  config: ConstraintConfig<B> | LegacyConstraintConfig,
-): Constraint<B> | Constraint<z.ZodType<unknown>> {
+function defineConstraint<B extends BoundaryDef>(config: ConstraintConfig<B>): Constraint<B> {
   const defSource = captureSource()
-  const c = isLegacyConstraintConfig(config) ? defineLegacyConstraint(config) : defineBoundaryConstraint(config)
+  const c = defineBoundaryConstraint(config)
 
   if (defSource) definitionSourceMap.set(c, defSource)
   return c
@@ -84,54 +71,10 @@ function defineBoundaryConstraint<B extends BoundaryDef>(config: ConstraintConfi
     maxRetries: config.maxRetries ?? 2,
     run: config.run,
     ...(strategy ? { strategy } : {}),
-    name: config.id,
-    check: async (output: ConstraintOutput, ctx: ConstraintContext): Promise<ConstraintCheckResult> => {
-      const runCtx = contextForConstraint(config.id, config.on, ctx)
-      const subject = subjectForBoundary(config.on, output)
-      return validateConstraintRunResult(await config.run(subject as never, runCtx as never), {
-        policyId: config.id,
-        boundary: config.on.id,
-      })
-    },
-    onChunk: undefined,
+    ...(config.onChunk ? { onChunk: config.onChunk } : {}),
   }) as Constraint<B>
 
   return c
-}
-
-function defineLegacyConstraint<TSchema extends z.ZodType>(
-  config: LegacyConstraintConfig<TSchema>,
-): Constraint<TSchema> {
-  const on = boundary.output.both<unknown>()
-  return Object.freeze({
-    _tag: 'Constraint' as const,
-    id: config.name,
-    on,
-    category: config.category,
-    severity: config.severity ?? 'assert',
-    maxRetries: config.maxRetries ?? 2,
-    run: async (subject: ConstraintOutput): Promise<ConstraintCheckResult> =>
-      validateConstraintRunResult(await config.check(subject as ConstraintOutput<TSchema>, legacyContext()), {
-        policyId: config.name,
-        boundary: on.id,
-      }),
-    name: config.name,
-    check: async (output: ConstraintOutput<TSchema>, ctx: ConstraintContext) =>
-      validateConstraintRunResult(await config.check(output, ctx), {
-        policyId: config.name,
-        boundary: on.id,
-      }),
-    onChunk: config.onChunk,
-  }) as unknown as Constraint<TSchema>
-}
-
-function isLegacyConstraintConfig(value: unknown): value is LegacyConstraintConfig {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'name' in value &&
-    'check' in value
-  )
 }
 
 function strategyMetadata(run: unknown): Constraint['strategy'] | undefined {
@@ -174,14 +117,4 @@ function valueAtPath(value: unknown, path: string): unknown {
     if (typeof current !== 'object' || current === null) return undefined
     return (current as Readonly<Record<string, unknown>>)[segment]
   }, value)
-}
-
-function legacyContext(): ConstraintContext {
-  return {
-    promptId: undefined,
-    model: undefined,
-    traceId: undefined,
-    attempt: 0,
-    metadata: {},
-  }
 }

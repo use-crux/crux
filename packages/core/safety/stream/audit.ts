@@ -1,9 +1,4 @@
-import type {
-  ChunkGuardrailResult,
-  Guardrail,
-  GuardrailAudit,
-  GuardrailAuditEntry,
-} from '../guardrail/types'
+import type { Guardrail, GuardrailAudit, GuardrailAuditEntry, GuardrailRunResult } from '../guardrail/types'
 
 type AppendGuardrailAudit = (audit: GuardrailAudit) => void
 
@@ -14,7 +9,7 @@ export function auditDisabledStreamGuards(
 ): void {
   for (const guard of guards) {
     const entry: GuardrailAuditEntry = {
-      guard: guard.name,
+      guard: guard.id,
       ...(guard.category !== undefined ? { category: guard.category } : {}),
       phase: 'output',
       action: 'allow',
@@ -29,19 +24,24 @@ export function auditDisabledStreamGuards(
 export function recordStreamChunkAction(
   appendGuardrailAudit: AppendGuardrailAudit,
   guard: Guardrail,
-  result: ChunkGuardrailResult,
+  result: GuardrailRunResult<unknown>,
   reason?: string,
   options?: { readonly blocked?: boolean },
 ): void {
-  if (result.action === 'pass' || result.action === 'hold') return
+  if (result.action === 'allow' || result.action === 'hold') return
 
   const entry: GuardrailAuditEntry = {
-    guard: guard.name,
+    guard: guard.id,
     ...(guard.category !== undefined ? { category: guard.category } : {}),
     phase: 'output',
-    action: result.action,
+    action: auditAction(result),
     ...(reason ? { reason } : {}),
     durationMs: 0,
   }
   appendGuardrailAudit({ applied: [entry], blocked: options?.blocked ?? result.action === 'block' })
+}
+
+function auditAction(result: GuardrailRunResult<unknown>): string {
+  if (result.action === 'rewrite') return result.rewrite.kind === 'normalize' ? 'transform' : result.rewrite.kind
+  return result.action
 }

@@ -35,7 +35,15 @@ import { prompt, context, createPrompts, createContexts, when, match, config } f
 import { tool } from '@use-crux/core/tools'
 import { toolMiddleware, approvalMiddleware } from '@use-crux/core/tool-middleware'
 import { adapter, loopRuntimeAdapter, defineProviderRuntime, defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
-import { guardrail, constraint, isGuardrail, isConstraint, createSafety, createSafetyPlugin } from '@use-crux/core/safety'
+import {
+  boundary,
+  guardrail,
+  constraint,
+  isGuardrail,
+  isConstraint,
+  createSafety,
+  createSafetyPlugin,
+} from '@use-crux/core/safety'
 import { evaluate, target, scorers, dataset, cassette } from '@use-crux/core/quality'
 
 // ─────────────────────────────────────────────────────────────────
@@ -183,10 +191,10 @@ describe('@use-crux/core/adapter', () => {
 describe('@use-crux/core/safety', () => {
   it('guardrail() builds a recognizable guardrail', () => {
     const guard = guardrail({
-      name: 'no-secrets',
-      phase: 'output',
-      validate: async (content: string) =>
-        content.includes('secret') ? { action: 'block' as const, reason: 'leak' } : { action: 'pass' as const },
+      id: 'no-secrets',
+      on: boundary.output.text(),
+      run: async (content: string) =>
+        content.includes('secret') ? { action: 'block' as const, reason: 'leak' } : { action: 'allow' as const },
     })
 
     expect(guard._tag).toBe('Guardrail')
@@ -194,7 +202,7 @@ describe('@use-crux/core/safety', () => {
   })
 
     it('constraint() builds a recognizable constraint', () => {
-    const c = constraint({ name: 'non-empty', check: async () => ({ pass: true }) })
+    const c = constraint({ id: 'non-empty', on: boundary.output.both(), run: async () => ({ pass: true }) })
 
     expect(c._tag).toBe('Constraint')
     expect(isConstraint(c)).toBe(true)

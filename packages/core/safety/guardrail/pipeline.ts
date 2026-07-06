@@ -1,14 +1,14 @@
 import type {
   Guardrail,
   GuardrailContext,
-  GuardrailPhase,
-  GuardrailResult,
   GuardrailAudit,
   GuardrailAuditEntry,
+  GuardrailRunResult,
 } from './types'
-import { validateLegacyGuardrailResult } from './types'
+import { validateGuardrailRunResult } from './types'
 import { GuardrailBlockedError } from './errors'
-import type { SafetyDecision } from '../decision'
+import type { SafetyDecision, SafetyRunContext } from '../decision'
+import type { BoundaryDef } from '../boundary'
 import { safeCaptureSummary } from '../errors'
 import { observe } from '../../observability'
 
@@ -16,8 +16,8 @@ import { observe } from '../../observability'
 
 export interface GuardrailPipelineConfig {
   readonly onBlock?: (guard: Guardrail, detail: { reason: string }) => void
-  readonly onRedact?: (guard: Guardrail, detail: { original: string; content: string }) => void
-  readonly onTransform?: (guard: Guardrail, detail: { original: string; content: string }) => void
+  readonly onRedact?: (guard: Guardrail, detail: { content: string }) => void
+  readonly onTransform?: (guard: Guardrail, detail: { content: string }) => void
   readonly onWarn?: (guard: Guardrail, detail: { reason: string }) => void
 }
 
@@ -57,18 +57,18 @@ export function createGuardrailPipeline(
   guards: readonly Guardrail[],
   config?: GuardrailPipelineConfig,
 ): GuardrailPipeline {
-  const inputGuards = guards.filter((g) => g.phase === 'input')
-  const outputGuards = guards.filter((g) => g.phase === 'output')
+  const inputGuards = guards.filter((g) => guardPhase(g) === 'input')
+  const outputGuards = guards.filter((g) => guardPhase(g) === 'output')
 
   return {
     guards,
 
     async runInput(content: string, ctx: GuardrailContext): Promise<GuardrailPipelineResult> {
-      return runGuards(inputGuards, content, { ...ctx, phase: 'input' }, config)
+      return runGuards(inputGuards, content, ctx, 'input', config)
     },
 
     async runOutput(content: string, ctx: GuardrailContext): Promise<GuardrailPipelineResult> {
-      return runGuards(outputGuards, content, { ...ctx, phase: 'output' }, config)
+      return runGuards(outputGuards, content, ctx, 'output', config)
     },
   }
 }
@@ -79,20 +79,21 @@ async function runGuards(
   guards: readonly Guardrail[],
   content: string,
   ctx: GuardrailContext,
+  phase: 'input' | 'output',
   config?: GuardrailPipelineConfig,
 ): Promise<GuardrailPipelineResult> {
   return observe.span(
     {
-      name: `${ctx.phase ?? 'unknown'} guardrails`,
+      name: `${phase} guardrails`,
       primitive: 'guardrail.run',
       attributes: {
-        phase: ctx.phase,
+        phase,
         promptId: ctx.promptId,
         model: ctx.model,
         guardrailCount: guards.length,
       },
     },
-    async () => runGuardsInternal(guards, content, ctx, config),
+    async () => runGuardsInternal(guards, content, ctx, phase, config),
   )
 }
 
@@ -100,6 +101,7 @@ async function runGuardsInternal(
   guards: readonly Guardrail[],
   content: string,
   ctx: GuardrailContext,
+  phase: 'input' | 'output',
   config?: GuardrailPipelineConfig,
 ): Promise<GuardrailPipelineResult> {
   let currentContent = content
@@ -107,51 +109,54 @@ async function runGuardsInternal(
 
   for (const guard of guards) {
     const start = performance.now()
+    const boundary = firstBoundary(guard)
     const span = observe.openSpan(
       {
-        name: guard.name,
+        name: guard.id,
         primitive: 'guardrail.run',
         attributes: {
-          guardrailName: guard.name,
+          guardrailName: guard.id,
           category: guard.category,
-          phase: guard.phase,
+          phase,
           promptId: ctx.promptId,
           model: ctx.model,
         },
       },
     )
-    let result: GuardrailResult<GuardrailPhase>
+    let result: GuardrailRunResult<unknown>
     let durationMs = 0
     try {
-      result = validateLegacyGuardrailResult(
-        await span.withContext(async () => guard.validate(currentContent, { ...ctx, mode: guard.mode })),
+      result = validateGuardrailRunResult(
+        await span.withContext(async () =>
+          guard.run(subjectForBoundary(boundary, currentContent) as never, runContext(guard, boundary, ctx) as never),
+        ),
         {
           streaming: false,
           last: true,
           policyId: guard.id,
-          boundary: ctx.phase === 'input' ? 'user.input' : 'model.output.text',
+          boundary: boundary.id,
         },
-      ) as GuardrailResult<GuardrailPhase>
+      )
       durationMs = performance.now() - start
       span.withContext(() =>
-        recordGuardrailReport(guard, result.action, durationMs, result),
+        recordGuardrailReport(guard, auditAction(result), phase, durationMs, result),
       )
-      span.end({ attributes: { action: result.action, durationMs } })
+      span.end({ attributes: { action: auditAction(result), durationMs } })
     } catch (error) {
       span.error(error)
       throw error
     }
 
     const entry: GuardrailAuditEntry = {
-      guard: guard.name,
+      guard: guard.id,
       ...(guard.category !== undefined ? { category: guard.category } : {}),
-      phase: guard.phase,
-      action: result.action,
+      phase,
+      action: auditAction(result),
       durationMs,
     }
 
     switch (result.action) {
-      case 'pass':
+      case 'allow':
         entries.push(entry)
         break
 
@@ -159,29 +164,27 @@ async function runGuardsInternal(
         entries.push(entry)
         if (guard.mode === 'report') break
         config?.onBlock?.(guard, { reason: result.reason })
-        span.withContext(() => recordGuardrailBlockedEdge(guard.name, result.reason))
+        span.withContext(() => recordGuardrailBlockedEdge(guard.id, result.reason))
         throw new GuardrailBlockedError({
-          guardrailId: guard.name,
-          phase: guard.phase,
+          guardrailId: guard.id,
+          phase,
           reason: result.reason,
-          decisions: [guardDecision(guard, result, currentContent, durationMs, ctx.phase)],
+          decisions: [guardDecision(guard, result, currentContent, durationMs, phase)],
         })
 
-      case 'redact':
+      case 'rewrite': {
         entries.push(entry)
         if (guard.mode !== 'report') {
-          config?.onRedact?.(guard, { original: currentContent, content: result.content })
-          currentContent = result.content
+          const content = stringifyGuardrailValue(result.value)
+          if (result.rewrite.kind === 'normalize') {
+            config?.onTransform?.(guard, { content })
+          } else {
+            config?.onRedact?.(guard, { content })
+          }
+          currentContent = content
         }
         break
-
-      case 'transform':
-        entries.push(entry)
-        if (guard.mode !== 'report') {
-          config?.onTransform?.(guard, { original: currentContent, content: result.content })
-          currentContent = result.content
-        }
-        break
+      }
 
       case 'warn':
         entries.push(entry)
@@ -189,7 +192,6 @@ async function runGuardsInternal(
         break
 
       default:
-        // Exhaustiveness check for future actions
         entries.push(entry)
     }
   }
@@ -202,37 +204,37 @@ async function runGuardsInternal(
 
 function guardDecision(
   guard: Guardrail,
-  result: GuardrailResult<GuardrailPhase>,
+  result: GuardrailRunResult<unknown>,
   content: string,
   durationMs: number,
-  phase: GuardrailPhase,
+  phase: 'input' | 'output',
 ): SafetyDecision {
   return {
     policyId: guard.id,
     kind: 'guardrail',
     boundary: phase === 'input' ? 'user.input' : 'model.output.text',
     mode: guard.mode,
-    action: safetyAction(result.action),
+    action: safetyAction(result),
     ...(result.action === 'block' || result.action === 'warn' ? { reason: result.reason } : {}),
     durationMs,
     captured: safeCaptureSummary(result.action === 'block' ? '' : content),
   }
 }
 
-function safetyAction(action: GuardrailResult<GuardrailPhase>['action']): SafetyDecision['action'] {
-  if (action === 'pass') return 'allow'
-  if (action === 'redact' || action === 'transform') return 'rewrite'
-  return action
+function safetyAction(result: GuardrailRunResult<unknown>): SafetyDecision['action'] {
+  if (result.action === 'allow' || result.action === 'hold') return 'allow'
+  if (result.action === 'rewrite') return 'rewrite'
+  return result.action
 }
 
 function recordGuardrailReport(
   guard: Guardrail,
   action: string,
+  phase: 'input' | 'output',
   durationMs: number,
   result: unknown,
 ): void {
-  const guardrailName = guard.name
-  const phase = guard.phase
+  const guardrailName = guard.id
   const activeSpanId = observe.captureContext()?.currentSpanId
   const artifactId = observe.artifact({
     kind: 'guardrail.report',
@@ -285,7 +287,7 @@ function recordGuardrailBlockedEdge(guardrailName: string, reason: string): void
 }
 
 function guardrailReportPreview(
-  phase: GuardrailPhase,
+  phase: 'input' | 'output',
   action: string,
   result: unknown,
 ): Record<string, unknown> {
@@ -301,7 +303,49 @@ function guardrailReportPreview(
   return {
     ...base,
     ...record,
-    ...(typeof record.content === 'string' ? { afterPreview: record.content.slice(0, 500) } : {}),
+    ...(typeof record.value === 'string' ? { afterPreview: record.value.slice(0, 500) } : {}),
     ...(typeof record.reason === 'string' ? { reason: record.reason } : {}),
   }
+}
+
+function guardPhase(guard: Guardrail): 'input' | 'output' {
+  const boundaries = Array.isArray(guard.on) ? guard.on : [guard.on]
+  return boundaries.some((boundary) => boundary.id === 'user.input' || boundary.id === 'model.input') ? 'input' : 'output'
+}
+
+function firstBoundary(guard: Guardrail): BoundaryDef {
+  return Array.isArray(guard.on) ? (guard.on[0] ?? { _tag: 'Boundary', id: 'model.output.text' }) : guard.on
+}
+
+function runContext<B extends BoundaryDef>(
+  guard: Guardrail,
+  boundary: B,
+  ctx: GuardrailContext,
+): SafetyRunContext<B> {
+  return {
+    policy: { id: guard.id, mode: ctx.mode ?? guard.mode },
+    boundary: { id: boundary.id as never, kind: boundary.id as never },
+    prompt: { id: ctx.promptId },
+    model: { id: ctx.model },
+    trace: { id: ctx.traceId },
+    attempt: { index: 0, kind: 'initial' },
+    metadata: ctx.metadata,
+    findings: { add() {} },
+    ...(ctx.stream ? { stream: ctx.stream } : {}),
+    ...(boundary.path ? { path: boundary.path } : {}),
+  }
+}
+
+function subjectForBoundary(boundary: BoundaryDef, content: string): unknown {
+  if (boundary.id === 'model.output') return { text: content, object: undefined }
+  return content
+}
+
+function stringifyGuardrailValue(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value)
+}
+
+function auditAction(result: GuardrailRunResult<unknown>): string {
+  if (result.action === 'rewrite') return result.rewrite.kind === 'normalize' ? 'transform' : result.rewrite.kind
+  return result.action
 }

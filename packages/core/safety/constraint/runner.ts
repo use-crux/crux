@@ -9,6 +9,8 @@ import type {
 import { validateConstraintRunResult } from './types'
 import { ConstraintViolationError } from './errors'
 import { observe } from '../../observability'
+import type { BoundaryDef } from '../boundary'
+import type { SafetyRunContext } from '../decision'
 
 // ── Runner Options ────────────────────────────────────────────────
 
@@ -35,7 +37,7 @@ export interface ConstraintRunResult {
 /** Result of one observed `check()` invocation. */
 export interface ObservedConstraintCheck {
   readonly constraint: Constraint
-  readonly result: Awaited<ReturnType<Constraint['check']>>
+  readonly result: ReturnType<typeof validateConstraintRunResult>
   readonly durationMs: number
 }
 
@@ -52,10 +54,10 @@ export async function observeConstraintCheck(
 ): Promise<ObservedConstraintCheck> {
   const span = observe.openSpan(
     {
-      name: c.name,
+      name: c.id,
       primitive: 'constraint.check',
       attributes: {
-        constraintName: c.name,
+        constraintName: c.id,
         category: c.category,
         severity: c.severity,
         maxRetries: c.maxRetries,
@@ -68,7 +70,7 @@ export async function observeConstraintCheck(
   try {
     return await span.withContext(async () => {
       const start = performance.now()
-      const result = validateConstraintRunResult(await c.check(output, ctx), {
+      const result = validateConstraintRunResult(await c.run(subjectForBoundary(c.on, output) as never, runContext(c, ctx) as never), {
         policyId: c.id,
         boundary: c.on.id,
       })
@@ -80,8 +82,8 @@ export async function observeConstraintCheck(
         encoding: 'json',
         preview: {
           kind: 'constraint.report',
-          constraint: c.name,
-          assertion: c.name,
+          constraint: c.id,
+          assertion: c.id,
           category: c.category,
           severity: c.severity,
           pass: result.pass,
@@ -96,7 +98,7 @@ export async function observeConstraintCheck(
           metadata: result.metadata,
         },
         attributes: {
-          constraintName: c.name,
+          constraintName: c.id,
           category: c.category,
           severity: c.severity,
           pass: result.pass,
@@ -108,13 +110,13 @@ export async function observeConstraintCheck(
           edgeType: 'produced',
           from: { kind: 'span', id: activeSpanId },
           to: { kind: 'artifact', id: artifactId },
-          attributes: { constraintName: c.name },
+          attributes: { constraintName: c.id },
         })
       }
       observe.event({
         name: 'constraint.checked',
         attributes: {
-          constraintName: c.name,
+          constraintName: c.id,
           pass: result.pass,
           durationMs,
           feedback: result.pass ? undefined : result.feedback,
@@ -134,6 +136,35 @@ export async function observeConstraintCheck(
     span.error(error)
     throw error
   }
+}
+
+function runContext<B extends BoundaryDef>(constraint: Constraint, ctx: ConstraintContext): SafetyRunContext<B> {
+  const boundary = constraint.on as B
+  return {
+    policy: { id: constraint.id, mode: 'enforce' },
+    boundary: { id: boundary.id as never, kind: boundary.id as never },
+    prompt: { id: ctx.promptId },
+    model: { id: ctx.model },
+    trace: { id: ctx.traceId },
+    attempt: { index: ctx.attempt, kind: ctx.attempt === 0 ? 'initial' : 'retry' },
+    metadata: ctx.metadata,
+    findings: { add() {} },
+    ...(boundary.path ? { path: boundary.path } : {}),
+  }
+}
+
+function subjectForBoundary(boundary: BoundaryDef, output: ConstraintOutput): unknown {
+  if (boundary.id === 'model.output.text') return output.text
+  if (boundary.id === 'model.output.object') return boundary.path ? valueAtPath(output.parsed, boundary.path) : output.parsed
+  if (boundary.id === 'model.output') return { text: output.text, object: output.parsed }
+  return output.text
+}
+
+function valueAtPath(value: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, segment) => {
+    if (typeof current !== 'object' || current === null) return undefined
+    return (current as Readonly<Record<string, unknown>>)[segment]
+  }, value)
 }
 
 // ── Runner ────────────────────────────────────────────────────────
@@ -200,12 +231,12 @@ async function runConstraintsInternal(
 
     for (const r of results) {
       const entry: ConstraintAuditEntry = {
-        constraint: r.constraint.name,
+        constraint: r.constraint.id,
         ...(r.constraint.category !== undefined ? { category: r.constraint.category } : {}),
         severity: r.constraint.severity,
         pass: r.result.pass,
         feedback: r.result.pass ? undefined : r.result.feedback,
-        attempts: (retryCounters.get(r.constraint.name) ?? 0) + 1,
+        attempts: (retryCounters.get(r.constraint.id) ?? 0) + 1,
         durationMs: r.durationMs,
         metadata: r.result.metadata,
       }
@@ -225,7 +256,7 @@ async function runConstraintsInternal(
     const assertFailures = failures.filter((f) => f.constraint.severity === 'assert')
 
     const canRetryAsserts = assertFailures.some((f) => {
-      const used = retryCounters.get(f.constraint.name) ?? 0
+      const used = retryCounters.get(f.constraint.id) ?? 0
       return used < f.constraint.maxRetries
     })
 
@@ -233,7 +264,7 @@ async function runConstraintsInternal(
       // If assert failures remain and retries exhausted, throw
       if (assertFailures.length > 0) {
         const failedConstraints = assertFailures.map((f) => ({
-          name: f.constraint.name,
+          name: f.constraint.id,
           feedback: f.result.pass ? '' : f.result.feedback,
         }))
 
@@ -262,19 +293,19 @@ async function runConstraintsInternal(
 
     // 5. Combine all failure feedback and retry
     const combinedFeedback = failures
-      .map((f) => (f.result.pass ? '' : `[${f.constraint.name}]: ${f.result.feedback}`))
+      .map((f) => (f.result.pass ? '' : `[${f.constraint.id}]: ${f.result.feedback}`))
       .filter(Boolean)
       .join('\n')
 
     const failureDetails: ConstraintFailure[] = failures.map((f) => ({
-      name: f.constraint.name,
+      name: f.constraint.id,
       category: f.constraint.category,
       severity: f.constraint.severity,
       feedback: f.result.pass ? '' : f.result.feedback,
     }))
 
     for (const f of failures) {
-      retryCounters.set(f.constraint.name, (retryCounters.get(f.constraint.name) ?? 0) + 1)
+      retryCounters.set(f.constraint.id, (retryCounters.get(f.constraint.id) ?? 0) + 1)
     }
     totalRetries++
 
@@ -303,7 +334,7 @@ async function runConstraintsInternal(
           preview: {
             kind: 'constraint.report',
             feedback: combinedFeedback,
-            failedConstraints: failures.map((f) => f.constraint.name),
+            failedConstraints: failures.map((f) => f.constraint.id),
             nextAttempt: totalRetries,
             attempts: failures.map((f) => ({
               n: totalRetries,

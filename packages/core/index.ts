@@ -416,8 +416,6 @@ export {
 export type {
   Guardrail,
   GuardrailConfig,
-  GuardrailContext,
-  GuardrailPhase,
 } from "./safety/guardrail";
 
 // Constraint

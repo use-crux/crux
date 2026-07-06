@@ -20,7 +20,7 @@ export async function runStreamChunkConstraints(options: {
     if (!verdict.abort) continue
 
     throw new ConstraintViolationError({
-      failedConstraints: [{ name: constraint.name, feedback: verdict.feedback }],
+      failedConstraints: [{ name: constraint.id, feedback: verdict.feedback }],
       audit: {
         entries: options.audit?.entries ?? [],
         allPassed: false,
@@ -47,7 +47,7 @@ export async function runFinalStreamConstraints(options: {
     ),
   )
   const entries: ConstraintAuditEntry[] = checks.map((check) => ({
-    constraint: check.constraint.name,
+    constraint: check.constraint.id,
     ...(check.constraint.category !== undefined ? { category: check.constraint.category } : {}),
     severity: check.constraint.severity,
     pass: check.result.pass,

@@ -1,6 +1,6 @@
 import { GuardrailBlockedError } from '../guardrail/errors'
 import type { SafetyRunContext } from '../decision'
-import type { ChunkGuardrailResult, Guardrail, GuardrailContext } from '../guardrail/types'
+import type { Guardrail, GuardrailContext } from '../guardrail/types'
 import { validateGuardrailRunResult } from '../guardrail/types'
 import { streamGuardDecision } from './decision'
 
@@ -39,12 +39,11 @@ export async function runFinalBoundaryGuard(
 
   if (result.action !== 'block' || guard.mode === 'report') return
 
-  const blockResult: ChunkGuardrailResult = { action: 'block', reason: result.reason }
   throw new GuardrailBlockedError({
-    guardrailId: guard.name,
+    guardrailId: guard.id,
     phase: 'output',
     reason: result.reason,
-    decisions: [streamGuardDecision(guard, blockResult, text)],
+    decisions: [streamGuardDecision(guard, result, text)],
   })
 }
 

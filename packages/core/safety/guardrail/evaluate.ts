@@ -1,4 +1,7 @@
-import type { Guardrail, GuardrailContext } from './types'
+import type { BoundaryDef } from '../boundary'
+import type { SafetyRunContext } from '../decision'
+import type { Guardrail } from './types'
+import { validateGuardrailRunResult } from './types'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -6,7 +9,7 @@ export interface GuardrailEvalCase {
   /** The content to validate. */
   readonly input: string
   /** The expected action from the guard. */
-  readonly expect: 'allow' | 'pass' | 'block' | 'rewrite' | 'redact' | 'transform' | 'warn'
+  readonly expect: 'allow' | 'block' | 'rewrite' | 'warn'
 }
 
 export interface GuardrailEvalCaseResult {
@@ -45,8 +48,8 @@ export interface GuardrailEvalReport {
  *
  * ```typescript
  * const report = await evaluateGuardrail(piiGuard, [
- *   { input: 'SSN is 123-45-6789', expect: 'redact' },
- *   { input: 'Hello world', expect: 'pass' },
+ *   { input: 'SSN is 123-45-6789', expect: 'rewrite' },
+ *   { input: 'Hello world', expect: 'allow' },
  * ])
  * ```
  */
@@ -56,31 +59,28 @@ export async function evaluateGuardrail(
 ): Promise<GuardrailEvalReport> {
   const results: GuardrailEvalCaseResult[] = []
 
-  const ctx: GuardrailContext = {
-    phase: guard.phase,
-    promptId: undefined,
-    model: undefined,
-    messages: [],
-    systemPrompt: undefined,
-    traceId: undefined,
-    metadata: {},
-  }
+  const boundary = firstBoundary(guard)
+  const ctx = evaluationContext(guard, boundary)
 
   for (const evalCase of cases) {
     const start = performance.now()
 
     try {
-      const result = await guard.validate(evalCase.input, ctx)
+      const result = validateGuardrailRunResult(await guard.run(evalCase.input as never, ctx as never), {
+        streaming: false,
+        last: true,
+        policyId: guard.id,
+        boundary: boundary.id,
+      })
       const durationMs = performance.now() - start
-      const action = normalizeAction(result.action)
 
       results.push({
         input: evalCase.input,
-        passed: action === normalizeAction(evalCase.expect),
+        passed: result.action === evalCase.expect,
         action: result.action,
         expected: evalCase.expect,
         durationMs,
-        ...(result.action === 'redact' || result.action === 'transform' ? { output: result.content } : {}),
+        ...(result.action === 'rewrite' ? { output: stringifyGuardrailValue(result.value) } : {}),
       })
     } catch (err) {
       const durationMs = performance.now() - start
@@ -108,8 +108,24 @@ export async function evaluateGuardrail(
   }
 }
 
-function normalizeAction(action: string): string {
-  if (action === 'pass') return 'allow'
-  if (action === 'redact' || action === 'transform') return 'rewrite'
-  return action
+function firstBoundary(guard: Guardrail): BoundaryDef {
+  return Array.isArray(guard.on) ? (guard.on[0] ?? { _tag: 'Boundary', id: 'model.output.text' }) : guard.on
+}
+
+function evaluationContext<B extends BoundaryDef>(guard: Guardrail, boundary: B): SafetyRunContext<B> {
+  return {
+    policy: { id: guard.id, mode: guard.mode },
+    boundary: { id: boundary.id as never, kind: boundary.id as never },
+    prompt: { id: undefined },
+    model: { id: undefined },
+    trace: { id: undefined },
+    attempt: { index: 0, kind: 'initial' },
+    metadata: {},
+    findings: { add() {} },
+    ...(boundary.path ? { path: boundary.path } : {}),
+  }
+}
+
+function stringifyGuardrailValue(value: unknown): string {
+  return typeof value === 'string' ? value : JSON.stringify(value)
 }

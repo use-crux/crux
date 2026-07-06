@@ -17,7 +17,8 @@ import { boundary, SafetyResultError } from '../safety'
 import { judge } from '../scoring'
 import { citationSchema } from '../citations'
 import type { RetrieverHit } from '../retrieval'
-import type { ConstraintContext } from '../safety/constraint/types'
+import type { BoundaryDef, SafetyRunContext, SubjectOf } from '../safety'
+import type { Constraint, ConstraintContext } from '../safety/constraint/types'
 
 const makeCtx = (overrides?: Partial<ConstraintContext>): ConstraintContext => ({
   promptId: 'test-prompt',
@@ -27,6 +28,24 @@ const makeCtx = (overrides?: Partial<ConstraintContext>): ConstraintContext => (
   metadata: {},
   ...overrides,
 })
+
+function makeRunCtx<B extends BoundaryDef>(c: Constraint<B>): SafetyRunContext<B> {
+  return {
+    policy: { id: c.id, mode: 'enforce' },
+    boundary: { id: c.on.id as never, kind: c.on.id as never },
+    prompt: { id: 'test-prompt' },
+    model: { id: 'test-model' },
+    trace: {},
+    attempt: { index: 0, kind: 'initial' },
+    metadata: {},
+    findings: { add() {} },
+    ...(c.on.path ? { path: c.on.path } : {}),
+  }
+}
+
+async function runConstraint<B extends BoundaryDef>(c: Constraint<B>, subject: SubjectOf<B>) {
+  return c.run(subject, makeRunCtx(c))
+}
 
 function hit(overrides: Partial<RetrieverHit> = {}): RetrieverHit {
   return {
@@ -45,12 +64,14 @@ function hit(overrides: Partial<RetrieverHit> = {}): RetrieverHit {
 describe('constraint', () => {
   it('creates a frozen constraint object with correct shape', () => {
     const constraint = makeConstraint({
-      name: 'test',
-      check: async () => ({ pass: true }),
+      id: 'test',
+      on: boundary.output.both(),
+      run: async () => ({ pass: true }),
     })
 
     expect(constraint._tag).toBe('Constraint')
-    expect(constraint.name).toBe('test')
+    expect(constraint.id).toBe('test')
+    expect(constraint.on.id).toBe('model.output')
     expect(constraint.severity).toBe('assert') // default
     expect(constraint.maxRetries).toBe(2) // default
     expect(constraint.onChunk).toBeUndefined()
@@ -59,10 +80,11 @@ describe('constraint', () => {
 
   it('respects severity and maxRetries overrides', () => {
     const constraint = makeConstraint({
-      name: 'soft',
+      id: 'soft',
+      on: boundary.output.text(),
       severity: 'suggest',
       maxRetries: 5,
-      check: async () => ({ pass: true }),
+      run: async () => ({ pass: true }),
     })
 
     expect(constraint.severity).toBe('suggest')
@@ -71,8 +93,9 @@ describe('constraint', () => {
 
   it('includes onChunk when provided', () => {
     const constraint = makeConstraint({
-      name: 'streaming',
-      check: async () => ({ pass: true }),
+      id: 'streaming',
+      on: boundary.output.text(),
+      run: async () => ({ pass: true }),
       onChunk: async () => ({ abort: false }),
     })
 
@@ -81,13 +104,16 @@ describe('constraint', () => {
 
   it('carries an optional risk category', () => {
     const constraint = makeConstraint({
-      name: 'grounded',
+      id: 'grounded',
+      on: boundary.output.text(),
       category: 'grounding',
-      check: async () => ({ pass: true }),
+      run: async () => ({ pass: true }),
     })
 
     expect(constraint.category).toBe('grounding')
-    expect(makeConstraint({ name: 'plain', check: async () => ({ pass: true }) }).category).toBeUndefined()
+    expect(
+      makeConstraint({ id: 'plain', on: boundary.output.text(), run: async () => ({ pass: true }) }).category,
+    ).toBeUndefined()
   })
 })
 
@@ -96,8 +122,9 @@ describe('constraint', () => {
 describe('isConstraint', () => {
   it('returns true for constraint objects', () => {
     const constraint = makeConstraint({
-      name: 'test',
-      check: async () => ({ pass: true }),
+      id: 'test',
+      on: boundary.output.text(),
+      run: async () => ({ pass: true }),
     })
     expect(isConstraint(constraint)).toBe(true)
   })
@@ -116,9 +143,10 @@ describe('isConstraint', () => {
 describe('evaluateConstraint', () => {
   it('runs constraint against test cases', async () => {
     const c = makeConstraint({
-      name: 'citation-check',
-      check: async (output) => {
-        if (output.text.includes('[1]')) return { pass: true }
+      id: 'citation-check',
+      on: boundary.output.text(),
+      run: async (output) => {
+        if (output.includes('[1]')) return { pass: true }
         return { pass: false, feedback: 'Missing citation' }
       },
     })
@@ -136,8 +164,9 @@ describe('evaluateConstraint', () => {
 
   it('handles errors in check function', async () => {
     const c = makeConstraint({
-      name: 'buggy',
-      check: async () => {
+      id: 'buggy',
+      on: boundary.output.text(),
+      run: async () => {
         throw new Error('Oops')
       },
     })
@@ -150,8 +179,9 @@ describe('evaluateConstraint', () => {
 
   it('reports constraint metadata so tests can assert the runtime decision contract', async () => {
     const c = makeConstraint({
-      name: 'risk-check',
-      check: async () => ({
+      id: 'risk-check',
+      on: boundary.output.text(),
+      run: async () => ({
         pass: false,
         feedback: 'Contains risky claim',
         metadata: { risk: 'unsupported-claim' },
@@ -327,21 +357,23 @@ describe('discriminated union check results', () => {
     // This test verifies runtime behavior — TypeScript compile-time
     // enforcement is the primary guard (feedback is required when pass=false)
     const c = makeConstraint({
-      name: 'typed',
-      check: async (output) => {
+      id: 'typed',
+      on: boundary.output.both(),
+      run: async (output) => {
         if (output.text === 'bad') return { pass: false, feedback: 'Must provide feedback' }
         return { pass: true }
       },
     })
 
-    const result = await c.check({ text: 'good', parsed: undefined }, makeCtx())
+    const result = await runConstraint(c, { text: 'good', object: undefined })
     expect(result.pass).toBe(true)
   })
 
   it('onChunk returning abort:true requires feedback', async () => {
     const c = makeConstraint({
-      name: 'stream-check',
-      check: async () => ({ pass: true }),
+      id: 'stream-check',
+      on: boundary.output.text(),
+      run: async () => ({ pass: true }),
       onChunk: async (_chunk, accumulated) => {
         if (accumulated.length > 10) return { abort: true, feedback: 'Too long already' }
         return { abort: false }

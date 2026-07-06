@@ -1,11 +1,11 @@
 import type { SafetyDecision } from '../decision'
 import { safeCaptureSummary } from '../errors'
-import type { ChunkGuardrailResult, Guardrail } from '../guardrail/types'
+import type { Guardrail, GuardrailRunResult } from '../guardrail/types'
 
 /** Build the safe, redacted decision summary stored on stream block errors. */
 export function streamGuardDecision(
   guard: Guardrail,
-  result: ChunkGuardrailResult,
+  result: GuardrailRunResult<unknown>,
   content: string,
 ): SafetyDecision {
   return {
@@ -21,10 +21,10 @@ export function streamGuardDecision(
   }
 }
 
-/** Map legacy stream actions onto the public safety-decision action vocabulary. */
-export function chunkSafetyAction(action: ChunkGuardrailResult['action']): SafetyDecision['action'] {
-  if (action === 'pass' || action === 'hold') return 'allow'
-  if (action === 'redact' || action === 'transform') return 'rewrite'
+/** Map stream guardrail actions onto the public safety-decision action vocabulary. */
+export function chunkSafetyAction(action: GuardrailRunResult<unknown>['action']): SafetyDecision['action'] {
+  if (action === 'allow' || action === 'hold') return 'allow'
+  if (action === 'rewrite') return 'rewrite'
   return action
 }
 

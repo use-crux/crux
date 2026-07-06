@@ -3,14 +3,8 @@ import type { Guardrail } from '../guardrail/types'
 /** Return the next complete prefix segment to evaluate, or `null` while holding. */
 export type StreamSegment = (buffer: string, last: boolean) => string | null
 
-/** Detect the pre-boundary stream config shape used by legacy guardrails. */
-export function isLegacyStreamConfig(value: Guardrail['stream']): value is { readonly buffer: 'none' | 'full' } {
-  return typeof value === 'object' && value !== null && 'buffer' in value
-}
-
 /** Resolve a guardrail stream option into the segmenter used by the stream engine. */
 export function segmenterFor(stream: Guardrail['stream']): StreamSegment {
-  if (isLegacyStreamConfig(stream)) return chunkSegment
   if (stream === 'chunk') return chunkSegment
   if (stream === 'line') return lineSegment
   if (stream === undefined || stream === 'sentence') return sentenceSegment
