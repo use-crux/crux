@@ -1,6 +1,8 @@
 import type { ConfigureOptions } from '../configure'
 import type { CruxConfig } from '../config-types'
+import type { CruxPlugin } from '../plugin'
 import type { CruxRuntime } from '../runtime'
+import { withDevtools } from '../../observability'
 import type { RuntimeConfigEnvironment, RuntimeConfigPlan, RuntimeConfigTransactionInput } from './types'
 
 /**
@@ -17,7 +19,9 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
   const observability = config.observability
   const observabilityCapture = observabilityCapturePolicy(observability)
   const ownsObservability =
-    observability?.enabled === false || observability?.transport !== undefined || observability?.serverUrl !== undefined
+    observability?.enabled === false ||
+    observability?.transport !== undefined ||
+    observability?.serverUrl !== undefined
 
   const runtimePatch: Partial<CruxRuntime> = {
     ...(records ? { records } : {}),
@@ -32,12 +36,12 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
     ...(observabilityCapture ? { observabilityCapture } : {}),
   }
 
+  const plugins = planPlugins(config, ownsObservability)
+
   const configureOptions: ConfigureOptions = {
     prompts: [],
-    devtools: ownsObservability ? undefined : config.devtools,
     autoEscape: config.generation?.autoEscape,
     securityWarnings: config.generation?.securityWarnings,
-    plugins: ownsObservability ? undefined : config.plugins ? [...config.plugins] : undefined,
   }
 
   return {
@@ -52,7 +56,7 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
       quality: config.quality,
       records,
     },
-    plugins: ownsObservability && config.plugins ? [...config.plugins] : [],
+    plugins,
     tokenizer: config.generation?.tokenizer,
   }
 }
@@ -81,6 +85,25 @@ function planObservability(config: Readonly<CruxConfig>): RuntimeConfigPlan['obs
     }
   }
   return { kind: 'none' }
+}
+
+function planPlugins(
+  config: Readonly<CruxConfig>,
+  ownsObservability: boolean,
+): readonly CruxPlugin[] {
+  const plugins = [...(config.plugins ?? [])]
+  if (!ownsObservability && config.devtools?.serverUrl) {
+    plugins.unshift(
+      withDevtools({
+        prompts: [],
+        contexts: [],
+        serverUrl: config.devtools.serverUrl,
+        bridge: config.devtools.bridge,
+        sessionId: config.devtools.sessionId,
+      }),
+    )
+  }
+  return plugins
 }
 
 function observabilityCapturePolicy(

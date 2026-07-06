@@ -22,9 +22,11 @@ import { describe, it, expect } from 'vitest'
 import {
   config,
   getRuntime,
+  pushHooksLayer,
   setRuntime,
   updateRuntime,
   resetRuntime,
+  restoreHooksLayer,
   resolveRecords,
   mergeRuntime,
   applyPlugins,
@@ -44,9 +46,11 @@ describe('@use-crux/core (runtime surface)', () => {
   it('exposes the documented runtime values', () => {
     expect(typeof config).toBe('function')
     expect(typeof getRuntime).toBe('function')
+    expect(typeof pushHooksLayer).toBe('function')
     expect(typeof setRuntime).toBe('function')
     expect(typeof updateRuntime).toBe('function')
     expect(typeof resetRuntime).toBe('function')
+    expect(typeof restoreHooksLayer).toBe('function')
     expect(typeof resolveRecords).toBe('function')
     expect(typeof mergeRuntime).toBe('function')
     expect(typeof applyPlugins).toBe('function')

@@ -14,7 +14,7 @@ import {
   type RuntimeConfigPlan,
   type RuntimeConfigTransactionPorts,
 } from '../runtime/config-transaction'
-import type { CruxRuntime } from '../runtime/runtime'
+import type { CruxRuntime, HooksLayerToken } from '../runtime/runtime'
 
 const plan = planRuntimeConfig({
   env: { CRUX_INDEX: '0' },
@@ -45,6 +45,8 @@ expectTypeOf(plan.plugins[0]?.install).toMatchTypeOf<
   ((runtime: Readonly<CruxRuntime>) => unknown) | undefined
 >()
 
+const layerToken = {} as HooksLayerToken
+
 const ports = {
   runtime: {
     get: () => ({ semanticCacheInstalled: true }),
@@ -53,6 +55,13 @@ const ports = {
     },
     update(patch) {
       expectTypeOf(patch).toEqualTypeOf<Partial<CruxRuntime>>()
+    },
+    pushLayer(patch) {
+      expectTypeOf(patch).toEqualTypeOf<Partial<CruxRuntime>>()
+      return layerToken
+    },
+    restoreLayer(token) {
+      expectTypeOf(token).toEqualTypeOf<HooksLayerToken>()
     },
   },
   plugins: {

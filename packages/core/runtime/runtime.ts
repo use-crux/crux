@@ -25,7 +25,7 @@ import type { RuntimeEngineDefinition } from './api/runtime-definition'
 /**
  * The set of global hooks and reporters that instrument Crux primitives.
  *
- * Devtools installs all fields atomically via `setRuntime()`.
+ * Devtools and config install fields atomically through layer tokens.
  * Primitives read individual fields via `getRuntime()`.
  *
  * @example
@@ -69,7 +69,28 @@ export interface CruxRuntime {
   semanticCacheInstalled?: boolean
 }
 
+const hooksLayerBrand = Symbol('CruxHooksLayerToken')
+
+/**
+ * Opaque handle returned by {@link pushHooksLayer}.
+ *
+ * Pass this token to {@link restoreHooksLayer} to restore exactly the runtime
+ * keys touched by that layer. Tokens are intentionally not constructible by
+ * callers; keep the value returned from `pushHooksLayer()`.
+ */
+export interface HooksLayerToken {
+  readonly [hooksLayerBrand]: true
+  readonly id: number
+}
+
+interface HooksLayer {
+  readonly keys: readonly (keyof CruxRuntime)[]
+  readonly previousRuntime: Readonly<CruxRuntime>
+}
+
 let _runtime: CruxRuntime = {}
+let nextHooksLayerId = 1
+const hooksLayers = new Map<number, HooksLayer>()
 
 /**
  * Get the current runtime state.
@@ -124,6 +145,57 @@ export function updateRuntime(patch: Partial<CruxRuntime>): void {
 }
 
 /**
+ * Install a partial runtime layer and return a token that can restore it.
+ *
+ * Only keys present in `patch` are captured and restored. Other layers that
+ * write different keys remain intact, so config teardown can coexist with
+ * devtools or test-installed hooks.
+ *
+ * @param patch - Runtime fields installed by this layer.
+ * @returns An opaque restore token for this layer.
+ *
+ * @example
+ * ```ts
+ * const token = pushHooksLayer({ middleware })
+ * // later
+ * restoreHooksLayer(token)
+ * ```
+ */
+export function pushHooksLayer(patch: Partial<CruxRuntime>): HooksLayerToken {
+  const id = nextHooksLayerId++
+  const keys = Object.keys(patch) as (keyof CruxRuntime)[]
+  hooksLayers.set(id, {
+    keys,
+    previousRuntime: { ..._runtime },
+  })
+  _runtime = { ..._runtime, ...patch }
+  return { id, [hooksLayerBrand]: true }
+}
+
+/**
+ * Restore the runtime keys captured by a previous hook layer.
+ *
+ * Restores are idempotent: calling this with an already-restored token is a
+ * no-op. Out-of-order restores are allowed; the restore writes the captured
+ * previous value for each key and leaves all other keys untouched.
+ */
+export function restoreHooksLayer(token: HooksLayerToken): void {
+  const layer = hooksLayers.get(token.id)
+  if (!layer) return
+
+  hooksLayers.delete(token.id)
+  const nextRuntime: CruxRuntime = { ..._runtime }
+  for (const key of layer.keys) {
+    if (Object.prototype.hasOwnProperty.call(layer.previousRuntime, key)) {
+      copyRuntimeField(nextRuntime, layer.previousRuntime, key)
+    } else {
+      delete nextRuntime[key]
+    }
+  }
+  _runtime = nextRuntime
+}
+
+/**
  * Clear all runtime state.
  *
  * Equivalent to `setRuntime({})`. Used in test cleanup and
@@ -131,6 +203,7 @@ export function updateRuntime(patch: Partial<CruxRuntime>): void {
  */
 export function resetRuntime(): void {
   _runtime = {}
+  hooksLayers.clear()
 }
 
 /**
@@ -155,4 +228,12 @@ export function resolveRecords(): RecordStore {
     )
   }
   return records
+}
+
+function copyRuntimeField<K extends keyof CruxRuntime>(
+  target: CruxRuntime,
+  source: Readonly<CruxRuntime>,
+  key: K,
+): void {
+  target[key] = source[key]
 }

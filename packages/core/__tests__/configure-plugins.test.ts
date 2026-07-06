@@ -1,47 +1,35 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { configure } from '../runtime/configure'
-import { prompt as cruxPrompt } from '../prompt/prompt'
-import { resetObservabilityRuntime } from '../observability'
-import { getRuntime, resetRuntime } from '../runtime/runtime'
-import { defaultTokenizer, setTokenizer } from '../shared/tokenizer'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { config } from '../runtime/config'
 import type { CruxPlugin } from '../runtime/plugin'
+import { resetRuntime } from '../runtime/runtime'
 
-function makePrompt(id: string) {
-  return cruxPrompt({ id, system: `Prompt ${id}` })
-}
-
-describe('configure — plugins', () => {
+describe('config — plugins', () => {
   beforeEach(() => {
     resetRuntime()
-    resetObservabilityRuntime()
-    setTokenizer(defaultTokenizer)
   })
 
   afterEach(() => {
     resetRuntime()
-    resetObservabilityRuntime()
-    setTokenizer(defaultTokenizer)
   })
 
-    it('calls plugin install() with the current runtime', () => {
+  it('calls plugin install() with the current runtime', () => {
     const install = vi.fn().mockReturnValue({})
     const plugin: CruxPlugin = { name: 'test-plugin', install }
 
-    const reg = configure({ prompts: [makePrompt('a')], plugins: [plugin] })
+    const crux = config({ plugins: [plugin] })
 
-    expect(install).toHaveBeenCalledOnce()
-    // install receives a runtime object (frozen snapshot)
-    const receivedRuntime = install.mock.calls[0][0]
-    expect(receivedRuntime).toBeDefined()
-    expect(typeof receivedRuntime).toBe('object')
-
-    reg.dispose()
+    try {
+      expect(install).toHaveBeenCalledOnce()
+      const receivedRuntime = install.mock.calls[0][0]
+      expect(Object.isFrozen(receivedRuntime)).toBe(true)
+    } finally {
+      crux.dispose()
+    }
   })
 
-    it("second plugin sees first plugin's hooks in the runtime", () => {
+  it("second plugin sees first plugin's hooks in the runtime", () => {
     const hook1 = vi.fn()
     const seenRuntimes: Record<string, unknown>[] = []
-
     const plugin1: CruxPlugin = {
       name: 'plugin-1',
       install() {
@@ -56,18 +44,16 @@ describe('configure — plugins', () => {
       },
     }
 
-    const reg = configure({
-      prompts: [makePrompt('a')],
-      plugins: [plugin1, plugin2],
-    })
+    const crux = config({ plugins: [plugin1, plugin2] })
 
-    // plugin-2 should have seen plugin-1's executionHook
-    expect(seenRuntimes[0].executionHook).toBeDefined()
-
-    reg.dispose()
+    try {
+      expect(seenRuntimes[0].executionHook).toBeDefined()
+    } finally {
+      crux.dispose()
+    }
   })
 
-    it('dispose() calls plugin dispose in reverse order before resetRuntime', () => {
+  it('dispose() calls plugin dispose in reverse order', () => {
     const order: string[] = []
     const plugin1: CruxPlugin = {
       name: 'p1',
@@ -78,18 +64,19 @@ describe('configure — plugins', () => {
       install: () => ({ dispose: () => order.push('p2-dispose') }),
     }
 
-    const reg = configure({
-      prompts: [makePrompt('a')],
-      plugins: [plugin1, plugin2],
-    })
+    const crux = config({ plugins: [plugin1, plugin2] })
+    crux.dispose()
 
-    reg.dispose()
     expect(order).toEqual(['p2-dispose', 'p1-dispose'])
   })
 
-    it('works unchanged when no plugins are provided', () => {
-    const reg = configure({ prompts: [makePrompt('a')] })
-    expect(reg.get('a')).toBeDefined()
-    reg.dispose()
+  it('works unchanged when no plugins are provided', () => {
+    const crux = config({})
+
+    try {
+      expect(crux.config).toEqual({})
+    } finally {
+      crux.dispose()
+    }
   })
 })

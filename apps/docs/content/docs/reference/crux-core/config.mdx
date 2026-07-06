@@ -44,8 +44,14 @@ installed. This is what `crux config inspect` uses.
 
 Outside index mode, config application is transactional: persistence and explicit observability are
 installed before user plugins, the Runtime Bridge connects after the prompt registry exists, and
-`dispose()` tears down the bridge before plugins and observability restore. This keeps plugin setup
-predictable without adding another public setup API.
+`dispose()` tears down the bridge before restoring config-owned hooks, plugins, and observability.
+This keeps plugin setup predictable without adding another public setup API.
+
+`config()` is one-config-per-process. Re-running it replaces the previous active installation before
+applying the new one, so hot reload does not stack middleware or duplicate plugin hook fan-out.
+Disposing an older returned `Crux` object is safe after a later `config()` call; it cannot clear the
+new active installation. Per-request or multi-tenant config scoping is intentionally out of scope for
+this process-global API.
 
 `devtools` and `observability` have different ownership:
 

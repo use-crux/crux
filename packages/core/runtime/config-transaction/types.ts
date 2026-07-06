@@ -14,7 +14,7 @@ import type { TokenizerFn } from '../../shared/tokenizer'
 import type { ConfigureOptions, PromptRegistry } from '../configure'
 import type { CruxConfig } from '../config-types'
 import type { ApplyPluginsResult, CruxPlugin } from '../plugin'
-import type { CruxRuntime } from '../runtime'
+import type { CruxRuntime, HooksLayerToken } from '../runtime'
 import type { Crux, RuntimeConfigCruxFactory } from './crux'
 
 /**
@@ -44,6 +44,10 @@ export interface RuntimeStorePort {
   set(runtime: CruxRuntime): void
   /** Merge a partial runtime patch into the current snapshot. */
   update(patch: Partial<CruxRuntime>): void
+  /** Install a runtime layer and return an opaque restore token. */
+  pushLayer(patch: Partial<CruxRuntime>): HooksLayerToken
+  /** Restore a previously installed runtime layer. */
+  restoreLayer(token: HooksLayerToken): void
 }
 
 /** Port for configuring canonical observability transport state. */

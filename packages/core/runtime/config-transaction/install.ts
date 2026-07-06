@@ -16,6 +16,7 @@ export function installRuntimeConfigPlan(
   ports: RequiredPorts,
 ): RuntimeConfigInstallation {
   let restoreObservability: (() => void) | undefined
+  const previousRuntime = ports.runtime.get()
   const runtimePatch = { ...plan.runtimePatch }
 
   if (plan.observability.kind === 'owned') {
@@ -36,17 +37,17 @@ export function installRuntimeConfigPlan(
     })
   }
 
-  ports.runtime.update(runtimePatch)
-
-  let runtime: CruxRuntime = { ...ports.runtime.get() }
+  let runtime: CruxRuntime = { ...previousRuntime, ...runtimePatch }
   const plugins =
     plan.plugins.length > 0
       ? ports.plugins.apply(plan.plugins, runtime)
       : undefined
   if (plugins) {
     runtime = { ...plugins.runtime }
-    ports.runtime.set(runtime)
   }
+
+  const layerPatch = changedRuntimeFields(previousRuntime, runtime, runtimePatch)
+  const layerToken = ports.runtime.pushLayer(layerPatch)
 
   if (plan.tokenizer) {
     ports.tokenizer.setTokenizer(plan.tokenizer)
@@ -56,6 +57,7 @@ export function installRuntimeConfigPlan(
   const restore = () => {
     if (restored) return
     restored = true
+    ports.runtime.restoreLayer(layerToken)
     void plugins?.dispose()
     restoreObservability?.()
   }
@@ -81,4 +83,31 @@ export function installRuntimeConfigPlan(
       })
     },
   }
+}
+
+function changedRuntimeFields(
+  previousRuntime: Readonly<CruxRuntime>,
+  runtime: Readonly<CruxRuntime>,
+  forcedPatch: Partial<CruxRuntime>,
+): Partial<CruxRuntime> {
+  const keys = new Set<keyof CruxRuntime>([
+    ...(Object.keys(previousRuntime) as (keyof CruxRuntime)[]),
+    ...(Object.keys(runtime) as (keyof CruxRuntime)[]),
+    ...(Object.keys(forcedPatch) as (keyof CruxRuntime)[]),
+  ])
+  const patch: Partial<CruxRuntime> = {}
+  for (const key of keys) {
+    if (previousRuntime[key] !== runtime[key] || key in forcedPatch) {
+      copyRuntimeField(patch, runtime, key)
+    }
+  }
+  return patch
+}
+
+function copyRuntimeField<K extends keyof CruxRuntime>(
+  target: Partial<CruxRuntime>,
+  source: Readonly<CruxRuntime>,
+  key: K,
+): void {
+  target[key] = source[key]
 }

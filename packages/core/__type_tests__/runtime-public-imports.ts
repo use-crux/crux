@@ -22,13 +22,21 @@
  */
 
 import { expectTypeOf } from 'vitest'
-import { config, mergeRuntime, applyPlugins, getRuntime } from '@use-crux/core'
+import {
+  config,
+  mergeRuntime,
+  applyPlugins,
+  getRuntime,
+  pushHooksLayer,
+  restoreHooksLayer,
+} from '@use-crux/core'
 import type {
   Crux,
   CruxConfig,
   CruxPlugin,
   CruxPluginResult,
   CruxRuntime,
+  HooksLayerToken,
   PromptMiddleware,
 } from '@use-crux/core'
 
@@ -69,6 +77,8 @@ expectTypeOf(tracer.install).returns.toEqualTypeOf<CruxPluginResult>()
 expectTypeOf(mergeRuntime).returns.toEqualTypeOf<CruxRuntime>()
 expectTypeOf(applyPlugins).returns.toMatchTypeOf<{ runtime: CruxRuntime; dispose: () => void }>()
 expectTypeOf(getRuntime()).toEqualTypeOf<Readonly<CruxRuntime>>()
+expectTypeOf(pushHooksLayer).returns.toEqualTypeOf<HooksLayerToken>()
+expectTypeOf(restoreHooksLayer).parameter(0).toEqualTypeOf<HooksLayerToken>()
 
 // `middleware` on the runtime is a `PromptMiddleware | undefined`, never `any`.
 expectTypeOf<CruxRuntime['middleware']>().toEqualTypeOf<PromptMiddleware | undefined>()

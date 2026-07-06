@@ -443,6 +443,17 @@ config({
 
 `recordInputs` and `recordOutputs` accept `true | false | "inline" | "reference" | "off"`. `"reference"` keeps only size/hash metadata, while `"off"` removes preview, size, hash, and URI payload metadata. The emit path also strips payload-shaped span/event attributes such as `text`, `query`, `messages`, `output`, `body`, and `filter`. `redactRecord()` runs after capture policy; returning `null` or throwing drops the record and increments `observabilityDiagnostics().redactedRecords`.
 
+## Configuration Lifecycle
+
+`config()` is process-global: one active project config owns the hook layer for
+middleware, plugins, persistence, observability policy, and runtime engine
+definition. Re-running `config()` replaces the previous installation before
+applying the new one, so hot reload does not stack middleware or duplicate hook
+fan-out. Disposing a returned `Crux` object restores only the layer it installed;
+independent layers such as imperative devtools remain intact. Multi-tenant or
+per-request config scoping is intentionally out of scope for this process-global
+API.
+
 ## Runtime Engine
 
 Runtime-bound APIs use a configured Runtime Engine for durable work, timers,

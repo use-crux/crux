@@ -2,7 +2,13 @@ import { configureObservability, createHttpObservabilityTransport } from '../../
 import { connectRuntimeBridge } from '../../runtime-bridge'
 import { setTokenizer } from '../../shared/tokenizer'
 import { applyPlugins } from '../plugin'
-import { getRuntime, setRuntime, updateRuntime } from '../runtime'
+import {
+  getRuntime,
+  pushHooksLayer,
+  restoreHooksLayer,
+  setRuntime,
+  updateRuntime,
+} from '../runtime'
 import type {
   ObservabilityConfigPort,
   PluginInstallerPort,
@@ -17,6 +23,8 @@ export const defaultRuntimeStorePort: RuntimeStorePort = {
   get: getRuntime,
   set: setRuntime,
   update: updateRuntime,
+  pushLayer: pushHooksLayer,
+  restoreLayer: restoreHooksLayer,
 }
 
 /** Observability port backed by Core's canonical observability runtime. */

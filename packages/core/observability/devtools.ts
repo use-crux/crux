@@ -27,7 +27,13 @@ import type { AnyPrompt } from '../prompt/prompt-types'
 import type { Context } from '../prompt/context-types'
 import type { CruxPlugin, CruxPluginResult } from '../runtime/plugin'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
-import { getRuntime, setRuntime, type CruxRuntime } from '../runtime/runtime'
+import {
+  getRuntime,
+  pushHooksLayer,
+  restoreHooksLayer,
+  type CruxRuntime,
+  type HooksLayerToken,
+} from '../runtime/runtime'
 import { configureObservability, observe } from './observe'
 import { createHttpObservabilityTransport } from './transport'
 import { IndexSnapshotSchema } from '../project-index'
@@ -98,7 +104,7 @@ export function withDevtools(options: EnableDevtoolsOptions): CruxPlugin {
 }
 
 interface DevtoolsRuntimeLayer {
-  previousRuntime: Readonly<CruxRuntime>
+  layerToken: HooksLayerToken
   dispose: () => void | Promise<void>
   parentToken: number
 }
@@ -207,21 +213,17 @@ export function enableDevtools(options: EnableDevtoolsOptions): () => void {
   const token = nextDevtoolsToken++
   const previousRuntime = getRuntime()
 
-  // Build and install all hooks via shared builder
   const { dispose, ...runtimePatch } = buildDevtoolsRuntime(
     options,
     previousRuntime,
   )
+  const layerToken = pushHooksLayer(runtimePatch)
   devtoolsRuntimeLayers.set(token, {
-    previousRuntime,
+    layerToken,
     dispose: dispose ?? (() => undefined),
     parentToken: activeDevtoolsToken,
   })
   activeDevtoolsToken = token
-
-  setRuntime({
-    ...runtimePatch,
-  })
 
   return () => disableDevtools(token)
 }
@@ -241,11 +243,13 @@ export function disableDevtools(token = activeDevtoolsToken): void {
 
   const tokensToDispose = activeDevtoolsTokensThrough(token)
   for (const activeToken of tokensToDispose) {
-    void devtoolsRuntimeLayers.get(activeToken)?.dispose()
+    const activeLayer = devtoolsRuntimeLayers.get(activeToken)
+    if (!activeLayer) continue
+    void activeLayer.dispose()
+    restoreHooksLayer(activeLayer.layerToken)
     devtoolsRuntimeLayers.delete(activeToken)
   }
 
-  setRuntime(layer.previousRuntime)
   activeDevtoolsToken = layer.parentToken
 }
 

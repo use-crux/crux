@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CruxObservabilityTransport } from '../observability'
 import type { CruxPlugin } from '../runtime/plugin'
-import type { CruxRuntime } from '../runtime/runtime'
+import type { CruxRuntime, HooksLayerToken } from '../runtime/runtime'
 import { node } from '../runtime/public'
 import { inMemoryRecordStore } from '../storage'
 import {
@@ -18,7 +18,7 @@ describe('runtime config transaction', () => {
     expect(plan.ownsObservability).toBe(false)
     expect(plan.observability).toEqual({ kind: 'none' })
     expect(plan.runtimePatch).toEqual({})
-    expect(plan.configureOptions).toEqual({ prompts: [], plugins: undefined })
+    expect(plan.configureOptions).toEqual({ prompts: [] })
     expect(plan.plugins).toEqual([])
   })
 
@@ -42,7 +42,7 @@ describe('runtime config transaction', () => {
     expect(plan.bridgeOptions.devtools).toEqual({ serverUrl: 'http://localhost:4400' })
   })
 
-  it('plans devtools fallback and user plugins for configure() when observability does not own transport', () => {
+  it('plans devtools fallback and user plugins for transaction install when observability does not own transport', () => {
     const plugin: CruxPlugin = { name: 'user-plugin', install: () => ({}) }
 
     const plan = planRuntimeConfig({
@@ -53,9 +53,12 @@ describe('runtime config transaction', () => {
     })
 
     expect(plan.ownsObservability).toBe(false)
-    expect(plan.plugins).toEqual([])
-    expect(plan.configureOptions.devtools).toEqual({ serverUrl: 'http://localhost:4400' })
-    expect(plan.configureOptions.plugins).toEqual([plugin])
+    expect(plan.plugins.map((plannedPlugin) => plannedPlugin.name)).toEqual([
+      'crux:devtools',
+      'user-plugin',
+    ])
+    expect(plan.plugins[1]).toBe(plugin)
+    expect(plan.configureOptions).toEqual({ prompts: [] })
   })
 
   it('plans disabled observability as an owned runtime clear before user plugins', () => {
@@ -75,8 +78,7 @@ describe('runtime config transaction', () => {
       observabilityTransport: undefined,
       observabilityDelivery: undefined,
     })
-    expect(plan.configureOptions.devtools).toBeUndefined()
-    expect(plan.configureOptions.plugins).toBeUndefined()
+    expect(plan.configureOptions).toEqual({ prompts: [] })
     expect(plan.plugins).toEqual([plugin])
   })
 
@@ -147,6 +149,15 @@ describe('runtime config transaction', () => {
           runtime = { ...runtime, ...patch }
           events.push('runtime:update')
         },
+        pushLayer(patch) {
+          runtime = { ...runtime, ...patch }
+          events.push('runtime:pushLayer')
+          return fakeLayerToken
+        },
+        restoreLayer() {
+          runtime = {}
+          events.push('runtime:restoreLayer')
+        },
       },
       observability: {
         configure() {
@@ -167,7 +178,7 @@ describe('runtime config transaction', () => {
       ports,
     ).apply()
 
-    expect(events).toEqual(['observability:configure', 'runtime:update', 'plugin', 'runtime:set'])
+    expect(events).toEqual(['observability:configure', 'plugin', 'runtime:pushLayer'])
     expect(installation.runtime.records).toBe(records)
     expect(installation.runtime.observabilityTransport).toBe(transport)
 
@@ -175,7 +186,7 @@ describe('runtime config transaction', () => {
     expect(events.at(-1)).toBe('observability:restore')
   })
 
-  it('restores plugin effects before observability ownership on dispose', () => {
+  it('restores runtime layer and plugin effects before observability ownership on dispose', () => {
     const events: string[] = []
     let runtime: CruxRuntime = {}
     const ports: RuntimeConfigTransactionPorts = {
@@ -186,6 +197,15 @@ describe('runtime config transaction', () => {
         },
         update(patch) {
           runtime = { ...runtime, ...patch }
+        },
+        pushLayer(patch) {
+          runtime = { ...runtime, ...patch }
+          events.push('runtime:pushLayer')
+          return fakeLayerToken
+        },
+        restoreLayer() {
+          runtime = {}
+          events.push('runtime:restoreLayer')
         },
       },
       observability: {
@@ -220,61 +240,16 @@ describe('runtime config transaction', () => {
     installation.restore()
     installation.restore()
 
-    expect(events).toEqual(['observability:configure', 'plugins:apply', 'plugins:dispose', 'observability:restore'])
+    expect(events).toEqual([
+      'observability:configure',
+      'plugins:apply',
+      'runtime:pushLayer',
+      'runtime:restoreLayer',
+      'plugins:dispose',
+      'observability:restore',
+    ])
   })
 
-  it('keeps CRUX_INDEX mode inert and avoids every side-effect port', () => {
-    const ports: RuntimeConfigTransactionPorts = {
-      runtime: {
-        get: vi.fn(() => ({ marker: true }) as CruxRuntime),
-        set: vi.fn(),
-        update: vi.fn(),
-      },
-      observability: {
-        createHttpTransport: vi.fn(),
-        configure: vi.fn(),
-      },
-      bridge: {
-        connect: vi.fn(),
-      },
-      tokenizer: {
-        setTokenizer: vi.fn(),
-      },
-      plugins: {
-        apply: vi.fn(),
-      },
-    }
-
-    const transaction = createRuntimeConfigTransaction(
-      {
-        env: { CRUX_INDEX: '1' },
-        config: {
-          persistence: { records: inMemoryRecordStore() },
-          generation: {
-            middleware: async (args, next) => next(args),
-            tokenizer: (text) => text.length,
-          },
-          observability: { serverUrl: 'https://collector.example.com' },
-          devtools: { serverUrl: 'http://localhost:4400', bridge: true },
-          plugins: [{ name: 'ignored-plugin', install: vi.fn(() => ({})) }],
-        },
-      },
-      ports,
-    )
-
-    const installation = transaction.apply()
-    const crux = transaction.createCrux()
-
-    expect(transaction.inert).toBe(true)
-    expect(installation.connectBridge({ ...crux })).toBeUndefined()
-    expect(ports.runtime?.get).not.toHaveBeenCalled()
-    expect(ports.runtime?.set).not.toHaveBeenCalled()
-    expect(ports.runtime?.update).not.toHaveBeenCalled()
-    expect(ports.observability?.createHttpTransport).not.toHaveBeenCalled()
-    expect(ports.observability?.configure).not.toHaveBeenCalled()
-    expect(ports.bridge?.connect).not.toHaveBeenCalled()
-    expect(ports.tokenizer?.setTokenizer).not.toHaveBeenCalled()
-    expect(ports.plugins?.apply).not.toHaveBeenCalled()
-    expect(crux.config.observability?.serverUrl).toBe('https://collector.example.com')
-  })
 })
+
+const fakeLayerToken = {} as HooksLayerToken

@@ -43,8 +43,16 @@ export type { PromptRegistry } from './configure'
 // Global runtime hook store
 // ─────────────────────────────────────────────────────────────────
 
-export { getRuntime, setRuntime, updateRuntime, resetRuntime, resolveRecords } from './runtime'
-export type { CruxRuntime } from './runtime'
+export {
+  getRuntime,
+  pushHooksLayer,
+  resetRuntime,
+  restoreHooksLayer,
+  resolveRecords,
+  setRuntime,
+  updateRuntime,
+} from './runtime'
+export type { CruxRuntime, HooksLayerToken } from './runtime'
 
 // ─────────────────────────────────────────────────────────────────
 // Plugins

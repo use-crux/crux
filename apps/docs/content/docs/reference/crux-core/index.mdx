@@ -230,8 +230,16 @@ For defaults, stability notes, and every nested option, see [Config](/docs/refer
 | `plugins`                     | `CruxPlugin[]`             | Composable runtime extensions.                                                       |
 
 **Returns:** `Crux` — exposes the raw `.config`, lifecycle `.dispose()`, and compatibility registry methods. Source-discovered projects should use their authored prompt/context exports directly rather than looking them up through `config()`.
+
+`config()` is one-config-per-process. Calling it again replaces the previous active installation
+before applying the new one, which keeps hot reload from stacking middleware or duplicating plugin
+hook fan-out. `dispose()` restores only the hook layer installed by that config; independent layers
+such as imperative devtools remain active.
+
+| Member | Description |
+| --- | --- |
 | `.config` | `Readonly<CruxConfig>` |
-| `.dispose()` | Tear down middleware, devtools, globals |
+| `.dispose()` | Tear down the Runtime Bridge and restore this config's hooks, plugins, and observability |
 
 Observability capture controls live under `observability`:
 

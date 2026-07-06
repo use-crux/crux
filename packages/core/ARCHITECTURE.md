@@ -463,7 +463,7 @@ The internal system composer handles the token budget:
 
 The observability graph mirrors the same state. Resolved context artifacts use the canonical `context.contribution` artifact kind and carry source, state, inclusion, priority, token, cache, injection, and freshness metadata. Prompt resolution emits a redacted `prompt.input` preview under the canonical `input` artifact kind; it contains top-level provided/schema/required/missing/unexpected keys and validation status, but never input values. Segmented system content preserves `segments: { text, dynamic, source?, observedAt?, sourceVersion? }[]` plus `staticTokens` / `dynamicTokens` on contribution previews, prompt inspect parts, system blocks, and budget-dropped previews. Inspect parts and contribution previews also report `servedFrom`, `resolvedAt`, and memo-hit `age`; part-level `observedAt` is the oldest segment observation time, and `sourceVersion` is the first segment version. When a prompt or context function returns a plain string, direct interpolation of unambiguous primitive input values is inferred into static/dynamic segments; transformed values still require explicit `{ segments }` for perfect provenance. Predicate failures and unmatched `match()` branches emit `state: "checked-not-included"` with `reason` and `branch` when available. Budgeted resolution emits a `prompt.budget` artifact containing `usedTokens`, `totalTokens`, dropped contribution payloads, and `prefixOverflow: true` when the stable provider-cache prefix is larger than the requested budget, then generation spans link that artifact as consumed. Generation `messages` artifacts include request tool names. The Go RunDetail projection composes these records into `RunDetailNode.request`, using exact generation requests for generation nodes, inherited nearest-ancestor requests for nested framework agent steps that only emit output-shaped message artifacts, and a final-descendant representative with `turns[]` for run/stream/agent/flow/composition aggregators. Contribution artifacts referenced from `messages.systemBlocks[].artifactId` are recovered through the graph index even when the producer span, not the generation span, owns the artifact. For framework agents whose prompt resolves under `agent.run` before the model stream, the projection also collects context contributions and prompt budgets produced under the nearest request scope before the generation starts; later child tool/flow generations are outside that time window. Convex Agent `thread-context` message artifacts are preferred over `call-args` when both are available, their prior-turn fields remain on `request.messages`, and inherited agent steps add earlier sibling generation outputs as `previousStepMessages`. Base-prompt provenance uses the concrete generation `promptId` where known, falling back to `messages.system` / `messages.prompt` for raw request fields. Model provenance is projected into `request.modelSummary`, per-turn `model` / `provider`, and flattened `RunDetail.rows[]`, preferring output artifact `meta.actualModelId` over selected/requested model attributes. Convex Agent wrapper spans emit the configured Agent `languageModel` on the aggregate stream/call and each AI SDK step span so framework turns are modelled even when no nested Crux generation exists; child tool/flow generations keep their own model provenance. UI clients should render that projection instead of walking descendant artifacts.
 
-The tokenizer is pluggable via `setTokenizer()` or `configure({ tokenizer })` for the ambient runtime; inside the pipeline every token count flows through the `TokenizerPort`, whose default adapter wraps that global. The default estimates tokens as `Math.ceil(text.length / 4)`. Tests pass a deterministic counter (e.g. `staticTokenizer()`, word count) through the port to pin budget decisions without depending on the estimate.
+The tokenizer is pluggable via `setTokenizer()` or `config({ generation: { tokenizer } })` for the ambient runtime; inside the pipeline every token count flows through the `TokenizerPort`, whose default adapter wraps that global. The default estimates tokens as `Math.ceil(text.length / 4)`. Tests pass a deterministic counter (e.g. `staticTokenizer()`, word count) through the port to pin budget decisions without depending on the estimate.
 
 ### Context Resolver Memoization
 
@@ -725,19 +725,22 @@ The plugin system enables composable hook installation. Three key functions:
 
 **Layered middleware**: When two plugins install middleware, the later plugin wraps the earlier one. Calling `next()` in the outer middleware invokes the inner middleware.
 
-**Plugin processing in `config()` / `configure()`**:
+**Plugin processing in `config()`**:
 
 1. `config()` creates a runtime config transaction and exits early in `CRUX_INDEX=1` mode.
-2. The transaction applies config-owned runtime state first: persistence store, explicit
-   observability ownership, capture policy, generation middleware, and tokenizer.
+2. The planner resolves config-owned runtime state: persistence store, explicit observability
+   ownership, capture policy, generation middleware, tokenizer, and plugin order.
 3. If the `observability` domain owns the transport (`enabled: false`, custom `transport`, or
-   `serverUrl`), the transaction applies user plugins after those runtime fields so plugins see the
-   owned transport/store state.
-4. If observability does not own the transport, `configure()` keeps devtools fallback ownership:
-   it auto-prepends `withDevtools()` for explicit `devtools.serverUrl`, then appends user plugins so
-   local devtools instrumentation installs before custom plugins.
-5. Plugin `dispose()` functions run before config-owned observability restore. Runtime Bridge
-   disposal runs before registry/plugin disposal.
+   `serverUrl`), user plugins install after those runtime fields so plugins see the owned
+   transport/store state.
+4. If observability does not own the transport, the planner prepends `withDevtools()` for explicit
+   `devtools.serverUrl`, then appends user plugins so local devtools instrumentation installs before
+   custom plugins.
+5. The installer computes the final runtime once and installs the changed fields as one hook layer.
+   Re-running `config()` restores the previous active layer first, so hot reload leaves one live
+   middleware/hook chain.
+6. Runtime Bridge disposal runs before registry disposal. Config restore removes its hook layer,
+   then plugin `dispose()` functions run before config-owned observability restore.
 
 ### Chaining (Legacy)
 
@@ -805,19 +808,20 @@ graph in the same backend whenever quality runs are executed with devtools attac
 to `runtime/config-transaction/`, a deep module with a pure planner and effectful installer:
 
 - `planRuntimeConfig()` reads only `CruxConfig` plus optional environment data. It decides index
-  mode, observability ownership, runtime patches, bridge inputs, tokenizer policy, and whether user
-  plugins belong to the transaction or to `configure()` behind devtools fallback.
+  mode, observability ownership, runtime patches, bridge inputs, tokenizer policy, and ordered
+  plugins, including the devtools fallback plugin when applicable.
 - `installRuntimeConfigPlan()` takes the plan plus narrow ports for runtime state, observability,
   bridge connection, tokenizer, plugins, diagnostics, and Crux object creation. Tests use fake ports
   to verify ordering without inspecting global state.
-- Production ports call the existing domain owners: `updateRuntime()` / `setRuntime()`,
+- Production ports call the existing domain owners: `pushHooksLayer()` / `restoreHooksLayer()`,
   `configureObservability()`, `createHttpObservabilityTransport()`, `connectRuntimeBridge()`,
   `setTokenizer()`, and `applyPlugins()`.
 
-The transaction boundary owns application and teardown order. It must not duplicate observability
-protocols, bridge protocols, plugin merge semantics, or prompt registry construction; those stay in
-their existing domains. `configure()` remains available for lower-level prompt registry tests and
-direct legacy use.
+The transaction boundary owns application and teardown order. `config()` is a one-config-per-process
+API: the last call replaces the previous active installation, and multi-tenant/per-request config
+scoping is out of scope. The transaction must not duplicate observability protocols, bridge
+protocols, plugin merge semantics, or prompt registry construction; those stay in their existing
+domains. `configure()` remains available for lower-level prompt registry tests and direct legacy use.
 
 ## configure() Internals
 
@@ -828,12 +832,9 @@ direct legacy use.
 3. **Auto-collect contexts** — Deduplicate contexts from prompts' `use` arrays with explicitly passed contexts
 4. **Validate** — All prompts must have an `id`, no duplicate IDs allowed
 5. **Build indexes** — `byId: Map<string, Prompt>`, `tagIndex: Map<string, Prompt[]>`
-6. **Apply globals for direct use** — `setTokenizer()`, `setRuntime()` for middleware if provided
-7. **Build plugins array** — Auto-prepend `withDevtools()` only for explicit `devtools.serverUrl`
-   local/tunnel config when `observability` has not already claimed the transport, then append user
-   `plugins`
-8. **Apply plugins** — `applyPlugins()` processes in order, each receiving cumulative runtime. Final runtime set via `setRuntime()`
-9. **Return frozen registry** — `get`, `find`, `list`, `byTag`, `byTags`, `tags`, `dispose` (dispose calls plugin cleanups in reverse order)
+6. **Apply registry policy flags** — `autoEscape` and `securityWarnings` stay module-local for
+   resolver defaults
+7. **Return frozen registry** — `get`, `find`, `list`, `byTag`, `byTags`, `tags`, `dispose`
 
 ### Tree Walking
 
@@ -867,10 +868,11 @@ The result provides typed autocomplete at every nesting level while also exposin
 2. Configure `@use-crux/core/observability` to deliver graph record batches to the Go backend
 3. Return `observabilityTransport` + `dispose()` that restores the previous observability runtime
 
-`enableDevtools()` remains for imperative use — delegates to `buildDevtoolsRuntime()` and calls `setRuntime()` directly.
+`enableDevtools()` remains for imperative use — delegates to `buildDevtoolsRuntime()` and installs
+its own hook layer so config teardown does not clobber imperative devtools hooks.
 
 When `config({ devtools: { serverUrl } })` is used without an explicit `observability` override,
-`configure()` auto-prepends `withDevtools()` so the local devtools transport is installed before
+the config planner auto-prepends `withDevtools()` so the local devtools transport is installed before
 custom plugins. `devtools` remains the local UI/control/tunnel/bridge domain; production export,
 remote collectors, and delivery policy belong under `observability` or telemetry plugins. When the
 server URL is a tokenized tunnel URL, the HTTP transport preserves the query token while appending

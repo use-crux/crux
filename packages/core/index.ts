@@ -355,12 +355,14 @@ export type {
 // Runtime hooks — prefer `config()` for centralized setup
 export {
   getRuntime,
+  pushHooksLayer,
   setRuntime,
   updateRuntime,
   resetRuntime,
+  restoreHooksLayer,
   resolveRecords,
 } from "./runtime";
-export type { CruxRuntime } from "./runtime";
+export type { CruxRuntime, HooksLayerToken } from "./runtime";
 export type { PromptMiddleware, PromptMiddlewareArgs } from "./runtime";
 
 // Canonical observability graph contract.
