@@ -36,11 +36,16 @@ describe('guardInput — pipeline ordering and content flow', () => {
         phase: 'input' as const,
         validate: async (content) => {
           seen.push(`${name}:${content}`)
-          return { action: 'transform' as const, content: `${content}${suffix}` }
+          return {
+            action: 'transform' as const,
+            content: `${content}${suffix}`,
+          }
         },
       })
 
-    const safety = identity({ call: { guardrails: [tagging('g1', '-1'), tagging('g2', '-2')] } })
+    const safety = identity({
+      call: { guardrails: [tagging('g1', '-1'), tagging('g2', '-2')] },
+    })
     const result = await safety.guardInput({ messages: [userMessage('x')] })
 
     // g1 sees the raw content; g2 sees g1's transformed output.
@@ -49,12 +54,15 @@ describe('guardInput — pipeline ordering and content flow', () => {
     expect(result.messages.at(-1)?.content).toBe('x-1-2')
   })
 
-    it('feeds the redacted output of an earlier guard into a later guard as its input', async () => {
+  it('feeds the redacted output of an earlier guard into a later guard as its input', async () => {
     const laterSaw = vi.fn()
     const redactor = guardrail({
       name: 'redactor',
       phase: 'input',
-      validate: async (content) => ({ action: 'redact' as const, content: content.replace('secret', '[X]') }),
+      validate: async (content) => ({
+        action: 'redact' as const,
+        content: content.replace('secret', '[X]'),
+      }),
     })
     const inspector = guardrail({
       name: 'inspector',
@@ -69,10 +77,34 @@ describe('guardInput — pipeline ordering and content flow', () => {
     await safety.guardInput({ messages: [userMessage('a secret value')] })
 
     expect(laterSaw).toHaveBeenCalledWith('a [X] value')
-    // Both guards land in the audit, redactor first, keeping the pre-redaction original.
+    // Both guards land in the audit, redactor first, without leaking the raw pre-redaction input.
     const applied = safety.audit.guardrails?.applied ?? []
     expect(applied.map((entry) => entry.guard)).toEqual(['redactor', 'inspector'])
-    expect(applied[0]).toMatchObject({ guard: 'redactor', action: 'redact', original: 'a secret value' })
+    expect(applied[0]).toMatchObject({ guard: 'redactor', action: 'redact' })
+    expect(applied[0]).not.toHaveProperty('original')
+  })
+
+  it('guards every user message instead of only the last user turn', async () => {
+    const seen: string[] = []
+    const redactor = guardrail({
+      name: 'all-user-input',
+      phase: 'input',
+      validate: async (content) => {
+        seen.push(content)
+        return {
+          action: 'redact' as const,
+          content: content.replaceAll('secret', '[X]'),
+        }
+      },
+    })
+    const safety = identity({ call: { guardrails: [redactor] } })
+
+    const result = await safety.guardInput({
+      messages: [userMessage('first secret'), { role: 'assistant', content: 'ok' }, userMessage('second secret')],
+    })
+
+    expect(seen).toEqual(['first secret', 'second secret'])
+    expect(result.messages.map((message) => message.content)).toEqual(['first [X]', 'ok', 'second [X]'])
   })
 })
 
@@ -101,11 +133,14 @@ describe('guardInput — block short-circuit', () => {
     expect(later).not.toHaveBeenCalled()
   })
 
-    it('throws a GuardrailBlockedError shaped with guardrailId, phase, and reason', async () => {
+  it('throws a GuardrailBlockedError shaped with guardrailId, phase, and reason', async () => {
     const blocker = guardrail({
       name: 'pii',
       phase: 'input',
-      validate: async () => ({ action: 'block' as const, reason: 'secret detected' }),
+      validate: async () => ({
+        action: 'block' as const,
+        reason: 'secret detected',
+      }),
     })
     const safety = identity({ call: { guardrails: [blocker] } })
 
@@ -119,5 +154,51 @@ describe('guardInput — block short-circuit', () => {
     expect(blocked.guardrailId).toBe('pii')
     expect(blocked.phase).toBe('input')
     expect(blocked.reason).toBe('secret detected')
+  })
+
+  it('attaches safe terminal decision metadata to a blocking error', async () => {
+    const blocker = guardrail({
+      name: 'pii',
+      phase: 'input',
+      validate: async () => ({
+        action: 'block' as const,
+        reason: 'secret detected',
+      }),
+    })
+    const safety = identity({ call: { guardrails: [blocker] } })
+
+    const error = await safety
+      .guardInput({ messages: [userMessage('my ssn is 123-45-6789')] })
+      .then(() => undefined)
+      .catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(GuardrailBlockedError)
+    const terminal = error as {
+      readonly decisions?: readonly Record<string, unknown>[]
+      readonly audit?: {
+        readonly applied?: readonly Record<string, unknown>[]
+      }
+    }
+    const decisions = terminal.decisions ?? terminal.audit?.applied ?? []
+    expect(decisions).toContainEqual(
+      expect.objectContaining({
+        action: 'block',
+        reason: 'secret detected',
+      }),
+    )
+    expect(JSON.stringify(decisions)).not.toContain('123-45-6789')
+  })
+
+  it('fails closed when a guardrail returns a malformed result', async () => {
+    const malformed = guardrail({
+      name: 'malformed',
+      phase: 'input',
+      validate: async () => ({ action: 'redact' }) as never,
+    })
+    const safety = identity({ call: { guardrails: [malformed] } })
+
+    await expect(safety.guardInput({ messages: [userMessage('secret')] })).rejects.toThrow(
+      /invalid|malformed|safety|result/i,
+    )
   })
 })

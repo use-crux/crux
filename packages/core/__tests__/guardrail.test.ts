@@ -30,7 +30,7 @@ describe('guardrail', () => {
     expect(Object.isFrozen(guard)).toBe(true)
   })
 
-    it('infers phase from config — input guard cannot return reask', () => {
+  it('infers phase from config — input guard cannot return reask', () => {
     // This test verifies the runtime shape. TypeScript compile-time enforcement
     // is tested by the type system itself (reask not in InputGuardrailResult).
     const guard = makeGuardrail({
@@ -42,7 +42,7 @@ describe('guardrail', () => {
     expect(guard.phase).toBe('input')
   })
 
-    it('creates output guard with all action types except reask', () => {
+  it('creates output guard with all action types except reask', () => {
     const guard = makeGuardrail({
       name: 'output-filter',
       phase: 'output',
@@ -56,7 +56,7 @@ describe('guardrail', () => {
     expect(Object.isFrozen(guard)).toBe(true)
   })
 
-    it('supports stream config on output guards', () => {
+  it('supports stream config on output guards', () => {
     const guard = makeGuardrail({
       name: 'streaming-guard',
       phase: 'output',
@@ -67,19 +67,21 @@ describe('guardrail', () => {
     expect(guard.stream).toEqual({ buffer: 'full' })
   })
 
-    it('supports onChunk handler for streaming', () => {
+  it('supports onChunk handler for streaming', () => {
     const guard = makeGuardrail({
       name: 'chunk-guard',
       phase: 'output',
       stream: { buffer: 'none' },
-      onChunk: async (_chunk, _accumulated, _ctx) => ({ action: 'pass' as const }),
+      onChunk: async (_chunk, _accumulated, _ctx) => ({
+        action: 'pass' as const,
+      }),
       validate: async () => ({ action: 'pass' as const }),
     })
 
     expect(typeof guard.onChunk).toBe('function')
   })
 
-    it('carries an optional risk category', () => {
+  it('carries an optional risk category', () => {
     const guard = makeGuardrail({
       name: 'pii-guard',
       category: 'pii',
@@ -89,8 +91,118 @@ describe('guardrail', () => {
 
     expect(guard.category).toBe('pii')
     expect(
-      makeGuardrail({ name: 'plain', phase: 'input', validate: async () => ({ action: 'pass' as const }) }).category,
+      makeGuardrail({
+        name: 'plain',
+        phase: 'input',
+        validate: async () => ({ action: 'pass' as const }),
+      }).category,
     ).toBeUndefined()
+  })
+})
+
+// ── Stable beta boundary authoring ────────────────────────────────
+
+describe('stable beta boundary authoring', () => {
+  it('exports frozen boundary helpers for the accepted safety targets', async () => {
+    const safety = (await import('../safety')) as typeof import('../safety') & {
+      readonly boundary?: {
+        readonly input: {
+          readonly text: () => unknown
+          readonly user: () => unknown
+          readonly model: () => unknown
+        }
+        readonly output: {
+          readonly text: () => unknown
+          readonly object: <T>() => unknown
+          readonly both: <T>() => unknown
+          readonly path: <T>() => (path: string) => unknown
+        }
+        readonly tool: {
+          readonly call: () => unknown
+          readonly result: () => unknown
+        }
+        readonly approval: { readonly request: () => unknown }
+        readonly retrieval: { readonly result: () => unknown }
+        readonly memory: { readonly write: <T = unknown>() => unknown }
+        readonly validation: { readonly feedback: () => unknown }
+      }
+    }
+
+    expect(safety.boundary).toBeDefined()
+    const boundary = safety.boundary!
+
+    expect(boundary.input.text()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'user.input',
+    })
+    expect(boundary.input.model()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'model.input',
+    })
+    expect(boundary.output.text()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'model.output.text',
+    })
+    expect(boundary.output.object<{ email: string }>()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'model.output.object',
+    })
+    expect(boundary.output.both<{ email: string }>()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'model.output',
+    })
+    expect(boundary.output.path<{ customer: { email: string } }>()('customer.email')).toMatchObject({
+      _tag: 'Boundary',
+      id: 'model.output.object',
+      path: 'customer.email',
+    })
+    expect(boundary.tool.call()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'tool.call',
+    })
+    expect(boundary.tool.result()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'tool.result',
+    })
+    expect(boundary.approval.request()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'approval.request',
+    })
+    expect(boundary.retrieval.result()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'retrieval.result',
+    })
+    expect(boundary.memory.write()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'memory.write',
+    })
+    expect(boundary.validation.feedback()).toMatchObject({
+      _tag: 'Boundary',
+      id: 'validation.feedback',
+    })
+  })
+
+  it('accepts id/on/run authoring and preserves multi-boundary bindings', async () => {
+    const safety = (await import('../safety')) as typeof import('../safety') & {
+      readonly boundary?: {
+        readonly input: { readonly text: () => unknown }
+        readonly output: { readonly text: () => unknown }
+      }
+    }
+    expect(safety.boundary).toBeDefined()
+
+    const guard = (makeGuardrail as unknown as (config: unknown) => Record<string, unknown>)({
+      id: 'input-or-output-pii',
+      on: [safety.boundary!.input.text(), safety.boundary!.output.text()],
+      run: async () => ({ action: 'allow' as const }),
+    })
+
+    expect(guard).toMatchObject({
+      _tag: 'Guardrail',
+      id: 'input-or-output-pii',
+      on: [expect.objectContaining({ id: 'user.input' }), expect.objectContaining({ id: 'model.output.text' })],
+    })
+    expect(Object.isFrozen(guard)).toBe(true)
   })
 })
 
@@ -105,7 +217,7 @@ describe('isGuardrail', () => {
     expect(isGuardrail(guard)).toBe(true)
   })
 
-    it('returns false for non-guardrail objects', () => {
+  it('returns false for non-guardrail objects', () => {
     expect(isGuardrail(null)).toBe(false)
     expect(isGuardrail(undefined)).toBe(false)
     expect(isGuardrail({})).toBe(false)
@@ -137,7 +249,7 @@ describe('context-level guardrails', () => {
     expect(Object.isFrozen(ctx.guardrails)).toBe(true)
   })
 
-    it('context() defaults to empty guardrails array', async () => {
+  it('context() defaults to empty guardrails array', async () => {
     const { context } = await import('../prompt/context')
 
     const ctx = context({
@@ -157,7 +269,10 @@ describe('evaluateGuardrail', () => {
       phase: 'output',
       validate: async (content) => {
         if (/\d{3}-\d{2}-\d{4}/.test(content))
-          return { action: 'redact' as const, content: content.replace(/\d{3}-\d{2}-\d{4}/g, '[SSN]') }
+          return {
+            action: 'redact' as const,
+            content: content.replace(/\d{3}-\d{2}-\d{4}/g, '[SSN]'),
+          }
         return { action: 'pass' as const }
       },
     })
@@ -180,7 +295,26 @@ describe('evaluateGuardrail', () => {
     expect(report.summary.failed).toBe(0)
   })
 
-    it('reports failures when action does not match expectation', async () => {
+  it('reports transformed content so tests can assert the runtime decision contract', async () => {
+    const guard = makeGuardrail({
+      name: 'pii-test',
+      phase: 'output',
+      validate: async (content) => ({
+        action: 'redact' as const,
+        content: content.replace('secret', '[X]'),
+      }),
+    })
+
+    const report = await evaluateGuardrail(guard, [{ input: 'secret', expect: 'redact' }])
+
+    expect(report.results[0]).toMatchObject({
+      passed: true,
+      action: 'redact',
+      output: '[X]',
+    })
+  })
+
+  it('reports failures when action does not match expectation', async () => {
     const guard = makeGuardrail({
       name: 'always-pass',
       phase: 'output',
@@ -196,7 +330,7 @@ describe('evaluateGuardrail', () => {
     expect(report.summary.failed).toBe(1)
   })
 
-    it('handles guard errors gracefully', async () => {
+  it('handles guard errors gracefully', async () => {
     const guard = makeGuardrail({
       name: 'broken',
       phase: 'output',

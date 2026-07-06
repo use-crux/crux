@@ -30,7 +30,10 @@ const importFixer = () =>
     stream: { buffer: 'none' },
     onChunk: async (chunk) => {
       if (chunk.includes('@/comps/')) {
-        return { action: 'transform' as const, content: chunk.replace('@/comps/', '@/components/') }
+        return {
+          action: 'transform' as const,
+          content: chunk.replace('@/comps/', '@/components/'),
+        }
       }
       if (chunk.endsWith('@/co')) return { action: 'hold' as const }
       return { action: 'pass' as const }
@@ -54,14 +57,18 @@ describe('streaming safety through real streamText', () => {
     }
     expect(streamed).toBe('import x from @/components/Button — done')
 
-    const meta = await (result as unknown as { completion: Promise<{ guardrails?: { applied: unknown[] } }> })
-      .completion
+    const meta = await (
+      result as unknown as {
+        completion: Promise<{ guardrails?: { applied: unknown[] } }>
+      }
+    ).completion
     expect(meta?.guardrails?.applied).toContainEqual(
-      expect.objectContaining({ guard: 'import-fixer', action: 'transform', original: '@/comps/Button' }),
+      expect.objectContaining({ guard: 'import-fixer', action: 'transform' }),
     )
+    expect(JSON.stringify(meta?.guardrails?.applied ?? [])).not.toContain('@/comps/Button')
   })
 
-  it('releases a held tail before the finish part so the assembled text includes it', async () => {
+  it('fails closed instead of releasing a held tail before the finish part', async () => {
     const ai = createCruxAi()
     // The final chunk ends mid-hold, so the tail is only released at seal.
     const model = streamingModel(['hello ', '@/co'])
@@ -72,14 +79,45 @@ describe('streaming safety through real streamText', () => {
       guardrails: [importFixer()],
     })
 
+    await expect(
+      (async () => {
+        for await (const _delta of result.textStream) {
+          // Consume until the safety transform closes or errors.
+        }
+      })(),
+    ).rejects.toThrow(/hold|stream|safety|result/i)
+
+    await expect((result as unknown as { completion: Promise<{ text?: string }> }).completion).rejects.toThrow(
+      /hold|stream|safety|result/i,
+    )
+  })
+
+  it('applies ordinary output guardrails to streamText by default', async () => {
+    const ai = createCruxAi()
+    const model = streamingModel(['api key sk-', '123.'])
+    const redactor = guardrail({
+      name: 'default-stream-redactor',
+      phase: 'output',
+      validate: async (content) => ({
+        action: 'redact' as const,
+        content: content.replace('sk-123', '[KEY]'),
+      }),
+    })
+
+    const result = await ai.stream(textPrompt, {
+      model,
+      input: { message: 'code' },
+      guardrails: [redactor],
+    })
+
     let streamed = ''
     for await (const delta of result.textStream) {
       streamed += delta
     }
-    expect(streamed).toBe('hello @/co')
+    expect(streamed).toBe('api key [KEY].')
 
     const meta = await (result as unknown as { completion: Promise<{ text?: string }> }).completion
-    expect(meta?.text).toBe('hello @/co')
+    expect(meta?.text).toBe('api key [KEY].')
   })
 
   it('a mid-stream block surfaces as a stream error', async () => {
