@@ -121,7 +121,7 @@ The `use` array is the bus. Memory, retrieval, guardrails, skills, blackboards, 
 import { prompt } from "@use-crux/core";
 import { memory, facts, recentMessages } from "@use-crux/core/memory";
 import { retriever } from "@use-crux/core/retrieval";
-import { constraint, guardrail } from "@use-crux/core/safety";
+import { boundary, constraint, guardrail } from "@use-crux/core/safety";
 import { generate } from "@use-crux/ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
@@ -146,16 +146,24 @@ const docs = retriever({
 });
 
 const injection = guardrail({
-  name: "injection",
-  phase: "input",
-  validate: detectPromptInjection,
+  id: "injection",
+  on: boundary.input.text(),
+  run: guardrail.injection({ action: "block" }),
 });
 
+const ReplyOutputSchema = z.object({
+  answer: z.string(),
+  citations: z.array(z.object({ title: z.string(), url: z.string() })),
+});
+
+type ReplyOutput = z.infer<typeof ReplyOutputSchema>;
+
 const grounded = constraint({
-  name: "grounded",
+  id: "grounded",
+  on: boundary.output.object<ReplyOutput>(),
   severity: "assert",
-  check: async (output) =>
-    output.parsed.citations.length > 0
+  run: async (output) =>
+    output.citations.length > 0
       ? { pass: true }
       : { pass: false, feedback: "Cite at least one source." },
 });
@@ -164,10 +172,7 @@ const reply = prompt({
   id: "reply",
   use: [chat, docs],
   input: z.object({ userId: z.string(), question: z.string() }),
-  output: z.object({
-    answer: z.string(),
-    citations: z.array(z.object({ title: z.string(), url: z.string() })),
-  }),
+  output: ReplyOutputSchema,
   system: "Answer from memory and product docs. Do not invent facts.",
   prompt: ({ input }) => input.question,
 });

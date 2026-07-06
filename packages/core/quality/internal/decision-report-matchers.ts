@@ -122,6 +122,26 @@ export function createDecisionReportExpect(input: {
         )
       },
     },
+    safety: {
+      toHaveOutcome(policyId, outcome, options) {
+        input.requireCaptured()
+        const match = findDecision(input.reports, {
+          kindPrefix: 'safety.',
+          subject: policyId,
+          outcome,
+          options,
+          label: 'safety decision',
+        })
+        input.assertOn(
+          'decisionReport.safety.toHaveOutcome',
+          match.pass,
+          match.message,
+          { policyId, outcome, ...(options?.reasonCode !== undefined ? { reasonCode: options.reasonCode } : {}) },
+          match.actual,
+          { spanIds: match.spanIds },
+        )
+      },
+    },
   }
 }
 

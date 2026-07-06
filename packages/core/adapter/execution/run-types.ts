@@ -16,6 +16,7 @@ import type { Message } from '../../generation/messages'
 import type { ValidationRetryOptions } from '../../generation/validation-retry'
 import type { Constraint } from '../../safety/constraint/types'
 import type { Guardrail } from '../../safety/guardrail/types'
+import type { SafetyTuneOptions } from '../../safety/tune'
 import type { ToolMiddleware } from '../../tools/types'
 import type { StreamHandle } from '../types'
 import type { ExecutorStreamHandle, StepObserver } from '../executor-types'
@@ -77,14 +78,17 @@ export interface AdapterExecutionGenerateArgs<
   /** Corrective retry policy for structured-output validation failures. */
   readonly validationRetry?: ValidationRetryOptions
 
-  /** Per-call semantic constraints merged with prompt/context constraints. */
+  /** Per-call semantic constraints composed by the Safety registry. */
   readonly constraints?: Constraint[]
 
   /** Shared retry cap for semantic constraint corrections. */
   readonly constraintMaxRetries?: number
 
-  /** Per-call guardrails merged with prompt/context guardrails. */
+  /** Per-call guardrails composed by the Safety registry. */
   readonly guardrails?: Guardrail[]
+
+  /** Per-call safety posture overrides keyed by policy id. */
+  readonly safety?: SafetyTuneOptions
 
   /** Cooperative timeout used by SDK-loop executions. */
   readonly timeoutMs?: number

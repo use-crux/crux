@@ -1,4 +1,7 @@
-import type { Constraint, ConstraintContext } from './types'
+import type { BoundaryDef } from '../boundary'
+import type { SafetyRunContext } from '../decision'
+import type { Constraint, ConstraintContext, ConstraintOutput } from './types'
+import { validateConstraintRunResult } from './types'
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -17,6 +20,7 @@ export interface ConstraintEvalCaseResult {
   readonly actualPass: boolean
   readonly matched: boolean
   readonly feedback?: string
+  readonly metadata?: Readonly<Record<string, unknown>>
   readonly durationMs: number
   readonly error?: string
 }
@@ -63,9 +67,10 @@ export async function evaluateConstraint(
     const start = performance.now()
 
     try {
-      const result = await constraint.check(
-        { text: evalCase.input.text, parsed: evalCase.input.parsed },
-        ctx,
+      const output = { text: evalCase.input.text, parsed: evalCase.input.parsed }
+      const result = validateConstraintRunResult(
+        await constraint.run(subjectForBoundary(constraint.on, output) as never, runContext(constraint, ctx) as never),
+        { policyId: constraint.id, boundary: constraint.on.id },
       )
       const durationMs = performance.now() - start
 
@@ -75,6 +80,7 @@ export async function evaluateConstraint(
         actualPass: result.pass,
         matched: result.pass === evalCase.expect,
         feedback: result.pass ? undefined : result.feedback,
+        metadata: result.metadata,
         durationMs,
       })
     } catch (err) {
@@ -101,4 +107,33 @@ export async function evaluateConstraint(
       failed,
     },
   }
+}
+
+function runContext<B extends BoundaryDef>(constraint: Constraint, ctx: ConstraintContext): SafetyRunContext<B> {
+  const boundary = constraint.on as B
+  return {
+    policy: { id: constraint.id, mode: 'enforce' },
+    boundary: { id: boundary.id as never, kind: boundary.id as never },
+    prompt: { id: ctx.promptId },
+    model: { id: ctx.model },
+    trace: { id: ctx.traceId },
+    attempt: { index: ctx.attempt, kind: 'initial' },
+    metadata: ctx.metadata,
+    findings: { add() {} },
+    ...(boundary.path ? { path: boundary.path } : {}),
+  }
+}
+
+function subjectForBoundary(boundary: BoundaryDef, output: ConstraintOutput): unknown {
+  if (boundary.id === 'model.output.text') return output.text
+  if (boundary.id === 'model.output.object') return boundary.path ? valueAtPath(output.parsed, boundary.path) : output.parsed
+  if (boundary.id === 'model.output') return { text: output.text, object: output.parsed }
+  return output.text
+}
+
+function valueAtPath(value: unknown, path: string): unknown {
+  return path.split('.').reduce<unknown>((current, segment) => {
+    if (typeof current !== 'object' || current === null) return undefined
+    return (current as Readonly<Record<string, unknown>>)[segment]
+  }, value)
 }

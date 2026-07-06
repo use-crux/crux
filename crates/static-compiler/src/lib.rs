@@ -10,6 +10,7 @@ pub(crate) use crux_indexer_primitives as primitives;
 pub(crate) use crux_indexer_protocol as protocol;
 
 pub(crate) mod analysis {
+    pub(crate) mod groups;
     pub(crate) mod parse;
     pub(crate) mod run;
     #[cfg(test)]

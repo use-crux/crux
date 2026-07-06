@@ -9,6 +9,12 @@
  */
 
 import type { z } from 'zod'
+import type { SafetyCaptureSummary, SafetyDecision } from '../safety/decision'
+import {
+  POLICY_TERMINAL,
+  toSafetyCaptureSummary,
+  type PolicyTerminalError,
+} from '../safety/errors'
 
 // ── Options ────────────────────────────────────────────────────────
 
@@ -32,7 +38,9 @@ export interface ValidationRetryOptions {
 
 /** Constructor arguments for {@link ValidationExhaustedError}. */
 export interface ValidationExhaustedErrorInit {
-  readonly lastRawOutput: string
+  readonly lastRawOutput?: string
+  readonly lastOutput?: SafetyCaptureSummary
+  readonly decisions?: readonly SafetyDecision[]
   readonly zodErrors: z.ZodError
   readonly attempts: number
   readonly maxAttempts: number
@@ -43,14 +51,16 @@ export interface ValidationExhaustedErrorInit {
  * Thrown when all validation retries are exhausted and the model's
  * structured output still fails Zod schema validation.
  *
- * Carries enough context for debugging: the last raw output,
- * the Zod errors, attempt count, and prompt identifier.
+ * Carries safe failure evidence, the Zod errors, attempt count, prompt
+ * identifier, and a `validation.feedback` Safety decision. Raw failed model
+ * output is intentionally not exposed on the public error.
  */
-export class ValidationExhaustedError extends Error {
+export class ValidationExhaustedError extends Error implements PolicyTerminalError {
   override readonly name = 'ValidationExhaustedError' as const
+  readonly [POLICY_TERMINAL] = true
 
-  /** The model's last raw text output that failed validation. */
-  readonly lastRawOutput: string
+  /** Safe summary of the model output that failed validation. */
+  readonly lastOutput: SafetyCaptureSummary
 
   /** The Zod validation errors from the last attempt. */
   readonly zodErrors: z.ZodError
@@ -64,15 +74,24 @@ export class ValidationExhaustedError extends Error {
   /** Identifier of the prompt that was being generated. */
   readonly promptId: string
 
+  /** Safety decision for the failed validation-feedback boundary. */
+  readonly decisions: readonly SafetyDecision[]
+
   constructor(init: ValidationExhaustedErrorInit) {
     super(
       `Validation failed after ${init.attempts}/${init.maxAttempts} attempts for prompt "${init.promptId}": ${init.zodErrors.message}`,
     )
-    this.lastRawOutput = init.lastRawOutput
+    this.lastOutput = init.lastOutput ?? toSafetyCaptureSummary(init.lastRawOutput ?? '')
     this.zodErrors = init.zodErrors
     this.attempts = init.attempts
     this.maxAttempts = init.maxAttempts
     this.promptId = init.promptId
+    this.decisions = init.decisions ?? [
+      validationFeedbackDecision({
+        captured: this.lastOutput,
+        reason: 'validation retries exhausted',
+      }),
+    ]
   }
 }
 
@@ -81,4 +100,20 @@ export class ValidationExhaustedError extends Error {
 /** Type guard for `ValidationExhaustedError`. */
 export function isValidationExhaustedError(error: unknown): error is ValidationExhaustedError {
   return error instanceof ValidationExhaustedError
+}
+
+function validationFeedbackDecision(input: {
+  readonly captured: SafetyCaptureSummary
+  readonly reason: string
+}): SafetyDecision {
+  return {
+    policyId: 'validation.feedback',
+    kind: 'guardrail',
+    boundary: 'validation.feedback',
+    mode: 'enforce',
+    action: 'block',
+    reason: input.reason,
+    durationMs: 0,
+    captured: input.captured,
+  }
 }

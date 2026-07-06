@@ -5157,6 +5157,112 @@ describe('project indexer', () => {
     })
   })
 
+  it('indexes stable-beta Safety boundaries, strategies, and tool policies', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/safety-beta.ts'),
+      `
+        import { boundary, constraint, guardrail, toolPolicy } from '@use-crux/core/safety'
+
+        interface Answer {
+          answer: string
+          citations: string[]
+        }
+
+        export const pii = guardrail({
+          id: 'pii',
+          on: [boundary.input.text(), boundary.output.text()],
+          run: guardrail.pii({ strategy: 'mask' }),
+        })
+
+        export const grounded = constraint({
+          id: 'grounded',
+          on: boundary.output.object<Answer>(),
+          run: constraint.judge({ judge: {} as never, minScore: 0.8 }),
+        })
+
+        export const blockDelete = toolPolicy({
+          id: 'block-delete',
+          match: { tool: 'deleteUser' },
+          action: 'block',
+          reason: 'Delete user requires an operator override.',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root })
+    const byId = new Map(snapshot.definitions.map((definition) => [definition.id, definition]))
+
+    expect(byId.get('guardrail:pii')).toMatchObject({
+      kind: 'guardrail',
+      metadata: expect.objectContaining({
+        facts: expect.objectContaining({
+          kind: 'guardrail',
+          policyId: 'pii',
+          boundaries: ['user.input', 'model.output.text'],
+          strategy: { kind: 'pii' },
+        }),
+      }),
+    })
+    expect(byId.get('constraint:grounded')).toMatchObject({
+      kind: 'constraint',
+      metadata: expect.objectContaining({
+        facts: expect.objectContaining({
+          kind: 'constraint',
+          policyId: 'grounded',
+          boundary: 'model.output.object',
+          strategy: { kind: 'judge' },
+        }),
+      }),
+    })
+    expect(byId.get('toolPolicy:block-delete')).toMatchObject({
+      kind: 'toolPolicy',
+      metadata: expect.objectContaining({
+        facts: expect.objectContaining({
+          kind: 'toolPolicy',
+          policyId: 'block-delete',
+          action: 'block',
+          match: { tool: 'deleteUser' },
+        }),
+      }),
+    })
+  })
+
+  it('lints duplicate stable-beta Safety policy ids across policy kinds', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      join(root, 'src/safety-duplicates.ts'),
+      `
+        import { boundary, guardrail, toolPolicy } from '@use-crux/core/safety'
+
+        export const piiOutput = guardrail({
+          id: 'pii',
+          on: boundary.output.text(),
+          run: guardrail.pii(),
+        })
+
+        export const piiToolPolicy = toolPolicy({
+          id: 'pii',
+          match: { tool: 'sendEmail' },
+          action: 'block',
+        })
+      `,
+    )
+
+    const snapshot = await indexProject({ root })
+
+    expect(snapshot.lintFindings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'safety.duplicate_policy_id',
+          relatedDefinitionIds: expect.arrayContaining(['guardrail:pii', 'toolPolicy:pii']),
+        }),
+      ]),
+    )
+  })
+
   it('captures deterministic static dependencies for relative imports', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })

@@ -28,6 +28,7 @@ import type { ApprovalRequestInfo } from './tool/approval'
 import type { ValidationRetryOptions } from '../generation/validation-retry'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
+import type { SafetyTuneOptions } from '../safety/tune'
 import { executeFallbackLoop } from '../generation/fallback-loop'
 import { isFallback } from '../generation/fallback'
 import type { FallbackModel } from '../generation/fallback'
@@ -90,6 +91,13 @@ export interface ExecutorGenerateOptions<TModel> {
   constraintMaxRetries?: number
   /** Guardrails to run on input/output during generation. */
   guardrails?: Guardrail[]
+  /**
+   * Per-call safety posture overrides keyed by policy id.
+   *
+   * Tune enforcement/reporting, stream posture, or whether a policy is
+   * enabled for this call without replacing the policy logic.
+   */
+  safety?: SafetyTuneOptions
   /**
    * Per-step steering observer. Runs after the factory's own steering
    * (skill re-resolution); on conflict, `stop` wins over `amend` wins over
@@ -248,6 +256,7 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       constraints: opts.constraints,
       constraintMaxRetries: opts.constraintMaxRetries,
       guardrails: opts.guardrails,
+      safety: opts.safety,
       observer: opts.observer,
       activeTools: opts.activeTools,
       extra: opts.extra,
@@ -302,6 +311,7 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       constraints: opts.constraints,
       constraintMaxRetries: opts.constraintMaxRetries,
       guardrails: opts.guardrails,
+      safety: opts.safety,
       observer: opts.observer,
       activeTools: opts.activeTools,
       extra: opts.extra,

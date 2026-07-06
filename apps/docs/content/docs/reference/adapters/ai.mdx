@@ -88,7 +88,7 @@ Execute a prompt using the Vercel AI SDK.
 
 ### `stream(prompt, options)`
 
-Stream a prompt execution. Same options as `generate()`, except `cascade()` is not supported (cascade needs full results for tier evaluation). [Streaming guardrails](/docs/guides/safety/guardrails#streaming) (`stream: { buffer }` / `onChunk`) execute automatically on text streams — mounted through the AI SDK's `experimental_transform`, so holds, mid-stream transforms, and blocks reach `textStream` consumers; constraints run report-only at end-of-stream and audits land on the completion meta.
+Stream a prompt execution. Same options as `generate()`, except `cascade()` is not supported (cascade needs full results for tier evaluation). [Streaming guardrails](/docs/guides/safety/guardrails#streaming) execute automatically on text streams through the Safety stream transform, so sentence-gated holds, rewrites, and blocks reach `textStream` consumers; constraints run report-only at end-of-stream and audits land on the completion meta.
 
 | Field                      | Type                                                                             | Description                                                                                                       |
 | -------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
@@ -175,7 +175,15 @@ Pre-bound `GenerateObjectFn` for `@use-crux/core` APIs (judges, extraction). Pas
 `generateObjectFn` shares the same AI SDK structured-attempt mechanics used by `generate()` for prompts with an `output` schema: provider-specific schema sanitation, core-backed `experimental_repairText`, and router/cascade model resolution all happen before the helper returns `{ object }`.
 
 ```ts
-const judge = llmJudge({ generate: generateObjectFn, model, ... })
+import { judge } from "@use-crux/core/scoring";
+
+const evaluator = judge({
+  id: "helpfulness",
+  criteria: "Does the answer resolve the request?",
+  scale: { min: 1, max: 5 },
+  generate: generateObjectFn,
+  model,
+})
 ```
 
 For a `GenerateObjectFn` that also runs through full adapter prompt execution semantics, use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction`.

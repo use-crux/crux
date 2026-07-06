@@ -8,6 +8,7 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { z } from 'zod'
 import { prompt as makePrompt, guardrail, resetRuntime } from '@use-crux/core'
+import { boundary } from '@use-crux/core/safety'
 import { createCruxAi } from '../index'
 import { streamingModel } from './mock-model'
 
@@ -24,16 +25,19 @@ const textPrompt = makePrompt({
 
 const importFixer = () =>
   guardrail({
-    name: 'import-fixer',
-    phase: 'output',
-    validate: async () => ({ action: 'pass' as const }),
-    stream: { buffer: 'none' },
-    onChunk: async (chunk) => {
+    id: 'import-fixer',
+    on: boundary.output.text(),
+    stream: 'chunk',
+    run: async (chunk) => {
       if (chunk.includes('@/comps/')) {
-        return { action: 'transform' as const, content: chunk.replace('@/comps/', '@/components/') }
+        return {
+          action: 'rewrite' as const,
+          value: chunk.replace('@/comps/', '@/components/'),
+          rewrite: { kind: 'normalize' as const },
+        }
       }
       if (chunk.endsWith('@/co')) return { action: 'hold' as const }
-      return { action: 'pass' as const }
+      return { action: 'allow' as const }
     },
   })
 
@@ -54,14 +58,18 @@ describe('streaming safety through real streamText', () => {
     }
     expect(streamed).toBe('import x from @/components/Button — done')
 
-    const meta = await (result as unknown as { completion: Promise<{ guardrails?: { applied: unknown[] } }> })
-      .completion
+    const meta = await (
+      result as unknown as {
+        completion: Promise<{ guardrails?: { applied: unknown[] } }>
+      }
+    ).completion
     expect(meta?.guardrails?.applied).toContainEqual(
-      expect.objectContaining({ guard: 'import-fixer', action: 'transform', original: '@/comps/Button' }),
+      expect.objectContaining({ guard: 'import-fixer', action: 'transform' }),
     )
+    expect(JSON.stringify(meta?.guardrails?.applied ?? [])).not.toContain('@/comps/Button')
   })
 
-  it('releases a held tail before the finish part so the assembled text includes it', async () => {
+  it('fails closed instead of releasing a held tail before the finish part', async () => {
     const ai = createCruxAi()
     // The final chunk ends mid-hold, so the tail is only released at seal.
     const model = streamingModel(['hello ', '@/co'])
@@ -72,24 +80,55 @@ describe('streaming safety through real streamText', () => {
       guardrails: [importFixer()],
     })
 
+    await expect(
+      (async () => {
+        for await (const _delta of result.textStream) {
+          // Consume until the safety transform closes or errors.
+        }
+      })(),
+    ).rejects.toThrow(/hold|stream|safety|result/i)
+
+    await expect((result as unknown as { completion: Promise<{ text?: string }> }).completion).rejects.toThrow(
+      /hold|stream|safety|result/i,
+    )
+  })
+
+  it('applies ordinary output guardrails to streamText by default', async () => {
+    const ai = createCruxAi()
+    const model = streamingModel(['api key sk-', '123.'])
+    const redactor = guardrail({
+      id: 'default-stream-redactor',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('sk-123', '[KEY]'),
+        rewrite: { kind: 'redact' as const },
+      }),
+    })
+
+    const result = await ai.stream(textPrompt, {
+      model,
+      input: { message: 'code' },
+      guardrails: [redactor],
+    })
+
     let streamed = ''
     for await (const delta of result.textStream) {
       streamed += delta
     }
-    expect(streamed).toBe('hello @/co')
+    expect(streamed).toBe('api key [KEY].')
 
     const meta = await (result as unknown as { completion: Promise<{ text?: string }> }).completion
-    expect(meta?.text).toBe('hello @/co')
+    expect(meta?.text).toBe('api key [KEY].')
   })
 
   it('a mid-stream block surfaces as a stream error', async () => {
     const blocker = guardrail({
-      name: 'live-block',
-      phase: 'output',
-      validate: async () => ({ action: 'pass' as const }),
-      stream: { buffer: 'none' },
-      onChunk: async (chunk) =>
-        chunk.includes('forbidden') ? { action: 'block' as const, reason: 'nope' } : { action: 'pass' as const },
+      id: 'live-block',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (chunk) =>
+        chunk.includes('forbidden') ? { action: 'block' as const, reason: 'nope' } : { action: 'allow' as const },
     })
     const ai = createCruxAi()
     const model = streamingModel(['fine ', 'forbidden tail'])

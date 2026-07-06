@@ -124,6 +124,7 @@ export const CRUX_CANONICAL_EDGE_TYPES = [
 ] as const;
 
 export const CRUX_CANONICAL_ARTIFACT_KINDS = [
+  "approval.request",
   "input",
   "output",
   "messages",
@@ -139,15 +140,18 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   "memory.snapshot",
   "memory.recall",
   "memory.diff",
+  "memory.write",
   "handoff.payload",
   "delegate.report",
   "constraint.report",
   "guardrail.report",
+  "validation.feedback",
   "error.stack",
   "error.raw",
   "stream.timeline",
   "score.report",
   "citation.report",
+  "quality.snapshot",
   "comparison.report",
   "composition.report",
   "routing.report",

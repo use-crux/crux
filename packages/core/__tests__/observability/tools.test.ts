@@ -364,6 +364,49 @@ describe('canonical tool observability', () => {
     )
   })
 
+  it('redacts approval request tool args before capture', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const model = testAdapter([
+      response('', [
+        {
+          id: 'call_email',
+          name: 'sendEmail',
+          args: { to: 'private@example.com', apiKey: 'sk-live-secret' },
+        },
+      ]),
+    ])
+
+    await model.generate(
+      testPrompt({
+        sendEmail: {
+          description: 'Send an email',
+          parameters: z.object({ to: z.string(), apiKey: z.string() }),
+          needsApproval: true,
+          execute: async () => 'sent',
+        },
+      }),
+      {
+        model: 'mock-model',
+        input: { instruction: 'Send the email' },
+      },
+    )
+    await observe.flush()
+
+    const approvalArgs = transport.records.find(
+      (record) =>
+        record.type === 'artifact' &&
+        record.kind === 'tool.args' &&
+        record.attributes?.toolCallId === 'call_email',
+    )
+    const preview = JSON.stringify(approvalArgs?.preview)
+
+    expect(preview).not.toContain('private@example.com')
+    expect(preview).not.toContain('sk-live-secret')
+    expect(preview).toContain('[redacted-email]')
+    expect(preview).toContain('[redacted]')
+  })
+
     it('records approved resume decisions before executing the approved tool', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)

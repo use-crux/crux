@@ -4,12 +4,14 @@ import { context } from '../prompt/context'
 import { contributor } from '../prompt/contributor'
 import { prompt } from '../prompt/prompt'
 import { constraint } from '../safety/constraint'
+import { boundary } from '../safety'
 
 describe('contributor()', () => {
   it('lets prompt use entries inject context, tools, constraints, and metadata', async () => {
     const check = constraint({
-      name: 'custom-check',
-      check: () => ({ pass: true, metadata: { checked: true } }),
+      id: 'custom-check',
+      on: boundary.output.both(),
+      run: () => ({ pass: true, metadata: { checked: true } }),
     })
     const execute = vi.fn(async () => 'ok')
     const source = contributor({

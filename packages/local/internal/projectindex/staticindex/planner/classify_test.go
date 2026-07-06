@@ -27,3 +27,10 @@ func TestProjectStaticIndexSignalMatcherIncludesRagBetaPrimitives(t *testing.T) 
 		}
 	}
 }
+
+func TestProjectStaticIndexSignalMatcherIncludesSafetyToolPolicy(t *testing.T) {
+	matcher := signalMatcherForCallNames(nil)
+	if !matcher.HasCruxInterest("export const approval = toolPolicy({ id: 'approval' })") {
+		t.Fatal("matcher did not detect safety tool policy interest")
+	}
+}

@@ -170,6 +170,36 @@ func TestProjectStaticIndexSourceInputKeepsPrimaryFilesSeparateFromSupportFiles(
 	}
 }
 
+func TestProjectStaticIndexSourceInputHonorsPrimaryFilesWithoutCacheStatus(t *testing.T) {
+	root := t.TempDir()
+	files := []string{
+		fileWithStaticIndexSource(t, root, "src/primary.ts"),
+		fileWithStaticIndexSource(t, root, "src/support.ts"),
+	}
+
+	input, err := FromPlan(projectindex.ProjectStaticSyntaxPlan{
+		Root:         root,
+		Files:        files,
+		PrimaryFiles: files[:1],
+	})
+	if err != nil {
+		t.Fatalf("FromPlan error = %v", err)
+	}
+
+	if len(input.Files) != 2 {
+		t.Fatalf("prepared files = %d, want primary and support", len(input.Files))
+	}
+	if len(input.PrimaryFiles) != 1 {
+		t.Fatalf("primary files = %d, want only declared primary file", len(input.PrimaryFiles))
+	}
+	if got, want := input.PrimaryFiles[0].File, files[0]; got != want {
+		t.Fatalf("primary file = %q, want %q", got, want)
+	}
+	if _, ok := input.SourceTextByFile[files[1]]; !ok {
+		t.Fatalf("source text omitted support file %q", files[1])
+	}
+}
+
 func fileWithStaticIndexSource(t testing.TB, root, name string) string {
 	t.Helper()
 	file := filepath.Join(root, name)

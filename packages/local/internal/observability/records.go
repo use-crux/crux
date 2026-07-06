@@ -248,6 +248,7 @@ var canonicalEdgeTypes = map[string]struct{}{
 }
 
 var canonicalArtifactKinds = map[string]struct{}{
+	"approval.request":     {},
 	"input":                {},
 	"output":               {},
 	"messages":             {},
@@ -263,6 +264,7 @@ var canonicalArtifactKinds = map[string]struct{}{
 	"memory.snapshot":      {},
 	"memory.recall":        {},
 	"memory.diff":          {},
+	"memory.write":         {},
 	"handoff.payload":      {},
 	"delegate.report":      {},
 	"constraint.report":    {},
@@ -280,8 +282,10 @@ var canonicalArtifactKinds = map[string]struct{}{
 	"embedding.report":     {},
 	"indexing.report":      {},
 	"ingest.report":        {},
+	"quality.snapshot":     {},
 	"corpus.report":        {},
 	"security.report":      {},
+	"validation.feedback":  {},
 }
 
 func ValidateRecord(record Record) error {

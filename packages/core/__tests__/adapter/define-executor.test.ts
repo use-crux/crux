@@ -15,6 +15,7 @@ import { fallback } from '../../generation/fallback'
 import { ValidationExhaustedError } from '../../generation/validation-retry'
 import { appendToolApprovalResponse } from '../../tools/approvals'
 import { resetRuntime } from '../../runtime/runtime'
+import { boundary, guardrail, SafetyStructuredSyncError } from '../../safety'
 import type { Message } from '../../generation/messages'
 import type { StepDirective } from '../../adapter/executor-types'
 
@@ -120,6 +121,57 @@ describe('loopRuntimeAdapter — structured output + validation retry', () => {
     expect(result.object).toEqual({ title: 'hi', count: 2 })
     expect(result.steps).toBe(1)
     expect(fake.calls.runStructuredAttempt).toHaveLength(1)
+  })
+
+  it('returns the synchronized object when output safety rewrites structured text', async () => {
+    const fake = fakeLoopRuntime({ structured: ['{"title":"private","count":2}'] })
+    const executor = loopRuntimeAdapter(fake.runtime)
+
+    const result = await executor.generate(structuredPrompt(), {
+      model: 'fake:m-1',
+      input: { instruction: 'make json' },
+      guardrails: [
+        guardrail({
+          id: 'redact-title',
+          on: boundary.output.text(),
+          run: (text) => ({
+            action: 'rewrite',
+            value: text.replace('private', '[redacted]'),
+            rewrite: { kind: 'redact' },
+          }),
+        }),
+      ],
+    })
+
+    expect(result.text).toBe('{"title":"[redacted]","count":2}')
+    expect(result.object).toEqual({ title: '[redacted]', count: 2 })
+  })
+
+  it('fails closed with the rewriting policy id when structured safety violates the schema', async () => {
+    const fake = fakeLoopRuntime({ structured: ['{"title":"private","count":2}'] })
+    const executor = loopRuntimeAdapter(fake.runtime)
+
+    const error = await executor
+      .generate(structuredPrompt(), {
+        model: 'fake:m-1',
+        input: { instruction: 'make json' },
+        guardrails: [
+          guardrail({
+            id: 'break-count',
+            on: boundary.output.text(),
+            run: (text) => ({
+              action: 'rewrite',
+              value: text.replace('"count":2', '"count":"two"'),
+              rewrite: { kind: 'normalize' },
+            }),
+          }),
+        ],
+      })
+      .then(() => undefined)
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(SafetyStructuredSyncError)
+    expect(error).toMatchObject({ policyId: 'break-count' })
   })
 
     it('retries with corrective feedback on invalid output, then succeeds', async () => {

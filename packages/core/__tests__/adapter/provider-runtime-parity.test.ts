@@ -14,6 +14,7 @@ import { fakeLoopRuntime, type FakeLoopRuntime } from '../../adapter/testing'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import type { Message } from '../../generation/messages'
 import { guardrail as makeGuardrail } from '../../safety/guardrail'
+import { boundary } from '../../safety'
 import { appendToolApprovalResponse } from '../../tools/approvals'
 import {
   createRuntimeClient,
@@ -181,16 +182,19 @@ describe('provider-runtime parity — streaming safety', () => {
 
   const importFixer = () =>
     makeGuardrail({
-      name: 'provider-runtime-import-fixer',
-      phase: 'output',
-      validate: async () => ({ action: 'pass' as const }),
-      stream: { buffer: 'none' },
-      onChunk: async (chunk) => {
+      id: 'provider-runtime-import-fixer',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (chunk) => {
         if (chunk.includes('@/comps/')) {
-          return { action: 'transform' as const, content: chunk.replace('@/comps/', '@/components/') }
+          return {
+            action: 'rewrite' as const,
+            value: chunk.replace('@/comps/', '@/components/'),
+            rewrite: { kind: 'normalize' as const },
+          }
         }
         if (chunk.endsWith('@/co')) return { action: 'hold' as const }
-        return { action: 'pass' as const }
+        return { action: 'allow' as const }
       },
     })
 
@@ -224,16 +228,16 @@ describe('provider-runtime parity — streaming safety', () => {
       expect.objectContaining({
         guard: 'provider-runtime-import-fixer',
         action: 'transform',
-        original: '@/comps/Button',
       }),
     )
+    expect(JSON.stringify(singleMeta?.guardrails?.applied ?? [])).not.toContain('@/comps/Button')
     expect(loopMeta?.guardrails?.applied).toContainEqual(
       expect.objectContaining({
         guard: 'provider-runtime-import-fixer',
         action: 'transform',
-        original: '@/comps/Button',
       }),
     )
+    expect(JSON.stringify(loopMeta?.guardrails?.applied ?? [])).not.toContain('@/comps/Button')
   })
 })
 

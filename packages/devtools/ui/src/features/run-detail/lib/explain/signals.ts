@@ -9,7 +9,7 @@
  *
  * What counts as a warning signal is deliberately the *strong, specific* set
  * (error/blocked status, stale-used evidence, a dropped required context, a
- * fired fallback, a guardrail/security block). Coverage gaps are surfaced as
+ * fired fallback, a guardrail/security block, or an output rewrite). Coverage gaps are surfaced as
  * chips but do **not** force `Explain` open — most turns are partially
  * unprotected, and crying wolf on every turn would defeat the triage default.
  */
@@ -28,10 +28,12 @@ function hasFiredFallback(report: TurnDecisionReport): boolean {
   return report.decisions.some((d) => d.reason.code.startsWith('routing.fallback'))
 }
 
-/** True when a guardrail or security check blocked input or output. */
-function hasSafetyBlock(report: TurnDecisionReport): boolean {
-  return report.decisions.some(
-    (d) => d.reason.code === 'guardrail.blocked' || d.reason.code === 'security.blocked',
+/** True when a safety policy blocked, rewrote, or rejected a turn artifact. */
+function hasSafetyIntervention(report: TurnDecisionReport): boolean {
+  return report.decisions.some((d) =>
+    ['guardrail.blocked', 'guardrail.redacted', 'constraint.failed', 'security.blocked'].includes(
+      d.reason.code,
+    ),
   )
 }
 
@@ -59,7 +61,7 @@ export function turnHasWarningSignal(report: TurnDecisionReport | RuntimeTurnDec
     hasStaleUsed(normalized) ||
     hasDroppedRequired(normalized) ||
     hasFiredFallback(normalized) ||
-    hasSafetyBlock(normalized)
+    hasSafetyIntervention(normalized)
   )
 }
 

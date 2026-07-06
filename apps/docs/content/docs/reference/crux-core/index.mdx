@@ -93,7 +93,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   />
   <Card
     title="Scoring"
-    description="llmJudge, prebuilt metrics, and judgeConstraint for enforcing judge scores as constraints."
+    description="judge, prebuilt metrics, and Safety integration through constraint.judge."
     href="/docs/reference/crux-core/scoring"
   />
   <Card
@@ -147,7 +147,7 @@ import { task, tasks } from '@use-crux/core/tasks'
 import { skill } from '@use-crux/core/skill'
 import { guardrail } from '@use-crux/core/safety'
 import { constraint } from '@use-crux/core/safety'
-import { llmJudge, metrics, judgeConstraint } from '@use-crux/core/scoring'
+import { judge, metrics } from '@use-crux/core/scoring'
 import { constraintScorer, expect, quality, suite, target } from '@use-crux/core/quality'
 import { createSemanticCache, semanticCachePolicies } from '@use-crux/core/cache'
 import { embedding } from '@use-crux/core/embedding'

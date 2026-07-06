@@ -1,0 +1,37 @@
+---
+title: safety.duplicate_policy_id
+---
+
+## What it checks
+
+Crux emits this finding when indexed Safety definitions reuse the same stable
+policy id across guardrails, constraints, or tool policies.
+
+## Why it matters
+
+Policy ids appear in Safety decisions, observability artifacts, Devtools
+Explain rows, Project Index definitions, and quality assertions. Reusing an id
+makes it hard to tell which policy blocked, rewrote, retried, or requested
+approval.
+
+## How to fix
+
+Rename one policy so each Safety policy id is unique within the project:
+
+```ts
+guardrail({ id: 'pii-output', on: boundary.output.text(), run: guardrail.pii() })
+toolPolicy({ id: 'delete-user-block', match: { tool: 'deleteUser' }, action: 'block' })
+```
+
+## When to suppress
+
+Suppress only during a temporary migration where both policy ids are visible
+but only one can run.
+
+## Rule metadata
+
+- Rule id: `safety.duplicate_policy_id`
+- Category: `safety`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `warning`

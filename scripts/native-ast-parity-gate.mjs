@@ -93,7 +93,9 @@ const commands = [
   {
     label: 'Run Go Project Index parity packages',
     command: 'go',
-    args: ['test', './internal/projectindex/...', '-count=1'],
+    // The production parity test indexes repoRoot and clears .crux/cache/index;
+    // keep Go packages serial so adjacent package tests cannot churn that cache.
+    args: ['test', '-p', '1', './internal/projectindex/...', '-count=1'],
     cwd: localPackageRoot,
     env: requiredGoParityEnv,
   },

@@ -8,10 +8,17 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import { z } from 'zod'
 import { constraint as makeConstraint, isConstraint } from '../safety/constraint/define'
+import { validateConstraintRunResult } from '../safety/constraint'
 import { evaluateConstraint } from '../safety/constraint/evaluate'
 import { ConstraintViolationError } from '../safety/constraint/errors'
-import type { ConstraintContext } from '../safety/constraint/types'
+import { boundary, SafetyResultError } from '../safety'
+import { judge } from '../scoring'
+import { citationSchema } from '../citations'
+import type { RetrieverHit } from '../retrieval'
+import type { BoundaryDef, SafetyRunContext, SubjectOf } from '../safety'
+import type { Constraint, ConstraintContext } from '../safety/constraint/types'
 
 const makeCtx = (overrides?: Partial<ConstraintContext>): ConstraintContext => ({
   promptId: 'test-prompt',
@@ -22,54 +29,91 @@ const makeCtx = (overrides?: Partial<ConstraintContext>): ConstraintContext => (
   ...overrides,
 })
 
+function makeRunCtx<B extends BoundaryDef>(c: Constraint<B>): SafetyRunContext<B> {
+  return {
+    policy: { id: c.id, mode: 'enforce' },
+    boundary: { id: c.on.id as never, kind: c.on.id as never },
+    prompt: { id: 'test-prompt' },
+    model: { id: 'test-model' },
+    trace: {},
+    attempt: { index: 0, kind: 'initial' },
+    metadata: {},
+    findings: { add() {} },
+    ...(c.on.path ? { path: c.on.path } : {}),
+  }
+}
+
+async function runConstraint<B extends BoundaryDef>(c: Constraint<B>, subject: SubjectOf<B>) {
+  return c.run(subject, makeRunCtx(c))
+}
+
+function hit(overrides: Partial<RetrieverHit> = {}): RetrieverHit {
+  return {
+    namespace: 'docs',
+    sourceId: 'guide.md',
+    chunkId: 'chunk-1',
+    content: 'Hybrid search combines dense and sparse retrieval for better recall.',
+    metadata: {},
+    score: 0.9,
+    ...overrides,
+  }
+}
+
 // ── makeConstraint() ────────────────────────────────────────────
 
 describe('constraint', () => {
   it('creates a frozen constraint object with correct shape', () => {
     const constraint = makeConstraint({
-      name: 'test',
-      check: async () => ({ pass: true }),
+      id: 'test',
+      on: boundary.output.both(),
+      run: async () => ({ pass: true }),
     })
 
     expect(constraint._tag).toBe('Constraint')
-    expect(constraint.name).toBe('test')
+    expect(constraint.id).toBe('test')
+    expect(constraint.on.id).toBe('model.output')
     expect(constraint.severity).toBe('assert') // default
     expect(constraint.maxRetries).toBe(2) // default
     expect(constraint.onChunk).toBeUndefined()
     expect(Object.isFrozen(constraint)).toBe(true)
   })
 
-    it('respects severity and maxRetries overrides', () => {
+  it('respects severity and maxRetries overrides', () => {
     const constraint = makeConstraint({
-      name: 'soft',
+      id: 'soft',
+      on: boundary.output.text(),
       severity: 'suggest',
       maxRetries: 5,
-      check: async () => ({ pass: true }),
+      run: async () => ({ pass: true }),
     })
 
     expect(constraint.severity).toBe('suggest')
     expect(constraint.maxRetries).toBe(5)
   })
 
-    it('includes onChunk when provided', () => {
+  it('includes onChunk when provided', () => {
     const constraint = makeConstraint({
-      name: 'streaming',
-      check: async () => ({ pass: true }),
+      id: 'streaming',
+      on: boundary.output.text(),
+      run: async () => ({ pass: true }),
       onChunk: async () => ({ abort: false }),
     })
 
     expect(constraint.onChunk).toBeDefined()
   })
 
-    it('carries an optional risk category', () => {
+  it('carries an optional risk category', () => {
     const constraint = makeConstraint({
-      name: 'grounded',
+      id: 'grounded',
+      on: boundary.output.text(),
       category: 'grounding',
-      check: async () => ({ pass: true }),
+      run: async () => ({ pass: true }),
     })
 
     expect(constraint.category).toBe('grounding')
-    expect(makeConstraint({ name: 'plain', check: async () => ({ pass: true }) }).category).toBeUndefined()
+    expect(
+      makeConstraint({ id: 'plain', on: boundary.output.text(), run: async () => ({ pass: true }) }).category,
+    ).toBeUndefined()
   })
 })
 
@@ -78,13 +122,14 @@ describe('constraint', () => {
 describe('isConstraint', () => {
   it('returns true for constraint objects', () => {
     const constraint = makeConstraint({
-      name: 'test',
-      check: async () => ({ pass: true }),
+      id: 'test',
+      on: boundary.output.text(),
+      run: async () => ({ pass: true }),
     })
     expect(isConstraint(constraint)).toBe(true)
   })
 
-    it('returns false for non-constraint objects', () => {
+  it('returns false for non-constraint objects', () => {
     expect(isConstraint(null)).toBe(false)
     expect(isConstraint(undefined)).toBe(false)
     expect(isConstraint({})).toBe(false)
@@ -98,9 +143,10 @@ describe('isConstraint', () => {
 describe('evaluateConstraint', () => {
   it('runs constraint against test cases', async () => {
     const c = makeConstraint({
-      name: 'citation-check',
-      check: async (output) => {
-        if (output.text.includes('[1]')) return { pass: true }
+      id: 'citation-check',
+      on: boundary.output.text(),
+      run: async (output) => {
+        if (output.includes('[1]')) return { pass: true }
         return { pass: false, feedback: 'Missing citation' }
       },
     })
@@ -116,10 +162,11 @@ describe('evaluateConstraint', () => {
     expect(report.summary.failed).toBe(1) // third doesn't match
   })
 
-    it('handles errors in check function', async () => {
+  it('handles errors in check function', async () => {
     const c = makeConstraint({
-      name: 'buggy',
-      check: async () => {
+      id: 'buggy',
+      on: boundary.output.text(),
+      run: async () => {
         throw new Error('Oops')
       },
     })
@@ -128,6 +175,149 @@ describe('evaluateConstraint', () => {
 
     expect(report.results[0]!.matched).toBe(false)
     expect(report.results[0]!.error).toBe('Oops')
+  })
+
+  it('reports constraint metadata so tests can assert the runtime decision contract', async () => {
+    const c = makeConstraint({
+      id: 'risk-check',
+      on: boundary.output.text(),
+      run: async () => ({
+        pass: false,
+        feedback: 'Contains risky claim',
+        metadata: { risk: 'unsupported-claim' },
+      }),
+    })
+
+    const report = await evaluateConstraint(c, [{ input: { text: 'risky output' }, expect: false }])
+
+    expect(report.results[0]).toMatchObject({
+      matched: true,
+      actualPass: false,
+      feedback: 'Contains risky claim',
+      metadata: { risk: 'unsupported-claim' },
+    })
+  })
+})
+
+describe('validateConstraintRunResult', () => {
+  it('accepts pass/fail results with safe metadata', () => {
+    expect(
+      validateConstraintRunResult(
+        { pass: true, metadata: { risk: 'none' } },
+        { policyId: 'quality', boundary: 'model.output.text' },
+      ),
+    ).toEqual({ pass: true, metadata: { risk: 'none' } })
+
+    expect(
+      validateConstraintRunResult(
+        { pass: false, feedback: 'Add citations.', metadata: { reason: 'missing-citation' } },
+        { policyId: 'citations', boundary: 'model.output.object' },
+      ),
+    ).toEqual({
+      pass: false,
+      feedback: 'Add citations.',
+      metadata: { reason: 'missing-citation' },
+    })
+  })
+
+  it('fails closed when a failed result omits feedback', () => {
+    expect(() =>
+      validateConstraintRunResult(
+        { pass: false },
+        { policyId: 'malformed', boundary: 'model.output.text' },
+      ),
+    ).toThrow(SafetyResultError)
+  })
+})
+
+describe('first-party constraint strategies', () => {
+  it('adapts a judge into a retryable constraint strategy', async () => {
+    const brandVoice = judge({
+      id: 'brand-voice',
+      criteria: 'Warm, direct, concrete.',
+      scale: { min: 0, max: 10 },
+      generate: async () => ({ object: { reasoning: 'Too vague.', score: 4 } }) as never,
+      model: 'test-model',
+    })
+    const run = makeConstraint.judge({
+      judge: brandVoice,
+      minScore: 7,
+      feedback: 'Rewrite with warmer, more concrete language.',
+    })
+    const c = makeConstraint({
+      id: 'brand-voice',
+      on: boundary.output.text(),
+      run,
+    })
+
+    const result = await run('Generic copy.', makeCtx() as never)
+
+    expect(c.strategy).toEqual({
+      kind: 'constraint.judge',
+      config: { judgeId: 'brand-voice', minScore: 7 },
+    })
+    expect(result).toMatchObject({
+      pass: false,
+      feedback: 'Rewrite with warmer, more concrete language.',
+      metadata: {
+        judge: {
+          metricId: 'brand-voice',
+          score: 4,
+          minScore: 7,
+          explanation: 'Too vague.',
+        },
+      },
+    })
+  })
+
+  it('adapts citation validation into a constraint strategy', async () => {
+    const schema = z.object({
+      answer: z.string(),
+      citations: z.array(citationSchema),
+    })
+    const run = makeConstraint.citations<typeof schema>({
+      hits: [hit()],
+      quotes: 'required',
+    })
+    const c = makeConstraint({
+      id: 'grounded-citations',
+      on: boundary.output.both<z.infer<typeof schema>>(),
+      run,
+    })
+
+    const result = await run(
+      {
+        text: '',
+        object: {
+          answer: 'Hybrid search improves recall.',
+          citations: [
+            {
+              sourceId: 'guide.md',
+              chunkId: 'chunk-1',
+              quote: 'dense and sparse retrieval',
+            },
+          ],
+        },
+      },
+      makeCtx() as never,
+    )
+
+    expect(c.strategy).toEqual({
+      kind: 'constraint.citations',
+      config: { required: true, quotes: 'required' },
+    })
+    expect(result).toMatchObject({
+      pass: true,
+      metadata: {
+        grounding: {
+          summary: {
+            citationCount: 1,
+            validCitationCount: 1,
+            invalidCitationCount: 0,
+          },
+        },
+      },
+    })
   })
 })
 
@@ -147,7 +337,12 @@ describe('ConstraintViolationError', () => {
 
     expect(err.name).toBe('ConstraintViolationError')
     expect(err.failedConstraints).toHaveLength(2)
-    expect(err.lastOutput).toBe('bad output')
+    expect(err.lastOutput).toMatchObject({
+      level: 'safe',
+      preview: 'bad output',
+      sizeBytes: 10,
+    })
+    expect(err.lastOutput.raw).toBeUndefined()
     expect(err.totalAttempts).toBe(3)
     expect(err.message).toContain('a')
     expect(err.message).toContain('b')
@@ -162,21 +357,23 @@ describe('discriminated union check results', () => {
     // This test verifies runtime behavior — TypeScript compile-time
     // enforcement is the primary guard (feedback is required when pass=false)
     const c = makeConstraint({
-      name: 'typed',
-      check: async (output) => {
+      id: 'typed',
+      on: boundary.output.both(),
+      run: async (output) => {
         if (output.text === 'bad') return { pass: false, feedback: 'Must provide feedback' }
         return { pass: true }
       },
     })
 
-    const result = await c.check({ text: 'good', parsed: undefined }, makeCtx())
+    const result = await runConstraint(c, { text: 'good', object: undefined })
     expect(result.pass).toBe(true)
   })
 
-    it('onChunk returning abort:true requires feedback', async () => {
+  it('onChunk returning abort:true requires feedback', async () => {
     const c = makeConstraint({
-      name: 'stream-check',
-      check: async () => ({ pass: true }),
+      id: 'stream-check',
+      on: boundary.output.text(),
+      run: async () => ({ pass: true }),
       onChunk: async (_chunk, accumulated) => {
         if (accumulated.length > 10) return { abort: true, feedback: 'Too long already' }
         return { abort: false }

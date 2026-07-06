@@ -1,0 +1,103 @@
+import type { BoundaryDef, BoundaryIdOf, SafetyTargetId } from './boundary'
+import type { GuardrailStreamOption } from './stream/types'
+
+/** Safe, structured finding metadata emitted by safety policies. */
+export interface SafetyFinding {
+  readonly type: string
+  readonly count?: number
+  readonly span?: { readonly start: number; readonly end: number }
+}
+
+/** Canonical action vocabulary for the safety decision read model. */
+export type SafetyDecisionAction =
+  | 'allow'
+  | 'block'
+  | 'warn'
+  | 'rewrite'
+  | 'retry'
+  | 'request_approval'
+  | 'drop'
+
+/** Safe evidence summary for content touched by safety. */
+export interface SafetyCaptureSummary {
+  readonly level: 'full' | 'safe' | 'evidence' | 'off'
+  readonly sizeBytes: number
+  readonly hash: string
+  readonly preview?: string
+  readonly raw?: string
+}
+
+/** Canonical runtime record for a safety policy decision. */
+export interface SafetyDecision {
+  readonly policyId: string
+  readonly kind: 'guardrail' | 'constraint' | 'toolPolicy'
+  readonly boundary: SafetyTargetId
+  readonly stage?: 'stream.segment' | 'stream.final'
+  readonly mode: 'enforce' | 'report'
+  readonly action: SafetyDecisionAction
+  readonly severity?: 'info' | 'warn' | 'error'
+  readonly reason?: string
+  readonly findings?: readonly SafetyFinding[]
+  readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
+  readonly durationMs: number
+  readonly captured: SafetyCaptureSummary
+}
+
+/** Mutable finding collector exposed to a single policy invocation. */
+export interface SafetyFindingCollector {
+  add(finding: SafetyFinding): void
+}
+
+/** Safe metadata available to guardrail and constraint callbacks. */
+export interface SafetyRunContext<B extends BoundaryDef | readonly BoundaryDef[] = BoundaryDef> {
+  readonly policy: {
+    readonly id: string
+    readonly mode: 'enforce' | 'report'
+  }
+  readonly boundary: {
+    readonly id: BoundaryIdOf<B>
+    readonly kind: BoundaryIdOf<B>
+  }
+  readonly prompt: {
+    readonly id?: string
+  }
+  readonly model: {
+    readonly id?: string
+  }
+  readonly trace: {
+    readonly id?: string
+  }
+  readonly attempt: {
+    readonly index: number
+    readonly kind: 'initial' | 'retry'
+  }
+  readonly metadata: Readonly<Record<string, unknown>>
+  readonly findings: SafetyFindingCollector
+  readonly stream?: {
+    readonly segment: true
+    readonly last: boolean
+    readonly heldChars: number
+    readonly heldMs: number
+  }
+  readonly path?: string
+  readonly tool?: {
+    readonly name: string
+  }
+}
+
+/** Inspectable strategy callback used by first-party helpers. */
+export interface StrategyRun<TSubject, TResult> {
+  (subject: TSubject, ctx: SafetyRunContext): TResult | Promise<TResult>
+  readonly strategy: {
+    readonly kind: string
+    readonly config: Readonly<Record<string, unknown>>
+  }
+}
+
+/** Effective posture fields that may be tuned per call. */
+export interface SafetyEffectivePolicyOptions {
+  readonly mode: 'enforce' | 'report'
+  readonly stream?: GuardrailStreamOption
+  readonly enabled: boolean
+  readonly tuned?: readonly ('mode' | 'stream' | 'enabled')[]
+}

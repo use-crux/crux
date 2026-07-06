@@ -35,6 +35,7 @@ import type { AgentExecutor } from '../agent/executor'
 import type { ValidationRetryOptions } from '../generation/validation-retry'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
+import type { SafetyTuneOptions } from '../safety/tune'
 import type { ToolMiddleware } from '../tools/types'
 import { coreStepDialect, createAdapterExecution } from './execution/session'
 
@@ -92,7 +93,8 @@ export interface AdapterGenerateOptions<TExtra extends Record<string, unknown> =
   /**
    * Semantic constraints to check after structural (Zod) validation passes.
    * All constraints run in parallel; combined feedback is injected on retry.
-   * Merged with per-prompt, context-level, and global constraints (per-call wins).
+   * Composed with prompt/context/global constraints by the Safety registry.
+   * Duplicate policy ids throw; use `safety.tune` for per-call posture changes.
    */
   constraints?: Constraint[]
   /**
@@ -102,9 +104,18 @@ export interface AdapterGenerateOptions<TExtra extends Record<string, unknown> =
   constraintMaxRetries?: number
   /**
    * Guardrails to run on input/output during generation.
-   * Merged with per-prompt, context-level, and global guardrails (per-call wins).
+   * Composed with prompt/context/global guardrails by the Safety registry.
+   * Duplicate policy ids throw; bind one guardrail to multiple boundaries when
+   * the same policy should apply in several places.
    */
   guardrails?: Guardrail[]
+  /**
+   * Per-call safety posture overrides keyed by policy id.
+   *
+   * Tune enforcement/reporting, stream posture, or whether a policy is
+   * enabled for this call without replacing the policy logic.
+   */
+  safety?: SafetyTuneOptions
 }
 
 /** Options for adapter `stream()` calls. */
@@ -229,6 +240,7 @@ export function adapter<
         constraints: opts.constraints,
         constraintMaxRetries: opts.constraintMaxRetries,
         guardrails: opts.guardrails,
+        safety: opts.safety,
       })) as AdapterGenerateResult<TRawResponse>
     }
 
@@ -252,6 +264,7 @@ export function adapter<
         constraints: opts.constraints,
         constraintMaxRetries: opts.constraintMaxRetries,
         guardrails: opts.guardrails,
+        safety: opts.safety,
       })) as StreamHandle<TRawStream>
     }
 

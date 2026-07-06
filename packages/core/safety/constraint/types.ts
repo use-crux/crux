@@ -1,20 +1,56 @@
 import type { z } from 'zod'
-
-// ── Severity ──────────────────────────────────────────────────────
+import type { BoundaryDef, SubjectOf } from '../boundary'
+import type { SafetyRunContext } from '../decision'
+import { SafetyResultError } from '../errors'
 
 export type ConstraintSeverity = 'assert' | 'suggest'
 
-// ── Check Result (discriminated union — compiler enforces feedback on failure) ─
-
+/** Retryable semantic assertion result returned by constraints. */
 export type ConstraintCheckResult =
   | { readonly pass: true; readonly metadata?: Readonly<Record<string, unknown>> }
   | { readonly pass: false; readonly feedback: string; readonly metadata?: Readonly<Record<string, unknown>> }
 
-// ── Chunk Check Result (discriminated union — feedback required on abort) ──
-
 export type ChunkCheckResult = { readonly abort: false } | { readonly abort: true; readonly feedback: string }
 
-// ── Context ───────────────────────────────────────────────────────
+/** Callable constraint body, optionally carrying first-party strategy metadata. */
+export interface ConstraintRun<B extends BoundaryDef> {
+  (subject: SubjectOf<B>, ctx: SafetyRunContext<B>): ConstraintCheckResult | Promise<ConstraintCheckResult>
+  readonly strategy?: {
+    readonly kind: string
+    readonly config: Readonly<Record<string, unknown>>
+  }
+}
+
+export interface ConstraintConfig<B extends BoundaryDef = BoundaryDef> {
+  readonly id: string
+  readonly on: B
+  readonly category?: string
+  readonly severity?: ConstraintSeverity
+  readonly maxRetries?: number
+  readonly run: ConstraintRun<B>
+  readonly onChunk?: (
+    chunk: string,
+    accumulated: string,
+    ctx: ConstraintContext,
+  ) => ChunkCheckResult | Promise<ChunkCheckResult>
+}
+
+/** Frozen constraint object. */
+export interface Constraint<B extends BoundaryDef = BoundaryDef> {
+  readonly _tag: 'Constraint'
+  readonly id: string
+  readonly on: B
+  readonly category: string | undefined
+  readonly severity: ConstraintSeverity
+  readonly maxRetries: number
+  readonly run: ConstraintConfig<B>['run']
+  readonly strategy?: {
+    readonly kind: string
+    readonly config: Readonly<Record<string, unknown>>
+  }
+
+  onChunk?(chunk: string, accumulated: string, ctx: ConstraintContext): ChunkCheckResult | Promise<ChunkCheckResult>
+}
 
 export interface ConstraintContext {
   readonly promptId: string | undefined
@@ -24,56 +60,10 @@ export interface ConstraintContext {
   readonly metadata: Readonly<Record<string, unknown>>
 }
 
-// ── Output (what the check function receives) ─────────────────────
-
 export interface ConstraintOutput<TSchema extends z.ZodType = z.ZodType<unknown>> {
   readonly text: string
   readonly parsed: z.infer<TSchema> | undefined
 }
-
-// ── Config ────────────────────────────────────────────────────────
-
-/**
- * Configuration for `constraint()`.
- *
- * Default generic is `z.ZodType<unknown>` (not `z.ZodType`) to prevent
- * `output.parsed` from silently resolving to `any`. Provide a schema type
- * for full compile-time safety on the parsed output.
- */
-export interface ConstraintConfig<TSchema extends z.ZodType = z.ZodType<unknown>> {
-  readonly name: string
-  /**
-   * Optional risk-category label (e.g. `'grounding'`, `'brand'`, `'pii'`).
-   * Carried through audit entries and observability artifacts so devtools
-   * and reporting can aggregate by risk type instead of by policy name.
-   */
-  readonly category?: string
-  readonly severity?: ConstraintSeverity
-  readonly maxRetries?: number
-  readonly check: (
-    output: ConstraintOutput<TSchema>,
-    ctx: ConstraintContext,
-  ) => ConstraintCheckResult | Promise<ConstraintCheckResult>
-  readonly onChunk?: (
-    chunk: string,
-    accumulated: string,
-    ctx: ConstraintContext,
-  ) => ChunkCheckResult | Promise<ChunkCheckResult>
-}
-
-// ── Frozen Constraint Object ──────────────────────────────────────
-
-export interface Constraint<TSchema extends z.ZodType = z.ZodType<unknown>> {
-  readonly _tag: 'Constraint'
-  readonly name: string
-  readonly category: string | undefined
-  readonly severity: ConstraintSeverity
-  readonly maxRetries: number
-  readonly check: ConstraintConfig<TSchema>['check']
-  readonly onChunk: ConstraintConfig<TSchema>['onChunk'] | undefined
-}
-
-// ── Audit ─────────────────────────────────────────────────────────
 
 export interface ConstraintAuditEntry {
   readonly constraint: string
@@ -89,16 +79,58 @@ export interface ConstraintAuditEntry {
 export interface ConstraintAudit {
   readonly entries: readonly ConstraintAuditEntry[]
   readonly allPassed: boolean
-  /** true when only suggest constraints failed — output is best-effort */
   readonly suggestFallback: boolean
 }
 
-// ── Failure detail (consumed by ConstraintFeedbackFormatter) ──────
-
-/** One failing constraint from a check round, as handed to the corrective-feedback formatter. */
 export interface ConstraintFailure {
   readonly name: string
-  readonly category: string | undefined
+  readonly category?: string
   readonly severity: ConstraintSeverity
   readonly feedback: string
+}
+
+/** Validate a JS/unknown constraint result and fail closed on malformed values. */
+export function validateConstraintRunResult(
+  value: unknown,
+  opts: { readonly policyId?: string; readonly boundary?: string },
+): ConstraintCheckResult {
+  if (!isRecord(value) || typeof value.pass !== 'boolean') {
+    throw resultError(opts, 'result must be an object with a boolean pass field')
+  }
+  if (value.pass === true) {
+    return {
+      pass: true,
+      ...(isMetadata(value.metadata) ? { metadata: value.metadata } : {}),
+    }
+  }
+  if (typeof value.feedback !== 'string' || value.feedback.length === 0) {
+    throw resultError(opts, 'failed constraint results require feedback')
+  }
+  return {
+    pass: false,
+    feedback: value.feedback,
+    ...(isMetadata(value.metadata) ? { metadata: value.metadata } : {}),
+  }
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null
+}
+
+function isMetadata(value: unknown): value is Readonly<Record<string, unknown>> {
+  return value === undefined || isRecord(value)
+}
+
+function resultError(
+  opts: { readonly policyId?: string; readonly boundary?: string },
+  problem: string,
+): SafetyResultError {
+  const policyId = opts.policyId ?? 'unknown'
+  const boundary = opts.boundary ?? 'unknown'
+  return new SafetyResultError({
+    message: `Safety constraint "${policyId}" returned an invalid result: ${problem}.`,
+    policyId,
+    boundary,
+    problem,
+  })
 }

@@ -10,12 +10,16 @@
  */
 
 import type { z } from 'zod'
+import type { BoundaryDef } from '../safety/boundary'
+import { boundary } from '../safety/boundary'
 import { constraint } from '../safety/constraint'
 import type { Constraint } from '../safety/constraint'
-import type { RetrieverHit } from '../retrieval/types'
-import { resolveCitations } from './resolve'
 import type { CitationConstraintConfig } from './types'
-import { createArtifact, formatCitationFeedback, selectDefaultCitations } from './validation'
+
+type CitationOutputBoundary<TSchema extends z.ZodType> = BoundaryDef<
+  'model.output',
+  { readonly text: string; readonly object: z.infer<TSchema> | undefined }
+>
 
 /**
  * Build a {@link Constraint} that requires output to cite retrieved sources.
@@ -30,67 +34,10 @@ import { createArtifact, formatCitationFeedback, selectDefaultCitations } from '
  */
 export function citationConstraint<TSchema extends z.ZodType = z.ZodType<unknown>>(
   config: CitationConstraintConfig<TSchema>,
-): Constraint<TSchema> {
-  const required = config.required ?? true
-  const quotePolicy = config.quotes ?? (required ? 'required' : 'optional')
-
-  return constraint<TSchema>({
-    name: config.name ?? 'grounded-citations',
-    check: async (output) => {
-      const hits = await allowedHits(config)
-      const citations = config.select?.(output) ?? selectDefaultCitations(output.parsed)
-      if ((!citations || citations.length === 0) && required) {
-        const artifact = createArtifact({
-          hits,
-          citations: [],
-          issues: [
-            {
-              code: 'missing_quote',
-              message: 'Output must include a citations array with at least one citation.',
-              citation: { sourceId: '', chunkId: '' },
-              sourceId: '',
-              chunkId: '',
-            },
-          ],
-          requestedCount: 0,
-          groundingId: config.groundingId,
-          retrieverId: config.retrieverId,
-          query: config.query,
-        })
-        return {
-          pass: false,
-          feedback:
-            'Add a citations array. Each citation must include sourceId, chunkId, and a quote copied from the cited source.',
-          metadata: { grounding: artifact },
-        }
-      }
-
-      const result = resolveCitations(citations ?? [], hits, { quotes: quotePolicy })
-      const artifact = {
-        ...result.artifact,
-        groundingId: config.groundingId,
-        retrieverId: config.retrieverId,
-        query: config.query,
-      }
-      if (result.valid) {
-        return {
-          pass: true,
-          metadata: { grounding: artifact },
-        }
-      }
-      return {
-        pass: false,
-        feedback: formatCitationFeedback(result.issues),
-        metadata: { grounding: artifact },
-      }
-    },
+): Constraint<CitationOutputBoundary<TSchema>> {
+  return constraint({
+    id: config.name ?? 'grounded-citations',
+    on: boundary.output.both<z.infer<TSchema> | undefined>(),
+    run: constraint.citations(config),
   })
-}
-
-async function allowedHits<TSchema extends z.ZodType>(
-  config: CitationConstraintConfig<TSchema>,
-): Promise<readonly RetrieverHit[]> {
-  if (config.session) return config.session.allowedHits()
-  if (config.hits) return config.hits
-  throw new Error('citationConstraint(): either hits or session must be provided.')
 }

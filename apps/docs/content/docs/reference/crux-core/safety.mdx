@@ -1,97 +1,195 @@
 ---
 title: Safety
-description: Guardrails and constraints authored once, executed through the per-call Safety session.
+description: Boundary-targeted guardrails, constraints, tool policies, and the per-call Safety session.
 ---
 
 ```ts
 import {
-  // Authoring
-  guardrail,
+  boundary,
   constraint,
-  evaluateGuardrail,
-  evaluateConstraint,
-  GuardrailBlockedError,
-  ConstraintViolationError,
-  // Consumption
   createSafety,
   createSafetyPlugin,
   defaultConstraintFeedbackFormatter,
+  evaluateConstraint,
+  evaluateGuardrail,
+  guardrail,
+  toolPolicy,
 } from '@use-crux/core/safety'
 ```
 
-`@use-crux/core/safety` is one deep module. Guardrails filter content; constraints validate generated output and can retry with feedback. Both are **authored** as frozen objects and **executed** through a single per-call `Safety` session that every adapter constructs internally — scope merging, phase ordering, retries, suspension policy, audits, and observability live in the session, never in adapter code.
+`@use-crux/core/safety` is the runtime policy boundary engine. Policies are
+authored as frozen objects and executed through one per-call Safety session.
+Adapters construct that session internally; application code usually authors
+policies and attaches them globally, to prompts/contexts, or per call.
+
+## Boundaries
+
+Policies bind to typed boundary descriptors:
+
+| Helper | Boundary |
+| --- | --- |
+| `boundary.input.text()` | User input text before provider execution. |
+| `boundary.input.model()` | Model input text. |
+| `boundary.output.text()` | Final model output text. |
+| `boundary.output.object<T>()` | Parsed structured output object. |
+| `boundary.output.both<T>()` | `{ text, object }` structured output pair. |
+| `boundary.output.path<T>()('a.b')` | Typed structured-output path. |
+| `boundary.tool.call()` / `boundary.tool.result()` | Tool arguments and results. |
+| `boundary.approval.request()` | Human approval request payloads. |
+| `boundary.retrieval.result()` | Retrieval hits before model consumption. |
+| `boundary.memory.write<T>()` | Candidate memory writes. |
+| `boundary.validation.feedback()` | Corrective validation feedback before re-prompting. |
+
+Boundary ids are stable decision/config ids. `boundary.stream.*` is not a
+public boundary family; streaming is configured on output guardrails.
 
 ## Guardrails
 
-`guardrail(config)` creates a frozen guardrail object. Guardrails run on input, output, or streaming chunks and can pass, block, redact, transform, warn, or hold chunks. An optional `category` (e.g. `'pii'`, `'jailbreak'`) is carried through audits for risk-type aggregation.
+`guardrail(config)` creates a policy that can allow, block, warn, rewrite, or
+hold stream segments.
 
 ```ts
-import { guardrail } from '@use-crux/core/safety'
-
-const piiGuard = guardrail({
-  name: 'pii',
+const pii = guardrail({
+  id: 'pii',
   category: 'pii',
-  phase: 'output',
-  validate: async (content) =>
-    content.includes('ssn') ? { action: 'block', reason: 'PII detected' } : { action: 'pass' },
+  on: [boundary.input.text(), boundary.output.text()],
+  run: guardrail.pii({ strategy: 'mask' }),
 })
 ```
 
-`GuardrailBlockedError` is thrown when a guard blocks content.
+Built-in strategies:
+
+- `guardrail.pii({ strategy })`
+- `guardrail.secrets()`
+- `guardrail.injection({ action })`
+- `guardrail.classifier({ classifier, blockWhen, findings })`
+
+Text strategies default to sentence-level streaming checks. Classifier and
+object/path guardrails run at final output unless tuned.
 
 ## Constraints
 
-`constraint(config)` creates a semantic output check. Constraints run after schema validation. Failed assert constraints produce feedback and retry until they pass or exhaust.
+`constraint(config)` creates a retryable semantic assertion. Constraints run on
+guarded output candidates.
 
 ```ts
-import { constraint } from '@use-crux/core/safety'
-
 const citeSources = constraint({
-  name: 'cite-sources',
+  id: 'cite-sources',
+  on: boundary.output.text(),
   severity: 'assert',
   maxRetries: 2,
-  check: async (output) =>
-    output.text.includes('[1]')
+  run: async (text) =>
+    text.includes('[1]')
       ? { pass: true }
       : { pass: false, feedback: 'Include at least one citation.' },
 })
 ```
 
-`ConstraintViolationError` is thrown when assert constraints fail after retries.
+Built-in strategies include `constraint.judge({ judge, minScore })` and
+`constraint.citations(...)`. Use `judge()` from `@use-crux/core/scoring` to
+create the judge instance, then bridge it through `constraint.judge(...)` for
+runtime enforcement.
 
-Constraints bridge into the other predicate surfaces without new concepts: [`judgeConstraint()`](/docs/reference/crux-core/scoring#judgeconstraintjudge-opts) turns an LLM judge into a normal constraint (online enforcement of scored quality), and [`constraintScorer()`](/docs/reference/crux-core/quality#constraintscorerc) runs any constraint as a binary scorer in eval suites (offline regression-testing of production policy).
+## Tool Policies
 
-## Registration: `createSafetyPlugin()`
+`toolPolicy()` is the Safety-owned surface for tool decisions. It returns
+ordinary tool middleware so it fits the adapter protocol, but blocked and
+approval-requested tools carry Safety decision evidence, Project Index rows,
+and Devtools Explain entries.
 
-One plugin registers global guardrails and constraints. Per-prompt (`prompt({ constraints })`), per-context, and per-call attachment merge with name-keyed precedence: per-call wins over per-prompt wins over global.
+```ts
+const blockDeletes = toolPolicy({
+  id: 'block-delete',
+  match: { tool: 'deleteUser' },
+  action: 'block',
+  reason: 'Delete user requires an operator override.',
+})
+
+const screenResults = toolPolicy.result({
+  id: 'screen-customer-result',
+  match: { tool: 'lookupCustomer' },
+  run: async ({ output }) =>
+    typeof output === 'string' && output.includes('ssn')
+      ? { action: 'block', reason: 'Tool result contained sensitive data.' }
+      : { action: 'allow' },
+})
+```
+
+Use `toolMiddleware()` instead for execution plumbing such as logging, timing,
+caching, retry wrapping, or argument normalization.
+
+## Registration
+
+Global policies are installed with `createSafetyPlugin()`:
 
 ```ts
 import { config } from '@use-crux/core'
 import { createSafetyPlugin } from '@use-crux/core/safety'
 
 config({
-  plugins: [createSafetyPlugin({ guardrails: [piiGuard], constraints: [citeSources] })],
+  plugins: [createSafetyPlugin({ guardrails: [pii], constraints: [citeSources] })],
 })
 ```
 
-## Consumption: `createSafety()`
+Prompt, context, and call-site policies compose into the same registry.
+Duplicate policy ids are invalid by default. Use one guardrail with an `on`
+array when the same policy should apply to several boundaries.
 
-Adapters consume safety through one session per `generate()`/`stream()` call. You only need this when building a custom adapter dialect; application code never calls it.
+## Consumption
+
+Adapters consume safety through `createSafety()`. Custom adapter dialects call:
+
+1. `guardInput()` before the provider call.
+2. `finalizeOutput()` after schema validation.
+3. `stamp()` before returning metadata.
+4. `openStream()` for streamed text.
 
 ```ts
 const safety = createSafety({ call: opts, resolved, promptId, model, systemPrompt })
 
-;({ messages } = await safety.guardInput({ messages }))           // input guards, redaction written back
-const final = await safety.finalizeOutput(output, regenerate, {   // constraints → output guards
-  suspended: finishReason === 'tool_approval_required',           // suspension skips output safety
+;({ messages } = await safety.guardInput({ messages }))
+
+const final = await safety.finalizeOutput(output, regenerate, {
+  suspended: finishReason === 'tool_approval_required',
+  messages,
 })
-const meta = safety.stamp(traceMeta)                              // audits attached iff non-empty
+
+const meta = safety.stamp(traceMeta)
 ```
 
-- `regenerate(corrective)` is the only dialect-specific concern: append the corrective messages, re-call the model, re-validate, return the new output.
-- `formatter` (a `ConstraintFeedbackFormatter`) injects corrective-message phrasing; the default is `defaultConstraintFeedbackFormatter`.
-- `safety.transcript` is a machine-readable protocol trace — the dialect parity suite asserts both dialects produce identical sequences.
-- `safety.openStream()` is the streaming sub-protocol: `feed()` each text delta (`emit`/`hold` directives), `finish()` at end-of-stream (runs `buffer: 'full'` guards plus report-only constraints, returns the seal with any `pending` tail), or `transform()` for a ready-made `TransformStream<string, string>`.
+`finalizeOutput()` applies output guardrails before constraints. Regenerated
+candidates are guarded before constraints re-check them. Structured output
+rewrites keep returned `text` and `object` synchronized or fail closed.
+
+`openStream()` exposes the streaming sub-protocol:
+
+- `feed(chunk)` returns `{ kind: 'emit', content }` or `{ kind: 'hold' }`.
+- `finish()` runs final-only guards, report-mode constraints, and returns the
+  final seal with any unreleased `pending` text.
+- `transform()` returns a `TransformStream<string, string>`.
+
+## Tuning And Capture
+
+Per-call `safety.tune` can change policy posture without replacing policy
+logic:
+
+```ts
+await adapter.generate(prompt, {
+  input,
+  safety: {
+    tune: {
+      pii: { mode: 'report' },
+      'cite-sources': { enabled: true },
+    },
+  },
+})
+```
+
+Allowed tune fields are `mode`, `stream`, and `enabled`. Unknown ids throw.
+
+Safety artifacts participate in `observability.capture`. Use capture presets
+and per-artifact overrides when traces leave a trusted boundary. Public audit,
+errors, and observability records are safe-by-default.
 
 ## Choosing The Primitive
 
@@ -99,12 +197,24 @@ const meta = safety.stamp(traceMeta)                              // audits atta
 | --- | --- |
 | Block, redact, transform, or warn on raw input/output | `guardrail()` |
 | Enforce business rules on generated output and retry | `constraint()` |
-| Enforce a minimum LLM-judge score and retry | `judgeConstraint()` (`@use-crux/core/scoring`) |
-| Regression-test a production constraint in eval suites | `constraintScorer()` (`@use-crux/core/quality`) |
+| Gate tool calls, tool results, or approvals as Safety decisions | `toolPolicy()` |
+| Instrument or modify tool execution mechanics | `toolMiddleware()` |
+| Enforce a minimum LLM-judge score and retry | `constraint.judge(...)` |
+| Regression-test a production constraint in eval suites | `constraintScorer()` from `@use-crux/core/quality` |
 | Repair JSON/schema parse failures | `validationRetry` |
+
+## Testing
+
+Use `evaluateGuardrail()` and `evaluateConstraint()` for focused policy tests.
+Use Quality decision-report matchers for runtime behavior:
+
+```ts
+ctx.expect.decisionReport.safety.toHaveOutcome('pii', 'rewrite')
+```
 
 ## Related
 
 - Guide: [Safety](/docs/guides/safety)
 - Guide: [Guardrails](/docs/guides/safety/guardrails)
 - Guide: [Constraints](/docs/guides/safety/constraints)
+- Guide: [Safety beta readiness](/docs/guides/safety/beta-readiness)

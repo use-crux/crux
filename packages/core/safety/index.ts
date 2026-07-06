@@ -1,8 +1,9 @@
 /**
- * `@use-crux/core/safety` — one deep module for guardrails and constraints.
+ * `@use-crux/core/safety` — runtime safety boundary engine.
  *
- * Authoring: `guardrail()`, `constraint()`, evaluated standalone via
- * `evaluateGuardrail()` / `evaluateConstraint()`.
+ * Authoring: attach `guardrail()`, `constraint()`, and action policies to
+ * typed `boundary.*` targets. Testing helpers evaluate authored policies
+ * without exposing session internals.
  *
  * Consumption: one per-call session created with `createSafety()` —
  * `guardInput()` → `finalizeOutput()` → `stamp()`, plus `openStream()` for
@@ -14,6 +15,43 @@
  *
  * @module
  */
+
+// ── Boundary and shared decision types ─────────────────────────────
+export { boundary, isBoundaryDef } from './boundary'
+export type {
+  ApprovalRequestSubject,
+  BoundaryDef,
+  BoundaryIdOf,
+  BoundaryInput,
+  DotPath,
+  PathValue,
+  RetrievalResultSubject,
+  SafetyTargetId,
+  SubjectOf,
+  ToolCallSubject,
+  ToolResultSubject,
+} from './boundary'
+export type {
+  SafetyCaptureSummary,
+  SafetyDecision,
+  SafetyDecisionAction,
+  SafetyEffectivePolicyOptions,
+  SafetyFinding,
+  SafetyRunContext,
+  StrategyRun,
+} from './decision'
+export type { GuardrailStreamOption, StreamSegmenter } from './stream/types'
+export type { SafetyTuneOptions, SafetyTunePolicyOptions } from './tune'
+
+// ── Policy-terminal errors ────────────────────────────────────────
+export {
+  SafetyConfigError,
+  SafetyConvergenceError,
+  SafetyResultError,
+  SafetyStructuredSyncError,
+  StreamHoldLimitError,
+  isPolicyTerminal,
+} from './errors'
 
 // ── The per-call session ───────────────────────────────────────────
 export { createSafety, defaultConstraintFeedbackFormatter } from './session'
@@ -40,21 +78,9 @@ export { GuardrailBlockedError } from './guardrail/errors'
 export type {
   Guardrail,
   GuardrailConfig,
-  GuardrailContext,
-  GuardrailPhase,
-  GuardrailStreamConfig,
-  GuardrailResult,
-  InputGuardrailResult,
-  OutputGuardrailResult,
-  ChunkGuardrailResult,
-  GuardrailPass,
-  GuardrailBlock,
-  GuardrailRedact,
-  GuardrailTransform,
-  GuardrailWarn,
-  GuardrailHold,
-  GuardrailAudit,
-  GuardrailAuditEntry,
+  GuardrailMode,
+  GuardrailRunResult,
+  GuardrailRewriteKind,
 } from './guardrail/types'
 
 // ── Constraint authoring ───────────────────────────────────────────
@@ -65,12 +91,18 @@ export type { ConstraintEvalCase, ConstraintEvalCaseResult, ConstraintEvalReport
 export type {
   Constraint,
   ConstraintConfig,
-  ConstraintContext,
   ConstraintSeverity,
   ConstraintCheckResult,
-  ChunkCheckResult,
-  ConstraintOutput,
-  ConstraintAudit,
-  ConstraintAuditEntry,
-  ConstraintFailure,
 } from './constraint/types'
+export type { JudgeConstraintStrategyOptions, JudgeConstraintVerdict } from './constraint/strategies'
+
+// ── Tool/action policy authoring ──────────────────────────────────
+export { toolPolicy } from './toolPolicy'
+export type {
+  ToolPolicyAction,
+  ToolPolicyArgsOptions,
+  ToolPolicyApprovalOptions,
+  ToolPolicyConfig,
+  ToolPolicyMatch,
+  ToolPolicyResultOptions,
+} from './toolPolicy'

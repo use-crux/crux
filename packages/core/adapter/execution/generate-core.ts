@@ -112,6 +112,7 @@ export async function generateCore<
       guardrails: args.guardrails,
       constraintMaxRetries: args.constraintMaxRetries,
     },
+    safety: args.safety,
     resolved: {
       constraints: resolved.constraints,
       guardrails: resolved.guardrails,
@@ -293,7 +294,7 @@ export async function generateCore<
             }
             return { text: regen.extracted.text, parsed: undefined };
           },
-          { suspended, messages },
+          { suspended, messages, schema: resolved.schema },
         );
         if (finalOutput.text !== lastExtracted.text) {
           lastExtracted = { ...lastExtracted, text: finalOutput.text };

@@ -12,6 +12,7 @@
 export * from "./turn-decision-report/evidence";
 export * from "./turn-decision-report/items";
 export * from "./turn-decision-report/report";
+export * from "./turn-decision-report/safety";
 export * from "./turn-decision-report/shared";
 export * from "./turn-decision-report/source-coverage";
 export * from "./turn-decision-report/targets";

@@ -51,7 +51,11 @@ import type {
   GenerationSettings,
   Message,
 } from "@use-crux/core";
-import type { Constraint, Guardrail } from "@use-crux/core/safety";
+import type {
+  Constraint,
+  Guardrail,
+  SafetyTuneOptions,
+} from "@use-crux/core/safety";
 import { isValidationExhaustedError } from "@use-crux/core";
 import type { DenseEmbedding } from "@use-crux/core/embedding";
 import type { Reranker, RetrievalModel } from "@use-crux/core/retrieval";
@@ -146,12 +150,14 @@ export type AIGenerateOptions<
    * then falls back to LLM retry with corrective messages.
    */
   validationRetry?: ValidationRetryOptions;
-  /** Per-call semantic constraints (highest precedence in the safety merge). */
+  /** Per-call semantic constraints composed by the Safety registry. */
   constraints?: Constraint[];
   /** Shared cap on total constraint retries across all constraints. */
   constraintMaxRetries?: number;
-  /** Per-call guardrails (highest precedence in the safety merge). */
+  /** Per-call guardrails composed by the Safety registry. */
   guardrails?: Guardrail[];
+  /** Per-call safety posture overrides keyed by policy id. */
+  safety?: SafetyTuneOptions;
 } & Omit<CallSettings, "toolChoice" | "stopWhen"> &
   GenerationSettings &
   ([keyof MergedInput<TOwnInput, TContexts>] extends [never]
@@ -326,6 +332,7 @@ type CallOpts = Record<string, unknown> & {
   constraints?: Constraint[];
   constraintMaxRetries?: number;
   guardrails?: Guardrail[];
+  safety?: SafetyTuneOptions;
   input?: Record<string, unknown>;
 };
 
@@ -368,6 +375,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       constraints,
       constraintMaxRetries,
       guardrails,
+      safety,
       input,
       ...settings
     } = opts;
@@ -384,6 +392,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       constraints,
       constraintMaxRetries,
       guardrails,
+      safety,
       activeTools,
       // The Crux-wide default budget (10, from loopRuntimeAdapter) — identical
       // across every adapter, enforced natively via the AI SDK's stopWhen.
@@ -432,6 +441,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       constraints,
       constraintMaxRetries,
       guardrails,
+      safety,
       input,
       ...settings
     } = opts;
@@ -447,6 +457,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       constraints,
       constraintMaxRetries,
       guardrails,
+      safety,
       activeTools,
       maxSteps,
       settings: settings as GenerationSettings,
@@ -455,6 +466,12 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
     const raw = handle.raw as Record<string, unknown>;
     const completion = handle.completion();
+    completion.catch(() => {
+      // Stream consumers may rely solely on `textStream`. Keep `completion`
+      // rejecting for callers that await it, but mark the public promise as
+      // observed so stream errors do not become process-level unhandled
+      // rejections.
+    });
     const existingMeta =
       (raw._meta as Record<string, unknown> | undefined) ?? {};
     // Typed completion plus the legacy `_meta._streamCompletion` location.
@@ -582,7 +599,7 @@ export const generateTextFn = defaultAi.generateTextFn;
  * AI SDK `generateObject` wrapped as a `GenerateObjectFn`.
  *
  * Use this when calling `@use-crux/core` APIs that expect a `GenerateObjectFn`
- * (e.g., `llmJudge().score()`, `extractKeyFacts()`).
+ * (e.g., `judge().score()`, `extractKeyFacts()`).
  *
  * This helper shares the same AI SDK structured-attempt mechanics used by
  * prompt structured generation: provider schema sanitation, core-backed JSON
@@ -594,10 +611,10 @@ export const generateTextFn = defaultAi.generateTextFn;
  * @example
  * ```ts
  * import { generateObjectFn } from '@use-crux/ai'
- * import { llmJudge } from '@use-crux/core/scoring'
+ * import { judge } from '@use-crux/core/scoring'
  *
- * const judge = llmJudge({ ... })
- * const result = await judge.score(input, { generate: generateObjectFn, model })
+ * const evaluator = judge({ ... })
+ * const result = await evaluator.score(input, { generate: generateObjectFn, model })
  * ```
  */
 export const generateObjectFn = defaultAi.generateObjectFn;

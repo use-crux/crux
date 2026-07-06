@@ -19,6 +19,7 @@ import type { AdapterResponse } from '../../adapter/types'
 import { prompt as makePrompt } from '../../prompt/prompt'
 import { guardrail as makeGuardrail, GuardrailBlockedError } from '../../safety/guardrail'
 import { constraint as makeConstraint } from '../../safety/constraint'
+import { boundary } from '../../safety'
 import { ConstraintViolationError } from '../../safety/constraint/errors'
 import { toolMiddleware } from '../../tools/middleware'
 import { appendToolApprovalResponse } from '../../tools/approvals'
@@ -325,11 +326,15 @@ describe('dialect parity — input guardrail redaction', () => {
 
   const redactor = () =>
     makeGuardrail({
-      name: 'secret-redactor',
-      phase: 'input',
-      validate: async (content) => {
-        if (!content.includes(SECRET)) return { action: 'pass' as const }
-        return { action: 'redact' as const, content: content.replaceAll(SECRET, '[REDACTED]') }
+      id: 'secret-redactor',
+      on: boundary.input.text(),
+      run: async (content) => {
+        if (!content.includes(SECRET)) return { action: 'allow' as const }
+        return {
+          action: 'rewrite' as const,
+          value: content.replaceAll(SECRET, '[REDACTED]'),
+          rewrite: { kind: 'redact' as const },
+        }
       },
     })
 
@@ -413,9 +418,10 @@ function recordSafetyProtocol() {
 
 const needsShip = () =>
   makeConstraint({
-    name: 'mentions-ship',
+    id: 'mentions-ship',
+    on: boundary.output.both(),
     maxRetries: 2,
-    check: async (output) =>
+    run: async (output) =>
       output.text.includes('ship') ? { pass: true as const } : { pass: false as const, feedback: 'must mention ship' },
   })
 
@@ -505,8 +511,9 @@ describe('dialect parity — constraint retry protocol', () => {
 describe('dialect parity — clean pass and blocks', () => {
   it('clean pass: identical protocol sequence and audits when everything passes', async () => {
     const passGuard = () =>
-      makeGuardrail({ name: 'g-in', phase: 'input', validate: async () => ({ action: 'pass' as const }) })
-    const passConstraint = () => makeConstraint({ name: 'c-pass', check: async () => ({ pass: true as const }) })
+      makeGuardrail({ id: 'g-in', on: boundary.input.text(), run: async () => ({ action: 'allow' as const }) })
+    const passConstraint = () =>
+      makeConstraint({ id: 'c-pass', on: boundary.output.both(), run: async () => ({ pass: true as const }) })
 
     const nativeEvents = recordSafetyProtocol()
     const native = scriptedAdapterSpec([{ text: 'a ship!' }])
@@ -530,7 +537,7 @@ describe('dialect parity — clean pass and blocks', () => {
 
     expect(executorEvents).toEqual(nativeProtocol)
     expect(nativeProtocol).toEqual([
-      { t: 'guardrail', id: 'g-in', phase: 'input', action: 'pass' },
+      { t: 'guardrail', id: 'g-in', phase: 'input', action: 'allow' },
       { t: 'check', name: 'c-pass', pass: true },
     ])
     expect(executorResult.text).toBe(nativeResult.text)
@@ -541,9 +548,9 @@ describe('dialect parity — clean pass and blocks', () => {
     it('input block: both dialects throw GuardrailBlockedError before any provider call', async () => {
     const blocker = () =>
       makeGuardrail({
-        name: 'input-blocker',
-        phase: 'input',
-        validate: async () => ({ action: 'block' as const, reason: 'unsafe input' }),
+        id: 'input-blocker',
+        on: boundary.input.text(),
+        run: async () => ({ action: 'block' as const, reason: 'unsafe input' }),
       })
 
     const native = scriptedAdapterSpec([{ text: 'never reached' }])
@@ -572,9 +579,9 @@ describe('dialect parity — clean pass and blocks', () => {
     it('output block: both dialects throw GuardrailBlockedError with the same identity', async () => {
     const blocker = () =>
       makeGuardrail({
-        name: 'output-blocker',
-        phase: 'output',
-        validate: async () => ({ action: 'block' as const, reason: 'unsafe output' }),
+        id: 'output-blocker',
+        on: boundary.output.text(),
+        run: async () => ({ action: 'block' as const, reason: 'unsafe output' }),
       })
 
     const native = scriptedAdapterSpec([{ text: 'toxic output' }])
@@ -599,12 +606,16 @@ describe('dialect parity — clean pass and blocks', () => {
 describe('dialect parity — output guards and suspension', () => {
   const outputRedactor = () =>
     makeGuardrail({
-      name: 'email-redactor',
-      phase: 'output',
-      validate: async (content) =>
+      id: 'email-redactor',
+      on: boundary.output.text(),
+      run: async (content) =>
         content.includes('a@b.c')
-          ? { action: 'redact' as const, content: content.replaceAll('a@b.c', '[EMAIL]') }
-          : { action: 'pass' as const },
+          ? {
+              action: 'rewrite' as const,
+              value: content.replaceAll('a@b.c', '[EMAIL]'),
+              rewrite: { kind: 'redact' as const },
+            }
+          : { action: 'allow' as const },
     })
 
     it('output guards redact the final text identically and stamp the same audit shape', async () => {
@@ -633,18 +644,19 @@ describe('dialect parity — output guards and suspension', () => {
     const guardSpy = vi.fn()
     const spyGuard = () =>
       makeGuardrail({
-        name: 'spy',
-        phase: 'output',
-        validate: async () => {
+        id: 'spy',
+        on: boundary.output.text(),
+        run: async () => {
           guardSpy()
-          return { action: 'pass' as const }
+          return { action: 'allow' as const }
         },
       })
     const checkSpy = vi.fn()
     const spyConstraint = () =>
       makeConstraint({
-        name: 'spy-c',
-        check: async () => {
+        id: 'spy-c',
+        on: boundary.output.both(),
+        run: async () => {
           checkSpy()
           return { pass: true as const }
         },
@@ -686,16 +698,19 @@ describe('dialect parity — output guards and suspension', () => {
 describe('dialect parity — streamed run with holds and transforms', () => {
   const importFixer = () =>
     makeGuardrail({
-      name: 'import-fixer',
-      phase: 'output',
-      validate: async () => ({ action: 'pass' as const }),
-      stream: { buffer: 'none' },
-      onChunk: async (chunk) => {
+      id: 'import-fixer',
+      on: boundary.output.text(),
+      stream: 'chunk',
+      run: async (chunk) => {
         if (chunk.includes('@/comps/')) {
-          return { action: 'transform' as const, content: chunk.replace('@/comps/', '@/components/') }
+          return {
+            action: 'rewrite' as const,
+            value: chunk.replace('@/comps/', '@/components/'),
+            rewrite: { kind: 'normalize' as const },
+          }
         }
         if (chunk.endsWith('@/co')) return { action: 'hold' as const }
-        return { action: 'pass' as const }
+        return { action: 'allow' as const }
       },
     })
 
@@ -710,10 +725,11 @@ describe('dialect parity — streamed run with holds and transforms', () => {
     expect(handle.raw.text).toBe('import x from @/components/Button — done')
     const meta = await handle.completion()
     expect(meta?.text).toBe('import x from @/components/Button — done')
-    // The mid-stream fix landed in the audit with the original content.
+    // The mid-stream fix landed in the audit without leaking the original content.
     expect(meta?.guardrails?.applied).toContainEqual(
-      expect.objectContaining({ guard: 'import-fixer', action: 'transform', original: '@/comps/Button' }),
+      expect.objectContaining({ guard: 'import-fixer', action: 'transform' }),
     )
+    expect(JSON.stringify(meta?.guardrails?.applied ?? [])).not.toContain('@/comps/Button')
   })
 
     it('adapter dialect: stream() drives the same protocol over text deltas', async () => {
@@ -755,8 +771,9 @@ describe('dialect parity — streamed run with holds and transforms', () => {
 
     const meta = await handle.completion()
     expect(meta?.guardrails?.applied).toContainEqual(
-      expect.objectContaining({ guard: 'import-fixer', action: 'transform', original: '@/comps/Button' }),
+      expect.objectContaining({ guard: 'import-fixer', action: 'transform' }),
     )
+    expect(JSON.stringify(meta?.guardrails?.applied ?? [])).not.toContain('@/comps/Button')
   })
 })
 

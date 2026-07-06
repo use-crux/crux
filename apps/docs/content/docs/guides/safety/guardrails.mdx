@@ -1,412 +1,204 @@
 ---
 title: Guardrails
-description: Composable safety pipeline for I/O validation — validate, redact, transform, and block content before and after LLM generation.
+description: Boundary-targeted policies that allow, block, warn, or rewrite content before unsafe data crosses a runtime boundary.
 ---
 
-Guardrails validate content before and after LLM generation. No AI SDK offers this natively — it's a Crux-only feature across all adapters.
-
-## Quick Start
+Guardrails protect runtime boundaries. They run before content moves into or out
+of the model, tools, retrieval, memory, validation feedback, or other Safety
+surfaces. Use a guardrail when you need to block, redact, mask, hash, normalize,
+or report on content without re-calling the model.
 
 ```ts title="guardrails.ts"
-import { guardrail, createSafetyPlugin } from '@use-crux/core/safety'
+import { boundary, guardrail } from '@use-crux/core/safety'
 
-// Block prompt injections on input
-const injectionGuard = guardrail({
-  name: 'injection',
-  phase: 'input',
-  validate: async (content) => {
-    if (/ignore\b.{0,30}\bprevious\b.{0,30}\binstructions/i.test(content))
-      return { action: 'block', reason: 'Prompt injection detected' }
-    return { action: 'pass' }
-  },
+export const injectionGuard = guardrail({
+  id: 'prompt-injection',
+  on: boundary.input.text(),
+  run: guardrail.injection({ action: 'block' }),
 })
 
-// Redact PII on output
-const piiGuard = guardrail({
-  name: 'pii',
-  phase: 'output',
-  stream: { buffer: 'full' },
-  validate: async (content) => {
-    const redacted = content.replace(/\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g, '[EMAIL]')
-    if (redacted !== content) return { action: 'redact', content: redacted }
-    return { action: 'pass' }
-  },
+export const piiGuard = guardrail({
+  id: 'pii',
+  on: [boundary.input.text(), boundary.output.text()],
+  run: guardrail.pii({ strategy: 'mask' }),
 })
-
-// Install as plugin — runs on every generate() and stream() call
-config({ plugins: [createSafetyPlugin({ guardrails: [injectionGuard, piiGuard] })] })
 ```
 
-## Three-Layer Safety Model
+Attach guardrails globally with `createSafetyPlugin()`, on prompts and contexts,
+or per call with `guardrails: [...]`.
 
-Guardrails are Layer 1 of Crux's safety architecture:
+## Authoring
 
-| Layer | Primitive | What it validates | When |
-|-------|-----------|-------------------|------|
-| **I/O Safety** | `guardrail()` | Content safety, PII, injection, toxicity | Before/after generate() |
-| **Action Safety** | `defineToolFilter()` (future) | Tool call approval, rate limits, cost gates | During tool loop |
-| **Output Quality** | [`constraint()`](/docs/guides/safety/constraints) | Semantic invariants (cite sources, language, tone) | After generation, with retry |
-
----
-
-## Defining Guards
-
-### `guardrail()`
-
-Creates a frozen guardrail object. Each guard declares a single **phase** and a `validate` function.
+Every guardrail has a stable `id`, one boundary or a boundary array, and a
+`run(subject, ctx)` callback. The boundary drives the subject type:
 
 ```ts
-import { guardrail } from '@use-crux/core/safety'
+const redactEmail = guardrail({
+  id: 'email-redactor',
+  on: boundary.output.text(),
+  run: async (text, ctx) => {
+    const next = text.replace(/\S+@\S+/g, '[email]')
 
-const guard = guardrail({
-  name: 'my-guard',
-  phase: 'output',
-  validate: async (content, ctx) => {
-    // content: the text to validate
-    //   input phase  → last user message
-    //   output phase → model response
-    // ctx: GuardrailContext with promptId, model, messages, traceId, metadata
-    return { action: 'pass' }
+    if (next === text) return { action: 'allow' }
+
+    return {
+      action: 'rewrite',
+      value: next,
+      rewrite: { kind: 'redact' },
+      findings: [{ type: 'email', count: 1 }],
+    }
   },
 })
 ```
 
-Guards are **frozen objects** — define once, compose freely. Guardrails filter content but never re-call the model. For retry-with-feedback on output quality, use [`constraint()`](/docs/guides/safety/constraints).
+Supported result actions:
 
-### Actions
+| Action | Effect |
+| --- | --- |
+| `allow` | Continue with the current subject. |
+| `block` | Stop the call with `GuardrailBlockedError`. |
+| `warn` | Record a Safety decision without changing content. |
+| `rewrite` | Replace the subject. Use `rewrite.kind` for `redact`, `mask`, `hash`, or `normalize`. |
+| `hold` | Streaming only. Wait for more text before releasing the segment. |
 
-Every `validate` call returns an action:
+Malformed or unknown results fail closed with `SafetyResultError`, including
+when JavaScript callers escape the TypeScript result type.
 
-| Action | Phase | What happens |
-|--------|-------|--------------|
-| `pass` | input, output, chunk | Content is safe. Continue to next guard |
-| `block` | input, output, chunk | Hard stop. Throws `GuardrailBlockedError`. Remaining guards skip |
-| `redact` | input, output, chunk | Destructive safety removal. Returns modified `content` + optional `entities`. Modified content flows to next guard |
-| `transform` | input, output, chunk | Constructive quality improvement. Returns modified `content`. Modified content flows to next guard |
-| `warn` | input, output, chunk | Log but continue. Returns `reason`. Content unchanged |
-| `hold` | chunk only | Don't emit yet. Merge this chunk into the next `onChunk` call. Enables cross-chunk transforms |
+## Built-in Strategies
 
-**`redact` vs `transform`**: Both modify content and flow forward the same way. The distinction is semantic — redactions carry safety audit metadata (what was removed, original content), transforms are quality improvements. Devtools displays them differently.
-
-### GuardrailContext
-
-Every `validate` and `onChunk` call receives context:
+First-party strategies are provider-agnostic and carry safe strategy metadata
+for observability, Devtools, and Project Index:
 
 ```ts
-interface GuardrailContext {
-  phase: 'input' | 'output'
-  promptId: string | undefined
-  model: string | undefined
-  messages: readonly Message[]
-  systemPrompt: string | undefined
-  traceId: string | undefined
-  metadata: Record<string, unknown>
-}
-```
-
-Use `ctx.model` for model-specific rules (stricter for cheaper models), `ctx.messages` for conversation-aware checks, `ctx.metadata` for app-specific passthrough.
-
----
-
-## Execution: the Safety session
-
-You never execute guards by hand. Every adapter constructs a per-call `Safety` session (`createSafety()`) that merges all scopes, runs input guards before the first provider call — **writing redacted/transformed content back into the messages the model sees** — and runs constraints followed by output guards on the final output. Custom adapter dialects drive the same session; see the [Safety reference](/docs/reference/crux-core/safety).
-
-### Execution model
-
-**Input guards** (before the first provider call):
-- Guard the last user message (with prompt-text fallback)
-- Execute in declaration order
-- Redacted/transformed content flows forward to subsequent guards — and to the provider
-- First `block` short-circuits — remaining guards skip, `GuardrailBlockedError` propagates
-
-**Output guards** (after constraints accept the final output):
-- Same sequential execution and content chaining
-- Skipped when the run suspends for tool approval — the response is a request for permission, not a final output
-
-### Content chaining
-
-When a guard redacts or transforms, the **modified** content is what the next guard sees:
-
-```
-Guard A (PII redactor): "Call John at 555-1234" → "Call [NAME] at [PHONE]"
-Guard B (inspector):    sees "Call [NAME] at [PHONE]" — no false positive on already-redacted content
-```
-
-### Retry with feedback?
-
-Guardrails never re-call the model. If you need to validate output quality and retry with feedback until requirements are met, use [`constraint()`](/docs/guides/safety/constraints) instead. The session runs constraints with parallel-check and combined-retry before output guards.
-
-### Audit trail
-
-Every applied guard lands in the audit on `result._meta.guardrails`:
-
-```ts
-const result = await adapter.generate(prompt, opts)
-
-result._meta.guardrails.blocked              // false (would have thrown if true)
-result._meta.guardrails.applied[0].guard     // 'pii'
-result._meta.guardrails.applied[0].category  // 'pii' (optional risk-type label)
-result._meta.guardrails.applied[0].action    // 'redact'
-result._meta.guardrails.applied[0].original  // original content before this guard
-result._meta.guardrails.applied[0].durationMs // 2.3
-```
-
----
-
-## Scoping
-
-Guardrails support four scoping levels, merged via union. When names collide, per-call wins over per-prompt wins over context-level wins over global.
-
-### Global (all generate calls)
-
-```ts
-import { createSafetyPlugin } from '@use-crux/core/safety'
-
-config({
-  plugins: [createSafetyPlugin({ guardrails: [injectionGuard, piiGuard] })],
+guardrail.pii({ strategy: 'redact' })
+guardrail.secrets()
+guardrail.injection({ action: 'warn' })
+guardrail.classifier({
+  classifier: async (subject) => ({ unsafe: subject.includes('risk') }),
+  blockWhen: (result) => result.unsafe,
 })
 ```
 
-### Per-prompt
+`pii`, `secrets`, and `injection` are text strategies. They default to
+sentence-gated streaming. `classifier` defaults to final-output checks because
+classifier calls are usually too expensive or stateful for every segment.
+
+## Boundaries
+
+Common boundaries:
+
+| Boundary | Subject |
+| --- | --- |
+| `boundary.input.text()` | User input text before the provider call. |
+| `boundary.output.text()` | Model output text before the caller sees it. |
+| `boundary.output.object<T>()` | Parsed structured output. |
+| `boundary.output.path<T>()('a.b')` | One typed structured-output path. |
+| `boundary.tool.call()` | Tool call name, id, and input. |
+| `boundary.tool.result()` | Tool result before it returns to the model. |
+| `boundary.memory.write<T>()` | Candidate memory write. |
+| `boundary.validation.feedback()` | Corrective feedback before it is re-prompted. |
+
+Guardrails can bind to several boundaries with `on: [...]`. A duplicate
+boundary in the same guardrail is a configuration error. Duplicate policy ids
+across attached policies are also invalid; use one policy with multiple
+boundaries when the same policy should apply in several places.
+
+## Execution
+
+Adapters create one Safety session per `generate()` or `stream()` call. The
+session:
+
+1. Runs input guardrails over every user message, in order.
+2. Applies output guardrails before constraints, validation feedback,
+   observability, memory, tools, and final caller access consume generated
+   content.
+3. Keeps structured `text` and `object` synchronized after rewrites.
+4. Emits safe Safety decisions and audit metadata by default.
+
+Guardrails do not re-call the model. Use a
+[constraint](/docs/guides/safety/constraints) when a semantic failure should
+retry generation with feedback.
+
+## Report Mode And Tuning
+
+Use `mode: 'report'` when a guardrail should audit but not enforce:
 
 ```ts
-const blogPrompt = prompt({
-  system: 'You are a blog writer...',
-  guardrails: [piiGuard, contentSafetyGuard],
-  // ...
+const shadowPii = guardrail({
+  id: 'pii-shadow',
+  mode: 'report',
+  on: boundary.output.text(),
+  run: guardrail.pii(),
 })
 ```
 
-### Per-context
-
-```ts
-const medicalContext = context({
-  id: 'medical',
-  system: 'Patient data context...',
-  guardrails: [hipaaGuard],
-})
-
-// Any prompt that uses this context inherits hipaaGuard
-const report = prompt({ use: [medicalContext], ... })
-```
-
-### Per-call (highest precedence)
+You can also tune policy posture per call:
 
 ```ts
 await adapter.generate(prompt, {
-  guardrails: [strictModeGuard],
+  input,
+  safety: {
+    tune: {
+      'pii-shadow': { mode: 'enforce' },
+      'prompt-injection': { enabled: false },
+    },
+  },
 })
 ```
 
-### Audit trail
+Tune can change only `mode`, `stream`, and `enabled`. Unknown policy ids throw
+so accidental misspellings do not silently weaken policy.
 
-Guardrail audit attaches to `result._meta.guardrails`:
+## Streaming
+
+Ordinary text guardrails apply to streams. By default, Crux gates text by
+sentence, runs each guardrail stage, then releases only the cleared segment.
+Later guardrails see earlier rewrites.
 
 ```ts
-const result = await adapter.generate(prompt, opts)
-result.text                       // safe (redacted/transformed) content
-result._meta.guardrails           // { applied: [...], blocked: false }
+const pii = guardrail({
+  id: 'pii',
+  on: boundary.output.text(),
+  stream: 'sentence',
+  run: guardrail.pii({ strategy: 'mask' }),
+})
 ```
 
-### `GuardrailBlockedError`
+Streaming options:
 
-Thrown when a guard blocks content:
+| Option | Behavior |
+| --- | --- |
+| `false` | Skip the guardrail for streaming calls and audit the skip. |
+| `'final'` | Let live chunks flow and run the guardrail once at completion. |
+| `'sentence'` | Gate and check complete sentence segments. |
+| `'line'` | Gate and check complete line segments. |
+| `'chunk'` | Check each provider text chunk. |
+| `{ segment, maxHold, onHoldLimit }` | Custom segmenter and hold bounds. |
+
+`hold` is valid only for non-final stream segments. If held text exceeds the
+configured `maxHold`, Crux fails closed by default with `StreamHoldLimitError`.
+Object and path guardrails run at final output for streams.
+
+## Errors And Audit
+
+`GuardrailBlockedError` is policy-terminal and carries safe decision metadata.
+Audit and observability records include policy ids, boundaries, action,
+duration, findings, and safe capture summaries. Raw pre-safety content is not
+included by default.
 
 ```ts
 import { GuardrailBlockedError } from '@use-crux/core/safety'
 
 try {
-  await adapter.generate(prompt, opts)
-} catch (e) {
-  if (e instanceof GuardrailBlockedError) {
-    e.guardrailId  // 'injection-detection'
-    e.phase        // 'input'
-    e.reason       // 'Prompt injection detected (score: 0.85)'
+  await adapter.generate(prompt, { input, guardrails: [injectionGuard] })
+} catch (error) {
+  if (error instanceof GuardrailBlockedError) {
+    error.decisions[0]?.policyId
+    error.decisions[0]?.captured.preview
   }
 }
 ```
 
----
-
-## Streaming
-
-### Buffer strategies
-
-Guards declare how they interact with streaming:
-
-| Strategy | Use case | Behavior |
-|----------|----------|----------|
-| `buffer: 'none'` | Real-time transforms (URL expansion, import fixes) | `onChunk` runs per-chunk. Client sees results immediately |
-| `buffer: 'full'` | Post-stream validation (PII, safety, formatting) | Chunks accumulate. `validate` runs once after stream completes |
-
-Streaming guardrails run automatically in every adapter's `stream()` — register the guard and stream as usual:
-
-```ts
-const handle = await adapter.stream(prompt, { model, input, guardrails: [iconFixer, piiGuard] })
-// Consumers see only the guarded stream; originals land in the audit on completion meta.
-```
-
-Mixed strategies work together. Each guard runs independently — `buffer: 'none'` guards process chunks in real-time while `buffer: 'full'` guards wait for completion. Constraints run report-only at end-of-stream (a live stream cannot regenerate).
-
-### Works with any text stream
-
-For custom dialects or non-Crux streams, the session exposes the same protocol directly — `safety.openStream().transform()` returns a standard Web Streams API `TransformStream<string, string>`:
-
-```ts
-import { createSafety } from '@use-crux/core/safety'
-
-const safety = createSafety({ call: { guardrails: [iconFixer, piiGuard] }, promptId, model })
-const guarded = anyTextStream.pipeThrough(safety.openStream().transform())
-```
-
-The guards themselves are also standalone — `guardrail()` has no adapter dependencies. You can use `@use-crux/core/safety` purely for the safety primitives without the rest of Crux.
-
-### `onChunk` handler
-
-For `buffer: 'none'` guards:
-
-```ts
-const urlExpander = guardrail({
-  name: 'url-expander',
-  phase: 'output',
-  stream: { buffer: 'none' },
-  onChunk: async (chunk, accumulated, ctx) => {
-    // chunk: current text (may include held content from previous hold)
-    // accumulated: everything received so far
-    const expanded = chunk.replaceAll('__URL_1__', 'https://example.com/long-url')
-    if (expanded !== chunk) return { action: 'transform', content: expanded }
-    return { action: 'pass' }
-  },
-  validate: async () => ({ action: 'pass' }),
-})
-```
-
-### The `hold` pattern
-
-When a transform needs to see a multi-token pattern (like an import statement that arrives across two chunks), return `{ action: 'hold' }`:
-
-```
-LLM sends: "import { BadIcon }"
-  → onChunk("import { BadIcon }")
-  → guard: incomplete import — no 'from' clause yet
-  → return { action: 'hold' }
-  → pipeline: buffers, emits nothing to client
-
-LLM sends: " from 'lucide-react'\n"
-  → onChunk("import { BadIcon } from 'lucide-react'\n")  ← held + new, merged
-  → guard: complete import! transform it
-  → return { action: 'transform', content: "import { GoodIcon } from 'lucide-react'\n" }
-  → pipeline: emits transformed content to client
-```
-
-**How it works:**
-- `hold` tells the pipeline "I need more data before I can decide"
-- The held content is stored in a **per-guard buffer** and **prepended** to the chunk on the next call
-- The guard sees progressively bigger chunks until it can act
-- Multiple consecutive holds just grow the buffer
-- On stream end, any held content flushes **unchanged** (graceful degradation)
-- Each guard's hold buffer is **independent** — one guard holding doesn't block others
-
-**The guard stays stateless.** It doesn't track what was held. It just looks at `chunk` (which may be bigger than a single LLM token) and decides:
-
-```ts
-const iconFixer = guardrail({
-  name: 'icon-fixer',
-  phase: 'output',
-  stream: { buffer: 'none' },
-  onChunk: async (chunk) => {
-    // Incomplete import? Hold — don't emit yet.
-    if (/import\s*\{/.test(chunk) && !/'[^']*'/.test(chunk)) {
-      return { action: 'hold' }
-    }
-
-    // Complete import for lucide-react? Fix invalid icons.
-    const match = chunk.match(/import\s*\{([^}]+)\}\s*from\s*['"]lucide-react['"]/)
-    if (match) {
-      const fixed = fixSpecifiers(match[1]!)
-      return { action: 'transform', content: chunk.replace(match[0], fixed) }
-    }
-
-    // Not an import — pass through.
-    return { action: 'pass' }
-  },
-  validate: async () => ({ action: 'pass' }),
-})
-```
-
-### Error recovery
-
-Guard failures must **never** break the stream. Catch exceptions and pass through unchanged:
-
-```ts
-onChunk: async (chunk) => {
-  try {
-    return { action: 'transform', content: riskyTransform(chunk) }
-  } catch {
-    return { action: 'pass' } // guard failed, pass original
-  }
-}
-```
-
----
-
-## Testing
-
-### `evaluateGuardrail()`
-
-Test guards against a matrix of cases:
-
-```ts
-import { evaluateGuardrail } from '@use-crux/core/safety'
-
-const report = await evaluateGuardrail(piiGuard, [
-  { input: 'Email me at john@example.com', expect: 'redact' },
-  { input: 'SSN: 123-45-6789', expect: 'redact' },
-  { input: 'Hello world', expect: 'pass' },
-])
-
-report.summary        // { total: 3, passed: 3, failed: 0 }
-report.results[0]     // { input: '...', passed: true, action: 'redact', expected: 'redact', durationMs: 1.2 }
-```
-
-Errors in the guard are caught gracefully — the case reports `action: 'error'` with the message.
-
-### `isGuardrail()`
-
-Runtime type guard:
-
-```ts
-import { isGuardrail } from '@use-crux/core/safety'
-
-isGuardrail(piiGuard)              // true
-isGuardrail({ _tag: 'Prompt' })    // false
-```
-
----
-
-## Devtools & Observability
-
-Guardrails emit two event types to the devtools protocol:
-
-| Event | When | Key fields |
-|-------|------|-----------|
-| `guardrail:run` | Every guard execution | `guardrailId`, `phase`, `action`, `reason`, `durationMs` |
-
-These events:
-- Appear in the devtools timeline alongside traces, tool calls, and memory events
-- Are emitted as OTel spans when `@use-crux/otel` is active
-- Are wired through `graph-record subscribers` (`guardrail.action records`)
-
-Use `graph-record guardrail events` plus the audit on `result._meta.guardrails` for application-level logging and EU AI Act audit trails. The optional `category` field on each policy lets reporting aggregate by risk type (`pii`, `jailbreak`, `toxicity`, ...) instead of by policy name.
-
----
-
-## Recipes
-
-Production-grade guardrail implementations usually combine the patterns below with the broader [Safety guide](/docs/guides/safety):
-
-- **PII Detection & Redaction** — Presidio-inspired recognizer pattern with context-enhanced confidence, Luhn validation, 3 redaction strategies
-- **Prompt Injection Detection** — 20+ regex patterns, multi-signal scoring, Unicode normalization, 5-layer defense model
-- **Content Safety** — Three-tier escalation (word-list, API classifier, LLM-as-judge), EU AI Act compliance
-- **Streaming Transforms** — v0-style LLM Suspense + Autofixer patterns with `hold` for cross-chunk fixes
+Use `evaluateGuardrail()` for focused unit tests and
+`ctx.expect.decisionReport.safety.toHaveOutcome(...)` in Quality suites when
+you want to assert on the canonical Safety decision report.

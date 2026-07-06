@@ -101,13 +101,14 @@ const ticket = await classify(`
 `validationRetry` recovers from schema failures. To enforce *semantic* rules — "summary must mention the affected area" — layer in a constraint:
 
 ```ts
-import { constraint } from '@use-crux/core/safety'
+import { boundary, constraint } from '@use-crux/core/safety'
 
-const summaryMentionsArea = constraint<typeof TicketSchema>({
-  name: 'summary-mentions-area',
+const summaryMentionsArea = constraint({
+  id: 'summary-mentions-area',
+  on: boundary.output.object<Ticket>(),
   severity: 'assert',
-  check: async (output) => {
-    if (output.parsed && !output.parsed.summary.toLowerCase().includes(output.parsed.affectedArea.toLowerCase())) {
+  run: async (ticket) => {
+    if (!ticket.summary.toLowerCase().includes(ticket.affectedArea.toLowerCase())) {
       return { pass: false, feedback: 'Summary must mention the affected area.' }
     }
     return { pass: true }

@@ -200,6 +200,7 @@ var cruxSignalPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`\bworkspace\s*\(`),
 	regexp.MustCompile(`\bconstraint\s*\(`),
 	regexp.MustCompile(`\bguardrail\s*\(`),
+	regexp.MustCompile(`\btoolPolicy\s*\(`),
 	regexp.MustCompile(`\bscorer\s*\(`),
 	regexp.MustCompile(`\bllmJudge\s*\(`),
 	regexp.MustCompile(`\bevaluation\s*\(`),

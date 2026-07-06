@@ -177,6 +177,9 @@ ctx.expect.handoffs.toHaveHandedOffTo('escalation-agent')
 ctx.expect.retrieval.toContainHit({ sourceId: 'kb-refunds' })
 ctx.expect.citations.toAllResolve()
 ctx.expect.safety.toHaveBlocked('pii-guardrail')
+ctx.expect.decisionReport.safety.toHaveOutcome('pii-guardrail', 'rewrite', {
+  reasonCode: 'guardrail.redacted',
+})
 ctx.expect.memory.toHaveWritten('customer-sentiment')
 ctx.expect.routing.toHaveSelectedModel('gpt-5-mini')
 ctx.expect.modelCalls.count().toBeLessThanOrEqual(3)
@@ -220,6 +223,16 @@ Assert that routing picked the intended route:
 expect: (ctx) => {
   ctx.expect.decisionReport.routing.toHaveOutcome('route:billing', 'selected', {
     reasonCode: 'routing.router.selected',
+  })
+}
+```
+
+Assert that a Safety policy intervened through the canonical decision report:
+
+```ts
+expect: (ctx) => {
+  ctx.expect.decisionReport.safety.toHaveOutcome('refund-approval', 'request_approval', {
+    reasonCode: 'tool.eligible.request',
   })
 }
 ```

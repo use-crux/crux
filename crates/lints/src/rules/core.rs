@@ -39,6 +39,10 @@ pub(crate) fn core_lint_findings(
         "cascadeDefinitionId",
     );
     let mut findings = Vec::new();
+    findings.extend(safety_duplicate_policy_id_findings(
+        builder,
+        &facts.definitions,
+    ));
 
     for definition in &facts.definitions {
         append_definition_findings(
@@ -61,6 +65,67 @@ pub(crate) fn core_lint_findings(
 
     findings.extend(relation_lint_findings(builder, &facts.relations, by_id));
     findings
+}
+
+const SAFETY_POLICY_KINDS: &[&str] = &["constraint", "guardrail", "toolPolicy"];
+
+fn safety_duplicate_policy_id_findings(
+    builder: &StaticIndexLintBuilder,
+    definitions: &[StaticIndexDefinition],
+) -> Vec<StaticIndexLintFinding> {
+    let mut by_policy_id = BTreeMap::<String, Vec<&StaticIndexDefinition>>::new();
+    for definition in definitions {
+        if !SAFETY_POLICY_KINDS.contains(&definition.kind.as_str()) {
+            continue;
+        }
+        by_policy_id
+            .entry(safety_policy_id(definition))
+            .or_default()
+            .push(definition);
+    }
+
+    by_policy_id
+        .into_iter()
+        .filter(|(_, items)| items.len() > 1)
+        .filter_map(|(policy_id, items)| {
+            let primary = items.first().copied();
+            builder.finding(StaticIndexLintFindingInput {
+                rule_id: "safety.duplicate_policy_id",
+                key: policy_id.as_str(),
+                message: format!(
+                    "Safety policy id \"{}\" is used by {} policy definitions.",
+                    policy_id,
+                    items.len()
+                ),
+                source: primary.and_then(|definition| definition.source.as_ref()),
+                primary_definition_id: primary.map(|definition| definition.id.as_str()),
+                related_definition_ids: items
+                    .iter()
+                    .map(|definition| definition.id.clone())
+                    .collect(),
+                evidence: items
+                    .iter()
+                    .map(|definition| {
+                        definition_evidence(definition, "Safety policy shares this id")
+                    })
+                    .collect(),
+                fixes: Vec::new(),
+            })
+        })
+        .collect()
+}
+
+fn safety_policy_id(definition: &StaticIndexDefinition) -> String {
+    definition
+        .metadata
+        .as_ref()
+        .and_then(Value::as_object)
+        .and_then(|metadata| metadata.get("facts"))
+        .and_then(Value::as_object)
+        .and_then(|facts| facts.get("policyId"))
+        .and_then(Value::as_str)
+        .unwrap_or(definition.name.as_str())
+        .to_string()
 }
 
 struct DefinitionRuleContext<'a> {

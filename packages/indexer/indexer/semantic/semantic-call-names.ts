@@ -36,6 +36,7 @@ const firstPartySemanticCallNames = [
   'router',
   'swarm',
   'tool',
+  'toolPolicy',
   'context',
   'prompt',
   'when',

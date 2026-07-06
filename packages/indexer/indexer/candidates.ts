@@ -35,6 +35,7 @@ const CRUX_SIGNAL_PATTERNS = [
   /\bworkspace\s*\(/,
   /\bconstraint\s*\(/,
   /\bguardrail\s*\(/,
+  /\btoolPolicy\s*\(/,
   /\bscorer\s*\(/,
   /\bllmJudge\s*\(/,
   /\bevaluation\s*\(/,

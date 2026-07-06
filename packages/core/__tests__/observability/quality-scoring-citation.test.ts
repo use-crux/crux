@@ -11,7 +11,7 @@ import {
   setObservabilityTransport,
 } from '../../observability'
 import { createFeedbackStore } from '../../quality/internal/feedback'
-import { llmJudge } from '../../scoring'
+import { judge as createJudge } from '../../scoring'
 
 describe('canonical quality, scoring, and citation observability', () => {
   const tempDirs: string[] = []
@@ -26,7 +26,7 @@ describe('canonical quality, scoring, and citation observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const generate = vi.fn(async () => ({ object: { reasoning: 'Strong answer.', score: 9, detail: { issueCount: 0 } } }))
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'answer_quality',
       criteria: 'Score answer quality.',
       scale: { min: 1, max: 5 },

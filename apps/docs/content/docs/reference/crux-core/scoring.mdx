@@ -4,103 +4,105 @@ description: LLM-as-a-judge scoring and pre-built quality metrics.
 ---
 
 ```ts
-import { llmJudge, metrics, judgeConstraint } from '@use-crux/core/scoring'
+import { judge, metrics } from '@use-crux/core/scoring'
 ```
 
-### `llmJudge(config)`
+## `judge(config)`
 
-Create a reusable judge instance.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | `string` | Judge identifier |
-| `criteria` | `string` | What to evaluate |
-| `scale` | `{ min: number, max: number }` | Score range |
-| `rubric` | `Record<number, string>?` | Score descriptions |
-| `chainOfThought` | `boolean?` | Enable reasoning (default: true) |
-| `fewShot` | `JudgeFewShot[]?` | Calibration examples |
-| `generate` | `GenerateObjectFn` | Structured generation function |
-| `model` | `unknown` | Judge model |
-
-**Returns:** `JudgeInstance`
-
-| Method | Description |
-|--------|-------------|
-| `.score(input)` | Score an input/output pair |
-| `.id` | Judge identifier |
-
-`.score()` input:
+Create a reusable LLM-as-a-judge scorer.
 
 | Field | Type | Description |
-|-------|------|-------------|
-| `input` | `string` | The query/prompt |
-| `output` | `string` | The response to evaluate |
-| `reference` | `string?` | Optional ground truth |
+| --- | --- | --- |
+| `id` | `string` | Judge identifier. |
+| `criteria` | `string` | What to evaluate. |
+| `scale` | `{ min: number; max: number }` | Score range. |
+| `rubric` | `Record<number, string>?` | Optional score descriptions. |
+| `context` | `string?` | Extra evaluator context. |
+| `chainOfThought` | `boolean?` | Whether to request a concise explanation before scoring. Default: `true`. |
+| `fewShot` | `JudgeFewShot[]?` | Calibration examples. |
+| `generate` | `GenerateObjectFn?` | Structured generation function. |
+| `model` | `unknown?` | Judge model. |
+| `detailSchema` | `z.ZodType<TDetail>?` | Optional structured details beside the score. |
 
-`.score()` returns `JudgeResult`:
+```ts
+const brandVoice = judge({
+  id: 'brand-voice',
+  criteria: 'Does the copy match the warm, direct brand voice?',
+  scale: { min: 1, max: 10 },
+  generate: generateObjectFn,
+  model,
+})
+
+const result = await brandVoice.score({
+  input: 'Write onboarding copy',
+  output: 'Welcome. Let us get you set up.',
+})
+```
+
+`score()` returns:
 
 | Field | Type | Description |
-|-------|------|-------------|
-| `score` | `number` | Clamped to scale |
-| `reasoning` | `string` | Chain-of-thought explanation |
-| `metricId` | `string` | Judge id |
+| --- | --- | --- |
+| `score` | `number` | Clamped to the configured scale. |
+| `reasoning` | `string` | Concise explanation for the score. |
+| `metricId` | `string` | Judge id. |
+| `detail` | `TDetail?` | Structured details when `detailSchema` is configured. |
 
-### `metrics`
+Per-call `score(input, options)` can override `generate`, `model`, and
+`evalId`.
 
-Six pre-built judges. Each takes `{ generate: GenerateObjectFn, model }` and returns a `JudgeInstance`.
+## `metrics`
+
+Pre-built judges for common quality dimensions. Each factory takes
+`{ generate, model }` and returns a `JudgeInstance`.
 
 | Metric | Criteria | Scale |
-|--------|----------|-------|
-| `metrics.relevance()` | Is the output relevant to the input query? | 1–5 |
-| `metrics.faithfulness()` | Is the output faithful to provided context? | 1–5 |
-| `metrics.coherence()` | Is the output logically coherent and well-structured? | 1–5 |
-| `metrics.completeness()` | Does the output address all aspects of the query? | 1–5 |
-| `metrics.toxicity()` | Is the output free from harmful content? (5 = safe) | 1–5 |
-| `metrics.conciseness()` | Is the output appropriately concise? | 1–5 |
+| --- | --- | --- |
+| `metrics.relevance()` | Is the output relevant to the input query? | 1-5 |
+| `metrics.faithfulness()` | Is the output faithful to provided context? | 1-5 |
+| `metrics.coherence()` | Is the output logically coherent and well-structured? | 1-5 |
+| `metrics.completeness()` | Does the output address all aspects of the query? | 1-5 |
+| `metrics.toxicity()` | Is the output free from harmful content? | 1-5 |
+| `metrics.conciseness()` | Is the output appropriately concise? | 1-5 |
 
 ```ts
 const relevance = metrics.relevance({ generate: generateObjectFn, model })
 const result = await relevance.score({ input: query, output: response })
 ```
 
-### `judgeConstraint(judge, opts)`
+## Safety Integration
 
-Bridge a judge into a normal [`Constraint`](/docs/reference/crux-core/safety) for online enforcement of scored quality. The returned constraint introduces nothing new — it behaves exactly like a hand-written `constraint()`: the safety session runs it with retries, audits, and observability unchanged, and the judge's `reasoning` becomes the corrective feedback for regeneration rounds.
+Runtime Safety enforcement is authored from the Safety subpath, not from
+scoring:
 
 ```ts
-const brandVoice = llmJudge({
-  id: 'brand-voice',
-  criteria: 'Does the copy match the warm, direct brand voice?',
-  scale: { min: 1, max: 10 },
-})
+import { boundary, constraint } from '@use-crux/core/safety'
+import { judge } from '@use-crux/core/scoring'
 
-const brandVoiceGate = judgeConstraint(brandVoice, { min: 7 })
-// → an ordinary Constraint named "brand-voice"
+const brandVoiceJudge = judge({ id: 'brand-voice', criteria, scale, generate, model })
+
+const brandVoiceGate = constraint({
+  id: 'brand-voice',
+  on: boundary.output.text(),
+  run: constraint.judge({ judge: brandVoiceJudge, minScore: 7 }),
+})
 ```
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `min` | `number` | Minimum acceptable score on the judge's own scale (inclusive) |
-| `severity` | `'assert' \| 'suggest'?` | Constraint severity (default: `'assert'`) |
-| `maxRetries` | `number?` | Per-constraint retry budget (default: 2) |
-| `category` | `string?` | Risk-category label carried into audits |
-| `feedback` | `(result: JudgeResult) => string?` | Retry feedback (default: the judge's reasoning) |
-| `generate` | `GenerateObjectFn?` | Judge generate override for the production call |
-| `model` | `unknown?` | Judge model override for the production call |
-| `input` | `(output, ctx) => string?` | Derive the judge's `input` field (default: empty) |
+For eval suites, `scorers.judge()` in
+[`@use-crux/core/quality`](/docs/reference/crux-core/quality) reuses the same
+judge machinery with rubric and choice-score modes.
 
-**Returns:** `Constraint<TSchema>` — pass it anywhere constraints are accepted (per-call, per-prompt, or `createSafetyPlugin()`). The factory is generic over the parsed-output schema like `constraint()` itself: annotate the `input` callback's parameter as `ConstraintOutput<typeof mySchema>` and `output.parsed` is typed instead of `unknown`.
-
-Check `metadata.judge` on audit entries carries a `JudgeConstraintVerdict`: `{ metricId, score, min, reasoning, detail? }` — `detail` is present (and typed by the judge's `TDetail`) when the judge has a `detailSchema`.
-
-For quality runs, `scorers.judge()` in [`@use-crux/core/quality`](/docs/reference/crux-core/quality) reuses this judge machinery with rubric and choice-score modes.
-
-### Types
+## Types
 
 ```ts
 import type {
-  JudgeConfig, JudgeInstance, JudgeResult, JudgeInput,
-  JudgeScoreOptions, JudgeFewShot, JudgeConstraintOptions, JudgeConstraintVerdict,
+  JudgeConfig,
+  JudgeFewShot,
+  JudgeInput,
+  JudgeInstance,
+  JudgeResult,
+  JudgeScoreOptions,
+  MetricDefaults,
 } from '@use-crux/core/scoring'
 ```
 
@@ -108,3 +110,4 @@ import type {
 
 - Guide: [Quality](/docs/guides/quality)
 - Reference: [Quality](/docs/reference/crux-core/quality)
+- Reference: [Safety](/docs/reference/crux-core/safety)

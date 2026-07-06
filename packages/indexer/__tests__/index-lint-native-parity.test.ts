@@ -189,6 +189,25 @@ const lintParityCases = [
     expectedRuleIds: ['workspace.write_without_guardrail', 'memory.long_lived_without_retention'],
   },
   {
+    name: 'safety duplicate policy id findings',
+    profile: 'strict',
+    definitions: [
+      definition({
+        id: 'constraint:safe',
+        kind: 'constraint',
+        name: 'safe',
+        metadata: { facts: { kind: 'constraint', policyId: 'safe' } },
+      }),
+      definition({
+        id: 'guardrail:safe',
+        kind: 'guardrail',
+        name: 'safe',
+        metadata: { facts: { kind: 'guardrail', policyId: 'safe' } },
+      }),
+    ],
+    expectedRuleIds: ['safety.duplicate_policy_id'],
+  },
+  {
     name: 'composition relation findings',
     profile: 'strict',
     definitions: [

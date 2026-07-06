@@ -1,7 +1,15 @@
-import type { GuardrailConfig, GuardrailPhase, Guardrail } from './types'
+import type { BoundaryDef, BoundaryInput } from '../boundary'
 import { captureSource } from '../../project-index/source'
+import type {
+  Guardrail,
+  GuardrailConfig,
+} from './types'
+import { classifier } from './strategies/classifier'
+import { injection } from './strategies/injection'
+import { pii } from './strategies/pii'
+import { secrets } from './strategies/secrets'
 
-/** Module-scoped map: frozen guardrail → definition-site source location. */
+/** Module-scoped map: frozen guardrail -> definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()
 
 /** Retrieve the definition-site source location for a guardrail instance. */
@@ -12,31 +20,38 @@ export function getGuardrailDefinitionSource(
 }
 
 /**
- * Define a composable guardrail for I/O safety validation.
+ * Define a composable guardrail for a safety boundary.
  *
- * Guards are frozen objects — define once, compose into pipelines.
- * Guardrails filter content (block, redact, transform, warn) but never re-call the model.
- * For retry-with-feedback on output quality, use `constraint()` instead.
+ * The `on` boundary drives the subject type passed to `run`. Text guardrails
+ * stay generic-free, while object/path guardrails infer structured subjects.
  */
-export function guardrail<TPhase extends GuardrailPhase>(config: GuardrailConfig<TPhase>): Guardrail<TPhase> {
-  // Capture call-site for devtools source map resolution
-  const defSource = captureSource()
-
-  const guardrail = Object.freeze({
-    _tag: 'Guardrail' as const,
-    name: config.name,
-    category: config.category,
-    phase: config.phase,
-    validate: config.validate,
-    stream: config.stream,
-    onChunk: config.onChunk,
-  }) satisfies Guardrail<TPhase>
-
-  // Store definition-site source in WeakMap (frozen objects can't have properties added)
-  if (defSource) definitionSourceMap.set(guardrail, defSource)
-
-  return guardrail
+interface GuardrailFactory {
+  <B extends BoundaryInput>(config: GuardrailConfig<B>): Guardrail<B>
+  /** Built-in text PII redaction/masking/hash strategy. */
+  readonly pii: typeof pii
+  /** Built-in API key, token, and authorization redaction strategy. */
+  readonly secrets: typeof secrets
+  /** Built-in heuristic prompt-injection strategy. */
+  readonly injection: typeof injection
+  /** Provider-agnostic classifier strategy adapter. */
+  readonly classifier: typeof classifier
 }
+
+function defineGuardrail<B extends BoundaryInput>(config: GuardrailConfig<B>): Guardrail<B>
+function defineGuardrail<B extends BoundaryInput>(config: GuardrailConfig<B>): Guardrail<B> {
+  const defSource = captureSource()
+  const guard = defineBoundaryGuardrail(config)
+
+  if (defSource) definitionSourceMap.set(guard, defSource)
+  return guard
+}
+
+export const guardrail: GuardrailFactory = Object.assign(defineGuardrail, {
+  pii,
+  secrets,
+  injection,
+  classifier,
+})
 
 /** Runtime type guard: checks if a value is a Guardrail. */
 export function isGuardrail(value: unknown): value is Guardrail {
@@ -45,6 +60,48 @@ export function isGuardrail(value: unknown): value is Guardrail {
     value !== undefined &&
     typeof value === 'object' &&
     '_tag' in value &&
-    (value as { _tag: unknown })._tag === 'Guardrail'
+    (value as { readonly _tag?: unknown })._tag === 'Guardrail'
   )
+}
+
+function defineBoundaryGuardrail<B extends BoundaryInput>(config: GuardrailConfig<B>): Guardrail<B> {
+  const mode = config.mode ?? 'enforce'
+  const strategy = strategyMetadata(config.run)
+  const stream = config.stream ?? defaultStreamForStrategy(strategy)
+
+  const guard = Object.freeze({
+    _tag: 'Guardrail' as const,
+    id: config.id,
+    on: config.on,
+    category: config.category,
+    mode,
+    stream,
+    run: config.run,
+    ...(strategy ? { strategy } : {}),
+  }) satisfies Guardrail<B>
+
+  return guard
+}
+
+function defaultStreamForStrategy(strategy: Guardrail['strategy'] | undefined): Guardrail['stream'] {
+  switch (strategy?.kind) {
+    case 'guardrail.pii':
+    case 'guardrail.secrets':
+    case 'guardrail.injection':
+      return 'sentence'
+    case 'guardrail.classifier':
+      return 'final'
+    default:
+      return undefined
+  }
+}
+
+function strategyMetadata(run: unknown): Guardrail['strategy'] | undefined {
+  if (typeof run !== 'function') return undefined
+  const maybeStrategy = (run as { readonly strategy?: unknown }).strategy
+  return isStrategyMetadata(maybeStrategy) ? maybeStrategy : undefined
+}
+
+function isStrategyMetadata(value: unknown): value is NonNullable<Guardrail['strategy']> {
+  return typeof value === 'object' && value !== null && 'kind' in value && typeof value.kind === 'string'
 }
