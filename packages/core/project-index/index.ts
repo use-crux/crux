@@ -1066,6 +1066,10 @@ export interface IndexSourceFile {
   status: "indexed" | "partial" | "error";
   /** Stable id of the package/workspace shard that owns this source file. */
   shardId?: string;
+  /** SHA-256 hash of the exact UTF-8 source text used for this row. */
+  sourceHash?: string;
+  /** SHA-256 hash of the exported surface that dependent files can observe. */
+  interfaceHash?: string;
   definitionIds?: string[];
   dependencies?: string[];
   dependents?: string[];
@@ -1916,6 +1920,8 @@ export const IndexSourceFileSchema = z.object({
   file: z.string(),
   status: z.enum(["indexed", "partial", "error"]),
   shardId: z.string().optional(),
+  sourceHash: z.string().optional(),
+  interfaceHash: z.string().optional(),
   definitionIds: z.array(z.string()).optional(),
   dependencies: z.array(z.string()).optional(),
   dependents: z.array(z.string()).optional(),

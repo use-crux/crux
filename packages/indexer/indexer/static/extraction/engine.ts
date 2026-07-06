@@ -1,5 +1,6 @@
 import { createProjectIndexCompilerRuntime, cruxCoreCompilerProfile } from '../../compiler/profile'
 import { mapBounded } from '../../pipeline'
+import { sourceInterfaceHashFromSourceFile } from '../../source-interface-hash'
 import { withStaticExtractionTiming, type StaticExtractionInstrumentation } from '../instrumentation'
 import {
   createTypeScriptStaticSyntaxFrontend,
@@ -78,8 +79,14 @@ export function createStaticExtraction(options: StaticExtractionOptions): Static
         const cached = await withStaticExtractionTiming(instrumentation, 'static.cache.read', file, () =>
           cache.get(cacheHit),
         )
-        if (cached?.semanticProfile) return cached
-        if (cached) return { ...cached, semanticProfile: await semanticProfileForExtractedFile(instrumentation, file, parseMemo) }
+        if (cached?.semanticProfile && cached.interfaceHash) return cached
+        if (cached) {
+          return {
+            ...cached,
+            semanticProfile: cached.semanticProfile ?? (await semanticProfileForExtractedFile(instrumentation, file, parseMemo)),
+            interfaceHash: cached.interfaceHash ?? (await interfaceHashForExtractedFile(instrumentation, file, parseMemo)),
+          }
+        }
       }
       const key = cacheEnabled
         ? await withStaticExtractionTiming(instrumentation, 'static.cache.key', file, () =>
@@ -96,10 +103,17 @@ export function createStaticExtraction(options: StaticExtractionOptions): Static
         const cached = await withStaticExtractionTiming(instrumentation, 'static.cache.read', file, () =>
           cache.get(JSON.stringify(key)),
         )
-        if (cached?.semanticProfile) return cached
-        if (cached) return { ...cached, semanticProfile: await semanticProfileForExtractedFile(instrumentation, file, parseMemo) }
+        if (cached?.semanticProfile && cached.interfaceHash) return cached
+        if (cached) {
+          return {
+            ...cached,
+            semanticProfile: cached.semanticProfile ?? (await semanticProfileForExtractedFile(instrumentation, file, parseMemo)),
+            interfaceHash: cached.interfaceHash ?? (await interfaceHashForExtractedFile(instrumentation, file, parseMemo)),
+          }
+        }
       }
       const semanticProfile = await semanticProfileForExtractedFile(instrumentation, file, parseMemo)
+      const interfaceHash = await interfaceHashForExtractedFile(instrumentation, file, parseMemo)
       const parsed = await parseWithRecordMemo(
         options.root,
         file,
@@ -110,7 +124,7 @@ export function createStaticExtraction(options: StaticExtractionOptions): Static
         undefined,
         options.nativeFactProjection,
       )
-      const extracted = Object.freeze({ file, ...parsed, semanticProfile, fromCache: false })
+      const extracted = Object.freeze({ file, ...parsed, semanticProfile, interfaceHash, fromCache: false })
       if (key) {
         await withStaticExtractionTiming(instrumentation, 'static.cache.write', file, () =>
           cache.set(JSON.stringify(key), extracted, key),
@@ -169,6 +183,20 @@ function semanticProfileForExtractedFile(
   return withStaticExtractionTiming(instrumentation, 'static.semantic_profile', file, () =>
     semanticProfileForFile(file, parseMemo),
   )
+}
+
+function interfaceHashForExtractedFile(
+  instrumentation: StaticExtractionInstrumentation | undefined,
+  file: string,
+  parseMemo: ReturnType<typeof createParseMemo>,
+): Promise<string | undefined> {
+  return withStaticExtractionTiming(instrumentation, 'static.interface_hash', file, async () => {
+    try {
+      return sourceInterfaceHashFromSourceFile(await parseMemo.readSourceFile(file))
+    } catch {
+      return undefined
+    }
+  })
 }
 
 function resolveSyntaxFrontend(

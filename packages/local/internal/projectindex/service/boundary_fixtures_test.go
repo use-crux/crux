@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
+	"path/filepath"
+	"sync"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -199,5 +202,169 @@ func boundaryPreviousIndex() store.IndexData {
 			Dependencies:  []string{},
 			Dependents:    []string{},
 		}},
+	}
+}
+
+type watchFallbackIndexer struct {
+	calledFull      bool
+	calledIncrement bool
+}
+
+func (i *watchFallbackIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	i.calledFull = true
+	return projectindex.IndexPatch{
+		SchemaVersion: 1,
+		Phase:         projectindex.PhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
+		Status:        "ok",
+		Facts: projectindex.IndexPatchFacts{
+			Sources: []store.IndexSourceFile{{
+				File:          "/repo/src/writer.ts",
+				Status:        "indexed",
+				ShardID:       ".",
+				DefinitionIDs: []string{"prompt:writer"},
+			}},
+			SourceGraph: &store.ProjectIndexSourceGraph{
+				SchemaVersion: 1,
+				ProducedBy:    "@use-crux/indexer",
+				Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
+				Shards:        []store.ProjectIndexShard{{ID: ".", Root: "/repo"}},
+			},
+		},
+	}, nil
+}
+
+func (i *watchFallbackIndexer) IndexProjectIncremental(
+	context.Context,
+	string,
+	string,
+	string,
+	store.IndexData,
+	[]string,
+	[]string,
+	string,
+) (projectindex.ProjectIndexIncrementalResult, error) {
+	i.calledIncrement = true
+	return projectindex.ProjectIndexIncrementalResult{}, nil
+}
+
+type cancellableBackgroundSemanticIndexer struct {
+	root string
+
+	mu             sync.Mutex
+	semanticCalls  int
+	firstStarted   chan struct{}
+	firstCanceled  chan struct{}
+	secondStarted  chan struct{}
+	releaseSecond  chan struct{}
+	secondDone     chan struct{}
+	firstStartOnce sync.Once
+	firstDoneOnce  sync.Once
+	secondOnce     sync.Once
+	secondDoneOnce sync.Once
+}
+
+func newCancellableBackgroundSemanticIndexer(root string) *cancellableBackgroundSemanticIndexer {
+	return &cancellableBackgroundSemanticIndexer{
+		root:          root,
+		firstStarted:  make(chan struct{}),
+		firstCanceled: make(chan struct{}),
+		secondStarted: make(chan struct{}),
+		releaseSecond: make(chan struct{}),
+		secondDone:    make(chan struct{}),
+	}
+}
+
+func (i *cancellableBackgroundSemanticIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, nil
+}
+
+func (i *cancellableBackgroundSemanticIndexer) IndexProjectIncremental(
+	_ context.Context,
+	root string,
+	configPath string,
+	projectName string,
+	_ store.IndexData,
+	files []string,
+	_ []string,
+	_ string,
+) (projectindex.ProjectIndexIncrementalResult, error) {
+	changedFile := ""
+	if len(files) > 0 {
+		changedFile = files[0]
+	}
+	return projectindex.ProjectIndexIncrementalResult{
+		Report: projectindex.ProjectIndexIncrementalReport{
+			PlanKind:        "source-file-reindex",
+			GraphConfidence: "complete-enough-for-source-closure",
+			ChangedFiles:    []string{changedFile},
+			AffectedFiles:   []string{changedFile},
+		},
+		Patches: []projectindex.IndexPatch{{
+			SchemaVersion: 1,
+			Phase:         projectindex.PhaseAST,
+			Project:       store.ProjectIdentity{Root: root, Name: projectName, ConfigFile: configPath},
+			Status:        "ok",
+			Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{changedFile}},
+			Facts: projectindex.IndexPatchFacts{
+				Sources: []store.IndexSourceFile{{
+					File:          changedFile,
+					Status:        "indexed",
+					ShardID:       ".",
+					DefinitionIDs: []string{fmt.Sprintf("prompt:%s", filepath.Base(changedFile))},
+				}},
+			},
+		}},
+	}, nil
+}
+
+func (i *cancellableBackgroundSemanticIndexer) IndexProjectSemanticPatch(ctx context.Context, req projectindex.ProjectSemanticIndexRequest) (projectindex.IndexPatch, error) {
+	i.mu.Lock()
+	i.semanticCalls++
+	call := i.semanticCalls
+	i.mu.Unlock()
+
+	switch call {
+	case 1:
+		i.firstStartOnce.Do(func() { close(i.firstStarted) })
+		<-ctx.Done()
+		i.firstDoneOnce.Do(func() { close(i.firstCanceled) })
+		return projectindex.IndexPatch{}, ctx.Err()
+	case 2:
+		i.secondOnce.Do(func() { close(i.secondStarted) })
+		<-i.releaseSecond
+		i.secondDoneOnce.Do(func() { close(i.secondDone) })
+		return projectindex.IndexPatch{
+			SchemaVersion: 1,
+			Phase:         projectindex.PhaseSemantic,
+			Project:       store.ProjectIdentity{Root: req.Root, Name: req.ProjectName, ConfigFile: req.ConfigPath},
+			Status:        "ok",
+			Facts:         projectindex.IndexPatchFacts{},
+		}, nil
+	default:
+		return projectindex.IndexPatch{}, fmt.Errorf("unexpected semantic call %d", call)
+	}
+}
+
+func backgroundSemanticPreviousIndex(root string) store.IndexData {
+	sourceA := filepath.Join(root, "src/a.ts")
+	sourceB := filepath.Join(root, "src/b.ts")
+	return store.IndexData{
+		SchemaVersion: 1,
+		Project:       &store.ProjectIdentity{Root: root, Name: "project", ConfigFile: "crux.config.ts"},
+		SourceGraph: &store.ProjectIndexSourceGraph{
+			SchemaVersion: 1,
+			ProducedBy:    "@use-crux/indexer",
+			Capabilities:  []string{"source-dependencies", "source-dependents", "definition-ownership", "diagnostic-ownership", "project-shards"},
+			Shards:        []store.ProjectIndexShard{{ID: ".", Root: root}},
+		},
+		Sources: []store.IndexSourceFile{
+			{File: sourceA, Status: "indexed", ShardID: ".", DefinitionIDs: []string{"prompt:a"}},
+			{File: sourceB, Status: "indexed", ShardID: ".", DefinitionIDs: []string{"prompt:b"}},
+		},
+		Definitions: []store.ProjectDefinition{
+			{ID: "prompt:a", Kind: "prompt", Name: "a", Source: &store.SourceLoc{File: sourceA}, Fidelity: "partial", Status: "active"},
+			{ID: "prompt:b", Kind: "prompt", Name: "b", Source: &store.SourceLoc{File: sourceB}, Fidelity: "partial", Status: "active"},
+		},
 	}
 }

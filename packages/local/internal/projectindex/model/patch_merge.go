@@ -219,6 +219,12 @@ func mergeIndexSourceFile(existing store.IndexSourceFile, incoming store.IndexSo
 	if incoming.ShardID != "" {
 		existing.ShardID = incoming.ShardID
 	}
+	if incoming.SourceHash != "" {
+		existing.SourceHash = incoming.SourceHash
+	}
+	if incoming.InterfaceHash != "" {
+		existing.InterfaceHash = incoming.InterfaceHash
+	}
 	existing.DefinitionIDs = appendUniqueStrings(existing.DefinitionIDs, incoming.DefinitionIDs)
 	if incoming.Dependencies != nil {
 		existing.Dependencies = append([]string(nil), incoming.Dependencies...)

@@ -110,6 +110,8 @@ class DefaultIndexGraphBuilder implements IndexGraphBuilder {
     const source = this.ensureSource(file, input.source.status)
     source.status = mergeStatus(source.status, input.source.status)
     source.shardId = input.source.shardId ?? source.shardId
+    source.sourceHash = input.source.sourceHash ?? source.sourceHash
+    source.interfaceHash = input.source.interfaceHash ?? source.interfaceHash
     source.definitionIds = dedupeBranded([
       ...source.definitionIds,
       ...normalizedDefinitionIds(input.source.definitionIds),
@@ -152,6 +154,8 @@ class DefaultIndexGraphBuilder implements IndexGraphBuilder {
       file,
       status,
       shardId: undefined,
+      sourceHash: undefined,
+      interfaceHash: undefined,
       definitionIds: [],
       relationIds: [],
       dependencies: [],
@@ -178,6 +182,8 @@ export function graphSources(graph: IndexGraph): IndexSourceFile[] {
       file: source.file,
       status: source.status,
       ...(source.shardId ? { shardId: source.shardId } : {}),
+      ...(source.sourceHash ? { sourceHash: source.sourceHash } : {}),
+      ...(source.interfaceHash ? { interfaceHash: source.interfaceHash } : {}),
       definitionIds: [...source.definitionIds],
       dependencies: [...source.dependencies],
       dependents: [...source.dependents],

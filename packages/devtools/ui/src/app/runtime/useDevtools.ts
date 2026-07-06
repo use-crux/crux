@@ -18,7 +18,7 @@
  * @module
  */
 
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { dispatchRuntime, useRetryAttempt } from './runtimeStore'
 import type { DevtoolsAction } from './devtoolsReducer'
@@ -30,6 +30,7 @@ import type {
 import { useDevtoolsConnection } from './useDevtoolsConnection'
 import { qk } from '@/shared/query/queryClient'
 import { observabilityEventIds } from './observabilityEvents'
+import { applyIndexDelta, normalizeProjectIndexData, type IndexDeltaMessage } from './indexDelta'
 
 export type { DevtoolsState } from './devtoolsReducer'
 
@@ -52,6 +53,7 @@ function getApiUrl(path: string): string {
 export function useDevtools(): void {
   const queryClient = useQueryClient()
   const retryAttempt = useRetryAttempt()
+  const indexDeltaGenerationRef = useRef(0)
 
   useDevtoolsConnection({
     url: getWsUrl(),
@@ -82,24 +84,16 @@ export function useDevtools(): void {
         // without a network round-trip.
         if (type === 'index') {
           const cat = msg as Partial<ProjectIndexData>
-          // Mirror `indexService.getIndex` normalization exactly —
-          // every consumer (Index, IndexHealth, search index) treats
-          // these arrays as guaranteed present. Missing fields here will
-          // crash downstream renders with `Cannot read properties of
-          // undefined`.
-          queryClient.setQueryData(qk.index(), {
-            schemaVersion: cat.schemaVersion ?? 1,
-            prompts: cat.prompts ?? [],
-            contexts: cat.contexts ?? [],
-            tools: cat.tools ?? [],
-            project: cat.project,
-            indexedAt: cat.indexedAt,
-            definitions: cat.definitions ?? [],
-            relations: cat.relations ?? [],
-            diagnostics: cat.diagnostics ?? [],
-            lintFindings: cat.lintFindings ?? [],
-            sources: cat.sources ?? [],
-          })
+          indexDeltaGenerationRef.current = 0
+          queryClient.setQueryData(qk.index(), normalizeProjectIndexData(cat))
+          void queryClient.invalidateQueries({ queryKey: qk.indexWatch() })
+        }
+        if (type === 'index:delta') {
+          const delta = msg as unknown as IndexDeltaMessage
+          if (delta.generation < indexDeltaGenerationRef.current) return
+          indexDeltaGenerationRef.current = delta.generation
+          queryClient.setQueryData<ProjectIndexData | undefined>(qk.index(), (current) => applyIndexDelta(current, delta))
+          void queryClient.invalidateQueries({ queryKey: qk.indexWatch() })
         }
         // Quality service emits `{ _tag: 'QualityEvent', kind, refId, ... }`.
         // We re-invalidate the matching query cache prefix so the cached

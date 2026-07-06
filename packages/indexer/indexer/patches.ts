@@ -329,6 +329,9 @@ function mergeIndexSourceFile(existing: IndexSourceFile, incoming: IndexSourceFi
   return {
     file: incoming.file,
     status: mergeSourceStatus(existing.status, incoming.status),
+    shardId: incoming.shardId ?? existing.shardId,
+    sourceHash: incoming.sourceHash ?? existing.sourceHash,
+    interfaceHash: incoming.interfaceHash ?? existing.interfaceHash,
     definitionIds: mergeStringLists(existing.definitionIds, incoming.definitionIds),
     dependencies: incoming.dependencies !== undefined ? [...incoming.dependencies].sort(compareCodepoint) : existing.dependencies,
     dependents: mergeStringLists(existing.dependents, incoming.dependents),

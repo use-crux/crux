@@ -40,7 +40,10 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
   const graphBuilder = createIndexGraphBuilder()
   const parsedFiles: string[] = []
   const semanticProfiles: SemanticSourceProfileFile[] = []
-  const extraction = createStaticExtraction({ root: input.decision.root })
+  // Changed files are static-cache misses by construction. Full AST refreshes
+  // still warm the durable cache; the watch hot path skips cache IO so Tier-A
+  // syntax feedback is bounded by parsing/projection, not filesystem writes.
+  const extraction = createStaticExtraction({ root: input.decision.root, cache: 'none' })
 
   for (const file of input.decision.affectedFiles) {
     if (input.decision.deletedFiles.includes(file)) continue
@@ -56,6 +59,8 @@ export async function indexProjectAstPartial(input: StaticPartialPatchInput): Pr
         file,
         status: 'indexed',
         ...(previousSource?.shardId ? { shardId: previousSource.shardId } : {}),
+        ...(parsed.semanticProfile?.sourceHash ? { sourceHash: parsed.semanticProfile.sourceHash } : {}),
+        ...(parsed.interfaceHash ? { interfaceHash: parsed.interfaceHash } : {}),
         definitionIds: parsed.definitions.map((definition) => definition.id),
         dependencies: [...parsed.dependencies],
         dependents: [...(previousSource?.dependents ?? [])],

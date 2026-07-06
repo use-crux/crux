@@ -46,6 +46,10 @@ type Service struct {
 	watchStatus projectIndexWatchStatusStore
 	readModel   ReadModelFunc
 	publish     PublishFunc
+
+	backgroundSemanticMu     sync.Mutex
+	backgroundSemanticCancel func()
+	backgroundSemanticSeq    uint64
 }
 
 // New creates a Project Index orchestration service.

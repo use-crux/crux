@@ -157,6 +157,8 @@ export interface StaticFileExtraction {
   readonly dependencies: readonly string[]
   /** Internal semantic source profile row produced while source text was already available. */
   readonly semanticProfile?: SemanticSourceProfileFile
+  /** SHA-256 hash of the exported surface dependent files can observe. */
+  readonly interfaceHash?: string
   /** `true` when the result came from the engine cache instead of parsing source text. */
   readonly fromCache: boolean
 }

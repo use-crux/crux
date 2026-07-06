@@ -154,6 +154,58 @@ describe('incremental indexing executor', () => {
     expect(normalizedIndexState(patchedState)).toEqual(normalizedIndexState(fullUpdatedState))
   })
 
+  it('uses source interface hashes to keep exported function body edits local', async () => {
+    const root = await fixtureRoot()
+    const helper = join(root, 'src/helper.ts')
+    const agentFile = join(root, 'src/agent.ts')
+    await mkdir(join(root, 'src'), { recursive: true })
+    await writeFile(
+      helper,
+      `
+        export function instructions(topic: string): string {
+          return \`Write about \${topic} clearly.\`
+        }
+      `,
+    )
+    await writeFile(
+      agentFile,
+      `
+        import { agent } from '@use-crux/core'
+        import { instructions } from './helper'
+
+        export const writerAgent = agent({
+          id: 'writer-agent',
+          instructions: instructions('indexes'),
+        })
+      `,
+    )
+
+    const previousIndex = await indexProject({ root, resolutionMode: 'source-only' })
+    await writeFile(
+      helper,
+      `
+        export function instructions(topic: string): string {
+          const prefix = 'Carefully'
+          return \`\${prefix} write about \${topic}.\`
+        }
+      `,
+    )
+
+    const incremental = await indexProjectIncremental({
+      root,
+      previousIndex,
+      files: [helper],
+      mode: 'ast',
+    })
+
+    expect(incremental.decision).toMatchObject({
+      kind: 'source-file-reindex',
+      affectedFiles: [helper],
+    })
+    expect(incremental.report.staticParsedFiles).toEqual([helper])
+    expect(incremental.report.invalidatedFiles).toEqual([helper])
+  })
+
   it('applies an invalidation-only AST patch for a safe deleted leaf source', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })

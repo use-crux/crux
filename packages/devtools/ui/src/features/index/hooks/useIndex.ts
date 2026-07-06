@@ -10,7 +10,7 @@
 
 import { useQuery, useSuspenseQuery } from '@tanstack/react-query'
 import { qk } from '@/shared/query/queryClient'
-import { indexService, type IndexData } from '../services/index'
+import { indexService, type IndexData, type IndexWatchStatus } from '../services/index'
 
 export function useIndex() {
   const q = useQuery<IndexData, Error>({
@@ -38,4 +38,23 @@ export function useIndexSuspense(): IndexData {
     queryKey: qk.index(),
     queryFn: ({ signal }) => indexService.getIndex(signal),
   }).data
+}
+
+/**
+ * Poll the lightweight watch read model used by the Index header.
+ *
+ * Index snapshots still arrive over WS; this hook only tracks scheduler
+ * telemetry such as fallback reasons, coalescing, affected files, and semantic
+ * follow-up state.
+ */
+export function useProjectIndexWatchStatus() {
+  return useQuery<IndexWatchStatus, Error>({
+    queryKey: qk.indexWatch(),
+    queryFn: ({ signal }) => indexService.getWatchStatus(signal),
+    refetchInterval: (query) => {
+      const data = query.state.data
+      if (data?.state === 'running' || data?.lastRun?.semanticStatus === 'pending') return 750
+      return 3_000
+    },
+  })
 }

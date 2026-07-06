@@ -1,6 +1,7 @@
 import type { IndexerExtensionRuntime } from '../../extensions'
 import { mapBounded } from '../../pipeline'
 import type { SemanticSourceProfileFile } from '../../semantic/source-profile'
+import { sourceInterfaceHashFromSourceFile } from '../../source-interface-hash'
 import { staticParseResultFromFacts } from '../file'
 import { withStaticExtractionTiming, type StaticExtractionInstrumentation } from '../instrumentation'
 import {
@@ -46,6 +47,7 @@ interface PreparedBatchFile {
   readonly index: number
   readonly file: string
   readonly semanticProfile: SemanticSourceProfileFile | undefined
+  readonly interfaceHash: string | undefined
   readonly cacheKey?: string
   readonly cacheMetadata?: StaticParseCacheEntryMetadata
   readonly cached?: StaticFileExtraction
@@ -126,6 +128,7 @@ async function extractFilesWithBatchFrontendWithoutCache(
         file,
         () => semanticProfileForFile(file, parseMemo),
       )
+      const interfaceHash = await interfaceHashForBatchFile(input, parseMemo, file)
       const parsed = await parseWithRecordMemo(
         input.root,
         file,
@@ -136,7 +139,7 @@ async function extractFilesWithBatchFrontendWithoutCache(
         projectionCache,
         input.nativeFactProjection,
       )
-      return Object.freeze({ file, ...parsed, semanticProfile, fromCache: false })
+      return Object.freeze({ file, ...parsed, semanticProfile, interfaceHash, fromCache: false })
     }),
   )
 }
@@ -211,14 +214,25 @@ async function prepareBatchFile(
     const cached = await withStaticExtractionTiming(input.instrumentation, 'static.cache.read', file, () =>
       input.cache.store.get(cacheHit),
     )
-    if (cached?.semanticProfile) return { index, file, semanticProfile: cached.semanticProfile, cacheKey: cacheHit, cached }
+    if (cached?.semanticProfile && cached.interfaceHash) {
+      return {
+        index,
+        file,
+        semanticProfile: cached.semanticProfile,
+        interfaceHash: cached.interfaceHash,
+        cacheKey: cacheHit,
+        cached,
+      }
+    }
     if (cached) {
       const semanticProfile = await sourceProfileForPreparedFile(input, parseMemo, file)
-      return { index, file, semanticProfile, cacheKey: cacheHit, cached: { ...cached, semanticProfile } }
+      const interfaceHash = await interfaceHashForBatchFile(input, parseMemo, file)
+      return { index, file, semanticProfile, interfaceHash, cacheKey: cacheHit, cached: { ...cached, semanticProfile, interfaceHash } }
     }
   }
   const semanticProfile = await sourceProfileForPreparedFile(input, parseMemo, file)
-  return { index, file, semanticProfile }
+  const interfaceHash = await interfaceHashForBatchFile(input, parseMemo, file)
+  return { index, file, semanticProfile, interfaceHash }
 }
 
 function sourceProfileForPreparedFile(
@@ -229,6 +243,20 @@ function sourceProfileForPreparedFile(
   return withStaticExtractionTiming(input.instrumentation, 'static.semantic_profile', file, () =>
     semanticProfileForFile(file, parseMemo),
   )
+}
+
+function interfaceHashForBatchFile(
+  input: BatchExtractionInput,
+  parseMemo: ParseMemo,
+  file: string,
+): Promise<string | undefined> {
+  return withStaticExtractionTiming(input.instrumentation, 'static.interface_hash', file, async () => {
+    try {
+      return sourceInterfaceHashFromSourceFile(await parseMemo.readSourceFile(file))
+    } catch {
+      return undefined
+    }
+  })
 }
 
 async function parseBatchMiss(
@@ -252,7 +280,10 @@ async function parseBatchMiss(
     instrumentation: input.instrumentation,
   })
   if (cacheState.cached) {
-    return { index: item.index, result: { ...cacheState.cached, semanticProfile: item.semanticProfile } }
+    return {
+      index: item.index,
+      result: { ...cacheState.cached, semanticProfile: item.semanticProfile, interfaceHash: item.interfaceHash },
+    }
   }
   const parsed = await withStaticExtractionTiming(input.instrumentation, 'static.extract_file.total', item.file, () =>
     parseWithRecordMemo(
@@ -270,6 +301,7 @@ async function parseBatchMiss(
     file: item.file,
     ...parsed,
     semanticProfile: item.semanticProfile,
+    interfaceHash: item.interfaceHash,
     fromCache: false,
   })
   const cacheKey = cacheState.cacheKey

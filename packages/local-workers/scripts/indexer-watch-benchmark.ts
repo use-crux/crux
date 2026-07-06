@@ -57,11 +57,11 @@ const DEFAULT_BACKEND_ROOT = '/home/henri/private/karyla/packages/backend'
 const WORKSPACE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
 const WATCH_BUDGET_PROFILES = {
   'karyla-backend': {
-    'leaf-prompt-edit': { p50TargetMs: 1800, p95BudgetMs: 2500 },
-    'imported-helper-edit': { p50TargetMs: 2400, p95BudgetMs: 3200 },
-    'unrelated-helper-edit': { p50TargetMs: 3600, p95BudgetMs: 4800 },
-    'config-edit': { p50TargetMs: 3200, p95BudgetMs: 4500 },
-    'deleted-file': { p50TargetMs: 3000, p95BudgetMs: 4500 },
+    'leaf-prompt-edit': { p50TargetMs: 110, p95BudgetMs: 130 },
+    'imported-helper-edit': { p50TargetMs: 5, p95BudgetMs: 6 },
+    'unrelated-helper-edit': { p50TargetMs: 585, p95BudgetMs: 690 },
+    'config-edit': { p50TargetMs: 605, p95BudgetMs: 710 },
+    'deleted-file': { p50TargetMs: 615, p95BudgetMs: 700 },
   },
 } as const satisfies Record<string, Record<WatchScenarioName, WatchScenarioBudget>>
 const COPY_EXCLUDED_NAMES = new Set([

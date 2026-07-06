@@ -11,6 +11,8 @@ export interface IncrementalGraphReadModel {
   readonly dependentsByFile: ReadonlyMap<AbsoluteSourceFilePath, readonly AbsoluteSourceFilePath[]>
   readonly definitionIdsByFile: ReadonlyMap<AbsoluteSourceFilePath, readonly string[]>
   readonly diagnosticsByFile: ReadonlyMap<AbsoluteSourceFilePath, readonly IndexDiagnostic[]>
+  readonly sourceHashByFile: ReadonlyMap<AbsoluteSourceFilePath, string>
+  readonly interfaceHashByFile: ReadonlyMap<AbsoluteSourceFilePath, string>
   readonly shardById: ReadonlyMap<string, ProjectIndexShard>
   readonly shardIdByFile: ReadonlyMap<AbsoluteSourceFilePath, string>
   readonly hasMaterializedEdges: boolean
@@ -47,6 +49,8 @@ export function graphReadModelFromIndex(index: ProjectIndexSnapshot): Incrementa
   const definitionIdsByFile = new Map<AbsoluteSourceFilePath, readonly string[]>()
   const diagnosticsByFile = diagnosticsBySourceFile(index.diagnostics)
   const diagnosticById = new Map<string, IndexDiagnostic>(index.diagnostics.map((diagnostic) => [diagnostic.id, diagnostic]))
+  const sourceHashByFile = new Map<AbsoluteSourceFilePath, string>()
+  const interfaceHashByFile = new Map<AbsoluteSourceFilePath, string>()
   const shardById = new Map<string, ProjectIndexShard>((index.sourceGraph?.shards ?? []).map((shard) => [shard.id, shard]))
   const shardIdByFile = new Map<AbsoluteSourceFilePath, string>()
   let hasMaterializedEdges = false
@@ -68,6 +72,12 @@ export function graphReadModelFromIndex(index: ProjectIndexSnapshot): Incrementa
     if (source.definitionIds) {
       definitionIdsByFile.set(file, [...new Set(source.definitionIds)].sort())
     }
+    if (source.sourceHash) {
+      sourceHashByFile.set(file, source.sourceHash)
+    }
+    if (source.interfaceHash) {
+      interfaceHashByFile.set(file, source.interfaceHash)
+    }
     if (source.diagnostics) {
       diagnosticsByFile.set(file, [
         ...(diagnosticsByFile.get(file) ?? []),
@@ -84,6 +94,8 @@ export function graphReadModelFromIndex(index: ProjectIndexSnapshot): Incrementa
     dependentsByFile,
     definitionIdsByFile,
     diagnosticsByFile,
+    sourceHashByFile,
+    interfaceHashByFile,
     shardById,
     shardIdByFile,
     hasMaterializedEdges,

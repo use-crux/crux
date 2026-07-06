@@ -35,6 +35,8 @@ export interface IndexSourceNode {
   file: SourceFilePath
   status: IndexSourceFile['status']
   shardId?: string
+  sourceHash?: string
+  interfaceHash?: string
   definitionIds: DefinitionId[]
   relationIds: RelationId[]
   dependencies: SourceFilePath[]

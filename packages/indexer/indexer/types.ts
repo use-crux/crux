@@ -13,6 +13,8 @@ export interface SourceGraph {
   dependenciesByFile: Map<string, string[]>
   /** Internal source-profile rows produced by the static phase for semantic handoff. */
   semanticProfileByFile?: Map<string, SemanticSourceProfileFile>
+  /** Absolute source file path -> exported-interface hash for dependent invalidation cutoffs. */
+  interfaceHashByFile?: Map<string, string>
 }
 
 /**

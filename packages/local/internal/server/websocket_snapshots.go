@@ -70,22 +70,22 @@ func (h *WSHub) sendRegisteredIndexSnapshot(client *wsClient) bool {
 	return false
 }
 
-func indexMessage(index store.IndexData) map[string]any {
-	payload := map[string]any{}
-	if raw, err := json.Marshal(index); err == nil {
-		_ = json.Unmarshal(raw, &payload)
-	}
-	payload["type"] = "index"
-	return payload
+type indexSnapshotMessage struct {
+	Type string `json:"type"`
+	store.IndexData
 }
 
-func apiIndexMessage(index api.IndexData) map[string]any {
-	payload := map[string]any{}
-	if raw, err := json.Marshal(index); err == nil {
-		_ = json.Unmarshal(raw, &payload)
-	}
-	payload["type"] = "index"
-	return payload
+type apiIndexSnapshotMessage struct {
+	Type string `json:"type"`
+	api.IndexData
+}
+
+func indexMessage(index store.IndexData) indexSnapshotMessage {
+	return indexSnapshotMessage{Type: "index", IndexData: index}
+}
+
+func apiIndexMessage(index api.IndexData) apiIndexSnapshotMessage {
+	return apiIndexSnapshotMessage{Type: "index", IndexData: index}
 }
 
 // sendJSON marshals and queues a single JSON message to a WebSocket client.

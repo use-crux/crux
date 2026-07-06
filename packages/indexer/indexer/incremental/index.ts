@@ -6,6 +6,7 @@ export type {
   GraphConfidence,
   IncrementalDecisionExplanation,
   IncrementalIndexDecision,
+  IncrementalSourceHashEvidence,
   IndexFilesOptions,
   SemanticClosureReindexDecision,
   SourceFileReindexDecision,

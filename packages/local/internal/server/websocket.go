@@ -35,6 +35,10 @@ type WSHub struct {
 	qualityEvents       *quality.EventBus
 	observabilityEvents *observability.EventBus
 	runtimeBridge       *runtimebridge.Service
+	indexMu             sync.Mutex
+	lastIndex           store.IndexData
+	hasLastIndex        bool
+	indexGeneration     uint64
 }
 
 // NewWSHub creates a WebSocket hub for the given store.
@@ -54,6 +58,7 @@ func NewWSHub(ctx context.Context, devtoolsSvc *devtools.Service, qualityEvents 
 		go h.forwardObservabilityEvents(observabilityEvents.Subscribe(ctx))
 	}
 	if devtoolsSvc != nil && devtoolsSvc.IndexEvents() != nil {
+		h.rememberIndex(devtoolsSvc.ProjectIndexSnapshot())
 		go h.forwardIndexEvents(devtoolsSvc.IndexEvents().Subscribe(ctx))
 	}
 	if runtimeBridge != nil {
@@ -172,7 +177,9 @@ func (h *WSHub) forwardObservabilityEvents(events <-chan observability.Event) {
 
 func (h *WSHub) forwardIndexEvents(events <-chan store.IndexData) {
 	for index := range events {
-		h.BroadcastJSON(indexMessage(index))
+		for _, message := range h.indexUpdateMessages(index) {
+			h.BroadcastJSON(message)
+		}
 	}
 }
 

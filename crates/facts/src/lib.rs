@@ -278,6 +278,10 @@ pub struct StaticIndexSourceRow {
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shard_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interface_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub definition_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

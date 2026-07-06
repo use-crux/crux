@@ -172,6 +172,88 @@ describe('incremental index planner', () => {
     })
   })
 
+  it('firewalls body-only edits when the exported interface hash is unchanged', () => {
+    const entry = join(root, 'src/index.ts')
+    const helper = join(root, 'src/helper.ts')
+    const decision = planIndexFiles({
+      root,
+      previousIndex: index({
+        sources: [
+          {
+            file: entry,
+            status: 'indexed',
+            dependencies: [helper],
+            dependents: [],
+          },
+          {
+            file: helper,
+            status: 'indexed',
+            sourceHash: 'sha256:old-body',
+            interfaceHash: 'sha256:stable-interface',
+            dependencies: [],
+            dependents: [entry],
+          },
+        ],
+      }),
+      files: ['src/helper.ts'],
+      currentSources: [
+        {
+          file: helper,
+          sourceHash: 'sha256:new-body',
+          interfaceHash: 'sha256:stable-interface',
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      kind: 'source-file-reindex',
+      changedFiles: [helper],
+      affectedFiles: [helper],
+      affectedDefinitionIds: [],
+    })
+  })
+
+  it('walks dependents when the exported interface hash changes', () => {
+    const entry = join(root, 'src/index.ts')
+    const helper = join(root, 'src/helper.ts')
+    const decision = planIndexFiles({
+      root,
+      previousIndex: index({
+        sources: [
+          {
+            file: entry,
+            status: 'indexed',
+            dependencies: [helper],
+            dependents: [],
+          },
+          {
+            file: helper,
+            status: 'indexed',
+            sourceHash: 'sha256:old-source',
+            interfaceHash: 'sha256:old-interface',
+            dependencies: [],
+            dependents: [entry],
+          },
+        ],
+      }),
+      files: ['src/helper.ts'],
+      currentSources: [
+        {
+          file: helper,
+          sourceHash: 'sha256:new-source',
+          interfaceHash: 'sha256:new-interface',
+        },
+      ],
+    })
+
+    expect(decision).toMatchObject({
+      kind: 'dependency-closure-reindex',
+      changedFiles: [helper],
+      affectedFiles: [helper, entry],
+      affectedDefinitionIds: [],
+    })
+  })
+
   it('plans source changes through shard-local source graphs first', () => {
     const app = join(root, 'packages/app/src/prompt.ts')
     const lib = join(root, 'packages/lib/src/prompt.ts')

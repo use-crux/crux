@@ -27,7 +27,7 @@ func mergeSourceFiles(current []store.IndexSourceFile, incoming []store.IndexSou
 	}
 	for _, item := range incoming {
 		if existing, ok := index[item.File]; ok {
-			merged[existing] = item
+			merged[existing] = mergeIndexSourceFile(merged[existing], item)
 			continue
 		}
 		index[item.File] = len(merged)

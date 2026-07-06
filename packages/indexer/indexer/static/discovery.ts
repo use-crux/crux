@@ -41,6 +41,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
   let nextSources = sources
   const dependenciesByFile = new Map<string, string[]>()
   const semanticProfileByFile = new Map<string, NonNullable<StaticFileExtraction['semanticProfile']>>()
+  const interfaceHashByFile = new Map<string, string>()
 
   for (const batch of staticDiscoveryBatches(staticFiles, options.staticFileBatches)) {
     for (const file of batch.files) {
@@ -52,6 +53,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
       }
       dependenciesByFile.set(file, [...parsed.dependencies])
       if (parsed.semanticProfile) semanticProfileByFile.set(file, parsed.semanticProfile)
+      if (parsed.interfaceHash) interfaceHashByFile.set(file, parsed.interfaceHash)
       diagnostics.push(...parsed.diagnostics)
       if (parsed.definitions.length === 0) continue
 
@@ -95,7 +97,7 @@ export async function discoverResolvedDefinitionsFromStaticCandidates(
     failedImportFiles,
     diagnostics,
     sources: nextSources,
-    sourceGraph: { dependenciesByFile, semanticProfileByFile },
+    sourceGraph: { dependenciesByFile, semanticProfileByFile, interfaceHashByFile },
   }
 }
 
@@ -141,6 +143,7 @@ export async function discoverStaticDefinitions(
   let nextSources = sources
   const dependenciesByFile = new Map<string, string[]>()
   const semanticProfileByFile = new Map<string, NonNullable<StaticFileExtraction['semanticProfile']>>()
+  const interfaceHashByFile = new Map<string, string>()
 
   const parsedFiles = []
   for (const batch of staticDiscoveryBatches([...files], options.staticFileBatches)) {
@@ -157,6 +160,7 @@ export async function discoverStaticDefinitions(
     const parsed = result.parsed
     dependenciesByFile.set(file, [...parsed.dependencies])
     if (parsed.semanticProfile) semanticProfileByFile.set(file, parsed.semanticProfile)
+    if (parsed.interfaceHash) interfaceHashByFile.set(file, parsed.interfaceHash)
     diagnostics.push(...parsed.diagnostics)
 
     if (parsed.definitions.length === 0 && parsed.relations.length === 0) continue
@@ -186,7 +190,7 @@ export async function discoverStaticDefinitions(
     relations,
     diagnostics,
     sources: nextSources,
-    sourceGraph: { dependenciesByFile, semanticProfileByFile },
+    sourceGraph: { dependenciesByFile, semanticProfileByFile, interfaceHashByFile },
   }
 }
 

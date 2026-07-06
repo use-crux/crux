@@ -5,7 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -27,7 +29,13 @@ type Service struct {
 	indexEvents   *IndexEventBus
 	indexService  *service.Service
 	indexModel    *readmodel.Model
+
+	publishMu          sync.Mutex
+	hasPublishedIndex  bool
+	lastPublishedIndex store.IndexData
 }
+
+const indexChangePublishDelay = 10 * time.Millisecond
 
 func NewService(s *store.Store, qualitySvc *quality.Service) *Service {
 	if qualitySvc == nil {
@@ -46,7 +54,7 @@ func NewService(s *store.Store, qualitySvc *quality.Service) *Service {
 		Context:   ctx,
 		Store:     s,
 		ReadModel: svc.indexReadModel,
-		Publish:   svc.indexEvents.Publish,
+		Publish:   svc.publishIndex,
 	})
 	svc.startIndexChangePublisher()
 	return svc
@@ -98,7 +106,7 @@ func (s *Service) startIndexChangePublisher() {
 				return
 			case <-changes:
 				if timer == nil {
-					timer = time.NewTimer(100 * time.Millisecond)
+					timer = time.NewTimer(indexChangePublishDelay)
 					timerC = timer.C
 					continue
 				}
@@ -108,9 +116,9 @@ func (s *Service) startIndexChangePublisher() {
 					default:
 					}
 				}
-				timer.Reset(100 * time.Millisecond)
+				timer.Reset(indexChangePublishDelay)
 			case <-timerC:
-				s.indexEvents.Publish(s.indexReadModel())
+				s.publishIndex(s.indexReadModel())
 				timer = nil
 				timerC = nil
 			}
@@ -136,12 +144,17 @@ func (s *Service) SubscribeChanges() <-chan struct{} {
 
 func (s *Service) RegisterIndexSnapshot(_ context.Context, index store.IndexData) {
 	s.store.SetIndexData(projectindex.MergeRuntimeSnapshot(s.store.GetIndex(), index))
-	s.indexEvents.Publish(s.indexReadModel())
+	s.publishIndex(s.indexReadModel())
 }
 
 func (s *Service) ProjectIndex(_ context.Context) (api.IndexData, error) {
 	var out api.IndexData
 	return out, assignJSON(&out, s.indexReadModel())
+}
+
+// ProjectIndexSnapshot returns the current Go-owned Project Index read model.
+func (s *Service) ProjectIndexSnapshot() store.IndexData {
+	return s.indexReadModel()
 }
 
 func (s *Service) ProjectIndexWatchStatus(_ context.Context) (api.ProjectIndexWatchStatus, error) {
@@ -157,6 +170,19 @@ func (s *Service) indexReadModel() store.IndexData {
 		return s.indexModel.Index()
 	}
 	return s.store.GetIndex()
+}
+
+func (s *Service) publishIndex(index store.IndexData) {
+	s.publishMu.Lock()
+	if s.hasPublishedIndex && reflect.DeepEqual(s.lastPublishedIndex, index) {
+		s.publishMu.Unlock()
+		return
+	}
+	s.lastPublishedIndex = index
+	s.hasPublishedIndex = true
+	s.publishMu.Unlock()
+
+	s.indexEvents.Publish(index)
 }
 
 func (s *Service) Context() api.DevtoolsContext {

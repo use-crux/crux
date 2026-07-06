@@ -3,7 +3,7 @@ import { hasUnresolvedImportDiagnostics, isBroadBoundaryFile, unknownChangedFile
 import { dependencyClosureDecision, fullReindexDecision, sourceFileDecision } from './decisions'
 import { graphReadModelFromIndex, hasTrustedSourceGraph } from './graph-read-model'
 import { absoluteSourceFilePath, normalizeChangedFiles, normalizeRoot } from './paths'
-import type { IncrementalIndexDecision, IndexFilesOptions } from './types'
+import type { AbsoluteSourceFilePath, IncrementalIndexDecision, IndexFilesOptions } from './types'
 
 const DEFAULT_MAX_AFFECTED_FILES = 1_000
 
@@ -124,7 +124,12 @@ export function planIndexFiles(options: IndexFilesOptions): IncrementalIndexDeci
     })
   }
 
-  const affectedFiles = dependentClosure(graph, allChangedFiles)
+  const sourceChanges = sourceChangesAfterInterfaceFirewall(graph, files, options.currentSources, root)
+  const changedFiles = [...new Set([...sourceChanges.changedFiles, ...deletedFiles])].sort()
+  const closureSeeds = [...new Set([...sourceChanges.closureSeeds, ...deletedFiles])].sort()
+  const affectedFiles = [
+    ...new Set([...sourceChanges.localFiles, ...dependentClosure(graph, closureSeeds)]),
+  ].sort()
   if (affectedFiles.length > (options.maxAffectedFiles ?? DEFAULT_MAX_AFFECTED_FILES)) {
     return fullReindexDecision({
       reason: 'closure-budget-exceeded',
@@ -164,12 +169,64 @@ export function planIndexFiles(options: IndexFilesOptions): IncrementalIndexDeci
   }
 
   const definitions = affectedDefinitionIds(graph, affectedFiles)
-  const changedFiles = allChangedFiles
   const hasDependents = affectedFiles.some((file) => !changedFiles.includes(file))
 
   return hasDependents
     ? dependencyClosureDecision({ root, changedFiles, deletedFiles, affectedFiles, affectedDefinitionIds: definitions })
     : sourceFileDecision({ root, changedFiles, deletedFiles, affectedFiles, affectedDefinitionIds: definitions })
+}
+
+function sourceChangesAfterInterfaceFirewall(
+  graph: ReturnType<typeof graphReadModelFromIndex>,
+  files: readonly AbsoluteSourceFilePath[],
+  currentSources: IndexFilesOptions['currentSources'],
+  root: string,
+): {
+  readonly changedFiles: readonly AbsoluteSourceFilePath[]
+  readonly localFiles: readonly AbsoluteSourceFilePath[]
+  readonly closureSeeds: readonly AbsoluteSourceFilePath[]
+} {
+  const currentByFile = currentSourceEvidenceByFile(currentSources, root)
+  const changedFiles: AbsoluteSourceFilePath[] = []
+  const localFiles: AbsoluteSourceFilePath[] = []
+  const closureSeeds: AbsoluteSourceFilePath[] = []
+
+  for (const file of files) {
+    const current = currentByFile.get(file)
+    const previousSourceHash = graph.sourceHashByFile.get(file)
+    const previousInterfaceHash = graph.interfaceHashByFile.get(file)
+
+    if (current && previousSourceHash && current.sourceHash === previousSourceHash) {
+      continue
+    }
+
+    changedFiles.push(file)
+    if (current?.interfaceHash && previousInterfaceHash && current.interfaceHash === previousInterfaceHash) {
+      localFiles.push(file)
+      continue
+    }
+    closureSeeds.push(file)
+  }
+
+  return {
+    changedFiles: [...new Set(changedFiles)].sort(),
+    localFiles: [...new Set(localFiles)].sort(),
+    closureSeeds: [...new Set(closureSeeds)].sort(),
+  }
+}
+
+function currentSourceEvidenceByFile(
+  currentSources: IndexFilesOptions['currentSources'],
+  root: string,
+): ReadonlyMap<AbsoluteSourceFilePath, { readonly sourceHash: string; readonly interfaceHash?: string }> {
+  const byFile = new Map<AbsoluteSourceFilePath, { readonly sourceHash: string; readonly interfaceHash?: string }>()
+  for (const source of currentSources ?? []) {
+    byFile.set(absoluteSourceFilePath(normalizeChangedFiles(root, [source.file])[0] ?? source.file), {
+      sourceHash: source.sourceHash,
+      ...(source.interfaceHash ? { interfaceHash: source.interfaceHash } : {}),
+    })
+  }
+  return byFile
 }
 
 function hasCompleteShardEvidence(

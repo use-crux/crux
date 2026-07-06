@@ -1,4 +1,5 @@
 import { performance } from 'node:perf_hooks'
+import { readFile } from 'node:fs/promises'
 import {
   astIndexPatchFromCompilerResult,
   compileProjectIndex,
@@ -12,6 +13,10 @@ import { planIndexFiles } from './plan'
 import { indexProjectSemanticPartial } from './semantic-executor'
 import { indexProjectAstPartial } from './static-executor'
 import type { IndexPatch } from '../patches'
+import { sourceInterfaceHashEvidence } from '../source-interface-hash'
+import { sourceFileDecision } from './decisions'
+import { normalizeChangedFiles, normalizeRoot } from './paths'
+import type { IncrementalIndexDecision, IncrementalSourceHashEvidence } from './types'
 
 /**
  * Executes incremental index indexing when the planner can prove a safe affected closure.
@@ -24,13 +29,15 @@ export async function indexProjectIncremental(
   const startedAt = new Date().toISOString()
   const durationMsByPhase: Record<string, number> = {}
   const planningStarted = performance.now()
-  const decision = planIndexFiles({
+  const plannedDecision = planIndexFiles({
     root: options.root,
     files: options.files,
     deletedFiles: options.deletedFiles,
     previousIndex: options.previousIndex,
+    currentSources: await currentSourceHashEvidence(options.files),
     maxAffectedFiles: options.maxAffectedFiles,
   })
+  const decision = decisionWithSemanticHydration(plannedDecision, options)
   durationMsByPhase.planning = durationMsSince(planningStarted)
   const invalidation = indexInvalidationFromDecision(decision)
 
@@ -111,6 +118,46 @@ export async function indexProjectIncremental(
       semanticStatus: semanticStatusForPatches(options.mode, semantic ? [ast.patch, semantic.patch] : [ast.patch]),
     }),
   }
+}
+
+function decisionWithSemanticHydration(
+  decision: IncrementalIndexDecision,
+  options: IndexProjectIncrementalOptions,
+): IncrementalIndexDecision {
+  if (
+    options.mode !== 'ast-and-semantic' ||
+    decision.kind !== 'source-file-reindex' ||
+    decision.affectedFiles.length > 0 ||
+    decision.deletedFiles.length > 0
+  ) {
+    return decision
+  }
+
+  const root = normalizeRoot(options.root)
+  const sourceByFile = new Map(options.previousIndex.sources.map((source) => [source.file, source]))
+  const files = normalizeChangedFiles(root, options.files).filter((file) => sourceByFile.has(file))
+  if (files.length === 0) return decision
+
+  return sourceFileDecision({
+    root,
+    changedFiles: files,
+    deletedFiles: [],
+    affectedFiles: files,
+    affectedDefinitionIds: [...new Set(files.flatMap((file) => sourceByFile.get(file)?.definitionIds ?? []))].sort(),
+  })
+}
+
+async function currentSourceHashEvidence(files: readonly string[]): Promise<readonly IncrementalSourceHashEvidence[]> {
+  const rows = await Promise.all(
+    files.map(async (file): Promise<IncrementalSourceHashEvidence | undefined> => {
+      try {
+        return { file, ...sourceInterfaceHashEvidence(file, await readFile(file, 'utf8')) }
+      } catch {
+        return undefined
+      }
+    }),
+  )
+  return rows.filter((row): row is IncrementalSourceHashEvidence => row !== undefined)
 }
 
 function durationMsSince(startedAt: number): number {

@@ -16,6 +16,8 @@ export function addSource(
     dependents: existing?.dependents,
     diagnostics: existing?.diagnostics,
     shardId: existing?.shardId,
+    sourceHash: existing?.sourceHash,
+    interfaceHash: existing?.interfaceHash,
   })
 }
 
@@ -33,6 +35,8 @@ export function sourceStatus(
     dependents: existing?.dependents,
     diagnostics: existing?.diagnostics,
     shardId: existing?.shardId,
+    sourceHash: existing?.sourceHash,
+    interfaceHash: existing?.interfaceHash,
   }
   return mergeSources([...sources.filter((source) => source.file !== file), updated])
 }
@@ -58,6 +62,8 @@ export function mergeSources(sources: IndexSourceFile[]): IndexSourceFile[] {
       dependents: dedupeStrings([...(existing.dependents ?? []), ...(source.dependents ?? [])]),
       diagnostics: dedupeStrings([...(existing.diagnostics ?? []), ...(source.diagnostics ?? [])]),
       shardId: source.shardId ?? existing.shardId,
+      sourceHash: source.sourceHash ?? existing.sourceHash,
+      interfaceHash: source.interfaceHash ?? existing.interfaceHash,
     })
   }
   return [...merged.values()]
@@ -99,6 +105,8 @@ export function attachSourceGraph(
       dependencies: dedupeStrings([...(source?.dependencies ?? []), ...(graph.dependenciesByFile.get(file) ?? [])]),
       dependents: dedupeStrings([...(source?.dependents ?? []), ...(dependentsByFile.get(file) ?? [])]),
       diagnostics: source?.diagnostics,
+      sourceHash: source?.sourceHash,
+      interfaceHash: source?.interfaceHash,
     }
   })
 }

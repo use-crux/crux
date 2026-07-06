@@ -13,6 +13,7 @@
 export type StaticExtractionTimingName =
   | 'static.extract_file.total'
   | 'static.semantic_profile'
+  | 'static.interface_hash'
   | 'static.cache.key'
   | 'static.cache.read'
   | 'static.cache.write'

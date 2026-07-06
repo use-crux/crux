@@ -171,6 +171,27 @@ func readIndexEvent(t *testing.T, ws *websocket.Conn) map[string]any {
 	}
 }
 
+func readIndexDeltaEvent(t *testing.T, ws *websocket.Conn) map[string]any {
+	t.Helper()
+	ws.SetReadDeadline(time.Now().Add(2 * time.Second))
+	for {
+		_, msg, err := ws.ReadMessage()
+		if err != nil {
+			t.Fatalf("expected index:delta event, got error: %v", err)
+		}
+		var envelope map[string]any
+		if err := json.Unmarshal(msg, &envelope); err != nil {
+			t.Fatalf("JSON decode error: %v", err)
+		}
+		if envelope["type"] == "index" {
+			t.Fatalf("received full index payload instead of delta: %#v", envelope)
+		}
+		if envelope["type"] == "index:delta" {
+			return envelope
+		}
+	}
+}
+
 func TestWebSocket_connect_and_receive_snapshot(t *testing.T) {
 	s := store.NewStore()
 	s.SetIndex(
@@ -253,6 +274,88 @@ func TestRegisteredSnapshotMessageUsesRegistryMetadata(t *testing.T) {
 	}
 	if _, ok := runtimeMessage["indexEvents"]; !ok {
 		t.Fatalf("runtime snapshot fields = %#v, want registry-provided indexEvents field", runtimeMessage)
+	}
+}
+
+func TestWebSocket_index_update_broadcasts_delta(t *testing.T) {
+	s := store.NewStore()
+	sourceFile := "/tmp/project/src/writer.ts"
+	s.SetIndexData(store.IndexData{
+		SchemaVersion: 1,
+		Project:       &store.ProjectIdentity{Root: "/tmp/project"},
+		Definitions: []store.ProjectDefinition{{
+			ID:          "prompt:writer",
+			Kind:        "prompt",
+			Name:        "writer",
+			Description: "old",
+			Fidelity:    "resolved",
+			Status:      "active",
+			Source:      &store.SourceLoc{File: sourceFile, Line: 1},
+		}},
+		Sources: []store.IndexSourceFile{{
+			File:          sourceFile,
+			Status:        "indexed",
+			DefinitionIDs: []string{"prompt:writer"},
+		}},
+	})
+	srv := newTestWSServer(t, s)
+	ts := httptest.NewServer(srv)
+	defer ts.Close()
+
+	ws := dialWS(t, ts)
+	defer ws.Close()
+	drainSnapshot(t, ws)
+
+	body := `{
+		"schemaVersion":1,
+		"project":{"root":"/tmp/project"},
+		"definitions":[{
+			"id":"prompt:writer",
+			"kind":"prompt",
+			"name":"writer",
+			"description":"new",
+			"fidelity":"resolved",
+			"status":"active",
+			"source":{"file":"/tmp/project/src/writer.ts","line":1}
+		}],
+		"diagnostics":[{
+			"id":"diagnostic:writer",
+			"severity":"info",
+			"code":"index.writer",
+			"message":"Writer changed",
+			"source":{"file":"/tmp/project/src/writer.ts","line":1}
+		}],
+		"sources":[{
+			"file":"/tmp/project/src/writer.ts",
+			"status":"indexed",
+			"definitionIds":["prompt:writer"],
+			"diagnostics":["diagnostic:writer"]
+		}]
+	}`
+	resp, err := ts.Client().Post(ts.URL+"/api/index/snapshot", "application/json", strings.NewReader(body))
+	if err != nil {
+		t.Fatalf("POST index snapshot: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("POST index status = %d, want %d", resp.StatusCode, http.StatusNoContent)
+	}
+
+	event := readIndexDeltaEvent(t, ws)
+	if event["file"] != sourceFile {
+		t.Fatalf("delta file = %#v, want %s", event["file"], sourceFile)
+	}
+	definitions, ok := event["definitions"].(map[string]any)
+	if !ok {
+		t.Fatalf("delta definitions = %#v", event["definitions"])
+	}
+	changed, ok := definitions["changed"].([]any)
+	if !ok || len(changed) != 1 {
+		t.Fatalf("delta changed definitions = %#v, want one", definitions["changed"])
+	}
+	diagnostics, ok := event["diagnostics"].([]any)
+	if !ok || len(diagnostics) != 1 {
+		t.Fatalf("delta diagnostics = %#v, want one", event["diagnostics"])
 	}
 }
 

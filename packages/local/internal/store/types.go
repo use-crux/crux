@@ -991,6 +991,8 @@ type IndexSourceFile struct {
 	File          string   `json:"file"`
 	Status        string   `json:"status"`
 	ShardID       string   `json:"shardId,omitempty"`
+	SourceHash    string   `json:"sourceHash,omitempty"`
+	InterfaceHash string   `json:"interfaceHash,omitempty"`
 	DefinitionIDs []string `json:"definitionIds,omitempty"`
 	Dependencies  []string `json:"dependencies,omitempty"`
 	Dependents    []string `json:"dependents,omitempty"`

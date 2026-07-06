@@ -166,7 +166,15 @@ func TestApplyIndexPatchMergesSourceRowsByUnion(t *testing.T) {
 		Status:        "ok",
 		Facts: IndexPatchFacts{
 			Sources: []store.IndexSourceFile{
-				{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"definition:a"}, Dependencies: []string{"src/b.ts"}, Diagnostics: []string{"diagnostic:a"}},
+				{
+					File:          "src/a.ts",
+					Status:        "active",
+					SourceHash:    "source:ast",
+					InterfaceHash: "interface:ast",
+					DefinitionIDs: []string{"definition:a"},
+					Dependencies:  []string{"src/b.ts"},
+					Diagnostics:   []string{"diagnostic:a"},
+				},
 			},
 		},
 	})
@@ -191,6 +199,9 @@ func TestApplyIndexPatchMergesSourceRowsByUnion(t *testing.T) {
 	assertStringSet(t, source.Dependencies, []string{"src/b.ts"})
 	assertStringSet(t, source.Dependents, []string{"src/c.ts"})
 	assertStringSet(t, source.Diagnostics, []string{"diagnostic:a", "diagnostic:semantic"})
+	if source.SourceHash != "source:ast" || source.InterfaceHash != "interface:ast" {
+		t.Fatalf("source hashes = %q/%q, want AST hash evidence preserved", source.SourceHash, source.InterfaceHash)
+	}
 }
 
 func TestApplyIndexPatchReplacesOutgoingSourceDependencies(t *testing.T) {

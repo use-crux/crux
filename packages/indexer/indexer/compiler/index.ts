@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type {
   ContextMeta,
@@ -38,6 +39,7 @@ import { relationDiagnosticsFromReport, resolveRelationModel } from '../relation
 import { backfillDefinitionSources, mergeSources } from '../sources'
 import { discoverProjectShards, shardIdForSourceFile, staticFileBatchesForShards } from '../shards/discovery'
 import { compareCodepoint } from '../sort'
+import { sourceInterfaceHashEvidence } from '../source-interface-hash'
 import type { ProjectShardFileBatch } from '../shards/types'
 import {
   createStaticExtraction,
@@ -540,7 +542,7 @@ async function compilerResultFromDiscovery(input: CompilerSnapshotInput): Promis
     ruleDescriptors,
   })
   const sourceGraph = projectCompilerSourceGraph(input.shards)
-  const sources = projectCompilerSourceRows({
+  const sources = await projectCompilerSourceRows({
     sources: mergeSources([...initialSources, ...discovered.sources]),
     definitions: merged.definitions,
     relations: merged.relations,
@@ -708,14 +710,14 @@ async function mergeCompilerDefinitions(
   return backfillDefinitionSources(definitionsWithPaths, [...diagnostics], configFile)
 }
 
-function projectCompilerSourceRows(input: {
+async function projectCompilerSourceRows(input: {
   readonly sources: readonly IndexSourceFile[]
   readonly definitions: readonly ProjectDefinition[]
   readonly relations: readonly ProjectRelation[]
   readonly diagnostics: readonly IndexDiagnostic[]
   readonly discovered: ProjectDiscoveryResult
   readonly shards: readonly ProjectIndexShard[]
-}): readonly IndexSourceFile[] {
+}): Promise<readonly IndexSourceFile[]> {
   const graphBuilder = createIndexGraphBuilder()
 
   input.sources.forEach((source) => graphBuilder.addSource({ source }))
@@ -729,10 +731,28 @@ function projectCompilerSourceRows(input: {
     graphBuilder.addDependency(file, dependency)
   })
 
-  return graphSources(graphBuilder.graph).map((source) => ({
-    ...source,
-    shardId: source.shardId ?? shardIdForSourceFile(source.file, input.shards),
-  }))
+  const rows = graphSources(graphBuilder.graph)
+  return Promise.all(
+    rows.map(async (source) => {
+      const sourceHash = source.sourceHash ?? input.discovered.sourceGraph.semanticProfileByFile?.get(source.file)?.sourceHash
+      const interfaceHash = source.interfaceHash ?? input.discovered.sourceGraph.interfaceHashByFile?.get(source.file)
+      const evidence = sourceHash && interfaceHash ? undefined : await sourceHashEvidenceFromDisk(source.file)
+      return {
+        ...source,
+        shardId: source.shardId ?? shardIdForSourceFile(source.file, input.shards),
+        sourceHash: sourceHash ?? evidence?.sourceHash,
+        interfaceHash: interfaceHash ?? evidence?.interfaceHash,
+      }
+    }),
+  )
+}
+
+async function sourceHashEvidenceFromDisk(file: string): Promise<ReturnType<typeof sourceInterfaceHashEvidence> | undefined> {
+  try {
+    return sourceInterfaceHashEvidence(file, await readFile(file, 'utf8'))
+  } catch {
+    return undefined
+  }
 }
 
 function dependenciesFromDiscovery(discovered: ProjectDiscoveryResult): ReadonlyArray<readonly [string, string]> {

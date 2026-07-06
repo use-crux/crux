@@ -63,7 +63,7 @@ const allowedKeysByPath: Readonly<Record<string, readonly string[]>> = {
     'defaultOptions',
     'budget',
   ],
-  sources: ['file', 'status', 'shardId', 'definitionIds', 'dependencies', 'dependents', 'diagnostics'],
+  sources: ['file', 'status', 'shardId', 'sourceHash', 'interfaceHash', 'definitionIds', 'dependencies', 'dependents', 'diagnostics'],
   prompts: ['id', 'description', 'tags', 'inputSchema', 'outputSchema', 'contextIds', 'hasOutput', 'settings', 'path', 'systemTemplate', 'promptTemplate', 'hasMessages', 'definitionSource'],
   contexts: ['id', 'description', 'priority', 'inputSchema', 'isStatic', 'usedBy', 'path', 'systemTemplate', 'definitionSource'],
   tools: ['name', 'description', 'inputSchema', 'path'],

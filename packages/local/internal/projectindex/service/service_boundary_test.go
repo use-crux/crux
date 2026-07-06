@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -129,6 +130,80 @@ func TestServiceRecordsIncrementalWatchStatusWithFakeClient(t *testing.T) {
 	}
 }
 
+func TestServiceRecordsIncrementalFallbackReasonInWatchStatus(t *testing.T) {
+	indexer := &watchFallbackIndexer{}
+	service := New(Options{Store: store.NewStore(), Indexer: indexer})
+
+	_, err := service.ReindexProjectIncrementalWithOptions(
+		context.Background(),
+		"/repo",
+		"crux.config.ts",
+		"project",
+		[]string{"/repo/src/writer.ts"},
+		nil,
+		ProjectReindexOptions{
+			Semantic: ProjectSemanticDisabled,
+			Watch:    ProjectWatchRunOptions{RunID: 43},
+		},
+	)
+	if err != nil {
+		t.Fatalf("ReindexProjectIncrementalWithOptions error = %v", err)
+	}
+
+	if indexer.calledIncrement {
+		t.Fatal("IndexProjectIncremental called without previous source graph")
+	}
+	if !indexer.calledFull {
+		t.Fatal("IndexProjectAstPatch was not called for fallback")
+	}
+	status := service.WatchStatus()
+	if status.LastRun == nil {
+		t.Fatal("watch last run = nil")
+	}
+	if status.LastRun.RunID != 43 || !status.LastRun.FallbackUsed || status.LastRun.FallbackReason != "missing-previous-source-graph" {
+		t.Fatalf("watch last run = %+v, want missing-previous-source-graph fallback", status.LastRun)
+	}
+}
+
+func TestServiceCancelsSupersededBackgroundSemantic(t *testing.T) {
+	root := t.TempDir()
+	indexer := newCancellableBackgroundSemanticIndexer(root)
+	service := New(Options{Store: store.NewStore(), Indexer: indexer})
+	service.WithFactStore(nil)
+	service.ApplyIndexPatch(context.Background(), projectindex.PatchFromSnapshot(backgroundSemanticPreviousIndex(root), projectindex.PhaseAST, "ok"))
+
+	_, err := service.ReindexProjectIncrementalWithOptions(
+		context.Background(),
+		root,
+		"crux.config.ts",
+		"project",
+		[]string{filepath.Join(root, "src/a.ts")},
+		nil,
+		ProjectReindexOptions{Semantic: ProjectSemanticBackground, Watch: ProjectWatchRunOptions{RunID: 1}},
+	)
+	if err != nil {
+		t.Fatalf("first ReindexProjectIncrementalWithOptions error = %v", err)
+	}
+	waitForClosed(t, indexer.firstStarted, "first semantic start")
+
+	_, err = service.ReindexProjectIncrementalWithOptions(
+		context.Background(),
+		root,
+		"crux.config.ts",
+		"project",
+		[]string{filepath.Join(root, "src/b.ts")},
+		nil,
+		ProjectReindexOptions{Semantic: ProjectSemanticBackground, Watch: ProjectWatchRunOptions{RunID: 2}},
+	)
+	if err != nil {
+		t.Fatalf("second ReindexProjectIncrementalWithOptions error = %v", err)
+	}
+	waitForClosed(t, indexer.firstCanceled, "first semantic cancellation")
+	waitForClosed(t, indexer.secondStarted, "second semantic start")
+	close(indexer.releaseSecond)
+	waitForClosed(t, indexer.secondDone, "second semantic completion")
+}
+
 func TestServiceIncrementalSharesSemanticAndLintCompletion(t *testing.T) {
 	indexer := &boundarySemanticIncrementalIndexer{}
 	published := []store.IndexData{}
@@ -171,5 +246,14 @@ func TestServiceIncrementalSharesSemanticAndLintCompletion(t *testing.T) {
 	}
 	if len(published) == 0 {
 		t.Fatal("Publish was not called")
+	}
+}
+
+func waitForClosed(t *testing.T, ch <-chan struct{}, label string) {
+	t.Helper()
+	select {
+	case <-ch:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for %s", label)
 	}
 }
