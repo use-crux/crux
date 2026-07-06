@@ -152,7 +152,7 @@ export function createMemoryStatePort(
         if (suspend.waiterId !== options.waiterId) return suspend
         return Object.freeze({
           ...clonePendingSuspend(suspend),
-          delivered: { eventId: options.eventId },
+          delivered: deliveredSuspend(options),
         })
       })
       const deliveredSuspends = mergeDeliveredSuspend(snapshot, options)
@@ -266,7 +266,12 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
           Object.fromEntries(
             Object.entries(snapshot.deliveredSuspends).map(([deliveryKey, delivery]) => [
               deliveryKey,
-              delivery ? { eventId: delivery.eventId } : undefined,
+              delivery
+                ? cloneDeliveredSuspend(
+                    delivery,
+                    `flow snapshot deliveredSuspends.${deliveryKey}.payload`,
+                  )
+                : undefined,
             ]),
           ),
         )
@@ -302,9 +307,32 @@ function clonePendingSuspend(
     waiterId: suspend.waiterId,
     timerId: suspend.timerId,
     delivered: suspend.delivered
-      ? { eventId: suspend.delivered.eventId }
+      ? cloneDeliveredSuspend(
+          suspend.delivered,
+          `flow snapshot pendingSuspends.${suspend.label}.delivered.payload`,
+        )
       : undefined,
   })
+}
+
+function cloneDeliveredSuspend(
+  delivery: NonNullable<RuntimePendingSuspend['delivered']>,
+  path: string,
+): NonNullable<RuntimePendingSuspend['delivered']> {
+  const payload = (
+    delivery as NonNullable<RuntimePendingSuspend['delivered']> & {
+      readonly payload?: JsonValue
+    }
+  ).payload
+  if (payload === undefined) {
+    return { eventId: delivery.eventId } as unknown as NonNullable<
+      RuntimePendingSuspend['delivered']
+    >
+  }
+  return {
+    eventId: delivery.eventId,
+    payload: cloneJsonValue(payload, path),
+  }
 }
 
 function mergeDeliveredSuspend(
@@ -316,8 +344,17 @@ function mergeDeliveredSuspend(
   if (!deliveryKey) return snapshot.deliveredSuspends
   return Object.freeze({
     ...(snapshot.deliveredSuspends ?? {}),
-    [deliveryKey]: { eventId: options.eventId as EventCursor },
+    [deliveryKey]: deliveredSuspend(options),
   })
+}
+
+function deliveredSuspend(
+  options: MarkSnapshotDeliveredOptions,
+): FlowSnapshot['pendingSuspends'][number]['delivered'] {
+  return {
+    eventId: options.eventId as EventCursor,
+    payload: cloneJsonValue(options.payload, 'flow snapshot delivered payload'),
+  }
 }
 
 export function cloneRuntimeWork(work: RuntimeWork): RuntimeWork {

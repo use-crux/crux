@@ -27,12 +27,24 @@ export type RegisteredRuntimeTargetFactory = (
 ) => RuntimeTarget
 
 const runtimeTargets = new Map<string, RegisteredRuntimeTargetFactory>()
+const duplicateRuntimeTargetWarnings = new Set<string>()
 
 /** Register or replace a process-local runtime target factory. */
 export function registerRuntimeTarget(
   targetName: string,
   factory: RegisteredRuntimeTargetFactory,
 ): void {
+  const existing = runtimeTargets.get(targetName)
+  if (
+    existing &&
+    existing !== factory &&
+    !duplicateRuntimeTargetWarnings.has(targetName)
+  ) {
+    duplicateRuntimeTargetWarnings.add(targetName)
+    console.warn(
+      `[crux] durable target name "${targetName}" was registered more than once with different definitions; durable target names must be unique and the last registration wins.`,
+    )
+  }
   runtimeTargets.set(targetName, factory)
 }
 

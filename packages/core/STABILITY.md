@@ -26,6 +26,19 @@ Everything else is labelled by subpath. Memory, retrieval, skills, agents,
 flows, quality, and local/devtools surfaces keep their existing beta or
 experimental status unless their own subpath documentation says otherwise.
 
+## Runtime Engine (`@use-crux/core/runtime`)
+
+The durable Runtime Engine and its runtime store adapter contract are
+experimental in this release line. This includes `node()`, `serverless()`,
+`genericQueue()`, `createRuntimeHandler()`, runtime `task()` targets, wake
+envelopes, diagnostics, `RuntimeStoreAdapter`, and the runtime conformance
+suites under `@use-crux/core/runtime/testing`.
+
+Experimental means the API is available for prototypes, integration work, and
+adapter development, but the durable-execution contract may still change without
+a migration window while Crux is pre-1.0. Do not treat the runtime store adapter
+ports as stable beta until this section is explicitly upgraded.
+
 ## Ordering Guarantee
 
 The prompt's own system text always comes first. Cached contexts (`cache: true`)

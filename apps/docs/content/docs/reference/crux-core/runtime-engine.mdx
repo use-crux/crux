@@ -18,6 +18,8 @@ import {
 
 The Runtime Engine is the durable execution layer for event waits, timers, background tasks, automatic flow resume, HTTP wake delivery, and runtime inspection. Object-bound flow APIs keep working without it; name-bound, event-bound, time-bound, and background APIs require a configured runtime.
 
+> **Stability:** `@use-crux/core/runtime` is experimental. The durable-execution surface and store-adapter contract may still break while Crux prepares the Runtime Engine for stable beta.
+
 ## Composers
 
 | Export | Use |
@@ -75,6 +77,8 @@ export const { GET, POST } = createRuntimeHandler({
 
 `GET` returns health metadata without secrets. `POST` verifies the wake request before decoding the envelope or touching durable state. Failed verification returns `WAKE_UNVERIFIED`; malformed envelopes return terminal client responses so queues do not poison-loop.
 
+Production handlers fail closed when neither `verify` nor the configured wake adapter supplies request verification. For custom HTTP wake, pass `verify: hmacWakeVerifier({ secret })`; pass `verify: allowUnsignedDevWake` only for trusted local endpoints.
+
 ## Artifact generation
 
 Next projects can use the lightweight config wrapper:
@@ -104,6 +108,8 @@ With `config({ runtime })`, flows can use:
 | `crux.flows.signal/resume/cancel(name, flowId, ...)` | Name-bound operations for code that does not have the original flow handle. |
 
 Durable payloads must be JSON-compatible. Complex data should live in application storage with ids or URLs passed through runtime payloads.
+
+Delivered event payloads are embedded in the flow snapshot at delivery time. Runtime-backed replay reads the snapshot payload, not the event log, so delivered flows do not depend on unbounded event history.
 
 ## Diagnostics
 
@@ -140,6 +146,8 @@ crux runtime cancel <workId>
 ## Adapter author surface
 
 `@use-crux/core/runtime` exports provider-agnostic port contracts, branded ids, wake envelope helpers, retry/state helpers, the in-memory reference store, and kernel APIs. Community adapters should keep correctness in the kernel and implement only persistence/delivery ports.
+
+Store adapters must persist the full delivered-suspend record written by `state.markSnapshotDelivered()`, including both `eventId` and the copied JSON `payload`.
 
 The conformance helpers live on `@use-crux/core/runtime/testing`:
 

@@ -163,9 +163,15 @@ export const getSnapshot = mutation({
 })
 
 export const markSnapshotDelivered = mutation({
-  args: { workId: v.string(), namespace: v.string(), waiterId: v.string(), eventId: v.string() },
+  args: {
+    workId: v.string(),
+    namespace: v.string(),
+    waiterId: v.string(),
+    eventId: v.string(),
+    payload: v.any(),
+  },
   returns: v.null(),
-  handler: async (ctx, { workId, namespace, waiterId, eventId }) => {
+  handler: async (ctx, { workId, namespace, waiterId, eventId, payload }) => {
     const snapshot = await ctx.db
       .query('runtimeSnapshots')
       .withIndex('by_flow', (q) => q.eq('namespace', namespace))
@@ -173,13 +179,14 @@ export const markSnapshotDelivered = mutation({
       .first()
     if (!snapshot) return null
     const pendingSuspends = (snapshot.pendingSuspends as Array<Record<string, unknown>>).map((suspend) =>
-      suspend.waiterId === waiterId ? { ...suspend, delivered: { eventId } } : suspend,
+      suspend.waiterId === waiterId ? { ...suspend, delivered: { eventId, payload } } : suspend,
     )
     const deliveredSuspends = mergeDeliveredSuspend(
       snapshot.deliveredSuspends as Record<string, unknown> | undefined,
       snapshot.pendingSuspends as Array<Record<string, unknown>>,
       waiterId,
       eventId,
+      payload,
     )
     await ctx.db.patch(snapshot._id, { pendingSuspends, deliveredSuspends })
     return null
@@ -191,6 +198,7 @@ function mergeDeliveredSuspend(
   pendingSuspends: Array<Record<string, unknown>>,
   waiterId: string,
   eventId: string,
+  payload: unknown,
 ): Record<string, unknown> | undefined {
   const suspend = pendingSuspends.find((pending) => pending.waiterId === waiterId)
   const deliveryKey = typeof suspend?.deliveryKey === 'string'
@@ -201,7 +209,7 @@ function mergeDeliveredSuspend(
   if (!deliveryKey) return current
   return {
     ...(current ?? {}),
-    [deliveryKey]: { eventId },
+    [deliveryKey]: { eventId, payload },
   }
 }
 

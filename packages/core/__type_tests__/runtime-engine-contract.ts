@@ -97,7 +97,7 @@ expectTypeOf(inMemoryRuntimeStore()).toMatchTypeOf<RuntimeStoreAdapter>()
 const deliveredSuspend: RuntimePendingSuspend = {
   label: 'approval',
   waiterId,
-  delivered: { eventId: cursor },
+  delivered: { eventId: cursor, payload: { approved: true } },
 }
 expectTypeOf(deliveredSuspend.delivered?.eventId).toEqualTypeOf<EventCursor | undefined>()
 

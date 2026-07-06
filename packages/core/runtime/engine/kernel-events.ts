@@ -132,7 +132,13 @@ export async function emitEventInTransaction(
   >(
     async (previous, waiter) => [
       ...(await previous),
-      ...(await fireWaiter({ tx, deps, waiter, eventId: event.eventId })),
+      ...(await fireWaiter({
+        tx,
+        deps,
+        waiter,
+        eventId: event.eventId,
+        payload: event.payload,
+      })),
     ],
     Promise.resolve([]),
   )
@@ -181,6 +187,7 @@ interface FireWaiterOptions {
   readonly deps: EmitEventInTransactionDeps
   readonly waiter: RuntimeWaiter
   readonly eventId: EventCursor
+  readonly payload: EmitEventInput['payload']
 }
 
 async function fireWaiter(
@@ -225,6 +232,7 @@ async function fireWaiter(
       namespace: options.waiter.namespace,
       waiterId: options.waiter.waiterId,
       eventId: options.eventId,
+      payload: options.payload,
     })
     return [
       await options.tx.outbox.put({

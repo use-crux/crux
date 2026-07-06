@@ -39,7 +39,12 @@ export interface CreateRuntimeHandlerOptions {
   readonly targets: readonly RuntimeHandlerTarget[]
   /** Runtime composer. Defaults to the globally configured `config({ runtime })`. */
   readonly runtime?: RuntimeEngineDefinition
-  /** Override request verification. Defaults to the runtime's verifier or dev allowlist. */
+  /**
+   * Override request verification.
+   *
+   * Production handlers require this option or a verifier supplied by the wake
+   * adapter. Pass `allowUnsignedDevWake` only for trusted local endpoints.
+   */
   readonly verify?: RuntimeWakeRequestVerifier
   /** Override the work id generator for deterministic tests. */
   readonly newWorkId?: () => WorkId
@@ -68,6 +73,10 @@ export function createRuntimeHandler(
       entry: runtimeDefinition.entry,
     })
   }
+  const verify = resolveWakeRequestVerifier(
+    options.verify,
+    runtimeDefinition.verifyWakeRequest,
+  )
   const runtimeRef: RuntimeTargetRuntimeRef = {}
   const targets = normalizeRuntimeHandlerTargets({
     targets: options.targets,
@@ -82,11 +91,6 @@ export function createRuntimeHandler(
   } satisfies CreateRuntimeOptions)
   runtimeRef.current = runtime
 
-  const verify =
-    options.verify ??
-    runtimeDefinition.verifyWakeRequest ??
-    allowUnsignedDevWake
-
   return Object.freeze({
     async GET(): Promise<Response> {
       return jsonResponse({
@@ -100,6 +104,33 @@ export function createRuntimeHandler(
       return await handleWakeRequest(request, { runtime, verify })
     },
   })
+}
+
+function resolveWakeRequestVerifier(
+  override: RuntimeWakeRequestVerifier | undefined,
+  runtimeVerifier: RuntimeWakeRequestVerifier | undefined,
+): RuntimeWakeRequestVerifier {
+  if (override) return override
+  if (runtimeVerifier) return runtimeVerifier
+  if (isDevelopmentEnvironment()) return allowUnsignedDevWake
+
+  throw createRuntimeError({
+    code: 'WAKE_UNVERIFIED',
+    whatFailed:
+      'createRuntimeHandler() requires wake request verification in production.',
+    why: 'No request verifier was supplied by the handler options or the configured wake adapter.',
+    whatStillWorks:
+      'Runtime handlers with signed wake adapters and local development handlers still work.',
+    nextStep:
+      'Pass verify: hmacWakeVerifier({ secret }) for signed requests, or pass verify: allowUnsignedDevWake explicitly for trusted local endpoints.',
+  })
+}
+
+function isDevelopmentEnvironment(): boolean {
+  return (
+    typeof process !== 'undefined' &&
+    process.env?.NODE_ENV !== 'production'
+  )
 }
 
 function missingRuntime(): never {

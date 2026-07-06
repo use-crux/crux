@@ -5,7 +5,6 @@
  */
 
 export type { CruxEngineCapabilities, DeploymentSupport } from './capabilities'
-export type { CruxRuntimeEngine } from './engine'
 export type {
   AppendEventOptions,
   DurableEventPort,
@@ -25,7 +24,6 @@ export type {
   WorkId,
 } from './ids'
 export type { ClaimOptions, Lease, LeasePort, LeaseResource } from './leases'
-export type { LiveDeliveryEvent, LiveDeliveryPort } from './live'
 export type {
   RuntimeSetupApplyOptions,
   RuntimeSetupFinding,
@@ -47,13 +45,6 @@ export type {
   RuntimeStatePort,
   RuntimeStateReadOptions,
 } from './state'
-export type {
-  DurableTaskPort,
-  EnqueueOptions,
-  EnqueuedTask,
-  RuntimeTaskError,
-} from './tasks'
-export type { DurableTimerPort, TimerOptions } from './timers'
 export type {
   NewRuntimeWaiter,
   ResolveWaiterOptions,

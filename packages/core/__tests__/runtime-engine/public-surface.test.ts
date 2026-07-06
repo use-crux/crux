@@ -6,6 +6,7 @@ import {
   inMemoryRuntimeStore,
   node,
   runtimeRequiredError,
+  type RuntimeEngineDefinition,
 } from '@use-crux/core/runtime'
 import {
   runRuntimeEngineAdapterTests,
@@ -23,5 +24,34 @@ describe('@use-crux/core runtime store public surface', () => {
     expect(typeof runtimeRequiredError).toBe('function')
     expect(typeof runStoreAdapterTests).toBe('function')
     expect(typeof runRuntimeEngineAdapterTests).toBe('function')
+  })
+
+  it('uses adapter-neutral remediation for capability preflight failures', () => {
+    const runtime = {
+      kind: 'in-process',
+      id: 'missing-events',
+      store: inMemoryRuntimeStore(),
+      capabilities: {
+        timers: { durable: true },
+        wake: { atLeastOnce: true, signed: false },
+        events: { durable: false, cursorReads: false },
+        waiters: { durable: true },
+        leases: { durable: true },
+        live: { available: false },
+        setup: { canCheck: false, canApply: false },
+        deployment: {
+          serverless: 'unsupported',
+          edge: 'unsupported',
+          multiProcess: 'unsupported',
+        },
+      },
+      createWake: () => async () => undefined,
+    } satisfies RuntimeEngineDefinition
+
+    expect(() =>
+      createRuntime({ runtime, startMaintenance: false }),
+    ).toThrow(
+      /Choose a Runtime Engine adapter that implements durable event cursor reads, then run its setup check or conformance tests./,
+    )
   })
 })

@@ -237,7 +237,7 @@ export function createPostgresStatePort(
       if (!snapshot) return
       const pendingSuspends = snapshot.pendingSuspends.map((suspend) =>
         suspend.waiterId === options.waiterId
-          ? { ...suspend, delivered: { eventId: options.eventId } }
+          ? { ...suspend, delivered: deliveredSuspend(options) }
           : suspend,
       )
       const deliveredSuspends = mergeDeliveredSuspend(snapshot, options)
@@ -299,8 +299,14 @@ function mergeDeliveredSuspend(
   if (!deliveryKey) return snapshot.deliveredSuspends
   return {
     ...(snapshot.deliveredSuspends ?? {}),
-    [deliveryKey]: { eventId: options.eventId },
+    [deliveryKey]: deliveredSuspend(options),
   }
+}
+
+function deliveredSuspend(
+  options: MarkSnapshotDeliveredOptions,
+): NonNullable<FlowSnapshot['pendingSuspends'][number]['delivered']> {
+  return { eventId: options.eventId, payload: options.payload }
 }
 
 function allowedStatuses(

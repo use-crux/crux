@@ -84,8 +84,10 @@ export interface RuntimePendingSuspend {
 
 /** Delivered event metadata recorded for replay to consume later. */
 export interface RuntimeDeliveredSuspend {
-  /** Durable event cursor containing the payload to replay. */
+  /** Durable event cursor that produced the replay payload. */
   readonly eventId: EventCursor
+  /** JSON payload copied from the delivered event for snapshot-only replay. */
+  readonly payload: JsonValue
 }
 
 /** Occurrence-keyed delivered suspend cursors retained across replay barriers. */
@@ -150,8 +152,10 @@ export interface SetWorkPendingOptions extends RuntimeStateReadOptions {
 export interface MarkSnapshotDeliveredOptions extends RuntimeStateReadOptions {
   /** Waiter that won the event/timeout race. */
   readonly waiterId: WaiterId
-  /** Durable event cursor containing the delivered payload. */
+  /** Durable event cursor that produced the delivered payload. */
   readonly eventId: EventCursor
+  /** JSON payload copied into the snapshot for future replay. */
+  readonly payload: JsonValue
 }
 
 /** Bounded work-listing options used by kernel-owned maintenance. */
@@ -274,7 +278,8 @@ export interface RuntimeStatePort {
    * Record which durable event delivered a pending suspend point.
    *
    * Called inside the same transaction that fires the waiter and resumes the
-   * owning work item. Replay later reads the event payload by cursor.
+   * owning work item. Replay later reads the copied payload from the snapshot,
+   * so event retention does not affect already-delivered suspends.
    */
   markSnapshotDelivered(
     workId: WorkId,

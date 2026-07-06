@@ -17,7 +17,7 @@ Object-bound flows remain the baseline. `flow.suspend()`, `reviewFlow.signal(...
 | `convex()` | Convex apps that want runtime work to execute inside Convex functions and scheduler. |
 | `genericQueue()` | You own a queue and want to adapt it without a bundled Crux package. |
 
-Deferred adapters such as SQLite, RabbitMQ, Upstash Redis store, Cloudflare, Inngest, and Temporal are not first-party runtime packages in v1. They are documented as recipes or future adapter shapes only.
+Deferred adapters such as SQLite, RabbitMQ, Upstash Redis store, Cloudflare, Inngest, and Temporal are not first-party runtime packages yet. They are documented as recipes or future adapter shapes only.
 
 ## Runtime-bound APIs
 
@@ -30,6 +30,8 @@ await crux.flows.signal('review', flowId, 'approval', payload)
 ```
 
 Durable payloads must be JSON-compatible. Pass ids, URLs, or application storage keys for large or complex values.
+
+When a durable event resumes a waiting flow, the Runtime Engine copies the event payload into the flow snapshot. Replay reads that snapshot payload directly instead of scanning the event log.
 
 ## Related
 

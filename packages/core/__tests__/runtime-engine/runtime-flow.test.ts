@@ -270,6 +270,39 @@ describe('runtime-backed flows', () => {
     crux.dispose()
   })
 
+  it('validates name-bound signal flow id and target name before emitting', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const reviewFlow = flow('signal-validation-review', async (scope) => {
+      await scope.suspend('approval')
+      return 'done'
+    })
+
+    const suspended = await reviewFlow.run()
+
+    await expect(
+      crux.flows.signal('signal-validation-review', 'missing_flow', 'approval', {}),
+    ).rejects.toMatchObject({
+      code: 'TARGET_NOT_FOUND',
+      message: expect.stringContaining(
+        'crux.flows.signal() could not find runtime-backed flow `missing_flow`.',
+      ),
+    })
+    await expect(
+      crux.flows.signal('other-signal-target', suspended.flowId, 'approval', {}),
+    ).rejects.toMatchObject({
+      code: 'TARGET_NOT_FOUND',
+      message: expect.stringContaining(
+        `crux.flows.signal() could not operate on flow \`${suspended.flowId}\` through target \`other-signal-target\`.`,
+      ),
+    })
+
+    crux.dispose()
+  })
+
   it('throws the standard runtime-required diagnostic for runtime-only flow APIs', async () => {
     const crux = config({})
     const embedDocument = task('missing-runtime-embed', {

@@ -1,6 +1,6 @@
 ---
 title: Runtime Adapter Authoring
-description: Build Runtime Engine store, wake, live, or full host adapters with the shared contracts and conformance tests.
+description: Build Runtime Engine store, wake, or full host adapters with the shared contracts and conformance tests.
 ---
 
 Most runtime adapters should implement one composable piece rather than a whole engine. Keep correctness in the core kernel; adapters persist rows, deliver wake messages, verify setup, and expose honest capabilities.
@@ -11,7 +11,6 @@ Most runtime adapters should implement one composable piece rather than a whole 
 | --- | --- |
 | Store adapter | You provide durable state/events/waiters/timers/outbox/leases, such as Postgres or DynamoDB. |
 | Wake adapter | You provide at-least-once delivery or HTTP wake, such as QStash or a queue. |
-| Live adapter | You provide best-effort realtime delivery. Live is never correctness. |
 | Host-bound runtime | Store and wake require host context, such as Convex. |
 
 ## Conformance tests
@@ -40,9 +39,28 @@ Capabilities are diagnostic-facing contracts. Report only what the adapter reall
 
 Missing capability should fail early with `CAPABILITY_MISSING`; it must not silently downgrade durability.
 
+## Wake verification
+
+HTTP wake handlers fail closed in production when no verifier is configured. Store-backed serverless adapters should provide a wake verifier, and hand-written custom handlers should pass one explicitly:
+
+```ts
+import { createRuntimeHandler, hmacWakeVerifier } from '@use-crux/core/runtime'
+
+export const { GET, POST } = createRuntimeHandler({
+  targets: [reviewFlow, embedDocument],
+  verify: hmacWakeVerifier({ secret: process.env.CRUX_RUNTIME_WAKE_SECRET! }),
+})
+```
+
+Use `verify: allowUnsignedDevWake` only for trusted local endpoints.
+
 ## Setup rules
 
 `setup.check()` never mutates resources. `setup.apply()` may perform safe additive setup only. Do not create paid services or perform destructive migrations automatically.
+
+## Store snapshot rules
+
+When `state.markSnapshotDelivered()` is called, persist the delivered suspend with both the durable `eventId` and the copied JSON `payload`. Runtime-backed flow replay reads that snapshot payload directly and must not need to scan the event log after delivery.
 
 ## Related
 

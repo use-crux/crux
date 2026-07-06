@@ -449,6 +449,10 @@ Runtime-bound APIs use a configured Runtime Engine for durable work, timers,
 event waiters, wake delivery, and maintenance. For local development and tests,
 use the in-process `node()` composer:
 
+`@use-crux/core/runtime` is experimental: the durable-execution and store-adapter
+contracts are still allowed to break while Crux prepares the Runtime Engine for
+stable beta.
+
 ```ts
 import { config } from "@use-crux/core";
 import { node } from "@use-crux/core/runtime";
@@ -464,6 +468,11 @@ With a runtime configured, flow handles can persist `flow.suspend()` and
 work with `flow.defer(task, input)`, schedule task timers with
 `flow.after(task, delay, input)`, and wait for child work with
 `flow.untilIdle({ scope: "current-flow" })`.
+
+Delivered event payloads are copied into the durable flow snapshot when a waiter
+fires. Flow replay reads those snapshot payloads directly instead of scanning
+the event log, so adapter retention can prune old events after later phases add
+retention policy.
 
 Executable durable task targets are defined from the runtime subpath, not the
 root Plans & Tasks ledger `task()` helper:

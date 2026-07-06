@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  allowUnsignedDevWake,
   CruxRuntimeError,
   createRuntimeHandler,
   encodeWakeEnvelope,
@@ -13,6 +14,78 @@ import {
 } from '@use-crux/core/runtime'
 
 describe('createRuntimeHandler', () => {
+  it('fails closed in production when no wake verifier is configured', () => {
+    const originalNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      expect(() =>
+        createRuntimeHandler({
+          runtime: node({
+            store: inMemoryRuntimeStore(),
+            namespace: 'tenant-a',
+            autoStartMaintenance: false,
+          }),
+          targets: [],
+        }),
+      ).toThrow(CruxRuntimeError)
+      expect(() =>
+        createRuntimeHandler({
+          runtime: node({
+            store: inMemoryRuntimeStore(),
+            namespace: 'tenant-a',
+            autoStartMaintenance: false,
+          }),
+          targets: [],
+        }),
+      ).toThrow(/Code: WAKE_UNVERIFIED/)
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv
+    }
+  })
+
+  it('allows unsigned wake requests in production only when explicitly configured', async () => {
+    const originalNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      const { GET } = createRuntimeHandler({
+        runtime: node({
+          store: inMemoryRuntimeStore(),
+          namespace: 'tenant-a',
+          autoStartMaintenance: false,
+        }),
+        targets: [],
+        verify: allowUnsignedDevWake,
+      })
+
+      await expect(
+        GET(new Request('https://example.com/api/crux')),
+      ).resolves.toMatchObject({ status: 200 })
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv
+    }
+  })
+
+  it('keeps unsigned wake requests available by default in development', async () => {
+    const originalNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    try {
+      const { GET } = createRuntimeHandler({
+        runtime: node({
+          store: inMemoryRuntimeStore(),
+          namespace: 'tenant-a',
+          autoStartMaintenance: false,
+        }),
+        targets: [],
+      })
+
+      await expect(
+        GET(new Request('https://example.com/api/crux')),
+      ).resolves.toMatchObject({ status: 200 })
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv
+    }
+  })
+
   it('rejects unverified wake requests before durable writes or target execution', async () => {
     const store = inMemoryRuntimeStore()
     let executed = false

@@ -225,6 +225,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           {
             eventId: string;
             namespace: string;
+            payload: unknown;
             waiterId: string;
             workId: string;
           },
