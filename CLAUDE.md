@@ -6,6 +6,9 @@
 - Always strive for concise, simple solutions
 - If a problem can be solved in a simpler way, propose it.
 
+## Subagents
+If you're Fable 5, you're not allowed to run subagents by yourself. Follow the guide below (Picking the right models for workflows and subagents).
+
 ## Picking the right models for workflows and subagents
 
 Rankings, higher = better. Cost reflects what I actually pay (OpenAI is near-free for me) not a list price. Intelligence is how hard a problem you can hand to model unsupervised. Taste covers UI/UX, code quality, API design, and copy.
