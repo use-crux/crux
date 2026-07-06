@@ -37,6 +37,13 @@ result.text; // extracted text
 result.raw; // raw Anthropic.Message
 ```
 
+`generate()` returns the canonical Crux envelope: `text`, `object` when present,
+optional accumulated `usage`, optional `cost`, `steps`, `finalStep`,
+provider-neutral `messages`, typed `raw`, and retained `_meta` for observability.
+`usage` is present only when every provider-call step reported usage. `stream()`
+returns `{ textStream, raw, completion }`, where `completion` resolves to the
+same envelope fields without `raw`/`_meta`.
+
 `createAnthropic()` returns a `CruxAdapter` with `generate()`, `stream()`, and agent composition methods (`parallel`, `pipeline`, `consensus`, `swarm`). Use `createGenerateObjectFn(client, model)` / `createGenerateTextFn(client, model)` to satisfy `@use-crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`). `createGenerateObjectFn()` is provider-native: it uses Anthropic structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
 The package exports `anthropicProviderRuntime` for advanced adapter composition. Internally, Anthropic uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; adapter authors building similar single-turn providers should start there.

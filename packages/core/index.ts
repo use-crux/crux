@@ -754,6 +754,10 @@ export type {
   AdapterGenerateOptions,
   AdapterStreamOptions,
   AdapterGenerateResult,
+  FinalStepInfo,
+  GenerateResult,
+  StreamCompletion,
+  StreamResult,
 } from "./adapter/index";
 
 // Loop-owning adapter abstraction (also available as @use-crux/core/adapter subpath)

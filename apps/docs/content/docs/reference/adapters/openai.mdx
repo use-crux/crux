@@ -1,17 +1,25 @@
 ---
-title: '@use-crux/openai'
+title: "@use-crux/openai"
 description: OpenAI SDK adapter — factory pattern with native generation options plus dense embedding helpers.
 ---
 
 Peer dependency: `openai`
 
 ```ts
-import { createOpenAI, embedding, openaiProviderRuntime, openAITranscript, toMessages, fromMessages } from '@use-crux/openai'
-import { createGenerateObjectFn, createGenerateTextFn } from '@use-crux/openai'
+import {
+  createOpenAI,
+  embedding,
+  openaiProviderRuntime,
+  openAITranscript,
+  toMessages,
+  fromMessages,
+} from "@use-crux/openai";
+import { createGenerateObjectFn, createGenerateTextFn } from "@use-crux/openai";
 ```
 
 <Callout type="info">
-  For usage examples and provider comparison, see the [Execution guide](/docs/guides/prompts/execution).
+  For usage examples and provider comparison, see the [Execution
+  guide](/docs/guides/prompts/execution).
 </Callout>
 
 ### `createOpenAI(client)`
@@ -34,17 +42,20 @@ Create an adapter bound to an OpenAI client.
 | `.reranker(config)`          | Create a judge-backed core `Reranker`                                          |
 
 ```ts
-import { createOpenAI } from '@use-crux/openai'
-import OpenAI from 'openai'
+import { createOpenAI } from "@use-crux/openai";
+import OpenAI from "openai";
 
-const adapter = createOpenAI(new OpenAI({ apiKey: process.env.OPENAI_API_KEY }))
+const adapter = createOpenAI(
+  new OpenAI({ apiKey: process.env.OPENAI_API_KEY }),
+);
 
 const result = await adapter.generate(editDraft, {
-  model: 'gpt-4o',
-  input: { instruction: 'Fix the intro' },
-})
-result.text
-result._meta.usage
+  model: "gpt-4o",
+  input: { instruction: "Fix the intro" },
+});
+result.text;
+result.usage;
+result.finalStep;
 ```
 
 ### `adapter.generate(prompt, options)`
@@ -63,8 +74,11 @@ result._meta.usage
 **Returns:** normalized Crux generate result with:
 
 - `result.text` — extracted assistant text
+- `result.usage` — accumulated usage when every provider-call step reported usage
+- `result.cost` — provider-reported cost when available
+- `result.finalStep` — final provider-call text, usage, finish reason, response id, and actual model id
 - `result.raw` — raw OpenAI SDK response
-- `result._meta` — normalized usage, finish reason, tool calls, and model metadata
+- `result._meta` — retained trace metadata for observability plumbing
 
 When the prompt has an `output` schema, the provider-parsed value remains available on `result.raw.choices[0].message.parsed`.
 
@@ -83,14 +97,18 @@ Stream a prompt execution.
 | `options.extra.tool_choice`         | `string?`                                      | OpenAI-native tool selection                                                        |
 | `options.extra.parallel_tool_calls` | `boolean?`                                     | Allow parallel tool calls                                                           |
 
-**Returns:** OpenAI stream.
+**Returns:** `StreamResult<TRawStream>`:
+
+- `result.textStream` — provider-neutral text deltas
+- `result.raw` — raw OpenAI SDK stream
+- `result.completion` — promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
 
 ### `adapter.retrievalModel(config)`
 
 Create a core `RetrievalModel` from the adapter instance.
 
 ```ts
-const retrievalModel = adapter.retrievalModel({ model: 'gpt-4o-mini' })
+const retrievalModel = adapter.retrievalModel({ model: "gpt-4o-mini" });
 ```
 
 Use it as a recipe-level `model` or step-level `model`.
@@ -101,9 +119,9 @@ Create a core `Reranker` for `rerank({ engine })`.
 
 ```ts
 const engine = adapter.reranker({
-  model: 'gpt-4o-mini',
+  model: "gpt-4o-mini",
   topN: 12,
-})
+});
 ```
 
 OpenAI's direct SDK adapter does not expose a native rerank endpoint. `adapter.reranker()` uses Crux's `judgeReranker()` over the configured OpenAI model, so each rerank call spends generation tokens.
@@ -163,15 +181,15 @@ This helper is also generated from the native chat profile, so text helper calls
 Create a dense Crux embedding backed by `client.embeddings.create()`.
 
 ```ts
-import OpenAI from 'openai'
-import { embedding } from '@use-crux/openai'
+import OpenAI from "openai";
+import { embedding } from "@use-crux/openai";
 
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const docsEmbedding = embedding(client, {
-  name: 'docs-embedding',
-  model: 'text-embedding-3-small',
-})
+  name: "docs-embedding",
+  model: "text-embedding-3-small",
+});
 ```
 
 Known OpenAI embedding models infer their default dimensions automatically. For custom model IDs, pass `dimensions` explicitly.
@@ -190,7 +208,11 @@ Known OpenAI embedding models infer their default dimensions automatically. For 
 ### Types
 
 ```ts
-import type { OpenAIChatRequest, OpenAIEmbeddingConfig, OpenAIExtra } from '@use-crux/openai'
+import type {
+  OpenAIChatRequest,
+  OpenAIEmbeddingConfig,
+  OpenAIExtra,
+} from "@use-crux/openai";
 ```
 
 ## Related

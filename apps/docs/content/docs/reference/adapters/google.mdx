@@ -1,5 +1,5 @@
 ---
-title: '@use-crux/google'
+title: "@use-crux/google"
 description: Google GenAI SDK adapter — factory pattern with provider caching plus dense embedding helpers.
 ---
 
@@ -13,12 +13,13 @@ import {
   googleTranscript,
   toMessages,
   fromMessages,
-} from '@use-crux/google'
-import { createGenerateObjectFn, createGenerateTextFn } from '@use-crux/google'
+} from "@use-crux/google";
+import { createGenerateObjectFn, createGenerateTextFn } from "@use-crux/google";
 ```
 
 <Callout type="info">
-  For usage examples and provider comparison, see the [Execution guide](/docs/guides/prompts/execution).
+  For usage examples and provider comparison, see the [Execution
+  guide](/docs/guides/prompts/execution).
 </Callout>
 
 ### `createGoogle(client, opts?)`
@@ -27,18 +28,18 @@ Create an adapter bound to a Google GenAI client with optional CachedContent con
 
 `createGoogle()` is the package's mapped single-turn bundle factory: it resolves the CachedContent option into a single `GoogleCachedContentLifecycle`, passes it into the provider runtime, and returns the bound adapter. The lifecycle owns prefix detection, cache keying/reuse, SDK cache operations, and fallback policy, and returns a request-ready config patch that both `generate()` and `stream()` merge. The package-owned `googleTranscript` owns `Content[]` conversion plus assistant text/function-call extraction. The Google package still owns the SDK request shape, function-call normalization, and response metadata normalization; the provider runtime supplies the adapter shell and default tool-round formatting.
 
-| Field                | Type                                                          | Description                                                                                                |
-| -------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
-| `client`             | `GoogleGenAI`                                                 | The Google GenAI client instance                                                                          |
+| Field                | Type                                                         | Description                                                                                                |
+| -------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| `client`             | `GoogleGenAI`                                                | The Google GenAI client instance                                                                           |
 | `opts.cachedContent` | `false \| GoogleCacheConfig \| GoogleCachedContentLifecycle` | CachedContent configuration. Omit for defaults, pass `false` to disable, or pass a fully custom lifecycle. |
 
 **`GoogleCacheConfig`:**
 
-| Field               | Type                           | Default      | Description                                                                          |
-| ------------------- | ------------------------------ | ------------ | ----------------------------------------------------------------------------------- |
-| `enabled`           | `boolean`                      | `true`       | Enable/disable the built-in lifecycle                                               |
-| `defaultTtlSeconds` | `number`                       | `300`        | TTL for server-side cache objects                                                   |
-| `maxEntries`        | `number`                       | `50`         | Max concurrent cache entries in memory                                              |
+| Field               | Type                           | Default      | Description                                                                           |
+| ------------------- | ------------------------------ | ------------ | ------------------------------------------------------------------------------------- |
+| `enabled`           | `boolean`                      | `true`       | Enable/disable the built-in lifecycle                                                 |
+| `defaultTtlSeconds` | `number`                       | `300`        | TTL for server-side cache objects                                                     |
+| `maxEntries`        | `number`                       | `50`         | Max concurrent cache entries in memory                                                |
 | `onError`           | `'fallback' \| 'throw'`        | `'fallback'` | Whether cache operation failures fall back to an inline `systemInstruction` or reject |
 | `port`              | `GoogleCachedContentCachePort` | SDK-backed   | Override the create/delete boundary while keeping built-in keying, TTL, and eviction. |
 
@@ -47,11 +48,11 @@ Create an adapter bound to a Google GenAI client with optional CachedContent con
 ```ts
 interface GoogleCachedContentCachePort {
   create(input: {
-    model: string
-    systemInstruction: string
-    ttlSeconds: number
-  }): Promise<GoogleCacheName | undefined>
-  delete(input: { name: GoogleCacheName }): Promise<void>
+    model: string;
+    systemInstruction: string;
+    ttlSeconds: number;
+  }): Promise<GoogleCacheName | undefined>;
+  delete(input: { name: GoogleCacheName }): Promise<void>;
 }
 ```
 
@@ -65,47 +66,52 @@ interface GoogleCachedContentCachePort {
 | `.reranker(config)`          | Create a judge-backed core `Reranker`                                                 |
 
 ```ts
-import { createGoogle } from '@use-crux/google'
-import { GoogleGenAI } from '@google/genai'
+import { createGoogle } from "@use-crux/google";
+import { GoogleGenAI } from "@google/genai";
 
-const adapter = createGoogle(new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY }))
+const adapter = createGoogle(
+  new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY }),
+);
 
 const result = await adapter.generate(sentiment, {
-  model: 'gemini-2.5-flash',
-  input: { text: 'Great product!' },
-})
-result.text
-result._meta.usage
+  model: "gemini-2.5-flash",
+  input: { text: "Great product!" },
+});
+result.text;
+result.usage;
+result.finalStep;
 ```
 
 <Callout type="info">
-  When the leading resolved system blocks have `providerCache: true`, the adapter automatically creates and reuses a
-  Google `CachedContent` object for that prefix, then sends any uncached remainder as `systemInstruction`. A single
-  `GoogleCachedContentLifecycle` owns prefix detection, cache keying/reuse, SDK cache operations, and fallback policy,
-  and returns a request-ready config patch. `createGoogle()` builds it; `generate()` and `stream()` only merge the
-  patch, so the cache lifecycle never leaks into core.
+  When the leading resolved system blocks have `providerCache: true`, the
+  adapter automatically creates and reuses a Google `CachedContent` object for
+  that prefix, then sends any uncached remainder as `systemInstruction`. A
+  single `GoogleCachedContentLifecycle` owns prefix detection, cache
+  keying/reuse, SDK cache operations, and fallback policy, and returns a
+  request-ready config patch. `createGoogle()` builds it; `generate()` and
+  `stream()` only merge the patch, so the cache lifecycle never leaks into core.
 </Callout>
 
 ```ts
 // Custom CachedContent configuration
 const adapter = createGoogle(client, {
   cachedContent: { defaultTtlSeconds: 600, maxEntries: 100 },
-})
+});
 
 // Surface cache failures instead of silently falling back
-const strict = createGoogle(client, { cachedContent: { onError: 'throw' } })
+const strict = createGoogle(client, { cachedContent: { onError: "throw" } });
 
 // Disable caching entirely
-const adapter = createGoogle(client, { cachedContent: false })
+const adapter = createGoogle(client, { cachedContent: false });
 
 // Back caching with a custom cache port, or pass a fully custom lifecycle
-const custom = createGoogle(client, { cachedContent: { port: myCachePort } })
+const custom = createGoogle(client, { cachedContent: { port: myCachePort } });
 
 // Skip or tune cache lifecycle for one request
 await adapter.generate(prompt, {
-  model: 'gemini-2.5-flash',
+  model: "gemini-2.5-flash",
   extra: { cachedContent: { ttlSeconds: 600 } },
-})
+});
 ```
 
 ### `adapter.generate(prompt, options)`
@@ -128,13 +134,16 @@ await adapter.generate(prompt, {
 **Returns:** normalized Crux generate result with:
 
 - `result.text` — extracted assistant text
+- `result.usage` — accumulated usage when every provider-call step reported usage
+- `result.cost` — provider-reported cost when available
+- `result.finalStep` — final provider-call text, usage, finish reason, response id, and actual model id
 - `result.raw` — raw Google SDK response
-- `result._meta` — normalized usage, finish reason, tool calls, and model metadata
-- `result._meta.usage.inputTokenDetails.cacheReadTokens` — tokens served from cache when available
+- `result._meta` — retained trace metadata for observability plumbing
+- `result.usage?.inputTokenDetails.cacheReadTokens` — tokens served from cache when available
 
 <Callout type="warn">
-  Structured output is validated with Zod after generation. Invalid JSON from the model produces a Zod error, not a
-  Google SDK error.
+  Structured output is validated with Zod after generation. Invalid JSON from
+  the model produces a Zod error, not a Google SDK error.
 </Callout>
 
 ### `adapter.stream(prompt, options)`
@@ -156,14 +165,18 @@ Stream a prompt execution.
 | `options.extra.cachedContent.skip`       | `boolean?`                                     | Skip caching for this call                                                          |
 | `options.extra.cachedContent.ttlSeconds` | `number?`                                      | TTL in seconds for a newly-created cache on this call                               |
 
-**Returns:** Google GenAI stream.
+**Returns:** `StreamResult<TRawStream>`:
+
+- `result.textStream` — provider-neutral text deltas
+- `result.raw` — raw Google GenAI stream
+- `result.completion` — promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
 
 ### `adapter.retrievalModel(config)`
 
 Create a core `RetrievalModel` from the adapter instance.
 
 ```ts
-const retrievalModel = adapter.retrievalModel({ model: 'gemini-2.5-flash' })
+const retrievalModel = adapter.retrievalModel({ model: "gemini-2.5-flash" });
 ```
 
 Use it as a recipe-level `model` or step-level `model`.
@@ -174,9 +187,9 @@ Create a core `Reranker` for `rerank({ engine })`.
 
 ```ts
 const engine = adapter.reranker({
-  model: 'gemini-2.5-flash',
+  model: "gemini-2.5-flash",
   topN: 12,
-})
+});
 ```
 
 Google's direct SDK adapter does not expose a native rerank endpoint. `adapter.reranker()` uses Crux's `judgeReranker()` over the configured Google model, so each rerank call spends generation tokens.
@@ -234,18 +247,18 @@ Create a `GenerateTextFn` bound to a client and model.
 Create a dense Crux embedding backed by `client.models.embedContent()`.
 
 ```ts
-import { GoogleGenAI } from '@google/genai'
-import { embedding } from '@use-crux/google'
+import { GoogleGenAI } from "@google/genai";
+import { embedding } from "@use-crux/google";
 
-const client = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY })
+const client = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
 
 const docsEmbedding = embedding(client, {
-  name: 'docs-embedding',
-  model: 'text-embedding-004',
+  name: "docs-embedding",
+  model: "text-embedding-004",
   dimensions: 768,
   maxInputTokens: 2048,
-  taskType: 'RETRIEVAL_DOCUMENT',
-})
+  taskType: "RETRIEVAL_DOCUMENT",
+});
 ```
 
 This helper is dense-only. Google's SDK returns token counts per embedded input when available, and the Crux helper aggregates them into embedding usage metadata automatically.
@@ -282,7 +295,7 @@ import type {
   GoogleExtra,
   GoogleFunctionDeclaration,
   GoogleRequest,
-} from '@use-crux/google'
+} from "@use-crux/google";
 ```
 
 ## Related

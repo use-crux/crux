@@ -31,7 +31,7 @@ import {
 
 afterEach(() => {
   vi.useRealTimers();
-})
+});
 
 // ─────────────────────────────────────────────────────────────────
 // Mock Types
@@ -61,7 +61,13 @@ function createMockResponse(
   return {
     text,
     toolCalls,
-    usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30, inputTokenDetails: {}, outputTokenDetails: {} },
+    usage: {
+      inputTokens: 10,
+      outputTokens: 20,
+      totalTokens: 30,
+      inputTokenDetails: {},
+      outputTokenDetails: {},
+    },
     finishReason: toolCalls ? "tool_calls" : "stop",
     responseId: "resp_123",
     actualModelId: "test-model",
@@ -101,7 +107,13 @@ function createMockSpec(
         rawStream,
         extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
         completion: async () => ({
-          usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30, inputTokenDetails: {}, outputTokenDetails: {} },
+          usage: {
+            inputTokens: 10,
+            outputTokens: 20,
+            totalTokens: 30,
+            inputTokenDetails: {},
+            outputTokenDetails: {},
+          },
           finishReason: "stop",
         }),
       };
@@ -220,7 +232,8 @@ describe("adapter", () => {
         budget: "step",
         limitMs: 50,
       });
-      const instanceAssertion = expect(result).rejects.toBeInstanceOf(TimeoutError);
+      const instanceAssertion =
+        expect(result).rejects.toBeInstanceOf(TimeoutError);
 
       await vi.advanceTimersByTimeAsync(50);
 
@@ -233,12 +246,19 @@ describe("adapter", () => {
       const spec = createMockSpec({
         call: async () => ({
           raw: { id: "raw_123", content: "tool" },
-          extracted: createMockResponse("", [{ id: "tc_1", name: "lookup", args: { q: "x" } }]),
+          extracted: createMockResponse("", [
+            { id: "tc_1", name: "lookup", args: { q: "x" } },
+          ]),
         }),
       });
       const adapter = makeAdapter(spec)(mockClient);
       const prompt = createTestPrompt({
-        tools: { lookup: { description: "lookup", execute: async () => new Promise<never>(() => {}) } },
+        tools: {
+          lookup: {
+            description: "lookup",
+            execute: async () => new Promise<never>(() => {}),
+          },
+        },
       });
 
       const result = adapter.generate(prompt, {
@@ -261,12 +281,19 @@ describe("adapter", () => {
       const spec = createMockSpec({
         call: async () => ({
           raw: { id: "raw_123", content: "tool" },
-          extracted: createMockResponse("", [{ id: "tc_1", name: "lookup", args: { q: "x" } }]),
+          extracted: createMockResponse("", [
+            { id: "tc_1", name: "lookup", args: { q: "x" } },
+          ]),
         }),
       });
       const adapter = makeAdapter(spec)(mockClient);
       const prompt = createTestPrompt({
-        tools: { lookup: { description: "lookup", execute: async () => new Promise<never>(() => {}) } },
+        tools: {
+          lookup: {
+            description: "lookup",
+            execute: async () => new Promise<never>(() => {}),
+          },
+        },
       });
 
       const result = adapter.generate(prompt, {
@@ -784,7 +811,13 @@ describe("adapter", () => {
         },
         extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
         completion: async () => ({
-          usage: { inputTokens: 5, outputTokens: 10, totalTokens: 15, inputTokenDetails: {}, outputTokenDetails: {} },
+          usage: {
+            inputTokens: 5,
+            outputTokens: 10,
+            totalTokens: 15,
+            inputTokenDetails: {},
+            outputTokenDetails: {},
+          },
         }),
       });
 
@@ -798,9 +831,9 @@ describe("adapter", () => {
       });
 
       expect(streamSpy).toHaveBeenCalledOnce();
-      expect(handle.rawStream).toBeDefined();
-      expect(typeof handle.extractTextDelta).toBe("function");
-      expect(typeof handle.completion).toBe("function");
+      expect(handle.raw).toBeDefined();
+      expect(typeof handle.textStream[Symbol.asyncIterator]).toBe("function");
+      expect(typeof handle.completion.then).toBe("function");
     });
 
     it("can iterate over the stream", async () => {
@@ -814,10 +847,7 @@ describe("adapter", () => {
       });
 
       const chunks: string[] = [];
-      for await (const chunk of handle.rawStream) {
-        const delta = handle.extractTextDelta(chunk);
-        if (delta) chunks.push(delta);
-      }
+      for await (const delta of handle.textStream) chunks.push(delta);
 
       expect(chunks).toEqual(["hel", "lo"]);
     });
@@ -830,12 +860,15 @@ describe("adapter", () => {
             [Symbol.asyncIterator]() {
               return {
                 async next() {
-                  return new Promise<IteratorResult<{ text: string }>>(() => {});
+                  return new Promise<IteratorResult<{ text: string }>>(
+                    () => {},
+                  );
                 },
               };
             },
           } as MockStream & AsyncIterable<unknown>,
-          extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+          extractTextDelta: (chunk: unknown) =>
+            (chunk as { text: string }).text,
           completion: async () => undefined,
         }),
       });
@@ -847,7 +880,7 @@ describe("adapter", () => {
         input: { instruction: "stream slowly" },
         timeout: { chunkMs: 40 },
       });
-      const read = handle.rawStream[Symbol.asyncIterator]().next();
+      const read = handle.textStream[Symbol.asyncIterator]().next();
       const assertion = expect(read).rejects.toMatchObject({
         budget: "chunk",
         limitMs: 40,
@@ -940,7 +973,10 @@ describe("adapter", () => {
         id: "reviewer",
         prompt: basePrompt,
         tools: {
-          agentTool: { description: "from agent", execute: async () => "agent" },
+          agentTool: {
+            description: "from agent",
+            execute: async () => "agent",
+          },
         },
       });
 
@@ -951,8 +987,12 @@ describe("adapter", () => {
       });
 
       const callArgs = callSpy.mock.calls[0]![1] as CallArgs;
-      expect(callArgs.tools?.map((tool) => tool.name).sort()).toEqual(["agentTool"]);
-      const resolvedBase = await basePrompt.resolve({ input: { instruction: "review" } });
+      expect(callArgs.tools?.map((tool) => tool.name).sort()).toEqual([
+        "agentTool",
+      ]);
+      const resolvedBase = await basePrompt.resolve({
+        input: { instruction: "review" },
+      });
       expect(resolvedBase).not.toHaveProperty("tools");
     });
   });

@@ -56,7 +56,8 @@ const result = await adapter.generate(editDraft, {
   input: { instruction: "Fix the intro" },
 });
 result.text;
-result._meta.usage;
+result.usage;
+result.finalStep;
 ```
 
 ### `adapter.generate(prompt, options)`
@@ -74,8 +75,11 @@ result._meta.usage;
 **Returns:** normalized Crux generate result with:
 
 - `result.text` — extracted assistant text
+- `result.usage` — accumulated usage when every provider-call step reported usage
+- `result.cost` — provider-reported cost when available
+- `result.finalStep` — final provider-call text, usage, finish reason, response id, and actual model id
 - `result.raw` — raw Anthropic SDK response
-- `result._meta` — normalized usage, finish reason, tool calls, and model metadata
+- `result._meta` — retained trace metadata for observability plumbing
 
 When the prompt has an `output` schema, Anthropic's parsed value remains available on `result.raw.parsed_output`.
 
@@ -98,7 +102,11 @@ Stream a prompt execution.
 | `options.extra.tools`       | `ToolUnion[]?`                                 | Anthropic-native tools that bypass Crux tool conversion                             |
 | `options.extra.tool_choice` | `ToolChoice?`                                  | Anthropic-native tool selection                                                     |
 
-**Returns:** Anthropic `MessageStream` (async iterable of `MessageStreamEvent`).
+**Returns:** `StreamResult<MessageStream>`:
+
+- `result.textStream` — provider-neutral text deltas
+- `result.raw` — raw Anthropic `MessageStream`
+- `result.completion` — promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
 
 ### `adapter.retrievalModel(config)`
 

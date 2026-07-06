@@ -55,6 +55,20 @@ result.object.sentiment; // 'positive' | 'negative' | 'neutral'
 
 That is a complete Crux program: typed input, typed output, and your SDK still making the model call.
 
+## Adapter Results
+
+Core-step adapters such as `@use-crux/openai`, `@use-crux/anthropic`, and
+`@use-crux/google` return the canonical `GenerateResult` envelope from
+`generate()`: accumulated `text`, optional accumulated `usage`, optional
+`cost`, `steps`, `finalStep`, provider-neutral `messages`, typed `.raw`, and
+retained `_meta` for observability plumbing. `usage` is present only when every
+provider-call step reported usage; Crux never presents a partial token sum as a
+total.
+
+`stream()` returns `StreamResult`: provider-neutral `textStream`, typed `.raw`
+for the SDK stream handle, and a `completion` promise resolving to the same
+envelope fields except `.raw` and `_meta`.
+
 ## Input Escaping
 
 Prompt resolution uses the parsed Zod output as the source of truth. Defaults

@@ -8,7 +8,11 @@
  */
 
 import type { z } from "zod";
-import type { TraceMeta, GenerationSettings, TokenUsage } from "../generation/types";
+import type {
+  TraceMeta,
+  GenerationSettings,
+  TokenUsage,
+} from "../generation/types";
 import type { SystemBlock } from "../resolver/types";
 import type { Message } from "../generation/messages";
 import type { ToolModelOutput } from "../types/tool";
@@ -83,6 +87,8 @@ export interface CallArgs<
 
 /** Stream handle returned by the adapter's stream method. */
 export interface StreamHandle<TRawStream> {
+  /** Original provider stream handle, when distinct from the wrapped iterable. */
+  raw?: TRawStream;
   rawStream: TRawStream & AsyncIterable<unknown>;
   extractTextDelta: (chunk: unknown) => string | undefined;
   completion: () => Promise<TraceMeta | undefined>;

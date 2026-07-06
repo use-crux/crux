@@ -13,30 +13,33 @@ pnpm add @use-crux/google @use-crux/core @google/genai
 ## Usage
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { createGoogle } from '@use-crux/google'
-import { GoogleGenAI } from '@google/genai'
-import { z } from 'zod'
+import { prompt } from "@use-crux/core";
+import { createGoogle } from "@use-crux/google";
+import { GoogleGenAI } from "@google/genai";
+import { z } from "zod";
 
-const google = createGoogle(new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY }))
+const google = createGoogle(
+  new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY }),
+);
 
 const fixTypos = prompt({
-  id: 'fix-typos',
+  id: "fix-typos",
   input: z.object({ instruction: z.string() }),
   prompt: ({ input }) => input.instruction,
-})
+});
 
 const result = await google.generate(fixTypos, {
-  model: 'gemini-2.5-flash',
-  input: { instruction: 'Fix typos in this draft.' },
-})
+  model: "gemini-2.5-flash",
+  input: { instruction: "Fix typos in this draft." },
+});
 
-result.text // extracted text
-result.raw // raw GenerateContentResponse
-result._meta // normalized usage, finish reason, etc.
+result.text; // extracted text
+result.raw; // raw GenerateContentResponse
+result.usage; // accumulated usage when every provider step reported it
+result.finalStep; // text, usage, finish reason, response id, and actual model for the final step
 ```
 
-The adapter also exposes `stream()` and agent composition methods (parallel, pipeline, consensus, swarm), plus `embedding()`, `createGenerateObjectFn()`, and `createGenerateTextFn()` for `@use-crux/core` APIs that expect framework-agnostic functions. `createGenerateObjectFn()` is provider-native: it uses Google structured JSON output and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
+The adapter also exposes `stream()` and agent composition methods (parallel, pipeline, consensus, swarm), plus `embedding()`, `createGenerateObjectFn()`, and `createGenerateTextFn()` for `@use-crux/core` APIs that expect framework-agnostic functions. `generate()` returns the canonical Crux envelope with accumulated `text`, optional `usage`, optional `cost`, `steps`, `finalStep`, provider-neutral `messages`, typed `raw`, and retained `_meta`; `usage` is present only when every provider-call step reported usage. `stream()` returns `{ textStream, raw, completion }`, where `completion` resolves to the same envelope fields without `raw`/`_meta`. `createGenerateObjectFn()` is provider-native: it uses Google structured JSON output and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
 Provider-level caching via Google's CachedContent API activates automatically for a leading run of system blocks with `providerCache: true`. A single `GoogleCachedContentLifecycle` owns prefix detection, cache keying/reuse, SDK cache operations, and fallback policy; it returns a request-ready config patch that both `generate()` and `stream()` merge. The adapter sends the cacheable prefix as `cachedContent` and keeps the uncached remainder as `systemInstruction`.
 

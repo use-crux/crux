@@ -13,6 +13,9 @@ import type {
   AdapterGenerateOptions,
   AdapterStreamOptions,
   AdapterGenerateResult,
+  GenerateResult,
+  StreamResult,
+  FinalStepInfo,
   AdapterResponse,
   CallArgs,
   StreamHandle,
@@ -214,6 +217,7 @@ const createMyAdapter = adapter({
       messages: args.messages,
     });
     return {
+      raw: stream,
       rawStream: stream,
       extractTextDelta: (chunk) => chunk.delta?.text,
       completion: async () => undefined,
@@ -270,15 +274,15 @@ The core-step execution IR produced by the `turn` provider-runtime branch.
 
 The adapter interface returned by the factory.
 
-| Property / Method        | Type                                           | Description                                               |
-| ------------------------ | ---------------------------------------------- | --------------------------------------------------------- |
-| `providerId`             | `string`                                       | Provider identifier from the spec                         |
-| `generate(prompt, opts)` | `Promise<AdapterGenerateResult<TRawResponse>>` | Execute a prompt (non-streaming) with automatic tool loop |
-| `stream(prompt, opts)`   | `Promise<StreamHandle<TRawStream>>`            | Execute a prompt (streaming)                              |
-| `parallel`               | `function`                                     | Run multiple agents concurrently                          |
-| `pipeline`               | `function`                                     | Chain agents sequentially                                 |
-| `consensus`              | `function`                                     | Run agents and pick a winner via voting                   |
-| `swarm`                  | `function`                                     | Run a swarm of agents with peer-to-peer routing           |
+| Property / Method        | Type                                           | Description                                                              |
+| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------ |
+| `providerId`             | `string`                                       | Provider identifier from the spec                                        |
+| `generate(prompt, opts)` | `Promise<AdapterGenerateResult<TRawResponse>>` | Execute a prompt (non-streaming) with automatic tool loop                |
+| `stream(prompt, opts)`   | `Promise<StreamResult<TRawStream>>`            | Execute a prompt and return canonical text deltas plus raw stream access |
+| `parallel`               | `function`                                     | Run multiple agents concurrently                                         |
+| `pipeline`               | `function`                                     | Chain agents sequentially                                                |
+| `consensus`              | `function`                                     | Run agents and pick a winner via voting                                  |
+| `swarm`                  | `function`                                     | Run a swarm of agents with peer-to-peer routing                          |
 
 ## `CallArgs<TExtra>`
 
@@ -300,24 +304,26 @@ Canonical args assembled by the adapter from prompt resolution. Passed to `spec.
 
 Canonical response extracted by the adapter from the provider's raw response. Used by the tool loop to determine if another iteration is needed.
 
-| Field           | Type                                                         | Description                                                                                       |
-| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `text`          | `string`                                                     | Extracted text                                                                                    |
-| `toolCalls`     | `Array<{ id, name, args }> \| undefined`                     | Tool call requests                                                                                |
-| `usage`         | `TokenUsage \| undefined`                                  | Token usage with `inputTokenDetails` and `outputTokenDetails`. Omit `usage` when the provider omits token counts; do not fabricate zeroes. |
-| `finishReason`  | `string \| undefined`                                        | Why generation stopped                                                                            |
-| `responseId`    | `string \| undefined`                                        | Provider response ID                                                                              |
-| `actualModelId` | `string \| undefined`                                        | Actual model used (may differ from requested)                                                     |
+| Field           | Type                                     | Description                                                                                                                                |
+| --------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `text`          | `string`                                 | Extracted text                                                                                                                             |
+| `toolCalls`     | `Array<{ id, name, args }> \| undefined` | Tool call requests                                                                                                                         |
+| `usage`         | `TokenUsage \| undefined`                | Token usage with `inputTokenDetails` and `outputTokenDetails`. Omit `usage` when the provider omits token counts; do not fabricate zeroes. |
+| `finishReason`  | `string \| undefined`                    | Why generation stopped                                                                                                                     |
+| `responseId`    | `string \| undefined`                    | Provider response ID                                                                                                                       |
+| `actualModelId` | `string \| undefined`                    | Actual model used (may differ from requested)                                                                                              |
 
 ## `StreamHandle<TRawStream>`
 
-Stream handle returned by the adapter's stream method.
+Internal stream handle returned by `AdapterSpec.stream()`. Public
+`CruxAdapter.stream()` wraps this as `StreamResult<TRawStream>`.
 
-| Field              | Type                                      | Description                               |
-| ------------------ | ----------------------------------------- | ----------------------------------------- |
-| `rawStream`        | `TRawStream & AsyncIterable<unknown>`     | The raw SDK stream                        |
-| `extractTextDelta` | `(chunk: unknown) => string \| undefined` | Extract text delta from a stream chunk    |
-| `completion`       | `() => Promise<TraceMeta \| undefined>`   | Get completion metadata after stream ends |
+| Field              | Type                                      | Description                                                             |
+| ------------------ | ----------------------------------------- | ----------------------------------------------------------------------- |
+| `raw`              | `TRawStream?`                             | Original provider stream handle when distinct from the wrapped iterable |
+| `rawStream`        | `TRawStream & AsyncIterable<unknown>`     | Provider stream iterable, possibly wrapped for safety/observability     |
+| `extractTextDelta` | `(chunk: unknown) => string \| undefined` | Extract text delta from a stream chunk                                  |
+| `completion`       | `() => Promise<TraceMeta \| undefined>`   | Get completion metadata after stream ends                               |
 
 ## `AdapterGenerateOptions<TExtra>`
 
@@ -335,14 +341,35 @@ Options for adapter `generate()` calls.
 | `messages`        | `Message[]?`                                                 | Additional messages to prepend (e.g., conversation history) |
 | `validationRetry` | [`ValidationRetryOptions?`](/docs/guides/safety/constraints) | Retry structured output on Zod validation failure           |
 
-## `AdapterGenerateResult<TRawResponse>`
+## `GenerateResult<TRawResponse>`
 
-| Field   | Type           | Description                                                  |
-| ------- | -------------- | ------------------------------------------------------------ |
-| `raw`   | `TRawResponse` | The raw SDK response                                         |
-| `text`  | `string`       | Extracted text                                               |
-| `_meta` | `TraceMeta`    | Normalized metadata (usage, finish reason, tool calls, etc.) |
-| `steps` | `number`       | Number of tool loop iterations performed                     |
+`AdapterGenerateResult<TRawResponse>` is the native adapter alias for this
+canonical envelope.
+
+| Field              | Type                              | Description                                                                    |
+| ------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
+| `text`             | `string`                          | Assistant-visible text accumulated across provider-call steps                  |
+| `object`           | `TOutput?`                        | Parsed structured output when the prompt declares an output schema             |
+| `usage`            | `TokenUsage?`                     | Accumulated usage, present only when every provider-call step reported usage   |
+| `cost`             | `TraceMeta['cost']?`              | Provider-reported cost when available                                          |
+| `steps`            | `number`                          | Provider-call steps represented in this envelope                               |
+| `finalStep`        | `FinalStepInfo`                   | Final provider-call text, optional usage, finish reason, response id, model id |
+| `messages`         | `Message[]`                       | Provider-neutral Crux transcript                                               |
+| `pendingApprovals` | `readonly ApprovalRequestInfo[]?` | Pending approval requests when execution suspended                             |
+| `raw`              | `TRawResponse`                    | The raw SDK response                                                           |
+| `_meta`            | `TraceMeta`                       | Retained trace metadata for observability plumbing                             |
+
+`usage` is omitted if any provider-call step omitted usage; Crux never reports a
+partial token sum as a total. `finalStep.usage` follows the provider's final
+step exactly and is also omitted when the final step was unmetered.
+
+## `StreamResult<TRawStream>`
+
+| Field        | Type                                 | Description                                                     |
+| ------------ | ------------------------------------ | --------------------------------------------------------------- |
+| `textStream` | `AsyncIterable<string>`              | Provider-neutral text deltas                                    |
+| `raw`        | `TRawStream`                         | Raw provider stream handle                                      |
+| `completion` | `Promise<StreamCompletion<TOutput>>` | Completion envelope: `GenerateResult` without `raw` and `_meta` |
 
 ## `ToolResultEntry`
 
@@ -388,6 +415,10 @@ import type {
   AdapterGenerateOptions,
   AdapterStreamOptions,
   AdapterGenerateResult,
+  GenerateResult,
+  StreamResult,
+  StreamCompletion,
+  FinalStepInfo,
   // Spec interfaces
   AdapterSpec,
   LoopRuntimePort,

@@ -22,6 +22,10 @@ import { orchestrateGenerate } from "../../generation/orchestrate";
 import { withBudget } from "../../generation/timeout";
 import type { AdapterResponse, CallArgs } from "../types";
 import {
+  createResultAccumulator,
+  type ResultStepFacts,
+} from "../result-accumulator";
+import {
   formatValidationFeedback,
   validateStructuredOutput,
 } from "../policy/validation-retry";
@@ -102,6 +106,7 @@ export async function generateCore<
   let pendingApprovals: readonly ApprovalRequestInfo[] | undefined;
   let stoppedBy: StopCondition | undefined;
   let steps = 0;
+  const stepFacts: ResultStepFacts[] = [];
   const validationRetry = args.validationRetry;
   const maxValidationRetries = validationRetry?.maxRetries ?? 0;
   let validationRetries = 0;
@@ -172,10 +177,13 @@ export async function generateCore<
         };
         lastCallArgs = callArgs;
 
-        const { raw, extracted } = await withBudget(() => dialect.call(dialect.client, callArgs), {
-          budget: "step",
-          limitMs: args.timeout?.stepMs,
-        });
+        const { raw, extracted } = await withBudget(
+          () => dialect.call(dialect.client, callArgs),
+          {
+            budget: "step",
+            limitMs: args.timeout?.stepMs,
+          },
+        );
         lastRaw = raw;
         lastExtracted = extracted;
 
@@ -191,6 +199,7 @@ export async function generateCore<
             if (validText !== extracted.text) {
               lastExtracted = { ...extracted, text: validText };
             }
+            rememberStep(lastExtracted);
             break;
           }
           if (validationRetries < maxValidationRetries && step < maxSteps - 1) {
@@ -210,6 +219,7 @@ export async function generateCore<
                 ),
               },
             ];
+            rememberStep({ ...lastExtracted, text: "" });
             continue;
           }
           validationRetry.onExhausted?.(
@@ -224,6 +234,7 @@ export async function generateCore<
             promptId: prompt.id ?? "unknown",
           });
         } else {
+          rememberStep(lastExtracted);
           break;
         }
 
@@ -236,6 +247,7 @@ export async function generateCore<
             finishReason: "tool_approval_required",
           };
           pendingApprovals = [round.request];
+          rememberStep(lastExtracted);
           break;
         }
         const amendment = await lifecycle.applySkillLoads(extracted.toolCalls);
@@ -246,6 +258,7 @@ export async function generateCore<
           step--;
           continue;
         }
+        rememberStep(lastExtracted);
         const triggered = findTriggeredStopCondition(stopConditions, {
           steps,
           toolCalls: extracted.toolCalls,
@@ -270,6 +283,7 @@ export async function generateCore<
         const finalOutput = await safety.finalizeOutput(
           { text: lastExtracted.text, parsed },
           async (corrective) => {
+            replaceLastStep({ ...lastExtracted!, text: "" });
             messages = dialect.appendToolRound(messages, lastExtracted!, []);
             messages = [...messages, ...corrective];
             const regen = await withBudget(
@@ -283,6 +297,7 @@ export async function generateCore<
             lastRaw = regen.raw;
             lastExtracted = regen.extracted;
             steps++;
+            rememberStep(lastExtracted);
             if (resolved.schema) {
               const reVal = validateStructuredOutput(
                 regen.extracted.text,
@@ -293,6 +308,7 @@ export async function generateCore<
                 : regen.extracted.text;
               if (reText !== regen.extracted.text) {
                 lastExtracted = { ...regen.extracted, text: reText };
+                replaceLastStep(lastExtracted);
               }
               let reParsed: unknown;
               try {
@@ -308,6 +324,7 @@ export async function generateCore<
         );
         if (finalOutput.text !== lastExtracted.text) {
           lastExtracted = { ...lastExtracted, text: finalOutput.text };
+          replaceLastStep(lastExtracted);
         }
         parsedObject = finalOutput.parsed;
       }
@@ -330,15 +347,17 @@ export async function generateCore<
           ? messages
           : appendAssistantResultMessage(messages, lastExtracted);
 
-      return {
+      const accumulator = createResultAccumulator();
+      for (const facts of stepFacts) accumulator.addStep(facts);
+
+      return accumulator.finalize({
         raw: lastRaw,
-        text: lastExtracted?.text ?? "",
-        ...(parsedObject !== undefined ? { object: parsedObject } : {}),
-        _meta: meta,
-        steps,
         messages: resultMessages,
+        _meta: meta,
+        ...(parsedObject !== undefined ? { object: parsedObject } : {}),
+        ...(meta.cost !== undefined ? { cost: meta.cost } : {}),
         ...(pendingApprovals ? { pendingApprovals } : {}),
-      };
+      });
     },
   );
 
@@ -349,4 +368,24 @@ export async function generateCore<
   });
 
   return generated;
+
+  function rememberStep(response: AdapterResponse | undefined): void {
+    if (!response) return;
+    stepFacts.push(stepFactsFromResponse(response));
+  }
+
+  function replaceLastStep(response: AdapterResponse | undefined): void {
+    if (!response || stepFacts.length === 0) return;
+    stepFacts[stepFacts.length - 1] = stepFactsFromResponse(response);
+  }
+}
+
+function stepFactsFromResponse(response: AdapterResponse): ResultStepFacts {
+  return {
+    text: response.text,
+    ...(response.usage !== undefined ? { usage: response.usage } : {}),
+    finishReason: response.finishReason,
+    responseId: response.responseId,
+    modelId: response.actualModelId,
+  };
 }

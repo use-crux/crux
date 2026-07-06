@@ -1445,15 +1445,17 @@ Map to SDK-specific args:
   ↓
 Call SDK function through the provider port/profile
   ↓
-Normalize result metadata into _meta:
+Normalize one provider-call step:
   { usage, finishReason, toolCalls, responseId, modelId, cost }
   ↓
 Adapter execution handles:
   ├── Apply policy sessions and middleware
   ├── Drive tool rounds or SDK step observation
+  ├── Record step facts in result-accumulator.ts
   └── Stamp metadata, memory capture, and observability
   ↓
-Return result
+Return GenerateResult:
+  { text, object?, usage?, cost?, steps, finalStep, messages, pendingApprovals?, raw, _meta }
 ```
 
 ### Adapter Generic Conventions
@@ -1508,25 +1510,51 @@ The Vercel AI SDK adapter exports pre-bound singletons (model is passed at call 
 
 These provider-native helpers are deliberately smaller than prompt `generate()`: they send the supplied schema to the provider's structured-output surface where supported, return provider/schema parsed `{ object }`, and preserve provider-native errors. They do not imply Crux prompt resolution, validation retry policy, safety sessions, cassettes, tools, memory capture, or instrumentation. Code that needs those runtime policies can call `createGenerateObjectFnFromGenerate(generate, { promptId })` from `@use-crux/core/compaction`; that bridge constructs a synthetic structured prompt and runs it through the supplied adapter `generate()` function.
 
-### Metadata Normalization
+### Result Envelope And Metadata Normalization
 
-Each adapter attaches `_meta` to the result with a consistent shape. This allows devtools middleware, quality experiments, and eval reports to extract usage/cost information without knowing which adapter was used.
+Core-step adapters build public results through `adapter/result-accumulator.ts`.
+Each provider-call step contributes assistant-visible text, optional usage,
+finish reason, response id, and actual model id. The accumulator concatenates
+step text, exposes `finalStep` as the final provider-call snapshot, and exposes
+top-level `usage` only when every provider-call step reported usage. If any step
+is unmetered, the total is unknown and `usage` is omitted instead of presenting
+a partial sum.
+
+Each adapter still attaches `_meta` to the result with a consistent trace shape.
+Public adapter docs should point users to `result.usage`, `result.cost`, and
+`result.finalStep`; `_meta` is retained for devtools middleware, quality
+experiments, eval reports, and observability plumbing.
 
 ```ts
-result._meta = {
+result = {
+  text: "checking done",
   usage: {
-    inputTokens,
-    outputTokens,
-    totalTokens,
-    inputTokenDetails: { cacheReadTokens, cacheWriteTokens },
-    outputTokenDetails: { reasoningTokens },
+    inputTokens: 12,
+    outputTokens: 8,
+    totalTokens: 20,
+    inputTokenDetails: { cacheReadTokens: 4 },
+    outputTokenDetails: {},
   },
-  finishReason: string,
-  toolCalls: { id, name, args }[],
-  responseId: string,
-  modelId: string,    // actual model ID returned by provider
-  cost: number,       // USD cost if available
-}
+  cost: 0.0003,
+  steps: 2,
+  finalStep: {
+    text: "done",
+    usage: finalStepUsage,
+    finishReason: "stop",
+    responseId: "resp_2",
+    modelId: "provider-model-id",
+  },
+  messages,
+  raw,
+  _meta: {
+    usage: finalStepUsage, // final provider-call metadata
+    finishReason: "stop",
+    toolCalls: [],
+    responseId: "resp_2",
+    actualModelId: "provider-model-id",
+    cost: 0.0003,
+  },
+};
 ```
 
 ## Storage Adapters
