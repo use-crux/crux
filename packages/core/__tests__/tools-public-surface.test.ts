@@ -12,7 +12,8 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 
-import { tool } from '@use-crux/core/tools'
+import { tool, toolPolicy as toolPolicyFromTools } from '@use-crux/core/tools'
+import { toolPolicy } from '@use-crux/core/safety'
 import {
   toolMiddleware,
   approvalMiddleware,
@@ -89,6 +90,59 @@ describe('@use-crux/core/tool-middleware — middleware', () => {
     const mw = approvalMiddleware({ id: 'gate', match: ['danger'] })
     const wrapped = mw.wrapTool('danger', { execute: async () => 'ok' })
     expect(await wrapped.needsApproval?.({}, {})).toBe(true)
+  })
+})
+
+describe('@use-crux/core/safety — toolPolicy()', () => {
+  it('re-exports the Safety-owned action policy from the tools subpath', () => {
+    expect(toolPolicyFromTools).toBe(toolPolicy)
+  })
+
+  it('creates approval middleware for matched tools', async () => {
+    const policy = toolPolicy.approval({ id: 'approve-email', match: 'sendEmail' })
+    const wrapped = policy.wrapTool('sendEmail', { execute: async () => 'sent' })
+
+    expect(policy._tag).toBe('ToolMiddleware')
+    expect(await wrapped.needsApproval?.({ to: 'ada@example.com' }, {})).toBe(true)
+  })
+
+  it('blocks unsafe tool args and rewrites safeable tool results', async () => {
+    const blockDelete = toolPolicy.args({
+      id: 'block-delete',
+      match: 'deleteUser',
+      run: async () => ({ action: 'block', reason: 'Deletes require manual approval.' }),
+    })
+    const redactResult = toolPolicy.result({
+      id: 'redact-result',
+      match: 'lookupUser',
+      run: async (subject) => ({
+        action: 'rewrite',
+        value: { ...subject, output: { email: '[redacted-email]' } },
+        rewrite: { kind: 'redact' },
+      }),
+    })
+
+    const blocked = blockDelete.wrapTool('deleteUser', { execute: async () => 'deleted' })
+    await expect(blocked.execute?.({ id: 'u1' }, {})).rejects.toThrow('Deletes require manual approval.')
+    await expect(blocked.execute?.({ id: 'u1', apiKey: 'sk-live-secret' }, {})).rejects.toMatchObject({
+      name: 'ToolPolicyBlockedError',
+      decisions: [
+        expect.objectContaining({
+          policyId: 'block-delete',
+          kind: 'toolPolicy',
+          boundary: 'tool.call',
+          action: 'block',
+          captured: expect.objectContaining({
+            preview: expect.not.stringContaining('sk-live-secret'),
+          }),
+        }),
+      ],
+    })
+
+    const rewritten = redactResult.wrapTool('lookupUser', {
+      execute: async () => ({ email: 'ada@example.com' }),
+    })
+    await expect(rewritten.execute?.({}, {})).resolves.toEqual({ email: '[redacted-email]' })
   })
 })
 

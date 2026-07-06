@@ -12,6 +12,7 @@
 
 // ── Tool authoring ──────────────────────────────────────────────
 export { tool } from './define-tool'
+export { toolPolicy } from '../safety/toolPolicy'
 
 // ── Tool middleware ─────────────────────────────────────────────
 export { toolMiddleware, approvalMiddleware, applyToolMiddleware, notifyToolApprovalResponses } from './middleware'

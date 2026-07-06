@@ -19,7 +19,15 @@ describe('ValidationExhaustedError', () => {
     expect(err).toBeInstanceOf(Error)
     expect(err).toBeInstanceOf(ValidationExhaustedError)
     expect(err.name).toBe('ValidationExhaustedError')
-    expect(err.lastRawOutput).toBe('{"name": 123}')
+    expect(err.lastOutput.preview).toBe('{"name": 123}')
+    expect(err.decisions).toEqual([
+      expect.objectContaining({
+        policyId: 'validation.feedback',
+        boundary: 'validation.feedback',
+        action: 'block',
+        captured: expect.objectContaining({ preview: '{"name": 123}' }),
+      }),
+    ])
     expect(err.zodErrors).toBe(zodError)
     expect(err.attempts).toBe(3)
     expect(err.maxAttempts).toBe(3)

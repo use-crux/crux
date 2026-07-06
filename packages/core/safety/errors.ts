@@ -1,4 +1,5 @@
 import type { SafetyCaptureSummary, SafetyDecision } from './decision'
+import { redactSensitiveText } from '../shared/redaction'
 
 export const POLICY_TERMINAL: unique symbol = Symbol.for('crux.safety.policyTerminal') as never
 
@@ -44,10 +45,7 @@ function fnv1a64(input: string): string {
 }
 
 function redactPreview(content: string): string {
-  return content
-    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{1,}/gi, '[redacted-email]')
-    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, '[redacted-ssn]')
-    .replace(/\b(?:sk|pk|rk|key|token)-[A-Za-z0-9_-]{3,}\b/g, '[redacted-secret]')
+  return redactSensitiveText(content)
 }
 
 interface SafetyErrorInit {

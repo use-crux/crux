@@ -17,7 +17,7 @@ export interface JudgeFewShot {
   reasoning: string
 }
 
-/** Configuration for creating an LLM judge via `llmJudge()`. */
+/** Configuration for creating an LLM judge via `judge()`. */
 export interface JudgeConfig<TDetail = unknown> {
   /** Unique identifier for this judge/metric. */
   id: string
@@ -32,7 +32,7 @@ export interface JudgeConfig<TDetail = unknown> {
    * Use this for per-call context like brand profiles, style guides, etc.
    */
   context?: string
-  /** Whether to request chain-of-thought reasoning before scoring. Default: true. */
+  /** Whether to request a concise explanation before scoring. Default: true. */
   chainOfThought?: boolean
   /** Few-shot calibration examples. */
   fewShot?: JudgeFewShot[]
@@ -54,7 +54,7 @@ export interface JudgeConfig<TDetail = unknown> {
 export interface JudgeResult<TDetail = unknown> {
   /** Numeric score within the judge's scale. */
   score: number
-  /** Chain-of-thought reasoning explaining the score. */
+  /** Short explanation for the score. */
   reasoning: string
   /** ID of the judge/metric that produced this result. */
   metricId: string

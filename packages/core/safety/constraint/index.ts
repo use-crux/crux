@@ -2,6 +2,7 @@
 export { constraint, isConstraint, getConstraintDefinitionSource } from './define'
 export { evaluateConstraint } from './evaluate'
 export { ConstraintViolationError } from './errors'
+export type { JudgeConstraintStrategyOptions, JudgeConstraintVerdict } from './strategies'
 
 // ── Types ──────────────────────────────────────────────────────────
 export type { ConstraintEvalCase, ConstraintEvalCaseResult, ConstraintEvalReport } from './evaluate'

@@ -12,6 +12,10 @@ import type {
   LegacyGuardrailConfig,
 } from './types'
 import { validateGuardrailRunResult, validateLegacyGuardrailResult } from './types'
+import { classifier } from './strategies/classifier'
+import { injection } from './strategies/injection'
+import { pii } from './strategies/pii'
+import { secrets } from './strategies/secrets'
 
 /** Module-scoped map: frozen guardrail -> definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()
@@ -29,10 +33,23 @@ export function getGuardrailDefinitionSource(
  * The `on` boundary drives the subject type passed to `run`. Text guardrails
  * stay generic-free, while object/path guardrails infer structured subjects.
  */
-export function guardrail<B extends BoundaryInput>(config: GuardrailConfig<B>): Guardrail<B>
-/** @internal Transitional overload for pre-migration source files. */
-export function guardrail<TPhase extends GuardrailPhase>(config: LegacyGuardrailConfig<TPhase>): Guardrail<BoundaryDef>
-export function guardrail<B extends BoundaryInput>(
+interface GuardrailFactory {
+  <B extends BoundaryInput>(config: GuardrailConfig<B>): Guardrail<B>
+  /** @internal Transitional overload for pre-migration source files. */
+  <TPhase extends GuardrailPhase>(config: LegacyGuardrailConfig<TPhase>): Guardrail<BoundaryDef>
+  /** Built-in text PII redaction/masking/hash strategy. */
+  readonly pii: typeof pii
+  /** Built-in API key, token, and authorization redaction strategy. */
+  readonly secrets: typeof secrets
+  /** Built-in heuristic prompt-injection strategy. */
+  readonly injection: typeof injection
+  /** Provider-agnostic classifier strategy adapter. */
+  readonly classifier: typeof classifier
+}
+
+function defineGuardrail<B extends BoundaryInput>(config: GuardrailConfig<B>): Guardrail<B>
+function defineGuardrail<TPhase extends GuardrailPhase>(config: LegacyGuardrailConfig<TPhase>): Guardrail<BoundaryDef>
+function defineGuardrail<B extends BoundaryInput>(
   config: GuardrailConfig<B> | LegacyGuardrailConfig,
 ): Guardrail<B> | Guardrail<BoundaryDef> {
   const defSource = captureSource()
@@ -41,6 +58,13 @@ export function guardrail<B extends BoundaryInput>(
   if (defSource) definitionSourceMap.set(guard, defSource)
   return guard
 }
+
+export const guardrail: GuardrailFactory = Object.assign(defineGuardrail, {
+  pii,
+  secrets,
+  injection,
+  classifier,
+})
 
 /** Runtime type guard: checks if a value is a Guardrail. */
 export function isGuardrail(value: unknown): value is Guardrail {
@@ -57,6 +81,7 @@ function defineBoundaryGuardrail<B extends BoundaryInput>(config: GuardrailConfi
   const mode = config.mode ?? 'enforce'
   const phase = phaseForBoundaryInput(config.on)
   const strategy = strategyMetadata(config.run)
+  const stream = config.stream ?? defaultStreamForStrategy(strategy)
 
   const guard = Object.freeze({
     _tag: 'Guardrail' as const,
@@ -65,7 +90,7 @@ function defineBoundaryGuardrail<B extends BoundaryInput>(config: GuardrailConfi
     on: config.on,
     category: config.category,
     mode,
-    stream: config.stream,
+    stream,
     run: config.run,
     ...(strategy ? { strategy } : {}),
     name: config.id,
@@ -85,6 +110,19 @@ function defineBoundaryGuardrail<B extends BoundaryInput>(config: GuardrailConfi
   }) satisfies Guardrail<B>
 
   return guard
+}
+
+function defaultStreamForStrategy(strategy: Guardrail['strategy'] | undefined): Guardrail['stream'] {
+  switch (strategy?.kind) {
+    case 'guardrail.pii':
+    case 'guardrail.secrets':
+    case 'guardrail.injection':
+      return 'sentence'
+    case 'guardrail.classifier':
+      return 'final'
+    default:
+      return undefined
+  }
 }
 
 function defineLegacyGuardrail<TPhase extends GuardrailPhase>(

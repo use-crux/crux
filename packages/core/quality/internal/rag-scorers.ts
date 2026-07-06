@@ -12,7 +12,7 @@
  * @module
  */
 
-import { llmJudge } from '../../scoring'
+import { judge as createJudge } from '../../scoring'
 import type { JudgeInput } from '../../scoring'
 import { asJudgeText, bridgeGenerateForJudge, resolveJudgeModel } from './judge-scorer'
 import type { ContextualScorerRun, ScorerRunContext } from './scorer-runtime'
@@ -119,7 +119,7 @@ export function createRagScorerRun(kind: RagScorerKind, opts: RagScorerOptions):
       `scorers.rag.${kind}('${name}')`,
     )
     const judgesChunks = kind === 'contextPrecision' || kind === 'contextRecall'
-    const judge = llmJudge({
+    const judge = createJudge({
       id: name,
       criteria: RAG_CRITERIA[kind],
       scale: { min: 0, max: 1 },

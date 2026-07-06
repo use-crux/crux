@@ -8,11 +8,15 @@
  */
 
 import { describe, it, expect } from 'vitest'
+import { z } from 'zod'
 import { constraint as makeConstraint, isConstraint } from '../safety/constraint/define'
 import { validateConstraintRunResult } from '../safety/constraint'
 import { evaluateConstraint } from '../safety/constraint/evaluate'
 import { ConstraintViolationError } from '../safety/constraint/errors'
-import { SafetyResultError } from '../safety'
+import { boundary, SafetyResultError } from '../safety'
+import { judge } from '../scoring'
+import { citationSchema } from '../citations'
+import type { RetrieverHit } from '../retrieval'
 import type { ConstraintContext } from '../safety/constraint/types'
 
 const makeCtx = (overrides?: Partial<ConstraintContext>): ConstraintContext => ({
@@ -23,6 +27,18 @@ const makeCtx = (overrides?: Partial<ConstraintContext>): ConstraintContext => (
   metadata: {},
   ...overrides,
 })
+
+function hit(overrides: Partial<RetrieverHit> = {}): RetrieverHit {
+  return {
+    namespace: 'docs',
+    sourceId: 'guide.md',
+    chunkId: 'chunk-1',
+    content: 'Hybrid search combines dense and sparse retrieval for better recall.',
+    metadata: {},
+    score: 0.9,
+    ...overrides,
+  }
+}
 
 // ── makeConstraint() ────────────────────────────────────────────
 
@@ -181,6 +197,97 @@ describe('validateConstraintRunResult', () => {
         { policyId: 'malformed', boundary: 'model.output.text' },
       ),
     ).toThrow(SafetyResultError)
+  })
+})
+
+describe('first-party constraint strategies', () => {
+  it('adapts a judge into a retryable constraint strategy', async () => {
+    const brandVoice = judge({
+      id: 'brand-voice',
+      criteria: 'Warm, direct, concrete.',
+      scale: { min: 0, max: 10 },
+      generate: async () => ({ object: { reasoning: 'Too vague.', score: 4 } }) as never,
+      model: 'test-model',
+    })
+    const run = makeConstraint.judge({
+      judge: brandVoice,
+      minScore: 7,
+      feedback: 'Rewrite with warmer, more concrete language.',
+    })
+    const c = makeConstraint({
+      id: 'brand-voice',
+      on: boundary.output.text(),
+      run,
+    })
+
+    const result = await run('Generic copy.', makeCtx() as never)
+
+    expect(c.strategy).toEqual({
+      kind: 'constraint.judge',
+      config: { judgeId: 'brand-voice', minScore: 7 },
+    })
+    expect(result).toMatchObject({
+      pass: false,
+      feedback: 'Rewrite with warmer, more concrete language.',
+      metadata: {
+        judge: {
+          metricId: 'brand-voice',
+          score: 4,
+          minScore: 7,
+          explanation: 'Too vague.',
+        },
+      },
+    })
+  })
+
+  it('adapts citation validation into a constraint strategy', async () => {
+    const schema = z.object({
+      answer: z.string(),
+      citations: z.array(citationSchema),
+    })
+    const run = makeConstraint.citations<typeof schema>({
+      hits: [hit()],
+      quotes: 'required',
+    })
+    const c = makeConstraint({
+      id: 'grounded-citations',
+      on: boundary.output.both<z.infer<typeof schema>>(),
+      run,
+    })
+
+    const result = await run(
+      {
+        text: '',
+        object: {
+          answer: 'Hybrid search improves recall.',
+          citations: [
+            {
+              sourceId: 'guide.md',
+              chunkId: 'chunk-1',
+              quote: 'dense and sparse retrieval',
+            },
+          ],
+        },
+      },
+      makeCtx() as never,
+    )
+
+    expect(c.strategy).toEqual({
+      kind: 'constraint.citations',
+      config: { required: true, quotes: 'required' },
+    })
+    expect(result).toMatchObject({
+      pass: true,
+      metadata: {
+        grounding: {
+          summary: {
+            citationCount: 1,
+            validCitationCount: 1,
+            invalidCitationCount: 0,
+          },
+        },
+      },
+    })
   })
 })
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { llmJudge } from '../../scoring/judge'
+import { judge as createJudge } from '../../scoring/judge'
 import type { GenerateObjectFn } from '../../compaction/types'
 
 /** Mock generate that returns a fixed score and reasoning. */
@@ -10,9 +10,9 @@ function mockGenerateWith(score: number, reasoning = 'Test reasoning'): Generate
   })) as unknown as GenerateObjectFn
 }
 
-describe('llmJudge', () => {
+describe('judge', () => {
   it('creates a judge with the correct id', () => {
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test-judge',
       criteria: 'Is the output good?',
       scale: { min: 1, max: 5 },
@@ -24,7 +24,7 @@ describe('llmJudge', () => {
   })
 
     it('score() returns JudgeResult with metricId', async () => {
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'relevance',
       criteria: 'Is the output relevant?',
       scale: { min: 1, max: 5 },
@@ -39,7 +39,7 @@ describe('llmJudge', () => {
   })
 
     it('clamps score to scale range (above max)', async () => {
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -52,7 +52,7 @@ describe('llmJudge', () => {
   })
 
     it('clamps score to scale range (below min)', async () => {
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -71,7 +71,7 @@ describe('llmJudge', () => {
       return { object: { reasoning: 'ok', score: 3 } }
     }) as unknown as GenerateObjectFn
 
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'Does the output contain actionable advice?',
       scale: { min: 1, max: 5 },
@@ -90,7 +90,7 @@ describe('llmJudge', () => {
       return { object: { reasoning: 'ok', score: 3 } }
     }) as unknown as GenerateObjectFn
 
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -116,7 +116,7 @@ describe('llmJudge', () => {
       return { object: { reasoning: 'ok', score: 3 } }
     }) as unknown as GenerateObjectFn
 
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -144,7 +144,7 @@ describe('llmJudge', () => {
       return { object: { reasoning: 'ok', score: 3 } }
     }) as unknown as GenerateObjectFn
 
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -164,7 +164,7 @@ describe('llmJudge', () => {
       return { object: { reasoning: 'ok', score: 3 } }
     }) as unknown as GenerateObjectFn
 
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -184,7 +184,7 @@ describe('llmJudge', () => {
       return { object: { reasoning: 'ok', score: 3 } }
     }) as unknown as GenerateObjectFn
 
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -203,7 +203,7 @@ describe('llmJudge', () => {
       return { object: { reasoning: 'ok', score: 3 } }
     }) as unknown as GenerateObjectFn
 
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -216,7 +216,7 @@ describe('llmJudge', () => {
   })
 
     it('throws if no generate function provided', async () => {
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -227,7 +227,7 @@ describe('llmJudge', () => {
   })
 
     it('throws if no model provided', async () => {
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -244,7 +244,7 @@ describe('llmJudge', () => {
       return { object: { reasoning: 'ok', score: 3 } }
     }) as unknown as GenerateObjectFn
 
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'Evaluate brand alignment',
       scale: { min: 1, max: 5 },
@@ -266,7 +266,7 @@ describe('llmJudge', () => {
       return { object: { reasoning: 'ok', score: 3 } }
     }) as unknown as GenerateObjectFn
 
-    const judge = llmJudge({
+    const judge = createJudge({
       id: 'test',
       criteria: 'test',
       scale: { min: 1, max: 5 },
@@ -288,7 +288,7 @@ describe('detailSchema', () => {
         },
       })) as unknown as GenerateObjectFn
 
-      const judge = llmJudge({
+      const judge = createJudge({
         id: 'brand-alignment',
         criteria: 'Evaluate brand alignment',
         scale: { min: 1, max: 5 },
@@ -308,7 +308,7 @@ describe('detailSchema', () => {
     })
 
     it('does not include detail when detailSchema is not configured', async () => {
-      const judge = llmJudge({
+      const judge = createJudge({
         id: 'test',
         criteria: 'test',
         scale: { min: 1, max: 5 },
@@ -333,7 +333,7 @@ describe('detailSchema', () => {
         }
       }) as unknown as GenerateObjectFn
 
-      const judge = llmJudge({
+      const judge = createJudge({
         id: 'plan-judge',
         criteria: 'test',
         scale: { min: 1, max: 5 },
@@ -360,7 +360,7 @@ describe('detailSchema', () => {
         return { object: { reasoning: 'ok', score: 3, detail: { notes: [] } } }
       }) as unknown as GenerateObjectFn
 
-      const judge = llmJudge({
+      const judge = createJudge({
         id: 'test',
         criteria: 'test',
         scale: { min: 1, max: 5 },

@@ -94,3 +94,15 @@ export type {
   ConstraintSeverity,
   ConstraintCheckResult,
 } from './constraint/types'
+export type { JudgeConstraintStrategyOptions, JudgeConstraintVerdict } from './constraint/strategies'
+
+// ── Tool/action policy authoring ──────────────────────────────────
+export { toolPolicy } from './toolPolicy'
+export type {
+  ToolPolicyAction,
+  ToolPolicyArgsOptions,
+  ToolPolicyApprovalOptions,
+  ToolPolicyConfig,
+  ToolPolicyMatch,
+  ToolPolicyResultOptions,
+} from './toolPolicy'

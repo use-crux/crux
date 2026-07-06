@@ -12,6 +12,7 @@
 
 import { getRuntime } from '../../runtime/runtime'
 import { currentObservabilityTransport, hasObservabilitySubscribers, observe } from '../../observability'
+import { redactSensitiveValue } from '../../shared/redaction'
 import type { JsonValue, ToolContentPart, ToolModelOutput } from '../../types/tool'
 
 // ─────────────────────────────────────────────────────────────────
@@ -187,7 +188,7 @@ export function emitToolArgsArtifact(
     kind: 'tool.args',
     contentType: 'application/json',
     encoding: 'json',
-    preview: toJsonValue(args),
+    preview: toJsonValue(redactSensitiveValue(args)),
     attributes: {
       toolName,
       toolCallId,
@@ -216,7 +217,7 @@ export function emitToolResultArtifact(
     kind: 'tool.result',
     contentType: 'application/json',
     encoding: 'json',
-    preview: toJsonValue(result),
+    preview: toJsonValue(redactSensitiveValue(result)),
     attributes: {
       toolName,
       toolCallId,
@@ -246,7 +247,7 @@ export function emitToolRequestArtifacts(
       preview: {
         toolName: toolCall.name,
         toolCallId: toolCall.id,
-        args: toJsonValue(toolCall.args),
+        args: toJsonValue(redactSensitiveValue(toolCall.args)),
       },
       attributes: {
         toolName: toolCall.name,

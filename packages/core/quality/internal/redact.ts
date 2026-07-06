@@ -12,9 +12,11 @@
  */
 
 import { canonicalJson } from './json'
-
-/** Replacement string for redacted values. @internal */
-export const REDACTED = '[redacted]'
+import {
+  REDACTED,
+  SENSITIVE_KEY_PATTERN,
+  redactSensitiveValue,
+} from '../../shared/redaction'
 
 /** Per-cell output snapshot size limit in bytes (spec 02 §1). @internal */
 export const OUTPUT_TRUNCATION_LIMIT = 32 * 1024
@@ -38,8 +40,6 @@ export type QualityRedactionRoot = 'metadata' | 'expected' | 'proposal'
  * Always-on redaction: key names that are redacted at every depth regardless
  * of configuration — authorization headers and API keys (spec 01 §9).
  */
-const ALWAYS_REDACTED_KEY = /^(authorization|proxy[-_]?authorization|api[-_]?key|x[-_]?api[-_]?key)$/i
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
 }
@@ -52,7 +52,7 @@ function redactNode(value: unknown, paths: ReadonlyArray<readonly string[]>): un
   if (!isRecord(value)) return value
   const out: Record<string, unknown> = {}
   for (const [key, entry] of Object.entries(value)) {
-    if (ALWAYS_REDACTED_KEY.test(key)) {
+    if (SENSITIVE_KEY_PATTERN.test(key)) {
       out[key] = REDACTED
       continue
     }
@@ -79,7 +79,7 @@ function redactNode(value: unknown, paths: ReadonlyArray<readonly string[]>): un
  */
 export function applyRedaction(value: unknown, paths: readonly string[]): unknown {
   const split = paths.map((path) => path.split('.').filter((segment) => segment !== ''))
-  return redactNode(value, split)
+  return redactNode(redactSensitiveValue(value), split)
 }
 
 /**

@@ -599,7 +599,7 @@ export const generateTextFn = defaultAi.generateTextFn;
  * AI SDK `generateObject` wrapped as a `GenerateObjectFn`.
  *
  * Use this when calling `@use-crux/core` APIs that expect a `GenerateObjectFn`
- * (e.g., `llmJudge().score()`, `extractKeyFacts()`).
+ * (e.g., `judge().score()`, `extractKeyFacts()`).
  *
  * This helper shares the same AI SDK structured-attempt mechanics used by
  * prompt structured generation: provider schema sanitation, core-backed JSON
@@ -611,10 +611,10 @@ export const generateTextFn = defaultAi.generateTextFn;
  * @example
  * ```ts
  * import { generateObjectFn } from '@use-crux/ai'
- * import { llmJudge } from '@use-crux/core/scoring'
+ * import { judge } from '@use-crux/core/scoring'
  *
- * const judge = llmJudge({ ... })
- * const result = await judge.score(input, { generate: generateObjectFn, model })
+ * const evaluator = judge({ ... })
+ * const result = await evaluator.score(input, { generate: generateObjectFn, model })
  * ```
  */
 export const generateObjectFn = defaultAi.generateObjectFn;

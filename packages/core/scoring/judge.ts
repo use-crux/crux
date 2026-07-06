@@ -13,7 +13,7 @@ import type { GenerateObjectFn } from '../compaction/types'
 import { observe } from '../observability'
 import { getRuntime } from '../runtime/runtime'
 
-/** Schema for structured judge output. Reasoning comes first for chain-of-thought. */
+/** Schema for structured judge output. The explanation is requested before the score. */
 const baseJudgeOutputSchema = z.object({
   reasoning: z.string(),
   score: z.number(),
@@ -65,7 +65,7 @@ function buildSystemPrompt(config: JudgeConfig): string {
   if (chainOfThought) {
     parts.push('')
     parts.push('## Instructions')
-    parts.push('First explain your reasoning step by step, then provide your numeric score.')
+    parts.push('Provide a concise explanation for the score, then provide your numeric score.')
     if (config.detailSchema) {
       parts.push(
         'Also provide structured details in the `detail` field with specific findings (e.g., issues found, patterns matched).',
@@ -107,13 +107,13 @@ function buildUserPrompt(input: JudgeInput): string {
  * Create a reusable LLM judge.
  *
  * The judge evaluates input/output pairs against custom criteria using
- * structured LLM output. Supports rubrics, chain-of-thought reasoning,
- * and few-shot calibration examples.
+ * structured LLM output. Supports rubrics, concise explanations, and
+ * few-shot calibration examples.
  *
  * @param config - Judge configuration with criteria, scale, and optional rubric.
  * @returns A `JudgeInstance` with a `score()` method.
  */
-export function llmJudge<TDetail = unknown>(config: JudgeConfig<TDetail>): JudgeInstance<TDetail> {
+export function judge<TDetail = unknown>(config: JudgeConfig<TDetail>): JudgeInstance<TDetail> {
   const systemPrompt = buildSystemPrompt(config)
   const outputSchema = buildOutputSchema(config)
 

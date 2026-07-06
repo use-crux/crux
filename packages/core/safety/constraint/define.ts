@@ -12,6 +12,8 @@ import type {
   LegacyConstraintConfig,
 } from './types'
 import { validateConstraintRunResult } from './types'
+import { citations } from './strategies/citations'
+import { judge } from './strategies/judge'
 
 /** Module-scoped map: frozen constraint -> definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()
@@ -29,12 +31,23 @@ export function getConstraintDefinitionSource(
  * The `on` boundary drives the subject type passed to `run`; use guardrails
  * for protective rewrites/blocks and constraints for retryable success rules.
  */
-export function constraint<B extends BoundaryDef>(config: ConstraintConfig<B>): Constraint<B>
-/** @internal Transitional overload for pre-migration source files. */
-export function constraint<TSchema extends z.ZodType = z.ZodType<unknown>>(
+interface ConstraintFactory {
+  <B extends BoundaryDef>(config: ConstraintConfig<B>): Constraint<B>
+  /** @internal Transitional overload for pre-migration source files. */
+  <TSchema extends z.ZodType = z.ZodType<unknown>>(
+    config: LegacyConstraintConfig<TSchema>,
+  ): Constraint<TSchema>
+  /** Built-in LLM-as-a-judge constraint strategy. */
+  readonly judge: typeof judge
+  /** Built-in grounded-citation constraint strategy. */
+  readonly citations: typeof citations
+}
+
+function defineConstraint<B extends BoundaryDef>(config: ConstraintConfig<B>): Constraint<B>
+function defineConstraint<TSchema extends z.ZodType = z.ZodType<unknown>>(
   config: LegacyConstraintConfig<TSchema>,
 ): Constraint<TSchema>
-export function constraint<B extends BoundaryDef>(
+function defineConstraint<B extends BoundaryDef>(
   config: ConstraintConfig<B> | LegacyConstraintConfig,
 ): Constraint<B> | Constraint<z.ZodType<unknown>> {
   const defSource = captureSource()
@@ -43,6 +56,11 @@ export function constraint<B extends BoundaryDef>(
   if (defSource) definitionSourceMap.set(c, defSource)
   return c
 }
+
+export const constraint: ConstraintFactory = Object.assign(defineConstraint, {
+  judge,
+  citations,
+})
 
 /** Runtime type guard: checks if a value is a Constraint. */
 export function isConstraint(value: unknown): value is Constraint {

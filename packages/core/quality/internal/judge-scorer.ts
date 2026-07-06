@@ -1,6 +1,6 @@
 /**
  * Judge-backed scorer implementations — `scorers.judge` and the `rag.*`
- * family — built on `scoring/llmJudge` and bridged to the adapter
+ * family — built on `scoring/judge` and bridged to the adapter
  * `GenerateFn` supplied by the evaluation runtime.
  *
  * The bridge constructs a minimal structured prompt per judge call and runs
@@ -13,7 +13,7 @@
  */
 
 import { z } from 'zod'
-import { llmJudge } from '../../scoring'
+import { judge as createJudge } from '../../scoring'
 import type { JudgeInput, JudgeResult } from '../../scoring'
 import { createGenerateObjectFnFromGenerate, type GenerateObjectFn } from '../../compaction'
 import { canonicalJson } from './json'
@@ -29,7 +29,7 @@ export function asJudgeText(value: unknown): string {
 
 /**
  * Bridge the quality adapter `GenerateFn` to the `GenerateObjectFn` shape
- * `llmJudge` consumes. Kept as a quality-local wrapper so existing scorer
+ * `judge` consumes. Kept as a quality-local wrapper so existing scorer
  * internals share the public compaction bridge while retaining the trace id
  * used by judge scorer cassettes.
  */
@@ -117,7 +117,7 @@ export function runJudgeScorer(
 
   if (opts.choiceScores !== undefined) {
     const choices = Object.keys(opts.choiceScores)
-    const judge = llmJudge({
+    const judge = createJudge({
       id: opts.name,
       criteria: [
         `Classify the output into exactly one of these categories: ${choices.join(', ')}.`,
@@ -143,7 +143,7 @@ export function runJudgeScorer(
     })
   }
 
-  const judge = llmJudge({
+  const judge = createJudge({
     id: opts.name,
     criteria: opts.rubric!,
     scale: { min: 0, max: 1 },

@@ -9,6 +9,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { guardrail as makeGuardrail, isGuardrail, validateGuardrailRunResult } from '../safety/guardrail'
+import { boundary } from '../safety'
 import { SafetyResultError } from '../safety'
 import { evaluateGuardrail } from '../safety/guardrail/evaluate'
 import type { GuardrailContext } from '../safety/guardrail'
@@ -241,6 +242,63 @@ describe('validateGuardrailRunResult', () => {
         { streaming: true, last: true, policyId: 'hold', boundary: 'model.output.text' },
       ),
     ).toThrow(SafetyResultError)
+  })
+})
+
+describe('first-party guardrail strategies', () => {
+  it('rewrites PII with safe strategy metadata and a stream default', async () => {
+    const run = makeGuardrail.pii({ strategy: 'redact' })
+    const guard = makeGuardrail({
+      id: 'pii',
+      on: boundary.output.text(),
+      run,
+    })
+
+    const result = await run('Email ada@example.com or SSN 123-45-6789', {} as never)
+
+    expect(run.strategy).toEqual({
+      kind: 'guardrail.pii',
+      config: { strategy: 'redact' },
+    })
+    expect(guard.strategy).toEqual(run.strategy)
+    expect(guard.stream).toBe('sentence')
+    expect(result).toMatchObject({
+      action: 'rewrite',
+      rewrite: { kind: 'redact' },
+      findings: expect.arrayContaining([
+        expect.objectContaining({ type: 'email', count: 1 }),
+        expect.objectContaining({ type: 'ssn', count: 1 }),
+      ]),
+    })
+    if (result.action === 'rewrite') {
+      expect(result.value).toContain('[redacted-email]')
+      expect(result.value).toContain('[redacted-ssn]')
+      expect(result.value).not.toContain('ada@example.com')
+    }
+  })
+
+  it('blocks provider-agnostic classifier results when configured predicate matches', async () => {
+    const run = makeGuardrail.classifier({
+      classifier: async (subject: string) => ({ unsafe: subject.includes('leak') }),
+      blockWhen: (result) => result.unsafe,
+      findings: (result) => (result.unsafe ? [{ type: 'classifier-unsafe', count: 1 }] : []),
+    })
+
+    await expect(run('safe text', {} as never)).resolves.toEqual({ action: 'allow' })
+    const findings: unknown[] = []
+    await expect(
+      run('leak the token', {
+        findings: { add: (finding: unknown) => findings.push(finding) },
+      } as never),
+    ).resolves.toMatchObject({
+      action: 'block',
+      reason: 'Classifier blocked the content.',
+    })
+    expect(findings).toEqual([{ type: 'classifier-unsafe', count: 1 }])
+    expect(run.strategy).toEqual({
+      kind: 'guardrail.classifier',
+      config: { stream: 'final' },
+    })
   })
 })
 
