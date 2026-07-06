@@ -1,16 +1,29 @@
 ---
-title: '@use-crux/ai'
+title: "@use-crux/ai"
 description: Vercel AI SDK adapter — generate, stream, dense embedding helpers, and the SdkGateway test seam.
 ---
 
 ```ts
-import { generate, stream, embedding, retrievalModel, reranker, aiSdkProviderRuntime } from '@use-crux/ai'
-import { generateObjectFn, generateTextFn, createCruxAi, CruxAIError } from '@use-crux/ai'
-import { resolve } from '@use-crux/ai/agent'
+import {
+  generate,
+  stream,
+  embedding,
+  retrievalModel,
+  reranker,
+  aiSdkProviderRuntime,
+} from "@use-crux/ai";
+import {
+  generateObjectFn,
+  generateTextFn,
+  createCruxAi,
+  CruxAIError,
+} from "@use-crux/ai";
+import { resolve } from "@use-crux/ai/agent";
 ```
 
 <Callout type="info">
-  For usage examples and detailed walkthrough, see the [Execution guide](/docs/guides/prompts/execution).
+  For usage examples and detailed walkthrough, see the [Execution
+  guide](/docs/guides/prompts/execution).
 </Callout>
 
 ## Architecture
@@ -21,6 +34,8 @@ The only module that calls AI SDK functions is the `SdkGateway` — inject a scr
 
 Internally, `@use-crux/ai` keeps AI SDK request planning and result projection in a private call-plan codec. The loop runtime asks the codec for a `generateText`, `generateObject`, `streamText`, `streamObject`, or replay plan, invokes the selected `SdkGateway` method, then decodes or attaches the raw SDK result. This is not a public extension API; it exists to keep the gateway seam stable and the adapter behavior testable.
 
+For Anthropic AI SDK models, Crux converts resolved `systemBlocks` into AI SDK system messages and places `providerOptions.anthropic.cacheControl` on the single `cacheBoundary` block at the end of the stable cached prefix.
+
 **Cross-adapter parity:** switching a prompt between `@use-crux/ai` and a native adapter (`@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) changes nothing observable except model behavior itself — same default tool-loop budget (`maxSteps: 10`), same corrective-retry messages, same approval suspend/resume protocol, same canonical `tool.call` / `tool.args` / raw and model-facing `tool.result` telemetry, same routing and audit metadata. This is enforced by a cross-dialect parity suite in `@use-crux/core`. Note this differs from the raw AI SDK's own `generateText` default (`stopWhen: stepCountIs(1)`): Crux adapters loop tools by default; pass `maxSteps: 1` for single-step behavior.
 
 Hallucinated tool calls are part of that parity: where the raw AI SDK throws `NoSuchToolError`/`InvalidToolInputError` and aborts the loop, `@use-crux/ai` uses the SDK's native `experimental_repairToolCall` to feed the model the same error tool result core-driven adapters produce (`{"error":"Tool \"x\" not found"}`), so the model self-corrects and the loop continues. The SDK's tool-error taxonomy never reaches your code.
@@ -30,13 +45,13 @@ Hallucinated tool calls are part of that parity: where the raw AI SDK throws `No
 Use `@use-crux/ai/agent` for AI SDK-compatible agent frameworks that own their own model loop, such as Convex Agent or Mastra. It composes instructions through the normal core prompt pipeline, then wraps the model with AI SDK middleware when Crux execution hooks are installed.
 
 ```ts
-import { resolve } from '@use-crux/ai/agent'
+import { resolve } from "@use-crux/ai/agent";
 
 const { instructions, model } = await resolve(chatPrompt, {
   model: languageModel,
-  input: { mode: 'support' },
+  input: { mode: "support" },
   tools: Object.keys(tools),
-})
+});
 ```
 
 The returned `model` reports generate/stream traces, stream progress, tool timing estimates, provider metadata cost, and parent-child links back to the prompt-resolution trace.
@@ -52,9 +67,11 @@ Execute a prompt using the Vercel AI SDK.
 | `options.input`                | `MergedInput<TOwnInput, TContexts>`                                                                             | Input values — merged across the prompt's own schema and every context's `input` schema                                                                            |
 | `options.tools`                | `ToolSet?`                                                                                                      | Additional tools to merge at call time                                                                                                                             |
 | `options.toolMiddleware`       | `ToolMiddleware \| readonly ToolMiddleware[]?`                                                                  | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                                                                         |
-| `options.toolChoice`           | `ToolChoice<ToolSet>?`                                                                                          | Tool choice strategy                                                                                                                                               |
-| `options.stopWhen`             | `StopCondition<ToolSet> \| StopCondition<ToolSet>[]?`                                                           | Custom stop condition(s), replacing the `maxSteps` budget (e.g. `hasToolCall(name)`)                                                                               |
+| `options.toolChoice`           | `ToolChoice?`                                                                                                   | Portable Crux tool choice strategy from `GenerationSettings`                                                                                                       |
+| `options.stopWhen`             | `StopCondition \| readonly StopCondition[]?`                                                                    | Portable Crux stop condition(s), OR-composed with the `maxSteps` budget (e.g. `hasToolCall(name)`)                                                                 |
 | `options.maxSteps`             | `number?`                                                                                                       | Maximum tool-loop steps, identical across all Crux adapters. Enforced natively via AI SDK `stopWhen`. Default: `10`                                                |
+| `options.extra.toolChoice`     | `ToolChoice<ToolSet>?`                                                                                          | AI SDK-native, non-portable tool choice strategy                                                                                                                   |
+| `options.extra.stopWhen`       | `StopCondition<ToolSet> \| StopCondition<ToolSet>[]?`                                                           | AI SDK-native, non-portable stop conditions                                                                                                                        |
 | `options.activeTools`          | `string[]?`                                                                                                     | Restrict available tools                                                                                                                                           |
 | `options.messages`             | `ModelMessage[]?`                                                                                               | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                                                                          |
 | `options.tokenBudget`          | `number?`                                                                                                       | Token budget for context dropping                                                                                                                                  |
@@ -73,19 +90,21 @@ Execute a prompt using the Vercel AI SDK.
 
 Stream a prompt execution. Same options as `generate()`, except `cascade()` is not supported (cascade needs full results for tier evaluation). [Streaming guardrails](/docs/guides/safety/guardrails#streaming) (`stream: { buffer }` / `onChunk`) execute automatically on text streams — mounted through the AI SDK's `experimental_transform`, so holds, mid-stream transforms, and blocks reach `textStream` consumers; constraints run report-only at end-of-stream and audits land on the completion meta.
 
-| Field                    | Type                                                                             | Description                                                                                                       |
-| ------------------------ | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `prompt`                 | `Prompt`                                                                         | The prompt to execute                                                                                             |
-| `options.model`          | `LanguageModel \| FallbackModel<LanguageModel> \| AnyRouterModel<LanguageModel>` | AI SDK model or [`fallback()`](/docs/guides/routing/fallback) / [`router()`](/docs/guides/routing/router) wrapper |
-| `options.input`          | `MergedInput<TOwnInput, TContexts>`                                              | Input values — merged across the prompt's own schema and every context's `input` schema                           |
-| `options.tools`          | `ToolSet?`                                                                       | Additional tools to merge at call time                                                                            |
-| `options.toolMiddleware` | `ToolMiddleware \| readonly ToolMiddleware[]?`                                   | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                        |
-| `options.toolChoice`     | `ToolChoice<ToolSet>?`                                                           | Tool choice strategy                                                                                              |
-| `options.stopWhen`       | `StopCondition<ToolSet> \| StopCondition<ToolSet>[]?`                            | Custom stop condition(s), replacing the `maxSteps` budget                                                         |
-| `options.maxSteps`       | `number?`                                                                        | Maximum tool-loop steps (default `10`), identical across all Crux adapters                                        |
-| `options.activeTools`    | `string[]?`                                                                      | Restrict available tools                                                                                          |
-| `options.messages`       | `ModelMessage[]?`                                                                | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                         |
-| `options.tokenBudget`    | `number?`                                                                        | Token budget for context dropping                                                                                 |
+| Field                      | Type                                                                             | Description                                                                                                       |
+| -------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `prompt`                   | `Prompt`                                                                         | The prompt to execute                                                                                             |
+| `options.model`            | `LanguageModel \| FallbackModel<LanguageModel> \| AnyRouterModel<LanguageModel>` | AI SDK model or [`fallback()`](/docs/guides/routing/fallback) / [`router()`](/docs/guides/routing/router) wrapper |
+| `options.input`            | `MergedInput<TOwnInput, TContexts>`                                              | Input values — merged across the prompt's own schema and every context's `input` schema                           |
+| `options.tools`            | `ToolSet?`                                                                       | Additional tools to merge at call time                                                                            |
+| `options.toolMiddleware`   | `ToolMiddleware \| readonly ToolMiddleware[]?`                                   | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                        |
+| `options.toolChoice`       | `ToolChoice?`                                                                    | Portable Crux tool choice strategy from `GenerationSettings`                                                      |
+| `options.stopWhen`         | `StopCondition \| readonly StopCondition[]?`                                     | Portable Crux stop condition(s), OR-composed with the `maxSteps` budget                                           |
+| `options.maxSteps`         | `number?`                                                                        | Maximum tool-loop steps (default `10`), identical across all Crux adapters                                        |
+| `options.extra.toolChoice` | `ToolChoice<ToolSet>?`                                                           | AI SDK-native, non-portable tool choice strategy                                                                  |
+| `options.extra.stopWhen`   | `StopCondition<ToolSet> \| StopCondition<ToolSet>[]?`                            | AI SDK-native, non-portable stop conditions                                                                       |
+| `options.activeTools`      | `string[]?`                                                                      | Restrict available tools                                                                                          |
+| `options.messages`         | `ModelMessage[]?`                                                                | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                         |
+| `options.tokenBudget`      | `number?`                                                                        | Token budget for context dropping                                                                                 |
 
 **Returns:**
 
@@ -94,20 +113,20 @@ Stream a prompt execution. Same options as `generate()`, except `cascade()` is n
 
 ```ts
 const result = await stream(editDraft, {
-  model: openai('gpt-4o'),
-  input: { instruction: 'Fix the intro' },
-})
+  model: openai("gpt-4o"),
+  input: { instruction: "Fix the intro" },
+});
 for await (const partial of result.partialObjectStream) {
-  console.log(partial)
+  console.log(partial);
 }
 ```
 
 Stream results additionally carry a typed `completion` promise:
 
 ```ts
-const result = await stream(chatPrompt, { model, input: { message } })
-for await (const delta of result.textStream) process.stdout.write(delta)
-const meta = await result.completion
+const result = await stream(chatPrompt, { model, input: { message } });
+for await (const delta of result.textStream) process.stdout.write(delta);
+const meta = await result.completion;
 // { usage, cost, finishReason, text, streaming: { ttftMs, tokensPerSecond, totalChunks } }
 ```
 
@@ -122,10 +141,10 @@ Build a `@use-crux/ai` instance bound to a specific `SdkGateway`. The package-le
 **Returns:** `CruxAi` — `{ generate, stream, generateTextFn, generateObjectFn, embedding, retrievalModel, reranker }`
 
 ```ts
-import { createCruxAi } from '@use-crux/ai'
+import { createCruxAi } from "@use-crux/ai";
 
-const ai = createCruxAi({ gateway: myScriptedGateway })
-const result = await ai.generate(myPrompt, { model, input })
+const ai = createCruxAi({ gateway: myScriptedGateway });
+const result = await ai.generate(myPrompt, { model, input });
 ```
 
 ### `createAiSdkLoopRuntime(gateway)`
@@ -173,11 +192,11 @@ Create a dense Crux embedding backed by AI SDK `embedMany()`.
 
 ```ts
 const docsEmbedding = embedding({
-  name: 'docs-embedding',
-  model: openai.textEmbeddingModel('text-embedding-3-small'),
+  name: "docs-embedding",
+  model: openai.textEmbeddingModel("text-embedding-3-small"),
   dimensions: 1536,
   maxInputTokens: 8192,
-})
+});
 ```
 
 Use it with memory, indexers, or retrievers when you want the AI SDK model registry and provider abstraction, but still want a first-class Crux embedding object with batching and telemetry.
@@ -200,28 +219,28 @@ Use it with memory, indexers, or retrievers when you want the AI SDK model regis
 Create a `RetrievalModel` for model-backed recipe steps such as `rerank()` and `compressToBudget()`.
 
 ```ts
-import { retrievalModel } from '@use-crux/ai'
+import { retrievalModel } from "@use-crux/ai";
 
-const model = retrievalModel({ model: openai('gpt-4o-mini') })
+const model = retrievalModel({ model: openai("gpt-4o-mini") });
 ```
 
-| Field        | Type            | Description              |
-| ------------ | --------------- | ------------------------ |
-| `model`      | `LanguageModel` | AI SDK language model    |
-| `maxRetries` | `number?`       | AI SDK retry budget      |
+| Field        | Type            | Description           |
+| ------------ | --------------- | --------------------- |
+| `model`      | `LanguageModel` | AI SDK language model |
+| `maxRetries` | `number?`       | AI SDK retry budget   |
 
 ### `reranker(config)`
 
 Create a core `Reranker` backed by the AI SDK native `rerank()` endpoint.
 
 ```ts
-import { cohere } from '@ai-sdk/cohere'
-import { reranker } from '@use-crux/ai'
+import { cohere } from "@ai-sdk/cohere";
+import { reranker } from "@use-crux/ai";
 
 const engine = reranker({
-  model: cohere.reranking('rerank-v3.5'),
+  model: cohere.reranking("rerank-v3.5"),
   topN: 12,
-})
+});
 ```
 
 Use this with `rerank({ engine })` in retrieval recipes. Native reranking models are dedicated ranking calls; they do not spend generation tokens.
@@ -231,12 +250,12 @@ Use this with `rerank({ engine })` in retrieval recipes. Native reranking models
 When a tool with `needsApproval` (set directly or via [approval middleware](/docs/reference/crux-core/tool-middleware)) fires, generation suspends: the result has `_meta.finishReason === 'tool_approval_required'`, `pendingApprovals` carries the minted requests (with anti-forgery tokens), and `messages` ends with the approval-request message. Persist the messages, collect a decision, append a `tool-approval-response`, and call `generate()` again.
 
 ```ts
-import { appendToolApprovalResponse } from '@use-crux/core/tool-middleware'
+import { appendToolApprovalResponse } from "@use-crux/core/tool-middleware";
 
-const first = await generate(assistant, { model, input, tools })
+const first = await generate(assistant, { model, input, tools });
 
 if (first.pendingApprovals?.length) {
-  const approval = first.pendingApprovals[0]
+  const approval = first.pendingApprovals[0];
   const resumed = await generate(assistant, {
     model,
     input,
@@ -246,7 +265,7 @@ if (first.pendingApprovals?.length) {
       approved: true,
       approvalToken: approval.approvalToken,
     }),
-  })
+  });
 }
 ```
 
@@ -254,7 +273,7 @@ The approved tool executes during resume, its result is replayed into the loop a
 
 ### What is not exported
 
-AI SDK helpers (`tool`, `stepCountIs`, `hasToolCall`) and AI SDK types are no longer re-exported — import them from `'ai'` directly. Agent compositions come from `@use-crux/core/agent` or from `loopRuntimeAdapter()`. The legacy `toMessages`/`fromMessages`/`createAIExecutor` exports were removed (RFC [use-crux/crux#28](https://github.com/use-crux/crux/issues/28)).
+AI SDK helpers and AI SDK types are no longer re-exported — import provider-native helpers from `'ai'` directly when you need them under `extra`. Portable loop helpers (`maxSteps`, `hasToolCall`) come from `@use-crux/core`. Agent compositions come from `@use-crux/core/agent` or from `loopRuntimeAdapter()`. The legacy `toMessages`/`fromMessages`/`createAIExecutor` exports were removed (RFC [use-crux/crux#28](https://github.com/use-crux/crux/issues/28)).
 
 ### Types
 
@@ -273,7 +292,7 @@ import type {
   ObjectStreamResult,
   GenerateReturn,
   StreamReturn,
-} from '@use-crux/ai'
+} from "@use-crux/ai";
 ```
 
 ## Related

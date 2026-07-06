@@ -35,6 +35,7 @@ export function collectToolApprovals(messages: readonly unknown[]): ResolvedTool
         toolCallId: request.toolCallId,
         toolName: request.toolName,
         input: request.input,
+        approvalToken: request.approvalToken,
       },
     ]),
   )
@@ -43,6 +44,7 @@ export function collectToolApprovals(messages: readonly unknown[]): ResolvedTool
   return responses.flatMap((response) => {
     const request = requests.get(response.approvalId)
     if (!request) return []
+    if (request.approvalToken && response.approvalToken !== request.approvalToken) return []
     const call = toolCalls.get(request.toolCallId)
     const toolName = request.toolName ?? call?.toolName
     if (!toolName) return []

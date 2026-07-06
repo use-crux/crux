@@ -4,7 +4,7 @@ description: context, when, match, and createContexts.
 ---
 
 ```ts
-import { context, when, match, createContexts } from '@use-crux/core'
+import { context, when, match, createContexts } from "@use-crux/core";
 ```
 
 ## `context(def)`
@@ -37,37 +37,38 @@ context({
   system: ({ input }) => string | { segments: ContextTextSegment[] } | Promise<string | { segments: ContextTextSegment[] }>,
   tools?: ({ input }) => ToolSet,
   rawFields?: string[],
-  cache?: number | true | { ttl?: number, providerCache?: boolean },
+  memo?: { ttl: number },
+  cache?: boolean,
 })
 ```
 
 ### Parameters
 
-| Field | Type | Description |
-|---|---|---|
-| `id` | `string?` | Identifier for debugging and devtools display |
-| `description` | `string?` | Human-readable description |
-| `priority` | `number?` | 0–100, default 50. Higher = dropped later under token pressure. Does not change normal render order. |
-| `input` | `ZodType?` | Schema for input fields this context needs. Merged into prompt input. |
-| `use` | `ContextEntry[]?` | Nested entries resolved before this context's own system text. Supports [`context()`](/docs/reference/crux-core/contexts), [`when()`](/docs/reference/crux-core/contexts), [`match()`](/docs/reference/crux-core/contexts), [skills](/docs/reference/crux-core/skill), [memory](/docs/reference/crux-core/memory), [blackboards](/docs/reference/crux-core/agent), [retrievers and grounding](/docs/reference/crux-core/retrieval), and [custom injectable entries](/docs/reference/crux-core/prompts#custom-injectable-entries). |
-| `when` | `({ input }) => boolean?` | When false, context is excluded entirely (no resolution, no tools, no tokens) |
-| `system` | `string \| { segments } \| (args) => string \| { segments } \| Promise<...>` | Static or dynamic system text. Segments preserve static/dynamic attribution for inspection. |
-| `tools` | `ToolSet \| (args) => ToolSet?` | Static or dynamic tool set |
-| `rawFields` | `string[]?` | Input fields skipped by auto-escape (use for HTML/Markdown that should be passed verbatim) |
-| `cache` | `number \| true \| object?` | Cache config for expensive resolvers. See below. |
+| Field         | Type                                                                         | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | `string?`                                                                    | Identifier for debugging and devtools display                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `description` | `string?`                                                                    | Human-readable description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `priority`    | `number?`                                                                    | 0–100, default 50. Higher = dropped later under token pressure. Does not change normal render order.                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `input`       | `ZodType?`                                                                   | Schema for input fields this context needs. Merged into prompt input.                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| `use`         | `ContextEntry[]?`                                                            | Nested entries resolved before this context's own system text. Supports [`context()`](/docs/reference/crux-core/contexts), [`when()`](/docs/reference/crux-core/contexts), [`match()`](/docs/reference/crux-core/contexts), [skills](/docs/reference/crux-core/skill), [memory](/docs/reference/crux-core/memory), [blackboards](/docs/reference/crux-core/agent), [retrievers and grounding](/docs/reference/crux-core/retrieval), and [custom contributor entries](/docs/reference/crux-core/prompts#custom-contributor-entries). |
+| `when`        | `({ input }) => boolean?`                                                    | When false, context is excluded entirely (no resolution, no tools, no tokens)                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| `system`      | `string \| { segments } \| (args) => string \| { segments } \| Promise<...>` | Static or dynamic system text. Segments preserve static/dynamic attribution for inspection.                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `tools`       | `ToolSet \| (args) => ToolSet?`                                              | Static or dynamic tool set                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| `rawFields`   | `string[]?`                                                                  | Top-level input fields skipped by auto-escape (use for HTML/Markdown that should be passed verbatim)                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `memo`        | `{ ttl: number }?`                                                           | App-side resolver memoization for dynamic contexts. Requires `id`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| `cache`       | `boolean?`                                                                   | Provider cache hint for stable prompt-prefix blocks.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 ### Caching
 
-Set `cache` to skip redundant resolver calls *and* enable provider-level prompt caching:
+Use `memo` to skip redundant resolver calls and `cache: true` to request provider-level prompt caching:
 
-| Form | Effect |
-|---|---|
-| `cache: 300_000` | TTL in milliseconds; both resolver and provider caching enabled |
-| `cache: true` | TTL = 5 minutes; both resolver and provider caching enabled |
-| `cache: { ttl: 300_000, providerCache: false }` | Resolver caching only |
-| `cache: { providerCache: true }` | Provider caching only (no resolver TTL) |
+| Form                                  | Effect                                        |
+| ------------------------------------- | --------------------------------------------- |
+| `memo: { ttl: 300_000 }`              | Resolver memoization for 300 seconds          |
+| `cache: true`                         | Provider cache hint only                      |
+| `memo: { ttl: 300_000 }, cache: true` | Resolver memoization plus provider cache hint |
 
-Contexts with `cache` require an `id` for cache key derivation. Static string contexts skip TTL caching but still honor `providerCache`.
+Contexts with `memo` require an `id` for cache key derivation. Static string contexts cannot use `memo`; use `cache: true` when static content should participate in provider prefix caching.
 
 ### Segmented system text
 
@@ -75,18 +76,18 @@ Return `{ segments }` when devtools need to distinguish authored boilerplate fro
 
 ```ts
 const workspace = context({
-  id: 'workspace',
+  id: "workspace",
   input: z.object({ workspaceName: z.string() }),
   system: ({ input }) => ({
     segments: [
-      { text: 'Current workspace: ', dynamic: false },
-      { text: input.workspaceName, dynamic: true, source: 'workspaceName' },
+      { text: "Current workspace: ", dynamic: false },
+      { text: input.workspaceName, dynamic: true, source: "workspaceName" },
     ],
   }),
-})
+});
 ```
 
-The runtime concatenates the segment text into the final system message. `.inspect().system.parts[]`, `context.contribution` artifacts, and `prompt.budget` dropped previews preserve `segments`, `staticTokens`, and `dynamicTokens`. Plain static strings are reported as one static segment, and dynamic string functions are reported as one dynamic segment without a source key.
+The runtime concatenates the segment text into the final system message. `.inspect().system.parts[]`, `context.contribution` artifacts, and `prompt.budget` dropped previews preserve `segments`, `staticTokens`, and `dynamicTokens`. Segments can also carry `observedAt` and `sourceVersion` when a primitive knows when the source data was observed. Plain static strings are reported as one static segment, and dynamic string functions are reported as one dynamic segment without a source key.
 
 ### Nested `use`
 
@@ -94,16 +95,16 @@ Use `context({ use })` to bundle a reusable capability instead of repeating prom
 
 ```ts
 const supportContext = context({
-  id: 'support-context',
+  id: "support-context",
   use: [userMemory, docsGrounding],
-  system: 'Answer with user memory and cited product docs when relevant.',
-})
+  system: "Answer with user memory and cited product docs when relevant.",
+});
 
 const supportPrompt = prompt({
-  id: 'support',
+  id: "support",
   use: [supportContext],
-  system: 'Help the user.',
-})
+  system: "Help the user.",
+});
 ```
 
 Nested entries resolve before the context's own `system` text. Their tools, constraints, guardrails, and metadata are merged through the same path as prompt-level `use` entries.
@@ -119,26 +120,26 @@ Use this when the context is more than text. For example, a `supportContext` can
 Wraps a context with a runtime predicate for conditional inclusion in the `use` array.
 
 ```ts
-import { when } from '@use-crux/core'
+import { when } from "@use-crux/core";
 
 prompt({
   use: [
-    when(i => !!i.brandVoice, brandCtx),                      // typed from context input
-    when<{ mode: string }>(i => i.mode === 'edit', editCtx),  // explicit generic
+    when((i) => !!i.brandVoice, brandCtx), // partial context input
+    when<{ mode: string }>((i) => i.mode === "edit", editCtx), // explicit generic
   ],
-})
+});
 ```
 
 **Returns:** `ConditionalContext<TCtx>` — the wrapped context's input keys become `Partial<>` in the merged prompt input type.
 
-When the predicate returns `false`, the context is excluded entirely — same semantics as setting `when` on the context definition.
+The default predicate parameter is typed as a partial view of the wrapped context's input, because wrapping makes those fields optional at the prompt level. Use the explicit generic form when the predicate reads prompt-owned fields. When the predicate returns `false`, the context is excluded entirely — same semantics as setting `when` on the context definition.
 
 ## `match(opts)`
 
 Selects between contexts based on a discriminator value (multi-way switch).
 
 ```ts
-import { match } from '@use-crux/core'
+import { match } from "@use-crux/core";
 
 prompt({
   use: [
@@ -148,14 +149,16 @@ prompt({
       default: createCtx,
     }),
   ],
-})
+});
 ```
 
-| Option | Type | Description |
-|---|---|---|
-| `on` | `(input) => string` | Extracts the discriminator value |
-| `cases` | `Record<string, Context \| Context[]>` | Contexts per discriminator value |
-| `default?` | `Context \| Context[]?` | Fallback when no case matches |
+| Option     | Type                                   | Description                      |
+| ---------- | -------------------------------------- | -------------------------------- |
+| `on`       | `(input) => string`                    | Extracts the discriminator value |
+| `cases`    | `Record<string, Context \| Context[]>` | Contexts per discriminator value |
+| `default?` | `Context \| Context[]?`                | Fallback when no case matches    |
+
+Every input key declared by any branch is included in the prompt's merged input type as optional, because only the selected branch is active at runtime.
 
 **Returns:** `MatchSpec` — frozen instance.
 
@@ -167,10 +170,10 @@ Same pattern as `createPrompts()` but for contexts.
 const contexts = createContexts({
   brand: { voice, terms },
   editor: { schema },
-})
+});
 
-contexts.brand.voice  // Context<...>
-contexts._all         // Context[] — flat list
+contexts.brand.voice; // Context<...>
+contexts._all; // Context[] — flat list
 ```
 
 ## How contexts merge
@@ -178,15 +181,15 @@ contexts._all         // Context[] — flat list
 When a prompt is resolved, the pipeline:
 
 1. **Filters** out contexts where `when()` returns false, falsy entries, and unmatched `match()` branches.
-2. **Resolves** each remaining context's `system()` callback in `use` order, with nested `context({ use })` entries before the context that owns them.
-3. **Concatenates** the prompt's own system text first, then active context text in `use` order.
-4. **Drops under budget** if a token budget is set. Lowest-priority contexts are dropped first, and the prompt's own system text is always kept.
+2. **Resolves** each remaining context's `system()` callback in `use` order, with nested `context({ use })` entries before the context that owns them within their cache tier.
+3. **Composes** the prompt's own system text first, then cached contexts (`cache: true`) as a stable prefix, then uncached contexts as the budget-droppable tail. Each group keeps `use` array order.
+4. **Drops under budget** if a token budget is set. Lowest-priority uncached contexts are dropped first, while the prompt's own system text and cached prefix are always kept.
 
-Priority controls token-budget degradation, not normal rendering order. Excluded contexts contribute *nothing* — not system text, not tools, not tokens. Budget-dropped contexts still contribute their tools.
+Priority controls token-budget degradation, not normal rendering order. Excluded contexts contribute _nothing_ — not system text, not tools, not tokens. Budget-dropped contexts still contribute their tools.
 
 ## Related
 
 - Guide: [Contexts](/docs/guides/contexts)
 - Reference: [Prompts](/docs/reference/crux-core/prompts) — how prompts compose contexts via `use`
-- Guide: [Caching](/docs/guides/contexts/caching) — TTL caching and provider cache hints
+- Guide: [Caching](/docs/guides/contexts/caching) — resolver memoization and provider cache hints
 - Guide: [Token budget](/docs/guides/contexts/token-budget) — automatic context dropping

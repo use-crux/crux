@@ -4,7 +4,10 @@ description: Provider adapter abstraction for building AI provider integrations.
 ---
 
 ```ts
-import { defineProviderRuntime, defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
+import {
+  defineProviderRuntime,
+  defineSingleTurnProviderBundle,
+} from "@use-crux/core/adapter";
 import type {
   CruxAdapter,
   AdapterGenerateOptions,
@@ -20,9 +23,12 @@ import type {
   ProviderRuntimeConformanceHarness,
   NativeTranscriptCodec,
   SingleTurnProviderBundleSpec,
-} from '@use-crux/core/adapter'
-import { providerRuntimeConformance, transcriptCodecConformance } from '@use-crux/core/adapter/testing'
-import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
+} from "@use-crux/core/adapter";
+import {
+  providerRuntimeConformance,
+  transcriptCodecConformance,
+} from "@use-crux/core/adapter/testing";
+import { describeCruxAdapterConformance } from "@use-crux/core/adapter/testing/vitest";
 ```
 
 ## Overview
@@ -33,11 +39,11 @@ Built-in adapters are built on this abstraction: `@use-crux/openai`, `@use-crux/
 
 ## Which contract do I implement?
 
-| Your SDK…                                                                                 | Ownership     | Mechanics | Example                                           |
-| ----------------------------------------------------------------------------------------- | ------------- | --------- | ------------------------------------------------- |
+| Your SDK…                                                                                 | Ownership     | Mechanics | Example                                                       |
+| ----------------------------------------------------------------------------------------- | ------------- | --------- | ------------------------------------------------------------- |
 | Exposes text/structured/stream chat calls and leaves tool execution to Crux               | `single-turn` | bundle    | `@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google` |
-| Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `loop-owned`  | `loop`    | `@use-crux/ai`                                        |
-| Needs a bespoke non-chat boundary                                                         | n/a           | core IR   | custom provider                                   |
+| Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `loop-owned`  | `loop`    | `@use-crux/ai`                                                |
+| Needs a bespoke non-chat boundary                                                         | n/a           | core IR   | custom provider                                               |
 
 Never implement more than one generation runtime for one SDK. In either branch, core owns the policy layer — prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A provider runtime implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
 
@@ -51,23 +57,30 @@ Under the hood, `turn` compiles to `AdapterSpec`: core calls `call()` once per l
 Test provider runtimes with `providerRuntimeConformance()`. The suite binds the public runtime through `runtime.create(...)`, so it covers both `single-turn` and `loop-owned` adapters without pinning provider internals. Your harness should own only the remote SDK seam: translate abstract model emissions into SDK-shaped fakes, then expose captured request bodies for provider-specific assertions.
 
 ```ts
-import { providerRuntimeConformance } from '@use-crux/core/adapter/testing'
+import { providerRuntimeConformance } from "@use-crux/core/adapter/testing";
 
-const violations = await providerRuntimeConformance(myProviderRuntime, myHarness())
-expect(violations).toEqual([])
+const violations = await providerRuntimeConformance(
+  myProviderRuntime,
+  myHarness(),
+);
+expect(violations).toEqual([]);
 ```
 
 For Vitest packages, use the describe helper:
 
 ```ts
-import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
+import { describeCruxAdapterConformance } from "@use-crux/core/adapter/testing/vitest";
 
 describeCruxAdapterConformance({
-  name: 'my-provider',
+  name: "my-provider",
   runtime: myProviderRuntime,
   harness: myHarness(),
-  capabilities: { ownership: 'single-turn', structuredOutput: true, streaming: true },
-})
+  capabilities: {
+    ownership: "single-turn",
+    structuredOutput: true,
+    streaming: true,
+  },
+});
 ```
 
 Use `adapterSpecConformance()` and `loopRuntimePortConformance()` only when you are testing lower-level compiler output or core execution IR directly. `fakeLoopRuntime()` remains the in-memory reference implementation for policy tests that need a loop-owned runtime without loading an SDK.
@@ -77,10 +90,10 @@ Use `adapterSpecConformance()` and `loopRuntimePortConformance()` only when you 
 Compile a raw chat SDK provider bundle into a Crux adapter runtime, public `create()` factory, and lightweight helper factory.
 
 ```ts
-import { defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
+import { defineSingleTurnProviderBundle } from "@use-crux/core/adapter";
 
 const myProvider = defineSingleTurnProviderBundle({
-  id: 'my-provider',
+  id: "my-provider",
   bind: (client) => ({
     call: (request) => client.chat.create(request),
     stream: (request) => client.chat.stream(request),
@@ -99,11 +112,11 @@ const myProvider = defineSingleTurnProviderBundle({
     settings: mapSettings,
     outputSchema: wrapOutputSchema,
   },
-})
+});
 
-export const myProviderRuntime = myProvider.runtime
-export const createMyProvider = myProvider.create
-export const myProviderHelpers = myProvider.helpers()
+export const myProviderRuntime = myProvider.runtime;
+export const createMyProvider = myProvider.create;
+export const myProviderHelpers = myProvider.helpers();
 ```
 
 The bundle owns provider wire facts: request bodies, SDK method binding, transcript conversion, assistant-turn extraction, response metadata extraction, stream delta extraction, settings/schema mapping, and provider-specific dependencies. Single-turn bundles should use `transcript: NativeTranscriptCodec` plus `response.meta(raw)`; `response.text(raw, assistant)` is only needed when the SDK exposes parsed structured output separately from assistant message text. Crux owns prompt resolution, tool execution, default canonical tool-round appends, validation retry, safety, memory capture, and observability.
@@ -114,7 +127,7 @@ Use `deps.create` and `deps.helpers` when your public factories should accept pr
 
 ```ts
 const google = defineSingleTurnProviderBundle({
-  id: 'google',
+  id: "google",
   bind: bindGoogle,
   profile: googleProfile,
   deps: {
@@ -123,7 +136,7 @@ const google = defineSingleTurnProviderBundle({
     }),
     helpers: () => ({}),
   },
-})
+});
 ```
 
 `defineProviderRuntime({ ownership: 'single-turn', turn })` is still available for lower-level compiler tests or unusual adapter packages that need to assemble the runtime object directly. Normal single-turn providers should use the bundle helper so `runtime`, `create()`, helper factories, dependency mapping, and extension checks are compiled consistently.
@@ -133,19 +146,22 @@ Rather than hand-writing a `NativeTranscriptCodec`, compile one from a `Provider
 Test transcript codecs directly with `transcriptCodecConformance()`:
 
 ```ts
-import { transcriptCodecConformance } from '@use-crux/core/adapter/testing'
+import { transcriptCodecConformance } from "@use-crux/core/adapter/testing";
 
 const violations = transcriptCodecConformance({
-  name: 'my-provider transcript',
+  name: "my-provider transcript",
   transcript: myTranscript,
   canonicalMessages,
   providerMessages,
   decodedMessages,
   rawAssistant,
-  assistant: { text: 'Checking.', toolCalls: [{ id: 'call_1', name: 'lookup', args: {} }] },
-})
+  assistant: {
+    text: "Checking.",
+    toolCalls: [{ id: "call_1", name: "lookup", args: {} }],
+  },
+});
 
-expect(violations).toEqual([])
+expect(violations).toEqual([]);
 ```
 
 Provider packages may expose `GenerateTextFn` and `GenerateObjectFn` helpers when useful, but those helpers should stay explicitly smaller than adapter `generate()`: no prompt resolution, tool loop, safety, cassettes, memory capture, or instrumentation.
@@ -161,10 +177,10 @@ Create a core-driven adapter from a compiled `AdapterSpec`. Provider packages sh
 **Returns:** `(client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra>`
 
 ```ts
-import { adapter } from '@use-crux/core/adapter'
+import { adapter } from "@use-crux/core/adapter";
 
 const createMyAdapter = adapter({
-  providerId: 'my-provider',
+  providerId: "my-provider",
 
   async call(client, args) {
     const response = await client.chat({
@@ -172,7 +188,7 @@ const createMyAdapter = adapter({
       system: args.system,
       messages: args.messages,
       ...args.settings,
-    })
+    });
     return {
       raw: response,
       extracted: {
@@ -187,24 +203,27 @@ const createMyAdapter = adapter({
         responseId: response.id,
         actualModelId: response.model,
       },
-    }
+    };
   },
 
   async stream(client, args) {
-    const stream = await client.chatStream({ model: args.model, messages: args.messages })
+    const stream = await client.chatStream({
+      model: args.model,
+      messages: args.messages,
+    });
     return {
       rawStream: stream,
       extractTextDelta: (chunk) => chunk.delta?.text,
       completion: async () => undefined,
-    }
+    };
   },
 
   appendToolRound(messages, response, results) {
     return [
       ...messages,
-      { role: 'assistant', content: response.text },
-      ...results.map((r) => ({ role: 'tool' as const, content: r.content })),
-    ]
+      { role: "assistant", content: response.text },
+      ...results.map((r) => ({ role: "tool" as const, content: r.content })),
+    ];
   },
 
   mapSettings(settings) {
@@ -212,13 +231,16 @@ const createMyAdapter = adapter({
       temperature: settings.temperature,
       max_tokens: settings.maxTokens,
       top_p: settings.topP,
-    }
+    };
   },
-})
+});
 
 // Create an adapter instance
-const adapter = createMyAdapter(myClient)
-const result = await adapter.generate(myPrompt, { model: 'my-model', input: { topic: 'AI' } })
+const adapter = createMyAdapter(myClient);
+const result = await adapter.generate(myPrompt, {
+  model: "my-model",
+  input: { topic: "AI" },
+});
 ```
 
 ## `AdapterSpec<TClient, TRawResponse, TRawStream, TExtra>`
@@ -260,30 +282,30 @@ The adapter interface returned by the factory.
 
 Canonical args assembled by the adapter from prompt resolution. Passed to `spec.call()` and `spec.stream()`.
 
-| Field          | Type                                                             | Description                                                                                                  |
-| -------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| `model`        | `string`                                                         | Model identifier                                                                                             |
-| `system`       | `string \| undefined`                                            | System message                                                                                               |
-| `systemBlocks` | `readonly SystemBlock[] \| undefined`                            | System message blocks with provider-level caching hints. Joining `block.text` with `\n\n` produces `system`. |
-| `messages`     | `Message[]`                                                      | Conversation messages                                                                                        |
-| `settings`     | `Record<string, unknown>`                                        | Mapped generation settings                                                                                   |
-| `schema`       | `ZodType \| undefined`                                           | Output schema (for structured output)                                                                        |
-| `schemaParams` | `Record<string, unknown> \| undefined`                           | Provider-native schema params                                                                                |
-| `tools`        | `Array<{ name, description, parameters, execute }> \| undefined` | Tool definitions                                                                                             |
-| `extra`        | `TExtra`                                                         | Provider-specific options                                                                                    |
+| Field          | Type                                                             | Description                                                                                                                                                        |
+| -------------- | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `model`        | `string`                                                         | Model identifier                                                                                                                                                   |
+| `system`       | `string \| undefined`                                            | System message. Absent in messages mode because the final system text is folded into `messages`.                                                                   |
+| `systemBlocks` | `readonly SystemBlock[] \| undefined`                            | System message blocks with provider-level caching hints. Joining `block.text` with `\n\n` produces the resolved system text, including provider adaptation blocks. |
+| `messages`     | `Message[]`                                                      | Conversation messages                                                                                                                                              |
+| `settings`     | `Record<string, unknown>`                                        | Mapped generation settings                                                                                                                                         |
+| `schema`       | `ZodType \| undefined`                                           | Output schema (for structured output)                                                                                                                              |
+| `schemaParams` | `Record<string, unknown> \| undefined`                           | Provider-native schema params                                                                                                                                      |
+| `tools`        | `Array<{ name, description, parameters, execute }> \| undefined` | Tool definitions                                                                                                                                                   |
+| `extra`        | `TExtra`                                                         | Provider-specific options                                                                                                                                          |
 
 ## `AdapterResponse`
 
 Canonical response extracted by the adapter from the provider's raw response. Used by the tool loop to determine if another iteration is needed.
 
-| Field           | Type                                         | Description                                   |
-| --------------- | -------------------------------------------- | --------------------------------------------- |
-| `text`          | `string`                                     | Extracted text                                |
-| `toolCalls`     | `Array<{ id, name, args }> \| undefined`     | Tool call requests                            |
-| `usage`         | `{ inputTokens, outputTokens, totalTokens }` | Token usage                                   |
-| `finishReason`  | `string \| undefined`                        | Why generation stopped                        |
-| `responseId`    | `string \| undefined`                        | Provider response ID                          |
-| `actualModelId` | `string \| undefined`                        | Actual model used (may differ from requested) |
+| Field           | Type                                                         | Description                                                                                       |
+| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `text`          | `string`                                                     | Extracted text                                                                                    |
+| `toolCalls`     | `Array<{ id, name, args }> \| undefined`                     | Tool call requests                                                                                |
+| `usage`         | `{ inputTokens?, outputTokens?, totalTokens? } \| undefined` | Token usage. Fields stay `undefined` when the provider omits usage instead of fabricating zeroes. |
+| `finishReason`  | `string \| undefined`                                        | Why generation stopped                                                                            |
+| `responseId`    | `string \| undefined`                                        | Provider response ID                                                                              |
+| `actualModelId` | `string \| undefined`                                        | Actual model used (may differ from requested)                                                     |
 
 ## `StreamHandle<TRawStream>`
 
@@ -335,9 +357,9 @@ Tool result to feed back into the next tool loop turn.
 
 Create an SDK-loop executor from a `LoopRuntimePort`. Provider packages should implement `defineProviderRuntime({ ownership: 'loop-owned', loop })`; use this only when testing runtime internals or building a bespoke runtime compiler. The port is already bound to its SDK client, so there is no separate client argument.
 
-| Parameter | Type                                                  | Description       |
-| --------- | ----------------------------------------------------- | ----------------- |
-| `port`    | `LoopRuntimePort<TModel, TRawResponse, TRawStream>`   | Loop runtime port |
+| Parameter | Type                                                | Description       |
+| --------- | --------------------------------------------------- | ----------------- |
+| `port`    | `LoopRuntimePort<TModel, TRawResponse, TRawStream>` | Loop runtime port |
 
 `generate()` accepts `ExecutorGenerateOptions`: `model` (plain or routing wrapper), `input`, `tools`, `toolMiddleware`, `messages`, `maxSteps`, `settings`, `tokenBudget`, `timeoutMs`, `validationRetry`, `constraints`, `guardrails`, `observer`, `activeTools`, and a port-specific `extra` passthrough. The result carries `raw` (the SDK's own result object), `text`, `object`, `_meta`, `steps`, `messages`, and `pendingApprovals` when suspended on tool approval.
 
@@ -345,15 +367,15 @@ Create an SDK-loop executor from a `LoopRuntimePort`. Provider packages should i
 
 The SDK-loop execution IR produced by the `loop` provider-runtime branch. The SDK client/gateway is closed over when the port is created, so each run method takes only the request.
 
-| Method                            | Description                                                                                                                                |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `id`                              | Runtime identifier for observability (e.g. `'ai-sdk'`)                                                                                     |
-| `describeModel(model)`            | Extract `ModelInfo` from an SDK model reference                                                                                            |
-| `mapSettings(settings, model)`    | Map canonical settings to SDK option names                                                                                                 |
-| `runTextLoop(request)`            | Multi-step text + tools; SDK owns the loop, core steers via `request.observer`                                                             |
-| `runStructuredAttempt(request)`   | ONE structured attempt; returns `invalid` as a value, never throws on schema failure                                                       |
-| `runStream(request)`              | Streaming; returns the SDK stream result untouched + typed `completion()`. Must drive `request.safety` when present (streaming guardrails) |
-| `replayStream?(cached)`           | Optional semantic-cache stream replay                                                                                                      |
+| Method                          | Description                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                            | Runtime identifier for observability (e.g. `'ai-sdk'`)                                                                                     |
+| `describeModel(model)`          | Extract `ModelInfo` from an SDK model reference                                                                                            |
+| `mapSettings(settings, model)`  | Map canonical settings to SDK option names                                                                                                 |
+| `runTextLoop(request)`          | Multi-step text + tools; SDK owns the loop, core steers via `request.observer`                                                             |
+| `runStructuredAttempt(request)` | ONE structured attempt; returns `invalid` as a value, never throws on schema failure                                                       |
+| `runStream(request)`            | Streaming; returns the SDK stream result untouched + typed `completion()`. Must drive `request.safety` when present (streaming guardrails) |
+| `replayStream?(cached)`         | Optional semantic-cache stream replay                                                                                                      |
 
 ## Types
 
@@ -389,7 +411,7 @@ import type {
   StreamHandle,
   ToolResultEntry,
   StatusDelta,
-} from '@use-crux/core/adapter'
+} from "@use-crux/core/adapter";
 ```
 
 ## Related

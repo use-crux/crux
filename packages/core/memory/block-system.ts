@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { context } from '../prompt/context'
+import { contextWithFullPromptInput } from '../prompt/context'
 import type { AnyToolSet } from '../types'
 import type { ExactFilter, FilterValue, JsonObject, RecordStore, Storage, VectorHit, VectorStore } from '../storage'
 import { inMemoryStorage } from '../storage'
@@ -860,10 +860,9 @@ export function memory(config: MemoryConfig): Memory {
     blocks: Object.freeze([...config.blocks]),
     config,
     asContext(options) {
-      return context({
+      return contextWithFullPromptInput({
         id: `memory:${config.id}`,
         description: `Memory: ${config.id}`,
-        family: 'memory',
         priority: options?.priority ?? 55,
         system: async ({ input }) => {
           const ctx = await createContext(input as Record<string, unknown>)
@@ -882,7 +881,7 @@ export function memory(config: MemoryConfig): Memory {
         tools: ({ input }) => {
           return api.asTools({ input: input as Record<string, unknown> })
         },
-      })
+      }, 'memory')
     },
     asTools(options) {
       const tools: AnyToolSet = {}

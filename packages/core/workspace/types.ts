@@ -19,7 +19,8 @@ import type {
   RecordStore,
   Storage,
 } from "../storage";
-import type { Context, PromptInjection } from "../prompt/context-types";
+import type { Context } from "../prompt/context-types";
+import type { InternalPromptInjection } from "../prompt/internal-injection";
 import type { JsonValue } from "../types/tool";
 import type {
   WorkspaceAppendOptions,
@@ -622,7 +623,7 @@ export interface Workspace<
   inject(args: {
     input: Record<string, unknown>;
     promptId?: string;
-  }): PromptInjection | Promise<PromptInjection>;
+  }): InternalPromptInjection | Promise<InternalPromptInjection>;
 }
 
 /** Options for {@link Workspace.asContext}. */

@@ -1317,9 +1317,10 @@ describe('dialect parity — approval protocol observability', () => {
     ])
   })
 
-    it('rejects a forged approval token with the same error in both dialects', async () => {
+    it('settles a forged approval token with the same invalid-approval result in both dialects', async () => {
     async function suspendThenForge(kind: 'native' | 'executor') {
-      const tools = { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } }
+      const execute = vi.fn()
+      const tools = { dangerous: { description: 'risky', needsApproval: true, execute } }
       const prompt = textPrompt()
 
       const suspended =
@@ -1348,25 +1349,35 @@ describe('dialect parity — approval protocol observability', () => {
       }) as Message[]
 
       if (kind === 'native') {
-        const second = scriptedAdapterSpec([{ text: 'never' }])
-        return makeAdapter(second.spec)(second.client)
-          .generate(prompt, { model: 'mock-model', input: { message: 'go' }, tools, messages })
-          .then(() => undefined)
-          .catch((error: unknown) => error)
+        const second = scriptedAdapterSpec([{ text: 'handled' }])
+        const result = await makeAdapter(second.spec)(second.client).generate(prompt, {
+          model: 'mock-model',
+          input: { message: 'go' },
+          tools,
+          messages,
+        })
+        return { execute, result }
       }
-      const second = fakeLoopRuntime({ loops: [[{ text: 'never' }]] })
-      return loopRuntimeAdapter(second.runtime)
-        .generate(prompt, { model: 'fake:mock-model', input: { message: 'go' }, tools, messages })
-        .then(() => undefined)
-        .catch((error: unknown) => error)
+      const second = fakeLoopRuntime({ loops: [[{ text: 'handled' }]] })
+      const result = await loopRuntimeAdapter(second.runtime).generate(prompt, {
+        model: 'fake:mock-model',
+        input: { message: 'go' },
+        tools,
+        messages,
+      })
+      return { execute, result }
     }
 
-    const nativeError = await suspendThenForge('native')
-    const executorError = await suspendThenForge('executor')
+    const native = await suspendThenForge('native')
+    const executor = await suspendThenForge('executor')
+    const nativeInvalid = native.result.messages.find((m) => m.role === 'tool' && m.metadata?.toolCallId === toolCall.id)
+    const executorInvalid = executor.result.messages.find((m) => m.role === 'tool' && m.metadata?.toolCallId === toolCall.id)
 
-    expect(nativeError).toBeInstanceOf(Error)
-    expect(executorError).toBeInstanceOf(Error)
-    expect((executorError as Error).message).toBe((nativeError as Error).message)
-    expect((nativeError as Error).message).toContain('token mismatch')
+    expect(native.execute).not.toHaveBeenCalled()
+    expect(executor.execute).not.toHaveBeenCalled()
+    expect(native.result.text).toBe('handled')
+    expect(executor.result.text).toBe('handled')
+    expect(executorInvalid?.content).toBe(nativeInvalid?.content)
+    expect(nativeInvalid?.content).toContain('approval-invalid')
   })
 })

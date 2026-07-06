@@ -4,18 +4,23 @@ description: Declare tools on contexts and prompts, merged automatically by adap
 ---
 
 <Callout type="warn">
-Tools are only available in text mode (prompts without an `output` schema). Structured output prompts use the model's JSON mode instead of tool calling.
+  Tools are only available in text mode (prompts without an `output` schema).
+  Structured output prompts use the model's JSON mode instead of tool calling.
 </Callout>
 
-Tools from three sources are merged with last-write-wins precedence:
+Prompt-time tool names must be unique. Crux checks collisions across these prompt-owned sources:
 
-1. **Context tools** — from `context({ tools })` via `use`
-2. **Prompt tools** — from `prompt({ tools })`
-3. **Call-site tools** — from `generate(prompt, { tools })`
+1. **Skill tools** — loader tools from `skill()`
+2. **Context tools** — from `context({ tools })` via `use`
+3. **Contributor tools** — from `contributor()` and injected primitives
+4. **Blackboard tools** — focused tools from `blackboard()`
+5. **Prompt tools** — from `prompt({ tools })`
+
+Call-site tools from `generate(prompt, { tools })` and `stream(prompt, { tools })` are applied later and intentionally override.
 
 ```ts title="agent.ts"
-import { prompt, context } from '@use-crux/core'
-import { generate, tool, stepCountIs } from '@use-crux/ai'
+import { context, maxSteps, prompt } from '@use-crux/core'
+import { generate, tool } from '@use-crux/ai'
 
 const search = context({
   id: 'search',
@@ -41,7 +46,9 @@ const agent = prompt({
       execute: async ({ note }) => ({ saved: true }),
     }),
   },
-  stopWhen: stepCountIs(5),
+  settings: {
+    stopWhen: maxSteps(5),
+  },
 })
 
 // Both searchWeb and saveNote are available to the model
@@ -64,14 +71,14 @@ const result2 = await generate(agent, {
 Tools often return data that is useful for your app but too large, noisy, or unsafe to feed back into the model unchanged. Use `toModelOutput()` when the raw result and the model-facing result should be different.
 
 ```ts title="search-tool.ts"
-import { tool } from '@use-crux/ai'
-import { z } from 'zod'
+import { tool } from "@use-crux/ai";
+import { z } from "zod";
 
 const searchDocs = tool({
-  description: 'Search product documentation',
+  description: "Search product documentation",
   parameters: z.object({ query: z.string() }),
   execute: async ({ query }) => {
-    const hits = await searchIndex(query)
+    const hits = await searchIndex(query);
 
     // Your app, logs, devtools, and evals can still inspect this full result.
     return {
@@ -81,16 +88,16 @@ const searchDocs = tool({
         indexLatencyMs: 18,
         rawScores: hits.map((hit) => hit.score),
       },
-    }
+    };
   },
   toModelOutput: ({ output }) => ({
-    type: 'text',
+    type: "text",
     value: output.hits
       .slice(0, 5)
       .map((hit) => `[${hit.sourceId}] ${hit.title}\n${hit.snippet}`)
-      .join('\n\n'),
+      .join("\n\n"),
   }),
-})
+});
 ```
 
 Crux preserves both shapes:
@@ -98,11 +105,11 @@ Crux preserves both shapes:
 ```ts
 const result = await generate(agent, {
   model,
-  input: { task: 'Find enterprise SSO docs' },
+  input: { task: "Find enterprise SSO docs" },
   tools: { searchDocs },
-})
+});
 
-result.toolResults[0].output      // full raw object from execute()
+result.toolResults[0].output; // full raw object from execute()
 // The next model step receives the compact text from toModelOutput().
 ```
 
@@ -110,11 +117,11 @@ Return `json` when the model should receive structured data:
 
 ```ts
 const getInvoice = tool({
-  description: 'Fetch an invoice',
+  description: "Fetch an invoice",
   parameters: z.object({ invoiceId: z.string() }),
   execute: async ({ invoiceId }) => loadInvoice(invoiceId),
   toModelOutput: ({ output }) => ({
-    type: 'json',
+    type: "json",
     value: {
       id: output.id,
       status: output.status,
@@ -122,107 +129,112 @@ const getInvoice = tool({
       currency: output.currency,
     },
   }),
-})
+});
 ```
 
 Use explicit error outputs when the tool handled a failure and you want the model to recover:
 
 ```ts
 const readFile = tool({
-  description: 'Read a project file',
+  description: "Read a project file",
   parameters: z.object({ path: z.string() }),
   execute: async ({ path }) => readProjectFile(path),
   toModelOutput: ({ output }) =>
     output.allowed
-      ? { type: 'text', value: output.contents }
-      : { type: 'execution-denied', reason: output.reason },
-})
+      ? { type: "text", value: output.contents }
+      : { type: "execution-denied", reason: output.reason },
+});
 ```
 
 Return `content` when the model should receive multimodal tool output:
 
 ```ts
 const renderChart = tool({
-  description: 'Render a chart for the current report',
+  description: "Render a chart for the current report",
   parameters: z.object({ chartId: z.string() }),
   execute: async ({ chartId }) => renderChartImage(chartId),
   toModelOutput: ({ output }) => ({
-    type: 'content',
+    type: "content",
     value: [
-      { type: 'text', text: output.caption },
-      { type: 'image-data', mediaType: 'image/png', data: output.base64Png },
+      { type: "text", text: output.caption },
+      { type: "image-data", mediaType: "image/png", data: output.base64Png },
     ],
   }),
-})
+});
 ```
 
 If `toModelOutput()` is omitted, Crux uses the standard default: strings become `{ type: 'text' }`, everything else becomes JSON. `@use-crux/ai` passes model output through to the AI SDK. Native adapters preserve supported media natively where the provider allows it: Google uses function-response media parts, Anthropic uses native `tool_result` content blocks, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results.
 
 ## Tool merging order
 
-Tools are collected from three layers and merged with **last-write-wins** semantics. If two layers define a tool with the same name, the later layer's definition replaces the earlier one entirely.
+Prompt-time tool names must be unique. Crux merges prompt-time tools in a fixed order and throws if two owners contribute the same name, so a model cannot silently bind to the wrong implementation. The error names both owners and suggests the only intentional override path: pass a replacement tool at the `generate()` or `stream()` call site.
 
-| Layer | Source | Precedence |
-|-------|--------|------------|
-| 1. Context tools | `context({ tools })` collected via `use` | Lowest |
-| 2. Prompt tools | `prompt({ tools })` | Middle |
-| 3. Call-site tools | `generate(prompt, { tools })` | Highest |
+| Layer                | Source                                                      | Precedence |
+| -------------------- | ----------------------------------------------------------- | ---------- |
+| 1. Skill tools       | `skill()` loader tools                                      | Checked    |
+| 2. Context tools     | `context({ tools })` collected via `use`                    | Checked    |
+| 3. Contributor tools | `contributor()` and injected primitive tools                | Checked    |
+| 4. Blackboard tools  | `blackboard()` focused tools                                | Checked    |
+| 5. Prompt tools      | `prompt({ tools })`                                         | Checked    |
+| 6. Call-site tools   | `generate(prompt, { tools })` / `stream(prompt, { tools })` | Override   |
 
-Internally, the resolve pipeline calls `collectContextTools()` to gather tools from all contexts (iterating through the `use` array in order, with later contexts overwriting earlier ones on name collision). Then prompt-level `config.tools` are merged on top via `Object.assign`. Finally, the adapter merges call-site tools last.
+Call-site tools are applied by the adapter after prompt resolution and intentionally win without a collision error.
 
 ```ts title="tools.ts"
-import { prompt, context } from '@use-crux/core'
-import { generate, tool } from '@use-crux/ai'
-import { z } from 'zod'
+import { prompt, context } from "@use-crux/core";
+import { generate, tool } from "@use-crux/ai";
+import { z } from "zod";
 
 // Context provides a basic search tool
 const webSearch = context({
-  id: 'web-search',
-  system: '## Web Search\nUse search to find information online.',
+  id: "web-search",
+  system: "## Web Search\nUse search to find information online.",
   tools: {
     search: tool({
-      description: 'Basic web search',
+      description: "Basic web search",
       parameters: z.object({ query: z.string() }),
       execute: async ({ query }) => ({ results: [`Result for: ${query}`] }),
     }),
   },
-})
+});
 
 // Prompt overrides search with a more specific implementation
 const researcher = prompt({
   use: [webSearch],
   input: z.object({ topic: z.string() }),
-  system: 'You are a research assistant.',
+  system: "You are a research assistant.",
   prompt: ({ input }) => `Research: ${input.topic}`,
   tools: {
     // This replaces the context's search tool (same name)
     search: tool({
-      description: 'Academic search with citations',
+      description: "Academic search with citations",
       parameters: z.object({ query: z.string(), year: z.number().optional() }),
       execute: async ({ query, year }) => ({
-        results: [{ title: query, year, citation: '...' }],
+        results: [{ title: query, year, citation: "..." }],
       }),
     }),
   },
-})
+});
 
 // Call-site can add more tools or override again
 const result = await generate(researcher, {
   model,
-  input: { topic: 'quantum computing' },
+  input: { topic: "quantum computing" },
   tools: {
     // Adds a new tool at call-site (highest precedence)
     saveResult: tool({
-      description: 'Persist a research finding',
+      description: "Persist a research finding",
       parameters: z.object({ finding: z.string() }),
       execute: async ({ finding }) => ({ saved: true }),
     }),
   },
-})
+});
 ```
 
 <Callout type="info">
-Contexts whose system text was dropped due to a token budget still contribute their tools. Tool availability is independent of whether the context's system message fit within the budget.
+  Contexts whose system text was dropped due to a token budget still contribute
+  their tools. Tool availability is independent of whether the context's system
+  message fit within the budget.
 </Callout>
 
 ## `activeTools`
@@ -232,9 +244,9 @@ Use `activeTools` to restrict which tools the model can call on a given invocati
 ```ts
 const result = await generate(researcher, {
   model,
-  input: { topic: 'quantum computing' },
-  activeTools: ['search'],  // model can only use search, not saveNote
-})
+  input: { topic: "quantum computing" },
+  activeTools: ["search"], // model can only use search, not saveNote
+});
 ```
 
 This is useful when the same prompt is used in different stages of a workflow where only a subset of tools should be available:
@@ -243,97 +255,138 @@ This is useful when the same prompt is used in different stages of a workflow wh
 // Stage 1: research (only search)
 const research = await generate(agent, {
   model,
-  input: { task: 'Find pricing data' },
-  activeTools: ['search'],
-})
+  input: { task: "Find pricing data" },
+  activeTools: ["search"],
+});
 
 // Stage 2: writing (only save)
 const written = await generate(agent, {
   model,
-  input: { task: 'Write the report' },
-  activeTools: ['saveNote'],
-})
+  input: { task: "Write the report" },
+  activeTools: ["saveNote"],
+});
 ```
 
 ## Middleware and approvals
 
 <Cards>
-  <Card title="Tool middleware" description="Audit, block, modify, or short-circuit tool execution with server-side middleware." href="/docs/guides/tools/middleware" />
-  <Card title="Tool approvals" description="Add serverless-safe human approval for dangerous tool calls." href="/docs/guides/tools/approvals" />
-  <Card title="React approval UI" description="Build a Next.js chat route and approval buttons using the AI SDK message flow." href="/docs/cookbook/basics/tool-approval-react" />
-  <Card title="CLI approval loop" description="Use the same approval middleware from a terminal app with readline." href="/docs/cookbook/basics/tool-approval-cli" />
-  <Card title="Expo approval screen" description="Handle approval requests in React Native without keeping a server request open." href="/docs/cookbook/basics/tool-approval-expo" />
+  <Card
+    title="Tool middleware"
+    description="Audit, block, modify, or short-circuit tool execution with server-side middleware."
+    href="/docs/guides/tools/middleware"
+  />
+  <Card
+    title="Tool approvals"
+    description="Add serverless-safe human approval for dangerous tool calls."
+    href="/docs/guides/tools/approvals"
+  />
+  <Card
+    title="React approval UI"
+    description="Build a Next.js chat route and approval buttons using the AI SDK message flow."
+    href="/docs/cookbook/basics/tool-approval-react"
+  />
+  <Card
+    title="CLI approval loop"
+    description="Use the same approval middleware from a terminal app with readline."
+    href="/docs/cookbook/basics/tool-approval-cli"
+  />
+  <Card
+    title="Expo approval screen"
+    description="Handle approval requests in React Native without keeping a server request open."
+    href="/docs/cookbook/basics/tool-approval-expo"
+  />
 </Cards>
 
 ## Stop conditions
 
-Control when multi-step tool use terminates using `stopWhen`. Crux re-exports the `stepCountIs` and `hasToolCall` helpers from the Vercel AI SDK:
+Control when multi-step tool use terminates using Crux's provider-neutral `stopWhen` settings:
 
 ```ts
-import { generate, tool, stepCountIs, hasToolCall } from '@use-crux/ai'
+import { hasToolCall, maxSteps } from "@use-crux/core";
+import { generate, tool } from "@use-crux/ai";
 
 // Stop after a maximum of 10 tool-use steps
 const result = await generate(agent, {
   model,
-  input: { task: 'Analyze the dataset' },
-  stopWhen: stepCountIs(10),
-})
+  input: { task: "Analyze the dataset" },
+  stopWhen: maxSteps(10),
+});
 ```
 
-You can also define `stopWhen` at the prompt level so it applies to every call:
+Define `stopWhen` in prompt `settings` when it should apply to every adapter call:
 
 ```ts
 const agent = prompt({
-  system: 'You are an analyst.',
+  system: "You are an analyst.",
   input: z.object({ task: z.string() }),
   prompt: ({ input }) => input.task,
-  tools: { /* ... */ },
-  stopWhen: stepCountIs(5),  // default for all generate() calls
-})
+  tools: {
+    /* ... */
+  },
+  settings: {
+    stopWhen: maxSteps(5),
+  },
+});
 ```
 
 The `hasToolCall` helper stops execution when a specific tool is called, which is useful for "exit" or "submit" tools:
 
 ```ts
 const submitTool = tool({
-  description: 'Submit the final answer',
+  description: "Submit the final answer",
   parameters: z.object({ answer: z.string() }),
   execute: async ({ answer }) => ({ submitted: true }),
-})
+});
 
 const result = await generate(agent, {
   model,
-  input: { task: 'Solve the puzzle' },
+  input: { task: "Solve the puzzle" },
   tools: { submit: submitTool },
-  stopWhen: hasToolCall('submit'),
-})
+  stopWhen: hasToolCall("submit"),
+});
 ```
 
 ## Tool error handling
 
-When a tool's `execute` function throws an error, the AI SDK catches it and returns the error as a tool result to the model. This allows the model to see what went wrong and retry with different arguments or adjust its approach.
+When a tool's `execute` function throws an error, the adapter returns the error as a tool result to the model. This allows the model to see what went wrong and retry with different arguments or adjust its approach.
 
 ```ts
 const fetchPage = tool({
-  description: 'Fetch a web page',
+  description: "Fetch a web page",
   parameters: z.object({ url: z.string().url() }),
   execute: async ({ url }) => {
-    const res = await fetch(url)
+    const res = await fetch(url);
     if (!res.ok) {
-      throw new Error(`HTTP ${res.status}: ${res.statusText}`)
+      throw new Error(`HTTP ${res.status}: ${res.statusText}`);
     }
-    return { content: await res.text() }
+    return { content: await res.text() };
   },
-})
+});
 ```
 
-If `execute` throws, the model receives the error message as the tool result and can decide to try a different URL, ask the user for help, or move on. Combine this with `stopWhen: stepCountIs(n)` to prevent infinite retry loops.
+If `execute` throws, the model receives the error message as the tool result and can decide to try a different URL, ask the user for help, or move on. Combine this with `stopWhen: maxSteps(n)` to prevent infinite retry loops.
 
 ## Next steps
 
 <Cards>
-  <Card title="Execution" description="Run prompts with Vercel AI SDK, OpenAI, Google GenAI, or agent frameworks." href="/docs/guides/prompts/execution" />
-  <Card title="Core Concepts" description="How contexts, prompts, and adapters compose together." href="/docs/foundations/mental-model" />
-  <Card title="Agents" description="Multi-agent coordination with blackboards and handoffs." href="/docs/guides/agents" />
-  <Card title="API Reference" description="Full @use-crux/core API — prompt tools, toolChoice, and stopWhen." href="/docs/reference/crux-core" />
+  <Card
+    title="Execution"
+    description="Run prompts with Vercel AI SDK, OpenAI, Google GenAI, or agent frameworks."
+    href="/docs/guides/prompts/execution"
+  />
+  <Card
+    title="Core Concepts"
+    description="How contexts, prompts, and adapters compose together."
+    href="/docs/foundations/mental-model"
+  />
+  <Card
+    title="Agents"
+    description="Multi-agent coordination with blackboards and handoffs."
+    href="/docs/guides/agents"
+  />
+  <Card
+    title="API Reference"
+    description="Full @use-crux/core API — prompt tools, toolChoice, and stopWhen."
+    href="/docs/reference/crux-core"
+  />
 </Cards>

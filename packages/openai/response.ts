@@ -21,11 +21,15 @@ export function openAIResponseMeta(result: ChatCompletion): NativeResponseMetada
   return {
     usage: result.usage
       ? {
-          inputTokens: result.usage.prompt_tokens ?? 0,
-          outputTokens: result.usage.completion_tokens ?? 0,
-          totalTokens: result.usage.total_tokens ?? 0,
+          inputTokens: result.usage.prompt_tokens ?? undefined,
+          outputTokens: result.usage.completion_tokens ?? undefined,
+          totalTokens:
+            result.usage.total_tokens ??
+            (result.usage.prompt_tokens != null && result.usage.completion_tokens != null
+              ? result.usage.prompt_tokens + result.usage.completion_tokens
+              : undefined),
         }
-      : { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+      : { inputTokens: undefined, outputTokens: undefined, totalTokens: undefined },
     finishReason: choice?.finish_reason,
     responseId: result.id,
     actualModelId: result.model,

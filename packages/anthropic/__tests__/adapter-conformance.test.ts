@@ -20,11 +20,15 @@ describeCruxAdapterConformance({
     streaming: true,
     toolCalls: true,
     approvalSuspension: true,
+    providerCache: true,
   },
 })
 
 function anthropicConformanceHarness(): ProviderRuntimeConformanceHarness<Anthropic> {
   return {
+    providerCache: {
+      assertRequest: assertAnthropicCacheBoundary,
+    },
     prepare(script) {
       const captured = capturedAnthropicClient({
         emissions: script.emissions,
@@ -43,6 +47,29 @@ function anthropicConformanceHarness(): ProviderRuntimeConformanceHarness<Anthro
       }
     },
   }
+}
+
+function assertAnthropicCacheBoundary(body: unknown): string | undefined {
+  const system = readRecord(body)?.system
+  if (!Array.isArray(system)) return `expected Anthropic system blocks, got ${JSON.stringify(system)}`
+
+  const markerBlocks = system.filter(
+    (block) => readRecord(block)?.cache_control !== undefined,
+  )
+  if (markerBlocks.length !== 1) {
+    return `expected one Anthropic cache_control marker, got ${markerBlocks.length}`
+  }
+
+  const marked = readRecord(markerBlocks[0])
+  if (marked?.text !== 'Cached rule B.') {
+    return `expected cache_control on "Cached rule B.", got ${JSON.stringify(marked)}`
+  }
+
+  const serialized = JSON.stringify(system)
+  for (const expected of ['Stable identity.', 'Cached rule A.', 'Cached rule B.', 'Dynamic tail: Run the conformance scenario.']) {
+    if (!serialized.includes(expected)) return `Anthropic request omitted ${expected}`
+  }
+  return undefined
 }
 
 function capturedAnthropicClient(script: {
@@ -91,7 +118,10 @@ function anthropicMessage(emission: ProviderConformanceEmission, sequence: numbe
     content: [...(emission.text ? [{ type: 'text' as const, text: emission.text }] : []), ...toolBlocks],
     stop_reason: toolBlocks.length > 0 ? 'tool_use' : 'end_turn',
     stop_sequence: null,
-    usage: { input_tokens: 13, output_tokens: 8 },
+    usage:
+      emission.usage !== undefined
+        ? { input_tokens: emission.usage.inputTokens, output_tokens: emission.usage.outputTokens }
+        : { input_tokens: 13, output_tokens: 8 },
   } as AnthropicParsedMessage
 }
 

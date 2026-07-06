@@ -82,7 +82,7 @@ async function* stream(): AsyncIterable<GenerateContentResponse> {
  * The cacheable context must lead, so the prompt carries no own `system` text
  * (that would always sort first as an uncacheable `source: 'prompt'` block).
  */
-const cachedRules = context({ id: 'rules', system: 'Cached rules', cache: { providerCache: true } })
+const cachedRules = context({ id: 'rules', system: 'Cached rules', cache: true })
 const promptRules = context({ id: 'extra', system: 'Prompt rules' })
 const cachedPrompt = prompt({
   id: 'cached',

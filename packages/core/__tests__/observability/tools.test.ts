@@ -416,16 +416,17 @@ describe('canonical tool observability', () => {
     )
   })
 
-    it('records approval token mismatches as errored tool.approval spans', async () => {
+    it('records approval token mismatches as errored tool.approval spans and invalid denial results', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const model = testAdapter([response('', [{ id: 'call_delete', name: 'deletePost', args: { id: 'post_1' } }])])
+    const execute = vi.fn(async () => 'deleted')
     const postPrompt = testPrompt({
       deletePost: {
         description: 'Delete a post',
         parameters: z.object({ id: z.string() }),
         needsApproval: true,
-        execute: async () => 'deleted',
+        execute,
       },
     })
 
@@ -440,15 +441,24 @@ describe('canonical tool observability', () => {
       approved: true,
     })
 
-    await expect(
-      model.generate(postPrompt, {
-        model: 'mock-model',
-        input: { instruction: 'Resume' },
-        messages: badMessages,
-      }),
-    ).rejects.toThrow('Approval response token mismatch')
+    const resumed = await model.generate(postPrompt, {
+      model: 'mock-model',
+      input: { instruction: 'Resume' },
+      messages: badMessages,
+    })
     await observe.flush()
 
+    expect(execute).not.toHaveBeenCalled()
+    expect(resumed.messages).toContainEqual(
+      expect.objectContaining({
+        role: 'tool',
+        content: expect.stringContaining('"reason":"approval-invalid"'),
+        metadata: expect.objectContaining({
+          toolCallId: 'call_delete',
+          toolName: 'deletePost',
+        }),
+      }),
+    )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'span:start',

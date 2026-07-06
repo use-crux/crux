@@ -14,6 +14,8 @@
 
 import type { GenerationSettings, TraceMeta } from '../generation/types'
 import type { AnyPrompt } from '../prompt/prompt-types'
+import type { ResolvedPrompt } from '../resolver/types'
+import type { AnyToolSet } from '../types'
 
 /**
  * Loosely-typed resolve options used at the adapter boundary.
@@ -35,6 +37,24 @@ import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
 import { coreStepDialect, createAdapterExecution } from './execution/session'
+
+/**
+ * Return a prompt view whose resolution includes additional agent tools.
+ *
+ * Agent composition needs tools to participate in the same adapter tool-loop
+ * path as prompt-authored tools, but mutating the prompt would leak those tools
+ * into later calls. This wrapper keeps the public `AnyPrompt` surface intact
+ * and scopes the merge to this executor call.
+ */
+function withMergedPromptTools(prompt: AnyPrompt, tools: AnyToolSet): AnyPrompt {
+  return Object.freeze({
+    ...prompt,
+    resolve: async (resolveOpts: AdapterResolveOpts): Promise<ResolvedPrompt> => {
+      const resolved = await prompt.resolve(resolveOpts)
+      return { ...resolved, tools: { ...(resolved.tools ?? {}), ...tools } }
+    },
+  })
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Generate Options
@@ -245,16 +265,7 @@ export function adapter<
       // so the tool loop can pick them up from the resolved prompt.
       const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) }
       const promptWithTools: AnyPrompt =
-        Object.keys(mergedTools).length > 0
-          ? (Object.freeze({
-              ...agent.prompt,
-              tools: mergedTools,
-              resolve: async (resolveOpts: AdapterResolveOpts) => {
-                const resolved = await agent.prompt.resolve(resolveOpts)
-                return { ...resolved, tools: { ...(resolved.tools ?? {}), ...mergedTools } }
-              },
-            }) as unknown as AnyPrompt)
-          : agent.prompt
+        Object.keys(mergedTools).length > 0 ? withMergedPromptTools(agent.prompt, mergedTools) : agent.prompt
 
       const generateOpts: AdapterGenerateOptions<TExtra> = {
         model,

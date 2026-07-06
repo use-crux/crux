@@ -32,111 +32,156 @@
 import type {
   LanguageModel,
   ToolSet,
-  ToolChoice,
-  StopCondition,
+  ToolChoice as AiToolChoice,
+  StopCondition as AiStopCondition,
   CallSettings,
   GenerateObjectResult,
   GenerateTextResult,
   StreamTextResult,
   StreamObjectResult,
   DeepPartial,
-} from 'ai'
-import type { z } from 'zod'
-import type { Prompt, AnyPrompt, Context, ResolvedPrompt, MergedInput, GenerationSettings, Message } from '@use-crux/core'
-import type { Constraint, Guardrail } from '@use-crux/core/safety'
-import { isValidationExhaustedError } from '@use-crux/core'
-import type { DenseEmbedding } from '@use-crux/core/embedding'
-import type { Reranker, RetrievalModel } from '@use-crux/core/retrieval'
-import type { ApprovalRequestInfo, ExecutorModelArg, ExecutorStreamMeta } from '@use-crux/core/adapter'
-import type { ToolMiddleware, FallbackModel } from '@use-crux/core'
-import { isRouter, isCascade, resolveModel } from '@use-crux/core/routing'
-import type { AnyRouterModel, CascadeModel } from '@use-crux/core/routing'
-import type { GenerateObjectFn, GenerateTextFn } from '@use-crux/core/compaction'
-import type { ValidationRetryOptions } from '@use-crux/core'
-import type { SdkGateway } from './src/gateway'
-import { liveSdkGateway } from './src/gateway'
-import type { SdkLoopResultLike } from './src/executor'
-import type { AIEmbeddingConfig, AIRerankerConfig, AIRetrievalModelConfig } from './src/extensions'
-import { aiSdkProviderRuntime } from './src/profile'
-import { extractModelInfo } from './src/provider-profile'
-import { createStructuredGenerateObjectFn } from './src/structured-generation'
+} from "ai";
+import type { z } from "zod";
+import type {
+  Prompt,
+  AnyPrompt,
+  Context,
+  ResolvedPrompt,
+  MergedInput,
+  GenerationSettings,
+  Message,
+} from "@use-crux/core";
+import type { Constraint, Guardrail } from "@use-crux/core/safety";
+import { isValidationExhaustedError } from "@use-crux/core";
+import type { DenseEmbedding } from "@use-crux/core/embedding";
+import type { Reranker, RetrievalModel } from "@use-crux/core/retrieval";
+import type {
+  ApprovalRequestInfo,
+  ExecutorModelArg,
+  ExecutorStreamMeta,
+} from "@use-crux/core/adapter";
+import type { ToolMiddleware, FallbackModel } from "@use-crux/core";
+import { isRouter, isCascade, resolveModel } from "@use-crux/core/routing";
+import type { AnyRouterModel, CascadeModel } from "@use-crux/core/routing";
+import type {
+  GenerateObjectFn,
+  GenerateTextFn,
+} from "@use-crux/core/compaction";
+import type { ValidationRetryOptions } from "@use-crux/core";
+import type { SdkGateway } from "./src/gateway";
+import { liveSdkGateway } from "./src/gateway";
+import type { SdkLoopResultLike } from "./src/executor";
+import type {
+  AIEmbeddingConfig,
+  AIRerankerConfig,
+  AIRetrievalModelConfig,
+} from "./src/extensions";
+import { aiSdkProviderRuntime } from "./src/profile";
+import { extractModelInfo } from "./src/provider-profile";
+import { createStructuredGenerateObjectFn } from "./src/structured-generation";
+
+type AiProviderOptions = Parameters<
+  SdkGateway["generateText"]
+>[0]["providerOptions"];
 
 // ─────────────────────────────────────────────────────────────────
 // Options Types
 // ─────────────────────────────────────────────────────────────────
 
-/** Options for `generate()` and `stream()` with AI SDK types. */
-export type AIGenerateOptions<TOwnInput extends z.ZodType, TContexts extends readonly Context<z.ZodType>[]> = {
+/** AI SDK-native, non-portable options for `generate()` and `stream()`. */
+export interface AIExtra extends Record<string, unknown> {
+  /** AI SDK-native tool choice strategy. Prefer Crux `toolChoice` for portable calls. */
+  readonly toolChoice?: AiToolChoice<ToolSet>;
+  /** AI SDK-native stop conditions. Prefer Crux `stopWhen` for portable calls. */
+  readonly stopWhen?:
+    | AiStopCondition<ToolSet>
+    | Array<AiStopCondition<ToolSet>>;
+}
+
+/** Options for `generate()` and `stream()` with AI SDK models. */
+export type AIGenerateOptions<
+  TOwnInput extends z.ZodType,
+  TContexts extends readonly Context<z.ZodType>[],
+> = {
   /** The AI SDK language model to use. Supports `fallback()`, `router()`, and `cascade()` wrappers. */
-  model: LanguageModel | FallbackModel<LanguageModel> | AnyRouterModel<LanguageModel> | CascadeModel<LanguageModel>
+  model:
+    | LanguageModel
+    | FallbackModel<LanguageModel>
+    | AnyRouterModel<LanguageModel>
+    | CascadeModel<LanguageModel>;
   /** Additional tools to merge at call time (highest precedence). */
-  tools?: ToolSet
+  tools?: ToolSet;
   /** Tool middleware applied after prompt tools and call-site tools are merged. */
-  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
+  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
   /**
    * Message history override for resume flows such as tool approval.
    * Pass the prior assistant messages plus a `tool-approval-response` tool message.
    */
-  messages?: ResolvedPrompt['messages']
-  /** Tool choice strategy. */
-  toolChoice?: ToolChoice<ToolSet>
+  messages?: ResolvedPrompt["messages"];
   /**
-   * Custom stop condition(s) for multi-step tool use, replacing the
-   * `maxSteps` budget. Use AI SDK conditions like `stepCountIs(n)` or
-   * `hasToolCall(name)` when step counting alone is not enough.
-   */
-  stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>
-  /**
-   * Maximum tool-loop steps, identical to every Crux adapter. Enforced
-   * natively via the AI SDK's `stopWhen`. Ignored when a custom
-   * `stopWhen` is provided.
+   * Maximum tool-loop steps, identical to every Crux adapter.
+   *
+   * Portable `settings.maxSteps`/`maxSteps()` are normalized to the same
+   * neutral stop-condition vocabulary before reaching the AI SDK.
    * @default 10
    */
-  maxSteps?: number
+  maxSteps?: number;
+  /** AI SDK-native, non-portable options. */
+  extra?: AIExtra;
+  /** AI SDK provider-specific options passed through to the underlying call. */
+  providerOptions?: AiProviderOptions;
   /** Restrict which tools the model can use. */
-  activeTools?: string[]
+  activeTools?: string[];
   /** Token budget for system message. */
-  tokenBudget?: number
+  tokenBudget?: number;
   /**
    * Optional hard timeout for the provider call in milliseconds.
    * Crux passes an AbortSignal to the AI SDK and rejects with AbortError
    * if the provider does not settle before the deadline.
    */
-  timeoutMs?: number
+  timeoutMs?: number;
   /**
    * Validation-feedback retry for structured output.
    * Uses AI SDK's `experimental_repairText` for cheap text fixes first,
    * then falls back to LLM retry with corrective messages.
    */
-  validationRetry?: ValidationRetryOptions
+  validationRetry?: ValidationRetryOptions;
   /** Per-call semantic constraints (highest precedence in the safety merge). */
-  constraints?: Constraint[]
+  constraints?: Constraint[];
   /** Shared cap on total constraint retries across all constraints. */
-  constraintMaxRetries?: number
+  constraintMaxRetries?: number;
   /** Per-call guardrails (highest precedence in the safety merge). */
-  guardrails?: Guardrail[]
-} & CallSettings &
+  guardrails?: Guardrail[];
+} & Omit<CallSettings, "toolChoice" | "stopWhen"> &
+  GenerationSettings &
   ([keyof MergedInput<TOwnInput, TContexts>] extends [never]
     ? { input?: undefined }
-    : { input: MergedInput<TOwnInput, TContexts> })
+    : { input: MergedInput<TOwnInput, TContexts> });
 
 // ─────────────────────────────────────────────────────────────────
 // Result Types
 // ─────────────────────────────────────────────────────────────────
 
 /** Stream result for text prompts. */
-export type TextStreamResult<TTools extends ToolSet = Record<string, never>> = StreamTextResult<TTools, never>
+export type TextStreamResult<TTools extends ToolSet = Record<string, never>> =
+  StreamTextResult<TTools, never>;
 
 /** Stream result for structured prompts. */
-export type ObjectStreamResult<T> = StreamObjectResult<DeepPartial<T>, T, never>
+export type ObjectStreamResult<T> = StreamObjectResult<
+  DeepPartial<T>,
+  T,
+  never
+>;
 
 /** Return type for `generate()` — discriminates on the prompt's output schema. */
 export type GenerateReturn<TOutput extends z.ZodType | undefined> =
-  TOutput extends z.ZodType<infer O> ? GenerateObjectResult<O> : GenerateTextResult<Record<string, never>, never>
+  TOutput extends z.ZodType<infer O>
+    ? GenerateObjectResult<O>
+    : GenerateTextResult<Record<string, never>, never>;
 
 /** Return type for `stream()` — discriminates on the prompt's output schema. */
 export type StreamReturn<TOutput extends z.ZodType | undefined> =
-  TOutput extends z.ZodType<infer O> ? ObjectStreamResult<O> : TextStreamResult
+  TOutput extends z.ZodType<infer O> ? ObjectStreamResult<O> : TextStreamResult;
 
 /**
  * Extra fields `@use-crux/ai` attaches to every stream result alongside the
@@ -149,7 +194,7 @@ export interface CruxStreamExtensions {
    * before, during, or after consuming the stream — it never consumes
    * the stream itself.
    */
-  completion: Promise<ExecutorStreamMeta | undefined>
+  completion: Promise<ExecutorStreamMeta | undefined>;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -157,7 +202,11 @@ export interface CruxStreamExtensions {
 // ─────────────────────────────────────────────────────────────────
 
 /** Machine-readable failure categories for AI SDK adapter errors. */
-export type CruxAIErrorCode = 'timeout' | 'validation_exhausted' | 'provider' | 'aborted'
+export type CruxAIErrorCode =
+  | "timeout"
+  | "validation_exhausted"
+  | "provider"
+  | "aborted";
 
 /**
  * Coded error wrapper for `@use-crux/ai` failures.
@@ -180,14 +229,18 @@ export type CruxAIErrorCode = 'timeout' | 'validation_exhausted' | 'provider' | 
  * ```
  */
 export class CruxAIError extends Error {
-  override readonly name = 'CruxAIError' as const
+  override readonly name = "CruxAIError" as const;
 
   /** Stable failure category — switch on this, not on message text. */
-  readonly code: CruxAIErrorCode
+  readonly code: CruxAIErrorCode;
 
-  constructor(code: CruxAIErrorCode, message: string, options?: { cause?: unknown }) {
-    super(message, options)
-    this.code = code
+  constructor(
+    code: CruxAIErrorCode,
+    message: string,
+    options?: { cause?: unknown },
+  ) {
+    super(message, options);
+    this.code = code;
   }
 
   /**
@@ -197,16 +250,18 @@ export class CruxAIError extends Error {
    * everything else is `'provider'`.
    */
   static classify(error: unknown): CruxAIError {
-    if (error instanceof CruxAIError) return error
-    const message = error instanceof Error ? error.message : String(error)
+    if (error instanceof CruxAIError) return error;
+    const message = error instanceof Error ? error.message : String(error);
     if (isValidationExhaustedError(error)) {
-      return new CruxAIError('validation_exhausted', message, { cause: error })
+      return new CruxAIError("validation_exhausted", message, { cause: error });
     }
-    if (error instanceof Error && error.name === 'AbortError') {
-      const code: CruxAIErrorCode = /tim(ed)? ?out/i.test(message) ? 'timeout' : 'aborted'
-      return new CruxAIError(code, message, { cause: error })
+    if (error instanceof Error && error.name === "AbortError") {
+      const code: CruxAIErrorCode = /tim(ed)? ?out/i.test(message)
+        ? "timeout"
+        : "aborted";
+      return new CruxAIError(code, message, { cause: error });
     }
-    return new CruxAIError('provider', message, { cause: error })
+    return new CruxAIError("provider", message, { cause: error });
   }
 }
 
@@ -220,7 +275,7 @@ export interface CruxAiOptions {
    * The AI SDK gateway to execute against.
    * @defaultValue {@link liveSdkGateway} — the real `ai` package functions.
    */
-  gateway?: SdkGateway
+  gateway?: SdkGateway;
 }
 
 /** The bound API surface returned by {@link createCruxAi}. */
@@ -233,7 +288,7 @@ export interface CruxAi {
   >(
     prompt: Prompt<TOwnInput, TOutput, TContexts>,
     opts: AIGenerateOptions<TOwnInput, TContexts>,
-  ): Promise<GenerateReturn<TOutput>>
+  ): Promise<GenerateReturn<TOutput>>;
   /** See the package-level {@link stream}. */
   stream<
     TOwnInput extends z.ZodType,
@@ -242,37 +297,37 @@ export interface CruxAi {
   >(
     prompt: Prompt<TOwnInput, TOutput, TContexts>,
     opts: AIGenerateOptions<TOwnInput, TContexts>,
-  ): Promise<StreamReturn<TOutput> & CruxStreamExtensions>
+  ): Promise<StreamReturn<TOutput> & CruxStreamExtensions>;
   /** See the package-level {@link generateTextFn}. */
-  generateTextFn: GenerateTextFn
+  generateTextFn: GenerateTextFn;
   /** See the package-level {@link generateObjectFn}. */
-  generateObjectFn: GenerateObjectFn
+  generateObjectFn: GenerateObjectFn;
   /** See the package-level {@link embedding}. */
-  embedding(config: AIEmbeddingConfig): DenseEmbedding
+  embedding(config: AIEmbeddingConfig): DenseEmbedding;
   /** See the package-level {@link retrievalModel}. */
-  retrievalModel(config: AIRetrievalModelConfig): RetrievalModel
+  retrievalModel(config: AIRetrievalModelConfig): RetrievalModel;
   /** See the package-level {@link reranker}. */
-  reranker(config: AIRerankerConfig): Reranker
+  reranker(config: AIRerankerConfig): Reranker;
 }
 
 /** Internal: the loosely-typed view of call opts used by the implementation. */
 type CallOpts = Record<string, unknown> & {
-  model: ExecutorModelArg<LanguageModel>
-  tools?: ToolSet
-  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
-  messages?: ResolvedPrompt['messages']
-  toolChoice?: ToolChoice<ToolSet>
-  stopWhen?: StopCondition<ToolSet> | Array<StopCondition<ToolSet>>
-  maxSteps?: number
-  activeTools?: string[]
-  tokenBudget?: number
-  timeoutMs?: number
-  validationRetry?: ValidationRetryOptions
-  constraints?: Constraint[]
-  constraintMaxRetries?: number
-  guardrails?: Guardrail[]
-  input?: Record<string, unknown>
-}
+  model: ExecutorModelArg<LanguageModel>;
+  tools?: ToolSet;
+  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
+  messages?: ResolvedPrompt["messages"];
+  maxSteps?: number;
+  extra?: AIExtra;
+  providerOptions?: AiProviderOptions;
+  activeTools?: string[];
+  tokenBudget?: number;
+  timeoutMs?: number;
+  validationRetry?: ValidationRetryOptions;
+  constraints?: Constraint[];
+  constraintMaxRetries?: number;
+  guardrails?: Guardrail[];
+  input?: Record<string, unknown>;
+};
 
 /**
  * Build a `@use-crux/ai` instance bound to a specific {@link SdkGateway}.
@@ -292,18 +347,20 @@ type CallOpts = Record<string, unknown> & {
  * ```
  */
 export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
-  const gateway = options.gateway ?? liveSdkGateway()
-  const executor = aiSdkProviderRuntime.create(gateway)
+  const gateway = options.gateway ?? liveSdkGateway();
+  const executor = aiSdkProviderRuntime.create(gateway);
 
-  async function generateImpl(prompt: AnyPrompt, opts: CallOpts): Promise<SdkLoopResultLike> {
+  async function generateImpl(
+    prompt: AnyPrompt,
+    opts: CallOpts,
+  ): Promise<SdkLoopResultLike> {
     const {
       model,
       tools,
       toolMiddleware,
       messages,
-      toolChoice,
-      stopWhen,
       maxSteps,
+      extra,
       activeTools,
       tokenBudget,
       timeoutMs,
@@ -313,7 +370,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       guardrails,
       input,
       ...settings
-    } = opts
+    } = opts;
 
     const result = await executor.generate(prompt, {
       model,
@@ -330,19 +387,15 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       activeTools,
       // The Crux-wide default budget (10, from loopRuntimeAdapter) — identical
       // across every adapter, enforced natively via the AI SDK's stopWhen.
-      // A custom `stopWhen` replaces the budget entirely.
       maxSteps,
       settings: settings as GenerationSettings,
-      extra: {
-        ...(toolChoice !== undefined ? { toolChoice } : {}),
-        ...(stopWhen !== undefined ? { stopWhen } : {}),
-      },
-    })
+      extra,
+    });
 
     if (result.raw) {
-      const raw = result.raw as SdkLoopResultLike
-      raw._meta = { ...(result._meta as Record<string, unknown>) }
-      return raw
+      const raw = result.raw as SdkLoopResultLike;
+      raw._meta = { ...(result._meta as Record<string, unknown>) };
+      return raw;
     }
 
     // No SDK result object exists in two cases: suspended on tool approval,
@@ -355,18 +408,23 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       _meta: { ...(result._meta as Record<string, unknown>) },
       messages: result.messages,
       pendingApprovals: result.pendingApprovals,
-    } as SdkLoopResultLike & { messages: Message[]; pendingApprovals?: readonly ApprovalRequestInfo[] }
+    } as SdkLoopResultLike & {
+      messages: Message[];
+      pendingApprovals?: readonly ApprovalRequestInfo[];
+    };
   }
 
-  async function streamImpl(prompt: AnyPrompt, opts: CallOpts): Promise<Record<string, unknown>> {
+  async function streamImpl(
+    prompt: AnyPrompt,
+    opts: CallOpts,
+  ): Promise<Record<string, unknown>> {
     const {
       model,
       tools,
       toolMiddleware,
       messages,
-      toolChoice,
-      stopWhen,
       maxSteps,
+      extra,
       activeTools,
       tokenBudget,
       timeoutMs,
@@ -376,7 +434,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       guardrails,
       input,
       ...settings
-    } = opts
+    } = opts;
 
     const handle = await executor.stream(prompt, {
       model,
@@ -392,25 +450,26 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       activeTools,
       maxSteps,
       settings: settings as GenerationSettings,
-      extra: {
-        ...(toolChoice !== undefined ? { toolChoice } : {}),
-        ...(stopWhen !== undefined ? { stopWhen } : {}),
-      },
-    })
+      extra,
+    });
 
-    const raw = handle.raw as Record<string, unknown>
-    const completion = handle.completion()
-    const existingMeta = (raw._meta as Record<string, unknown> | undefined) ?? {}
+    const raw = handle.raw as Record<string, unknown>;
+    const completion = handle.completion();
+    const existingMeta =
+      (raw._meta as Record<string, unknown> | undefined) ?? {};
     // Typed completion plus the legacy `_meta._streamCompletion` location.
-    raw._meta = { ...existingMeta, _streamCompletion: completion }
-    ;(raw as { completion?: Promise<ExecutorStreamMeta | undefined> }).completion = completion
-    return raw
+    raw._meta = { ...existingMeta, _streamCompletion: completion };
+    (
+      raw as { completion?: Promise<ExecutorStreamMeta | undefined> }
+    ).completion = completion;
+    return raw;
   }
 
-  const generateFn = generateImpl as unknown as CruxAi['generate']
-  const streamFn = streamImpl as unknown as CruxAi['stream']
+  const generateFn = generateImpl as unknown as CruxAi["generate"];
+  const streamFn = streamImpl as unknown as CruxAi["stream"];
 
-  const generateObjectFnImpl: GenerateObjectFn = createStructuredGenerateObjectFn(gateway)
+  const generateObjectFnImpl: GenerateObjectFn =
+    createStructuredGenerateObjectFn(gateway);
 
   const generateTextFnImpl: GenerateTextFn = async (options) => {
     const run = async (model: LanguageModel) => {
@@ -418,23 +477,23 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
         model,
         system: options.system,
         prompt: options.prompt,
-      } as Parameters<SdkGateway['generateText']>[0])
-      return { text: result.text }
-    }
+      } as Parameters<SdkGateway["generateText"]>[0]);
+      return { text: result.text };
+    };
     if (isRouter(options.model) || isCascade(options.model)) {
       const resolved = await resolveModel<LanguageModel, { text: string }>(
         options.model as unknown as LanguageModel,
         { prompt: options.prompt },
         run,
         (model) => {
-          const info = extractModelInfo(model)
-          return info.modelId || info.provider
+          const info = extractModelInfo(model);
+          return info.modelId || info.provider;
         },
-      )
-      return { text: resolved.text }
+      );
+      return { text: resolved.text };
     }
-    return run(options.model as LanguageModel)
-  }
+    return run(options.model as LanguageModel);
+  };
 
   return {
     generate: generateFn,
@@ -444,14 +503,14 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     embedding: executor.embedding,
     retrievalModel: executor.retrievalModel,
     reranker: executor.reranker,
-  }
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────
 // Default instance (live gateway) — the package-level API
 // ─────────────────────────────────────────────────────────────────
 
-const defaultAi = createCruxAi()
+const defaultAi = createCruxAi();
 
 /**
  * Execute a prompt using the Vercel AI SDK.
@@ -460,7 +519,7 @@ const defaultAi = createCruxAi()
  *   `result.object` is validated against the prompt's schema, with
  *   tiered repair/retry when `validationRetry` is configured.
  * - Without: returns a `GenerateTextResult`; multi-step tool use is
- *   enabled by passing `stopWhen` (e.g. `stepCountIs(5)`).
+ *   bounded by `maxSteps` and portable `stopWhen` settings.
  *
  * Models may be plain AI SDK models or core routing wrappers —
  * `fallback()`, `router()`, and `cascade()` are resolved by core before
@@ -480,7 +539,7 @@ const defaultAi = createCruxAi()
  * result.object // typed from the prompt's output schema
  * ```
  */
-export const generate = defaultAi.generate
+export const generate = defaultAi.generate;
 
 /**
  * Stream a prompt using the Vercel AI SDK.
@@ -501,7 +560,7 @@ export const generate = defaultAi.generate
  * const meta = await result.completion // { usage, cost, streaming: { ttftMs, … } }
  * ```
  */
-export const stream = defaultAi.stream
+export const stream = defaultAi.stream;
 
 /**
  * AI SDK `generateText` wrapped as a `GenerateTextFn`.
@@ -517,7 +576,7 @@ export const stream = defaultAi.stream
  * await compactConversation({ generate: generateTextFn, model, ... })
  * ```
  */
-export const generateTextFn = defaultAi.generateTextFn
+export const generateTextFn = defaultAi.generateTextFn;
 
 /**
  * AI SDK `generateObject` wrapped as a `GenerateObjectFn`.
@@ -541,7 +600,7 @@ export const generateTextFn = defaultAi.generateTextFn
  * const result = await judge.score(input, { generate: generateObjectFn, model })
  * ```
  */
-export const generateObjectFn = defaultAi.generateObjectFn
+export const generateObjectFn = defaultAi.generateObjectFn;
 
 /**
  * Create a dense Crux embedding backed by AI SDK `embedMany()`.
@@ -550,39 +609,48 @@ export const generateObjectFn = defaultAi.generateObjectFn
  * registry and model objects that power `generate()` / `stream()`.
  */
 export function embedding(config: AIEmbeddingConfig): DenseEmbedding {
-  return defaultAi.embedding(config)
+  return defaultAi.embedding(config);
 }
 
 /**
  * Create a bound retrieval model backed by AI SDK `generateText()` and `generateObject()`.
  */
 export function retrievalModel(config: AIRetrievalModelConfig): RetrievalModel {
-  return defaultAi.retrievalModel(config)
+  return defaultAi.retrievalModel(config);
 }
 
 /**
  * Create a Crux retriever reranker backed by AI SDK `rerank()`.
  */
 export function reranker(config: AIRerankerConfig): Reranker {
-  return defaultAi.reranker(config)
+  return defaultAi.reranker(config);
 }
 
 // ─────────────────────────────────────────────────────────────────
 // Gateway exports (test seam)
 // ─────────────────────────────────────────────────────────────────
 
-export { liveSdkGateway } from './src/gateway'
-export type { SdkGateway } from './src/gateway'
-export { createAiSdkLoopRuntime } from './src/executor'
-export type { AiSdkLoopRuntime, SdkLoopResultLike, SdkStreamResultLike } from './src/executor'
-export type { AIEmbeddingConfig, AIRerankerConfig, AIRetrievalModelConfig, AiSdkRuntimeExtensions } from './src/extensions'
-export { aiSdkProviderRuntime } from './src/profile'
+export { liveSdkGateway } from "./src/gateway";
+export type { SdkGateway } from "./src/gateway";
+export { createAiSdkLoopRuntime } from "./src/executor";
+export type {
+  AiSdkLoopRuntime,
+  SdkLoopResultLike,
+  SdkStreamResultLike,
+} from "./src/executor";
+export type {
+  AIEmbeddingConfig,
+  AIRerankerConfig,
+  AIRetrievalModelConfig,
+  AiSdkRuntimeExtensions,
+} from "./src/extensions";
+export { aiSdkProviderRuntime } from "./src/profile";
 
 // ─────────────────────────────────────────────────────────────────
 // What is intentionally NOT exported from the root
 // ─────────────────────────────────────────────────────────────────
 //
-// - AI SDK re-exports (`tool`, `stepCountIs`, `hasToolCall`, types):
+// - AI SDK re-exports (`tool`, provider-native stop helpers, types):
 //   import them from 'ai' directly — `@use-crux/ai` is an adapter, not a
 //   re-packaging of the SDK.
 // - Agent compositions (`parallel`, `pipeline`, `consensus`, `swarm`):

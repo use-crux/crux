@@ -238,7 +238,7 @@ choices usually belong in prompt, agent, eval, or adapter code.
 | ----------------------------- | ------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------- |
 | `generation.middleware`       | `PromptMiddleware` | `undefined`                                           | Global generate/stream middleware. Plugins can layer additional middleware. |
 | `generation.tokenizer`        | `TokenizerFn`      | character estimate                                    | Custom token counting for budgets and related helpers.                      |
-| `generation.autoEscape`       | `boolean`          | `true`                                                | Escapes string input values before system/prompt functions receive them.    |
+| `generation.autoEscape`       | `boolean`          | `true`                                                | Escapes top-level string input fields before context gates and system/prompt functions receive them. |
 | `generation.securityWarnings` | `boolean`          | `true` when `NODE_ENV !== 'production'`, else `false` | Emits warnings for suspicious input patterns.                               |
 
 ```ts title="crux.config.ts"

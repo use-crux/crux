@@ -4,11 +4,12 @@
  * @module
  */
 
-import { defineProviderRuntime } from '@use-crux/core/adapter'
-import { createAiSdkLoopRuntime } from './executor'
-import { createAiSdkRuntimeExtensions } from './extensions'
-import type { SdkGateway } from './gateway'
-import { extractModelInfo } from './provider-profile'
+import { defineProviderRuntime } from "@use-crux/core/adapter";
+import { createAiSdkLoopRuntime } from "./executor";
+import { createAiSdkRuntimeExtensions } from "./extensions";
+import type { SdkGateway } from "./gateway";
+import { extractModelInfo } from "./provider-profile";
+import { mapAiSdkSettings } from "./sdk-codec";
 
 /**
  * Public provider runtime for the Vercel AI SDK.
@@ -20,15 +21,16 @@ import { extractModelInfo } from './provider-profile'
  * client-dependent loop operations; core assembles them into a `LoopRuntimePort`.
  */
 export const aiSdkProviderRuntime = defineProviderRuntime({
-  id: 'ai-sdk',
-  ownership: 'loop-owned',
+  id: "ai-sdk",
+  ownership: "loop-owned",
   loop: {
     describeModel: extractModelInfo,
-    settings: (settings) => ({ ...settings }),
+    settings: mapAiSdkSettings,
     bind: (gateway: SdkGateway) => {
-      const { runTextLoop, runStructuredAttempt, runStream, replayStream } = createAiSdkLoopRuntime(gateway)
-      return { runTextLoop, runStructuredAttempt, runStream, replayStream }
+      const { runTextLoop, runStructuredAttempt, runStream, replayStream } =
+        createAiSdkLoopRuntime(gateway);
+      return { runTextLoop, runStructuredAttempt, runStream, replayStream };
     },
   },
   extend: ({ client }) => createAiSdkRuntimeExtensions(client),
-})
+});

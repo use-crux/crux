@@ -3,11 +3,12 @@ title: Building Custom Adapters
 description: Use Crux's shared orchestration layer to build adapters for any AI SDK with minimal boilerplate.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout'
+import { Callout } from "fumadocs-ui/components/callout";
 
 <Callout type="info">
-  This guide is for developers building adapters for SDKs not covered by the built-in `@use-crux/ai`, `@use-crux/openai`,
-  `@use-crux/google`, and `@use-crux/anthropic` packages. Most users don't need this.
+  This guide is for developers building adapters for SDKs not covered by the
+  built-in `@use-crux/ai`, `@use-crux/openai`, `@use-crux/google`, and
+  `@use-crux/anthropic` packages. Most users don't need this.
 </Callout>
 
 ## Overview
@@ -27,15 +28,16 @@ Step 3 is identical across all adapters. Provider runtimes compile into a privat
 Use `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter` when your SDK boundary looks like OpenAI Chat Completions, Anthropic Messages, or Google GenAI content generation: Crux should own the loop, and your package should own provider wire facts.
 
 ```ts
-import { defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
+import { defineSingleTurnProviderBundle } from "@use-crux/core/adapter";
 
 const bindAcme = (client: AcmeClient) => ({
-  call: (request, mode) => (mode === 'structured' ? client.parse(request) : client.create(request)),
+  call: (request, mode) =>
+    mode === "structured" ? client.parse(request) : client.create(request),
   stream: (request) => client.stream(request),
-})
+});
 
 const acme = defineSingleTurnProviderBundle({
-  id: 'acme',
+  id: "acme",
   bind: bindAcme,
   profile: {
     request: acmeRequest,
@@ -48,11 +50,11 @@ const acme = defineSingleTurnProviderBundle({
     outputSchema: acmeOutputSchema,
     transcript: acmeTranscript,
   },
-})
+});
 
-export const acmeProviderRuntime = acme.runtime
-export const createAcme = acme.create
-export const acmeHelpers = acme.helpers()
+export const acmeProviderRuntime = acme.runtime;
+export const createAcme = acme.create;
+export const acmeHelpers = acme.helpers();
 ```
 
 The bundle keeps the public runtime, adapter factory, and lightweight helper factory in one place. If the public factory should accept options instead of a raw dependency object, add `deps.create` and `deps.helpers` mappers; Google uses this to keep CachedContent policy in `@use-crux/google` while core receives only a narrow cache resolver.
@@ -60,14 +62,18 @@ The bundle keeps the public runtime, adapter factory, and lightweight helper fac
 This keeps tests small: bind `acmeProviderRuntime.create(scriptedClient)`, run prompts through the public adapter methods, and assert on the scripted client's captured request bodies. For reusable adapter coverage, add the provider-runtime conformance suite; it exercises the same public runtime boundary used by the built-in adapters:
 
 ```ts
-import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
+import { describeCruxAdapterConformance } from "@use-crux/core/adapter/testing/vitest";
 
 describeCruxAdapterConformance({
-  name: 'acme',
+  name: "acme",
   runtime: acmeProviderRuntime,
   harness: acmeConformanceHarness(),
-  capabilities: { ownership: 'single-turn', structuredOutput: true, streaming: true },
-})
+  capabilities: {
+    ownership: "single-turn",
+    structuredOutput: true,
+    streaming: true,
+  },
+});
 ```
 
 Keep provider-specific transcript tests for unusual message conversion behavior.
@@ -77,21 +83,21 @@ Keep provider-specific transcript tests for unusual message conversion behavior.
 Convert between Crux's canonical `Message` format and your SDK's format with a `NativeTranscriptCodec`:
 
 ```ts
-import type { Message } from '@use-crux/core'
-import type { NativeTranscriptCodec } from '@use-crux/core/adapter'
+import type { Message } from "@use-crux/core";
+import type { NativeTranscriptCodec } from "@use-crux/core/adapter";
 
 export function toMessages(sdkMessages: readonly unknown[]): Message[] {
   return sdkMessages.map((msg) => ({
     role: normalizeRole(msg),
     content: extractText(msg),
-  }))
+  }));
 }
 
 export function fromMessages(messages: readonly Message[]): YourSDKMessage[] {
   return messages.map((msg) => ({
     role: msg.role,
     content: msg.content,
-  }))
+  }));
 }
 
 export const acmeTranscript = {
@@ -101,7 +107,7 @@ export const acmeTranscript = {
     text: raw.message.content,
     toolCalls: raw.message.toolCalls,
   }),
-} satisfies NativeTranscriptCodec<YourSDKMessage, AcmeResponse>
+} satisfies NativeTranscriptCodec<YourSDKMessage, AcmeResponse>;
 ```
 
 Keep tool-call ids, provider-specific roles, rich tool results, and assistant extraction in this codec. Request builders should consume `args.providerMessages` rather than converting `args.messages` again.
@@ -111,21 +117,27 @@ Keep tool-call ids, provider-specific roles, rich tool results, and assistant ex
 Writing `fromMessages`/`toMessages`/`appendToolRound` by hand means re-reading `Message.metadata` (tool calls, tool names, model output, error flags) in every provider. Instead, implement a `ProviderTranscriptDialect` and let core own the canonical transcript semantics. Core extracts neutral `ProviderTranscriptUnit`s, groups adjacent tool results, renders fallback text through shared `ToolResultEncodingHelpers`, and appends each tool round exactly once with `appendCanonicalToolRound()`:
 
 ```ts
-import { defineProviderTranscriptCodec } from '@use-crux/core/adapter'
-import type { ProviderTranscriptDialect } from '@use-crux/core/adapter'
+import { defineProviderTranscriptCodec } from "@use-crux/core/adapter";
+import type { ProviderTranscriptDialect } from "@use-crux/core/adapter";
 
 const acmeDialect: ProviderTranscriptDialect<YourSDKMessage, AcmeResponse> = {
   // `system` units can be dropped; return undefined to emit nothing.
-  encodeText: ({ role, text }) => (role === 'system' ? undefined : { role, content: text }),
-  encodeAssistant: ({ text, toolCalls = [] }) => encodeAssistant(text, toolCalls),
+  encodeText: ({ role, text }) =>
+    role === "system" ? undefined : { role, content: text },
+  encodeAssistant: ({ text, toolCalls = [] }) =>
+    encodeAssistant(text, toolCalls),
   // `helpers.plainText` / `contentParts` / `errorFlag` give one canonical reading
   // of each result; fan out to one wire message per result via a returned array.
-  encodeToolResults: ({ results }, helpers) => results.map((r) => encodeToolResult(r, helpers)),
+  encodeToolResults: ({ results }, helpers) =>
+    results.map((r) => encodeToolResult(r, helpers)),
   decodeMessage: (msg) => decodeToUnits(msg),
-  readAssistant: (raw) => ({ text: raw.message.content, toolCalls: raw.message.toolCalls }),
-}
+  readAssistant: (raw) => ({
+    text: raw.message.content,
+    toolCalls: raw.message.toolCalls,
+  }),
+};
 
-export const acmeTranscript = defineProviderTranscriptCodec(acmeDialect)
+export const acmeTranscript = defineProviderTranscriptCodec(acmeDialect);
 ```
 
 A dialect only ever sees neutral units (`ProviderToolCall`, `ProviderToolResult`) and SDK types — never raw `Message.metadata` — so the public `fromMessages()` and runtime tool-round appends cannot drift apart. Prefer this over a hand-written `NativeTranscriptCodec` for any tool-calling provider; reach for a bespoke `appendToolRound` only if the canonical transcript units genuinely cannot represent your wire format.
@@ -135,48 +147,69 @@ A dialect only ever sees neutral units (`ProviderToolCall`, `ProviderToolResult`
 Runtime hooks should be narrow and typed. Request hooks build SDK-native input; response hooks normalize metadata only; transcript hooks own assistant text/tool calls.
 
 ```ts
-import type { GenerationSettings } from '@use-crux/core'
-import type { NativeChatRequestArgs, NativeResponseMetadata } from '@use-crux/core/adapter'
+import type { GenerationSettings } from "@use-crux/core";
+import type {
+  NativeChatRequestArgs,
+  NativeResponseMetadata,
+} from "@use-crux/core/adapter";
 
 interface AcmeExtra extends Record<string, unknown> {
-  readonly toolChoice?: 'auto' | 'none'
+  /** Provider-native override for options Crux does not model portably. */
+  readonly nativeToolChoice?: "auto" | "none";
 }
 
 interface AcmeRequest {
-  readonly model: string
-  readonly messages: readonly YourSDKMessage[]
-  readonly temperature?: number
-  readonly maxTokens?: number
-  readonly toolChoice?: 'auto' | 'none'
+  readonly model: string;
+  readonly messages: readonly YourSDKMessage[];
+  readonly temperature?: number;
+  readonly maxTokens?: number;
+  readonly toolChoice?: "auto" | "none" | "required" | { name: string };
 }
 
-function acmeRequest(args: NativeChatRequestArgs<AcmeExtra, YourSDKMessage>): AcmeRequest {
+function acmeRequest(
+  args: NativeChatRequestArgs<AcmeExtra, YourSDKMessage>,
+): AcmeRequest {
   return {
     model: args.model,
     messages: args.providerMessages,
     ...acmeSettings(args.settings),
-    toolChoice: args.extra.toolChoice,
-  }
+    ...(args.extra.nativeToolChoice
+      ? { toolChoice: args.extra.nativeToolChoice }
+      : {}),
+  };
 }
 
 function acmeSettings(settings: GenerationSettings): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-  if (settings.temperature !== undefined) result.temperature = settings.temperature
-  if (settings.maxTokens !== undefined) result.maxTokens = settings.maxTokens
-  return result
+  const result: Record<string, unknown> = {};
+  if (settings.temperature !== undefined)
+    result.temperature = settings.temperature;
+  if (settings.maxTokens !== undefined) result.maxTokens = settings.maxTokens;
+  if (settings.toolChoice !== undefined) {
+    result.toolChoice =
+      typeof settings.toolChoice === "string"
+        ? settings.toolChoice
+        : { name: settings.toolChoice.tool };
+  }
+  return result;
 }
 
 function acmeResponseMeta(result: AcmeResponse): NativeResponseMetadata {
+  const inputTokens = result.usage?.input;
+  const outputTokens = result.usage?.output;
+
   return {
     usage: {
-      inputTokens: result.usage?.input ?? 0,
-      outputTokens: result.usage?.output ?? 0,
-      totalTokens: (result.usage?.input ?? 0) + (result.usage?.output ?? 0),
+      inputTokens,
+      outputTokens,
+      totalTokens:
+        inputTokens !== undefined && outputTokens !== undefined
+          ? inputTokens + outputTokens
+          : undefined,
     },
     finishReason: result.finish_reason,
     responseId: result.id,
     actualModelId: result.model,
-  }
+  };
 }
 ```
 
@@ -185,21 +218,25 @@ function acmeResponseMeta(result: AcmeResponse): NativeResponseMetadata {
 Use the `loop` branch when the SDK owns the tool loop. Implement typed hooks for the SDK boundary and let Crux steer the policy layer through the executor request:
 
 ```ts
-import { defineProviderRuntime } from '@use-crux/core/adapter'
+import { defineProviderRuntime } from "@use-crux/core/adapter";
 
 export const acmeSdkRuntime = defineProviderRuntime({
-  id: 'acme-sdk',
-  ownership: 'loop-owned',
+  id: "acme-sdk",
+  ownership: "loop-owned",
   loop: {
-    describeModel: (model: AcmeModel) => ({ provider: model.provider, modelId: model.id }),
+    describeModel: (model: AcmeModel) => ({
+      provider: model.provider,
+      modelId: model.id,
+    }),
     settings: acmeSdkSettings,
     bind: (client: AcmeGateway) => ({
       runTextLoop: (request) => runAcmeLoop(client, request),
-      runStructuredAttempt: (request) => runAcmeStructuredAttempt(client, request),
+      runStructuredAttempt: (request) =>
+        runAcmeStructuredAttempt(client, request),
       runStream: (request) => runAcmeStream(client, request),
     }),
   },
-})
+});
 ```
 
 `bind(client)` returns the client-dependent operations; Crux assembles them with `describeModel`/`settings`/`id` into a gateway-closed `LoopRuntimePort`. `runTextLoop()` should return completed text/object/messages metadata or a suspended approval outcome. `runStructuredAttempt()` makes one provider attempt and returns invalid schema results in-band; Crux owns the retry loop.

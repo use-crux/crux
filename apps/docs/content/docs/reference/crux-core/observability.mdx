@@ -15,7 +15,7 @@ import {
   observabilityDiagnostics,
   subscribeObservability,
   teeObservabilityTransport,
-} from '@use-crux/core/observability'
+} from "@use-crux/core/observability";
 ```
 
 `@use-crux/core/observability` is the canonical graph contract for Crux execution traces. It defines the record shapes emitted by the TypeScript runtime and consumed by the local Go devtools backend.
@@ -175,7 +175,7 @@ Custom metric keys must use the `custom.*` namespace. Span families are derived 
 
 Prompt and safety helpers emit the same graph contract automatically:
 
-- `prompt.resolve()` opens `prompt.resolve`, records conditional context inclusion/exclusion as `context.predicate`, and records resolved context text as `context.resolve` spans with `context.contribution` artifacts. Contributions that provide tools include `injectedTools`, including dropped text contributions whose tools still participate in the request. Direct injectables, retrievers/grounding, memory, and blackboards emit tool-only `context.contribution` previews when they contribute tools without resolved text. Segmented system content preserves `segments: { text, dynamic, source? }[]`, `staticTokens`, and `dynamicTokens` on context previews, inspect parts, and budget-dropped previews. Generation spans that consume the resolved prompt link back to included context artifacts and prompt-budget artifacts, and their `messages` artifact includes request `toolNames`; the Go read model projects those records into `RunDetailNode.request`. Token-budget decisions emit `prompt.budget` artifacts with dropped contribution previews.
+- `prompt.resolve()` opens `prompt.resolve`, records conditional context inclusion/exclusion as `context.predicate`, and records resolved context text as `context.resolve` spans with `context.contribution` artifacts. Contributions that provide tools include `injectedTools`, including dropped text contributions whose tools still participate in the request. Direct injectables, retrievers/grounding, memory, and blackboards emit tool-only `context.contribution` previews when they contribute tools without resolved text. Segmented system content preserves `segments: { text, dynamic, source?, observedAt?, sourceVersion? }[]`, `staticTokens`, and `dynamicTokens` on context previews, inspect parts, and budget-dropped previews. Context previews and inspect parts also include `servedFrom`, `resolvedAt`, memo-hit `age`, and summarized segment source facts when available. Generation spans that consume the resolved prompt link back to included context artifacts and prompt-budget artifacts, and their `messages` artifact includes request `toolNames`; the Go read model projects those records into `RunDetailNode.request`. Token-budget decisions emit `prompt.budget` artifacts with dropped contribution previews and `prefixOverflow: true` when the stable provider-cache prefix exceeds the requested budget.
 - Memory blocks and blackboards emit `memory.read` / `memory.write` spans, attach `memory.snapshot` artifacts when a read or write has inspectable state, attach `memory.recall` artifacts for non-empty read result previews, attach `memory.diff` artifacts for before/after write summaries, and connect those artifacts with semantic memory edges. Empty reads still emit the span but omit `memory.recall`, so UIs should not render a recalled-block card for zero-result reads. Raw namespaces are represented by `namespaceHash`; blackboard snapshots and diffs carry `memoryType: "blackboard"`. Budgeted composed-memory renders add `budgetMaxTokens`, `budgetIncludedBlocks`, `budgetTrimmedBlocks`, and `budgetDroppedBlocks` span attributes and mirror the same decision under `memory.snapshot.preview.budget`. Proposal-oriented writes can include `writeMode` and `proposalStatus` so review state remains visible in traces.
 - Adapter-managed tools, including live `@use-crux/ai` tool calls, emit `tool.call` spans, consume `tool.args` artifacts, produce raw and model-facing `tool.result` artifacts, and record thrown `execute()` failures as rich error evidence on the same tool span while preserving the model-facing error output. Model-emitted tool intents attach to the generation as `tool.request` artifacts and are linked to the eventual tool execution by tool call id. Convex Agent streams expose an outer `generation.stream` plus child `generation.call` spans for each AI SDK step, so tool-call turns and later text turns are visible as consecutive streamed generations. Convex Agent fallback tool-call parts follow the same contract, so stop-condition tools remain inspectable even when no handler executes. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans.
 - Retrieval calls emit `retrieval.query` spans with bounded `retrieval.hits` artifacts and `retrieval.returned` edges. Retrieval recipes open a parent `retrieval.recipe` span and record fanout/retrieve/hit steps as child `retrieval.step` spans with inspectable step output artifacts.
@@ -190,39 +190,39 @@ Prompt and safety helpers emit the same graph contract automatically:
 - The Safety session's guardrail phases open grouped and per-guard `guardrail.run` spans, attach `guardrail.report` artifacts for pass, warn, redact, transform, hold, and block actions, and emit `guardrail.blocked` edges for blocks.
 
 ```ts
-import { observe } from '@use-crux/core/observability'
+import { observe } from "@use-crux/core/observability";
 
 await observe.run(
-  { name: 'support reply', rootPrimitive: 'agent.run' },
+  { name: "support reply", rootPrimitive: "agent.run" },
   async () => {
     await observe.span(
-      { name: 'retrieve docs', primitive: 'retrieval.query' },
+      { name: "retrieve docs", primitive: "retrieval.query" },
       async () => {
         observe.event({
-          name: 'query.built',
-          attributes: { terms: ['refund', 'policy'] },
-        })
+          name: "query.built",
+          attributes: { terms: ["refund", "policy"] },
+        });
       },
-    )
+    );
   },
-)
+);
 ```
 
 The runtime uses async context propagation on Node.js and preserves parent span stacks across normal async work. For async work that crosses a boundary where context is not preserved, pass an explicit captured context:
 
 ```ts
-const context = observe.captureContext()
+const context = observe.captureContext();
 
 queueMicrotask(() => {
   void observe.withContext(context, async () => {
     await observe.span(
-      { name: 'delegate', primitive: 'delegate.invoke' },
+      { name: "delegate", primitive: "delegate.invoke" },
       async () => {
         // delegated work
       },
-    )
-  })
-})
+    );
+  });
+});
 ```
 
 ## Delivery
@@ -240,41 +240,41 @@ records directly:
 
 ```ts
 const unsubscribe = subscribeObservability((record) => {
-  if (record.type === 'span:end') {
-    console.log(record.primitive, record.status)
+  if (record.type === "span:end") {
+    console.log(record.primitive, record.status);
   }
-})
+});
 
-unsubscribe()
+unsubscribe();
 ```
 
 Use the narrowed overload when you only need specific record variants:
 
 ```ts
 const unsubscribeSpanEnds = subscribeObservability(
-  ['span:end'] as const,
+  ["span:end"] as const,
   (record) => {
-    console.log(record.spanId, record.status)
+    console.log(record.spanId, record.status);
   },
-)
+);
 
-unsubscribeSpanEnds()
+unsubscribeSpanEnds();
 ```
 
 Use the diagnostics channel when an external Node integration wants to subscribe without depending on
 Crux plugin wiring:
 
 ```ts
-import { channel } from 'node:diagnostics_channel'
+import { channel } from "node:diagnostics_channel";
 import {
   CRUX_OBSERVABILITY_CHANNEL,
   type CruxObservabilityChannelMessage,
-} from '@use-crux/core/observability'
+} from "@use-crux/core/observability";
 
 channel(CRUX_OBSERVABILITY_CHANNEL).subscribe((message) => {
-  const { record } = message as CruxObservabilityChannelMessage
+  const { record } = message as CruxObservabilityChannelMessage;
   // map record to your tracing backend
-})
+});
 ```
 
 In-process subscriber errors are isolated from user code and counted in
@@ -283,7 +283,7 @@ In-process subscriber errors are isolated from user code and counted in
 The default runtime path is non-blocking: transport failures are captured as diagnostics and never throw into user code. In serverless runtimes, await a bounded flush before returning so queued records are not killed with the request:
 
 ```ts
-await observe.flush({ timeoutMs: 5000 })
+await observe.flush({ timeoutMs: 5000 });
 ```
 
 Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. Failed batches retry on a capped backoff without waiting for another emitted record, while runtime reset and transport replacement count stale in-flight failures as dropped instead of requeueing them into a later transport. HTTP delivery normalizes unknown preview values into JSON-safe shapes, sends `observability.token` / `CRUX_DEVTOOLS_TOKEN` as bearer auth when configured, and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
@@ -291,14 +291,14 @@ Observability delivery is queued into batches. The first delivery starts immedia
 Convex actions can use the helpers from `@use-crux/convex`:
 
 ```ts
-import { withObservabilityFlush } from '@use-crux/convex/observability'
+import { withObservabilityFlush } from "@use-crux/convex/observability";
 
 export const run = internalAction({
   args: {},
   handler: withObservabilityFlush(async (ctx, args) => {
     // Crux work here
   }),
-})
+});
 ```
 
 `@use-crux/convex/server` actions flush automatically by default. Pass `observabilityFlushTimeoutMs: false` only when an outer serverless boundary already flushes.
@@ -306,14 +306,14 @@ export const run = internalAction({
 Use `createHttpObservabilityTransport()` to send canonical batches to the local Crux backend endpoint:
 
 ```ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 config({
   observability: {
-    serverUrl: 'http://localhost:4400',
+    serverUrl: "http://localhost:4400",
     delivery: { maxPendingDeliveries: 1000 },
   },
-})
+});
 ```
 
 Use `teeObservabilityTransport()` when a library needs its own capture sink while preserving an existing transport:
@@ -324,17 +324,17 @@ import {
   createInMemoryObservabilityTransport,
   setObservabilityTransport,
   teeObservabilityTransport,
-} from '@use-crux/core/observability'
+} from "@use-crux/core/observability";
 
-const capture = createInMemoryObservabilityTransport()
+const capture = createInMemoryObservabilityTransport();
 const auditSink = createHttpObservabilityTransport({
-  serverUrl: 'http://localhost:4400',
-})
+  serverUrl: "http://localhost:4400",
+});
 const restore = setObservabilityTransport(
   teeObservabilityTransport(capture, auditSink),
-)
+);
 
-restore()
+restore();
 ```
 
 ### Capture policy
@@ -347,7 +347,7 @@ config({
     recordInputs: false,
     recordOutputs: false,
   },
-})
+});
 ```
 
 When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`. Output-family artifacts include model outputs, stream timelines, tool results, retrieval hits, memory snapshots/recalls/diffs, guardrail and constraint reports, handoff payloads, delegate reports, composition outputs, compaction summaries, judge reasoning, citation quotes, rendered context, and raw error payloads. The runtime's canonical artifact-kind map is exhaustive, so adding a new built-in artifact kind requires an explicit `input`, `output`, or `exempt` privacy decision before it can compile. Custom artifact kinds default to captured payloads only when the active capture policy allows their declared direction.

@@ -3,7 +3,7 @@ title: Streaming with tools
 description: Stream a response while the model calls tools mid-stream, updating the UI as data arrives.
 ---
 
-This recipe shows how to stream model output to the client *and* let the model call tools during the stream — for example, a search box that streams a draft answer and updates partial results as the model fetches additional context.
+This recipe shows how to stream model output to the client _and_ let the model call tools during the stream — for example, a search box that streams a draft answer and updates partial results as the model fetches additional context.
 
 ## Primitives used
 
@@ -23,97 +23,98 @@ This recipe shows how to stream model output to the client *and* let the model c
 ### `lib/ai/tools.ts`
 
 ```ts
-import { tool } from '@use-crux/ai'
-import { z } from 'zod'
+import { tool } from "@use-crux/ai";
+import { z } from "zod";
 
 export const searchDocs = tool({
-  description: 'Search the documentation index for a query.',
+  description: "Search the documentation index for a query.",
   inputSchema: z.object({
-    query: z.string().describe('The search query — what the user is asking about'),
+    query: z
+      .string()
+      .describe("The search query — what the user is asking about"),
     limit: z.number().int().min(1).max(10).default(5),
   }),
   execute: async ({ query, limit }) => {
-    const results = await searchIndex(query, limit)
+    const results = await searchIndex(query, limit);
     return {
       results: results.map((r) => ({
         title: r.title,
         url: r.url,
         excerpt: r.excerpt,
       })),
-    }
+    };
   },
-})
+});
 
 export const fetchPage = tool({
-  description: 'Fetch the full text of a documentation page by URL.',
+  description: "Fetch the full text of a documentation page by URL.",
   inputSchema: z.object({ url: z.string().url() }),
   execute: async ({ url }) => {
-    const text = await fetchPageContent(url)
-    return { text }
+    const text = await fetchPageContent(url);
+    return { text };
   },
-})
+});
 ```
 
 ### `lib/ai/prompts.ts`
 
 ```ts
-import { prompt, context } from '@use-crux/core'
-import { z } from 'zod'
+import { prompt, context } from "@use-crux/core";
+import { z } from "zod";
 
-import { searchDocs, fetchPage } from './tools'
+import { searchDocs, fetchPage } from "./tools";
 
 const docsTools = context({
-  id: 'docs-tools',
-  system:
-    `You can search the docs and fetch full pages. Always start with searchDocs to find relevant pages.
+  id: "docs-tools",
+  system: `You can search the docs and fetch full pages. Always start with searchDocs to find relevant pages.
      Use fetchPage when you need the full text of a single page to answer accurately.`,
   tools: () => ({ searchDocs, fetchPage }),
-})
+});
 
 export const docsAssistant = prompt({
-  id: 'docs-assistant',
+  id: "docs-assistant",
   use: [docsTools],
   input: z.object({ message: z.string() }),
-  system:
-    `You answer questions about our product documentation.
+  system: `You answer questions about our product documentation.
      Be concise. Cite the page title in your answer when you used a search result.`,
   prompt: ({ input }) => input.message,
-})
+});
 ```
 
 ### `app/api/chat/route.ts` (Next.js)
 
 ```ts
-import { stream } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
+import { maxSteps } from "@use-crux/core";
+import { stream } from "@use-crux/ai";
+import { openai } from "@ai-sdk/openai";
 
-import { docsAssistant } from '@/lib/ai/prompts'
+import { docsAssistant } from "@/lib/ai/prompts";
 
 export async function POST(req: Request) {
-  const { messages } = await req.json()
+  const { messages } = await req.json();
 
   const result = await stream(docsAssistant, {
-    model: openai('gpt-4o'),
-    input: { message: messages.at(-1)?.content ?? '' },
+    model: openai("gpt-4o"),
+    input: { message: messages.at(-1)?.content ?? "" },
     messages,
-    stopWhen: { stepCountIs: 5 },  // bound the tool-loop
-  })
+    stopWhen: maxSteps(5), // bound the tool-loop
+  });
 
-  return result.toUIMessageStreamResponse()
+  return result.toUIMessageStreamResponse();
 }
 ```
 
 ### Client
 
 ```tsx
-'use client'
+"use client";
 
-import { useChat } from 'ai/react'
+import { useChat } from "ai/react";
 
 export function DocsChat() {
   const { messages, input, handleInputChange, handleSubmit } = useChat({
-    api: '/api/chat',
-  })
+    api: "/api/chat",
+  });
 
   return (
     <div>
@@ -126,7 +127,7 @@ export function DocsChat() {
           {m.toolInvocations?.map((t) => (
             <div key={t.toolCallId} className="text-sm text-gray-500">
               {t.toolName}({JSON.stringify(t.args)})
-              {t.state === 'result' && (
+              {t.state === "result" && (
                 <pre>{JSON.stringify(t.result, null, 2)}</pre>
               )}
             </div>
@@ -139,7 +140,7 @@ export function DocsChat() {
         <button type="submit">Send</button>
       </form>
     </div>
-  )
+  );
 }
 ```
 
@@ -149,7 +150,7 @@ export function DocsChat() {
 
 2. **`stream()` returns a streaming result, not a Promise.** The handler immediately returns the `Response` from `toUIMessageStreamResponse()`. Tool calls happen mid-stream and the AI SDK pipes their input/output through the response as UI message parts the client renders.
 
-3. **`stopWhen: { stepCountIs: 5 }` bounds the tool-loop.** Without a stop condition, the model could enter an infinite tool-call loop. `stepCountIs` is the simplest bound. For more nuanced control, use `hasToolCall(name)` to stop after a specific tool call resolves.
+3. **`stopWhen: maxSteps(5)` bounds the tool-loop.** Without a stop condition, the model could enter an infinite tool-call loop. `maxSteps()` is the simplest bound. For more nuanced control, use `hasToolCall(name)` from `@use-crux/core` to stop after a specific tool call resolves.
 
 4. **The client renders tool invocations from `message.toolInvocations`.** Each invocation has a state (`partial-call`, `call`, `result`) so you can show "calling search..." while the tool runs and the result when it lands.
 
@@ -157,11 +158,11 @@ export function DocsChat() {
 
 ### Constrain which tools can run together
 
-If `fetchPage` is expensive and you only want it called *after* a search succeeded, write a guardrail or surface that constraint in the system prompt. Tools themselves don't enforce ordering — that's the model's job, guided by your `system` text.
+If `fetchPage` is expensive and you only want it called _after_ a search succeeded, write a guardrail or surface that constraint in the system prompt. Tools themselves don't enforce ordering — that's the model's job, guided by your `system` text.
 
 ### Stream a structured object instead
 
-If you want a *typed* progressive result (not free-form chat), use `streamObject` from the AI SDK with a resolved prompt. See the [structured extraction recipe](/docs/cookbook/basics/structured-extraction) for the pattern.
+If you want a _typed_ progressive result (not free-form chat), use `streamObject` from the AI SDK with a resolved prompt. See the [structured extraction recipe](/docs/cookbook/basics/structured-extraction) for the pattern.
 
 ### Persist conversation across reloads
 
@@ -170,7 +171,19 @@ Drop the [chat-with-memory](/docs/cookbook/basics/chat-with-memory) recipe along
 ## Where to next
 
 <Cards>
-  <Card title="Tools guide" description="Defining tools, lifecycle hooks, error handling." href="/docs/guides/tools" />
-  <Card title="Chat with memory" description="Add persistent memory to this chat loop." href="/docs/cookbook/basics/chat-with-memory" />
-  <Card title="Compositions" description="Combine multiple agents instead of a single tool-using agent." href="/docs/guides/compositions" />
+  <Card
+    title="Tools guide"
+    description="Defining tools, lifecycle hooks, error handling."
+    href="/docs/guides/tools"
+  />
+  <Card
+    title="Chat with memory"
+    description="Add persistent memory to this chat loop."
+    href="/docs/cookbook/basics/chat-with-memory"
+  />
+  <Card
+    title="Compositions"
+    description="Combine multiple agents instead of a single tool-using agent."
+    href="/docs/guides/compositions"
+  />
 </Cards>

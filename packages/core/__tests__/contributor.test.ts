@@ -1,20 +1,20 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { context } from '../prompt/context'
-import { injectable } from '../prompt/injectable'
+import { contributor } from '../prompt/contributor'
 import { prompt } from '../prompt/prompt'
 import { constraint } from '../safety/constraint'
 
-describe('injectable()', () => {
+describe('contributor()', () => {
   it('lets prompt use entries inject context, tools, constraints, and metadata', async () => {
     const check = constraint({
       name: 'custom-check',
       check: () => ({ pass: true, metadata: { checked: true } }),
     })
     const execute = vi.fn(async () => 'ok')
-    const source = injectable({
+    const source = contributor({
       id: 'custom-source',
-      async inject({ input, promptId }) {
+      async contribute({ input, promptId }) {
         return {
           contexts: [
             context({
@@ -54,9 +54,9 @@ describe('injectable()', () => {
   })
 
     it('lets context use entries compose before the context system text', async () => {
-    const nested = injectable({
+    const nested = contributor({
       id: 'nested',
-      inject: () => ({
+      contribute: () => ({
         contexts: [context({ id: 'nested-context', system: 'Nested evidence.' })],
       }),
     })
@@ -78,9 +78,9 @@ describe('injectable()', () => {
   })
 
     it('throws on injected tool collisions', async () => {
-    const first = injectable({
+    const first = contributor({
       id: 'first',
-      inject: () => ({
+      contribute: () => ({
         tools: {
           search: {
             description: 'first',
@@ -90,9 +90,9 @@ describe('injectable()', () => {
         },
       }),
     })
-    const second = injectable({
+    const second = contributor({
       id: 'second',
-      inject: () => ({
+      contribute: () => ({
         tools: {
           search: {
             description: 'second',
@@ -105,6 +105,9 @@ describe('injectable()', () => {
 
     const answer = prompt({ use: [first, second], system: 'Base.' })
 
-    await expect(answer.resolve({})).rejects.toThrow('Injected tool name collision for "search"')
+    await expect(answer.resolve({})).rejects.toThrow(
+      'Tool name collision for "search": contributed by both contributor:first and contributor:second. ' +
+        'Rename one of them, or pass the overriding tool at the call site (call-site tools intentionally win).',
+    )
   })
 })

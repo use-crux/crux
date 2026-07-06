@@ -1,6 +1,6 @@
 import type { z } from 'zod'
-import { getInputShapeKeys } from './injectable'
-import type { ContextEntry, ContributorContribution, ContributorEntry, PromptInjection } from './context-types'
+import { getInputShapeKeys } from './schema-shape'
+import type { ContextEntry, Contribution, ContributorEntry } from './context-types'
 
 /**
  * Configuration for {@link contributor}.
@@ -15,14 +15,6 @@ export interface ContributorConfig<TInput extends z.ZodType = z.ZodType> {
    * (`contributor:<id>`), exclusion records, and tool-collision errors.
    */
   id: string
-  /**
-   * Family label for observability grouping. Use one of the canonical
-   * families (`retriever`, `memory`, `skill`, …) when your contributor
-   * specializes one of them; anything else is grouped as `injectable`.
-   *
-   * @default 'injectable'
-   */
-  family?: string
   /** Input fields this contributor reads, merged into the prompt's input schema. */
   input?: TInput
   /**
@@ -51,18 +43,16 @@ export interface ContributorConfig<TInput extends z.ZodType = z.ZodType> {
   contribute(args: {
     input: z.infer<TInput> & Record<string, unknown>
     promptId?: string
-  }): ContributorContribution | Promise<ContributorContribution>
+  }): Contribution | Promise<Contribution>
 }
 
 /**
  * Create a custom prompt contributor — a first-class `use:` entry that can
  * gate itself, bundle nested entries, and write to every prompt channel.
  *
- * Where `injectable()` covers "compute some contexts and tools at resolve
- * time", `contributor()` adds the rest of the entry contract: a `when` gate
- * with exclusion reporting, nested `use` composition, and pipeline re-entry
- * with arbitrary entry kinds. Built-in factories (`memory()`, `skill()`,
- * `retriever().asContext()`) are lowered to the same internal contract.
+ * Built-in factories (`memory()`, `skill()`, `retriever().asContext()`) lower
+ * through the same resolver contract, while application code should use this
+ * single custom-entry primitive for prompt-time composition.
  *
  * @example Feature-flagged tool surface with bundled retrieval
  * ```ts
@@ -84,9 +74,7 @@ export interface ContributorConfig<TInput extends z.ZodType = z.ZodType> {
  * })
  * ```
  *
- * @returns A frozen {@link ContributorEntry}. Also structurally a valid
- * `InjectableEntry` (its `inject()` exposes the `PromptInjection`-compatible
- * subset of the contribution) for compatibility with pre-contributor code.
+ * @returns A frozen {@link ContributorEntry}.
  */
 export function contributor<TInput extends z.ZodType>(config: ContributorConfig<TInput>): ContributorEntry<TInput> {
   if (!config.id.trim()) {
@@ -103,25 +91,11 @@ export function contributor<TInput extends z.ZodType>(config: ContributorConfig<
   return Object.freeze({
     _tag: 'Contributor' as const,
     id: config.id,
-    family: config.family ?? 'injectable',
     inputSchema: config.input,
     inputKeys: Object.freeze(inputKeys),
     when: config.when as ContributorEntry<TInput>['when'],
     useEntries: Object.freeze([...(config.use ?? [])]),
     contribute,
-    // Legacy adapter: expose the PromptInjection-compatible subset so
-    // injectable-aware code paths (and the deprecated flatten pass) treat
-    // contributors as injectables. `use` re-entry is driver-only.
-    async inject(args: { input: Record<string, unknown>; promptId?: string }): Promise<PromptInjection> {
-      const result = (await contribute(args)) ?? {}
-      return {
-        contexts: result.contexts,
-        tools: result.tools,
-        constraints: result.constraints,
-        guardrails: result.guardrails,
-        metadata: result.metadata,
-      }
-    },
   })
 }
 

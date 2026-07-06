@@ -44,8 +44,9 @@ function staticSkillContext(options: {
     constraints: Object.freeze([]),
     guardrails: Object.freeze([]),
     when: undefined,
-    cacheTtl: 0,
+    memoTtl: 0,
     providerCache: false,
+    definitionWarnings: Object.freeze([]),
     family: 'skill' as const,
   })
 }

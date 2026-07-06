@@ -20,11 +20,15 @@ describeCruxAdapterConformance({
     streaming: true,
     toolCalls: true,
     approvalSuspension: true,
+    providerCache: true,
   },
 })
 
 function openAIConformanceHarness(): ProviderRuntimeConformanceHarness<OpenAI> {
   return {
+    providerCache: {
+      assertRequest: assertOpenAICacheNoop,
+    },
     prepare(script) {
       const captured = capturedOpenAIClient({
         emissions: script.emissions,
@@ -43,6 +47,25 @@ function openAIConformanceHarness(): ProviderRuntimeConformanceHarness<OpenAI> {
       }
     },
   }
+}
+
+function assertOpenAICacheNoop(body: unknown): string | undefined {
+  const serialized = JSON.stringify(body)
+  for (const expected of [
+    'Stable identity.',
+    'Cached rule A.',
+    'Cached rule B.',
+    'Dynamic tail: Run the conformance scenario.',
+  ]) {
+    if (!serialized.includes(expected)) return `OpenAI request omitted ${expected}`
+  }
+
+  for (const forbidden of ['cache_control', 'cacheControl', 'cachedContent']) {
+    if (serialized.includes(forbidden)) {
+      return `OpenAI request unexpectedly included provider cache marker ${forbidden}`
+    }
+  }
+  return undefined
 }
 
 function capturedOpenAIClient(script: {
@@ -101,7 +124,14 @@ function chatCompletion(emission: ProviderConformanceEmission, sequence: number)
         logprobs: null,
       },
     ],
-    usage: { prompt_tokens: 13, completion_tokens: 8, total_tokens: 21 },
+    usage:
+      emission.usage !== undefined
+        ? {
+            prompt_tokens: emission.usage.inputTokens,
+            completion_tokens: emission.usage.outputTokens,
+            total_tokens: emission.usage.totalTokens,
+          }
+        : { prompt_tokens: 13, completion_tokens: 8, total_tokens: 21 },
   } as unknown as ChatCompletion
 }
 

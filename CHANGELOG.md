@@ -2,6 +2,101 @@
 
 Human-friendly release notes for synchronized Crux releases. Package-specific changelogs live next to each package.
 
+## 0.4.0-beta.0
+
+### Core stable beta
+
+- Promote `@use-crux/core` composition and adapter contracts to stable beta, documented in `packages/core/STABILITY.md`.
+
+### Breaking changes
+
+- Prompt input now uses parsed Zod output throughout resolution. Defaults and transforms are visible to contexts, gates, tools, memo keys, and prompt callbacks.
+
+  ```ts
+  // Before: callbacks could see undefined/raw values after Zod parsing.
+  const p = prompt({
+    input: z.object({ tone: z.string().default("friendly") }),
+  });
+
+  // After: callbacks receive the parsed output.
+  p.resolve({ input: {} }); // tone is "friendly"
+  ```
+
+- Context resolver memoization and provider prefix caching are separate fields.
+
+  ```ts
+  // Before
+  context({
+    id: "brand",
+    system: loadBrand,
+    cache: { ttl: 300_000, providerCache: true },
+  });
+
+  // After
+  context({
+    id: "brand",
+    system: loadBrand,
+    memo: { ttl: 300_000 },
+    cache: true,
+  });
+  ```
+
+- Messages-mode provider adaptations no longer return parallel `system` or `systemBlocks` fields. Adapted system text is folded into `messages`.
+
+  ```ts
+  // Before: resolved.system could reappear in messages mode.
+  // After: resolved.system is undefined; resolved.messages contains the final system text.
+  ```
+
+- Prompt-time tool names must be unique across skills, contexts, contributors, blackboards, and prompt config. Call-site `generate()` / `stream()` tools remain the only override path.
+
+  ```ts
+  // Before: some prompt-time tools silently overwrote earlier tools.
+  // After: resolution throws and names both owners; pass the override at the call site instead.
+  ```
+
+- Prompt content modes are now a compile-time union. `messages` cannot be combined with `system` or `prompt` in typed code.
+
+  ```ts
+  // Before
+  prompt({ system: "You are concise.", messages: ({ input }) => [] });
+
+  // After
+  prompt({
+    messages: ({ input }) => [{ role: "system", content: "You are concise." }],
+  });
+  ```
+
+- Custom prompt composition is consolidated on `contributor()`. The public `injectable()` factory, `InjectableConfig`, `InjectableEntry`, `PromptInjection`, and `ContributorEntry.inject()` are removed. `ContributorContribution` is renamed to `Contribution`, and `AdapterMap` is renamed to `ProviderAdaptations`.
+
+  ```ts
+  // Before
+  injectable({ id: "account", inject: async () => ({ tools }) });
+
+  // After
+  contributor({ id: "account", contribute: async () => ({ tools }) });
+  ```
+
+- Portable tool controls now live in `GenerationSettings`. Provider-native AI SDK variants moved to `extra`.
+
+  ```ts
+  // Before
+  generate(promptDef, { model, stopWhen: aiStopWhen });
+
+  // After, portable
+  generate(promptDef, { model, stopWhen: hasToolCall("lookup") });
+
+  // After, AI SDK-native escape hatch
+  generate(promptDef, { model, extra: { stopWhen: aiStopWhen } });
+  ```
+
+- Provider-cache blocks now form a stable prefix before the uncached tail. Token budgets only drop uncached blocks, and `SystemBlock.cacheBoundary` marks the single native provider-cache breakpoint.
+
+  ```ts
+  // Before: priority could drop or reorder any context under budget pressure.
+  // After: prompt system -> cached contexts -> uncached contexts; only the tail drops.
+  ```
+
 ## 0.4.0
 
 ### Highlights

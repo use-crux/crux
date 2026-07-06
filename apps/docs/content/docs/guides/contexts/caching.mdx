@@ -3,102 +3,108 @@ title: Context Caching
 description: Cache expensive context resolvers and leverage LLM provider token caching for cost savings.
 ---
 
-Context resolvers that call databases, RAG systems, or APIs run on every `prompt.resolve()` call. The `cache` option on `context()` solves two problems at once:
+Context resolvers that call databases, RAG systems, or APIs run on every `prompt.resolve()` call. Crux names the two caching layers separately:
 
-1. **Application-level caching** — skip the resolver function when the same inputs produce the same output
-2. **Provider-level token caching** — tell Anthropic to cache this content block (90% token discount) or benefit from OpenAI's automatic prefix caching (50% discount)
+1. **`memo: { ttl }`** — skip the resolver function when the same declared inputs produce the same output.
+2. **`cache: true`** — mark the resolved block for provider-level token caching.
 
 ## Quick Start
 
 ```ts title="contexts.ts"
-import { context } from '@use-crux/core'
-import { z } from 'zod'
+import { context } from "@use-crux/core";
+import { z } from "zod";
 
 const brand = context({
-  id: 'brand-voice',
+  id: "brand-voice",
   input: z.object({ orgId: z.string() }),
   system: async ({ input }) => {
-    const data = await fetchBrandProfile(input.orgId) // expensive DB call
-    return `## Brand Voice\n${data.guidelines}`
+    const data = await fetchBrandProfile(input.orgId); // expensive DB call
+    return `## Brand Voice\n${data.guidelines}`;
   },
-  cache: 300_000, // 5 minutes — enables both caching layers
-})
+  memo: { ttl: 300_000 }, // app-side resolver memoization
+  cache: true, // provider cache hint
+});
 ```
 
-That's it. The first call runs the resolver and caches the result. Subsequent calls with the same `orgId` within 5 minutes skip the resolver entirely. The Anthropic adapter also marks this block with `cache_control: { type: 'ephemeral' }` for provider-level token caching.
+The first call runs the resolver and memoizes the result. Subsequent calls with the same `orgId` within 5 minutes skip the resolver entirely. The Anthropic adapter places one `cache_control: { type: 'ephemeral' }` marker at the end of Crux's stable provider-cache prefix.
 
-## Cache Option Forms
+## Option Forms
 
-| Form                                           | Resolver TTL        | Provider Cache |
-| ---------------------------------------------- | ------------------- | -------------- |
-| `cache: 300_000`                               | 300s                | Yes            |
-| `cache: true`                                  | 300s (5min default) | Yes            |
-| `cache: { ttl: 60_000 }`                       | 60s                 | Yes            |
-| `cache: { ttl: 60_000, providerCache: false }` | 60s                 | No             |
-| `cache: { providerCache: true }`               | None                | Yes            |
-| Not set / `false`                              | None                | No             |
+| Form                                  | Resolver Memo | Provider Cache |
+| ------------------------------------- | ------------: | -------------: |
+| `memo: { ttl: 300_000 }`              |          300s |             No |
+| `cache: true`                         |          None |            Yes |
+| `memo: { ttl: 300_000 }, cache: true` |          300s |            Yes |
+| Not set / `cache: false`              |          None |             No |
 
 <Callout type="info">
-  The 5-minute default TTL matches Anthropic's cache window. Anthropic extends the cache on every hit, so a
-  frequently-used context stays cached indefinitely.
+  `memo.ttl` is your freshness tolerance: the resolved contribution may be that
+  old. `cache: true` is only a provider hint; it does not memoize resolver work.
 </Callout>
 
 ## Fine-Grained Control
 
-Use the object form when the two caching layers need different settings:
+Use the two fields independently when the layers need different settings:
 
 ```ts title="contexts.ts"
 // Cache the resolver but DON'T mark as a provider cache breakpoint
 // (content varies too much for prefix caching)
 const searchResults = context({
-  id: 'search',
+  id: "search",
   input: z.object({ query: z.string() }),
   system: async ({ input }) => ragSearch(input.query),
-  cache: { ttl: 30_000, providerCache: false },
-})
+  memo: { ttl: 30_000 },
+});
 
 // Provider cache only — cheap to compute but stable across calls
 const rules = context({
-  id: 'rules',
-  system: '## Rules\nAlways respond in JSON.',
-  cache: { providerCache: true },
-})
+  id: "rules",
+  system: "## Rules\nAlways respond in JSON.",
+  cache: true,
+});
 ```
 
 ## How It Works
 
 ### Application-Level (Resolver Caching)
 
-When `cacheTtl > 0`:
+When `memo.ttl > 0`:
 
 1. A cache key is computed from `contextId` + a stable hash of the input fields declared in the context's `inputSchema`
-2. On cache hit: the cached text is returned, `systemFn()` is never called
-3. On cache miss: `systemFn()` runs, the result is stored with TTL
+2. On cache hit: the cached text is returned, `systemFn()` is never called, and inspect/artifact metadata reports `servedFrom: "memo"`, the original `resolvedAt`, and `age`
+3. On cache miss: `systemFn()` runs, the result is stored with `memo.ttl`, and metadata reports `servedFrom: "live"` plus `resolvedAt`
 4. Unrelated prompt-level input fields don't affect the cache key
 
 ### Provider-Level (Token Caching)
 
-When `providerCache: true`:
+When `cache: true`:
 
-1. The resolution pipeline includes `systemBlocks` on `ResolvedPrompt` — one block per context, each with a `providerCache` flag
-2. **`@use-crux/anthropic`** converts blocks to Anthropic `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` (up to 4 breakpoints)
-3. **`@use-crux/google`** creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. A single CachedContent lifecycle handles creation, reuse, per-call TTL, concurrency dedup, and graceful error fallback automatically; configure it (TTL, max entries, `onError: 'throw'`, a custom cache port, or a fully custom lifecycle) via `createGoogle(client, { cachedContent })` — see the [`@use-crux/google` reference](/docs/reference/adapters/google).
-4. **`@use-crux/ai` (Vercel AI SDK)** converts blocks to `SystemModelMessage[]` with `providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } }` when the model is Anthropic
-5. **OpenAI** prefix caching works automatically — Crux's deterministic context ordering already provides stable prefixes
+1. The resolution pipeline includes `systemBlocks` on `ResolvedPrompt` — one block per system contribution, each with a `providerCache` flag and a single `cacheBoundary` marker on the final cached block
+2. Cached contexts form a stable prefix after the prompt's own system text; uncached contexts form the droppable tail. Token budgets can drop only the uncached tail.
+3. **`@use-crux/anthropic`** converts blocks to Anthropic `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` on the `cacheBoundary` block
+4. **`@use-crux/google`** creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. A single CachedContent lifecycle handles creation, reuse, per-call TTL, concurrency dedup, and graceful error fallback automatically; configure it (TTL, max entries, `onError: 'throw'`, a custom cache port, or a fully custom lifecycle) via `createGoogle(client, { cachedContent })` — see the [`@use-crux/google` reference](/docs/reference/adapters/google).
+5. **`@use-crux/ai` (Vercel AI SDK)** converts blocks to `SystemModelMessage[]` with `providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } }` on the `cacheBoundary` block when the model is Anthropic
+6. **OpenAI** prefix caching works automatically — Crux's deterministic context ordering already provides stable prefixes
 
 ## Requirements
 
-- **`id` is required** when `cacheTtl > 0` — needed for cache key derivation. An error is thrown at definition time if missing.
-- **Static string contexts** silently skip TTL caching (nothing to cache). `providerCache` still applies — static content is ideal for provider prefix caching.
+- **`id` is required** when `memo` is set — needed for cache key derivation. An error is thrown at definition time if missing.
+- **Static contexts cannot use `memo`** because there is no resolver call to memoize. Use `cache: true` on stable static content for provider prefix caching.
+- **Short memo with provider cache warns** when `cache: true` and `memo.ttl < 300000`, because the provider may reuse the block longer than your declared freshness tolerance.
+- **Dynamic prompt system with cached contexts warns** because provider cache prefixes must be byte-stable before the native breakpoint.
 
 ## Observability
 
-Cache events flow through the standard instrumentation pipeline:
+Resolved contributions carry freshness facts through `.inspect()` and
+`context.contribution` artifacts:
 
-- **Instrumentation hooks**: `onContextCacheHit` and `onContextCacheMiss` fire during the compiled resolution pass with contextId, cache key, and age/resolution timing
-- **Devtools**: Cache hit/miss events appear in the trace timeline and the dashboard stats panel shows hit count, miss count, and hit rate
-- **CLI TUI**: The stats panel displays "Context Cache" with hit/miss counts and hit rate percentage
-- **OTel**: Cache events create `crux.context.cache` spans with `status` (hit/miss) and `age_ms` attributes
+- **Live resolutions** report `servedFrom: "live"` and `resolvedAt`
+- **Memo hits** report `servedFrom: "memo"`, the original `resolvedAt`, and `age`
+- **Structured segments** can also carry `observedAt` and `sourceVersion` when a primitive already knows source freshness
+
+`compilePrompt().inspect()` uses the same memo-cache path as `.resolve()`, but
+runs with quiet observability and instrumentation ports so inspection does not
+emit spans, artifacts, or cache events.
 
 ## Next Steps
 

@@ -9,21 +9,26 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { MiddlewareResult } from '../../runtime/types'
-import { createSafety } from '../../safety/session'
-import { orchestrateStream } from '../../generation/orchestrate'
-import type { ExecutorRequest, ExecutorStreamHandle, ExecutorStreamMeta } from '../executor-types'
-import { createToolLifecycle } from '../tool/session'
-import type { AdapterExecutionStreamArgs, SdkLoopDialect } from './types'
-import { initialMessageState } from './messages'
+import type { z } from "zod";
+import type { MiddlewareResult } from "../../runtime/types";
+import { createSafety } from "../../safety/session";
+import { orchestrateStream } from "../../generation/orchestrate";
+import { withDefaultResolverPorts } from "../../resolver/ports";
+import type {
+  ExecutorRequest,
+  ExecutorStreamHandle,
+  ExecutorStreamMeta,
+} from "../executor-types";
+import { createToolLifecycle } from "../tool/session";
+import type { AdapterExecutionStreamArgs, SdkLoopDialect } from "./types";
+import { initialMessageState } from "./messages";
 import {
   buildResolveOpts,
   createTimeoutSignal,
   DEFAULT_MAX_STEPS,
   inspectForDevtools,
   withSkillActivationInput,
-} from './shared'
+} from "./shared";
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -40,44 +45,53 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>,
   args: AdapterExecutionStreamArgs<TModel, Record<string, unknown>>,
 ): Promise<ExecutorStreamHandle<TRawStream>> {
-  const prompt = args.prompt
-  const modelInfo = dialect.describeModel(args.model)
+  const prompt = args.prompt;
+  const modelInfo = dialect.describeModel(args.model);
   const resolveOpts = buildResolveOpts({
     input: args.input,
     provider: modelInfo.provider,
     modelId: modelInfo.modelId,
     tokenBudget: args.tokenBudget,
     settings: args.settings,
-  })
-  const resolved = await prompt.resolve(resolveOpts)
-  const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo)
+  });
+  const resolved = await prompt.resolve(resolveOpts);
+  const diagnostics = withDefaultResolverPorts().diagnostics;
+  const mappedSettings = dialect.mapSettings(resolved.settings, modelInfo);
   const lifecycle = createToolLifecycle({
-    regime: 'sdk',
+    regime: "sdk",
     resolved,
     call: { tools: args.tools, toolMiddleware: args.toolMiddleware },
     promptId: prompt.id,
     input: args.input ?? {},
-    reresolve: (skillSession) => prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
-  })
-  const tools = lifecycle.tools
-  let { messages, promptText } = initialMessageState(resolved, args.messages)
-  messages = (await lifecycle.resume(messages)).messages
+    reresolve: (skillSession) =>
+      prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
+  });
+  const tools = lifecycle.tools;
+  let { messages, promptText } = initialMessageState(resolved, args.messages);
+  messages = (await lifecycle.resume(messages)).messages;
   const safety = createSafety({
     call: {
       constraints: args.constraints,
       guardrails: args.guardrails,
       constraintMaxRetries: args.constraintMaxRetries,
     },
-    resolved: { constraints: resolved.constraints, guardrails: resolved.guardrails, metadata: resolved.metadata },
+    resolved: {
+      constraints: resolved.constraints,
+      guardrails: resolved.guardrails,
+      metadata: resolved.metadata,
+    },
     promptId: prompt.id,
     model: modelInfo.modelId,
     systemPrompt: resolved.system,
-  })
-  const guardedInput = await safety.guardInput({ messages, prompt: promptText })
-  messages = [...guardedInput.messages]
-  promptText = guardedInput.prompt
+  });
+  const guardedInput = await safety.guardInput({
+    messages,
+    prompt: promptText,
+  });
+  messages = [...guardedInput.messages];
+  promptText = guardedInput.prompt;
 
-  const { signal, dispose } = createTimeoutSignal(args.timeoutMs)
+  const { signal, dispose } = createTimeoutSignal(args.timeoutMs);
   const request: ExecutorRequest<TModel> & { schema?: z.ZodType } = {
     model: args.model,
     modelInfo,
@@ -88,61 +102,78 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     settings: mappedSettings,
     tools,
     activeTools: args.activeTools,
-    maxSteps: args.maxSteps ?? DEFAULT_MAX_STEPS,
+    maxSteps: args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
     observer: args.observer,
     abortSignal: signal,
     extra: args.extra,
-    ...(safety.enabled && !resolved.schema ? { safety: safety.openStream() } : {}),
+    diagnostics,
+    ...(safety.enabled && !resolved.schema
+      ? { safety: safety.openStream() }
+      : {}),
     ...(resolved.schema ? { schema: resolved.schema } : {}),
+  };
+
+  let handle: ExecutorStreamHandle<TRawStream>;
+  try {
+    handle = await orchestrateStream<
+      Record<string, unknown>,
+      ExecutorStreamHandle<TRawStream>
+    >(
+      {
+        promptId: prompt.id,
+        promptConfig: prompt.config ?? ({} as NonNullable<typeof prompt.config>),
+        preparedArgs: {
+          model: modelInfo.modelId,
+          system: resolved.system,
+          systemBlocks: resolved.systemBlocks,
+          prompt: promptText,
+          messages,
+          settings: mappedSettings,
+          schema: resolved.schema,
+          tools,
+          input: args.input ?? {},
+          ...(await inspectForDevtools(prompt, resolveOpts, tools)),
+        },
+        input: args.input ?? {},
+        provider: modelInfo.provider || dialect.id,
+        model: args.model,
+        resolved,
+        outputMode: resolved.schema ? "object" : "text",
+        timeoutMs: args.timeoutMs,
+        ...(dialect.replayStream
+          ? {
+              createCachedStreamResult: (cached: {
+                text?: string;
+                object?: unknown;
+                meta?: Record<string, unknown>;
+              }) => dialect.replayStream!(cached) as unknown as MiddlewareResult,
+            }
+          : {}),
+      },
+      async () => dialect.runStream(request),
+    );
+  } catch (error) {
+    dispose();
+    throw error;
   }
 
-  const handle = await orchestrateStream<Record<string, unknown>, ExecutorStreamHandle<TRawStream>>(
-    {
-      promptId: prompt.id,
-      promptConfig: prompt.config ?? ({} as NonNullable<typeof prompt.config>),
-      preparedArgs: {
-        model: modelInfo.modelId,
-        system: resolved.system,
-        systemBlocks: resolved.systemBlocks,
-        prompt: promptText,
-        messages,
-        settings: mappedSettings,
-        schema: resolved.schema,
-        tools,
-        input: args.input ?? {},
-        ...(await inspectForDevtools(prompt, resolveOpts, tools)),
-      },
-      input: args.input ?? {},
-      provider: modelInfo.provider || dialect.id,
-      model: args.model,
-      resolved,
-      outputMode: resolved.schema ? 'object' : 'text',
-      timeoutMs: args.timeoutMs,
-      ...(dialect.replayStream
-        ? {
-            createCachedStreamResult: (cached: { text?: string; object?: unknown; meta?: Record<string, unknown> }) =>
-              dialect.replayStream!(cached) as unknown as MiddlewareResult,
-          }
-        : {}),
-    },
-    async () => dialect.runStream(request),
-  )
-
-  const innerCompletion = handle.completion.bind(handle)
-  const wrappedCompletion = async (): Promise<ExecutorStreamMeta | undefined> => {
+  const innerCompletion = handle.completion.bind(handle);
+  const wrappedCompletion = async (): Promise<
+    ExecutorStreamMeta | undefined
+  > => {
     try {
-      const meta = await innerCompletion()
-      const stamped = meta ? safety.stamp(meta) : meta
+      const meta = await innerCompletion();
+      const stamped = meta ? safety.stamp(meta) : meta;
       await lifecycle.captureTurn({
         messages,
         assistantText: stamped?.text,
         toolCalls: stamped?.toolCalls,
-      })
-      return stamped
+      });
+      return stamped;
     } finally {
-      dispose()
+      dispose();
     }
-  }
+  };
 
-  return { ...handle, completion: wrappedCompletion }
+  return { ...handle, completion: wrappedCompletion };
 }

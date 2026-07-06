@@ -107,69 +107,47 @@ describe('context()', () => {
     const result = await ctx.systemFn({ userId: 'user_123' })
     expect(result).toBe('User: user_123')
   })
-  // ── Cache option parsing ──
+  // ── Cache and memo option parsing ──
 
-  describe('cache option', () => {
-    it('cache: number sets cacheTtl and providerCache: true', () => {
-      const ctx = context({ id: 'c1', system: () => 'dynamic', cache: 300_000 })
-      expect(ctx.cacheTtl).toBe(300_000)
-      expect(ctx.providerCache).toBe(true)
-    })
-
-    it('cache: true sets cacheTtl to 300_000 and providerCache: true', () => {
+  describe('cache and memo options', () => {
+    it('cache: true sets only providerCache', () => {
       const ctx = context({ id: 'c1', system: () => 'dynamic', cache: true })
-      expect(ctx.cacheTtl).toBe(300_000)
+      expect(ctx.memoTtl).toBe(0)
       expect(ctx.providerCache).toBe(true)
     })
 
-    it('cache: { ttl: 60_000 } sets cacheTtl and providerCache defaults to true', () => {
-      const ctx = context({ id: 'c1', system: () => 'dynamic', cache: { ttl: 60_000 } })
-      expect(ctx.cacheTtl).toBe(60_000)
-      expect(ctx.providerCache).toBe(true)
-    })
-
-    it('cache: { ttl: 60_000, providerCache: false } respects explicit providerCache', () => {
-      const ctx = context({ id: 'c1', system: () => 'dynamic', cache: { ttl: 60_000, providerCache: false } })
-      expect(ctx.cacheTtl).toBe(60_000)
+    it('memo sets only memoTtl', () => {
+      const ctx = context({ id: 'c1', system: () => 'dynamic', memo: { ttl: 60_000 } })
+      expect(ctx.memoTtl).toBe(60_000)
       expect(ctx.providerCache).toBe(false)
     })
 
-    it('cache: { providerCache: true } sets only providerCache, no TTL', () => {
-      const ctx = context({ id: 'c1', system: 'text', cache: { providerCache: true } })
-      expect(ctx.cacheTtl).toBe(0)
+    it('cache and memo can be combined explicitly', () => {
+      const ctx = context({ id: 'c1', system: () => 'dynamic', cache: true, memo: { ttl: 300_000 } })
+      expect(ctx.memoTtl).toBe(300_000)
       expect(ctx.providerCache).toBe(true)
     })
 
-    it('no cache option defaults to cacheTtl: 0 and providerCache: false', () => {
+    it('no cache or memo option defaults to memoTtl: 0 and providerCache: false', () => {
       const ctx = context({ id: 'c1', system: 'text' })
-      expect(ctx.cacheTtl).toBe(0)
+      expect(ctx.memoTtl).toBe(0)
       expect(ctx.providerCache).toBe(false)
     })
 
-    it('cache: false defaults to cacheTtl: 0 and providerCache: false', () => {
+    it('cache: false defaults to memoTtl: 0 and providerCache: false', () => {
       const ctx = context({ id: 'c1', system: 'text', cache: false })
-      expect(ctx.cacheTtl).toBe(0)
+      expect(ctx.memoTtl).toBe(0)
       expect(ctx.providerCache).toBe(false)
     })
 
-    it('throws if cacheTtl > 0 but no id', () => {
-      expect(() => context({ system: () => 'dynamic', cache: 300_000 })).toThrow(/cache requires an id/)
+    it('throws if memo is set but no id', () => {
+      expect(() => context({ system: () => 'dynamic', memo: { ttl: 300_000 } })).toThrow(/memo requires an id/)
     })
 
-    it('static string system with cache TTL silently sets cacheTtl to 0', () => {
-      const ctx = context({ id: 'c1', system: 'A static string', cache: 300_000 })
-      expect(ctx.cacheTtl).toBe(0) // nothing to cache for static strings
-      expect(ctx.providerCache).toBe(true) // provider caching still applies
-    })
-
-    it('dynamic system with cache TTL preserves cacheTtl', () => {
-      const ctx = context({
-        id: 'c1',
-        system: () => 'dynamic result',
-        cache: 300_000,
-      })
-      expect(ctx.cacheTtl).toBe(300_000)
-      expect(ctx.providerCache).toBe(true)
+    it('static string system with memo throws', () => {
+      expect(() => context({ id: 'c1', system: 'A static string', memo: { ttl: 300_000 } })).toThrow(
+        /memo has no effect on a static context/,
+      )
     })
   })
 })

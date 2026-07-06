@@ -2,15 +2,16 @@
  * Public type surface for the prompt authoring domain.
  *
  * This is the curated barrel: the concrete definitions are split by concern
- * into `context-types.ts` (context authoring + `use:` entry contracts) and
- * `prompt-types.ts` (the `prompt()` config, instance, hooks, and cache types).
- * Inference helpers live separately in `type-utils.ts`.
+ * into `context-types.ts` (context authoring + `use:` entry contracts),
+ * `content-types.ts` (prompt content-mode union helpers), and `prompt-types.ts`
+ * (the `prompt()` config, instance, hooks, and cache types). Inference helpers
+ * live separately in `type-utils.ts`.
  *
  * @module
  */
 
 export type {
-  CacheOption,
+  ContextDefinitionWarning,
   ContextTextSegment,
   ContextSystemContent,
   ContextSystemResult,
@@ -18,17 +19,18 @@ export type {
   ContextDef,
   Context,
   ConditionalContext,
+  MatchCases,
   MatchSpec,
   ContextEntry,
-  PromptInjection,
-  InjectableEntry,
-  ContributorContribution,
+  Contribution,
   ContributorEntry,
   SkillEntry,
   MemoryEntry,
   BlackboardEntry,
   ContextTree,
 } from './context-types'
+
+export type { PromptCallback, SystemField, PromptField, PromptContent } from './content-types'
 
 export type {
   SemanticCacheMode,

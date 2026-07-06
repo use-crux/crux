@@ -8,11 +8,15 @@ import type {
   ContextTree,
   ConditionalContext,
   MatchSpec,
-  CacheOption,
+  MatchCases,
+  ContextDefinitionWarning,
 } from './context-types'
-import type { DeepReadonly } from './type-utils'
+import type { DeepReadonly, InferContextInput } from './type-utils'
 import type { AnyToolSet } from '../types'
 import { captureSource } from '../project-index/source'
+import type { CruxContextInjectableKind } from '../observability/contract'
+import { getInputShapeKeys } from './schema-shape'
+import { consumesFullPromptInput, withFullPromptInput } from './internal-full-input'
 
 /** Module-scoped map: frozen context → definition-site source location. */
 const definitionSourceMap = new WeakMap<object, { file: string; line: number; column?: number }>()
@@ -45,8 +49,6 @@ interface StaticContextDef {
   description?: string
   /** Static system message text — always contributes the same content. */
   system: string | ContextSystemContent
-  /** Family label for observability grouping. Set by primitive factories; plain contexts omit it. */
-  family?: import('../observability/contract').CruxContextInjectableKind
   /** Nested entries resolved before this context's own system text. */
   use?: readonly import('./context-types').ContextEntry[]
   /** Priority for token-aware rendering (0–100). Default: `50`. */
@@ -58,67 +60,36 @@ interface StaticContextDef {
    * For static contexts, the predicate receives an empty input object.
    */
   when?: (arg: { input: {} }) => boolean
-  /** Cache configuration. See `CacheOption` for details. */
-  cache?: CacheOption
+  /** Provider cache hint: request a prompt-cache breakpoint for this block. Nothing app-side. */
+  cache?: boolean
+  /** Memoize this context's resolution app-side. Requires `id`. Dynamic `system` only. */
+  memo?: { ttl: number }
   /** Constraints contributed by this context. */
   constraints?: import('../safety/constraint/types').Constraint[]
   /** Guardrails contributed by this context. */
   guardrails?: import('../safety/guardrail/types').Guardrail[]
 }
 
-/** Default TTL (5 minutes) — matches Anthropic's cache window. */
-const DEFAULT_CACHE_TTL = 300_000
-
-/**
- * Read the `shape` property of a Zod schema (Zod v4 puts it on `_zod`, v3 on the root).
- * Returns `undefined` when the schema isn't an object schema.
- */
-function readShape(schema: z.ZodType): Record<string, unknown> | undefined {
-  const candidate = schema as { _zod?: { shape?: unknown }; shape?: unknown }
-  const shape = candidate._zod?.shape ?? candidate.shape
-  return shape && typeof shape === 'object' ? (shape as Record<string, unknown>) : undefined
-}
+/** Provider prompt-cache window used to detect contradictory short memo TTLs. */
+const PROVIDER_CACHE_WINDOW_MS = 300_000
+const contextFamilyMap = new WeakMap<object, CruxContextInjectableKind>()
 
 function isContextSystemContent(value: unknown): value is ContextSystemContent {
   return typeof value === 'object' && value !== null && Array.isArray((value as { segments?: unknown }).segments)
 }
 
-/**
- * Parse a `CacheOption` into resolved `cacheTtl` and `providerCache` values.
- *
- * @param cache - The raw cache option from the context definition.
- * @param id - The context's id (for validation).
- * @param isStaticSystem - Whether the system is a plain string (not a function).
- * @returns Parsed `{ cacheTtl, providerCache }`.
- */
-function parseCacheOption(
-  cache: CacheOption | undefined,
-  id: string | undefined,
-  isStaticSystem: boolean,
-): { cacheTtl: number; providerCache: boolean } {
-  if (cache === undefined || cache === false) {
-    return { cacheTtl: 0, providerCache: false }
-  }
+function declaredInputFor(
+  input: Record<string, unknown>,
+  inputKeys: readonly string[],
+  fullPromptInput: boolean,
+): Record<string, unknown> {
+  if (fullPromptInput) return input
 
-  if (cache === true) {
-    return {
-      cacheTtl: isStaticSystem ? 0 : DEFAULT_CACHE_TTL,
-      providerCache: true,
-    }
+  const declaredInput: Record<string, unknown> = {}
+  for (const key of inputKeys) {
+    declaredInput[key] = input[key]
   }
-
-  if (typeof cache === 'number') {
-    return {
-      cacheTtl: isStaticSystem ? 0 : cache,
-      providerCache: true,
-    }
-  }
-
-  // Object form: { ttl?, providerCache? }
-  const ttl = cache.ttl !== undefined && cache.ttl > 0 && !isStaticSystem ? cache.ttl : 0
-  // Default providerCache to true when cache object is provided
-  const pc = cache.providerCache !== undefined ? cache.providerCache : true
-  return { cacheTtl: ttl, providerCache: pc }
+  return declaredInput
 }
 
 /**
@@ -158,13 +129,12 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
   const useEntries = 'use' in def && Array.isArray(def.use) ? [...def.use] : []
   const inputSchema = 'input' in def ? def.input : undefined
   const priority = 'priority' in def && def.priority !== undefined ? def.priority : 50
+  const isStaticSystem = typeof system === 'string' || isContextSystemContent(system)
+  const fullPromptInput = consumesFullPromptInput(def)
 
   // Extract input keys from the Zod schema shape (used for conflict detection)
   const inputKeys: string[] = []
-  if (inputSchema) {
-    const schemaShape = readShape(inputSchema)
-    if (schemaShape) inputKeys.push(...Object.keys(schemaShape))
-  }
+  if (inputSchema) inputKeys.push(...getInputShapeKeys(inputSchema))
 
   const systemFn: (input: Record<string, unknown>) => ContextSystemResult | Promise<ContextSystemResult> =
     typeof system === 'string'
@@ -173,7 +143,7 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
         ? () => system
         : (input) =>
             (system as (arg: ContextSystemArg<unknown>) => ContextSystemResult | Promise<ContextSystemResult>)({
-              input,
+              input: declaredInputFor(input, inputKeys, fullPromptInput),
             })
 
   const toolsValue: unknown = 'tools' in def ? def.tools : undefined
@@ -181,7 +151,10 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
     toolsValue === undefined
       ? undefined
       : typeof toolsValue === 'function'
-        ? (input) => (toolsValue as (arg: ContextSystemArg<unknown>) => AnyToolSet)({ input })
+        ? (input) =>
+            (toolsValue as (arg: ContextSystemArg<unknown>) => AnyToolSet)({
+              input: declaredInputFor(input, inputKeys, fullPromptInput),
+            })
         : () => toolsValue as AnyToolSet
 
   const rawFields: string[] = 'rawFields' in def && Array.isArray(def.rawFields) ? [...def.rawFields] : []
@@ -189,23 +162,36 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
   // Process context-level `when` predicate
   const whenDef = 'when' in def ? (def as ContextDef<z.ZodType>).when : undefined
   const whenFn: ((input: Record<string, unknown>) => boolean) | undefined = whenDef
-    ? (input) => whenDef({ input } as ContextSystemArg<unknown>)
+    ? (input) => whenDef({ input: declaredInputFor(input, inputKeys, fullPromptInput) } as ContextSystemArg<unknown>)
     : undefined
 
-  // Parse cache option
-  const cacheRaw: CacheOption | undefined = 'cache' in def ? def.cache : undefined
-  const { cacheTtl, providerCache } = parseCacheOption(
-    cacheRaw,
-    id,
-    typeof system === 'string' || isContextSystemContent(system),
-  )
+  const providerCache = 'cache' in def && def.cache === true
+  const memoTtl = 'memo' in def && def.memo ? def.memo.ttl : 0
 
-  // Validate: cache TTL requires an id for cache key derivation
-  if (cacheTtl > 0 && !id) {
+  if (memoTtl > 0 && !id) {
     throw new Error(
-      'context(): cache requires an id for cache key derivation. ' + 'Add an `id` field to your context definition.',
+      'context(): memo requires an id for cache key derivation. ' + 'Add an `id` field to your context definition.',
     )
   }
+
+  if (memoTtl > 0 && isStaticSystem) {
+    throw new Error(
+      `context(${id ?? 'unknown'}): memo has no effect on a static context — remove memo or make \`system\` a function.`,
+    )
+  }
+
+  const definitionWarnings: ContextDefinitionWarning[] =
+    providerCache && memoTtl > 0 && memoTtl < PROVIDER_CACHE_WINDOW_MS
+      ? [
+          {
+            code: 'memo-cache-contradiction',
+            message:
+              `context "${id}": cache: true asks the provider to reuse this block for ~5 minutes, ` +
+              `but memo.ttl (${memoTtl}ms) declares it stale sooner. ` +
+              `Raise memo.ttl to ≥300000 or drop the provider cache hint.`,
+          },
+        ]
+      : []
 
   const ctx = Object.freeze({
     _tag: 'Context' as const,
@@ -214,22 +200,59 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
     inputSchema,
     inputKeys: Object.freeze(inputKeys),
     systemFn,
-    systemKind: typeof system === 'string' || isContextSystemContent(system) ? 'static' : 'dynamic',
+    systemKind: isStaticSystem ? 'static' : 'dynamic',
     useEntries: Object.freeze(useEntries),
     priority,
     toolsFn,
     rawFields: Object.freeze(rawFields),
     when: whenFn,
-    cacheTtl,
+    memoTtl,
     providerCache,
+    definitionWarnings: Object.freeze(definitionWarnings),
     constraints: Object.freeze([...('constraints' in def && Array.isArray(def.constraints) ? def.constraints : [])]),
     guardrails: Object.freeze([...('guardrails' in def && Array.isArray(def.guardrails) ? def.guardrails : [])]),
-    family: 'family' in def ? def.family : undefined,
+    family: contextFamilyMap.get(def),
   })
 
   if (defSource) definitionSourceMap.set(ctx, defSource)
 
   return ctx
+}
+
+/**
+ * @internal Create an SDK-owned adapter context whose callback consumes the
+ * full prompt input contractually (for example, dynamic memory namespaces or
+ * retriever query callbacks). Application-authored contexts should use
+ * `context()` with an explicit `input` schema instead.
+ */
+export function contextWithFullPromptInput(
+  def: Omit<ContextDef<z.ZodType<Record<string, unknown>>>, 'input' | 'rawFields' | 'memo'>,
+  family?: CruxContextInjectableKind,
+): Context<z.ZodType<{}>> {
+  const fullInputDef = withFullPromptInput(def)
+  if (family) contextFamilyMap.set(fullInputDef, family)
+  return context(fullInputDef) as Context<z.ZodType<{}>>
+}
+
+/**
+ * @internal Create a context with a first-party observability family.
+ *
+ * Application-authored `ContextDef` objects do not expose `family`; primitive
+ * factories use this helper so resolved contexts can still be attributed as
+ * memory, blackboard, retriever, skill, and similar built-ins.
+ */
+export function contextWithFamily<TInput extends z.ZodType>(
+  def: ContextDef<TInput>,
+  family: CruxContextInjectableKind,
+): Context<TInput>
+export function contextWithFamily(def: StaticContextDef, family: CruxContextInjectableKind): Context<z.ZodType<{}>>
+export function contextWithFamily(
+  def: StaticContextDef | ContextDef<z.ZodType>,
+  family: CruxContextInjectableKind,
+): Context<z.ZodType> {
+  contextFamilyMap.set(def, family)
+  const createContext = context as (contextDef: StaticContextDef | ContextDef<z.ZodType>) => Context<z.ZodType>
+  return createContext(def)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -244,7 +267,7 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
  * The wrapped context's input keys become `Partial<>` in the merged type.
  *
  * **Predicate typing:**
- * - By default, typed against the context's own input schema (full autocomplete).
+ * - By default, typed against a partial view of the context's own input schema.
  * - For prompt-level fields not on the context, use an explicit generic:
  *   `when<{ mode: string }>(i => i.mode === 'research', ctx)`
  *
@@ -259,13 +282,7 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
  * ```
  */
 export function when<TCtx extends Context<z.ZodType>>(
-  predicate: (
-    input: TCtx extends Context<infer S>
-      ? S extends z.ZodType
-        ? z.infer<S>
-        : Record<string, unknown>
-      : Record<string, unknown>,
-  ) => boolean,
+  predicate: (input: Partial<InferContextInput<TCtx>> & Record<string, unknown>) => boolean,
   ctx: TCtx,
 ): ConditionalContext<TCtx>
 export function when<TInput extends Record<string, unknown>, TCtx extends Context<z.ZodType> = Context<z.ZodType>>(
@@ -314,24 +331,32 @@ export function when(
  * })
  * ```
  */
+export function match<const TCases extends MatchCases>(opts: {
+  on: () => Extract<keyof TCases, string>
+  cases: TCases
+  default?: Context<z.ZodType> | readonly Context<z.ZodType>[]
+}): MatchSpec<TCases>
 export function match<
-  TCases extends Record<string, Context<z.ZodType> | readonly Context<z.ZodType>[]>,
+  const TCases extends MatchCases,
   TInput extends Record<string, unknown> = Record<string, unknown>,
 >(opts: {
   on: (input: TInput) => Extract<keyof TCases, string>
   cases: TCases
   default?: Context<z.ZodType> | readonly Context<z.ZodType>[]
-}): MatchSpec {
+}): MatchSpec<TCases>
+export function match(opts: {
+  on: (input: Record<string, unknown>) => string
+  cases: MatchCases
+  default?: Context<z.ZodType> | readonly Context<z.ZodType>[]
+}): MatchSpec<MatchCases> {
   const defSource = captureSource()
 
   const spec = Object.freeze({
     _tag: 'MatchSpec' as const,
     on: opts.on as (input: Record<string, unknown>) => string,
-    cases: Object.freeze({ ...opts.cases }) as Readonly<
-      Record<string, Context<z.ZodType> | readonly Context<z.ZodType>[]>
-    >,
+    cases: Object.freeze({ ...opts.cases }),
     default: opts.default,
-  })
+  }) satisfies MatchSpec<MatchCases>
 
   if (defSource) definitionSourceMap.set(spec, defSource)
 
@@ -371,10 +396,19 @@ export function match<
  */
 export function createContexts<const T extends ContextTree>(tree: T): ContextTreeResult<T> {
   const all: Context<z.ZodType>[] = []
+  const seenIds = new Map<string, string>()
 
   function validate(node: unknown, path: string): void {
     if (node && typeof node === 'object' && '_tag' in node && (node as { _tag: unknown })._tag === 'Context') {
-      all.push(node as Context<z.ZodType>)
+      const ctx = node as Context<z.ZodType>
+      if (ctx.id) {
+        const existingPath = seenIds.get(ctx.id)
+        if (existingPath) {
+          throw new Error(`createContexts: duplicate context id "${ctx.id}" at "${existingPath}" and "${path}".`)
+        }
+        seenIds.set(ctx.id, path)
+      }
+      all.push(ctx)
       return
     }
     if (node && typeof node === 'object' && !Array.isArray(node)) {

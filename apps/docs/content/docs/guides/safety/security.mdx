@@ -3,11 +3,11 @@ title: Security
 description: Input sanitization and prompt injection defense.
 ---
 
-All string input values are XML-escaped by default, and a `safe` tagged template gives you per-value control over escaping, truncation, and wrapping.
+Top-level string input fields are XML-escaped by default, and a `safe` tagged template gives you per-value control over escaping, truncation, and wrapping.
 
 ## Auto-escape (default)
 
-All string input values are XML-escaped before reaching system/prompt functions. No code changes needed:
+Top-level string input fields are XML-escaped before reaching context gates, tools, and system/prompt functions. No code changes needed:
 
 ```ts
 prompt({
@@ -17,7 +17,7 @@ prompt({
 })
 ```
 
-Declare `rawFields` for trusted content that shouldn't be escaped:
+Declare `rawFields` for trusted top-level content that shouldn't be escaped:
 
 ```ts
 prompt({
@@ -28,8 +28,9 @@ prompt({
 ```
 
 <Callout type="warn">
-  Auto-escape only covers string values in the `input` schema. If you inject untrusted content via `rawFields` or
-  `raw()`, you are responsible for sanitizing it.
+  Auto-escape only rewrites top-level string fields in the parsed `input` object. Nested strings inside objects or
+  arrays emit a diagnostic and must be escaped explicitly. If you inject untrusted content via `rawFields` or `raw()`,
+  you are responsible for sanitizing it.
 </Callout>
 
 ### Escape table

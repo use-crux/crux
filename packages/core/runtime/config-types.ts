@@ -224,7 +224,7 @@ export interface CruxGenerationConfig {
   /** Custom tokenizer function for token counting. */
   readonly tokenizer?: TokenizerFn
   /**
-   * Auto-escape all string input values before they reach system/prompt functions.
+   * Auto-escape top-level string input fields before they reach system/prompt functions.
    * @default true
    */
   readonly autoEscape?: boolean

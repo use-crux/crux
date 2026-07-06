@@ -3,13 +3,13 @@ title: Token Management
 description: Token-aware rendering and automatic context dropping under budget pressure.
 ---
 
-When the assembled system message exceeds a token budget, the lowest-priority contexts are dropped first. Provider-specific adaptations let you tweak prompts per model without breaking portability.
+When the assembled system message exceeds a token budget, Crux preserves the prompt's own system text and any provider-cache prefix, then drops the lowest-priority uncached contexts first. Provider-specific adaptations let you tweak prompts per model without breaking portability.
 
 ```ts title="generate.ts"
 import { prompt, context } from '@use-crux/core'
 import { generate } from '@use-crux/ai'
 
-const critical = context({ priority: 100, system: '## Critical Rules' })  // never dropped
+const critical = context({ priority: 100, system: '## Critical Rules' })  // dropped last in the uncached tail
 const guidelines = context({ priority: 50, system: '## Guidelines\n...' })
 const examples = context({ priority: 20, system: '## Examples\n...' })    // dropped first
 
@@ -26,16 +26,17 @@ const result = await generate(myPrompt, {
 ```
 
 <Callout type="info">
-  Use `.inspect()` to see exactly which contexts were kept, dropped, and why — see [Type
-  System](/docs/guides/advanced/type-system) for the full inspection API.
+  Use `.inspect()` to see exactly which contexts were kept, dropped, and why —
+  see [Type System](/docs/guides/advanced/type-system) for the full inspection
+  API.
 </Callout>
 
 ## How it works
 
 1. **Conditional contexts are evaluated first** — `when` predicates, `when()` wrappers, and `match()` specs are resolved. Excluded contexts are never even resolved.
-2. The prompt's own system text is always included
-3. Active context contributions are sorted by priority (lowest first for dropping)
-4. Lowest-priority contexts are dropped until the total fits within budget
+2. The prompt's own system text is always included.
+3. Cached contexts (`cache: true`) form a stable prefix after the prompt's own system text and are never budget-dropped.
+4. Uncached context contributions stay in `use` order for rendering, then the lowest-priority uncached contexts are dropped until the total fits within budget.
 5. Use `.inspect()` to see exactly what was dropped, excluded, and why
 
 ## Conditional exclusion vs token-budget dropping
@@ -57,9 +58,9 @@ Use `when`/`match` when a context is irrelevant to the current request (wrong mo
 const research = context({
   input: z.object({ synthesis: z.string().optional() }),
   when: ({ input }) => !!input.synthesis, // excluded when no data
-  priority: 40, // AND droppable under pressure
+  priority: 40, // AND droppable under pressure unless it uses cache: true
   system: ({ input }) => `## Research\n${input.synthesis}`,
-})
+});
 ```
 
 ## Custom tokenizer
@@ -71,24 +72,25 @@ config({
   generation: {
     tokenizer: (text) => encode(text).length,
   },
-})
+});
 ```
 
 Or standalone: `setTokenizer((text) => encode(text).length)`
 
 ## Context Caching
 
-Contexts with expensive async resolvers can be cached with a single `cache` option — skipping redundant resolver calls and enabling provider-level token caching (90% discount on Anthropic, 50% on OpenAI).
+Contexts with expensive async resolvers can use `memo` to skip redundant resolver calls. Stable blocks can also set `cache: true` to request provider-level token caching and join the stable prefix.
 
 ```ts
 const brand = context({
-  id: 'brand-voice',
+  id: "brand-voice",
   system: async ({ input }) => fetchBrandProfile(input.orgId),
-  cache: 300_000, // 5min TTL + provider caching
-})
+  memo: { ttl: 300_000 }, // 5min resolver memoization
+  cache: true, // provider cache hint
+});
 ```
 
-See the **[Context Caching guide](/docs/guides/contexts/caching)** for full details on cache option forms, provider behavior, and observability.
+See the **[Context Caching guide](/docs/guides/contexts/caching)** for full details on resolver memoization, provider behavior, and observability.
 
 ## Provider-specific adaptations
 
@@ -96,21 +98,23 @@ Different models sometimes need different prompting strategies. The `adapt` fiel
 
 ```ts title="prompts.ts"
 const myPrompt = prompt({
-  system: 'You are a helpful assistant.',
+  system: "You are a helpful assistant.",
   adapt: {
     anthropic: {
-      appendSystem: '\nReturn raw JSON, no markdown fences.',
+      appendSystem: "\nReturn raw JSON, no markdown fences.",
     },
     openai: {
-      prependPrompt: 'Think step by step.\n\n',
+      prependPrompt: "Think step by step.\n\n",
       settings: { temperature: 0.1 },
     },
-    '*': { appendSystem: '\nRespond with valid JSON only.' },
+    "*": { appendSystem: "\nRespond with valid JSON only." },
   },
-})
+});
 ```
 
 **Resolution priority:** exact `provider` match > `modelId` prefix (for OpenRouter-style routing) > `'*'` wildcard.
+
+System adaptations participate in the same block model as prompt and context text. Prompt-owned system text remains first; `prependSystem` is inserted after that own-system block when it exists, and `appendSystem` is appended at the end. In `messages` mode, the final adapted system text is folded into the messages array instead of returning a parallel `system` field.
 
 <Callout type="warn">
 `adapt` tweaks are applied during `.resolve()`, so `.inspect()` output reflects them. Test with `inspect({ provider: 'anthropic' })` to verify provider-specific changes.

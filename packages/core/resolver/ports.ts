@@ -34,30 +34,30 @@ import type {
   CruxArtifactKind,
   CruxPrimitiveFamily,
   CruxPrimitiveName,
-} from '../observability/contract'
-import type { SkillActivationSession } from '../skill/session'
-import type { SkillEntry } from '../prompt/context-types'
-import type { SkillMeta, SkillReference } from '../skill/types'
-import type { ResolvedSystemContent } from './contract'
+} from "../observability/contract";
+import type { SkillActivationSession } from "../skill/session";
+import type { SkillEntry } from "../prompt/context-types";
+import type { SkillMeta, SkillReference } from "../skill/types";
+import type { ResolvedSystemContent } from "./contract";
 
-export { withDefaultResolverPorts } from './default-ports'
+export { withDefaultResolverPorts } from "./default-ports";
 
 /** A tracing scope for one unit of resolution work (predicate check, context resolve, the whole prompt). */
 export interface ResolveTraceScope {
-  name: string
-  family: CruxPrimitiveFamily
-  primitive: CruxPrimitiveName
-  attributes?: Record<string, unknown>
+  name: string;
+  family: CruxPrimitiveFamily;
+  primitive: CruxPrimitiveName;
+  attributes?: Record<string, unknown>;
 }
 
 /** An artifact record emitted during resolution (contribution, budget, input previews). */
 export interface ResolveArtifact {
-  kind: CruxArtifactKind
-  contentType: string
-  encoding: 'json' | 'text' | 'bytes' | 'reference'
-  sizeBytes?: number
-  preview?: unknown
-  attributes?: Record<string, unknown>
+  kind: CruxArtifactKind;
+  contentType: string;
+  encoding: "json" | "text" | "bytes" | "reference";
+  sizeBytes?: number;
+  preview?: unknown;
+  attributes?: Record<string, unknown>;
 }
 
 /**
@@ -71,21 +71,24 @@ export interface ResolveArtifact {
  */
 export interface ObservabilityPort {
   /** Run `fn` inside a traced scope (span). Nested scopes nest in the trace. */
-  scope<T>(scope: ResolveTraceScope, fn: () => T | Promise<T>): Promise<T>
+  scope<T>(scope: ResolveTraceScope, fn: () => T | Promise<T>): Promise<T>;
   /**
    * Emit an artifact, returning its id when the runtime produced one.
    *
    * @param edgeAttributes - Attributes for the `produced` edge from the
    * currently active span to this artifact, when both exist.
    */
-  artifact(record: ResolveArtifact, edgeAttributes?: Record<string, unknown>): CruxArtifactId | undefined
+  artifact(
+    record: ResolveArtifact,
+    edgeAttributes?: Record<string, unknown>,
+  ): CruxArtifactId | undefined;
 }
 
 /** A registry skill resolved to its full content. */
 export interface ResolvedRegistrySkill {
-  instructions: string
-  references: readonly SkillReference[]
-  meta: SkillMeta
+  instructions: string;
+  references: readonly SkillReference[];
+  meta: SkillMeta;
 }
 
 /**
@@ -104,21 +107,24 @@ export interface ResolvedRegistrySkill {
  */
 export interface SkillSourcePort {
   /** Fetch a registry skill's full content. Rejections degrade to the placeholder skill with a diagnostic warning. */
-  resolveRegistrySkill(id: string): Promise<ResolvedRegistrySkill>
+  resolveRegistrySkill(id: string): Promise<ResolvedRegistrySkill>;
   /** Generate the auto-index text that leads a prompt's skill contributions. */
-  index(skills: readonly SkillEntry[]): string
+  index(skills: readonly SkillEntry[]): string;
   /** Open an activation session over `skills`, seeded from the input's active-skill ids. */
-  createActivationSession(args: { skills: readonly SkillEntry[]; input: unknown }): SkillActivationSession
+  createActivationSession(args: {
+    skills: readonly SkillEntry[];
+    input: unknown;
+  }): SkillActivationSession;
 }
 
 /** A context-cache lookup result: the cached content plus its age, for instrumentation. */
 export interface ContextCacheHit {
-  content: ResolvedSystemContent
-  ageMs: number
+  content: ResolvedSystemContent;
+  ageMs: number;
 }
 
 /**
- * The resolver-output cache for contexts configured with `cache: { ttl }`.
+ * The resolver-output cache for contexts configured with `memo: { ttl }`.
  *
  * Keys are derived as `cache:ctx:{contextId}:{inputHash}` by the pipeline;
  * the port only stores and expires. The default adapter is the module-level
@@ -127,14 +133,14 @@ export interface ContextCacheHit {
  */
 export interface ContextCachePort {
   /** Return non-expired content for `key`, or `null`. Expired entries are evicted on read. */
-  get(key: string): ContextCacheHit | null
+  get(key: string): ContextCacheHit | null;
   /** Store `content` under `key` for `ttlMs` milliseconds. */
-  set(key: string, content: ResolvedSystemContent, ttlMs: number): void
+  set(key: string, content: ResolvedSystemContent, ttlMs: number): void;
 }
 
 /** Time source for cache ages and resolution timings. Substitute a fixed clock for deterministic tests. */
 export interface ClockPort {
-  now(): number
+  now(): number;
 }
 
 /**
@@ -149,15 +155,15 @@ export interface ClockPort {
  */
 export interface TokenizerPort {
   /** Estimate the token count of `text`. */
-  count(text: string): number
+  count(text: string): number;
 }
 
 /** Sanitization policy snapshot, read lazily once per resolution step. */
 export interface ResolvePolicy {
   /** Escape XML-significant characters in string inputs (except declared `rawFields`). */
-  autoEscape: boolean
+  autoEscape: boolean;
   /** Detect and warn about suspicious patterns in string inputs (dev mode). */
-  securityWarnings: boolean
+  securityWarnings: boolean;
 }
 
 /**
@@ -166,13 +172,21 @@ export interface ResolvePolicy {
  * Defaults to `console.warn`; the collecting fake captures entries instead.
  */
 export interface DiagnosticsPort {
-  warn(message: string, detail?: unknown): void
+  warn(message: string, detail?: unknown): void;
 }
 
 /** Context-cache instrumentation events. */
 export interface InstrumentationPort {
-  contextCacheHit(event: { contextId: string; cacheKey: string; ageMs: number }): void
-  contextCacheMiss(event: { contextId: string; cacheKey: string; resolutionMs: number }): void
+  contextCacheHit(event: {
+    contextId: string;
+    cacheKey: string;
+    ageMs: number;
+  }): void;
+  contextCacheMiss(event: {
+    contextId: string;
+    cacheKey: string;
+    resolutionMs: number;
+  }): void;
 }
 
 /**
@@ -189,13 +203,64 @@ export interface InstrumentationPort {
  * ```
  */
 export interface ResolverPorts {
-  observability: ObservabilityPort
-  skills: SkillSourcePort
-  cache: ContextCachePort
-  clock: ClockPort
-  tokenizer: TokenizerPort
+  observability: ObservabilityPort;
+  skills: SkillSourcePort;
+  cache: ContextCachePort;
+  clock: ClockPort;
+  tokenizer: TokenizerPort;
   /** Read the current policy. Called lazily so `configure()` changes apply immediately. */
-  policy: () => ResolvePolicy
-  diagnostics: DiagnosticsPort
-  instrumentation: InstrumentationPort
+  policy: () => ResolvePolicy;
+  diagnostics: DiagnosticsPort;
+  instrumentation: InstrumentationPort;
+}
+
+/**
+ * Create the inspect-mode observability decorator.
+ *
+ * The resolver still runs the same ordered pass in inspect mode, including
+ * gates, context resolution, budget work, and memo-cache reads/writes. This
+ * port only suppresses emission: scopes execute their body and artifacts are
+ * ignored, so inspect stays deterministic without producing telemetry.
+ *
+ * @internal
+ */
+export function quietObservability(): ObservabilityPort {
+  return {
+    async scope(_scope, fn) {
+      return await fn();
+    },
+    artifact() {
+      return undefined;
+    },
+  };
+}
+
+/**
+ * Create the inspect-mode instrumentation decorator.
+ *
+ * Inspect intentionally uses the normal memo-cache path; hit/miss hooks are
+ * quieted here so cache warming does not emit instrumentation events.
+ *
+ * @internal
+ */
+export function quietInstrumentation(): InstrumentationPort {
+  return {
+    contextCacheHit() {},
+    contextCacheMiss() {},
+  };
+}
+
+/**
+ * Create the inspect-mode diagnostics decorator.
+ *
+ * Inspect is a structural read of the resolution result, not an emitting
+ * operation. Definition-time diagnostics still fire during compilation; this
+ * quiet port suppresses warnings produced by the resolve/inspect pass itself.
+ *
+ * @internal
+ */
+export function quietDiagnostics(): DiagnosticsPort {
+  return {
+    warn() {},
+  };
 }

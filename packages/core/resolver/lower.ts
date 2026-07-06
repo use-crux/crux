@@ -3,19 +3,19 @@
  *
  * `lowerEntry()` turns each member of the eight-way `ContextEntry` union
  * (plain contexts, `when()` wrappers, `match()` specs, skills, memories,
- * blackboards, injectables, custom contributors, plus falsy values) into a
- * {@link LoweredContributor} for the driver. Everything family-specific —
- * dispatch precedence, exclusion source naming, observability classification,
- * predicate semantics — lives here, so adding an entry family is one new
- * lowering function instead of coordinated edits across the pipeline.
+ * blackboards, private inject-shaped primitives, custom contributors, plus
+ * falsy values) into a {@link LoweredContributor} for the driver. Everything
+ * family-specific — dispatch precedence, exclusion source naming, observability
+ * classification, predicate semantics — lives here, so adding an entry family
+ * is one new lowering function instead of coordinated edits across the pipeline.
  *
- * Also home to `collectSchemaContributions()`, the definition-time walk that
- * answers the contract's "shape" question for input-schema merging.
+ * Definition-time schema collection lives in `schema-collection.ts`; this file
+ * stays focused on the runtime lowering contract.
  *
  * Behavioral notes:
  *
- * - Dispatch precedence is contributor → injectable (duck-typed on a callable
- *   `inject`) → `_tag` switch → plain context, matching the legacy order.
+ * - Dispatch precedence is contributor → private inject-shaped primitive
+ *   (duck-typed on a callable `inject`) → `_tag` switch → plain context.
  * - Family classification reads `Context.family`, declared by the primitive
  *   factory that produced the context (`memory()`, `blackboard()`,
  *   `retriever()`, grounding, the skill surface). Plain contexts default to
@@ -35,21 +35,19 @@ import type {
   Context,
   ContextEntry,
   ContributorEntry,
-  InjectableEntry,
   MatchSpec,
   MemoryEntry,
-  PromptInjection,
   SkillEntry,
 } from '../prompt/context-types'
+import type { InternalInjectableEntry, InternalPromptInjection } from '../prompt/internal-injection'
 import type { CruxContextInjectableKind, CruxContextInjects } from '../observability/contract'
-import { isInjectableEntry } from '../prompt/injectable'
+import { isInternalInjectableEntry } from '../prompt/internal-injection'
 import { isContributorEntry } from '../prompt/contributor'
 import {
   CONTRIBUTOR,
   type GateResult,
   type InclusionStep,
   type LoweredContributor,
-  type SchemaContribution,
 } from './contract'
 
 // ─────────────────────────────────────────────────────────────────
@@ -87,8 +85,8 @@ export function contextContributionKind(ctx: Context<z.ZodType>): CruxContextInj
   return ctx.family ?? 'context'
 }
 
-/** Classify an injectable entry by its `_tag`, falling back to `injectable`. */
-export function injectableContributionKind(entry: InjectableEntry): CruxContextInjectableKind {
+/** Classify a private injectable entry by its `_tag`, falling back to `injectable`. */
+export function injectableContributionKind(entry: InternalInjectableEntry): CruxContextInjectableKind {
   if (entry._tag === 'Retriever' || entry._tag === 'RetrievalPipeline' || entry._tag === 'Grounding') {
     return 'retriever'
   }
@@ -98,22 +96,9 @@ export function injectableContributionKind(entry: InjectableEntry): CruxContextI
   return 'injectable'
 }
 
-const KNOWN_INJECTABLE_KINDS: ReadonlySet<string> = new Set([
-  'prompt',
-  'context',
-  'conditional',
-  'match',
-  'skill',
-  'memory',
-  'blackboard',
-  'retriever',
-  'handoff',
-  'injectable',
-])
-
-/** Classify a custom contributor: its declared family when canonical, else `injectable`. */
-function contributorContributionKind(entry: ContributorEntry<z.ZodType>): CruxContextInjectableKind {
-  return KNOWN_INJECTABLE_KINDS.has(entry.family) ? (entry.family as CruxContextInjectableKind) : 'injectable'
+/** Classify a custom contributor. Public contributors are app-owned injectables. */
+function contributorContributionKind(_entry: ContributorEntry<z.ZodType>): CruxContextInjectableKind {
+  return 'injectable'
 }
 
 /** Tool names of a toolset, or `undefined` when empty — artifact previews omit empty lists. */
@@ -123,8 +108,8 @@ export function toolNames(tools: AnyToolSet | undefined): readonly string[] | un
   return names.length > 0 ? names : undefined
 }
 
-/** Channels a `PromptInjection` actually wrote to, or `undefined` when it wrote nothing. */
-export function injectionInjects(injection: PromptInjection): readonly CruxContextInjects[] | undefined {
+/** Channels a private injection/contribution actually wrote to, or `undefined` when it wrote nothing. */
+export function injectionInjects(injection: InternalPromptInjection): readonly CruxContextInjects[] | undefined {
   const injects: CruxContextInjects[] = []
   if ((injection.contexts?.length ?? 0) > 0) injects.push('system')
   if (Object.keys(injection.tools ?? {}).length > 0) injects.push('tools')
@@ -202,6 +187,7 @@ export function lowerContext(ctx: Context<z.ZodType>, index: number): LoweredCon
     family: 'context',
     index,
     mergeSourceId: ctx.id ?? `context[${index}]`,
+    toolOwnerLabel: ctx.id ? `context:${ctx.id}` : `context[${index}]`,
     gate: (input) => gatePlainContext(ctx, index, input),
     children: () => ctx.useEntries,
     contribute: () => ({ contexts: [ctx] }),
@@ -216,6 +202,7 @@ function lowerConditional(cond: ConditionalContext<Context<z.ZodType>>, index: n
     family: 'conditional',
     index,
     mergeSourceId: ctx.id ?? `context[${index}]`,
+    toolOwnerLabel: ctx.id ? `context:${ctx.id}` : `context[${index}]`,
     gate: (input) => {
       const source = ctx.id ? `context:${ctx.id}` : `context[${index}]`
       const name = ctx.id ?? `context[${index}]`
@@ -267,6 +254,7 @@ function lowerMatch(spec: MatchSpec, index: number): LoweredContributor {
     family: 'match',
     index,
     mergeSourceId: `match[${index}]`,
+    toolOwnerLabel: undefined,
     gate: (input) => {
       const source = `match[${index}]`
       const discriminator = spec.on(input)
@@ -330,6 +318,7 @@ function lowerSkill(entry: SkillEntry, index: number): LoweredContributor {
     family: 'skill',
     index,
     mergeSourceId: `skill:${entry.id}`,
+    toolOwnerLabel: `skill:${entry.id}`,
     contribute: () => ({ skill: entry }),
   }
 }
@@ -341,6 +330,7 @@ function lowerMemory(entry: MemoryEntry, index: number): LoweredContributor {
     family: 'memory',
     index,
     mergeSourceId: `memory:${entry.id}`,
+    toolOwnerLabel: undefined,
     // Memory contributes its context (reported through composition with
     // family 'memory') and a lifecycle binding. Its tools are opt-in via
     // `memory.asTools()` at the prompt level — nothing to merge or report.
@@ -358,6 +348,7 @@ function lowerBlackboard(entry: BlackboardEntry, index: number): LoweredContribu
     family: 'blackboard',
     index,
     mergeSourceId: `blackboard:${entry.id}`,
+    toolOwnerLabel: `blackboard:${entry.id}`,
     contribute: () => ({
       blackboard: entry,
       appendContexts: [entry.asContext()],
@@ -374,13 +365,14 @@ function lowerBlackboard(entry: BlackboardEntry, index: number): LoweredContribu
   }
 }
 
-function lowerInjectable(entry: InjectableEntry, index: number): LoweredContributor {
+function lowerInjectable(entry: InternalInjectableEntry, index: number): LoweredContributor {
   return {
     [CONTRIBUTOR]: true,
     id: entry.id,
     family: injectableContributionKind(entry),
     index,
     mergeSourceId: entry.id,
+    toolOwnerLabel: `contributor:${entry.id}`,
     contribute: async ({ input, promptId }) => {
       const injection = (await entry.inject({ input, promptId })) ?? {}
       return {
@@ -406,9 +398,10 @@ function lowerContributorEntry(entry: ContributorEntry<z.ZodType>, index: number
   return {
     [CONTRIBUTOR]: true,
     id: entry.id,
-    family: entry.family,
+    family: kind,
     index,
     mergeSourceId: entry.id,
+    toolOwnerLabel: `contributor:${entry.id}`,
     gate: (input) => {
       if (!entry.when) return INCLUDED
       const source = `contributor:${entry.id}`
@@ -486,9 +479,8 @@ const loweredCache = new WeakMap<object, Map<number, LoweredContributor>>()
  * resolutions of the same prompt reuse lowered instances; lowering itself is
  * pure, with all input-dependent work deferred to `gate`/`contribute`.
  *
- * Dispatch precedence (legacy-compatible, order matters):
- * custom contributor → injectable (duck-typed `inject`) → `_tag` families →
- * plain context.
+ * Dispatch precedence: custom contributor → private inject-shaped primitive
+ * (duck-typed `inject`) → `_tag` families → plain context.
  */
 export function lowerEntry(entry: ContextEntry, index: number): LoweredContributor | null {
   if (!entry) return null
@@ -506,7 +498,7 @@ export function lowerEntry(entry: ContextEntry, index: number): LoweredContribut
 
 function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, index: number): LoweredContributor {
   if (isContributorEntry(entry)) return lowerContributorEntry(entry, index)
-  if (isInjectableEntry(entry)) return lowerInjectable(entry, index)
+  if (isInternalInjectableEntry(entry)) return lowerInjectable(entry, index)
   switch (entry._tag) {
     case 'Skill':
       return lowerSkill(entry as SkillEntry, index)
@@ -521,81 +513,4 @@ function lowerEntryUncached(entry: NonNullable<Exclude<ContextEntry, false>>, in
     default:
       return lowerContext(entry as Context<z.ZodType>, index)
   }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Definition-time schema collection (the "shape" question)
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Collect every input-schema contribution reachable from `entries`, in the
- * order schema merging attributes them.
- *
- * Replaces the legacy `extractAllContexts` walk (and its fabricated fake
- * `Context` objects for injectable schemas). The flat output order is
- * load-bearing: conflict errors label anonymous entries `context[<index>]`
- * by position in this list, and entries without schemas still occupy a slot
- * to keep those labels stable.
- *
- * Optionality rules:
- * - plain context → optional only when it declares `when`
- * - `when()` wrapper and `match()` branches → always optional
- * - injectables and custom contributors → required (they cannot be
- *   conditionally excluded at definition time)
- * - skills, memories, blackboards → no schema contribution
- */
-export function collectSchemaContributions(entries: readonly ContextEntry[]): SchemaContribution[] {
-  const out: SchemaContribution[] = []
-
-  for (const entry of entries) {
-    if (!entry) continue
-
-    if (isContributorEntry(entry)) {
-      out.push(...collectSchemaContributions(entry.useEntries))
-      if (entry.inputSchema) {
-        out.push({ id: entry.id, schema: entry.inputSchema, optional: false })
-      }
-      continue
-    }
-
-    if (isInjectableEntry(entry)) {
-      if (entry.inputSchema) {
-        out.push({ id: entry.id, schema: entry.inputSchema, optional: false })
-      }
-      continue
-    }
-
-    if (entry._tag === 'Skill' || entry._tag === 'Memory' || entry._tag === 'Blackboard') continue
-
-    if (entry._tag === 'MatchSpec') {
-      const spec = entry as MatchSpec
-      for (const branch of Object.values(spec.cases)) {
-        const branchContexts = Array.isArray(branch) ? branch : [branch as Context<z.ZodType>]
-        for (const ctx of branchContexts) {
-          out.push({ id: ctx.id, schema: ctx.inputSchema, optional: true })
-        }
-      }
-      if (spec.default) {
-        const defaults = Array.isArray(spec.default) ? spec.default : [spec.default as Context<z.ZodType>]
-        for (const ctx of defaults) {
-          out.push({ id: ctx.id, schema: ctx.inputSchema, optional: true })
-        }
-      }
-      continue
-    }
-
-    if (entry._tag === 'ConditionalContext') {
-      const cond = entry as ConditionalContext<Context<z.ZodType>>
-      out.push({ id: cond.context.id, schema: cond.context.inputSchema, optional: true })
-      continue
-    }
-
-    const ctx = entry as Context<z.ZodType>
-    if (ctx.useEntries.length > 0) {
-      out.push(...collectSchemaContributions(ctx.useEntries))
-    }
-    out.push({ id: ctx.id, schema: ctx.inputSchema, optional: !!ctx.when })
-  }
-
-  return out
 }

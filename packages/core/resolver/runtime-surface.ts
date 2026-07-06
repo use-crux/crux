@@ -13,44 +13,48 @@ import type { AnyToolSet } from '../types'
 import type { BlackboardEntry, Context } from '../prompt/context-types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
+import { createToolMergeAccumulator, type ToolMergeAccumulator, type ToolOwnerLabel } from './tool-merge'
+
+function contextToolOwner(ctx: Context<z.ZodType>, index: number): ToolOwnerLabel {
+  return ctx.id ? `context:${ctx.id}` : `context[${index}]`
+}
+
+/** Merge tools from active contexts in context order. */
+export function mergeActiveContextTools(
+  merge: ToolMergeAccumulator,
+  contexts: readonly Context<z.ZodType>[],
+  input: Record<string, unknown>,
+): void {
+  for (let index = 0; index < contexts.length; index++) {
+    const ctx = contexts[index]!
+    if (ctx.toolsFn) {
+      merge.merge(ctx.toolsFn(input), contextToolOwner(ctx, index))
+    }
+  }
+}
 
 /** Collect tools from active contexts in context order. */
 export function collectActiveContextTools(
   contexts: readonly Context<z.ZodType>[],
   input: Record<string, unknown>,
 ): AnyToolSet {
-  const tools: AnyToolSet = {}
-  for (const ctx of contexts) {
-    if (ctx.toolsFn) {
-      Object.assign(tools, ctx.toolsFn(input))
-    }
-  }
-  return tools
+  const merge = createToolMergeAccumulator()
+  mergeActiveContextTools(merge, contexts, input)
+  return merge.tools
 }
 
-/** Collect blackboard tools and reject collisions with existing tool names. */
-export function collectBlackboardTools(
-  blackboards: readonly BlackboardEntry[],
-  existingTools: AnyToolSet = {},
-): AnyToolSet {
-  const tools: AnyToolSet = {}
-  const existingNames = new Set(Object.keys(existingTools))
-
+/** Merge blackboard tools in blackboard entry order. */
+export function mergeBlackboardTools(merge: ToolMergeAccumulator, blackboards: readonly BlackboardEntry[]): void {
   for (const board of blackboards) {
-    const boardTools = board.asTools()
-    for (const [name, tool] of Object.entries(boardTools)) {
-      if (name in tools || existingNames.has(name)) {
-        throw new Error(
-          `Blackboard tool name collision for "${name}". ` +
-            `Blackboard "${board.id}" generated a tool name that already exists. ` +
-            `Configure a tool prefix, e.g. blackboard({ id: "${board.id}", ..., tools: { prefix: "${board.id}" } }).`,
-        )
-      }
-      tools[name] = tool
-    }
+    merge.merge(board.asTools(), `blackboard:${board.id}`)
   }
+}
 
-  return tools
+/** Collect blackboard tools and reject collisions within blackboard entries. */
+export function collectBlackboardTools(blackboards: readonly BlackboardEntry[]): AnyToolSet {
+  const merge = createToolMergeAccumulator()
+  mergeBlackboardTools(merge, blackboards)
+  return merge.tools
 }
 
 /** Collect semantic constraints from active contexts. */

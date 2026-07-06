@@ -10,6 +10,7 @@
 
 import type { ContextSystemContent, ContextSystemResult, ContextTextSegment } from '../prompt/context-types'
 import type { ResolvedSystemContent } from './contract'
+import { summarizeSegmentFreshness } from './freshness'
 
 /** Token estimator injected by the caller — the resolver passes `ports.tokenizer.count`. */
 type CountTokens = (text: string) => number
@@ -96,7 +97,7 @@ export async function resolveSystemContent<T>(
  */
 export function recountSystemContent(content: ResolvedSystemContent, count: CountTokens): ResolvedSystemContent {
   if (!content.segments || content.segments.length === 0) return content
-  return segmentsToSystemContent(content.segments, count)
+  return { ...segmentsToSystemContent(content.segments, count), ...freshnessFields(content) }
 }
 
 /** Select only the input fields a context declared for segment inference. */
@@ -204,6 +205,8 @@ function segmentsToSystemContent(segments: readonly ContextTextSegment[], count:
       text: segment.text,
       dynamic: segment.dynamic,
       ...(segment.source ? { source: segment.source } : {}),
+      ...(typeof segment.observedAt === 'number' ? { observedAt: segment.observedAt } : {}),
+      ...(segment.sourceVersion ? { sourceVersion: segment.sourceVersion } : {}),
     }))
   const text = normalized.map((segment) => segment.text).join('')
   const staticTokens = normalized
@@ -216,5 +219,19 @@ function segmentsToSystemContent(segments: readonly ContextTextSegment[], count:
     text,
     ...(normalized.length > 0 ? { segments: normalized } : {}),
     ...(normalized.length > 0 ? { staticTokens, dynamicTokens } : {}),
+    ...summarizeSegmentFreshness(normalized),
+  }
+}
+
+function freshnessFields(content: ResolvedSystemContent): Pick<
+  ResolvedSystemContent,
+  'servedFrom' | 'resolvedAt' | 'age' | 'observedAt' | 'sourceVersion'
+> {
+  return {
+    ...(content.servedFrom ? { servedFrom: content.servedFrom } : {}),
+    ...(typeof content.resolvedAt === 'number' ? { resolvedAt: content.resolvedAt } : {}),
+    ...(typeof content.age === 'number' ? { age: content.age } : {}),
+    ...(typeof content.observedAt === 'number' ? { observedAt: content.observedAt } : {}),
+    ...(content.sourceVersion ? { sourceVersion: content.sourceVersion } : {}),
   }
 }

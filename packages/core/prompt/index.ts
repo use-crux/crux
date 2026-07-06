@@ -17,7 +17,6 @@
 export { prompt, getPromptDefinitionSource } from './prompt'
 export { context, createContexts, when, match, getContextDefinitionSource } from './context'
 export { createPrompts } from './prompts-tree'
-export { injectable, isInjectableEntry, getInputShapeKeys } from './injectable'
 export { contributor, isContributorEntry } from './contributor'
 
 // ─────────────────────────────────────────────────────────────────
@@ -25,7 +24,6 @@ export { contributor, isContributorEntry } from './contributor'
 // ─────────────────────────────────────────────────────────────────
 
 export type { ContributorConfig } from './contributor'
-export type { InjectableConfig } from './injectable'
 export type { LeafContextOf, ContextTreeResult } from './context'
 export type { PromptTree, LeafPromptOf, PromptTreeResult } from './prompts-tree'
 
@@ -34,7 +32,7 @@ export type { PromptTree, LeafPromptOf, PromptTreeResult } from './prompts-tree'
 // ─────────────────────────────────────────────────────────────────
 
 export type {
-  CacheOption,
+  ContextDefinitionWarning,
   ContextTextSegment,
   ContextSystemContent,
   ContextSystemResult,
@@ -42,11 +40,10 @@ export type {
   ContextDef,
   Context,
   ConditionalContext,
+  MatchCases,
   MatchSpec,
   ContextEntry,
-  PromptInjection,
-  InjectableEntry,
-  ContributorContribution,
+  Contribution,
   ContributorEntry,
   SkillEntry,
   MemoryEntry,
@@ -56,6 +53,10 @@ export type {
   SemanticCacheQueryContext,
   SemanticCachePromptOptions,
   PromptCacheOptions,
+  PromptCallback,
+  SystemField,
+  PromptField,
+  PromptContent,
   PromptInputArg,
   PromptConfig,
   PrepareHookArgs,

@@ -15,29 +15,35 @@ pnpm add @use-crux/anthropic @use-crux/core @anthropic-ai/sdk
 ## Usage
 
 ```ts
-import { prompt } from '@use-crux/core'
-import { createAnthropic } from '@use-crux/anthropic'
-import Anthropic from '@anthropic-ai/sdk'
+import { prompt } from "@use-crux/core";
+import { createAnthropic } from "@use-crux/anthropic";
+import Anthropic from "@anthropic-ai/sdk";
 
-const anthropic = createAnthropic(new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }))
+const anthropic = createAnthropic(
+  new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }),
+);
 
 const fixTypos = prompt({
-  id: 'fix-typos',
+  id: "fix-typos",
   template: ({ instruction }: { instruction: string }) => instruction,
-})
+});
 
 const result = await anthropic.generate(fixTypos, {
-  model: 'claude-sonnet-4-5-20250929',
-  input: { instruction: 'Fix typos' },
-})
+  model: "claude-sonnet-4-5-20250929",
+  input: { instruction: "Fix typos" },
+});
 
-result.text // extracted text
-result.raw // raw Anthropic.Message
+result.text; // extracted text
+result.raw; // raw Anthropic.Message
 ```
 
 `createAnthropic()` returns a `CruxAdapter` with `generate()`, `stream()`, and agent composition methods (`parallel`, `pipeline`, `consensus`, `swarm`). Use `createGenerateObjectFn(client, model)` / `createGenerateTextFn(client, model)` to satisfy `@use-crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`). `createGenerateObjectFn()` is provider-native: it uses Anthropic structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
 The package exports `anthropicProviderRuntime` for advanced adapter composition. Internally, Anthropic uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; adapter authors building similar single-turn providers should start there.
+
+Crux maps portable `GenerationSettings.toolChoice` values to Anthropic `tool_choice`: `'auto'` → `{ type: 'auto' }`, `'none'` → `{ type: 'none' }`, `'required'` → `{ type: 'any' }`, and `{ tool }` → `{ type: 'tool', name }`. Anthropic-native options that Crux does not model portably belong in the typed `extra` option.
+
+For provider prompt caching, Crux resolves cached contexts into a stable prefix and marks the final cached `SystemBlock` with `cacheBoundary`. This adapter places Anthropic `cache_control: { type: 'ephemeral' }` on that boundary block only.
 
 ## Message and Tool-Round Serialization
 

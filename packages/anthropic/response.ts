@@ -30,14 +30,14 @@ export function extractAdapterResponse(result: AnthropicParsedMessage): AdapterR
 
 /** Read response metadata that is not owned by Anthropic transcript conversion. */
 export function anthropicResponseMeta(result: AnthropicParsedMessage): NativeResponseMetadata {
-  const inputTokens = result.usage?.input_tokens ?? 0
-  const outputTokens = result.usage?.output_tokens ?? 0
+  const inputTokens = result.usage?.input_tokens
+  const outputTokens = result.usage?.output_tokens
 
   return {
     usage: {
       inputTokens,
       outputTokens,
-      totalTokens: inputTokens + outputTokens,
+      totalTokens: inputTokens != null && outputTokens != null ? inputTokens + outputTokens : undefined,
     },
     finishReason: result.stop_reason ?? undefined,
     responseId: result.id,

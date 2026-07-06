@@ -10,7 +10,7 @@
  * @module
  */
 
-export { createAiSdkCodec } from './sdk-codec/index'
+export { createAiSdkCodec, mapAiSdkSettings } from "./sdk-codec/index";
 export type {
   AiSdkCallPlan,
   AiSdkCodec,
@@ -20,4 +20,4 @@ export type {
   CachedStreamPayload,
   SdkLoopResultLike,
   SdkStreamResultLike,
-} from './sdk-codec/types'
+} from "./sdk-codec/types";

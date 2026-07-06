@@ -11,13 +11,14 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { ModelInfo } from '../types'
-import type { GenerationSettings, TraceMeta } from '../generation/types'
-import type { SystemBlock } from '../resolver/types'
-import type { Message } from '../generation/messages'
-import type { JsonValue } from '../types/tool'
-import type { AdapterResponse } from './types'
+import type { z } from "zod";
+import type { ModelInfo } from "../types";
+import type { GenerationSettings, TraceMeta } from "../generation/types";
+import type { SystemBlock } from "../resolver/types";
+import type { DiagnosticsPort } from "../resolver/ports";
+import type { Message } from "../generation/messages";
+import type { JsonValue } from "../types/tool";
+import type { AdapterResponse } from "./types";
 
 // ─────────────────────────────────────────────────────────────────
 // Request
@@ -38,53 +39,58 @@ import type { AdapterResponse } from './types'
  */
 export interface ExecutorRequest<TModel> {
   /** The concrete model to call. Never a routing wrapper. */
-  readonly model: TModel
+  readonly model: TModel;
   /** Provider/model identity, from `describeModel()` — use for provider quirks. */
-  readonly modelInfo: ModelInfo
+  readonly modelInfo: ModelInfo;
   /** Assembled system prompt text, when the prompt declares one. */
-  readonly system: string | undefined
+  readonly system: string | undefined;
   /**
    * System prompt as source-attributed blocks with provider-cache hints.
    * Specs that support native prompt caching (e.g. Anthropic cache
    * breakpoints) should prefer these over the joined `system` string.
    */
-  readonly systemBlocks: readonly SystemBlock[] | undefined
+  readonly systemBlocks: readonly SystemBlock[] | undefined;
   /** Single-shot user prompt, mutually exclusive with `messages`. */
-  readonly prompt: string | undefined
+  readonly prompt: string | undefined;
   /** Conversation history in canonical Crux `Message` format. */
-  readonly messages: readonly Message[] | undefined
+  readonly messages: readonly Message[] | undefined;
   /** Provider-native settings, already mapped via `mapSettings()`. */
-  readonly settings: Record<string, unknown>
+  readonly settings: Record<string, unknown>;
   /**
    * Merged + instrumented tool map. Values keep whatever shape the caller
    * provided (AI SDK `tool()` objects pass through untouched); the factory
    * only wraps `execute`/`needsApproval`/`toModelOutput` for devtools.
    */
-  readonly tools: Record<string, unknown> | undefined
+  readonly tools: Record<string, unknown> | undefined;
   /** Restrict which tools the model may call this run, when set. */
-  readonly activeTools: readonly string[] | undefined
+  readonly activeTools: readonly string[] | undefined;
   /**
    * Maximum loop steps the SDK may take. The spec must stop the loop at
-   * this budget (e.g. AI SDK `stopWhen: stepCountIs(maxSteps)`), adjusted
+   * this budget through native loop controls, adjusted
    * for any steps refunded via {@link StepDirective} `refundStep`.
    */
-  readonly maxSteps: number
+  readonly maxSteps: number;
   /**
    * Core's per-step steering hook. Call after every completed step and
    * apply the returned directive before the next step begins. See
    * {@link StepObserver} for the buffering contract.
    */
-  readonly observer: StepObserver | undefined
+  readonly observer: StepObserver | undefined;
   /**
    * Cooperative cancellation from core's timeout policy. Pass to the SDK
    * (`abortSignal`) so a timed-out call stops consuming tokens.
    */
-  readonly abortSignal: AbortSignal | undefined
+  readonly abortSignal: AbortSignal | undefined;
   /**
    * Adapter-specific passthrough options the factory does not interpret
    * (e.g. AI SDK `toolChoice`, custom `stopWhen` conditions).
    */
-  readonly extra: Record<string, unknown> | undefined
+  readonly extra: Record<string, unknown> | undefined;
+  /**
+   * Non-fatal diagnostics channel for executor-level degradations that happen
+   * after prompt resolution, such as SDK surface limitations.
+   */
+  readonly diagnostics?: DiagnosticsPort;
   /**
    * The safety streaming sub-protocol for `runStream()`. Set only on text
    * streams when guarded streaming applies; absent for `generate()` and
@@ -98,7 +104,7 @@ export interface ExecutorRequest<TModel> {
    * seal's `pending` tail before closing. With the AI SDK, mount it via
    * `experimental_transform` on `streamText`.
    */
-  readonly safety?: import('../safety/session').SafetyStream
+  readonly safety?: import("../safety/session").SafetyStream;
 }
 
 /**
@@ -108,7 +114,7 @@ export interface ExecutorRequest<TModel> {
  */
 export interface StructuredRequest<TModel> extends ExecutorRequest<TModel> {
   /** The Zod schema the prompt declared as its `output`. */
-  readonly schema: z.ZodType
+  readonly schema: z.ZodType;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -118,21 +124,25 @@ export interface StructuredRequest<TModel> extends ExecutorRequest<TModel> {
 /** One completed step of an executor-driven loop, as reported to core. */
 export interface ExecutorStep {
   /** Zero-based step index. Refunded steps do not advance the index seen by budgets. */
-  readonly index: number
+  readonly index: number;
   /** Assistant text produced in this step (may be empty for pure tool steps). */
-  readonly text: string
+  readonly text: string;
   /** Tool calls the model requested this step. */
-  readonly toolCalls: ReadonlyArray<{ readonly id: string; readonly name: string; readonly args: unknown }>
+  readonly toolCalls: ReadonlyArray<{
+    readonly id: string;
+    readonly name: string;
+    readonly args: unknown;
+  }>;
   /** Results of tools the SDK executed this step. */
   readonly toolResults: ReadonlyArray<{
-    readonly toolCallId: string
-    readonly toolName: string
-    readonly output: unknown
-  }>
+    readonly toolCallId: string;
+    readonly toolName: string;
+    readonly output: unknown;
+  }>;
   /** The SDK's finish reason for this step, when reported. */
-  readonly finishReason: string | undefined
+  readonly finishReason: string | undefined;
   /** Token usage for this step, when reported. */
-  readonly usage: AdapterResponse['usage'] | undefined
+  readonly usage: AdapterResponse["usage"] | undefined;
 }
 
 /**
@@ -147,13 +157,13 @@ export interface ExecutorStep {
 export type StepDirective =
   | {
       /** Proceed to the next step unchanged. The default when no observer is set. */
-      readonly kind: 'continue'
+      readonly kind: "continue";
     }
   | {
       /** Stop the loop now; the current step's response becomes the final response. */
-      readonly kind: 'stop'
+      readonly kind: "stop";
       /** Optional reason recorded in observability output. */
-      readonly reason?: string
+      readonly reason?: string;
     }
   | {
       /**
@@ -161,22 +171,22 @@ export type StepDirective =
        * mid-loop re-resolution (e.g. `LoadSkill` activating a skill whose
        * instructions must join the system prompt for subsequent steps).
        */
-      readonly kind: 'amend'
+      readonly kind: "amend";
       /** Replacement system prompt for subsequent steps. */
-      readonly system?: string
+      readonly system?: string;
       /** Replacement system blocks for subsequent steps. */
-      readonly systemBlocks?: readonly SystemBlock[]
+      readonly systemBlocks?: readonly SystemBlock[];
       /** Replacement tool map for subsequent steps (already instrumented). */
-      readonly tools?: Record<string, unknown>
+      readonly tools?: Record<string, unknown>;
       /** Replacement active-tool restriction for subsequent steps. */
-      readonly activeTools?: readonly string[]
+      readonly activeTools?: readonly string[];
       /**
        * When `true`, the step that produced this directive does not count
        * against `maxSteps` — used for bookkeeping steps like `LoadSkill`
        * so loading a skill never costs the model a real working step.
        */
-      readonly refundStep?: boolean
-    }
+      readonly refundStep?: boolean;
+    };
 
 /**
  * Core's per-step steering hook, passed to `runLoop()` via
@@ -193,7 +203,7 @@ export interface StepObserver {
    * @param step - The step that just finished.
    * @returns The directive to apply before the next step.
    */
-  onStepFinish(step: ExecutorStep): Promise<StepDirective>
+  onStepFinish(step: ExecutorStep): Promise<StepDirective>;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -203,9 +213,9 @@ export interface StepObserver {
 /** Provider metadata extracted by the executor after a run. */
 export interface ExecutorMeta {
   /** Total cost in USD, when the provider reports it (e.g. OpenRouter). */
-  readonly costUsd?: number
+  readonly costUsd?: number;
   /** Raw provider metadata for diagnostics; never interpreted by core. */
-  readonly providerMetadata?: unknown
+  readonly providerMetadata?: unknown;
 }
 
 /**
@@ -214,10 +224,10 @@ export interface ExecutorMeta {
  * resume protocol — the executor only reports what was suspended.
  */
 export interface PendingToolApproval {
-  readonly toolCallId: string
-  readonly toolName: string
+  readonly toolCallId: string;
+  readonly toolName: string;
   /** The tool's input args, JSON-safe for persistence and display. */
-  readonly input: JsonValue
+  readonly input: JsonValue;
 }
 
 /**
@@ -239,30 +249,30 @@ export interface PendingToolApproval {
  */
 export type ExecutorOutcome<TRawResponse> =
   | {
-      readonly status: 'complete'
+      readonly status: "complete";
       /** The SDK's own result object, passed through untouched for consumers. */
-      readonly raw: TRawResponse
+      readonly raw: TRawResponse;
       /** Canonical extraction of the final response. */
-      readonly response: AdapterResponse
+      readonly response: AdapterResponse;
       /** Full canonical message history including tool rounds. */
-      readonly messages: readonly Message[]
+      readonly messages: readonly Message[];
       /** Budget-consuming steps taken (refunds excluded). */
-      readonly steps: number
+      readonly steps: number;
       /** Provider metadata (cost, etc.). */
-      readonly meta: ExecutorMeta
+      readonly meta: ExecutorMeta;
     }
   | {
-      readonly status: 'suspended'
-      readonly reason: 'tool-approval'
+      readonly status: "suspended";
+      readonly reason: "tool-approval";
       /** The tool calls awaiting a decision. */
-      readonly pendingApprovals: readonly PendingToolApproval[]
+      readonly pendingApprovals: readonly PendingToolApproval[];
       /** The assistant step that requested the suspended tools. */
-      readonly assistantResponse: AdapterResponse
+      readonly assistantResponse: AdapterResponse;
       /** Canonical history up to (not including) the approval request. */
-      readonly messages: readonly Message[]
+      readonly messages: readonly Message[];
       /** Budget-consuming steps taken before suspension. */
-      readonly steps: number
-    }
+      readonly steps: number;
+    };
 
 /**
  * The result of `attemptStructured()` — exactly one structured-output
@@ -279,21 +289,21 @@ export type ExecutorOutcome<TRawResponse> =
  */
 export type StructuredAttempt<TRawResponse> =
   | {
-      readonly status: 'ok'
+      readonly status: "ok";
       /** The SDK's own result object (e.g. `GenerateObjectResult`). */
-      readonly raw: TRawResponse
+      readonly raw: TRawResponse;
       /** Canonical extraction of the response. */
-      readonly response: AdapterResponse
+      readonly response: AdapterResponse;
       /** The parsed, schema-valid object. */
-      readonly object: unknown
+      readonly object: unknown;
     }
   | {
-      readonly status: 'invalid'
+      readonly status: "invalid";
       /** The model's raw text that failed validation (best effort). */
-      readonly rawText: string
+      readonly rawText: string;
       /** Why validation failed. */
-      readonly error: z.ZodError
-    }
+      readonly error: z.ZodError;
+    };
 
 // ─────────────────────────────────────────────────────────────────
 // Streaming
@@ -302,16 +312,16 @@ export type StructuredAttempt<TRawResponse> =
 /** Completion metadata resolved when an executor-driven stream finishes. */
 export interface ExecutorStreamMeta extends TraceMeta {
   /** Final assistant text, when the stream produced text. */
-  readonly text?: string
+  readonly text?: string;
   /** Stream timing metrics measured by the executor. */
   readonly streaming?: {
     /** Time to first token in milliseconds. */
-    readonly ttftMs?: number
+    readonly ttftMs?: number;
     /** Output tokens per second over the whole stream. */
-    readonly tokensPerSecond?: number
+    readonly tokensPerSecond?: number;
     /** Total chunks observed. */
-    readonly totalChunks?: number
-  }
+    readonly totalChunks?: number;
+  };
 }
 
 /**
@@ -326,7 +336,7 @@ export interface ExecutorStreamMeta extends TraceMeta {
  */
 export interface ExecutorStreamHandle<TRawStream> {
   /** The SDK stream result object, untouched. */
-  readonly raw: TRawStream
+  readonly raw: TRawStream;
   /** Resolves with final metadata when the stream finishes. */
-  completion: () => Promise<ExecutorStreamMeta | undefined>
+  completion: () => Promise<ExecutorStreamMeta | undefined>;
 }

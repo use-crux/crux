@@ -1,7 +1,7 @@
 /**
  * Provider-neutral generation policy contracts.
  *
- * Owns the SDK-agnostic generation settings, provider adaptation map, and
+ * Owns the SDK-agnostic generation settings, provider adaptations, and
  * normalized result metadata that adapters read and write during a generate or
  * stream call. These types are intentionally provider-free: every adapter maps
  * them to and from its own SDK shape at the execution boundary.
@@ -13,8 +13,9 @@
  * @module
  */
 
-import type { ConstraintAudit } from '../safety/constraint/types'
-import type { GuardrailAudit } from '../safety/guardrail/types'
+import type { ConstraintAudit } from "../safety/constraint/types";
+import type { GuardrailAudit } from "../safety/guardrail/types";
+import type { StopCondition, ToolChoice } from "./tool-control";
 
 // ─────────────────────────────────────────────────────────────────
 // Generation Settings
@@ -29,25 +30,40 @@ import type { GuardrailAudit } from '../safety/guardrail/types'
  * Merged with last-write-wins priority:
  * `config.settings` < `adapt.settings` < call-site overrides.
  *
- * The index signature allows SDK-specific settings to pass through.
+ * Provider-specific options belong in each adapter's typed `extra` option so
+ * prompt definitions remain portable across adapters.
  */
 export interface GenerationSettings {
   /** Sampling temperature (0–2). Higher = more random. */
-  temperature?: number
+  temperature?: number;
   /** Maximum number of tokens to generate. */
-  maxTokens?: number
+  maxTokens?: number;
   /** Nucleus sampling threshold. */
-  topP?: number
+  topP?: number;
   /** Top-K sampling. */
-  topK?: number
+  topK?: number;
   /** Sequences that stop generation. */
-  stopSequences?: string[]
+  stopSequences?: string[];
+  /**
+   * Portable tool choice policy.
+   *
+   * Adapters map this to provider-native request fields. Provider-specific
+   * variants belong in adapter `extra` options.
+   */
+  toolChoice?: ToolChoice;
+  /**
+   * Portable tool-loop stop condition(s). Arrays are OR-composed.
+   *
+   * Numeric {@link maxSteps} is kept as shorthand and normalized with this
+   * field during adapter execution.
+   */
+  stopWhen?: StopCondition | readonly StopCondition[];
+  /** Shorthand for `stopWhen: maxSteps(n)`. */
+  maxSteps?: number;
   /** Penalize frequent tokens. */
-  frequencyPenalty?: number
+  frequencyPenalty?: number;
   /** Penalize already-present tokens. */
-  presencePenalty?: number
-  /** Extensible — SDK-specific settings pass through. */
-  [key: string]: unknown
+  presencePenalty?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -62,15 +78,15 @@ export interface GenerationSettings {
  */
 export interface PromptAdaptation {
   /** Text prepended to the system message. */
-  prependSystem?: string
+  prependSystem?: string;
   /** Text appended to the system message. */
-  appendSystem?: string
+  appendSystem?: string;
   /** Text prepended to the user prompt. */
-  prependPrompt?: string
+  prependPrompt?: string;
   /** Text appended to the user prompt. */
-  appendPrompt?: string
+  appendPrompt?: string;
   /** Generation settings overrides for this provider. */
-  settings?: GenerationSettings
+  settings?: GenerationSettings;
 }
 
 /**
@@ -87,9 +103,9 @@ export interface PromptAdaptation {
  * }
  * ```
  */
-export type AdapterMap = {
-  [provider: string]: PromptAdaptation
-}
+export type ProviderAdaptations = {
+  [provider: string]: PromptAdaptation;
+};
 
 // ─────────────────────────────────────────────────────────────────
 // Token Usage & Trace Metadata
@@ -97,12 +113,12 @@ export type AdapterMap = {
 
 /** Token usage from an AI call. */
 export interface TokenUsage {
-  inputTokens?: number
-  outputTokens?: number
-  totalTokens?: number
-  cacheReadTokens?: number
-  cacheWriteTokens?: number
-  reasoningTokens?: number
+  inputTokens?: number;
+  outputTokens?: number;
+  totalTokens?: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+  reasoningTokens?: number;
 }
 
 /**
@@ -113,15 +129,17 @@ export interface TokenUsage {
  * produced it.
  */
 export interface TraceMeta {
-  usage?: TokenUsage
+  usage?: TokenUsage;
   /** Total cost in USD — only present when the provider returns it (e.g. OpenRouter). */
-  cost?: number
-  finishReason?: string
-  toolCalls?: Array<{ id?: string; name: string; args: unknown }>
-  responseId?: string
-  actualModelId?: string
+  cost?: number;
+  finishReason?: string;
+  /** Neutral stop condition that ended a tool loop, when Crux stopped before provider completion. */
+  stoppedBy?: StopCondition;
+  toolCalls?: Array<{ id?: string; name: string; args: unknown }>;
+  responseId?: string;
+  actualModelId?: string;
   /** Constraint audit trail — present when constraints ran during generation. */
-  constraints?: ConstraintAudit
+  constraints?: ConstraintAudit;
   /** Guardrail audit trail — present when guardrails ran during generation. */
-  guardrails?: GuardrailAudit
+  guardrails?: GuardrailAudit;
 }

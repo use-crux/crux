@@ -11,40 +11,66 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { AnyToolSet, AnyMessage, ModelInfo } from '../types'
-import type { AnyPromptConfig } from '../prompt/prompt-types'
-import type { ContextEntry } from '../prompt/context-types'
-import type { ResolvedPrompt } from './types'
-import type { ToolMiddleware } from '../tools/types'
-import { LOAD_REFERENCE_TOOL_NAME, LOAD_SKILL_TOOL_NAME } from '../skill/tools'
-import { detectSuspiciousPatterns, escapeXml } from '../shared/sanitize'
-import { resolveUse } from './driver'
-import { guardInputs } from './input-guard'
-import { assertNoObjectMessageContent, assertNoObjectPromptText } from './pass-guards'
-import { resolvePostMergeSurface } from './post-merge-surface'
-import { emitPromptInputArtifact, emitSecurityWarningSpan, promptInputPreview } from './prompt-observability'
-import { mergeSettings, selectAdaptation } from './prompt-settings'
-import type { ResolverPorts } from './ports'
+import type { z } from "zod";
+import type { AnyToolSet, AnyMessage, ModelInfo } from "../types";
+import type { AnyPromptConfig } from "../prompt/prompt-types";
+import type { ContextEntry } from "../prompt/context-types";
+import type { ResolvedPrompt } from "./types";
+import type { ToolMiddleware } from "../tools/types";
+import { LOAD_REFERENCE_TOOL_NAME, LOAD_SKILL_TOOL_NAME } from "../skill/tools";
 import {
-  collectActiveContextTools,
-  collectBlackboardTools,
+  applyPromptAdaptationText,
+  applySystemAdaptationBlocks,
+  applySystemAdaptationText,
+  foldSystemIntoMessages,
+  joinSystemText,
+} from "./adaptation";
+import { detectSuspiciousPatterns, escapeXml } from "../shared/sanitize";
+import { collectStaticEntryIds } from "./definition-analysis";
+import { resolveUse } from "./driver";
+import {
+  collectDeclaredRawFields,
+  collectResolverPrivateInput,
+  containsNestedString,
+  mergeResolverPrivateInput,
+} from "./input-pipeline";
+import { guardInputs } from "./input-guard";
+import {
+  assertNoObjectMessageContent,
+  assertNoObjectPromptText,
+} from "./pass-guards";
+import { resolvePostMergeSurface } from "./post-merge-surface";
+import {
+  emitPromptInputArtifact,
+  emitSecurityWarningSpan,
+  promptInputPreview,
+} from "./prompt-observability";
+import { mergeSettings, selectAdaptation } from "./prompt-settings";
+import type { ResolverPorts } from "./ports";
+import {
   collectContextConstraints,
   collectContextGuardrails,
-} from './runtime-surface'
-import { safeParseSchema } from './schema'
-import { createSkillToolSurface } from './skills'
-import { buildSystemMessage } from './system-message'
-import { renderPromptText, resolveSystemContent } from './system-content'
-import type { PromptResolutionPass, ProjectionMode, ResolveCallOptions } from './compiler-types'
+  mergeActiveContextTools,
+  mergeBlackboardTools,
+} from "./runtime-surface";
+import { safeParseSchema } from "./schema";
+import { createSkillToolSurface } from "./skills";
+import { buildSystemMessage } from "./system-message";
+import { renderPromptText, resolveSystemContent } from "./system-content";
+import { createToolMergeAccumulator, type ToolOwnerLabel } from "./tool-merge";
+import type {
+  PromptResolutionPass,
+  ProjectionMode,
+  ResolveCallOptions,
+} from "./compiler-types";
 
 /** Validate prompt config invariants that the compiler depends on. */
 export function validatePromptConfig(config: AnyPromptConfig): void {
   if (config.messages && (config.system || config.prompt)) {
     throw new Error(
       'prompt: "messages" is mutually exclusive with "system" and "prompt". ' +
-        'Use either messages mode or system+prompt mode, not both.',
-    )
+        "Use either messages mode or system+prompt mode, not both.",
+    );
   }
 }
 
@@ -56,180 +82,238 @@ export async function runPromptPass(
   ports: ResolverPorts,
   mode: ProjectionMode,
 ): Promise<PromptResolutionPass> {
-  let input = opts.input ?? {}
+  let input = opts.input ?? {};
+  const resolverPrivateInput = collectResolverPrivateInput(input);
 
   if (mergedSchema) {
-    const parseResult = safeParseSchema(mergedSchema, input)
+    const parseResult = safeParseSchema(mergedSchema, input);
     if (!parseResult.success) {
-      if (mode === 'resolve') {
-        emitPromptInputArtifact(ports, promptInputPreview(config.id, input, mergedSchema, 'failed'))
+      if (mode === "resolve") {
+        emitPromptInputArtifact(
+          ports,
+          promptInputPreview(config.id, input, mergedSchema, "failed"),
+        );
       }
-      throw new Error(`Input validation failed: ${JSON.stringify(parseResult.error?.issues ?? parseResult.error)}`)
+      throw new Error(
+        `Input validation failed: ${JSON.stringify(parseResult.error?.issues ?? parseResult.error)}`,
+      );
     }
-    if (mode === 'resolve') {
-      emitPromptInputArtifact(ports, promptInputPreview(config.id, input, mergedSchema, 'passed'))
+    if (mode === "resolve") {
+      emitPromptInputArtifact(
+        ports,
+        promptInputPreview(config.id, input, mergedSchema, "passed"),
+      );
     }
-  } else if (mode === 'resolve') {
-    emitPromptInputArtifact(ports, promptInputPreview(config.id, input, undefined, 'not-configured'))
+    input = parseResult.data as Record<string, unknown>;
+  } else if (mode === "resolve") {
+    emitPromptInputArtifact(
+      ports,
+      promptInputPreview(config.id, input, undefined, "not-configured"),
+    );
   }
 
-  const entries: readonly ContextEntry[] = config.use ?? []
-  const mergedUse = await resolveUse(entries, input as Record<string, unknown>, config.id, ports)
-  const postMerge = await resolvePostMergeSurface(mergedUse, input, ports)
+  const entries: readonly ContextEntry[] = config.use ?? [];
+
+  if (config.sanitize) {
+    input = config.sanitize(input as never) as Record<string, unknown>;
+  }
 
   if (ports.policy().autoEscape) {
     const rawFieldSet = new Set<string>([
       ...(config.rawFields ?? []),
-      ...postMerge.contexts.flatMap((ctx) => ctx.rawFields ?? []),
-    ])
+      ...collectDeclaredRawFields(entries),
+    ]);
 
-    const sanitizedInput: Record<string, unknown> = { ...input }
+    const sanitizedInput: Record<string, unknown> = { ...input };
+    let warnedNestedStrings = false;
     for (const [key, value] of Object.entries(sanitizedInput)) {
-      if (typeof value === 'string' && !rawFieldSet.has(key)) {
-        sanitizedInput[key] = escapeXml(value)
+      if (typeof value === "string" && !rawFieldSet.has(key)) {
+        sanitizedInput[key] = escapeXml(value);
+      } else if (
+        typeof value !== "string" &&
+        !warnedNestedStrings &&
+        containsNestedString(value)
+      ) {
+        ports.diagnostics.warn(
+          `auto-escape: input field "${key}" contains nested string values; ` +
+            `auto-escape covers top-level strings only. Escape nested content explicitly or restructure the input.`,
+        );
+        warnedNestedStrings = true;
       }
     }
-    input = sanitizedInput
+    input = sanitizedInput;
   }
 
-  if (config.sanitize) {
-    input = config.sanitize(input as never) as Record<string, unknown>
-  }
+  input = mergeResolverPrivateInput(
+    input as Record<string, unknown>,
+    resolverPrivateInput,
+  );
 
-  if (mode === 'resolve' && ports.policy().securityWarnings) {
+  if (mode === "resolve" && ports.policy().securityWarnings) {
     for (const [key, value] of Object.entries(opts.input ?? {})) {
-      if (typeof value === 'string') {
-        const warnings = detectSuspiciousPatterns(value, key)
+      if (typeof value === "string") {
+        const warnings = detectSuspiciousPatterns(value, key);
         for (const warning of warnings) {
-          ports.diagnostics.warn(`[@use-crux/core] ${warning.message}`)
+          ports.diagnostics.warn(`[@use-crux/core] ${warning.message}`);
           emitSecurityWarningSpan({
-            promptId: config.id ?? 'unknown',
+            promptId: config.id ?? "unknown",
             field: key,
             pattern: warning.pattern,
             message: warning.message,
             inputPreview: value.slice(0, 200),
-          })
+          });
         }
       }
     }
   }
 
-  const guardedInput = guardInputs(input as Record<string, unknown>, config.id)
-  const ownSystem = await resolveSystemContent(config.system, guardedInput, ports.tokenizer.count)
-  const composed = await buildSystemMessage(ownSystem, postMerge.contexts, guardedInput, opts.tokenBudget, ports)
-  let system = composed.system
-  const systemBlocks = composed.blocks
-
-  let promptText: string | undefined
-  let messages: AnyMessage[] | undefined
-
-  if (config.messages) {
-    messages = (config.messages as (arg: { input: Record<string, unknown> }) => AnyMessage[])({ input: guardedInput })
-    assertNoObjectMessageContent(messages)
-
-    if (system) {
-      const firstSystemIdx = messages.findIndex((message) => message.role === 'system')
-      if (firstSystemIdx >= 0) {
-        const first = messages[firstSystemIdx]!
-        const firstContent = typeof first.content === 'string' ? first.content : String(first.content)
-        messages = [...messages]
-        messages[firstSystemIdx] = {
-          ...first,
-          content: system + '\n\n' + firstContent,
-        }
-      } else {
-        messages = [{ role: 'system' as const, content: system }, ...messages]
-      }
-      system = ''
-    }
-  } else {
-    promptText = await renderPromptText(config.prompt, guardedInput)
-  }
-
-  const promptInfo = promptText ? { text: promptText, tokens: ports.tokenizer.count(promptText) } : undefined
-  assertNoObjectPromptText(promptText, config.id)
+  const guardedInput = guardInputs(input as Record<string, unknown>, config.id);
+  const mergedUse = await resolveUse(
+    entries,
+    guardedInput,
+    config.id,
+    ports,
+    0,
+    new Set(),
+    undefined,
+    collectStaticEntryIds(entries),
+  );
+  const postMerge = await resolvePostMergeSurface(
+    mergedUse,
+    guardedInput,
+    ports,
+  );
+  const ownSystem = await resolveSystemContent(
+    config.system,
+    guardedInput,
+    ports.tokenizer.count,
+  );
+  const composed = await buildSystemMessage(
+    ownSystem,
+    postMerge.contexts,
+    guardedInput,
+    opts.tokenBudget,
+    ports,
+    {
+      ownProviderCache: config.cache?.provider === true,
+      ownSystemIsStatic: typeof config.system === "string",
+      ownSystemIsDynamic: typeof config.system === "function",
+      promptId: config.id,
+    },
+  );
+  let system = composed.system;
+  let systemBlocks = composed.blocks;
 
   const modelInfo: ModelInfo = {
-    provider: opts.provider ?? '',
-    modelId: opts.modelId ?? '',
-  }
-  const adaptation = selectAdaptation(config.adapt, modelInfo)
-  if (adaptation) {
-    if (adaptation.prependSystem) system = adaptation.prependSystem + '\n\n' + system
-    if (adaptation.appendSystem) system = system + '\n\n' + adaptation.appendSystem
-    if (promptText !== undefined) {
-      if (adaptation.prependPrompt) promptText = adaptation.prependPrompt + promptText
-      if (adaptation.appendPrompt) promptText = promptText + adaptation.appendPrompt
-    }
+    provider: opts.provider ?? "",
+    modelId: opts.modelId ?? "",
+  };
+  const adaptation = selectAdaptation(config.adapt, modelInfo);
+  systemBlocks = applySystemAdaptationBlocks(systemBlocks, adaptation);
+  system =
+    systemBlocks.length > 0
+      ? joinSystemText(systemBlocks.map((block) => block.text))
+      : applySystemAdaptationText(system, adaptation);
+  const inspectionSystem = system;
+
+  let promptText: string | undefined;
+  let messages: AnyMessage[] | undefined;
+
+  if (config.messages) {
+    messages = (
+      config.messages as (arg: {
+        input: Record<string, unknown>;
+      }) => AnyMessage[]
+    )({ input: guardedInput });
+    assertNoObjectMessageContent(messages);
+
+    messages = foldSystemIntoMessages(system, messages);
+    system = "";
+  } else {
+    promptText = await renderPromptText(config.prompt, guardedInput);
+    promptText = applyPromptAdaptationText(promptText, adaptation);
   }
 
-  const { input: _input, provider: _provider, modelId: _modelId, tokenBudget: _tokenBudget, ...callSettings } = opts
-  void _input
-  void _provider
-  void _modelId
-  void _tokenBudget
-  const settings = mergeSettings(config.settings, adaptation?.settings, callSettings)
+  const promptInfo = promptText
+    ? { text: promptText, tokens: ports.tokenizer.count(promptText) }
+    : undefined;
+  assertNoObjectPromptText(promptText, config.id);
+
+  const {
+    input: _input,
+    provider: _provider,
+    modelId: _modelId,
+    tokenBudget: _tokenBudget,
+    ...callSettings
+  } = opts;
+  void _input;
+  void _provider;
+  void _modelId;
+  void _tokenBudget;
+  const settings = mergeSettings(
+    config.settings,
+    adaptation?.adaptation.settings,
+    callSettings,
+  );
 
   const resolved: ResolvedPrompt = {
     ...(system ? { system } : {}),
-    ...(systemBlocks.length > 0 ? { systemBlocks } : {}),
-    ...(composed.promptBudgetArtifactId ? { promptBudgetArtifactId: composed.promptBudgetArtifactId } : {}),
+    ...(!config.messages && systemBlocks.length > 0 ? { systemBlocks } : {}),
+    ...(composed.promptBudgetArtifactId
+      ? { promptBudgetArtifactId: composed.promptBudgetArtifactId }
+      : {}),
     ...(promptText ? { prompt: promptText } : {}),
     ...(messages ? { messages } : {}),
     ...(config.output ? { schema: config.output } : {}),
     settings,
+  };
+
+  const configTools = config.tools;
+  const toolMerge = createToolMergeAccumulator();
+  let skillTools: AnyToolSet = {};
+  let skillSession: unknown;
+  if (mode === "resolve" && postMerge.skills.length > 0) {
+    const toolSurface = createSkillToolSurface(postMerge.skills, input, ports);
+    skillTools = toolSurface.tools;
+    skillSession = toolSurface.session;
+    const owner = skillToolOwner(postMerge.skills);
+    if (owner) toolMerge.merge(skillTools, owner);
   }
 
-  const contextTools = collectActiveContextTools(postMerge.contexts, input)
-  const configTools = config.tools
-  let skillTools: AnyToolSet = {}
-  let skillSession: unknown
-  if (mode === 'resolve' && postMerge.skills.length > 0) {
-    const toolSurface = createSkillToolSurface(postMerge.skills, input, ports)
-    skillTools = toolSurface.tools
-    skillSession = toolSurface.session
-  }
-
-  const blackboardExistingTools =
-    mode === 'resolve'
-      ? { ...skillTools, ...contextTools, ...(configTools ?? {}) }
-      : { ...contextTools, ...(configTools ?? {}) }
-  const blackboardTools = collectBlackboardTools(postMerge.blackboards, blackboardExistingTools)
+  mergeActiveContextTools(toolMerge, postMerge.contexts, input);
+  toolMerge.mergeOwned(postMerge.injectedTools, postMerge.injectedToolOwners);
+  mergeBlackboardTools(toolMerge, postMerge.blackboards);
+  toolMerge.merge(configTools, "prompt config");
 
   if (skillSession !== undefined) {
-    ;(resolved as ResolvedPrompt & { _skillSession?: unknown })._skillSession = skillSession
+    (resolved as ResolvedPrompt & { _skillSession?: unknown })._skillSession =
+      skillSession;
   }
 
-  const merged = {
-    ...skillTools,
-    ...contextTools,
-    ...postMerge.injectedTools,
-    ...blackboardTools,
-    ...configTools,
-  }
-
-  if (Object.keys(merged).length > 0) resolved.tools = merged
-  const toolMiddleware = mergeToolMiddleware(postMerge.injectedToolMiddleware, config.toolMiddleware)
-  if (toolMiddleware !== undefined) resolved.toolMiddleware = toolMiddleware
-  if (config.toolChoice !== undefined) resolved.toolChoice = config.toolChoice
-  if (config.stopWhen !== undefined) resolved.stopWhen = config.stopWhen
+  const merged = toolMerge.tools;
+  if (Object.keys(merged).length > 0) resolved.tools = merged;
+  const toolMiddleware = mergeToolMiddleware(
+    postMerge.injectedToolMiddleware,
+    config.toolMiddleware,
+  );
+  if (toolMiddleware !== undefined) resolved.toolMiddleware = toolMiddleware;
 
   const allConstraints = [
     ...postMerge.injectedConstraints,
     ...collectContextConstraints(postMerge.contexts),
     ...(config.constraints ?? []),
-  ]
-  if (allConstraints.length > 0) resolved.constraints = allConstraints
+  ];
+  if (allConstraints.length > 0) resolved.constraints = allConstraints;
 
   const allGuardrails = [
     ...postMerge.injectedGuardrails,
     ...collectContextGuardrails(postMerge.contexts),
     ...(config.guardrails ?? []),
-  ]
-  if (allGuardrails.length > 0) resolved.guardrails = allGuardrails
+  ];
+  if (allGuardrails.length > 0) resolved.guardrails = allGuardrails;
 
   if (Object.keys(postMerge.injectedMetadata).length > 0) {
-    resolved.metadata = postMerge.injectedMetadata
+    resolved.metadata = postMerge.injectedMetadata;
   }
 
   if (postMerge.memories.length > 0) {
@@ -237,20 +321,27 @@ export async function runPromptPass(
       memory,
       input: input as Record<string, unknown>,
       promptId: config.id,
-    }))
+    }));
   }
 
-  const systemTokens = composed.system ? ports.tokenizer.count(composed.system) : 0
-  const promptTokens = promptInfo?.tokens ?? 0
-  const skillToolNames = postMerge.skills.length > 0 ? [LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME] : []
-  const inspectTools = { ...contextTools, ...postMerge.injectedTools, ...blackboardTools, ...configTools }
-  const toolNames = [...skillToolNames, ...Object.keys(inspectTools)]
+  const systemTokens = inspectionSystem
+    ? ports.tokenizer.count(inspectionSystem)
+    : 0;
+  const promptTokens = promptInfo?.tokens ?? 0;
+  const skillToolNames =
+    postMerge.skills.length > 0
+      ? [LOAD_SKILL_TOOL_NAME, LOAD_REFERENCE_TOOL_NAME]
+      : [];
+  const toolNames =
+    mode === "resolve"
+      ? Object.keys(merged)
+      : [...skillToolNames, ...Object.keys(merged)];
 
   return {
     args: resolved,
     inspection: {
       system: {
-        total: composed.system,
+        total: inspectionSystem,
         parts: composed.parts,
         totalTokens: systemTokens,
       },
@@ -261,27 +352,34 @@ export async function runPromptPass(
       tokenBudget: opts.tokenBudget,
       tools: toolNames.length > 0 ? toolNames : undefined,
     },
-  }
+  };
+}
+
+function skillToolOwner(
+  skills: readonly { id: string }[],
+): ToolOwnerLabel | undefined {
+  const first = skills[0];
+  return first ? `skill:${first.id}` : undefined;
 }
 
 function mergeToolMiddleware(
   injected: readonly ToolMiddleware[],
   configured: ToolMiddleware | readonly ToolMiddleware[] | undefined,
 ): ToolMiddleware | readonly ToolMiddleware[] | undefined {
-  const chain = [...injected, ...normalizeToolMiddleware(configured)]
-  if (chain.length === 0) return undefined
-  return chain
+  const chain = [...injected, ...normalizeToolMiddleware(configured)];
+  if (chain.length === 0) return undefined;
+  return chain;
 }
 
 function normalizeToolMiddleware(
   middleware: ToolMiddleware | readonly ToolMiddleware[] | undefined,
 ): ToolMiddleware[] {
-  if (middleware === undefined) return []
-  return isToolMiddlewareArray(middleware) ? [...middleware] : [middleware]
+  if (middleware === undefined) return [];
+  return isToolMiddlewareArray(middleware) ? [...middleware] : [middleware];
 }
 
 function isToolMiddlewareArray(
   middleware: ToolMiddleware | readonly ToolMiddleware[],
 ): middleware is readonly ToolMiddleware[] {
-  return Array.isArray(middleware)
+  return Array.isArray(middleware);
 }

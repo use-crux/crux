@@ -23,6 +23,7 @@ describe('providerRuntimeConformance', () => {
             ? script.structuredTexts.map((text) => runtimeResponse(text))
             : script.emissions?.map((emission) =>
                 runtimeResponse(emission.text ?? '', {
+                  ...(emission.usage !== undefined ? { usage: emission.usage } : {}),
                   toolCalls: emission.toolCalls?.map(
                     (toolCall, index): RuntimeToolCall => ({
                       id: toolCall.id ?? `call_${index}`,

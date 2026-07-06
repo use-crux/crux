@@ -1,17 +1,17 @@
-import type { LanguageModel, StopCondition, ToolSet } from 'ai'
-import type { ExecutorOutcome, ExecutorRequest } from '@use-crux/core/adapter'
-import { toJsonValue } from '@use-crux/core/adapter'
-import type { SdkGateway } from '../gateway'
-import type { SdkUsageLike } from '../meta'
-import { extractCost, normalizeUsage } from '../meta'
-import { dropTrailingAssistant, fromResponseMessages } from '../messages'
-import { buildSystemArg } from '../provider-profile'
-import { extractResponse } from '../result-shape'
-import { canonicalBase, buildBaseArgs } from './request-args'
-import { withToolCallRepair } from './tool-call-repair'
-import type { AiSdkCallPlan, SdkLoopResultLike } from './types'
+import type { LanguageModel, StopCondition, ToolSet } from "ai";
+import type { ExecutorOutcome, ExecutorRequest } from "@use-crux/core/adapter";
+import { toJsonValue } from "@use-crux/core/adapter";
+import type { SdkGateway } from "../gateway";
+import type { SdkUsageLike } from "../meta";
+import { extractCost, normalizeUsage } from "../meta";
+import { dropTrailingAssistant, fromResponseMessages } from "../messages";
+import { buildSystemArg } from "../provider-profile";
+import { extractResponse } from "../result-shape";
+import { canonicalBase, buildBaseArgs } from "./request-args";
+import { withToolCallRepair } from "./tool-call-repair";
+import type { AiSdkCallPlan, SdkLoopResultLike } from "./types";
 
-const APPROVAL_PART = 'tool-approval-request'
+const APPROVAL_PART = "tool-approval-request";
 
 /**
  * Plan one AI SDK `generateText()` loop and the corresponding core outcome
@@ -26,37 +26,63 @@ const APPROVAL_PART = 'tool-approval-request'
  */
 export function createLoopCallPlan(
   request: ExecutorRequest<LanguageModel>,
-): AiSdkCallPlan<'generateText', ExecutorOutcome<SdkLoopResultLike>> {
-  const args = buildBaseArgs(request, { includeTools: true })
-  withToolCallRepair(args)
+): AiSdkCallPlan<"generateText", ExecutorOutcome<SdkLoopResultLike>> {
+  const args = buildBaseArgs(request, { includeTools: true });
+  withToolCallRepair(args);
 
-  let stopReason: string | undefined
-  let refunds = 0
-  let stepIndex = 0
-  let overrides: { system?: ReturnType<typeof buildSystemArg>; activeTools?: readonly string[] } | undefined
+  let stopReason: string | undefined;
+  let refunds = 0;
+  let stepIndex = 0;
+  let overrides:
+    | {
+        system?: ReturnType<typeof buildSystemArg>;
+        activeTools?: readonly string[];
+      }
+    | undefined;
 
-  const directiveStop: StopCondition<ToolSet> = () => stopReason !== undefined
-  const explicitStop = request.extra?.stopWhen as StopCondition<ToolSet> | StopCondition<ToolSet>[] | undefined
+  const directiveStop: StopCondition<ToolSet> = () => stopReason !== undefined;
+  const explicitStop = (request.extra?.stopWhen ??
+    request.settings.stopWhen) as
+    | StopCondition<ToolSet>
+    | StopCondition<ToolSet>[]
+    | undefined;
+  const budget: StopCondition<ToolSet> = ({ steps }) =>
+    steps.length >= request.maxSteps + refunds;
   if (explicitStop !== undefined) {
-    args.stopWhen = [...(Array.isArray(explicitStop) ? explicitStop : [explicitStop]), directiveStop]
+    args.stopWhen = [
+      ...(Array.isArray(explicitStop) ? explicitStop : [explicitStop]),
+      directiveStop,
+      budget,
+    ];
   } else {
-    const budget: StopCondition<ToolSet> = ({ steps }) => steps.length >= request.maxSteps + refunds
-    args.stopWhen = [directiveStop, budget]
+    args.stopWhen = [directiveStop, budget];
   }
 
   if (request.observer) {
-    const observer = request.observer
+    const observer = request.observer;
     args.onStepFinish = async (step: {
-      text: string
-      toolCalls: Array<{ toolCallId: string; toolName: string; input?: unknown }>
-      toolResults: Array<{ toolCallId: string; toolName: string; output?: unknown }>
-      finishReason?: string
-      usage?: SdkUsageLike
+      text: string;
+      toolCalls: Array<{
+        toolCallId: string;
+        toolName: string;
+        input?: unknown;
+      }>;
+      toolResults: Array<{
+        toolCallId: string;
+        toolName: string;
+        output?: unknown;
+      }>;
+      finishReason?: string;
+      usage?: SdkUsageLike;
     }) => {
       const directive = await observer.onStepFinish({
         index: stepIndex,
         text: step.text,
-        toolCalls: step.toolCalls.map((tc) => ({ id: tc.toolCallId, name: tc.toolName, args: tc.input })),
+        toolCalls: step.toolCalls.map((tc) => ({
+          id: tc.toolCallId,
+          name: tc.toolName,
+          args: tc.input,
+        })),
         toolResults: step.toolResults.map((tr) => ({
           toolCallId: tr.toolCallId,
           toolName: tr.toolName,
@@ -64,39 +90,52 @@ export function createLoopCallPlan(
         })),
         finishReason: step.finishReason,
         usage: normalizeUsage(step.usage),
-      })
-      stepIndex++
-      if (directive.kind === 'stop') {
-        stopReason = directive.reason ?? 'observer'
-      } else if (directive.kind === 'amend') {
+      });
+      stepIndex++;
+      if (directive.kind === "stop") {
+        stopReason = directive.reason ?? "observer";
+      } else if (directive.kind === "amend") {
         if (directive.refundStep) {
-          refunds++
-          stepIndex--
+          refunds++;
+          stepIndex--;
         }
         overrides = {
-          ...(directive.system !== undefined || directive.systemBlocks !== undefined
-            ? { system: buildSystemArg(directive.systemBlocks, directive.system, request.modelInfo) }
+          ...(directive.system !== undefined ||
+          directive.systemBlocks !== undefined
+            ? {
+                system: buildSystemArg(
+                  directive.systemBlocks,
+                  directive.system,
+                  request.modelInfo,
+                ),
+              }
             : {}),
-          ...(directive.activeTools !== undefined ? { activeTools: directive.activeTools } : {}),
-        }
+          ...(directive.activeTools !== undefined
+            ? { activeTools: directive.activeTools }
+            : {}),
+        };
       }
-    }
+    };
     args.prepareStep = () =>
       overrides
         ? {
-            ...(overrides.system !== undefined ? { system: overrides.system } : {}),
-            ...(overrides.activeTools !== undefined ? { activeTools: [...overrides.activeTools] } : {}),
+            ...(overrides.system !== undefined
+              ? { system: overrides.system }
+              : {}),
+            ...(overrides.activeTools !== undefined
+              ? { activeTools: [...overrides.activeTools] }
+              : {}),
           }
-        : {}
+        : {};
   }
 
   return {
-    method: 'generateText',
-    args: args as Parameters<SdkGateway['generateText']>[0],
+    method: "generateText",
+    args: args as Parameters<SdkGateway["generateText"]>[0],
     decode(raw): ExecutorOutcome<SdkLoopResultLike> {
-      return decodeLoopResult(request, raw as SdkLoopResultLike, refunds)
+      return decodeLoopResult(request, raw as SdkLoopResultLike, refunds);
     },
-  }
+  };
 }
 
 function decodeLoopResult(
@@ -104,36 +143,41 @@ function decodeLoopResult(
   result: SdkLoopResultLike,
   refunds: number,
 ): ExecutorOutcome<SdkLoopResultLike> {
-  const base = canonicalBase(request)
-  const sdkSteps = result.steps?.length ?? 1
-  const budgetSteps = Math.max(1, sdkSteps - refunds)
-  const approvalParts = (result.content ?? []).filter((part) => part.type === APPROVAL_PART)
+  const base = canonicalBase(request);
+  const sdkSteps = result.steps?.length ?? 1;
+  const budgetSteps = Math.max(1, sdkSteps - refunds);
+  const approvalParts = (result.content ?? []).filter(
+    (part) => part.type === APPROVAL_PART,
+  );
 
   if (approvalParts.length > 0) {
-    const converted = fromResponseMessages(result.response?.messages ?? [])
+    const converted = fromResponseMessages(result.response?.messages ?? []);
     return {
-      status: 'suspended',
-      reason: 'tool-approval',
+      status: "suspended",
+      reason: "tool-approval",
       pendingApprovals: approvalParts.map((part) => ({
-        toolCallId: part.toolCall?.toolCallId ?? '',
-        toolName: part.toolCall?.toolName ?? '',
+        toolCallId: part.toolCall?.toolCallId ?? "",
+        toolName: part.toolCall?.toolName ?? "",
         input: toJsonValue(part.toolCall?.input),
       })),
       assistantResponse: extractResponse(result),
       messages: [...base, ...dropTrailingAssistant(converted)],
       steps: budgetSteps,
-    }
+    };
   }
 
   return {
-    status: 'complete',
+    status: "complete",
     raw: result,
     response: extractResponse(result),
-    messages: [...base, ...fromResponseMessages(result.response?.messages ?? [])],
+    messages: [
+      ...base,
+      ...fromResponseMessages(result.response?.messages ?? []),
+    ],
     steps: budgetSteps,
     meta: {
       costUsd: extractCost(result.providerMetadata),
       providerMetadata: result.providerMetadata,
     },
-  }
+  };
 }

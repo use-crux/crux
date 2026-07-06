@@ -61,6 +61,8 @@ export interface ProviderConformanceEmission {
 
 /** Abstract provider behavior for one isolated conformance case. */
 export interface ProviderConformanceScript {
+  /** Marks the provider-cache boundary scenario for harness-specific setup. */
+  readonly providerCache?: boolean
   /** Non-streaming model turns, consumed in order by generation calls. */
   readonly emissions?: readonly ProviderConformanceEmission[]
   /** Raw structured-output texts, consumed by structured generation calls. */
@@ -99,6 +101,16 @@ export interface ProviderRuntimeConformanceHarness<
 > {
   /** Capabilities enabled for this provider runtime. */
   readonly capabilities?: ProviderRuntimeConformanceCapabilities
+  /**
+   * Provider-owned cache-boundary assertion.
+   *
+   * Core owns the cached-prefix scenario; each provider owns the native request
+   * shape. Return `undefined` when the captured request is correct, or a short
+   * diagnostic string when it violates the provider's cache contract.
+   */
+  readonly providerCache?: {
+    assertRequest(body: unknown): string | undefined
+  }
   /** Create a fresh fake client/model pair for one isolated case. */
   prepare(
     script: ProviderConformanceScript,
