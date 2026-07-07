@@ -669,6 +669,8 @@ Lease ownership is a kernel-level fencing contract. `handleWake()` claims a stor
 
 Generated and hand-written wake entries meet the kernel through `createRuntimeHandler({ targets })`, which normalizes exported flow/task targets, verifies HTTP wake requests before envelope decode, and returns fetch-compatible `GET`/`POST` handlers. Host-bound adapters such as Convex use `bindHostRuntime()` to supply request-scoped store and wake bindings while still delegating to `createRuntime()` and the same kernel path.
 
+App-level runtime tests use `createTestRuntime()` from `runtime/testing`. The harness normalizes the same target arrays accepted by `createRuntimeHandler()`, installs a temporary hook layer with an in-memory runtime definition, and drives `reviewFlow.run()` through the production object-bound flow path. Its controllable clock rides on the runtime definition (`now` and `newWorkId`), and `createRuntime()` inherits those hooks for every resolved instance. Runtime-backed flow deadline math reads the resolved engine clock, so `flow.after()` and suspend timeouts remain deterministic without a separate test-only interpreter.
+
 Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The current code set is `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`, `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`, `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`, `SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `LEASE_LOST`, `NAMESPACE_AMBIGUOUS`, and `RUNTIME_HOST_ONLY`; raw adapter errors stay as causes.
 
 ## Middleware Pipeline

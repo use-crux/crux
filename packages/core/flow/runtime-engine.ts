@@ -110,7 +110,7 @@ export function runtimeFlowSnapshot(
     pendingSuspends: [],
     deliveredSuspends: execution.snapshot.deliveredSuspends,
     scheduledEffects: options.scheduledEffects ?? execution.snapshot.scheduledEffects ?? {},
-    updatedAt: new Date(),
+    updatedAt: execution.runtime.now(),
   }
 }
 

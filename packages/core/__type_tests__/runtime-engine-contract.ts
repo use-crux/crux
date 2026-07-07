@@ -41,7 +41,13 @@ import {
   waiterTimeoutKey,
 } from '@use-crux/core/runtime'
 import { task as planTask } from '@use-crux/core'
-import { runRuntimeEngineAdapterTests, runStoreAdapterTests } from '@use-crux/core/runtime/testing'
+import {
+  createTestRuntime,
+  runRuntimeEngineAdapterTests,
+  runStoreAdapterTests,
+  type TestRuntime,
+  type TestRuntimeSettleResult,
+} from '@use-crux/core/runtime/testing'
 
 declare const workId: WorkId
 declare const flowId: FlowId
@@ -135,6 +141,13 @@ const runtimeDefinition = node({
 expectTypeOf(runtimeDefinition).toMatchTypeOf<RuntimeEngineDefinition<InMemoryRuntimeStore>>()
 expectTypeOf(runtimeDefinition).toMatchTypeOf<InProcessRuntimeEngineDefinition<InMemoryRuntimeStore>>()
 expectTypeOf(runtimeDefinition.kind).toEqualTypeOf<'in-process'>()
+const runtimeDefinitionWithClock = {
+  ...runtimeDefinition,
+  now: () => new Date('2026-07-07T00:00:00.000Z'),
+  newWorkId: () => workId,
+} satisfies InProcessRuntimeEngineDefinition<InMemoryRuntimeStore>
+expectTypeOf(runtimeDefinitionWithClock.now()).toEqualTypeOf<Date>()
+expectTypeOf(runtimeDefinitionWithClock.newWorkId()).toEqualTypeOf<WorkId>()
 const resolvedRuntime = createRuntime({
   runtime: runtimeDefinition,
   targets: {},
@@ -172,6 +185,15 @@ runWithRuntimeHost(
   },
   () => hostBoundRuntime,
 )
+
+const testRuntime = createTestRuntime({
+  targets: [documentedDurableTask],
+  epoch: new Date('2026-07-07T00:00:00.000Z'),
+})
+expectTypeOf(testRuntime).toMatchTypeOf<TestRuntime>()
+expectTypeOf(testRuntime.store).toEqualTypeOf<InMemoryRuntimeStore>()
+expectTypeOf(testRuntime.clock.now()).toEqualTypeOf<Date>()
+expectTypeOf(testRuntime.clock.advance('2d')).toEqualTypeOf<Promise<TestRuntimeSettleResult>>()
 
 runStoreAdapterTests({
   name: 'type-only-memory-store',

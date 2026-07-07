@@ -11,3 +11,11 @@ export type {
   RunRuntimeEngineAdapterTestsOptions,
   RuntimeEngineAdapterTestHarness,
 } from './engine'
+export { createTestRuntime } from './test-runtime'
+export type {
+  CreateTestRuntimeOptions,
+  TestRuntime,
+  TestRuntimeClock,
+  TestRuntimeSettleOptions,
+  TestRuntimeSettleResult,
+} from './test-runtime'

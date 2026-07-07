@@ -548,8 +548,30 @@ export const { GET, POST } = createRuntimeHandler({
 
 Advanced and generated entry files can resolve a composer explicitly with
 `createRuntime({ runtime, targets })`. The `@use-crux/core/runtime/testing`
-subpath exposes the shared store and kernel conformance suites for adapter
-authors.
+subpath exposes `createTestRuntime()` for app-level flow and task tests, plus
+the shared store and kernel conformance suites for adapter authors.
+
+```ts
+import { flow } from "@use-crux/core";
+import { durableTask } from "@use-crux/core/runtime";
+import { createTestRuntime } from "@use-crux/core/runtime/testing";
+
+const sendReminder = durableTask("send-reminder", {
+  run: async (input: { userId: string }) => {
+    await sendEmail(input.userId);
+  },
+});
+
+const onboarding = flow("onboarding", async (scope, input: { userId: string }) => {
+  await scope.after(sendReminder, "2d", { userId: input.userId });
+  await scope.suspend("approval");
+});
+
+const rt = createTestRuntime({ targets: [onboarding, sendReminder] });
+await onboarding.run({ userId: "user_1" });
+await rt.clock.advance("2d");
+rt.dispose();
+```
 
 Runtime store adapters may implement `runComposite(kind, input)` to execute one
 kernel-owned named composite atomically in their native substrate. Ordinary
@@ -578,7 +600,7 @@ Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 | `@use-crux/core/agent`           | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm.                                                                                         |
 | `@use-crux/core/flow`            | Suspendable typed workflows.                                                                                                                                                |
 | `@use-crux/core/runtime`         | Runtime Engine composers, port contracts, diagnostics, wake envelopes, kernel composites, outbox dispatch, pure retry/state helpers, and the in-memory runtime store.       |
-| `@use-crux/core/runtime/testing` | Runtime Engine store and kernel conformance suites for adapter authors.                                                                                                     |
+| `@use-crux/core/runtime/testing` | App-level Runtime Engine test harness plus store and kernel conformance suites for adapter authors.                                                                         |
 | `@use-crux/core/observability`   | Canonical graph records, presentation read-model types, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
 | `@use-crux/core/project-index`   | Public Project Index contracts for local devtools and source intelligence.                                                                                                  |
 

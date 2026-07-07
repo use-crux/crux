@@ -11,6 +11,7 @@ import {
   type RuntimeEngineDefinition,
 } from '@use-crux/core/runtime'
 import {
+  createTestRuntime,
   runRuntimeEngineAdapterTests,
   runStoreAdapterTests,
 } from '@use-crux/core/runtime/testing'
@@ -28,6 +29,7 @@ describe('@use-crux/core runtime store public surface', () => {
     expect(typeof runtimeRequiredError).toBe('function')
     expect(typeof runStoreAdapterTests).toBe('function')
     expect(typeof runRuntimeEngineAdapterTests).toBe('function')
+    expect(typeof createTestRuntime).toBe('function')
   })
 
   it('uses adapter-neutral remediation for capability preflight failures', () => {

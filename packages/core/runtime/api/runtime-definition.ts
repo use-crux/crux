@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { CruxEngineCapabilities } from '../ports'
+import type { CruxEngineCapabilities, WorkId } from '../ports'
 import type { RuntimeStoreAdapter } from '../store'
 import type { RuntimeKernel } from '../engine/kernel'
 import type { RuntimeWakeDeliver } from '../engine/outbox'
@@ -56,6 +56,10 @@ export interface InProcessRuntimeEngineDefinition<
   readonly maintenance?: RuntimeMaintenanceLoopOptions
   /** Retention policy for terminal Runtime Engine records. */
   readonly retention?: RuntimeRetentionConfig
+  /** Current time source inherited by resolved runtime instances. */
+  readonly now?: () => Date
+  /** Work id generator inherited by resolved runtime instances. */
+  readonly newWorkId?: () => WorkId
   /** Optional HTTP wake verifier supplied by a wake adapter such as QStash. */
   readonly verifyWakeRequest?: RuntimeWakeRequestVerifier
   /** Create wake delivery for this runtime. */

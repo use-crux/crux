@@ -11,9 +11,10 @@ import {
   createRuntimeHandler,
   createRuntime,
   bindHostRuntime,
-  task,
+  durableTask,
   CruxRuntimeError,
 } from '@use-crux/core/runtime'
+import { createTestRuntime } from '@use-crux/core/runtime/testing'
 ```
 
 The Runtime Engine is the durable execution layer for event waits, timers, background tasks, automatic flow resume, HTTP wake delivery, and runtime inspection. Object-bound flow APIs keep working without it; name-bound, event-bound, time-bound, and background APIs require a configured runtime.
@@ -139,6 +140,23 @@ Every finalizing wake commit checks the executor's lease token inside the same t
 
 `createRuntime()` and `createRuntimeKernel()` enable a best-effort heartbeat by default while target code runs. Advanced tests or hosts can pass `leaseExtension: false`, or provide `{ intervalMs, schedule }` to drive extension with custom scheduling. Hosts that cannot run timers during target execution should rely on fencing and set `leaseTtlMs` for the longest expected target.
 
+## Testing
+
+`createTestRuntime({ targets, epoch? })` lives on `@use-crux/core/runtime/testing`. It installs a temporary in-memory Runtime Engine hook layer, exposes a controllable clock, and settles maintenance without real timers.
+
+```ts
+import { createTestRuntime } from '@use-crux/core/runtime/testing'
+
+const rt = createTestRuntime({ targets: [reviewFlow, sendReminder] })
+
+const suspended = await reviewFlow.run({ userId: 'user_1' })
+await rt.clock.advance('2d')
+
+rt.dispose()
+```
+
+`targets` accepts the same exported flow handles and `durableTask()` targets as `createRuntimeHandler({ targets })`. `rt.tick()` runs one maintenance pass; `rt.settle({ maxTicks })` runs bounded maintenance until no outbox, timer, lease, waiter, or pending-work activity remains.
+
 ## Diagnostics
 
 Public runtime failures throw `CruxRuntimeError` with a stable `code`, a user-facing explanation, the exact next step, and a docs URL. Current runtime codes are documented under [Errors](/docs/errors).
@@ -181,22 +199,24 @@ Store adapters also implement bounded `prune()` methods on the owning ports: eve
 
 Store adapters may also implement `runComposite(kind, input)`. This optional method runs one named kernel composite atomically and returns the typed result for that composite. If omitted, core calls `transact()` and executes the same kernel-owned body in-process. Adapters should override it only when the platform needs a native atomic boundary, such as Convex running `runtime.composites.run` as one component mutation.
 
-The conformance helpers live on `@use-crux/core/runtime/testing`:
+The test harness and conformance helpers live on `@use-crux/core/runtime/testing`:
 
 ```ts
 import {
+  createTestRuntime,
   runStoreAdapterTests,
   runRuntimeEngineAdapterTests,
 } from '@use-crux/core/runtime/testing'
 ```
 
-Use them for store adapters and full runtime adapters. Tests cover namespace isolation, idempotency, leases, stale-lease fencing, waiter races, timers, outbox recovery, retention pruning, retry source guards, and idle-counter invariants.
+Use `createTestRuntime()` for app-level flow and task tests. Use the conformance helpers for store adapters and full runtime adapters. Conformance tests cover namespace isolation, idempotency, leases, stale-lease fencing, waiter races, timers, outbox recovery, retention pruning, retry source guards, and idle-counter invariants.
 
 ## Related
 
 - Guide: [Next/Vercel Runtime](/docs/guides/runtime/next-vercel)
 - Guide: [Long-lived Node Runtime](/docs/guides/runtime/node)
 - Guide: [Convex Runtime](/docs/guides/runtime/convex)
+- Guide: [Testing Runtime Flows](/docs/guides/runtime/testing)
 - Reference: [@use-crux/postgres](/docs/reference/postgres)
 - Reference: [@use-crux/upstash](/docs/reference/storage/upstash)
 - Reference: [@use-crux/convex](/docs/reference/storage/convex)

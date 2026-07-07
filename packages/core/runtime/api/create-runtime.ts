@@ -117,12 +117,16 @@ export function createRuntime<TStore extends RuntimeStoreAdapter>(
   assertRuntimeCapabilities(options.runtime)
 
   const namespace = options.namespace ?? options.runtime.namespace ?? 'local'
-  const now = options.now ?? (() => new Date())
+  const now = options.now ?? options.runtime.now ?? (() => new Date())
+  const newWorkId =
+    options.newWorkId ??
+    options.runtime.newWorkId ??
+    createDefaultWorkIdGenerator()
   const kernel = createRuntimeKernel({
     store: options.runtime.store,
     targets: options.targets ?? {},
     verifyWake: options.verifyWake,
-    newWorkId: options.newWorkId ?? createDefaultWorkIdGenerator(),
+    newWorkId,
     now,
     leaseTtlMs: options.leaseTtlMs,
     leaseExtension: options.leaseExtension,
