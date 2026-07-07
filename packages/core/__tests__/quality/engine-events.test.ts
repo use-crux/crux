@@ -158,9 +158,9 @@ describe('Quality runner — capture settling must not hold cells hostage', () =
         task: upperTask,
         data: [{ input: { q: 'a' } }, { input: { q: 'b' } }],
       })
-      const startedAt = Date.now()
+      const startedAt = performance.now()
       const experiment = await run(evaluation)
-      const wallMs = Date.now() - startedAt
+      const wallMs = performance.now() - startedAt
 
       // Forwarding QoS is not the runner's job: the capture tee receives
       // records synchronously at dispatch; settle must give up quickly.

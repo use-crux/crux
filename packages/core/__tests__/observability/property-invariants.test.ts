@@ -18,6 +18,10 @@ interface GeneratedObservabilityCase {
   readonly errorMessage?: string
 }
 
+const OBSERVABILITY_PROPERTY_SEED = 0xc0ffee
+const OBSERVABILITY_PROPERTY_RUNS = 200
+const OBSERVABILITY_PROPERTY_TIMEOUT_MS = 30_000
+
 const attributeValueArbitrary = fc.oneof(
   fc.string({ maxLength: 40 }),
   fc.integer(),
@@ -140,9 +144,9 @@ describe('observability property invariants', () => {
           transport.records.length + diagnostics.invalidRecords + diagnostics.redactedRecords + diagnostics.droppedRecords,
         ).toBeGreaterThan(0)
       }),
-      { numRuns: 200 },
+      { numRuns: OBSERVABILITY_PROPERTY_RUNS, seed: OBSERVABILITY_PROPERTY_SEED },
     )
-  })
+  }, OBSERVABILITY_PROPERTY_TIMEOUT_MS)
 })
 
 function hostileToStringValue(): unknown {

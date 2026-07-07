@@ -29,7 +29,6 @@ import {
   currentObservabilityTransport,
   observe,
   setObservabilityTransport,
-  teeObservabilityTransport,
   type CruxObservabilityTransport,
 } from '../../observability'
 import type { TokenUsage } from '../../generation/types'
@@ -221,7 +220,7 @@ export function installSignalCapture(): SignalCapture {
     },
   }
   const restore = setObservabilityTransport(
-    previous ? teeObservabilityTransport(captureTransport, previous) : captureTransport,
+    previous ? captureThenForwardTransport(captureTransport, previous) : captureTransport,
   )
   return {
     take(runId) {
@@ -238,6 +237,21 @@ export function installSignalCapture(): SignalCapture {
     },
     dispose() {
       restore()
+    },
+  }
+}
+
+function captureThenForwardTransport(
+  capture: CruxObservabilityTransport,
+  forward: CruxObservabilityTransport,
+): CruxObservabilityTransport {
+  return {
+    maxRecordsPerRequest: forward.maxRecordsPerRequest,
+    send(records) {
+      capture.send(records)
+      void Promise.resolve()
+        .then(() => forward.send(records))
+        .catch(() => undefined)
     },
   }
 }
