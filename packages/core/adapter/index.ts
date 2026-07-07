@@ -23,14 +23,43 @@
  */
 
 // Core types
-export type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry, StatusDelta } from './types'
+export type {
+  AdapterResponse,
+  CallArgs,
+  StreamHandle,
+  ToolResultEntry,
+  StatusDelta,
+} from "./types";
+export { callArgsFromResolvedPrompt } from "./codec";
+export type { ResolvedPromptCodecOptions } from "./codec";
 
 // Adapter specification interface (core-driven loop)
-export type { AdapterSpec } from './spec'
+export type { AdapterSpec } from "./spec";
 
 // Factory + result/option types (core-driven loop)
-export { adapter } from './define-adapter'
-export type { CruxAdapter, AdapterGenerateOptions, AdapterStreamOptions, AdapterGenerateResult } from './define-adapter'
+export { adapter } from "./define-adapter";
+export { createResultAccumulator } from "./result-accumulator";
+export { CruxIncompleteCallError, CruxStaleHandleError } from "./call-handle";
+export { CruxTransportStreamUnsupportedError } from "./transport";
+export type {
+  CruxAdapter,
+  AdapterGenerateOptions,
+  AdapterStreamOptions,
+  AdapterGenerateResult,
+  AdapterTransport,
+  AdapterTransportInfo,
+} from "./define-adapter";
+export type {
+  FinalStepInfo,
+  GenerateResult,
+  StreamCompletion,
+  StreamResult,
+} from "./result-accumulator";
+export type {
+  CallHandle,
+  CallHandleResponseDecoder,
+  CallStepOutcome,
+} from "./call-handle";
 
 // Native single-turn provider contracts
 export type {
@@ -40,7 +69,7 @@ export type {
   NativeProviderPort,
   NativeResponseMetadata,
   NativeTranscriptCodec,
-} from './native-chat'
+} from "./native-chat";
 
 // Canonical transcript IR and the codec compiler built on it
 export {
@@ -50,7 +79,7 @@ export {
   defineProviderTranscriptCodec,
   messagesToTranscriptUnits,
   transcriptUnitsToMessages,
-} from './native-chat'
+} from "./native-chat";
 export type {
   OneOrMany,
   ProviderToolCall,
@@ -58,11 +87,27 @@ export type {
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
   ToolResultEncodingHelpers,
-} from './native-chat'
+} from "./native-chat";
+
+// Tool approval policy helpers
+export {
+  approvalPolicyKind,
+  inspectToolApprovalPolicies,
+  resolveApprovalPolicy,
+} from "../tools/approval-policy";
+export type {
+  ApprovalDeclaration,
+  ResolvedApprovalPolicy,
+  ToolApprovalContext,
+  ToolApprovalInspection,
+  ToolApprovalLayer,
+  ToolApprovalMap,
+  ToolApprovalPolicy,
+} from "../tools/approval-policy";
 
 // Provider runtime authoring layer
-export { defineProviderRuntime } from './provider-runtime'
-export { defineSingleTurnProviderBundle } from './provider-runtime'
+export { defineProviderRuntime } from "./provider-runtime";
+export { defineSingleTurnProviderBundle } from "./provider-runtime";
 export type {
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
@@ -83,10 +128,14 @@ export type {
   SingleTurnProviderBundleSpec,
   SingleTurnRuntimeContract,
   SingleTurnProviderRuntimeSpec,
-} from './provider-runtime'
+} from "./provider-runtime";
 
 // Loop runtime port (SDK-driven loop)
-export type { LoopRuntimePort, BoundLoopRuntime, CachedStreamPayload } from './loop-runtime-port'
+export type {
+  LoopRuntimePort,
+  BoundLoopRuntime,
+  CachedStreamPayload,
+} from "./loop-runtime-port";
 export type {
   ExecutorRequest,
   StructuredRequest,
@@ -99,22 +148,25 @@ export type {
   StructuredAttempt,
   ExecutorStreamHandle,
   ExecutorStreamMeta,
-} from './executor-types'
+} from "./executor-types";
 
 // Factory + result/option types (SDK-driven loop)
-export { loopRuntimeAdapter } from './define-executor'
+export { loopRuntimeAdapter } from "./define-executor";
 export type {
   CruxExecutor,
   ExecutorModelArg,
   ExecutorGenerateOptions,
   ExecutorStreamOptions,
   ExecutorGenerateResult,
-} from './define-executor'
+} from "./define-executor";
 
 // Shared policy modules (used by both factories; public so executors built
 // outside core can reuse the exact same policy primitives)
-export { validateStructuredOutput, formatValidationFeedback } from './policy/validation-retry'
-export type { ValidationResult } from './policy/validation-retry'
+export {
+  validateStructuredOutput,
+  formatValidationFeedback,
+} from "./policy/validation-retry";
+export type { ValidationResult } from "./policy/validation-retry";
 
 // Generic measurement/serialization helpers (not tool policy)
 export {
@@ -124,14 +176,14 @@ export {
   renderToolContentPartAsText,
   toJsonValue,
   toolModelOutputFromMetadata,
-} from './tool/emission'
+} from "./tool/emission";
 
 // The per-call tool lifecycle session — the single consumption entry point
 // for tool middleware, approvals, instrumentation, skill loads, and memory
 // capture. The orchestration primitives it replaced (instrumentToolSet,
 // the approval id/token/message helpers, resume scanning, …) are session
 // internals now.
-export { createToolLifecycle } from './tool'
+export { createToolLifecycle } from "./tool";
 export type {
   ToolLifecycle,
   ToolLifecycleOptions,
@@ -142,23 +194,30 @@ export type {
   SkillAmendment,
   SuspendedRound,
   ToolProtocolEvent,
-} from './tool'
-export type { ApprovalRequestInfo } from './tool/approval'
+} from "./tool";
+export type { ApprovalRequestInfo } from "./tool/approval";
 
 // Replay seam (@internal) — the process-wide generation interceptor the
 // Quality cassette runtime installs around every spec call. Exported so
 // adapter packages can test their replayed-result shapes against it.
-export { setGenerationInterceptor, clearGenerationInterceptor } from './interception'
-export type { GenerationInterceptor, InterceptedGeneration } from './interception'
+export {
+  setGenerationInterceptor,
+  clearGenerationInterceptor,
+} from "./interception";
+export type {
+  GenerationInterceptor,
+  InterceptedGeneration,
+} from "./interception";
 
 // Testing utilities for public provider runtimes and lower-level execution IR.
 export {
+  assertCanonicalResult,
   adapterSpecConformance,
   fakeLoopRuntime,
   loopRuntimePortConformance,
   providerRuntimeConformance,
   transcriptCodecConformance,
-} from './testing'
+} from "./testing";
 export type {
   AdapterConformanceCapabilities,
   AdapterConformanceEmission,
@@ -166,6 +225,11 @@ export type {
   AdapterConformanceInspector,
   AdapterConformancePrepared,
   AdapterConformanceScript,
+  CanonicalFinalStepInfo,
+  CanonicalGenerateResultLike,
+  CanonicalResultExpectation,
+  CanonicalResultStepExpectation,
+  CanonicalTokenUsage,
   FakeLoopRuntime,
   FakeLoopRuntimeConfig,
   FakeLoopEmission,
@@ -184,4 +248,4 @@ export type {
   ProviderRuntimeConformanceStreamHandle,
   TranscriptConformanceScenario,
   TranscriptWrapperExpectation,
-} from './testing'
+} from "./testing";

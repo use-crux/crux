@@ -25,14 +25,7 @@ export function buildTraceMeta(args: {
   costUsd?: number
 }): TraceMeta {
   return {
-    usage: {
-      inputTokens: args.response.usage.inputTokens,
-      outputTokens: args.response.usage.outputTokens,
-      totalTokens: args.response.usage.totalTokens,
-      cacheReadTokens: args.response.usage.cacheReadTokens,
-      cacheWriteTokens: args.response.usage.cacheWriteTokens,
-      reasoningTokens: args.response.usage.reasoningTokens,
-    },
+    ...(args.response.usage !== undefined ? { usage: args.response.usage } : {}),
     ...(args.costUsd !== undefined ? { cost: args.costUsd } : {}),
     finishReason: args.response.finishReason,
     toolCalls: args.response.toolCalls?.map((tc) => ({ id: tc.id, name: tc.name, args: tc.args })),

@@ -127,7 +127,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   └── types.ts        Runtime middleware contracts (PromptMiddleware, PromptMiddlewareArgs, MiddlewareResult)
 ├── generation/         Provider-neutral generation lifecycle policy
 │   ├── index.ts        Curated barrel: messages, fallback, retry, validation-retry, JSON repair + @internal orchestration
-│   ├── orchestrate.ts  Shared adapter orchestration (generic OrchestrationSpec<T>) split across observability/result-meta/fallback-loop/attempt-timeout/stream-interception concern files
+│   ├── orchestrate.ts  Shared adapter orchestration (generic OrchestrationSpec<T>) split across observability/result-meta/fallback-loop/timeout/stream-interception concern files
 │   ├── fallback.ts / retry.ts / validation-retry.ts   fallback policy, retry-with-backoff, validation-feedback retry types
 │   ├── repair-json.ts  repairJsonText() — zero-cost JSON text repair (markdown fences, trailing commas, bracket extraction)
 │   ├── messages.ts     canonical Message type + helpers
@@ -138,6 +138,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── middleware.ts   toolMiddleware(), approvalMiddleware(), applyToolMiddleware() + module-level approval registry state
 │   ├── approvals.ts    resumable approval message protocol helpers
 │   ├── entity.ts       composeTools(), CruxEntity (asTools()/asContext())
+│   ├── context-types.ts typed tool-context inference helpers (`contextSchema` → `toolsContext`)
 │   ├── types.ts        tool + middleware/approval public types
 │   └── internal/       private message parsers + stateless middleware helpers
 ├── shared/             Genuinely cross-domain, provider-agnostic utilities (kept small)
@@ -242,9 +243,11 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── handoff.ts      handoff() — schema-validated inter-agent context transfer
 │   └── delegate.ts     delegate() — handoff + subagent execution as callable tool
 ├── skill/
-│   ├── index.ts        Barrel: skill.inline, skill.fromFile, skill.fromRegistry, registry, generateIndex
+│   ├── index.ts        Universal barrel: skill.inline, skill.fromRegistry, registry, generateIndex
+│   ├── node.ts         Node-only barrel: fileSkill and skill.fromFile for local SKILL.md files
 │   ├── types.ts        Skill, SkillMeta, SkillReference, InlineSkillConfig, LazySkill, SkillLoadError
-│   ├── loaders.ts      inlineSkill(), fileSkill() — create Skill objects from inline text or SKILL.md files
+│   ├── loaders.ts      inlineSkill() — create Skill objects from inline text
+│   ├── file-loader.ts  fileSkill() — Node filesystem loader for SKILL.md files and references
 │   ├── frontmatter.ts  parseFrontmatter() — lightweight YAML frontmatter parser for SKILL.md
 │   ├── index.ts      generateIndex() — system prompt section listing available skills
 │   ├── session-contract.ts  SkillActivationSession public contract, snapshots, persistence port
@@ -279,6 +282,8 @@ compatibility shims, while every implementation lives in a domain folder.
     ├── provider-runtime/   defineSingleTurnProviderBundle() and defineProviderRuntime() — public provider authoring compilers
     ├── spec.ts             AdapterSpec — provider contract for SDKs WITHOUT a tool loop (core drives)
     ├── types.ts            Canonical adapter types: AdapterResponse, CallArgs, StreamHandle, ToolResultEntry
+    ├── codec.ts            ResolvedPrompt → CallArgs helper for public adapter codec wrappers
+    ├── call-handle.ts      Public CallHandle plus incomplete/stale handle errors
     ├── define-adapter.ts   adapter() factory — thin AdapterSpec wiring to the execution session, plus adapter-bound compositions
     ├── native-chat/        Single-turn provider compiler/contracts (request/transcript/response/stream/settings/helpers)
     │   └── transcript/     Canonical transcript IR: ProviderTranscriptUnit + ProviderTranscriptDialect, messagesToTranscriptUnits()/transcriptUnitsToMessages(), appendCanonicalToolRound(), and defineProviderTranscriptCodec() compiling a dialect into a NativeTranscriptCodec
@@ -290,6 +295,7 @@ compatibility shims, while every implementation lives in a domain folder.
     │   ├── dialect-types.ts / run-types.ts / types.ts   Internal contracts and the session-facing type barrel
     │   ├── dialects.ts     coreStepDialect()/sdkLoopDialect() thin adapters from public specs
     │   ├── generate-core.ts / stream-core.ts   Crux-owned one-step provider loop
+    │   ├── handle-core.ts   Manual pause/resume shell over generate-core for prepare/step/finish
     │   ├── generate-sdk.ts / stream-sdk.ts     SDK-owned loop boundary, timeout and replay wiring
     │   └── shared helpers  Prompt resolution, message shaping, metadata/cache replay, stream safety, and structured retry helpers
     ├── testing.ts          Testing barrel: providerRuntimeConformance(), adapterSpecConformance(), transcriptCodecConformance(), fakeLoopRuntime(), loopRuntimePortConformance()
@@ -305,6 +311,8 @@ compatibility shims, while every implementation lives in a domain folder.
     └── tool/               ONE deep module for the tool lifecycle (public barrel: @use-crux/core/adapter/tool)
         ├── index.ts        createToolLifecycle() + middleware authoring + app-facing approval helpers (the old tool-approvals barrel's exports live here)
         ├── session.ts      The per-call ToolLifecycle session over the private gate→execute→settle verdict kernel: merge precedence, middleware chaining, the approval suspend/resume protocol, both regimes' instrumentation profiles, LoadSkill re-arming, at-most-once memory capture, protocol transcript
+        ├── context.ts      (internal) validates `toolsContext` against each tool's `contextSchema` before the loop starts
+        ├── execution-options.ts (internal) injects lifecycle-owned execution options into SDK-regime tool maps
         ├── emission.ts     (internal) instrumentToolSet() leak-free hook wrappers (bounded pending map), tool model-output shaping/rendering/measuring, tool span/artifact emitters
         ├── approval.ts     (internal) Approval id/token minting, request message shape, decision validation (token verification), resume detection, approval observability
         └── resolved.ts     (internal) readSkillState() private-field accessor + captureMemoryTurn() memory-binding flush
@@ -313,11 +321,21 @@ compatibility shims, while every implementation lives in a domain folder.
 
 ### Two adapter dialects
 
-`defineSingleTurnProviderBundle()` is the preferred public authoring boundary for raw chat SDKs where Crux owns the tool loop. The provider bundle owns request assembly, a required `NativeTranscriptCodec`, response metadata normalization, stream delta extraction, settings/schema mapping, provider-specific deps, the SDK client binder, and lightweight helper factory creation. Core compiles the bundle through the lower-level `defineProviderRuntime({ ownership: 'single-turn', turn })` path, which in turn emits the `AdapterSpec` IR and public `createX()` adapter factory. The lower-level single-turn branch remains available for compiler tests and unusual packages that need to assemble the runtime object directly, but provider packages should prefer the bundle so `runtime`, `create()`, helper factories, dependency mappers, ownership metadata, and extension collision checks are generated consistently. Native provider packages own the wire codec that turns canonical `Message[]` into provider transcripts and reads assistant text/tool-call intent from raw responses: OpenAI emits `tool_calls` plus `tool` messages, Anthropic emits assistant `tool_use` blocks plus user `tool_result` blocks, and Google emits `functionCall` / `functionResponse` parts with synthesized ids where needed. Those codecs are not hand-written end to end: core owns a canonical transcript IR (`native-chat/transcript/`) that extracts neutral `ProviderTranscriptUnit`s from `Message[]`, groups adjacent tool results, renders tool-result fallback text/error flags through shared `ToolResultEncodingHelpers`, and appends a tool round exactly once via `appendCanonicalToolRound()`. Each provider implements a `ProviderTranscriptDialect` (encode text/assistant/tool-results, decode a wire message, read the assistant turn) using only its SDK types, and `defineProviderTranscriptCodec(dialect)` compiles it into the `NativeTranscriptCodec`. A dialect never interprets raw `Message.metadata`, so a provider's public `fromMessages()` and its runtime tool-round appends can no longer drift — Anthropic in particular no longer needs a bespoke append merely because it represents tool results as user-role blocks. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata (`usage`, finish reason, ids, actual model id); structured-output text overrides stay as response-level functions. Core intentionally shares only provider-neutral pieces: canonical transcript/response types, tool-result metadata guards, deterministic rich-content text rendering, and the native-chat compiler. Provider runtime tests use `providerRuntimeConformance()` / `describeCruxAdapterConformance()` against the public runtime, while `transcriptCodecConformance()` checks provider transcript laws directly: wrapper parity, provider-message encoding/decoding, assistant extraction, and optional tool-round appends. `ownership: 'loop-owned'` with `loop.bind()` covers orchestrating SDKs like the Vercel AI SDK: `bind(client)` returns the client-dependent operations (`BoundLoopRuntime`), which core assembles with `describeModel`/`settings`/`id` into a gateway-closed `LoopRuntimePort` (no per-call client threading) and hands straight to `loopRuntimeAdapter()`. The port hands the loop to the SDK with the execution session's armed `tools` map, and core steers each completed step through `StepObserver.onStepFinish() → StepDirective` (observe step N, apply before step N+1 — runtimes buffer `amend` directives and apply them in the next step's preparation). Both runtime branches adapt their compiled contracts into `createAdapterExecution()` (`core-step` or `sdk-loop`) after concrete model routing is resolved; the `sdk-loop` dialect is simply the `LoopRuntimePort` tagged with a discriminant. Structured output goes through `runStructuredAttempt()` for loop-owned runtimes, which performs exactly one attempt and returns schema failures as the `invalid` variant rather than throwing, keeping the corrective-retry loop in core. Tool-approval needs surface as a `suspended` outcome; the execution modules use `ToolLifecycle.suspend()` to seal it (id/token minting, request message, observability) and `ToolLifecycle.resume()` to replay decided calls — with full spans/artifacts/hooks in both dialects.
+`defineSingleTurnProviderBundle()` is the preferred public authoring boundary for raw chat SDKs where Crux owns the tool loop. The provider bundle owns request assembly, a required `NativeTranscriptCodec`, response metadata normalization, stream delta extraction, settings/schema mapping, provider-specific deps, the SDK client binder, and lightweight helper factory creation. Core compiles the bundle through the lower-level `defineProviderRuntime({ ownership: 'single-turn', turn })` path, which in turn emits the `AdapterSpec` IR and public `createX()` adapter factory. The lower-level single-turn branch remains available for compiler tests and unusual packages that need to assemble the runtime object directly, but provider packages should prefer the bundle so `runtime`, `create()`, helper factories, dependency mappers, ownership metadata, and extension collision checks are generated consistently. Native provider packages own the wire codec that turns canonical `Message[]` into provider transcripts and reads assistant text/tool-call intent from raw responses: OpenAI emits `tool_calls` plus `tool` messages, Anthropic emits assistant `tool_use` blocks plus user `tool_result` blocks, and Google emits `functionCall` / `functionResponse` parts with synthesized ids where needed. Those codecs are not hand-written end to end: core owns a canonical transcript IR (`native-chat/transcript/`) that extracts neutral `ProviderTranscriptUnit`s from `Message[]`, groups adjacent tool results, renders tool-result fallback text/error flags through shared `ToolResultEncodingHelpers`, and appends a tool round exactly once via `appendCanonicalToolRound()`. Each provider implements a `ProviderTranscriptDialect` (encode text/assistant/tool-results, decode a wire message, read the assistant turn) using only its SDK types, and `defineProviderTranscriptCodec(dialect)` compiles it into the `NativeTranscriptCodec`. A dialect never interprets raw `Message.metadata`, so a provider's public `fromMessages()` and its runtime tool-round appends can no longer drift — Anthropic in particular no longer needs a bespoke append merely because it represents tool results as user-role blocks. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata (`usage`, finish reason, ids, actual model id); structured-output text overrides stay as response-level functions. Core intentionally shares only provider-neutral pieces: canonical transcript/response types, tool-result metadata guards, deterministic rich-content text rendering, and the native-chat compiler. Provider runtime tests use `providerRuntimeConformance()` / `describeCruxAdapterConformance()` against the public runtime, while `transcriptCodecConformance()` checks provider transcript laws directly: wrapper parity, provider-message encoding/decoding, assistant extraction, and optional tool-round appends. `ownership: 'loop-owned'` with `loop.bind()` covers orchestrating SDKs like the Vercel AI SDK: `bind(client)` returns the client-dependent operations (`BoundLoopRuntime`), which core assembles with `describeModel`/`settings`/`id` into a gateway-closed `LoopRuntimePort` (no per-call client threading) and hands straight to `loopRuntimeAdapter()`. The port hands the loop to the SDK with the execution session's armed `tools` map, and core steers each completed step through `StepObserver.onStepEnd() → StepDirective` (observe step N, apply before step N+1 — runtimes buffer `amend` directives and apply them in the next step's preparation). Both runtime branches adapt their compiled contracts into `createAdapterExecution()` (`core-step` or `sdk-loop`) after concrete model routing is resolved; the `sdk-loop` dialect is simply the `LoopRuntimePort` tagged with a discriminant. Structured output goes through `runStructuredAttempt()` for loop-owned runtimes, which performs exactly one attempt and returns schema failures as the `invalid` variant rather than throwing, keeping the corrective-retry loop in core. Tool-approval needs surface as a `suspended` outcome; the execution modules use `ToolLifecycle.suspend()` to seal it (id/token minting, request message, observability) and `ToolLifecycle.resume()` to replay decided calls — with full spans/artifacts/hooks in both dialects.
 
 Inside `@use-crux/ai`, the `LoopRuntimePort` implementation (`createAiSdkLoopRuntime(gateway)`) is intentionally just a gateway runner over an internal SDK call-plan codec. The codec builds AI SDK args, wires loop steering, tool-call repair, structured-output repair/error projection, stream callbacks, stream safety transforms, completion metadata, and replay shape; `SdkGateway` remains the only code that calls the `ai` package runtime. The external-agent bridge follows the same boundary: `@use-crux/ai/agent` uses core prompt resolution and inspect data, then owns AI SDK model wrapping, stream progress, tool timing estimates, provider metadata cost extraction, and tracing middleware.
 
-Both regimes drive the same private gate→execute→settle verdict kernel inside `adapter/tool/session.ts`: `executeRound()` is the pull shell, the armed tool map is the push shell. Live SDK-regime tools now use the same canonical emission profile as core-regime tool execution: `tool.call` spans with consumed `tool.args`, raw and model-facing `tool.result` artifacts, relation edges, and paired `tool.call start records` / `tool.call end records` hooks. That, plus the shared Safety session, is the structural guarantee that validation retry, instrumentation hook ordering, tool observability, approval semantics, skill re-resolution, memory capture, and safety merges behave identically regardless of who drives the loop. The cross-dialect parity suite (`__tests__/adapter/dialect-parity.test.ts`) verifies it mechanically: identical hook protocols, span/artifact structures, message shapes, and errors for clean rounds, middleware-modified rounds, suspension, resume-approved, resume-denied, token mismatch, and mid-loop skill loads.
+Public adapter codecs are thin wrappers over the same request/response hooks.
+`toParams(resolved, { model })` first uses `codec.ts` to shape a resolved prompt
+into canonical `CallArgs`, then each adapter applies its existing settings,
+transcript, schema, request, and response helpers. Codecs do not run tool
+lifecycle policy. Anthropic's headless handle is a sans-I/O shell over the same
+`generate-core.ts` path: `handle-core.ts` starts `generateCore()` with a manual
+provider `call()` implementation that captures params and waits; `step(response)`
+decodes the raw response through the provider hook, resolves that pending call,
+and returns either the final envelope or the next captured params.
+
+Both regimes drive the same private gate→execute→settle verdict kernel inside `adapter/tool/session.ts`: `executeRound()` is the pull shell, the armed tool map is the push shell. Before either shell runs, the lifecycle validates `toolsContext` against each composed tool's `contextSchema` and stores the parsed value next to the shared `runtimeContext` for execute hooks, middleware, and approval middleware. Live SDK-regime tools now use the same canonical emission profile as core-regime tool execution: `tool.call` spans with consumed `tool.args`, raw and model-facing `tool.result` artifacts, relation edges, and paired `tool.call start records` / `tool.call end records` hooks. That, plus the shared Safety session, is the structural guarantee that validation retry, instrumentation hook ordering, tool observability, approval semantics, typed tool context, skill re-resolution, memory capture, and safety merges behave identically regardless of who drives the loop. The cross-dialect parity suite (`__tests__/adapter/dialect-parity.test.ts`) verifies it mechanically: identical hook protocols, span/artifact structures, message shapes, and errors for clean rounds, middleware-modified rounds, suspension, resume-approved, resume-denied, token mismatch, and mid-loop skill loads.
 
 ## Runtime Profiles
 
@@ -1057,9 +1075,9 @@ Tool execution keeps raw output and model-facing output separate. `execute()` re
 
 Native adapters read the structured `modelOutput` stored on tool-result message metadata. Google maps content outputs to function responses with native inline media parts when possible. Anthropic maps text, images, and PDFs to native `tool_result` content blocks when possible. OpenAI Chat Completions only accepts text tool-result content, so non-text parts are represented as deterministic textual references rather than being silently dropped.
 
-Tool middleware is intentionally separate from prompt middleware. `PromptMiddleware` wraps the whole generate/stream operation; `ToolMiddleware` wraps each tool definition before execution. The final chain is prompt-level middleware first, then call-site middleware, applied after context/prompt/call-site tool merging so policies see the actual executable tool set — both rules are owned by the `ToolLifecycle` session, not by dialect code. `toolMiddleware()` is the generic wrapper for before/after/error hooks. `approvalMiddleware()` is a convenience wrapper that sets provider-compatible `needsApproval` on matched tools and stores callback metadata for resume; after a `LoadSkill` rebuild the session re-arms the tool map, marks newly activated skills injected through the explicit `SkillActivationSession`, and re-notifies against the rebuilt instances.
+Tool middleware is intentionally separate from prompt middleware. `PromptMiddleware` wraps the whole generate/stream operation; `ToolMiddleware` wraps each tool before execution. The final chain is prompt-level middleware first, then call-site middleware, applied after context/prompt/call-site tool merging so hooks see the actual executable tool set — both rules are owned by the `ToolLifecycle` session, not by dialect code. Tool definitions remain policy-free: approval policy is declared with `context({ toolApproval })`, `prompt({ toolApproval })`, or call-site `generate()`/`stream({ toolApproval })`. Exact tool names beat wildcards across layers; within exact or wildcard declarations, call site beats prompt beats context. `approvalMiddleware()` remains the cross-cutting convenience for request/decision callbacks and matcher-based gates without putting policy on tool definitions. After a `LoadSkill` rebuild the session re-arms the tool map, marks newly activated skills injected through the explicit `SkillActivationSession`, and re-notifies against the rebuilt instances.
 
-Approval is return-and-resume, not a blocking await and not flow suspension. On the first request, the adapter returns an approval request in message history. When the core-driven dialect suspends mid-round, sibling tools gated _before_ the approval point have already executed; their results are persisted as tool messages right after the approval-request message, so the model hears about side effects that happened and `resume()` treats them as completed instead of replaying them. The AI SDK adapter uses AI SDK `tool-approval-request` parts; native OpenAI/Google/Anthropic adapters use Crux message metadata exposed through `result.messages`. The client records the id and sends a later `tool-approval-response` via `appendToolApprovalResponse()` or an equivalent message. Native approval requests include an `approvalToken`, and resume treats decisions that do not echo that token as model-visible `approval-invalid` denials — the session's gate checks the history decision (and its token) before `needsApproval`, so a forged token never executes the tool even if the tool no longer requires approval. On resume, `ToolLifecycle.resume()` notifies `onApproved`/`onDenied` exactly once per approval id, replays approved calls through the same gate→execute→settle pipeline as live calls (full spans/artifacts/hooks in both dialects), and settles denied calls as execution-denied output. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans, so devtools can explain why a tool ran, did not run, or failed trust validation. This keeps approvals compatible with serverless and Convex actions because no long-lived promise or in-memory modal state is required. Server code must resume from server-issued message history or trusted session storage for mutating tools; approval is a human-in-the-loop execution gate, not a replacement for tool-level authorization.
+Approval is return-and-resume, not a blocking await and not flow suspension. On the first request, the adapter returns an approval request in message history. When the core-driven dialect suspends mid-round, sibling tools gated _before_ the approval point have already executed; their results are persisted as tool messages right after the approval-request message, so the model hears about side effects that happened and `resume()` treats them as completed instead of replaying them. The AI SDK adapter maps Crux's resolved approval evaluator to the SDK-owned loop internally; native OpenAI/Google/Anthropic adapters use Crux message metadata exposed through `result.messages`. The client records the id and sends a later `tool-approval-response` via `appendToolApprovalResponse()` or an equivalent message. Native approval requests include an `approvalToken`, and resume treats decisions that do not echo that token as model-visible `approval-invalid` denials — the session's gate checks the history decision and token before evaluating current approval policy, so a forged token never executes the tool even if the later call omits approval policy. On resume, `ToolLifecycle.resume()` notifies `onApproved`/`onDenied` exactly once per approval id, replays approved calls through the same gate→execute→settle pipeline as live calls (full spans/artifacts/hooks in both dialects), and settles denied calls as execution-denied output. Approval request, approval, denial, and token mismatch paths emit `tool.approval` spans, so devtools can explain why a tool ran, did not run, or failed trust validation. This keeps approvals compatible with serverless and Convex actions because no long-lived promise or in-memory modal state is required. Server code must resume from server-issued message history or trusted session storage for mutating tools; approval is a human-in-the-loop execution gate, not a replacement for tool-level authorization.
 
 ## Memory Primitives
 
@@ -1425,7 +1443,7 @@ The crux Convex component (`@use-crux/convex/convex.config`) provides persistenc
 
 ## Adapter Pattern
 
-All adapters follow the same structure. Cross-cutting concerns (prompt resolution, middleware, safety, validation retry, tool lifecycle, fallback, hooks, and model-output normalization) are handled by the adapter execution session. Provider packages define `defineSingleTurnProviderBundle()` for raw chat SDKs or `defineProviderRuntime({ ownership: 'loop-owned', loop: { bind } })` for SDK-owned loops. Provider-specific code stays in the runtime spec: request assembly, SDK port binding, transcript conversion/assistant extraction, response metadata normalization, stream delta extraction, settings/schema mapping, and unusual provider dependencies.
+All adapters follow the same structure. Cross-cutting concerns (prompt resolution, middleware, safety, validation retry, tool lifecycle, fallback, hooks, and model-output normalization) are handled by the adapter execution session. Provider packages define `defineSingleTurnProviderBundle()` for raw chat SDKs or `defineProviderRuntime({ ownership: 'loop-owned', loop: { bind } })` for SDK-owned loops. Provider-specific code stays in the runtime spec: request assembly, SDK port binding, transcript conversion/assistant extraction, response metadata normalization, stream delta extraction, settings/schema mapping, and unusual provider dependencies. Headless codecs, `prepare()` handles, and `generate({ transport })` are thin views over those same specs: core-step adapters swap only the provider call port, while the AI SDK adapter swaps its package-local `SdkGateway` seam so `@use-crux/core` remains provider-agnostic.
 
 ```
 Receive: (prompt, options)
@@ -1445,15 +1463,17 @@ Map to SDK-specific args:
   ↓
 Call SDK function through the provider port/profile
   ↓
-Normalize result metadata into _meta:
+Normalize one provider-call step:
   { usage, finishReason, toolCalls, responseId, modelId, cost }
   ↓
 Adapter execution handles:
   ├── Apply policy sessions and middleware
   ├── Drive tool rounds or SDK step observation
+  ├── Record step facts in result-accumulator.ts
   └── Stamp metadata, memory capture, and observability
   ↓
-Return result
+Return GenerateResult:
+  { text, object?, usage?, cost?, steps, finalStep, messages, pendingApprovals?, raw, _meta }
 ```
 
 ### Adapter Generic Conventions
@@ -1477,7 +1497,7 @@ The indexer treats model-routing definitions as authored architecture, separate 
 
 - `orchestrateGenerate<TArgs extends Record<string, unknown>, TResult>(spec, doGenerate)` and `orchestrateStream<TArgs, TResult>(...)` — wrap adapter-specific `doGenerate` / `doStream` callbacks. `TArgs` is the prepared SDK args object; `TResult` is the SDK result. The shared `MiddlewareResult` interface (`text?`, `object?`, `_meta?`, `[key: string]: unknown`) is the structural contract for middleware-visible result shapes.
 
-`@use-crux/ai` additionally supports `timeoutMs` on direct `generate()` and `stream()` calls. The adapter wraps provider generation calls with an `AbortController`, passes `abortSignal` to the AI SDK args, and rejects with `AbortError` if the provider does not settle before the deadline. `@use-crux/core` records that timeout as span metadata (`timeoutMs`, `deadlineAt`) and emits an `operation.deadline` event at operation start so the Go read model can distinguish an active long call from a genuinely missed terminal lifecycle record. This matters in serverless/Convex-style runtimes where a provider stall or worker shutdown can prevent the terminal `span:end` from being delivered.
+Adapters support structured `timeout` budgets on direct `generate()` and `stream()` calls: `totalMs` for the whole managed call, `stepMs` for provider attempts, `chunkMs` for stalled streams, and `toolMs` / `tools[name]` for tool execution. SDK-loop adapters pass `abortSignal` to the underlying SDK where cooperative cancellation is available, and Crux rejects expired budgets with `TimeoutError`. `@use-crux/core` records the total budget as span metadata (`totalTimeoutMs`, `deadlineAt`) and emits an `operation.deadline` event at operation start so the Go read model can distinguish an active long call from a genuinely missed terminal lifecycle record. This matters in serverless/Convex-style runtimes where a provider stall or worker shutdown can prevent the terminal `span:end` from being delivered.
 
 This keeps adapters type-honest across router/fallback dispatch without resorting to `any` at composition boundaries. Where the SDK's own types are intentionally inaccessible (Convex `FunctionReference` triggering `TS2589`, AI SDK alt-form discriminated unions that reject `Record<string, unknown>` spreads), each `any` carries an `eslint-disable-next-line` with a one-line rationale.
 
@@ -1491,7 +1511,7 @@ Five functions extracted from adapter duplication, exported as `@internal`. `Orc
 | `orchestrateStream()`   | Middleware wrapping, `onError` hook                                                                                                  |
 | `executeFallbackLoop()` | Model fallback with per-attempt timing, error classification, `FallbackAttemptDetail[]` metadata, canonical `fallback.attempt` spans |
 | `wrapStreamIterable()`  | Async iterator interception for progress reporting (OpenAI, Google, Anthropic)                                                       |
-| `withAttemptTimeout()`  | Per-attempt timeout with `AbortController`                                                                                           |
+| `withBudget()`          | Structured timeout budget race with `TimeoutError` and optional `AbortSignal`                                                        |
 
 ### Pre-built Generate Functions
 
@@ -1508,19 +1528,51 @@ The Vercel AI SDK adapter exports pre-bound singletons (model is passed at call 
 
 These provider-native helpers are deliberately smaller than prompt `generate()`: they send the supplied schema to the provider's structured-output surface where supported, return provider/schema parsed `{ object }`, and preserve provider-native errors. They do not imply Crux prompt resolution, validation retry policy, safety sessions, cassettes, tools, memory capture, or instrumentation. Code that needs those runtime policies can call `createGenerateObjectFnFromGenerate(generate, { promptId })` from `@use-crux/core/compaction`; that bridge constructs a synthetic structured prompt and runs it through the supplied adapter `generate()` function.
 
-### Metadata Normalization
+### Result Envelope And Metadata Normalization
 
-Each adapter attaches `_meta` to the result with a consistent shape. This allows devtools middleware, quality experiments, and eval reports to extract usage/cost information without knowing which adapter was used.
+Core-step adapters build public results through `adapter/result-accumulator.ts`.
+Each provider-call step contributes assistant-visible text, optional usage,
+finish reason, response id, and actual model id. The accumulator concatenates
+step text, exposes `finalStep` as the final provider-call snapshot, and exposes
+top-level `usage` only when every provider-call step reported usage. If any step
+is unmetered, the total is unknown and `usage` is omitted instead of presenting
+a partial sum.
+
+Each adapter still attaches `_meta` to the result with a consistent trace shape.
+Public adapter docs should point users to `result.usage`, `result.cost`, and
+`result.finalStep`; `_meta` is retained for devtools middleware, quality
+experiments, eval reports, and observability plumbing.
 
 ```ts
-result._meta = {
-  usage: { inputTokens, outputTokens, totalTokens, cacheReadTokens, cacheWriteTokens, reasoningTokens },
-  finishReason: string,
-  toolCalls: { id, name, args }[],
-  responseId: string,
-  modelId: string,    // actual model ID returned by provider
-  cost: number,       // USD cost if available
-}
+result = {
+  text: "checking done",
+  usage: {
+    inputTokens: 12,
+    outputTokens: 8,
+    totalTokens: 20,
+    inputTokenDetails: { cacheReadTokens: 4 },
+    outputTokenDetails: {},
+  },
+  cost: 0.0003,
+  steps: 2,
+  finalStep: {
+    text: "done",
+    usage: finalStepUsage,
+    finishReason: "stop",
+    responseId: "resp_2",
+    modelId: "provider-model-id",
+  },
+  messages,
+  raw,
+  _meta: {
+    usage: finalStepUsage, // final provider-call metadata
+    finishReason: "stop",
+    toolCalls: [],
+    responseId: "resp_2",
+    actualModelId: "provider-model-id",
+    cost: 0.0003,
+  },
+};
 ```
 
 ## Storage Adapters
@@ -1575,7 +1627,7 @@ Retrieval and data-loading primitives write the same graph contract. `retrieval.
 
 Tool primitives write the graph from the shared adapter loop. This keeps user-defined tools, context-injected tools, skill tools, swarm transfer tools, and approved resume executions on one contract: `tool.request` for model intent, `tool.call` for execution, `tool.args` / `tool.result` artifacts for inspectable payloads, and `tool.approval` for gates. Devtools, subscribers, diagnostics-channel listeners, and `@use-crux/otel` all consume those canonical graph records directly.
 
-Delivery is intentionally non-blocking for normal Node.js use. The first queued delivery starts immediately so devtools can show live span starts during long-running actions. Later records coalesce per microtask and are delivered FIFO behind the active transport send, so a later `span:end` cannot overtake its own `span:start` across HTTP delivery attempts. HTTP batches are JSON-normalized before transport: cyclic values, `bigint`, functions, non-finite numbers, deep objects, and oversized strings are converted into inspectable safe previews instead of poisoning the POST. If the Go backend rejects a multi-record batch, the transport isolates records and still delivers valid lifecycle records such as `span:end` / `run:end`, so one bad detail artifact cannot strand a successful run as visually running. The Go observability service still reconciles out-of-order lifecycle records by stable ids and timestamps defensively, so externally reordered records do not corrupt the read model. Streaming generation spans close through a single finalizer shared by raw stream drain, provider completion metadata, stream cancellation, and stream errors. The finalizer waits for both stream and completion signals when both exist, merges provider usage over stream-derived metrics, closes cancelled consumers as `cancelled`, and uses a 10s unref'd fallback when completion metadata is never awaited. Generation `timeoutMs` is enforced in core orchestration, not only in provider adapters: if a model call never settles, `generation.call` / `generation.stream` emits a terminal error span instead of relying on backend deadline reconciliation. For presentation only, terminal ancestor scopes such as suspended flows can close still-running descendants before operation deadline fallback marks them incomplete; output or usage evidence lets completed generations render as `ok` while the enclosing flow renders as `suspended`. Transport errors are collected by diagnostics and do not throw into user code. Failed batches requeue behind the delivery engine and retry on an unref'd capped backoff, so terminal records do not wait for an unrelated future emit before reaching devtools. Runtime reset and transport replacement advance the delivery epoch; stale in-flight failures are counted as dropped instead of being requeued into a later transport. Bounded `observe.flush({ timeoutMs })` and `observe.shutdown({ timeoutMs })` exist for serverless runtimes and Convex-style request lifecycles where queued writes must be awaited before the platform freezes or kills the process. Bounded flush uses a cancelable timeout primitive so a successful delivery does not leave a timer alive after the flush returns.
+Delivery is intentionally non-blocking for normal Node.js use. The first queued delivery starts immediately so devtools can show live span starts during long-running actions. Later records coalesce per microtask and are delivered FIFO behind the active transport send, so a later `span:end` cannot overtake its own `span:start` across HTTP delivery attempts. HTTP batches are JSON-normalized before transport: cyclic values, `bigint`, functions, non-finite numbers, deep objects, and oversized strings are converted into inspectable safe previews instead of poisoning the POST. If the Go backend rejects a multi-record batch, the transport isolates records and still delivers valid lifecycle records such as `span:end` / `run:end`, so one bad detail artifact cannot strand a successful run as visually running. The Go observability service still reconciles out-of-order lifecycle records by stable ids and timestamps defensively, so externally reordered records do not corrupt the read model. Streaming generation spans close through a single finalizer shared by raw stream drain, provider completion metadata, stream cancellation, and stream errors. The finalizer waits for both stream and completion signals when both exist, merges provider usage over stream-derived metrics, closes cancelled consumers as `cancelled`, and uses a 10s unref'd fallback when completion metadata is never awaited. Generation `timeout.totalMs` is enforced in core orchestration, not only in provider adapters: if a model call never settles, `generation.call` / `generation.stream` emits a terminal error span instead of relying on backend deadline reconciliation. For presentation only, terminal ancestor scopes such as suspended flows can close still-running descendants before operation deadline fallback marks them incomplete; output or usage evidence lets completed generations render as `ok` while the enclosing flow renders as `suspended`. Transport errors are collected by diagnostics and do not throw into user code. Failed batches requeue behind the delivery engine and retry on an unref'd capped backoff, so terminal records do not wait for an unrelated future emit before reaching devtools. Runtime reset and transport replacement advance the delivery epoch; stale in-flight failures are counted as dropped instead of being requeued into a later transport. Bounded `observe.flush({ timeoutMs })` and `observe.shutdown({ timeoutMs })` exist for serverless runtimes and Convex-style request lifecycles where queued writes must be awaited before the platform freezes or kills the process. Bounded flush uses a cancelable timeout primitive so a successful delivery does not leave a timer alive after the flush returns.
 
 `config({ observability })` wires a custom transport or an HTTP transport as explicit export behavior.
 Default `config()` does not install telemetry, upload, raw-content capture, or delivery policy.

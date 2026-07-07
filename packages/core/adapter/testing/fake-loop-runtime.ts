@@ -6,7 +6,7 @@
  * approvals, steering) with zero SDK involvement. It is also the reference
  * implementation of the loop runtime contract: it honors `maxSteps`, awaits
  * the observer and applies directives (including `refundStep`), suspends on
- * approval-needing tools, and validates structured scripts against the real
+ * approval-gated tools, and validates structured scripts against the real
  * schema — the honesty that lets fake-backed policy tests transfer to real SDKs.
  *
  * @module
@@ -89,16 +89,16 @@ export interface FakeLoopRuntime {
   }
 }
 
-const FAKE_USAGE = { inputTokens: 10, outputTokens: 20, totalTokens: 30 } as const
+const FAKE_USAGE = {
+  inputTokens: 10,
+  outputTokens: 20,
+  totalTokens: 30,
+  inputTokenDetails: {},
+  outputTokenDetails: {},
+} as const
 
 interface FakeToolLike {
   execute?: (input: unknown, options: { toolCallId?: string; messages?: readonly unknown[] }) => unknown
-  needsApproval?:
-    | boolean
-    | ((
-        input: unknown,
-        options: { toolCallId?: string; messages?: readonly unknown[] },
-      ) => boolean | PromiseLike<boolean>)
   toModelOutput?: (args: {
     toolCallId: string
     input: Record<string, unknown>
@@ -195,7 +195,7 @@ export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRun
 
         if (toolCalls.length === 0) {
           messages = [...messages, { role: 'assistant', content: lastResponse.text }]
-          await request.observer?.onStepFinish({
+          await request.observer?.onStepEnd({
             index: steps - 1,
             text: lastResponse.text,
             toolCalls: [],
@@ -206,10 +206,18 @@ export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRun
           break
         }
 
-        // Approval scan first: a real SDK detects needsApproval before executing.
+        // Approval scan first: a real SDK detects approval-gated tools before executing.
         for (const tc of toolCalls) {
           const tool = lookupTool(tools, activeTools, tc.name)
-          if (tool && (await needsApproval(tool, tc, messages))) {
+          if (
+            tool &&
+            (await request.toolApproval?.({
+              toolName: tc.name,
+              toolCallId: tc.id,
+              input: tc.args,
+              messages,
+            }))
+          ) {
             const pending: PendingToolApproval = {
               toolCallId: tc.id,
               toolName: tc.name,
@@ -253,7 +261,7 @@ export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRun
           ...toolMessages,
         ]
 
-        const directive: StepDirective = (await request.observer?.onStepFinish({
+        const directive: StepDirective = (await request.observer?.onStepEnd({
           index: steps - 1,
           text: lastResponse.text,
           toolCalls,
@@ -330,11 +338,7 @@ export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRun
         raw: { kind: 'fake-stream', chunks, text },
         completion: async () => ({
           text,
-          usage: {
-            inputTokens: FAKE_USAGE.inputTokens,
-            outputTokens: FAKE_USAGE.outputTokens,
-            totalTokens: FAKE_USAGE.totalTokens,
-          },
+          usage: FAKE_USAGE,
           finishReason: 'stop',
           streaming: { totalChunks: chunks.length, ttftMs: 1 },
         }),
@@ -354,14 +358,4 @@ function lookupTool(
   if (activeTools && !activeTools.includes(name)) return undefined
   const tool = tools[name]
   return tool && typeof tool === 'object' ? (tool as FakeToolLike) : undefined
-}
-
-async function needsApproval(
-  tool: FakeToolLike,
-  toolCall: { id: string; args: unknown },
-  messages: readonly Message[],
-): Promise<boolean> {
-  if (tool.needsApproval === undefined) return false
-  if (typeof tool.needsApproval === 'boolean') return tool.needsApproval
-  return Boolean(await tool.needsApproval(toolCall.args, { toolCallId: toolCall.id, messages }))
 }

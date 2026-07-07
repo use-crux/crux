@@ -18,6 +18,7 @@ import type { SystemBlock } from "../resolver/types";
 import type { DiagnosticsPort } from "../resolver/ports";
 import type { Message } from "../generation/messages";
 import type { JsonValue } from "../types/tool";
+import type { ResultStepFacts } from "./result-accumulator";
 import type { AdapterResponse } from "./types";
 
 // ─────────────────────────────────────────────────────────────────
@@ -33,7 +34,7 @@ import type { AdapterResponse } from "./types";
  * `router()`, `cascade()`) are unwrapped to a concrete `model`, settings
  * are mapped through `mapSettings()`, and tools are merged, middleware-
  * wrapped, and instrumented. The spec's only job is to translate this
- * into its SDK's native arguments and run the call.
+   * into its SDK's native arguments and run the call.
  *
  * @typeParam TModel - The SDK's model type (e.g. AI SDK `LanguageModel`).
  */
@@ -59,9 +60,23 @@ export interface ExecutorRequest<TModel> {
   /**
    * Merged + instrumented tool map. Values keep whatever shape the caller
    * provided (AI SDK `tool()` objects pass through untouched); the factory
-   * only wraps `execute`/`needsApproval`/`toModelOutput` for devtools.
+   * only wraps `execute`/`toModelOutput` for devtools.
    */
   readonly tools: Record<string, unknown> | undefined;
+  /**
+   * Backend-neutral approval evaluator for SDK-owned tool loops.
+   *
+   * SDK adapters adapt this to their native approval hook, but policy remains
+   * resolved by core from context, prompt, call-site, and middleware inputs.
+   */
+  readonly toolApproval?: (
+        call: {
+          readonly toolName: string;
+          readonly toolCallId: string;
+          readonly input: unknown;
+          readonly messages?: readonly Message[];
+        },
+      ) => boolean | PromiseLike<boolean>;
   /** Restrict which tools the model may call this run, when set. */
   readonly activeTools: readonly string[] | undefined;
   /**
@@ -203,7 +218,7 @@ export interface StepObserver {
    * @param step - The step that just finished.
    * @returns The directive to apply before the next step.
    */
-  onStepFinish(step: ExecutorStep): Promise<StepDirective>;
+  onStepEnd(step: ExecutorStep): Promise<StepDirective>;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -239,7 +254,7 @@ export interface PendingToolApproval {
  *   canonical history including every tool round, ready to persist or to
  *   feed into a follow-up call. `steps` counts budget-consuming steps
  *   (refunded steps excluded).
- * - `suspended`: a tool with `needsApproval` fired. The loop stopped
+ * - `suspended`: a tool approval policy fired. The loop stopped
  *   *before executing* that tool; `assistantResponse` is the step that
  *   requested it, and `messages` ends just before the approval request —
  *   core appends the approval-request message itself after minting tokens.
@@ -258,6 +273,14 @@ export type ExecutorOutcome<TRawResponse> =
       readonly messages: readonly Message[];
       /** Budget-consuming steps taken (refunds excluded). */
       readonly steps: number;
+      /**
+       * Exact provider-call facts reported by loop-owning SDKs.
+       *
+       * When supplied, core uses these for canonical envelope accumulation
+       * instead of deriving step facts from observer callbacks or the final
+       * aggregate response.
+       */
+      readonly stepFacts?: readonly ResultStepFacts[];
       /** Provider metadata (cost, etc.). */
       readonly meta: ExecutorMeta;
     }

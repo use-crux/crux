@@ -43,7 +43,17 @@ export interface GenerationSettings {
   /** Top-K sampling. */
   topK?: number;
   /** Sequences that stop generation. */
-  stopSequences?: string[];
+  stopSequences?: readonly string[];
+  /** Deterministic sampling seed, when supported by the selected provider. */
+  seed?: number;
+  /**
+   * Portable reasoning-effort hint.
+   *
+   * Adapters map this to provider-native controls when the selected model
+   * supports reasoning. Exact budgets, summaries, and provider-specific
+   * disabling controls belong in the adapter's typed `extra` option.
+   */
+  reasoning?: 'low' | 'medium' | 'high';
   /**
    * Portable tool choice policy.
    *
@@ -113,12 +123,32 @@ export type ProviderAdaptations = {
 
 /** Token usage from an AI call. */
 export interface TokenUsage {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-  cacheReadTokens?: number;
-  cacheWriteTokens?: number;
-  reasoningTokens?: number;
+  /** Total input, or prompt, tokens billed for the call. */
+  inputTokens: number;
+  /** Total output, or completion, tokens billed for the call. */
+  outputTokens: number;
+  /** Total billed tokens for the call. */
+  totalTokens: number;
+  /**
+   * Breakdown of input-token classes.
+   *
+   * The object is always present when usage is present. Individual fields are
+   * omitted when the provider did not report them; Crux does not fabricate
+   * zeroes for missing detail counts.
+   */
+  inputTokenDetails: {
+    cacheReadTokens?: number;
+    cacheWriteTokens?: number;
+  };
+  /**
+   * Breakdown of output-token classes.
+   *
+   * The object is always present when usage is present. Individual fields are
+   * omitted when the provider did not report them.
+   */
+  outputTokenDetails: {
+    reasoningTokens?: number;
+  };
 }
 
 /**

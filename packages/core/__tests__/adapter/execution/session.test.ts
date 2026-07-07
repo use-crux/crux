@@ -28,7 +28,7 @@ function adapterResponse(text: string): AdapterResponse {
   return {
     text,
     toolCalls: undefined,
-    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+    usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
     finishReason: 'stop',
     responseId: undefined,
     actualModelId: undefined,

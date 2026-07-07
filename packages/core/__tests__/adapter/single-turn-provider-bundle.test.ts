@@ -134,7 +134,7 @@ function defineBundleTest<TExtensions extends object = Record<string, never>>(
           id: `resp_${client.calls.length}`,
           model: 'bundle-actual',
           text: 'bundle text',
-          usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+          usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, inputTokenDetails: {}, outputTokenDetails: {} },
         }
       },
       async stream() {

@@ -16,7 +16,7 @@ import type {
 } from '../../adapter/testing'
 import type { AdapterSpec } from '../../adapter/spec'
 import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '../../adapter/types'
-import type { GenerationSettings } from '../../generation/types'
+import type { GenerationSettings, TokenUsage } from '../../generation/types'
 import type { Message } from '../../generation/messages'
 
 interface FakeNativeClient {
@@ -37,11 +37,7 @@ interface FakeNativeRawResponse {
   readonly model: string
   readonly text: string
   readonly toolCalls?: readonly { readonly id: string; readonly name: string; readonly args: unknown }[]
-  readonly usage: {
-    readonly inputTokens: number
-    readonly outputTokens: number
-    readonly totalTokens: number
-  }
+  readonly usage: TokenUsage
   readonly finishReason: string
 }
 
@@ -66,7 +62,9 @@ function createFakeNativeSpec(): AdapterSpec<FakeNativeClient, FakeNativeRawResp
         ? { text: client.script.structuredTexts?.[client.calls.length - 1] ?? '{"ok":true}' }
         : (client.script.emissions?.[client.calls.length - 1] ?? { text: 'ok' })
 
-      const usage = emission.usage ?? { inputTokens: 11, outputTokens: 7, totalTokens: 18 }
+      const usage =
+        emission.usage ??
+        { inputTokens: 11, outputTokens: 7, totalTokens: 18, inputTokenDetails: {}, outputTokenDetails: {} }
       const raw: FakeNativeRawResponse = {
         id: `fake_resp_${client.calls.length}`,
         model: 'fake-native-actual',
@@ -76,11 +74,7 @@ function createFakeNativeSpec(): AdapterSpec<FakeNativeClient, FakeNativeRawResp
           name: toolCall.name,
           args: toolCall.args,
         })),
-        usage: {
-          inputTokens: usage.inputTokens ?? 0,
-          outputTokens: usage.outputTokens ?? 0,
-          totalTokens: usage.totalTokens ?? 0,
-        },
+        usage,
         finishReason: emission.toolCalls?.length ? 'tool_calls' : 'stop',
       }
 
@@ -103,7 +97,7 @@ function createFakeNativeSpec(): AdapterSpec<FakeNativeClient, FakeNativeRawResp
             ? String((chunk as { readonly delta: unknown }).delta)
             : undefined,
         completion: async () => ({
-          usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+          usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5, inputTokenDetails: {}, outputTokenDetails: {} },
           finishReason: 'stop',
         }),
       }

@@ -13,6 +13,9 @@ import type {
   AdapterGenerateOptions,
   AdapterStreamOptions,
   AdapterGenerateResult,
+  GenerateResult,
+  StreamResult,
+  FinalStepInfo,
   AdapterResponse,
   CallArgs,
   StreamHandle,
@@ -49,7 +52,7 @@ Never implement more than one generation runtime for one SDK. In either branch, 
 
 Under the hood, `turn` compiles to `AdapterSpec`: core calls `call()` once per loop turn and `appendToolRound()` formats results. `loop.bind()` compiles to a `LoopRuntimePort`: the SDK owns the loop and core steers each step through a `StepObserver`. `bind(client)` returns the client-dependent operations (`BoundLoopRuntime`), which core assembles with `id`, `describeModel`, and `mapSettings(settings, model)` into a gateway-closed `LoopRuntimePort`:
 
-- `runTextLoop()` runs the SDK loop, awaiting `observer.onStepFinish(step)` after every step and applying the returned `StepDirective` before the next one — `continue`, `stop`, or `amend` (swap system prompt/active tools mid-loop, optionally `refundStep` so bookkeeping steps like `LoadSkill` don't consume budget).
+- `runTextLoop()` runs the SDK loop, awaiting `observer.onStepEnd(step)` after every step and applying the returned `StepDirective` before the next one — `continue`, `stop`, or `amend` (swap system prompt/active tools mid-loop, optionally `refundStep` so bookkeeping steps like `LoadSkill` don't consume budget).
 - `runStructuredAttempt()` makes exactly ONE structured-output attempt and returns `invalid` as a value instead of throwing — core owns the corrective-retry loop.
 - `stream()` returns the SDK's stream result untouched plus a typed `completion()`. When `request.safety` is set (a [`SafetyStream`](/docs/reference/crux-core/safety) — text streams with streaming guardrails or constraints), the spec must drive it: feed every outgoing text delta, forward `emit` content, swallow `hold`s, surface a thrown `GuardrailBlockedError` as a stream error, and call `finish()` at end-of-stream, emitting the seal's `pending` tail. With the AI SDK this is one `experimental_transform`.
 - Tool-approval needs surface as the `suspended` outcome; core mints approval ids/tokens and owns resume.
@@ -198,6 +201,8 @@ const createMyAdapter = adapter({
           inputTokens: response.usage.input,
           outputTokens: response.usage.output,
           totalTokens: response.usage.input + response.usage.output,
+          inputTokenDetails: {},
+          outputTokenDetails: {},
         },
         finishReason: response.stop_reason,
         responseId: response.id,
@@ -212,6 +217,7 @@ const createMyAdapter = adapter({
       messages: args.messages,
     });
     return {
+      raw: stream,
       rawStream: stream,
       extractTextDelta: (chunk) => chunk.delta?.text,
       completion: async () => undefined,
@@ -268,15 +274,16 @@ The core-step execution IR produced by the `turn` provider-runtime branch.
 
 The adapter interface returned by the factory.
 
-| Property / Method        | Type                                           | Description                                               |
-| ------------------------ | ---------------------------------------------- | --------------------------------------------------------- |
-| `providerId`             | `string`                                       | Provider identifier from the spec                         |
-| `generate(prompt, opts)` | `Promise<AdapterGenerateResult<TRawResponse>>` | Execute a prompt (non-streaming) with automatic tool loop |
-| `stream(prompt, opts)`   | `Promise<StreamHandle<TRawStream>>`            | Execute a prompt (streaming)                              |
-| `parallel`               | `function`                                     | Run multiple agents concurrently                          |
-| `pipeline`               | `function`                                     | Chain agents sequentially                                 |
-| `consensus`              | `function`                                     | Run agents and pick a winner via voting                   |
-| `swarm`                  | `function`                                     | Run a swarm of agents with peer-to-peer routing           |
+| Property / Method        | Type                                           | Description                                                              |
+| ------------------------ | ---------------------------------------------- | ------------------------------------------------------------------------ |
+| `providerId`             | `string`                                       | Provider identifier from the spec                                        |
+| `generate(prompt, opts)` | `Promise<AdapterGenerateResult<TRawResponse>>` | Execute a prompt (non-streaming) with automatic tool loop                |
+| `stream(prompt, opts)`   | `Promise<StreamResult<TRawStream>>`            | Execute a prompt and return canonical text deltas plus raw stream access |
+| `prepare(prompt, opts)`  | `Promise<CallHandle<...>>`                     | Headless handle: prepare params, then feed provider or SDK responses     |
+| `parallel`               | `function`                                     | Run multiple agents concurrently                                         |
+| `pipeline`               | `function`                                     | Chain agents sequentially                                                |
+| `consensus`              | `function`                                     | Run agents and pick a winner via voting                                  |
+| `swarm`                  | `function`                                     | Run a swarm of agents with peer-to-peer routing                          |
 
 ## `CallArgs<TExtra>`
 
@@ -298,24 +305,26 @@ Canonical args assembled by the adapter from prompt resolution. Passed to `spec.
 
 Canonical response extracted by the adapter from the provider's raw response. Used by the tool loop to determine if another iteration is needed.
 
-| Field           | Type                                                         | Description                                                                                       |
-| --------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
-| `text`          | `string`                                                     | Extracted text                                                                                    |
-| `toolCalls`     | `Array<{ id, name, args }> \| undefined`                     | Tool call requests                                                                                |
-| `usage`         | `{ inputTokens?, outputTokens?, totalTokens? } \| undefined` | Token usage. Fields stay `undefined` when the provider omits usage instead of fabricating zeroes. |
-| `finishReason`  | `string \| undefined`                                        | Why generation stopped                                                                            |
-| `responseId`    | `string \| undefined`                                        | Provider response ID                                                                              |
-| `actualModelId` | `string \| undefined`                                        | Actual model used (may differ from requested)                                                     |
+| Field           | Type                                     | Description                                                                                                                                |
+| --------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `text`          | `string`                                 | Extracted text                                                                                                                             |
+| `toolCalls`     | `Array<{ id, name, args }> \| undefined` | Tool call requests                                                                                                                         |
+| `usage`         | `TokenUsage \| undefined`                | Token usage with `inputTokenDetails` and `outputTokenDetails`. Omit `usage` when the provider omits token counts; do not fabricate zeroes. |
+| `finishReason`  | `string \| undefined`                    | Why generation stopped                                                                                                                     |
+| `responseId`    | `string \| undefined`                    | Provider response ID                                                                                                                       |
+| `actualModelId` | `string \| undefined`                    | Actual model used (may differ from requested)                                                                                              |
 
 ## `StreamHandle<TRawStream>`
 
-Stream handle returned by the adapter's stream method.
+Internal stream handle returned by `AdapterSpec.stream()`. Public
+`CruxAdapter.stream()` wraps this as `StreamResult<TRawStream>`.
 
-| Field              | Type                                      | Description                               |
-| ------------------ | ----------------------------------------- | ----------------------------------------- |
-| `rawStream`        | `TRawStream & AsyncIterable<unknown>`     | The raw SDK stream                        |
-| `extractTextDelta` | `(chunk: unknown) => string \| undefined` | Extract text delta from a stream chunk    |
-| `completion`       | `() => Promise<TraceMeta \| undefined>`   | Get completion metadata after stream ends |
+| Field              | Type                                      | Description                                                             |
+| ------------------ | ----------------------------------------- | ----------------------------------------------------------------------- |
+| `raw`              | `TRawStream?`                             | Original provider stream handle when distinct from the wrapped iterable |
+| `rawStream`        | `TRawStream & AsyncIterable<unknown>`     | Provider stream iterable, possibly wrapped for safety/observability     |
+| `extractTextDelta` | `(chunk: unknown) => string \| undefined` | Extract text delta from a stream chunk                                  |
+| `completion`       | `() => Promise<TraceMeta \| undefined>`   | Get completion metadata after stream ends                               |
 
 ## `AdapterGenerateOptions<TExtra>`
 
@@ -333,14 +342,35 @@ Options for adapter `generate()` calls.
 | `messages`        | `Message[]?`                                                 | Additional messages to prepend (e.g., conversation history) |
 | `validationRetry` | [`ValidationRetryOptions?`](/docs/guides/safety/constraints) | Retry structured output on Zod validation failure           |
 
-## `AdapterGenerateResult<TRawResponse>`
+## `GenerateResult<TRawResponse>`
 
-| Field   | Type           | Description                                                  |
-| ------- | -------------- | ------------------------------------------------------------ |
-| `raw`   | `TRawResponse` | The raw SDK response                                         |
-| `text`  | `string`       | Extracted text                                               |
-| `_meta` | `TraceMeta`    | Normalized metadata (usage, finish reason, tool calls, etc.) |
-| `steps` | `number`       | Number of tool loop iterations performed                     |
+`AdapterGenerateResult<TRawResponse>` is the native adapter alias for this
+canonical envelope.
+
+| Field              | Type                              | Description                                                                    |
+| ------------------ | --------------------------------- | ------------------------------------------------------------------------------ |
+| `text`             | `string`                          | Assistant-visible text accumulated across provider-call steps                  |
+| `object`           | `TOutput?`                        | Parsed structured output when the prompt declares an output schema             |
+| `usage`            | `TokenUsage?`                     | Accumulated usage, present only when every provider-call step reported usage   |
+| `cost`             | `TraceMeta['cost']?`              | Provider-reported cost when available                                          |
+| `steps`            | `number`                          | Provider-call steps represented in this envelope                               |
+| `finalStep`        | `FinalStepInfo`                   | Final provider-call text, optional usage, finish reason, response id, model id |
+| `messages`         | `Message[]`                       | Provider-neutral Crux transcript                                               |
+| `pendingApprovals` | `readonly ApprovalRequestInfo[]?` | Pending approval requests when execution suspended                             |
+| `raw`              | `TRawResponse`                    | The raw SDK response                                                           |
+| `_meta`            | `TraceMeta`                       | Retained trace metadata for observability plumbing                             |
+
+`usage` is omitted if any provider-call step omitted usage; Crux never reports a
+partial token sum as a total. `finalStep.usage` follows the provider's final
+step exactly and is also omitted when the final step was unmetered.
+
+## `StreamResult<TRawStream>`
+
+| Field        | Type                                 | Description                                                     |
+| ------------ | ------------------------------------ | --------------------------------------------------------------- |
+| `textStream` | `AsyncIterable<string>`              | Provider-neutral text deltas                                    |
+| `raw`        | `TRawStream`                         | Raw provider stream handle                                      |
+| `completion` | `Promise<StreamCompletion<TOutput>>` | Completion envelope: `GenerateResult` without `raw` and `_meta` |
 
 ## `ToolResultEntry`
 
@@ -361,7 +391,7 @@ Create an SDK-loop executor from a `LoopRuntimePort`. Provider packages should i
 | --------- | --------------------------------------------------- | ----------------- |
 | `port`    | `LoopRuntimePort<TModel, TRawResponse, TRawStream>` | Loop runtime port |
 
-`generate()` accepts `ExecutorGenerateOptions`: `model` (plain or routing wrapper), `input`, `tools`, `toolMiddleware`, `messages`, `maxSteps`, `settings`, `tokenBudget`, `timeoutMs`, `validationRetry`, `constraints`, `guardrails`, `observer`, `activeTools`, and a port-specific `extra` passthrough. The result carries `raw` (the SDK's own result object), `text`, `object`, `_meta`, `steps`, `messages`, and `pendingApprovals` when suspended on tool approval.
+`generate()` accepts `ExecutorGenerateOptions`: `model` (plain or routing wrapper), `input`, `tools`, `toolMiddleware`, `toolApproval`, `messages`, `maxSteps`, `settings`, `tokenBudget`, `timeout`, `validationRetry`, `constraints`, `guardrails`, `observer`, `activeTools`, and a port-specific `extra` passthrough. `timeout` is structured: `totalMs` covers the whole managed call, `stepMs` covers provider attempts, `chunkMs` covers stream inactivity, and `toolMs` / `tools[name]` cover tool execution. The result carries `raw` (the SDK's own result object), `text`, `object`, `_meta`, `steps`, `messages`, and `pendingApprovals` when suspended on tool approval.
 
 ## `LoopRuntimePort`
 
@@ -386,6 +416,10 @@ import type {
   AdapterGenerateOptions,
   AdapterStreamOptions,
   AdapterGenerateResult,
+  GenerateResult,
+  StreamResult,
+  StreamCompletion,
+  FinalStepInfo,
   // Spec interfaces
   AdapterSpec,
   LoopRuntimePort,

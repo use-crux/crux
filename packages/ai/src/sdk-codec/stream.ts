@@ -141,14 +141,15 @@ export async function createStreamCallPlan(
     try {
       await progress?.flush();
       const durationMs = deps.clock() - streamStartTime;
-      const outputTokens = event.totalUsage?.outputTokens;
+      const usage = normalizeUsage(event.totalUsage);
+      const outputTokens = usage?.outputTokens;
       const tokensPerSecond =
         durationMs > 0 && outputTokens
           ? Math.round((outputTokens / durationMs) * 1000)
           : undefined;
 
       resolveCompletion({
-        usage: normalizeUsage(event.totalUsage),
+        usage,
         finishReason: event.finishReason,
         toolCalls:
           event.toolCalls && event.toolCalls.length > 0

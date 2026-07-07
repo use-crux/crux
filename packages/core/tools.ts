@@ -11,4 +11,12 @@
 export { tool } from './tools/define-tool'
 export { toolPolicy } from './safety/toolPolicy'
 export type { ToolConfig, NamedToolDef } from './tools/types'
+export type {
+  KnownToolsFor,
+  MergeKnownTools,
+  PromptToolsOf,
+  ToolContextOf,
+  ToolsContextOf,
+  ToolsContextOption,
+} from './tools/context-types'
 export type { ToolDef, ToolModelOutput, ToModelOutputArgs } from './types/tool'

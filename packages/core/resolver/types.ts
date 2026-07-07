@@ -25,6 +25,10 @@ import type {
 } from "../observability/contract";
 import type { ToolMiddleware } from "../tools/types";
 import type {
+  ApprovalDeclaration,
+  ToolApprovalInspection,
+} from "../tools/approval-policy";
+import type {
   ContextEntry,
   ContextTextSegment,
   MemoryEntry,
@@ -97,6 +101,11 @@ export interface ResolvedPrompt {
   tools?: AnyToolSet;
   /** Middleware applied to merged tools before adapter execution. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
+  /**
+   * Approval policy declarations collected from context and prompt composition
+   * layers. Call-site declarations are added by adapters at execution time.
+   */
+  toolApprovalDeclarations?: readonly ApprovalDeclaration[];
   /** Tool name filter. */
   activeTools?: string[];
   /** Merged generation settings (config < adapt < call-site). */
@@ -267,4 +276,6 @@ export interface InspectResult {
   tokenBudget: number | undefined;
   /** Names of all tools that would be included (context + config), if any. */
   tools: string[] | undefined;
+  /** Effective prompt-time approval policy per composed tool. */
+  toolApprovals?: ToolApprovalInspection[];
 }

@@ -31,7 +31,7 @@ function response(text: string, toolCalls?: AdapterResponse['toolCalls']): Adapt
   return {
     text,
     toolCalls,
-    usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8 },
+    usage: { inputTokens: 3, outputTokens: 5, totalTokens: 8, inputTokenDetails: {}, outputTokenDetails: {} },
     finishReason: toolCalls ? 'tool_calls' : 'stop',
     responseId: 'resp_1',
     actualModelId: 'mock-model',
@@ -317,7 +317,6 @@ describe('canonical tool observability', () => {
       deletePost: {
         description: 'Delete a post',
         parameters: z.object({ id: z.string() }),
-        needsApproval: true,
         execute: async () => 'deleted',
       },
     })
@@ -325,6 +324,7 @@ describe('canonical tool observability', () => {
     const pending = await model.generate(postPrompt, {
       model: 'mock-model',
       input: { instruction: 'Delete post_1' },
+      toolApproval: { deletePost: 'always' },
     })
     const approval = pending.messages.flatMap((message) => message.metadata?.toolApprovalRequests ?? [])[0]
     const deniedMessages = appendToolApprovalResponse(pending.messages, {
@@ -337,6 +337,7 @@ describe('canonical tool observability', () => {
     await model.generate(postPrompt, {
       model: 'mock-model',
       input: { instruction: 'Resume' },
+      toolApproval: { deletePost: 'always' },
       messages: deniedMessages,
     })
     await observe.flush()
@@ -382,13 +383,13 @@ describe('canonical tool observability', () => {
         sendEmail: {
           description: 'Send an email',
           parameters: z.object({ to: z.string(), apiKey: z.string() }),
-          needsApproval: true,
           execute: async () => 'sent',
         },
       }),
       {
         model: 'mock-model',
         input: { instruction: 'Send the email' },
+        toolApproval: { sendEmail: 'always' },
       },
     )
     await observe.flush()
@@ -419,7 +420,6 @@ describe('canonical tool observability', () => {
       deletePost: {
         description: 'Delete a post',
         parameters: z.object({ id: z.string() }),
-        needsApproval: true,
         execute,
       },
     })
@@ -427,6 +427,7 @@ describe('canonical tool observability', () => {
     const pending = await model.generate(postPrompt, {
       model: 'mock-model',
       input: { instruction: 'Delete post_1' },
+      toolApproval: { deletePost: 'always' },
     })
     const approval = pending.messages.flatMap((message) => message.metadata?.toolApprovalRequests ?? [])[0]
     const approvedMessages = appendToolApprovalResponse(pending.messages, {
@@ -438,6 +439,7 @@ describe('canonical tool observability', () => {
     await model.generate(postPrompt, {
       model: 'mock-model',
       input: { instruction: 'Resume' },
+      toolApproval: { deletePost: 'always' },
       messages: approvedMessages,
     })
     await observe.flush()
@@ -468,7 +470,6 @@ describe('canonical tool observability', () => {
       deletePost: {
         description: 'Delete a post',
         parameters: z.object({ id: z.string() }),
-        needsApproval: true,
         execute,
       },
     })
@@ -476,6 +477,7 @@ describe('canonical tool observability', () => {
     const pending = await model.generate(postPrompt, {
       model: 'mock-model',
       input: { instruction: 'Delete post_1' },
+      toolApproval: { deletePost: 'always' },
     })
     const approval = pending.messages.flatMap((message) => message.metadata?.toolApprovalRequests ?? [])[0]
     const badMessages = appendToolApprovalResponse(pending.messages, {
@@ -487,6 +489,7 @@ describe('canonical tool observability', () => {
     const resumed = await model.generate(postPrompt, {
       model: 'mock-model',
       input: { instruction: 'Resume' },
+      toolApproval: { deletePost: 'always' },
       messages: badMessages,
     })
     await observe.flush()

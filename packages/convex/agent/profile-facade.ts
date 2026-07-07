@@ -1,6 +1,6 @@
-import type { AnyToolSet, ContextEntry, Prompt } from '@use-crux/core'
+import type { AnyToolSet } from '@use-crux/core'
+import type { AnyConvexPrompt } from './lifecycle-types'
 import { resolve as resolveAiAgent } from '@use-crux/ai/agent'
-import type { z } from 'zod'
 import { createProfileBackedAgentLifecycle } from './lifecycle'
 import { createDefaultConvexAgentDriver } from './default-driver'
 import { Agent, type ConvexAgentComponent } from './facade'
@@ -22,7 +22,7 @@ import { convexTools, wrapToolRecord } from './sdk-tools'
  * @param config - Prompt, model, component, tool, and lifecycle options.
  * @returns A Convex-Agent-shaped helper backed by Crux prompt resolution.
  */
-export function convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
+export function convexAgent<TPrompt extends AnyConvexPrompt>(
   config: ConvexAgentConfig<TPrompt>,
 ): CruxConvexAgent<TPrompt> {
   const { crux, ...agentConfig } = config

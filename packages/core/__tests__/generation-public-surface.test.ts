@@ -17,7 +17,7 @@
  * - `repairJsonText()` repairs malformed JSON;
  * - `ValidationExhaustedError` round-trips through its type guard;
  * - the `@internal` orchestration helpers (`orchestrateGenerate`,
- *   `orchestrateStream`, `executeFallbackLoop`, `withAttemptTimeout`,
+ *   `orchestrateStream`, `executeFallbackLoop`, `withBudget`,
  *   `wrapStreamIterable`) are present on the package surface.
  */
 
@@ -33,7 +33,8 @@ import {
   orchestrateGenerate,
   orchestrateStream,
   executeFallbackLoop,
-  withAttemptTimeout,
+  TimeoutError,
+  withBudget,
   wrapStreamIterable,
 } from '@use-crux/core'
 
@@ -56,7 +57,8 @@ describe('@use-crux/core (generation surface)', () => {
     expect(typeof orchestrateGenerate).toBe('function')
     expect(typeof orchestrateStream).toBe('function')
     expect(typeof executeFallbackLoop).toBe('function')
-    expect(typeof withAttemptTimeout).toBe('function')
+    expect(typeof TimeoutError).toBe('function')
+    expect(typeof withBudget).toBe('function')
     expect(typeof wrapStreamIterable).toBe('function')
   })
 })
@@ -123,15 +125,18 @@ describe('@use-crux/core ValidationExhaustedError', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────
-// withAttemptTimeout() — generic per-attempt timeout
+// withBudget() — generic structured timeout budget
 // ─────────────────────────────────────────────────────────────────
 
-describe('@use-crux/core withAttemptTimeout()', () => {
+describe('@use-crux/core withBudget()', () => {
   it('resolves a fast function and aborts a slow one', async () => {
-    await expect(withAttemptTimeout(() => Promise.resolve('ok'), 1000)).resolves.toBe('ok')
+    await expect(withBudget(() => Promise.resolve('ok'), { budget: 'step', limitMs: 1000 })).resolves.toBe('ok')
 
     await expect(
-      withAttemptTimeout(() => new Promise((resolve) => setTimeout(() => resolve('late'), 50)), 1),
-    ).rejects.toMatchObject({ name: 'AbortError' })
+      withBudget(() => new Promise((resolve) => setTimeout(() => resolve('late'), 50)), {
+        budget: 'step',
+        limitMs: 1,
+      }),
+    ).rejects.toMatchObject({ name: 'TimeoutError', budget: 'step' })
   })
 })

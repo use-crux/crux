@@ -73,7 +73,7 @@ describe('provider runtime', () => {
               id: 'resp_1',
               model: 'runtime-actual',
               text: 'single-turn text',
-              usage: { inputTokens: 2, outputTokens: 3, totalTokens: 5 },
+              usage: { inputTokens: 2, outputTokens: 3, totalTokens: 5, inputTokenDetails: {}, outputTokenDetails: {} },
             }
           },
           async stream() {

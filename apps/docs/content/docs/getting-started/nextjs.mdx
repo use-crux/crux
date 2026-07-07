@@ -132,7 +132,7 @@ export default async function Page() {
 For chat or any long-form output, stream from a Route Handler:
 
 ```ts title="app/api/chat/route.ts"
-import { stream } from '@use-crux/ai'
+import { createUIMessageStreamResponse, stream } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 
 import { chatPrompt } from '@/lib/ai/prompts'
@@ -145,12 +145,13 @@ export async function POST(req: Request) {
     input: { message },
   })
 
-  return result.toUIMessageStreamResponse()
+  return createUIMessageStreamResponse(result)
 }
 ```
 
 <Callout type="info">
-  The Vercel AI SDK adapter's `stream()` returns a result compatible with `toUIMessageStreamResponse()` for seamless
+  The Vercel AI SDK adapter's `stream()` returns a canonical Crux stream
+  result. Pass it to `createUIMessageStreamResponse(result)` for seamless
   integration with `useChat` on the client.
 </Callout>
 

@@ -14,6 +14,7 @@ import type { DenseEmbedding } from '../embedding'
 import type { JsonObject, RecordStore, Storage, VectorStore } from '../storage'
 import type { PromptMiddlewareArgs } from '../runtime/types'
 import type { SemanticCacheMode, SemanticCachePromptOptions } from '../prompt/prompt-types'
+import type { TokenUsage } from '../generation/types'
 
 /** Context for resolving a cache scope key for a single call. */
 export interface SemanticCacheScopeContext {
@@ -81,7 +82,7 @@ export interface SemanticCacheEntry {
     text?: string
     object?: unknown
     finishReason?: string
-    usage?: Record<string, unknown>
+    usage?: TokenUsage | Record<string, unknown>
     meta?: Record<string, unknown>
   }
   createdAt: number
@@ -92,9 +93,7 @@ export interface SemanticCacheEntry {
 /** Structural shape of result `_meta` fields read by the semantic cache. Internal. */
 export interface CacheableResultMeta {
   finishReason?: string
-  usage?:
-    | Record<string, unknown>
-    | { inputTokens?: number; outputTokens?: number; totalTokens?: number; [key: string]: unknown }
+  usage?: TokenUsage | Record<string, unknown>
   toolCalls?: unknown[]
   [key: string]: unknown
 }
@@ -104,9 +103,7 @@ export interface CacheableResult {
   text?: string
   object?: unknown
   finishReason?: string
-  usage?:
-    | Record<string, unknown>
-    | { inputTokens?: number; outputTokens?: number; totalTokens?: number; [key: string]: unknown }
+  usage?: TokenUsage | Record<string, unknown>
   toolCalls?: unknown[]
   _meta?: CacheableResultMeta
 }

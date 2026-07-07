@@ -20,9 +20,14 @@ import {
 
 The tool lifecycle is one deep module. Middleware and approvals are **authored** as frozen objects; everything between "the model emitted tool calls" and "tool results are ready" is **executed** through a single per-call `ToolLifecycle` session that every adapter constructs internally — merge precedence, middleware chaining, the approval suspend/resume protocol, instrumentation, skill loads, and memory capture live in the session, never in adapter code. See [the ToolLifecycle session](#the-toollifecycle-session-adapter-authors) below.
 
-Tool middleware wraps tool definitions before an adapter executes them. Use it for policies that should apply across many tools: audit logging, timing, validation, approvals, and consistent error handling.
+Tool middleware wraps tools before an adapter executes them. Use it for behavior that should apply across many tools: audit logging, timing, validation, matcher-based approval callbacks, and consistent error handling. Tool definitions themselves stay policy-free; explicit approval policy belongs on `context({ toolApproval })`, `prompt({ toolApproval })`, or call-site `generate()` / `stream()` options.
 
 `toolMiddleware()` can observe or intercept execution. Use `beforeExecute`, `afterExecute`, and `onError` for simple hooks. Use `aroundExecute(call, next)` when middleware needs to modify input, call the wrapped tool conditionally, or return early.
+
+When a tool declares `contextSchema`, middleware receives the parsed value on
+`call.context` and `call.options.context`. Every hook also receives
+`call.runtimeContext`, the shared per-run value supplied by `generate()` /
+`stream()`.
 
 Middleware can be attached to a prompt:
 
@@ -119,7 +124,7 @@ const trimSubjects = toolMiddleware({
 
 ## `approvalMiddleware(config)`
 
-`approvalMiddleware()` is a convenience wrapper over `toolMiddleware()` for human-in-the-loop approval. It marks matched tool calls as approval-gated and wires approval responses back to callbacks on the next request.
+`approvalMiddleware()` is a convenience wrapper over `toolMiddleware()` for human-in-the-loop approval. It gates matched tool calls and wires approval responses back to callbacks on the next request. For explicit policy that should be inspectable by tool name, prefer `toolApproval`; middleware is useful for broad matcher-based gates and audit callbacks.
 
 ```ts
 const approvals = approvalMiddleware({

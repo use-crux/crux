@@ -1,5 +1,5 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import type { ContextEntry, MergedInput, Prompt, PromptConfig, ResolvedPrompt } from '@use-crux/core'
+import type { AnyToolSet, ContextEntry, MergedInput, Prompt, PromptConfig, ResolvedPrompt } from '@use-crux/core'
 import type { CruxAttributes } from '@use-crux/core/observability'
 import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { z } from 'zod'
@@ -32,11 +32,16 @@ import type {
 } from './driver'
 
 /** Prompt shape supported by the Convex runtime profile. */
-export type AnyConvexPrompt = Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>
+export type AnyConvexPrompt = Prompt<
+  z.ZodType,
+  z.ZodType | undefined,
+  readonly ContextEntry[],
+  AnyToolSet | undefined
+>
 
 /** Infer the merged input expected by a prompt and its context list. */
 export type PromptInput<TPrompt> =
-  TPrompt extends Prompt<infer TOwnInput, z.ZodType | undefined, infer TContexts>
+  TPrompt extends Prompt<infer TOwnInput, z.ZodType | undefined, infer TContexts, AnyToolSet | undefined>
     ? MergedInput<TOwnInput, TContexts>
     : never
 
@@ -259,7 +264,12 @@ export interface ProfileBackedAgentLifecycle<TPrompt extends AnyConvexPrompt> {
 }
 
 /** Type alias for prompt config reuse when adding runtime contexts. */
-export type AnyConvexPromptConfig = PromptConfig<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>
+export type AnyConvexPromptConfig = PromptConfig<
+  z.ZodType,
+  z.ZodType | undefined,
+  readonly ContextEntry[],
+  AnyToolSet | undefined
+>
 
 /** Captured context snapshot plus the original call arguments for a continued turn. */
 export interface ThreadContextPreparation {

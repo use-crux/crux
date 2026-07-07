@@ -125,7 +125,9 @@ function chatCompletion(emission: ProviderConformanceEmission, sequence: number)
       },
     ],
     usage:
-      emission.usage !== undefined
+      emission.usage === null
+        ? undefined
+        : emission.usage !== undefined
         ? {
             prompt_tokens: emission.usage.inputTokens,
             completion_tokens: emission.usage.outputTokens,

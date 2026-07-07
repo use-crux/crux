@@ -20,7 +20,13 @@ function anthropicResponse(text: string, toolUseBlocks?: any[]) {
     model: "claude-sonnet-4-20250514",
     content,
     stop_reason: toolUseBlocks?.length ? "tool_use" : "end_turn",
-    usage: { input_tokens: 10, output_tokens: 5 },
+    usage: {
+      input_tokens: 10,
+      output_tokens: 5,
+      cache_creation_input_tokens: 2,
+      cache_read_input_tokens: 3,
+      output_tokens_details: { thinking_tokens: 4 },
+    },
   };
 }
 
@@ -79,6 +85,8 @@ describe("Anthropic adapter (adapter)", () => {
         inputTokens: 10,
         outputTokens: 5,
         totalTokens: 15,
+        inputTokenDetails: { cacheReadTokens: 3, cacheWriteTokens: 2 },
+        outputTokenDetails: { reasoningTokens: 4 },
       });
     });
 

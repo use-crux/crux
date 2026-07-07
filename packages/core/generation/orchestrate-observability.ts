@@ -13,6 +13,7 @@
 import { observe } from '../observability'
 import type { ResolvedPrompt } from '../resolver/types'
 import type { OrchestrationSpec } from './orchestrate-types'
+import { TimeoutError, normalizeBudgetMs, type TimeoutOptions } from './timeout'
 import type { GenerationPerformanceTracker } from './performance-metrics'
 import { generationUsageAttributes } from './result-meta'
 import { createStreamSpanFinalizer, type StreamSpanFinalizer } from './stream-finalizer'
@@ -21,36 +22,36 @@ import { createStreamTokenCoalescer } from './stream-token-coalescer'
 export function generationAttributes(
   spec: Pick<
     OrchestrationSpec<Record<string, unknown>>,
-    'promptId' | 'provider' | 'model' | 'outputMode' | 'timeoutMs'
+    'promptId' | 'provider' | 'model' | 'outputMode' | 'timeout'
   >,
   operation: 'generate' | 'stream',
 ): Record<string, unknown> {
-  const timeoutMs = normalizeTimeoutMs(spec.timeoutMs)
+  const totalTimeoutMs = normalizeTotalTimeoutMs(spec.timeout?.totalMs)
   return {
     operation,
     ...(spec.promptId ? { promptId: spec.promptId } : {}),
     ...(spec.provider ? { provider: spec.provider } : {}),
     ...(typeof spec.model === 'string' ? { model: spec.model } : {}),
     ...(spec.outputMode ? { outputMode: spec.outputMode } : {}),
-    ...(timeoutMs ? { timeoutMs, deadlineAt: new Date(Date.now() + timeoutMs).toISOString() } : {}),
+    ...(totalTimeoutMs ? { totalTimeoutMs, deadlineAt: new Date(Date.now() + totalTimeoutMs).toISOString() } : {}),
   }
 }
 
-export function emitOperationDeadline(timeoutMs: number | undefined): void {
-  const normalized = normalizeTimeoutMs(timeoutMs)
+export function emitOperationDeadline(totalMs: TimeoutOptions['totalMs']): void {
+  const normalized = normalizeTotalTimeoutMs(totalMs)
   if (!normalized) return
   observe.event({
     name: 'operation.deadline',
     attributes: {
-      timeoutMs: normalized,
+      totalTimeoutMs: normalized,
       deadlineAt: new Date(Date.now() + normalized).toISOString(),
     },
   })
 }
 
-function normalizeTimeoutMs(timeoutMs: number | undefined): number | undefined {
-  if (typeof timeoutMs !== 'number' || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return undefined
-  return Math.floor(timeoutMs)
+function normalizeTotalTimeoutMs(totalMs: number | undefined): number | undefined {
+  if (typeof totalMs !== 'number' || !Number.isFinite(totalMs) || totalMs <= 0) return undefined
+  return Math.floor(totalMs)
 }
 
 export function generationInputPreview(
@@ -143,6 +144,7 @@ export function attachStreamObservability(
   result: unknown,
   span: ReturnType<typeof observe.openSpan>,
   performance: GenerationPerformanceTracker,
+  chunkMs?: number,
 ): void {
   if (!result || typeof result !== 'object') {
     span.end({ attributes: { streamCompleted: true, streamObservable: false }, metrics: performance.metrics() })
@@ -168,6 +170,7 @@ export function attachStreamObservability(
       span,
       finalizer,
       performance,
+      chunkMs,
     )
   }
 
@@ -217,9 +220,11 @@ async function* observedStream(
   span: ReturnType<typeof observe.openSpan>,
   finalizer: StreamSpanFinalizer,
   performance: GenerationPerformanceTracker,
+  chunkMs?: number,
 ): AsyncIterable<unknown> {
   let completed = false
   let failed = false
+  const normalizedChunkMs = normalizeBudgetMs(chunkMs)
   const tokenChunks = createStreamTokenCoalescer({
     emit: (attributes) => {
       void span.withContext(() => {
@@ -231,7 +236,11 @@ async function* observedStream(
     },
   })
   try {
-    for await (const chunk of rawStream) {
+    const iterator = rawStream[Symbol.asyncIterator]()
+    while (true) {
+      const next = await nextStreamChunk(iterator, normalizedChunkMs)
+      if (next.done) break
+      const chunk = next.value
       const delta = extractTextDelta(chunk)
       if (delta) {
         performance.recordOutputChunk()
@@ -252,6 +261,24 @@ async function* observedStream(
       tokenChunks.flush()
       finalizer.streamReturned({ tokenChunkCount: tokenChunks.chunkCount() })
     }
+  }
+}
+
+async function nextStreamChunk(
+  iterator: AsyncIterator<unknown>,
+  chunkMs: number | undefined,
+): Promise<IteratorResult<unknown>> {
+  if (chunkMs === undefined) return iterator.next()
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      iterator.next(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new TimeoutError({ budget: 'chunk', limitMs: chunkMs })), chunkMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
   }
 }
 

@@ -69,7 +69,7 @@ describe('generation interception at the executor boundary', () => {
         response: {
           text: '{"answer":"replayed"}',
           toolCalls: undefined,
-          usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+          usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, inputTokenDetails: {}, outputTokenDetails: {} },
           finishReason: 'stop',
           responseId: undefined,
           actualModelId: 'm1',

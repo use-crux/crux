@@ -13,6 +13,7 @@
 import type { AnyPromptConfig } from '../prompt/prompt-types'
 import type { MiddlewareResult } from '../runtime/types'
 import type { ResolvedPrompt } from '../resolver/types'
+import type { TimeoutOptions } from './timeout'
 
 /**
  * Context for generate/stream orchestration. Adapters construct this
@@ -50,11 +51,8 @@ export interface OrchestrationSpec<TPreparedArgs extends Record<string, unknown>
     object?: unknown
     meta?: Record<string, unknown>
   }) => MiddlewareResult
-  /**
-   * Maximum wall-clock runtime for this operation, when the adapter supports
-   * one. This is observability metadata only; adapters still own enforcement.
-   */
-  timeoutMs?: number
+  /** Structured timeout budgets for this managed operation. */
+  timeout?: TimeoutOptions
 }
 
 /**

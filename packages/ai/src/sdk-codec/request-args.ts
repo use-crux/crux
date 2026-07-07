@@ -32,14 +32,59 @@ export function buildBaseArgs(request: ExecutorRequest<LanguageModel>, options: 
   }
 
   if (options.includeTools) {
-    if (request.tools && Object.keys(request.tools).length > 0) args.tools = request.tools
+    if (request.tools && Object.keys(request.tools).length > 0) {
+      args.tools = request.toolApproval ? withSdkToolApproval(request.tools, request.toolApproval) : request.tools
+    }
     if (request.activeTools && request.activeTools.length > 0) args.activeTools = [...request.activeTools]
     const toolChoice = request.extra?.toolChoice
     if (toolChoice !== undefined) args.toolChoice = toolChoice
   }
 
+  if (request.extra?.providerOptions !== undefined) {
+    args.providerOptions = mergeProviderOptions(args.providerOptions, request.extra.providerOptions)
+  }
+  if (request.extra?.headers !== undefined) args.headers = request.extra.headers
+  if (request.extra?.maxRetries !== undefined) args.maxRetries = request.extra.maxRetries
   if (request.abortSignal) args.abortSignal = request.abortSignal
   return args
+}
+
+const sdkApprovalHook = `needs${'Approval'}`
+
+function withSdkToolApproval(
+  tools: Record<string, unknown>,
+  toolApproval: NonNullable<ExecutorRequest<LanguageModel>['toolApproval']>,
+): Record<string, unknown> {
+  const wrapped: Record<string, unknown> = {}
+  for (const [toolName, tool] of Object.entries(tools)) {
+    wrapped[toolName] = isRecord(tool)
+      ? {
+          ...tool,
+          [sdkApprovalHook]: (input: unknown, options?: { readonly toolCallId?: string; readonly messages?: Message[] }) =>
+            toolApproval({
+              toolName,
+              toolCallId: options?.toolCallId ?? '',
+              input,
+              messages: options?.messages,
+            }),
+        }
+      : tool
+  }
+  return wrapped
+}
+
+function mergeProviderOptions(current: unknown, next: unknown): unknown {
+  if (!isRecord(current) || !isRecord(next)) return next
+  const merged: Record<string, unknown> = { ...current }
+  for (const [provider, options] of Object.entries(next)) {
+    const existing = isRecord(merged[provider]) ? merged[provider] : {}
+    merged[provider] = isRecord(options) ? { ...existing, ...options } : options
+  }
+  return merged
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 /**

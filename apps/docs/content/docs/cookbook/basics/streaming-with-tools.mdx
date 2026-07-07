@@ -8,7 +8,7 @@ This recipe shows how to stream model output to the client _and_ let the model c
 ## Primitives used
 
 - `prompt()` with `tools`
-- `@use-crux/ai` `stream()` returning a `toUIMessageStreamResponse()`
+- `@use-crux/ai` `stream()` with `createUIMessageStreamResponse()`
 - AI SDK `useChat` on the client
 - Optional: `context()` to share tools across multiple prompts
 
@@ -85,7 +85,7 @@ export const docsAssistant = prompt({
 
 ```ts
 import { maxSteps } from "@use-crux/core";
-import { stream } from "@use-crux/ai";
+import { createUIMessageStreamResponse, stream } from "@use-crux/ai";
 import { openai } from "@ai-sdk/openai";
 
 import { docsAssistant } from "@/lib/ai/prompts";
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
     stopWhen: maxSteps(5), // bound the tool-loop
   });
 
-  return result.toUIMessageStreamResponse();
+  return createUIMessageStreamResponse(result);
 }
 ```
 
@@ -148,7 +148,7 @@ export function DocsChat() {
 
 1. **Tools come from a context, not the prompt.** Putting `searchDocs` and `fetchPage` on a `context()` means any prompt that uses `docsTools` inherits them. If you later add a `docsSummarizer` prompt that also needs these tools, you reuse the context — no copy-paste.
 
-2. **`stream()` returns a streaming result, not a Promise.** The handler immediately returns the `Response` from `toUIMessageStreamResponse()`. Tool calls happen mid-stream and the AI SDK pipes their input/output through the response as UI message parts the client renders.
+2. **`stream()` returns a canonical stream result.** The handler immediately returns the `Response` from `createUIMessageStreamResponse(result)`. Tool calls happen mid-stream and the AI SDK pipes their input/output through the response as UI message parts the client renders.
 
 3. **`stopWhen: maxSteps(5)` bounds the tool-loop.** Without a stop condition, the model could enter an infinite tool-call loop. `maxSteps()` is the simplest bound. For more nuanced control, use `hasToolCall(name)` from `@use-crux/core` to stop after a specific tool call resolves.
 

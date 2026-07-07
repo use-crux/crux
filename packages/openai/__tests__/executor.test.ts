@@ -26,7 +26,13 @@ function chatResponse(content: string | null, toolCalls?: any[]) {
         finish_reason: toolCalls?.length ? "tool_calls" : "stop",
       },
     ],
-    usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+    usage: {
+      prompt_tokens: 10,
+      completion_tokens: 5,
+      total_tokens: 15,
+      prompt_tokens_details: { cached_tokens: 4 },
+      completion_tokens_details: { reasoning_tokens: 3 },
+    },
   };
 }
 
@@ -53,6 +59,8 @@ describe("OpenAI adapter via adapter", () => {
       inputTokens: 10,
       outputTokens: 5,
       totalTokens: 15,
+      inputTokenDetails: { cacheReadTokens: 4 },
+      outputTokenDetails: { reasoningTokens: 3 },
     });
     expect(result._meta.finishReason).toBe("stop");
   });

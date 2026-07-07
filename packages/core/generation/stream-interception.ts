@@ -11,6 +11,7 @@
 
 import type { StreamProgressReporter } from '../runtime/middleware'
 import type { TextDeltaExtractor } from './orchestrate-types'
+import { TimeoutError, normalizeBudgetMs } from './timeout'
 
 /**
  * Mutate `[Symbol.asyncIterator]` on an SDK stream object to intercept
@@ -27,6 +28,7 @@ import type { TextDeltaExtractor } from './orchestrate-types'
  * @param extractTextDelta - SDK-specific chunk to text delta extractor
  * @param onComplete - Called when the iterator finishes (receives final chunk if available)
  * @param onError - Called on iteration error (receives the error)
+ * @param chunkMs - Optional inactivity timeout between chunks.
  */
 export function wrapStreamIterable(
   stream: { [Symbol.asyncIterator]: () => AsyncIterator<unknown> },
@@ -34,15 +36,17 @@ export function wrapStreamIterable(
   extractTextDelta: TextDeltaExtractor,
   onComplete: (finalChunk?: unknown) => void,
   onError: (err: unknown) => void,
+  chunkMs?: number,
 ): void {
   const originalIterFn = stream[Symbol.asyncIterator].bind(stream)
+  const normalizedChunkMs = normalizeBudgetMs(chunkMs)
 
   stream[Symbol.asyncIterator] = function () {
     const iter = originalIterFn()
     return {
       async next() {
         try {
-          const result = await iter.next()
+          const result = await nextWithChunkBudget(iter, normalizedChunkMs)
           if (!result.done) {
             const textDelta = extractTextDelta(result.value)
             progress?.onChunk(textDelta ?? undefined)
@@ -60,5 +64,24 @@ export function wrapStreamIterable(
       return: iter.return?.bind(iter),
       throw: iter.throw?.bind(iter),
     }
+  }
+}
+
+async function nextWithChunkBudget(
+  iter: AsyncIterator<unknown>,
+  chunkMs: number | undefined,
+): Promise<IteratorResult<unknown>> {
+  if (chunkMs === undefined) return iter.next()
+
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      iter.next(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new TimeoutError({ budget: 'chunk', limitMs: chunkMs })), chunkMs)
+      }),
+    ])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
   }
 }

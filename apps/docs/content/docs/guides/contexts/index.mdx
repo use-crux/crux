@@ -210,7 +210,7 @@ Excluded contexts are not resolved, do not call async `system()` functions, and 
 ```ts title="context-with-memory.ts"
 import { context, prompt } from '@use-crux/core'
 import { memory, recentMessages, facts } from '@use-crux/core/memory'
-import { skill } from '@use-crux/core/skill'
+import { skill } from '@use-crux/core/skill/node'
 import { z } from 'zod'
 
 const userMemory = memory({

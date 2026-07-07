@@ -1,0 +1,80 @@
+/**
+ * Canonical envelope helpers for SDK-loop execution.
+ *
+ * Loop-owned SDKs report a complete run back to core. This module adapts that
+ * run summary into the same public envelope used by single-turn adapters.
+ *
+ * @internal
+ * @module
+ */
+
+import type { TraceMeta } from "../../generation/types";
+import type { Message } from "../../generation/messages";
+import type { AdapterResponse } from "../types";
+import type { ExecutorStep } from "../executor-types";
+import type { ApprovalRequestInfo } from "../tool/approval";
+import {
+  createResultAccumulator,
+  type ResultStepFacts,
+} from "../result-accumulator";
+import type { AdapterExecutionGenerateResult } from "./types";
+
+/** Convert an observed SDK-loop step into accumulator facts. */
+export function sdkStepFacts(step: ExecutorStep): ResultStepFacts {
+  return {
+    text: step.text,
+    ...(step.usage !== undefined ? { usage: step.usage } : {}),
+    finishReason: step.finishReason,
+    responseId: undefined,
+    modelId: undefined,
+  };
+}
+
+/** Convert the final SDK response into accumulator facts. */
+export function sdkResponseFacts(
+  response: AdapterResponse,
+  text: string = response.text,
+): ResultStepFacts {
+  return {
+    text,
+    ...(response.usage !== undefined ? { usage: response.usage } : {}),
+    finishReason: response.finishReason,
+    responseId: response.responseId,
+    modelId: response.actualModelId,
+  };
+}
+
+/** Finalize an SDK-loop result through the canonical accumulator. */
+export function finalizeSdkResultEnvelope<TRawResponse>(args: {
+  readonly raw: TRawResponse | undefined;
+  readonly response: AdapterResponse;
+  readonly text: string;
+  readonly object?: unknown;
+  readonly _meta: TraceMeta;
+  readonly messages: Message[];
+  readonly pendingApprovals?: readonly ApprovalRequestInfo[];
+  readonly stepFacts?: readonly ResultStepFacts[];
+  readonly finalStepMode?: "replace" | "append" | "preserve";
+}): AdapterExecutionGenerateResult<TRawResponse> {
+  const facts = [...(args.stepFacts ?? [])];
+  const finalFacts = sdkResponseFacts(args.response, args.text);
+  if (facts.length === 0 || args.finalStepMode === "append") {
+    facts.push(finalFacts);
+  } else if (args.finalStepMode !== "preserve") {
+    facts[facts.length - 1] = finalFacts;
+  }
+
+  const accumulator = createResultAccumulator();
+  for (const fact of facts) accumulator.addStep(fact);
+
+  return accumulator.finalize({
+    raw: args.raw,
+    messages: args.messages,
+    _meta: args._meta,
+    ...(args.object !== undefined ? { object: args.object } : {}),
+    ...(args._meta.cost !== undefined ? { cost: args._meta.cost } : {}),
+    ...(args.pendingApprovals
+      ? { pendingApprovals: args.pendingApprovals }
+      : {}),
+  }) as AdapterExecutionGenerateResult<TRawResponse>;
+}

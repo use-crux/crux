@@ -119,7 +119,7 @@ Throws `ConsensusError` when quorum is not met. The error has `.votes` and `.quo
 | `agentId` | `string` | Agent identifier |
 | `output` | `unknown` | The agent's output |
 | `durationMs` | `number` | Execution time |
-| `usage` | `{ inputTokens?, outputTokens?, totalTokens? }?` | Token usage if available |
+| `usage` | `TokenUsage | undefined` | Token usage if available |
 
 ### `AgentExecutor`
 

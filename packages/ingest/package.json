@@ -18,7 +18,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "type": "module",
   "main": "./index.ts",
@@ -26,18 +26,15 @@
   "exports": {
     ".": {
       "types": "./index.ts",
-      "import": "./index.ts",
-      "require": "./index.ts"
+      "import": "./index.ts"
     },
     "./files": {
       "types": "./files.ts",
-      "import": "./files.ts",
-      "require": "./files.ts"
+      "import": "./files.ts"
     },
     "./urls": {
       "types": "./urls.ts",
-      "import": "./urls.ts",
-      "require": "./urls.ts"
+      "import": "./urls.ts"
     }
   },
   "dependencies": {

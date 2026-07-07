@@ -188,7 +188,7 @@ const work = await tasks({
 Skills are Markdown-based instruction sets that agents can load on demand. Compatible with the [skills.sh](https://skills.sh) format.
 
 ```ts
-import { skill, skillsSh } from '@use-crux/core/skill'
+import { skill, skillsSh } from '@use-crux/core/skill/node'
 
 const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
 const research = skill.fromRegistry(skillsSh, 'user/skills/research')

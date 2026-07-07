@@ -56,7 +56,7 @@ describe('@use-crux/ai/agent', () => {
     expect(executionEvents[0]).toMatchObject({
       promptId: 'agent-boundary',
       parentResolveTraceId: 'resolve-trace-1',
-      usage: { inputTokens: 5, outputTokens: 7 },
+      usage: { inputTokens: 5, outputTokens: 7, totalTokens: 12, inputTokenDetails: {}, outputTokenDetails: {} },
       resolveInspect: expect.objectContaining({
         tools: expect.arrayContaining(['searchDocs']),
       }),

@@ -58,15 +58,8 @@ describe('streaming safety through real streamText', () => {
     }
     expect(streamed).toBe('import x from @/components/Button — done')
 
-    const meta = await (
-      result as unknown as {
-        completion: Promise<{ guardrails?: { applied: unknown[] } }>
-      }
-    ).completion
-    expect(meta?.guardrails?.applied).toContainEqual(
-      expect.objectContaining({ guard: 'import-fixer', action: 'transform' }),
-    )
-    expect(JSON.stringify(meta?.guardrails?.applied ?? [])).not.toContain('@/comps/Button')
+    const meta = await result.completion
+    expect(meta.text).toBe('import x from @/components/Button — done')
   })
 
   it('fails closed instead of releasing a held tail before the finish part', async () => {

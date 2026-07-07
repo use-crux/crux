@@ -12,7 +12,7 @@
  */
 
 import { observe } from '../observability'
-import { withAttemptTimeout } from './attempt-timeout'
+import { withBudget } from './timeout'
 import type { FallbackModel, FallbackMeta, FallbackAttemptDetail } from './fallback'
 import { classifyError, shouldAttemptFallback } from './fallback'
 import { getMeta, setMeta } from './result-meta'
@@ -73,7 +73,7 @@ export async function executeFallbackLoop<M, R>(
 
     try {
       const result = await attemptSpan.withContext(() =>
-        withAttemptTimeout(() => tryModel(model), fallbackOpts.timeout),
+        withBudget(() => tryModel(model), { budget: 'step', limitMs: fallbackOpts.timeout }),
       )
       const durationMs = Date.now() - attemptStart
 

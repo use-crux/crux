@@ -331,6 +331,20 @@ export {
   findToolApprovalDecision,
   deniedToolModelOutput,
 } from "./tools/approvals";
+export {
+  approvalPolicyKind,
+  inspectToolApprovalPolicies,
+  resolveApprovalPolicy,
+} from "./tools/approval-policy";
+export type {
+  ApprovalDeclaration,
+  ResolvedApprovalPolicy,
+  ToolApprovalContext,
+  ToolApprovalInspection,
+  ToolApprovalLayer,
+  ToolApprovalMap,
+  ToolApprovalPolicy,
+} from "./tools/approval-policy";
 export type {
   ToolApprovalDecision,
   ToolApprovalDecisionEvent,
@@ -351,6 +365,14 @@ export type {
   ToolResultContext,
   ApprovalMiddlewareConfig,
 } from "./tools/types";
+export type {
+  KnownToolsFor,
+  MergeKnownTools,
+  PromptToolsOf,
+  ToolContextOf,
+  ToolsContextOf,
+  ToolsContextOption,
+} from "./tools/context-types";
 
 // Runtime hooks — prefer `config()` for centralized setup
 export {
@@ -724,10 +746,19 @@ export type {
   orchestrateGenerate,
   orchestrateStream,
   executeFallbackLoop,
-  withAttemptTimeout,
   wrapStreamIterable,
+  TimeoutError,
+  normalizeBudgetMs,
+  toolBudgetMs,
+  createBudgetSignal,
+  withBudget,
 } from "./generation";
 /** @internal */ export type {
+  TimeoutBudget,
+  TimeoutOptions,
+  TimeoutErrorOptions,
+  BudgetOptions,
+  BudgetSignal,
   OrchestrationSpec,
   TextDeltaExtractor,
 } from "./generation";
@@ -745,6 +776,10 @@ export type {
   AdapterGenerateOptions,
   AdapterStreamOptions,
   AdapterGenerateResult,
+  FinalStepInfo,
+  GenerateResult,
+  StreamCompletion,
+  StreamResult,
 } from "./adapter/index";
 
 // Loop-owning adapter abstraction (also available as @use-crux/core/adapter subpath)

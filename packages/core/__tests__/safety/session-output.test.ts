@@ -428,7 +428,7 @@ describe('stamp', () => {
 
     const meta = safety.stamp({
       finishReason: 'stop',
-      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, inputTokenDetails: {}, outputTokenDetails: {} },
     })
 
     expect(meta.finishReason).toBe('stop')

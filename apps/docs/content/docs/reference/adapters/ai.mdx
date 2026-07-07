@@ -7,6 +7,8 @@ description: Vercel AI SDK adapter — generate, stream, dense embedding helpers
 import {
   generate,
   stream,
+  createUIMessageStreamResponse,
+  pipeUIMessageStreamToResponse,
   embedding,
   retrievalModel,
   reranker,
@@ -28,7 +30,7 @@ import { resolve } from "@use-crux/ai/agent";
 
 ## Architecture
 
-`@use-crux/ai` exports `aiSdkProviderRuntime`, a normal Crux provider runtime with `ownership: 'loop-owned'` for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding through the same `SdkGateway` seam.
+`@use-crux/ai` exports `aiSdkProviderRuntime`, a normal Crux provider runtime with `ownership: 'loop-owned'` for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, SDK-owned tool approval hooks, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding through the same `SdkGateway` seam.
 
 The only module that calls AI SDK functions is the `SdkGateway` — inject a scripted one via [`createCruxAi`](#createcruxaioptions) to test without module mocks.
 
@@ -67,24 +69,33 @@ Execute a prompt using the Vercel AI SDK.
 | `options.input`                | `MergedInput<TOwnInput, TContexts>`                                                                             | Input values — merged across the prompt's own schema and every context's `input` schema                                                                            |
 | `options.tools`                | `ToolSet?`                                                                                                      | Additional tools to merge at call time                                                                                                                             |
 | `options.toolMiddleware`       | `ToolMiddleware \| readonly ToolMiddleware[]?`                                                                  | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                                                                         |
+| `options.toolApproval`         | `ToolApprovalMap?`                                                                                              | Call-site approval policy; exact tool names beat `'*'`, and call-site policy wins over prompt/context declarations.                                                 |
+| `options.toolsContext`         | `Record<string, unknown>?`                                                                                      | Required for composed tools that declare `contextSchema`; values are Zod-validated before the tool loop starts.                                                     |
+| `options.runtimeContext`       | `unknown?`                                                                                                      | Shared per-run context visible to tool `execute`, middleware, and function-form `toolApproval` policies.                                                            |
+| `options.transport`            | `(params, info) => Promise<SdkLoopResultLike>`                                                                  | BYO `SdkGateway` call. Crux still owns the loop, approvals, validation retry, routing, and timeouts.                                                                 |
 | `options.toolChoice`           | `ToolChoice?`                                                                                                   | Portable Crux tool choice strategy from `GenerationSettings`                                                                                                       |
 | `options.stopWhen`             | `StopCondition \| readonly StopCondition[]?`                                                                    | Portable Crux stop condition(s), OR-composed with the `maxSteps` budget (e.g. `hasToolCall(name)`)                                                                 |
 | `options.maxSteps`             | `number?`                                                                                                       | Maximum tool-loop steps, identical across all Crux adapters. Enforced natively via AI SDK `stopWhen`. Default: `10`                                                |
+| `options.maxTokens`            | `number?`                                                                                                       | Portable maximum output tokens. Lowered to AI SDK `maxOutputTokens`.                                                                                                |
+| `options.topK`                 | `number?`                                                                                                       | Portable top-K sampling.                                                                                                                                            |
+| `options.stopSequences`        | `readonly string[]?`                                                                                            | Portable stop sequences.                                                                                                                                            |
+| `options.seed`                 | `number?`                                                                                                       | Portable deterministic sampling seed when the model supports it.                                                                                                     |
+| `options.reasoning`            | `'low' \| 'medium' \| 'high'?`                                                                                  | Portable reasoning effort. Lowered to AI SDK v6 provider options for OpenAI, Anthropic, and Google models.                                                         |
 | `options.extra.toolChoice`     | `ToolChoice<ToolSet>?`                                                                                          | AI SDK-native, non-portable tool choice strategy                                                                                                                   |
 | `options.extra.stopWhen`       | `StopCondition<ToolSet> \| StopCondition<ToolSet>[]?`                                                           | AI SDK-native, non-portable stop conditions                                                                                                                        |
+| `options.extra.providerOptions` | `ProviderOptions?`                                                                                              | AI SDK provider-specific options. Merged with Crux-generated provider options such as portable `reasoning`.                                                         |
+| `options.extra.headers`        | `Record<string, string \| undefined>?`                                                                          | AI SDK HTTP headers for HTTP-based providers.                                                                                                                       |
+| `options.extra.maxRetries`     | `number?`                                                                                                       | AI SDK retry policy.                                                                                                                                                |
 | `options.activeTools`          | `string[]?`                                                                                                     | Restrict available tools                                                                                                                                           |
 | `options.messages`             | `ModelMessage[]?`                                                                                               | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                                                                          |
 | `options.tokenBudget`          | `number?`                                                                                                       | Token budget for context dropping                                                                                                                                  |
-| `options.timeoutMs`            | `number?`                                                                                                       | Hard timeout for the provider call. Crux passes an `AbortSignal` to the AI SDK and closes the generation span with `AbortError` if the call does not settle.       |
+| `options.timeout`            | `{ totalMs?, stepMs?, chunkMs?, toolMs?, tools? }?`                                                             | Structured timeout budgets. Crux rejects with `TimeoutError`; `tools[name]` overrides `toolMs` for one tool.                                                       |
 | `options.validationRetry`      | [`ValidationRetryOptions?`](/docs/guides/safety/constraints)                                                    | Retry structured output on validation failure                                                                                                                      |
 | `options.constraints`          | [`Constraint[]?`](/docs/guides/safety/constraints)                                                              | Per-call semantic constraints (highest precedence in the safety merge)                                                                                             |
 | `options.constraintMaxRetries` | `number?`                                                                                                       | Shared cap on total constraint retries across all constraints                                                                                                      |
 | `options.guardrails`           | [`Guardrail[]?`](/docs/guides/safety/guardrails)                                                                | Per-call guardrails (highest precedence in the safety merge)                                                                                                       |
 
-**Returns:**
-
-- With `output` schema: `GenerateObjectResult<T>` — `.object` (typed)
-- Without `output`: `GenerateTextResult` — `.text`
+**Returns:** `GenerateResult<TRaw, TOutput>` — accumulated `.text`, optional complete `.usage`, optional `.cost`, `.steps`, `.finalStep`, provider-neutral `.messages`, retained `._meta`, and typed `.raw` for the AI SDK result. With an `output` schema, `.object` is typed from the prompt schema.
 
 ### `stream(prompt, options)`
 
@@ -97,26 +108,27 @@ Stream a prompt execution. Same options as `generate()`, except `cascade()` is n
 | `options.input`            | `MergedInput<TOwnInput, TContexts>`                                              | Input values — merged across the prompt's own schema and every context's `input` schema                           |
 | `options.tools`            | `ToolSet?`                                                                       | Additional tools to merge at call time                                                                            |
 | `options.toolMiddleware`   | `ToolMiddleware \| readonly ToolMiddleware[]?`                                   | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                        |
+| `options.toolApproval`     | `ToolApprovalMap?`                                                               | Call-site approval policy; exact tool names beat `'*'`, and call-site policy wins over prompt/context declarations. |
+| `options.toolsContext`     | `Record<string, unknown>?`                                                       | Required for composed tools that declare `contextSchema`; values are Zod-validated before the tool loop starts.    |
+| `options.runtimeContext`   | `unknown?`                                                                       | Shared per-run context visible to tool `execute`, middleware, and function-form `toolApproval` policies.           |
 | `options.toolChoice`       | `ToolChoice?`                                                                    | Portable Crux tool choice strategy from `GenerationSettings`                                                      |
 | `options.stopWhen`         | `StopCondition \| readonly StopCondition[]?`                                     | Portable Crux stop condition(s), OR-composed with the `maxSteps` budget                                           |
 | `options.maxSteps`         | `number?`                                                                        | Maximum tool-loop steps (default `10`), identical across all Crux adapters                                        |
+| `options.reasoning`        | `'low' \| 'medium' \| 'high'?`                                                   | Portable reasoning effort. Lowered to AI SDK v6 provider options for OpenAI, Anthropic, and Google models.        |
 | `options.extra.toolChoice` | `ToolChoice<ToolSet>?`                                                           | AI SDK-native, non-portable tool choice strategy                                                                  |
 | `options.extra.stopWhen`   | `StopCondition<ToolSet> \| StopCondition<ToolSet>[]?`                            | AI SDK-native, non-portable stop conditions                                                                       |
 | `options.activeTools`      | `string[]?`                                                                      | Restrict available tools                                                                                          |
 | `options.messages`         | `ModelMessage[]?`                                                                | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                         |
 | `options.tokenBudget`      | `number?`                                                                        | Token budget for context dropping                                                                                 |
 
-**Returns:**
-
-- With `output`: `ObjectStreamResult<T>` — `.partialObjectStream`
-- Without `output`: `TextStreamResult` — `.textStream`
+**Returns:** `StreamResult<TRawStream, TOutput>` — canonical `.textStream`, typed `.raw` for the AI SDK stream result, and `.completion`, which resolves to the canonical completion envelope.
 
 ```ts
 const result = await stream(editDraft, {
   model: openai("gpt-4o"),
   input: { instruction: "Fix the intro" },
 });
-for await (const partial of result.partialObjectStream) {
+for await (const partial of result.raw.partialObjectStream) {
   console.log(partial);
 }
 ```
@@ -126,9 +138,41 @@ Stream results additionally carry a typed `completion` promise:
 ```ts
 const result = await stream(chatPrompt, { model, input: { message } });
 for await (const delta of result.textStream) process.stdout.write(delta);
-const meta = await result.completion;
-// { usage, cost, finishReason, text, streaming: { ttftMs, tokensPerSecond, totalChunks } }
+const completion = await result.completion;
+// { text, usage?, cost?, steps, finalStep, messages }
 ```
+
+For AI SDK UI routes, pass the canonical result to the helper:
+
+```ts
+const result = await stream(chatPrompt, { model, input: { message } });
+return createUIMessageStreamResponse(result);
+```
+
+Use `pipeUIMessageStreamToResponse(result, options)` for Node `ServerResponse` targets.
+
+### `toParams(resolved, options)` / `fromResponse(response)`
+
+`toParams()` converts a `ResolvedPrompt` plus an AI SDK `{ model, settings?,
+extra? }` object into `generateText()` args. `fromResponse()` normalizes an AI
+SDK generate result into Crux `AdapterResponse` facts.
+
+These codecs are translation-only. Use managed `generate()`/`stream()` when
+Crux should run tools, approvals, validation retry, memory capture, safety, and
+observability.
+
+### `prepare(prompt, options)`
+
+Prepare a headless AI SDK call. Crux resolves the prompt and returns the
+planned `SdkGateway` params without invoking the AI SDK. Feed the raw SDK result
+back with `finish(response)`.
+
+`generate(prompt, { ...options, transport })` is the BYO-wire mode where Crux
+keeps owning the loop and invokes your callback for each `SdkGateway` request.
+AI SDK structured validation retry still happens when the transport throws the
+same validation/parse errors the SDK would throw. `stream()` with `transport`
+is intentionally unsupported and rejects with
+`CruxTransportStreamUnsupportedError`.
 
 ### `createCruxAi(options?)`
 
@@ -138,7 +182,7 @@ Build a `@use-crux/ai` instance bound to a specific `SdkGateway`. The package-le
 | ----------------- | ------------- | --------------------------------------------------------------------- |
 | `options.gateway` | `SdkGateway?` | The AI SDK gateway to execute against. Defaults to `liveSdkGateway()` |
 
-**Returns:** `CruxAi` — `{ generate, stream, generateTextFn, generateObjectFn, embedding, retrievalModel, reranker }`
+**Returns:** `CruxAi` — `{ generate, stream, prepare, generateTextFn, generateObjectFn, embedding, retrievalModel, reranker }`
 
 ```ts
 import { createCruxAi } from "@use-crux/ai";
@@ -255,12 +299,17 @@ Use this with `rerank({ engine })` in retrieval recipes. Native reranking models
 
 ### Tool approvals
 
-When a tool with `needsApproval` (set directly or via [approval middleware](/docs/reference/crux-core/tool-middleware)) fires, generation suspends: the result has `_meta.finishReason === 'tool_approval_required'`, `pendingApprovals` carries the minted requests (with anti-forgery tokens), and `messages` ends with the approval-request message. Persist the messages, collect a decision, append a `tool-approval-response`, and call `generate()` again.
+When `toolApproval` requires approval for a tool call, generation suspends: the result has `_meta.finishReason === 'tool_approval_required'`, `pendingApprovals` carries the minted requests (with anti-forgery tokens), and `messages` ends with the approval-request message. Persist the messages, collect a decision, append a `tool-approval-response`, and call `generate()` again.
 
 ```ts
 import { appendToolApprovalResponse } from "@use-crux/core/tool-middleware";
 
-const first = await generate(assistant, { model, input, tools });
+const first = await generate(assistant, {
+  model,
+  input,
+  tools,
+  toolApproval: { deletePost: "always" },
+});
 
 if (first.pendingApprovals?.length) {
   const approval = first.pendingApprovals[0];
@@ -268,6 +317,7 @@ if (first.pendingApprovals?.length) {
     model,
     input,
     tools,
+    toolApproval: { deletePost: "always" },
     messages: appendToolApprovalResponse(first.messages, {
       approvalId: approval.approvalId,
       approved: true,
@@ -294,7 +344,6 @@ import type {
   CruxAi,
   CruxAiOptions,
   CruxAIErrorCode,
-  CruxStreamExtensions,
   SdkGateway,
   TextStreamResult,
   ObjectStreamResult,

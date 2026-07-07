@@ -97,22 +97,3 @@ export async function inspectForDevtools(
     return {}
   }
 }
-
-/**
- * Create an abort signal and cleanup hook for a generation timeout.
- *
- * @param timeoutMs - Wall-clock timeout in milliseconds. Non-positive values disable timeout handling.
- * @returns An optional signal and a `dispose()` function that clears timers.
- */
-export function createTimeoutSignal(timeoutMs: number | undefined): {
-  signal: AbortSignal | undefined
-  dispose: () => void
-} {
-  if (!timeoutMs || timeoutMs <= 0) return { signal: undefined, dispose: () => {} }
-  const controller = new AbortController()
-  const timer = setTimeout(
-    () => controller.abort(new DOMException(`Generation timed out after ${timeoutMs}ms`, 'AbortError')),
-    timeoutMs,
-  )
-  return { signal: controller.signal, dispose: () => clearTimeout(timer) }
-}

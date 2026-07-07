@@ -8,22 +8,11 @@
  * @module
  */
 
-import type { ToolCallContext, ToolExecutionOptions, ToolLike, ToolMatcher } from '../types'
+import type { ToolCallContext, ToolLike, ToolMatcher } from '../types'
 
 /** Structural guard: any non-null object is treated as a wrappable tool. */
 export function isToolLike(value: unknown): value is ToolLike {
   return value !== null && typeof value === 'object'
-}
-
-/** Resolve a tool's `needsApproval` (boolean or predicate) to a concrete boolean. */
-export async function evaluateNeedsApproval<TInput>(
-  needsApproval: ToolLike<TInput>['needsApproval'],
-  input: TInput,
-  options: ToolExecutionOptions,
-): Promise<boolean> {
-  if (needsApproval === undefined) return false
-  if (typeof needsApproval === 'boolean') return needsApproval
-  return Boolean(await needsApproval(input, options))
 }
 
 /** Return true when any matcher selects the given tool call. */

@@ -21,6 +21,7 @@
 
 import type { AnyPrompt } from '../prompt/prompt-types'
 import type { GenerationSettings, TraceMeta } from '../generation/types'
+import type { TimeoutOptions } from '../generation/timeout'
 import type { Message } from '../generation/messages'
 import type { LoopRuntimePort } from './loop-runtime-port'
 import type { ExecutorStreamHandle, StepObserver } from './executor-types'
@@ -36,6 +37,7 @@ import { isRouter, isCascade } from '../routing'
 import { resolveModel } from '../routing/resolve'
 import type { AnyRouterModel, CascadeModel } from '../routing'
 import type { ToolMiddleware } from '../tools/types'
+import type { ToolApprovalMap } from '../tools/approval-policy'
 import { createCompositions } from '../agent/create-compositions'
 import type { AgentExecutor } from '../agent/executor'
 import { createAdapterExecution, sdkLoopDialect } from './execution/session'
@@ -59,8 +61,14 @@ export interface ExecutorGenerateOptions<TModel> {
   input?: Record<string, unknown>
   /** Additional tools merged at call time (highest precedence). */
   tools?: Record<string, unknown>
+  /** Per-tool context values keyed by tools that declare `contextSchema`. */
+  toolsContext?: Readonly<Record<string, unknown>>
+  /** Shared context threaded through tool execution, middleware, approvals, and step hooks. */
+  runtimeContext?: unknown
   /** Tool middleware applied after prompt tools and call-site tools are merged. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
+  /** Call-site approval policy with final-word precedence over prompt/context declarations. */
+  toolApproval?: ToolApprovalMap
   /**
    * Message history override — used for conversation continuations and for
    * resuming after a tool-approval decision (append a
@@ -73,12 +81,8 @@ export interface ExecutorGenerateOptions<TModel> {
   settings?: GenerationSettings
   /** Token budget for the system message. */
   tokenBudget?: number
-  /**
-   * Hard wall-clock timeout in milliseconds. Enforced by core (the call
-   * rejects with an `AbortError`) and forwarded to the SDK as an
-   * `AbortSignal` so the underlying request is cancelled too.
-   */
-  timeoutMs?: number
+  /** Structured timeout budgets for this managed call. */
+  timeout?: TimeoutOptions
   /**
    * Validation-feedback retry for structured output. Each retry makes one
    * additional `attemptStructured` call with the Zod errors injected as a
@@ -199,7 +203,7 @@ export interface CruxExecutor<TModel, TRawResponse = unknown, TRawStream = unkno
  *   model: 'fake:m-1',
  *   input: { instruction: 'Say hello' },
  *   validationRetry: { maxRetries: 2 },
- *   timeoutMs: 30_000,
+   *   timeout: { totalMs: 30_000 },
  * })
  * ```
  */
@@ -246,12 +250,15 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       model,
       input: opts.input,
       tools: opts.tools,
+      toolsContext: opts.toolsContext,
+      runtimeContext: opts.runtimeContext,
       toolMiddleware: opts.toolMiddleware,
+      toolApproval: opts.toolApproval,
       messages: opts.messages,
       maxSteps: opts.maxSteps,
       settings: opts.settings,
       tokenBudget: opts.tokenBudget,
-      timeoutMs: opts.timeoutMs,
+      timeout: opts.timeout,
       validationRetry: opts.validationRetry,
       constraints: opts.constraints,
       constraintMaxRetries: opts.constraintMaxRetries,
@@ -301,12 +308,15 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       model,
       input: opts.input,
       tools: opts.tools,
+      toolsContext: opts.toolsContext,
+      runtimeContext: opts.runtimeContext,
       toolMiddleware: opts.toolMiddleware,
+      toolApproval: opts.toolApproval,
       messages: opts.messages,
       maxSteps: opts.maxSteps,
       settings: opts.settings,
       tokenBudget: opts.tokenBudget,
-      timeoutMs: opts.timeoutMs,
+      timeout: opts.timeout,
       validationRetry: opts.validationRetry,
       constraints: opts.constraints,
       constraintMaxRetries: opts.constraintMaxRetries,
@@ -339,13 +349,7 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       agentId: agent.id,
       output: result.object ?? result.text,
       durationMs: Date.now() - start,
-      usage: result._meta.usage
-        ? {
-            inputTokens: result._meta.usage.inputTokens,
-            outputTokens: result._meta.usage.outputTokens,
-            totalTokens: result._meta.usage.totalTokens,
-          }
-        : undefined,
+      usage: result._meta.usage,
     }
   }
 

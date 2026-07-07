@@ -40,6 +40,7 @@ Create an adapter bound to an Anthropic client.
 | ---------------------------- | ---------------------------------------------------------------------- |
 | `.generate(prompt, options)` | Execute a prompt via `messages.parse` (structured) or `.create` (text) |
 | `.stream(prompt, options)`   | Stream a prompt execution                                              |
+| `.prepare(prompt, options)`  | Prepare a sans-I/O call handle with provider params                    |
 | `.retrievalModel(config)`    | Bind Anthropic generation to core retrieval recipe steps               |
 | `.reranker(config)`          | Create a judge-backed core `Reranker`                                  |
 
@@ -56,7 +57,8 @@ const result = await adapter.generate(editDraft, {
   input: { instruction: "Fix the intro" },
 });
 result.text;
-result._meta.usage;
+result.usage;
+result.finalStep;
 ```
 
 ### `adapter.generate(prompt, options)`
@@ -68,14 +70,21 @@ result._meta.usage;
 | `options.input`             | `object`                                       | Input values                                                                        |
 | `options.tools`             | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
 | `options.toolMiddleware`    | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
+| `options.toolApproval`      | `ToolApprovalMap?`                             | Call-site approval policy; exact tool names beat `'*'`.                             |
+| `options.toolsContext`      | `Record<string, unknown>?`                     | Required for composed tools that declare `contextSchema`; values are Zod-validated before the tool loop starts. |
+| `options.runtimeContext`    | `unknown?`                                     | Shared per-run context visible to tool `execute`, middleware, and function-form `toolApproval` policies. |
+| `options.transport`         | `(params, info) => Promise<Message>`           | BYO wire call. Crux still owns tools, approvals, validation retry, routing, and timeouts. |
 | `options.extra.tools`       | `ToolUnion[]?`                                 | Anthropic-native tools that bypass Crux tool conversion                             |
 | `options.extra.tool_choice` | `ToolChoice?`                                  | Anthropic-native tool selection                                                     |
 
 **Returns:** normalized Crux generate result with:
 
 - `result.text` — extracted assistant text
+- `result.usage` — accumulated usage when every provider-call step reported usage
+- `result.cost` — provider-reported cost when available
+- `result.finalStep` — final provider-call text, usage, finish reason, response id, and actual model id
 - `result.raw` — raw Anthropic SDK response
-- `result._meta` — normalized usage, finish reason, tool calls, and model metadata
+- `result._meta` — retained trace metadata for observability plumbing
 
 When the prompt has an `output` schema, Anthropic's parsed value remains available on `result.raw.parsed_output`.
 
@@ -95,10 +104,51 @@ Stream a prompt execution.
 | `options.input`             | `object`                                       | Input values                                                                        |
 | `options.tools`             | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
 | `options.toolMiddleware`    | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
+| `options.toolApproval`      | `ToolApprovalMap?`                             | Call-site approval policy; exact tool names beat `'*'`.                             |
+| `options.toolsContext`      | `Record<string, unknown>?`                     | Required for composed tools that declare `contextSchema`; values are Zod-validated before the tool loop starts. |
+| `options.runtimeContext`    | `unknown?`                                     | Shared per-run context visible to tool `execute`, middleware, and function-form `toolApproval` policies. |
 | `options.extra.tools`       | `ToolUnion[]?`                                 | Anthropic-native tools that bypass Crux tool conversion                             |
 | `options.extra.tool_choice` | `ToolChoice?`                                  | Anthropic-native tool selection                                                     |
 
-**Returns:** Anthropic `MessageStream` (async iterable of `MessageStreamEvent`).
+**Returns:** `StreamResult<MessageStream>`:
+
+- `result.textStream` — provider-neutral text deltas
+- `result.raw` — raw Anthropic `MessageStream`
+- `result.completion` — promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
+
+### `adapter.prepare(prompt, options)`
+
+Prepare a headless Anthropic call. Crux resolves the prompt, opens the same
+executor path used by `generate()`, and returns provider params without making
+the SDK call.
+
+```ts
+const call = await adapter.prepare(editDraft, {
+  model: "claude-sonnet-4-5-20250929",
+  input: { instruction: "Fix the intro" },
+});
+
+const response = await client.messages.create(call.params);
+const result = await call.finish(response);
+```
+
+Use `step(response)` when the model may request tools or validation retry may
+need another turn. The returned `next.params` is the next Anthropic request.
+
+`generate(prompt, { ...options, transport })` is the BYO-wire mode where Crux
+keeps owning the loop and invokes your callback for each Anthropic request.
+`stream()` with `transport` is intentionally unsupported and rejects with
+`CruxTransportStreamUnsupportedError`.
+
+### `toParams(resolved, options)` / `fromResponse(response)`
+
+`toParams()` converts a `ResolvedPrompt` plus `{ model, settings?, extra? }`
+into Anthropic message-create params. `ResolvedPrompt` does not include a
+model, so `options.model` is required. `fromResponse()` normalizes an
+Anthropic response into Crux `AdapterResponse` facts.
+
+These codecs are translation-only. They do not run tool middleware, approvals,
+validation retry, memory capture, safety, or observability.
 
 ### `adapter.retrievalModel(config)`
 

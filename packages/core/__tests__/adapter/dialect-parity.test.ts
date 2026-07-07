@@ -62,7 +62,7 @@ function scriptedAdapterSpec(script: ScriptedCall[]) {
       const extracted: AdapterResponse = {
         text: scripted.text ?? '',
         toolCalls: scripted.toolCalls,
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
         finishReason: scripted.toolCalls?.length ? 'tool_calls' : 'stop',
         responseId: undefined,
         actualModelId: undefined,
@@ -202,9 +202,10 @@ describe('dialect parity — validation retry', () => {
 
 describe('dialect parity — tool approval protocol', () => {
   const toolCall = { id: 'tc_parity', name: 'dangerous', args: { target: 'db' } }
+  const dangerousApproval = { dangerous: 'always' } as const
 
   function dangerousTools(execute: ReturnType<typeof vi.fn>) {
-    return { dangerous: { description: 'risky', needsApproval: true, execute } }
+    return { dangerous: { description: 'risky', execute } }
   }
 
   it('suspends with the same finish reason and approval-request message shape', async () => {
@@ -215,6 +216,7 @@ describe('dialect parity — tool approval protocol', () => {
       model: 'mock-model',
       input: { message: 'do it' },
       tools: dangerousTools(nativeExecute),
+      toolApproval: dangerousApproval,
     })
 
     const executorExecute = vi.fn()
@@ -224,6 +226,7 @@ describe('dialect parity — tool approval protocol', () => {
       model: 'fake:mock-model',
       input: { message: 'do it' },
       tools: dangerousTools(executorExecute),
+      toolApproval: dangerousApproval,
     })
 
     // Neither dialect executed the tool.
@@ -257,6 +260,7 @@ describe('dialect parity — tool approval protocol', () => {
           model: 'mock-model',
           input: { message: 'do it' },
           tools,
+          toolApproval: dangerousApproval,
         })
         const request = (
           suspended.messages.at(-1)!.metadata as {
@@ -268,6 +272,7 @@ describe('dialect parity — tool approval protocol', () => {
           model: 'mock-model',
           input: { message: 'do it' },
           tools,
+          toolApproval: dangerousApproval,
           messages: appendToolApprovalResponse(suspended.messages, {
             approvalId: request.approvalId,
             approved: true,
@@ -285,6 +290,7 @@ describe('dialect parity — tool approval protocol', () => {
         model: 'fake:mock-model',
         input: { message: 'do it' },
         tools,
+        toolApproval: dangerousApproval,
       })
       const approval = suspended.pendingApprovals![0]!
       const second = fakeLoopRuntime({ loops: [[{ text: 'all done' }]] })
@@ -292,6 +298,7 @@ describe('dialect parity — tool approval protocol', () => {
         model: 'fake:mock-model',
         input: { message: 'do it' },
         tools,
+        toolApproval: dangerousApproval,
         messages: appendToolApprovalResponse(suspended.messages, {
           approvalId: approval.approvalId,
           approved: true,
@@ -662,13 +669,15 @@ describe('dialect parity — output guards and suspension', () => {
         },
       })
     const toolCall = { id: 'tc_s', name: 'dangerous', args: {} }
-    const tools = { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } }
+    const tools = { dangerous: { description: 'risky', execute: vi.fn() } }
+    const toolApproval = { dangerous: 'always' } as const
 
     const native = scriptedAdapterSpec([{ text: 'need approval', toolCalls: [toolCall] }])
     const nativeResult = await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
       model: 'mock-model',
       input: { message: 'go' },
       tools,
+      toolApproval,
       guardrails: [spyGuard()],
       constraints: [spyConstraint()],
     })
@@ -678,6 +687,7 @@ describe('dialect parity — output guards and suspension', () => {
       model: 'fake:mock-model',
       input: { message: 'go' },
       tools,
+      toolApproval,
       guardrails: [spyGuard()],
       constraints: [spyConstraint()],
     })
@@ -764,16 +774,11 @@ describe('dialect parity — streamed run with holds and transforms', () => {
     })
 
     let streamed = ''
-    for await (const chunk of handle.rawStream) {
-      streamed += handle.extractTextDelta(chunk) ?? ''
-    }
+    for await (const delta of handle.textStream) streamed += delta
     expect(streamed).toBe('import x from @/components/Button — done')
 
-    const meta = await handle.completion()
-    expect(meta?.guardrails?.applied).toContainEqual(
-      expect.objectContaining({ guard: 'import-fixer', action: 'transform' }),
-    )
-    expect(JSON.stringify(meta?.guardrails?.applied ?? [])).not.toContain('@/comps/Button')
+    const completion = await handle.completion
+    expect(completion.text).toBe('import x from @/components/Button — done')
   })
 })
 
@@ -1036,9 +1041,11 @@ describe('dialect parity — clean tool round protocol', () => {
         modelOutputType: 'text',
         error: undefined,
       },
-    ])
-    expect(nativeResult.text).toBe('done')
-    expect(executorResult.text).toBe('done')
+    ]);
+    expect(nativeResult.text).toBe("callingdone");
+    expect(nativeResult.finalStep.text).toBe("done");
+    expect(executorResult.text).toBe("callingdone");
+    expect(executorResult.finalStep.text).toBe("done");
 
     // The tool round the model saw is identical.
     const toolRound = (messages: readonly Message[]) =>
@@ -1151,6 +1158,7 @@ describe('dialect parity — clean tool round protocol', () => {
 
 describe('dialect parity — approval protocol observability', () => {
   const toolCall = { id: 'tc_prot', name: 'dangerous', args: { target: 'db' } }
+  const dangerousApproval = { dangerous: 'always' } as const
 
   it('suspension fires onToolApprovalRequest exactly once with the same approvalId, and nothing executes', async () => {
     const nativeEvents = recordToolProtocol()
@@ -1158,7 +1166,8 @@ describe('dialect parity — approval protocol observability', () => {
     await makeAdapter(native.spec)(native.client).generate(textPrompt(), {
       model: 'mock-model',
       input: { message: 'go' },
-      tools: { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } },
+      tools: { dangerous: { description: 'risky', execute: vi.fn() } },
+      toolApproval: dangerousApproval,
     })
     const nativeProtocol = [...nativeEvents]
     resetRuntime()
@@ -1168,7 +1177,8 @@ describe('dialect parity — approval protocol observability', () => {
     await loopRuntimeAdapter(fake.runtime).generate(textPrompt(), {
       model: 'fake:mock-model',
       input: { message: 'go' },
-      tools: { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } },
+      tools: { dangerous: { description: 'risky', execute: vi.fn() } },
+      toolApproval: dangerousApproval,
     })
 
     expect(executorEvents).toEqual(nativeProtocol)
@@ -1180,7 +1190,7 @@ describe('dialect parity — approval protocol observability', () => {
     it('resumes a denied call identically: never executes, same denial content, no start/end hooks', async () => {
     async function suspendThenDeny(kind: 'native' | 'executor') {
       const execute = vi.fn()
-      const tools = { dangerous: { description: 'risky', needsApproval: true, execute } }
+      const tools = { dangerous: { description: 'risky', execute } }
       const prompt = textPrompt()
 
       const suspended =
@@ -1191,6 +1201,7 @@ describe('dialect parity — approval protocol observability', () => {
                 model: 'mock-model',
                 input: { message: 'go' },
                 tools,
+                toolApproval: dangerousApproval,
               })
             })()
           : await (async () => {
@@ -1199,6 +1210,7 @@ describe('dialect parity — approval protocol observability', () => {
                 model: 'fake:mock-model',
                 input: { message: 'go' },
                 tools,
+                toolApproval: dangerousApproval,
               })
             })()
 
@@ -1223,6 +1235,7 @@ describe('dialect parity — approval protocol observability', () => {
                 model: 'mock-model',
                 input: { message: 'go' },
                 tools,
+                toolApproval: dangerousApproval,
                 messages,
               })
             })()
@@ -1232,6 +1245,7 @@ describe('dialect parity — approval protocol observability', () => {
                 model: 'fake:mock-model',
                 input: { message: 'go' },
                 tools,
+                toolApproval: dangerousApproval,
                 messages,
               })
             })()
@@ -1259,7 +1273,7 @@ describe('dialect parity — approval protocol observability', () => {
     it('resumes an approved call with full observability in BOTH dialects (sdk resumes were blind)', async () => {
     async function suspendThenApprove(kind: 'native' | 'executor') {
       const execute = vi.fn(async () => 'deleted 3 rows')
-      const tools = { dangerous: { description: 'risky', needsApproval: true, execute } }
+      const tools = { dangerous: { description: 'risky', execute } }
       const prompt = textPrompt()
 
       const suspended =
@@ -1270,6 +1284,7 @@ describe('dialect parity — approval protocol observability', () => {
                 model: 'mock-model',
                 input: { message: 'go' },
                 tools,
+                toolApproval: dangerousApproval,
               })
             })()
           : await (async () => {
@@ -1278,6 +1293,7 @@ describe('dialect parity — approval protocol observability', () => {
                 model: 'fake:mock-model',
                 input: { message: 'go' },
                 tools,
+                toolApproval: dangerousApproval,
               })
             })()
 
@@ -1299,6 +1315,7 @@ describe('dialect parity — approval protocol observability', () => {
           model: 'mock-model',
           input: { message: 'go' },
           tools,
+          toolApproval: dangerousApproval,
           messages,
         })
       } else {
@@ -1307,6 +1324,7 @@ describe('dialect parity — approval protocol observability', () => {
           model: 'fake:mock-model',
           input: { message: 'go' },
           tools,
+          toolApproval: dangerousApproval,
           messages,
         })
       }
@@ -1337,20 +1355,21 @@ describe('dialect parity — approval protocol observability', () => {
     it('settles a forged approval token with the same invalid-approval result in both dialects', async () => {
     async function suspendThenForge(kind: 'native' | 'executor') {
       const execute = vi.fn()
-      const tools = { dangerous: { description: 'risky', needsApproval: true, execute } }
+      const tools = { dangerous: { description: 'risky', execute } }
       const prompt = textPrompt()
 
       const suspended =
         kind === 'native'
           ? await makeAdapter(scriptedAdapterSpec([{ text: 'need approval', toolCalls: [toolCall] }]).spec)({
               kind: 'mock',
-            }).generate(prompt, { model: 'mock-model', input: { message: 'go' }, tools })
+            }).generate(prompt, { model: 'mock-model', input: { message: 'go' }, tools, toolApproval: dangerousApproval })
           : await (async () => {
               const first = fakeLoopRuntime({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
               return loopRuntimeAdapter(first.runtime).generate(prompt, {
                 model: 'fake:mock-model',
                 input: { message: 'go' },
                 tools,
+                toolApproval: dangerousApproval,
               })
             })()
 
@@ -1371,6 +1390,7 @@ describe('dialect parity — approval protocol observability', () => {
           model: 'mock-model',
           input: { message: 'go' },
           tools,
+          toolApproval: dangerousApproval,
           messages,
         })
         return { execute, result }
@@ -1380,6 +1400,7 @@ describe('dialect parity — approval protocol observability', () => {
         model: 'fake:mock-model',
         input: { message: 'go' },
         tools,
+        toolApproval: dangerousApproval,
         messages,
       })
       return { execute, result }

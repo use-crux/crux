@@ -13,10 +13,37 @@ import type { AnyToolSet } from '../types'
 import type { BlackboardEntry, Context } from '../prompt/context-types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
+import type { ApprovalDeclaration } from '../tools/approval-policy'
 import { createToolMergeAccumulator, type ToolMergeAccumulator, type ToolOwnerLabel } from './tool-merge'
 
-function contextToolOwner(ctx: Context<z.ZodType>, index: number): ToolOwnerLabel {
+export function contextToolOwner(ctx: Context<z.ZodType>, index: number): ToolOwnerLabel {
   return ctx.id ? `context:${ctx.id}` : `context[${index}]`
+}
+
+/** Convert one context's approval map into scoped declarations. */
+function contextApprovalDeclarations(
+  ctx: Context<z.ZodType>,
+  owner: ToolOwnerLabel,
+  toolNames: readonly string[],
+): ApprovalDeclaration[] {
+  if (!ctx.toolApproval) return []
+
+  const owned = new Set(toolNames)
+  const declarations: ApprovalDeclaration[] = []
+  for (const [key, policy] of Object.entries(ctx.toolApproval)) {
+    if (key !== '*' && !owned.has(key)) {
+      const available = toolNames.length > 0 ? toolNames.map((name) => `"${name}"`).join(', ') : 'no tools'
+      throw new Error(`${owner} declared toolApproval for "${key}", but it only owns ${available}.`)
+    }
+    declarations.push({
+      layer: 'context',
+      owner,
+      key,
+      policy,
+      appliesTo: key === '*' ? [...toolNames] : [key],
+    })
+  }
+  return declarations
 }
 
 /** Merge tools from active contexts in context order. */
@@ -25,12 +52,26 @@ export function mergeActiveContextTools(
   contexts: readonly Context<z.ZodType>[],
   input: Record<string, unknown>,
 ): void {
+  mergeActiveContextToolSurfaces(merge, contexts, input)
+}
+
+/** Merge context tools and collect their scoped approval declarations. */
+export function mergeActiveContextToolSurfaces(
+  merge: ToolMergeAccumulator,
+  contexts: readonly Context<z.ZodType>[],
+  input: Record<string, unknown>,
+): ApprovalDeclaration[] {
+  const declarations: ApprovalDeclaration[] = []
   for (let index = 0; index < contexts.length; index++) {
     const ctx = contexts[index]!
+    const owner = contextToolOwner(ctx, index)
+    const tools = ctx.toolsFn?.(input)
+    declarations.push(...contextApprovalDeclarations(ctx, owner, tools ? Object.keys(tools) : []))
     if (ctx.toolsFn) {
-      merge.merge(ctx.toolsFn(input), contextToolOwner(ctx, index))
+      merge.merge(tools, owner)
     }
   }
+  return declarations
 }
 
 /** Collect tools from active contexts in context order. */

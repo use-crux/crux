@@ -16,6 +16,7 @@ import { defineNativeChatProvider } from '../../adapter/native-chat'
 import type { NativeAssistantTurn, NativeProviderPort, NativeResponseMetadata } from '../../adapter/native-chat'
 import type { CallArgs } from '../../adapter/types'
 import type { Message } from '../../generation/messages'
+import type { TokenUsage } from '../../generation/types'
 
 interface NativeTestProviderMessage {
   readonly role: Message['role']
@@ -38,11 +39,7 @@ interface NativeTestRawResponse {
   readonly text: string
   readonly structuredObject?: unknown
   readonly toolCalls?: readonly { readonly id: string; readonly name: string; readonly args: unknown }[]
-  readonly usage: {
-    readonly inputTokens: number
-    readonly outputTokens: number
-    readonly totalTokens: number
-  }
+  readonly usage: TokenUsage
   readonly finishReason: string
 }
 
@@ -100,7 +97,7 @@ const nativeTestProfile = defineNativeChatProvider<
         ? String((chunk as { readonly delta: unknown }).delta)
         : undefined,
     completion: async () => ({
-      usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5 },
+      usage: { inputTokens: 3, outputTokens: 2, totalTokens: 5, inputTokenDetails: {}, outputTokenDetails: {} },
       finishReason: 'stop',
     }),
   },
@@ -143,7 +140,9 @@ function bindNativeTest(
         mode === 'structured'
           ? { text: client.script.structuredTexts?.[callIndex] ?? '{"ok":true}' }
           : (client.script.emissions?.[callIndex] ?? { text: 'ok' })
-      const usage = emission.usage ?? { inputTokens: 11, outputTokens: 7, totalTokens: 18 }
+      const usage =
+        emission.usage ??
+        { inputTokens: 11, outputTokens: 7, totalTokens: 18, inputTokenDetails: {}, outputTokenDetails: {} }
 
       return {
         id: `native_resp_${client.calls.length}`,
@@ -154,11 +153,7 @@ function bindNativeTest(
           name: toolCall.name,
           args: toolCall.args,
         })),
-        usage: {
-          inputTokens: usage.inputTokens ?? 0,
-          outputTokens: usage.outputTokens ?? 0,
-          totalTokens: usage.totalTokens ?? 0,
-        },
+        usage,
         finishReason: emission.toolCalls?.length ? 'tool_calls' : 'stop',
       }
     },
@@ -271,7 +266,7 @@ describe('native-chat compiler', () => {
         model: 'native-test-actual',
         text: 'not-json',
         structuredObject: { ok: true },
-        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+        usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} },
         finishReason: 'stop',
       }),
       stream: async () => streamFrom([]),

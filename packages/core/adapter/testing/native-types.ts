@@ -8,6 +8,8 @@
  * @module
  */
 
+import type { TokenUsage } from '../../generation/types'
+
 /** One scripted native model response consumed by a conformance case. */
 export interface AdapterConformanceEmission {
   /** Assistant text returned by the provider. */
@@ -15,11 +17,7 @@ export interface AdapterConformanceEmission {
   /** Tool calls returned by the provider, already in canonical intent form. */
   readonly toolCalls?: readonly { readonly id?: string; readonly name: string; readonly args: unknown }[]
   /** Usage that the adapter should normalize onto `AdapterResponse.usage`. */
-  readonly usage?: {
-    readonly inputTokens?: number
-    readonly outputTokens?: number
-    readonly totalTokens?: number
-  }
+  readonly usage?: TokenUsage
 }
 
 /** Abstract provider behavior for one conformance case. */

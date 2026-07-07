@@ -1,0 +1,114 @@
+---
+title: Headless Calls
+description: Use adapter codecs, prepare/step/finish handles, or transport callbacks when you want to own the provider wire call.
+---
+
+import { Callout } from "fumadocs-ui/components/callout";
+
+Crux adapters have four execution rungs. They all share the same prompt
+resolution, tool policy, validation, safety, memory, and observability pipeline;
+they only differ in who makes the provider call.
+
+| Rung        | You own                              | Crux owns                                                                                            | Use it when                                                                                  |
+| ----------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Codecs      | Control flow and provider wire calls | Translation only                                                                                     | You already have a custom loop and only need request/response conversion                     |
+| Handle      | Control flow and provider wire calls | Tool protocol, approvals, validation directives, typed tool context, memory, cost, and observability | You need a sans-I/O state machine for tests, queues, or nonstandard HTTP clients             |
+| `transport` | The wire callback                    | The full loop, including routing and timeouts                                                        | You want Crux to orchestrate while a proxy, recorder, or custom client performs each request |
+| Managed     | Nothing                              | Everything                                                                                           | You want the normal `generate()` or `stream()` path                                          |
+
+## Codecs
+
+Every first-party generation adapter exports `toParams()` and `fromResponse()`.
+They are translation helpers only.
+
+```ts
+const params = toParams(resolvedPrompt, {
+  model: "gpt-4o",
+  settings: { temperature: 0.2 },
+});
+
+const response = await client.chat.completions.create(params);
+const facts = fromResponse(response);
+```
+
+Use codecs when you own the loop. They do not execute tools, enforce approvals,
+validate `toolsContext`, retry structured output, write memory, or emit
+generation spans.
+
+## Handles
+
+`prepare()` returns provider params for the next step without making a network
+call. Feed the provider response back into `step()`; Crux advances the same
+protocol engine used by managed `generate()`.
+
+```ts
+const call = await adapter.prepare(editDraft, {
+  model: "claude-sonnet-4-5-20250929",
+  input: { instruction: "Fix the intro" },
+});
+
+const first = await client.messages.create(call.params);
+const outcome = await call.step(first);
+
+if (outcome.done) {
+  console.log(outcome.result.text);
+} else {
+  const nextResponse = await client.messages.create(outcome.next.params);
+  const result = await outcome.next.finish(nextResponse);
+  console.log(result.text);
+}
+```
+
+Handles are useful for fixture-driven tests and runtimes where the provider
+wire call must be scheduled or proxied outside Crux. `finish(response)` is
+`step(response)` plus an assertion that the call is complete; it throws
+`CruxIncompleteCallError` if the model requested another step.
+
+<Callout type="info">
+  The AI SDK adapter handle exposes one pending `generateText()` or
+  `generateObject()` gateway call. SDK-thrown structured-output validation
+  errors are covered by managed `generate()` and `transport`, not by the handle,
+  because the public handle accepts completed SDK results rather than SDK
+  exceptions.
+</Callout>
+
+## Transport
+
+`transport` is the BYO-wire mode for managed execution. Crux still drives the
+loop; your callback only performs the provider call for each step.
+
+```ts
+const result = await adapter.generate(editDraft, {
+  model: "gpt-4o",
+  input: { instruction: "Fix the intro" },
+  transport: (params, info) => {
+    audit.write({ stepIndex: info.stepIndex, modelId: info.modelId, params });
+    return proxy.callProvider(params, { signal: info.signal });
+  },
+});
+```
+
+Because Crux initiates each step, `transport` preserves fallback/cascade
+routing, structured `timeout` budgets, tool execution, approvals, validation
+retry, memory capture, and observability.
+
+`stream()` with `transport` is intentionally unsupported in this contract
+revision. Adapters reject it with `CruxTransportStreamUnsupportedError` instead
+of ignoring the callback.
+
+## Capability Matrix
+
+| Feature                                                               | Codecs                | Handle                                                                                | `transport` | Managed |
+| --------------------------------------------------------------------- | --------------------- | ------------------------------------------------------------------------------------- | ----------- | ------- |
+| Prompts/context, skills (static), retrieval, flows, evals, compaction | ✅                    | ✅                                                                                    | ✅          | ✅      |
+| Memory write / cost / execution observability                         | manual digest         | ✅ auto                                                                               | ✅ auto     | ✅ auto |
+| Tool loop, middleware, typed context, maxSteps/stopWhen               | ❌ (user's loop)      | ✅                                                                                    | ✅          | ✅      |
+| Approval suspension/resume (managed)                                  | protocol helpers only | ✅                                                                                    | ✅          | ✅      |
+| Validation retry                                                      | ❌                    | ✅ (directive; AI SDK structured validation SDK-throw path is managed+transport only) | ✅          | ✅      |
+| Per-step/tool observability spans                                     | ❌                    | ✅                                                                                    | ✅          | ✅      |
+| fallback / cascade / enforced `timeout` budgets                       | ❌                    | ❌                                                                                    | ✅          | ✅      |
+
+The first-party equivalence tests compare managed `generate()`, hand-driven
+handles, and `transport` for each adapter. The AI SDK validation-retry exception
+above is covered by managed and `transport` equivalence because those paths own
+the SDK call and can observe SDK-thrown validation failures.

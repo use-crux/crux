@@ -240,6 +240,7 @@ describe('createGoogle CachedContent boundary', () => {
         candidatesTokenCount: 50,
         totalTokenCount: 550,
         cachedContentTokenCount: 400,
+        thoughtsTokenCount: 25,
       },
       text: 'ok',
     })) as unknown as GoogleGenAI['models']['generateContent']
@@ -247,6 +248,7 @@ describe('createGoogle CachedContent boundary', () => {
 
     const result = await adapter.generate(cachedPrompt, { model: 'gemini-2.5-flash' })
 
-    expect(result._meta.usage?.cacheReadTokens).toBe(400)
+    expect(result._meta.usage?.inputTokenDetails.cacheReadTokens).toBe(400)
+    expect(result._meta.usage?.outputTokenDetails.reasoningTokens).toBe(25)
   })
 })

@@ -4,6 +4,9 @@
  * Skills are reusable instruction sets that an LLM can load on-demand.
  * Compatible with the skills.sh community format (SKILL.md with YAML frontmatter).
  *
+ * This universal entry point avoids Node.js built-ins. Import
+ * `@use-crux/core/skill/node` when you need to load local SKILL.md files.
+ *
  * @example
  * ```ts
  * import { skill } from '@use-crux/core/skill'
@@ -23,25 +26,6 @@
 import type { Skill } from './types'
 import { inlineSkill } from './loaders'
 import { registrySkill, registry } from './registry'
-
-// Lazy-loaded file module — only resolved when skill.fromFile() is called.
-// This prevents esbuild/Convex from pulling in fs/path at bundle time.
-let _fileModule: { fileSkill: (path: string) => Skill } | null = null
-function _loadFileModule() {
-  if (!_fileModule) {
-    try {
-      // Use a variable to prevent static analysis by bundlers
-      const modPath = './file-loader'
-      _fileModule = require(modPath) as typeof _fileModule
-    } catch {
-      throw new Error(
-        'skill.fromFile() requires Node.js. In serverless environments (Convex, edge), ' +
-          'use skill.fromRegistry() or skill.inline() instead.',
-      )
-    }
-  }
-  return _fileModule!
-}
 
 export { inlineSkill } from './loaders'
 export { parseFrontmatter } from './frontmatter'
@@ -69,9 +53,8 @@ export type {
 /**
  * The skill namespace — entry point for creating skills.
  *
- * `fromFile` lazy-loads the Node.js-dependent file-loader module on first call.
- * This avoids pulling `fs`/`path` into serverless bundles (Convex, edge runtimes)
- * that only use `inline` or `fromRegistry`.
+ * This namespace is safe for edge and serverless bundles because it does not
+ * import Node.js built-ins. Use `@use-crux/core/skill/node` for local files.
  */
 export const skill = Object.freeze({
   /**
@@ -79,21 +62,6 @@ export const skill = Object.freeze({
    * Requires id and description — otherwise just use context().
    */
   inline: inlineSkill,
-  /**
-   * Load a skill from a local SKILL.md file.
-   * Reads synchronously at call time. Parses YAML frontmatter.
-   * Only available in Node.js environments (uses fs/path).
-   *
-   * Import `@use-crux/core/skill/file-loader` directly if your bundler
-   * chokes on the lazy require (e.g., Convex without 'use node').
-   */
-  fromFile(filePath: string): Skill {
-    // Lazy require at call time — not at import time.
-    // esbuild/Convex won't resolve this because require() on a string
-    // literal in a function body is not statically analyzable.
-    const mod = _loadFileModule()
-    return mod.fileSkill(filePath)
-  },
   /**
    * Load a skill from a registry.
    * Content is fetched lazily on first prompt.resolve(), then cached.
