@@ -25,6 +25,7 @@ export interface RouterMeta {
   availableRoutes: string[]
   hints: unknown | undefined
   overridden: boolean
+  usedDefaultRoute: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -106,8 +107,8 @@ async function resolveRouter<M, R>(
 
       // Resolve model from routes — fall to default if key not found
       const routes = config.routes as Record<string, M>
-      const selectedModel = classifiedAs in routes ? routes[classifiedAs] : routes['default']
-      const usedDefaultRoute = !(classifiedAs in routes)
+      const usedDefaultRoute = !Object.hasOwn(routes, classifiedAs)
+      const selectedModel = usedDefaultRoute ? routes['default'] : routes[classifiedAs]
       const selectedModelId =
         isRouter(selectedModel) || isCascade(selectedModel) ? classifiedAs : extractModelId(selectedModel as M)
 
@@ -143,6 +144,7 @@ async function resolveRouter<M, R>(
         availableRoutes,
         hints: _hints,
         overridden,
+        usedDefaultRoute,
       }
 
       result._meta = { ...result._meta, router: routerMeta }
@@ -269,8 +271,8 @@ async function resolveCascade<M, R>(
           const resultWithMeta = ensureMeta(result)
           const durationMs = Date.now() - tierStart
 
-          // Track cost
-          const tierCost = (resultWithMeta._meta as { cost?: unknown }).cost as number | undefined
+          // Track only costs that can safely participate in cascade budgets.
+          const tierCost = normalizeCascadeTierCost((resultWithMeta._meta as { cost?: unknown }).cost, i, modelId)
           if (tierCost !== undefined) {
             totalCost += tierCost
           }
@@ -403,13 +405,6 @@ async function resolveCascade<M, R>(
 
       // All tiers tried, all rejected
       const error = new CascadeExhaustedError(lastResult, tierDetails)
-      cascadeSpan.error(error, {
-        totalTiers: tiers.length,
-        tiersAttempted: tierDetails.filter((tier) => tier.status !== 'skipped').length,
-        acceptedAtTier: -1,
-        budgetExceeded: false,
-        durationMs: Date.now() - cascadeStart,
-      })
       throw error
     })
     return result
@@ -433,6 +428,27 @@ function ensureMeta<R>(result: R): R & { _meta: Record<string, unknown> } {
     r._meta = {}
   }
   return r as R & { _meta: Record<string, unknown> }
+}
+
+/**
+ * Return a cost only when it is safe for arithmetic budget accounting.
+ * Provider metadata is best-effort, so invalid reported costs are observed
+ * and ignored rather than allowed to poison all later budget checks.
+ */
+function normalizeCascadeTierCost(cost: unknown, tierIndex: number, model: string): number | undefined {
+  if (cost === undefined) return undefined
+  if (typeof cost === 'number' && Number.isFinite(cost)) return cost
+
+  observe.event({
+    name: 'cascade.cost_unreliable',
+    attributes: {
+      tierIndex,
+      model,
+      costType: typeof cost,
+      reportedCost: String(cost),
+    },
+  })
+  return undefined
 }
 
 function buildCascadeResult<R>(
