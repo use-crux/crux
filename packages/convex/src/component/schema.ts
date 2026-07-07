@@ -72,8 +72,8 @@ export default defineSchema({
     .index('by_namespace_status_updated', ['namespace', 'status', 'updatedAt'])
     .index('by_status_updated', ['status', 'updatedAt']),
 
-  runtimeEvents: defineTable({
-    eventId: v.number(),
+	  runtimeEvents: defineTable({
+	    eventId: v.union(v.number(), v.string()),
     eventKey: v.optional(v.string()),
     idempotencyKey: v.optional(v.string()),
     namespace: v.string(),
@@ -128,6 +128,7 @@ export default defineSchema({
   runtimeOutbox: defineTable({
     outboxId: v.string(),
     namespace: v.string(),
+    workId: v.optional(v.string()),
     envelope: v.any(),
     state: v.string(),
     attempts: v.number(),
@@ -136,6 +137,8 @@ export default defineSchema({
   })
     .index('by_outbox_id', ['outboxId'])
     .index('by_namespace_state_next', ['namespace', 'state', 'nextAttemptAt'])
+    .index('by_work_state_next', ['workId', 'state', 'nextAttemptAt'])
+    .index('by_work_namespace_state_next', ['workId', 'namespace', 'state', 'nextAttemptAt'])
     .index('by_namespace_state_confirmed', ['namespace', 'state', 'confirmedAt'])
     .index('by_state_confirmed', ['state', 'confirmedAt']),
 

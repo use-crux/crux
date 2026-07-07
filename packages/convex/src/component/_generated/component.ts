@@ -144,6 +144,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           any,
           Name
         >;
+        listByWork: FunctionReference<
+          "mutation",
+          "internal",
+          { limit?: number; namespace?: string; state?: string; workId: string },
+          any,
+          Name
+        >;
         put: FunctionReference<
           "mutation",
           "internal",

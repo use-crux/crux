@@ -84,6 +84,10 @@ const confirmOutbox = mutation<{ outboxId: string }, null>('runtime/outbox:confi
 const createWork = mutation<{ work: Record<string, unknown> }, Record<string, unknown>>(
   'runtime/state:createWork',
 )
+const listWork = mutation<
+  { namespace: string; status: string; updatedBefore?: number; limit?: number },
+  Array<Record<string, unknown>>
+>('runtime/state:listWork')
 const setWorkPending = mutation<
   {
     workId: string
@@ -180,6 +184,34 @@ describe('Crux Convex Runtime Engine component', () => {
     })
   })
 
+  it('appends runtime events without writing namespace counter rows', async () => {
+    const t = convexTest({ schema, modules })
+    await t.mutation(appendEvent, {
+      event: { namespace: 'tenant-a', name: 'first', payload: {} },
+    })
+    await t.mutation(appendEvent, {
+      event: { namespace: 'tenant-a', name: 'second', payload: {} },
+    })
+
+    await expect(
+      t.run(async (ctx) => await ctx.db.query('runtimeCounters').collect()),
+    ).resolves.toEqual([])
+  })
+
+  it('rejects namespace-less maintenance scans instead of collecting whole tables', async () => {
+    const t = convexTest({ schema, modules })
+
+    await expect(
+      t.mutation(resolveWaiters, {
+        eventName: 'document.approved',
+        payload: { documentId: 'doc-1' },
+      }),
+    ).rejects.toThrow('namespace')
+    await expect(t.mutation(claimExpiredWaiters, { now: 10 })).rejects.toThrow('namespace')
+    await expect(t.mutation(claimDueTimers, { now: 10 })).rejects.toThrow('namespace')
+    await expect(t.mutation(claimOutbox, { now: 10 })).rejects.toThrow('namespace')
+  })
+
   it('only resolves and claims active waiter, timer, and outbox rows', async () => {
     const t = convexTest({ schema, modules })
 
@@ -196,6 +228,7 @@ describe('Crux Convex Runtime Engine component', () => {
       t.mutation(resolveWaiters, {
         eventName: 'document.approved',
         payload: { documentId: 'doc-1' },
+        namespace: 'tenant-a',
       }),
     ).resolves.toHaveLength(1)
     await expect(
@@ -205,9 +238,10 @@ describe('Crux Convex Runtime Engine component', () => {
       t.mutation(resolveWaiters, {
         eventName: 'document.approved',
         payload: { documentId: 'doc-1' },
+        namespace: 'tenant-a',
       }),
     ).resolves.toEqual([])
-    await expect(t.mutation(claimExpiredWaiters, { now: 10 })).resolves.toEqual([])
+    await expect(t.mutation(claimExpiredWaiters, { namespace: 'tenant-a', now: 10 })).resolves.toEqual([])
 
     const timer = await t.mutation(putTimer, {
       timer: {
@@ -219,14 +253,14 @@ describe('Crux Convex Runtime Engine component', () => {
     await expect(
       t.mutation(transitionTimer, { timerId: timer.timerId, from: 'scheduled', to: 'cancelled' }),
     ).resolves.toBe(true)
-    await expect(t.mutation(claimDueTimers, { now: 10 })).resolves.toEqual([])
+    await expect(t.mutation(claimDueTimers, { namespace: 'tenant-a', now: 10 })).resolves.toEqual([])
 
     const outbox = await t.mutation(putOutbox, {
       envelope: { ns: 'tenant-a', workId: 'work-1' },
       nextAttemptAt: 10,
     })
     await t.mutation(confirmOutbox, { outboxId: outbox.outboxId })
-    await expect(t.mutation(claimOutbox, { now: 10 })).resolves.toEqual([])
+    await expect(t.mutation(claimOutbox, { namespace: 'tenant-a', now: 10 })).resolves.toEqual([])
     await expect(t.mutation(listOutbox, { namespace: 'tenant-a' })).resolves.toEqual([
       expect.objectContaining({ outboxId: outbox.outboxId, state: 'confirmed' }),
     ])
@@ -421,6 +455,23 @@ describe('Crux Convex Runtime Engine component', () => {
       { namespace: 'tenant-a', status: 'pending', targetId: 'review', count: 2 },
       { namespace: 'tenant-a', status: 'leased', targetId: 'review', count: 1 },
     ])
+  })
+
+  it('lists bounded work rows by status', async () => {
+    const t = convexTest({ schema, modules })
+    await t.mutation(createWork, {
+      work: workRow('work-1', 'tenant-a', 'pending', 'review'),
+    })
+    await t.mutation(createWork, {
+      work: workRow('work-2', 'tenant-a', 'pending', 'review'),
+    })
+    await t.mutation(createWork, {
+      work: workRow('work-3', 'tenant-a', 'pending', 'review'),
+    })
+
+    await expect(
+      t.mutation(listWork, { namespace: 'tenant-a', status: 'pending', limit: 2 }),
+    ).resolves.toHaveLength(2)
   })
 })
 

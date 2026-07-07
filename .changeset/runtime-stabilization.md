@@ -7,7 +7,7 @@
 "@use-crux/indexer": minor
 ---
 
-Declare `@use-crux/core/runtime` and its store-adapter contract experimental while Runtime Engine stabilization continues.
+Promote `@use-crux/core/runtime` and its store-adapter contract to stable beta while Crux remains pre-1.0.
 
 Remove unused Runtime Engine dead port exports, validate `crux.flows.signal()` against the durable flow snapshot before emitting, warn once when a durable target name is re-registered with a different definition, and make production `createRuntimeHandler()` fail closed unless wake request verification is configured explicitly or supplied by the wake adapter.
 
@@ -26,3 +26,5 @@ Hard-rename the global hook-store API from the runtime family to the hooks famil
 Rename the Runtime Engine task target factory from `task()` to `durableTask()` and remove the dead task output generic. Project Index runtime target discovery and lint guidance now recognize `durableTask()` declarations. Remove `createConvexRuntimeBridge` from the public `@use-crux/convex` root and package subpath; use `createCruxConvex().run()`, `.storage()`, and `.bridge()` as the single Convex entry point.
 
 Add `createTestRuntime()` on `@use-crux/core/runtime/testing` for app-level Runtime Engine tests. The harness installs an in-memory runtime hook layer, provides a controllable clock for `flow.after()` and suspend timeouts, and exposes bounded `tick()`/`settle()` helpers without real timers.
+
+Bound Runtime Engine outbox dispatch to eight concurrent deliveries by default, add `RuntimeOutboxPort.listByWork()` for targeted orphan recovery, remove shared-counter event append hot spots and unbounded namespace-less maintenance scans from the Convex runtime component, and remove `eval.run` from the runtime bridge command contract.

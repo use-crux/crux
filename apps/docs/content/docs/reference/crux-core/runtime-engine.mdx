@@ -19,7 +19,7 @@ import { createTestRuntime } from '@use-crux/core/runtime/testing'
 
 The Runtime Engine is the durable execution layer for event waits, timers, background tasks, automatic flow resume, HTTP wake delivery, and runtime inspection. Object-bound flow APIs keep working without it; name-bound, event-bound, time-bound, and background APIs require a configured runtime.
 
-> **Stability:** `@use-crux/core/runtime` is experimental. The durable-execution surface and store-adapter contract may still break while Crux prepares the Runtime Engine for stable beta.
+> **Stability:** `@use-crux/core/runtime` and the Runtime Engine store-adapter contract are stable beta while Crux remains pre-1.0. Breaking changes require a minor-version bump and migration notes.
 
 ## Composers
 
@@ -155,7 +155,7 @@ await rt.clock.advance('2d')
 rt.dispose()
 ```
 
-`targets` accepts the same exported flow handles and `durableTask()` targets as `createRuntimeHandler({ targets })`. `rt.tick()` runs one maintenance pass; `rt.settle({ maxTicks })` runs bounded maintenance until no outbox, timer, lease, waiter, or pending-work activity remains.
+`targets` accepts the same exported flow handles and `durableTask()` targets as `createRuntimeHandler({ targets })`. `rt.tick()` runs one maintenance pass; `rt.settle({ maxTicks })` runs bounded maintenance until no outbox, timer, lease, waiter, or pending-work activity remains. Outbox delivery runs with bounded concurrency and defaults to eight in-flight deliveries per dispatch pass; delivery order across separate outbox rows is not a Runtime Engine guarantee.
 
 ## Diagnostics
 
@@ -194,6 +194,8 @@ crux runtime cancel <workId>
 `@use-crux/core/runtime` exports provider-agnostic port contracts, branded ids, wake envelope helpers, retry/state helpers, the in-memory reference store, and kernel APIs. Community adapters should keep correctness in the kernel and implement only persistence/delivery ports.
 
 Store adapters must persist the full delivered-suspend record written by `state.markSnapshotDelivered()`, including both `eventId` and the copied JSON `payload`.
+
+Store adapters must implement `outbox.listByWork(workId, { namespace?, state?, limit? })`. The kernel uses it for targeted orphan-work recovery instead of namespace-wide outbox scans; adapters should index by work id when their substrate supports it.
 
 Store adapters also implement bounded `prune()` methods on the owning ports: events, terminal work/snapshots/idempotency keys, timers, waiters, and outbox. Prune methods must delete only records already terminal or settled before the cutoff, respect `limit`, and return `truncated: true` when more eligible rows remain.
 

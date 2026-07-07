@@ -69,7 +69,7 @@ export const listWork = mutation({
     const rows = await ctx.db
       .query('runtimeWork')
       .withIndex('by_namespace_status_updated', (q) => q.eq('namespace', namespace).eq('status', status))
-      .collect()
+      .take(limit ?? 1_000)
     return limitRows(
       rows.filter((row) => updatedBefore === undefined || row.updatedAt < updatedBefore),
       limit,

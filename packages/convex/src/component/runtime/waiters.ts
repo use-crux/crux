@@ -1,7 +1,7 @@
 import { v } from 'convex/values'
 import { mutation } from '../_generated/server.js'
 import type { MutationCtx } from '../_generated/server.js'
-import { limitRows, matchesTopLevel, pruneBatch, randomId } from './shared'
+import { limitRows, matchesTopLevel, pruneBatch, randomId, requireRuntimeNamespace } from './shared'
 
 export const register = mutation({
   args: { waiter: v.any() },
@@ -21,14 +21,13 @@ export const resolve = mutation({
   args: { eventName: v.string(), payload: v.any(), namespace: v.optional(v.string()) },
   returns: v.any(),
   handler: async (ctx, { eventName, payload, namespace }) => {
-    const rows = namespace
-      ? await ctx.db
-          .query('runtimeWaiters')
-          .withIndex('by_namespace_event_state', (q) =>
-            q.eq('namespace', namespace).eq('eventName', eventName).eq('state', 'armed'),
-          )
-          .collect()
-      : await ctx.db.query('runtimeWaiters').collect()
+    const resolvedNamespace = requireRuntimeNamespace(namespace, 'waiters.resolve')
+    const rows = await ctx.db
+      .query('runtimeWaiters')
+      .withIndex('by_namespace_event_state', (q) =>
+        q.eq('namespace', resolvedNamespace).eq('eventName', eventName).eq('state', 'armed'),
+      )
+      .collect()
     return rows.filter(
       (row) =>
         row.eventName === eventName &&
@@ -70,12 +69,11 @@ export const claimExpired = mutation({
   args: { namespace: v.optional(v.string()), now: v.number(), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, { namespace, now, limit }) => {
-    const rows = namespace
-      ? await ctx.db
-          .query('runtimeWaiters')
-          .withIndex('by_namespace_state_timeout', (q) => q.eq('namespace', namespace).eq('state', 'armed'))
-          .collect()
-      : await ctx.db.query('runtimeWaiters').collect()
+    const resolvedNamespace = requireRuntimeNamespace(namespace, 'waiters.claimExpired')
+    const rows = await ctx.db
+      .query('runtimeWaiters')
+      .withIndex('by_namespace_state_timeout', (q) => q.eq('namespace', resolvedNamespace).eq('state', 'armed'))
+      .take(limit ?? 1_000)
     return limitRows(
       rows.filter((row) => row.state === 'armed' && typeof row.timeoutAt === 'number' && row.timeoutAt <= now),
       limit,

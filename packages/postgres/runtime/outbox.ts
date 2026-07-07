@@ -36,12 +36,13 @@ export function createPostgresOutboxPort(
 
       const result = await db.query(
         `INSERT INTO ${outbox}
-          (outbox_id, namespace, envelope, state, attempts, next_attempt_at)
-         VALUES ($1, $2, $3::jsonb, 'pending', 0, $4)
+          (outbox_id, namespace, work_id, envelope, state, attempts, next_attempt_at)
+         VALUES ($1, $2, $3, $4::jsonb, 'pending', 0, $5)
          RETURNING *`,
         [
           newRuntimeId('outbox'),
           envelope.ns,
+          envelope.workId,
           encodeJson(envelope),
           deliverAt,
         ],
@@ -87,6 +88,28 @@ export function createPostgresOutboxPort(
     async list(options): Promise<readonly RuntimeOutboxItem[]> {
       const values: unknown[] = [options.namespace]
       const filters = ['namespace = $1']
+      if (options.state) {
+        values.push(options.state)
+        filters.push(`state = $${values.length}`)
+      }
+      values.push(options.limit ?? 100)
+      const result = await db.query(
+        `SELECT * FROM ${outbox}
+          WHERE ${filters.join(' AND ')}
+          ORDER BY next_attempt_at ASC
+          LIMIT $${values.length}`,
+        values,
+      )
+      return result.rows.map(decodeOutbox)
+    },
+
+    async listByWork(workId, options = {}): Promise<readonly RuntimeOutboxItem[]> {
+      const values: unknown[] = [workId]
+      const filters = ['work_id = $1']
+      if (options.namespace) {
+        values.push(options.namespace)
+        filters.push(`namespace = $${values.length}`)
+      }
       if (options.state) {
         values.push(options.state)
         filters.push(`state = $${values.length}`)

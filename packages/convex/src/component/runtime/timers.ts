@@ -1,7 +1,7 @@
 import { v } from 'convex/values'
 import { mutation } from '../_generated/server.js'
 import type { MutationCtx } from '../_generated/server.js'
-import { limitRows, pruneBatch, randomId } from './shared'
+import { limitRows, pruneBatch, randomId, requireRuntimeNamespace } from './shared'
 
 const TIMER_STATES = ['scheduled', 'fired', 'cancelled'] as const
 
@@ -29,12 +29,11 @@ export const claimDue = mutation({
   args: { namespace: v.optional(v.string()), now: v.number(), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, { namespace, now, limit }) => {
-    const rows = namespace
-      ? await ctx.db
-          .query('runtimeTimers')
-          .withIndex('by_namespace_state_fire', (q) => q.eq('namespace', namespace).eq('state', 'scheduled'))
-          .collect()
-      : await ctx.db.query('runtimeTimers').collect()
+    const resolvedNamespace = requireRuntimeNamespace(namespace, 'timers.claimDue')
+    const rows = await ctx.db
+      .query('runtimeTimers')
+      .withIndex('by_namespace_state_fire', (q) => q.eq('namespace', resolvedNamespace).eq('state', 'scheduled'))
+      .take(limit ?? 1_000)
     return limitRows(rows.filter((row) => row.state === 'scheduled' && row.fireAt <= now), limit)
   },
 })

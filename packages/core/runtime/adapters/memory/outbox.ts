@@ -83,6 +83,18 @@ export function createMemoryOutboxPort(
       return rows.map((item) => cloneOutboxItem(item))
     },
 
+    async listByWork(workId, options = {}): Promise<readonly RuntimeOutboxItem[]> {
+      const rows = [...data.outbox.values()]
+        .filter(
+          (item) =>
+            item.envelope.workId === workId &&
+            (options.namespace === undefined || item.namespace === options.namespace) &&
+            (options.state === undefined || item.state === options.state),
+        )
+        .slice(0, options.limit)
+      return rows.map((item) => cloneOutboxItem(item))
+    },
+
     async confirm(outboxId: string): Promise<void> {
       if (faults.crashBeforeConfirm) {
         faults.crashBeforeConfirm = false

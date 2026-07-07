@@ -84,6 +84,7 @@ export const REQUIRED_COLUMNS: Readonly<Record<RuntimePostgresTable, readonly st
   outbox: [
     'outbox_id',
     'namespace',
+    'work_id',
     'envelope',
     'state',
     'attempts',
@@ -185,12 +186,15 @@ export function ddlStatements(schema: string): readonly string[] {
     `CREATE TABLE IF NOT EXISTS ${outbox} (
       outbox_id text PRIMARY KEY,
       namespace text NOT NULL,
+      work_id text,
       envelope jsonb NOT NULL,
       state text NOT NULL,
       attempts integer NOT NULL,
       next_attempt_at timestamptz NOT NULL,
       confirmed_at timestamptz
     )`,
+    `ALTER TABLE ${outbox}
+      ADD COLUMN IF NOT EXISTS work_id text`,
     `ALTER TABLE ${outbox}
       ADD COLUMN IF NOT EXISTS confirmed_at timestamptz`,
     `CREATE TABLE IF NOT EXISTS ${idempotency} (
@@ -239,10 +243,12 @@ export function ddlStatements(schema: string): readonly string[] {
       ON ${timers} (namespace, settled_at) WHERE state IN ('fired', 'cancelled')`,
     `CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIndex(schema, 'timers_namespace_idempotency_key_idx')}
       ON ${timers} (namespace, idempotency_key) WHERE idempotency_key IS NOT NULL`,
-	    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_pending_next_attempt_idx')}
-	      ON ${outbox} (next_attempt_at) WHERE state = 'pending'`,
-	    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_claimable_next_attempt_idx')}
-	      ON ${outbox} (namespace, next_attempt_at) WHERE state <> 'confirmed'`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_pending_next_attempt_idx')}
+      ON ${outbox} (next_attempt_at) WHERE state = 'pending'`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_claimable_next_attempt_idx')}
+      ON ${outbox} (namespace, next_attempt_at) WHERE state <> 'confirmed'`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_work_pending_idx')}
+      ON ${outbox} (work_id) WHERE state = 'pending'`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_confirmed_at_idx')}
       ON ${outbox} (namespace, confirmed_at) WHERE state = 'confirmed'`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'idempotency_completed_at_idx')}
@@ -319,12 +325,13 @@ export async function checkDdl(
     'timers_scheduled_fire_at_idx',
     'timers_work_id_idx',
     'timers_settled_at_idx',
-	    'timers_namespace_idempotency_key_idx',
-	    'outbox_pending_next_attempt_idx',
-	    'outbox_claimable_next_attempt_idx',
+    'timers_namespace_idempotency_key_idx',
+    'outbox_pending_next_attempt_idx',
+    'outbox_claimable_next_attempt_idx',
+    'outbox_work_pending_idx',
     'outbox_confirmed_at_idx',
     'idempotency_completed_at_idx',
-	  ]
+  ]
   const missingIndexes = requiredIndexes.filter(
     (name) => !existingIndexes.has(name),
   )

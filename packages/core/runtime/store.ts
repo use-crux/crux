@@ -141,6 +141,16 @@ export interface ListOutboxOptions {
   readonly limit?: number
 }
 
+/** Bounded outbox listing options for one owning work item. */
+export interface ListOutboxByWorkOptions {
+  /** Namespace to filter within. Omit only for namespace-agnostic inspection. */
+  readonly namespace?: string
+  /** Current outbox state to include. Omit to include every state. */
+  readonly state?: RuntimeOutboxState
+  /** Maximum number of rows to return. */
+  readonly limit?: number
+}
+
 /** Store-backed outbox operations used by dispatchers and maintenance. */
 export interface RuntimeOutboxPort {
   /** Persist a wake envelope for delivery after the surrounding transaction commits. */
@@ -156,6 +166,11 @@ export interface RuntimeOutboxPort {
   ): Promise<readonly RuntimeOutboxItem[]>
   /** List bounded outbox rows for operator/devtools inspection. */
   list(options: ListOutboxOptions): Promise<readonly RuntimeOutboxItem[]>
+  /** List bounded outbox rows owned by one work item. */
+  listByWork(
+    workId: WorkId,
+    options?: ListOutboxByWorkOptions,
+  ): Promise<readonly RuntimeOutboxItem[]>
   /** Mark a delivered row confirmed. */
   confirm(outboxId: string): Promise<void>
   /** Requeue a row after a delivery failure. */

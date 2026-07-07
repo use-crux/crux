@@ -183,13 +183,14 @@ export async function requeuePendingWorkIfStillOrphanedInTransaction(
     namespace: input.work.namespace,
   })
   if (!current || current.status !== 'pending') return false
-  const before = await tx.outbox.list({
+  const before = await tx.outbox.listByWork(current.workId, {
     namespace: current.namespace,
     state: 'pending',
-    limit: 1_000,
+    limit: 1,
   })
   const hasPendingWake = before.some(
     (item) =>
+      item.namespace === current.namespace &&
       item.envelope.workId === current.workId &&
       item.envelope.idempotencyKey === current.idempotencyKey,
   )

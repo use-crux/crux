@@ -28,16 +28,18 @@ experimental status unless their own subpath documentation says otherwise.
 
 ## Runtime Engine (`@use-crux/core/runtime`)
 
-The durable Runtime Engine and its runtime store adapter contract are
-experimental in this release line. This includes `node()`, `serverless()`,
-`genericQueue()`, `createRuntimeHandler()`, `durableTask()` targets, wake
-envelopes, diagnostics, `RuntimeStoreAdapter`, and the runtime conformance
-suites under `@use-crux/core/runtime/testing`.
+The durable Runtime Engine and its runtime store adapter contract are stable
+beta. This includes `node()`, `serverless()`, `genericQueue()`,
+`createRuntimeHandler()`, `createRuntime()`, `bindHostRuntime()`,
+`durableTask()` targets, wake envelopes, diagnostics, `RuntimeStoreAdapter`,
+named kernel composites, retention and lease behavior, and the runtime
+conformance suites under `@use-crux/core/runtime/testing`.
 
-Experimental means the API is available for prototypes, integration work, and
-adapter development, but the durable-execution contract may still change without
-a migration window while Crux is pre-1.0. Do not treat the runtime store adapter
-ports as stable beta until this section is explicitly upgraded.
+Breaking Runtime Engine changes require the same minor-version bump and
+migration-note treatment as the core stable beta surface while Crux remains
+pre-1.0. Patch releases may add optional fields, diagnostics, helpers, and
+compatible behavior fixes. Host-specific integrations and adapters not covered
+by their package documentation may still be experimental.
 
 ## Ordering Guarantee
 

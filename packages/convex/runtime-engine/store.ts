@@ -151,15 +151,18 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
   const waiters: RuntimeWaiterStorePort = {
     register: async (waiter) => decodeWaiter(await run(refs.waiters.register, { waiter: encodeWaiter(waiter) })),
     resolve: async (eventName, payload, read = {}) =>
-      (await run<readonly unknown[]>(refs.waiters.resolve, { eventName, payload, namespace: read.namespace })).map(
-        decodeWaiter,
-      ),
+      (await run<readonly unknown[]>(refs.waiters.resolve, {
+        eventName,
+        payload,
+        namespace: requireNamespace(read.namespace, 'waiters.resolve'),
+      })).map(decodeWaiter),
     cancel: (waiterId) => run(refs.waiters.cancel, { waiterId }).then(noop),
     attachTimer: (waiterId, timerId) => run(refs.waiters.attachTimer, { waiterId, timerId }).then(noop),
     listByWork: async (workId) => (await run<readonly unknown[]>(refs.waiters.listByWork, { workId })).map(decodeWaiter),
     claimExpired: async (query: ClaimExpiredWaitersOptions) =>
       (await run<readonly unknown[]>(refs.waiters.claimExpired, {
         ...query,
+        namespace: requireNamespace(query.namespace, 'waiters.claimExpired'),
         now: query.now.getTime(),
       })).map(decodeWaiter),
     transition: (waiterId, from, to) => run(refs.waiters.transition, { waiterId, from, to }),
@@ -177,7 +180,11 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
       return result ? decodeTimer(result) : null
     },
     claimDue: async (query: ClaimDueTimersOptions) =>
-      (await run<readonly unknown[]>(refs.timers.claimDue, { ...query, now: query.now.getTime() })).map(decodeTimer),
+      (await run<readonly unknown[]>(refs.timers.claimDue, {
+        ...query,
+        namespace: requireNamespace(query.namespace, 'timers.claimDue'),
+        now: query.now.getTime(),
+      })).map(decodeTimer),
     list: async (query) => (await run<readonly unknown[]>(refs.timers.list, { ...query })).map(decodeTimer),
     listByWork: async (workId) => (await run<readonly unknown[]>(refs.timers.listByWork, { workId })).map(decodeTimer),
     transition: (timerId, from, to) => run(refs.timers.transition, { timerId, from, to }),
@@ -201,10 +208,15 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     claimPending: async (query: ClaimOutboxOptions) =>
       (await run<readonly unknown[]>(refs.outbox.claimPending, {
         ...query,
+        namespace: requireNamespace(query.namespace, 'outbox.claimPending'),
         now: query.now.getTime(),
       })).map(decodeOutbox) as readonly RuntimeOutboxItem[],
     list: async (query) =>
       (await run<readonly unknown[]>(refs.outbox.list, { ...query })).map(decodeOutbox) as readonly RuntimeOutboxItem[],
+    listByWork: async (workId, query = {}) =>
+      (await run<readonly unknown[]>(refs.outbox.listByWork, cleanArgs({ workId, ...query }))).map(
+        decodeOutbox,
+      ) as readonly RuntimeOutboxItem[],
     confirm: (outboxId) => run(refs.outbox.confirm, { outboxId }).then(noop),
     retryLater: (outboxId, nextAttemptAt) =>
       run(refs.outbox.retryLater, { outboxId, nextAttemptAt: encodeOutboxDate(nextAttemptAt) }).then(noop),
@@ -262,6 +274,19 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
 }
 
 function noop(): void { }
+
+function requireNamespace(namespace: string | undefined, operation: string): string {
+  if (namespace) return namespace
+  throw createRuntimeError({
+    code: 'NAMESPACE_AMBIGUOUS',
+    whatFailed: `Convex Runtime Engine ${operation} was called without a namespace.`,
+    why: 'The Convex component cannot safely satisfy namespace-less runtime scans without reading unbounded runtime tables.',
+    whatStillWorks:
+      'Runtime handlers and maintenance created from convex({ namespace }) continue to pass their configured namespace.',
+    nextStep:
+      'Pass an explicit runtime namespace or use a Convex Runtime Engine definition configured with namespace.',
+  })
+}
 
 function cleanArgs<T extends Record<string, unknown>>(args: T): T {
   return Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined)) as T

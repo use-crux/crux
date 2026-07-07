@@ -7,6 +7,16 @@ export function randomId(prefix: string): string {
   return `${prefix}_${suffix}`
 }
 
+export function requireRuntimeNamespace(
+  namespace: string | undefined,
+  operation: string,
+): string {
+  if (namespace) return namespace
+  throw new Error(
+    `Convex Runtime Engine ${operation} requires an explicit namespace to avoid unbounded component scans.`,
+  )
+}
+
 export function matchesTopLevel(
   payload: unknown,
   match: Record<string, unknown>,

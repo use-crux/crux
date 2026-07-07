@@ -1,7 +1,7 @@
 import { v } from 'convex/values'
 import { mutation } from '../_generated/server.js'
 import type { MutationCtx } from '../_generated/server.js'
-import { limitRows, pruneBatch, randomId } from './shared'
+import { limitRows, pruneBatch, randomId, requireRuntimeNamespace } from './shared'
 
 const OUTBOX_STATES = ['pending', 'dispatched', 'confirmed'] as const
 
@@ -21,6 +21,7 @@ export const put = mutation({
     const record = {
       outboxId: randomId('outbox'),
       namespace: envelope.ns,
+      workId: envelope.workId,
       envelope,
       state: 'pending',
       attempts: 0,
@@ -41,12 +42,11 @@ export const claimPending = mutation({
   args: { namespace: v.optional(v.string()), now: v.number(), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, { namespace, now, limit }) => {
-    const rows = namespace
-      ? await ctx.db
-          .query('runtimeOutbox')
-          .withIndex('by_namespace_state_next', (q) => q.eq('namespace', namespace).eq('state', 'pending'))
-          .collect()
-      : await ctx.db.query('runtimeOutbox').collect()
+    const resolvedNamespace = requireRuntimeNamespace(namespace, 'outbox.claimPending')
+    const rows = await ctx.db
+      .query('runtimeOutbox')
+      .withIndex('by_namespace_state_next', (q) => q.eq('namespace', resolvedNamespace).eq('state', 'pending'))
+      .take(limit ?? 1_000)
     const due = limitRows(rows.filter((row) => row.state === 'pending' && row.nextAttemptAt <= now), limit)
     for (const row of due) {
       await ctx.db.patch(row._id, { state: 'dispatched', attempts: row.attempts + 1 })
@@ -70,6 +70,40 @@ export const list = mutation({
             )
             .take(limit ?? 1_000),
         ),
+      )
+    ).flat()
+    return limitRows(rows, limit)
+  },
+})
+
+export const listByWork = mutation({
+  args: {
+    workId: v.string(),
+    namespace: v.optional(v.string()),
+    state: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
+  returns: v.any(),
+  handler: async (ctx, { workId, namespace, state, limit }) => {
+    const states = state === undefined ? OUTBOX_STATES : [state]
+    const rows = (
+      await Promise.all(
+        states.map((rowState) => {
+          if (namespace) {
+            return ctx.db
+              .query('runtimeOutbox')
+              .withIndex('by_work_namespace_state_next', (q) =>
+                q.eq('workId', workId).eq('namespace', namespace).eq('state', rowState),
+              )
+              .take(limit ?? 1_000)
+          }
+          return ctx.db
+            .query('runtimeOutbox')
+            .withIndex('by_work_state_next', (q) =>
+              q.eq('workId', workId).eq('state', rowState),
+            )
+            .take(limit ?? 1_000)
+        }),
       )
     ).flat()
     return limitRows(rows, limit)

@@ -8,6 +8,7 @@ import type {
 import type { MutationCtx } from '../_generated/server.js'
 import { decodeEvent } from '../../../runtime-engine/codec'
 import { clean, cleanDoc, unsupported } from './composite-utils'
+import { randomId } from './shared'
 
 export function createCompositeEventPort(ctx: MutationCtx): DurableEventPort {
   return {
@@ -30,10 +31,9 @@ async function appendEventRecord(
   )
   if (existing) return runtimeEventFromRecord(existing)
 
-  const eventId = await nextCounter(ctx, `${event.namespace}:events`)
   const record = clean({
     ...event,
-    eventId,
+    eventId: generatedEventCursor(),
     eventKey: event.eventId,
     idempotencyKey: options?.idempotencyKey,
     appendedAt: Date.now(),
@@ -69,7 +69,7 @@ async function findDuplicateEvent(
 }
 
 function runtimeEventFromRecord(
-  record: Record<string, unknown> & { eventId: number; eventKey?: string },
+  record: Record<string, unknown> & { eventId: string | number; eventKey?: string },
 ): RuntimeEvent {
   return decodeEvent({
     ...cleanDoc(record),
@@ -77,13 +77,6 @@ function runtimeEventFromRecord(
   })
 }
 
-async function nextCounter(ctx: MutationCtx, key: string): Promise<number> {
-  const existing = await ctx.db
-    .query('runtimeCounters')
-    .withIndex('by_key', (q) => q.eq('key', key))
-    .first()
-  const value = (existing?.value ?? 0) + 1
-  if (existing) await ctx.db.patch(existing._id, { value })
-  else await ctx.db.insert('runtimeCounters', { key, value })
-  return value
+function generatedEventCursor(): string {
+  return `cvx:${randomId('event')}`
 }

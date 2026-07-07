@@ -132,6 +132,7 @@ function runtimeComponent(): ConvexRuntimeComponent {
         get: mutationRef('runtime/outbox:get'),
         claimPending: mutationRef('runtime/outbox:claimPending'),
         list: mutationRef('runtime/outbox:list'),
+        listByWork: mutationRef('runtime/outbox:listByWork'),
         confirm: mutationRef('runtime/outbox:confirm'),
         retryLater: mutationRef('runtime/outbox:retryLater'),
         prune: mutationRef('runtime/outbox:prune'),

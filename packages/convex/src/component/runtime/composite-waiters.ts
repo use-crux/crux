@@ -7,7 +7,7 @@ import type { WithoutSystemFields } from 'convex/server'
 import type { Doc } from '../_generated/dataModel.js'
 import type { MutationCtx } from '../_generated/server.js'
 import { decodeWaiter, encodeWaiter } from '../../../runtime-engine/codec'
-import { matchesTopLevel, randomId } from './shared'
+import { matchesTopLevel, randomId, requireRuntimeNamespace } from './shared'
 import { unsupported } from './composite-utils'
 
 type RuntimeWaiterRow = WithoutSystemFields<Doc<'runtimeWaiters'>>
@@ -63,14 +63,13 @@ async function resolveWaiterRecords(
   payload: unknown,
   namespace: string | undefined,
 ): Promise<readonly RuntimeWaiter[]> {
-  const rows = namespace
-    ? await ctx.db
-        .query('runtimeWaiters')
-        .withIndex('by_namespace_event_state', (q) =>
-          q.eq('namespace', namespace).eq('eventName', eventName).eq('state', 'armed'),
-        )
-        .collect()
-    : await ctx.db.query('runtimeWaiters').collect()
+  const resolvedNamespace = requireRuntimeNamespace(namespace, 'waiters.resolve')
+  const rows = await ctx.db
+    .query('runtimeWaiters')
+    .withIndex('by_namespace_event_state', (q) =>
+      q.eq('namespace', resolvedNamespace).eq('eventName', eventName).eq('state', 'armed'),
+    )
+    .collect()
   return rows
     .filter(
       (row) =>

@@ -186,6 +186,38 @@ describe('RuntimeKernel', () => {
     })
   })
 
+  it('dispatches outbox rows with bounded concurrency', async () => {
+    const store = inMemoryRuntimeStore()
+    for (const workId of ['work_1', 'work_2', 'work_3', 'work_4']) {
+      await store.outbox.put({
+        v: 1,
+        ns: 'tenant-a',
+        workId: workId as WorkId,
+        target: 'embed-document' as RuntimeTargetId,
+        kind: 'task.run',
+        idempotencyKey: `task:${workId}`,
+        attempt: 1,
+      })
+    }
+
+    let active = 0
+    let maxActive = 0
+    const result = await dispatchBatch({
+      store,
+      concurrency: 2,
+      deliver: async () => {
+        active += 1
+        maxActive = Math.max(maxActive, active)
+        await Promise.resolve()
+        active -= 1
+      },
+      now: () => new Date('2100-01-01T00:00:00.000Z'),
+    })
+
+    expect(result).toEqual({ delivered: 4, failed: 0 })
+    expect(maxActive).toBe(2)
+  })
+
   it('marks unknown targets blocked and acknowledges the poison wake', async () => {
     const store = inMemoryRuntimeStore()
     const kernel = createRuntimeKernel({

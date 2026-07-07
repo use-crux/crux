@@ -18,6 +18,7 @@ export function createCompositeOutboxPort(ctx: MutationCtx): RuntimeOutboxPort {
     get: (outboxId) => outboxById(ctx, outboxId),
     claimPending: unsupported('outbox.claimPending'),
     list: (query) => listOutboxRecords(ctx, query),
+    listByWork: (workId, options) => listOutboxRecordsByWork(ctx, workId, options),
     confirm: unsupported('outbox.confirm'),
     retryLater: unsupported('outbox.retryLater'),
     prune: unsupported('outbox.prune'),
@@ -42,6 +43,7 @@ async function putOutboxRecord(
   const record = {
     outboxId: randomId('outbox'),
     namespace: envelope.ns,
+    workId: envelope.workId,
     envelope: encodeWakeEnvelope(envelope),
     state: 'pending',
     attempts: 0,
@@ -71,6 +73,38 @@ async function listOutboxRecords(
     )
   ).flat()
   return limitRows(rows.map(decodeOutbox), query.limit)
+}
+
+async function listOutboxRecordsByWork(
+  ctx: MutationCtx,
+  workId: Parameters<RuntimeOutboxPort['listByWork']>[0],
+  options: Parameters<RuntimeOutboxPort['listByWork']>[1] = {},
+): Promise<readonly RuntimeOutboxItem[]> {
+  const states = options.state === undefined
+    ? ['pending', 'dispatched', 'confirmed']
+    : [options.state]
+  const namespace = options.namespace
+  const rows = (
+    await Promise.all(
+      states.map((state) => {
+        if (namespace) {
+          return ctx.db
+            .query('runtimeOutbox')
+            .withIndex('by_work_namespace_state_next', (q) =>
+              q.eq('workId', workId).eq('namespace', namespace).eq('state', state),
+            )
+            .take(options.limit ?? 1_000)
+        }
+        return ctx.db
+          .query('runtimeOutbox')
+          .withIndex('by_work_state_next', (q) =>
+            q.eq('workId', workId).eq('state', state),
+          )
+          .take(options.limit ?? 1_000)
+      }),
+    )
+  ).flat()
+  return limitRows(rows.map(decodeOutbox), options.limit)
 }
 
 async function outboxById(

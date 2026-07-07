@@ -460,9 +460,9 @@ Runtime-bound APIs use a configured Runtime Engine for durable work, timers,
 event waiters, wake delivery, and maintenance. For local development and tests,
 use the in-process `node()` composer:
 
-`@use-crux/core/runtime` is experimental: the durable-execution and store-adapter
-contracts are still allowed to break while Crux prepares the Runtime Engine for
-stable beta.
+`@use-crux/core/runtime` and the Runtime Engine store-adapter contract are
+stable beta while Crux remains pre-1.0. Breaking changes require a minor-version
+bump and migration notes.
 
 ```ts
 import { config } from "@use-crux/core";
@@ -495,6 +495,11 @@ confirmed outbox rows, idempotency keys, settled timers/waiters, terminal
 snapshots, and per-class `sweepLimit`. Defaults keep events for 24h, terminal
 work and idempotency keys for 7d, confirmed outbox/timers/waiters for 24h, and
 terminal snapshots for 30d. Set a class to `false` to keep it indefinitely.
+
+Outbox dispatch is bounded and defaults to eight in-flight deliveries per
+maintenance pass. Store adapters expose `outbox.listByWork(...)` with
+`namespace`, `state`, and `limit` options so orphan recovery can check the
+specific work item's wake rows without namespace-wide scans.
 
 Wake execution fences every final commit with the worker's lease token. If
 maintenance reclaims a long-running item and another worker finishes it first,
