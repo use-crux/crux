@@ -66,6 +66,8 @@ pub struct StaticSyntaxFileRecord {
     pub frontend: StaticSyntaxFrontendIdentity,
     pub file: String,
     pub source_hash: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interface_hash: Option<String>,
     pub imports: Vec<StaticImportRecord>,
     pub matches: Vec<StaticSourceMatch>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -228,8 +230,13 @@ pub enum StaticSyntaxValue {
         parameter_names: Vec<String>,
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         first_parameter_bindings: Vec<StaticFunctionParameterBinding>,
+        /// Ordered call expressions visible inside the function body.
         calls: Vec<StaticFunctionCallValue>,
+        /// Function return values. Native frontends resolve direct identifier
+        /// returns at record-production time using their binding graph.
         returns: Vec<StaticSyntaxValue>,
+        /// Function-scoped initializer evidence retained for display and
+        /// compatibility. This is not a lazy scope-resolution surface.
         local_initializers: Vec<StaticInitializerRecord>,
         source: SourceLocation,
         #[serde(skip_serializing_if = "Option::is_none")]

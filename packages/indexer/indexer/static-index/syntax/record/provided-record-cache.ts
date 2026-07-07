@@ -35,11 +35,11 @@ export function createProvidedStaticSyntaxRecordCache(maxEntries: number): Provi
     if (cached) {
       entries.delete(file)
       entries.set(file, cached)
-      return cached
+      return readEntry(entries, file, cached)
     }
     const loaded = Promise.resolve(load())
     set(file, loaded)
-    return loaded
+    return readEntry(entries, file, loaded)
   }
 
   return {
@@ -57,7 +57,7 @@ export function createProvidedStaticSyntaxRecordCache(maxEntries: number): Provi
           }
           entries.delete(file)
           entries.set(file, cached)
-          const record = await cached
+          const record = await readEntry(entries, file, cached)
           if (record) records.set(file, record)
         }),
       )
@@ -73,6 +73,19 @@ export function createProvidedStaticSyntaxRecordCache(maxEntries: number): Provi
 
       return records
     },
+  }
+}
+
+async function readEntry(
+  entries: Map<string, Promise<RecordResult>>,
+  file: string,
+  value: Promise<RecordResult>,
+): Promise<RecordResult> {
+  try {
+    return await value
+  } catch (error) {
+    if (entries.get(file) === value) entries.delete(file)
+    throw error
   }
 }
 

@@ -14,7 +14,6 @@ import {
 } from '../indexer/extensions'
 import { internalStaticCallContext, internalTypeScriptContext } from '../indexer/static-index/compatibility/syntax-record-bridge/native-context'
 import { createExtractContext } from '../indexer/extensions/runtime/engine'
-import { indexLintFinding } from '../indexer/lints/rules'
 
 describe('indexer extension runtime', () => {
   it('exposes deterministic manifest identity for unordered extension manifests', () => {
@@ -447,6 +446,75 @@ describe('indexer extension runtime', () => {
     })
   })
 
+  it('turns a throwing extractor into an attributed degraded result', () => {
+    const runtime = createIndexerExtensionRuntime({
+      extensions: [
+        extension({
+          name: '@acme/workflows',
+          version: '1',
+          extractors: [
+            {
+              name: 'workflow.define',
+              patterns: [{ kind: 'call', name: 'defineWorkflow' }],
+              extract: () => {
+                throw new Error('boom')
+              },
+            },
+          ],
+        }),
+      ],
+    })
+
+    expect(runtime.extractStatic(staticInput('defineWorkflow({})'))).toEqual({
+      kind: 'degraded',
+      extension: { name: '@acme/workflows', version: '1' },
+      extractor: 'workflow.define',
+      dependencies: [
+        { kind: 'extension', name: '@acme/workflows', version: '1' },
+        { kind: 'extractor', extension: '@acme/workflows', name: 'workflow.define' },
+      ],
+      diagnostics: [
+        expect.objectContaining({
+          code: 'index.extractor_failed',
+          message: expect.stringContaining('@acme/workflows/workflow.define'),
+          source: { file: '/project/src/workflow.ts', line: 1 },
+        }),
+      ],
+    })
+  })
+
+  it('turns malformed extractor results into attributed degraded diagnostics', () => {
+    const runtime = createIndexerExtensionRuntime({
+      extensions: [
+        extension({
+          name: '@acme/workflows',
+          version: '1',
+          extractors: [
+            {
+              name: 'workflow.define',
+              patterns: [{ kind: 'call', name: 'defineWorkflow' }],
+              extract: () =>
+                ({ kind: 'degraded' }) as unknown as ReturnType<NonNullable<IndexerExtension['extractors']>[number]['extract']>,
+            },
+          ],
+        }),
+      ],
+    })
+
+    expect(runtime.extractStatic(staticInput('defineWorkflow({})'))).toEqual(
+      expect.objectContaining({
+        kind: 'degraded',
+        extractor: 'workflow.define',
+        diagnostics: [
+          expect.objectContaining({
+            code: 'index.extractor_result_invalid',
+            message: expect.stringContaining('diagnostics'),
+          }),
+        ],
+      }),
+    )
+  })
+
   it('projects runtime extraction results into the current static parser compatibility shape', () => {
     const runtime = createIndexerExtensionRuntime({
       extensions: [
@@ -537,6 +605,47 @@ describe('indexer extension runtime', () => {
       diagnostics: [],
     })
     expect(workflow).toEqual(definition('@acme.workflow:publish', 'workflow' as ProjectDefinitionKind, 'publish'))
+  })
+
+  it('reports throwing rules without aborting other rules', () => {
+    const workflow = definition('@acme.workflow:publish', 'workflow' as ProjectDefinitionKind, 'publish')
+    const runtime = createIndexerExtensionRuntime({
+      extensions: [
+        extension({
+          name: '@acme/alpha',
+          version: '1',
+          rules: [
+            {
+              manifest: ruleManifest('@acme/alpha/ok', 'ok'),
+              messages: { finding: 'ok' },
+              check: () => [lintFinding('ok')],
+            },
+            {
+              manifest: ruleManifest('@acme/alpha/broken', 'broken'),
+              messages: { finding: 'broken' },
+              check: () => {
+                throw new Error('rule exploded')
+              },
+            },
+            {
+              manifest: ruleManifest('@acme/alpha/still-runs', 'still runs'),
+              messages: { finding: 'still runs' },
+              check: () => [lintFinding('still-runs')],
+            },
+          ],
+        }),
+      ],
+    })
+
+    expect(runtime.checkRules({ definitions: [workflow], relations: [] })).toEqual({
+      outputs: [expect.objectContaining({ message: 'ok' }), expect.objectContaining({ message: 'still-runs' })],
+      diagnostics: [
+        expect.objectContaining({
+          code: 'index.rule_failed',
+          message: expect.stringContaining('@acme/alpha/broken'),
+        }),
+      ],
+    })
   })
 
   it('skips semantic-phase rules until semantic evidence is available', () => {
@@ -655,6 +764,46 @@ describe('indexer extension runtime', () => {
         ],
       }),
     ).toThrow(/Duplicate index rule: @acme\/alpha\/require-owner/)
+  })
+
+  it('reports cross-extension duplicate rule names as registry diagnostics', () => {
+    const runtime = createIndexerExtensionRuntime({
+      extensions: [
+        extension({
+          name: '@use-crux/a',
+          version: '1',
+          rules: [
+            {
+              manifest: ruleManifest('crux.shared-rule', 'shared a'),
+              messages: { finding: 'shared a' },
+              check: () => [lintFinding('a')],
+            },
+          ],
+        }),
+        extension({
+          name: '@use-crux/b',
+          version: '1',
+          rules: [
+            {
+              manifest: ruleManifest('crux.shared-rule', 'shared b'),
+              messages: { finding: 'shared b' },
+              check: () => [lintFinding('b')],
+            },
+          ],
+        }),
+      ],
+    })
+
+    expect(runtime.manifest.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'index.rule_conflict',
+        message: expect.stringContaining('crux.shared-rule'),
+      }),
+    ])
+    expect(runtime.checkRules({ definitions: [], relations: [] })).toEqual({
+      outputs: [],
+      diagnostics: runtime.manifest.diagnostics,
+    })
   })
 
   it('rejects un-namespaced third-party relation and rule declarations', () => {
@@ -777,13 +926,22 @@ function extension(input: IndexerExtension): IndexerExtension {
 }
 
 function lintFinding(id: string): IndexLintFinding {
-  return indexLintFinding({
+  return {
+    id: `definition.missing_eval_coverage:${id}`,
+    severity: 'warning',
     ruleId: 'definition.missing_eval_coverage',
-    key: id,
+    category: 'quality',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['recommended'],
+    title: id,
     message: id,
+    rationale: id,
     relatedDefinitionIds: [],
     evidence: [],
-  })
+    fixes: [],
+    docsUrl: 'https://cruxjs.dev/docs/reference/indexer',
+  }
 }
 
 function ruleManifest(id: string, description: string) {

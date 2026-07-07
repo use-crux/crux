@@ -105,3 +105,19 @@ func TestWorkerCloseWaitsCleanly(t *testing.T) {
 		t.Fatalf("second Close error = %v", err)
 	}
 }
+
+func TestWorkerCloseKillsProcessThatIgnoresStdinClose(t *testing.T) {
+	worker := New(Script{Name: "fake-stubborn"}, WithCommand(shellPath(t), fakeStubbornWorker(t)))
+
+	if _, err := CallRaw(context.Background(), worker, map[string]string{"mode": "ok"}); err != nil {
+		t.Fatalf("CallRaw error = %v", err)
+	}
+	started := time.Now()
+	err := worker.Close()
+	if err == nil || !strings.Contains(err.Error(), "close timed out") {
+		t.Fatalf("Close error = %v, want bounded forced-kill error", err)
+	}
+	if elapsed := time.Since(started); elapsed > 2*time.Second {
+		t.Fatalf("Close took %s, want bounded shutdown", elapsed)
+	}
+}

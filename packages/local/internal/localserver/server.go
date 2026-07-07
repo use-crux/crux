@@ -85,7 +85,7 @@ func New(options Options) http.Handler {
 		http.NotFound(w, r)
 	})
 
-	registerSourceRoutes(mux, options.SourceResolver)
+	registerSourceRoutes(mux, options.SourceResolver, options.ProjectRoot)
 
 	if options.UI != nil {
 		mux.Handle("/", options.UI)

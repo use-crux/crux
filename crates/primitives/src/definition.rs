@@ -186,5 +186,15 @@ pub(crate) fn fingerprint_json<T: Serialize>(value: &T) -> String {
     let encoded = serde_json::to_string(value).unwrap_or_default();
     let mut hasher = Sha256::new();
     hasher.update(encoded.as_bytes());
-    format!("{:x}", hasher.finalize())[..16].to_string()
+    hex_lower(&hasher.finalize())[..16].to_string()
+}
+
+fn hex_lower(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
 }

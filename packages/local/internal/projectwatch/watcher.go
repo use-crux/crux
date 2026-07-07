@@ -12,7 +12,7 @@ import (
 	"github.com/fsnotify/fsnotify"
 )
 
-const defaultDebounce = 250 * time.Millisecond
+const defaultDebounce = 25 * time.Millisecond
 
 // Watcher observes project source/config changes and emits debounced deltas.
 //

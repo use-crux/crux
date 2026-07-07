@@ -1,24 +1,20 @@
-use std::collections::HashMap;
-
 use oxc_ast::ast::*;
 use oxc_span::Span;
 
 use crate::{
-    protocol::{
-        StaticFunctionParameterBinding, StaticImportRecord, StaticInitializerRecord,
-        StaticSyntaxValue,
-    },
+    protocol::{StaticFunctionParameterBinding, StaticInitializerRecord, StaticSyntaxValue},
     syntax::function_calls::function_calls_from_statements,
+    syntax::semantic_imports::SemanticImportIndex,
+    syntax::semantic_initializers::SemanticInitializerIndex,
     syntax::source::SourceView,
     syntax::values::{initializer_records_from_declarator, syntax_value_from_expression},
 };
 
-type ImportsByLocalName = HashMap<String, StaticImportRecord>;
-
 pub fn function_value_from_function(
     view: &SourceView<'_>,
     function: &Function<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
+    initializer_index: Option<&SemanticInitializerIndex<'_>>,
     source_span: Span,
 ) -> StaticSyntaxValue {
     let body = function.body.as_deref();
@@ -29,7 +25,7 @@ pub fn function_value_from_function(
             function_calls_from_statements(view, &body.statements, imports)
         }),
         returns: body.map_or_else(Vec::new, |body| {
-            function_returns_from_statements(view, &body.statements, imports)
+            function_returns_from_statements(view, &body.statements, imports, initializer_index)
         }),
         local_initializers: body.map_or_else(Vec::new, |body| {
             function_initializers_from_statements(view, &body.statements, imports)
@@ -42,14 +38,20 @@ pub fn function_value_from_function(
 pub fn function_value_from_arrow(
     view: &SourceView<'_>,
     function: &ArrowFunctionExpression<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
+    initializer_index: Option<&SemanticInitializerIndex<'_>>,
 ) -> StaticSyntaxValue {
-    let mut returns = function_returns_from_statements(view, &function.body.statements, imports);
+    let mut returns = function_returns_from_statements(
+        view,
+        &function.body.statements,
+        imports,
+        initializer_index,
+    );
     if function.expression {
         if let Some(Statement::ExpressionStatement(statement)) = function.body.statements.first() {
             returns.insert(
                 0,
-                syntax_value_from_expression(view, &statement.expression, imports),
+                function_return_value(view, &statement.expression, imports, initializer_index),
             );
         }
     }
@@ -149,11 +151,12 @@ fn property_key_name(key: &PropertyKey<'_>) -> Option<String> {
 fn function_returns_from_statements(
     view: &SourceView<'_>,
     statements: &[Statement<'_>],
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
+    initializer_index: Option<&SemanticInitializerIndex<'_>>,
 ) -> Vec<StaticSyntaxValue> {
     let mut returns = Vec::new();
     for statement in statements {
-        collect_returns_from_statement(view, statement, imports, &mut returns);
+        collect_returns_from_statement(view, statement, imports, initializer_index, &mut returns);
     }
     returns
 }
@@ -161,7 +164,7 @@ fn function_returns_from_statements(
 fn function_initializers_from_statements(
     view: &SourceView<'_>,
     statements: &[Statement<'_>],
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> Vec<StaticInitializerRecord> {
     let mut initializers = Vec::new();
     for statement in statements {
@@ -173,34 +176,78 @@ fn function_initializers_from_statements(
 fn collect_returns_from_statement(
     view: &SourceView<'_>,
     statement: &Statement<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
+    initializer_index: Option<&SemanticInitializerIndex<'_>>,
     returns: &mut Vec<StaticSyntaxValue>,
 ) {
     match statement {
         Statement::ReturnStatement(statement) => {
             if let Some(argument) = &statement.argument {
-                returns.push(syntax_value_from_expression(view, argument, imports));
+                returns.push(function_return_value(
+                    view,
+                    argument,
+                    imports,
+                    initializer_index,
+                ));
             }
         }
         Statement::BlockStatement(block) => {
             for statement in &block.body {
-                collect_returns_from_statement(view, statement, imports, returns);
+                collect_returns_from_statement(
+                    view,
+                    statement,
+                    imports,
+                    initializer_index,
+                    returns,
+                );
             }
         }
         Statement::IfStatement(statement) => {
-            collect_returns_from_statement(view, &statement.consequent, imports, returns);
+            collect_returns_from_statement(
+                view,
+                &statement.consequent,
+                imports,
+                initializer_index,
+                returns,
+            );
             if let Some(alternate) = &statement.alternate {
-                collect_returns_from_statement(view, alternate, imports, returns);
+                collect_returns_from_statement(
+                    view,
+                    alternate,
+                    imports,
+                    initializer_index,
+                    returns,
+                );
             }
         }
         _ => {}
     }
 }
 
+fn function_return_value(
+    view: &SourceView<'_>,
+    expression: &Expression<'_>,
+    imports: &SemanticImportIndex<'_>,
+    initializer_index: Option<&SemanticInitializerIndex<'_>>,
+) -> StaticSyntaxValue {
+    match expression {
+        Expression::Identifier(identifier) => initializer_index
+            .and_then(|index| index.value_for_identifier(identifier))
+            .unwrap_or_else(|| syntax_value_from_expression(view, expression, imports)),
+        Expression::ParenthesizedExpression(parenthesized) => {
+            function_return_value(view, &parenthesized.expression, imports, initializer_index)
+        }
+        Expression::AwaitExpression(await_expression) => {
+            function_return_value(view, &await_expression.argument, imports, initializer_index)
+        }
+        _ => syntax_value_from_expression(view, expression, imports),
+    }
+}
+
 fn collect_initializers_from_statement(
     view: &SourceView<'_>,
     statement: &Statement<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
     initializers: &mut Vec<StaticInitializerRecord>,
 ) {
     match statement {

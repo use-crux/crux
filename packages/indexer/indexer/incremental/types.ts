@@ -68,7 +68,25 @@ export interface IndexFilesOptions {
   readonly files: readonly string[]
   readonly deletedFiles?: readonly string[]
   readonly previousIndex?: ProjectIndexSnapshot
+  /**
+   * Current source hash evidence for changed files.
+   *
+   * The planner stays pure: callers that already read the edited source can
+   * pass the new full-source hash and exported-interface hash here. Missing
+   * evidence keeps the conservative dependent-closure behavior.
+   */
+  readonly currentSources?: readonly IncrementalSourceHashEvidence[]
   readonly maxAffectedFiles?: number
+}
+
+/** Hash evidence for one current changed source file. */
+export interface IncrementalSourceHashEvidence {
+  /** Absolute or project-relative source file path. */
+  readonly file: string
+  /** SHA-256 hash of the exact UTF-8 source text. */
+  readonly sourceHash: string
+  /** SHA-256 hash of the exported surface dependent files can observe. */
+  readonly interfaceHash?: string
 }
 
 /**

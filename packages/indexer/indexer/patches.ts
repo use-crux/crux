@@ -16,6 +16,7 @@ import type {
 } from '@use-crux/core/project-index'
 import type { SemanticSourceProfile } from './semantic/source-profile'
 import { relationIdentity, withResolvedRelationReadModel } from './relations'
+import { compareCodepoint } from './sort'
 
 export type IndexPatchPhase = 'cache' | 'ast' | 'semantic' | 'runtime' | 'quality'
 export type IndexPatchStatus = 'ok' | 'partial' | 'degraded'
@@ -311,26 +312,43 @@ function mergeSourcesForPatch(
   patch: IndexPatch,
 ): IndexSourceFile[] {
   const merged = new Map(existing.map((source) => [source.file, source]))
-  if (!patch.facts.sources?.length) return [...merged.values()]
+  const incomingSources = patch.facts.sources ?? []
 
-  for (const source of patch.facts.sources) {
+  for (const source of incomingSources) {
     const current = merged.get(source.file)
     const currentPhase = phases[source.file] ?? 'cache'
     if (current && phaseRank(patch.phase) < phaseRank(currentPhase)) continue
     merged.set(source.file, current ? mergeIndexSourceFile(current, source) : source)
   }
-  return [...merged.values()]
+  const incomingFiles = new Set(incomingSources.map((source) => source.file))
+  const deletedFiles = new Set((patch.invalidates?.files ?? []).filter((file) => !incomingFiles.has(file)))
+  return pruneDeletedSourceEdges([...merged.values()], deletedFiles)
 }
 
 function mergeIndexSourceFile(existing: IndexSourceFile, incoming: IndexSourceFile): IndexSourceFile {
   return {
     file: incoming.file,
     status: mergeSourceStatus(existing.status, incoming.status),
+    shardId: incoming.shardId ?? existing.shardId,
+    sourceHash: incoming.sourceHash ?? existing.sourceHash,
+    interfaceHash: incoming.interfaceHash ?? existing.interfaceHash,
     definitionIds: mergeStringLists(existing.definitionIds, incoming.definitionIds),
-    dependencies: mergeStringLists(existing.dependencies, incoming.dependencies),
+    dependencies: incoming.dependencies !== undefined ? [...incoming.dependencies].sort(compareCodepoint) : existing.dependencies,
     dependents: mergeStringLists(existing.dependents, incoming.dependents),
     diagnostics: mergeStringLists(existing.diagnostics, incoming.diagnostics),
   }
+}
+
+function pruneDeletedSourceEdges(
+  sources: readonly IndexSourceFile[],
+  deletedFiles: ReadonlySet<string>,
+): IndexSourceFile[] {
+  if (deletedFiles.size === 0) return [...sources]
+  return sources.map((source) => ({
+    ...source,
+    dependencies: filterStringList(source.dependencies, deletedFiles),
+    dependents: filterStringList(source.dependents, deletedFiles),
+  }))
 }
 
 function mergeSourceStatus(
@@ -347,8 +365,16 @@ function mergeStringLists(
   incoming: readonly string[] | undefined,
 ): string[] | undefined {
   if (existing === undefined && incoming === undefined) return undefined
-  const merged = [...new Set([...(existing ?? []), ...(incoming ?? [])])].sort()
+  const merged = [...new Set([...(existing ?? []), ...(incoming ?? [])])].sort(compareCodepoint)
   return merged
+}
+
+function filterStringList(
+  values: readonly string[] | undefined,
+  excluded: ReadonlySet<string>,
+): string[] | undefined {
+  if (values === undefined) return undefined
+  return values.filter((value) => !excluded.has(value))
 }
 
 function mergeDiagnosticsByPhase(
@@ -399,7 +425,12 @@ function invalidateIndexPatchState(state: IndexPatchState, patch: IndexPatch): I
     invalidatedDiagnosticIds,
     invalidatedDefinitionIds,
   )
-  const sources = state.sources.filter((source) => !invalidatedFiles.has(source.file))
+  const sources = state.sources
+    .filter((source) => !invalidatedFiles.has(source.file))
+    .map((source) => ({
+      ...source,
+      dependents: filterStringList(source.dependents, invalidatedFiles),
+    }))
 
   return {
     ...state,

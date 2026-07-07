@@ -3,6 +3,7 @@ import type { ResolvedProjectModel } from '@use-crux/core/project-index'
 import type { IndexPatch } from '../indexer/patches'
 import {
   indexPatchFromWorkerEvents,
+  projectIndexArtifactToWorkerEvents,
   indexPatchToWorkerEvents,
   projectIndexArtifactToWorkerEvent,
 } from '../contracts/worker-events'
@@ -72,7 +73,7 @@ describe('project index worker protocol', () => {
     expect(fixture.outOfOrderEvents[1]).toMatchObject({ type: 'fact:batch', sequence: 1 })
   })
 
-  it('streams semantic source profile rows outside phase metadata', () => {
+  it('streams source profile rows and carries terminal profile metadata on phase:done', () => {
     const patch: IndexPatch = {
       schemaVersion: 1,
       phase: 'ast',
@@ -103,7 +104,43 @@ describe('project index worker protocol', () => {
     })
 
     expect(events.map((event) => event.type)).toEqual(['phase:start', 'sourceProfile:batch', 'phase:done'])
-    expect(events.find((event) => event.type === 'phase:done')).not.toHaveProperty('patch.semanticSourceProfile')
+    const semanticSourceProfile = patch.semanticSourceProfile
+    if (!semanticSourceProfile) throw new Error('Expected semantic source profile fixture')
+    const sourceProfileBatch = events.find((event) => event.type === 'sourceProfile:batch')
+    expect(sourceProfileBatch).toMatchObject({ type: 'sourceProfile:batch', files: semanticSourceProfile.files })
+    expect(sourceProfileBatch).not.toHaveProperty('complete')
+    expect(events.find((event) => event.type === 'phase:done')).toMatchObject({
+      patch: { semanticSourceProfile },
+    })
+    expect(indexPatchFromWorkerEvents(events)).toEqual(patch)
+  })
+
+  it('splits fact batches by serialized event bytes', () => {
+    const patch: IndexPatch = {
+      schemaVersion: 1,
+      phase: 'ast',
+      project: { root: '/repo', name: 'fixture' },
+      startedAt: '2026-07-06T10:00:00.000Z',
+      finishedAt: '2026-07-06T10:00:00.001Z',
+      status: 'ok',
+      facts: {
+        diagnostics: [
+          diagnosticFixture('diagnostic:large-a'),
+          diagnosticFixture('diagnostic:large-b'),
+        ],
+      },
+    }
+
+    const events = indexPatchToWorkerEvents(patch, {
+      transactionId: 'tx-large-facts',
+      producer: { name: '@use-crux/indexer', version: 'test' },
+      maxFactsPerBatch: 10,
+      maxEventBytes: 1_500,
+    })
+    const factBatches = events.filter((event) => event.type === 'fact:batch')
+
+    expect(factBatches).toHaveLength(2)
+    expect(factBatches.map((event) => event.facts)).toEqual([[expect.any(Object)], [expect.any(Object)]])
     expect(indexPatchFromWorkerEvents(events)).toEqual(patch)
   })
 
@@ -152,6 +189,34 @@ describe('project index worker protocol', () => {
     })
   })
 
+  it('chunks JSON artifacts by serialized event bytes', () => {
+    const payload = {
+      root: '/repo',
+      files: [
+        { file: '/repo/src/a.ts', source: 'x'.repeat(800) },
+        { file: '/repo/src/b.ts', source: 'y'.repeat(800) },
+      ],
+    } as unknown as ResolvedProjectModel
+
+    const events = projectIndexArtifactToWorkerEvents('projectModel', payload, {
+      root: '/repo',
+      transactionId: 'artifact-large-project-model',
+      maxEventBytes: 700,
+    })
+    const chunks = events.filter((event) => event.type === 'artifact:chunk')
+    const done = events.at(-1)
+    const decoded = Buffer.concat(chunks.map((event) => Buffer.from(event.payloadChunk, 'base64'))).toString('utf8')
+
+    expect(chunks.length).toBeGreaterThan(1)
+    expect(done).toMatchObject({
+      type: 'artifact:done',
+      artifact: 'projectModel',
+      root: '/repo',
+    })
+    expect(done).not.toHaveProperty('payload')
+    expect(JSON.parse(decoded)).toEqual(payload)
+  })
+
   it('marks runtime patch facts as runtime-observed evidence', () => {
     const patch: IndexPatch = {
       schemaVersion: 1,
@@ -190,3 +255,12 @@ describe('project index worker protocol', () => {
     })
   })
 })
+
+function diagnosticFixture(id: string): NonNullable<IndexPatch['facts']['diagnostics']>[number] {
+  return {
+    id,
+    severity: 'info',
+    code: 'index.large_fact',
+    message: 'x'.repeat(800),
+  }
+}

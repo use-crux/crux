@@ -3,7 +3,7 @@ import type {
   ProjectRelation,
 } from "@use-crux/core/project-index";
 import { safeId } from "../definitions";
-import { dataAccessKindForMethod } from "../extractors/data-access-manifest";
+import { dataAccessKindForMethod } from "./data-access-manifest";
 import { projectRelation } from "../relations";
 import type {
   SemanticAnalyzerNode,

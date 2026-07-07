@@ -6,6 +6,7 @@ export type {
   GraphConfidence,
   IncrementalDecisionExplanation,
   IncrementalIndexDecision,
+  IncrementalSourceHashEvidence,
   IndexFilesOptions,
   SemanticClosureReindexDecision,
   SourceFileReindexDecision,
@@ -14,12 +15,8 @@ export { explainIncrementalDecision } from './explain'
 export { indexInvalidationFromDecision, type IndexPatchInvalidation } from './invalidation'
 export { planIndexFiles } from './plan'
 export { planIndexFilesDryRun } from './dry-run'
-export { indexProjectIncremental } from './executor'
 export type {
-  IncrementalExecutionMode,
   IncrementalExecutionReport,
-  IncrementalIndexExecutionResult,
   IncrementalPatchCounts,
   IncrementalSemanticStatus,
-  IndexProjectIncrementalOptions,
 } from './execution-types'

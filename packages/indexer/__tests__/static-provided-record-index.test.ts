@@ -1,15 +1,8 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  indexProjectAst,
-  indexProjectAstFromSyntaxRecordProvider,
-  indexProjectAstFromSyntaxRecords,
-  inspectProjectStaticSyntaxPlan,
-} from '..'
-import { createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
-import type { IndexPatch } from '../indexer/patches'
+import { inspectProjectStaticSyntaxPlan } from '../host/static-index'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -25,6 +18,39 @@ afterEach(async () => {
 })
 
 describe('provided static syntax record indexing', () => {
+  it('keeps source-only static syntax planning from importing user config modules', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const file = join(root, 'src/writer.ts')
+    const sentinel = join(root, 'config-imported.txt')
+    await writeFile(
+      file,
+      ["import { prompt } from '@use-crux/core'", '', "export const writerPrompt = prompt({ id: 'writer.plan' })"].join(
+        '\n',
+      ),
+    )
+    await writeFile(
+      join(root, 'crux.config.ts'),
+      [
+        "import { writeFileSync } from 'node:fs'",
+        "import { config } from '@use-crux/core'",
+        '',
+        `writeFileSync(${JSON.stringify(sentinel)}, 'imported')`,
+        '',
+        'export default config({',
+        "  experimental: { indexer: { nativeAst: { frontend: 'oxc' } } },",
+        '})',
+      ].join('\n'),
+    )
+
+    const plan = await inspectProjectStaticSyntaxPlan({ root, projectName: 'provided-records' })
+
+    expect(plan.files).toContain(file)
+    expect(plan.configFile).toBe(join(root, 'crux.config.ts'))
+    expect(plan.staticSyntaxEnabled).toBe(false)
+    await expect(fileExists(sentinel)).resolves.toBe(false)
+  })
+
   it('reports the static syntax plan needed by a native parser host', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
@@ -36,18 +62,18 @@ describe('provided static syntax record indexing', () => {
       ),
     )
 
-    const plan = await inspectProjectStaticSyntaxPlan({ root, projectName: 'provided-records' })
+    const plan = await inspectProjectStaticSyntaxPlan({
+      root,
+      projectName: 'provided-records',
+      resolutionMode: 'config-policy',
+    })
 
     expect(plan.root).toBe(root)
     expect(plan.files).toEqual([file])
-    expect(plan.callNames).toContain('prompt')
-    expect(plan.constructorNames).toContain('Agent')
-    expect(plan.pruneNativeFactCallNames).toEqual(['cascade', 'fallback', 'router'])
-    expect(plan.relationSpecs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: 'prompt.uses_context', fidelity: 'partial', runtimeJoin: true }),
-      ]),
-    )
+    expect(plan.callNames).toEqual([])
+    expect(plan.constructorNames).toEqual(['Agent'])
+    expect(plan.pruneNativeFactCallNames).toEqual([])
+    expect(plan.relationSpecs).toEqual([])
     expect(plan.ruleDescriptors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'prompt.missing_input_schema', source: 'builtin' }),
@@ -85,7 +111,11 @@ describe('provided static syntax record indexing', () => {
       ].join('\n'),
     )
 
-    const plan = await inspectProjectStaticSyntaxPlan({ root, projectName: 'provided-records' })
+    const plan = await inspectProjectStaticSyntaxPlan({
+      root,
+      projectName: 'provided-records',
+      resolutionMode: 'config-policy',
+    })
 
     expect(plan.files).toContain(file)
     expect(plan.staticSyntaxEnabled).toBe(true)
@@ -110,132 +140,13 @@ describe('provided static syntax record indexing', () => {
     expect(plan.configFile).toBe(configFile)
     expect(plan.files).toContain(configFile)
   })
-
-  it('builds the same AST patch facts as the parser-backed static path', async () => {
-    const root = await fixtureRoot()
-    await mkdir(join(root, 'src'), { recursive: true })
-    const file = join(root, 'src/writer.ts')
-    const source = [
-      "import { prompt } from '@use-crux/core'",
-      '',
-      'export const writerPrompt = prompt({',
-      "  id: 'writer.provided',",
-      "  system: 'Write clearly.',",
-      '})',
-    ].join('\n')
-    await writeFile(file, source)
-
-    const record = await createTypeScriptStaticSyntaxFrontend({ callNames: ['prompt'] }).parseFile({
-      root,
-      file,
-      source,
-    })
-    const provided = await indexProjectAstFromSyntaxRecords({
-      root,
-      projectName: 'provided-records',
-      records: [record],
-    })
-    await rm(join(root, '.crux'), { recursive: true, force: true })
-    const baseline = await indexProjectAst({ root, projectName: 'provided-records' })
-
-    expect(normalizedPatchFacts(provided)).toEqual(normalizedPatchFacts(baseline))
-  })
-
-  it('builds the same AST patch facts from a lazy syntax record provider', async () => {
-    const root = await fixtureRoot()
-    await mkdir(join(root, 'src'), { recursive: true })
-    const file = join(root, 'src/writer.ts')
-    const secondFile = join(root, 'src/editor.ts')
-    const source = [
-      "import { prompt } from '@use-crux/core'",
-      '',
-      'export const writerPrompt = prompt({',
-      "  id: 'writer.provider',",
-      "  system: 'Write clearly.',",
-      '})',
-    ].join('\n')
-    const secondSource = [
-      "import { prompt } from '@use-crux/core'",
-      '',
-      "export const editorPrompt = prompt({ id: 'editor.provider' })",
-    ].join('\n')
-    await writeFile(file, source)
-    await writeFile(secondFile, secondSource)
-
-    const frontend = createTypeScriptStaticSyntaxFrontend({ callNames: ['prompt'] })
-    const record = await frontend.parseFile({
-      root,
-      file,
-      source,
-    })
-    const secondRecord = await frontend.parseFile({
-      root,
-      file: secondFile,
-      source: secondSource,
-    })
-    const recordsByFile = new Map([
-      [file, record],
-      [secondFile, secondRecord],
-    ])
-    const reads: string[] = []
-    const batchReads: string[][] = []
-    const provided = await indexProjectAstFromSyntaxRecordProvider({
-      root,
-      projectName: 'provided-record-provider',
-      recordProvider: {
-        identity: record.frontend,
-        read: async (requestedFile) => {
-          reads.push(requestedFile)
-          return recordsByFile.get(requestedFile)
-        },
-        readMany: async (requestedFiles) => {
-          batchReads.push([...requestedFiles])
-          return new Map(
-            requestedFiles.flatMap((requestedFile) => {
-              const requestedRecord = recordsByFile.get(requestedFile)
-              return requestedRecord ? [[requestedFile, requestedRecord] as const] : []
-            }),
-          )
-        },
-      },
-    })
-    await rm(join(root, '.crux'), { recursive: true, force: true })
-    const baseline = await indexProjectAst({ root, projectName: 'provided-record-provider' })
-
-    expect(batchReads.flat()).toContain(file)
-    expect(batchReads.flat()).toContain(secondFile)
-    expect(reads).not.toContain(file)
-    expect(reads).not.toContain(secondFile)
-    expect(normalizedPatchFacts(provided)).toEqual(normalizedPatchFacts(baseline))
-  })
-
-  it('indexes an empty project from an explicit native syntax frontend identity', async () => {
-    const root = await fixtureRoot()
-
-    const patch = await indexProjectAstFromSyntaxRecords({
-      root,
-      projectName: 'empty-provided-records',
-      records: [],
-      frontendIdentity: { name: 'oxc-rust', version: 'test' },
-    })
-
-    expect(patch.project).toMatchObject({ root, name: 'empty-provided-records' })
-    expect(patch.facts.definitions).toEqual([])
-  })
 })
 
-function normalizedPatchFacts(patch: IndexPatch) {
-  return {
-    project: patch.project,
-    prompts: patch.facts.prompts,
-    contexts: patch.facts.contexts,
-    tools: patch.facts.tools,
-    definitions: patch.facts.definitions,
-    relations: patch.facts.relations,
-    diagnostics: patch.facts.diagnostics,
-    lintFindings: patch.facts.lintFindings,
-    ruleDescriptors: patch.facts.ruleDescriptors,
-    sources: patch.facts.sources,
-    sourceGraph: patch.facts.sourceGraph,
+async function fileExists(file: string): Promise<boolean> {
+  try {
+    await access(file)
+    return true
+  } catch {
+    return false
   }
 }

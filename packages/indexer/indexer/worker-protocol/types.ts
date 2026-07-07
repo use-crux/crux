@@ -225,10 +225,9 @@ export interface ProjectIndexPhaseErrorEvent extends ProjectIndexWorkerEventBase
 /**
  * Emits one complete JSON artifact.
  *
- * Artifacts use a single transactional event because they are small read models,
- * not appendable index facts. The host still validates protocol version,
- * transaction id, root identity, artifact kind, and stream byte budget before
- * returning the payload.
+ * Small artifacts use a single event with `payload`. Large artifacts may be
+ * preceded by `artifact:chunk` events and then use this event as the terminal
+ * marker without `payload`.
  */
 export interface ProjectIndexArtifactDoneEvent<
   TKind extends ProjectIndexArtifactKind = ProjectIndexArtifactKind,
@@ -238,8 +237,25 @@ export interface ProjectIndexArtifactDoneEvent<
   readonly artifact: TKind
   /** Absolute project root for host-side identity validation. */
   readonly root: string
-  /** JSON-safe artifact payload. */
-  readonly payload: ProjectIndexArtifactMap[TKind]
+  /** JSON-safe artifact payload, omitted when prior chunks carried it. */
+  readonly payload?: ProjectIndexArtifactMap[TKind]
+}
+
+/** Streams one base64-encoded JSON artifact payload chunk. */
+export interface ProjectIndexArtifactChunkEvent<
+  TKind extends ProjectIndexArtifactKind = ProjectIndexArtifactKind,
+> extends ProjectIndexWorkerEventBase {
+  readonly type: 'artifact:chunk'
+  /** Artifact kind represented by the chunked payload. */
+  readonly artifact: TKind
+  /** Absolute project root for host-side identity validation. */
+  readonly root: string
+  /** Zero-based contiguous sequence number. */
+  readonly sequence: number
+  /** Chunk payload encoding. */
+  readonly encoding: 'base64'
+  /** Base64-encoded bytes from the artifact's JSON representation. */
+  readonly payloadChunk: string
 }
 
 /** Reports an artifact-level worker failure. */
@@ -261,5 +277,6 @@ export type ProjectIndexWorkerEvent =
   | ProjectIndexSourceProfileBatchEvent
   | ProjectIndexPhaseDoneEvent
   | ProjectIndexPhaseErrorEvent
+  | ProjectIndexArtifactChunkEvent
   | ProjectIndexArtifactDoneEvent
   | ProjectIndexArtifactErrorEvent

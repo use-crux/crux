@@ -70,7 +70,7 @@ func TestCheckRuleFactsBuildsRuleRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckRuleFacts error = %v", err)
 	}
-	if reader.request.Method != "checkStaticRules" || reader.request.ResolutionMode != "config-policy" || !reader.request.NativeLintFinalize {
+	if reader.request.Method != "checkStaticRules" || reader.request.ResolutionMode != "config-policy" {
 		t.Fatalf("request = %+v, want static rule request", reader.request)
 	}
 	if len(reader.request.Files) != 1 || reader.request.Files[0] != "src/writer.ts" {

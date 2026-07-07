@@ -10,7 +10,7 @@ use crate::relation::model::{StaticIndexRelationPolicyTable, resolve_static_inde
 use crate::relation::policy::StaticIndexRelationPolicy;
 
 #[test]
-fn relation_refs_honor_from_variable_target_kind_type_and_source() {
+fn relation_refs_honor_explicit_target_kind_type_and_source() {
     let source = StaticIndexSourceLocation {
         file: "src/workflow.ts".to_string(),
         line: 12,
@@ -40,7 +40,8 @@ fn relation_refs_honor_from_variable_target_kind_type_and_source() {
                 "tool".to_string(),
                 "workflow.step.uses_tool".to_string(),
             )]),
-            from_variable: Some("composeStep".to_string()),
+            from_id: Some("workflow.step:compose".to_string()),
+            to_id: Some("tool:writer".to_string()),
             to_variable: Some("writerTool".to_string()),
             source: Some(source.clone()),
             ..relation_ref("workflow:daily", "workflow.uses_target")

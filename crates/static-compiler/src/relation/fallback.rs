@@ -61,6 +61,38 @@ pub(crate) fn fallback_relation_target_id(
         | "flow.step.writes_workspace" => {
             Some(format!("workspace:{}", safe_use_entry_id(variable)))
         }
+        "flow.step.uses_agent"
+        | "composition.uses_agent"
+        | "parallel.branch.uses_agent"
+        | "pipeline.stage.uses_agent"
+        | "consensus.includes_agent"
+        | "swarm.includes_agent" => Some(format!("agent:{}", safe_use_entry_id(variable))),
+        "composition.uses_prompt"
+        | "parallel.branch.uses_prompt"
+        | "pipeline.stage.uses_prompt" => Some(format!("prompt:{}", safe_use_entry_id(variable))),
+        "composition.uses_tool"
+        | "parallel.branch.uses_tool"
+        | "pipeline.stage.uses_tool"
+        | "workspace.exposes_tool" => Some(format!("tool:{variable}")),
+        "composition.uses_flow" | "parallel.branch.uses_flow" | "pipeline.stage.uses_flow" => {
+            Some(format!("flow:{}", safe_use_entry_id(variable)))
+        }
+        "agent.uses_routing"
+        | "flow.step.uses_routing"
+        | "composition.uses_routing"
+        | "parallel.branch.uses_routing"
+        | "pipeline.stage.uses_routing" => {
+            Some(format!("routing.router:{}", safe_use_entry_id(variable)))
+        }
+        "consensus.uses_scorer"
+        | "rag.recipe.step.uses_scorer"
+        | "rag.pipeline.stage.uses_scorer" => {
+            Some(format!("scorer:{}", safe_use_entry_id(variable)))
+        }
+        "rag.recipe.step.uses_reranker" => {
+            Some(format!("rag.reranker:{}", safe_use_entry_id(variable)))
+        }
+        "consensus.uses_judge" => Some(format!("agent:{}", safe_use_entry_id(variable))),
         "rag.recipe.uses_retriever"
         | "rag.recipe.step.uses_retriever"
         | "rag.pipeline.uses_retriever"

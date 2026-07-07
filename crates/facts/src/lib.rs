@@ -4,6 +4,8 @@
 //!
 //! These structs mirror the JSON names owned by `@use-crux/core/project-index`.
 //! Metadata-heavy regions stay as `serde_json::Value` until Rust owns those read models.
+//! Source locations and snippets are typed because they are stable Project Index
+//! contract surfaces emitted by both TypeScript and native frontends.
 
 use std::collections::BTreeMap;
 
@@ -120,6 +122,32 @@ pub struct StaticIndexSourceLocation {
     pub function_name: Option<String>,
 }
 
+/// Source span compatible with the Project Index read model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticIndexSourceRange {
+    pub file: String,
+    pub start_line: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_line: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_column: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end_column: Option<usize>,
+}
+
+/// Source text excerpt compatible with the Project Index read model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StaticIndexSourceSnippet {
+    pub source: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub language: Option<String>,
+    pub range: StaticIndexSourceRange,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub truncated: Option<bool>,
+}
+
 /// Project definition fact emitted by native or extension extraction.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -136,7 +164,7 @@ pub struct StaticIndexDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source: Option<StaticIndexSourceLocation>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub source_snippet: Option<Value>,
+    pub source_snippet: Option<StaticIndexSourceSnippet>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source_refs: Vec<StaticIndexProjectSourceRef>,
     pub fidelity: StaticIndexFidelity,
@@ -212,7 +240,7 @@ pub struct StaticIndexProjectSourceRef {
     pub symbol: Option<String>,
     pub source: StaticIndexSourceLocation,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub snippet: Option<Value>,
+    pub snippet: Option<StaticIndexSourceSnippet>,
     pub fidelity: StaticIndexFidelity,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
@@ -278,6 +306,10 @@ pub struct StaticIndexSourceRow {
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shard_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_hash: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interface_hash: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub definition_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -315,4 +347,83 @@ pub struct StaticIndexSourceGraphShard {
     pub discovered_by: Option<String>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub references: Vec<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn definition_source_snippet_is_a_typed_contract_surface() {
+        let snippet = StaticIndexSourceSnippet {
+            source: "definePrompt({ name: 'answer' })".to_string(),
+            language: Some("typescript".to_string()),
+            range: StaticIndexSourceRange {
+                file: "src/prompts.ts".to_string(),
+                start_line: 3,
+                start_column: Some(5),
+                end_line: Some(3),
+                end_column: Some(37),
+            },
+            truncated: Some(false),
+        };
+        let definition = StaticIndexDefinition {
+            id: "prompt:answer".to_string(),
+            kind: "prompt".to_string(),
+            name: "answer".to_string(),
+            description: None,
+            tags: Vec::new(),
+            path: Vec::new(),
+            source: None,
+            source_snippet: Some(snippet.clone()),
+            source_refs: Vec::new(),
+            fidelity: StaticIndexFidelity::Resolved,
+            status: Some("active".to_string()),
+            fingerprint: None,
+            metadata: None,
+            quality: None,
+        };
+
+        let encoded = serde_json::to_value(&definition).expect("encoded definition");
+
+        assert_eq!(encoded["sourceSnippet"]["source"], snippet.source);
+        assert_eq!(encoded["sourceSnippet"]["language"], "typescript");
+        assert_eq!(encoded["sourceSnippet"]["range"]["startLine"], 3);
+        assert_eq!(encoded["sourceSnippet"]["range"]["startColumn"], 5);
+    }
+
+    #[test]
+    fn source_ref_snippet_deserializes_as_project_index_shape() {
+        let facts: StaticIndexPatchFacts = serde_json::from_value(json!({
+            "sourceRefs": [{
+                "definitionId": "prompt:answer",
+                "ref": {
+                    "id": "prompt:answer:source:schema:input:inputSchema",
+                    "role": "schema",
+                    "property": "input",
+                    "symbol": "inputSchema",
+                    "source": { "file": "src/prompts.ts", "line": 3, "column": 5 },
+                    "snippet": {
+                        "source": "z.object({ question: z.string() })",
+                        "range": { "file": "src/prompts.ts", "startLine": 3 },
+                        "truncated": true
+                    },
+                    "fidelity": "resolved"
+                }
+            }]
+        }))
+        .expect("decoded facts");
+
+        let snippet = facts.source_refs[0]
+            .ref_
+            .snippet
+            .as_ref()
+            .expect("source-ref snippet");
+        assert_eq!(snippet.source, "z.object({ question: z.string() })");
+        assert_eq!(snippet.range.file, "src/prompts.ts");
+        assert_eq!(snippet.range.start_line, 3);
+        assert_eq!(snippet.truncated, Some(true));
+    }
 }

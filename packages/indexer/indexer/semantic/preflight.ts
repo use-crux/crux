@@ -1,4 +1,5 @@
 import type { IndexPatchBudget } from '../patches'
+import { compareCodepoint } from '../sort'
 import { semanticSourceProfile, type SemanticSourceProfile, type SemanticSourceProfileFile } from './source-profile'
 
 /** Default guardrails for semantic work before a TypeScript program is created. */
@@ -159,5 +160,5 @@ async function completeSemanticSourceProfile(
 }
 
 function compareProfileFiles(left: SemanticSourceProfileFile, right: SemanticSourceProfileFile): number {
-  return left.file.localeCompare(right.file)
+  return compareCodepoint(left.file, right.file)
 }

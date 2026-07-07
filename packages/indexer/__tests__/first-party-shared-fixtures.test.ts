@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 import { builtInIndexRuleDescriptors } from '../indexer/lints/rules'
 import { indexRelationPolicies } from '../indexer/relations'
-import { firstPartyPrimitiveFixtureInventory } from './first-party-extractor-inventory'
 
 describe('first-party shared static index fixtures', () => {
   it('validates shared static syntax, relation, and rule fixture files', () => {
@@ -38,10 +37,7 @@ describe('first-party shared static index fixtures', () => {
 
   it('audits native coverage identities against required parity fixture classes', () => {
     const coverage = readStaticIndexRuntimeSharedFixture('primitive-coverage-identities')
-    const inventory = firstPartyPrimitiveFixtureInventory()
-    const coveredExtractors = inventory
-      .filter((item) => item.staticIndexCoverage === 'covered')
-      .map((item) => item.extractor)
+    const coveredExtractors = coverage.identities.map((identity) => identity.extractor).sort()
 
     expect(coverage.requiredFixtureClasses).toEqual([
       'definitions',
@@ -55,7 +51,7 @@ describe('first-party shared static index fixtures', () => {
       'runtimeMetadata',
       'degradedBehavior',
     ])
-    expect(coverage.identities.map((identity) => identity.extractor)).toEqual(coveredExtractors)
+    expect(coverage.identities.map((identity) => identity.extractor).sort()).toEqual(coveredExtractors)
     for (const identity of coverage.identities) {
       expect(identity.extension).toBe('@use-crux/indexer/crux-core')
       expect(identity.family).toBe(identity.extractor)

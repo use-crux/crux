@@ -95,7 +95,7 @@ function describeError(error: unknown): string {
 
 /**
  * Lower colocated `prompt({ tests })` cases (Quality rung 0) into
- * `prompt:<id>` evaluations. Prompts come from source-discovered prompt
+ * `prompt:<id>` evaluations. Prompts come from Project Model/config-visible
  * exports; prompts without tests are skipped. Lowering failures (e.g. a tested
  * prompt without an explicit id) become collect errors.
  *

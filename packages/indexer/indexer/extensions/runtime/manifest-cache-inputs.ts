@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { compareCodepoint } from '../../sort'
 import type { ExtensionRuntimeManifest } from './engine'
 import type { IndexDependency } from '../public-contract/types'
 
@@ -71,7 +72,7 @@ function stableJson(value: unknown): StableJsonValue {
     return Object.fromEntries(
       Object.entries(value)
         .filter(([, item]) => item !== undefined)
-        .sort(([left], [right]) => left.localeCompare(right))
+        .sort(([left], [right]) => compareCodepoint(left, right))
         .map(([key, item]) => [key, stableJson(item)]),
     )
   }

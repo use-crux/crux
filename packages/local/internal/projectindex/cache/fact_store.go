@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -46,7 +47,14 @@ func (s *SQLiteIndexFactStore) LoadSnapshot(ctx context.Context, root, projectNa
 }
 
 func projectIndexFactStoreDBFile(root string) string {
-	return filepath.Join(root, ".crux", "cache", "index-v2", "index.db")
+	return filepath.Join(
+		root,
+		".crux",
+		"cache",
+		"index-v2",
+		"epoch-"+strconv.Itoa(ProjectIndexSnapshotCacheEpoch),
+		"index.db",
+	)
 }
 
 func openProjectIndexFactDB(root string) (*sql.DB, error) {

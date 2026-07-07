@@ -1,19 +1,16 @@
-use std::collections::HashMap;
-
 use oxc_ast::ast::*;
 
 use crate::{
-    protocol::{StaticFunctionCallValue, StaticImportRecord},
+    protocol::StaticFunctionCallValue,
+    syntax::semantic_imports::SemanticImportIndex,
     syntax::source::SourceView,
     syntax::values::{call_args, call_receiver, callee_record_from_expression},
 };
 
-type ImportsByLocalName = HashMap<String, StaticImportRecord>;
-
 pub(crate) fn function_calls_from_statements(
     view: &SourceView<'_>,
     statements: &[Statement<'_>],
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> Vec<StaticFunctionCallValue> {
     let mut calls = Vec::new();
     for statement in statements {
@@ -25,7 +22,7 @@ pub(crate) fn function_calls_from_statements(
 fn collect_calls_from_statement(
     view: &SourceView<'_>,
     statement: &Statement<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
     calls: &mut Vec<StaticFunctionCallValue>,
 ) {
     match statement {
@@ -70,7 +67,7 @@ fn collect_calls_from_statement(
 fn collect_calls_from_expression(
     view: &SourceView<'_>,
     expression: &Expression<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
     calls: &mut Vec<StaticFunctionCallValue>,
 ) {
     match expression {
@@ -134,7 +131,7 @@ fn collect_calls_from_expression(
 fn collect_calls_from_argument(
     view: &SourceView<'_>,
     argument: &Argument<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
     calls: &mut Vec<StaticFunctionCallValue>,
 ) {
     match argument {
@@ -185,7 +182,7 @@ fn collect_calls_from_argument(
 fn collect_calls_from_array_element(
     view: &SourceView<'_>,
     element: &ArrayExpressionElement<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
     calls: &mut Vec<StaticFunctionCallValue>,
 ) {
     match element {
@@ -239,7 +236,7 @@ fn collect_calls_from_array_element(
 fn call_value(
     view: &SourceView<'_>,
     call: &CallExpression<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> StaticFunctionCallValue {
     StaticFunctionCallValue {
         callee: callee_record_from_expression(&call.callee, imports),

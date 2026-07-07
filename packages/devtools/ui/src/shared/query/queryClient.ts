@@ -40,6 +40,7 @@ export const queryClient = new QueryClient({
 /** Top-level query key namespaces. Used both by hooks + WS invalidator. */
 export const qk = {
   index: () => ['index'] as const,
+  indexWatch: () => ['index', 'watch'] as const,
   quality: {
     all: ['quality'] as const,
     overview: (window?: string) => ['quality', 'overview', ...(window ? [window] : [])] as const,

@@ -6,8 +6,8 @@ import (
 	"net/http"
 )
 
-func RegisterRoutes(mux *http.ServeMux, scriptPath string, embeddedScript []byte) {
-	worker := New(scriptPath, embeddedScript)
+func RegisterRoutes(mux *http.ServeMux, scriptPath string, embeddedScript []byte, projectRoot string) {
+	worker := New(scriptPath, embeddedScript, projectRoot)
 	mux.HandleFunc("POST /api/resolve-source", func(w http.ResponseWriter, r *http.Request) {
 		var req struct {
 			Locations []Location `json:"locations"`

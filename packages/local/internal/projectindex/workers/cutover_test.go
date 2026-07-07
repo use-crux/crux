@@ -73,16 +73,6 @@ func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
 				}) + '\n')
 				return
 			}
-			if (req.method === 'indexProjectAstFromSyntaxRecords' || req.method === 'indexProjectAst') {
-				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
-					type: 'phase:error',
-					transactionId: 'tx-error',
-					phase: 'ast',
-					error: { message: 'Static Index cutover should not call ' + req.method }
-				}) + '\n')
-				return
-			}
 			process.stdout.write(JSON.stringify({ error: 'unexpected method: ' + req.method }) + '\n')
 		})
 	`), 0o600); err != nil {
@@ -120,9 +110,6 @@ func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
 	}
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection) {
 		t.Fatalf("timing.NodeReasons = %v, want no %q", timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection)
-	}
-	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonSyntaxRecordProjection) {
-		t.Fatalf("timing.NodeReasons = %v, want no %q", timing.NodeReasons, projectIndexNodeReasonSyntaxRecordProjection)
 	}
 	if !reflect.DeepEqual(timing.NativeOnlyReasons, timing.NodeReasons) {
 		t.Fatalf("timing.NativeOnlyReasons = %v, want NodeReasons %v", timing.NativeOnlyReasons, timing.NodeReasons)

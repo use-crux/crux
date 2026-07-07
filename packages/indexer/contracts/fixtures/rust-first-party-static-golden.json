@@ -1,0 +1,4841 @@
+{
+  "schemaVersion": 1,
+  "frontend": "oxc-rust",
+  "rootPlaceholder": "<repo>",
+  "fileSelection": "staticDefinitionFiles(root)",
+  "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
+  "totals": {
+    "files": 536,
+    "definitions": 327,
+    "relations": 185,
+    "diagnostics": 4,
+    "dependencies": 972,
+    "canonicalBytes": 2401159
+  },
+  "files": [
+    {
+      "file": "apps/docs/app/(home)/_components.tsx",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "apps/docs/app/(home)/compare/page.tsx",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "apps/docs/app/(home)/observability/page.tsx",
+      "sha256": "488ae00dc56b27637c73024582da24eb661af85d0b0ebed0c7a274db8b631d8e",
+      "bytes": 113,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "apps/docs/app/(home)/page.tsx",
+      "sha256": "8a49c389eadcacad5514ed49c47b6554eb58408a3c8d3eede62674b23ab43901",
+      "bytes": 160,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "apps/docs/app/(home)/why/page.tsx",
+      "sha256": "488ae00dc56b27637c73024582da24eb661af85d0b0ebed0c7a274db8b631d8e",
+      "bytes": 113,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "apps/docs/lib/layout.shared.tsx",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "examples/node-basic/hello.ts",
+      "sha256": "88425866a163b2d620952942e74dc42f1dd0ec2505265d4762cc35dd3f067c39",
+      "bytes": 1717,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "examples/node-basic/quality-citations.eval.ts",
+      "sha256": "97e2342d157e913d9182bfdbe805ed874c95e8f89b51fcecbc87305e6641f0c7",
+      "bytes": 4510,
+      "definitions": 2,
+      "relations": 0,
+      "diagnostics": 2,
+      "dependencies": 0
+    },
+    {
+      "file": "examples/node-basic/quality-model-backed.example.ts",
+      "sha256": "9c7b4d8f863953bc7cd06eba75e6adf25313eac7baeb751d0cb909da0ea766d9",
+      "bytes": 6237,
+      "definitions": 3,
+      "relations": 0,
+      "diagnostics": 2,
+      "dependencies": 1
+    },
+    {
+      "file": "examples/node-basic/quality-models.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/__type_tests__/adapter-law-public-surface.ts",
+      "sha256": "91a12fa02fa0d69468b04385017e92065a2b81c6a70940feebbfa3d4bb1ac544",
+      "bytes": 2787,
+      "definitions": 2,
+      "relations": 1,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/ai/__type_tests__/provider-runtime-public-surface.ts",
+      "sha256": "7359405e0f65364af5de186d2a6d827befe452e59ca266e207a5d1af9130397a",
+      "bytes": 97,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/ai/agent/index.ts",
+      "sha256": "1618a3e10795f17927b921800617cbcd821aa27e1fa1321b3c91c7fb1b2e6cf0",
+      "bytes": 164,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/ai/agent/observability.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/agent/prompt-resolution.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/agent/skill-injection.ts",
+      "sha256": "0a3e840d21d49823463eb05331c4f41dc8504a10972a89b23ca2c58e757eaf88",
+      "bytes": 111,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/ai/agent/tool-timing.ts",
+      "sha256": "0a3e840d21d49823463eb05331c4f41dc8504a10972a89b23ca2c58e757eaf88",
+      "bytes": 111,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/ai/agent/tracing-middleware.ts",
+      "sha256": "6a909a58fb2f3e2d29ffe7bae22516633180cac161c2ce26f09b0fbdb4c702f4",
+      "bytes": 274,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/ai/agent/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/index.ts",
+      "sha256": "db241ad0cb3bafa2731ef333d7f13bfafa3c5e0caddb7a2d47a2f7115816b62f",
+      "bytes": 316,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/ai/src/call-handle.ts",
+      "sha256": "830a2e4cedb8bddef531a75ef7ac7b57fc5a799ef28202d4918686713227bdcf",
+      "bytes": 112,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/ai/src/codec.ts",
+      "sha256": "dff030df6558f88bde91b5128fc9a2c8d23b6f17efaab47597c2a1df392e7232",
+      "bytes": 191,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/ai/src/executor.ts",
+      "sha256": "5b54672c360675487e214a6c061f30a90b4aecf0dda92d900d28c5994e946807",
+      "bytes": 105,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/ai/src/extensions.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/src/gateway.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/src/messages.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/src/meta.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/src/options.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/src/profile.ts",
+      "sha256": "0eb4b1416e850af890e18d684e11c9b12a70449fa2d07243e17d4588f6d5a704",
+      "bytes": 226,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/ai/src/provider-profile.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/src/result-shape.ts",
+      "sha256": "946ef57f93435e32e690706de0117b8e30f6af6060fb82a5f3c9ef424dd44708",
+      "bytes": 100,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/index.ts",
+      "sha256": "68b6d0485c0ab865735777b4e8202528b89661bc6acce343794205130d597777",
+      "bytes": 294,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/loop.ts",
+      "sha256": "d631f4657b71b55a38e8741616e9dd68bc5704e855f705ba6ee657d98bb5c862",
+      "bytes": 329,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/replay.ts",
+      "sha256": "8ecae641f9e7855372728791e60d32cd33eb595dc10dbcf13a9b71d3b2b82f71",
+      "bytes": 117,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/request-args.ts",
+      "sha256": "f2f4dff5e8507c1aae606db6d1aba3f4dd567aab7232412bb2820632e2a27ba3",
+      "bytes": 149,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/stream-meta.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/stream-safety.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/stream.ts",
+      "sha256": "ea2c1e07296c9a24233fc9fa48db95beb13589b208f7632212efed534fe3bbff",
+      "bytes": 353,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/structured.ts",
+      "sha256": "cf17119b46b5d2cd02c2ef7561f30accf264b45e1dbd81771bf1242da25668e2",
+      "bytes": 237,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/ai/src/sdk-codec/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/src/stream-result.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/src/structured-generation.ts",
+      "sha256": "ecf852c3b3a004f4728affe180cfa71a117dfa40a4705ab6b759bdf16ac46be5",
+      "bytes": 150,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/ai/src/ui-message.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/stream/client.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/stream/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/stream/server.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/ai/stream/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/anthropic/codec.ts",
+      "sha256": "8396d72fd7518660085f1b9d537b44c564bbdc6a6a768f4d194d06b1aca021b8",
+      "bytes": 198,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/anthropic/helpers.ts",
+      "sha256": "4a40e209956b24f56925c7dff38cc9a33e8719093523bc4d5e4b2fb15ee02ef2",
+      "bytes": 105,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/anthropic/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/anthropic/message-codec.ts",
+      "sha256": "468ba3ad04555167c1120303ea8ee66edf3b6df4debab6356025fa430a829b4d",
+      "bytes": 118,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/anthropic/native.ts",
+      "sha256": "8396d72fd7518660085f1b9d537b44c564bbdc6a6a768f4d194d06b1aca021b8",
+      "bytes": 198,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/anthropic/request-params.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/anthropic/response.ts",
+      "sha256": "57ad412ada05bb1ef16204e193ec7525200b21b0d5ed869c0332f7d2f6500ab7",
+      "bytes": 112,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/anthropic/tool-result-content.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/__type_tests__/flow-surface.ts",
+      "sha256": "220ccd4f328370f4a2ae7c837f0a6942ccb53cfcf0318fb86c9cd273acb7d8e5",
+      "bytes": 2380,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/__type_tests__/profile-agent-surface.ts",
+      "sha256": "dfc34b5be83f068e3ac44bc7c55aad3271865f0a47759f79ccc351f737e218f3",
+      "bytes": 8183,
+      "definitions": 4,
+      "relations": 2,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/__type_tests__/profile-inference.ts",
+      "sha256": "1f8ac3e226b7866c55627f066c2a3b5e7c426cdf7fdc7048f061b8ef67ff99f9",
+      "bytes": 25420,
+      "definitions": 12,
+      "relations": 12,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/convex/__type_tests__/retrieval-surface.ts",
+      "sha256": "f8a7ef2f7558019fa81d35c3410005367b0a82f639221ff40b5f03bf271a93c6",
+      "bytes": 5295,
+      "definitions": 5,
+      "relations": 1,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/__type_tests__/runtime-engine-declaration.ts",
+      "sha256": "bbfbba0bdce9ce96ae91f75dbb2cb302895a34f6bffea425d4047c54b1a4f7c4",
+      "bytes": 103,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/agent.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/agent/default-driver.ts",
+      "sha256": "926e77d6517202c5abe8882047254dd78d4257baed97c4855e3a8f6d41b5f9d6",
+      "bytes": 1338,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/agent/lifecycle-observability.ts",
+      "sha256": "268be23047844221a3ad22284609ac53cf8cac612157a9492e8687d176ff0e6e",
+      "bytes": 109,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/agent/lifecycle-persistence.ts",
+      "sha256": "a849d04dd3d8f12df1e895364dfb324acbd7d0dced1b1b9daff1aa5f978357e8",
+      "bytes": 222,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/agent/lifecycle-store.ts",
+      "sha256": "c2fec2e609291824d3573d329d83fc3ee53228f52c1fb3a1419ee9d58719e753",
+      "bytes": 109,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/agent/lifecycle-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/agent/lifecycle.ts",
+      "sha256": "b60e9243761beccdf5fceaa3e798991c8d95200e614787aeb7905faa65a2e591",
+      "bytes": 469,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 8
+    },
+    {
+      "file": "packages/convex/agent/profile-facade.ts",
+      "sha256": "030ec4b1f13c5a6790402a9ae077eab4dc5e5b7f5d1869a2672b96f0a47cb67f",
+      "bytes": 2466,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/convex/agent/sdk-observability-artifacts.ts",
+      "sha256": "e7cc04b2aa551c376543836d6d22109be0ddce44c41770eae302d38b1121dfc3",
+      "bytes": 176,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/convex/agent/sdk-observability-values.ts",
+      "sha256": "95131b8af03e06c1a5edbed2a87d6aebb60b2c6504cdfb74eeb2538f130614b5",
+      "bytes": 117,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/agent/sdk-observability.ts",
+      "sha256": "05839f4578f7b8fed430c3fd8298a33a610bf5a82b8c882515f73bcc74fbf249",
+      "bytes": 344,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/convex/agent/sdk-step-observability.ts",
+      "sha256": "c1abd2999246b60ba9db09334d96b682fff43281f2597e421e1bcd21da06fae5",
+      "bytes": 295,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/convex/agent/sdk-tool-observability.ts",
+      "sha256": "d986a3db12deb19710e77e2cdb18f6d3a4e4e5f9c304df1d8f7109fc6b05b252",
+      "bytes": 221,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/agent/sdk-tools.ts",
+      "sha256": "eca09385f2ee8a76d724b64c8ce59361636fcf1a548d9ccdb2fc8d618cf46db2",
+      "bytes": 245,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/convex/agent/sdk-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/agent/sdk.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/agent/skill-activation-persistence.ts",
+      "sha256": "bbfbba0bdce9ce96ae91f75dbb2cb302895a34f6bffea425d4047c54b1a4f7c4",
+      "bytes": 103,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/bridge.ts",
+      "sha256": "c2fec2e609291824d3573d329d83fc3ee53228f52c1fb3a1419ee9d58719e753",
+      "bytes": 109,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/compaction-observability.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/context.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/index.ts",
+      "sha256": "16cad948317f14689d3f0b8e30ef91c82ce9aee5c1ddb598c6ade394f01563de",
+      "bytes": 120,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/memory.ts",
+      "sha256": "e9da59a85e1307c8b83d968d47bc39db0fa78eb137f8d244bd9fcd29e09f711f",
+      "bytes": 1220,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/observability.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/profile-store.ts",
+      "sha256": "20768aab041c4fe7adb9dba61f170ac4eb36c5dac115792db961e402cf5a8547",
+      "bytes": 103,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/profile.ts",
+      "sha256": "7bafb10d88f6b30d0895b4347a991a3cbffdf612c1ef9f1eabdb93a4df4283cc",
+      "bytes": 186,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/react.ts",
+      "sha256": "d690e453eb813ab3352bd4d3dccd4c842bee2be313b9465ff8e6e1938ab22ad2",
+      "bytes": 105,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/retrieval.ts",
+      "sha256": "dfe8d393856f392a880444ae7bf06efd9a4e88d75b46d192958e1b293a4dfb8d",
+      "bytes": 2022,
+      "definitions": 2,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/runtime-bridge.ts",
+      "sha256": "8499575ac3f343ae23738cd35ab9950a8a80d56eef06f31aeafd9bd88a87ab18",
+      "bytes": 334,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/convex/runtime-engine/codec.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/runtime-engine/definition.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/runtime-engine/handlers.ts",
+      "sha256": "28bf64bf1de851bdcdee4becb3ae155a05473ebcaf0ffef5405af57e1b48279a",
+      "bytes": 203,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/runtime-engine/helpers.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/runtime-engine/node-handlers.ts",
+      "sha256": "5f6f3fdcbcd05dfbbf17a797fb58bb0211da9d7bb53299b3a94c82bda0fe74ae",
+      "bytes": 296,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/convex/runtime-engine/store.ts",
+      "sha256": "9bbf175ba7d75084f33ebcfbf1a6b926d68ba51fd646f24780782a4bf4f71015",
+      "bytes": 116,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/runtime.ts",
+      "sha256": "e917585fa618274c2a1c912efc9e8af382a365ce9064d229232260bc7c875c59",
+      "bytes": 2002,
+      "definitions": 1,
+      "relations": 2,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/server-flow.ts",
+      "sha256": "fdd1377b6ea1b06d8a7f629e4c0d087ca131311b8883e4f79356fe7e8be2ff89",
+      "bytes": 3311,
+      "definitions": 3,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/server.ts",
+      "sha256": "4c26e4d9f2a6a212b3f370572057f034f4db9c0e2dede98fd0228175f7caf8f5",
+      "bytes": 149,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/convex/skill-node.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/skill.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/src/component/memory.ts",
+      "sha256": "df4401916946229461976991c0ea8b5d91f252216e562c3fec00b2a6bba78b70",
+      "bytes": 114,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/src/component/runtime/composite-events.ts",
+      "sha256": "50719eb517dcf38e242c4bcb77b36294b049d0281e2aa4f133a75e27fb9db6be",
+      "bytes": 239,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/src/component/runtime/composite-outbox.ts",
+      "sha256": "50719eb517dcf38e242c4bcb77b36294b049d0281e2aa4f133a75e27fb9db6be",
+      "bytes": 239,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/src/component/runtime/composite-state.ts",
+      "sha256": "0881cb42ac0e7a4ea01dc3bc72afd866d36402baaa71b8d5c78e58908764320d",
+      "bytes": 246,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/src/component/runtime/composite-timers.ts",
+      "sha256": "50719eb517dcf38e242c4bcb77b36294b049d0281e2aa4f133a75e27fb9db6be",
+      "bytes": 239,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/src/component/runtime/composite-transaction.ts",
+      "sha256": "3ffdf088a2a88b60855f3eba855d9ea236c064ec66598d19d9714ab0e94ad3d6",
+      "bytes": 402,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/convex/src/component/runtime/composite-utils.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/src/component/runtime/composite-waiters.ts",
+      "sha256": "50719eb517dcf38e242c4bcb77b36294b049d0281e2aa4f133a75e27fb9db6be",
+      "bytes": 239,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/src/component/runtime/composites.ts",
+      "sha256": "c30229cb19b6c0d790fcab9c1249625ff2d4d6493218de7612c2e79543f6c6b6",
+      "bytes": 239,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/convex/storage.ts",
+      "sha256": "fddda5b9b43cb06c9d3ee68baf095779d5915d8059b4d54b382630cf9a2501c4",
+      "bytes": 5521,
+      "definitions": 4,
+      "relations": 2,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/convex/store-component.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/store-doc/codec.ts",
+      "sha256": "df4401916946229461976991c0ea8b5d91f252216e562c3fec00b2a6bba78b70",
+      "bytes": 114,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/store-doc/storage-utils.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/store-doc/storage.ts",
+      "sha256": "893fa4b06259cc22b5661f78d9d4fdbc0aec8bc73f5fb6528757b4e071174a08",
+      "bytes": 163,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/convex/store-doc/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/store.ts",
+      "sha256": "d690e453eb813ab3352bd4d3dccd4c842bee2be313b9465ff8e6e1938ab22ad2",
+      "bytes": 105,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/swarm-observability.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/convex/swarm.ts",
+      "sha256": "7008eb60e5050c90c61555a4d50eb28b003632a4f27ce0dae90c0bc52c850e34",
+      "bytes": 157,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/convex/tools.ts",
+      "sha256": "bbfbba0bdce9ce96ae91f75dbb2cb302895a34f6bffea425d4047c54b1a4f7c4",
+      "bytes": 103,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/convex/workspace.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/composition-inference-pass2.ts",
+      "sha256": "263e69c796e027ce443198bda54d6732c23563a74497582627e7c06152b35e5a",
+      "bytes": 39446,
+      "definitions": 22,
+      "relations": 39,
+      "diagnostics": 0,
+      "dependencies": 7
+    },
+    {
+      "file": "packages/core/__type_tests__/composition-inference-pass3.ts",
+      "sha256": "1d597e49cae66e7e15da6817497de715b04e09fdc3dfcfb30741db16d8f1ea18",
+      "bytes": 7888,
+      "definitions": 5,
+      "relations": 3,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/__type_tests__/composition-inference.ts",
+      "sha256": "62c31215e3b650d726f897de4def21a04bbbbd47c839a1ca3e9908bd48638f2a",
+      "bytes": 11234,
+      "definitions": 6,
+      "relations": 5,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/__type_tests__/config-contract.ts",
+      "sha256": "4bee2b991b28ef28f00de37e067ba7e7d52baee45d47b21ba203687b3cc18f2d",
+      "bytes": 2430,
+      "definitions": 2,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/__type_tests__/context-memo-cache-contract.ts",
+      "sha256": "99e63b269e1aaaf435aa2e07c87ca2ea8b3bc288d98a9029764da1df9b89df0b",
+      "bytes": 5129,
+      "definitions": 5,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/__type_tests__/core-beta-contract.ts",
+      "sha256": "f1b036c9bb26caccaab8178200e94bfa9f9d485b02c68feccf57c6e55d7a8ecf",
+      "bytes": 50494,
+      "definitions": 27,
+      "relations": 14,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/__type_tests__/fixtures/quality-perf-fixture.ts",
+      "sha256": "3b3b178c010afb35aeae774e8a36661c4544f299a6643f9dda04a3e9753b35c2",
+      "bytes": 1823601,
+      "definitions": 70,
+      "relations": 40,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/__type_tests__/flow-beta-contract.ts",
+      "sha256": "b104f9b7a3512759db29e931c1c8ad45b4893c4093b3ce0b90c282696ea0a13d",
+      "bytes": 11516,
+      "definitions": 7,
+      "relations": 3,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/inference-surfaces.ts",
+      "sha256": "3e3a761d8fb9a1856f57c8aa1715971beec16d13be2a4260658eade49322b0d2",
+      "bytes": 17692,
+      "definitions": 9,
+      "relations": 5,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/__type_tests__/memory-beta-contract.ts",
+      "sha256": "fcdb75e2860562a9e3693e991c36bb2783b2e40c844948c95439719d07214754",
+      "bytes": 106,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/__type_tests__/no-any-public-surface.ts",
+      "sha256": "b8d1bd880785ab6c242f6a1511d65665384870d976df149c741071ef40536789",
+      "bytes": 13069,
+      "definitions": 8,
+      "relations": 6,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/__type_tests__/plans-tasks-beta-api.ts",
+      "sha256": "774cf4dd2ef86483dbc0412849e0d7beadd75b7663e93746e37d90f19acb3ad7",
+      "bytes": 174,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/__type_tests__/prompt-compiler-contract.ts",
+      "sha256": "400c6f85c58333d507e8e0651592564f0d715c0629400acabab90f2180cfc4cc",
+      "bytes": 1442,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/prompt-domain-imports.ts",
+      "sha256": "ad6727c83000360eb9de023985db2d7bf7d1663b3bdb2794f6d179d2752e6fe2",
+      "bytes": 10614,
+      "definitions": 5,
+      "relations": 4,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/__type_tests__/provider-runtime-public-surface.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/public-root-imports.ts",
+      "sha256": "51d4cd0186cdbcd0791a7463ee4e79b5d6997bb2144ffc47f8458dfa0ea8676a",
+      "bytes": 13771,
+      "definitions": 9,
+      "relations": 5,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/quality-authoring-examples.ts",
+      "sha256": "b95215ef87b6d0c189a753cb879ab4130f6022c40ba4ecd3c14d36f3fe767a83",
+      "bytes": 130590,
+      "definitions": 25,
+      "relations": 13,
+      "diagnostics": 0,
+      "dependencies": 7
+    },
+    {
+      "file": "packages/core/__type_tests__/quality-authoring.test-d.ts",
+      "sha256": "45c0b253c8c7691271e6af7a5ff83cf9c8072e3a4c5acc6db24113e4d01f43c7",
+      "bytes": 14834,
+      "definitions": 10,
+      "relations": 4,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/__type_tests__/quality-decision-report-matchers.test-d.ts",
+      "sha256": "15e82d513d02f464da307fb3995cdf7c140abd406d7f9019b03c3dfd10282cd9",
+      "bytes": 5584,
+      "definitions": 4,
+      "relations": 2,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/__type_tests__/retrieval-beta-contract.ts",
+      "sha256": "901d750b1c2901c19ccf0c28c214b04ae1b66e0fd614772bf211f71a2ec35864",
+      "bytes": 25868,
+      "definitions": 18,
+      "relations": 9,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/__type_tests__/retrieval-reranker-contract.ts",
+      "sha256": "6b684e8657a8f73db22a5c95ab8a94c1dfa701d02e325b58caee972fb02bafcf",
+      "bytes": 109,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/__type_tests__/runtime-engine-contract.ts",
+      "sha256": "f8be09c05c83b7c01da8d26a9d189a09f323f7d04398148071afb4d8ee190661",
+      "bytes": 2070,
+      "definitions": 2,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/runtime-public-imports.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/safety-beta-contract.ts",
+      "sha256": "5b4969c88a4e02d3af332d41793d2bf53ca293fe6d7fc6075f49f8da20fb816d",
+      "bytes": 3508,
+      "definitions": 3,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/__type_tests__/single-turn-provider-bundle-public-surface.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/skill-node-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/storage-consumer-contract.ts",
+      "sha256": "c822112d062a3be81d09fe716bcc299da91cad320f2f3024868969bab4e9ec5c",
+      "bytes": 13385,
+      "definitions": 10,
+      "relations": 5,
+      "diagnostics": 0,
+      "dependencies": 10
+    },
+    {
+      "file": "packages/core/__type_tests__/store-conformance.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/tool-context-contract.ts",
+      "sha256": "e946b9c01460d8d4b3e5e616e7acbf781ddb762c299d88704752ff766ee06682",
+      "bytes": 4289,
+      "definitions": 3,
+      "relations": 1,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/__type_tests__/tree-leaf-inference.ts",
+      "sha256": "d0830408ceaf01049cdd0e4354ec3e246c6a5121c9e55d58ffd87be17380a6ae",
+      "bytes": 7332,
+      "definitions": 10,
+      "relations": 1,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/__type_tests__/turn-decision-report.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/workspace-types.ts",
+      "sha256": "9e2d0b478282238ddee423c2be655b60e48cde461f30da468a8bd84a0036787a",
+      "bytes": 2125,
+      "definitions": 2,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/adapter/define-adapter-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/adapter/define-executor.ts",
+      "sha256": "a12665e36ac46ef6aec80f7c774c9b9bb41b930ca006235eeb5128c5bc06912a",
+      "bytes": 350,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/adapter/executor-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/adapter/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/adapter/loop-runtime-port.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/adapter/provider-runtime/define.ts",
+      "sha256": "f9e7490c25c491f6b9aab7d0fb16e1c5c7edb197ea6874dbb0e9630830113a73",
+      "bytes": 251,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/adapter/provider-runtime/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/adapter/testing.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/adapter/testing/fake-loop-runtime.ts",
+      "sha256": "d198536dae6bf21b6d2b40659a1b4acd9984bb28fd9901b3f9d3064af6a6dde9",
+      "bytes": 173,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/adapter/testing/loop-runtime-conformance.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/adapter/testing/provider-runtime.ts",
+      "sha256": "db95c307c81021c504920cec42717854218a251a0e79af1ab543c9d6e24981dd",
+      "bytes": 13059,
+      "definitions": 7,
+      "relations": 3,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/adapter/tool/approval-policy-evaluator.ts",
+      "sha256": "8693bee3671ac5f5b447699e2071a4b2a7866ab88cee466679447684d007ce90",
+      "bytes": 158,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/adapter/tool/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/adapter/tool/session.ts",
+      "sha256": "4d003ddee02208b77314a543fd4c5ca554017cb2b1a653a4fbf00648b2922f8b",
+      "bytes": 742,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 14
+    },
+    {
+      "file": "packages/core/agent/agent.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/agent/blackboard.ts",
+      "sha256": "f99193d043788146888a3cca9ae15673c30077484601336c2d4f7ed2eb004dde",
+      "bytes": 1387,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/agent/composition-runtime/execution.ts",
+      "sha256": "7c308c12059a4fcf6a2152dd14a94096289d6e4f1c4eed327f2bc7689651bc9a",
+      "bytes": 246,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/agent/consensus.ts",
+      "sha256": "b5356cd356adb5864ffc9c258f195ad6f878d1660adba505be5cd05dd65bd153",
+      "bytes": 157,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/agent/create-compositions.ts",
+      "sha256": "2c48b399b8458c9ba9584706567060d9e30e58efe3d2bd79d014ad977e7c5f35",
+      "bytes": 229,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/agent/delegate.ts",
+      "sha256": "0211ebac7b60aba1d0cfbecfbf3ef8e7928a0f64504262414f99d8c24771e7ff",
+      "bytes": 155,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/agent/executor.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/agent/fakes.ts",
+      "sha256": "af291431dd3432e271adaf2a4e18bfc694d089d5d2e7288a4d87124c5d27b6f7",
+      "bytes": 119,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/agent/handoff.ts",
+      "sha256": "83b2e6b6ec3eb0c8d50dbb70d5589a5b0a802d4767d66d806a88fc013f47f5d6",
+      "bytes": 196,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/agent/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/agent/parallel.ts",
+      "sha256": "b5356cd356adb5864ffc9c258f195ad6f878d1660adba505be5cd05dd65bd153",
+      "bytes": 157,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/agent/pipeline.ts",
+      "sha256": "0ce20fc0c88f7269bdd7c8d46c57a9040f5808c77173471c08444091934a7c85",
+      "bytes": 194,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/agent/swarm.ts",
+      "sha256": "638b5f2b85ccde957fa803c062b346bedb427f6ae1f6a08756c799fc721698bd",
+      "bytes": 218,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/cache/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/citations/constraint.ts",
+      "sha256": "5923fecb8fbd23dfc89bd456582558da81cacb88338b7baeb7baf5c148246ae8",
+      "bytes": 1432,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/citations/grounding.ts",
+      "sha256": "d49b73beeabc96442bde5e86937d1fd70aa32d0f1f546d804a8201d28e615e4d",
+      "bytes": 284,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/core/citations/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/compaction/generate-object.ts",
+      "sha256": "fa49466813f035e5ef0db00a20b20a7eddebc7e96eda12deea3f150eb826cde8",
+      "bytes": 1594,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/cost/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/embedding/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/flow/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/flow/lifecycle.ts",
+      "sha256": "71f8a3598f148de6bea51c8bc5419eb50218033414b17109ddfe12b24db3bc0b",
+      "bytes": 154,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/flow/scope.ts",
+      "sha256": "ff5a4b0a5820a1a17b935e226e7c340003618d0afe825af641a64359dc10fc29",
+      "bytes": 1044,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 21
+    },
+    {
+      "file": "packages/core/flow/signals.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/flow/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/generation/fallback.ts",
+      "sha256": "8aa395ef1306fca06d8e1d548c1665540501addc9bc46b8180d1d4902382e8ec",
+      "bytes": 121,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/generation/messages.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/generation/orchestrate.ts",
+      "sha256": "388fba4380c591672a7143748953708ace367fa78cdcaa8c5629ab7efc6fbd00",
+      "bytes": 407,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 7
+    },
+    {
+      "file": "packages/core/generation/retry.ts",
+      "sha256": "0cfa56c4348ae58debf0cdff5134a735561b519af297ce9a1fcd636a706337ac",
+      "bytes": 153,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/indexed-knowledge/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/memory/block-contracts.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/memory/block-system.ts",
+      "sha256": "e95e31c166f2b6e739ce91f81cc431ae612d422d60e4131c4d7ae73f3cd72c41",
+      "bytes": 1753,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 9
+    },
+    {
+      "file": "packages/core/memory/contracts.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/memory/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/memory/utils.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/observability/devtools.ts",
+      "sha256": "62da32a2def1e9aaaedc3ee5d5ac62c410d3cc670cd4d9880346afe42ab9bace",
+      "bytes": 305,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/core/plan/agent.ts",
+      "sha256": "7a5785b159886bf8288246e3ef0ca1cb60d8de3084a25fe138b4e502c2646b2f",
+      "bytes": 228,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/plan/creation-tools.ts",
+      "sha256": "7a1c1e4f1cbf1867650204862ad9e4547c952d34ccda88cc43674594f01745fe",
+      "bytes": 104,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/plan/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/plan/plans.ts",
+      "sha256": "111bb1584e3c8870b771688e1629891ae4bfc4ffd114f7ce4d6d7215c233c7f9",
+      "bytes": 372,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 7
+    },
+    {
+      "file": "packages/core/plan/task-spec.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/plan/tasks.ts",
+      "sha256": "eaeba0dae360a73e16f51f1116530b7e24e4c49ae59ff83f83732dfe42af4ef0",
+      "bytes": 581,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 12
+    },
+    {
+      "file": "packages/core/plan/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/project-index/index.ts",
+      "sha256": "477e2629b9b853e28decc71f381fbfc87e02bba43e59676b213a2e2833695b1d",
+      "bytes": 121,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/prompt/context-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/prompt/context.ts",
+      "sha256": "82a12f71a4516ec97a9467a1c63a26f941bc22e867bf5108a309ae1d7a86de14",
+      "bytes": 213,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/prompt/contributor.ts",
+      "sha256": "40be922ff9e5211438c891b0806dc2b1f315864d5fc9990bba112a864ede5925",
+      "bytes": 113,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/prompt/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/prompt/prompt-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/prompt/prompt.ts",
+      "sha256": "6d38e19290e66657d70734a8177e847175bda18a5a0a7ebcc55749101ebbf027",
+      "bytes": 157,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/prompt/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/case.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/config.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/dataset.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/evaluate.ts",
+      "sha256": "ce9d6b78a89cc46ee00e5b07b5d3c3155f08cbb639a10cb9b88d424b662f4d6d",
+      "bytes": 202,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/quality/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/internal/assertion-callbacks.ts",
+      "sha256": "f370c76258b63e8c90bfb365719c5210145dceb2f1f107a21aa229d58fb7eb48",
+      "bytes": 166,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/quality/internal/assertion-outcomes.ts",
+      "sha256": "ba3a3161c96631dba3c087976ee8c22c384815fd30bff826329e08bc0963c255",
+      "bytes": 165,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/quality/internal/baseline.ts",
+      "sha256": "3f067deda57b928cfbb14b304a4572dc0ea172db9880d98f62696e78dbe313ab",
+      "bytes": 115,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/quality/internal/cassette-context.ts",
+      "sha256": "68caccf0149132210502a357b70cc1573b602d3093c40b2d227d54839ee68fe0",
+      "bytes": 114,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/quality/internal/cassette.ts",
+      "sha256": "961ca001ff38ab50a64e093f9a1097e91d1097a5ef86ce2f0f3f9b1ad6b3a619",
+      "bytes": 211,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/quality/internal/compare.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/internal/definition.ts",
+      "sha256": "c670b8451a1d259322b7408a278ad6fc100ad72a5397e9f26050b78d25acc30d",
+      "bytes": 108,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/quality/internal/engine.ts",
+      "sha256": "34a0dd5b57e52cbc8c7f24b6464f3887319c93982df353d9814c1737bb4e4429",
+      "bytes": 1340,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 24
+    },
+    {
+      "file": "packages/core/quality/internal/errors.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/internal/expect-runtime.ts",
+      "sha256": "2e69e59d953c3f9fcd6a2eb8ccdecc972d68136ba3ccb98a8a8474854a885bcf",
+      "bytes": 238,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/quality/internal/feedback.ts",
+      "sha256": "609dc4a8a9eca3bf74c50b57b72b07545b25938becd63c21d03047f5a4b1917f",
+      "bytes": 163,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/quality/internal/json.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/internal/output-cache.ts",
+      "sha256": "3f067deda57b928cfbb14b304a4572dc0ea172db9880d98f62696e78dbe313ab",
+      "bytes": 115,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/quality/internal/persist.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/internal/prompt-tests.ts",
+      "sha256": "05e2b3d798359d300f7b56657e80e6ab8b75e2e2af4786fc6146a7f035ca8ced",
+      "bytes": 110,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/quality/internal/redact.ts",
+      "sha256": "3efeb73593f3a94a65495f0cf0fdc3da4aca11ced4710c871833888a1b07ed3c",
+      "bytes": 158,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/quality/internal/runner.ts",
+      "sha256": "1f64c3e01d18bd77bde85195a14cc3bf93fe5a7dfdf3ed2e5a77a8e435f663d1",
+      "bytes": 237,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/quality/internal/score-map.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/internal/scorer-runtime.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/internal/signals.ts",
+      "sha256": "eea4251c2091d7e988075624bbe476741831bdd6c9b601346d2aba0b3f8a3595",
+      "bytes": 180,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/quality/internal/source-frames.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/internal/ulid.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/replay.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/scorers.ts",
+      "sha256": "c711bfd61bbd13e3e063b79cc5d63a62c5ce0da7514e95018898810e495361db",
+      "bytes": 389,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/quality/source-frame.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/standard-schema.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/quality/target.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/resolver/contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/resolver/definition-analysis.ts",
+      "sha256": "5c7a4bc31cd781ba5fe26cabb41c0e1c82874921bd3209974f3eb7f268520963",
+      "bytes": 164,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/resolver/fakes.ts",
+      "sha256": "d643ed8df62ad0edf203676b6ac62c2cdc3bdddfcf896830bd7f22e61f2ba189",
+      "bytes": 199,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/resolver/lower.ts",
+      "sha256": "ab59c97b46976828263971c27d7f4f224ca0d0e8a1c1f773bae80a47336dd7d1",
+      "bytes": 208,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/resolver/pass.ts",
+      "sha256": "1336d3a10cf36d8f5833b34575ec172a5cf4e8bba60ef34fdc5f14f70009d2d0",
+      "bytes": 924,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 18
+    },
+    {
+      "file": "packages/core/resolver/ports.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/resolver/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/retrieval/define-retriever.ts",
+      "sha256": "1cb64f53122ecbed812f88a463963852a6d59a5c75b4be2cfc9fbcd18b5781f2",
+      "bytes": 354,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/retrieval/entity.ts",
+      "sha256": "02bb6bd35cd655495686b6db364a10a138c30397e1c9f7885563551b43aec154",
+      "bytes": 194,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/retrieval/knowledge-base-runtime.ts",
+      "sha256": "822e9220a9ce309ba98a94815a3e79f385e639617e0c62bcb0598d4070c48b2a",
+      "bytes": 3084,
+      "definitions": 1,
+      "relations": 3,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/retrieval/knowledge-base.ts",
+      "sha256": "b5d0dfe9274d3a709da572a7231086f3eb6539f1e4a5ee76e5344b92a8554410",
+      "bytes": 277,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/retrieval/recipe/federation.ts",
+      "sha256": "10008f63bf3d39482100e342c55db82720b88fb6ebe349d4a8355e7dc5ab4a16",
+      "bytes": 254,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/retrieval/recipe/recipe.ts",
+      "sha256": "ee0274a0fb6be192d8db81c9566bcfea9ac4bc87bfc6bb4c05791605bd596ab5",
+      "bytes": 383,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 7
+    },
+    {
+      "file": "packages/core/retrieval/recipe/source.ts",
+      "sha256": "fb97ad5b7d8788f0cfa4773bfade3c38bb0468f4f2dcb0314a1894210e91c8fe",
+      "bytes": 110,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/retrieval/recipe/step.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/retrieval/recipe/steps/built-ins.ts",
+      "sha256": "77a0fe29448fc79f308d46283316265628a34401c1a24cf29f7affe471e19a69",
+      "bytes": 255,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/retrieval/reranker.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/retrieval/tools.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/retrieval/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/routing/cascade.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/routing/router.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/runtime/api/task.ts",
+      "sha256": "d412e0f8372c84c5c0295b5bacb04113010cfea2b484fd84bf01c396d22fa86d",
+      "bytes": 121,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/runtime/artifacts.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/runtime/config-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/runtime/config.ts",
+      "sha256": "98e8d21cce6d3ee9c89d7fdabab260786cd09ab055adf9d7ea704c33ebcfb146",
+      "bytes": 170,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/runtime/configure.ts",
+      "sha256": "b61a750b9599218738613f530d168e660057e095ebfd1f17e989d670ed994133",
+      "bytes": 120,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/runtime/engine/kernel-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/runtime/execution-context.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/runtime/handler/create-runtime-handler.ts",
+      "sha256": "a4cee5a83bbe393ff128d4dcc68ea8b468170c082d9eabf8485c6a9ac7885114",
+      "bytes": 413,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 7
+    },
+    {
+      "file": "packages/core/runtime/handler/targets.ts",
+      "sha256": "9e572a555aecb9eba241699ad84e4783297dda443f05f6901aaca32763593d24",
+      "bytes": 169,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/runtime/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/runtime/next.ts",
+      "sha256": "a4a9cc7580f1e76e04e083443afcdbb7bd0faf8acf04ea4cfad4abe588d6cc7a",
+      "bytes": 115,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/runtime/plugin.ts",
+      "sha256": "92db915828494e4ee2555c5f58044f4d8e1bb6e00082b067963f508994bb4431",
+      "bytes": 115,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/runtime/ports/ids.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/runtime/public.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/runtime/runtime.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/runtime/testing/test-runtime.ts",
+      "sha256": "f2a9e254e721a75c77e6b99a3a9b1794d50388ace6664ce31283a2b1d1554fdf",
+      "bytes": 358,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/safety/constraint/runner.ts",
+      "sha256": "9a0a754b4242c3e948a4ea8cc343632a430b81017614768789267181ab973a2b",
+      "bytes": 214,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/safety/constraint/strategies/judge.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/safety/guardrail/pipeline.ts",
+      "sha256": "35b6c2af98334093689a8f50865288fad1621accf01de7f896cb44cff38a4b1e",
+      "bytes": 252,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/safety/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/safety/session.ts",
+      "sha256": "29e17e41e99f5d088bab3405e9df8172dd78e3cf915e1490d9d248e3825eb2b1",
+      "bytes": 345,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/safety/toolPolicy/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/scoring/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/scripts/check-no-explicit-any.mjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/shared/tokenizer.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/skill/agent-kit.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/skill/frontmatter.ts",
+      "sha256": "ecbc1d6dc3aed1890f43c96f034d27959097244c8244579c3086158b5c89edb5",
+      "bytes": 105,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/skill/index.ts",
+      "sha256": "b243f30e50146c2f1b78e844ae51e01f36ba40b0ec29e9a26779b4fb1c03b6bf",
+      "bytes": 148,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/skill/loaders.ts",
+      "sha256": "ecbc1d6dc3aed1890f43c96f034d27959097244c8244579c3086158b5c89edb5",
+      "bytes": 105,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/skill/node.ts",
+      "sha256": "75c502b5f46357f4a643e778d0f962487427c164ba9603fd21b86481161f7ec5",
+      "bytes": 192,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/skill/session-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/skill/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/tasks/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/tool-middleware.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/tools.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/tools/define-tool.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/tools/entity.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/tools/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/tools/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/workspace/artifacts.ts",
+      "sha256": "89cbc26cac2d83de9bce9df3db5d08fbfc9e67e53ddc7ae4a88f78af54a59bb6",
+      "bytes": 392,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 7
+    },
+    {
+      "file": "packages/core/workspace/context-adapters.ts",
+      "sha256": "d82abdf89c35347f020436052b1e5548aa98817bbe979915c9138df0ae21900d",
+      "bytes": 153,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/workspace/define-workspace.ts",
+      "sha256": "8d9c68403bada71241632deef0deed859fba37c2bccf1a82ec2401460556ac21",
+      "bytes": 3177,
+      "definitions": 2,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 19
+    },
+    {
+      "file": "packages/core/workspace/fs-ops.ts",
+      "sha256": "0f85b0d30ff1e2a2152e5739818cbe0be91f5a4e30f00f8a920dbe65e514c5f3",
+      "bytes": 770,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 15
+    },
+    {
+      "file": "packages/core/workspace/path.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/workspace/retriever-source.ts",
+      "sha256": "9223d310415d187d5f5b237c82e9324604ef9ec9c650a342e1c3da48fd868934",
+      "bytes": 288,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/core/workspace/transaction.ts",
+      "sha256": "89ceaf30972d718ec04ed39968f9ca08997da079e2950989ab450bd7dd076377",
+      "bytes": 462,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 8
+    },
+    {
+      "file": "packages/core/workspace/version-ops.ts",
+      "sha256": "328f6a88deb55ac5198b2c02ee4f0a2bdd096b27651c5508663a2a8869ba257b",
+      "bytes": 442,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 8
+    },
+    {
+      "file": "packages/core/workspace/version-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/app/router/AppRouter.tsx",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/features/baselines/components/BaselinesView.tsx",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/features/experiments/components/ExperimentsView.tsx",
+      "sha256": "4387cedeef899bb36d291505fddc92b25ff434cfa01d747b2acc815e78e6315a",
+      "bytes": 244,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/devtools/ui/src/features/index/hooks/useIndex.ts",
+      "sha256": "5790988b90647273f197d3cf9f1b80ca788d63811fad587ee564685cac528f29",
+      "bytes": 134,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/devtools/ui/src/features/memory/components/MemoryView.tsx",
+      "sha256": "6127db090955806e632da72e74f9d31b156bc3542276640e88a29adfe58ae1e6",
+      "bytes": 558,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/devtools/ui/src/features/memory/components/MemoryWorkingDetail.tsx",
+      "sha256": "b45b8dbb2c7ed395cf6608dad1142eea19e462011bd144c8543f385ac6952c91",
+      "bytes": 301,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/ContextComposition.tsx",
+      "sha256": "64416ca5984028a4c571f298ec7e6eaf945cdbb6e5708f084c6b16c15c13a64d",
+      "bytes": 151,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/GenerationDecisions.tsx",
+      "sha256": "29ddd95177b00bbedaf050ca524a58bae7d17912843c9e39d0ec87750a0c1dd9",
+      "bytes": 325,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/PrimitiveCards.tsx",
+      "sha256": "0dfd1de576ad79359beb89e37ea9ed1cfc75e4d35a010ae9a52450dd15e7e8a7",
+      "bytes": 457,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/SessionCanvas.tsx",
+      "sha256": "63cd3ddc0043d9b49d5ccd529b3d9017ccc80a51d877571b4a75bac435b3f3d6",
+      "bytes": 150,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/SpanInspector.tsx",
+      "sha256": "c1023abd63cac7c2027d5d75832a759f1f687c67a6ed92d0c0a4be2036efd318",
+      "bytes": 407,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/SpanTree.tsx",
+      "sha256": "8fa8f1aa32b3c826b03e0a7454f61534934679c68b17fdf80d48e42e5d097f50",
+      "bytes": 150,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/hooks/useTraceFeedback.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/shared/hooks/useLibraryApi.ts",
+      "sha256": "c59f0f19f18dee23e0fcd516abb3169690a4042f66e3eced03ffa73faa75fc43",
+      "bytes": 5005,
+      "definitions": 5,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/shared/hooks/usePrefetch.ts",
+      "sha256": "218c07e88551c638f3585f858881fb3eff9059ce27e3eb82b9aabfa42573acab",
+      "bytes": 2036,
+      "definitions": 2,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/google/cached-content/planner.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/google/cached-content/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/google/codec.ts",
+      "sha256": "916743370e1ec9753dca431e6ebfe17acafd8596db0e23563c79af6dc0c926ae",
+      "bytes": 231,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/google/embedding.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/google/function-response.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/google/helpers.ts",
+      "sha256": "731d1bfbd9716e80e1edb58ac34cad80493a8bb9315429c373e94edf6ee8208d",
+      "bytes": 102,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/google/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/google/message-codec.ts",
+      "sha256": "411a83eba31ffe86247d2d51a50275109569efcba4201a8c04ec804af5e53703",
+      "bytes": 113,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/google/native.ts",
+      "sha256": "13d3a3b808dcfbcbda715e9970aed25a587a24e4d9608f0668441673f52521c4",
+      "bytes": 266,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/google/request.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/google/response.ts",
+      "sha256": "ab4746e31ec10dbe17fbdbfa4d37db23c79f276d87f58a4a84bfe2bd45ddf056",
+      "bytes": 109,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/google/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/contracts/fixtures/shared.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/contracts/static-index/fixtures.ts",
+      "sha256": "7da9544c020894820c8f787c90d598a874209deaf32f793cb210b680f5dee1ba",
+      "bytes": 181,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/contracts/worker-events/fixtures.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/extensions.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/host/runtime.ts",
+      "sha256": "a46be3fa553396d21f9818fe7accf2c0f32844427fd0ec93c67442046b905bfc",
+      "bytes": 111,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/ast/snippets.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/ast/source-refs.ts",
+      "sha256": "b09f2e17e8a2fde3f9da6b6f55cb26f2968e03c78f39ba23e78dfff44fe805f2",
+      "bytes": 319,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/indexer/indexer/compiler/profile.ts",
+      "sha256": "fa911e206c05a1a8ac431e8dff03b6003c3d4d9d7cb1403795ebf91924015d79",
+      "bytes": 121,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/config.ts",
+      "sha256": "5605aa5e8f44718336144a2b99664f86d1e8e3010ad04fda2fb89f9f0d6732ab",
+      "bytes": 302,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/indexer/indexer/definitions.ts",
+      "sha256": "f6950850ce45d4f2f52e8d69bcfa087fd2d11b30628e025ac313cb120d7f1aca",
+      "bytes": 170,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/diagnostics.ts",
+      "sha256": "1d10c625f05b56ab494f30ae91bb0e51c926ff56201e83aac15ac32aaa4d503f",
+      "bytes": 166,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/discovery.ts",
+      "sha256": "12e46f1ba4a0d66a4438b6d9f3421cfaed1b0d5e438db389d670414a3fe519b3",
+      "bytes": 216,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/enrichment.ts",
+      "sha256": "1d10c625f05b56ab494f30ae91bb0e51c926ff56201e83aac15ac32aaa4d503f",
+      "bytes": 166,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/eval-discovery.ts",
+      "sha256": "60de1e69dc824eceb294c842e028c259b958c69a94c2054261bdf0694f18f667",
+      "bytes": 347,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/indexer/indexer/evaluations.ts",
+      "sha256": "e7fd5184220a52e69149af86402cd166e75d5177f0ea915915d1da4d1456d868",
+      "bytes": 236,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/loading/manifest.ts",
+      "sha256": "4f0e486602adf4cd4fc291609bfbb880375ed181d0d3bf94d3af97c93208b460",
+      "bytes": 132,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/loading/package-provenance.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/loading/references.ts",
+      "sha256": "e9369bb3bbcc7d8c415234d4e1d41f9e473aedd0df1b6e9d07bfe97562329743",
+      "bytes": 249,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/public-contract/authoring-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/public-contract/builders.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/public-contract/extractor-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/public-contract/manifest-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/public-contract/resolver-rule-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/runtime/diagnostics.ts",
+      "sha256": "b4453bdb0f9f03e1cc397ec25eae203cde85821360b891749d8bd59a707e67aa",
+      "bytes": 116,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/runtime/engine.ts",
+      "sha256": "dd7fbbc9909321616feec764938474ff8365b8f7d654fae6b0e7f6506c2183eb",
+      "bytes": 1129,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 14
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/runtime/registry.ts",
+      "sha256": "82eca5b2b8a8b502aa27eec03192193e06cf71851d006f366cd5068ba4d1f2dd",
+      "bytes": 400,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/runtime/results.ts",
+      "sha256": "af862682c84ea76f8c045825b0fa721fa54ba41575230486f0e23afa37a0bd7d",
+      "bytes": 135,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/extensions/runtime/rule-availability.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/graph/builder.ts",
+      "sha256": "0f2adee7c45f36e571f9dccf62822577d387196772b5a088ac97d535c8f90e11",
+      "bytes": 201,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/graph/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/incremental/execution-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/incremental/graph-read-model.ts",
+      "sha256": "62a725c9414cc1a0b3b4b48ae9ceb5766ee1ebde0f5d6123c121e97b59bf6121",
+      "bytes": 122,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/incremental/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/index-presentation.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/lints/rules.ts",
+      "sha256": "3853382ced571c57b32ddbd58ddc652885c768094f66534124ef707d3972c48d",
+      "bytes": 134,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/merge.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/patches.ts",
+      "sha256": "5f04fd35a3bb65e7e2280a40939a45f858fe2f80f17feee1a0248cf670fe02dd",
+      "bytes": 162,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/paths.ts",
+      "sha256": "db45cfd1af5eae1d43bf17f1343a15b2cade5f5a27109db86d8c809fd352a0c4",
+      "bytes": 213,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/project-config-inspect-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/project-config-inspect.ts",
+      "sha256": "1ea23b69160da87cac18b98b6abceeda89a96cbb0c6f7bbc21312602244924b8",
+      "bytes": 278,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/indexer/indexer/project-model-diagnostics.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/project-model-metadata.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/project-model.ts",
+      "sha256": "2adb2996e8fd1d7f3b165eb939d4557b78b5d26a847c8dd9467fe8a53b90616a",
+      "bytes": 372,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/indexer/indexer/relations/index.ts",
+      "sha256": "7f59e419a776cb942c7a86209af4bf2dd9f82bacb7cc3776f29212c93b89139f",
+      "bytes": 312,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/indexer/indexer/relations/runtime-use-targets.ts",
+      "sha256": "ddbe47efee283aabb931417419e2ff235df896663881ba3a497bac7e9cd9d126",
+      "bytes": 129,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/relations/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/resolution-mode.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/runtime-ops-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/runtime-ops.ts",
+      "sha256": "fad4208f0f51b74a12e34335f7852e19696b0d888aaf515f81331fa432ba3e8d",
+      "bytes": 156,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/semantic-support.ts",
+      "sha256": "0aaa962d002d1d53906d1ac84117fc4bba468f2833970bb108c6e964e7b48ed0",
+      "bytes": 118,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/access-relations.ts",
+      "sha256": "30650350904802396663bce45fa9ef4662c7fdcf97192bfba2e2e1915e253555",
+      "bytes": 349,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/agent-handoff-relations.ts",
+      "sha256": "bcb4b61d37420b8a365b8ea6a9a691629ac51c327ac826379b8faf36742e7bdd",
+      "bytes": 168,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/analyzers/relation.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/analyzers/schema.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/analyzers/source-ref.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/backends/tsgo/direct-projectors/dependencies.ts",
+      "sha256": "5e9ff835cb0b6c30bc05c1f44cc28da1ff9033495691d2a6c8b370304833d6e5",
+      "bytes": 288,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/backends/tsgo/direct-projectors/manifest.ts",
+      "sha256": "de11c470896d92477512641dc93355cf2971db7eafb36b42c175ef194a1336b0",
+      "bytes": 381,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/backends/tsgo/direct-projectors/routing.ts",
+      "sha256": "aeba28d919ba18082b31a5a8c6a0b46964cc57597902ffeb2767445ff2f8ea8d",
+      "bytes": 475,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/backends/tsgo/direct-projectors/storage-shapes.ts",
+      "sha256": "8c78aab978b961a52880389fcc5bb79ecf77ae3e0729331e561b153c1419e878",
+      "bytes": 187,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/backends/tsgo/direct-projectors/storage.ts",
+      "sha256": "f8a65afe33f86e9d332b9d17923efb4b226aca01195fb17f266f53e628e836bd",
+      "bytes": 426,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/backends/tsgo/source.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/backends/tsgo/zod-schema.ts",
+      "sha256": "7dff12ee48906a349316591b43a996ec331fed61fba2807036fa45b4e7308e97",
+      "bytes": 134,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/candidates.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/data-access-manifest.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/discovery.ts",
+      "sha256": "1bd2945b5f20fda941f534b449cf7f205e9bc14c1eb145fa243021b9dcc2177f",
+      "bytes": 241,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/enrichment-facts.ts",
+      "sha256": "08a4a363e29d0e945df1f2b7410fc342d0677a7564f0dc47200801b65de8e6e6",
+      "bytes": 416,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/evidence/facts.ts",
+      "sha256": "347984361b65518c299eabf435e250733fd4550d4dfdeab2c67bdacaad51f96f",
+      "bytes": 744,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 11
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/model/relation-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/model/schema-json.ts",
+      "sha256": "cfacb484520c9d576db7b45d8eb52511b3e53279aa5cc34cc8ed707e10023817",
+      "bytes": 128,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/model/source-refs.ts",
+      "sha256": "11890d2a68165bff4e6774109cf30ebfe9aebb60e8ce3791cc9e733687d647af",
+      "bytes": 268,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/model/target-resolution.ts",
+      "sha256": "b9dd22a78ac9d20cadc2c63cf41c5c3576a7ccd5bf5c57c47a54c5b6937488c3",
+      "bytes": 421,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/patch.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/registry.ts",
+      "sha256": "ee78d23ed9216502412ce64e1d7ea8e4374cfdf4bd052cc61feabad6173312bc",
+      "bytes": 340,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/relation-facts.ts",
+      "sha256": "fc2f9930bafe9c1fb8941f14cb3aa67cd5ea19811dc95185b7cb4fb138bd6277",
+      "bytes": 422,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/runner.ts",
+      "sha256": "b0cd714ab65c7be17a9d6a25fc86ddc3d063815ad5743c4cabf6f01cf3a0cc8c",
+      "bytes": 120,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/service/backend-selection.ts",
+      "sha256": "8d362db4550934df89da10152904e2f679ac8afe3f9b8cd41949fc8102263b35",
+      "bytes": 253,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/service/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/source-ref-candidates.ts",
+      "sha256": "cfacb484520c9d576db7b45d8eb52511b3e53279aa5cc34cc8ed707e10023817",
+      "bytes": 128,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/storage-facts.ts",
+      "sha256": "2298d9a06c64e08eaceb8ecd6a2c2855b76bc3f287acc969ab837bb29830a1bf",
+      "bytes": 179,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/storage-model.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/syntax-readers.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/shards/discovery.ts",
+      "sha256": "d5e4853cac0ce24c4f4a2a7345531579d3b19b6d561b8c23281a95944ab2fc4a",
+      "bytes": 109,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/shards/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/sources.ts",
+      "sha256": "7d7f1f51816d1d104d66972a9e9e4d9277c1c8bb4f450317fe070e75db795f65",
+      "bytes": 117,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/compatibility/syntax-record-bridge/schema-source-ref.ts",
+      "sha256": "af7273597ae45092c624be016cfefc5816b55644d6710e6d08e31880f10643af",
+      "bytes": 309,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/compatibility/syntax-record-bridge/source-ref.ts",
+      "sha256": "60ac19a520318786dc3a4754042e4bf7618e48eaadb2b7f7ba0dca96512cacb3",
+      "bytes": 341,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/compatibility/syntax-record-bridge/source-resolver.ts",
+      "sha256": "f27107940f7689b06ce2986bb65623c0098bae542206b5b31b98eba762d500d0",
+      "bytes": 137,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/compatibility/syntax-record-bridge/static-call-context.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/config/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/config/inspect.ts",
+      "sha256": "3b58da87ae86722a3af82f627e5f77d46febcca7410f1eebd530e4f70e4ab643",
+      "bytes": 174,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/extension-host/evidence/host-facts.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/extension-host/evidence/host.ts",
+      "sha256": "4b33d61a2f9acf72611ad44ad36aa31797369484b1428f3f87cf7f2341ed584e",
+      "bytes": 282,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/extension-host/evidence/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/extension-host/evidence/worker.ts",
+      "sha256": "01c72b1c22b2675a021a9a31a441294607dbc8121ea22616070095dda87d73f6",
+      "bytes": 190,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/extension-host/host-plan/coverage.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/extension-host/index.ts",
+      "sha256": "025266187df97d2c9f238c243cec48fec04e4951d9498d5a46156fa88fd091ae",
+      "bytes": 433,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/plan/index.ts",
+      "sha256": "4727a04ef106591802e5b93eb57761da6c753c46267e7ae4c04faab46c4637e5",
+      "bytes": 746,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 12
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/syntax/record/file.ts",
+      "sha256": "d9be1e0829e4431960e4998d2c3ec4825360beef8f2fc28e07ca6b7b2b810b86",
+      "bytes": 671,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 8
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/syntax/record/imported-definitions.ts",
+      "sha256": "b8e67720011ef07eefb5af06e67b9c16fea98a345d94202d2aea3a2a2375750b",
+      "bytes": 322,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/syntax/record/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/syntax/record/projection-cache.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/syntax/record/runtime-prepare.ts",
+      "sha256": "f27107940f7689b06ce2986bb65623c0098bae542206b5b31b98eba762d500d0",
+      "bytes": 137,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/syntax/record/schema.ts",
+      "sha256": "f27107940f7689b06ce2986bb65623c0098bae542206b5b31b98eba762d500d0",
+      "bytes": 137,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/syntax/record/tree-paths.ts",
+      "sha256": "f1ea90212eab763eefd1bafc027901372b82364ab5d491391ce8f9975daf1878",
+      "bytes": 382,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/syntax/record/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static-index/syntax/record/value-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static/definition-builder.ts",
+      "sha256": "309a14da2e8cf423ec25dbefdf4ad82a1f4b6d0e3f0e467627e98134468f0aa3",
+      "bytes": 166,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/indexer/static/discovery.ts",
+      "sha256": "2c5bd2dcab7f0603afe42cc1b1c47f1ecfab77a690f06e7d78d901c59ad4b1a5",
+      "bytes": 300,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/indexer/indexer/static/extraction/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static/injection-read-model.ts",
+      "sha256": "ddbe47efee283aabb931417419e2ff235df896663881ba3a497bac7e9cd9d126",
+      "bytes": 129,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/static/input-contracts.ts",
+      "sha256": "ddbe47efee283aabb931417419e2ff235df896663881ba3a497bac7e9cd9d126",
+      "bytes": 129,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/static/tree-path-order.ts",
+      "sha256": "d5e4853cac0ce24c4f4a2a7345531579d3b19b6d561b8c23281a95944ab2fc4a",
+      "bytes": 109,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/indexer/static/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/static/use-entry-helpers.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/indexer/worker-protocol/patch-events.ts",
+      "sha256": "87fb04a1da9ef9e4a4e1921413d3a547501e16112146e6f9dcb007ecaa5d6a61",
+      "bytes": 268,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/indexer/worker-protocol/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/testing.ts",
+      "sha256": "51c053f0bbd42c5a8ca6a706268154eff5eb0c77ece43def08ba89c0e3b6e6f1",
+      "bytes": 301,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/indexer/testing/rust-oxc-frontend.ts",
+      "sha256": "dc4205431e5762b82d102a29811055bd4fae40fe51ba7614c993d8d744629365",
+      "bytes": 130,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/ingest/observability.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/bin/project-indexer-protocol.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/bin/project-indexer-semantic-timing.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/bin/project-indexer-static-host.ts",
+      "sha256": "77e21ff55c64009677584eb17db87021f6638c4b1b4931b2e8073f9b627c5c10",
+      "bytes": 131,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/local-workers/bin/project-indexer-static-timing.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/bin/project-indexer.ts",
+      "sha256": "8d5886f24f20193bf9f8ff521c516bab44c1680b1dcea60fec1f6c72ae998f0a",
+      "bytes": 261,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/local-workers/bin/project-runtime-indexer.ts",
+      "sha256": "77e21ff55c64009677584eb17db87021f6638c4b1b4931b2e8073f9b627c5c10",
+      "bytes": 131,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/local-workers/bin/project-semantic-indexer.ts",
+      "sha256": "d4168c6503a3c3b211963e3565bbd29f7f60f28709b45e729c4cc080c571eab2",
+      "bytes": 202,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/local-workers/bin/quality-runner.ts",
+      "sha256": "02dcb2c96a7b4e06dcae9295872b694b3c36145d29bda58c3fc33c668ca96e5e",
+      "bytes": 449,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 7
+    },
+    {
+      "file": "packages/local-workers/bin/source-resolver.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/lib/indexer-semantic-parity.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/lib/project-indexer-request.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/lib/quality-collect.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/lib/quality-config.ts",
+      "sha256": "b296456fabe747339873719656b0029f2615af827740888f7dc0335065ff9f40",
+      "bytes": 131,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/local-workers/lib/quality-core-bridge.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/lib/quality-execute.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/lib/quality-observability.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/lib/quality-promote.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/lib/quality-prompt-discovery.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/scripts/build-workers.mjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local/npm/local/bin/crux.cjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/openai/codec.ts",
+      "sha256": "4e7831d12026a70f484a84017a5917b873738902f54351c161871b94b0b1d625",
+      "bytes": 182,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/openai/embedding.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/openai/helpers.ts",
+      "sha256": "20e292c2236275f41f821249ddda053769c177ef37736a666a013d87c2694bda",
+      "bytes": 102,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/openai/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/openai/message-codec.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/openai/native.ts",
+      "sha256": "aa027970623b32e1714d60f5060e60612d4464452d0bcdd021934e058039ae63",
+      "bytes": 217,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/openai/request.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/openai/response.ts",
+      "sha256": "5cf18da69bc61654778865a99f1efeac34e29c276c921031c75447c3763c757b",
+      "bytes": 109,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/otel/attribute-mapper.ts",
+      "sha256": "d1b8d3efb278aba999dcea4042006afcd83944841c1328c3335ec8debb1a3e69",
+      "bytes": 138,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/otel/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/otel/message-content.ts",
+      "sha256": "6f40843fc4d6d9a5299421ed52e49da6cc1560e6f3e44b09c623294020ae8c9b",
+      "bytes": 101,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/otel/otel-span-manager.ts",
+      "sha256": "a9e9305c117bfe1f3c0a9a3258b7e6a58d2cd0dcad3ae7a1cb714c1bad230e41",
+      "bytes": 149,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/otel/plugin.ts",
+      "sha256": "a2bd84f489bcd05e2d8c60b16ad42c24b32fca755849a318b036bd0f00be1eca",
+      "bytes": 225,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/otel/record-mapper.ts",
+      "sha256": "f468ace7f0f598c7ec879cda98b1778348462751d50bd1f38e7d912cf54ca568",
+      "bytes": 300,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/otel/semconv.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/postgres/runtime.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/postgres/runtime/codec.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/postgres/runtime/ddl.ts",
+      "sha256": "f879551f8077eb5ffb27c430d0cc52af7f2ac9c0abe62b2c5d120a6fedd3aedf",
+      "bytes": 109,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/postgres/runtime/events.ts",
+      "sha256": "ea985dc5ec0645df3af29b21b17892e982262b5c97fc549d5312572e496cb324",
+      "bytes": 242,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/postgres/runtime/idle.ts",
+      "sha256": "50df924a8ea7ad01e29584452cfa82c0f06b8bd3385c56f1b231543dc223c229",
+      "bytes": 154,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/postgres/runtime/index.ts",
+      "sha256": "70ed314ee2e6654eea33ffa27e0b67c2733355619c87ead78f577ee55f74e530",
+      "bytes": 510,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 10
+    },
+    {
+      "file": "packages/postgres/runtime/leases.ts",
+      "sha256": "25fa35a05b53df83ef3e7a9a25be7c421cbe550ff331083d2d02bde20aa87855",
+      "bytes": 195,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/postgres/runtime/outbox.ts",
+      "sha256": "4ea2a72f51b6c44a73617997598edafc2ddd35d5e7ec6b5d7165ee93b628d914",
+      "bytes": 284,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/postgres/runtime/prune.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/postgres/runtime/setup.ts",
+      "sha256": "e5ffd4ccd9d243823bab00998dfacbe175d7de848fb5b8add624d0ee85166cff",
+      "bytes": 151,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/postgres/runtime/state.ts",
+      "sha256": "7179a55d65890d2331dabe5313653c2176208f246760f8ea6553adc38c16d185",
+      "bytes": 285,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/postgres/runtime/timers.ts",
+      "sha256": "4ea2a72f51b6c44a73617997598edafc2ddd35d5e7ec6b5d7165ee93b628d914",
+      "bytes": 284,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/postgres/runtime/waiters.ts",
+      "sha256": "4ea2a72f51b6c44a73617997598edafc2ddd35d5e7ec6b5d7165ee93b628d914",
+      "bytes": 284,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/react/src/hooks.ts",
+      "sha256": "5d1520baa615a25f3eaf9ca45ae5ebdaace00b495e62a15432fdb2935f6da3f4",
+      "bytes": 108,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/react/src/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/react/src/polling.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/react/src/provider.tsx",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/react/src/server.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/react/src/server/sse.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/react/src/sse.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/react/src/testing.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/react/src/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/upstash/convex-list-page.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/upstash/index.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/upstash/redis-record-store.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/upstash/runtime.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/upstash/vector-filter.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/upstash/vector-store-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/upstash/vector-store.ts",
+      "sha256": "8b2eec6b6debb1ac0109fb74517ea9eab826b15f8f072f700d87eee237e339a0",
+      "bytes": 161,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "scripts/native-ast-benchmark.mjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "scripts/native-ast-parity-gate.mjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "scripts/stage-npm-packages.mjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "scripts/update-root-changelog.mjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "scripts/validate-staged-npm-packages.mjs",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    }
+  ]
+}

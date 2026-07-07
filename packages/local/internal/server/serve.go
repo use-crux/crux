@@ -16,6 +16,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/devtools"
 	"github.com/use-crux/crux/packages/local/internal/observability"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectwatch"
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/store"
@@ -55,12 +56,14 @@ type DevServerOptions struct {
 	ObservabilityDBPath  string
 	IngestTokenPath      string
 	RuntimeArtifacts     RuntimeArtifactGenerator
+	ProjectIndexer       projectindex.ProjectIndexer
 	// Quiet suppresses slog output (for TUI mode where stdout/stderr is owned by Bubbletea).
 	Quiet bool
 }
 
-// RuntimeArtifactGenerator refreshes Runtime Engine generated files for root.
-type RuntimeArtifactGenerator func(ctx context.Context, root string) error
+// RuntimeArtifactGenerator refreshes Runtime Engine generated files from the
+// native Project Index definitions for root.
+type RuntimeArtifactGenerator func(ctx context.Context, root string, definitions []store.ProjectDefinition) error
 
 const runtimeArtifactGenerationTimeout = 120 * time.Second
 
@@ -94,6 +97,9 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 	}
 	qualitySvc := quality.NewService(s, quality.Dir(serverOpts.QualityDir))
 	devtoolsSvc := devtools.NewService(s, qualitySvc)
+	if opts.ProjectIndexer != nil {
+		devtoolsSvc.WithProjectIndexer(opts.ProjectIndexer)
+	}
 	observabilitySvc, err := observability.OpenService(ctx, serverOpts.ObservabilityDBPath)
 	if err != nil {
 		slog.Error("observability service initialization failed", "error", err)
@@ -106,14 +112,15 @@ func NewDevServer(opts DevServerOptions) *DevServer {
 			slog.Warn("project index startup reindex skipped", "error", err)
 			return
 		}
-		if err := runtimeArtifacts(ctx, cwd); err != nil {
-			slog.Warn("runtime artifact startup generation failed", "error", err)
-		}
-		if _, err := devtoolsSvc.ReindexProjectWithOptions(ctx, cwd, "", "", devtools.ProjectReindexOptions{
+		index, err := devtoolsSvc.ReindexProjectWithOptions(ctx, cwd, "", "", devtools.ProjectReindexOptions{
 			Semantic: devtools.ProjectSemanticBackground,
-		}); err != nil {
+		})
+		if err != nil {
 			slog.Warn("project index startup reindex failed", "error", err)
 			return
+		}
+		if err := runtimeArtifacts(ctx, cwd, index.Definitions); err != nil {
+			slog.Warn("runtime artifact startup generation failed", "error", err)
 		}
 		startProjectIndexWatcher(ctx, cwd, devtoolsSvc, runtimeArtifacts)
 	}()
@@ -187,7 +194,7 @@ func hostIsLoopback(host string) bool {
 
 func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *devtools.Service, runtimeArtifacts RuntimeArtifactGenerator) {
 	runner := projectwatch.NewRunner(func(runCtx context.Context, run projectwatch.Run) {
-		if _, err := devtoolsSvc.ReindexProjectIncrementalWithOptions(runCtx, root, "", "", run.Delta.Files, run.Delta.DeletedFiles, devtools.ProjectReindexOptions{
+		index, err := devtoolsSvc.ReindexProjectIncrementalWithOptions(runCtx, root, "", "", run.Delta.Files, run.Delta.DeletedFiles, devtools.ProjectReindexOptions{
 			Semantic: devtools.ProjectSemanticBackground,
 			Watch: devtools.ProjectWatchRunOptions{
 				RunID:                   run.ID,
@@ -195,7 +202,8 @@ func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *dev
 				CoalescedWhileRunning:   run.Queue.CoalescedWhileRunning,
 				PendingRunReplacedCount: run.Queue.PendingRunReplacedCount,
 			},
-		}); err != nil {
+		})
+		if err != nil {
 			slog.Warn(
 				"project index incremental reindex failed",
 				"error", err,
@@ -203,9 +211,10 @@ func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *dev
 				"files", len(run.Delta.Files),
 				"deletedFiles", len(run.Delta.DeletedFiles),
 			)
+			return
 		}
 		if runtimeArtifacts != nil {
-			if err := runtimeArtifacts(runCtx, root); err != nil {
+			if err := runtimeArtifacts(runCtx, root, index.Definitions); err != nil {
 				slog.Warn(
 					"runtime artifact watch generation failed",
 					"error", err,
@@ -235,7 +244,7 @@ func startProjectIndexWatcher(ctx context.Context, root string, devtoolsSvc *dev
 }
 
 type runtimeArtifactWorker interface {
-	GenerateRuntimeArtifacts(ctx context.Context, root string) (json.RawMessage, error)
+	GenerateRuntimeArtifacts(ctx context.Context, root string, definitions []store.ProjectDefinition) (json.RawMessage, error)
 }
 
 func newRuntimeArtifactGeneratorForDev(projectIndexerScript string) (RuntimeArtifactGenerator, func() error) {
@@ -244,18 +253,18 @@ func newRuntimeArtifactGeneratorForDev(projectIndexerScript string) (RuntimeArti
 }
 
 func runtimeArtifactGeneratorForWorker(worker runtimeArtifactWorker) RuntimeArtifactGenerator {
-	return func(ctx context.Context, root string) error {
-		return generateRuntimeArtifactsWithWorker(ctx, root, worker)
+	return func(ctx context.Context, root string, definitions []store.ProjectDefinition) error {
+		return generateRuntimeArtifactsWithWorker(ctx, root, definitions, worker)
 	}
 }
 
-func generateRuntimeArtifactsWithWorker(ctx context.Context, root string, worker runtimeArtifactWorker) error {
+func generateRuntimeArtifactsWithWorker(ctx context.Context, root string, definitions []store.ProjectDefinition, worker runtimeArtifactWorker) error {
 	if _, ok := ctx.Deadline(); !ok {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, runtimeArtifactGenerationTimeout)
 		defer cancel()
 	}
-	_, err := worker.GenerateRuntimeArtifacts(ctx, root)
+	_, err := worker.GenerateRuntimeArtifacts(ctx, root, definitions)
 	return err
 }
 

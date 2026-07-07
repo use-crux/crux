@@ -96,6 +96,8 @@ fn merge_source_row(
                 file: incoming.file,
                 status: merge_source_status(&existing.status, &incoming.status),
                 shard_id: incoming.shard_id.or(existing.shard_id),
+                source_hash: incoming.source_hash.or(existing.source_hash),
+                interface_hash: incoming.interface_hash.or(existing.interface_hash),
                 definition_ids: sorted_strings(
                     [existing.definition_ids, incoming.definition_ids].concat(),
                 ),
@@ -121,6 +123,8 @@ fn ensure_source_row<'a>(
             file: file.to_string(),
             status: status.to_string(),
             shard_id: None,
+            source_hash: None,
+            interface_hash: None,
             definition_ids: Vec::new(),
             dependencies: Vec::new(),
             dependents: Vec::new(),

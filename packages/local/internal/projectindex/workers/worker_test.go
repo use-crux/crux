@@ -8,6 +8,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 )
 
 func TestFindNodePathPrefersNVMNode24OverOlderPathNode(t *testing.T) {
@@ -65,19 +68,24 @@ func TestWorker_contextCancellationKillsStuckStreamWorker(t *testing.T) {
 	}
 
 	worker := newTestWorkerWithProjectScript(t, script)
+	defer worker.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
 	start := time.Now()
-	_, err := worker.IndexProjectAstPatch(ctx, t.TempDir(), "", "stuck-project")
+	_, err := worker.streamPatches(
+		ctx,
+		requestwire.Request{Method: "indexProjectRuntime", Root: t.TempDir(), ProjectName: "stuck-project"},
+		projectindex.IndexPatchBudget{},
+	)
 	if err == nil {
-		t.Fatal("IndexProjectAstPatch error = nil, want caller deadline exceeded")
+		t.Fatal("streamPatches error = nil, want caller deadline exceeded")
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("IndexProjectAstPatch error = %v, want caller deadline exceeded", err)
+		t.Fatalf("streamPatches error = %v, want caller deadline exceeded", err)
 	}
 	if elapsed := time.Since(start); elapsed > time.Second {
-		t.Fatalf("IndexProjectAstPatch took %s, want bounded cancellation", elapsed)
+		t.Fatalf("streamPatches took %s, want bounded cancellation", elapsed)
 	}
 }
 

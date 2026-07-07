@@ -63,7 +63,7 @@ const allowedKeysByPath: Readonly<Record<string, readonly string[]>> = {
     'defaultOptions',
     'budget',
   ],
-  sources: ['file', 'status', 'shardId', 'definitionIds', 'dependencies', 'dependents', 'diagnostics'],
+  sources: ['file', 'status', 'shardId', 'sourceHash', 'interfaceHash', 'definitionIds', 'dependencies', 'dependents', 'diagnostics'],
   prompts: ['id', 'description', 'tags', 'inputSchema', 'outputSchema', 'contextIds', 'hasOutput', 'settings', 'path', 'systemTemplate', 'promptTemplate', 'hasMessages', 'definitionSource'],
   contexts: ['id', 'description', 'priority', 'inputSchema', 'isStatic', 'usedBy', 'path', 'systemTemplate', 'definitionSource'],
   tools: ['name', 'description', 'inputSchema', 'path'],
@@ -137,13 +137,13 @@ function normalizeParityValue(value: JsonValue, context: NormalizeContext): Json
       normalizeParityValue(item, { ...context, path: normalizeArrayItemPath(context.path) }),
     )
     if (!isUnorderedArrayPath(context.path)) return normalized
-    return [...normalized].sort((left, right) => sortKey(left).localeCompare(sortKey(right)))
+    return [...normalized].sort((left, right) => compareCodepoint(sortKey(left), sortKey(right)))
   }
   if (!isJsonObject(value)) return normalizePrimitive(value, context.path)
 
   validateObjectKeys(value, context)
   const sorted: Record<string, JsonValue> = {}
-  for (const key of Object.keys(value).sort()) {
+  for (const key of Object.keys(value).sort(compareCodepoint)) {
     sorted[key] = normalizeParityValue(value[key], { ...context, path: childPath(context.path, key) })
   }
   return sorted
@@ -228,6 +228,10 @@ function sortKey(value: JsonValue): string {
     }
   }
   return JSON.stringify(value)
+}
+
+function compareCodepoint(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0
 }
 
 function sourceRefSortKey(value: JsonObject): string | undefined {

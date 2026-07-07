@@ -15,7 +15,8 @@ import { locationCacheKey, putLocationCache, type LocationCacheKey } from './cac
 import { discoverSourceMap, normalizePath } from './discovery'
 import { extractFunctionBody } from './extraction'
 import { nodeSourceResolverFileSystem, type SourceResolverFileSystem } from './filesystem'
-import { loadOriginalSource, loadOriginalSourceWithKind } from './original-source'
+import { loadOriginalSource, loadOriginalSourceWithKind, resolveOriginalPath } from './original-source'
+import { isReadablePathInsideRoot } from './path-containment'
 import { parseTraceMap, resolveOriginalPosition } from './trace-map'
 import type {
   ResolvedFnSource,
@@ -42,17 +43,21 @@ const GENERATED_PATH_SEGMENTS = new Set([
 export interface SourceResolverOptions {
   /** Filesystem dependency used for source maps and original source fallback. */
   readonly fileSystem?: SourceResolverFileSystem
+  /** Project root that untrusted source-map file reads must stay inside. */
+  readonly projectRoot?: string
 }
 
 /** Resolve bundled trace locations and original function source through source maps. */
 export class SourceResolver {
   private readonly fileSystem: SourceResolverFileSystem
-  private mapCache = new Map<string, TraceMap | null>()
+  private readonly projectRoot: string | undefined
+  private mapCache = new Map<string, TraceMap>()
   private locationCache = new Map<LocationCacheKey, ResolvedLocation>()
 
   /** Create a source resolver with optional filesystem dependency injection. */
   constructor(options: SourceResolverOptions = {}) {
     this.fileSystem = options.fileSystem ?? nodeSourceResolverFileSystem
+    this.projectRoot = options.projectRoot
   }
 
   /**
@@ -67,10 +72,10 @@ export class SourceResolver {
     if (cached) return cached
 
     const traceMap = await this.loadTraceMap(file)
-    if (!traceMap) return this.cacheAndReturn(key, unresolvedLocation(file, line, column, fn))
+    if (!traceMap) return unresolvedLocation(file, line, column, fn)
 
     const resolved = resolveOriginalPosition(traceMap, line, column)
-    if (resolved.kind === 'unresolved') return this.cacheAndReturn(key, unresolvedLocation(file, line, column, fn))
+    if (resolved.kind === 'unresolved') return unresolvedLocation(file, line, column, fn)
 
     return this.cacheAndReturn(key, {
       file: resolved.file,
@@ -94,7 +99,13 @@ export class SourceResolver {
     const resolved = resolveOriginalPosition(traceMap, line, column)
     if (resolved.kind === 'unresolved') return null
 
-    const content = await loadOriginalSource(traceMap, normalizePath(file), resolved.file, this.fileSystem)
+    const content = await loadOriginalSource(
+      traceMap,
+      normalizePath(file),
+      resolved.file,
+      this.fileSystem,
+      this.containmentOptions(),
+    )
     if (!content) return null
 
     const extracted = extractFunctionBody(content, resolved.line, resolved.column ?? 0)
@@ -123,6 +134,8 @@ export class SourceResolver {
     options: SourceFrameOptions = {},
   ): Promise<SourceFrameResolution> {
     const normalized = normalizePath(file)
+    if (!(await this.canReadPath(normalized))) return { kind: 'unavailable', reason: 'source-outside-project' }
+
     const traceMap = await this.loadTraceMap(normalized)
     if (!traceMap) {
       const directFrame = await this.resolveDirectSourceFrame(normalized, line, column, options)
@@ -131,8 +144,17 @@ export class SourceResolver {
 
     const resolved = resolveOriginalPosition(traceMap, line, column)
     if (resolved.kind === 'unresolved') return { kind: 'unavailable', reason: 'source-file-missing' }
+    if (!(await this.canReadOriginalSourcePath(normalized, resolved.file))) {
+      return { kind: 'unavailable', reason: 'source-outside-project' }
+    }
 
-    const loaded = await loadOriginalSourceWithKind(traceMap, normalized, resolved.file, this.fileSystem)
+    const loaded = await loadOriginalSourceWithKind(
+      traceMap,
+      normalized,
+      resolved.file,
+      this.fileSystem,
+      this.containmentOptions(),
+    )
     if (!loaded) return { kind: 'unavailable', reason: 'source-file-missing' }
 
     const sourceLines = splitSourceLines(loaded.content)
@@ -183,16 +205,15 @@ export class SourceResolver {
 
   private async loadTraceMap(file: string): Promise<TraceMap | null> {
     const normalized = normalizePath(file)
+    if (!(await this.canReadPath(normalized))) return null
     const cached = this.mapCache.get(normalized)
     if (cached !== undefined) return cached
 
-    const discovered = await discoverSourceMap(normalized, this.fileSystem)
-    if (discovered.kind === 'not-found') {
-      this.mapCache.set(normalized, null)
-      return null
-    }
+    const discovered = await discoverSourceMap(normalized, this.fileSystem, this.containmentOptions())
+    if (discovered.kind === 'not-found') return null
 
     const traceMap = parseTraceMap(discovered.mapJson)
+    if (!traceMap) return null
     this.mapCache.set(normalized, traceMap)
     return traceMap
   }
@@ -210,6 +231,7 @@ export class SourceResolver {
     column: number | undefined,
     options: SourceFrameOptions,
   ): Promise<SourceFrameResolution | null> {
+    if (!(await this.canReadPath(file))) return { kind: 'unavailable', reason: 'source-outside-project' }
     if (!isDirectAuthoredSourceCandidate(file) || !this.fileSystem.exists(file)) return null
 
     let content: string
@@ -252,6 +274,21 @@ export class SourceResolver {
       stale: false,
       resolver: 'disk',
     }
+  }
+
+  private async canReadOriginalSourcePath(bundledFile: string, sourcePath: string): Promise<boolean> {
+    if (!this.projectRoot) return true
+    const originalPath = resolveOriginalPath(bundledFile, sourcePath)
+    if (!originalPath) return false
+    return isReadablePathInsideRoot(this.projectRoot, originalPath, this.fileSystem)
+  }
+
+  private async canReadPath(file: string): Promise<boolean> {
+    return !this.projectRoot || isReadablePathInsideRoot(this.projectRoot, file, this.fileSystem)
+  }
+
+  private containmentOptions(): { readonly projectRoot?: string } {
+    return this.projectRoot ? { projectRoot: this.projectRoot } : {}
   }
 }
 

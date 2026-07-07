@@ -11,6 +11,7 @@
 import { dirname, resolve as resolvePath } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { SourceResolverFileSystem } from './filesystem'
+import { isReadablePathInsideRoot } from './path-containment'
 import type { SourceMapDiscoveryResult } from './types'
 
 /** Convert file URLs to filesystem paths while preserving non-URL inputs. */
@@ -23,6 +24,12 @@ export function normalizePath(filePath: string): string {
   }
 }
 
+/** Options for source-map discovery from untrusted project paths. */
+export interface SourceMapDiscoveryOptions {
+  /** Project root that sidecar, bundle, and relative map reads must stay inside. */
+  readonly projectRoot?: string
+}
+
 /**
  * Discover and read a source map for a bundled file.
  *
@@ -33,9 +40,13 @@ export function normalizePath(filePath: string): string {
 export async function discoverSourceMap(
   bundledFile: string,
   fileSystem: SourceResolverFileSystem,
+  options: SourceMapDiscoveryOptions = {},
 ): Promise<SourceMapDiscoveryResult> {
   const sidecarPath = `${bundledFile}.map`
-  if (fileSystem.exists(sidecarPath)) {
+  if (
+    fileSystem.exists(sidecarPath) &&
+    (!options.projectRoot || (await isReadablePathInsideRoot(options.projectRoot, sidecarPath, fileSystem)))
+  ) {
     try {
       return { kind: 'found', mapJson: await fileSystem.readFile(sidecarPath), source: 'sidecar' }
     } catch {
@@ -45,6 +56,9 @@ export async function discoverSourceMap(
 
   let bundleContent: string
   try {
+    if (options.projectRoot && !(await isReadablePathInsideRoot(options.projectRoot, bundledFile, fileSystem))) {
+      return { kind: 'not-found', reason: 'bundle-not-readable' }
+    }
     bundleContent = await fileSystem.readFile(bundledFile)
   } catch {
     return { kind: 'not-found', reason: 'bundle-not-readable' }
@@ -71,6 +85,9 @@ export async function discoverSourceMap(
 
   const mapPath = resolvePath(dirname(bundledFile), url)
   if (!fileSystem.exists(mapPath)) return { kind: 'not-found', reason: 'relative-map-not-readable' }
+  if (options.projectRoot && !(await isReadablePathInsideRoot(options.projectRoot, mapPath, fileSystem))) {
+    return { kind: 'not-found', reason: 'relative-map-not-readable' }
+  }
 
   try {
     return { kind: 'found', mapJson: await fileSystem.readFile(mapPath), source: 'relative-url' }

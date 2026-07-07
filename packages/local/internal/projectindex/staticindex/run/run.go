@@ -40,6 +40,10 @@ type Request struct {
 	Compiler     Compiler
 	Evidence     EvidenceFunc
 	PatchOptions patch.Options
+	// PatchInvalidates overrides the compiler default AST invalidation. Full
+	// static runs leave this empty so Rust emits {all:true}; incremental runs
+	// pass exact file invalidation.
+	PatchInvalidates json.RawMessage
 }
 
 // Result is the outcome of a Static Index execution.

@@ -13,7 +13,7 @@ import {
   type RegisteredExtractor,
 } from '../../../extensions/runtime/registry'
 import type { StaticExtractionResult } from '../../../extensions/runtime/engine'
-import { runtimeResultFromExtractResult } from '../../../extensions/runtime/results'
+import { runtimeResultFromExtractResult, runtimeResultFromExtractorError } from '../../../extensions/runtime/results'
 import { createStaticRecordExtractContext } from './context'
 
 /** Record-backed static extraction input consumed by native-ready runtime adapters. */
@@ -58,20 +58,25 @@ export function extractStaticRecordWithRegistry(
   let noneResult: Extract<StaticExtractionResult, { readonly kind: 'none' }> | undefined
   for (const item of registered) {
     const objectArg = objectArgForExtractor(input.match, item.extractor, initializers)
-    const result = item.extractor.extract(
-      createStaticRecordExtractContext({
-        root: input.root,
-        record: input.record,
-        match: input.match,
-        initializers,
-        extension: item.extension,
-        extractor: item.extractor,
-        initializerRecords,
-        recordsByFile: input.recordsByFile,
-        ...(objectArg ? { objectArg } : {}),
-      }),
-    )
-    const runtimeResult = runtimeResultFromExtractResult(item, result)
+    let result: unknown
+    try {
+      result = item.extractor.extract(
+        createStaticRecordExtractContext({
+          root: input.root,
+          record: input.record,
+          match: input.match,
+          initializers,
+          extension: item.extension,
+          extractor: item.extractor,
+          initializerRecords,
+          recordsByFile: input.recordsByFile,
+          ...(objectArg ? { objectArg } : {}),
+        }),
+      )
+    } catch (error) {
+      return runtimeResultFromExtractorError(item, input.match.source, error)
+    }
+    const runtimeResult = runtimeResultFromExtractResult(item, result, { source: input.match.source })
     if (runtimeResult.kind !== 'none') return runtimeResult
     noneResult ??= runtimeResult
   }

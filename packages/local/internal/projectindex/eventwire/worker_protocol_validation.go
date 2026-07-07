@@ -43,8 +43,5 @@ func (c *ProjectIndexPatchStreamCollector) validateRoot(root string) error {
 }
 
 func (c *ProjectIndexPatchStreamCollector) streamByteLimit() int {
-	if c.options.MaxBytes > 0 {
-		return c.options.MaxBytes
-	}
-	return c.options.Budget.MaxBytes
+	return c.options.MaxBytes
 }

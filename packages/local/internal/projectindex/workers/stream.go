@@ -12,12 +12,13 @@ import (
 
 func (w *Bundle) sourceClient() source.Client {
 	return source.Client{
-		Name:          "project-indexer",
-		ScriptContent: w.scriptContent,
-		ScriptPath:    w.scriptPath,
-		Worker:        w.worker,
-		MaxBytes:      workerMaxResponseBytes,
-		Producer:      workerProducer,
+		Name:           "project-indexer",
+		ScriptContent:  w.scriptContent,
+		ScriptPath:     w.scriptPath,
+		Worker:         w.worker,
+		MaxLineBytes:   workerMaxResponseLineBytes,
+		MaxStreamBytes: workerMaxResponseStreamBytes,
+		Producer:       workerProducer,
 	}
 }
 

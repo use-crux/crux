@@ -14,6 +14,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/assets"
 	"github.com/use-crux/crux/packages/local/internal/cli"
 	"github.com/use-crux/crux/packages/local/internal/output"
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
 type runtimeGenerateOptions struct {
@@ -101,7 +102,12 @@ func generateRuntimeArtifactsWithWorker(ctx context.Context, root string) (json.
 		ctx, cancel = context.WithTimeout(ctx, runtimeGenerateTimeout)
 		defer cancel()
 	}
-	return worker.GenerateRuntimeArtifacts(ctx, root)
+	astResult, err := worker.IndexProjectAstPatchWithResult(ctx, root, "", "")
+	if err != nil {
+		return nil, err
+	}
+	index := projectindex.ApplyPatch(projectindex.EmptyPatchState(), astResult.Patch).Index
+	return worker.GenerateRuntimeArtifacts(ctx, root, index.Definitions)
 }
 
 func runRuntimeOperationWithWorker(ctx context.Context, root, operation, workID string) (json.RawMessage, error) {

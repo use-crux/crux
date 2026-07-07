@@ -10,7 +10,8 @@ const sourceWorkerMaxResponseBytes = 4 * 1024 * 1024
 
 // Worker manages source map resolution through a persistent Node worker.
 type Worker struct {
-	worker *workerproc.Worker
+	worker      *workerproc.Worker
+	projectRoot string
 }
 
 // ResolveRequest is a request to resolve source locations.
@@ -24,6 +25,7 @@ type ResolveRequest struct {
 	FrameRadius *int       `json:"frameRadius,omitempty"`
 	Role        string     `json:"role,omitempty"`
 	CapturedAt  string     `json:"capturedAt,omitempty"`
+	ProjectRoot string     `json:"projectRoot,omitempty"`
 }
 
 // Location is an input location to resolve.
@@ -60,6 +62,7 @@ type FrameRequest struct {
 	FrameRadius *int   `json:"frameRadius,omitempty"`
 	Role        string `json:"role,omitempty"`
 	CapturedAt  string `json:"capturedAt,omitempty"`
+	ProjectRoot string `json:"projectRoot,omitempty"`
 }
 
 // FrameResult is the source resolver's authored-frame union shape.
@@ -87,12 +90,13 @@ type FrameLine struct {
 }
 
 // New creates a source worker. When scriptPath is empty, embeddedScript is used.
-func New(scriptPath string, embeddedScript []byte) *Worker {
+func New(scriptPath string, embeddedScript []byte, projectRoot string) *Worker {
 	opts := []workerproc.Option{workerproc.WithMaxResponseBytes(sourceWorkerMaxResponseBytes)}
 	if scriptPath != "" {
 		opts = append(opts, workerproc.WithScriptPath(scriptPath))
 	}
 	return &Worker{
+		projectRoot: projectRoot,
 		worker: workerproc.New(workerproc.Script{
 			Name:    "source-resolver",
 			Content: embeddedScript,
@@ -105,8 +109,9 @@ func (w *Worker) ResolveLocations(ctx context.Context, locations []Location) ([]
 	resp, err := workerproc.Call[struct {
 		Locations []ResolvedLocation `json:"locations"`
 	}](ctx, w.worker, ResolveRequest{
-		Method:    "resolveLocations",
-		Locations: locations,
+		Method:      "resolveLocations",
+		Locations:   locations,
+		ProjectRoot: w.projectRoot,
 	})
 	if err != nil {
 		return nil, err
@@ -117,10 +122,11 @@ func (w *Worker) ResolveLocations(ctx context.Context, locations []Location) ([]
 // ResolveFn resolves a function's source code.
 func (w *Worker) ResolveFn(ctx context.Context, file string, line int, column *int) (*ResolvedFn, error) {
 	resp, err := workerproc.Call[ResolvedFn](ctx, w.worker, ResolveRequest{
-		Method: "resolveFnSource",
-		File:   file,
-		Line:   line,
-		Column: column,
+		Method:      "resolveFnSource",
+		File:        file,
+		Line:        line,
+		Column:      column,
+		ProjectRoot: w.projectRoot,
 	})
 	if err != nil {
 		return nil, err
@@ -139,11 +145,21 @@ func (w *Worker) ResolveFrame(ctx context.Context, req FrameRequest) (*FrameResu
 		FrameRadius: req.FrameRadius,
 		Role:        req.Role,
 		CapturedAt:  req.CapturedAt,
+		ProjectRoot: firstNonEmpty(req.ProjectRoot, w.projectRoot),
 	})
 	if err != nil {
 		return nil, err
 	}
 	return &resp, nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // Close shuts down the worker process.

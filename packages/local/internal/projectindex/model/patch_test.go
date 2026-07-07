@@ -166,7 +166,15 @@ func TestApplyIndexPatchMergesSourceRowsByUnion(t *testing.T) {
 		Status:        "ok",
 		Facts: IndexPatchFacts{
 			Sources: []store.IndexSourceFile{
-				{File: "src/a.ts", Status: "active", DefinitionIDs: []string{"definition:a"}, Dependencies: []string{"src/b.ts"}, Diagnostics: []string{"diagnostic:a"}},
+				{
+					File:          "src/a.ts",
+					Status:        "active",
+					SourceHash:    "source:ast",
+					InterfaceHash: "interface:ast",
+					DefinitionIDs: []string{"definition:a"},
+					Dependencies:  []string{"src/b.ts"},
+					Diagnostics:   []string{"diagnostic:a"},
+				},
 			},
 		},
 	})
@@ -191,6 +199,94 @@ func TestApplyIndexPatchMergesSourceRowsByUnion(t *testing.T) {
 	assertStringSet(t, source.Dependencies, []string{"src/b.ts"})
 	assertStringSet(t, source.Dependents, []string{"src/c.ts"})
 	assertStringSet(t, source.Diagnostics, []string{"diagnostic:a", "diagnostic:semantic"})
+	if source.SourceHash != "source:ast" || source.InterfaceHash != "interface:ast" {
+		t.Fatalf("source hashes = %q/%q, want AST hash evidence preserved", source.SourceHash, source.InterfaceHash)
+	}
+}
+
+func TestApplyIndexPatchReplacesOutgoingSourceDependencies(t *testing.T) {
+	state := ApplyPatch(EmptyPatchState(), IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Facts: IndexPatchFacts{
+			Sources: []store.IndexSourceFile{
+				{File: "src/writer.ts", Status: "active", DefinitionIDs: []string{"prompt:writer"}, Dependencies: []string{"src/brand.ts"}},
+				{File: "src/brand.ts", Status: "active", DefinitionIDs: []string{"context:brand"}, Dependents: []string{"src/writer.ts"}},
+				{File: "src/tone.ts", Status: "active", DefinitionIDs: []string{"context:tone"}, Dependents: []string{"src/other.ts"}},
+			},
+		},
+	})
+
+	next := ApplyPatch(state, IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Invalidates:   &IndexPatchInvalidation{Files: []string{"src/writer.ts"}},
+		Facts: IndexPatchFacts{
+			Sources: []store.IndexSourceFile{
+				{File: "src/writer.ts", Status: "active", DefinitionIDs: []string{"prompt:writer"}, Dependencies: []string{"src/tone.ts"}},
+				{File: "src/tone.ts", Status: "active", DefinitionIDs: []string{"context:tone"}, Dependents: []string{"src/writer.ts"}},
+			},
+		},
+	})
+
+	writer := findTestSource(next.Index.Sources, "src/writer.ts")
+	if writer == nil {
+		t.Fatal("writer source row missing")
+	}
+	assertStringSet(t, writer.Dependencies, []string{"src/tone.ts"})
+	brand := findTestSource(next.Index.Sources, "src/brand.ts")
+	if brand == nil {
+		t.Fatal("brand source row missing")
+	}
+	assertStringSet(t, brand.Dependents, nil)
+	tone := findTestSource(next.Index.Sources, "src/tone.ts")
+	if tone == nil {
+		t.Fatal("tone source row missing")
+	}
+	assertStringSet(t, tone.Dependents, []string{"src/other.ts", "src/writer.ts"})
+}
+
+func TestApplyIndexPatchPrunesDeletedSourceEdges(t *testing.T) {
+	state := ApplyPatch(EmptyPatchState(), IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Facts: IndexPatchFacts{
+			Sources: []store.IndexSourceFile{
+				{File: "src/deleted.ts", Status: "active", DefinitionIDs: []string{"prompt:deleted"}, Dependencies: []string{"src/brand.ts"}, Dependents: []string{"src/consumer.ts"}},
+				{File: "src/brand.ts", Status: "active", DefinitionIDs: []string{"context:brand"}, Dependents: []string{"src/deleted.ts"}},
+				{File: "src/consumer.ts", Status: "active", DefinitionIDs: []string{"agent:consumer"}, Dependencies: []string{"src/deleted.ts"}},
+			},
+		},
+	})
+
+	next := ApplyPatch(state, IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseAST,
+		Project:       store.ProjectIdentity{Root: "/repo", Name: "project"},
+		Status:        "ok",
+		Invalidates:   &IndexPatchInvalidation{Files: []string{"src/deleted.ts"}},
+		Facts:         IndexPatchFacts{Sources: []store.IndexSourceFile{}},
+	})
+
+	if findTestSource(next.Index.Sources, "src/deleted.ts") != nil {
+		t.Fatalf("deleted source row survived: %+v", next.Index.Sources)
+	}
+	brand := findTestSource(next.Index.Sources, "src/brand.ts")
+	if brand == nil {
+		t.Fatal("brand source row missing")
+	}
+	assertStringSet(t, brand.Dependents, nil)
+	consumer := findTestSource(next.Index.Sources, "src/consumer.ts")
+	if consumer == nil {
+		t.Fatal("consumer source row missing")
+	}
+	assertStringSet(t, consumer.Dependencies, nil)
 }
 
 func TestApplyIndexPatchQualityLintPatchReplacesQualityFindingsOnly(t *testing.T) {

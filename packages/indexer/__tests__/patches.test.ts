@@ -262,6 +262,136 @@ describe('index patch merge', () => {
     ])
   })
 
+  it('replaces outgoing source dependencies and recomputes reverse dependents', () => {
+    const initial = applyIndexPatch(emptyIndexPatchState(), {
+      schemaVersion: 1,
+      phase: 'ast',
+      project: { root: '/repo' },
+      startedAt: '2026-06-02T10:00:00.000Z',
+      finishedAt: '2026-06-02T10:00:00.001Z',
+      status: 'ok',
+      facts: {
+        sources: [
+          {
+            file: '/repo/src/writer.ts',
+            status: 'indexed',
+            definitionIds: ['prompt:writer'],
+            dependencies: ['/repo/src/brand.ts'],
+            dependents: [],
+            diagnostics: [],
+          },
+          {
+            file: '/repo/src/brand.ts',
+            status: 'indexed',
+            definitionIds: ['context:brand'],
+            dependencies: [],
+            dependents: ['/repo/src/writer.ts'],
+            diagnostics: [],
+          },
+          {
+            file: '/repo/src/tone.ts',
+            status: 'indexed',
+            definitionIds: ['context:tone'],
+            dependencies: [],
+            dependents: ['/repo/src/other.ts'],
+            diagnostics: [],
+          },
+        ],
+      },
+    })
+
+    const refreshed = applyIndexPatch(initial, {
+      schemaVersion: 1,
+      phase: 'ast',
+      project: { root: '/repo' },
+      startedAt: '2026-06-02T10:00:01.000Z',
+      finishedAt: '2026-06-02T10:00:01.001Z',
+      status: 'ok',
+      invalidates: { files: ['/repo/src/writer.ts'] },
+      facts: {
+        sources: [
+          {
+            file: '/repo/src/writer.ts',
+            status: 'indexed',
+            definitionIds: ['prompt:writer'],
+            dependencies: ['/repo/src/tone.ts'],
+            dependents: [],
+            diagnostics: [],
+          },
+          {
+            file: '/repo/src/tone.ts',
+            status: 'indexed',
+            definitionIds: ['context:tone'],
+            dependencies: [],
+            dependents: ['/repo/src/writer.ts'],
+            diagnostics: [],
+          },
+        ],
+      },
+    })
+
+    expect(sourceByFile(refreshed.sources, '/repo/src/writer.ts')?.dependencies).toEqual(['/repo/src/tone.ts'])
+    expect(sourceByFile(refreshed.sources, '/repo/src/brand.ts')?.dependents).toEqual([])
+    expect(sourceByFile(refreshed.sources, '/repo/src/tone.ts')?.dependents).toEqual([
+      '/repo/src/other.ts',
+      '/repo/src/writer.ts',
+    ])
+  })
+
+  it('removes dangling source graph edges when a file is deleted', () => {
+    const initial = applyIndexPatch(emptyIndexPatchState(), {
+      schemaVersion: 1,
+      phase: 'ast',
+      project: { root: '/repo' },
+      startedAt: '2026-06-02T10:00:00.000Z',
+      finishedAt: '2026-06-02T10:00:00.001Z',
+      status: 'ok',
+      facts: {
+        sources: [
+          {
+            file: '/repo/src/deleted.ts',
+            status: 'indexed',
+            definitionIds: ['prompt:deleted'],
+            dependencies: ['/repo/src/brand.ts'],
+            dependents: ['/repo/src/consumer.ts'],
+            diagnostics: [],
+          },
+          {
+            file: '/repo/src/brand.ts',
+            status: 'indexed',
+            definitionIds: ['context:brand'],
+            dependencies: [],
+            dependents: ['/repo/src/deleted.ts'],
+            diagnostics: [],
+          },
+          {
+            file: '/repo/src/consumer.ts',
+            status: 'indexed',
+            definitionIds: ['agent:consumer'],
+            dependencies: ['/repo/src/deleted.ts'],
+            dependents: [],
+            diagnostics: [],
+          },
+        ],
+      },
+    })
+
+    const deleted = applyIndexPatch(initial, {
+      schemaVersion: 1,
+      phase: 'ast',
+      project: { root: '/repo' },
+      startedAt: '2026-06-02T10:00:01.000Z',
+      finishedAt: '2026-06-02T10:00:01.001Z',
+      status: 'ok',
+      invalidates: { files: ['/repo/src/deleted.ts'] },
+      facts: { sources: [] },
+    })
+
+    expect(sourceByFile(deleted.sources, '/repo/src/deleted.ts')).toBeUndefined()
+    expect(sourceByFile(deleted.sources, '/repo/src/brand.ts')?.dependents).toEqual([])
+    expect(sourceByFile(deleted.sources, '/repo/src/consumer.ts')?.dependencies).toEqual([])
+  })
+
   it('lets semantic facts enrich stable definitions without owning core fields', () => {
     const ast = applyIndexPatch(emptyIndexPatchState(), {
       schemaVersion: 1,
@@ -539,3 +669,7 @@ describe('index patch merge', () => {
     ])
   })
 })
+
+function sourceByFile(sources: ReturnType<typeof applyIndexPatch>['sources'], file: string) {
+  return sources.find((source) => source.file === file)
+}

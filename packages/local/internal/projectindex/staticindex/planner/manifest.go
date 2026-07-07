@@ -6,7 +6,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const syntaxFrontendVersion = "oxc_parser@0.133.0+crux_native_group3.7"
+const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.7"
 
 var defaultCallNames = []string{
 	"Agent",
@@ -189,10 +189,8 @@ func defaultHost() json.RawMessage {
 	payload := map[string]any{
 		"extractors":                          extractors,
 		"bundledNativeExtractorCount":         len(extractors),
-		"bundledTypeScriptExtractorCount":     0,
 		"extensionTypeScriptExtractorCount":   0,
 		"typeScriptRuleCount":                 0,
-		"requiresTypeScriptHostForBundled":    false,
 		"requiresTypeScriptHostForExtensions": false,
 		"requiresTypeScriptHostForRules":      false,
 		"requiresCompatibilityEvidence":       false,

@@ -9,8 +9,8 @@ import (
 // enrichment. Reindex orchestration uses this to overlap Node startup with
 // native AST work.
 func (w *Worker) Prewarm(ctx context.Context) error {
-	if w == nil || w.phase.Worker == nil {
+	if w == nil || len(w.phases) == 0 || w.phases[0].Worker == nil {
 		return fmt.Errorf("project semantic worker is not configured")
 	}
-	return w.phase.Worker.Prewarm(ctx)
+	return w.phases[0].Worker.Prewarm(ctx)
 }

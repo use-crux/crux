@@ -2,8 +2,7 @@ use oxc_ast::ast::*;
 use oxc_span::GetSpan;
 
 use crate::{
-    protocol::{StaticInitializerRecord, StaticSourceMatch},
-    syntax::initializers::{scoped_initializers_for_arrow, scoped_initializers_for_function},
+    protocol::StaticSourceMatch,
     syntax::match_arguments::{visit_argument, visit_array_element},
     syntax::match_build::{MatchContext, call_match, new_match, should_skip_subtree},
     syntax::match_statements::visit_statement,
@@ -13,7 +12,6 @@ use crate::{
 pub(crate) fn visit_expression(
     context: MatchContext<'_, '_>,
     expression: &Expression<'_>,
-    scoped_initializers: &[StaticInitializerRecord],
     matches: &mut Vec<StaticSourceMatch>,
 ) {
     if should_skip_subtree(context, expression.span()) {
@@ -32,12 +30,11 @@ pub(crate) fn visit_expression(
                     ),
                     call,
                     false,
-                    scoped_initializers,
                 ));
             }
-            visit_expression(context, &call.callee, scoped_initializers, matches);
+            visit_expression(context, &call.callee, matches);
             for argument in &call.arguments {
-                visit_argument(context, argument, scoped_initializers, matches);
+                visit_argument(context, argument, matches);
             }
         }
         Expression::NewExpression(new_expression) => {
@@ -49,140 +46,82 @@ pub(crate) fn visit_expression(
                 ),
                 new_expression,
                 false,
-                scoped_initializers,
             ) {
                 matches.push(match_record);
             }
-            visit_expression(
-                context,
-                &new_expression.callee,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &new_expression.callee, matches);
             for argument in &new_expression.arguments {
-                visit_argument(context, argument, scoped_initializers, matches);
+                visit_argument(context, argument, matches);
             }
         }
         Expression::ObjectExpression(object) => {
             for property in &object.properties {
                 match property {
                     ObjectPropertyKind::ObjectProperty(property) => {
-                        visit_expression(context, &property.value, scoped_initializers, matches);
+                        visit_expression(context, &property.value, matches);
                     }
                     ObjectPropertyKind::SpreadProperty(spread) => {
-                        visit_expression(context, &spread.argument, scoped_initializers, matches);
+                        visit_expression(context, &spread.argument, matches);
                     }
                 }
             }
         }
         Expression::AwaitExpression(await_expression) => {
-            visit_expression(
-                context,
-                &await_expression.argument,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &await_expression.argument, matches);
         }
         Expression::ConditionalExpression(conditional) => {
-            visit_expression(context, &conditional.test, scoped_initializers, matches);
-            visit_expression(
-                context,
-                &conditional.consequent,
-                scoped_initializers,
-                matches,
-            );
-            visit_expression(
-                context,
-                &conditional.alternate,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &conditional.test, matches);
+            visit_expression(context, &conditional.consequent, matches);
+            visit_expression(context, &conditional.alternate, matches);
+        }
+        Expression::LogicalExpression(logical) => {
+            visit_expression(context, &logical.left, matches);
+            visit_expression(context, &logical.right, matches);
+        }
+        Expression::BinaryExpression(binary) => {
+            visit_expression(context, &binary.left, matches);
+            visit_expression(context, &binary.right, matches);
         }
         Expression::UnaryExpression(unary_expression) => {
-            visit_expression(
-                context,
-                &unary_expression.argument,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &unary_expression.argument, matches);
         }
         Expression::ParenthesizedExpression(parenthesized) => {
-            visit_expression(
-                context,
-                &parenthesized.expression,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &parenthesized.expression, matches);
         }
         Expression::TSAsExpression(expression) => {
-            visit_expression(
-                context,
-                &expression.expression,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &expression.expression, matches);
         }
         Expression::TSSatisfiesExpression(expression) => {
-            visit_expression(
-                context,
-                &expression.expression,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &expression.expression, matches);
         }
         Expression::TSTypeAssertion(expression) => {
-            visit_expression(
-                context,
-                &expression.expression,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &expression.expression, matches);
         }
         Expression::TSNonNullExpression(expression) => {
-            visit_expression(
-                context,
-                &expression.expression,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &expression.expression, matches);
         }
         Expression::TSInstantiationExpression(expression) => {
-            visit_expression(
-                context,
-                &expression.expression,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &expression.expression, matches);
         }
         Expression::StaticMemberExpression(member) => {
-            visit_expression(context, &member.object, scoped_initializers, matches);
+            visit_expression(context, &member.object, matches);
         }
         Expression::ArrayExpression(array) => {
             for element in &array.elements {
-                visit_array_element(context, element, scoped_initializers, matches);
+                visit_array_element(context, element, matches);
             }
         }
         Expression::ArrowFunctionExpression(function) => {
-            let scoped = scoped_initializers_for_arrow(
-                context.view,
-                function,
-                context.imports,
-                scoped_initializers,
-            );
+            let context = context.with_scope(function.scope_id.get().unwrap_or(context.scope_id));
             for statement in &function.body.statements {
-                visit_statement(context, statement, false, &scoped, matches);
+                visit_statement(context, statement, false, matches);
             }
         }
         Expression::FunctionExpression(function) => {
-            let scoped = scoped_initializers_for_function(
-                context.view,
-                function,
-                context.imports,
-                scoped_initializers,
-            );
+            let context = context.with_scope(function.scope_id.get().unwrap_or(context.scope_id));
             if let Some(body) = &function.body {
                 for statement in &body.statements {
-                    visit_statement(context, statement, false, &scoped, matches);
+                    visit_statement(context, statement, false, matches);
                 }
             }
         }
@@ -193,7 +132,6 @@ pub(crate) fn visit_expression(
 pub(crate) fn visit_expression_call(
     context: MatchContext<'_, '_>,
     call: &CallExpression<'_>,
-    scoped_initializers: &[StaticInitializerRecord],
     matches: &mut Vec<StaticSourceMatch>,
 ) {
     let callee = callee_record_from_expression(&call.callee, context.imports);
@@ -207,11 +145,10 @@ pub(crate) fn visit_expression_call(
             ),
             call,
             false,
-            scoped_initializers,
         ));
     }
-    visit_expression(context, &call.callee, scoped_initializers, matches);
+    visit_expression(context, &call.callee, matches);
     for argument in &call.arguments {
-        visit_argument(context, argument, scoped_initializers, matches);
+        visit_argument(context, argument, matches);
     }
 }

@@ -57,19 +57,29 @@ func devServerTestOptions(t *testing.T, port int) DevServerOptions {
 		QualityDir:          filepath.Join(dir, "quality"),
 		ObservabilityDBPath: filepath.Join(dir, "observability.sqlite"),
 		IngestTokenPath:     filepath.Join(dir, ".crux", "devtools", "ingest-token"),
-		RuntimeArtifacts: func(context.Context, string) error {
+		RuntimeArtifacts: func(context.Context, string, []store.ProjectDefinition) error {
 			return nil
 		},
 	}
 }
 
-func TestNewDevServerGeneratesRuntimeArtifactsOnStartup(t *testing.T) {
+func TestNewDevServerGeneratesRuntimeArtifactsAfterStartupReindex(t *testing.T) {
 	root := t.TempDir()
 	t.Chdir(root)
-	calls := make(chan string, 1)
+	calls := make(chan runtimeArtifactCall, 1)
 	opts := devServerTestOptions(t, findFreePort())
-	opts.RuntimeArtifacts = func(_ context.Context, gotRoot string) error {
-		calls <- gotRoot
+	opts.ProjectIndexer = fakeProjectIndexer{
+		index: store.IndexData{
+			Definitions: []store.ProjectDefinition{
+				{ID: "flow:startup", Kind: "flow", Name: "startup"},
+			},
+		},
+	}
+	opts.RuntimeArtifacts = func(_ context.Context, gotRoot string, definitions []store.ProjectDefinition) error {
+		calls <- runtimeArtifactCall{
+			root:        gotRoot,
+			definitions: definitions,
+		}
 		return nil
 	}
 
@@ -77,9 +87,15 @@ func TestNewDevServerGeneratesRuntimeArtifactsOnStartup(t *testing.T) {
 	defer srv.Shutdown(context.Background())
 
 	select {
-	case gotRoot := <-calls:
-		if gotRoot != root {
-			t.Fatalf("runtime artifact root = %q, want %q", gotRoot, root)
+	case got := <-calls:
+		if got.root != root {
+			t.Fatalf("runtime artifact root = %q, want %q", got.root, root)
+		}
+		if got, want := len(got.definitions), 1; got != want {
+			t.Fatalf("runtime artifact definitions = %d, want %d", got, want)
+		}
+		if got.definitions[0].ID != "flow:startup" {
+			t.Fatalf("runtime artifact definition id = %q, want flow:startup", got.definitions[0].ID)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("runtime artifact startup generation was not called")
@@ -90,25 +106,40 @@ func TestRuntimeArtifactGeneratorForWorkerReusesWorker(t *testing.T) {
 	worker := &recordingRuntimeArtifactWorker{}
 	generate := runtimeArtifactGeneratorForWorker(worker)
 
-	if err := generate(context.Background(), "/project/one"); err != nil {
+	firstDefinitions := []store.ProjectDefinition{{ID: "prompt:one", Kind: "prompt", Name: "one"}}
+	secondDefinitions := []store.ProjectDefinition{{ID: "task:two", Kind: "task", Name: "two"}}
+
+	if err := generate(context.Background(), "/project/one", firstDefinitions); err != nil {
 		t.Fatalf("first runtime artifact generation: %v", err)
 	}
-	if err := generate(context.Background(), "/project/two"); err != nil {
+	if err := generate(context.Background(), "/project/two", secondDefinitions); err != nil {
 		t.Fatalf("second runtime artifact generation: %v", err)
 	}
 
 	if got, want := worker.roots, []string{"/project/one", "/project/two"}; fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("worker roots = %#v, want %#v", got, want)
 	}
+	if got, want := worker.definitionIDs, []string{"prompt:one", "task:two"}; fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("worker definition ids = %#v, want %#v", got, want)
+	}
 }
 
 type recordingRuntimeArtifactWorker struct {
-	roots []string
+	roots         []string
+	definitionIDs []string
 }
 
-func (w *recordingRuntimeArtifactWorker) GenerateRuntimeArtifacts(_ context.Context, root string) (json.RawMessage, error) {
+func (w *recordingRuntimeArtifactWorker) GenerateRuntimeArtifacts(_ context.Context, root string, definitions []store.ProjectDefinition) (json.RawMessage, error) {
 	w.roots = append(w.roots, root)
+	if len(definitions) > 0 {
+		w.definitionIDs = append(w.definitionIDs, definitions[0].ID)
+	}
 	return json.RawMessage(`{}`), nil
+}
+
+type runtimeArtifactCall struct {
+	root        string
+	definitions []store.ProjectDefinition
 }
 
 func TestDevServer_start_and_query(t *testing.T) {

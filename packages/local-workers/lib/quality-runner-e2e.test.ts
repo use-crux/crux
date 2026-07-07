@@ -76,7 +76,7 @@ function runNoConfigWorker(
 }
 
 describe('quality-runner worker (subprocess e2e)', () => {
-  it('collects colocated prompt tests from source-discovered bundles without crux.config.ts', async () => {
+  it('does not source-project colocated prompt tests without crux.config.ts', async () => {
     const { exitCode, events, stderr } = await runNoConfigWorker(['--collect-only'], {
       cwd: NO_CONFIG_PROMPT_PROJECT,
     })
@@ -86,39 +86,19 @@ describe('quality-runner worker (subprocess e2e)', () => {
     if (collectDone?.type !== 'collect:done') throw new Error(`no collect:done; stderr: ${stderr}`)
 
     expect(collectDone.errors).toEqual([])
-    expect(collectDone.evaluations.map((manifest) => manifest.id)).toContain('prompt:support.answer')
-    expect(collectDone.evaluations.find((manifest) => manifest.id === 'prompt:support.answer')).toMatchObject({
-      source: 'prompt-tests',
-      cases: [
-        expect.objectContaining({ name: 'refund question' }),
-        expect.objectContaining({ name: 'status question' }),
-      ],
-    })
+    expect(collectDone.evaluations.map((manifest) => manifest.id)).not.toContain('prompt:support.answer')
   }, 60_000)
 
-  it('fails closed with a Project Model diagnostic when no-config prompt-test dependencies are unproven', async () => {
+  it('does not synthesize prompt-test dependency diagnostics without native Project Model evidence', async () => {
     const { exitCode, events, stderr } = await runNoConfigWorker(['--collect-only'], {
       cwd: NO_CONFIG_BROKEN_PROMPT_PROJECT,
     })
 
-    expect(exitCode, stderr).toBe(2)
+    expect(exitCode, stderr).toBe(0)
     const collectDone = events.find((event) => event.type === 'collect:done')
     if (collectDone?.type !== 'collect:done') throw new Error(`no collect:done; stderr: ${stderr}`)
-    expect(collectDone.errors).toEqual([
-      expect.objectContaining({
-        code: 'project_model.prompt_test_dependency_unproven',
-        file: resolve(NO_CONFIG_BROKEN_PROMPT_PROJECT, 'src/prompts.ts'),
-      }),
-    ])
-
-    const error = events.find((event) => event.type === 'error')
-    expect(error).toMatchObject({
-      type: 'error',
-      scope: 'collect',
-      code: 'project_model.prompt_test_dependency_unproven',
-      file: resolve(NO_CONFIG_BROKEN_PROMPT_PROJECT, 'src/prompts.ts'),
-    })
-    expect(error?.message).toContain('stable exported context')
+    expect(collectDone.errors).toEqual([])
+    expect(events.some((event) => event.type === 'error')).toBe(false)
   }, 60_000)
 
   it('collects file + colocated evaluations and runs selected file evals without ambient model setup', async () => {

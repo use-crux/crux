@@ -1,80 +1,68 @@
 /**
- * Public Crux Indexer entry point.
+ * Crux Indexer SDK entry point.
  *
- * This barrel exposes the high-level compiler facades for building Project
- * Index snapshots, patches, project-model reads, config inspection, relation
- * policies, incremental execution reports, and host-visible timing data.
- * Low-level compiler, parser, semantic backend, host, and protocol contracts live
- * behind explicit subpaths so this surface stays stable for SDK consumers.
+ * This barrel exposes extension-authoring primitives and stable record
+ * contracts. Bundled first-party indexing is a Crux Local/CLI binary feature
+ * implemented by the native Static Index pipeline.
  *
  * @module
  */
 
-export type {
-  IndexProjectAstFromSyntaxRecordProviderOptions,
-  IndexProjectAstFromSyntaxRecordsOptions,
-  IndexProjectOptions,
-  IndexProjectRuntimeOptions,
-} from './indexer'
-export type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
 export {
-  indexProject,
-  indexProjectAst,
-  indexProjectAstFromSyntaxRecordProvider,
-  indexProjectAstFromSyntaxRecords,
-  indexProjectRuntime,
-  indexProjectSemantic,
-} from './indexer'
-export {
-  diffRuntimeArtifactDrift,
-  generateRuntimeArtifacts,
-  manifestFromDefinitions,
-} from './indexer/runtime-artifacts'
-export { runRuntimeOperation } from './indexer/runtime-ops'
+  callPattern,
+  facts,
+  INDEXER_EXTENSION_API_VERSION,
+  isIndexerExtensionAllowed,
+  loadIndexerExtensionReferences,
+  newPattern,
+  none,
+  PROJECT_INDEX_SCHEMA_VERSION,
+  projectDefinition,
+  resolveIndexerExtensionReferences,
+  validateIndexerExtensionManifest,
+} from './indexer/extensions'
 export type {
-  GenerateRuntimeArtifactsOptions,
-  RuntimeArtifactGenerationResult,
-  RuntimeArtifactDriftReport,
-  RuntimeArtifactMissingTarget,
-} from './indexer/runtime-artifacts'
-export type {
-  RuntimeOperationKind,
-  RuntimeOperationOptions,
-  RuntimeOperationResult,
-} from './indexer/runtime-ops'
-export type { ResolveProjectModelOptions } from './indexer/project-model'
-export { resolveProjectModel } from './indexer/project-model'
-export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from './indexer/static-index/plan'
-export { inspectProjectStaticSyntaxPlan } from './indexer/static-index/plan'
-export type {
-  InspectProjectStaticIndexConfigOptions,
-  ProjectStaticIndexConfig,
-  ProjectStaticIndexExtensionReference,
-} from './indexer/static-index/config/inspect'
-export { inspectProjectStaticIndexConfig } from './indexer/static-index/config/inspect'
-export type {
-  InspectProjectConfigOptions,
-  ProjectConfigFileOrigin,
-  ProjectConfigFileStatus,
-  ProjectConfigInspect,
-  ProjectConfigList,
-  ProjectConfigOrigin,
-  ProjectConfigSetting,
-} from './indexer/project-config-inspect'
-export { inspectProjectConfig } from './indexer/project-config-inspect'
-export { indexProjectIncremental } from './indexer/incremental'
-export type {
-  StaticExtractionTiming,
-  StaticExtractionTimingName,
-} from './indexer/static/extraction/engine'
-export type {
-  IncrementalExecutionMode,
-  IncrementalExecutionReport,
-  IncrementalIndexExecutionResult,
-  IncrementalPatchCounts,
-  IncrementalSemanticStatus,
-  IndexProjectIncrementalOptions,
-} from './indexer/incremental'
+  ArgumentReader,
+  ConfigCallReader,
+  ConfigReader,
+  ConfiguredObjectReader,
+  DefinitionBuilder,
+  DefinitionBuilderInput,
+  ExtensionIdentity,
+  ExtensionReference,
+  ExtensionTrustMode,
+  ExtensionTrustPolicy,
+  ExtractContext,
+  ExtractMatch,
+  ExtractPattern,
+  ExtractResult,
+  ExtractedDefinition,
+  ExtractedFacts,
+  ExtractedSourceRef,
+  IndexDependency,
+  IndexerCompatibility,
+  IndexerExtension,
+  IndexerExtensionConfig,
+  IndexRule,
+  IndexRuleContext,
+  InstalledIndexerExtension,
+  LoadIndexerExtensionReferencesInput,
+  RelationSpec,
+  ReferenceBuilder,
+  ResolvedIndexerExtension,
+  ResolveIndexerExtensionReferencesInput,
+  ResolveIndexerExtensionReferencesResult,
+  SemanticReadModel,
+  SemanticSymbol,
+  SemanticType,
+  SourceReference,
+  SourceRefBuilder,
+  SourceView,
+  StaticObjectReader,
+  StaticObjectMapIdentifierEntry,
+  UnresolvedReference,
+} from './indexer/extensions'
+export type { IndexerExtensionManifestValidation } from './indexer/extensions/loading/manifest'
 export type {
   IndexPatch,
   IndexPatchBudget,
@@ -88,31 +76,13 @@ export type {
   SemanticSourceProfile,
   SemanticSourceProfileFile,
   SemanticSourceProfileHints,
-  NativeSemanticBackendSelection,
-  TypeScriptSemanticBackendSelection,
 } from './indexer/semantic/service'
 export type {
   SemanticIndexInstrumentation,
   SemanticIndexTiming,
   SemanticIndexTimingName,
 } from './indexer/semantic/instrumentation'
-export {
-  builtInRelationPolicies,
-  createRelationPolicyTable,
-  mergeRelationsByIdentity,
-  relationDiagnosticsFromReport,
-  relationIdentity,
-  resolveRelationModel,
-  withResolvedRelationReadModel,
-} from './indexer/relations'
 export type {
-  IndexRelationPolicy,
-  IndexRelationPresentation,
-  RelationFactRef,
-  RelationModel,
-  RelationModelInput,
-  RelationPolicyTable,
-  RelationResolutionReport,
-  UnresolvedRelationReason,
-  UnresolvedRelationRef,
-} from './indexer/relations'
+  StaticExtractionTiming,
+  StaticExtractionTimingName,
+} from './indexer/static/extraction/engine'

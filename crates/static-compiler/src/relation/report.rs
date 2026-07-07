@@ -61,7 +61,10 @@ pub(crate) struct StaticIndexRelationFactRef {
 
 pub(crate) fn fact_ref(relation_ref: &StaticIndexRelationRef) -> StaticIndexRelationFactRef {
     StaticIndexRelationFactRef {
-        owner_definition_id: relation_ref.owner_definition_id.clone(),
+        owner_definition_id: relation_ref
+            .from_id
+            .clone()
+            .unwrap_or_else(|| relation_ref.owner_definition_id.clone()),
         ref_type: relation_ref.r#type.clone(),
         to_id: relation_ref.to_id.clone(),
         to_variable: relation_ref.to_variable.clone(),

@@ -124,9 +124,14 @@ export interface StaticFunctionValue {
   readonly firstParameterBindings?: readonly StaticFunctionParameterBinding[]
   /** Ordered call expressions visible inside the function body. */
   readonly calls: readonly StaticFunctionCallValue[]
-  /** Return expressions visible directly inside the function body. */
+  /**
+   * Return values visible inside the function body.
+   *
+   * Native frontends resolve direct identifier returns at record-production time using their binding graph.
+   * Consumers must not reinterpret `localInitializers` as a lazy scope database for return-site resolution.
+   */
   readonly returns: readonly StaticSyntaxValue[]
-  /** Function-scoped local initializer values visible to return/call expressions. */
+  /** Function-scoped initializer evidence retained for display and compatibility, not lazy binding resolution. */
   readonly localInitializers: readonly StaticInitializerRecord[]
   readonly source: SourceLocation
   readonly snippet?: SourceSnippet

@@ -12,9 +12,18 @@ import type { IndexRelationPolicy } from './types'
 import { withExpandedInputContracts } from '../static/input-contracts'
 import { factsUseEntries, relationHintForTarget, safeUseEntryId } from '../static/use-entry-helpers'
 import type { StaticFoundDefinition } from '../types'
+import {
+  withResolvedRuntimeUseEntryTargets,
+  type RuntimeUseTargetRules,
+} from './runtime-use-targets'
 
 export { indexRelationPolicies } from './policies'
 export type { IndexRelationPolicy, IndexRelationPresentation } from './types'
+export type {
+  RuntimeUseTargetExactRule,
+  RuntimeUseTargetRules,
+  RuntimeUseTargetSuffixRule,
+} from './runtime-use-targets'
 
 /**
  * Preserves the legacy static id contract while making relation identity independent of discovery tier.
@@ -300,6 +309,8 @@ export interface RelationModelInput {
   readonly definitions: readonly ProjectDefinition[]
   /** Relations already resolved elsewhere, such as config, discovery, semantic, or runtime facts. */
   readonly relations?: readonly ProjectRelation[]
+  /** Optional data rules for matching runtime `use` variables to ambient targets. */
+  readonly runtimeUseTargetRules?: RuntimeUseTargetRules
 }
 
 /**
@@ -344,9 +355,11 @@ export function resolveRelationModel(
   const importedDefinitions = [...(input.importedDefinitions?.values() ?? [])].filter(
     (definition) => !definitionIds.has(definition.id),
   )
-  const definitions = withResolvedRelationReadModel([...input.definitions, ...importedDefinitions], relations).filter(
-    (definition) => definitionIds.has(definition.id),
-  )
+  const definitions = withResolvedRelationReadModel(
+    [...input.definitions, ...importedDefinitions],
+    relations,
+    input.runtimeUseTargetRules,
+  ).filter((definition) => definitionIds.has(definition.id))
   return {
     relations,
     definitions,
@@ -369,8 +382,13 @@ export function resolveRelationModel(
 export function withResolvedRelationReadModel(
   definitions: readonly ProjectDefinition[],
   relations: readonly ProjectRelation[],
+  runtimeUseTargetRules?: RuntimeUseTargetRules,
 ): ProjectDefinition[] {
-  return withResolvedInjectionReadModel(withResolvedRoutingTargetMetadata(definitions, relations), relations)
+  return withResolvedInjectionReadModel(
+    withResolvedRoutingTargetMetadata(definitions, relations),
+    relations,
+    runtimeUseTargetRules,
+  )
 }
 
 interface StaticRelationBinding {
@@ -396,10 +414,12 @@ interface StaticRelationBinding {
 function withResolvedInjectionReadModel(
   definitions: readonly ProjectDefinition[],
   relations: readonly ProjectRelation[],
+  runtimeUseTargetRules: RuntimeUseTargetRules | undefined,
 ): ProjectDefinition[] {
   return withExpandedInputContracts(
     withResolvedRuntimeUseEntryTargets(
       withResolvedInjectionUseEntryTargets(withResolvedRelationDependencyFacts(definitions, relations), relations),
+      runtimeUseTargetRules,
     ),
     relations,
   )
@@ -588,167 +608,6 @@ function isInjectionUseRelation(type: string): boolean {
     type === 'injectable.uses_memory' ||
     type === 'injectable.uses_blackboard'
   )
-}
-
-/**
- * Runtime `prepare` entries sometimes name ambient resources rather than imported values.
- */
-function withResolvedRuntimeUseEntryTargets(definitions: readonly ProjectDefinition[]): ProjectDefinition[] {
-  const runtimeTargets = definitions.filter(isRuntimeUseTarget)
-  if (runtimeTargets.length === 0) return [...definitions]
-
-  return definitions.map((definition) => {
-    const entries = factsUseEntries(definition)
-    if (entries.length === 0) return definition
-    const enriched = entries.map((entry) => {
-      if (entry.targetDefinitionId || entry.via !== 'runtime') return entry
-      const target = runtimeUseEntryTarget(entry, runtimeTargets)
-      if (!target) return entry
-      return {
-        ...entry,
-        relationHint: relationHintForTarget(target.kind) ?? entry.relationHint,
-        targetDefinitionId: target.id,
-        targetKind: target.kind,
-        targetName: target.name,
-        relationType: runtimeUseRelationType(definition.kind, target.kind),
-        relationFidelity: 'partial',
-      } satisfies InjectionUseFacts
-    })
-    if (enriched.every((entry, index) => entry === entries[index])) return definition
-    return {
-      ...definition,
-      metadata: {
-        ...(definition.metadata ?? {}),
-        facts: {
-          ...(definition.metadata?.facts ?? {}),
-          useEntries: enriched,
-        } as NonNullable<ProjectDefinition['metadata']>['facts'],
-      },
-    }
-  })
-}
-
-/**
- * Runtime use entries can only target definitions that are safe ambient resources.
- */
-function isRuntimeUseTarget(definition: ProjectDefinition): boolean {
-  return (
-    definition.kind === 'memory' ||
-    definition.kind === 'blackboard' ||
-    definition.kind === 'rag.retriever' ||
-    (definition.kind === 'context' && definitionHasToolFacts(definition))
-  )
-}
-
-/**
- * Tool-context definitions are identified from normalized static facts, not naming alone.
- */
-function definitionHasToolFacts(definition: ProjectDefinition): boolean {
-  const facts = definition.metadata?.facts
-  if (!facts || typeof facts !== 'object' || !('tools' in facts)) return false
-  const tools = (facts as { tools?: { hasTools?: unknown } }).tools
-  return tools?.hasTools === true
-}
-
-/**
- * Resolves runtime aliases such as `tools`, `x.memory`, and `blackboard`.
- */
-function runtimeUseEntryTarget(
-  entry: InjectionUseFacts,
-  runtimeTargets: readonly ProjectDefinition[],
-): ProjectDefinition | undefined {
-  if (!entry.variable) return undefined
-  const variable = entry.variable
-  if (variable === 'tools') {
-    return (
-      runtimeTargets.find(
-        (definition) => definition.id === 'context:karyla-tools' || definition.name === 'karyla-tools',
-      ) ?? runtimeTargets.find((definition) => definition.id.endsWith(':tools'))
-    )
-  }
-
-  if (variable.endsWith('.tools')) {
-    const owner = variable.slice(0, -'.tools'.length)
-    const safeOwner = safeUseEntryId(owner).toLowerCase()
-    return (
-      runtimeTargets.find(
-        (definition) => definition.id.endsWith(':tools') && definition.id.toLowerCase().includes(safeOwner),
-      ) ?? runtimeTargets.find((definition) => definition.id.endsWith(':tools'))
-    )
-  }
-
-  if (variable.endsWith('.memory')) {
-    const owner = variable.slice(0, -'.memory'.length)
-    const safeOwner = safeUseEntryId(owner).toLowerCase()
-    const aliases = runtimeMemoryOwnerAliases(safeOwner)
-    return runtimeTargets.find(
-      (definition) =>
-        definition.kind === 'memory' &&
-        aliases.some(
-          (alias) =>
-            definition.id.endsWith(`:${alias}`) ||
-            definition.id.toLowerCase().includes(alias) ||
-            definition.name.toLowerCase().includes(alias),
-        ),
-    )
-  }
-
-  if (variable.endsWith('.retriever')) {
-    const owner = variable.slice(0, -'.retriever'.length)
-    const safeOwner = safeUseEntryId(owner).toLowerCase()
-    return runtimeTargets.find(
-      (definition) =>
-        definition.kind === 'rag.retriever' &&
-        (definition.id.endsWith(`:${safeOwner}`) ||
-          definition.id.toLowerCase().includes(safeOwner) ||
-          definition.name.toLowerCase().includes(safeOwner)),
-    )
-  }
-
-  if (variable === 'blackboard') {
-    return (
-      runtimeTargets.find(
-        (definition) => definition.kind === 'blackboard' && definition.metadata?.exportName === 'blackboard',
-      ) ??
-      runtimeTargets.find(
-        (definition) =>
-          definition.kind === 'blackboard' &&
-          typeof definition.metadata?.facts === 'object' &&
-          definition.metadata.facts !== null &&
-          'runtimeIdPrefix' in definition.metadata.facts &&
-          (definition.metadata.facts as { runtimeIdPrefix?: unknown }).runtimeIdPrefix === 'thread:',
-      ) ??
-      runtimeTargets.find((definition) => definition.kind === 'blackboard')
-    )
-  }
-
-  const direct = runtimeTargets.find(
-    (definition) =>
-      variable === definition.name ||
-      variable === definition.metadata?.exportName ||
-      definition.id.endsWith(`:${safeUseEntryId(variable)}`),
-  )
-  if (direct) return direct
-
-  return undefined
-}
-
-/**
- * Runtime use-entry matches produce partial graph knowledge until semantic analysis confirms them.
- */
-function runtimeUseRelationType(ownerKind: ProjectDefinitionKind, targetKind: ProjectDefinitionKind): string {
-  if (targetKind === 'memory') return `${ownerKind}.uses_memory`
-  if (targetKind === 'blackboard') return `${ownerKind}.uses_blackboard`
-  if (targetKind === 'injectable') return `${ownerKind}.uses_injectable`
-  return `${ownerKind}.uses_context`
-}
-
-/**
- * Keeps historical runtime memory aliases compatible with current index ids.
- */
-function runtimeMemoryOwnerAliases(owner: string): string[] {
-  if (owner === 'episodic') return ['episodic', 'episodes', 'user-episodes']
-  return [owner]
 }
 
 /**

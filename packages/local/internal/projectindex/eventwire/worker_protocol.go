@@ -266,7 +266,7 @@ func (c *ProjectIndexPatchStreamCollector) handleDone(raw json.RawMessage) error
 		return err
 	}
 	event.Patch.Facts = tx.facts
-	if len(tx.sourceProfileFiles) > 0 {
+	if event.Patch.SemanticSourceProfile == nil && len(tx.sourceProfileFiles) > 0 {
 		event.Patch.SemanticSourceProfile = semanticSourceProfileFromStreamFiles(tx.sourceProfileFiles)
 	}
 	if err := validatePatchBudget(event.Patch, c.options.Budget); err != nil {

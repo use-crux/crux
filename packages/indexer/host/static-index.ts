@@ -2,43 +2,20 @@
  * Static Index host facade.
  *
  * This module is for Crux-owned workers and local runtime bridges that need to
- * run the source-only Project Index lane or compare static syntax frontends.
- * It exposes compiler-owned facades and JSON-safe Static Syntax contracts
- * without exporting parser-native AST objects.
+ * inspect source-file selection and Static Index planning. Source patch
+ * production is owned by the Go/Rust Static Index compiler path; this facade
+ * intentionally does not expose an in-process TypeScript projection pipeline.
  *
  * @module
  */
 
-export {
-  astIndexPatchFromCompilerResult,
-  compileProjectIndex,
-  createProjectIndexCompiler,
-  projectIndexSnapshotFromCompilerResult,
-} from '../indexer/compiler'
-export { createStaticExtraction } from '../indexer/static/extraction/engine'
 export { staticDefinitionFiles } from '../indexer/files'
-export { createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
+export { inspectProjectStaticIndexConfig } from '../indexer/static-index/config/inspect'
+export { inspectProjectStaticSyntaxPlan } from '../indexer/static-index/plan'
 
 export type {
-  ProjectIndexCompileMode,
-  ProjectIndexCompiler,
-  ProjectIndexCompilerInput,
-  ProjectIndexCompilerResult,
-} from '../indexer/compiler'
-export type { CompilerOwnedProjection, ProjectIndexCompilerProfile } from '../indexer/compiler/profile'
-export type {
-  SourceReader,
-  StaticExtractionEngine,
-  StaticExtractionInstrumentation,
-  StaticExtractionOptions,
-  StaticFileExtraction,
-} from '../indexer/static/extraction/engine'
-export type {
-  StaticParseCacheHit,
-  StaticParseCacheStore,
-} from '../indexer/static/extraction/types'
-export type {
-  ProvidedStaticSyntaxRecordProvider,
-  StaticSyntaxFrontendFactory,
-} from '../indexer/static-index/syntax'
-
+  InspectProjectStaticIndexConfigOptions,
+  ProjectStaticIndexConfig,
+  ProjectStaticIndexExtensionReference,
+} from '../indexer/static-index/config/inspect'
+export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from '../indexer/static-index/plan'

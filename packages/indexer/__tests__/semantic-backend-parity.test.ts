@@ -1,7 +1,6 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProjectSemantic } from '..'
 import type { IndexPatchFacts } from '../indexer/patches'
 import { createNativeSemanticBackend, createSemanticIndexService, createTypeScriptSemanticBackend } from '../indexer/semantic/service'
 import {
@@ -40,10 +39,11 @@ describe('semantic backend parity', () => {
 
     it(`matches TypeScript semantic facts through public cached indexing for ${fixture.name}`, async () => {
       const { root } = await writeFixture(fixture)
-      const typescriptPatch = await indexProjectSemantic({ root, semanticBackend: 'typescript' })
-      const nativePatch = await indexProjectSemantic({ root, semanticBackend: { name: 'native' } })
-      const cachedTypescriptPatch = await indexProjectSemantic({ root, semanticBackend: 'typescript' })
-      const cachedNativePatch = await indexProjectSemantic({
+      const service = createSemanticIndexService()
+      const typescriptPatch = await service.indexProject({ root, semanticBackend: 'typescript' })
+      const nativePatch = await service.indexProject({ root, semanticBackend: { name: 'native' } })
+      const cachedTypescriptPatch = await service.indexProject({ root, semanticBackend: 'typescript' })
+      const cachedNativePatch = await service.indexProject({
         root,
         semanticBackend: { name: 'native' },
       })

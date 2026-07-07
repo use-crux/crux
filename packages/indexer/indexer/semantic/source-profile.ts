@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { sha256 } from '../cache-identity'
+import { compareCodepoint } from '../sort'
 import { isNativeDirectCandidateCallSet, isSemanticPrimitiveCallName } from './backends/tsgo/direct-projectors/manifest'
 import { collectSemanticSourceImportDependencies } from './source-imports'
 
@@ -218,7 +219,7 @@ function withinSourceByteBudget(sourceBytes: number, maxSourceBytes: number | un
 }
 
 function compareProfileFiles(left: SemanticSourceProfileFile, right: SemanticSourceProfileFile): number {
-  return left.file.localeCompare(right.file)
+  return compareCodepoint(left.file, right.file)
 }
 
 function cruxCallNamesFromSource(source: string): readonly string[] {

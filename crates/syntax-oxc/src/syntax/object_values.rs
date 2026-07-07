@@ -1,19 +1,16 @@
-use std::collections::HashMap;
-
 use oxc_ast::ast::*;
 
 use crate::{
-    protocol::{StaticImportRecord, StaticObjectProperty, StaticSyntaxValue},
+    protocol::{StaticObjectProperty, StaticSyntaxValue},
+    syntax::semantic_imports::SemanticImportIndex,
     syntax::source::SourceView,
     syntax::values::{expression_name, syntax_value_from_expression},
 };
 
-type ImportsByLocalName = HashMap<String, StaticImportRecord>;
-
 pub(crate) fn object_value(
     view: &SourceView<'_>,
     object: &ObjectExpression<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> StaticSyntaxValue {
     StaticSyntaxValue::Object {
         properties: object
@@ -37,7 +34,7 @@ pub(crate) fn property_access_value(member: &StaticMemberExpression<'_>) -> Stat
 fn object_property(
     view: &SourceView<'_>,
     property: &ObjectPropertyKind<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> Option<StaticObjectProperty> {
     match property {
         ObjectPropertyKind::SpreadProperty(spread) => {

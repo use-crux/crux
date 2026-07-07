@@ -105,6 +105,15 @@ func TestWorkerCommandPathMissingWhenNoEnvOrSibling(t *testing.T) {
 	}
 }
 
+func TestDefaultPoolSizeUsesGOMAXPROCS(t *testing.T) {
+	old := runtime.GOMAXPROCS(8)
+	t.Cleanup(func() { runtime.GOMAXPROCS(old) })
+
+	if got := defaultPoolSize(); got != 8 {
+		t.Fatalf("defaultPoolSize() = %d, want GOMAXPROCS", got)
+	}
+}
+
 func TestPoolParsesFilesThroughCommandWorkers(t *testing.T) {
 	pool := NewPool(2, shellPath(t), fakeEchoWorker(t))
 	defer pool.Close()

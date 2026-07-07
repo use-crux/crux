@@ -60,7 +60,6 @@ func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 		{"projectindex/staticindex/sourceprofile", "Static Index source profile boundary"},
 		{"projectindex/staticindex/frontend", "Static Syntax frontend process adapter (Rust/Oxc)"},
 		{"projectindex/staticindex/frontend/record", "Static Syntax record model"},
-		{"projectindex/staticindex/frontend/stream", "Static Syntax stream decoder"},
 		{"projectindex/eventwire", "Project Index worker event stream collector"},
 		{"process/workerproc", "generic JSON-lines worker process package"},
 		{"assets", "generated local runtime asset owner"},
@@ -88,6 +87,7 @@ func TestProjectIndexArchitecturePackagesUseBoundedContextLayout(t *testing.T) {
 	movedPhase6Roots := []string{
 		"projectindex/staticindex/syntax",
 		"projectindex/staticindex/client",
+		"projectindex/staticindex/frontend/stream",
 	}
 	for _, packagePath := range movedPhase6Roots {
 		if _, err := os.Stat(filepath.Join(internalDir, packagePath)); !os.IsNotExist(err) {

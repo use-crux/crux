@@ -4,9 +4,24 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/fsnotify/fsnotify"
 )
+
+func TestNewUsesLowLatencyDefaultDebounce(t *testing.T) {
+	watcher, err := New(Options{
+		Root:    t.TempDir(),
+		OnDelta: func(Delta) {},
+	})
+	if err != nil {
+		t.Fatalf("New watcher: %v", err)
+	}
+
+	if watcher.debounce < 20*time.Millisecond || watcher.debounce > 30*time.Millisecond {
+		t.Fatalf("default debounce = %s, want low-latency 20-30ms settle window", watcher.debounce)
+	}
+}
 
 func TestClassifyFsEventMapsWritesAndDeletes(t *testing.T) {
 	root := t.TempDir()

@@ -175,7 +175,13 @@ func mergePatchFacts[T any](existing []T, phases map[string]IndexPatchPhase, pha
 	return merged
 }
 
-func mergePatchSources(existing []store.IndexSourceFile, phases map[string]IndexPatchPhase, phase IndexPatchPhase, incoming []store.IndexSourceFile) []store.IndexSourceFile {
+func mergePatchSources(
+	existing []store.IndexSourceFile,
+	phases map[string]IndexPatchPhase,
+	phase IndexPatchPhase,
+	incoming []store.IndexSourceFile,
+	invalidates *IndexPatchInvalidation,
+) []store.IndexSourceFile {
 	merged := make([]store.IndexSourceFile, 0, len(existing)+len(incoming))
 	index := map[string]int{}
 	for _, item := range existing {
@@ -187,7 +193,7 @@ func mergePatchSources(existing []store.IndexSourceFile, phases map[string]Index
 		merged = append(merged, item)
 	}
 	if len(incoming) == 0 {
-		return merged
+		return pruneDeletedSourceEdges(merged, deletedSourceFiles(invalidates, incoming))
 	}
 	for _, item := range incoming {
 		currentPhase := phases[item.File]
@@ -203,7 +209,7 @@ func mergePatchSources(existing []store.IndexSourceFile, phases map[string]Index
 		index[item.File] = len(merged)
 		merged = append(merged, item)
 	}
-	return merged
+	return pruneDeletedSourceEdges(merged, deletedSourceFiles(invalidates, incoming))
 }
 
 func mergeIndexSourceFile(existing store.IndexSourceFile, incoming store.IndexSourceFile) store.IndexSourceFile {
@@ -213,11 +219,48 @@ func mergeIndexSourceFile(existing store.IndexSourceFile, incoming store.IndexSo
 	if incoming.ShardID != "" {
 		existing.ShardID = incoming.ShardID
 	}
+	if incoming.SourceHash != "" {
+		existing.SourceHash = incoming.SourceHash
+	}
+	if incoming.InterfaceHash != "" {
+		existing.InterfaceHash = incoming.InterfaceHash
+	}
 	existing.DefinitionIDs = appendUniqueStrings(existing.DefinitionIDs, incoming.DefinitionIDs)
-	existing.Dependencies = appendUniqueStrings(existing.Dependencies, incoming.Dependencies)
+	if incoming.Dependencies != nil {
+		existing.Dependencies = append([]string(nil), incoming.Dependencies...)
+	}
 	existing.Dependents = appendUniqueStrings(existing.Dependents, incoming.Dependents)
 	existing.Diagnostics = appendUniqueStrings(existing.Diagnostics, incoming.Diagnostics)
 	return existing
+}
+
+func deletedSourceFiles(invalidates *IndexPatchInvalidation, incoming []store.IndexSourceFile) map[string]bool {
+	deleted := map[string]bool{}
+	if invalidates == nil || len(invalidates.Files) == 0 {
+		return deleted
+	}
+	for _, file := range invalidates.Files {
+		if file != "" {
+			deleted[file] = true
+		}
+	}
+	for _, source := range incoming {
+		delete(deleted, source.File)
+	}
+	return deleted
+}
+
+func pruneDeletedSourceEdges(sources []store.IndexSourceFile, deleted map[string]bool) []store.IndexSourceFile {
+	if len(deleted) == 0 {
+		return sources
+	}
+	next := make([]store.IndexSourceFile, 0, len(sources))
+	for _, source := range sources {
+		source.Dependencies = filterStringsNotInSet(source.Dependencies, deleted)
+		source.Dependents = filterStringsNotInSet(source.Dependents, deleted)
+		next = append(next, source)
+	}
+	return next
 }
 
 func mergePatchDiagnostics(existing []store.IndexDiagnostic, incoming []store.IndexDiagnostic) []store.IndexDiagnostic {

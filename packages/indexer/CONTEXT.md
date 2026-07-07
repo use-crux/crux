@@ -197,7 +197,7 @@ _Avoid_: JavaScript fallback, partial native coverage
 **Semantic Facts Cache**:
 The projected semantic fact cache keyed by semantic source profile, backend identity, TypeScript and
 compiler-option identity, and explicit epoch. Current writes use the binary local envelope after the
-`semantic-facts-v15` hard migration.
+`semantic-facts-v21` hard migration.
 _Avoid_: legacy JSON cache, backend-agnostic cache blob
 
 **Runtime Index**:
@@ -215,7 +215,9 @@ _Avoid_: native plugin manifest, tsgo primitive registry
 
 **Experimental Indexer Config**:
 The top-level `experimental.indexer` config bucket for unstable Crux Indexer behavior, currently
-`experimental.indexer.native: true | { engine?: 'tsgo'; tsserverPath?: string }`.
+`experimental.indexer.native: true | { engine?: 'tsgo'; tsserverPath?: string }` for semantic
+backend experiments and `experimental.indexer.nativeAst: true | { frontend?: 'oxc' }` for Static
+Syntax experiments.
 _Avoid_: indexer.semantic backend config, public unstableApi flag
 
 **Internal Traversal Helper**:
@@ -245,14 +247,6 @@ The previous Project Index facts used to prove that a partial reindex plan cover
 source file and definition.
 _Avoid_: hints, assumptions
 
-**Legacy Project Index**:
-The current implementation name for the accepted Project Index concept.
-_Avoid_: using in new public APIs after the rename slice
-
-**Legacy Crux Indexer**:
-The current package/system name for the accepted Crux Indexer concept.
-_Avoid_: using in new public APIs after the rename slice
-
 ## Relationships
 
 - A **Project Index** contains zero or more **Index Source Rows**.
@@ -267,10 +261,10 @@ _Avoid_: using in new public APIs after the rename slice
   relationships already present in authored source.
 - A **Duplicate Registration Trap** is an architecture bug unless the repeated field is really an
   explicit policy, trust, privacy, cost, or ownership decision.
-- A **Compiler Result** is projected by emitters into a `ProjectIndexSnapshot` or `IndexPatch` after
-  the rename slice. Current code still uses `ProjectIndexSnapshot` and `IndexPatch`.
+- A **Compiler Result** is projected by emitters into a `ProjectIndexSnapshot` or `IndexPatch`.
+  These names describe Project Index artifacts, not the public system name.
 - Production syntax discovery and incremental AST partial execution project through shared compiler
-  result emitters while downstream consumers keep the existing result shape until the rename lands.
+  result emitters while downstream consumers keep the Project Index artifact shapes.
 - A **Project Index Compiler** exposes **Compiler Slots** for different contribution roles.
 - A **Compiler Profile** creates an **Extension Runtime** for one compiler instance.
 - A **Compiler Intrinsic** belongs to a **Compiler Profile** and explains first-party parser-owned behavior that is not stable extension API.
@@ -299,12 +293,12 @@ _Avoid_: using in new public APIs after the rename slice
   `indexer` policy config, so unstable backend experiments have an obvious graduation path.
 - The **Extension Runtime** executes **Compiler Slots** and owns deterministic extension ordering, contribution identity, result policy, and cache identity inputs.
 - **Index Rule** identities participate in **Extension Runtime** cache identity inputs.
-- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Epochs live in `indexer/cache-identity.ts` and `@use-crux/local`'s `index_cache_identity.go`; they are migration levers, not hidden magic constants.
+- **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Current hard migration epochs are `static-parse-v54`, `semantic-facts-v21`, and Go snapshot `epoch-26` under `.crux/cache/index-v2/`. Epochs live in `indexer/cache-identity.ts` and `@use-crux/local`'s `projectindex/cache/identity.go`; they are migration levers, not hidden magic constants.
 - **Index Rule** metadata provides docs, option schema, and message declarations before a rule can run.
 - An **Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
-- First-party static primitive call names are owned by `cruxCoreExtension` extension extractors. Extractors emit **Extracted Facts**; the removed primitive extractor registry is not part of the extension boundary.
+- First-party static primitive call names are owned by the Rust/Oxc Static Index primitive manifest. Bundled primitives do not have a TypeScript implementation.
 - An **Indexer Extension** may declare zero or more **Relation Specs**.
-- `cruxCoreExtension` contributes the built-in **Index Rule** used by full and AST-partial indexing.
+- Built-in **Index Rules** are evaluated by the Rust `crates/lints` implementation. TypeScript exposes descriptor/contract readers and the third-party extension rule surface.
 - An **Internal Traversal Helper** may support first-party extractors, but it is not part of the stable **Extension Boundary**.
 - An **Extracted Fact** may contain an **Unresolved Reference**.
 - A **Resolved Relation** is produced from an **Unresolved Reference** and a matching **Relation Spec**.
@@ -343,7 +337,8 @@ _Avoid_: using in new public APIs after the rename slice
 - "Relation" should mean a **Resolved Relation** in the Project Index; extractor outputs that still need linking are **Unresolved References**.
 - "Visitor" or "traversal API" should mean an **Internal Traversal Helper** unless a later ADR deliberately makes parser traversal public.
 - "Registry" is acceptable for a normalized data structure, but the architectural boundary should be the **Extension Runtime** because it executes slot contributions rather than merely storing them.
-- "Index" and "Crux Indexer" are legacy implementation terms until the pre-launch rename lands.
+- "Index" alone is ambiguous. Use **Crux Indexer** for the system and **Project Index** for the
+  artifact/read model.
 - "Project Index" can mean either the raw snapshot or the devtools read model in older code. Use
   **Project Index Snapshot** for cache/store values and **Project Index Read Model** for enriched
   devtools/API values.

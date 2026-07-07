@@ -15,6 +15,7 @@ type ProjectIndexIncrementalReport struct {
 	PlanKind                 string                  `json:"planKind"`
 	FallbackUsed             bool                    `json:"fallbackUsed"`
 	FallbackReason           string                  `json:"fallbackReason,omitempty"`
+	ASTUsedStaticIndex       bool                    `json:"astUsedStaticIndex"`
 	GraphConfidence          string                  `json:"graphConfidence"`
 	ChangedFiles             []string                `json:"changedFiles"`
 	DeletedFiles             []string                `json:"deletedFiles"`

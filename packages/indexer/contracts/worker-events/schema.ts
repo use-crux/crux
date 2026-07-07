@@ -11,6 +11,7 @@
 
 export type {
   IndexPatchToWorkerEventsOptions,
+  ProjectIndexArtifactChunkEvent,
   ProjectIndexArtifactDoneEvent,
   ProjectIndexArtifactErrorEvent,
   ProjectIndexArtifactKind,
@@ -37,4 +38,5 @@ export {
   indexPatchToWorkerEventStream,
   indexPatchToWorkerEvents,
   projectIndexArtifactToWorkerEvent,
+  projectIndexArtifactToWorkerEvents,
 } from '../../indexer/worker-protocol'

@@ -1,5 +1,4 @@
 import type ts from 'typescript'
-import type { StaticCallContext } from '../../../extractors/types'
 import type {
   StaticInitializerRecord,
   StaticObjectValue,
@@ -8,6 +7,7 @@ import type {
 } from '../../syntax/record/types'
 import type { StaticSyntaxInitializerMap } from '../../syntax/record/value'
 import type { ExtractContext } from '../../../extensions/public-contract/extractor-types'
+import type { StaticCallContext } from './static-call-context'
 
 const nativeSyntaxHandleBrand: unique symbol = Symbol('crux.indexer.nativeSyntaxHandle')
 

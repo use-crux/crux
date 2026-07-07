@@ -76,13 +76,13 @@ func staticIndexRulesIndexerScript() string {
 				return
 			}
 			if (req.method === 'checkStaticRules') {
-				if (req.nativeLintFinalize !== true) {
+				if ('nativeLintFinalize' in req) {
 					process.stdout.write(JSON.stringify({
 						protocolVersion: 2,
 						type: 'artifact:error',
 						transactionId: 'artifact-rule-check',
 						artifact: 'staticRuleCheck',
-						error: { message: 'expected nativeLintFinalize=true, got: ' + JSON.stringify(req.nativeLintFinalize) }
+						error: { message: 'nativeLintFinalize must not be sent' }
 					}) + '\n')
 					return
 				}

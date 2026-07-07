@@ -14,10 +14,12 @@ state differently. Public package wildcard exports also made internal compiler m
 
 **Decision**
 
-Introduce a Compiler Profile as the compiler-owned assembly unit for first-party extensions and
-compiler-owned projections. `createProjectIndexCompiler(...)` creates an isolated compiler instance from a profile
-and constructs the Extension Runtime for that instance. The default profile is
-`cruxCoreCompilerProfile`.
+Introduce a Compiler Profile as the compiler-owned assembly unit for extension manifests and
+compiler-owned projection identity. The default profile is `cruxCoreCompilerProfile`.
+
+Superseding note: the later Rust-only bundled cutover removed the monolithic in-process TypeScript
+compiler API. Profiles remain as extension-host and cache-identity inputs, not as public source
+projection constructors.
 
 Compiler-owned behavior that is not public extension authoring API is declared as a Compiler
 Intrinsic. The default profile currently declares Convex agent extraction, Agent constructor

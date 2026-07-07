@@ -2,10 +2,11 @@ import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SEMANTIC_FACTS_CACHE_EPOCH } from '../indexer/cache-identity'
-import type { IndexPatchFacts } from '../indexer/patches'
+import type { IndexPatch, IndexPatchFacts } from '../indexer/patches'
 import { semanticIndexFactsCached } from '../indexer/semantic-cache'
 import type { SemanticBackendIdentity, SemanticCompilerRuntimeIdentity } from '../indexer/semantic/service'
 import type { SemanticSourceProfile } from '../indexer/semantic/source-profile'
+import { indexPatchFromWorkerEvents, indexPatchToWorkerEvents } from '../contracts/worker-events'
 
 const roots: string[] = []
 
@@ -132,6 +133,66 @@ describe('semantic facts cache', () => {
     expect(timingNames).toContain('semantic.cache.miss')
     expect(timingNames).toContain('semantic.cache.hit')
     await expect(cacheFileNames(root)).resolves.toHaveLength(1)
+  })
+
+  it('does not reuse semantic facts from incomplete source profiles round-tripped through worker events', async () => {
+    const root = await fixtureRoot()
+    const writer = join(root, 'src/writer.ts')
+    const helper = join(root, 'src/helper.ts')
+    await writeFile(writer, `export const writer = true`)
+    await writeFile(helper, `export const helper = true`)
+    const backendIdentity: SemanticBackendIdentity = { name: 'test-cache-incomplete-profile', version: 'v1' }
+    const facts = cachedFacts()
+    let producerCalls = 0
+    const timingNames: string[] = []
+    const sourceProfile = semanticSourceProfileFixture(root, [writer])
+
+    const streamedPatch = indexPatchFromWorkerEvents(
+      indexPatchToWorkerEvents(
+        {
+          schemaVersion: 1,
+          phase: 'ast',
+          project: { root, name: 'semantic-cache' },
+          startedAt: '2026-07-06T10:00:00.000Z',
+          finishedAt: '2026-07-06T10:00:00.001Z',
+          status: 'partial',
+          facts: {},
+          semanticSourceProfile: {
+            ...sourceProfile,
+            dependencyClosure: [helper, writer].sort(),
+            sourceBytes: sourceProfile.sourceBytes + 24,
+            complete: false,
+          },
+        } satisfies IndexPatch,
+        {
+          transactionId: 'tx-incomplete-profile',
+          producer: { name: '@use-crux/indexer', version: 'test' },
+        },
+      ),
+    )
+
+    expect(streamedPatch.semanticSourceProfile).toMatchObject({
+      complete: false,
+      dependencyClosure: [helper, writer].sort(),
+      sourceBytes: sourceProfile.sourceBytes + 24,
+    })
+
+    for (let index = 0; index < 2; index += 1) {
+      await semanticIndexFactsCached(root, [writer], {
+        backendIdentity,
+        sourceProfile: streamedPatch.semanticSourceProfile,
+        instrumentation: { onTiming: (timing) => timingNames.push(timing.name) },
+        async *produceEvidence() {
+          producerCalls += 1
+          yield { kind: 'definitions', facts: facts.definitions ?? [] }
+          yield { kind: 'diagnostics', facts: [] }
+        },
+      })
+    }
+
+    expect(producerCalls).toBe(2)
+    expect(timingNames).toEqual(expect.arrayContaining(['semantic.cache.unkeyed']))
+    await expect(cacheFileNames(root)).rejects.toThrow()
   })
 
   it('normalizes relative and absolute source profile files', async () => {

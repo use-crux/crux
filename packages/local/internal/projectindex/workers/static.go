@@ -126,12 +126,24 @@ func (w *Bundle) staticIndexSessionForPlan(
 	plan projectindex.ProjectStaticSyntaxPlan,
 	staticCompiler StaticCompiler,
 ) *session.Session {
+	return w.staticIndexSessionForPlanWithInvalidates(root, configPath, projectName, plan, staticCompiler, nil)
+}
+
+func (w *Bundle) staticIndexSessionForPlanWithInvalidates(
+	root string,
+	configPath string,
+	projectName string,
+	plan projectindex.ProjectStaticSyntaxPlan,
+	staticCompiler StaticCompiler,
+	patchInvalidates json.RawMessage,
+) *session.Session {
 	return session.New(session.Options{
-		Root:         root,
-		ConfigPath:   configPath,
-		ProjectName:  projectName,
-		Compiler:     staticCompiler,
-		PatchOptions: staticPatchOptions(root),
+		Root:             root,
+		ConfigPath:       configPath,
+		ProjectName:      projectName,
+		Compiler:         staticCompiler,
+		PatchOptions:     staticPatchOptions(root),
+		PatchInvalidates: patchInvalidates,
 		Planner: session.PlannerFunc(func(context.Context, string, string, string) (planner.InspectResult, error) {
 			return planner.InspectResult{Plan: plan}, nil
 		}),

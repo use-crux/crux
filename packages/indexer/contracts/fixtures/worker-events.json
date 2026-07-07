@@ -77,6 +77,19 @@
         "startedAt": "2026-06-24T10:00:00.000Z",
         "finishedAt": "2026-06-24T10:00:00.010Z",
         "status": "ok",
+        "semanticSourceProfile": {
+          "files": [
+            {
+              "file": "/repo/src/contract.ts",
+              "sourceHash": "sha256:contract",
+              "sourceBytes": 42,
+              "hints": { "nativeDirectCruxCandidate": true, "cruxCallNames": ["prompt"] }
+            }
+          ],
+          "dependencyClosure": ["/repo/src/contract.ts"],
+          "sourceBytes": 42,
+          "complete": true
+        },
         "invalidates": { "all": true }
       },
       "summary": { "factCount": 2 }

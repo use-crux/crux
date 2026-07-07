@@ -26,15 +26,18 @@ type Bundle struct {
 	activePlan     *projectStaticSyntaxPlanCall
 }
 
-const workerMaxResponseBytes = 16 * 1024 * 1024
-const workerProducer = "@use-crux/indexer/project-indexer"
+const (
+	workerMaxResponseLineBytes   = 16 * 1024 * 1024
+	workerMaxResponseStreamBytes = 128 * 1024 * 1024
+	workerProducer               = "@use-crux/indexer/project-indexer"
+)
 
 // New creates a Project Index worker bundle backed by the configured workers.
 func New(options BundleOptions) *Bundle {
 	return &Bundle{
 		scriptPath:    options.ProjectIndexerScript,
 		scriptContent: options.Assets.ProjectIndexer,
-		worker:        node.NewWorker("project-indexer", options.Assets.ProjectIndexer, options.ProjectIndexerScript, workerMaxResponseBytes),
+		worker:        node.NewWorker("project-indexer", options.Assets.ProjectIndexer, options.ProjectIndexerScript, workerMaxResponseLineBytes),
 		semanticWorker: semanticworker.New(semanticworker.Options{
 			ScriptPath:    options.ProjectSemanticIndexerScript,
 			ScriptContent: options.Assets.ProjectSemanticIndexer,

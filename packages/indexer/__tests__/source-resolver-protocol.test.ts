@@ -34,6 +34,7 @@ describe('source resolver worker protocol', () => {
           file: '/bundle.js',
           line: 1,
           column: 0,
+          projectRoot: '/project',
           sourceRef: '/bundle.js:1:0',
           frameRadius: 2,
           role: 'failed',
@@ -47,6 +48,7 @@ describe('source resolver worker protocol', () => {
         file: '/bundle.js',
         line: 1,
         column: 0,
+        projectRoot: '/project',
         sourceRef: '/bundle.js:1:0',
         frameRadius: 2,
         role: 'failed',
@@ -70,6 +72,12 @@ describe('source resolver worker protocol', () => {
     ).toEqual({
       ok: false,
       error: 'resolveSourceFrame role is invalid',
+    })
+    expect(
+      parseSourceResolverWorkerRequest('{"method":"resolveSourceFrame","file":"/bundle.js","line":1,"projectRoot":1}'),
+    ).toEqual({
+      ok: false,
+      error: 'resolveSourceFrame projectRoot must be a string',
     })
   })
 

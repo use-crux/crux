@@ -52,6 +52,26 @@ describe('extension registry dispatch', () => {
       ),
     ).toEqual([])
   })
+
+  it('orders extensions and extractors by codepoint for cache-stable precedence', () => {
+    const registry = createExtensionRegistry([
+      extension('@scope/a', [
+        extractor('á-extractor', [{ kind: 'call', name: 'defineThing' }]),
+        extractor('Z-extractor', [{ kind: 'call', name: 'defineThing' }]),
+      ]),
+      extension('@scope/Z', [extractor('a-extractor', [{ kind: 'call', name: 'defineThing' }])]),
+      extension('@scope/á', [extractor('a-extractor', [{ kind: 'call', name: 'defineThing' }])]),
+    ])
+
+    expect(registry.extensions.map((item) => item.name)).toEqual(['@scope/Z', '@scope/a', '@scope/á'])
+    expect(extractorsForCall(registry, 'defineThing').map((item) => `${item.extension.name}/${item.extractor.name}`))
+      .toEqual([
+        '@scope/Z/a-extractor',
+        '@scope/a/Z-extractor',
+        '@scope/a/á-extractor',
+        '@scope/á/a-extractor',
+      ])
+  })
 })
 
 function extension(name: string, extractors: IndexerExtension['extractors']): IndexerExtension {

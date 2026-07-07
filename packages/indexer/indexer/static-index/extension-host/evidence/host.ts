@@ -34,7 +34,6 @@ export type StaticExtensionHostMethod =
 
 /** Machine-readable reason the Static Index run needs the Node compatibility host. */
 export type StaticExtensionHostNodeReason =
-  | 'typescript-bundled-extractors'
   | 'typescript-extension-extractors'
   | 'typescript-rules'
   | 'compatibility-evidence'
@@ -177,7 +176,8 @@ export async function loadStaticExtensionHostManifest(
   input: LoadStaticExtensionHostManifestInput,
 ): Promise<LoadStaticExtensionHostManifestResult> {
   const { runtime, diagnostics } = await createStaticExtensionHostRuntime(input)
-  const reasons = hostNodeReasons(runtime.manifest, diagnostics)
+  const resultDiagnostics = [...diagnostics, ...runtime.manifest.diagnostics]
+  const reasons = hostNodeReasons(runtime.manifest, resultDiagnostics)
 
   return {
     method: 'loadStaticExtensionHostManifest',
@@ -185,7 +185,7 @@ export async function loadStaticExtensionHostManifest(
     nativeCompilerProtocolVersion: input.nativeCompilerProtocolVersion,
     manifest: runtime.manifest,
     cacheInputs: runtime.manifest.cacheInputs,
-    diagnostics,
+    diagnostics: resultDiagnostics,
     node: {
       started: reasons.length > 0,
       reasons,
@@ -222,7 +222,7 @@ export async function extractStaticEvidenceBatch(
     root: input.root,
     results,
     facts: nativeFinalizeFactsFromExtractionResults(results.map((item) => item.result)),
-    diagnostics,
+    diagnostics: [...diagnostics, ...runtime.manifest.diagnostics],
   }
 }
 
@@ -286,7 +286,6 @@ function hostNodeReasons(
   diagnostics: readonly IndexDiagnostic[],
 ): readonly StaticExtensionHostNodeReason[] {
   const reasons: StaticExtensionHostNodeReason[] = []
-  if (manifest.staticHost.requiresTypeScriptHostForBundled) reasons.push('typescript-bundled-extractors')
   if (manifest.staticHost.requiresTypeScriptHostForExtensions) reasons.push('typescript-extension-extractors')
   if (manifest.staticHost.requiresTypeScriptHostForRules) reasons.push('typescript-rules')
   if (manifest.staticHost.requiresCompatibilityEvidence) reasons.push('compatibility-evidence')

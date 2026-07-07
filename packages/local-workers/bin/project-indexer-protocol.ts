@@ -1,7 +1,7 @@
 import type { IndexPatch } from '@use-crux/indexer'
 import {
   indexPatchToWorkerEventStream,
-  projectIndexArtifactToWorkerEvent,
+  projectIndexArtifactToWorkerEvents,
   PROJECT_INDEX_WORKER_PROTOCOL_VERSION,
   type ProjectIndexArtifactKind,
   type ProjectIndexArtifactMap,
@@ -18,19 +18,13 @@ const projectIndexFactProducer = {
 } as const satisfies ProjectIndexFactProducer
 
 const projectIndexMaxFactsPerBatchByMethod = {
-  indexProjectAst: 200,
-  indexProjectAstFromSyntaxRecords: 200,
   indexProjectSemantic: 100,
-  indexProjectIncremental: 200,
   indexProjectRuntime: 100,
 } as const satisfies Record<ProjectIndexPatchMethod, number>
 
 /** Patch-producing project-indexer request methods. */
 export type ProjectIndexPatchMethod =
-  | 'indexProjectAst'
-  | 'indexProjectAstFromSyntaxRecords'
   | 'indexProjectSemantic'
-  | 'indexProjectIncremental'
   | 'indexProjectRuntime'
 
 /** Async JSON-line writer used by the worker protocol helpers. */
@@ -40,13 +34,6 @@ export type ProjectIndexWorkerWriter = (value: unknown) => Promise<void>
 export type ProjectIndexWorkerErrorContext =
   | { kind: 'phase'; method: string; phase?: IndexPatch['phase'] }
   | { kind: 'artifact'; method: string; artifact?: ProjectIndexArtifactKind }
-
-/** Minimal incremental result shape needed for V2 event emission. */
-export interface ProjectIndexIncrementalEventResult {
-  readonly patches: readonly IndexPatch[]
-  readonly decision?: unknown
-  readonly report?: unknown
-}
 
 /** Options for writing patch events from a concrete worker binary. */
 export interface ProjectIndexPatchEventOptions {
@@ -96,42 +83,11 @@ export async function writeArtifactEvent<TKind extends ProjectIndexArtifactKind>
   payload: ProjectIndexArtifactMap[TKind],
   root: string,
 ): Promise<void> {
-  await write(
-    projectIndexArtifactToWorkerEvent(artifact, payload, {
-      root,
-      transactionId: `artifact:${artifact}`,
-    }),
-  )
-}
-
-/** Writes all patches from an incremental indexing run as ordered V2 events. */
-export async function writeIncrementalEvents(
-  write: ProjectIndexWorkerWriter,
-  result: ProjectIndexIncrementalEventResult,
-): Promise<void> {
-  for (let index = 0; index < result.patches.length; index += 1) {
-    const patch = result.patches[index]
-    if (!patch) continue
-    const events = indexPatchToWorkerEventStream(patch, {
-      transactionId: transactionIdForPatch(`indexProjectIncremental:${index}`, patch),
-      producer: projectIndexFactProducer,
-      maxFactsPerBatch: projectIndexMaxFactsPerBatchByMethod.indexProjectIncremental,
-    })
-    const isFinalPatch = index === result.patches.length - 1
-    for (const event of events) {
-      if (isFinalPatch && event.type === 'phase:done') {
-        await write({
-          ...event,
-          summary: {
-            ...event.summary,
-            decision: result.decision,
-            report: result.report,
-          },
-        })
-      } else {
-        await write(event)
-      }
-    }
+  for (const event of projectIndexArtifactToWorkerEvents(artifact, payload, {
+    root,
+    transactionId: `artifact:${artifact}`,
+  })) {
+    await write(event)
   }
 }
 
@@ -190,10 +146,7 @@ export function errorContextForMethod(method: string | undefined): ProjectIndexW
       return { kind: 'artifact', method, artifact: 'runtimeArtifacts' }
     case 'runRuntimeOperation':
       return { kind: 'artifact', method, artifact: 'runtimeOperation' }
-    case 'indexProjectAst':
-    case 'indexProjectAstFromSyntaxRecords':
     case 'indexProjectSemantic':
-    case 'indexProjectIncremental':
     case 'indexProjectRuntime':
       return { kind: 'phase', method, phase: phaseForMethod(method) }
     default:
@@ -218,13 +171,8 @@ function phaseForMethod(method: ProjectIndexPatchMethod): IndexPatch['phase']
 function phaseForMethod(method: string | undefined): IndexPatch['phase'] | undefined
 function phaseForMethod(method: string | undefined): IndexPatch['phase'] | undefined {
   switch (method) {
-    case 'indexProjectAst':
-    case 'indexProjectAstFromSyntaxRecords':
-      return 'ast'
     case 'indexProjectSemantic':
       return 'semantic'
-    case 'indexProjectIncremental':
-      return 'ast'
     case 'indexProjectRuntime':
       return 'runtime'
     default:
@@ -239,10 +187,7 @@ function maxFactsPerBatchForMethod(method: string): number {
 
 function isProjectIndexPatchMethod(method: string): method is ProjectIndexPatchMethod {
   return (
-    method === 'indexProjectAst' ||
-    method === 'indexProjectAstFromSyntaxRecords' ||
     method === 'indexProjectSemantic' ||
-    method === 'indexProjectIncremental' ||
     method === 'indexProjectRuntime'
   )
 }

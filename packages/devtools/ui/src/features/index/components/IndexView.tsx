@@ -25,11 +25,11 @@ import { SkeletonSplit } from '@/shared/components/Skeleton'
 import { qk } from '@/shared/query/queryClient'
 import { navTarget } from '@/app/navigation/navTarget'
 import { useNavigation } from '@/app/navigation/useNavigation'
-import { useIndexSuspense } from '@/features/index/hooks/useIndex'
+import { useIndexSuspense, useProjectIndexWatchStatus } from '@/features/index/hooks/useIndex'
 import { indexService } from '@/features/index/services/index'
 import { useConnected } from '@/app/runtime/runtimeStore'
 import { IndexHealth } from './IndexHealth'
-import { buildIndex, IndexBrowser, IndexIndexProvider, IndexingStatus } from '../v2'
+import { buildIndex, IndexBrowser, IndexIndexProvider, IndexingStatus, WatchStatus } from '../v2'
 import { Btn } from '../v2/primitives'
 import { MemoryView } from '@/features/memory/components/MemoryView'
 import { PlansView } from '@/features/plans/components/PlansView'
@@ -63,6 +63,7 @@ export function IndexView({
   // Suspends on first paint — caught by the SectionBoundary below. WS-driven
   // index pushes refresh in the background without re-suspending.
   const projectIndex = useIndexSuspense()
+  const watchStatus = useProjectIndexWatchStatus()
   const definitions = projectIndex.definitions ?? []
   const relations = projectIndex.relations ?? []
   const lintFindings = projectIndex.lintFindings ?? []
@@ -108,6 +109,7 @@ export function IndexView({
         {relations.length === 1 ? '' : 's'}
       </span>
       <IndexingStatus indexing={projectIndex.indexing} />
+      <WatchStatus status={watchStatus.data} />
     </span>
   )
 

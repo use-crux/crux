@@ -2,6 +2,7 @@ package session
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/planner"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/run"
@@ -49,6 +50,9 @@ type Options struct {
 	Evidence EvidenceFunc
 	// PatchOptions configures finalize/compile patch construction.
 	PatchOptions PatchOptions
+	// PatchInvalidates overrides the default patch invalidation emitted by the
+	// Static Index compiler, used by incremental file-scoped refreshes.
+	PatchInvalidates json.RawMessage
 }
 
 // Session runs Static Index orchestration with fixed options.

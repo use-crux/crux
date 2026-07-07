@@ -5,6 +5,7 @@ import type {
   StaticEvidenceExtractorInterest,
   StaticEvidenceInterestManifest,
 } from './types'
+import { compareCodepoint } from '../../../sort'
 import type { ExtractPattern } from '../../../extensions/public-contract/extractor-types'
 import type { IndexerExtension } from '../../../extensions/public-contract/manifest-types'
 
@@ -168,15 +169,15 @@ function importFromMatches(pattern: readonly string[] | undefined, declaration: 
 }
 
 function compareExtractors(a: StaticEvidenceExtractorInterest, b: StaticEvidenceExtractorInterest): number {
-  return `${a.extension.name}:${a.name}`.localeCompare(`${b.extension.name}:${b.name}`)
+  return compareCodepoint(`${a.extension.name}:${a.name}`, `${b.extension.name}:${b.name}`)
 }
 
 function compareCalls(a: StaticCallInterest, b: StaticCallInterest): number {
-  return callInterestKey(a).localeCompare(callInterestKey(b))
+  return compareCodepoint(callInterestKey(a), callInterestKey(b))
 }
 
 function compareConstructors(a: StaticConstructorInterest, b: StaticConstructorInterest): number {
-  return constructorInterestKey(a).localeCompare(constructorInterestKey(b))
+  return compareCodepoint(constructorInterestKey(a), constructorInterestKey(b))
 }
 
 function callInterestKey(interest: StaticCallInterest): string {

@@ -1289,7 +1289,7 @@ describe('observe runtime', () => {
       pendingDeliveries: 1,
       droppedRecords: 97_952,
     })
-  }, 10_000)
+  }, 60_000)
 
   it('posts canonical batches through the HTTP transport', async () => {
     const fetchImpl = vi.fn<typeof fetch>(

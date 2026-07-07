@@ -1,4 +1,4 @@
-import { IndexRuleManifestSchema } from '@use-crux/core/project-index'
+import { IndexRuleManifestSchema, type IndexDiagnostic } from '@use-crux/core/project-index'
 import { patternCallNames } from '../public-contract/patterns'
 import { validateRelationSpecs } from '../public-contract/relation-specs'
 import {
@@ -9,6 +9,8 @@ import {
   type ExtractorDispatchIndex,
   type RegisteredExtractor,
 } from './registry-index'
+import { compareCodepoint } from '../../sort'
+import { ruleConflictDiagnostic } from './diagnostics'
 import type { IndexRule, IndexerExtension } from '../public-contract/types'
 
 export type { RegisteredExtractor } from './registry-index'
@@ -25,6 +27,10 @@ export interface ExtensionRegistry {
   readonly callNames: readonly string[]
   /** Precomputed dispatch tables used by static extraction hot paths. */
   readonly dispatchIndex: ExtractorDispatchIndex
+  /** Recoverable registry problems surfaced to index diagnostics without aborting the request. */
+  readonly diagnostics: readonly IndexDiagnostic[]
+  /** Rule ids that were declared by multiple extensions and must not execute. */
+  readonly conflictedRuleIds: ReadonlySet<string>
 }
 
 /**
@@ -36,19 +42,19 @@ export interface ExtensionRegistry {
  * makes cache keys, diagnostics, and first-match extractor behavior reproducible.
  */
 export function createExtensionRegistry(extensions: readonly IndexerExtension[]): ExtensionRegistry {
-  const normalizedExtensions = [...extensions].sort((a, b) => a.name.localeCompare(b.name))
+  const normalizedExtensions = [...extensions].sort((a, b) => compareCodepoint(a.name, b.name))
   const relationSpecErrors = validateRelationSpecs(
     normalizedExtensions.flatMap((extension) => extension.relations ?? []),
   )
   const relationNamespaceErrors = validateRelationNamespaces(normalizedExtensions)
   const ruleErrors = validateIndexRuleDeclarations(normalizedExtensions)
-  const duplicateRuleErrors = validateUniqueIndexRuleNames(normalizedExtensions)
+  const ruleNameConflicts = validateIndexRuleNameConflicts(normalizedExtensions)
   const ruleNamespaceErrors = validateRuleNamespaces(normalizedExtensions)
   const errors = [
     ...relationSpecErrors,
     ...relationNamespaceErrors,
     ...ruleErrors,
-    ...duplicateRuleErrors,
+    ...ruleNameConflicts.errors,
     ...ruleNamespaceErrors,
   ]
   if (errors.length > 0) {
@@ -56,7 +62,7 @@ export function createExtensionRegistry(extensions: readonly IndexerExtension[])
   }
   const extractors = normalizedExtensions.flatMap((extension) =>
     [...(extension.extractors ?? [])]
-      .sort((a, b) => a.name.localeCompare(b.name))
+      .sort((a, b) => compareCodepoint(a.name, b.name))
       .map((extractor) => ({ extension, extractor })),
   )
   const dispatchIndex = createExtractorDispatchIndex(extractors)
@@ -65,6 +71,8 @@ export function createExtensionRegistry(extensions: readonly IndexerExtension[])
     extractors,
     callNames: patternCallNames(normalizedExtensions),
     dispatchIndex,
+    diagnostics: ruleNameConflicts.diagnostics,
+    conflictedRuleIds: ruleNameConflicts.conflictedRuleIds,
   }
 }
 
@@ -109,12 +117,43 @@ function validateIndexRuleDeclarations(extensions: readonly IndexerExtension[]):
   )
 }
 
+interface IndexRuleNameConflictResult {
+  readonly errors: readonly string[]
+  readonly diagnostics: readonly IndexDiagnostic[]
+  readonly conflictedRuleIds: ReadonlySet<string>
+}
+
 /**
- * Detects duplicate rule names across extensions.
+ * Splits rule id collisions into fatal same-extension duplicates and recoverable cross-extension
+ * conflicts.
  */
-function validateUniqueIndexRuleNames(extensions: readonly IndexerExtension[]): readonly string[] {
-  const names = extensions.flatMap((extension) => (extension.rules ?? []).map((rule) => rule.manifest?.id).filter(Boolean))
-  return duplicateStrings(names).map((name) => `Duplicate index rule: ${name}`)
+function validateIndexRuleNameConflicts(extensions: readonly IndexerExtension[]): IndexRuleNameConflictResult {
+  const errors: string[] = []
+  const ownersByRule = new Map<string, Set<string>>()
+  for (const extension of extensions) {
+    const seenInExtension = new Set<string>()
+    for (const rule of extension.rules ?? []) {
+      const ruleId = rule.manifest?.id
+      if (!ruleId) continue
+      if (seenInExtension.has(ruleId)) errors.push(`Duplicate index rule: ${ruleId}`)
+      seenInExtension.add(ruleId)
+      const owners = ownersByRule.get(ruleId) ?? new Set<string>()
+      owners.add(extension.name)
+      ownersByRule.set(ruleId, owners)
+    }
+  }
+
+  const conflictedRuleIds = new Set<string>()
+  const diagnostics = [...ownersByRule]
+    .flatMap(([ruleId, owners]) => {
+      if (owners.size < 2) return []
+      const sortedOwners = [...owners].sort(compareCodepoint)
+      conflictedRuleIds.add(ruleId)
+      return [ruleConflictDiagnostic(ruleId, sortedOwners)]
+    })
+    .sort((left, right) => compareCodepoint(left.id, right.id))
+
+  return { errors, diagnostics, conflictedRuleIds }
 }
 
 /**
@@ -150,19 +189,6 @@ function validateIndexRuleDeclaration(extensionName: string, rule: IndexRule): r
     errors.push(`${extensionName}/${ruleName}: rule messages must contain at least one message.`)
   }
   return errors
-}
-
-/**
- * Returns sorted duplicate strings from an input collection.
- */
-function duplicateStrings(values: readonly string[]): readonly string[] {
-  const seen = new Set<string>()
-  const duplicates = new Set<string>()
-  for (const value of values) {
-    if (seen.has(value)) duplicates.add(value)
-    seen.add(value)
-  }
-  return [...duplicates].sort()
 }
 
 /**

@@ -27,11 +27,13 @@ import type {
   SourceLocation,
 } from '@use-crux/core/project-index'
 import { createProjectModelDefinitionId, createProjectModelRelationId } from '@use-crux/core/project-index'
-import { compileProjectIndex } from './compiler'
+import { indexDefinitionsFromSnapshot, serializeIndex } from '@use-crux/core/project-index/serializers'
+import { loadProjectConfig } from './config'
 import { findConfigFiles } from './files'
 import { projectModelDiagnostics } from './project-model-diagnostics'
 import { projectModelDefinitionMetadata } from './project-model-metadata'
 import { DEFAULT_PROJECT_MODEL_RESOLUTION_MODE } from './resolution-mode'
+import { compareCodepoint } from './sort'
 
 const DEFAULT_QUALITY_INCLUDE = ['evals/**/*.eval.ts', '**/*.eval.ts'] as const
 const DEFAULT_IGNORED_PATHS = [
@@ -73,19 +75,21 @@ export interface ResolveProjectModelOptions {
 export async function resolveProjectModel(options: ResolveProjectModelOptions): Promise<ResolvedProjectModel> {
   const root = resolve(options.root)
   const resolutionMode = options.resolutionMode ?? DEFAULT_PROJECT_MODEL_RESOLUTION_MODE
-  const compiled = await compileProjectIndex({
-    root,
-    configPath: options.configPath,
-    projectName: options.projectName,
-    mode: resolutionMode,
-  })
-  const configFiles = projectConfigFiles(root, options.configPath, resolutionMode, compiled.diagnostics)
-  const packageName = packageNameField(root)
-  const definitions = (compiled.facts.definitions ?? []).map(projectModelDefinition)
-  const relationDefinitions = new Map(
-    (compiled.facts.definitions ?? []).map((definition) => [definition.id, definition]),
+  const { loaded, diagnostics: configDiagnostics } = await loadProjectConfig(root, options.configPath, resolutionMode)
+  const configIndex = serializeIndex(
+    loaded.crux?.prompts ? [...loaded.crux.prompts] : [],
+    loaded.crux?.contexts ? [...loaded.crux.contexts] : [],
+    undefined,
   )
-  const relations = (compiled.facts.relations ?? []).map((relation) =>
+  const configFacts = indexDefinitionsFromSnapshot(configIndex)
+  const diagnostics = [...configFacts.diagnostics, ...configDiagnostics]
+  const configFiles = projectConfigFiles(root, options.configPath, resolutionMode, diagnostics)
+  const packageName = packageNameField(root)
+  const definitions = configFacts.definitions.map(projectModelDefinition)
+  const relationDefinitions = new Map(
+    configFacts.definitions.map((definition) => [definition.id, definition]),
+  )
+  const relations = configFacts.relations.map((relation) =>
     projectModelRelation(relation, relationDefinitions),
   )
 
@@ -102,10 +106,10 @@ export async function resolveProjectModel(options: ResolveProjectModelOptions): 
     diagnostics: projectModelDiagnostics(
       root,
       configFiles,
-      compiled.diagnostics,
-      compiled.lintFindings,
-      compiled.facts.definitions ?? [],
-      compiled.facts.relations ?? [],
+      diagnostics,
+      [],
+      configFacts.definitions,
+      configFacts.relations,
     ),
   }
 }
@@ -193,7 +197,7 @@ function evaluationFiles(definitions: readonly ProjectModelDefinition[]): readon
     if (definition.kind !== 'evaluation' || !definition.source?.file) continue
     files.set(definition.source.file, field(definition.source.file, sourceProvenance(definition.source)))
   }
-  return [...files.values()].sort((left, right) => left.value.localeCompare(right.value))
+  return [...files.values()].sort((left, right) => compareCodepoint(left.value, right.value))
 }
 
 function projectModelDefinition(definition: ProjectDefinition): ProjectModelDefinition {

@@ -300,6 +300,8 @@ pub struct StaticIndexCompileRequest {
     pub lint_suppressions: Vec<StaticIndexLintSuppression>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub emit_builtin_lints: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub patch_invalidates: Option<Value>,
 }
 
 /// `staticIndexFinalize` request.

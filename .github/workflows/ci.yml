@@ -46,8 +46,8 @@ jobs:
 
       - name: Setup Rust
         run: |
-          rustup toolchain install 1.93.0 --profile minimal
-          rustup default 1.93.0
+          rustup toolchain install 1.96.1 --profile minimal
+          rustup default 1.96.1
           rustc --version
 
       - name: Install
@@ -56,7 +56,12 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Build Rust/Oxc worker for tests
+        run: cargo build --package crux-static-index-worker --bin crux-static-index-worker
+
       - name: Test
+        env:
+          CRUX_STATIC_INDEX_WORKER: ${{ github.workspace }}/target/debug/crux-static-index-worker
         run: pnpm test
 
       - name: Go observability conformance

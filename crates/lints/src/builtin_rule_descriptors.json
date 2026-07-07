@@ -39,7 +39,7 @@
     "source": "builtin",
     "severity": "info",
     "category": "quality",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",
@@ -178,7 +178,7 @@
     "source": "builtin",
     "severity": "info",
     "category": "contracts",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",
@@ -318,7 +318,7 @@
     "source": "builtin",
     "severity": "info",
     "category": "observability",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",
@@ -353,7 +353,7 @@
     "source": "builtin",
     "severity": "info",
     "category": "observability",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",
@@ -698,7 +698,7 @@
     "source": "builtin",
     "severity": "error",
     "category": "runtime",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",
@@ -733,7 +733,7 @@
     "source": "builtin",
     "severity": "warning",
     "category": "runtime",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",
@@ -768,7 +768,7 @@
     "source": "builtin",
     "severity": "warning",
     "category": "contracts",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",
@@ -1013,7 +1013,7 @@
     "source": "builtin",
     "severity": "info",
     "category": "composition",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",
@@ -1048,7 +1048,7 @@
     "source": "builtin",
     "severity": "warning",
     "category": "composition",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",
@@ -1118,7 +1118,7 @@
     "source": "builtin",
     "severity": "warning",
     "category": "composition",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",
@@ -1153,7 +1153,7 @@
     "source": "builtin",
     "severity": "warning",
     "category": "composition",
-    "maturity": "preview",
+    "maturity": "stable",
     "confidence": "high",
     "profiles": [
       "recommended",

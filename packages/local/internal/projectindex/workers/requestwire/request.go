@@ -10,13 +10,11 @@ import (
 )
 
 const (
-	BatchSize                   = 128
-	SyntaxRecordBatchMaxRecords = 32
-	SyntaxRecordBatchMaxBytes   = 8 * 1024 * 1024
+	BatchSize = 128
 )
 
-// Request is the V2 NDJSON envelope exchanged with the TypeScript indexer
-// worker. Keep this package focused on wire shape and transport batching.
+// Request is the V2 NDJSON envelope exchanged with TypeScript worker
+// entrypoints. Keep this package focused on wire shape and transport batching.
 type Request struct {
 	ProtocolVersion               int                                      `json:"protocolVersion,omitempty"`
 	Method                        string                                   `json:"method"`
@@ -30,16 +28,12 @@ type Request struct {
 	PreviousIndex                 *store.IndexData                         `json:"previousIndex,omitempty"`
 	PreviousDefinitions           []store.ProjectDefinition                `json:"previousIndexDefinitions,omitempty"`
 	PreviousSources               []store.IndexSourceFile                  `json:"previousIndexSources,omitempty"`
+	Definitions                   []store.ProjectDefinition                `json:"definitions,omitempty"`
 	Files                         []string                                 `json:"files,omitempty"`
 	DeletedFiles                  []string                                 `json:"deletedFiles,omitempty"`
-	SyntaxRecords                 []json.RawMessage                        `json:"syntaxRecords,omitempty"`
-	SyntaxRecordsBatch            []json.RawMessage                        `json:"syntaxRecordsBatch,omitempty"`
-	SyntaxFrontend                *projectindex.SyntaxFrontend             `json:"syntaxFrontendIdentity,omitempty"`
-	NativeFactProjection          string                                   `json:"nativeFactProjection,omitempty"`
 	Jobs                          []json.RawMessage                        `json:"jobs,omitempty"`
 	Graph                         json.RawMessage                          `json:"graph,omitempty"`
 	AvailableFacts                json.RawMessage                          `json:"availableFacts,omitempty"`
-	NativeLintFinalize            bool                                     `json:"nativeLintFinalize,omitempty"`
 	DependencyClosure             []string                                 `json:"dependencyClosure,omitempty"`
 	SourceProfile                 *projectindex.SemanticSourceProfile      `json:"sourceProfile,omitempty"`
 	SourceProfileFiles            []projectindex.SemanticSourceProfileFile `json:"sourceProfileFiles,omitempty"`
@@ -64,8 +58,6 @@ func MaxFactsPerBatch(method string) int {
 	switch method {
 	case "indexProjectSemantic":
 		return 100
-	case "indexProjectAst", "indexProjectAstFromSyntaxRecords", "indexProjectIncremental":
-		return 200
 	default:
 		return 100
 	}

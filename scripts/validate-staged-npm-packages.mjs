@@ -2,7 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -12,7 +12,43 @@ const indexPath = join(stageRoot, 'packages.json')
 const index = JSON.parse(await readFile(indexPath, 'utf8'))
 const deprecatedScope = `${'@'}crux`
 
+/**
+ * Platform package contract for `@use-crux/local`.
+ *
+ * The wrapper package resolves one of these optional dependencies at runtime.
+ * Each platform package must carry the Go CLI plus the sibling Rust Static
+ * Index worker, because the Go runtime discovers that worker beside itself.
+ */
+const localPlatformPackages = new Map([
+  [
+    '@use-crux/local-linux-x64',
+    { os: 'linux', cpu: 'x64', binaries: ['bin/crux', 'bin/crux-static-index-worker'] },
+  ],
+  [
+    '@use-crux/local-linux-arm64',
+    { os: 'linux', cpu: 'arm64', binaries: ['bin/crux', 'bin/crux-static-index-worker'] },
+  ],
+  [
+    '@use-crux/local-darwin-x64',
+    { os: 'darwin', cpu: 'x64', binaries: ['bin/crux', 'bin/crux-static-index-worker'] },
+  ],
+  [
+    '@use-crux/local-darwin-arm64',
+    { os: 'darwin', cpu: 'arm64', binaries: ['bin/crux', 'bin/crux-static-index-worker'] },
+  ],
+  [
+    '@use-crux/local-win32-x64',
+    { os: 'win32', cpu: 'x64', binaries: ['bin/crux.exe', 'bin/crux-static-index-worker.exe'] },
+  ],
+  [
+    '@use-crux/local-win32-arm64',
+    { os: 'win32', cpu: 'arm64', binaries: ['bin/crux.exe', 'bin/crux-static-index-worker.exe'] },
+  ],
+])
+
 const failures = []
+
+await validateCommittedWorkspaceManifests(failures)
 
 for (const staged of index.packages) {
   const packageDir = join(stageRoot, staged.path)
@@ -44,6 +80,21 @@ for (const staged of index.packages) {
 
   const [result] = JSON.parse(pack.stdout)
   const paths = result.files.map((file) => file.path)
+  const localPlatform = localPlatformPackages.get(staged.name)
+  if (localPlatform) {
+    if (!matchesSingleValueArray(manifest.os, localPlatform.os)) {
+      failures.push(`${staged.name}: package.json must declare os ${JSON.stringify([localPlatform.os])}`)
+    }
+    if (!matchesSingleValueArray(manifest.cpu, localPlatform.cpu)) {
+      failures.push(`${staged.name}: package.json must declare cpu ${JSON.stringify([localPlatform.cpu])}`)
+    }
+    for (const binary of localPlatform.binaries) {
+      if (!paths.includes(binary)) {
+        failures.push(`${staged.name}: tarball missing required binary ${binary}`)
+      }
+    }
+  }
+
   for (const path of paths) {
     if (path.includes('__tests__/') || path.includes('__type_tests__/')) {
       failures.push(`${staged.name}: tarball includes test-only file ${path}`)
@@ -114,4 +165,52 @@ function hasLocalScopePackageImport(content) {
     new RegExp(String.raw`import\s*\(\s*['"]${deprecatedScope}/`).test(content) ||
     new RegExp(String.raw`require\s*\(\s*['"]${deprecatedScope}/`).test(content)
   )
+}
+
+function matchesSingleValueArray(value, expected) {
+  return Array.isArray(value) && value.length === 1 && value[0] === expected
+}
+
+async function validateCommittedWorkspaceManifests(failures) {
+  const manifests = await committedPackageManifests(repoRoot)
+  for (const manifestPath of manifests) {
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    const platformOptionalDeps = Object.keys(manifest.optionalDependencies ?? {}).filter((name) =>
+      localPlatformPackages.has(name),
+    )
+    if (platformOptionalDeps.length > 0) {
+      failures.push(
+        `${relativeToRepo(manifestPath)}: Platform optionalDependencies must be staged for @use-crux/local publish output only; remove ${platformOptionalDeps.join(', ')}`,
+      )
+    }
+  }
+}
+
+async function committedPackageManifests(root) {
+  const ignoredDirectories = new Set([
+    '.git',
+    '.tmp',
+    '.turbo',
+    'dist',
+    'node_modules',
+    'target',
+    'tmp',
+  ])
+  const entries = await readdir(root, { withFileTypes: true })
+  const manifests = []
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (ignoredDirectories.has(entry.name)) continue
+      manifests.push(...(await committedPackageManifests(join(root, entry.name))))
+      continue
+    }
+    if (entry.isFile() && entry.name === 'package.json') {
+      manifests.push(join(root, entry.name))
+    }
+  }
+  return manifests
+}
+
+function relativeToRepo(file) {
+  return file.startsWith(`${repoRoot}/`) ? file.slice(repoRoot.length + 1) : file
 }

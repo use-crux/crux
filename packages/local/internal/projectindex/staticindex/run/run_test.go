@@ -88,6 +88,35 @@ func TestRunEvidenceErrorRequiresNodeWithoutFinalize(t *testing.T) {
 	}
 }
 
+func TestRunCompilePassesPatchInvalidates(t *testing.T) {
+	root, sourceFile := writeSource(t)
+	invalidates := json.RawMessage(fmt.Sprintf(`{"files":[%q]}`, sourceFile))
+	compiler := &recordingCompileCompiler{root: root, sourceFile: sourceFile, invalidates: invalidates}
+
+	result, err := Run(context.Background(), Request{
+		Root:             root,
+		ProjectName:      "static-run",
+		Plan:             testPlan(root, sourceFile),
+		Compiler:         compiler,
+		PatchOptions:     testPatchOptions(root),
+		PatchInvalidates: invalidates,
+		Evidence:         func(context.Context, []json.RawMessage) ([]json.RawMessage, error) { return nil, nil },
+	})
+
+	if err != nil {
+		t.Fatalf("Run error = %v", err)
+	}
+	if !result.Used {
+		t.Fatal("Used = false, want Static Index compile patch")
+	}
+	if compiler.compileCalls != 1 {
+		t.Fatalf("compile calls = %d, want 1", compiler.compileCalls)
+	}
+	if result.Patch.Invalidates == nil || len(result.Patch.Invalidates.Files) != 1 || result.Patch.Invalidates.Files[0] != sourceFile {
+		t.Fatalf("patch invalidates = %+v, want file-scoped invalidation", result.Patch.Invalidates)
+	}
+}
+
 type recordingCompiler struct {
 	root          string
 	sourceFile    string
@@ -160,6 +189,56 @@ func (c *recordingCompiler) StaticIndexFinalizeStream(_ context.Context, request
 	}, nil
 }
 
+type recordingCompileCompiler struct {
+	root         string
+	sourceFile   string
+	invalidates  json.RawMessage
+	compileCalls int
+}
+
+func (c *recordingCompileCompiler) StaticIndexPrepare(_ context.Context, request protocol.PrepareRequest) (protocol.PrepareResponse, error) {
+	return protocol.PrepareResponse{
+		ProtocolVersion: protocol.Version,
+		Method:          protocol.PrepareMethod,
+		Plan: protocol.Plan{
+			Root:         request.Root,
+			ProjectName:  request.ProjectName,
+			Files:        append([]protocol.SourceFile(nil), request.Files...),
+			PrimaryFiles: append([]protocol.SourceFile(nil), request.PrimaryFiles...),
+			CacheMisses:  append([]protocol.SourceFile(nil), request.Files...),
+		},
+	}, nil
+}
+
+func (c *recordingCompileCompiler) StaticIndexAnalyzeStream(context.Context, protocol.AnalyzeRequest, protocol.AnalyzeStreamHandler) (protocol.AnalyzeResponse, error) {
+	return protocol.AnalyzeResponse{}, errors.New("analyze should not run for native-only compile")
+}
+
+func (c *recordingCompileCompiler) StaticIndexFinalizeStream(context.Context, protocol.FinalizeRequest, protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+	return protocol.FinalizeResponse{}, errors.New("finalize should not run for native-only compile")
+}
+
+func (c *recordingCompileCompiler) StaticIndexCompileStream(_ context.Context, request protocol.CompileRequest, handle protocol.FinalizeStreamHandler) (protocol.FinalizeResponse, error) {
+	c.compileCalls++
+	if !request.Stream {
+		return protocol.FinalizeResponse{}, fmt.Errorf("compile stream flag = false, want true")
+	}
+	if !bytes.Equal(request.PatchInvalidates, c.invalidates) {
+		return protocol.FinalizeResponse{}, fmt.Errorf("compile patch invalidates = %s, want %s", request.PatchInvalidates, c.invalidates)
+	}
+	events := completePatchEventsWithInvalidates(c.root, c.invalidates)
+	for _, event := range events {
+		if err := handle(protocol.FinalizeStreamEvent{OK: true, Type: "event", Event: event}); err != nil {
+			return protocol.FinalizeResponse{}, err
+		}
+	}
+	return protocol.FinalizeResponse{
+		ProtocolVersion: protocol.Version,
+		Method:          protocol.CompileMethod,
+		Events:          events,
+	}, nil
+}
+
 func writeSource(t *testing.T) (string, string) {
 	t.Helper()
 	root := t.TempDir()
@@ -184,6 +263,7 @@ func testPlan(root, sourceFile string) projectindex.ProjectStaticSyntaxPlan {
 		StaticSyntaxEnabled: true,
 		StaticInterests:     json.RawMessage(`{"extractors":[]}`),
 		SourceGraph:         json.RawMessage(`{"schemaVersion":1,"producedBy":"@use-crux/indexer","capabilities":[],"shards":[]}`),
+		StaticHost:          json.RawMessage(`{"nativeOnlyEligible":true}`),
 	}
 }
 
@@ -197,8 +277,12 @@ func testPatchOptions(root string) patch.Options {
 }
 
 func completePatchEvents(root string) []json.RawMessage {
+	return completePatchEventsWithInvalidates(root, json.RawMessage(`{"all":true}`))
+}
+
+func completePatchEventsWithInvalidates(root string, invalidates json.RawMessage) []json.RawMessage {
 	return []json.RawMessage{
 		json.RawMessage(fmt.Sprintf(`{"protocolVersion":2,"type":"phase:start","transactionId":"tx","phase":"ast","root":%q,"startedAt":"1970-01-01T00:00:00.000Z"}`, root)),
-		json.RawMessage(fmt.Sprintf(`{"protocolVersion":2,"type":"phase:done","transactionId":"tx","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":%q},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok","invalidates":{"all":true}},"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}`, root)),
+		json.RawMessage(fmt.Sprintf(`{"protocolVersion":2,"type":"phase:done","transactionId":"tx","phase":"ast","patch":{"schemaVersion":1,"phase":"ast","project":{"root":%q},"startedAt":"1970-01-01T00:00:00.000Z","finishedAt":"1970-01-01T00:00:00.000Z","status":"ok","invalidates":%s},"summary":{"factCount":0,"decision":{"staticIndexComplete":true}}}`, root, invalidates)),
 	}
 }

@@ -2,7 +2,7 @@ import type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
 import { loadProjectConfig } from '../../config'
 import {
   compilerProfileWithResolvedExtensions,
-  createProjectIndexCompilerRuntime,
+  createStaticExtensionHostRuntime,
   cruxCoreCompilerProfile,
 } from '../../compiler/profile'
 import { loadIndexerExtensionReferences, type ResolvedIndexerExtension } from '../../extensions'
@@ -61,7 +61,7 @@ export async function loadStaticExtensionHostManifestForProject(
 
 function staticIndexExtensionCacheInputs(extensions: readonly ResolvedIndexerExtension[]) {
   const profile = compilerProfileWithResolvedExtensions(cruxCoreCompilerProfile, extensions)
-  const runtime = createProjectIndexCompilerRuntime(profile)
+  const runtime = createStaticExtensionHostRuntime(profile)
   return staticExtractionIdentity({
     profile: runtime.profile,
     extensionRuntime: runtime.extensionRuntime,

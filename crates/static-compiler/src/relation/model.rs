@@ -220,17 +220,7 @@ fn target_definition<'a>(
             .iter()
             .find(|definition| definition.id == *to_id);
     }
-    if relation_ref.r#type == "eval.covers_definition" {
-        return None;
-    }
-    let variable = relation_ref.to_variable.as_deref()?;
-    let safe_variable = safe_use_entry_id(variable);
-    definitions.iter().find(|definition| {
-        definition.name == variable
-            || definition_export_name(definition).as_deref() == Some(variable)
-            || definition.id.ends_with(&format!(":{variable}"))
-            || definition.id.ends_with(&format!(":{safe_variable}"))
-    })
+    None
 }
 
 fn definition_by_variable<'a>(

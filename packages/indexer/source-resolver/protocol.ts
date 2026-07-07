@@ -12,13 +12,20 @@ import type { SourceFrameLineRole, SourceLocation } from './types'
 
 /** Worker request accepted by `source-resolver.mjs`. */
 export type SourceResolverWorkerRequest =
-  | { readonly method: 'resolveLocations'; readonly locations: readonly SourceLocation[] }
-  | { readonly method: 'resolveFnSource'; readonly file: string; readonly line: number; readonly column?: number }
+  | { readonly method: 'resolveLocations'; readonly locations: readonly SourceLocation[]; readonly projectRoot?: string }
+  | {
+      readonly method: 'resolveFnSource'
+      readonly file: string
+      readonly line: number
+      readonly column?: number
+      readonly projectRoot?: string
+    }
   | {
       readonly method: 'resolveSourceFrame'
       readonly file: string
       readonly line: number
       readonly column?: number
+      readonly projectRoot?: string
       readonly sourceRef?: string
       readonly frameRadius?: number
       readonly role?: SourceFrameLineRole
@@ -47,7 +54,10 @@ export function parseSourceResolverWorkerRequest(line: string): ParsedSourceReso
     if (!Array.isArray(value.locations) || !value.locations.every(isSourceLocation)) {
       return { ok: false, error: 'resolveLocations requires locations' }
     }
-    return { ok: true, request: { method: 'resolveLocations', locations: value.locations } }
+    if (value.projectRoot !== undefined && typeof value.projectRoot !== 'string') {
+      return { ok: false, error: 'resolveLocations projectRoot must be a string' }
+    }
+    return { ok: true, request: { method: 'resolveLocations', locations: value.locations, projectRoot: value.projectRoot } }
   }
 
   if (value.method === 'resolveFnSource') {
@@ -57,6 +67,9 @@ export function parseSourceResolverWorkerRequest(line: string): ParsedSourceReso
     if (value.column !== undefined && !isFiniteNumber(value.column)) {
       return { ok: false, error: 'resolveFnSource column must be a number' }
     }
+    if (value.projectRoot !== undefined && typeof value.projectRoot !== 'string') {
+      return { ok: false, error: 'resolveFnSource projectRoot must be a string' }
+    }
     return {
       ok: true,
       request: {
@@ -64,6 +77,7 @@ export function parseSourceResolverWorkerRequest(line: string): ParsedSourceReso
         file: value.file,
         line: value.line,
         column: value.column,
+        projectRoot: value.projectRoot,
       },
     }
   }
@@ -81,6 +95,9 @@ export function parseSourceResolverWorkerRequest(line: string): ParsedSourceReso
     if (value.sourceRef !== undefined && typeof value.sourceRef !== 'string') {
       return { ok: false, error: 'resolveSourceFrame sourceRef must be a string' }
     }
+    if (value.projectRoot !== undefined && typeof value.projectRoot !== 'string') {
+      return { ok: false, error: 'resolveSourceFrame projectRoot must be a string' }
+    }
     if (value.role !== undefined && !isSourceFrameLineRole(value.role)) {
       return { ok: false, error: 'resolveSourceFrame role is invalid' }
     }
@@ -94,6 +111,7 @@ export function parseSourceResolverWorkerRequest(line: string): ParsedSourceReso
         file: value.file,
         line: value.line,
         column: value.column,
+        projectRoot: value.projectRoot,
         sourceRef: value.sourceRef,
         frameRadius: value.frameRadius,
         role: value.role,

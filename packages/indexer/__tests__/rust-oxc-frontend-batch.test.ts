@@ -1,65 +1,102 @@
-import { mkdtemp, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
-import type { StaticSyntaxFileInput } from '../indexer/static-index/syntax'
-import { createRustOxcStaticSyntaxFrontend } from '../testing/rust-oxc-frontend'
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { describe, expect, it } from "vitest";
+import type { StaticSyntaxFileInput } from "../indexer/static-index/syntax";
+import {
+  createRustOxcStaticSyntaxFrontend,
+  rustOxcPackagedWorkerStatus,
+} from "../testing/rust-oxc-frontend";
 
-describe('Rust/Oxc syntax frontend batch protocol', () => {
-  it('parses many files through one worker request', async () => {
-    const worker = await writeFakeIndexerWorker()
-    const previousWorker = process.env.CRUX_STATIC_INDEX_WORKER
-    const previousBatch = process.env.CRUX_STATIC_INDEX_WORKER_BATCH
-    process.env.CRUX_STATIC_INDEX_WORKER = worker
-    process.env.CRUX_STATIC_INDEX_WORKER_BATCH = '1'
+describe("Rust/Oxc syntax frontend batch protocol", () => {
+  it("resolves the worker shipped by a local platform package", async () => {
+    const root = await mkdtemp(join(tmpdir(), "crux-local-platform-worker-"));
+    const packageDir = join(
+      root,
+      "node_modules",
+      "@use-crux",
+      "local-linux-x64",
+    );
+    const worker = join(packageDir, "bin", "crux-static-index-worker");
+    await mkdir(join(packageDir, "bin"), { recursive: true });
+    await writeFile(
+      join(packageDir, "package.json"),
+      JSON.stringify({ name: "@use-crux/local-linux-x64" }),
+    );
+    await writeFile(worker, "");
+
+    expect(
+      rustOxcPackagedWorkerStatus({
+        platform: "linux",
+        arch: "x64",
+        searchPaths: [root],
+      }),
+    ).toEqual({ available: true, workerPath: worker });
+  });
+
+  it("parses many files through one worker request", async () => {
+    const worker = await writeFakeIndexerWorker();
+    const previousWorker = process.env.CRUX_STATIC_INDEX_WORKER;
+    const previousBatch = process.env.CRUX_STATIC_INDEX_WORKER_BATCH;
+    process.env.CRUX_STATIC_INDEX_WORKER = worker;
+    process.env.CRUX_STATIC_INDEX_WORKER_BATCH = "1";
     try {
-      const frontend = createRustOxcStaticSyntaxFrontend()
-      expect(frontend.parseFiles).toBeTypeOf('function')
+      const frontend = createRustOxcStaticSyntaxFrontend();
+      expect(frontend.parseFiles).toBeTypeOf("function");
 
       const records = await frontend.parseFiles?.([
-        syntaxInput('/fixture/src/a.ts', "export const a = 'a'"),
-        syntaxInput('/fixture/src/b.ts', "export const b = 'b'"),
-      ])
+        syntaxInput("/fixture/src/a.ts", "export const a = 'a'"),
+        syntaxInput("/fixture/src/b.ts", "export const b = 'b'"),
+      ]);
 
-      expect(records?.map((record) => record.file)).toEqual(['/fixture/src/a.ts', '/fixture/src/b.ts'])
-      expect(records?.map((record) => record.diagnostics[0]?.message)).toEqual(['batch:2:0', 'batch:2:1'])
+      expect(records?.map((record) => record.file)).toEqual([
+        "/fixture/src/a.ts",
+        "/fixture/src/b.ts",
+      ]);
+      expect(records?.map((record) => record.diagnostics[0]?.message)).toEqual([
+        "batch:2:0",
+        "batch:2:1",
+      ]);
     } finally {
-      restoreEnv('CRUX_STATIC_INDEX_WORKER', previousWorker)
-      restoreEnv('CRUX_STATIC_INDEX_WORKER_BATCH', previousBatch)
+      restoreEnv("CRUX_STATIC_INDEX_WORKER", previousWorker);
+      restoreEnv("CRUX_STATIC_INDEX_WORKER_BATCH", previousBatch);
     }
-  })
+  });
 
-  it('can send a disk-source batch request without embedding source text', async () => {
-    const worker = await writeFakeIndexerWorker()
-    const previousWorker = process.env.CRUX_STATIC_INDEX_WORKER
-    const previousBatch = process.env.CRUX_STATIC_INDEX_WORKER_BATCH
-    const previousReadFiles = process.env.CRUX_STATIC_INDEX_WORKER_READ_FILES
-    process.env.CRUX_STATIC_INDEX_WORKER = worker
-    process.env.CRUX_STATIC_INDEX_WORKER_BATCH = '1'
-    process.env.CRUX_STATIC_INDEX_WORKER_READ_FILES = '1'
+  it("can send a disk-source batch request without embedding source text", async () => {
+    const worker = await writeFakeIndexerWorker();
+    const previousWorker = process.env.CRUX_STATIC_INDEX_WORKER;
+    const previousBatch = process.env.CRUX_STATIC_INDEX_WORKER_BATCH;
+    const previousReadFiles = process.env.CRUX_STATIC_INDEX_WORKER_READ_FILES;
+    process.env.CRUX_STATIC_INDEX_WORKER = worker;
+    process.env.CRUX_STATIC_INDEX_WORKER_BATCH = "1";
+    process.env.CRUX_STATIC_INDEX_WORKER_READ_FILES = "1";
     try {
-      const frontend = createRustOxcStaticSyntaxFrontend()
+      const frontend = createRustOxcStaticSyntaxFrontend();
       const records = await frontend.parseFiles?.([
-        syntaxInput('/fixture/src/a.ts', "export const a = 'a'"),
-        syntaxInput('/fixture/src/b.ts', "export const b = 'b'"),
-      ])
+        syntaxInput("/fixture/src/a.ts", "export const a = 'a'"),
+        syntaxInput("/fixture/src/b.ts", "export const b = 'b'"),
+      ]);
 
-      expect(records?.map((record) => record.diagnostics[0]?.message)).toEqual(['disk:2:0', 'disk:2:1'])
+      expect(records?.map((record) => record.diagnostics[0]?.message)).toEqual([
+        "disk:2:0",
+        "disk:2:1",
+      ]);
     } finally {
-      restoreEnv('CRUX_STATIC_INDEX_WORKER', previousWorker)
-      restoreEnv('CRUX_STATIC_INDEX_WORKER_BATCH', previousBatch)
-      restoreEnv('CRUX_STATIC_INDEX_WORKER_READ_FILES', previousReadFiles)
+      restoreEnv("CRUX_STATIC_INDEX_WORKER", previousWorker);
+      restoreEnv("CRUX_STATIC_INDEX_WORKER_BATCH", previousBatch);
+      restoreEnv("CRUX_STATIC_INDEX_WORKER_READ_FILES", previousReadFiles);
     }
-  })
-})
+  });
+});
 
 function syntaxInput(file: string, source: string): StaticSyntaxFileInput {
-  return { root: '/fixture', file, source }
+  return { root: "/fixture", file, source };
 }
 
 async function writeFakeIndexerWorker(): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), 'crux-rust-oxc-worker-'))
-  const worker = join(dir, 'worker.mjs')
+  const dir = await mkdtemp(join(tmpdir(), "crux-rust-oxc-worker-"));
+  const worker = join(dir, "worker.mjs");
   await writeFile(
     worker,
     `#!/usr/bin/env node
@@ -94,14 +131,14 @@ lines.on('line', (line) => {
 })
 `,
     { mode: 0o755 },
-  )
-  return worker
+  );
+  return worker;
 }
 
 function restoreEnv(name: string, value: string | undefined): void {
   if (value === undefined) {
-    delete process.env[name]
+    delete process.env[name];
   } else {
-    process.env[name] = value
+    process.env[name] = value;
   }
 }

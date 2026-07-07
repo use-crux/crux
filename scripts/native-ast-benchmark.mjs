@@ -1,49 +1,54 @@
 #!/usr/bin/env node
 
 /**
- * Native AST benchmark runner.
+ * Native AST production benchmark runner.
  *
  * The runner builds the release Rust/Oxc worker and fresh embedded TypeScript
  * worker assets before invoking the Go Project Index benchmarks via `go test`.
- * Benchmark
- * output is left in Go's native format so callers can archive or compare it
- * with `benchstat`.
+ * Benchmark output is left in Go's native format so callers can archive or
+ * compare it with `benchstat`.
  *
  * Environment:
  *
  * - `CRUX_INDEXER_BENCH_ROOT`: project root to benchmark. Defaults to this repo.
  * - `CRUX_INDEXER_BENCH_MODES`: comma-separated benchmark profiles.
  * - `CRUX_INDEXER_BENCH_COUNT`: Go benchmark repetition count. Defaults to `3`.
- * - `CRUX_INDEXER_BENCH_BENCH`: Go benchmark regexp. Defaults to the AST and graph benchmarks.
+ * - `CRUX_INDEXER_BENCH_BENCH`: Go benchmark regexp. Defaults to the AST, graph, and watch benchmarks.
  * - `CRUX_INDEXER_BENCH_TIMEOUT`: Go test timeout. Defaults to `30m`.
  * - `CRUX_INDEXER_BENCH_BENCHTIME`: optional Go `-benchtime` value.
+ * - `CRUX_INDEXER_BENCH_TIER_A_MS`: Tier-A watch leaf p95 budget. Defaults to `100`.
+ * - `CRUX_INDEXER_BENCH_SKIP_TIER_A_GATE`: set `1` to report, but not fail, the Tier-A gate.
+ * - `CRUX_INDEXER_BENCH_IN_PLACE`: set `1` to mutate `CRUX_INDEXER_BENCH_ROOT` for watch benchmarks.
  *
  * @module
  */
 
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { spawnSync } from 'node:child_process'
-import { fileURLToPath } from 'node:url'
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 
-const repoRoot = resolve(fileURLToPath(new URL('..', import.meta.url)))
-const localPackageRoot = resolve(repoRoot, 'packages', 'local')
-const workerBinaryName = process.platform === 'win32' ? 'crux-static-index-worker.exe' : 'crux-static-index-worker'
-const workerPath = resolve(repoRoot, 'target', 'release', workerBinaryName)
-const benchmarkRoot = resolve(process.env.CRUX_INDEXER_BENCH_ROOT ?? repoRoot)
+const repoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const localPackageRoot = resolve(repoRoot, "packages", "local");
+const workerBinaryName =
+  process.platform === "win32"
+    ? "crux-static-index-worker.exe"
+    : "crux-static-index-worker";
+const workerPath = resolve(repoRoot, "target", "release", workerBinaryName);
+const benchmarkRoot = resolve(process.env.CRUX_INDEXER_BENCH_ROOT ?? repoRoot);
 const benchmarkPattern =
-  process.env.CRUX_INDEXER_BENCH_BENCH ?? 'BenchmarkWorker(IndexProjectAstPatch|ReindexProjectGraphPipeline)$'
-const benchmarkCount = process.env.CRUX_INDEXER_BENCH_COUNT ?? '3'
-const benchmarkTimeout = process.env.CRUX_INDEXER_BENCH_TIMEOUT ?? '30m'
-const benchmarkTime = process.env.CRUX_INDEXER_BENCH_BENCHTIME
+  process.env.CRUX_INDEXER_BENCH_BENCH ??
+  "BenchmarkWorker(IndexProjectAstPatch|ReindexProjectGraphPipeline|ProductionWatchLeafPath)$";
+const benchmarkCount = process.env.CRUX_INDEXER_BENCH_COUNT ?? "3";
+const benchmarkTimeout = process.env.CRUX_INDEXER_BENCH_TIMEOUT ?? "30m";
+const benchmarkTime = process.env.CRUX_INDEXER_BENCH_BENCHTIME;
 
 /**
- * @typedef {'js-cold' | 'js-warm' | 'native-cold' | 'native-warm'} BenchmarkProfileName
+ * @typedef {'production-cold' | 'production-warm'} BenchmarkProfileName
  *
  * @typedef {Readonly<{
  *   name: BenchmarkProfileName
  *   description: string
- *   nativeAst: boolean
  *   clearCache: boolean
  * }>} BenchmarkProfile
  *
@@ -58,67 +63,64 @@ const benchmarkTime = process.env.CRUX_INDEXER_BENCH_BENCHTIME
 
 /** @type {Readonly<Record<BenchmarkProfileName, BenchmarkProfile>>} */
 const benchmarkProfiles = {
-  'js-cold': {
-    name: 'js-cold',
-    description: 'TypeScript baseline with index cache cleared before each benchmark iteration',
-    nativeAst: false,
+  "production-cold": {
+    name: "production-cold",
+    description:
+      "Production Go to Rust/Oxc path with index cache cleared before each benchmark iteration",
     clearCache: true,
   },
-  'js-warm': {
-    name: 'js-warm',
-    description: 'TypeScript baseline with normal warm-cache behavior',
-    nativeAst: false,
+  "production-warm": {
+    name: "production-warm",
+    description:
+      "Production Go to Rust/Oxc path with normal warm-cache behavior",
     clearCache: false,
   },
-  'native-cold': {
-    name: 'native-cold',
-    description: 'Native AST path with index cache cleared before each benchmark iteration',
-    nativeAst: true,
-    clearCache: true,
-  },
-  'native-warm': {
-    name: 'native-warm',
-    description: 'Native AST path with normal warm-cache behavior',
-    nativeAst: true,
-    clearCache: false,
-  },
-}
+};
 
 /** @type {readonly BenchmarkProfile[]} */
 const selectedProfiles = parseBenchmarkProfiles(
-  process.env.CRUX_INDEXER_BENCH_MODES ?? 'js-cold,native-cold,js-warm,native-warm',
-)
+  process.env.CRUX_INDEXER_BENCH_MODES ?? "production-cold,production-warm",
+);
 
 if (!existsSync(benchmarkRoot)) {
-  throw new Error(`CRUX_INDEXER_BENCH_ROOT does not exist: ${benchmarkRoot}`)
+  throw new Error(`CRUX_INDEXER_BENCH_ROOT does not exist: ${benchmarkRoot}`);
 }
 
-console.log(`Native AST benchmark root: ${benchmarkRoot}`)
-console.log(`Go benchmark pattern: ${benchmarkPattern}`)
-console.log(`Profiles: ${selectedProfiles.map((profile) => profile.name).join(', ')}`)
+console.log(`Native AST benchmark root: ${benchmarkRoot}`);
+console.log(`Go benchmark pattern: ${benchmarkPattern}`);
+console.log(
+  `Profiles: ${selectedProfiles.map((profile) => profile.name).join(", ")}`,
+);
 
 run({
-  label: 'Build release Rust/Oxc Static Index worker',
-  command: 'cargo',
-  args: ['build', '--release', '--package', 'crux-static-index-worker', '--bin', 'crux-static-index-worker'],
-})
-assertWorkerExists()
+  label: "Build release Rust/Oxc Static Index worker",
+  command: "cargo",
+  args: [
+    "build",
+    "--release",
+    "--package",
+    "crux-static-index-worker",
+    "--bin",
+    "crux-static-index-worker",
+  ],
+});
+assertWorkerExists();
 
 run({
-  label: 'Build local worker bundle for Go host benchmarks',
-  command: 'pnpm',
-  args: ['--filter', '@use-crux/local-workers', 'build'],
-})
+  label: "Build local worker bundle for Go host benchmarks",
+  command: "pnpm",
+  args: ["--filter", "@use-crux/local-workers", "build"],
+});
 
 run({
-  label: 'Embed local workers for Go host benchmarks',
-  command: 'make',
-  args: ['embed-workers'],
+  label: "Embed local workers for Go host benchmarks",
+  command: "make",
+  args: ["embed-workers"],
   cwd: localPackageRoot,
-})
+});
 
 for (const profile of selectedProfiles) {
-  runGoBenchmark(profile)
+  runGoBenchmark(profile);
 }
 
 /**
@@ -129,15 +131,15 @@ for (const profile of selectedProfiles) {
  */
 function parseBenchmarkProfiles(raw) {
   return raw
-    .split(',')
+    .split(",")
     .map((value) => value.trim())
     .filter(Boolean)
     .map((name) => {
-      if (isBenchmarkProfileName(name)) return benchmarkProfiles[name]
+      if (isBenchmarkProfileName(name)) return benchmarkProfiles[name];
       throw new Error(
-        `Unknown CRUX_INDEXER_BENCH_MODES profile "${name}". Expected one of: ${Object.keys(benchmarkProfiles).join(', ')}`,
-      )
-    })
+        `Unknown CRUX_INDEXER_BENCH_MODES profile "${name}". Expected one of: ${Object.keys(benchmarkProfiles).join(", ")}`,
+      );
+    });
 }
 
 /**
@@ -147,45 +149,44 @@ function parseBenchmarkProfiles(raw) {
  * @returns {name is BenchmarkProfileName}
  */
 function isBenchmarkProfileName(name) {
-  return Object.hasOwn(benchmarkProfiles, name)
+  return Object.hasOwn(benchmarkProfiles, name);
 }
 
 /**
- * Runs the Go benchmark suite for one JS/native and cold/warm profile.
+ * Runs the Go benchmark suite for one production cold/warm profile.
  *
  * @param {BenchmarkProfile} profile - Benchmark profile to execute.
  */
 function runGoBenchmark(profile) {
   const args = [
-    'test',
-    './internal/projectindex/workers',
-    '-run',
-    '^$',
-    '-bench',
+    "test",
+    "./internal/projectindex/workers",
+    "-run",
+    "^$",
+    "-bench",
     benchmarkPattern,
-    '-benchmem',
-    '-count',
+    "-benchmem",
+    "-count",
     benchmarkCount,
-    '-timeout',
+    "-timeout",
     benchmarkTimeout,
-  ]
-  if (benchmarkTime) args.push('-benchtime', benchmarkTime)
+  ];
+  if (benchmarkTime) args.push("-benchtime", benchmarkTime);
 
-  console.log(`\nProfile: ${profile.name}`)
-  console.log(profile.description)
+  console.log(`\nProfile: ${profile.name}`);
+  console.log(profile.description);
 
   run({
     label: `Run Go Project Index benchmark (${profile.name})`,
-    command: 'go',
+    command: "go",
     args,
     cwd: localPackageRoot,
     env: {
       CRUX_STATIC_INDEX_WORKER: workerPath,
       CRUX_INDEXER_BENCH_ROOT: benchmarkRoot,
-      CRUX_INDEXER_BENCH_NATIVE_AST: profile.nativeAst ? '1' : '0',
-      CRUX_INDEXER_BENCH_CLEAR_CACHE: profile.clearCache ? '1' : '0',
+      CRUX_INDEXER_BENCH_CLEAR_CACHE: profile.clearCache ? "1" : "0",
     },
-  })
+  });
 }
 
 /**
@@ -194,21 +195,21 @@ function runGoBenchmark(profile) {
  * @param {BenchmarkCommand} item - Command descriptor to execute.
  */
 function run(item) {
-  console.log(`\n==> ${item.label}`)
+  console.log(`\n==> ${item.label}`);
   const result = spawnSync(item.command, item.args, {
     cwd: item.cwd ?? repoRoot,
     env: { ...process.env, ...item.env },
-    stdio: 'inherit',
-    shell: process.platform === 'win32',
-  })
-  if (result.error) throw result.error
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (result.error) throw result.error;
   if (result.status !== 0) {
-    process.exit(result.status ?? 1)
+    process.exit(result.status ?? 1);
   }
 }
 
 /** Throws if the release worker binary expected by the benchmarks was not produced. */
 function assertWorkerExists() {
-  if (existsSync(workerPath)) return
-  throw new Error(`Native AST benchmark expected Rust worker at ${workerPath}`)
+  if (existsSync(workerPath)) return;
+  throw new Error(`Native AST benchmark expected Rust worker at ${workerPath}`);
 }

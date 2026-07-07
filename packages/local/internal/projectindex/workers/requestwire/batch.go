@@ -8,11 +8,6 @@ func Batch(req Request) ([]any, error) {
 	events := []any{Start(req, requestID)}
 	events = appendPreviousIndexBatches(events, req, requestID)
 	events = appendSourceProfileBatches(events, req, requestID)
-	var err error
-	events, err = appendSyntaxRecordBatches(events, req, requestID)
-	if err != nil {
-		return nil, err
-	}
 	events = append(events, Request{
 		ProtocolVersion: 2,
 		Method:          req.Method,
@@ -28,8 +23,6 @@ func Start(req Request, requestID string) Request {
 	start.RequestKind = RequestKindStart
 	start.PreviousDefinitions = nil
 	start.PreviousSources = nil
-	start.SyntaxRecords = nil
-	start.SyntaxRecordsBatch = nil
 	start.SourceProfileFiles = nil
 	start.PreviousIndex = CompactPrevious(start.PreviousIndex)
 	if start.SourceProfile != nil {
@@ -42,9 +35,7 @@ func Start(req Request, requestID string) Request {
 
 func shouldChunk(req Request) bool {
 	switch req.Method {
-	case "indexProjectAstFromSyntaxRecords":
-		return true
-	case "indexProjectIncremental", "indexProjectRuntime":
+	case "indexProjectRuntime":
 		return HasPreviousRows(req.PreviousIndex)
 	case "indexProjectSemantic":
 		return HasPreviousRows(req.PreviousIndex) || (req.SourceProfile != nil && len(req.SourceProfile.Files) > 0)
@@ -92,26 +83,6 @@ func appendSourceProfileBatches(events []any, req Request, requestID string) []a
 		})
 	}
 	return events
-}
-
-func appendSyntaxRecordBatches(events []any, req Request, requestID string) ([]any, error) {
-	if req.Method != "indexProjectAstFromSyntaxRecords" {
-		return events, nil
-	}
-	batches, err := SyntaxRecordBatches(req.SyntaxRecords)
-	if err != nil {
-		return nil, err
-	}
-	for _, batch := range batches {
-		events = append(events, Request{
-			ProtocolVersion:    2,
-			Method:             req.Method,
-			RequestID:          requestID,
-			RequestKind:        RequestKindSyntaxRecords,
-			SyntaxRecordsBatch: batch,
-		})
-	}
-	return events, nil
 }
 
 func requestIDPrefix(method string) string {

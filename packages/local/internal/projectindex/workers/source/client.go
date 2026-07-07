@@ -16,16 +16,17 @@ const staticFallbackTimeout = 30 * time.Second
 
 // Client is the shared Project Index phase client for TypeScript worker lanes.
 //
-// Each phase supplies its worker name, script, producer identity, and byte
-// budget, while Client owns the common V2 JSON-line batching, stream
+// Each phase supplies its worker name, script, producer identity, and transport
+// limits, while Client owns the common V2 JSON-line batching, stream
 // collection, artifact handling, and source-only fallback behavior.
 type Client struct {
-	Name          string
-	ScriptContent []byte
-	ScriptPath    string
-	Worker        *workerproc.Worker
-	MaxBytes      int
-	Producer      string
+	Name           string
+	ScriptContent  []byte
+	ScriptPath     string
+	Worker         *workerproc.Worker
+	MaxLineBytes   int
+	MaxStreamBytes int
+	Producer       string
 }
 
 // SourceOnlyArtifactFallback retries an artifact request in source-only mode
@@ -76,14 +77,11 @@ func (c Client) Collector(
 	collector := projectindex.NewProjectIndexPatchStreamCollector(projectindex.ProjectIndexPatchStreamOptions{
 		Root:             req.Root,
 		Budget:           budget,
-		MaxBytes:         c.MaxBytes,
+		MaxBytes:         c.MaxStreamBytes,
 		MaxFactsPerBatch: requestwire.MaxFactsPerBatch(req.Method),
 		Producer:         c.Producer,
 	})
 	err := c.PatchRequest(ctx, req, collector.Handle, func() bool {
-		if req.Method == "indexProjectIncremental" {
-			return collector.HasIncrementalReport()
-		}
 		return collector.CompletedPatchCount() >= 1
 	})
 	if err != nil {
@@ -97,7 +95,7 @@ func (c Client) Artifact(ctx context.Context, req requestwire.Request, artifact 
 	collector := projectindex.NewProjectIndexArtifactStreamCollector(projectindex.ProjectIndexArtifactStreamOptions{
 		Root:     req.Root,
 		Artifact: artifact,
-		MaxBytes: c.MaxBytes,
+		MaxBytes: c.MaxStreamBytes,
 	})
 	result, err := c.Stream(ctx, req, collector.Handle)
 	if err != nil {
@@ -124,7 +122,7 @@ func (c Client) Stream(ctx context.Context, req requestwire.Request, handle func
 		Name:     c.Name,
 		Content:  c.ScriptContent,
 		Path:     c.ScriptPath,
-		MaxBytes: c.MaxBytes,
+		MaxBytes: c.MaxLineBytes,
 	}, data, handle)
 }
 

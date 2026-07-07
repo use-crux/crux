@@ -1,11 +1,11 @@
 import type { IndexExtractor, ExtractContext, ExtractedFacts, IndexerExtension } from '../../../extensions/public-contract/types'
-import type { StaticCallContext } from '../../../extractors/types'
 import { createExtensionRegistry, type ExtensionRegistry } from '../../../extensions/runtime/registry'
 import {
   createExtractContext,
   createIndexerExtensionRuntime,
   extractedFactsFromStaticExtractionResult,
 } from '../../../extensions/runtime/engine'
+import type { StaticCallContext } from './static-call-context'
 
 /**
  * Runs registered static extractors for one parser-owned call context and returns the first fact result.

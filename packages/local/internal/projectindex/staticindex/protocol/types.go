@@ -211,6 +211,7 @@ type CompileRequest struct {
 	LintConfig       json.RawMessage   `json:"lintConfig,omitempty"`
 	LintSuppressions []LintSuppression `json:"lintSuppressions,omitempty"`
 	EmitBuiltinLints *bool             `json:"emitBuiltinLints,omitempty"`
+	PatchInvalidates json.RawMessage   `json:"patchInvalidates,omitempty"`
 }
 
 type FinalizeResponse struct {

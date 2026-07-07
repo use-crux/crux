@@ -14,6 +14,22 @@ const DEFAULT_PROVIDER_RECORD_CACHE_SIZE = 512
 
 export type SerializedStaticSyntaxRecord = string | Uint8Array
 
+/** Error thrown when a provided syntax record fails identity or source validation. */
+export class StaticSyntaxRecordIntegrityError extends Error {
+  readonly file: string
+
+  constructor(file: string, message: string) {
+    super(message)
+    this.name = 'StaticSyntaxRecordIntegrityError'
+    this.file = file
+  }
+}
+
+/** Returns whether an error came from provided-record integrity validation. */
+export function isStaticSyntaxRecordIntegrityError(error: unknown): error is StaticSyntaxRecordIntegrityError {
+  return error instanceof StaticSyntaxRecordIntegrityError
+}
+
 /** Lazy lookup surface for externally produced syntax records. */
 export interface ProvidedStaticSyntaxRecordProvider {
   /**
@@ -246,7 +262,8 @@ function assertStaticSyntaxFrontendName(value: string): asserts value is StaticS
 
 function assertRecordIdentity(record: StaticSyntaxFileRecord, identity: StaticSyntaxFrontendIdentity): void {
   if (record.frontend.name !== identity.name || record.frontend.version !== identity.version) {
-    throw new Error(
+    throw new StaticSyntaxRecordIntegrityError(
+      record.file,
       `Provided static syntax record for ${record.file} uses ${record.frontend.name}@${record.frontend.version}, expected ${identity.name}@${identity.version}`,
     )
   }
@@ -261,12 +278,18 @@ async function providedRecordForInput(input: {
   const record = await input.read()
   if (!record) {
     if (input.fallback) return input.fallback.parseFile(input.input)
-    throw new Error(`No provided static syntax record for ${input.input.file}`)
+    throw new StaticSyntaxRecordIntegrityError(
+      input.input.file,
+      `No provided static syntax record for ${input.input.file}`,
+    )
   }
   assertRecordIdentity(record, input.identity)
   const sourceHash = sha256(input.input.source)
   if (record.sourceHash !== sourceHash) {
-    throw new Error(`Provided static syntax record for ${input.input.file} does not match current source text`)
+    throw new StaticSyntaxRecordIntegrityError(
+      input.input.file,
+      `Provided static syntax record for ${input.input.file} does not match current source text`,
+    )
   }
   return record
 }

@@ -1,13 +1,13 @@
-use std::collections::HashMap;
-
 use oxc_ast::ast::*;
+use oxc_semantic::Scoping;
 
 use crate::{
-    protocol::{StaticImportRecord, StaticInitializerRecord, StaticSourceMatch},
-    syntax::initializers::scoped_initializers_for_function,
+    protocol::StaticSourceMatch,
     syntax::match_build::{MatchContext, match_from_declarator, new_match, traversal_needles},
     syntax::match_expressions::{visit_expression, visit_expression_call},
     syntax::match_interests::CalleeMatcher,
+    syntax::semantic_imports::SemanticImportIndex,
+    syntax::semantic_initializers::SemanticInitializerIndex,
     syntax::source::SourceView,
 };
 
@@ -15,8 +15,10 @@ pub(crate) fn collect_matches(
     root: &str,
     file: &str,
     view: &SourceView<'_>,
+    scoping: &Scoping,
+    initializer_index: &SemanticInitializerIndex<'_>,
     statements: &[Statement<'_>],
-    imports: &HashMap<String, StaticImportRecord>,
+    imports: &SemanticImportIndex<'_>,
     call_matcher: &CalleeMatcher,
     constructor_matcher: &CalleeMatcher,
 ) -> Vec<StaticSourceMatch> {
@@ -30,6 +32,8 @@ pub(crate) fn collect_matches(
                 root,
                 file,
                 view,
+                initializer_index,
+                scope_id: scoping.root_scope_id(),
                 imports,
                 call_matcher,
                 constructor_matcher,
@@ -37,7 +41,6 @@ pub(crate) fn collect_matches(
             },
             statement,
             false,
-            &[],
             &mut matches,
         );
     }
@@ -48,64 +51,49 @@ pub(crate) fn visit_statement(
     context: MatchContext<'_, '_>,
     statement: &Statement<'_>,
     exported: bool,
-    scoped_initializers: &[StaticInitializerRecord],
     matches: &mut Vec<StaticSourceMatch>,
 ) {
     match statement {
         Statement::ExportNamedDeclaration(export) => {
             if let Some(declaration) = &export.declaration {
-                visit_declaration(context, declaration, true, scoped_initializers, matches);
+                visit_declaration(context, declaration, true, matches);
             }
         }
         Statement::ExportDefaultDeclaration(export) => {
-            visit_export_default(context, &export.declaration, scoped_initializers, matches);
+            visit_export_default(context, &export.declaration, matches);
         }
         Statement::VariableDeclaration(declaration) => {
             for declarator in &declaration.declarations {
-                if let Some(match_record) =
-                    match_from_declarator(context, declarator, exported, scoped_initializers)
-                {
-                    matches.push(match_record);
-                }
+                visit_variable_declarator(context, declarator, exported, matches);
             }
         }
         Statement::FunctionDeclaration(function) => {
-            let scoped = scoped_initializers_for_function(
-                context.view,
-                function,
-                context.imports,
-                scoped_initializers,
-            );
+            let context = context.with_scope(function.scope_id.get().unwrap_or(context.scope_id));
             if let Some(body) = &function.body {
                 for statement in &body.statements {
-                    visit_statement(context, statement, false, &scoped, matches);
+                    visit_statement(context, statement, false, matches);
                 }
             }
         }
         Statement::ExpressionStatement(statement) => {
-            visit_expression(context, &statement.expression, scoped_initializers, matches);
+            visit_expression(context, &statement.expression, matches);
         }
         Statement::ReturnStatement(statement) => {
             if let Some(argument) = &statement.argument {
-                visit_expression(context, argument, scoped_initializers, matches);
+                visit_expression(context, argument, matches);
             }
         }
         Statement::BlockStatement(block) => {
+            let context = context.with_scope(block.scope_id.get().unwrap_or(context.scope_id));
             for statement in &block.body {
-                visit_statement(context, statement, false, scoped_initializers, matches);
+                visit_statement(context, statement, false, matches);
             }
         }
         Statement::IfStatement(statement) => {
-            visit_expression(context, &statement.test, scoped_initializers, matches);
-            visit_statement(
-                context,
-                &statement.consequent,
-                false,
-                scoped_initializers,
-                matches,
-            );
+            visit_expression(context, &statement.test, matches);
+            visit_statement(context, &statement.consequent, false, matches);
             if let Some(alternate) = &statement.alternate {
-                visit_statement(context, alternate, false, scoped_initializers, matches);
+                visit_statement(context, alternate, false, matches);
             }
         }
         _ => {}
@@ -116,29 +104,19 @@ fn visit_declaration(
     context: MatchContext<'_, '_>,
     declaration: &Declaration<'_>,
     exported: bool,
-    scoped_initializers: &[StaticInitializerRecord],
     matches: &mut Vec<StaticSourceMatch>,
 ) {
     match declaration {
         Declaration::VariableDeclaration(declaration) => {
             for declarator in &declaration.declarations {
-                if let Some(match_record) =
-                    match_from_declarator(context, declarator, exported, scoped_initializers)
-                {
-                    matches.push(match_record);
-                }
+                visit_variable_declarator(context, declarator, exported, matches);
             }
         }
         Declaration::FunctionDeclaration(function) => {
-            let scoped = scoped_initializers_for_function(
-                context.view,
-                function,
-                context.imports,
-                scoped_initializers,
-            );
+            let context = context.with_scope(function.scope_id.get().unwrap_or(context.scope_id));
             if let Some(body) = &function.body {
                 for statement in &body.statements {
-                    visit_statement(context, statement, false, &scoped, matches);
+                    visit_statement(context, statement, false, matches);
                 }
             }
         }
@@ -146,15 +124,60 @@ fn visit_declaration(
     }
 }
 
+fn visit_variable_declarator(
+    context: MatchContext<'_, '_>,
+    declarator: &VariableDeclarator<'_>,
+    exported: bool,
+    matches: &mut Vec<StaticSourceMatch>,
+) {
+    if let Some(match_record) = match_from_declarator(context, declarator, exported) {
+        matches.push(match_record);
+        return;
+    }
+    visit_binding_pattern(context, &declarator.id, matches);
+    if let Some(init) = &declarator.init {
+        visit_expression(context, init, matches);
+    }
+}
+
+fn visit_binding_pattern(
+    context: MatchContext<'_, '_>,
+    pattern: &BindingPattern<'_>,
+    matches: &mut Vec<StaticSourceMatch>,
+) {
+    match pattern {
+        BindingPattern::ObjectPattern(pattern) => {
+            for property in &pattern.properties {
+                visit_binding_pattern(context, &property.value, matches);
+            }
+            if let Some(rest) = &pattern.rest {
+                visit_binding_pattern(context, &rest.argument, matches);
+            }
+        }
+        BindingPattern::ArrayPattern(pattern) => {
+            for element in pattern.elements.iter().flatten() {
+                visit_binding_pattern(context, element, matches);
+            }
+            if let Some(rest) = &pattern.rest {
+                visit_binding_pattern(context, &rest.argument, matches);
+            }
+        }
+        BindingPattern::AssignmentPattern(pattern) => {
+            visit_binding_pattern(context, &pattern.left, matches);
+            visit_expression(context, &pattern.right, matches);
+        }
+        BindingPattern::BindingIdentifier(_) => {}
+    }
+}
+
 fn visit_export_default(
     context: MatchContext<'_, '_>,
     declaration: &ExportDefaultDeclarationKind<'_>,
-    scoped_initializers: &[StaticInitializerRecord],
     matches: &mut Vec<StaticSourceMatch>,
 ) {
     match declaration {
         ExportDefaultDeclarationKind::CallExpression(call) => {
-            visit_expression_call(context, call, scoped_initializers, matches);
+            visit_expression_call(context, call, matches);
         }
         ExportDefaultDeclarationKind::NewExpression(new_expression) => {
             if let Some(match_record) = new_match(
@@ -165,21 +188,15 @@ fn visit_export_default(
                 ),
                 new_expression,
                 false,
-                scoped_initializers,
             ) {
                 matches.push(match_record);
             }
         }
         ExportDefaultDeclarationKind::FunctionDeclaration(function) => {
-            let scoped = scoped_initializers_for_function(
-                context.view,
-                function,
-                context.imports,
-                scoped_initializers,
-            );
+            let context = context.with_scope(function.scope_id.get().unwrap_or(context.scope_id));
             if let Some(body) = &function.body {
                 for statement in &body.statements {
-                    visit_statement(context, statement, false, &scoped, matches);
+                    visit_statement(context, statement, false, matches);
                 }
             }
         }

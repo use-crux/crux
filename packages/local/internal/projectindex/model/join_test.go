@@ -11,6 +11,12 @@ func TestJoinSemanticPatchCarriesSourceGraphAndSupportSources(t *testing.T) {
 	patch := JoinSemanticPatch(IndexPatch{
 		Phase: PhaseSemantic,
 		Facts: IndexPatchFacts{
+			Sources: []store.IndexSourceFile{{
+				File:          "src/writer.ts",
+				Status:        "indexed",
+				SourceHash:    "source:writer",
+				InterfaceHash: "interface:writer",
+			}},
 			SourceRefs: []IndexSourceRefFact{{
 				DefinitionID: "prompt:writer",
 				Ref: store.ProjectSourceRef{
@@ -37,6 +43,9 @@ func TestJoinSemanticPatchCarriesSourceGraphAndSupportSources(t *testing.T) {
 	}
 	if len(writer.Dependencies) != 1 || writer.Dependencies[0] != "src/helper.ts" {
 		t.Fatalf("writer dependencies = %+v, want helper", writer.Dependencies)
+	}
+	if writer.SourceHash != "source:writer" || writer.InterfaceHash != "interface:writer" {
+		t.Fatalf("writer hashes = %q/%q, want existing patch hash evidence", writer.SourceHash, writer.InterfaceHash)
 	}
 	if len(helper.Dependents) != 1 || helper.Dependents[0] != "src/writer.ts" {
 		t.Fatalf("helper dependents = %+v, want writer", helper.Dependents)

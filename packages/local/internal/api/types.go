@@ -1378,6 +1378,8 @@ type IndexRuleSuppression struct {
 type IndexSourceFile struct {
 	File          string   `json:"file"`
 	Status        string   `json:"status"`
+	SourceHash    string   `json:"sourceHash,omitempty"`
+	InterfaceHash string   `json:"interfaceHash,omitempty"`
 	DefinitionIDs []string `json:"definitionIds,omitempty"`
 	Dependencies  []string `json:"dependencies,omitempty"`
 	Dependents    []string `json:"dependents,omitempty"`

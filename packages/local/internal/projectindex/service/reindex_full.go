@@ -91,7 +91,11 @@ func (p projectIndexPipeline) reindexProjectWithOptions(
 	run.generation = run.semanticRequest.IndexGeneration
 
 	run.lintPrefetch = s.startProjectLintPrefetch(ctx, projectLintIndexRequest(root, configPath, projectName, index, astResult.UsedStaticIndex))
-	defer run.lintPrefetch.stop()
+	defer func() {
+		if !run.lintPrefetchDetached {
+			run.lintPrefetch.stop()
+		}
+	}()
 
 	return s.completeSemanticAndLint(ctx, run)
 }

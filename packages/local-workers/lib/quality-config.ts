@@ -1,7 +1,7 @@
 /**
  * Quality runner configuration — loads the `quality:` block of
- * `crux.config.ts` when present, resolves no-config source discovery
- * defaults, and scaffolds the persistence root's `.gitignore` (experiments
+ * `crux.config.ts` when present, resolves no-config quality defaults, and
+ * scaffolds the persistence root's `.gitignore` (experiments
  * and cache are machine-local; baselines and cassettes are committed).
  *
  * @module
@@ -119,10 +119,9 @@ function isCruxInstance(value: unknown): value is Crux {
  * Load the Quality project model used by the runner.
  *
  * When a Crux config is present, the config module supplies the `quality:`
- * block. Prompt tests are collected from source-discovered prompt exports
- * rather than from config-level registration. When no config is present,
- * Quality uses source-discovery conventions: empty quality policy and prompt
- * files discovered from the project root.
+ * block and any prompt exports already visible from that module can contribute
+ * colocated tests. When no config is present, Quality uses no-config
+ * conventions without running a TypeScript source projection fallback.
  */
 export async function loadQualityProject(configPath?: string): Promise<LoadedQualityProject> {
   const projectRoot = resolveQualityProjectRoot(configPath)

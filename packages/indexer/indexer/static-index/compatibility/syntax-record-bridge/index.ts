@@ -13,7 +13,6 @@ export { staticFoundDefinitionFromExtractedFacts, staticFoundDefinitionsFromExtr
 export { extractStaticRecordWithRegistry, type StaticRecordExtractionInput } from './runtime'
 export { createStaticRecordExtractContext } from './context'
 export { createStaticRecordSourceRefBuilder } from './source-ref'
-export { staticRecordDataAccessRefsFromValue } from './record-data-access'
 export { schemaPropertySourceRefs } from './schema-source-ref'
 export {
   createStaticRecordSourceResolver,
@@ -36,19 +35,6 @@ export {
   internalIdentifierRefsForConfigProperty,
   internalObjectMapIdentifierEntries,
 } from './config'
-export { internalDataAccessRefsForConfigProperties } from './data-access'
-export { internalFlowTraversal } from './flow-traversal'
-export {
-  internalCascadeTierDefinitions,
-  internalFallbackOptionDefinitions,
-  internalFallbackOptions,
-  internalRouterRouteDefinitions,
-  internalRoutingArrayProperty,
-  internalRoutingModelPreview,
-  internalRoutingObjectLiteralMetadata,
-  internalRoutingObjectProperty,
-  internalRoutingPropertyInitializer,
-} from './routing-traversal'
 export {
   internalStaticTraversal,
   type CallPredicate,

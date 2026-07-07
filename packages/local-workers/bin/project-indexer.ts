@@ -8,18 +8,14 @@
 
 import { createInterface } from 'node:readline'
 import {
-  indexProjectAst,
-  indexProjectAstFromSyntaxRecordProvider,
-  indexProjectAstFromSyntaxRecords,
-  indexProjectIncremental,
+  generateRuntimeArtifacts,
   inspectProjectStaticIndexConfig,
   inspectProjectStaticSyntaxPlan,
   inspectProjectConfig,
   resolveProjectModel,
-  generateRuntimeArtifacts,
   runRuntimeOperation,
   type RuntimeOperationKind,
-} from '@use-crux/indexer'
+} from '@use-crux/indexer/host'
 import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@use-crux/core/project-index'
 import {
   createProjectIndexWorkerRequestAssembler,
@@ -29,14 +25,11 @@ import {
   assertProjectIndexWorkerProtocolV2,
   errorContextForMethod,
   writeArtifactEvent,
-  writeIncrementalEvents,
-  writePatchEvents,
   writeProjectIndexArtifactError,
   writeProjectIndexPhaseError,
   type ProjectIndexWorkerErrorContext,
 } from './project-indexer-protocol'
 import { writeStaticHostArtifactRequest } from './project-indexer-static-host'
-import { createStaticTimingCollector, providedRecordCacheSizeFromEnv } from './project-indexer-static-timing'
 
 const rl = createInterface({
   input: process.stdin,
@@ -46,12 +39,11 @@ const rl = createInterface({
 let pending = 0
 let closing = false
 let lineQueue = Promise.resolve()
-const liveProjectionRequests = new Map<string, Promise<void>>()
 
 const assembleProjectIndexWorkerRequest = createProjectIndexWorkerRequestAssembler()
 
 function maybeExit(): void {
-  if (closing && pending === 0 && liveProjectionRequests.size === 0) process.exit(0)
+  if (closing && pending === 0) process.exit(0)
 }
 
 async function writeResponse(value: unknown): Promise<void> {
@@ -89,18 +81,6 @@ async function handleLine(line: string): Promise<void> {
     streamError = errorContextForMethod(parsed.method)
     const req = await assembleProjectIndexWorkerRequest(parsed)
     if (!req) {
-      if (parsed.requestKind === 'done' && parsed.requestId) {
-        const liveProjection = liveProjectionRequests.get(parsed.requestId)
-        if (liveProjection) await liveProjection
-      }
-      return
-    }
-    if (req.liveSyntaxRecordProjection && req.requestId) {
-      const liveProjection = runAssembledRequest(req, streamError).finally(() => {
-        liveProjectionRequests.delete(req.requestId!)
-        maybeExit()
-      })
-      liveProjectionRequests.set(req.requestId, liveProjection)
       return
     }
     await runAssembledRequest(req, streamError)
@@ -122,153 +102,89 @@ async function runAssembledRequest(
   streamError: ProjectIndexWorkerErrorContext | undefined,
 ): Promise<void> {
   try {
-    try {
-      switch (req.method) {
-        case 'resolveProjectModel': {
-          if (!req.root) throw new Error('resolveProjectModel requires root')
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const projectModel = await resolveProjectModel({
-            root: req.root,
-            configPath: req.configPath,
-            projectName: req.projectName,
-            resolutionMode: requestResolutionMode(req.resolutionMode),
-          })
-          await writeArtifactEvent(writeResponse, 'projectModel', projectModel, req.root)
-          break
-        }
-        case 'inspectProjectConfig': {
-          if (!req.root) throw new Error('inspectProjectConfig requires root')
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const config = await inspectProjectConfig({
-            root: req.root,
-            configPath: req.configPath,
-            projectName: req.projectName,
-            resolutionMode: requestResolutionMode(req.resolutionMode),
-          })
-          await writeArtifactEvent(writeResponse, 'projectConfig', config, req.root)
-          break
-        }
-        case 'inspectProjectStaticIndexConfig': {
-          if (!req.root) throw new Error('inspectProjectStaticIndexConfig requires root')
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const config = await inspectProjectStaticIndexConfig({
-            root: req.root,
-            configPath: req.configPath,
-          })
-          await writeArtifactEvent(writeResponse, 'projectStaticIndexConfig', config, req.root)
-          break
-        }
-        case 'inspectProjectStaticSyntaxPlan': {
-          if (!req.root) throw new Error('inspectProjectStaticSyntaxPlan requires root')
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const plan = await inspectProjectStaticSyntaxPlan({
-            root: req.root,
-            configPath: req.configPath,
-            projectName: req.projectName,
-            resolutionMode: requestResolutionMode(req.resolutionMode),
-            includeCacheStatus: req.includeStaticCacheStatus,
-          })
-          await writeArtifactEvent(writeResponse, 'projectStaticSyntaxPlan', plan, req.root)
-          break
-        }
-        case 'loadStaticExtensionHostManifest':
-        case 'extractStaticEvidenceBatch':
-        case 'checkStaticRules': {
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          await writeStaticHostArtifactRequest(writeResponse, req)
-          break
-        }
-        case 'generateRuntimeArtifacts': {
-          if (!req.root) throw new Error('generateRuntimeArtifacts requires root')
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const result = await generateRuntimeArtifacts({ root: req.root })
-          await writeArtifactEvent(writeResponse, 'runtimeArtifacts', result, req.root)
-          break
-        }
-        case 'runRuntimeOperation': {
-          if (!req.root) throw new Error('runRuntimeOperation requires root')
-          if (!req.runtimeOperation) throw new Error('runRuntimeOperation requires runtimeOperation')
-          if (!isRuntimeOperationKind(req.runtimeOperation)) {
-            throw new Error(`unknown runtime operation: ${req.runtimeOperation}`)
-          }
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const result = await runRuntimeOperation({
-            root: req.root,
-            operation: req.runtimeOperation,
-            workId: req.runtimeWorkId,
-            includeDetails: req.runtimeIncludeDetails === true,
-          })
-          await writeArtifactEvent(writeResponse, 'runtimeOperation', result, req.root)
-          break
-        }
-        case 'indexProjectAst': {
-          if (!req.root) throw new Error('indexProjectAst requires root')
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const staticTimings = createStaticTimingCollector()
-          const patch = await indexProjectAst({
-            root: req.root,
-            configPath: req.configPath,
-            projectName: req.projectName,
-            staticInstrumentation: staticTimings.instrumentation,
-          })
-          await writePatchEvents(writeResponse, 'indexProjectAst', patch, { timings: staticTimings.summary() })
-          break
-        }
-        case 'indexProjectAstFromSyntaxRecords': {
-          if (!req.root) throw new Error('indexProjectAstFromSyntaxRecords requires root')
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const staticTimings = createStaticTimingCollector()
-          const patch = req.syntaxRecordProvider
-            ? await indexProjectAstFromSyntaxRecordProvider({
-                root: req.root,
-                configPath: req.configPath,
-                projectName: req.projectName,
-                recordProvider: req.syntaxRecordProvider,
-                frontendIdentity: req.syntaxFrontendIdentity,
-                staticCacheHits: req.staticCacheHits,
-                staticInstrumentation: staticTimings.instrumentation,
-                providedRecordCacheSize: providedRecordCacheSizeFromEnv(),
-                nativeFactProjection: req.nativeFactProjection,
-              })
-            : await indexProjectAstFromSyntaxRecords({
-                root: req.root,
-                configPath: req.configPath,
-                projectName: req.projectName,
-                records: requiredSyntaxRecords(req),
-                frontendIdentity: req.syntaxFrontendIdentity,
-                staticCacheHits: req.staticCacheHits,
-                staticInstrumentation: staticTimings.instrumentation,
-                providedRecordCacheSize: providedRecordCacheSizeFromEnv(),
-                nativeFactProjection: req.nativeFactProjection,
-              })
-          await writePatchEvents(writeResponse, 'indexProjectAstFromSyntaxRecords', patch, {
-            timings: staticTimings.summary(),
-          })
-          break
-        }
-        case 'indexProjectIncremental': {
-          if (!req.root) throw new Error('indexProjectIncremental requires root')
-          if (!req.previousIndex) throw new Error('indexProjectIncremental requires previousIndex')
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const result = await indexProjectIncremental({
-            root: req.root,
-            configPath: req.configPath,
-            projectName: req.projectName,
-            previousIndex: req.previousIndex,
-            files: req.files ?? [],
-            deletedFiles: req.deletedFiles,
-            mode: req.mode ?? 'ast',
-            semanticBackend: req.semanticBackend,
-            maxAffectedFiles: req.maxAffectedFiles,
-          })
-          await writeIncrementalEvents(writeResponse, result)
-          break
-        }
-        default:
-          await writeResponse({ error: `unknown method: ${req.method}` })
+    switch (req.method) {
+      case 'resolveProjectModel': {
+        if (!req.root) throw new Error('resolveProjectModel requires root')
+        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        const projectModel = await resolveProjectModel({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+          resolutionMode: requestResolutionMode(req.resolutionMode),
+        })
+        await writeArtifactEvent(writeResponse, 'projectModel', projectModel, req.root)
+        break
       }
-    } finally {
-      await cleanupProjectIndexWorkerRequest(req)
+      case 'inspectProjectConfig': {
+        if (!req.root) throw new Error('inspectProjectConfig requires root')
+        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        const config = await inspectProjectConfig({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+          resolutionMode: requestResolutionMode(req.resolutionMode),
+        })
+        await writeArtifactEvent(writeResponse, 'projectConfig', config, req.root)
+        break
+      }
+      case 'inspectProjectStaticIndexConfig': {
+        if (!req.root) throw new Error('inspectProjectStaticIndexConfig requires root')
+        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        const config = await inspectProjectStaticIndexConfig({
+          root: req.root,
+          configPath: req.configPath,
+        })
+        await writeArtifactEvent(writeResponse, 'projectStaticIndexConfig', config, req.root)
+        break
+      }
+      case 'inspectProjectStaticSyntaxPlan': {
+        if (!req.root) throw new Error('inspectProjectStaticSyntaxPlan requires root')
+        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        const plan = await inspectProjectStaticSyntaxPlan({
+          root: req.root,
+          configPath: req.configPath,
+          projectName: req.projectName,
+          resolutionMode: requestResolutionMode(req.resolutionMode),
+          includeCacheStatus: req.includeStaticCacheStatus,
+        })
+        await writeArtifactEvent(writeResponse, 'projectStaticSyntaxPlan', plan, req.root)
+        break
+      }
+      case 'loadStaticExtensionHostManifest':
+      case 'extractStaticEvidenceBatch':
+      case 'checkStaticRules': {
+        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        await writeStaticHostArtifactRequest(writeResponse, req)
+        break
+      }
+      case 'generateRuntimeArtifacts': {
+        if (!req.root) throw new Error('generateRuntimeArtifacts requires root')
+        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        const result = await generateRuntimeArtifacts({
+          root: req.root,
+          definitions: req.definitions,
+        })
+        await writeArtifactEvent(writeResponse, 'runtimeArtifacts', result, req.root)
+        break
+      }
+      case 'runRuntimeOperation': {
+        if (!req.root) throw new Error('runRuntimeOperation requires root')
+        if (!req.runtimeOperation) throw new Error('runRuntimeOperation requires runtimeOperation')
+        if (!isRuntimeOperationKind(req.runtimeOperation)) {
+          throw new Error(`unknown runtime operation: ${req.runtimeOperation}`)
+        }
+        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        const result = await runRuntimeOperation({
+          root: req.root,
+          operation: req.runtimeOperation,
+          workId: req.runtimeWorkId,
+          includeDetails: req.runtimeIncludeDetails === true,
+        })
+        await writeArtifactEvent(writeResponse, 'runtimeOperation', result, req.root)
+        break
+      }
+      default:
+        await writeResponse({ error: `unknown method: ${req.method}` })
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
@@ -280,22 +196,6 @@ async function runAssembledRequest(
     } else {
       await writeResponse({ error: message })
     }
-  }
-}
-
-function requiredSyntaxRecords(
-  req: ProjectIndexWorkerRequest,
-): NonNullable<ProjectIndexWorkerRequest['syntaxRecords']> {
-  if (!req.syntaxRecords) throw new Error('indexProjectAstFromSyntaxRecords requires syntaxRecords')
-  return req.syntaxRecords
-}
-
-async function cleanupProjectIndexWorkerRequest(req: ProjectIndexWorkerRequest): Promise<void> {
-  try {
-    await req.cleanup?.()
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    process.stderr.write(`[project-indexer] cleanup error: ${message}\n`)
   }
 }
 

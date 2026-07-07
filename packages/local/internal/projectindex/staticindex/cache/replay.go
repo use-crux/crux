@@ -95,9 +95,11 @@ func replayFact(root string, projectName string, hit protocol.SourceFile) (json.
 		Relations:   extraction.Relations,
 		Diagnostics: extraction.Diagnostics,
 		Sources: []store.IndexSourceFile{{
-			File:         file,
-			Status:       "indexed",
-			Dependencies: dependencies,
+			File:          file,
+			Status:        "indexed",
+			SourceHash:    hit.SourceHash,
+			InterfaceHash: extraction.InterfaceHash,
+			Dependencies:  dependencies,
 		}},
 	}
 	fact, err := json.Marshal(group)

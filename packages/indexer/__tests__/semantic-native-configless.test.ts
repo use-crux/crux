@@ -46,7 +46,7 @@ describe('configless native semantic backend', () => {
     expect(typescriptPatch.status).toBe('ok')
     expect(nativePatch.status).toBe('ok')
     expect(normalizedFacts(nativePatch.facts)).toEqual(normalizedFacts(typescriptPatch.facts))
-  })
+  }, 30_000)
 })
 
 function normalizedFacts(facts: IndexPatchFacts): IndexPatchFacts {

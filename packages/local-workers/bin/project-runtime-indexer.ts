@@ -9,7 +9,7 @@
  */
 
 import { createInterface } from 'node:readline'
-import { indexProjectRuntime } from '@use-crux/indexer'
+import { indexProjectRuntimeForHost } from '@use-crux/indexer/host/runtime'
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import {
   assertProjectIndexWorkerProtocolV2,
@@ -83,7 +83,7 @@ async function handleLine(line: string): Promise<void> {
     if (!req.previousIndex) throw new Error('indexProjectRuntime requires previousIndex')
     assertProjectIndexWorkerProtocolV2(req.protocolVersion)
 
-    const patch = await indexProjectRuntime({
+    const patch = await indexProjectRuntimeForHost({
       root: req.root,
       configPath: req.configPath,
       projectName: req.projectName,

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use serde_json::{Map, Value, json};
 
@@ -99,25 +99,12 @@ fn tool_contributions_from_factory_call(
     let Some(Some(resolved)) = context.resolve_record_source(Some(&identifier)) else {
         return dynamic_tool_contributions();
     };
-    let StaticSyntaxValue::Function {
-        returns,
-        local_initializers,
-        ..
-    } = resolved.value
-    else {
+    let StaticSyntaxValue::Function { returns, .. } = resolved.value else {
         return dynamic_tool_contributions();
     };
-    let helper_initializers = local_initializers
-        .iter()
-        .map(|initializer| (initializer.name.as_str(), initializer))
-        .collect::<HashMap<_, _>>();
     let object = returns
         .iter()
-        .filter_map(|value| {
-            let resolved =
-                resolve_static_value(value, &helper_initializers, &mut Default::default());
-            matches!(resolved, StaticSyntaxValue::Object { .. }).then_some(resolved)
-        })
+        .filter_map(|value| matches!(value, StaticSyntaxValue::Object { .. }).then_some(value))
         .max_by_key(|value| match value {
             StaticSyntaxValue::Object { properties, .. } => properties.len(),
             _ => 0,

@@ -21,10 +21,8 @@ type interestManifest struct {
 type hostPlan struct {
 	Extractors                          []json.RawMessage `json:"extractors,omitempty"`
 	BundledNativeExtractorCount         int               `json:"bundledNativeExtractorCount"`
-	BundledTypeScriptExtractorCount     int               `json:"bundledTypeScriptExtractorCount"`
 	ExtensionTypeScriptExtractorCount   int               `json:"extensionTypeScriptExtractorCount"`
 	TypeScriptRuleCount                 int               `json:"typeScriptRuleCount"`
-	RequiresTypeScriptHostForBundled    bool              `json:"requiresTypeScriptHostForBundled"`
 	RequiresTypeScriptHostForExtensions bool              `json:"requiresTypeScriptHostForExtensions"`
 	RequiresTypeScriptHostForRules      bool              `json:"requiresTypeScriptHostForRules"`
 	RequiresCompatibilityEvidence       bool              `json:"requiresCompatibilityEvidence"`
@@ -133,10 +131,8 @@ func mergeStaticHost(
 	merged := hostPlan{
 		Extractors:                          append(append([]json.RawMessage{}, base.Extractors...), extension.Extractors...),
 		BundledNativeExtractorCount:         base.BundledNativeExtractorCount + extension.BundledNativeExtractorCount,
-		BundledTypeScriptExtractorCount:     base.BundledTypeScriptExtractorCount + extension.BundledTypeScriptExtractorCount,
 		ExtensionTypeScriptExtractorCount:   base.ExtensionTypeScriptExtractorCount + extension.ExtensionTypeScriptExtractorCount,
 		TypeScriptRuleCount:                 base.TypeScriptRuleCount + extension.TypeScriptRuleCount,
-		RequiresTypeScriptHostForBundled:    base.RequiresTypeScriptHostForBundled || extension.RequiresTypeScriptHostForBundled,
 		RequiresTypeScriptHostForExtensions: base.RequiresTypeScriptHostForExtensions || extension.RequiresTypeScriptHostForExtensions,
 		RequiresTypeScriptHostForRules:      base.RequiresTypeScriptHostForRules || extension.RequiresTypeScriptHostForRules,
 		RequiresCompatibilityEvidence:       base.RequiresCompatibilityEvidence || extension.RequiresCompatibilityEvidence,

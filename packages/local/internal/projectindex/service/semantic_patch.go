@@ -106,14 +106,14 @@ func (s *Service) applyProjectSemanticPatchResult(
 }
 
 func (s *Service) applyProjectSemanticPatchInBackground(request projectindex.ProjectSemanticIndexRequest) {
+	taskCtx, cancel, seq := s.newBackgroundSemanticContext()
 	go func() {
+		defer s.finishBackgroundSemanticTask(seq)
+		defer cancel()
 		if s == nil {
 			return
 		}
-		if _, ok := s.indexer.(SemanticClient); !ok {
-			return
-		}
-		_, _ = s.applyProjectSemanticPatch(s.ctx, request, nil)
+		_, _ = s.applyProjectSemanticPatch(taskCtx, request, nil)
 	}()
 }
 
@@ -146,7 +146,13 @@ func (s *Service) applyPlannedSemanticPatchInBackground(
 	astIndex store.IndexData,
 	matches semanticRequestMatcher,
 ) {
+	seq := s.beginBackgroundSemanticTask(func() {
+		if task != nil {
+			task.stop()
+		}
+	})
 	go func() {
+		defer s.finishBackgroundSemanticTask(seq)
 		_, _ = s.applyPlannedSemanticPatch(s.ctx, request, task, nil, astIndex, matches)
 	}()
 }

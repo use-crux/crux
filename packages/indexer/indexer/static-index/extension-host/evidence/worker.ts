@@ -1,9 +1,5 @@
 import type { ProjectModelResolutionMode } from '@use-crux/core/project-index'
 import { loadProjectConfig } from '../../../config'
-import { applyIndexLintConfig } from '../../../lints/config'
-import { indexLintFindings } from '../../../lints/findings'
-import { builtInIndexRuleDescriptors } from '../../../lints/rules'
-import { applyIndexLintSuppressions } from '../../../lints/suppressions'
 import {
   checkStaticRules,
   extractStaticEvidenceBatch,
@@ -49,14 +45,6 @@ export interface CheckStaticRulesForProjectInput extends StaticExtensionWorkerPr
   readonly graph: CheckStaticRulesInput['graph']
   /** Optional auxiliary facts made available to rule implementations. */
   readonly availableFacts?: CheckStaticRulesInput['availableFacts']
-  /** Source files scanned for Crux lint suppression directives. */
-  readonly files?: readonly string[]
-  /**
-   * When true, TypeScript executes extension rules only and returns raw lint
-   * facts. Native finalization owns built-in rules, config filtering, and
-   * suppression handling for the merged lint set.
-   */
-  readonly nativeLintFinalize?: boolean
 }
 
 /**
@@ -117,41 +105,11 @@ export async function checkStaticRulesForProject(
     ...(input.availableFacts ? { availableFacts: input.availableFacts } : {}),
   })
   const diagnostics = [...runtimeInput.configDiagnostics, ...extensionResult.diagnostics]
-  if (input.nativeLintFinalize) {
-    return {
-      ...extensionResult,
-      diagnostics,
-      facts: projectRuleFinalizeFacts({
-        lintFindings: extensionResult.outputs,
-        diagnostics,
-      }),
-    }
-  }
-
-  const ruleDescriptors = [...builtInIndexRuleDescriptors(), ...extensionResult.ruleDescriptors]
-  const rawFindings = [
-    ...indexLintFindings({ ...input.graph, runtime: runtimeInput.runtime }),
-    ...extensionResult.outputs,
-  ]
-  const outputs = applyIndexLintConfig({
-    config: runtimeInput.lint,
-    configFile: runtimeInput.configFile,
-    diagnostics,
-    ruleDescriptors,
-    findings: applyIndexLintSuppressions({
-      files: input.files ?? graphSourceFiles(input.graph),
-      findings: rawFindings,
-      diagnostics,
-      ruleDescriptors,
-    }),
-  })
   return {
     ...extensionResult,
-    outputs,
     diagnostics,
-    ruleDescriptors,
     facts: projectRuleFinalizeFacts({
-      lintFindings: outputs,
+      lintFindings: extensionResult.outputs,
       diagnostics,
     }),
   }
@@ -160,9 +118,6 @@ export async function checkStaticRulesForProject(
 async function staticExtensionRuntimeInputForProject(input: StaticExtensionWorkerProjectInput): Promise<
   StaticExtensionHostRuntimeInput & {
     readonly configDiagnostics: Awaited<ReturnType<typeof loadProjectConfig>>['diagnostics']
-    readonly configFile?: string
-    readonly lint: Awaited<ReturnType<typeof loadProjectConfig>>['loaded']['lint']
-    readonly runtime?: { readonly configured: boolean }
   }
 > {
   const loaded = await loadProjectConfig(input.root, input.configPath, input.resolutionMode ?? 'config-policy')
@@ -170,11 +125,6 @@ async function staticExtensionRuntimeInputForProject(input: StaticExtensionWorke
     root: input.root,
     config: loaded.loaded.indexer,
     configDiagnostics: loaded.diagnostics,
-    configFile: loaded.loaded.configFile,
-    lint: loaded.loaded.lint,
-    ...(loaded.loaded.importFailed
-      ? {}
-      : { runtime: { configured: Boolean(loaded.loaded.crux?.config.runtime) } }),
   }
 }
 
@@ -186,15 +136,4 @@ function projectRuleFinalizeFacts(input: {
     ...(input.lintFindings.length ? { lintFindings: input.lintFindings } : {}),
     ...(input.diagnostics.length ? { diagnostics: input.diagnostics } : {}),
   }
-}
-
-function graphSourceFiles(graph: CheckStaticRulesInput['graph']): readonly string[] {
-  return [
-    ...new Set(
-      [
-        ...graph.definitions.map((definition) => definition.source?.file),
-        ...graph.relations.map((relation) => relation.source?.file),
-      ].filter((file): file is string => typeof file === 'string' && file.length > 0),
-    ),
-  ].sort()
 }

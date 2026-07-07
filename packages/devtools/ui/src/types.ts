@@ -823,6 +823,38 @@ export interface ProjectIndexingStatus {
   }
 }
 
+/**
+ * Bounded live-indexing status published by Crux Local's watch pipeline.
+ *
+ * This is intentionally telemetry about the latest coalesced run, not a copy
+ * of Project Index facts. Use `ProjectIndexData` for the indexed read model.
+ */
+export interface ProjectIndexWatchStatus {
+  state: 'idle' | 'running' | 'fallback' | 'degraded' | string
+  lastRun?: ProjectIndexWatchRunInfo
+}
+
+/** Describes the latest save-triggered Project Index refresh. */
+export interface ProjectIndexWatchRunInfo {
+  runId: number
+  status: string
+  planKind?: string
+  fallbackUsed: boolean
+  fallbackReason?: string
+  graphConfidence?: string
+  changedFileCount: number
+  deletedFileCount: number
+  affectedFileCount: number
+  affectedDefinitionCount: number
+  patchCount: number
+  deltaBatchCount?: number
+  coalescedWhileRunning?: boolean
+  pendingRunReplacedCount?: number
+  phaseTimingsMs?: Record<string, number>
+  semanticStatus: string
+  staleSemanticDropped?: boolean
+}
+
 export interface ProjectIndexData {
   schemaVersion?: number
   prompts: PromptMeta[]

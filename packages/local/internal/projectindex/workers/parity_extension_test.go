@@ -11,12 +11,12 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex/staticindex/frontend"
 )
 
-func TestWorkerNativeStaticIndexUsesTypeScriptExtensionFallbackInProductionPath(t *testing.T) {
+func TestWorkerNativeStaticIndexUsesTypeScriptExtensionHostInProductionPath(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
 	if os.Getenv(frontend.WorkerEnv) == "" {
-		t.Skipf("set %s to run production Static Index extension fallback parity", frontend.WorkerEnv)
+		t.Skipf("set %s to run production Static Index extension host test", frontend.WorkerEnv)
 	}
 
 	root := t.TempDir()
@@ -43,11 +43,11 @@ func TestWorkerNativeStaticIndexUsesTypeScriptExtensionFallbackInProductionPath(
 		t.Fatalf("plan did not include extension fallback manifest: callNames=%v staticHost=%s", plan.CallNames, string(plan.StaticHost))
 	}
 
-	facts, err := productionStaticIndexFinalFacts(context.Background(), worker, root, "crux.config.ts", "parity-extension-fallback")
+	facts, err := productionStaticIndexFinalFacts(context.Background(), worker, root, "crux.config.ts", "parity-extension-host")
 	if err != nil {
-		t.Fatalf("native production static index with extension fallback error = %v", err)
+		t.Fatalf("native production static index with extension host error = %v", err)
 	}
-	assertNativeSyntaxPathRan(t, worker.LastAstTiming())
+	assertNativeStaticIndexPathRan(t, worker.LastAstTiming())
 	assertHasDefinition(t, facts, "prompt:writer")
 	assertHasDefinition(t, facts, "@acme/workflow:publish")
 	assertHasLintFinding(t, facts, "@acme/crux-indexer-extension/require-owner")

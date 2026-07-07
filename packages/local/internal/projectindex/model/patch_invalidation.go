@@ -110,6 +110,7 @@ func filterSources(sources []store.IndexSourceFile, invalidatedFiles map[string]
 		}
 		source.DefinitionIDs = filterStringsNotInSet(source.DefinitionIDs, invalidatedDefinitionIDs)
 		source.Diagnostics = filterStringsNotInSet(source.Diagnostics, invalidatedDiagnosticIDs)
+		source.Dependents = filterStringsNotInSet(source.Dependents, invalidatedFiles)
 		next = append(next, source)
 	}
 	return next

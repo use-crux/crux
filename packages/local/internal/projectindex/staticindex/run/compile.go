@@ -47,6 +47,7 @@ func runCompile(
 		LintConfig:       request.Plan.LintConfig,
 		LintSuppressions: runlint.SuppressionsFromSourceText(sourceInput.SourceTextByFile),
 		EmitBuiltinLints: &emitBuiltinLints,
+		PatchInvalidates: request.PatchInvalidates,
 	})
 	timing := Timing{NativeParseAndForwardMs: elapsedMs(started)}
 	if err != nil {

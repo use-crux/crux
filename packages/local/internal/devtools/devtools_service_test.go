@@ -1493,6 +1493,35 @@ func TestServicePublishesIndexQualityOnStoreChange(t *testing.T) {
 	}
 }
 
+func TestServicePublishesIndexModelPromptlyOnStoreChange(t *testing.T) {
+	s := store.NewStore()
+	service := NewService(s, nil)
+	defer service.Shutdown()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	events := service.IndexEvents().Subscribe(ctx)
+
+	started := time.Now()
+	s.SetIndexData(store.IndexData{
+		Definitions: []store.ProjectDefinition{
+			{ID: "prompt:fast", Kind: "prompt", Name: "fast", Fidelity: "resolved", Status: "active"},
+		},
+	})
+
+	select {
+	case index := <-events:
+		if findDefinition(index.Definitions, "prompt:fast") == nil {
+			t.Fatalf("definitions = %+v, want fast prompt", index.Definitions)
+		}
+		if elapsed := time.Since(started); elapsed > 50*time.Millisecond {
+			t.Fatalf("index publish latency = %s, want under 50ms on save path", elapsed)
+		}
+	case <-time.After(75 * time.Millisecond):
+		t.Fatal("timed out waiting for prompt index publish")
+	}
+}
+
 func TestServiceIndexReadModelPreservesLintFindings(t *testing.T) {
 	service := NewService(store.NewStore(), nil)
 	defer service.Shutdown()

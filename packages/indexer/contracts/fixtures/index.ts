@@ -8,10 +8,11 @@
  * @module
  */
 
-import { staticIndexRuntimeContractManifestGroups } from '../contract-manifest'
+import { staticIndexRuntimeContractManifestGroups } from "../contract-manifest";
 
 /** Contract groups with shared TypeScript fixture payloads. */
-export const staticIndexRuntimeContractFixtureGroups = staticIndexRuntimeContractManifestGroups
+export const staticIndexRuntimeContractFixtureGroups =
+  staticIndexRuntimeContractManifestGroups;
 
 export {
   readStaticIndexRuntimeSharedFixture,
@@ -25,9 +26,17 @@ export {
   type SemanticEvidenceSharedFixture,
   type WorkerEventCasesSharedFixture,
   type WorkerEventsSharedFixture,
-} from './shared'
+} from "./shared";
+export type {
+  RustFirstPartyStaticGoldenFileFixture,
+  RustFirstPartyStaticGoldenSharedFixture,
+  RustFirstPartyStaticGoldenTotalsFixture,
+} from "./rust-first-party-static-golden";
 
-export { workerEventFixtureOptions, workerEventFixturePatch } from '../worker-events/fixtures'
+export {
+  workerEventFixtureOptions,
+  workerEventFixturePatch,
+} from "../worker-events/fixtures";
 export {
   staticIndexCompilerRequestFixtures,
   staticIndexCompilerResponseFixtures,
@@ -36,4 +45,4 @@ export {
   staticIndexRunIdentityFixture,
   staticIndexSourceFileFixture,
   staticIndexTelemetryFixture,
-} from '../static-index/fixtures'
+} from "../static-index/fixtures";

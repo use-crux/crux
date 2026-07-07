@@ -74,6 +74,7 @@ func runFinalize(
 		LintConfig:       request.Plan.LintConfig,
 		LintSuppressions: runlint.SuppressionsFromSourceText(sourceInput.SourceTextByFile),
 		EmitBuiltinLints: &emitBuiltinLints,
+		PatchInvalidates: request.PatchInvalidates,
 	})
 	if err != nil {
 		return Result{}, fmt.Errorf("Static Index finalize: %w", err)

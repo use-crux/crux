@@ -81,25 +81,43 @@ describe('SourceResolver', () => {
     expect(reads).toEqual(['/project/dist/bundle.js.map'])
   })
 
-  it('caches missing source maps after the first unresolved lookup', async () => {
+  it('retries missing source maps so rebuild races recover', async () => {
+    let sourceMapAvailable = false
+    const files: Record<string, string> = {
+      '/project/dist/bundle.js': 'function original(){return"from-original"}\n',
+      '/project/dist/bundle.js.map': JSON.stringify({
+        version: 3,
+        file: 'bundle.js',
+        sources: ['../src/original.ts'],
+        sourcesContent: ['export const original = true\n'],
+        names: [],
+        mappings: 'AAAA',
+      }),
+    }
     const reads: string[] = []
     const fileSystem: SourceResolverFileSystem = {
-      exists: () => false,
+      exists: (path) => sourceMapAvailable && path === '/project/dist/bundle.js.map',
       readFile: async (path) => {
         reads.push(path)
-        throw new Error(`missing ${path}`)
+        const value = files[path]
+        if (value === undefined) throw new Error(`missing ${path}`)
+        return value
       },
     }
     const resolver = new SourceResolver({ fileSystem })
 
-    await expect(resolver.resolveLocation('/project/dist/missing-map.js', 1, 0)).resolves.toMatchObject({
+    await expect(resolver.resolveLocation('/project/dist/bundle.js', 1, 0)).resolves.toMatchObject({
       resolved: false,
     })
-    await expect(resolver.resolveLocation('/project/dist/missing-map.js', 2, 0)).resolves.toMatchObject({
-      resolved: false,
+    sourceMapAvailable = true
+    await expect(resolver.resolveLocation('/project/dist/bundle.js', 1, 0)).resolves.toMatchObject({
+      file: '../src/original.ts',
+      line: 1,
+      column: 0,
+      resolved: true,
     })
 
-    expect(reads).toEqual(['/project/dist/missing-map.js'])
+    expect(reads).toEqual(['/project/dist/bundle.js', '/project/dist/bundle.js.map'])
   })
 
   it('resolves narrow authored source-frame snapshots from source-map content', async () => {
@@ -158,6 +176,37 @@ describe('SourceResolver', () => {
     })
     const frame = await resolver.resolveSourceFrame('/project/dist/eval.js', 1, 0)
     expect(frame.kind === 'source-frame' ? frame.contentHash : '').toMatch(/^sha256:[a-f0-9]{64}$/)
+  })
+
+  it('refuses source-map disk fallback outside the project root', async () => {
+    const files: Record<string, string> = {
+      '/project/dist/eval.js': 'ctx.expect(result).toBe("wrong")\n',
+      '/project/dist/eval.js.map': JSON.stringify({
+        version: 3,
+        file: 'eval.js',
+        sources: ['../../outside/secret.eval.ts'],
+        names: [],
+        mappings: 'AAAA',
+      }),
+      '/outside/secret.eval.ts': 'export const secret = true\n',
+    }
+    const reads: string[] = []
+    const fileSystem: SourceResolverFileSystem = {
+      exists: (path) => Object.prototype.hasOwnProperty.call(files, path),
+      readFile: async (path) => {
+        reads.push(path)
+        const value = files[path]
+        if (value === undefined) throw new Error(`missing ${path}`)
+        return value
+      },
+    }
+    const resolver = new SourceResolver({ fileSystem, projectRoot: '/project' })
+
+    await expect(resolver.resolveSourceFrame('/project/dist/eval.js', 1, 0)).resolves.toEqual({
+      kind: 'unavailable',
+      reason: 'source-outside-project',
+    })
+    expect(reads).toEqual(['/project/dist/eval.js.map'])
   })
 
   it('resolves direct authored source-frame snapshots from disk when no source map is needed', async () => {

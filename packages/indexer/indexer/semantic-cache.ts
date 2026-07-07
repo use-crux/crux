@@ -7,6 +7,7 @@ import {
   SEMANTIC_FACTS_CACHE_EPOCH,
   sha256,
 } from './cache-identity'
+import { compareCodepoint } from './sort'
 import { indexCacheBoundaryFileNames } from './incremental/boundaries'
 import type { IndexPatchFacts } from './patches'
 import {
@@ -178,7 +179,7 @@ function defaultSemanticCompilerRuntimeIdentity(
 }
 
 function compareCacheFileInputs(left: ConfigFileHash, right: ConfigFileHash): number {
-  return left.file.localeCompare(right.file)
+  return compareCodepoint(left.file, right.file)
 }
 
 async function readCache(file: string): Promise<IndexPatchFacts | undefined> {

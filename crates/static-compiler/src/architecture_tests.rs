@@ -62,6 +62,23 @@ fn primitives_crate_does_not_depend_on_syntax_frontend() {
 }
 
 #[test]
+fn primitive_tool_helpers_do_not_resolve_through_function_local_initializer_summaries() {
+    let static_compiler_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let tools_source = static_compiler_dir
+        .parent()
+        .expect("static compiler crate should live under crates/")
+        .join("primitives/src/injection/tools.rs");
+    let source =
+        std::fs::read_to_string(&tools_source).expect("tool projection source should be readable");
+
+    assert!(
+        !source.contains("local_initializers"),
+        "tool helper returns must use pre-resolved Function.returns values instead of treating \
+         Function.local_initializers as a lazy scope database"
+    );
+}
+
+#[test]
 fn lints_crate_consumes_prepared_inputs_without_file_io() {
     let static_compiler_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let lints_src = static_compiler_dir
@@ -255,7 +272,7 @@ fn static_index_identity() -> StaticIndexRunIdentity {
     StaticIndexRunIdentity {
         protocol_version: STATIC_INDEX_PROTOCOL_VERSION,
         compiler: version_identity("crux-static-index", "0.1.0"),
-        oxc: version_identity("oxc-rust", "oxc_parser@0.133.0+crux_native_group3.7"),
+        oxc: version_identity("oxc-rust", "oxc_parser@0.139.0+crux_native_group3.7"),
         primitive_manifest: digest_identity("crux-first-party-primitives"),
         relation_policy: digest_identity("crux-relation-policy"),
         extension_manifests: Vec::new(),

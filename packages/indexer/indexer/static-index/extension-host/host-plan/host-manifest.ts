@@ -6,7 +6,7 @@ import {
   type StaticIndexExtractorCoverage,
 } from './coverage'
 
-export type StaticExtractorHostMode = 'native-covered' | 'typescript-bundled' | 'typescript-extension'
+export type StaticExtractorHostMode = 'native-covered' | 'typescript-extension'
 
 /** Native/TypeScript execution decision for one static extractor identity. */
 export interface StaticExtractorHostPlan {
@@ -28,14 +28,10 @@ export interface StaticExtensionHostManifest {
   readonly extractors: readonly StaticExtractorHostPlan[]
   /** Bundled first-party extractors that can be projected by Static Index without Node. */
   readonly bundledNativeExtractorCount: number
-  /** Bundled first-party extractors that still need the TypeScript host. */
-  readonly bundledTypeScriptExtractorCount: number
   /** Third-party extension extractors that run in the TypeScript host. */
   readonly extensionTypeScriptExtractorCount: number
   /** TypeScript index rules that still require the TypeScript host. */
   readonly typeScriptRuleCount: number
-  /** Whether bundled extractors require the TypeScript host. */
-  readonly requiresTypeScriptHostForBundled: boolean
   /** Whether third-party extensions require the TypeScript host. */
   readonly requiresTypeScriptHostForExtensions: boolean
   /** Whether TypeScript index rules require the TypeScript host. */
@@ -56,20 +52,16 @@ export function staticExtensionHostManifest(input: {
 }): StaticExtensionHostManifest {
   const plans = input.extractors.map(staticExtractorHostPlan)
   const bundledNativeExtractorCount = plans.filter((plan) => plan.mode === 'native-covered').length
-  const bundledTypeScriptExtractorCount = plans.filter((plan) => plan.mode === 'typescript-bundled').length
   const extensionTypeScriptExtractorCount = plans.filter((plan) => plan.mode === 'typescript-extension').length
   const compatibilityMode = input.staticInterests.compatibility?.mode ?? 'compatibility'
   const requiresCompatibilityEvidence = compatibilityMode === 'compatibility'
-  const requiresTypeScriptHostForBundled = bundledTypeScriptExtractorCount > 0
   const requiresTypeScriptHostForExtensions = extensionTypeScriptExtractorCount > 0
   const requiresTypeScriptHostForRules = input.typeScriptRuleCount > 0
   return {
     extractors: plans,
     bundledNativeExtractorCount,
-    bundledTypeScriptExtractorCount,
     extensionTypeScriptExtractorCount,
     typeScriptRuleCount: input.typeScriptRuleCount,
-    requiresTypeScriptHostForBundled,
     requiresTypeScriptHostForExtensions,
     requiresTypeScriptHostForRules,
     requiresCompatibilityEvidence,
@@ -77,7 +69,6 @@ export function staticExtensionHostManifest(input: {
       ? { compatibilityReason: input.staticInterests.compatibility.reason }
       : {}),
     nativeOnlyEligible:
-      !requiresTypeScriptHostForBundled &&
       !requiresTypeScriptHostForExtensions &&
       !requiresTypeScriptHostForRules &&
       !requiresCompatibilityEvidence,
@@ -102,11 +93,7 @@ function staticExtractorHostPlan(extractor: ExtractorIdentity): StaticExtractorH
       native,
     }
   }
-  return {
-    extension: extractor.extension,
-    name: extractor.name,
-    mode: 'typescript-bundled',
-    native,
-    reason: native.reason,
-  }
+  throw new Error(
+    `Bundled Crux extractor ${extractor.extension.name}:${extractor.name} is not covered by Static Index: ${native.reason ?? 'missing native coverage'}`,
+  )
 }

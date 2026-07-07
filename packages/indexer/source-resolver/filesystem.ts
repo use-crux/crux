@@ -9,7 +9,7 @@
  */
 
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, realpath } from 'node:fs/promises'
 
 /** Minimal filesystem capabilities required by source-map resolution. */
 export interface SourceResolverFileSystem {
@@ -17,10 +17,13 @@ export interface SourceResolverFileSystem {
   readonly exists: (path: string) => boolean
   /** Read a UTF-8 text file. Errors are handled by caller-owned fallback policy. */
   readonly readFile: (path: string) => Promise<string>
+  /** Resolve symlinks before trusted-root containment checks. */
+  readonly realpath?: (path: string) => Promise<string>
 }
 
 /** Node-backed filesystem implementation used by the runtime resolver facade. */
 export const nodeSourceResolverFileSystem: SourceResolverFileSystem = {
   exists: existsSync,
   readFile: (path) => readFile(path, 'utf-8'),
+  realpath,
 }

@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, relative, resolve } from 'node:path'
 import type { ProjectIndexShard } from '@use-crux/core/project-index'
 import { globSync } from 'tinyglobby'
+import { compareCodepoint } from '../sort'
 import type { ProjectShardFileBatch, ProjectShardGraph } from './types'
 
 const PACKAGE_MANIFEST = 'package.json'
@@ -32,7 +33,7 @@ export function discoverProjectShards(root: string): ProjectShardGraph {
         ...shard,
         references: [...referencedShardIds(shard.configFile, shardIdByRoot)],
       }))
-      .sort((a, b) => a.id.localeCompare(b.id)),
+      .sort((a, b) => compareCodepoint(a.id, b.id)),
   }
 }
 
@@ -75,10 +76,10 @@ export function staticFileBatchesForShards(
   for (const [shardId, shardFiles] of filesByShardId) {
     const shard = shardById.get(shardId)
     if (!shard) continue
-    const ownedFiles = [...new Set(shardFiles)].sort()
+    const ownedFiles = [...new Set(shardFiles)].sort(compareCodepoint)
     if (ownedFiles.length > 0) batches.push({ shard, files: ownedFiles })
   }
-  return batches.sort((a, b) => a.shard.id.localeCompare(b.shard.id))
+  return batches.sort((a, b) => compareCodepoint(a.shard.id, b.shard.id))
 }
 
 interface ShardDraft {
