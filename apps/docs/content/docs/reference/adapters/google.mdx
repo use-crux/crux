@@ -124,6 +124,8 @@ await adapter.generate(prompt, {
 | `options.tools`                          | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
 | `options.toolMiddleware`                 | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
 | `options.toolApproval`                   | `ToolApprovalMap?`                             | Call-site approval policy; exact tool names beat `'*'`.                             |
+| `options.toolsContext`                   | `Record<string, unknown>?`                     | Required for composed tools that declare `contextSchema`; values are Zod-validated before the tool loop starts. |
+| `options.runtimeContext`                 | `unknown?`                                     | Shared per-run context visible to tool `execute`, middleware, and function-form `toolApproval` policies. |
 | `options.extra.tools`                    | `GoogleFunctionDeclaration[]?`                 | Google-native function declarations that bypass Crux tool conversion                |
 | `options.temperature`                    | `number?`                                      | Temperature                                                                         |
 | `options.maxOutputTokens`                | `number?`                                      | Max output tokens                                                                   |
@@ -159,6 +161,8 @@ Stream a prompt execution.
 | `options.tools`                          | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
 | `options.toolMiddleware`                 | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
 | `options.toolApproval`                   | `ToolApprovalMap?`                             | Call-site approval policy; exact tool names beat `'*'`.                             |
+| `options.toolsContext`                   | `Record<string, unknown>?`                     | Required for composed tools that declare `contextSchema`; values are Zod-validated before the tool loop starts. |
+| `options.runtimeContext`                 | `unknown?`                                     | Shared per-run context visible to tool `execute`, middleware, and function-form `toolApproval` policies. |
 | `options.extra.tools`                    | `GoogleFunctionDeclaration[]?`                 | Google-native function declarations that bypass Crux tool conversion                |
 | `options.temperature`                    | `number?`                                      | Temperature                                                                         |
 | `options.maxOutputTokens`                | `number?`                                      | Max output tokens                                                                   |

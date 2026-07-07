@@ -60,7 +60,13 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   const lifecycle = createToolLifecycle({
     regime: "sdk",
     resolved,
-    call: { tools: args.tools, toolMiddleware: args.toolMiddleware, toolApproval: args.toolApproval },
+    call: {
+      tools: args.tools,
+      toolsContext: args.toolsContext,
+      runtimeContext: args.runtimeContext,
+      toolMiddleware: args.toolMiddleware,
+      toolApproval: args.toolApproval,
+    },
     promptId: prompt.id,
     input: args.input ?? {},
     timeout: args.timeout,

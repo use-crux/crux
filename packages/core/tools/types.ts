@@ -17,7 +17,13 @@
  */
 
 import type { z } from 'zod'
-import type { JsonValue, ToolDef, ToolModelOutput, ToModelOutputArgs } from '../types/tool'
+import type {
+  JsonValue,
+  ToolDef,
+  ToolExecutionOptions,
+  ToolModelOutput,
+  ToModelOutputArgs,
+} from '../types/tool'
 
 // ─────────────────────────────────────────────────────────────────
 // Tool authoring
@@ -34,6 +40,7 @@ export interface ToolConfig<
   TInputSchema extends z.ZodType,
   TOutput,
   TName extends string | undefined = string | undefined,
+  TContextSchema extends z.ZodType | undefined = undefined,
 > {
   /**
    * Optional stable name used by adapters that need named registries.
@@ -43,7 +50,17 @@ export interface ToolConfig<
   description: string
   input?: TInputSchema
   parameters?: TInputSchema
-  execute: (input: z.infer<TInputSchema>) => TOutput | Promise<TOutput>
+  /**
+   * Optional schema for dependencies that must be supplied at generation time
+   * through `toolsContext.<toolName>`.
+   */
+  contextSchema?: TContextSchema
+  execute: (
+    input: z.infer<TInputSchema>,
+    options: ToolExecutionOptions<
+      TContextSchema extends z.ZodType ? z.infer<TContextSchema> : never
+    >,
+  ) => TOutput | Promise<TOutput>
   toModelOutput?: (
     args: ToModelOutputArgs<z.infer<TInputSchema>, TOutput>,
   ) => ToolModelOutput | Promise<ToolModelOutput>
@@ -53,11 +70,15 @@ export interface ToolConfig<
  * A {@link ToolDef} that also carries an optional literal `name`, preserved so
  * adapters can build named tool registries from authored tools.
  */
-export type NamedToolDef<TInput, TOutput, TName extends string | undefined = string | undefined> = ToolDef<
+export type NamedToolDef<
   TInput,
-  TOutput
-> & {
+  TOutput,
+  TName extends string | undefined = string | undefined,
+  TContext = never,
+  TContextSchema extends z.ZodType | undefined = undefined,
+> = ToolDef<TInput, TOutput, TContext> & {
   readonly name?: TName
+  readonly contextSchema?: TContextSchema
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -116,24 +137,53 @@ export interface ToolApprovalDecision {
 // Tool call context
 // ─────────────────────────────────────────────────────────────────
 
+/**
+ * Execution options surfaced to middleware hooks.
+ *
+ * Middleware can wrap tools with or without a `contextSchema`, so context is
+ * exposed as an optional field here even though authored tool `execute`
+ * functions receive the stricter {@link ToolExecutionOptions} shape.
+ */
+export type ToolCallExecutionOptions<
+  TContext = unknown,
+  TRuntimeContext = unknown,
+> =
+  | ToolExecutionOptions<TContext, TRuntimeContext>
+  | (ToolExecutionOptions<never, TRuntimeContext> & { readonly context?: TContext })
+
 /** Context describing a single tool invocation, passed to middleware hooks. */
-export interface ToolCallContext<TInput = unknown> {
+export interface ToolCallContext<
+  TInput = unknown,
+  TContext = unknown,
+  TRuntimeContext = unknown,
+> {
   readonly toolName: string
   readonly toolCallId: string
   readonly input: TInput
-  readonly options: ToolExecutionOptions
+  readonly options: ToolCallExecutionOptions<TContext, TRuntimeContext>
+  readonly context?: TContext
+  readonly runtimeContext: TRuntimeContext
   readonly messages?: readonly unknown[]
   readonly metadata?: Readonly<Record<string, unknown>>
 }
 
 /** {@link ToolCallContext} extended with the produced output. */
-export interface ToolResultContext<TInput = unknown, TOutput = unknown> extends ToolCallContext<TInput> {
+export interface ToolResultContext<
+  TInput = unknown,
+  TOutput = unknown,
+  TContext = unknown,
+  TRuntimeContext = unknown,
+> extends ToolCallContext<TInput, TContext, TRuntimeContext> {
   readonly output: TOutput
   readonly durationMs: number
 }
 
 /** {@link ToolCallContext} extended with the thrown error. */
-export interface ToolErrorContext<TInput = unknown> extends ToolCallContext<TInput> {
+export interface ToolErrorContext<
+  TInput = unknown,
+  TContext = unknown,
+  TRuntimeContext = unknown,
+> extends ToolCallContext<TInput, TContext, TRuntimeContext> {
   readonly error: unknown
   readonly durationMs: number
 }
@@ -153,20 +203,18 @@ export type ToolMatcher<TInput = unknown> =
 /** Continuation passed to {@link ToolMiddlewareConfig.aroundExecute}. */
 export type ToolMiddlewareNext<TInput, TOutput> = (
   input: TInput,
-  options: ToolExecutionOptions,
+  options: ToolCallExecutionOptions,
 ) => TOutput | PromiseLike<TOutput>
 
-/** Loosely-typed per-call options threaded through tool execution. */
-export interface ToolExecutionOptions {
-  readonly toolCallId?: string
-  readonly messages?: readonly unknown[]
-  readonly [key: string]: unknown
-}
-
 /** The shape of a tool's `execute` function. */
-export type ToolExecuteFunction<TInput = unknown, TOutput = unknown> = (
+export type ToolExecuteFunction<
+  TInput = unknown,
+  TOutput = unknown,
+  TContext = never,
+  TRuntimeContext = unknown,
+> = (
   input: TInput,
-  options: ToolExecutionOptions,
+  options: ToolExecutionOptions<TContext, TRuntimeContext>,
 ) => TOutput | PromiseLike<TOutput>
 
 /**
@@ -175,10 +223,16 @@ export type ToolExecuteFunction<TInput = unknown, TOutput = unknown> = (
  * Kept intentionally loose (index signature) so middleware composes over
  * tools authored by any SDK, not just Crux's {@link NamedToolDef}.
  */
-export interface ToolLike<TInput = unknown, TOutput = unknown> {
+export interface ToolLike<
+  TInput = unknown,
+  TOutput = unknown,
+  TContext = never,
+  TRuntimeContext = unknown,
+> {
   readonly description?: string
   readonly title?: string
-  readonly execute?: ToolExecuteFunction<TInput, TOutput>
+  readonly execute?: ToolExecuteFunction<TInput, TOutput, TContext, TRuntimeContext>
+  readonly contextSchema?: z.ZodType<TContext>
   readonly toModelOutput?: (args: {
     readonly toolCallId: string
     readonly input: TInput
@@ -230,4 +284,4 @@ export interface ToolApprovalDecisionEvent<TInput = unknown> extends ToolCallCon
   readonly reason?: string
 }
 
-export type { ToolDef, ToolModelOutput, ToModelOutputArgs } from '../types/tool'
+export type { ToolDef, ToolExecutionOptions, ToolModelOutput, ToModelOutputArgs } from '../types/tool'

@@ -13,7 +13,16 @@ describe('adapter options parity scaffold', () => {
   })
 
   for (const parityCase of CANONICAL_OPTIONS_PARITY_CASES) {
-    it.todo(`Phase ${parityCase.phase}: ${parityCase.name}`)
+    if (parityCase.phase === 7) {
+      it(`Phase ${parityCase.phase}: ${parityCase.name}`, () => {
+        const options = createCanonicalOptionsFixture()
+        const search = options.tools.search as { readonly contextSchema?: { safeParse(input: unknown): unknown } }
+
+        expect(search.contextSchema?.safeParse(options.toolsContext.search)).toMatchObject({ success: true })
+        expect(options.runtimeContext).toMatchObject({ requestId: 'req_1' })
+      })
+    } else {
+      it.todo(`Phase ${parityCase.phase}: ${parityCase.name}`)
+    }
   }
 })
-

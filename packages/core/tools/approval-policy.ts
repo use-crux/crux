@@ -17,20 +17,26 @@ export interface ToolApprovalContext<TInput = unknown, TRuntimeContext = unknown
   readonly toolCallId: string
   /** Tool input arguments for this invocation. */
   readonly input: TInput
-  /** Per-call runtime context. Phase 7 gives this a precise inferred type. */
+  /** Shared caller-provided context for this generation run. */
   readonly runtimeContext: TRuntimeContext
   /** Canonical message history visible to the approval policy, when available. */
   readonly messages?: readonly unknown[]
 }
 
+type ToolApprovalPredicate<TInput, TRuntimeContext> = {
+  bivarianceHack(ctx: ToolApprovalContext<TInput, TRuntimeContext>): boolean | PromiseLike<boolean>
+}['bivarianceHack']
+
 /** Policy for deciding whether a tool call must suspend for approval. */
-export type ToolApprovalPolicy =
+export type ToolApprovalPolicy<TInput = unknown, TRuntimeContext = unknown> =
   | 'always'
   | 'never'
-  | ((ctx: ToolApprovalContext) => boolean | PromiseLike<boolean>)
+  | ToolApprovalPredicate<TInput, TRuntimeContext>
 
 /** Map from exact tool names, or `'*'`, to approval policies. */
-export type ToolApprovalMap = Readonly<Record<string, ToolApprovalPolicy>>
+export type ToolApprovalMap<TRuntimeContext = unknown> = Readonly<
+  Record<string, ToolApprovalPolicy<unknown, TRuntimeContext>>
+>
 
 /** Composition layer that contributed an approval declaration. */
 export type ToolApprovalLayer = 'call' | 'prompt' | 'context'

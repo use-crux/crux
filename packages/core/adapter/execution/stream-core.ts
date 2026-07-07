@@ -50,7 +50,13 @@ export async function streamCore<TClient, TRawResponse, TRawStream, TExtra exten
   const lifecycle = createToolLifecycle({
     regime: 'core',
     resolved,
-    call: { tools: args.tools, toolMiddleware: args.toolMiddleware, toolApproval: args.toolApproval },
+    call: {
+      tools: args.tools,
+      toolsContext: args.toolsContext,
+      runtimeContext: args.runtimeContext,
+      toolMiddleware: args.toolMiddleware,
+      toolApproval: args.toolApproval,
+    },
     promptId: prompt.id,
     input: args.input ?? {},
     timeout: args.timeout,

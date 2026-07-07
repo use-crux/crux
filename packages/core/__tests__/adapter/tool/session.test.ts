@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
+import { z } from 'zod'
 import { createToolLifecycle } from '../../../adapter/tool/session'
 import { toolMiddleware, approvalMiddleware } from '../../../tools/middleware'
 import { appendToolApprovalResponse } from '../../../tools/approvals'
@@ -108,6 +109,86 @@ describe('createToolLifecycle — preparation', () => {
     const result = await lifecycle.descriptors![0]!.execute({ v: 'x' }, { toolCallId: 'tc1' })
     expect(result).toBe('xCP')
   })
+
+  it('validates toolsContext for tools that declare contextSchema during preparation', () => {
+    const weather = {
+      description: 'weather',
+      contextSchema: z.object({ apiKey: z.string() }),
+      execute: async () => 'ok',
+    }
+
+    expect(() =>
+      createToolLifecycle({
+        regime: 'core',
+        resolved: resolvedWith({ tools: { weather } }),
+        call: { toolsContext: { weather: { apiKey: 123 } } },
+        promptId: 'p1',
+      }),
+    ).toThrow(/Tool "weather" toolsContext\.weather validation failed/)
+  })
+
+  it('rejects toolsContext for tools without contextSchema during preparation', () => {
+    const ping = {
+      description: 'ping',
+      execute: async () => 'pong',
+    }
+
+    expect(() =>
+      createToolLifecycle({
+        regime: 'core',
+        resolved: resolvedWith({ tools: { ping } }),
+        call: { toolsContext: { ping: { ignored: true } } },
+        promptId: 'p1',
+      }),
+    ).toThrow(/toolsContext\.ping was provided, but tool "ping" does not declare contextSchema/)
+  })
+
+  it('threads toolsContext and runtimeContext through SDK-regime armed tools', async () => {
+    const execute = vi.fn(async () => 'sunny')
+    const beforeExecute = vi.fn()
+    const runtimeContext = { tenantId: 'tenant_1' }
+    const weather = {
+      description: 'weather',
+      contextSchema: z.object({ apiKey: z.string() }),
+      execute,
+    }
+
+    const lifecycle = createToolLifecycle({
+      regime: 'sdk',
+      resolved: resolvedWith({ tools: { weather } }),
+      call: {
+        runtimeContext,
+        toolsContext: { weather: { apiKey: 'secret' } },
+        toolMiddleware: toolMiddleware({ id: 'audit', beforeExecute }),
+      },
+      promptId: 'p1',
+    })
+
+    const sdkTool = lifecycle.tools?.weather as {
+      execute: (input: unknown, options: { toolCallId: string; messages?: readonly unknown[] }) => Promise<unknown>
+    }
+    await sdkTool.execute({ city: 'Amsterdam' }, { toolCallId: 'tc1', messages: [] })
+
+    expect(execute).toHaveBeenCalledWith(
+      { city: 'Amsterdam' },
+      expect.objectContaining({
+        toolCallId: 'tc1',
+        context: { apiKey: 'secret' },
+        runtimeContext,
+      }),
+    )
+    expect(beforeExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'weather',
+        context: { apiKey: 'secret' },
+        runtimeContext,
+        options: expect.objectContaining({
+          context: { apiKey: 'secret' },
+          runtimeContext,
+        }),
+      }),
+    )
+  })
 })
 
 // ─────────────────────────────────────────────────────────────────
@@ -148,6 +229,61 @@ function coreLifecycleWithApproval(
 }
 
 describe('createToolLifecycle — executeRound', () => {
+  it('threads toolsContext and runtimeContext into execute, middleware, and approval policies', async () => {
+    const execute = vi.fn(async () => 'sunny')
+    const beforeExecute = vi.fn()
+    const policy = vi.fn(() => false)
+    const runtimeContext = { tenantId: 'tenant_1', userId: 'user_1' }
+    const weather = {
+      description: 'weather',
+      contextSchema: z.object({ apiKey: z.string() }),
+      execute,
+    }
+    const lifecycle = coreLifecycleWithApproval(
+      { weather },
+      [{ layer: 'prompt', key: 'weather', policy }],
+      {
+        call: {
+          runtimeContext,
+          toolsContext: { weather: { apiKey: 'secret' } },
+          toolMiddleware: toolMiddleware({ id: 'audit', beforeExecute }),
+        },
+      },
+    )
+
+    const round = await lifecycle.executeRound(
+      adapterResponse({ toolCalls: [{ id: 'tc1', name: 'weather', args: { city: 'Amsterdam' } }] }),
+      [{ role: 'user', content: 'go' }],
+    )
+
+    expect(round.kind).toBe('completed')
+    expect(execute).toHaveBeenCalledWith(
+      { city: 'Amsterdam' },
+      expect.objectContaining({
+        toolCallId: 'tc1',
+        context: { apiKey: 'secret' },
+        runtimeContext,
+      }),
+    )
+    expect(beforeExecute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'weather',
+        context: { apiKey: 'secret' },
+        runtimeContext,
+        options: expect.objectContaining({
+          context: { apiKey: 'secret' },
+          runtimeContext,
+        }),
+      }),
+    )
+    expect(policy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        toolName: 'weather',
+        runtimeContext,
+      }),
+    )
+  })
+
   it('executes a round and appends the tool round to history', async () => {
     const execute = vi.fn(async (input: { q: string }) => `answer to ${input.q}`)
     const lifecycle = coreLifecycle({ search: { description: 'search', execute } })

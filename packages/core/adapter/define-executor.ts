@@ -61,6 +61,10 @@ export interface ExecutorGenerateOptions<TModel> {
   input?: Record<string, unknown>
   /** Additional tools merged at call time (highest precedence). */
   tools?: Record<string, unknown>
+  /** Per-tool context values keyed by tools that declare `contextSchema`. */
+  toolsContext?: Readonly<Record<string, unknown>>
+  /** Shared context threaded through tool execution, middleware, approvals, and step hooks. */
+  runtimeContext?: unknown
   /** Tool middleware applied after prompt tools and call-site tools are merged. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
   /** Call-site approval policy with final-word precedence over prompt/context declarations. */
@@ -246,6 +250,8 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       model,
       input: opts.input,
       tools: opts.tools,
+      toolsContext: opts.toolsContext,
+      runtimeContext: opts.runtimeContext,
       toolMiddleware: opts.toolMiddleware,
       toolApproval: opts.toolApproval,
       messages: opts.messages,
@@ -302,6 +308,8 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       model,
       input: opts.input,
       tools: opts.tools,
+      toolsContext: opts.toolsContext,
+      runtimeContext: opts.runtimeContext,
       toolMiddleware: opts.toolMiddleware,
       toolApproval: opts.toolApproval,
       messages: opts.messages,

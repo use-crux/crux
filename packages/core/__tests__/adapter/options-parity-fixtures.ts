@@ -3,6 +3,7 @@
  */
 
 import { hasToolCall } from '../../generation'
+import { z } from 'zod'
 import type { Message } from '../../generation/messages'
 import type { StopCondition, ToolChoice } from '../../generation/tool-control'
 import type { ValidationRetryOptions } from '../../generation/validation-retry'
@@ -77,6 +78,7 @@ export function createCanonicalOptionsFixture(
     tools: {
       search: {
         description: 'Search fixture data.',
+        contextSchema: z.object({ tenantId: z.string() }),
         execute: async (args: unknown) => ({ args }),
       },
     },

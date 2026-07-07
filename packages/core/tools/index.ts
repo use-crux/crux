@@ -71,3 +71,11 @@ export type {
   ToolModelOutput,
   ToModelOutputArgs,
 } from './types'
+export type {
+  KnownToolsFor,
+  MergeKnownTools,
+  PromptToolsOf,
+  ToolContextOf,
+  ToolsContextOf,
+  ToolsContextOption,
+} from './context-types'

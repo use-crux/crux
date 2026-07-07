@@ -76,6 +76,12 @@ export interface AdapterExecutionGenerateArgs<
   /** Additional tools merged after prompt/context tools. */
   readonly tools?: Record<string, unknown>
 
+  /** Per-tool context values keyed by tools that declare `contextSchema`. */
+  readonly toolsContext?: Readonly<Record<string, unknown>>
+
+  /** Shared context threaded through tool execution, middleware, approvals, and step hooks. */
+  readonly runtimeContext?: unknown
+
   /** Tool middleware applied to the merged tool set. */
   readonly toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
 

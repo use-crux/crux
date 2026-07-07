@@ -48,6 +48,10 @@ export interface RequiresToolApprovalOptions {
   readonly toolCall: ApprovalPolicyToolCall
   /** Current conversation history. */
   readonly messages: readonly Message[]
+  /** Shared caller-provided context for this generation run. */
+  readonly runtimeContext?: unknown
+  /** Parsed context value for this tool when it declares `contextSchema`. */
+  readonly toolContext?: unknown
   /** Ordered approval declarations collected from context, prompt, and call sites. */
   readonly declarations: readonly ApprovalDeclaration[]
   /** Optional policy trace sink used by dialect parity tests. */
@@ -76,11 +80,19 @@ export async function requiresToolApproval(options: RequiresToolApprovalOptions)
   if (!tool || typeof tool !== 'object') return false
 
   const policyRequiresApproval = await evaluateDeclaredApprovalPolicy(toolCall, messages, declarations, options)
+  const middlewareOptions = {
+    toolCallId: toolCall.id,
+    messages,
+    runtimeContext: options.runtimeContext,
+    ...(options.toolContext !== undefined ? { context: options.toolContext } : {}),
+  }
   const middlewareRequiresApproval = await evaluateApprovalMiddleware(tool, {
     toolName: toolCall.name,
     toolCallId: toolCall.id,
     input: toolCall.args,
-    options: { toolCallId: toolCall.id, messages },
+    options: middlewareOptions,
+    ...(options.toolContext !== undefined ? { context: options.toolContext } : {}),
+    runtimeContext: options.runtimeContext,
     messages,
   })
   return policyRequiresApproval || middlewareRequiresApproval
@@ -90,7 +102,7 @@ async function evaluateDeclaredApprovalPolicy(
   toolCall: ApprovalPolicyToolCall,
   messages: readonly Message[],
   declarations: readonly ApprovalDeclaration[],
-  options: Pick<RequiresToolApprovalOptions, 'onPolicyTrace'>,
+  options: Pick<RequiresToolApprovalOptions, 'onPolicyTrace' | 'runtimeContext'>,
 ): Promise<boolean> {
   const resolvedPolicy = resolveApprovalPolicy(toolCall.name, declarations)
   if (!resolvedPolicy) return false
@@ -106,7 +118,7 @@ async function evaluateDeclaredApprovalPolicy(
       toolName: toolCall.name,
       toolCallId: toolCall.id,
       input: toolCall.args,
-      runtimeContext: undefined,
+      runtimeContext: options.runtimeContext,
       messages,
     }
     try {

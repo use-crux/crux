@@ -42,6 +42,7 @@ import type { z } from "zod";
 import type {
   Prompt,
   AnyPrompt,
+  AnyToolSet,
   Context,
   ResolvedPrompt,
   MergedInput,
@@ -210,18 +211,36 @@ export interface CruxAi {
     TOwnInput extends z.ZodType,
     TOutput extends z.ZodType | undefined,
     TContexts extends readonly Context<z.ZodType>[],
+    TPromptTools extends AnyToolSet | undefined = undefined,
+    TCallTools extends ToolSet | undefined = undefined,
+    TRuntimeContext = unknown,
   >(
-    prompt: Prompt<TOwnInput, TOutput, TContexts>,
-    opts: AIGenerateOptions<TOwnInput, TContexts>,
+    prompt: Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+    opts: AIGenerateOptions<
+      TOwnInput,
+      TContexts,
+      TCallTools,
+      Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+      TRuntimeContext
+    >,
   ): Promise<GenerateReturn<TOutput>>;
   /** See the package-level {@link stream}. */
   stream<
     TOwnInput extends z.ZodType,
     TOutput extends z.ZodType | undefined,
     TContexts extends readonly Context<z.ZodType>[],
+    TPromptTools extends AnyToolSet | undefined = undefined,
+    TCallTools extends ToolSet | undefined = undefined,
+    TRuntimeContext = unknown,
   >(
-    prompt: Prompt<TOwnInput, TOutput, TContexts>,
-    opts: AIGenerateOptions<TOwnInput, TContexts>,
+    prompt: Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+    opts: AIGenerateOptions<
+      TOwnInput,
+      TContexts,
+      TCallTools,
+      Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+      TRuntimeContext
+    >,
   ): Promise<StreamReturn<TOutput>>;
   /** See the package-level {@link generateTextFn}. */
   generateTextFn: GenerateTextFn;
@@ -239,6 +258,8 @@ export interface CruxAi {
 type CallOpts = Record<string, unknown> & {
   model: ExecutorModelArg<LanguageModel>;
   tools?: ToolSet;
+  toolsContext?: Readonly<Record<string, unknown>>;
+  runtimeContext?: unknown;
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
   toolApproval?: ToolApprovalMap;
   messages?: ResolvedPrompt["messages"];
@@ -283,6 +304,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     const {
       model,
       tools,
+      toolsContext,
+      runtimeContext,
       toolMiddleware,
       toolApproval,
       messages,
@@ -304,6 +327,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       model,
       input,
       tools: tools as Record<string, unknown> | undefined,
+      toolsContext,
+      runtimeContext,
       toolMiddleware,
       toolApproval,
       messages: messages as Message[] | undefined,
@@ -332,6 +357,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     const {
       model,
       tools,
+      toolsContext,
+      runtimeContext,
       toolMiddleware,
       toolApproval,
       messages,
@@ -353,6 +380,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       model,
       input,
       tools: tools as Record<string, unknown> | undefined,
+      toolsContext,
+      runtimeContext,
       toolMiddleware,
       toolApproval,
       messages: messages as Message[] | undefined,

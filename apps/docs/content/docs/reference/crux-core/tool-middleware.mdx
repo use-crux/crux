@@ -24,6 +24,11 @@ Tool middleware wraps tools before an adapter executes them. Use it for behavior
 
 `toolMiddleware()` can observe or intercept execution. Use `beforeExecute`, `afterExecute`, and `onError` for simple hooks. Use `aroundExecute(call, next)` when middleware needs to modify input, call the wrapped tool conditionally, or return early.
 
+When a tool declares `contextSchema`, middleware receives the parsed value on
+`call.context` and `call.options.context`. Every hook also receives
+`call.runtimeContext`, the shared per-run value supplied by `generate()` /
+`stream()`.
+
 Middleware can be attached to a prompt:
 
 ```ts

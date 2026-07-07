@@ -17,9 +17,12 @@ import type { z } from "zod";
 import type {
   Context,
   GenerationSettings,
+  KnownToolsFor,
   MergedInput,
+  Prompt,
   ResolvedPrompt,
   TimeoutOptions,
+  ToolsContextOption,
 } from "@use-crux/core";
 import type {
   FallbackModel,
@@ -64,11 +67,16 @@ export interface AIExtra extends Record<string, unknown> {
   readonly maxRetries?: AiMaxRetries;
 }
 
-/** Options for `generate()` and `stream()` with AI SDK models. */
-export type AIGenerateOptions<
+type AIPromptForOptions<
   TOwnInput extends z.ZodType,
   TContexts extends readonly Context<z.ZodType>[],
-> = {
+  TPromptTools extends Record<string, unknown> | undefined = Record<string, unknown> | undefined,
+> = Prompt<TOwnInput, z.ZodType | undefined, TContexts, TPromptTools>;
+
+interface AIGenerateBaseOptions<
+  TCallTools extends ToolSet | undefined,
+  TRuntimeContext,
+> {
   /** The AI SDK language model to use. Supports `fallback()`, `router()`, and `cascade()` wrappers. */
   model:
     | LanguageModel
@@ -76,11 +84,15 @@ export type AIGenerateOptions<
     | AnyRouterModel<LanguageModel>
     | CascadeModel<LanguageModel>;
   /** Additional tools to merge at call time (highest precedence). */
-  tools?: ToolSet;
+  tools?: TCallTools;
   /** Tool middleware applied after prompt tools and call-site tools are merged. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
   /** Call-site approval policy with final-word precedence over prompt/context declarations. */
-  toolApproval?: ToolApprovalMap;
+  toolApproval?: ToolApprovalMap<TRuntimeContext>;
+  /** Per-tool context values keyed by tools that declare `contextSchema`. */
+  toolsContext?: Readonly<Record<string, unknown>>;
+  /** Shared context threaded through tool execution, middleware, approvals, and step hooks. */
+  runtimeContext?: TRuntimeContext;
   /**
    * Message history override for resume flows such as tool approval.
    * Pass the prior assistant messages plus a `tool-approval-response` tool
@@ -118,7 +130,19 @@ export type AIGenerateOptions<
   guardrails?: Guardrail[];
   /** Per-call safety posture overrides keyed by policy id. */
   safety?: SafetyTuneOptions;
-} & GenerationSettings &
+}
+
+/** Options for `generate()` and `stream()` with AI SDK models. */
+export type AIGenerateOptions<
+  TOwnInput extends z.ZodType,
+  TContexts extends readonly Context<z.ZodType>[],
+  TCallTools extends ToolSet | undefined = ToolSet | undefined,
+  TPrompt extends AIPromptForOptions<TOwnInput, TContexts> | undefined = undefined,
+  TRuntimeContext = unknown,
+> = {
+} & Omit<AIGenerateBaseOptions<TCallTools, TRuntimeContext>, "toolsContext"> &
+  ToolsContextOption<KnownToolsFor<TPrompt, TCallTools>> &
+  GenerationSettings &
   ([keyof MergedInput<TOwnInput, TContexts>] extends [never]
     ? { input?: undefined }
     : { input: MergedInput<TOwnInput, TContexts> });

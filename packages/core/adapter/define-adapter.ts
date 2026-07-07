@@ -111,9 +111,13 @@ export function adapter<
 
     // ── generate() ──────────────────────────────────────────────
 
-    async function generate(
-      prompt: AnyPrompt,
-      opts: AdapterGenerateOptions<TExtra>,
+    async function generate<
+      TPrompt extends AnyPrompt,
+      TCallTools extends AnyToolSet | undefined = undefined,
+      TRuntimeContext = unknown,
+    >(
+      prompt: TPrompt,
+      opts: AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext>,
     ): Promise<AdapterGenerateResult<TRawResponse>> {
       return (await execution.generate({
         prompt,
@@ -130,6 +134,8 @@ export function adapter<
         extra: opts.extra,
         messages: opts.messages,
         tools: opts.tools,
+        toolsContext: opts.toolsContext,
+        runtimeContext: opts.runtimeContext,
         toolMiddleware: opts.toolMiddleware,
         toolApproval: opts.toolApproval,
         validationRetry: opts.validationRetry,
@@ -143,9 +149,13 @@ export function adapter<
 
     // ── stream() ──────────────────────────────────────────────
 
-    async function streamFn(
-      prompt: AnyPrompt,
-      opts: AdapterStreamOptions<TExtra>,
+    async function streamFn<
+      TPrompt extends AnyPrompt,
+      TCallTools extends AnyToolSet | undefined = undefined,
+      TRuntimeContext = unknown,
+    >(
+      prompt: TPrompt,
+      opts: AdapterStreamOptions<TExtra, TCallTools, TPrompt, TRuntimeContext>,
     ): Promise<StreamResult<TRawStream>> {
       const handle = await execution.stream({
         prompt,
@@ -162,6 +172,8 @@ export function adapter<
         extra: opts.extra,
         messages: opts.messages,
         tools: opts.tools,
+        toolsContext: opts.toolsContext,
+        runtimeContext: opts.runtimeContext,
         toolMiddleware: opts.toolMiddleware,
         toolApproval: opts.toolApproval,
         validationRetry: opts.validationRetry,

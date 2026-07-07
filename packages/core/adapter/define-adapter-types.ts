@@ -17,13 +17,20 @@ import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
 import type { SafetyTuneOptions } from "../safety/tune";
 import type { ToolMiddleware } from "../tools/types";
+import type {
+  KnownToolsFor,
+  ToolsContextOption,
+} from "../tools/context-types";
 import type { ToolApprovalMap } from "../tools/approval-policy";
+import type { AnyToolSet } from "../types";
 import type { ValidationRetryOptions } from "../generation/validation-retry";
 import type { GenerateResult, StreamResult } from "./result-accumulator";
 
-/** Options for adapter `generate()` calls. */
-export interface AdapterGenerateOptions<
+/** Shared fields for adapter `generate()` calls before conditional tool context is applied. */
+export interface AdapterGenerateBaseOptions<
   TExtra extends Record<string, unknown> = Record<string, unknown>,
+  TCallTools extends AnyToolSet | undefined = AnyToolSet | undefined,
+  TRuntimeContext = unknown,
 > {
   /** Model identifier passed to the provider's API. */
   model: string;
@@ -42,11 +49,15 @@ export interface AdapterGenerateOptions<
   /** Additional messages to prepend (e.g., conversation history). */
   messages?: Message[];
   /** Additional tools to merge at call time after prompt/context tools. */
-  tools?: Record<string, unknown>;
+  tools?: TCallTools;
   /** Tool middleware applied after prompt tools and call-site tools are merged. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
   /** Call-site approval policy with final-word precedence over prompt/context declarations. */
-  toolApproval?: ToolApprovalMap;
+  toolApproval?: ToolApprovalMap<TRuntimeContext>;
+  /** Per-tool context values keyed by tools that declare `contextSchema`. */
+  toolsContext?: Readonly<Record<string, unknown>>;
+  /** Shared context threaded through tool execution, middleware, approvals, and step hooks. */
+  runtimeContext?: TRuntimeContext;
   /**
    * Validation-feedback retry for structured output.
    * When set, failed Zod schema validation triggers a retry with
@@ -81,10 +92,22 @@ export interface AdapterGenerateOptions<
   timeout?: TimeoutOptions;
 }
 
-/** Options for adapter `stream()` calls. */
-export interface AdapterStreamOptions<
+/** Options for adapter `generate()` calls. */
+export type AdapterGenerateOptions<
   TExtra extends Record<string, unknown> = Record<string, unknown>,
-> extends AdapterGenerateOptions<TExtra> {}
+  TCallTools extends AnyToolSet | undefined = AnyToolSet | undefined,
+  TPrompt extends AnyPrompt | undefined = undefined,
+  TRuntimeContext = unknown,
+> = Omit<AdapterGenerateBaseOptions<TExtra, TCallTools, TRuntimeContext>, "toolsContext"> &
+  ToolsContextOption<KnownToolsFor<TPrompt, TCallTools>>;
+
+/** Options for adapter `stream()` calls. */
+export type AdapterStreamOptions<
+  TExtra extends Record<string, unknown> = Record<string, unknown>,
+  TCallTools extends AnyToolSet | undefined = AnyToolSet | undefined,
+  TPrompt extends AnyPrompt | undefined = undefined,
+  TRuntimeContext = unknown,
+> = AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext>;
 
 /** Result of an adapter `generate()` call. */
 export type AdapterGenerateResult<
@@ -103,15 +126,23 @@ export interface CruxAdapter<
   readonly providerId: string;
 
   /** Execute a prompt (non-streaming) with automatic tool loop. */
-  generate(
-    prompt: AnyPrompt,
-    opts: AdapterGenerateOptions<TExtra>,
+  generate<
+    TPrompt extends AnyPrompt,
+    TCallTools extends AnyToolSet | undefined = undefined,
+    TRuntimeContext = unknown,
+  >(
+    prompt: TPrompt,
+    opts: AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext>,
   ): Promise<AdapterGenerateResult<TRawResponse>>;
 
   /** Execute a prompt (streaming). */
-  stream(
-    prompt: AnyPrompt,
-    opts: AdapterStreamOptions<TExtra>,
+  stream<
+    TPrompt extends AnyPrompt,
+    TCallTools extends AnyToolSet | undefined = undefined,
+    TRuntimeContext = unknown,
+  >(
+    prompt: TPrompt,
+    opts: AdapterStreamOptions<TExtra, TCallTools, TPrompt, TRuntimeContext>,
   ): Promise<StreamResult<TRawStream>>;
 
   /** Run multiple agents concurrently and merge results. */

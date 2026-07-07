@@ -365,6 +365,14 @@ export type {
   ToolResultContext,
   ApprovalMiddlewareConfig,
 } from "./tools/types";
+export type {
+  KnownToolsFor,
+  MergeKnownTools,
+  PromptToolsOf,
+  ToolContextOf,
+  ToolsContextOf,
+  ToolsContextOption,
+} from "./tools/context-types";
 
 // Runtime hooks — prefer `config()` for centralized setup
 export {

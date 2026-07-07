@@ -275,7 +275,15 @@ export function emitToolRequestArtifacts(
  * generic in SDK land; the wrappers are passthroughs, so structural typing
  * is sufficient here.
  */
-type ToolExecute = (input: unknown, options: { toolCallId?: string; [key: string]: unknown }) => unknown
+interface InstrumentedToolExecutionOptions {
+  readonly toolCallId?: string
+  readonly messages?: readonly unknown[]
+  readonly context?: unknown
+  readonly runtimeContext?: unknown
+  readonly abortSignal?: AbortSignal
+}
+
+type ToolExecute = (input: unknown, options?: InstrumentedToolExecutionOptions) => unknown
 type ToolToModelOutput = (args: {
   toolCallId: string
   input: unknown
@@ -392,14 +400,18 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
       execute: async function instrumentedExecute(
         this: unknown,
         input: unknown,
-        options: { toolCallId?: string; [key: string]: unknown },
+        options?: InstrumentedToolExecutionOptions,
       ) {
         const toolCallId = options?.toolCallId ?? `tc_${Date.now()}`
+        const executionOptions: InstrumentedToolExecutionOptions = {
+          ...(options ?? {}),
+          toolCallId,
+        }
         const start = Date.now()
         const span = openToolCallSpan(name, toolCallId, input)
         try {
           span.withContext(() => emitToolArgsArtifact(span.spanId, name, toolCallId, input))
-          const result = await span.withContext(() => originalExecute.call(this, input, options))
+          const result = await span.withContext(() => originalExecute.call(this, input, executionOptions))
           const outputSize = measureUnknown(result)
           if (originalToModelOutput) {
             rememberPending(toolCallId, { start, input, output: result, outputSize, span })

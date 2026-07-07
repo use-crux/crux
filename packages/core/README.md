@@ -92,6 +92,31 @@ When a call suspends, persist `result.messages`, append a
 `tool-approval-response` with `appendToolApprovalResponse()`, and call the
 adapter again with the resumed messages.
 
+## Tool Context
+
+Tools can declare per-tool dependencies with `contextSchema`. Any adapter call
+that composes that tool must pass a matching `toolsContext.<toolName>` value;
+Crux validates it before the tool loop starts, rejects `toolsContext` keys for
+tools without `contextSchema`, and passes the parsed value to `execute`,
+middleware, and approval middleware. `runtimeContext` is shared across the
+whole run and is also visible to function-form `toolApproval` policies.
+
+```ts
+const weather = tool({
+  description: "Get weather.",
+  input: z.object({ city: z.string() }),
+  contextSchema: z.object({ apiKey: z.string() }),
+  execute: async ({ city }, { context, runtimeContext }) =>
+    fetchWeather(city, context.apiKey, runtimeContext),
+});
+
+await generate(assistant, {
+  model,
+  toolsContext: { weather: { apiKey: process.env.WEATHER_API_KEY } },
+  runtimeContext: { tenantId: "tenant_1" },
+});
+```
+
 ## Input Escaping
 
 Prompt resolution uses the parsed Zod output as the source of truth. Defaults

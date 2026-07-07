@@ -4,7 +4,7 @@
 
 import type { LanguageModel } from "ai";
 import { z } from "zod";
-import type { Prompt } from "@use-crux/core";
+import { prompt, tool, type Prompt } from "@use-crux/core";
 import { generate } from "../index";
 
 declare const model: LanguageModel;
@@ -48,4 +48,47 @@ void generate(textPrompt, {
   input: { instruction: "portable" },
   // @ts-expect-error - AI SDK headers belongs in extra.headers.
   headers: { "x-crux-test": "yes" },
+});
+
+const weather = tool({
+  description: "Get weather",
+  input: z.object({ city: z.string() }),
+  contextSchema: z.object({ apiKey: z.string() }),
+  execute: async ({ city }, { context }) => `${city}:${context.apiKey}`,
+});
+
+const toolPrompt = prompt({
+  id: "ai-tool-context",
+  tools: { weather },
+  prompt: "Use the tool.",
+});
+
+void generate(toolPrompt, {
+  model,
+  toolsContext: { weather: { apiKey: "secret" } },
+});
+
+void generate(toolPrompt, {
+  model,
+  toolsContext: { weather: { apiKey: "secret" } },
+  runtimeContext: { tenantId: "tenant_1" },
+  toolApproval: {
+    weather: (ctx) => {
+      ctx.runtimeContext.tenantId satisfies string;
+      // @ts-expect-error - runtimeContext is inferred from the call option.
+      ctx.runtimeContext.missing;
+      return false;
+    },
+  },
+});
+
+// @ts-expect-error - prompt-level contextSchema makes toolsContext required.
+void generate(toolPrompt, { model });
+
+void generate(toolPrompt, {
+  model,
+  toolsContext: {
+    // @ts-expect-error - toolsContext value must match the tool schema.
+    weather: { apiKey: 123 },
+  },
 });

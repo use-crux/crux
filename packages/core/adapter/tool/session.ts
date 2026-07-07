@@ -76,6 +76,12 @@ import {
 } from './approval'
 import type { ApprovalRequestInfo } from './approval'
 import { callApprovalDeclarations, requiresToolApproval } from './approval-policy-evaluator'
+import { resolveToolsContext, type ResolvedToolsContext } from './context'
+import {
+  withToolLifecycleExecutionOptions,
+  type PartialToolLifecycleExecutionOptions,
+  type ToolLifecycleExecutionOptions,
+} from './execution-options'
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -114,6 +120,8 @@ export interface ToolLifecycleOptions {
     readonly tools?: Record<string, unknown>
     readonly toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
     readonly toolApproval?: ToolApprovalMap
+    readonly toolsContext?: Readonly<Record<string, unknown>>
+    readonly runtimeContext?: unknown
   }
   /** Identity threaded into spans, hooks, and memory capture. */
   readonly promptId: string | undefined
@@ -377,7 +385,7 @@ function convertTools(
 interface SessionToolShape {
   readonly execute?: (
     input: unknown,
-    options: { readonly toolCallId?: string; readonly messages?: readonly unknown[] },
+    options: ToolLifecycleExecutionOptions,
   ) => unknown
   readonly toModelOutput?: (args: {
     toolCallId: string
@@ -466,6 +474,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   let middlewareCount = 0
   let skillSession: SkillActivationSession | undefined
   let approvalDeclarations: readonly ApprovalDeclaration[] = []
+  let toolContexts: ResolvedToolsContext = {}
 
   function arm(resolved: ResolvedPrompt): void {
     skillSession = readSkillActivationSession(resolved)
@@ -476,6 +485,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     middlewareCount = middlewareChain.length
     const merged = { ...(resolved.tools ?? {}), ...(options.call?.tools ?? {}) }
     wrappedTools = applyToolMiddleware(merged, middleware)
+    toolContexts = resolveToolsContext(wrappedTools, options.call?.toolsContext)
     approvalDeclarations = [
       ...(resolved.toolApprovalDeclarations ?? []),
       ...callApprovalDeclarations(options.call?.toolApproval),
@@ -484,7 +494,9 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       descriptors = convertTools(wrappedTools, options.sanitizeToolSchema)
     } else {
       const keys = Object.keys(wrappedTools)
-      armedTools = keys.length > 0 ? instrumentToolSet(wrappedTools) : undefined
+      armedTools = keys.length > 0
+        ? instrumentToolSet(withToolLifecycleExecutionOptions(wrappedTools, executionOptionsForSdkTool))
+        : undefined
     }
   }
 
@@ -505,6 +517,34 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   const appendRound: AppendToolRound = options.appendToolRound ?? canonicalAppendToolRound
 
   const currentTraceId = (): string | undefined => getExecutionContext()?.traceId ?? observe.captureContext()?.traceId
+
+  function executionOptionsFor(
+    toolCall: SessionToolCall,
+    messages: readonly Message[],
+  ): ToolLifecycleExecutionOptions {
+    const base = {
+      toolCallId: toolCall.id,
+      messages,
+      runtimeContext: options.call?.runtimeContext,
+    }
+    return Object.prototype.hasOwnProperty.call(toolContexts, toolCall.name)
+      ? { ...base, context: toolContexts[toolCall.name] }
+      : base
+  }
+
+  function executionOptionsForSdkTool(
+    toolName: string,
+    rawOptions: PartialToolLifecycleExecutionOptions | undefined,
+  ): ToolLifecycleExecutionOptions {
+    const base = {
+      ...(rawOptions ?? {}),
+      toolCallId: rawOptions?.toolCallId ?? `tc_${now()}`,
+      runtimeContext: options.call?.runtimeContext,
+    }
+    return Object.prototype.hasOwnProperty.call(toolContexts, toolName)
+      ? { ...base, context: toolContexts[toolName] }
+      : base
+  }
 
   // ── The kernel: gate → execute → settle ─────────────────────────
 
@@ -600,8 +640,9 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     try {
       span.withContext(() => emitToolArgsArtifact(span.spanId, toolCall.name, toolCall.id, toolCall.args))
       const execute = tool.execute ?? (() => undefined)
+      const toolOptions = executionOptionsFor(toolCall, messages)
       const result = await span.withContext(() =>
-        withBudget(() => Promise.resolve(execute(toolCall.args, { toolCallId: toolCall.id, messages })), {
+        withBudget(() => Promise.resolve(execute(toolCall.args, toolOptions)), {
           budget: 'tool',
           limitMs: toolBudgetMs(options.timeout, toolCall.name),
           toolName: toolCall.name,
@@ -704,6 +745,8 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       tool,
       toolCall,
       messages,
+      runtimeContext: options.call?.runtimeContext,
+      toolContext: toolContexts[toolCall.name],
       declarations: approvalDeclarations,
       onPolicyTrace: (trace) => transcript.push({ t: 'approval.policy', ...trace }),
     })

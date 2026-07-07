@@ -31,24 +31,63 @@ const emptyInputSchema = z.object({})
  * })
  * ```
  */
-export function tool<TOutput, const TName extends string | undefined = undefined>(
-  config: Omit<ToolConfig<typeof emptyInputSchema, TOutput, TName>, 'input' | 'parameters'> & {
+export function tool<
+  TOutput,
+  const TName extends string | undefined = undefined,
+  const TContextSchema extends z.ZodType | undefined = undefined,
+>(
+  config: Omit<ToolConfig<typeof emptyInputSchema, TOutput, TName, TContextSchema>, 'input' | 'parameters'> & {
     input?: undefined
     parameters?: undefined
   },
-): NamedToolDef<Record<string, never>, TOutput, TName>
-export function tool<const TInputSchema extends z.ZodType, TOutput, const TName extends string | undefined = undefined>(
-  config: ToolConfig<TInputSchema, TOutput, TName>,
-): NamedToolDef<z.infer<TInputSchema>, TOutput, TName>
-export function tool<const TInputSchema extends z.ZodType, TOutput, const TName extends string | undefined = undefined>(
-  config: ToolConfig<TInputSchema, TOutput, TName>,
-): NamedToolDef<z.infer<TInputSchema>, TOutput, TName> {
+): NamedToolDef<
+  Record<string, never>,
+  TOutput,
+  TName,
+  TContextSchema extends z.ZodType ? z.infer<TContextSchema> : never,
+  TContextSchema
+>
+export function tool<
+  const TInputSchema extends z.ZodType,
+  TOutput,
+  const TName extends string | undefined = undefined,
+  const TContextSchema extends z.ZodType | undefined = undefined,
+>(
+  config: ToolConfig<TInputSchema, TOutput, TName, TContextSchema>,
+): NamedToolDef<
+  z.infer<TInputSchema>,
+  TOutput,
+  TName,
+  TContextSchema extends z.ZodType ? z.infer<TContextSchema> : never,
+  TContextSchema
+>
+export function tool<
+  const TInputSchema extends z.ZodType,
+  TOutput,
+  const TName extends string | undefined = undefined,
+  const TContextSchema extends z.ZodType | undefined = undefined,
+>(
+  config: ToolConfig<TInputSchema, TOutput, TName, TContextSchema>,
+): NamedToolDef<
+  z.infer<TInputSchema>,
+  TOutput,
+  TName,
+  TContextSchema extends z.ZodType ? z.infer<TContextSchema> : never,
+  TContextSchema
+> {
   const parameters = config.parameters ?? config.input ?? emptyInputSchema
   return Object.freeze({
     ...(config.name ? { name: config.name } : {}),
     description: config.description,
     parameters,
     execute: config.execute,
+    ...(config.contextSchema ? { contextSchema: config.contextSchema } : {}),
     ...(config.toModelOutput ? { toModelOutput: config.toModelOutput } : {}),
-  }) as NamedToolDef<z.infer<TInputSchema>, TOutput, TName>
+  }) as NamedToolDef<
+    z.infer<TInputSchema>,
+    TOutput,
+    TName,
+    TContextSchema extends z.ZodType ? z.infer<TContextSchema> : never,
+    TContextSchema
+  >
 }
