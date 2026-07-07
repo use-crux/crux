@@ -1,11 +1,10 @@
-use std::collections::HashMap;
-
 use oxc_ast::ast::*;
 use oxc_span::GetSpan;
 
 use crate::{
-    protocol::{LiteralValue, StaticImportRecord, StaticSyntaxValue},
+    protocol::{LiteralValue, StaticSyntaxValue},
     syntax::function_values::{function_value_from_arrow, function_value_from_function},
+    syntax::semantic_imports::SemanticImportIndex,
     syntax::source::SourceView,
     syntax::values::{
         call_args, call_receiver, callee_record_from_expression, object_value,
@@ -13,12 +12,10 @@ use crate::{
     },
 };
 
-type ImportsByLocalName = HashMap<String, StaticImportRecord>;
-
 pub(crate) fn argument_value(
     view: &SourceView<'_>,
     argument: &Argument<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> StaticSyntaxValue {
     match argument {
         Argument::StringLiteral(literal) => StaticSyntaxValue::Literal {
@@ -61,10 +58,10 @@ pub(crate) fn argument_value(
             syntax_value_from_expression(view, &parenthesized.expression, imports)
         }
         Argument::ArrowFunctionExpression(function) => {
-            function_value_from_arrow(view, function, imports)
+            function_value_from_arrow(view, function, imports, None)
         }
         Argument::FunctionExpression(function) => {
-            function_value_from_function(view, function, imports, function.span())
+            function_value_from_function(view, function, imports, None, function.span())
         }
         Argument::LogicalExpression(_) | Argument::BinaryExpression(_) => {
             unsupported_value(view, argument.span(), "BinaryExpression")
@@ -76,7 +73,7 @@ pub(crate) fn argument_value(
 pub(crate) fn array_element_value(
     view: &SourceView<'_>,
     element: &ArrayExpressionElement<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> Option<StaticSyntaxValue> {
     match element {
         ArrayExpressionElement::Elision(_) => None,
@@ -127,12 +124,13 @@ pub(crate) fn array_element_value(
             syntax_value_from_expression(view, &parenthesized.expression, imports),
         ),
         ArrayExpressionElement::ArrowFunctionExpression(function) => {
-            Some(function_value_from_arrow(view, function, imports))
+            Some(function_value_from_arrow(view, function, imports, None))
         }
         ArrayExpressionElement::FunctionExpression(function) => Some(function_value_from_function(
             view,
             function,
             imports,
+            None,
             function.span(),
         )),
         ArrayExpressionElement::LogicalExpression(_)
@@ -150,7 +148,7 @@ pub(crate) fn array_element_value(
 pub(crate) fn call_value(
     view: &SourceView<'_>,
     call: &CallExpression<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> StaticSyntaxValue {
     StaticSyntaxValue::Call {
         callee: callee_record_from_expression(&call.callee, imports),

@@ -56,6 +56,9 @@ type refreshRun struct {
 	// plannedSemanticDetached is set once ownership of plannedSemantic moves to a
 	// background goroutine; the reindex flow must then not stop it on return.
 	plannedSemanticDetached bool
+	// lintPrefetchDetached is set once ownership of lintPrefetch moves to a
+	// background goroutine; the reindex flow must then not stop it on return.
+	lintPrefetchDetached bool
 }
 
 // completeSemanticAndLint runs the semantic and lint phases for a refresh once
@@ -74,6 +77,10 @@ func (s *Service) completeSemanticAndLint(ctx context.Context, run *refreshRun) 
 
 func (s *Service) completeDisabledSemantic(ctx context.Context, run *refreshRun) (store.IndexData, error) {
 	s.watchStatus.SemanticDisabled(run.watch.RunID)
+	if run.hasWatchRun() {
+		s.applyProjectLintPatchInBackground(run, run.index)
+		return run.index, nil
+	}
 	lintRequest, err := run.lintRequestWithPrefetch(run.index)
 	if err != nil {
 		return store.IndexData{}, err
@@ -82,6 +89,15 @@ func (s *Service) completeDisabledSemantic(ctx context.Context, run *refreshRun)
 }
 
 func (s *Service) completeBackgroundSemantic(ctx context.Context, run *refreshRun) (store.IndexData, error) {
+	if run.hasWatchRun() {
+		if run.plannedSemantic != nil {
+			run.plannedSemanticDetached = true
+			s.applyPlannedSemanticPatchInBackground(run.semanticRequest, run.plannedSemantic, run.index, run.semanticMatch)
+		} else {
+			s.applyProjectSemanticPatchInBackground(run.semanticRequest)
+		}
+		return run.index, nil
+	}
 	lintRequest, err := run.lintRequestWithPrefetch(run.index)
 	if err != nil {
 		return store.IndexData{}, err
@@ -107,4 +123,8 @@ func (run *refreshRun) lintRequestWithPrefetch(index store.IndexData) (projectin
 		return projectindex.ProjectLintIndexRequest{}, err
 	}
 	return request, nil
+}
+
+func (run *refreshRun) hasWatchRun() bool {
+	return run != nil && run.watch.RunID != 0
 }

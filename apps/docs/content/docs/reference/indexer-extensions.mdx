@@ -1,13 +1,14 @@
 ---
-title: '@use-crux/indexer/extensions'
+title: "@use-crux/indexer/extensions"
 description: Experimental Crux Indexer extension authoring surface.
 ---
 
-import { Callout } from 'fumadocs-ui/components/callout'
+import { Callout } from "fumadocs-ui/components/callout";
 
 <Callout type="warn">
-  This API is experimental. It is production-used by Crux first-party internals and supports explicit allowlisted
-  package loading, but it is not a sandboxed third-party plugin ecosystem yet.
+  This API is experimental. It is production-used by Crux first-party internals
+  and supports explicit allowlisted package loading, but it is not a sandboxed
+  third-party plugin ecosystem yet.
 </Callout>
 
 `@use-crux/indexer/extensions` exposes the authoring primitives for Crux Indexer extensions. Extensions contribute immutable Project Index facts; the compiler owns parsing, relation resolution, validation, cache invalidation, and snapshot or patch emission. Degraded extractor diagnostics and declared source-file dependencies are preserved by the compiler. Allowlisted packages can be loaded from `crux.config.ts`; parser adapters, resolver internals, custom third-party rule execution, emitters, and sandboxing remain internal/reserved.
@@ -15,7 +16,12 @@ import { Callout } from 'fumadocs-ui/components/callout'
 ## Authoring Helpers
 
 ```ts
-import { callPattern, facts, none, projectDefinition } from '@use-crux/indexer/extensions'
+import {
+  callPattern,
+  facts,
+  none,
+  projectDefinition,
+} from "@use-crux/indexer/extensions";
 ```
 
 - `callPattern(input)` declares a call-expression pattern. `importFrom` is an exact authored module-specifier constraint; package subpaths are not wildcard matches.
@@ -33,13 +39,16 @@ import {
   assertDeterministicExtraction,
   defineIndexerExtensionFixture,
   extractFixtureSource,
-} from '@use-crux/indexer/testing'
+} from "@use-crux/indexer/testing";
 
-const fixture = defineIndexerExtensionFixture(extension)
-const out = await extractFixtureSource(fixture, `export const wf = defineWorkflow({ id: 'release' })`)
+const fixture = defineIndexerExtensionFixture(extension);
+const out = await extractFixtureSource(
+  fixture,
+  `export const wf = defineWorkflow({ id: 'release' })`,
+);
 ```
 
-`extractFixtureSource(...)` runs the production static extraction engine over in-memory source text with cache disabled. Use it for source-text-to-facts tests instead of constructing parser-native contexts. `assertDeterministicExtraction(...)` double-runs a fixture and throws when the canonical output changes.
+`extractFixtureSource(...)` runs the production static extraction engine over in-memory source text with cache disabled. The testing harness uses the in-process TypeScript syntax-record producer by default and reports the producer on `out.trace.syntaxFrontend`. Use it for source-text-to-facts tests instead of constructing parser-native contexts. `assertDeterministicExtraction(...)` double-runs a fixture and throws when the canonical output changes.
 
 ## Loading
 
@@ -47,14 +56,16 @@ Crux loads extension packages only from explicit config. Loading is not automati
 and not sandboxing; an allowlisted package is trusted JavaScript code.
 
 ```ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 export default config({
   indexer: {
-    extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
-    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
+    extensions: [
+      { package: "@acme/crux-indexer", export: "default", version: "^1.0.0" },
+    ],
+    trust: { mode: "allowlisted", allow: ["@acme/crux-indexer"] },
   },
-})
+});
 ```
 
 `loadIndexerExtensionReferences(...)` resolves configured packages from the project root, preflights
@@ -62,15 +73,17 @@ package-name trust before import, reads installed package versions from package 
 selected package export, and then validates the manifest.
 
 ```ts
-import { loadIndexerExtensionReferences } from '@use-crux/indexer/extensions'
+import { loadIndexerExtensionReferences } from "@use-crux/indexer/extensions";
 
 const loaded = await loadIndexerExtensionReferences({
   root: process.cwd(),
   config: {
-    extensions: [{ package: '@acme/crux-indexer', export: 'default', version: '^1.0.0' }],
-    trust: { mode: 'allowlisted', allow: ['@acme/crux-indexer'] },
+    extensions: [
+      { package: "@acme/crux-indexer", export: "default", version: "^1.0.0" },
+    ],
+    trust: { mode: "allowlisted", allow: ["@acme/crux-indexer"] },
   },
-})
+});
 ```
 
 `resolveIndexerExtensionReferences(...)` is the pure helper for tooling that already has extension
@@ -82,18 +95,18 @@ packages or execute third-party code.
 ## Extension Manifest
 
 ```ts
-import type { IndexerExtension } from '@use-crux/indexer/extensions'
+import type { IndexerExtension } from "@use-crux/indexer/extensions";
 
 export const extension: IndexerExtension = {
-  name: '@acme/index',
-  version: '1',
+  name: "@acme/index",
+  version: "1",
   crux: {
-    indexer: '^0.1.0',
+    indexer: "^0.1.0",
     projectIndexSchema: 1,
   },
   extractors: [],
   relations: [],
-}
+};
 ```
 
 `extractors` are the only production-executed v1 public slot for third-party packages. `relations`
@@ -106,33 +119,34 @@ are internal/reserved until the extension system is stabilized.
 ## Extractor Contract
 
 ```ts
-import { facts, type IndexExtractor } from '@use-crux/indexer/extensions'
+import { facts, type IndexExtractor } from "@use-crux/indexer/extensions";
 
 export const extractor: IndexExtractor = {
-  name: 'acme.defineTool',
-  patterns: [{ kind: 'call', name: 'defineTool', importFrom: ['@acme/tools'] }],
+  name: "acme.defineTool",
+  patterns: [{ kind: "call", name: "defineTool", importFrom: ["@acme/tools"] }],
   extract(ctx) {
-    if (!ctx.config) return { kind: 'none' }
-    const name = ctx.config.string('name') ?? ctx.args.string(0) ?? ctx.source.localName
-    const id = `tool:${ctx.source.safeId(name)}`
+    if (!ctx.config) return { kind: "none" };
+    const name =
+      ctx.config.string("name") ?? ctx.args.string(0) ?? ctx.source.localName;
+    const id = `tool:${ctx.source.safeId(name)}`;
 
     return facts({
       definitions: [
         ctx.define.definition({
           variableName: ctx.source.variableName,
           id,
-          kind: 'tool',
+          kind: "tool",
           name,
           metadata: {
             exportName: ctx.source.variableName,
-            inputSchema: ctx.config.schema('input'),
+            inputSchema: ctx.config.schema("input"),
           },
         }),
       ],
-      references: [ctx.ref.variable('agent.uses_tool', 'writerTool')],
-    })
+      references: [ctx.ref.variable("agent.uses_tool", "writerTool")],
+    });
   },
-}
+};
 ```
 
 `extract(ctx)` should be a pure function of its context. It should read source-local values through `ctx.args`, `ctx.config`, and `ctx.source`; build values with `ctx.define`, `ctx.ref`, and `ctx.sourceRef`; and return `facts(...)`, `none()`, or a degraded result. Do not mutate index graphs, caches, diagnostics arrays, registries, or snapshots.

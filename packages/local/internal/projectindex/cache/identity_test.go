@@ -4,24 +4,34 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 25 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want existing epoch 25", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 26 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want pre-launch migration epoch 26", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
 	for _, phrase := range []string{
-		"persisted `.crux/cache/index/index.json`",
+		"persisted `.crux/cache/index-v2/epoch-*`",
 		"stale snapshot masking after restart",
 		"TS-owned AST and semantic fact cache identity",
 	} {
 		if !strings.Contains(doc, phrase) {
 			t.Fatalf("ProjectIndexSnapshotCacheEpoch doc = %q, missing %q", doc, phrase)
 		}
+	}
+}
+
+func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
+	root := t.TempDir()
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-26", "index.db")
+
+	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
+		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)
 	}
 }
 

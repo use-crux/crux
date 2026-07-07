@@ -20,11 +20,13 @@ pub mod frontend {
 
 mod syntax {
     pub(crate) mod argument_values;
+    pub(crate) mod binding_symbols;
     pub(crate) mod frontend;
     pub(crate) mod function_calls;
     pub(crate) mod function_values;
     pub(crate) mod imports;
     pub(crate) mod initializers;
+    pub(crate) mod interface_hash;
     pub(crate) mod match_arguments;
     pub(crate) mod match_build;
     pub(crate) mod match_expressions;
@@ -32,6 +34,9 @@ mod syntax {
     pub(crate) mod match_statements;
     pub(crate) mod object_values;
     pub(crate) mod resolve;
+    pub(crate) mod semantic_imports;
+    pub(crate) mod semantic_initializer_walk;
+    pub(crate) mod semantic_initializers;
     pub(crate) mod source;
     pub(crate) mod values;
 }

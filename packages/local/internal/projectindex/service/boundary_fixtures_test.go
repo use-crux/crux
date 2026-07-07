@@ -248,6 +248,61 @@ func (i *watchFallbackIndexer) IndexProjectIncremental(
 	return projectindex.ProjectIndexIncrementalResult{}, nil
 }
 
+type watchBackgroundLintIndexer struct {
+	lintStarted chan struct{}
+	releaseLint chan struct{}
+	lintDone    chan struct{}
+}
+
+func (i *watchBackgroundLintIndexer) IndexProjectAstPatch(context.Context, string, string, string) (projectindex.IndexPatch, error) {
+	return projectindex.IndexPatch{}, nil
+}
+
+func (i *watchBackgroundLintIndexer) IndexProjectIncremental(
+	context.Context,
+	string,
+	string,
+	string,
+	store.IndexData,
+	[]string,
+	[]string,
+	string,
+) (projectindex.ProjectIndexIncrementalResult, error) {
+	return projectindex.ProjectIndexIncrementalResult{
+		Report: projectindex.ProjectIndexIncrementalReport{
+			PlanKind:           "source-file-reindex",
+			ASTUsedStaticIndex: true,
+			GraphConfidence:    "complete-enough-for-source-closure",
+			ChangedFiles:       []string{"/repo/src/writer.ts"},
+			AffectedFiles:      []string{"/repo/src/writer.ts"},
+		},
+		Patches: []projectindex.IndexPatch{{
+			SchemaVersion: 1,
+			Phase:         projectindex.PhaseAST,
+			Project:       store.ProjectIdentity{Root: "/repo", Name: "project", ConfigFile: "crux.config.ts"},
+			Status:        "ok",
+			Invalidates:   &projectindex.IndexPatchInvalidation{Files: []string{"/repo/src/writer.ts"}},
+			Facts: projectindex.IndexPatchFacts{
+				Definitions: []store.ProjectDefinition{{
+					ID:       "prompt:writer",
+					Kind:     "prompt",
+					Name:     "writer",
+					Source:   &store.SourceLoc{File: "/repo/src/writer.ts"},
+					Fidelity: "partial",
+					Status:   "active",
+				}},
+			},
+		}},
+	}, nil
+}
+
+func (i *watchBackgroundLintIndexer) IndexProjectLintPatch(context.Context, projectindex.ProjectLintIndexRequest) (projectindex.IndexPatch, error) {
+	close(i.lintStarted)
+	<-i.releaseLint
+	close(i.lintDone)
+	return projectindex.IndexPatch{}, nil
+}
+
 type cancellableBackgroundSemanticIndexer struct {
 	root string
 

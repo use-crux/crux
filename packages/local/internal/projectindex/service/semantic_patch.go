@@ -113,9 +113,6 @@ func (s *Service) applyProjectSemanticPatchInBackground(request projectindex.Pro
 		if s == nil {
 			return
 		}
-		if _, ok := s.indexer.(SemanticClient); !ok {
-			return
-		}
 		_, _ = s.applyProjectSemanticPatch(taskCtx, request, nil)
 	}()
 }

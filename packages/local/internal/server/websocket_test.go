@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -192,6 +195,38 @@ func readIndexDeltaEvent(t *testing.T, ws *websocket.Conn) map[string]any {
 	}
 }
 
+func TestWebSocketIndexMessagesStayTyped(t *testing.T) {
+	snapshots := readServerSource(t, "websocket_snapshots.go")
+	for _, needle := range []string{
+		"type indexSnapshotMessage struct",
+		"type apiIndexSnapshotMessage struct",
+		"func indexMessage(index store.IndexData) indexSnapshotMessage",
+		"func apiIndexMessage(index api.IndexData) apiIndexSnapshotMessage",
+	} {
+		if !strings.Contains(snapshots, needle) {
+			t.Fatalf("websocket_snapshots.go lost typed index envelope %q", needle)
+		}
+	}
+	for _, forbidden := range []string{
+		"json.Unmarshal",
+		"var envelope map[string]any",
+	} {
+		if strings.Contains(snapshots, forbidden) {
+			t.Fatalf("websocket_snapshots.go must not rebuild index snapshots through %q", forbidden)
+		}
+	}
+
+	deltas := readServerSource(t, "websocket_index_delta.go")
+	if !strings.Contains(deltas, "type indexDeltaMessage struct") {
+		t.Fatalf("websocket_index_delta.go lost typed index delta envelope")
+	}
+	for _, forbidden := range []string{"json.Unmarshal", "map[string]any"} {
+		if strings.Contains(deltas, forbidden) {
+			t.Fatalf("websocket_index_delta.go must not rebuild index updates through %q", forbidden)
+		}
+	}
+}
+
 func TestWebSocket_connect_and_receive_snapshot(t *testing.T) {
 	s := store.NewStore()
 	s.SetIndex(
@@ -236,6 +271,19 @@ func TestWebSocket_connect_and_receive_snapshot(t *testing.T) {
 	if !receivedTypes["index"] {
 		t.Error("did not receive index message")
 	}
+}
+
+func readServerSource(t *testing.T, name string) string {
+	t.Helper()
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("runtime.Caller failed")
+	}
+	data, err := os.ReadFile(filepath.Join(filepath.Dir(currentFile), name))
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	return string(data)
 }
 
 func TestRegisteredSnapshotMessageUsesRegistryMetadata(t *testing.T) {

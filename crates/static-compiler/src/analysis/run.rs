@@ -13,7 +13,7 @@ use crate::{
     primitives::projection::project_static_syntax_record_with_records,
     protocol::StaticSyntaxFileRecord,
     protocol::static_index::StaticIndexAnalyzeRequest,
-    source::groups::grouped_source_facts,
+    source::groups::{SourceHashEvidence, grouped_source_facts},
     source::tree_paths::grouped_tree_path_definition_facts,
 };
 
@@ -113,17 +113,39 @@ fn analyze_parsed_file(
     {
         groups.push(tree_paths);
     }
+    let imported_records = parsed
+        .record
+        .imports
+        .iter()
+        .filter_map(|import| import.resolved_file.clone())
+        .collect::<Vec<_>>();
+    let dependencies = parsed
+        .record
+        .imports
+        .iter()
+        .filter(|import| import.import_kind.as_deref() != Some("type"))
+        .filter_map(|import| import.resolved_file.clone())
+        .collect::<Vec<_>>();
+    let dependency_evidence = imported_records
+        .iter()
+        .filter_map(|dependency| {
+            records_by_file
+                .get(dependency)
+                .map(|record| SourceHashEvidence {
+                    file: record.file.as_str(),
+                    source_hash: record.source_hash.as_str(),
+                    interface_hash: record.interface_hash.as_deref(),
+                })
+        })
+        .collect();
     if let Some(source_group) = grouped_source_facts(
         &request.plan.root,
         request.plan.project_name.as_deref(),
         &parsed.record.file,
-        parsed
-            .record
-            .imports
-            .iter()
-            .filter(|import| import.import_kind.as_deref() != Some("type"))
-            .filter_map(|import| import.resolved_file.clone())
-            .collect(),
+        &parsed.record.source_hash,
+        parsed.record.interface_hash.as_deref(),
+        dependencies,
+        dependency_evidence,
         !groups.is_empty(),
     )
     .and_then(group_from_value)

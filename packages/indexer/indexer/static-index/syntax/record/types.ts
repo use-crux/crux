@@ -175,6 +175,8 @@ export interface StaticSyntaxFileRecord {
   readonly file: string
   /** SHA-256 hash of the exact parsed source text. */
   readonly sourceHash: string
+  /** SHA-256 hash of the exported surface used to firewall dependent invalidation. */
+  readonly interfaceHash?: string
   /** Static import bindings visible in this file. */
   readonly imports: readonly StaticImportRecord[]
   /** Source-local declarations and call sites that may produce Project Index facts. */

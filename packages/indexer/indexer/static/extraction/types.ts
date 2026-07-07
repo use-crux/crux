@@ -1,12 +1,26 @@
-import type { IndexDiagnostic, IndexRuleDescriptor, ProjectDefinition, ProjectRelation } from '@use-crux/core/project-index'
-import type { ExtensionRuleInput, ExtensionRuleResult, IndexDependency, IndexerExtension } from '../../extensions'
-import type { ExtensionRuntimeManifest } from '../../extensions/runtime/engine'
-import type { ProjectIndexCompilerProfile } from '../../compiler/profile'
-import type { SemanticSourceProfileFile } from '../../semantic/source-profile'
-import type { StaticExtractionInstrumentation } from '../instrumentation'
-import type { NativeFactProjectionMode, StaticSyntaxFrontend, StaticSyntaxFrontendFactory } from '../../static-index/syntax/record'
-import type { StaticExtractionIdentity } from './identity'
-import type { SourceReader } from './source-io'
+import type {
+  IndexDiagnostic,
+  IndexRuleDescriptor,
+  ProjectDefinition,
+  ProjectRelation,
+} from "@use-crux/core/project-index";
+import type {
+  ExtensionRuleInput,
+  ExtensionRuleResult,
+  IndexDependency,
+  IndexerExtension,
+} from "../../extensions";
+import type { ExtensionRuntimeManifest } from "../../extensions/runtime/engine";
+import type { ProjectIndexCompilerProfile } from "../../compiler/profile";
+import type { SemanticSourceProfileFile } from "../../semantic/source-profile";
+import type { StaticExtractionInstrumentation } from "../instrumentation";
+import type {
+  NativeFactProjectionMode,
+  StaticSyntaxFrontend,
+  StaticSyntaxFrontendFactory,
+} from "../../static-index/syntax/record";
+import type { StaticExtractionIdentity } from "./identity";
+import type { SourceReader } from "./source-io";
 
 /**
  * Configuration for a static extraction run.
@@ -20,23 +34,24 @@ import type { SourceReader } from './source-io'
  */
 export interface StaticExtractionOptions {
   /** Absolute project root used to normalize source paths, dependencies, config files, and cache keys. */
-  readonly root: string
+  readonly root: string;
   /** Compiler profile for first-party extractors and compiler-owned projections. Defaults to Crux core. */
-  readonly profile?: ProjectIndexCompilerProfile
+  readonly profile?: ProjectIndexCompilerProfile;
   /** Trusted extension manifests appended to the compiler profile for this engine instance. */
-  readonly extensions?: readonly IndexerExtension[]
+  readonly extensions?: readonly IndexerExtension[];
   /** Internal compiler inputs that affect static output but are resolved outside extension manifests. */
-  readonly additionalCacheInputs?: readonly IndexDependency[]
+  readonly additionalCacheInputs?: readonly IndexDependency[];
   /** Source text provider. Defaults to filesystem reads; fixture tests usually pass an in-memory reader. */
-  readonly sources?: SourceReader
+  readonly sources?: SourceReader;
   /**
    * Syntax-record frontend or frontend factory used by this engine.
    *
-   * This is an internal compiler substitution point, not a public project config flag. Omit it to
-   * use the TypeScript-backed record frontend. Prefer passing a factory for native frontends so the
-   * engine can inject the compiler runtime's extractor call names before parsing.
+   * Root and host callers must choose a frontend explicitly. The TypeScript syntax-record producer is
+   * available as a test/compat reference implementation, but it is not an implicit production
+   * default. Prefer passing a factory for native frontends so the engine can inject the compiler
+   * runtime's extractor call names before parsing.
    */
-  readonly syntaxFrontend?: StaticSyntaxFrontend | StaticSyntaxFrontendFactory
+  readonly syntaxFrontend: StaticSyntaxFrontend | StaticSyntaxFrontendFactory;
   /**
    * Native syntax-record fact lane to emit.
    *
@@ -46,23 +61,23 @@ export interface StaticExtractionOptions {
    *
    * @internal
    */
-  readonly nativeFactProjection?: NativeFactProjectionMode
+  readonly nativeFactProjection?: NativeFactProjectionMode;
   /** Cache behavior for per-file extraction. Defaults to the project-local persistent cache. */
-  readonly cache?: 'persistent' | 'none' | StaticParseCacheStore
+  readonly cache?: "persistent" | "none" | StaticParseCacheStore;
   /**
    * Optional low-overhead instrumentation hooks.
    *
    * Timings use stable compiler phase names so TypeScript and native frontends can be benchmarked
    * without exposing AST or checker internals.
    */
-  readonly instrumentation?: StaticExtractionInstrumentation
+  readonly instrumentation?: StaticExtractionInstrumentation;
   /**
    * Internal validated cache hits supplied by a native parser host.
    *
    * These let warm native runs avoid recomputing exact static cache keys for
    * files whose manifest entry was already validated during planning.
    */
-  readonly cacheHits?: readonly StaticParseCacheHit[]
+  readonly cacheHits?: readonly StaticParseCacheHit[];
 }
 
 /**
@@ -79,7 +94,10 @@ export interface StaticExtractionOptions {
  *
  * @example
  * ```ts
- * const extraction = createStaticExtraction({ root: process.cwd() })
+ * const extraction = createStaticExtraction({
+ *   root: process.cwd(),
+ *   syntaxFrontend: createRustOxcStaticSyntaxFrontend,
+ * })
  * const file = await extraction.extractFile('/repo/src/prompts.ts')
  * const ruleResult = extraction.rules.check({
  *   definitions: file.definitions,
@@ -95,16 +113,16 @@ export interface StaticExtractionEngine {
    * They include extension/extractor/rule identities, compiler profile/projection identities, and
    * the selected syntax frontend version.
    */
-  readonly identity: StaticExtractionIdentity
+  readonly identity: StaticExtractionIdentity;
   /** Normalized extension manifest after deterministic sorting and validation. */
-  readonly manifest: ExtensionRuntimeManifest
+  readonly manifest: ExtensionRuntimeManifest;
   /**
    * Extracts one source file.
    *
    * The result is safe to serialize. It contains no TypeScript AST nodes and no mutable compiler
    * state. When caching is enabled, a matching cached value is returned with `fromCache: true`.
    */
-  extractFile(file: string): Promise<StaticFileExtraction>
+  extractFile(file: string): Promise<StaticFileExtraction>;
   /**
    * Extracts many source files with bounded concurrency.
    *
@@ -114,7 +132,7 @@ export interface StaticExtractionEngine {
   extractFiles(
     files: readonly string[],
     options?: { readonly concurrency?: number },
-  ): Promise<readonly StaticFileExtraction[]>
+  ): Promise<readonly StaticFileExtraction[]>;
   /**
    * Project-level rule phase.
    *
@@ -124,17 +142,17 @@ export interface StaticExtractionEngine {
    */
   readonly rules: {
     /** User-facing metadata for extension-provided rules. */
-    readonly descriptors: readonly IndexRuleDescriptor[]
+    readonly descriptors: readonly IndexRuleDescriptor[];
     /** Checks a merged project fact set and returns findings plus diagnostics. */
-    check(input: ExtensionRuleInput): ExtensionRuleResult
-  }
+    check(input: ExtensionRuleInput): ExtensionRuleResult;
+  };
   /**
    * Explains a file extraction.
    *
    * This returns the same facts as `extractFile(...)` plus the structural cache inputs used by the
    * engine. It is intended for tests, diagnostics, and debugging cache invalidation behavior.
    */
-  explainFile(file: string): Promise<StaticExtractionExplanation>
+  explainFile(file: string): Promise<StaticExtractionExplanation>;
 }
 
 /**
@@ -146,29 +164,29 @@ export interface StaticExtractionEngine {
  */
 export interface StaticFileExtraction {
   /** Absolute source file path that produced this result. */
-  readonly file: string
+  readonly file: string;
   /** Definitions proven from syntax, extension extractors, and compiler-owned projections. */
-  readonly definitions: readonly ProjectDefinition[]
+  readonly definitions: readonly ProjectDefinition[];
   /** Relations proven or resolved from static references in this extraction pass. */
-  readonly relations: readonly ProjectRelation[]
+  readonly relations: readonly ProjectRelation[];
   /** Diagnostics that should be surfaced with the static Project Index output. */
-  readonly diagnostics: readonly IndexDiagnostic[]
+  readonly diagnostics: readonly IndexDiagnostic[];
   /** Direct source files whose text can change this file's static output. */
-  readonly dependencies: readonly string[]
+  readonly dependencies: readonly string[];
   /** Internal semantic source profile row produced while source text was already available. */
-  readonly semanticProfile?: SemanticSourceProfileFile
+  readonly semanticProfile?: SemanticSourceProfileFile;
   /** SHA-256 hash of the exported surface dependent files can observe. */
-  readonly interfaceHash?: string
+  readonly interfaceHash?: string;
   /** `true` when the result came from the engine cache instead of parsing source text. */
-  readonly fromCache: boolean
+  readonly fromCache: boolean;
 }
 
 /** Source hash row stored inside a static parse cache manifest entry. */
 export interface StaticParseCacheSourceHash {
   /** Path relative to the project root using POSIX separators. */
-  readonly file: string
+  readonly file: string;
   /** SHA-256 hash of that file's UTF-8 source. */
-  readonly sourceHash: string
+  readonly sourceHash: string;
 }
 
 /**
@@ -179,21 +197,21 @@ export interface StaticParseCacheSourceHash {
  * recomputing dependency keys through a TypeScript parse in the planning step.
  */
 export interface StaticParseCacheEntryMetadata {
-  readonly version: string
-  readonly root: string
-  readonly file: string
-  readonly sourceHash: string
-  readonly dependencies: readonly StaticParseCacheSourceHash[]
-  readonly configFiles: readonly StaticParseCacheSourceHash[]
-  readonly compilerInputs: readonly unknown[]
+  readonly version: string;
+  readonly root: string;
+  readonly file: string;
+  readonly sourceHash: string;
+  readonly dependencies: readonly StaticParseCacheSourceHash[];
+  readonly configFiles: readonly StaticParseCacheSourceHash[];
+  readonly compilerInputs: readonly unknown[];
 }
 
 /** Validated static parse cache hit supplied by a native parser host. */
 export interface StaticParseCacheHit {
   /** Absolute source file path. */
-  readonly file: string
+  readonly file: string;
   /** Opaque cache key string previously validated by the planner. */
-  readonly cacheKey: string
+  readonly cacheKey: string;
 }
 
 /**
@@ -205,9 +223,13 @@ export interface StaticParseCacheHit {
  */
 export interface StaticParseCacheStore {
   /** Returns a cached extraction result for an opaque key, if one exists. */
-  get(key: string): Promise<StaticFileExtraction | undefined>
+  get(key: string): Promise<StaticFileExtraction | undefined>;
   /** Persists an extraction result for an opaque key. Implementations should be best-effort. */
-  set(key: string, value: StaticFileExtraction, metadata?: StaticParseCacheEntryMetadata): Promise<void>
+  set(
+    key: string,
+    value: StaticFileExtraction,
+    metadata?: StaticParseCacheEntryMetadata,
+  ): Promise<void>;
 }
 
 /**
@@ -217,5 +239,5 @@ export interface StaticParseCacheStore {
  * are part of a run. It intentionally exposes inputs, not the full cache key shape.
  */
 export interface StaticExtractionExplanation extends StaticFileExtraction {
-  readonly cacheInputs: readonly IndexDependency[]
+  readonly cacheInputs: readonly IndexDependency[];
 }

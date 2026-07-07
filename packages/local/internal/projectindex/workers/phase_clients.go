@@ -27,6 +27,13 @@ func (w *Bundle) IndexProjectIncremental(ctx context.Context, root, configPath, 
 	if mode == "" {
 		mode = "ast"
 	}
+	if w.canUseStaticIndexIncremental(previousIndex, mode) {
+		return w.indexProjectIncrementalFromStaticIndex(ctx, root, configPath, projectName, previousIndex, files, deletedFiles)
+	}
+	return w.indexProjectIncrementalFromTypeScript(ctx, root, configPath, projectName, previousIndex, files, deletedFiles, mode)
+}
+
+func (w *Bundle) indexProjectIncrementalFromTypeScript(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (projectindex.ProjectIndexIncrementalResult, error) {
 	req := requestwire.Request{
 		Method:        "indexProjectIncremental",
 		Root:          root,

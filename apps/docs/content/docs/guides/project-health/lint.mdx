@@ -37,6 +37,8 @@ Profiles are additive:
 | `experimental` | You want early feedback from rules that are still being proven. |
 | `off` | You need to disable index lint findings for a project. |
 
+Stable-beta rules are the default quality-gate set. They cover inspectable schemas, hidden required prompt input, dynamic injection visibility, flow replay and suspend contracts, routing defaults, unresolved RAG recipe steps, runtime target identity, and runtime serialization safety. Preview rules can still appear in the recommended, strict, or experimental profiles, but treat them as advisory until their policy and backend evidence are promoted.
+
 ## Read Findings As Design Feedback
 
 Each finding should tell you what happened, why it matters, and what to do next. The important fields are:

@@ -77,14 +77,19 @@ func (p projectIndexPipeline) reindexProjectIncrementalWithOptions(
 		return p.reindexProjectWithOptions(ctx, root, configPath, projectName, options)
 	}
 
+	applyPatch := s.commitAndApply
+	if options.hasWatchRun() {
+		applyPatch = s.commitAndApplyRaw
+	}
 	index := previous
 	for _, patch := range result.Patches {
-		index, err = s.commitAndApply(ctx, normalizePatchIdentity(patch, root, configPath, projectName))
+		index, err = applyPatch(ctx, normalizePatchIdentity(patch, root, configPath, projectName))
 		if err != nil {
 			return store.IndexData{}, err
 		}
 	}
 	run.index = index
+	run.astUsedStaticIndex = result.Report.ASTUsedStaticIndex
 
 	run.semanticRequest = projectSemanticIndexRequest(
 		root,
@@ -96,10 +101,15 @@ func (p projectIndexPipeline) reindexProjectIncrementalWithOptions(
 	)
 	run.semanticRequest.IndexGeneration = s.indexState.CurrentGeneration()
 	run.semanticRequest.WatchRunID = options.Watch.RunID
+	run.semanticRequest.ASTUsedStaticIndex = result.Report.ASTUsedStaticIndex
 	run.generation = run.semanticRequest.IndexGeneration
 
-	run.lintPrefetch = s.startProjectLintPrefetch(ctx, projectLintIndexRequest(root, configPath, projectName, index, false))
-	defer run.lintPrefetch.stop()
+	run.lintPrefetch = s.startProjectLintPrefetch(ctx, projectLintIndexRequest(root, configPath, projectName, index, result.Report.ASTUsedStaticIndex))
+	defer func() {
+		if !run.lintPrefetchDetached {
+			run.lintPrefetch.stop()
+		}
+	}()
 
 	s.watchStatus.IncrementalResult(options.Watch, result, len(result.Patches), watchSemanticStatusForMode(semanticMode))
 

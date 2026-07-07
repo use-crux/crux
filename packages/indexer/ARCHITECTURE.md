@@ -10,10 +10,10 @@ that might omit affected facts.
 
 ## Accepted Target Architecture
 
-The accepted pre-launch direction is to rename this package and its public model from **Source
-Indexer / Project Index** to **Crux Indexer / Project Index**. The current code still uses
-`@use-crux/indexer` and `ProjectIndex*` names until the rename implementation lands, but new
-architecture decisions should use the target language:
+The accepted pre-launch direction is to use **Crux Indexer** for the public system and
+**Project Index** for the output/read model. `@use-crux/indexer` is the package name, while
+`ProjectIndex*` identifiers are artifact/read-model names rather than legacy system names. New
+architecture decisions should use this language:
 
 - Public system name: **Crux Indexer**.
 - Target package name: `@use-crux/indexer`.
@@ -28,9 +28,9 @@ policy, resolver/emitter internals, and output projection.
 
 Static source extraction is composed behind `createStaticExtraction`. The engine owns the extension
 runtime manifest, compiler-profile projection, parser call names, rule descriptors, source reader,
-per-run parse memo, cache store, and deterministic cache identity. Cache identity includes extension
-and extractor identities, compiler profile/projections, and the syntax frontend identity
-`{ kind: 'syntax-frontend', name: 'typescript', version: ts.version }`, so TypeScript upgrades
+per-run parse memo, cache store, and deterministic cache identity. Host callers pass a syntax
+frontend explicitly. Cache identity includes extension and extractor identities, compiler
+profile/projections, and the selected syntax frontend identity, so parser/frontend upgrades
 invalidate static extraction structurally instead of relying only on manual epoch bumps.
 
 Accepted public package surfaces after the rename:
@@ -55,7 +55,8 @@ Accepted host-only surfaces while the package remains private:
 `@use-crux/indexer/testing` exposes source-text fixtures for extension authors. Fixtures use the same
 static extraction engine as production with an in-memory `SourceReader` and `cache: 'none'`, which
 keeps extension tests on the public source-text-to-facts path rather than hand-building parser-native
-contexts.
+contexts. The testing harness uses the in-process TypeScript syntax-record producer as its fixture
+default and reports the selected producer on `trace.syntaxFrontend`.
 
 `@use-crux/indexer/contracts/*` is the TypeScript-owned contract spine for worker-event, Static Syntax,
 Static Index, and Semantic Evidence protocols. The contract manifest records the canonical fixture,
@@ -92,7 +93,7 @@ Accepted non-public surfaces:
 The accepted analysis tiers are:
 
 ```ts
-type AnalysisTier = 'syntax' | 'index' | 'semantic'
+type AnalysisTier = "syntax" | "index" | "semantic";
 ```
 
 `syntax` is file-local and parser-backed, `index` is project-level Project Index analysis, and
@@ -699,5 +700,5 @@ Known v1 boundary:
   patch commit and projection timing lives under `packages/local/internal/devtools`. These benchmarks
   are not part of deterministic default CI.
 
-For the durable implementation checklist and slice-by-slice TDD plan, see
-[docs/incremental-planner-execution-plan.md](./docs/incremental-planner-execution-plan.md).
+For the incremental planner rationale, see
+[ADR-0001](./docs/adr/0001-incremental-planner-before-partial-execution.md).

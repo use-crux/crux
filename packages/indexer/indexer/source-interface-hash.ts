@@ -52,7 +52,7 @@ function statementInterfaceRows(
   exportedLocals: ReadonlyMap<string, string>,
 ): string[] {
   if (ts.isExportDeclaration(statement)) return exportDeclarationRows(sourceFile, statement)
-  if (ts.isExportAssignment(statement)) return [`export-assignment:${printed(sourceFile, statement.expression)}`]
+  if (ts.isExportAssignment(statement)) return [`export-assignment:${surfaceText(sourceFile, statement.expression)}`]
 
   const directExport = hasExportModifier(statement)
   if (ts.isFunctionDeclaration(statement)) {
@@ -67,7 +67,7 @@ function statementInterfaceRows(
   }
   if (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement) || ts.isEnumDeclaration(statement)) {
     const exportedName = directExport ? exportedDeclarationName(statement, statement.name.text) : exportedLocals.get(statement.name.text)
-    return exportedName ? [`declaration:${exportedName}:${printed(sourceFile, statement)}`] : []
+    return exportedName ? [`declaration:${exportedName}:${surfaceText(sourceFile, statement)}`] : []
   }
   if (ts.isVariableStatement(statement)) {
     return variableStatementRows(sourceFile, statement, directExport, exportedLocals)
@@ -90,7 +90,7 @@ function variableStatementRows(
         [
           'variable',
           exportedName,
-          declaration.type ? printed(sourceFile, declaration.type) : '',
+          declaration.type ? surfaceText(sourceFile, declaration.type) : '',
           declaration.initializer ? initializerInterface(sourceFile, declaration.initializer) : '',
         ].join(':'),
       )
@@ -100,7 +100,7 @@ function variableStatementRows(
 }
 
 function exportDeclarationRows(sourceFile: ts.SourceFile, statement: ts.ExportDeclaration): string[] {
-  const moduleSpecifier = statement.moduleSpecifier ? printed(sourceFile, statement.moduleSpecifier) : ''
+  const moduleSpecifier = statement.moduleSpecifier ? surfaceText(sourceFile, statement.moduleSpecifier) : ''
   const clause = statement.exportClause
   if (!clause) return [`export-all:${moduleSpecifier}`]
   if (ts.isNamespaceExport(clause)) return [`export-namespace:${clause.name.text}:${moduleSpecifier}`]
@@ -145,7 +145,7 @@ function initializerInterface(sourceFile: ts.SourceFile, expression: ts.Expressi
   if (ts.isClassExpression(expression)) {
     return classSignature(sourceFile, expression)
   }
-  return printed(sourceFile, expression)
+  return surfaceText(sourceFile, expression)
 }
 
 function functionSignature(
@@ -155,12 +155,12 @@ function functionSignature(
   return [
     typeParameters(sourceFile, node.typeParameters),
     parameters(sourceFile, node.parameters),
-    node.type ? printed(sourceFile, node.type) : '',
+    node.type ? surfaceText(sourceFile, node.type) : '',
   ].join(':')
 }
 
 function classSignature(sourceFile: ts.SourceFile, node: ts.ClassDeclaration | ts.ClassExpression): string {
-  const heritage = node.heritageClauses?.map((clause) => printed(sourceFile, clause)).join('|') ?? ''
+  const heritage = node.heritageClauses?.map((clause) => surfaceText(sourceFile, clause)).join('|') ?? ''
   const members = node.members.map((member) => classMemberSignature(sourceFile, member)).filter(Boolean).sort(compareCodepoint)
   return [heritage, ...members].join(':')
 }
@@ -168,18 +168,23 @@ function classSignature(sourceFile: ts.SourceFile, node: ts.ClassDeclaration | t
 function classMemberSignature(sourceFile: ts.SourceFile, member: ts.ClassElement): string {
   if (hasPrivateModifier(member)) return ''
   if (ts.isMethodDeclaration(member)) return `method:${memberName(sourceFile, member.name)}:${functionSignature(sourceFile, member)}`
+  if (ts.isConstructorDeclaration(member)) return `method:constructor:${constructorSignature(sourceFile, member)}`
   if (ts.isPropertyDeclaration(member)) {
     return [
       'property',
       memberName(sourceFile, member.name),
-      member.type ? printed(sourceFile, member.type) : '',
+      member.type ? surfaceText(sourceFile, member.type) : '',
       member.initializer ? initializerInterface(sourceFile, member.initializer) : '',
     ].join(':')
   }
   if (ts.isGetAccessorDeclaration(member) || ts.isSetAccessorDeclaration(member)) {
     return `accessor:${memberName(sourceFile, member.name)}:${accessorSignature(sourceFile, member)}`
   }
-  return printed(sourceFile, member)
+  return surfaceText(sourceFile, member)
+}
+
+function constructorSignature(sourceFile: ts.SourceFile, node: ts.ConstructorDeclaration): string {
+  return ['', parameters(sourceFile, node.parameters), ''].join(':')
 }
 
 function accessorSignature(
@@ -188,7 +193,7 @@ function accessorSignature(
 ): string {
   return [
     parameters(sourceFile, node.parameters),
-    node.type ? printed(sourceFile, node.type) : '',
+    node.type ? surfaceText(sourceFile, node.type) : '',
   ].join(':')
 }
 
@@ -196,9 +201,9 @@ function parameters(sourceFile: ts.SourceFile, parameters: ts.NodeArray<ts.Param
   return parameters.map((parameter) =>
     [
       parameter.dotDotDotToken ? '...' : '',
-      printed(sourceFile, parameter.name),
+      surfaceText(sourceFile, parameter.name),
       parameter.questionToken ? '?' : '',
-      parameter.type ? printed(sourceFile, parameter.type) : '',
+      parameter.type ? surfaceText(sourceFile, parameter.type) : '',
       parameter.initializer ? initializerInterface(sourceFile, parameter.initializer) : '',
     ].join(''),
   ).join(',')
@@ -208,11 +213,11 @@ function typeParameters(
   sourceFile: ts.SourceFile,
   parameters: ts.NodeArray<ts.TypeParameterDeclaration> | undefined,
 ): string {
-  return parameters?.map((parameter) => printed(sourceFile, parameter)).join(',') ?? ''
+  return parameters ? surfaceText(sourceFile, parameters) : ''
 }
 
 function memberName(sourceFile: ts.SourceFile, name: ts.PropertyName | undefined): string {
-  return name ? printed(sourceFile, name) : ''
+  return name ? surfaceText(sourceFile, name) : ''
 }
 
 function hasExportModifier(node: ts.Node): boolean {
@@ -231,6 +236,12 @@ function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
   return ts.canHaveModifiers(node) && (ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) ?? false)
 }
 
-function printed(sourceFile: ts.SourceFile, node: ts.Node): string {
-  return ts.createPrinter({ removeComments: true }).printNode(ts.EmitHint.Unspecified, node, sourceFile)
+function surfaceText(sourceFile: ts.SourceFile, node: ts.Node | ts.NodeArray<ts.Node>): string {
+  const start = typeof (node as ts.Node).getStart === 'function' ? (node as ts.Node).getStart(sourceFile) : node.pos
+  return sourceFile.text
+    .slice(start, node.end)
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^export\s+/, '')
+    .replace(/^default\s+/, '')
 }

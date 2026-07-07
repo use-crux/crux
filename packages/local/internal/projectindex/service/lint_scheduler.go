@@ -41,6 +41,23 @@ func (s *Service) applyProjectLintPatch(ctx context.Context, request projectinde
 	return s.applyLintPatchIfCurrent(ctx, patch, generation)
 }
 
+func (s *Service) applyProjectLintPatchInBackground(run *refreshRun, index store.IndexData) {
+	if s == nil || run == nil {
+		return
+	}
+	run.lintPrefetchDetached = true
+	request := projectLintIndexRequest(run.root, run.configPath, run.projectName, index, run.astUsedStaticIndex)
+	generation := run.generation
+	prefetch := run.lintPrefetch
+	go func() {
+		defer prefetch.stop()
+		if err := applyProjectLintPrefetch(&request, prefetch); err != nil {
+			return
+		}
+		_, _ = s.applyProjectLintPatch(s.ctx, request, generation)
+	}()
+}
+
 func projectLintIndexRequest(
 	root string,
 	configPath string,

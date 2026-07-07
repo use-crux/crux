@@ -33,6 +33,21 @@ func (s *Service) commitAndApply(ctx context.Context, patch projectindex.IndexPa
 	return s.ApplyIndexPatch(ctx, patch), nil
 }
 
+// commitAndApplyRaw persists a patch and updates the raw store without running
+// synchronous devtools read-model enrichment. Watch refreshes use this so the
+// AST-ready path is not blocked by quality/local enrichment; the store mutation
+// still wakes the debounced publisher owned by the devtools service.
+func (s *Service) commitAndApplyRaw(ctx context.Context, patch projectindex.IndexPatch) (store.IndexData, error) {
+	if err := s.indexCache.Commit(ctx, patch); err != nil {
+		return store.IndexData{}, err
+	}
+	s.indexMu.Lock()
+	defer s.indexMu.Unlock()
+	applied := s.indexState.Apply(patch)
+	s.store.SetIndexData(applied)
+	return applied, nil
+}
+
 // normalizePatchIdentity fills in the project identity and finish timestamp that
 // every applied patch must carry when a phase client leaves them empty.
 func normalizePatchIdentity(

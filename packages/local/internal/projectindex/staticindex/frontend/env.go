@@ -74,8 +74,5 @@ func defaultPoolSize() int {
 	if size < 1 {
 		return 1
 	}
-	if size > 4 {
-		return 4
-	}
 	return size
 }

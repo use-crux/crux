@@ -165,6 +165,53 @@ func TestServiceRecordsIncrementalFallbackReasonInWatchStatus(t *testing.T) {
 	}
 }
 
+func TestServiceReturnsWatchIncrementalBeforeBackgroundLint(t *testing.T) {
+	indexer := &watchBackgroundLintIndexer{
+		lintStarted: make(chan struct{}),
+		releaseLint: make(chan struct{}),
+		lintDone:    make(chan struct{}),
+	}
+	service := New(Options{Store: store.NewStore(), Indexer: indexer})
+	service.ApplyIndexPatch(context.Background(), projectindex.PatchFromSnapshot(boundaryPreviousIndex(), projectindex.PhaseAST, "ok"))
+
+	done := make(chan error, 1)
+	go func() {
+		_, err := service.ReindexProjectIncrementalWithOptions(
+			context.Background(),
+			"/repo",
+			"crux.config.ts",
+			"project",
+			[]string{"/repo/src/writer.ts"},
+			nil,
+			ProjectReindexOptions{
+				Semantic: ProjectSemanticDisabled,
+				Watch:    ProjectWatchRunOptions{RunID: 44},
+			},
+		)
+		done <- err
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("ReindexProjectIncrementalWithOptions error = %v", err)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("watch incremental waited for lint")
+	}
+	select {
+	case <-indexer.lintStarted:
+	case <-time.After(time.Second):
+		t.Fatal("background lint did not start")
+	}
+	close(indexer.releaseLint)
+	select {
+	case <-indexer.lintDone:
+	case <-time.After(time.Second):
+		t.Fatal("background lint did not finish")
+	}
+}
+
 func TestServiceCancelsSupersededBackgroundSemantic(t *testing.T) {
 	root := t.TempDir()
 	indexer := newCancellableBackgroundSemanticIndexer(root)

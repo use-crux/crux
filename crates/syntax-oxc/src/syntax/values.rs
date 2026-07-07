@@ -1,26 +1,21 @@
-use std::collections::HashMap;
-
 use oxc_ast::ast::*;
 use oxc_span::{GetSpan, Span};
 
 use crate::{
-    protocol::{
-        LiteralValue, StaticCalleeRecord, StaticImportRecord, StaticInitializerRecord,
-        StaticSyntaxValue,
-    },
+    protocol::{LiteralValue, StaticCalleeRecord, StaticInitializerRecord, StaticSyntaxValue},
     syntax::argument_values::{argument_value, array_element_value, call_value},
     syntax::function_values::{function_value_from_arrow, function_value_from_function},
+    syntax::semantic_imports::SemanticImportIndex,
+    syntax::semantic_initializers::SemanticInitializerIndex,
     syntax::source::SourceView,
 };
 
 pub(crate) use crate::syntax::object_values::{object_value, property_access_value};
 
-type ImportsByLocalName = HashMap<String, StaticImportRecord>;
-
 pub fn syntax_value_from_expression(
     view: &SourceView<'_>,
     expression: &Expression<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> StaticSyntaxValue {
     match expression {
         Expression::StringLiteral(literal) => StaticSyntaxValue::Literal {
@@ -63,10 +58,10 @@ pub fn syntax_value_from_expression(
             syntax_value_from_expression(view, &parenthesized.expression, imports)
         }
         Expression::ArrowFunctionExpression(function) => {
-            function_value_from_arrow(view, function, imports)
+            function_value_from_arrow(view, function, imports, None)
         }
         Expression::FunctionExpression(function) => {
-            function_value_from_function(view, function, imports, function.span())
+            function_value_from_function(view, function, imports, None, function.span())
         }
         Expression::LogicalExpression(_) | Expression::BinaryExpression(_) => {
             unsupported_value(view, expression.span(), "BinaryExpression")
@@ -81,7 +76,7 @@ pub fn syntax_value_from_expression(
 
 pub fn callee_record_from_expression(
     expression: &Expression<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> StaticCalleeRecord {
     let direct = matches!(expression, Expression::Identifier(_));
     let Some(local_name) = expression_name(expression) else {
@@ -94,8 +89,7 @@ pub fn callee_record_from_expression(
             resolved_file: None,
         };
     };
-    let import_lookup_name = import_lookup_name(expression).unwrap_or_else(|| local_name.clone());
-    if let Some(imported) = imports.get(&import_lookup_name) {
+    if let Some(imported) = imports.record_for_callee(expression) {
         let member_import = matches!(expression, Expression::StaticMemberExpression(_));
         let imported_name = if member_import {
             local_name.clone()
@@ -105,7 +99,7 @@ pub fn callee_record_from_expression(
         return StaticCalleeRecord {
             name: imported_name.clone(),
             direct: Some(direct),
-            local_name: Some(import_lookup_name),
+            local_name: Some(imported.local_name.clone()),
             imported_name: Some(imported_name),
             module_specifier: Some(imported.module_specifier.clone()),
             resolved_file: imported.resolved_file.clone(),
@@ -118,22 +112,6 @@ pub fn callee_record_from_expression(
         imported_name: None,
         module_specifier: None,
         resolved_file: None,
-    }
-}
-
-fn import_lookup_name(expression: &Expression<'_>) -> Option<String> {
-    match expression {
-        Expression::Identifier(identifier) => Some(identifier.name.as_str().to_string()),
-        Expression::StaticMemberExpression(member) => member_receiver_base_name(&member.object),
-        _ => None,
-    }
-}
-
-fn member_receiver_base_name(expression: &Expression<'_>) -> Option<String> {
-    match expression {
-        Expression::Identifier(identifier) => Some(identifier.name.as_str().to_string()),
-        Expression::StaticMemberExpression(member) => member_receiver_base_name(&member.object),
-        _ => None,
     }
 }
 
@@ -150,7 +128,16 @@ pub fn expression_name(expression: &Expression<'_>) -> Option<String> {
 pub fn initializer_records_from_declarator(
     view: &SourceView<'_>,
     declarator: &VariableDeclarator<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
+) -> Vec<StaticInitializerRecord> {
+    initializer_records_from_declarator_with_index(view, declarator, imports, None)
+}
+
+pub(crate) fn initializer_records_from_declarator_with_index(
+    view: &SourceView<'_>,
+    declarator: &VariableDeclarator<'_>,
+    imports: &SemanticImportIndex<'_>,
+    initializer_index: Option<&SemanticInitializerIndex<'_>>,
 ) -> Vec<StaticInitializerRecord> {
     let Some(init) = &declarator.init else {
         return Vec::new();
@@ -159,7 +146,7 @@ pub fn initializer_records_from_declarator(
     if names.is_empty() {
         return Vec::new();
     }
-    let value = syntax_value_from_expression(view, init, imports);
+    let value = syntax_value_from_expression_with_index(view, init, imports, initializer_index);
     let source = view.location_for_span(init);
     let snippet = Some(view.snippet_for_span(init));
     names
@@ -173,10 +160,45 @@ pub fn initializer_records_from_declarator(
         .collect()
 }
 
+fn syntax_value_from_expression_with_index(
+    view: &SourceView<'_>,
+    expression: &Expression<'_>,
+    imports: &SemanticImportIndex<'_>,
+    initializer_index: Option<&SemanticInitializerIndex<'_>>,
+) -> StaticSyntaxValue {
+    match expression {
+        Expression::ArrowFunctionExpression(function) => {
+            function_value_from_arrow(view, function, imports, initializer_index)
+        }
+        Expression::FunctionExpression(function) => function_value_from_function(
+            view,
+            function,
+            imports,
+            initializer_index,
+            function.span(),
+        ),
+        Expression::ParenthesizedExpression(parenthesized) => {
+            syntax_value_from_expression_with_index(
+                view,
+                &parenthesized.expression,
+                imports,
+                initializer_index,
+            )
+        }
+        Expression::AwaitExpression(await_expression) => syntax_value_from_expression_with_index(
+            view,
+            &await_expression.argument,
+            imports,
+            initializer_index,
+        ),
+        _ => syntax_value_from_expression(view, expression, imports),
+    }
+}
+
 pub fn call_args(
     view: &SourceView<'_>,
     args: &[Argument<'_>],
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> Vec<StaticSyntaxValue> {
     args.iter()
         .map(|arg| argument_value(view, arg, imports))
@@ -216,7 +238,7 @@ pub fn binding_names(pattern: &BindingPattern<'_>) -> Vec<String> {
 pub(crate) fn call_receiver(
     view: &SourceView<'_>,
     callee: &Expression<'_>,
-    imports: &ImportsByLocalName,
+    imports: &SemanticImportIndex<'_>,
 ) -> Option<Box<StaticSyntaxValue>> {
     match callee {
         Expression::StaticMemberExpression(member) => Some(Box::new(syntax_value_from_expression(

@@ -234,7 +234,7 @@ pub fn compile(request: StaticIndexCompileRequest) -> StaticIndexFinalizeRespons
         lint_suppressions: request.lint_suppressions,
         emit_builtin_lints: request.emit_builtin_lints,
         patch_phase: None,
-        patch_invalidates: None,
+        patch_invalidates: request.patch_invalidates,
         cache: None,
     };
 

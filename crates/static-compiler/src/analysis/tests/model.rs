@@ -198,6 +198,53 @@ fn analyze_relation_refs_are_finalize_compatible() {
 }
 
 #[test]
+fn analyze_resolves_function_return_tools_with_rust_binding_evidence() {
+    let source = [
+        "const searchTool = tool({ name: 'search', execute: () => null })",
+        "const lateTool = tool({ name: 'late', execute: () => null })",
+        "function makeTools() {",
+        "  const tools = { search: searchTool }",
+        "  {",
+        "    const tools = { wrong: lateTool }",
+        "  }",
+        "  return tools",
+        "  {",
+        "    const tools = { late: lateTool }",
+        "  }",
+        "}",
+        "export const assistant = prompt({ id: 'assistant', tools: makeTools() })",
+    ]
+    .join("\n");
+    let facts = analyze_static_index_facts(&request_with_call_names(
+        vec!["prompt".to_string(), "tool".to_string()],
+        &source,
+    ));
+    let facts = facts.into_wire_values();
+    let prompt_group = facts
+        .iter()
+        .find(|fact| fact["definitions"][0]["id"] == "prompt:assistant")
+        .expect("prompt fact group");
+    let tool_variables = prompt_group["definitions"][0]["metadata"]["facts"]["tools"]["variables"]
+        .as_array()
+        .expect("prompt tool facts should include variables")
+        .iter()
+        .filter_map(|value| value.as_str())
+        .collect::<Vec<_>>();
+
+    assert_eq!(tool_variables, vec!["searchTool"]);
+    assert!(
+        prompt_group["relationRefs"].as_array().is_some_and(|refs| {
+            refs.iter().any(|reference| {
+                reference["type"] == "prompt.uses_tool" && reference["toVariable"] == "searchTool"
+            }) && refs
+                .iter()
+                .all(|reference| reference["toVariable"] != "lateTool")
+        }),
+        "prompt relation refs should use the return-site binding, not later or nested shadows"
+    );
+}
+
+#[test]
 fn analyze_rust_workspace_watch_as_read_and_transaction_as_write_access() {
     let source = [
         "const scratch = workspace({ id: 'scratch' })",

@@ -578,10 +578,8 @@ function toolContributionsFromRecordFactoryCall(
   if (seen.has(key)) return { facts: { hasTools: true, dynamic: true }, references: [] }
   const helper = resolveStaticSyntaxValue({ kind: 'identifier', name: callName }, ctx.initializers)
   if (helper?.kind !== 'function') return { facts: { hasTools: true, dynamic: true }, references: [] }
-  const helperInitializers = createStaticSyntaxInitializerMap(helper.localInitializers)
   const objects = helper.returns.flatMap((value): readonly StaticObjectValue[] => {
-    const resolved = resolveStaticSyntaxValue(value, helperInitializers)
-    return resolved?.kind === 'object' ? [resolved] : []
+    return value.kind === 'object' ? [value] : []
   })
   const object = objects.sort((a, b) => b.properties.length - a.properties.length)[0]
   return object ? toolContributionsFromRecordObject(object, true) : { facts: { hasTools: true, dynamic: true }, references: [] }

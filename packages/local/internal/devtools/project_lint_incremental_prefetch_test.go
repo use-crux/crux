@@ -44,6 +44,12 @@ func TestReindexProjectIncrementalInlinePrefetchesLintFactsWhileSemanticRuns(t *
 	if !indexer.sawPrefetchedRuleFacts {
 		t.Fatal("incremental lint request did not include prefetched rule facts")
 	}
+	if !indexer.sawPrefetchStaticIndex {
+		t.Fatal("incremental lint prefetch did not receive ASTUsedStaticIndex")
+	}
+	if !indexer.sawLintStaticIndex {
+		t.Fatal("incremental lint request did not receive ASTUsedStaticIndex")
+	}
 }
 
 type incrementalConcurrentLintProjectIndexer struct {
@@ -52,6 +58,8 @@ type incrementalConcurrentLintProjectIndexer struct {
 	prefetchStarted        chan struct{}
 	sawSemanticQuality     bool
 	sawPrefetchedRuleFacts bool
+	sawPrefetchStaticIndex bool
+	sawLintStaticIndex     bool
 }
 
 func incrementalLintPreviousIndex() store.IndexData {
@@ -96,10 +104,11 @@ func (i *incrementalConcurrentLintProjectIndexer) IndexProjectAstPatch(context.C
 func (i *incrementalConcurrentLintProjectIndexer) IndexProjectIncremental(context.Context, string, string, string, store.IndexData, []string, []string, string) (projectindex.ProjectIndexIncrementalResult, error) {
 	return projectindex.ProjectIndexIncrementalResult{
 		Report: projectindex.ProjectIndexIncrementalReport{
-			PlanKind:        "source-file-reindex",
-			GraphConfidence: "complete-enough-for-source-closure",
-			ChangedFiles:    []string{"/repo/src/writer.ts"},
-			AffectedFiles:   []string{"/repo/src/writer.ts"},
+			PlanKind:           "source-file-reindex",
+			ASTUsedStaticIndex: true,
+			GraphConfidence:    "complete-enough-for-source-closure",
+			ChangedFiles:       []string{"/repo/src/writer.ts"},
+			AffectedFiles:      []string{"/repo/src/writer.ts"},
 		},
 		Patches: []projectindex.IndexPatch{{
 			SchemaVersion: 1,
@@ -157,8 +166,9 @@ func (i *incrementalConcurrentLintProjectIndexer) IndexProjectSemanticPatch(ctx 
 	}, nil
 }
 
-func (i *incrementalConcurrentLintProjectIndexer) PrefetchProjectLintFacts(context.Context, projectindex.ProjectLintIndexRequest) (projectindex.ProjectLintPrefetchResult, error) {
+func (i *incrementalConcurrentLintProjectIndexer) PrefetchProjectLintFacts(_ context.Context, req projectindex.ProjectLintIndexRequest) (projectindex.ProjectLintPrefetchResult, error) {
 	close(i.prefetchStarted)
+	i.sawPrefetchStaticIndex = req.ASTUsedStaticIndex
 	return projectindex.ProjectLintPrefetchResult{
 		RuleFacts: []json.RawMessage{json.RawMessage(`{"ruleResults":[{"ruleId":"extension.rule"}]}`)},
 	}, nil
@@ -171,5 +181,6 @@ func (i *incrementalConcurrentLintProjectIndexer) IndexProjectLintPatch(_ contex
 		}
 	}
 	i.sawPrefetchedRuleFacts = req.Prefetch != nil && len(req.Prefetch.RuleFacts) == 1
+	i.sawLintStaticIndex = req.ASTUsedStaticIndex
 	return projectindex.IndexPatch{}, nil
 }

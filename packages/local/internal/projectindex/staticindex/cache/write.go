@@ -23,6 +23,7 @@ type entryMetadata struct {
 
 type WritableExtraction struct {
 	File            string                                  `json:"file"`
+	InterfaceHash   string                                  `json:"interfaceHash,omitempty"`
 	Definitions     []store.ProjectDefinition               `json:"definitions"`
 	Relations       []store.ProjectRelation                 `json:"relations"`
 	Diagnostics     []store.IndexDiagnostic                 `json:"diagnostics"`
@@ -118,6 +119,7 @@ func extractionForFile(input writeForFile) WritableExtraction {
 	}
 	return WritableExtraction{
 		File:            input.File,
+		InterfaceHash:   input.Source.InterfaceHash,
 		Definitions:     definitions,
 		Relations:       relationsForCache(input.File, ids, input.Patch.Relations),
 		Diagnostics:     diagnosticsForCache(input.File, ids, input.Source.Diagnostics, input.Patch.Diagnostics),

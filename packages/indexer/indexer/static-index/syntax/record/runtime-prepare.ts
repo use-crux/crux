@@ -1,11 +1,7 @@
 import type { InjectionUseFacts } from '@use-crux/core/project-index'
 import type { ExtractedFacts } from '../../../extensions'
 import type { StaticFunctionValue, StaticObjectValue, StaticSyntaxFileRecord, StaticSyntaxValue } from './types'
-import {
-  createStaticSyntaxInitializerMap,
-  resolveStaticSyntaxValue,
-  staticObjectPropertyValue,
-} from './value'
+import { staticObjectPropertyValue } from './value'
 
 /** Derives partial prompt injection facts from Convex runtime prepare helpers in syntax records. */
 export function staticRecordRuntimePrepareFacts(record: StaticSyntaxFileRecord): ExtractedFacts[] {
@@ -61,11 +57,9 @@ function returnedObjects(fn: StaticFunctionValue): readonly StaticObjectValue[] 
 }
 
 function runtimeUseEntriesFromHelper(fn: StaticFunctionValue): readonly InjectionUseFacts[] {
-  const initializers = createStaticSyntaxInitializerMap(fn.localInitializers)
   return fn.returns.flatMap((value): readonly InjectionUseFacts[] => {
-    const resolved = resolveStaticSyntaxValue(value, initializers)
-    return resolved?.kind === 'array'
-      ? resolved.elements.map((element) => runtimeUseEntry(runtimeVariableName(element), {
+    return value.kind === 'array'
+      ? value.elements.map((element) => runtimeUseEntry(runtimeVariableName(element), {
           conditionality: 'dynamic',
           via: 'runtime',
         }))

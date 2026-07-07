@@ -10,6 +10,30 @@ import {
 } from '../indexer/lints/rules'
 import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
 
+const stableBetaRuleIds = [
+  'quality.missing_baseline',
+  'prompt.missing_input_schema',
+  'prompt.hidden_required_input',
+  'context.missing_input_schema',
+  'injection.dynamic_dependency',
+  'injection.dynamic_tools',
+  'tool.missing_input_schema',
+  'flow.duplicate_step_label',
+  'flow.duplicate_suspend_name',
+  'flow.undeclared_suspend_signal',
+  'routing.missing_stable_id',
+  'routing.router_missing_default',
+  'routing.cascade_unreachable_tier',
+  'rag.recipe_step_unresolved_target',
+  'runtime.duplicate_target_name',
+  'runtime.non_literal_target_name',
+  'runtime.target_not_exported',
+  'runtime.closure_defer',
+  'runtime.non_serializable_payload',
+] as const
+
+const stableBetaRuleIdSet: ReadonlySet<string> = new Set(stableBetaRuleIds)
+
 describe('index lint rule registry', () => {
   it('owns product metadata needed by all lint surfaces', () => {
     expect(Object.keys(indexLintRules).sort()).toEqual([...indexLintRuleIds].sort())
@@ -57,6 +81,21 @@ describe('index lint rule registry', () => {
         },
       }),
     )
+  })
+
+  it('marks the stable-beta lint rule set explicitly', () => {
+    expect(indexLintRuleIds.filter((ruleId) => indexLintRules[ruleId].maturity === 'stable')).toEqual([
+      ...stableBetaRuleIds,
+    ])
+
+    for (const ruleId of stableBetaRuleIds) {
+      expect(indexLintRules[ruleId].confidence, `${ruleId} confidence`).toMatch(/^(high|medium)$/)
+      expect(indexLintRules[ruleId].profiles, `${ruleId} profiles`).toContain('recommended')
+    }
+
+    for (const ruleId of indexLintRuleIds.filter((id) => !stableBetaRuleIdSet.has(id))) {
+      expect(indexLintRules[ruleId].maturity, `${ruleId} maturity`).toBe('preview')
+    }
   })
 
   it('validates every built-in rule manifest', () => {
@@ -175,5 +214,12 @@ describe('index lint rule registry', () => {
       expect(source).toContain(`Category: \`${rule.category}\``)
       expect(source).toContain(`Maturity: \`${rule.maturity}\``)
     }
+  })
+
+  it('keeps docs navigation aligned with every built-in rule page', () => {
+    const docsRoot = join(process.cwd(), '../../apps/docs/content/docs/reference/crux-core/index-lints')
+    const meta = JSON.parse(readFileSync(join(docsRoot, 'meta.json'), 'utf8')) as { readonly pages: readonly string[] }
+
+    expect(meta.pages).toEqual(indexLintRuleIds.map((ruleId) => indexLintRules[ruleId].docsSlug))
   })
 })

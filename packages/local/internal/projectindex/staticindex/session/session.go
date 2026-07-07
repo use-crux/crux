@@ -45,13 +45,14 @@ func (s *Session) Run(ctx context.Context) (Result, error) {
 
 	result.Status = StatusIncomplete
 	runResult, err := run.Run(ctx, run.Request{
-		Root:         options.Root,
-		ConfigPath:   options.ConfigPath,
-		ProjectName:  options.ProjectName,
-		Plan:         plan.Plan,
-		Compiler:     options.Compiler,
-		Evidence:     options.Evidence,
-		PatchOptions: options.PatchOptions,
+		Root:             options.Root,
+		ConfigPath:       options.ConfigPath,
+		ProjectName:      options.ProjectName,
+		Plan:             plan.Plan,
+		Compiler:         options.Compiler,
+		Evidence:         options.Evidence,
+		PatchOptions:     options.PatchOptions,
+		PatchInvalidates: options.PatchInvalidates,
 	})
 	result.StaticTiming = runResult.Timing
 	addNodeReason(&result, runResult.NodeReason)

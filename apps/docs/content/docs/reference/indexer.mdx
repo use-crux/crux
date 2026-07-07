@@ -1,5 +1,5 @@
 ---
-title: '@use-crux/indexer'
+title: "@use-crux/indexer"
 description: Internal TypeScript source intelligence package for Project Index indexing.
 ---
 
@@ -26,7 +26,7 @@ remains the JavaScript `typescript` compiler API backend. Enable the native path
 top-level experimental config:
 
 ```ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 export default config({
   experimental: {
@@ -34,25 +34,25 @@ export default config({
       native: true,
     },
   },
-})
+});
 ```
 
 The current native engine is TypeScript-Go. When you need to point Crux at a specific native preview
 server binary, pass the path explicitly:
 
 ```ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 export default config({
   experimental: {
     indexer: {
       native: {
-        engine: 'tsgo',
-        tsserverPath: '/path/to/tsgo',
+        engine: "tsgo",
+        tsserverPath: "/path/to/tsgo",
       },
     },
   },
-})
+});
 ```
 
 Omit `experimental.indexer.native`, or set it to `false`, to keep the default TypeScript backend.
@@ -88,7 +88,7 @@ and `experimental.indexer.tsserverPath` provenance when those flags are present.
 Static Project Index extraction has a separate native beta:
 
 ```ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 export default config({
   experimental: {
@@ -96,7 +96,7 @@ export default config({
       nativeAst: true,
     },
   },
-})
+});
 ```
 
 `experimental.indexer.nativeAst: true` or `{ frontend: 'oxc' }` lets `@use-crux/local` run the
@@ -142,7 +142,7 @@ for custom contributions is `contributor()`.
 
 The indexer is intentionally layered. The fast AST/source pass should return a useful Project Index quickly, while deeper TypeScript semantic analysis is background enrichment. Semantic analysis may use a long-lived `ts.Program` / `TypeChecker` to resolve aliases, barrels, imported symbols, nested schemas, callbacks, and primitive graph edges that are not safe to infer from syntax alone. For injection intelligence, that includes imported contributor-family definitions serialized as `injectable`, imported injectable input schemas and `inject` callback source refs, import-safe prompt/context/injectable `use` arrays with spreads, resolved `useEntries` for imported/spread arrays and helper-shaped conditional entries, condition-specific source refs for `when(...)`, `match(...)`, and guarded `&&` use entries, imported/spread tool maps, simple injectable `inject` functions that return tool maps, and returned constraints/guardrails/metadata keys. Computed semantic use/tool shapes are kept as dynamic or partial facts where possible, so clients can show that the indexer saw the injection surface even when it could not safely resolve every target.
 
-Index indexing is wrapped by the Project Index Compiler boundary in `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result with facts, diagnostics, lint findings, rule descriptor metadata, source rows, and graph evidence; compiler emitters project that value into `ProjectIndexSnapshot` or AST `IndexPatch` output. Static source extraction is owned by `createStaticExtraction`, which exposes cached `extractFile` / `extractFiles`, rule descriptors/checking, extension manifest introspection, and deterministic cache inputs. Its identity includes extension/extractor/rule inputs, compiler profile/projection inputs, and the TypeScript syntax frontend version. The package entry points (`indexProject`, `indexProjectAst`, `indexProjectSemantic`, `indexProjectIncremental`, and `resolveProjectModel`) delegate into those boundaries instead of a mutable session object.
+Index indexing is wrapped by the Project Index Compiler boundary in `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result with facts, diagnostics, lint findings, rule descriptor metadata, source rows, and graph evidence; compiler emitters project that value into `ProjectIndexSnapshot` or AST `IndexPatch` output. Static source extraction is owned by `createStaticExtraction`, which exposes cached `extractFile` / `extractFiles`, rule descriptors/checking, extension manifest introspection, and deterministic cache inputs. Its identity includes extension/extractor/rule inputs, compiler profile/projection inputs, and the selected syntax frontend version; host callers pass the syntax frontend explicitly. The package entry points (`indexProject`, `indexProjectAst`, `indexProjectSemantic`, `indexProjectIncremental`, and `resolveProjectModel`) delegate into those boundaries instead of a mutable session object.
 
 `resolveProjectModel(...)` returns the `ResolvedProjectModel` read model from `@use-crux/core/project-index`. It is the config-inspection surface used by `crux config inspect`: selected root, package name, config status, source roots, ignored conventions, definitions, Quality discovery defaults, and diagnostics all carry provenance so config remains policy/override state rather than a duplicate primitive registry. Missing config is reported as source-only discovery, while selected lint findings such as missing stable ids and runtime-dependent tool maps become Project Model diagnostics with source provenance.
 
@@ -168,7 +168,7 @@ an extension.
 
 The package export map is intentionally small: `@use-crux/indexer`, `@use-crux/indexer/extensions`, `@use-crux/indexer/testing`, and `@use-crux/indexer/source-resolver`. Internal `indexer/*` modules are not public package entry points.
 
-The root package exports `createStaticExtraction` for compiler-owned static extraction over known files.
+The host package exports `createStaticExtraction` for compiler-owned static extraction over known files with an explicit syntax frontend.
 It also exports the relation model facade used by the compiler: `resolveRelationModel`,
 `relationIdentity`, `mergeRelationsByIdentity`, `createRelationPolicyTable`, and
 `relationDiagnosticsFromReport`, plus `withResolvedRelationReadModel` for callers that already have
@@ -182,7 +182,8 @@ through `RelationResolutionReport.policyGaps` and `relation.policy_gap` diagnost
 Runtime `use` entries that name ambient resources are resolved from `RuntimeUseTargetRules`; app or
 host-specific aliases belong in that data rather than in SDK resolver code.
 Use `@use-crux/indexer/testing` for extension tests; it wraps that same engine with an in-memory source
-reader and disabled cache.
+reader, disabled cache, the TypeScript syntax-record producer as the fixture default, and
+`trace.syntaxFrontend` reporting for the producer that ran.
 
 The experimental extractor context exposes compiler-owned readers and builders for the current migration path: argument reads, static object reads, schema projection, definition/reference builders, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Its public shape is frozen as `extension`, `extractor`, `match`, `source`, `args`, `config`, `define`, `ref`, and `sourceRef`. Raw TypeScript nodes remain an unstable first-party escape hatch on internal module paths only.
 
@@ -228,7 +229,7 @@ Project Index caches are local implementation details, but their identities are 
 
 - Bump `packages/indexer/indexer/cache-identity.ts` `STATIC_PARSE_CACHE_EPOCH` when static AST extraction changes definition, relation, metadata, schema, source-ref, diagnostic, path/source, file-classification, or presentation-hint output.
 - Bump `packages/indexer/indexer/cache-identity.ts` `SEMANTIC_FACTS_CACHE_EPOCH` when semantic enrichment changes schema/callback/source-ref resolution, runtime joins, intelligence metadata, relations, lint facts, compiler runtime identity, or compiler-option meaning.
-- Bump `packages/local/internal/devtools/index_cache_identity.go` `projectIndexSnapshotCacheEpoch` when an existing `.crux/cache/index/index.json` snapshot could hide a new `IndexData` / `ProjectDefinition` read-model field or changed cache semantics after restart.
+- Bump `packages/local/internal/projectindex/cache/identity.go` `ProjectIndexSnapshotCacheEpoch` when an existing `.crux/cache/index-v2/epoch-*` snapshot could hide a new `IndexData` / `ProjectDefinition` read-model field or changed cache semantics after restart.
 
 Moving semantic logic between analyzers without changing emitted facts does not require a semantic cache version bump.
 

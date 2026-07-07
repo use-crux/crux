@@ -10,6 +10,7 @@ import (
 
 type Extraction struct {
 	File            string                                  `json:"file,omitempty"`
+	InterfaceHash   string                                  `json:"interfaceHash,omitempty"`
 	Definitions     []json.RawMessage                       `json:"definitions"`
 	Relations       []json.RawMessage                       `json:"relations"`
 	Dependencies    []string                                `json:"dependencies"`

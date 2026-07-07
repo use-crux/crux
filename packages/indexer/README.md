@@ -20,13 +20,13 @@ This package owns TypeScript/AST indexing that needs to run near user source cod
 
 The Go runtime in `@use-crux/local` calls this through bounded Node worker bundles built by the private `@use-crux/local-workers` package. `@use-crux/core` owns the public index contracts; this package owns how local projects are indexed into those contracts.
 
-`source-resolver.mjs` is intentionally separate from `project-indexer.mjs`. The project indexer builds ahead-of-time Project Index facts from authored source. The source resolver performs lazy runtime lookup for bundled trace locations, using source maps to resolve original positions and extract readable function source for devtools trace views.
+`source-resolver.mjs` is intentionally separate from `project-indexer.mjs`. The Crux Indexer worker builds ahead-of-time Project Index facts from authored source. The source resolver performs lazy runtime lookup for bundled trace locations, using source maps to resolve original positions and extract readable function source for devtools trace views.
 
-For the package architecture, source graph model, and incremental planner direction, see [ARCHITECTURE.md](./ARCHITECTURE.md). For the durable issue #18 execution checklist, see [docs/incremental-planner-execution-plan.md](./docs/incremental-planner-execution-plan.md).
+For the package architecture, source graph model, and incremental planner direction, see [ARCHITECTURE.md](./ARCHITECTURE.md) and [ADR-0001](./docs/adr/0001-incremental-planner-before-partial-execution.md).
 
-The static source pass classifies candidate files before AST parsing. It indexes ordinary authored source with Crux signals, ignores universal output/cache directories, skips generated/bundled/base64 artifact files through content signals, and emits a index diagnostic when an oversized authored-looking source file is skipped for safety. This keeps local devtools responsive without relying on project-specific folder-name ignores.
+The static source pass classifies candidate files before AST parsing. It indexes ordinary authored source with Crux signals, ignores universal output/cache directories, skips generated/bundled/base64 artifact files through content signals, and emits an index diagnostic when an oversized authored-looking source file is skipped for safety. This keeps local devtools responsive without relying on project-specific folder-name ignores.
 
-Project index indexing runs through the Project Index Compiler boundary under `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result value containing index facts, diagnostics, lint findings, rule descriptor metadata, source rows, and graph evidence; pure emitters project that value into the historical `ProjectIndexSnapshot` and AST `IndexPatch` shapes. `createProjectIndexCompiler` builds an instance from a compiler profile so extension runtime state is isolated per compiler. Static source extraction is owned by `createStaticExtraction`, which is the single source of parser call names, rule descriptors, cache inputs, the TypeScript syntax frontend identity, and cached per-file extraction. `indexProject`, `indexProjectAst`, `indexProjectSemantic`, `indexProjectIncremental`, and `resolveProjectModel` delegate to these compiler boundaries instead of a mutable session object.
+Crux Indexer work runs through the Project Index Compiler boundary under `indexer/compiler/`. `compileProjectIndex` returns an immutable compiler result value containing index facts, diagnostics, lint findings, rule descriptor metadata, source rows, and graph evidence; pure emitters project that value into the `ProjectIndexSnapshot` and AST `IndexPatch` artifact shapes. `createProjectIndexCompiler` builds an instance from a compiler profile so extension runtime state is isolated per compiler. Static source extraction is owned by `createStaticExtraction`, which is the single source of parser call names, rule descriptors, cache inputs, the selected syntax frontend identity, and cached per-file extraction; host callers pass the syntax frontend explicitly. `indexProject`, `indexProjectAst`, `indexProjectSemantic`, `indexProjectIncremental`, and `resolveProjectModel` delegate to these compiler boundaries instead of a mutable session object.
 
 `resolveProjectModel(...)` is the package-public facade for source-discovery inspection. It returns the JSON-safe `ResolvedProjectModel` contract from `@use-crux/core/project-index`, including selected root, package name, config status, source roots, ignored conventions, discovered definitions, Quality defaults, and Project Model diagnostics with provenance. Missing config is reported as source-only discovery rather than a warning, while selected lint findings such as missing stable ids and runtime-dependent tool maps become actionable Project Model diagnostics. It is a read model for local tooling, not a setup registry.
 
@@ -47,7 +47,7 @@ hands manifests to the compiler profile. `resolveIndexerExtensionReferences(...)
 manifest-only gate for tooling and tests that already have extension objects. There is no global
 registration and no implicit package discovery.
 
-Extension authors can test manifests with `@use-crux/indexer/testing`. `defineIndexerExtensionFixture` plus `extractFixtureSource` runs the production static extraction engine against in-memory source text with cache disabled, and `assertDeterministicExtraction` double-runs the same fixture to guard stable output and cache identity.
+Extension authors can test manifests with `@use-crux/indexer/testing`. `defineIndexerExtensionFixture` plus `extractFixtureSource` runs the production static extraction engine against in-memory source text with cache disabled, using the in-process TypeScript syntax-record producer as the fixture default and reporting the producer in `trace.syntaxFrontend`. `assertDeterministicExtraction` double-runs the same fixture to guard stable output and cache identity.
 
 The public extension context is frozen as a reader/builder object: `extension`, `extractor`, `match`, `source`, `args`, `config`, `define`, `ref`, and `sourceRef`. It exposes factory argument reads, static object reads, schema projection, definition/reference builders, constructor matches, and source-ref builders for properties, callbacks, schemas, template interpolations, and helper functions. Raw TypeScript access remains an unstable first-party adapter on internal module paths only.
 
@@ -107,7 +107,7 @@ The epoch constants live in one place:
 
 - `indexer/cache-identity.ts` (`STATIC_PARSE_CACHE_EPOCH`) for static AST parser/extractor output changes: definitions, relations, metadata, schemas, source refs, diagnostics, source/path ids, file classification, or presentation hints.
 - `indexer/cache-identity.ts` (`SEMANTIC_FACTS_CACHE_EPOCH`) for semantic enrichment changes: compiler-resolved aliases, nested schemas, callbacks, source refs, runtime joins, intelligence metadata, relations, lint facts, compiler runtime identity, or compiler option meaning.
-- `@use-crux/local`'s `packages/local/internal/devtools/index_cache_identity.go` (`projectIndexSnapshotCacheEpoch`) when a stale `.crux/cache/index/index.json` snapshot could hide a new read-model field or changed cache semantics after restart.
+- `@use-crux/local`'s `packages/local/internal/projectindex/cache/identity.go` (`ProjectIndexSnapshotCacheEpoch`) when a stale `.crux/cache/index-v2/epoch-*` snapshot could hide a new read-model field or changed cache semantics after restart.
 
 Refactors that only move semantic logic between analyzers without changing emitted facts do not require a cache version bump.
 
@@ -127,10 +127,13 @@ import {
   indexProjectIncremental,
   inspectProjectConfig,
   resolveProjectModel,
-} from '@use-crux/indexer'
-import type { IndexerExtension } from '@use-crux/indexer/extensions'
-import { SourceResolver } from '@use-crux/indexer/source-resolver'
-import { defineIndexerExtensionFixture, extractFixtureSource } from '@use-crux/indexer/testing'
+} from "@use-crux/indexer";
+import type { IndexerExtension } from "@use-crux/indexer/extensions";
+import { SourceResolver } from "@use-crux/indexer/source-resolver";
+import {
+  defineIndexerExtensionFixture,
+  extractFixtureSource,
+} from "@use-crux/indexer/testing";
 ```
 
 Crux-owned worker hosts can use private host subpaths while the package remains private:
@@ -140,8 +143,8 @@ import {
   compileProjectIndex,
   createStaticExtraction,
   indexProjectAstFromSyntaxRecordsForHost,
-} from '@use-crux/indexer/host/static-index'
-import { indexPatchFromWorkerEvents } from '@use-crux/indexer/contracts/worker-events'
+} from "@use-crux/indexer/host/static-index";
+import { indexPatchFromWorkerEvents } from "@use-crux/indexer/contracts/worker-events";
 ```
 
-Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `createStaticExtraction` and `indexProjectAstFromSyntaxRecordsForHost` are Crux-owned host boundaries for bundled tools and workers that need source-file facts, validated native cache hits, or native projection controls. `@use-crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party extension support is stabilized. Internal `indexer/*` modules are not package exports; `host/*` subpaths are Crux-owned worker bridges, and `contracts/*` subpaths are JSON-safe cross-runtime contracts rather than general SDK entry points.
+Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `createStaticExtraction` and `indexProjectAstFromSyntaxRecordsForHost` are Crux-owned host boundaries for bundled tools and workers that need source-file facts, explicit syntax frontends, validated native cache hits, or native projection controls. `@use-crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party extension support is stabilized. Internal `indexer/*` modules are not package exports; `host/*` subpaths are Crux-owned worker bridges, and `contracts/*` subpaths are JSON-safe cross-runtime contracts rather than general SDK entry points.

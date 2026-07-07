@@ -60,15 +60,15 @@ and embeds the TypeScript worker assets for Go host tests, and sets
 
 ## Cache Identity Review
 
-The static output contract changed during parity hardening, so the static cache
-namespace is `static-parse-v39`. Go Static Index cache replay is pinned to the
-same namespace through the shared fixture. The Go Project Index snapshot cache
-epoch was bumped during earlier parity phases when changed read-model behavior
-could have been hidden by an existing `.crux/cache/index/index.json`.
+The static output contract changed during stable-beta hardening, so the static
+cache namespace is `static-parse-v53`. Go Static Index cache replay is pinned to
+the same namespace through the shared fixture. Semantic facts use
+`semantic-facts-v21`, and the Go Project Index snapshot cache lives under
+`.crux/cache/index-v2/epoch-26/` so restart warm loads cannot mask renamed or
+schema-shifted read-model output.
 
-No semantic cache epoch change is part of this beta gate. `nativeAst` is the
-static AST/source frontend experiment and is independent from
-`experimental.indexer.native`.
+`nativeAst` is the static AST/source frontend experiment and remains independent
+from `experimental.indexer.native`, which selects the semantic backend.
 
 ## Release Checklist
 
@@ -103,17 +103,21 @@ performance evidence:
 pnpm benchmark:native-ast
 ```
 
-By default it benchmarks this repository with cold and warm TypeScript baseline
-runs plus cold and warm native AST runs. It builds the release Rust/Oxc worker,
-refreshes the embedded TypeScript worker assets used by the Go host, and invokes
-the existing Go Project Index benchmark entrypoints with
-`CRUX_INDEXER_BENCH_ROOT` and `CRUX_STATIC_INDEX_WORKER` set.
+By default it benchmarks this repository through the production Go to Rust/Oxc
+Static Index path with cold and warm runs. It builds the release Rust/Oxc
+worker, refreshes the embedded TypeScript worker assets used by the Go host,
+and invokes the production Go Project Index benchmark entrypoints with
+`CRUX_INDEXER_BENCH_ROOT` and `CRUX_STATIC_INDEX_WORKER` set. The default
+benchmark set includes the full AST patch path, the full graph pipeline, and
+the Tier-A watch leaf path, which fails when p95 exceeds `100ms` unless
+`CRUX_INDEXER_BENCH_SKIP_TIER_A_GATE=1` is set.
 
 Useful overrides:
 
 ```bash
 CRUX_INDEXER_BENCH_ROOT=/path/to/project pnpm benchmark:native-ast
-CRUX_INDEXER_BENCH_MODES=native-cold,native-warm pnpm benchmark:native-ast
+CRUX_INDEXER_BENCH_MODES=production-cold,production-warm pnpm benchmark:native-ast
+CRUX_INDEXER_BENCH_TIER_A_MS=100 pnpm benchmark:native-ast
 CRUX_INDEXER_BENCH_COUNT=5 CRUX_INDEXER_BENCH_BENCHTIME=10s pnpm benchmark:native-ast
 ```
 

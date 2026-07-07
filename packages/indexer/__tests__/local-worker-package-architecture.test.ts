@@ -1,4 +1,6 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
@@ -48,6 +50,47 @@ describe('local worker package architecture', () => {
     expect(localMakefile).toContain('@use-crux/local-workers')
     expect(localMakefile).not.toContain('../devtools/dist')
   })
+
+  it('rejects staged local platform packages that omit the Rust static index worker', () => {
+    const stageDir = mkdtempSync(join(tmpdir(), 'crux-npm-stage-'))
+    try {
+      const packageDir = join(stageDir, '@use-crux', 'local-linux-x64')
+      mkdirSync(join(packageDir, 'bin'), { recursive: true })
+      writeFileSync(join(packageDir, 'bin', 'crux'), 'test binary\n')
+      writeJson(join(packageDir, 'package.json'), {
+        name: '@use-crux/local-linux-x64',
+        version: '0.4.0',
+        description: 'Crux local runtime binary for linux-x64',
+        os: ['linux'],
+        cpu: ['x64'],
+        files: ['bin'],
+        license: 'Apache-2.0',
+      })
+      writeJson(join(stageDir, 'packages.json'), {
+        packages: [
+          {
+            name: '@use-crux/local-linux-x64',
+            version: '0.4.0',
+            path: '@use-crux/local-linux-x64',
+          },
+        ],
+      })
+
+      const result = spawnSync(
+        process.execPath,
+        [join(repoRoot, 'scripts', 'validate-staged-npm-packages.mjs'), stageDir],
+        {
+          cwd: repoRoot,
+          encoding: 'utf8',
+        },
+      )
+
+      expect(result.status).not.toBe(0)
+      expect(`${result.stdout}\n${result.stderr}`).toContain('bin/crux-static-index-worker')
+    } finally {
+      rmSync(stageDir, { recursive: true, force: true })
+    }
+  })
 })
 
 interface WorkspacePackageJson {
@@ -62,4 +105,8 @@ function packageJson(packageDir: string): WorkspacePackageJson {
 
 function workerEntrypointPath(entrypoint: WorkerEntrypoint): string {
   return join(localWorkersPackageDir, 'bin', entrypoint)
+}
+
+function writeJson(path: string, value: unknown): void {
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
 }

@@ -6,14 +6,31 @@
  * fixtures without depending on parser-native contexts, TypeScript AST nodes,
  * or package-internal compiler helpers.
  *
+ * This testing subpath prefers the packaged Rust/Oxc syntax-record producer when a shipped worker is
+ * resolvable, then falls back to the in-process TypeScript producer so fixture tests do not require
+ * native worker binaries. Fixture traces report the selected producer.
+ *
  * @module
  */
 
-import { join } from 'node:path'
-import { createExtensionRegistry } from './indexer/extensions'
-import type { IndexDependency, IndexerExtension } from './extensions'
-import type { ProjectIndexCompilerProfile } from './indexer/compiler/profile'
-import { createStaticExtraction, type StaticFileExtraction, type SourceReader } from './indexer/static/extraction/engine'
+import { join } from "node:path";
+import { createExtensionRegistry } from "./indexer/extensions";
+import type { IndexDependency, IndexerExtension } from "./extensions";
+import type { ProjectIndexCompilerProfile } from "./indexer/compiler/profile";
+import {
+  createStaticExtraction,
+  type StaticFileExtraction,
+  type SourceReader,
+} from "./indexer/static/extraction/engine";
+import {
+  createTypeScriptStaticSyntaxFrontend,
+  type StaticSyntaxFrontendFactory,
+  type StaticSyntaxFrontendIdentity,
+} from "./indexer/static-index/syntax";
+import {
+  createRustOxcStaticSyntaxFrontend,
+  rustOxcFixtureSyntaxFrontendStatus,
+} from "./testing/rust-oxc-frontend";
 
 /**
  * A source-text fixture for an indexer extension.
@@ -29,9 +46,9 @@ import { createStaticExtraction, type StaticFileExtraction, type SourceReader } 
  */
 export interface IndexerExtensionFixture {
   /** Extension manifest under test. It is validated before extraction starts. */
-  readonly extension: IndexerExtension
+  readonly extension: IndexerExtension;
   /** Additional absolute files available to the in-memory source reader. */
-  readonly files: Readonly<Record<string, string>>
+  readonly files: Readonly<Record<string, string>>;
 }
 
 /**
@@ -44,21 +61,23 @@ export interface IndexerExtensionFixture {
 export interface FixtureExtraction {
   /** Convenience grouping for tests that want to assert "facts out" as one value. */
   readonly facts: {
-    readonly definitions: StaticFileExtraction['definitions']
-    readonly relations: StaticFileExtraction['relations']
-  }
+    readonly definitions: StaticFileExtraction["definitions"];
+    readonly relations: StaticFileExtraction["relations"];
+  };
   /** Definitions emitted by the extension and projected by the engine. */
-  readonly definitions: StaticFileExtraction['definitions']
+  readonly definitions: StaticFileExtraction["definitions"];
   /** Relations emitted or resolved during fixture extraction. */
-  readonly relations: StaticFileExtraction['relations']
+  readonly relations: StaticFileExtraction["relations"];
   /** Diagnostics emitted by the extension or static projection pipeline. */
-  readonly diagnostics: StaticFileExtraction['diagnostics']
+  readonly diagnostics: StaticFileExtraction["diagnostics"];
   /** File, dependency, and identity details for deterministic fixture assertions. */
   readonly trace: {
-    readonly file: string
-    readonly dependencies: StaticFileExtraction['dependencies']
-    readonly cacheInputs: readonly IndexDependency[]
-  }
+    readonly file: string;
+    readonly dependencies: StaticFileExtraction["dependencies"];
+    readonly cacheInputs: readonly IndexDependency[];
+    /** Syntax-record producer used for this fixture run. */
+    readonly syntaxFrontend: StaticSyntaxFrontendIdentity;
+  };
 }
 
 /**
@@ -76,7 +95,7 @@ export function defineIndexerExtensionFixture(
   extension: IndexerExtension,
   options: { readonly files?: Readonly<Record<string, string>> } = {},
 ): IndexerExtensionFixture {
-  return { extension, files: options.files ?? {} }
+  return { extension, files: options.files ?? {} };
 }
 
 /**
@@ -85,8 +104,10 @@ export function defineIndexerExtensionFixture(
  * This is useful for tests that assert declaration failures: duplicate relation specs, invalid rule
  * metadata, unsupported compatibility ranges, or malformed extractor patterns.
  */
-export function validateIndexerExtensionFixture(fixture: IndexerExtensionFixture): void {
-  createExtensionRegistry([fixture.extension])
+export function validateIndexerExtensionFixture(
+  fixture: IndexerExtensionFixture,
+): void {
+  createExtensionRegistry([fixture.extension]);
 }
 
 /**
@@ -113,19 +134,23 @@ export async function extractFixtureSource(
   fixture: IndexerExtensionFixture,
   input: string | { readonly file: string; readonly source: string },
 ): Promise<FixtureExtraction> {
-  validateIndexerExtensionFixture(fixture)
-  const root = '/__crux_indexer_fixture__'
-  const file = typeof input === 'string' ? join(root, 'fixture.ts') : join(root, input.file)
-  const source = typeof input === 'string' ? input : input.source
-  const files = { ...fixture.files, [file]: source }
+  validateIndexerExtensionFixture(fixture);
+  const root = "/__crux_indexer_fixture__";
+  const file =
+    typeof input === "string"
+      ? join(root, "fixture.ts")
+      : join(root, input.file);
+  const source = typeof input === "string" ? input : input.source;
+  const files = { ...fixture.files, [file]: source };
   const extraction = createStaticExtraction({
     root,
     profile: fixtureCompilerProfile,
     extensions: [fixture.extension],
     sources: inMemorySourceReader(files),
-    cache: 'none',
-  })
-  const extracted = await extraction.extractFile(file)
+    syntaxFrontend: fixtureSyntaxFrontend(),
+    cache: "none",
+  });
+  const extracted = await extraction.extractFile(file);
   return {
     facts: {
       definitions: extracted.definitions,
@@ -138,8 +163,9 @@ export async function extractFixtureSource(
       file: extracted.file,
       dependencies: extracted.dependencies,
       cacheInputs: extraction.identity.cacheInputs,
+      syntaxFrontend: extraction.identity.syntaxFrontend,
     },
-  }
+  };
 }
 
 /**
@@ -153,10 +179,12 @@ export async function assertDeterministicExtraction(
   fixture: IndexerExtensionFixture,
   source: string,
 ): Promise<void> {
-  const first = await extractFixtureSource(fixture, source)
-  const second = await extractFixtureSource(fixture, source)
+  const first = await extractFixtureSource(fixture, source);
+  const second = await extractFixtureSource(fixture, source);
   if (canonical(first) !== canonical(second)) {
-    throw new Error('Indexer extension fixture extraction is not deterministic')
+    throw new Error(
+      "Indexer extension fixture extraction is not deterministic",
+    );
   }
 }
 
@@ -166,14 +194,17 @@ export async function assertDeterministicExtraction(
  * The reader fails loudly for missing files so fixture tests expose broken import paths instead of
  * silently falling back to the host filesystem.
  */
-function inMemorySourceReader(files: Readonly<Record<string, string>>): SourceReader {
+function inMemorySourceReader(
+  files: Readonly<Record<string, string>>,
+): SourceReader {
   return {
     read: async (file) => {
-      const source = files[file]
-      if (source === undefined) throw new Error(`Fixture source not found: ${file}`)
-      return source
+      const source = files[file];
+      if (source === undefined)
+        throw new Error(`Fixture source not found: ${file}`);
+      return source;
     },
-  }
+  };
 }
 
 /**
@@ -183,11 +214,17 @@ function inMemorySourceReader(files: Readonly<Record<string, string>>): SourceRe
  * sufficient and keeps the assertion free of test-runner-specific matchers.
  */
 function canonical(value: unknown): string {
-  return JSON.stringify(value)
+  return JSON.stringify(value);
 }
 
 const fixtureCompilerProfile = {
-  name: '@use-crux/indexer/fixture-profile',
-  version: '1',
+  name: "@use-crux/indexer/fixture-profile",
+  version: "1",
   extensions: [],
-} as const satisfies ProjectIndexCompilerProfile
+} as const satisfies ProjectIndexCompilerProfile;
+
+function fixtureSyntaxFrontend(): StaticSyntaxFrontendFactory {
+  return rustOxcFixtureSyntaxFrontendStatus().available
+    ? createRustOxcStaticSyntaxFrontend
+    : createTypeScriptStaticSyntaxFrontend;
+}

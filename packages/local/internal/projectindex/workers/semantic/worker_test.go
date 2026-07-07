@@ -3,9 +3,13 @@ package semantic
 import (
 	"context"
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/store"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestWorker_semanticPatchUsesDedicatedStreamProtocol(t *testing.T) {
@@ -291,4 +295,211 @@ func TestWorker_reusesProcessAcrossSemanticRequests(t *testing.T) {
 	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:call-2" {
 		t.Fatalf("definitions = %+v, want second request from same worker process", patch.Facts.Definitions)
 	}
+}
+
+func TestWorker_shardsSemanticRequestsAcrossWorkerPool(t *testing.T) {
+	if _, err := findNodePath(); err != nil {
+		t.Skipf("node unavailable: %v", err)
+	}
+
+	dir := t.TempDir()
+	marker := filepath.Join(dir, "started.txt")
+	t.Setenv("CRUX_TEST_SEMANTIC_MARKER", marker)
+
+	script := filepath.Join(dir, "semantic-indexer.mjs")
+	if err := os.WriteFile(script, []byte(`
+		import { appendFileSync, readFileSync } from 'node:fs'
+		import { basename } from 'node:path'
+
+		process.stdin.setEncoding('utf8')
+		let buffer = ''
+		const pending = new Map()
+		const marker = process.env.CRUX_TEST_SEMANTIC_MARKER
+
+		process.stdin.on('data', (chunk) => {
+			buffer += chunk
+			for (;;) {
+				const newline = buffer.indexOf('\n')
+				if (newline < 0) return
+				const line = buffer.slice(0, newline).trim()
+				buffer = buffer.slice(newline + 1)
+				if (line.length > 0) {
+					const req = assemble(JSON.parse(line))
+					if (req) void handle(req)
+				}
+			}
+		})
+
+		function assemble(req) {
+			if (!req.requestKind) return req
+			if (req.requestKind === 'start') {
+				pending.set(req.requestId, {
+					...req,
+					requestKind: undefined,
+					previousIndex: req.previousIndex ? { ...req.previousIndex, definitions: [], sources: [] } : undefined,
+					sourceProfile: req.sourceProfile ? { ...req.sourceProfile, files: [] } : undefined,
+				})
+				return undefined
+			}
+			const current = pending.get(req.requestId)
+			if (!current) throw new Error('missing pending request ' + req.requestId)
+			if (req.requestKind === 'previousIndex:definitions') {
+				current.previousIndex.definitions.push(...(req.previousIndexDefinitions ?? []))
+				return undefined
+			}
+			if (req.requestKind === 'previousIndex:sources') {
+				current.previousIndex.sources.push(...(req.previousIndexSources ?? []))
+				return undefined
+			}
+			if (req.requestKind === 'sourceProfile:batch') {
+				current.sourceProfile.files.push(...(req.sourceProfileFiles ?? []))
+				return undefined
+			}
+			if (req.requestKind === 'done') {
+				pending.delete(req.requestId)
+				return current
+			}
+		}
+
+		async function handle(req) {
+			if (!Array.isArray(req.files) || req.files.length !== 1) {
+				throw new Error('expected one file per semantic shard, got ' + JSON.stringify(req.files))
+			}
+			appendFileSync(marker, req.files[0] + '\n')
+			await waitForBothShards()
+			const name = basename(req.files[0]).replace(/\.[^.]+$/, '')
+			const id = 'prompt:' + name
+			const tx = 'tx-' + name
+			const events = [
+				{
+					protocolVersion: 2,
+					type: 'phase:start',
+					transactionId: tx,
+					phase: 'semantic',
+					root: req.root,
+					startedAt: new Date(0).toISOString()
+				},
+				{
+					protocolVersion: 2,
+					type: 'fact:batch',
+					transactionId: tx,
+					sequence: 0,
+					facts: [{
+						schemaVersion: 1,
+						factId: 'definitions:' + id,
+						kind: 'definitions',
+						phase: 'semantic',
+						projectRoot: req.root,
+						producer: { name: '@use-crux/indexer/project-indexer', version: 'test' },
+						fidelity: 'inferred',
+						provenance: { kind: 'runtime', attribute: 'project-index.semantic' },
+						fact: { id, kind: 'prompt', name, fidelity: 'resolved', status: 'active' }
+					}]
+				},
+				{
+					protocolVersion: 2,
+					type: 'phase:done',
+					transactionId: tx,
+					phase: 'semantic',
+					patch: {
+						schemaVersion: 1,
+						phase: 'semantic',
+						project: { root: req.root, name: req.projectName },
+						startedAt: new Date(0).toISOString(),
+						finishedAt: new Date(0).toISOString(),
+						status: 'ok'
+					},
+					summary: { factCount: 1, timings: [{ name: 'semantic.program.create', durationMs: 5, count: 1 }] }
+				}
+			]
+			for (const event of events) process.stdout.write(JSON.stringify(event) + '\n')
+		}
+
+		async function waitForBothShards() {
+			const deadline = Date.now() + 2500
+			while (Date.now() < deadline) {
+				try {
+					const lines = readFileSync(marker, 'utf8').trim().split('\n').filter(Boolean)
+					if (lines.length >= 2) return
+				} catch {}
+				await new Promise((resolve) => setTimeout(resolve, 10))
+			}
+			throw new Error('timed out waiting for both semantic shards')
+		}
+	`), 0o600); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+
+	root := t.TempDir()
+	app := filepath.Join(root, "packages", "app", "src", "app.ts")
+	lib := filepath.Join(root, "packages", "lib", "src", "lib.ts")
+	req := projectindex.ProjectSemanticIndexRequest{
+		Root:        root,
+		ProjectName: "semantic-project",
+		Files:       []string{app, lib},
+		Budget:      projectindex.IndexPatchBudget{MaxDefinitions: 10},
+		PreviousIndex: &store.IndexData{
+			SchemaVersion: 1,
+			Project:       &store.ProjectIdentity{Root: root, Name: "semantic-project"},
+			SourceGraph: &store.ProjectIndexSourceGraph{
+				SchemaVersion: 1,
+				ProducedBy:    "@use-crux/indexer",
+				Capabilities:  []string{"source-dependencies", "project-shards"},
+				Shards: []store.ProjectIndexShard{
+					{ID: "packages/app", Root: filepath.Join(root, "packages", "app")},
+					{ID: "packages/lib", Root: filepath.Join(root, "packages", "lib")},
+				},
+			},
+			Sources: []store.IndexSourceFile{
+				{File: app, Status: "indexed", ShardID: "packages/app"},
+				{File: lib, Status: "indexed", ShardID: "packages/lib"},
+			},
+		},
+		SourceProfile: &projectindex.SemanticSourceProfile{
+			Files: []projectindex.SemanticSourceProfileFile{
+				{File: app, SourceHash: "hash-app", SourceBytes: 10},
+				{File: lib, SourceHash: "hash-lib", SourceBytes: 10},
+			},
+			DependencyClosure: []string{app, lib},
+			SourceBytes:       20,
+			Complete:          true,
+		},
+	}
+
+	worker := New(Options{ScriptPath: script, MaxWorkers: 2})
+	defer worker.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	patch, err := worker.IndexProjectSemanticPatch(ctx, req)
+	if err != nil {
+		t.Fatalf("IndexProjectSemanticPatch error = %v", err)
+	}
+
+	ids := []string{}
+	for _, definition := range patch.Facts.Definitions {
+		ids = append(ids, definition.ID)
+	}
+	slices.Sort(ids)
+	if !slices.Equal(ids, []string{"prompt:app", "prompt:lib"}) {
+		t.Fatalf("definitions = %v, want sharded app/lib definitions", ids)
+	}
+	started := strings.Fields(string(mustReadFile(t, marker)))
+	slices.Sort(started)
+	if !slices.Equal(started, []string{app, lib}) {
+		t.Fatalf("started shard files = %v, want %v", started, []string{app, lib})
+	}
+	timings := worker.LastSemanticTimings()
+	if len(timings) != 1 || timings[0].Name != "semantic.program.create" || timings[0].Count != 2 {
+		t.Fatalf("semantic timings = %+v, want merged program timing count 2", timings)
+	}
+}
+
+func mustReadFile(t testing.TB, path string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read %s: %v", path, err)
+	}
+	return data
 }
