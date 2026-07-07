@@ -142,6 +142,10 @@ export const { executeTarget } = createConvexRuntimeTargetExecutor({
 })
 ```
 
+Convex runtime execution is fencing-only. The host bindings disable in-process
+lease heartbeat timers and rely on `LEASE_LOST` fencing plus a lease TTL sized
+for the longest expected target action.
+
 ### Storage Beta adapters
 
 Use `convexRecordStore()`, `convexVectorStore()`, and `convexStorage()` for component-backed Crux records and dense vector search. No manual schema or function definitions needed.

@@ -201,14 +201,12 @@ export type {
 export {
   flowEventResumeKey,
   flowManualResumeKey,
-  flowSignalResumeKey,
   flowStartResumeKey,
   operatorRetryEventName,
   operatorRetryKey,
   taskRunKey,
   timerKey,
   waiterTimeoutKey,
-  watchDeliverKey,
 } from './engine/idempotency'
 export { runtimeSignalEventName } from './engine/replay'
 

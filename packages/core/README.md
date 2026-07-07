@@ -505,7 +505,9 @@ Wake execution fences every final commit with the worker's lease token. If
 maintenance reclaims a long-running item and another worker finishes it first,
 the stale worker exits with `LEASE_LOST` instead of retrying, dead-lettering, or
 overwriting the winner. Hosts that can schedule timers heartbeat leases while
-targets run; timerless hosts should size `leaseTtlMs` for their longest target.
+targets run; timerless hosts can pass `leaseExtension: false` and should size
+`leaseTtlMs` for their longest target. Convex host bindings disable the
+heartbeat and rely on fencing.
 
 Executable durable task targets are defined from the runtime subpath, not the
 root Plans & Tasks ledger `task()` helper:

@@ -21,7 +21,13 @@ afterEach(() => {
 
 describe('createTestRuntime()', () => {
   it('drives runtime-backed flow timers with an injected clock', async () => {
+    const prepared: Array<{ userId: string }> = []
     const reminders: Array<{ userId: string }> = []
+    const prepareAccount = durableTask('phase-9-prepare-account', {
+      run: (input: { userId: string }) => {
+        prepared.push(input)
+      },
+    })
     const sendReminder = durableTask('phase-9-send-reminder', {
       run: (input: { userId: string }) => {
         reminders.push(input)
@@ -30,6 +36,7 @@ describe('createTestRuntime()', () => {
     const onboarding = flow(
       'phase-9-onboarding',
       async (scope, input: { userId: string }) => {
+        await scope.defer(prepareAccount, { userId: input.userId })
         await scope.after(sendReminder, '2d', { userId: input.userId })
         await scope.suspend('approval')
         return 'approved'
@@ -37,7 +44,7 @@ describe('createTestRuntime()', () => {
     )
 
     runtime = createTestRuntime({
-      targets: [onboarding, sendReminder],
+      targets: [onboarding, prepareAccount, sendReminder],
       epoch: new Date('2026-07-07T00:00:00.000Z'),
     })
 
@@ -46,14 +53,25 @@ describe('createTestRuntime()', () => {
       status: 'suspended',
       suspendedAt: 'approval',
     })
+    expect(prepared).toEqual([])
     expect(reminders).toEqual([])
 
     const snapshot = await runtime.store.state.getSnapshot(
       suspended.flowId as FlowId,
       { namespace: runtime.runtime.namespace },
     )
-    const timerId = snapshot?.scheduledEffects?.['after:1']?.timerId
+    const deferredWorkId = snapshot?.scheduledEffects?.['defer:1']?.workId
+    const timerId = snapshot?.scheduledEffects?.['after:2']?.timerId
+    expect(deferredWorkId).toEqual(expect.any(String))
     expect(timerId).toEqual(expect.any(String))
+
+    await runtime.settle()
+    expect(prepared).toEqual([{ userId: 'user_1' }])
+    expect(reminders).toEqual([])
+    await expect(workStatusCounts()).resolves.toMatchObject({
+      completed: 1,
+      suspended: 1,
+    })
 
     await runtime.clock.advance('47h')
     expect(reminders).toEqual([])

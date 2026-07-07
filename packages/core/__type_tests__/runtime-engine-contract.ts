@@ -175,6 +175,7 @@ const hostBoundRuntime = bindHostRuntime(hostRuntimeDefinition, {
   targets: {},
   newWorkId: () => workId,
   createWake: () => async () => {},
+  leaseExtension: false,
   startMaintenance: false,
 })
 expectTypeOf(hostBoundRuntime).toMatchTypeOf<ResolvedRuntimeEngine<InMemoryRuntimeStore>>()

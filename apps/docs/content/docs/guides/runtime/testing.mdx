@@ -5,7 +5,7 @@ description: Test Runtime Engine flows, timers, and durable tasks with createTes
 
 `createTestRuntime()` gives app tests an in-memory Runtime Engine, a controllable clock, and a temporary runtime config layer. Flow handles still run through the same object-bound runtime path they use in production.
 
-## Flow timers
+## Flow effects
 
 ```ts
 import { expect, test } from 'vitest'
@@ -14,7 +14,13 @@ import { durableTask } from '@use-crux/core/runtime'
 import { createTestRuntime } from '@use-crux/core/runtime/testing'
 
 test('sends onboarding reminders after two days', async () => {
+  const prepared: string[] = []
   const sent: string[] = []
+  const prepareAccount = durableTask('prepare-account', {
+    run: async (input: { userId: string }) => {
+      prepared.push(input.userId)
+    },
+  })
   const sendReminder = durableTask('send-reminder', {
     run: async (input: { userId: string }) => {
       sent.push(input.userId)
@@ -23,15 +29,21 @@ test('sends onboarding reminders after two days', async () => {
   const onboarding = flow(
     'onboarding',
     async (scope, input: { userId: string }) => {
+      await scope.defer(prepareAccount, { userId: input.userId })
       await scope.after(sendReminder, '2d', { userId: input.userId })
       await scope.suspend('approval')
     },
   )
-  const rt = createTestRuntime({ targets: [onboarding, sendReminder] })
+  const rt = createTestRuntime({ targets: [onboarding, prepareAccount, sendReminder] })
 
   try {
     const suspended = await onboarding.run({ userId: 'user_1' })
     expect(suspended.status).toBe('suspended')
+    expect(prepared).toEqual([])
+    expect(sent).toEqual([])
+
+    await rt.settle()
+    expect(prepared).toEqual(['user_1'])
     expect(sent).toEqual([])
 
     await rt.clock.advance('2d')

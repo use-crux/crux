@@ -84,6 +84,7 @@ export function createConvexRuntimeHandlers(options: CreateConvexRuntimeHandlers
       namespace: options.namespace,
       targets,
       newWorkId: options.newWorkId ?? createConvexWorkIdGenerator(),
+      leaseExtension: false,
       createWake: () => async (envelope) => {
         await ctx.scheduler.runAfter(0, options.targetExecutor ?? handlers.handleWake, { envelope })
       },

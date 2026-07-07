@@ -69,6 +69,7 @@ export function createConvexRuntimeTargetExecutor(
       namespace: options.namespace,
       targets,
       newWorkId: options.newWorkId ?? createConvexWorkIdGenerator(),
+      leaseExtension: false,
       createWake: () => async (envelope) => {
         await ctx.scheduler.runAfter(0, executor.executeTarget, { envelope })
       },

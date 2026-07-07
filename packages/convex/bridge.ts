@@ -75,7 +75,7 @@ export function setup(http: CruxConvexBridgeHttpRouter, crux: Crux, options: Cru
       try {
         const records = await resolveBridgeRecords(ctx, crux, options)
         const result = await executeRuntimeBridgeCommand(
-          { devtools: crux.config.devtools, quality: crux.config.quality, records },
+          { devtools: crux.config.devtools, records },
           command,
         )
         return jsonResponse(
@@ -156,7 +156,6 @@ function convexBridgeManifest(
   const endpointUrl = options.url ?? requestUrl
   const manifest = getRuntimeBridgeManifest(
     {
-      quality: crux.config.quality,
       records: crux.config.persistence?.records,
       devtools: endpointUrl
         ? {

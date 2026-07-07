@@ -53,10 +53,6 @@ export const RuntimeBridgeConfigSchema = z.union([
 ])
 export type RuntimeBridgeOptions = z.infer<typeof RuntimeBridgeConfigSchema>
 
-/** Runtime command names accepted by app peers. */
-export const BridgeCommandNameSchema = z.enum(['store.read'])
-export type BridgeCommandName = z.infer<typeof BridgeCommandNameSchema>
-
 /** Environment label advertised by a runtime peer. */
 export const BridgePeerEnvironmentSchema = z.enum(['node', 'convex', 'serverless', 'browser', 'unknown'])
 export type BridgePeerEnvironment = z.infer<typeof BridgePeerEnvironmentSchema>
@@ -202,10 +198,6 @@ export interface RuntimeBridgeManifestInput {
   readonly devtools?: {
     readonly serverUrl?: string
     readonly bridge?: RuntimeBridgeOptions
-  }
-  readonly eval?: unknown
-  readonly quality?: {
-    readonly id?: string
   }
   readonly records?: unknown
 }

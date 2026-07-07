@@ -164,7 +164,11 @@ export function registerStoreCoordinationTests<
         store.leases.claim('work:work_1', { ttlMs: 1_000 }),
       ).resolves.toBeNull()
 
+      const firstToken = first!.token
+      const firstExpiresAt = first!.expiresAt
       const extended = await store.leases.extend(first!, 2_000)
+      expect(extended.token).toBe(firstToken)
+      expect(extended.expiresAt.getTime()).toBeGreaterThan(firstExpiresAt.getTime())
       vi.advanceTimersByTime(1_500)
       await expect(
         store.leases.claim('work:work_1', { ttlMs: 1_000 }),

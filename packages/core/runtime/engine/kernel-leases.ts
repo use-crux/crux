@@ -113,6 +113,9 @@ const NOOP_HEARTBEAT: LeaseExtensionHeartbeat = Object.freeze({
 })
 
 function defaultSchedule(fn: () => void, intervalMs: number): () => void {
+  if (typeof setInterval !== 'function' || typeof clearInterval !== 'function') {
+    return () => {}
+  }
   const timer = setInterval(fn, intervalMs)
   const maybeUnref = timer as { unref?: () => void }
   maybeUnref.unref?.()

@@ -96,7 +96,7 @@ export interface ConvexRuntimeBridgeEngineOptions {
   readonly targetExecutor?: unknown
 }
 
-/** Options for `createConvexRuntimeBridge()`. */
+/** Internal options for `createConvexRuntimeBridge()`. */
 export interface CreateConvexRuntimeBridgeOptions<TCtx extends ConvexCtxPort = ConvexCtxPort> {
   /** Crux persistence component installed from `@use-crux/convex/convex.config`. */
   readonly component: ComponentApi
@@ -119,25 +119,14 @@ export interface CreateConvexRuntimeBridgeOptions<TCtx extends ConvexCtxPort = C
 }
 
 /**
- * Create the host/runtime bridge for Crux inside Convex.
+ * Create the internal host/runtime bridge used by `createCruxConvex()`.
  *
- * Use this when an app needs request-scoped Crux runtime behavior without
- * adopting the higher-level profile-backed Convex Agent helper. `createCruxConvex()`
- * delegates its runtime, storage, and bridge methods to this function.
+ * This helper is intentionally not part of the public Convex package surface.
+ * It centralizes request-scoped storage, runtime host binding, namespace
+ * defaults, and the devtools HTTP bridge behind the profile entry point.
  *
- * @param options - Component ref plus optional namespace/store defaults.
- * @returns A reusable Convex runtime bridge.
- *
- * @example
- * ```ts
- * const runtime = createConvexRuntimeBridge({
- *   component: components.crux,
- * })
- *
- * await runtime.run(ctx, { threadId }, async ({ records }) => {
- *   await records.put(`blackboard:${threadId}`, { status: 'ready' })
- * })
- * ```
+ * @param options - Component ref plus optional namespace, runtime, and storage defaults.
+ * @returns Internal bridge consumed by `createCruxConvex()`.
  */
 export function createConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   options: CreateConvexRuntimeBridgeOptions<TCtx>,
@@ -228,6 +217,7 @@ function createRuntimeHostBinder<TCtx extends ConvexCtxPort>(options: {
       }),
       createWake: () => wakeWithScheduler(options.ctx, options.targetExecutor),
       newWorkId: runtimeOptions.newWorkId ?? createConvexWorkIdGenerator(),
+      leaseExtension: false,
       startMaintenance: runtimeOptions.startMaintenance ?? false,
     })
   }

@@ -40,7 +40,7 @@ export type {
 export type { PromptRegistry } from './configure'
 
 // ─────────────────────────────────────────────────────────────────
-// Global runtime hook store
+// Global hooks store
 // ─────────────────────────────────────────────────────────────────
 
 export {

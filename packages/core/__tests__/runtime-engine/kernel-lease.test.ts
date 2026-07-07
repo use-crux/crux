@@ -4,7 +4,14 @@ import {
   createRuntimeKernel,
   wakeEnvelopeForWork,
 } from '../../runtime/engine/kernel'
-import type { RuntimeTargetId, TaskId, WorkId } from '../../runtime/ports'
+import { startLeaseExtensionHeartbeat } from '../../runtime/engine/kernel-leases'
+import type {
+  Lease,
+  LeaseToken,
+  RuntimeTargetId,
+  TaskId,
+  WorkId,
+} from '../../runtime/ports'
 
 describe('RuntimeKernel lease fencing', () => {
   it('rejects a stale final commit after maintenance reclaims the lease', async () => {
@@ -247,6 +254,32 @@ describe('RuntimeKernel lease fencing', () => {
       )
     } finally {
       warn.mockRestore()
+    }
+  })
+
+  it('does not crash timerless hosts that use the default heartbeat scheduler', () => {
+    const store = inMemoryRuntimeStore()
+    const lease: Lease = {
+      resource: 'work:work_task_1',
+      token: 'lease_token_1' as LeaseToken,
+      expiresAt: new Date('2026-07-02T00:01:00.000Z'),
+    }
+
+    vi.stubGlobal('setInterval', undefined)
+    vi.stubGlobal('clearInterval', undefined)
+    try {
+      expect(() => {
+        const heartbeat = startLeaseExtensionHeartbeat(
+          { store, leaseTtlMs: 1_000 },
+          lease,
+          () => {
+            throw new Error('timerless host should not extend leases')
+          },
+        )
+        heartbeat.stop()
+      }).not.toThrow()
+    } finally {
+      vi.unstubAllGlobals()
     }
   })
 })

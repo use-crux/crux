@@ -1,14 +1,88 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { config, flow } from '@use-crux/core'
+import { createRuntime, node } from '@use-crux/core/runtime'
 import { inMemoryRuntimeStore } from '../../runtime/adapters/memory'
 import { createRuntimeKernel } from '../../runtime/engine/kernel'
 import type { WorkItem } from '../../runtime/engine/work'
+import { runtimeTargetMap } from '../../runtime/api/target-registry'
 import type {
   FlowId,
   RuntimeTargetId,
   WorkId,
 } from '../../runtime/ports'
+import { resetHooks } from '../../runtime/runtime'
 
 describe('RuntimeKernel retention maintenance', () => {
+  afterEach(() => {
+    resetHooks()
+  })
+
+  it('prunes terminal records created by a real runtime-backed flow', async () => {
+    let now = new Date('2026-07-02T00:00:00.000Z')
+    let nextWork = 0
+    const store = inMemoryRuntimeStore()
+    const runtimeDefinition = Object.freeze({
+      ...node({
+        store,
+        namespace: 'tenant-a',
+        autoStartMaintenance: false,
+        retention: {
+          events: '1ms',
+          terminalWork: '1ms',
+          terminalSnapshots: '1ms',
+          idempotencyKeys: '1ms',
+          sweepLimit: 50,
+        },
+      }),
+      now: () => now,
+      newWorkId: () => `work_retention_${++nextWork}` as WorkId,
+    })
+    const crux = config({ runtime: runtimeDefinition })
+    const reviewFlow = flow('retention-real-flow', async (scope, input: { documentId: string }) => {
+      await scope.suspend('approval')
+      return input.documentId
+    })
+    const runtimeRef = {}
+    const runtime = createRuntime({
+      runtime: runtimeDefinition,
+      targets: runtimeTargetMap(runtimeRef),
+      leaseExtension: false,
+      startMaintenance: false,
+    })
+    Object.assign(runtimeRef, { current: runtime })
+
+    try {
+      const suspended = await reviewFlow.run({ documentId: 'doc_1' })
+      await reviewFlow.signal(suspended.flowId, 'approval', {}, { resume: false })
+      await expect(reviewFlow.resume(suspended.flowId)).resolves.toMatchObject({
+        status: 'completed',
+        output: 'doc_1',
+      })
+      const snapshot = await store.state.getSnapshot(suspended.flowId as FlowId, {
+        namespace: 'tenant-a',
+      })
+      expect(snapshot).toMatchObject({ status: 'completed' })
+      const workId = snapshot!.workId as WorkId
+      await expect(store.state.getWork(workId, { namespace: 'tenant-a' })).resolves.toMatchObject({
+        status: 'completed',
+      })
+
+      now = new Date('2999-01-02T00:00:00.000Z')
+      await expect(runtime.maintenance.tick({ now })).resolves.toMatchObject({
+        retentionTruncated: false,
+      })
+      await expect(
+        store.state.getSnapshot(suspended.flowId as FlowId, {
+          namespace: 'tenant-a',
+        }),
+      ).resolves.toBeNull()
+      await expect(store.state.getWork(workId, { namespace: 'tenant-a' })).resolves.toBeNull()
+    } finally {
+      runtime.dispose()
+      crux.dispose()
+    }
+  })
+
   it('prunes retained terminal records while preserving live runtime records', async () => {
     const store = inMemoryRuntimeStore()
     const now = new Date('2999-01-02T00:00:00.000Z')

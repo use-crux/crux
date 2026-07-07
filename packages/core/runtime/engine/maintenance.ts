@@ -191,8 +191,7 @@ export async function requeuePendingWorkIfStillOrphanedInTransaction(
   const hasPendingWake = before.some(
     (item) =>
       item.namespace === current.namespace &&
-      item.envelope.workId === current.workId &&
-      item.envelope.idempotencyKey === current.idempotencyKey,
+      item.envelope.workId === current.workId,
   )
   if (hasPendingWake) return false
   await tx.outbox.put(wakeEnvelopeForWork(current), {

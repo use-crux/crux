@@ -12,13 +12,20 @@ import type { RunStoreAdapterTestsOptions } from './store-types'
 export function registerStoreCompositeTests<
   TStore extends RuntimeStoreAdapter,
 >(options: RunStoreAdapterTestsOptions<TStore>): void {
+  it('invariant: named composites execute through the adapter runner', async () => {
+    const cases = compositeCases()
+
+    for (const testCase of cases) {
+      const store = await options.createStore()
+      await testCase.prepare?.(store)
+      await expect(testCase.run(store), testCase.kind).resolves.toBeUndefined()
+    }
+  })
+
   it.skipIf(options.substrateAtomicTransact)(
     'invariant: named composites roll back partial writes when the transaction fails',
     async () => {
-      const cases: StoreCompositeRollbackCase[] = [
-        ...workflowCompositeRollbackCases(),
-        ...operationalCompositeRollbackCases(),
-      ]
+      const cases = compositeCases()
 
       for (const testCase of cases) {
         const store = await options.createStore()
@@ -34,4 +41,11 @@ export function registerStoreCompositeTests<
       }
     },
   )
+}
+
+function compositeCases(): StoreCompositeRollbackCase[] {
+  return [
+    ...workflowCompositeRollbackCases(),
+    ...operationalCompositeRollbackCases(),
+  ]
 }

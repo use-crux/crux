@@ -53,7 +53,6 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
     configureOptions,
     bridgeOptions: {
       devtools: config.devtools,
-      quality: config.quality,
       records,
     },
     plugins,

@@ -14,7 +14,7 @@ import type {
   WorkItem,
 } from '@use-crux/core/runtime'
 
-const COMPOSITE_DATE_TAG = '$cruxRuntimeDate'
+const COMPOSITE_DATE_TAG = '_cruxRuntimeDate'
 
 export function encodeWorkForCreate(input: NewWorkItem): Record<string, unknown> {
   const now = input.now ?? new Date()

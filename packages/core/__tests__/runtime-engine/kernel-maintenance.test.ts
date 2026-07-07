@@ -109,7 +109,7 @@ describe('RuntimeKernel maintenance and cancellation composites', () => {
     ])
   })
 
-  it('does not treat another namespace outbox row as the orphan wake for a colliding work id', async () => {
+  it('does not re-enqueue due work when any same-namespace pending wake exists', async () => {
     const store = inMemoryRuntimeStore()
     const kernel = createRuntimeKernel({
       store,
@@ -130,7 +130,13 @@ describe('RuntimeKernel maintenance and cancellation composites', () => {
     await store.state.putWork(work)
     await store.state.putWork(otherTenantWork)
     await store.outbox.put(wakeEnvelopeForWork(otherTenantWork), { deliverAt: dueAt })
-    const currentWake = await store.outbox.put(wakeEnvelopeForWork(work), { deliverAt: dueAt })
+    const currentWake = await store.outbox.put(
+      {
+        ...wakeEnvelopeForWork(work),
+        idempotencyKey: 'resume:work_task_1:replacement',
+      },
+      { deliverAt: dueAt },
+    )
 
     await expect(
       kernel.maintenanceTick({

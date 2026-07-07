@@ -163,9 +163,4 @@ export default defineSchema({
     scope: v.string(),
     count: v.number(),
   }).index('by_namespace_scope', ['namespace', 'scope']),
-
-  runtimeCounters: defineTable({
-    key: v.string(),
-    value: v.number(),
-  }).index('by_key', ['key']),
 })

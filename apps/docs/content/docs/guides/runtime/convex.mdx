@@ -71,7 +71,7 @@ durable flow.
 - Use top-level named exports and literal target names.
 - Do not call runtime-backed APIs from a Next server process configured with `runtime: convex()`.
 - Configure retention on `convex({ retention })`; the component prunes terminal runtime rows during host-bound maintenance.
-- Convex action execution is fencing-only: stale final commits are rejected with `LEASE_LOST`, but actions do not run an in-process heartbeat timer. Keep target work below the configured lease TTL or increase `leaseTtlMs` for long actions.
+- Convex runtime execution is fencing-only: stale final commits are rejected with `LEASE_LOST`, and Convex host bindings pass `leaseExtension: false` so isolate and Node action paths do not run in-process heartbeat timers. Keep target work below the configured lease TTL or increase `leaseTtlMs` for long actions.
 - Use Convex setup/deploy flow for component tables; Crux setup commands report host-specific diagnostics rather than creating paid resources.
 
 ## Related

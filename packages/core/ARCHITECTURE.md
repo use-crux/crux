@@ -670,9 +670,9 @@ Retention is kernel-owned and adapter-proven. Composers carry `RuntimeRetentionC
 
 Outbox dispatch is bounded and defaults to eight in-flight deliveries per pass. Outbox row ordering is not a cross-row correctness contract. Store adapters expose `outbox.listByWork(workId, { namespace?, state?, limit? })` so orphan-work recovery can check targeted pending wake rows without namespace-wide scans; Postgres and Convex persist `workId` on outbox rows for that index.
 
-Lease ownership is a kernel-level fencing contract. `handleWake()` claims a store lease, records the token on the leased work row, heartbeats that lease while target code runs when the host supports timers, and re-checks the same token inside every finalizing commit transaction. If maintenance has reclaimed the work or another worker has re-leased it, completion, suspension, retry, and failure commits abort with `LEASE_LOST`; the stale executor acknowledges the wake without consuming attempts or overwriting the current owner. Store adapters only implement `leases.claim/extend/release` and transactional state reads/writes.
+Lease ownership is a kernel-level fencing contract. `handleWake()` claims a store lease, records the token on the leased work row, heartbeats that lease while target code runs when the host supports timers, and re-checks the same token inside every finalizing commit transaction. If maintenance has reclaimed the work or another worker has re-leased it, completion, suspension, retry, and failure commits abort with `LEASE_LOST`; the stale executor acknowledges the wake without consuming attempts or overwriting the current owner. Timerless host bindings pass `leaseExtension: false` and rely on fencing plus an appropriately sized `leaseTtlMs`; Convex does this for both isolate handlers and Node actions. Store adapters only implement `leases.claim/extend/release` and transactional state reads/writes.
 
-Generated and hand-written wake entries meet the kernel through `createRuntimeHandler({ targets })`, which normalizes exported flow/task targets, verifies HTTP wake requests before envelope decode, and returns fetch-compatible `GET`/`POST` handlers. Host-bound adapters such as Convex use `bindHostRuntime()` to supply request-scoped store and wake bindings while still delegating to `createRuntime()` and the same kernel path.
+Generated and hand-written wake entries meet the kernel through `createRuntimeHandler({ targets })`, which normalizes exported flow/task targets, verifies HTTP wake requests before envelope decode, and returns fetch-compatible `GET`/`POST` handlers. Host-bound adapters such as Convex use `bindHostRuntime()` to supply request-scoped store, wake, and host-safe lease-extension settings while still delegating to `createRuntime()` and the same kernel path.
 
 App-level runtime tests use `createTestRuntime()` from `runtime/testing`. The harness normalizes the same target arrays accepted by `createRuntimeHandler()`, installs a temporary hook layer with an in-memory runtime definition, and drives `reviewFlow.run()` through the production object-bound flow path. Its controllable clock rides on the runtime definition (`now` and `newWorkId`), and `createRuntime()` inherits those hooks for every resolved instance. Runtime-backed flow deadline math reads the resolved engine clock, so `flow.after()` and suspend timeouts remain deterministic without a separate test-only interpreter.
 
@@ -835,13 +835,12 @@ domains. `configure()` remains available for lower-level prompt registry tests a
 `configure(options)` does the following in order:
 
 1. **Extract flat lists** — Walk tree (via `_all` property or recursive traversal) or use arrays directly
-2. **Compute namespace paths** — If trees were passed, map each prompt/context ID to its path in the tree (e.g., `'draft-edit' → ['editor', 'edit']`)
-3. **Auto-collect contexts** — Deduplicate contexts from prompts' `use` arrays with explicitly passed contexts
-4. **Validate** — All prompts must have an `id`, no duplicate IDs allowed
-5. **Build indexes** — `byId: Map<string, Prompt>`, `tagIndex: Map<string, Prompt[]>`
-6. **Apply registry policy flags** — `autoEscape` and `securityWarnings` stay module-local for
+2. **Auto-collect contexts** — Deduplicate contexts from prompts' `use` arrays with explicitly passed contexts
+3. **Validate** — All prompts must have an `id`, no duplicate IDs allowed
+4. **Build indexes** — `byId: Map<string, Prompt>`, `tagIndex: Map<string, Prompt[]>`
+5. **Apply registry policy flags** — `autoEscape` and `securityWarnings` stay module-local for
    resolver defaults
-7. **Return frozen registry** — `get`, `find`, `list`, `byTag`, `byTags`, `tags`, `dispose`
+6. **Return frozen registry** — `get`, `find`, `list`, `byTag`, `byTags`, `tags`, `dispose`
 
 ### Tree Walking
 
@@ -850,8 +849,6 @@ domains. `configure()` remains available for lower-level prompt registry tests a
 - **Flat array** — Pass through directly
 - **Object with `_all`** — Use the pre-computed flat list from `createPrompts()`/`createContexts()`
 - **Plain nested object** — Recursively walk, collect leaves where `_tag === 'Prompt'` or `_tag === 'Context'`
-
-`computePaths()` recursively traverses the tree, building path arrays as it descends. Each leaf's ID is mapped to its full path (e.g., `{ editor: { edit: promptInstance } }` → `'draft-edit' → ['editor', 'edit']`).
 
 ## createPrompts() / createContexts()
 

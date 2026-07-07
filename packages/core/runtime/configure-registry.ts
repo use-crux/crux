@@ -88,37 +88,6 @@ export function extractContexts(input: ContextInput | undefined): Context<z.ZodT
   return result
 }
 
-/**
- * Compute namespace paths from a tree.
- * Returns a Map of instance id → path segments (e.g., 'draft-edit' → ['editor', 'edit']).
- */
-export function computePaths(
-  input: unknown,
-  getId: (v: unknown) => string | undefined,
-  isLeaf: (v: unknown) => boolean,
-): Map<string, string[]> {
-  const paths = new Map<string, string[]>()
-
-  if (Array.isArray(input)) return paths // flat arrays have no tree structure
-
-  function walk(node: unknown, path: string[]) {
-    if (isLeaf(node)) {
-      const id = getId(node)
-      if (id) paths.set(id, path)
-      return
-    }
-    if (node && typeof node === 'object') {
-      for (const [key, value] of Object.entries(node)) {
-        if (key === '_all') continue // skip _all property
-        walk(value, [...path, key])
-      }
-    }
-  }
-
-  walk(input, [])
-  return paths
-}
-
 /** Auto-collect contexts from prompts' `use` arrays, deduped with explicit ones. */
 export function collectContexts(prompts: AnyPrompt[], explicit: Context<z.ZodType>[]): Context<z.ZodType>[] {
   const seen = new Set<Context<z.ZodType>>(explicit)

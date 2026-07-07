@@ -53,7 +53,7 @@ export async function enqueueTaskInTransaction(
     now: deps.now(),
   })
   await tx.outbox.put(wakeEnvelopeForWork(item), {
-    deliverAt: input.notBefore,
+    deliverAt: input.notBefore ?? deps.now(),
   })
   return item
 }

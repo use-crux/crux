@@ -184,7 +184,7 @@ describe('Crux Convex Runtime Engine component', () => {
     })
   })
 
-  it('appends runtime events without writing namespace counter rows', async () => {
+  it('appends runtime events without a shared namespace counter table', async () => {
     const t = convexTest({ schema, modules })
     await t.mutation(appendEvent, {
       event: { namespace: 'tenant-a', name: 'first', payload: {} },
@@ -194,8 +194,8 @@ describe('Crux Convex Runtime Engine component', () => {
     })
 
     await expect(
-      t.run(async (ctx) => await ctx.db.query('runtimeCounters').collect()),
-    ).resolves.toEqual([])
+      t.run(async (ctx) => await ctx.db.query('runtimeEvents').collect()),
+    ).resolves.toHaveLength(2)
   })
 
   it('rejects namespace-less maintenance scans instead of collecting whole tables', async () => {
