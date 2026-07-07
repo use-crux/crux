@@ -78,7 +78,7 @@
     },
     {
       "file": "examples/node-basic/quality-citations.eval.ts",
-      "sha256": "af665d0df8b8c90cf1c37088375d765102a61c1e1c28faf0954452441488f718",
+      "sha256": "207215f5716132ad807d2b3c06a5f404891c8175600b1a162fb1f87936f9f7be",
       "bytes": 4508,
       "definitions": 2,
       "relations": 0,
@@ -87,7 +87,7 @@
     },
     {
       "file": "examples/node-basic/quality-model-backed.example.ts",
-      "sha256": "8db64a13563d7da2d7f2018b4ad0c25a8d13146a4690d5315ac62fd93ca97782",
+      "sha256": "7350708b7b3a71fde77fff05d56d8df5ebd636759516be34189f24d97bfd105d",
       "bytes": 6235,
       "definitions": 3,
       "relations": 0,
@@ -1140,7 +1140,7 @@
     },
     {
       "file": "packages/core/__type_tests__/fixtures/quality-perf-fixture.ts",
-      "sha256": "fb4c80d7c906ea755220087311568a46175b43f8a2038b4285b5f501dca32748",
+      "sha256": "f81fd570961b32bb9f4048d042f38ed98ff27f11918f0c5cb4112e8cfd1109f9",
       "bytes": 1819101,
       "definitions": 70,
       "relations": 40,
@@ -1230,7 +1230,7 @@
     },
     {
       "file": "packages/core/__type_tests__/quality-authoring-examples.ts",
-      "sha256": "5746b6de5475c0a900475a1e1efe396f9cb6ac716a4a83d092922c17fffe4ec6",
+      "sha256": "7b86503112a861616fffca0efc0f1a19afc3e7d6050472f839a8b2ba28d44df8",
       "bytes": 130350,
       "definitions": 25,
       "relations": 13,

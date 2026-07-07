@@ -206,7 +206,17 @@ pub fn first_party_primitive_manifest_digest() -> String {
             b"0"
         });
     }
-    format!("sha256:{:x}", hasher.finalize())
+    format!("sha256:{}", hex_lower(&hasher.finalize()))
+}
+
+fn hex_lower(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        out.push(HEX[(byte >> 4) as usize] as char);
+        out.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    out
 }
 
 /// The replacement identity of one first-party primitive: the extension and

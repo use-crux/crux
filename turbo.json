@@ -1,6 +1,7 @@
 {
   "$schema": "https://v2-8-0.turborepo.dev/schema.json",
   "globalDependencies": ["**/.env.*local"],
+  "globalPassThroughEnv": ["CRUX_STATIC_INDEX_WORKER"],
   "ui": "tui",
   "tasks": {
     "build": {

@@ -34,7 +34,7 @@ func DefaultCacheCompilerInputs() []json.RawMessage {
 		`{"kind":"native-primitive-manifest","name":"crux-static-index-host","version":"1","digest":"593bce811915c4645c37c794421dce255bd56de018931630c0eac68509e0d28c"}`,
 		`{"kind":"relation-policy","name":"runtime-relation-specs","digest":"cd296cc9b333195f6c74f7e9cda75549c35b667800328f9f9300bdef03edaf82"}`,
 		`{"kind":"static-evidence-manifest","name":"runtime-static-interests","digest":"06bb2a1749d33c98f386ae5c17d4828b61d95150d1679a91d62754b59e41689c"}`,
-		`{"kind":"syntax-frontend","name":"oxc-rust","version":"oxc_parser@0.133.0+crux_native_group3.7"}`,
+		`{"kind":"syntax-frontend","name":"oxc-rust","version":"oxc_parser@0.139.0+crux_native_group3.7"}`,
 	}
 	out := make([]json.RawMessage, 0, len(inputs))
 	for _, input := range inputs {

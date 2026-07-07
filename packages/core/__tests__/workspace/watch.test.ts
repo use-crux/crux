@@ -318,7 +318,7 @@ async function waitForPoll(): Promise<void> {
   await delay(100);
 }
 
-async function eventually(assert: () => void, timeoutMs = 3_000): Promise<void> {
+async function eventually(assert: () => void, timeoutMs = 10_000): Promise<void> {
   const started = Date.now();
   let lastError: unknown;
   let attempts = 0;

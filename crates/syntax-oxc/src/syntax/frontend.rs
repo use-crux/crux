@@ -96,7 +96,7 @@ pub fn parse_source(input: ParseRequest) -> Result<StaticSyntaxFileRecord, Strin
         native_facts: Vec::new(),
         local_initializers,
         diagnostics: parsed
-            .errors
+            .diagnostics
             .into_iter()
             .enumerate()
             .map(|(index, error)| IndexDiagnostic {
