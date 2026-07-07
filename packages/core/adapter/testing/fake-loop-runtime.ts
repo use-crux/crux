@@ -6,7 +6,7 @@
  * approvals, steering) with zero SDK involvement. It is also the reference
  * implementation of the loop runtime contract: it honors `maxSteps`, awaits
  * the observer and applies directives (including `refundStep`), suspends on
- * approval-needing tools, and validates structured scripts against the real
+ * approval-gated tools, and validates structured scripts against the real
  * schema — the honesty that lets fake-backed policy tests transfer to real SDKs.
  *
  * @module
@@ -99,12 +99,6 @@ const FAKE_USAGE = {
 
 interface FakeToolLike {
   execute?: (input: unknown, options: { toolCallId?: string; messages?: readonly unknown[] }) => unknown
-  needsApproval?:
-    | boolean
-    | ((
-        input: unknown,
-        options: { toolCallId?: string; messages?: readonly unknown[] },
-      ) => boolean | PromiseLike<boolean>)
   toModelOutput?: (args: {
     toolCallId: string
     input: Record<string, unknown>
@@ -212,10 +206,18 @@ export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRun
           break
         }
 
-        // Approval scan first: a real SDK detects needsApproval before executing.
+        // Approval scan first: a real SDK detects approval-gated tools before executing.
         for (const tc of toolCalls) {
           const tool = lookupTool(tools, activeTools, tc.name)
-          if (tool && (await needsApproval(tool, tc, messages))) {
+          if (
+            tool &&
+            (await request.toolApproval?.({
+              toolName: tc.name,
+              toolCallId: tc.id,
+              input: tc.args,
+              messages,
+            }))
+          ) {
             const pending: PendingToolApproval = {
               toolCallId: tc.id,
               toolName: tc.name,
@@ -356,14 +358,4 @@ function lookupTool(
   if (activeTools && !activeTools.includes(name)) return undefined
   const tool = tools[name]
   return tool && typeof tool === 'object' ? (tool as FakeToolLike) : undefined
-}
-
-async function needsApproval(
-  tool: FakeToolLike,
-  toolCall: { id: string; args: unknown },
-  messages: readonly Message[],
-): Promise<boolean> {
-  if (tool.needsApproval === undefined) return false
-  if (typeof tool.needsApproval === 'boolean') return tool.needsApproval
-  return Boolean(await tool.needsApproval(toolCall.args, { toolCallId: toolCall.id, messages }))
 }

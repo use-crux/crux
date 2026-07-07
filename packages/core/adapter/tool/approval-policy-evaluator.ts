@@ -1,0 +1,129 @@
+/**
+ * Internal approval-policy evaluator for tool lifecycle sessions.
+ *
+ * The public contract declares approval requirements at composition sites
+ * (`context()`, `prompt()`, and per-call options). This module turns those
+ * declarations, plus legacy-compatible `approvalMiddleware()` metadata, into
+ * one backend-neutral boolean for a concrete tool call.
+ *
+ * @module
+ */
+
+import type { Message } from '../../generation/messages'
+import {
+  approvalPolicyKind,
+  resolveApprovalPolicy,
+  type ApprovalDeclaration,
+  type ToolApprovalContext,
+  type ToolApprovalMap,
+} from '../../tools/approval-policy'
+import { evaluateApprovalMiddleware } from '../../tools/middleware'
+
+/** The call shape needed to evaluate approval requirements. */
+export interface ApprovalPolicyToolCall {
+  /** Provider-owned tool call id. */
+  readonly id: string
+  /** Resolved tool name. */
+  readonly name: string
+  /** Raw provider input for the tool. */
+  readonly args: unknown
+}
+
+/** Trace payload emitted when a declared approval policy is evaluated. */
+export interface ApprovalPolicyTrace {
+  readonly toolCallId: string
+  readonly toolName: string
+  readonly policy: 'always' | 'never' | 'function'
+  readonly result: 'approve' | 'suspend'
+  readonly layer?: 'call' | 'prompt' | 'context'
+  readonly key?: string
+  readonly owner?: string
+}
+
+/** Options for {@link requiresToolApproval}. */
+export interface RequiresToolApprovalOptions {
+  /** The middleware-wrapped tool object, if one exists for the call. */
+  readonly tool: unknown
+  /** The concrete tool call being gated. */
+  readonly toolCall: ApprovalPolicyToolCall
+  /** Current conversation history. */
+  readonly messages: readonly Message[]
+  /** Ordered approval declarations collected from context, prompt, and call sites. */
+  readonly declarations: readonly ApprovalDeclaration[]
+  /** Optional policy trace sink used by dialect parity tests. */
+  readonly onPolicyTrace?: (trace: ApprovalPolicyTrace) => void
+}
+
+/**
+ * Convert per-call `toolApproval` options into the same declaration shape
+ * used by resolved context and prompt declarations.
+ */
+export function callApprovalDeclarations(map: ToolApprovalMap | undefined): ApprovalDeclaration[] {
+  if (!map) return []
+  return Object.entries(map).map(([key, policy]) => ({ layer: 'call' as const, key, policy }))
+}
+
+/**
+ * Evaluate whether a tool call requires approval.
+ *
+ * Declared policies are exact-name/wildcard aware through
+ * {@link resolveApprovalPolicy}. Middleware metadata is evaluated second and
+ * OR'd with declarations so existing `approvalMiddleware()` users retain the
+ * ability to request approval without mutating the tool object.
+ */
+export async function requiresToolApproval(options: RequiresToolApprovalOptions): Promise<boolean> {
+  const { tool, toolCall, messages, declarations } = options
+  if (!tool || typeof tool !== 'object') return false
+
+  const policyRequiresApproval = await evaluateDeclaredApprovalPolicy(toolCall, messages, declarations, options)
+  const middlewareRequiresApproval = await evaluateApprovalMiddleware(tool, {
+    toolName: toolCall.name,
+    toolCallId: toolCall.id,
+    input: toolCall.args,
+    options: { toolCallId: toolCall.id, messages },
+    messages,
+  })
+  return policyRequiresApproval || middlewareRequiresApproval
+}
+
+async function evaluateDeclaredApprovalPolicy(
+  toolCall: ApprovalPolicyToolCall,
+  messages: readonly Message[],
+  declarations: readonly ApprovalDeclaration[],
+  options: Pick<RequiresToolApprovalOptions, 'onPolicyTrace'>,
+): Promise<boolean> {
+  const resolvedPolicy = resolveApprovalPolicy(toolCall.name, declarations)
+  if (!resolvedPolicy) return false
+
+  const { policy, provenance } = resolvedPolicy
+  let requiresApproval: boolean
+  if (policy === 'always') {
+    requiresApproval = true
+  } else if (policy === 'never') {
+    requiresApproval = false
+  } else {
+    const context: ToolApprovalContext = {
+      toolName: toolCall.name,
+      toolCallId: toolCall.id,
+      input: toolCall.args,
+      runtimeContext: undefined,
+      messages,
+    }
+    try {
+      requiresApproval = Boolean(await policy(context))
+    } catch {
+      requiresApproval = true
+    }
+  }
+
+  options.onPolicyTrace?.({
+    toolCallId: toolCall.id,
+    toolName: toolCall.name,
+    policy: approvalPolicyKind(policy),
+    result: requiresApproval ? 'suspend' : 'approve',
+    layer: provenance.layer,
+    key: provenance.key,
+    ...(provenance.owner ? { owner: provenance.owner } : {}),
+  })
+  return requiresApproval
+}

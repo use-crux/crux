@@ -65,12 +65,6 @@ export interface CallArgs<
             readonly messages?: readonly unknown[];
           },
         ) => unknown | Promise<unknown>;
-        needsApproval?:
-          | boolean
-          | ((
-              args: unknown,
-              options: { toolCallId?: string; messages?: Message[] },
-            ) => boolean | PromiseLike<boolean>);
         toModelOutput?: (args: {
           toolCallId: string;
           input: Record<string, unknown>;

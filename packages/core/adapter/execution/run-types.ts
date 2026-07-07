@@ -20,6 +20,7 @@ import type { Constraint } from '../../safety/constraint/types'
 import type { Guardrail } from '../../safety/guardrail/types'
 import type { SafetyTuneOptions } from '../../safety/tune'
 import type { ToolMiddleware } from '../../tools/types'
+import type { ToolApprovalMap } from '../../tools/approval-policy'
 import type { StreamHandle } from '../types'
 import type { ExecutorStreamHandle, StepObserver } from '../executor-types'
 import type { ApprovalRequestInfo } from '../tool/approval'
@@ -77,6 +78,9 @@ export interface AdapterExecutionGenerateArgs<
 
   /** Tool middleware applied to the merged tool set. */
   readonly toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
+
+  /** Call-site approval policy with final-word precedence over prompt/context declarations. */
+  readonly toolApproval?: ToolApprovalMap
 
   /** Corrective retry policy for structured-output validation failures. */
   readonly validationRetry?: ValidationRetryOptions

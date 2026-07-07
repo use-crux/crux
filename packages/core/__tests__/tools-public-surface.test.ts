@@ -86,10 +86,11 @@ describe('@use-crux/core/tool-middleware — middleware', () => {
     expect(seen).toEqual(['echo'])
   })
 
-    it('approvalMiddleware forces approval for matched tools', async () => {
+    it('approvalMiddleware exposes a tagged middleware for matched tools', async () => {
     const mw = approvalMiddleware({ id: 'gate', match: ['danger'] })
     const wrapped = mw.wrapTool('danger', { execute: async () => 'ok' })
-    expect(await wrapped.needsApproval?.({}, {})).toBe(true)
+    expect(mw._tag).toBe('ToolMiddleware')
+    expect(await wrapped.execute?.({}, {})).toBe('ok')
   })
 })
 

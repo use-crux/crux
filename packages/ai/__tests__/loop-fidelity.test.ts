@@ -1,7 +1,7 @@
 /**
  * Loop-fidelity tests: `MockLanguageModelV3` through the REAL `generateText`
  * / `generateObject` via the live gateway. These prove the executor's
- * neutral `stopWhen`/directive buffering, tier-1 repair, and native `needsApproval`
+ * neutral `stopWhen`/directive buffering, tier-1 repair, and tool approval
  * suspension hold against actual SDK loop mechanics — the seams a scripted
  * gateway cannot exercise.
  */
@@ -116,7 +116,7 @@ describe("loop fidelity — real generateText", () => {
     expect(result.text).toBe("answer after tools");
   });
 
-  it("suspends on native needsApproval without executing the tool", async () => {
+  it("suspends on toolApproval without executing the tool", async () => {
     const execute = vi.fn(async () => "dangerous result");
     const ai = createCruxAi();
     const model = mockModel([
@@ -133,10 +133,10 @@ describe("loop fidelity — real generateText", () => {
         guarded: {
           description: "guarded",
           inputSchema: z.object({ go: z.boolean() }),
-          needsApproval: true,
           execute,
         },
       } as never,
+      toolApproval: { guarded: "always" },
     });
 
     expect(execute).not.toHaveBeenCalled();

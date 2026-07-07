@@ -63,7 +63,7 @@ import type {
   GenerateResult,
   StreamResult,
 } from "@use-crux/core/adapter";
-import type { ToolMiddleware, FallbackModel } from "@use-crux/core";
+import type { ToolApprovalMap, ToolMiddleware, FallbackModel } from "@use-crux/core";
 import { isRouter, isCascade, resolveModel } from "@use-crux/core/routing";
 import type { AnyRouterModel, CascadeModel } from "@use-crux/core/routing";
 import type {
@@ -240,6 +240,7 @@ type CallOpts = Record<string, unknown> & {
   model: ExecutorModelArg<LanguageModel>;
   tools?: ToolSet;
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
+  toolApproval?: ToolApprovalMap;
   messages?: ResolvedPrompt["messages"];
   maxSteps?: number;
   extra?: AIExtra;
@@ -283,6 +284,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       model,
       tools,
       toolMiddleware,
+      toolApproval,
       messages,
       maxSteps,
       extra,
@@ -303,6 +305,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       input,
       tools: tools as Record<string, unknown> | undefined,
       toolMiddleware,
+      toolApproval,
       messages: messages as Message[] | undefined,
       tokenBudget,
       timeout,
@@ -330,6 +333,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       model,
       tools,
       toolMiddleware,
+      toolApproval,
       messages,
       maxSteps,
       extra,
@@ -350,6 +354,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       input,
       tools: tools as Record<string, unknown> | undefined,
       toolMiddleware,
+      toolApproval,
       messages: messages as Message[] | undefined,
       tokenBudget,
       timeout,

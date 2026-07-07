@@ -23,6 +23,7 @@ import type {
 } from "@use-crux/core";
 import type {
   FallbackModel,
+  ToolApprovalMap,
   ToolMiddleware,
   ValidationRetryOptions,
 } from "@use-crux/core";
@@ -78,6 +79,8 @@ export type AIGenerateOptions<
   tools?: ToolSet;
   /** Tool middleware applied after prompt tools and call-site tools are merged. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
+  /** Call-site approval policy with final-word precedence over prompt/context declarations. */
+  toolApproval?: ToolApprovalMap;
   /**
    * Message history override for resume flows such as tool approval.
    * Pass the prior assistant messages plus a `tool-approval-response` tool

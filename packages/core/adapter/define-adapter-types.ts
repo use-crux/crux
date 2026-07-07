@@ -17,6 +17,7 @@ import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
 import type { SafetyTuneOptions } from "../safety/tune";
 import type { ToolMiddleware } from "../tools/types";
+import type { ToolApprovalMap } from "../tools/approval-policy";
 import type { ValidationRetryOptions } from "../generation/validation-retry";
 import type { GenerateResult, StreamResult } from "./result-accumulator";
 
@@ -44,6 +45,8 @@ export interface AdapterGenerateOptions<
   tools?: Record<string, unknown>;
   /** Tool middleware applied after prompt tools and call-site tools are merged. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
+  /** Call-site approval policy with final-word precedence over prompt/context declarations. */
+  toolApproval?: ToolApprovalMap;
   /**
    * Validation-feedback retry for structured output.
    * When set, failed Zod schema validation triggers a retry with

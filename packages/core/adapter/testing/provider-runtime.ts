@@ -393,7 +393,6 @@ export async function providerRuntimeConformance<
       const guardedTools = {
         guarded: {
           ...echoTool(),
-          needsApproval: true,
           execute: async () => {
             executed = true;
             return "approved output";
@@ -403,6 +402,7 @@ export async function providerRuntimeConformance<
       const result = await bound.generate(textPrompt, {
         ...baseOptions(prepared.model),
         tools: guardedTools,
+        toolApproval: { guarded: "always" },
       });
 
       if (executed)
@@ -464,7 +464,6 @@ export async function providerRuntimeConformance<
       const guardedTools = {
         guarded: {
           ...echoTool(),
-          needsApproval: true,
           execute: async () => {
             executed = true;
             return "approved output";
@@ -474,6 +473,7 @@ export async function providerRuntimeConformance<
       const result = await bound.generate(textPrompt, {
         ...baseOptions(prepared.model),
         tools: guardedTools,
+        toolApproval: { guarded: "always" },
       });
       const approval = firstApproval(result.pendingApprovals);
       if (!approval) {

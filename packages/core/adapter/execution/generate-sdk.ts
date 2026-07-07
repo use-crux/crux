@@ -84,7 +84,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   const lifecycle = createToolLifecycle({
     regime: "sdk",
     resolved,
-    call: { tools: args.tools, toolMiddleware: args.toolMiddleware },
+    call: { tools: args.tools, toolMiddleware: args.toolMiddleware, toolApproval: args.toolApproval },
     promptId: prompt.id,
     input: args.input ?? {},
     timeout: args.timeout,
@@ -158,6 +158,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     messages,
     settings: mappedSettings,
     tools: lifecycle.tools,
+    toolApproval: (call) =>
+      lifecycle.requiresApproval(
+        { id: call.toolCallId, name: call.toolName, args: call.input },
+        call.messages ?? messages,
+      ),
     activeTools: args.activeTools,
     maxSteps,
     observer: loopObserver,

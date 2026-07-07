@@ -7,7 +7,7 @@
 
 import { describe, it, expect, afterEach } from 'vitest'
 import { resetRuntime } from '../../../runtime/runtime'
-import { resetObservabilityRuntime, subscribeObservability } from '../../../observability'
+import { resetObservabilityRuntime } from '../../../observability'
 import { instrumentToolSet, renderToolModelOutput } from '../../../adapter/tool/emission'
 import type { ToolModelOutput } from '../../../types/tool'
 
@@ -22,19 +22,6 @@ describe('instrumentToolSet', () => {
     expect(instrumentToolSet(tools)).toBe(tools)
   })
 
-  it("leaves needsApproval unwrapped — approval records are the lifecycle session's to emit", async () => {
-    const unsubscribe = subscribeObservability(() => {})
-    const needsApproval = async () => true
-    try {
-      const tools = instrumentToolSet({
-        guarded: { execute: async () => 'ok', needsApproval },
-      })!
-
-      expect((tools.guarded as { needsApproval: unknown }).needsApproval).toBe(needsApproval)
-    } finally {
-      unsubscribe()
-    }
-  })
 })
 
 describe('renderToolModelOutput', () => {

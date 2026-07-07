@@ -21,7 +21,6 @@ import {
   approvalDecisionKey,
   assertNonEmptyId,
   createToolCallId,
-  evaluateNeedsApproval,
   isToolLike,
   matchesAny,
 } from './internal/middleware-helpers'
@@ -41,6 +40,7 @@ interface ApprovalMetadata<TInput = unknown> {
   readonly middlewareId: string
   readonly toolName: string
   readonly match: readonly ToolMatcher[]
+  readonly onRequest?: (call: ToolCallContext<TInput>) => void | PromiseLike<void>
   readonly onApproved?: (event: ToolApprovalDecisionEvent<TInput>) => void | PromiseLike<void>
   readonly onDenied?: (event: ToolApprovalDecisionEvent<TInput>) => void | PromiseLike<void>
 }
@@ -105,8 +105,9 @@ export function toolMiddleware(config: ToolMiddlewareConfig): ToolMiddleware {
 /**
  * Create a middleware that requires human approval for matched tools.
  *
- * Matched tools report `needsApproval` true and, on resume, fire the
- * `onApproved`/`onDenied` callbacks via {@link notifyToolApprovalResponses}.
+ * Matched tools carry middleware metadata consumed by the tool lifecycle and,
+ * on resume, fire the `onApproved`/`onDenied` callbacks via
+ * {@link notifyToolApprovalResponses}.
  */
 export function approvalMiddleware<TInput = unknown>(config: ApprovalMiddlewareConfig<TInput>): ToolMiddleware {
   assertNonEmptyId(config.id, 'approvalMiddleware')
@@ -116,24 +117,10 @@ export function approvalMiddleware<TInput = unknown>(config: ApprovalMiddlewareC
     _tag: 'ToolMiddleware',
     id: config.id,
     wrapTool<TToolInput, TOutput>(toolName: string, tool: ToolLike<TToolInput, TOutput>): ToolLike<TToolInput, TOutput> {
-      const originalNeedsApproval = tool.needsApproval
       const originalExecute = tool.execute
 
       const wrapped: ToolLike<TToolInput, TOutput> = {
         ...tool,
-        needsApproval: async (input: TToolInput, options: ToolExecutionOptions = {}) => {
-          const toolCallId = options.toolCallId ?? createToolCallId()
-          const call = { toolName, toolCallId, input, options, messages: options.messages }
-          const originalDecision = await evaluateNeedsApproval(originalNeedsApproval, input, options)
-          const matched = await matchesAny(config.match, call as unknown as ToolCallContext<TInput>)
-          if (matched) {
-            await config.onRequest?.(call as unknown as ToolCallContext<TInput>)
-          }
-          if (originalDecision || matched) {
-            return true
-          }
-          return false
-        },
         ...(originalExecute
           ? {
               execute: async (input: TToolInput, options: ToolExecutionOptions = {}) => {
@@ -163,12 +150,27 @@ export function approvalMiddleware<TInput = unknown>(config: ApprovalMiddlewareC
         middlewareId: config.id,
         toolName,
         match: config.match as readonly ToolMatcher[],
+        onRequest: config.onRequest as ApprovalMetadata['onRequest'],
         onApproved: config.onApproved as ApprovalMetadata['onApproved'],
         onDenied: config.onDenied as ApprovalMetadata['onDenied'],
       })
       return wrapped
     },
   }
+}
+
+/** Evaluate approval middleware metadata attached to a wrapped tool. */
+export async function evaluateApprovalMiddleware(
+  tool: unknown,
+  call: ToolCallContext,
+): Promise<boolean> {
+  if (!isToolLike(tool)) return false
+  const metadata = approvalMetadata.get(tool)
+  if (!metadata) return false
+  const matched = await matchesAny(metadata.match, call)
+  if (!matched) return false
+  await metadata.onRequest?.(call)
+  return true
 }
 
 /** Apply a middleware chain across an entire tool set, preserving non-tool values. */

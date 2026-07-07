@@ -240,10 +240,11 @@ describe('loopRuntimeAdapter — routing dispatch', () => {
 
 describe('loopRuntimeAdapter — tool approval protocol', () => {
   const dangerousTools = (execute: ReturnType<typeof vi.fn>) => ({
-    dangerous: { description: 'risky', needsApproval: true, execute },
+    dangerous: { description: 'risky', execute },
   })
+  const dangerousApproval = { dangerous: 'always' } as const
 
-    it('suspends on approval-needing tools with a minted token and request message', async () => {
+    it('suspends on approval-gated tools with a minted token and request message', async () => {
     const execute = vi.fn()
     const fake = fakeLoopRuntime({
       loops: [[{ text: 'I need approval', toolCalls: [{ name: 'dangerous', args: { target: 'db' } }] }]],
@@ -254,6 +255,7 @@ describe('loopRuntimeAdapter — tool approval protocol', () => {
       model: 'fake:m-1',
       input: { instruction: 'do it' },
       tools: dangerousTools(execute),
+      toolApproval: dangerousApproval,
     })
 
     expect(execute).not.toHaveBeenCalled()
@@ -286,6 +288,7 @@ describe('loopRuntimeAdapter — tool approval protocol', () => {
       model: 'fake:m-1',
       input: { instruction: 'do it' },
       tools,
+      toolApproval: dangerousApproval,
     })
     const approval = suspended.pendingApprovals![0]!
 
@@ -299,6 +302,7 @@ describe('loopRuntimeAdapter — tool approval protocol', () => {
       model: 'fake:m-1',
       input: { instruction: 'do it' },
       tools,
+      toolApproval: dangerousApproval,
       messages: resumeMessages,
     })
 

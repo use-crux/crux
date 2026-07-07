@@ -37,6 +37,7 @@ import { isRouter, isCascade } from '../routing'
 import { resolveModel } from '../routing/resolve'
 import type { AnyRouterModel, CascadeModel } from '../routing'
 import type { ToolMiddleware } from '../tools/types'
+import type { ToolApprovalMap } from '../tools/approval-policy'
 import { createCompositions } from '../agent/create-compositions'
 import type { AgentExecutor } from '../agent/executor'
 import { createAdapterExecution, sdkLoopDialect } from './execution/session'
@@ -62,6 +63,8 @@ export interface ExecutorGenerateOptions<TModel> {
   tools?: Record<string, unknown>
   /** Tool middleware applied after prompt tools and call-site tools are merged. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
+  /** Call-site approval policy with final-word precedence over prompt/context declarations. */
+  toolApproval?: ToolApprovalMap
   /**
    * Message history override — used for conversation continuations and for
    * resuming after a tool-approval decision (append a
@@ -244,6 +247,7 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       input: opts.input,
       tools: opts.tools,
       toolMiddleware: opts.toolMiddleware,
+      toolApproval: opts.toolApproval,
       messages: opts.messages,
       maxSteps: opts.maxSteps,
       settings: opts.settings,
@@ -299,6 +303,7 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       input: opts.input,
       tools: opts.tools,
       toolMiddleware: opts.toolMiddleware,
+      toolApproval: opts.toolApproval,
       messages: opts.messages,
       maxSteps: opts.maxSteps,
       settings: opts.settings,

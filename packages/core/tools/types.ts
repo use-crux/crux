@@ -179,9 +179,6 @@ export interface ToolLike<TInput = unknown, TOutput = unknown> {
   readonly description?: string
   readonly title?: string
   readonly execute?: ToolExecuteFunction<TInput, TOutput>
-  readonly needsApproval?:
-    | boolean
-    | ((input: TInput, options: ToolExecutionOptions) => boolean | PromiseLike<boolean>)
   readonly toModelOutput?: (args: {
     readonly toolCallId: string
     readonly input: TInput

@@ -29,6 +29,7 @@ import type {
   ResolvedPrompt,
 } from "../resolver/types";
 import type { ToolMiddleware } from "../tools/types";
+import type { ToolApprovalMap } from "../tools/approval-policy";
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
 
@@ -138,6 +139,14 @@ export interface PromptBaseConfig<
    * override path and intentionally win after prompt resolution.
    */
   tools?: AnyToolSet;
+  /**
+   * Approval policy for the prompt's full composed toolset.
+   *
+   * Exact-name entries and `'*'` are resolved with context and call-site
+   * declarations at execution time. Tool definitions themselves remain
+   * policy-free.
+   */
+  toolApproval?: ToolApprovalMap;
   /** Middleware applied to tools before adapter execution. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
 

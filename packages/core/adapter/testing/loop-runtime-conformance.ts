@@ -208,13 +208,13 @@ export async function loopRuntimePortConformance<TModel>(
           guarded: {
             description: 'guarded',
             inputSchema: anyInput,
-            needsApproval: true,
             execute: async () => {
               executed = true
               return 'ran'
             },
           },
         },
+        toolApproval: (call) => call.toolName === 'guarded',
       }),
     )
     if (outcome.status !== 'suspended') fail('approval suspension', `expected suspended, got ${outcome.status}`)

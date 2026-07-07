@@ -17,6 +17,7 @@ import { updateRuntime, resetRuntime } from '../../../runtime/runtime'
 import type { AdapterResponse } from '../../../adapter/types'
 import type { Message } from '../../../generation/messages'
 import type { ResolvedPrompt } from '../../../resolver/types'
+import type { ApprovalDeclaration } from '../../../tools/approval-policy'
 
 function resolvedWith(partial: Partial<ResolvedPrompt>): ResolvedPrompt {
   return { settings: {}, ...partial } as ResolvedPrompt
@@ -131,6 +132,17 @@ function coreLifecycle(tools: Record<string, unknown>, extra?: Partial<Parameter
     resolved: resolvedWith({ tools }),
     promptId: 'p1',
     createApprovalToken: () => 'token-1',
+    ...extra,
+  })
+}
+
+function coreLifecycleWithApproval(
+  tools: Record<string, unknown>,
+  declarations: readonly ApprovalDeclaration[],
+  extra?: Partial<Parameters<typeof createToolLifecycle>[0]>,
+) {
+  return coreLifecycle(tools, {
+    resolved: resolvedWith({ tools, toolApprovalDeclarations: declarations }),
     ...extra,
   })
 }
@@ -274,9 +286,12 @@ describe('createToolLifecycle — executeRound', () => {
 // ─────────────────────────────────────────────────────────────────
 
 describe('createToolLifecycle — approval gate', () => {
-  it('suspends at the first undecided needsApproval with a minted id and token', async () => {
+  it('suspends at the first undecided toolApproval policy with a minted id and token', async () => {
     const execute = vi.fn()
-    const lifecycle = coreLifecycle({ dangerous: { needsApproval: true, execute } })
+    const lifecycle = coreLifecycleWithApproval(
+      { dangerous: { execute } },
+      [{ layer: 'prompt', key: 'dangerous', policy: 'always' }],
+    )
     const response = adapterResponse({
       text: 'need ok',
       toolCalls: [{ id: 'tc9', name: 'dangerous', args: { target: 'db' } }],
@@ -308,11 +323,13 @@ describe('createToolLifecycle — approval gate', () => {
     expect(lifecycle.transcript).toContainEqual({ t: 'suspend.mint', toolCallId: 'tc9', approvalId: 'approval_tc9' })
   })
 
-    it('evaluates function-form needsApproval against the call input', async () => {
+    it('evaluates function-form toolApproval against the call input', async () => {
     const execute = vi.fn(async () => 'ran')
-    const lifecycle = coreLifecycle({
-      guarded: { needsApproval: async (input: { risky: boolean }) => input.risky, execute },
-    })
+    const policy = vi.fn(async (ctx) => (ctx.input as { risky: boolean }).risky)
+    const lifecycle = coreLifecycleWithApproval(
+      { guarded: { execute } },
+      [{ layer: 'prompt', key: 'guarded', policy }],
+    )
 
     const safe = await lifecycle.executeRound(
       adapterResponse({ toolCalls: [{ id: 'tc1', name: 'guarded', args: { risky: false } }] }),
@@ -327,16 +344,40 @@ describe('createToolLifecycle — approval gate', () => {
     )
     expect(risky.kind).toBe('suspended')
     expect(execute).toHaveBeenCalledTimes(1)
+    expect(policy).toHaveBeenLastCalledWith({
+      toolName: 'guarded',
+      toolCallId: 'tc2',
+      input: { risky: true },
+      runtimeContext: undefined,
+      messages: [],
+    })
+  })
+
+  it('lets exact context policy beat a call-site wildcard', async () => {
+    const execute = vi.fn(async () => 'deployed')
+    const lifecycle = coreLifecycleWithApproval(
+      { deploy: { execute } },
+      [{ layer: 'context', owner: 'context:deployment', key: 'deploy', policy: 'always', appliesTo: ['deploy'] }],
+      { call: { toolApproval: { '*': 'never' } } },
+    )
+
+    const round = await lifecycle.executeRound(
+      adapterResponse({ toolCalls: [{ id: 'tc1', name: 'deploy', args: {} }] }),
+      [],
+    )
+
+    expect(round.kind).toBe('suspended')
+    expect(execute).not.toHaveBeenCalled()
   })
 
   it('persists settled siblings: their results follow the approval-request message', async () => {
-    const lifecycle = coreLifecycle({
+    const lifecycle = coreLifecycleWithApproval({
       first: {
         execute: async () => ({ verbose: 'first done with details' }),
         toModelOutput: () => ({ type: 'text', value: 'first summary' }),
       },
-      dangerous: { needsApproval: true, execute: vi.fn() },
-    })
+      dangerous: { execute: vi.fn() },
+    }, [{ layer: 'prompt', key: 'dangerous', policy: 'always' }])
     const round = await lifecycle.executeRound(
       adapterResponse({
         text: 'two calls',
@@ -375,9 +416,10 @@ describe('createToolLifecycle — approval gate', () => {
     const dangerousExecute = vi.fn(async () => 'risky done')
     const tools = {
       first: { execute: firstExecute },
-      dangerous: { needsApproval: true, execute: dangerousExecute },
+      dangerous: { execute: dangerousExecute },
     }
-    const suspendedRound = await coreLifecycle(tools).executeRound(
+    const declarations: ApprovalDeclaration[] = [{ layer: 'prompt', key: 'dangerous', policy: 'always' }]
+    const suspendedRound = await coreLifecycleWithApproval(tools, declarations).executeRound(
       adapterResponse({
         text: 'two calls',
         toolCalls: [
@@ -395,7 +437,7 @@ describe('createToolLifecycle — approval gate', () => {
       approvalToken: suspendedRound.request.approvalToken,
     }) as Message[]
 
-    const outcome = await coreLifecycle(tools).resume(messages)
+    const outcome = await coreLifecycleWithApproval(tools, declarations).resume(messages)
 
     // Only the gated call replays — the sibling's persisted result makes it
     // "completed" for the resume scan.
@@ -416,8 +458,9 @@ describe('createToolLifecycle — approval gate', () => {
 
 async function suspendThenDecide(decision: { approved: boolean; reason?: string; tamperToken?: string }) {
   const execute = vi.fn(async () => 'deleted 3 rows')
-  const tools = { dangerous: { description: 'risky', needsApproval: true, execute } }
-  const first = coreLifecycle(tools)
+  const tools = { dangerous: { description: 'risky', execute } }
+  const declarations: ApprovalDeclaration[] = [{ layer: 'prompt', key: 'dangerous', policy: 'always' }]
+  const first = coreLifecycleWithApproval(tools, declarations)
   const round = await first.executeRound(
     adapterResponse({ text: 'need ok', toolCalls: [{ id: 'tc9', name: 'dangerous', args: { target: 'db' } }] }),
     [{ role: 'user', content: 'go' }],
@@ -429,13 +472,13 @@ async function suspendThenDecide(decision: { approved: boolean; reason?: string;
     reason: decision.reason,
     approvalToken: decision.tamperToken ?? round.request.approvalToken,
   }) as Message[]
-  return { tools, execute, messages }
+  return { tools, declarations, execute, messages }
 }
 
 describe('createToolLifecycle — resume', () => {
   it('replays an approved call through the full pipeline and appends a synthetic round', async () => {
-    const { tools, execute, messages } = await suspendThenDecide({ approved: true })
-    const lifecycle = coreLifecycle(tools)
+    const { tools, declarations, execute, messages } = await suspendThenDecide({ approved: true })
+    const lifecycle = coreLifecycleWithApproval(tools, declarations)
 
     const outcome = await lifecycle.resume(messages)
 
@@ -458,14 +501,14 @@ describe('createToolLifecycle — resume', () => {
     })
 
     // Idempotent: resuming the already-resumed history replays nothing.
-    const again = await coreLifecycle(tools).resume(outcome.messages)
+    const again = await coreLifecycleWithApproval(tools, declarations).resume(outcome.messages)
     expect(again.replayed).toBe(0)
     expect(execute).toHaveBeenCalledTimes(1)
   })
 
     it('settles a denied call as execution-denied without executing', async () => {
-    const { tools, execute, messages } = await suspendThenDecide({ approved: false, reason: 'too risky' })
-    const lifecycle = coreLifecycle(tools)
+    const { tools, declarations, execute, messages } = await suspendThenDecide({ approved: false, reason: 'too risky' })
+    const lifecycle = coreLifecycleWithApproval(tools, declarations)
 
     const outcome = await lifecycle.resume(messages)
 
@@ -487,7 +530,7 @@ describe('createToolLifecycle — resume', () => {
 
     it('settles a mismatched approval token as an invalid approval denial', async () => {
     const { execute, messages } = await suspendThenDecide({ approved: true, tamperToken: 'forged' })
-    // The tool was re-registered WITHOUT needsApproval — the token check still guards the replay.
+    // The tool was re-registered without approval policy — the token check still guards the replay.
     const lifecycle = coreLifecycle({ dangerous: { description: 'risky', execute } })
 
     const outcome = await lifecycle.resume(messages)

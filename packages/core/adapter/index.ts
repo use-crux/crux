@@ -78,6 +78,22 @@ export type {
   ToolResultEncodingHelpers,
 } from "./native-chat";
 
+// Tool approval policy helpers
+export {
+  approvalPolicyKind,
+  inspectToolApprovalPolicies,
+  resolveApprovalPolicy,
+} from "../tools/approval-policy";
+export type {
+  ApprovalDeclaration,
+  ResolvedApprovalPolicy,
+  ToolApprovalContext,
+  ToolApprovalInspection,
+  ToolApprovalLayer,
+  ToolApprovalMap,
+  ToolApprovalPolicy,
+} from "../tools/approval-policy";
+
 // Provider runtime authoring layer
 export { defineProviderRuntime } from "./provider-runtime";
 export { defineSingleTurnProviderBundle } from "./provider-runtime";

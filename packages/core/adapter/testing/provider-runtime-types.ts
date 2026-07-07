@@ -20,6 +20,7 @@ import type { ProviderOwnership } from "../provider-runtime";
 import type { StepObserver } from "../executor-types";
 import type { AdapterConformanceInspector } from "./native-types";
 import type { ValidationRetryOptions } from "../../generation/validation-retry";
+import type { ToolApprovalMap } from "../../tools/approval-policy";
 
 /** Feature flags that calibrate a provider-runtime conformance run. */
 export interface ProviderRuntimeConformanceCapabilities {
@@ -142,6 +143,8 @@ export interface ProviderRuntimeConformanceGenerateOptions<TModel> {
   readonly input?: Record<string, unknown>;
   /** Call-site tools to merge into the prompt run. */
   readonly tools?: Record<string, unknown>;
+  /** Call-site tool approval policy. */
+  readonly toolApproval?: ToolApprovalMap;
   /** Maximum model/tool loop steps. */
   readonly maxSteps?: number;
   /** Call-site settings. */

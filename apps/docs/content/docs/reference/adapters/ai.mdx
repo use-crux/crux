@@ -30,7 +30,7 @@ import { resolve } from "@use-crux/ai/agent";
 
 ## Architecture
 
-`@use-crux/ai` exports `aiSdkProviderRuntime`, a normal Crux provider runtime with `ownership: 'loop-owned'` for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, native `needsApproval`, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding through the same `SdkGateway` seam.
+`@use-crux/ai` exports `aiSdkProviderRuntime`, a normal Crux provider runtime with `ownership: 'loop-owned'` for the Vercel AI SDK. Core owns all policy (prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, the [`Safety` session](/docs/reference/crux-core/safety) for constraints/guardrails, the tool-approval protocol, instrumentation, timeouts); the adapter delegates mechanics to AI SDK natives (`stopWhen`, `prepareStep`, `experimental_repairText`, SDK-owned tool approval hooks, `abortSignal`, `experimental_transform` for streaming guardrails). The bound runtime also exposes AI SDK embedding through the same `SdkGateway` seam.
 
 The only module that calls AI SDK functions is the `SdkGateway` — inject a scripted one via [`createCruxAi`](#createcruxaioptions) to test without module mocks.
 
@@ -69,6 +69,7 @@ Execute a prompt using the Vercel AI SDK.
 | `options.input`                | `MergedInput<TOwnInput, TContexts>`                                                                             | Input values — merged across the prompt's own schema and every context's `input` schema                                                                            |
 | `options.tools`                | `ToolSet?`                                                                                                      | Additional tools to merge at call time                                                                                                                             |
 | `options.toolMiddleware`       | `ToolMiddleware \| readonly ToolMiddleware[]?`                                                                  | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                                                                         |
+| `options.toolApproval`         | `ToolApprovalMap?`                                                                                              | Call-site approval policy; exact tool names beat `'*'`, and call-site policy wins over prompt/context declarations.                                                 |
 | `options.toolChoice`           | `ToolChoice?`                                                                                                   | Portable Crux tool choice strategy from `GenerationSettings`                                                                                                       |
 | `options.stopWhen`             | `StopCondition \| readonly StopCondition[]?`                                                                    | Portable Crux stop condition(s), OR-composed with the `maxSteps` budget (e.g. `hasToolCall(name)`)                                                                 |
 | `options.maxSteps`             | `number?`                                                                                                       | Maximum tool-loop steps, identical across all Crux adapters. Enforced natively via AI SDK `stopWhen`. Default: `10`                                                |
@@ -104,6 +105,7 @@ Stream a prompt execution. Same options as `generate()`, except `cascade()` is n
 | `options.input`            | `MergedInput<TOwnInput, TContexts>`                                              | Input values — merged across the prompt's own schema and every context's `input` schema                           |
 | `options.tools`            | `ToolSet?`                                                                       | Additional tools to merge at call time                                                                            |
 | `options.toolMiddleware`   | `ToolMiddleware \| readonly ToolMiddleware[]?`                                   | Call-site tool wrappers. See [Tool Middleware](/docs/reference/crux-core/tool-middleware).                        |
+| `options.toolApproval`     | `ToolApprovalMap?`                                                               | Call-site approval policy; exact tool names beat `'*'`, and call-site policy wins over prompt/context declarations. |
 | `options.toolChoice`       | `ToolChoice?`                                                                    | Portable Crux tool choice strategy from `GenerationSettings`                                                      |
 | `options.stopWhen`         | `StopCondition \| readonly StopCondition[]?`                                     | Portable Crux stop condition(s), OR-composed with the `maxSteps` budget                                           |
 | `options.maxSteps`         | `number?`                                                                        | Maximum tool-loop steps (default `10`), identical across all Crux adapters                                        |
@@ -269,12 +271,17 @@ Use this with `rerank({ engine })` in retrieval recipes. Native reranking models
 
 ### Tool approvals
 
-When a tool with `needsApproval` (set directly or via [approval middleware](/docs/reference/crux-core/tool-middleware)) fires, generation suspends: the result has `_meta.finishReason === 'tool_approval_required'`, `pendingApprovals` carries the minted requests (with anti-forgery tokens), and `messages` ends with the approval-request message. Persist the messages, collect a decision, append a `tool-approval-response`, and call `generate()` again.
+When `toolApproval` requires approval for a tool call, generation suspends: the result has `_meta.finishReason === 'tool_approval_required'`, `pendingApprovals` carries the minted requests (with anti-forgery tokens), and `messages` ends with the approval-request message. Persist the messages, collect a decision, append a `tool-approval-response`, and call `generate()` again.
 
 ```ts
 import { appendToolApprovalResponse } from "@use-crux/core/tool-middleware";
 
-const first = await generate(assistant, { model, input, tools });
+const first = await generate(assistant, {
+  model,
+  input,
+  tools,
+  toolApproval: { deletePost: "always" },
+});
 
 if (first.pendingApprovals?.length) {
   const approval = first.pendingApprovals[0];
@@ -282,6 +289,7 @@ if (first.pendingApprovals?.length) {
     model,
     input,
     tools,
+    toolApproval: { deletePost: "always" },
     messages: appendToolApprovalResponse(first.messages, {
       approvalId: approval.approvalId,
       approved: true,

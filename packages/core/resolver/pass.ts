@@ -50,9 +50,14 @@ import type { ResolverPorts } from "./ports";
 import {
   collectContextConstraints,
   collectContextGuardrails,
-  mergeActiveContextTools,
+  mergeActiveContextToolSurfaces,
   mergeBlackboardTools,
 } from "./runtime-surface";
+import {
+  inspectToolApprovalPolicies,
+  type ApprovalDeclaration,
+  type ToolApprovalMap,
+} from "../tools/approval-policy";
 import { safeParseSchema } from "./schema";
 import { createSkillToolSurface } from "./skills";
 import { buildSystemMessage } from "./system-message";
@@ -63,6 +68,11 @@ import type {
   ProjectionMode,
   ResolveCallOptions,
 } from "./compiler-types";
+
+function promptApprovalDeclarations(map: ToolApprovalMap | undefined): ApprovalDeclaration[] {
+  if (!map) return [];
+  return Object.entries(map).map(([key, policy]) => ({ layer: "prompt" as const, key, policy }));
+}
 
 /** Validate prompt config invariants that the compiler depends on. */
 export function validatePromptConfig(config: AnyPromptConfig): void {
@@ -280,7 +290,10 @@ export async function runPromptPass(
     if (owner) toolMerge.merge(skillTools, owner);
   }
 
-  mergeActiveContextTools(toolMerge, postMerge.contexts, input);
+  const toolApprovalDeclarations = [
+    ...mergeActiveContextToolSurfaces(toolMerge, postMerge.contexts, input),
+    ...promptApprovalDeclarations(config.toolApproval),
+  ];
   toolMerge.mergeOwned(postMerge.injectedTools, postMerge.injectedToolOwners);
   mergeBlackboardTools(toolMerge, postMerge.blackboards);
   toolMerge.merge(configTools, "prompt config");
@@ -292,6 +305,7 @@ export async function runPromptPass(
 
   const merged = toolMerge.tools;
   if (Object.keys(merged).length > 0) resolved.tools = merged;
+  if (toolApprovalDeclarations.length > 0) resolved.toolApprovalDeclarations = toolApprovalDeclarations;
   const toolMiddleware = mergeToolMiddleware(
     postMerge.injectedToolMiddleware,
     config.toolMiddleware,
@@ -351,6 +365,9 @@ export async function runPromptPass(
       excludedContexts: postMerge.excluded,
       tokenBudget: opts.tokenBudget,
       tools: toolNames.length > 0 ? toolNames : undefined,
+      ...(toolNames.length > 0
+        ? { toolApprovals: inspectToolApprovalPolicies(toolNames, toolApprovalDeclarations) }
+        : {}),
     },
   };
 }

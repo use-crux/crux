@@ -1,7 +1,7 @@
 /**
  * Shared tool instrumentation policy for adapter factories.
  *
- * Owns the wrapping of tool `execute`/`needsApproval`/`toModelOutput`
+ * Owns the wrapping of tool `execute`/`toModelOutput`
  * with canonical observability graph records, plus the helpers for
  * shaping, rendering, and measuring tool model output. Used by both
  * `adapter()` (core-driven loop) and `loopRuntimeAdapter()` (SDK-driven
@@ -324,7 +324,7 @@ const DEFAULT_MAX_PENDING = 1000
  *   the shaped output. The in-flight result is parked in a bounded
  *   pending map keyed by `toolCallId`; the same span is closed when the
  *   model-facing output is known.
- * - `needsApproval` is NOT wrapped here: approval lifecycle records are
+ * - Approval policy is NOT wrapped here: approval lifecycle records are
  *   emitted by the tool session at gate suspension or `suspend()` sealing.
  *
  * Pending state cannot leak: entries are deleted when `toModelOutput`

@@ -17,6 +17,7 @@ import type { SkillMeta } from '../skill/types'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
 import type { ToolMiddleware } from '../tools/types'
+import type { ToolApprovalMap } from '../tools/approval-policy'
 import type { AnyToolSet } from '../types'
 import type { InternalInjectableEntry } from './internal-injection'
 
@@ -118,6 +119,13 @@ export interface ContextDef<TInput extends z.ZodType = z.ZodType> {
    */
   tools?: AnyToolSet | ((arg: ContextSystemArg<z.infer<TInput>>) => AnyToolSet)
   /**
+   * Approval policy for tools contributed by this context.
+   *
+   * Exact keys must name tools this context contributes. The `'*'` key applies
+   * only to this context's own tools, never to prompt or call-site tools.
+   */
+  toolApproval?: ToolApprovalMap
+  /**
    * Input fields that contain trusted, pre-formatted content (HTML, Markdown)
    * and should NOT be auto-escaped. Only relevant when auto-escape is enabled.
    *
@@ -195,6 +203,8 @@ export interface Context<TInput extends z.ZodType = z.ZodType> {
   readonly priority: number
   /** Resolves tools to contribute, or `undefined` if no tools. */
   readonly toolsFn: ((input: Record<string, unknown>) => AnyToolSet) | undefined
+  /** Approval policy scoped to this context's contributed tools. */
+  readonly toolApproval?: ToolApprovalMap
   /** Input fields that should skip auto-escaping (trusted content). */
   readonly rawFields: readonly string[]
   /**

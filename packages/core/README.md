@@ -69,6 +69,29 @@ total.
 for the SDK stream handle, and a `completion` promise resolving to the same
 envelope fields except `.raw` and `_meta`.
 
+## Tool Approvals
+
+Tool definitions stay policy-free. Require human approval where tools are
+composed: `context({ toolApproval })`, `prompt({ toolApproval })`, or the
+call-site `generate()`/`stream()` options. Exact tool names beat wildcards;
+within the selected exact or wildcard declarations, call site wins over prompt
+and prompt wins over context.
+
+```ts
+const result = await adapter.generate(assistant, {
+  model: "gpt-4o",
+  input,
+  toolApproval: {
+    deletePost: "always",
+    "*": "never",
+  },
+});
+```
+
+When a call suspends, persist `result.messages`, append a
+`tool-approval-response` with `appendToolApprovalResponse()`, and call the
+adapter again with the resumed messages.
+
 ## Input Escaping
 
 Prompt resolution uses the parsed Zod output as the source of truth. Defaults
