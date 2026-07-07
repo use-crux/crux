@@ -10,7 +10,7 @@
     "relations": 185,
     "diagnostics": 4,
     "dependencies": 972,
-    "canonicalBytes": 2396415
+    "canonicalBytes": 2401159
   },
   "files": [
     {
@@ -78,8 +78,8 @@
     },
     {
       "file": "examples/node-basic/quality-citations.eval.ts",
-      "sha256": "207215f5716132ad807d2b3c06a5f404891c8175600b1a162fb1f87936f9f7be",
-      "bytes": 4508,
+      "sha256": "97e2342d157e913d9182bfdbe805ed874c95e8f89b51fcecbc87305e6641f0c7",
+      "bytes": 4510,
       "definitions": 2,
       "relations": 0,
       "diagnostics": 2,
@@ -87,8 +87,8 @@
     },
     {
       "file": "examples/node-basic/quality-model-backed.example.ts",
-      "sha256": "7350708b7b3a71fde77fff05d56d8df5ebd636759516be34189f24d97bfd105d",
-      "bytes": 6235,
+      "sha256": "9c7b4d8f863953bc7cd06eba75e6adf25313eac7baeb751d0cb909da0ea766d9",
+      "bytes": 6237,
       "definitions": 3,
       "relations": 0,
       "diagnostics": 2,
@@ -1140,8 +1140,8 @@
     },
     {
       "file": "packages/core/__type_tests__/fixtures/quality-perf-fixture.ts",
-      "sha256": "f81fd570961b32bb9f4048d042f38ed98ff27f11918f0c5cb4112e8cfd1109f9",
-      "bytes": 1819101,
+      "sha256": "3b3b178c010afb35aeae774e8a36661c4544f299a6643f9dda04a3e9753b35c2",
+      "bytes": 1823601,
       "definitions": 70,
       "relations": 40,
       "diagnostics": 0,
@@ -1230,8 +1230,8 @@
     },
     {
       "file": "packages/core/__type_tests__/quality-authoring-examples.ts",
-      "sha256": "7b86503112a861616fffca0efc0f1a19afc3e7d6050472f839a8b2ba28d44df8",
-      "bytes": 130350,
+      "sha256": "b95215ef87b6d0c189a753cb879ab4130f6022c40ba4ecd3c14d36f3fe767a83",
+      "bytes": 130590,
       "definitions": 25,
       "relations": 13,
       "diagnostics": 0,

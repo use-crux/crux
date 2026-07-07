@@ -156,7 +156,9 @@ function rootStableGoldenValue(value: unknown): unknown {
     normalized[key] =
       key === "fingerprint"
         ? "<root-derived-fingerprint>"
-        : rootStableGoldenValue(child);
+        : key === "assertionSiteId"
+          ? "<root-derived-assertion-site-id>"
+          : rootStableGoldenValue(child);
   }
   return normalized;
 }
