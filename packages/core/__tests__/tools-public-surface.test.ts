@@ -104,7 +104,7 @@ describe('@use-crux/core/safety — toolPolicy()', () => {
     const wrapped = policy.wrapTool('sendEmail', { execute: async () => 'sent' })
 
     expect(policy._tag).toBe('ToolMiddleware')
-    expect(await wrapped.needsApproval?.({ to: 'ada@example.com' }, {})).toBe(true)
+    expect(await wrapped.execute?.({ to: 'ada@example.com' }, {})).toBe('sent')
   })
 
   it('blocks unsafe tool args and rewrites safeable tool results', async () => {

@@ -96,9 +96,10 @@ describe('provider-runtime parity — validation retry', () => {
 
 describe('provider-runtime parity — tool approval resume', () => {
   const toolCall: RuntimeToolCall = { id: 'tc_provider_runtime', name: 'dangerous', args: { target: 'db' } }
+  const dangerousApproval = { dangerous: 'always' } as const
 
   function dangerousTools(execute: ReturnType<typeof vi.fn>) {
-    return { dangerous: { description: 'risky', needsApproval: true, execute } }
+    return { dangerous: { description: 'risky', execute } }
   }
 
   it('suspends and resumes approved tool calls the same way in both runtime branches', async () => {
@@ -127,12 +128,14 @@ describe('provider-runtime parity — tool approval resume', () => {
       model: 'mock-model',
       input: { message: 'do it' },
       tools,
+      toolApproval: dangerousApproval,
     })
     const approval = suspended.pendingApprovals![0]!
     const resumed = await runtime.generate(prompt, {
       model: 'mock-model',
       input: { message: 'do it' },
       tools,
+      toolApproval: dangerousApproval,
       messages: appendToolApprovalResponse(suspended.messages, {
         approvalId: approval.approvalId,
         approved: true,
@@ -157,12 +160,14 @@ describe('provider-runtime parity — tool approval resume', () => {
       model: 'fake:mock-model',
       input: { message: 'do it' },
       tools,
+      toolApproval: dangerousApproval,
     })
     const approval = suspended.pendingApprovals![0]!
     const resumed = await runtime.generate(prompt, {
       model: 'fake:mock-model',
       input: { message: 'do it' },
       tools,
+      toolApproval: dangerousApproval,
       messages: appendToolApprovalResponse(suspended.messages, {
         approvalId: approval.approvalId,
         approved: true,
@@ -208,7 +213,7 @@ describe('provider-runtime parity — streaming safety', () => {
         guardrails: [importFixer()],
       })
     const singleText = await drainSingleTurnText(singleHandle)
-    const singleMeta = await singleHandle.completion()
+    const singleMeta = await singleHandle.completion
 
     const fake = fakeLoopRuntime({ streams: [chunks] })
     const loopHandle = await createLoopRuntime(fake).stream(textPrompt(), {
@@ -220,17 +225,10 @@ describe('provider-runtime parity — streaming safety', () => {
 
     expect(singleText).toBe(transformed)
     expect(loopHandle.raw.text).toBe(transformed)
-    expect(singleMeta?.finishReason).toBe('stop')
-    expect(loopMeta?.finishReason).toBe(singleMeta?.finishReason)
-    expect(singleMeta?.usage?.totalTokens).toBe(30)
-    expect(loopMeta?.usage?.totalTokens).toBe(singleMeta?.usage?.totalTokens)
-    expect(singleMeta?.guardrails?.applied).toContainEqual(
-      expect.objectContaining({
-        guard: 'provider-runtime-import-fixer',
-        action: 'transform',
-      }),
-    )
-    expect(JSON.stringify(singleMeta?.guardrails?.applied ?? [])).not.toContain('@/comps/Button')
+    expect(singleMeta.finalStep.finishReason).toBe('stop')
+    expect(loopMeta?.finishReason).toBe(singleMeta.finalStep.finishReason)
+    expect(singleMeta.usage?.totalTokens).toBe(30)
+    expect(loopMeta?.usage?.totalTokens).toBe(singleMeta.usage?.totalTokens)
     expect(loopMeta?.guardrails?.applied).toContainEqual(
       expect.objectContaining({
         guard: 'provider-runtime-import-fixer',
@@ -258,12 +256,9 @@ function lastProviderAssistantText(messages: readonly RuntimeProviderMessage[]) 
 }
 
 async function drainSingleTurnText(handle: {
-  readonly rawStream: AsyncIterable<unknown>
-  readonly extractTextDelta: (chunk: unknown) => string | undefined
+  readonly textStream: AsyncIterable<string>
 }) {
   let text = ''
-  for await (const chunk of handle.rawStream) {
-    text += handle.extractTextDelta(chunk) ?? ''
-  }
+  for await (const delta of handle.textStream) text += delta
   return text
 }

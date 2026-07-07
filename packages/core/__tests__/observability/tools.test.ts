@@ -383,13 +383,13 @@ describe('canonical tool observability', () => {
         sendEmail: {
           description: 'Send an email',
           parameters: z.object({ to: z.string(), apiKey: z.string() }),
-          needsApproval: true,
           execute: async () => 'sent',
         },
       }),
       {
         model: 'mock-model',
         input: { instruction: 'Send the email' },
+        toolApproval: { sendEmail: 'always' },
       },
     )
     await observe.flush()

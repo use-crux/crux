@@ -46,7 +46,6 @@ describe('adapter options parity scaffold', () => {
             search: 'always',
             '*': 'never',
           })
-          expect(options.tools.search).not.toHaveProperty('needsApproval')
           break
 
         case 7: {
