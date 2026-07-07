@@ -30,8 +30,8 @@ Middleware receives `{ promptId, preparedArgs }` and a `next` function. It can i
 Standalone setup (when not using `config()`):
 
 ```ts
-import { updateRuntime } from '@use-crux/core'
-updateRuntime({ middleware: async (args, next) => { ... } })
+import { updateHooks } from '@use-crux/core'
+updateHooks({ middleware: async (args, next) => { ... } })
 ```
 
 ## Lifecycle hooks

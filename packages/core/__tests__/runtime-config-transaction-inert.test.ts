@@ -3,14 +3,14 @@ import {
   createRuntimeConfigTransaction,
   type RuntimeConfigTransactionPorts,
 } from '../runtime/config-transaction'
-import type { CruxRuntime, HooksLayerToken } from '../runtime/runtime'
+import type { CruxHooks, HooksLayerToken } from '../runtime/runtime'
 import { inMemoryRecordStore } from '../storage'
 
 describe('runtime config transaction — inert mode', () => {
   it('keeps CRUX_INDEX mode inert and avoids every side-effect port', () => {
     const ports: RuntimeConfigTransactionPorts = {
-      runtime: {
-        get: vi.fn(() => ({ marker: true }) as CruxRuntime),
+      hooks: {
+        get: vi.fn(() => ({ marker: true }) as CruxHooks),
         set: vi.fn(),
         update: vi.fn(),
         pushLayer: vi.fn(() => fakeLayerToken),
@@ -53,11 +53,11 @@ describe('runtime config transaction — inert mode', () => {
 
     expect(transaction.inert).toBe(true)
     expect(installation.connectBridge({ ...crux })).toBeUndefined()
-    expect(ports.runtime?.get).not.toHaveBeenCalled()
-    expect(ports.runtime?.set).not.toHaveBeenCalled()
-    expect(ports.runtime?.update).not.toHaveBeenCalled()
-    expect(ports.runtime?.pushLayer).not.toHaveBeenCalled()
-    expect(ports.runtime?.restoreLayer).not.toHaveBeenCalled()
+    expect(ports.hooks?.get).not.toHaveBeenCalled()
+    expect(ports.hooks?.set).not.toHaveBeenCalled()
+    expect(ports.hooks?.update).not.toHaveBeenCalled()
+    expect(ports.hooks?.pushLayer).not.toHaveBeenCalled()
+    expect(ports.hooks?.restoreLayer).not.toHaveBeenCalled()
     expect(ports.observability?.createHttpTransport).not.toHaveBeenCalled()
     expect(ports.observability?.configure).not.toHaveBeenCalled()
     expect(ports.bridge?.connect).not.toHaveBeenCalled()

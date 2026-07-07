@@ -10,7 +10,7 @@
  */
 
 import { observe } from '../observability'
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import { embeddingCacheKey } from './cache'
 import { combineGovernance, compactGovernance, eventGovernance } from './metrics'
 import { emitEmbeddingOutputArtifact } from './observability'

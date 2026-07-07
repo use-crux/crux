@@ -10,7 +10,7 @@
  */
 
 import { observe } from '../observability'
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import type { MiddlewareResult } from '../runtime/types'
 import { buildHitMeta, hydrateResult, lookupEntry, resultKindFromArgs } from './entry'
 import { emitSemanticCacheArtifact } from './observability'

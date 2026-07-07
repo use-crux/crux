@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { taskListKey } from '../../plan/helpers'
 import { getTaskList, tasks } from '../../plan/tasks'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 import type { JsonObject, RecordListOptions, RecordPage, RecordStore, RecordWriteOptions } from '../../storage'
 import { inMemoryRecordStore } from '../../storage'
 
 /** Create fresh records and register them in the runtime. */
 function setup() {
   const records = inMemoryRecordStore()
-  updateRuntime({ records })
+  updateHooks({ records })
   return records
 }
 
@@ -21,7 +21,7 @@ async function expectTaskError(
   await expect(promise).rejects.toMatchObject({ name, ...fields })
 }
 
-afterEach(() => resetRuntime())
+afterEach(() => resetHooks())
 
 describe('TaskList state correctness', () => {
   it('rejects duplicate task IDs without corrupting visible state', async () => {
@@ -45,7 +45,7 @@ describe('TaskList state correctness', () => {
 
   it('rejects concurrent duplicate task IDs atomically', async () => {
     const store = createDuplicateInsertRaceStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
     const handle = await tasks()
 
     const results = await Promise.allSettled([

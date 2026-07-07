@@ -8,7 +8,7 @@
  * @module
  */
 
-import { getRuntime, resolveRecords } from '../runtime/runtime'
+import { getHooks, resolveRecords } from '../runtime/runtime'
 import type { JsonValue, RecordStore } from '../storage'
 import type { FlowSnapshot, ListFlowsOptions, FlowSummary } from './types'
 import { assertFlowJsonValue, assertFlowSnapshotMetadata } from './serialization'

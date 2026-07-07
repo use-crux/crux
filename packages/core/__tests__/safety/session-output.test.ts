@@ -10,12 +10,12 @@ import { createSafety, ConstraintViolationError, GuardrailBlockedError, createSa
 import type { SafetyCallOptions, SafetyOutput } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
-import { updateRuntime, resetRuntime, getRuntime } from '../../runtime/runtime'
+import { updateHooks, resetHooks, getHooks } from '../../runtime/runtime'
 import { applyPlugins } from '../../runtime/plugin'
 import type { Message } from '../../generation/messages'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 const session = (options?: Partial<SafetyCallOptions>) =>
@@ -293,8 +293,8 @@ describe('createSafetyPlugin', () => {
       ],
     })
 
-    const { runtime } = applyPlugins([plugin], getRuntime())
-    updateRuntime(runtime)
+    const { hooks } = applyPlugins([plugin], getHooks())
+    updateHooks(hooks)
 
     const safety = session()
     expect(safety.enabled).toBe(true)
@@ -305,16 +305,16 @@ describe('createSafetyPlugin', () => {
     expect(checkSpy).toHaveBeenCalledTimes(1)
   })
 
-    it('multiple safety plugins compose — policies concatenate', () => {
+  it('multiple safety plugins compose — policies concatenate', () => {
     const g1 = guardrail({ name: 'g1', phase: 'input', validate: async () => ({ action: 'pass' as const }) })
     const g2 = guardrail({ name: 'g2', phase: 'input', validate: async () => ({ action: 'pass' as const }) })
 
-    const { runtime } = applyPlugins(
+    const { hooks } = applyPlugins(
       [createSafetyPlugin({ guardrails: [g1] }), createSafetyPlugin({ guardrails: [g2] })],
-      getRuntime(),
+      getHooks(),
     )
 
-    expect(runtime.globalGuardrails?.map((g) => g.name)).toEqual(['g1', 'g2'])
+    expect(hooks.globalGuardrails?.map((g) => g.name)).toEqual(['g1', 'g2'])
   })
 })
 

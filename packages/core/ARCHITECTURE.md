@@ -120,8 +120,8 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── config.ts / config-types.ts   config() + CruxConfig shape
 │   ├── config-transaction/   Internal runtime config transaction: plan, ports, install, Crux object factory
 │   ├── configure.ts / configure-registry.ts   configure() registry build + global security flags
-│   ├── runtime.ts      CruxRuntime — global hooks/reporters (getRuntime/setRuntime/updateRuntime/resetRuntime)
-│   ├── plugin.ts / merge-runtime.ts   CruxPlugin, applyPlugins(), mergeRuntime() layered composition
+│   ├── runtime.ts      CruxHooks — global hooks/reporters (getHooks/setHooks/updateHooks/resetHooks)
+│   ├── plugin.ts / merge-runtime.ts   CruxPlugin, applyPlugins(), mergeHooks() layered composition
 │   ├── middleware.ts / instrumentation-hooks.ts   per-call hook function types + the graph-record subscribers contract
 │   ├── execution-context.ts   session/execution context helpers
 │   └── types.ts        Runtime middleware contracts (PromptMiddleware, PromptMiddlewareArgs, MiddlewareResult)
@@ -258,7 +258,7 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── safety/
 │   ├── index.ts        Curated @use-crux/core/safety surface: authoring (guardrail/constraint), the Safety session, createSafetyPlugin, errors, evaluate helpers
 │   ├── session.ts      createSafety() — THE consumption entry point (one session per generate/stream call). Owns three-scope merge (call > prompt > global, reads runtime globals + hooks once and snapshots), guarded-content selection with redaction write-back (guardInput), constraints-then-output-guards ordering with injectable corrective-feedback formatter (finalizeOutput), suspension policy (output safety skipped on tool-approval suspension), audit accumulation + TraceMeta stamping, protocol transcript for the parity suite, and the streaming sub-protocol (openStream: per-chunk holds/transforms, buffer:'full' flush validation, report-only constraints at finish)
-│   ├── plugin.ts       createSafetyPlugin({ guardrails, constraints }) — CruxPlugin registering global policies (mergeRuntime concats so multiple plugins compose)
+│   ├── plugin.ts       createSafetyPlugin({ guardrails, constraints }) — CruxPlugin registering global policies (mergeHooks concats so multiple plugins compose)
 │   └── guardrail/
 │       ├── index.ts        Authoring barrel: guardrail, isGuardrail, evaluateGuardrail, GuardrailBlockedError (execution is session-only)
 │       ├── types.ts        GuardrailContext, phase-conditional result types (InputGuardrailResult, OutputGuardrailResult, ChunkGuardrailResult), GuardrailStreamConfig, GuardrailAudit, optional category (risk-type aggregation)
@@ -446,7 +446,7 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 - **`resolver/lower.ts`** — `lowerEntry(entry, index)` turns each member of the `ContextEntry` union (context, `when()` wrapper, `match()` spec, skill, memory, blackboard, private inject-shaped primitives, `contributor()` entry, falsy) into an internal `LoweredContributor` answering up to four questions: `gate` (sync include/exclude with reason + observability facts), `children` (sync nesting), `contribute` (async, the only I/O point), and — at definition time — `collectSchemaContributions()` (the "shape" question for input-schema merging). This is the only module that knows the union; family classification lives here too and reads `Context.family`, declared through internal helpers by primitive factories — memory, blackboard, retriever/grounding, handoff, and the skill surface (no id sniffing).
 - **`resolver/driver.ts`** — `resolveUse()` walks lowered contributors: gate facts emit first, children merge before the entry's own contribution, `Contribution.use` re-enters the pipeline with branch-local indices, tool collisions throw with the owning entry attributed, and all `context.contribution` artifact emission happens at exactly two sites (gate steps + contribution facts).
 - **`resolver/skills.ts`** — the cross-entry collector for skills. The shared pass calls it from the post-merge phase before either `PromptResolution.args` or `PromptResolution.inspect()` is projected, so skill indexing, lazy registry fetches, and loaded-skill contexts cannot drift between resolve and inspect. Registry fetch, skill-index generation, and activation-session creation all flow through the `SkillSourcePort` (no direct skill-module imports in the pass). Resolve-mode skill tools are bound to a `SkillActivationSession` and the resolved prompt carries `_skillSession` as the explicit activation boundary.
-- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports (pure contracts): `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + index + activation-session creation), `ContextCachePort`, `ClockPort`, `TokenizerPort` (every reported token count flows through it, so a deterministic counter pins budget behavior), `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. The production adapters live in `resolver/default-ports.ts`; `withDefaultResolverPorts()` wraps the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` / `setTokenizer()` keep their install-takes-effect-immediately semantics. `compilePrompt(config, { ports })` binds the pipeline to explicit ports; in-memory fakes for every port — plus the one-call `createResolverFakes()` bundle — ship from `@use-crux/core` (`resolver/fakes.ts`).
+- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports (pure contracts): `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + index + activation-session creation), `ContextCachePort`, `ClockPort`, `TokenizerPort` (every reported token count flows through it, so a deterministic counter pins budget behavior), `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. The production adapters live in `resolver/default-ports.ts`; `withDefaultResolverPorts()` wraps the pre-existing globals lazily, so `setHooks()` / `configureObservability()` / `setTokenizer()` keep their install-takes-effect-immediately semantics. `compilePrompt(config, { ports })` binds the pipeline to explicit ports; in-memory fakes for every port — plus the one-call `createResolverFakes()` bundle — ship from `@use-crux/core` (`resolver/fakes.ts`).
 - Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ store })`), which is the correct seam.
 - The lowered `Contributor` contract types are exported from `@use-crux/core` as advanced API for adapter and primitive authors. The lowering, driver, and schema collection functions stay internal to the compiled prompt boundary. The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions through the same channels as other entries.
 - Memory entries contribute their context (reported with family `memory`) and a memory binding; memory tools are opt-in via `memory.asTools()` and are neither merged nor reported as injected. The legacy sync `flattenContextEntries()` pass has been removed — the driver is the only gating code path.
@@ -695,16 +695,16 @@ Return result to caller
 
 ### Hook Types
 
-All global hooks live in the `CruxRuntime` object (`runtime/runtime.ts`). Use `setRuntime()` to install atomically, `getRuntime()` to read:
+All global hooks live in the `CruxHooks` object (`runtime/runtime.ts`). Use `setHooks()` to install atomically, `getHooks()` to read:
 
-| Hook                       | Scope          | Runtime field                       | Purpose                                               |
+| Hook                       | Scope          | Hooks field                         | Purpose                                               |
 | -------------------------- | -------------- | ----------------------------------- | ----------------------------------------------------- |
-| `PromptMiddleware`         | All prompts    | `runtime.middleware`                | Wrap every generate/stream call                       |
-| `ResolveHook`              | Agent adapter  | `runtime.resolveHook`               | Observe `.resolve()` calls without generation         |
-| `ExecutionHook`            | Agent adapter  | `runtime.executionHook`             | Observe model calls from agent frameworks             |
-| `StreamProgressHook`       | Streaming      | `runtime.streamProgressHook`        | Live streaming metrics (TTFT, chunks)                 |
-| `StreamStartHook`          | Streaming      | `runtime.streamStartHook`           | Eager hook before first chunk                         |
-| `graph-record subscribers` | All primitives | `runtime.observability subscribers` | Observe memory, compaction, scoring, agent operations |
+| `PromptMiddleware`         | All prompts    | `hooks.middleware`                  | Wrap every generate/stream call                       |
+| `ResolveHook`              | Agent adapter  | `hooks.resolveHook`                 | Observe `.resolve()` calls without generation         |
+| `ExecutionHook`            | Agent adapter  | `hooks.executionHook`               | Observe model calls from agent frameworks             |
+| `StreamProgressHook`       | Streaming      | `hooks.streamProgressHook`          | Live streaming metrics (TTFT, chunks)                 |
+| `StreamStartHook`          | Streaming      | `hooks.streamStartHook`             | Eager hook before first chunk                         |
+| `graph-record subscribers` | All primitives | `hooks.observability subscribers`   | Observe memory, compaction, scoring, agent operations |
 | `onPrepare`                | Single prompt  | `prompt({ hooks: { onPrepare } })`  | After system assembly, before generation              |
 | `onGenerate`               | Single prompt  | `prompt({ hooks: { onGenerate } })` | After successful generation                           |
 | `onError`                  | Single prompt  | `prompt({ hooks: { onError } })`    | After failed generation                               |
@@ -715,8 +715,8 @@ The plugin system enables composable hook installation. Three key functions:
 
 | Function                             | Purpose                                                                                                               |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `mergeRuntime(base, patch)`          | Compose two runtimes: fan-out for hooks, layered chaining for middleware, last-write-wins for observability transport |
-| `applyPlugins(plugins, initial)`     | Process plugins in order, each seeing cumulative state. Returns merged runtime + dispose                              |
+| `mergeHooks(base, patch)`          | Compose two hook states: fan-out for hooks, layered chaining for middleware, last-write-wins for observability transport |
+| `applyPlugins(plugins, initial)`     | Process plugins in order, each seeing cumulative state. Returns merged hooks + dispose                                  |
 | `withDevtools()` / `withTelemetry()` | Built-in plugins returning `CruxPluginResult`                                                                         |
 
 **Fan-out semantics**: When two plugins install the same hook (e.g., `tool.call start records`), both handlers are called for every event. Neither can suppress the other.
@@ -731,7 +731,7 @@ The plugin system enables composable hook installation. Three key functions:
 2. The planner resolves config-owned runtime state: persistence store, explicit observability
    ownership, capture policy, generation middleware, tokenizer, and plugin order.
 3. If the `observability` domain owns the transport (`enabled: false`, custom `transport`, or
-   `serverUrl`), user plugins install after those runtime fields so plugins see the owned
+   `serverUrl`), user plugins install after those hook fields so plugins see the owned
    transport/store state.
 4. If observability does not own the transport, the planner prepends `withDevtools()` for explicit
    `devtools.serverUrl`, then appends user plugins so local devtools instrumentation installs before
@@ -1057,7 +1057,7 @@ interface graph-record subscribers {
 }
 ```
 
-`— zero cost when no hooks are installed. Plugins install hooks via the plugin system;`mergeRuntime()` automatically fan-outs multiple handlers for the same hook.
+`— zero cost when no hooks are installed. Plugins install hooks via the plugin system;`mergeHooks()` automatically fan-outs multiple handlers for the same hook.
 
 The `evalId` field on `onJudgeResult` enables correlation: callers that run judges inside a larger evaluation can pass an id through `JudgeScoreOptions`, and the judge includes it in the hook event so devtools can link individual judge scores back to the run that triggered them. (Quality cells don't need it — judge calls made by `scorers.judge()` nest inside the cell's observed run.)
 

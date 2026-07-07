@@ -1,17 +1,17 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { inMemoryRecordStore } from '../../storage'
 import { plan, getPlan, updatePlan } from '../../plan/plans'
-import { updateRuntime, resetRuntime } from '../../runtime/runtime'
+import { updateHooks, resetHooks } from '../../runtime/runtime'
 import type { CreatePlanInput, JsonObject, PlanUpdate } from '../../plan/types'
 
 /** Create a fresh store and register it in the runtime. */
 function setup() {
   const store = inMemoryRecordStore()
-  updateRuntime({ records: store })
+  updateHooks({ records: store })
   return store
 }
 
-afterEach(() => resetRuntime())
+afterEach(() => resetHooks())
 
 describe('Plan CRUD', () => {
   it('plan() generates UUID, sets version=1, timestamps', async () => {

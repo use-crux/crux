@@ -1,7 +1,7 @@
 import type { ConfigureOptions } from '../configure'
 import type { CruxConfig } from '../config-types'
 import type { CruxPlugin } from '../plugin'
-import type { CruxRuntime } from '../runtime'
+import type { CruxHooks } from '../runtime'
 import { withDevtools } from '../../observability'
 import type { RuntimeConfigEnvironment, RuntimeConfigPlan, RuntimeConfigTransactionInput } from './types'
 
@@ -9,7 +9,7 @@ import type { RuntimeConfigEnvironment, RuntimeConfigPlan, RuntimeConfigTransact
  * Build a side-effect-free runtime config plan.
  *
  * The plan owns lifecycle decisions that should be easy to test without
- * touching globals: index mode, runtime patches, observability ownership,
+ * touching globals: index mode, hook patches, observability ownership,
  * devtools fallback behavior, plugin ordering, and bridge inputs.
  */
 export function planRuntimeConfig(input: RuntimeConfigTransactionInput): RuntimeConfigPlan {
@@ -23,7 +23,7 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
     observability?.transport !== undefined ||
     observability?.serverUrl !== undefined
 
-  const runtimePatch: Partial<CruxRuntime> = {
+  const hooksPatch: Partial<CruxHooks> = {
     ...(records ? { records } : {}),
     ...(config.runtime ? { runtimeEngine: config.runtime } : {}),
     ...(config.generation?.middleware ? { middleware: config.generation.middleware } : {}),
@@ -47,7 +47,7 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
   return {
     inert,
     config,
-    runtimePatch,
+    hooksPatch,
     ownsObservability,
     observability: planObservability(config),
     configureOptions,

@@ -2,14 +2,14 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { prompt } from '../../prompt/prompt'
 import { applyPlugins } from '../../runtime/plugin'
-import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
+import { getHooks, resetHooks, setHooks } from '../../runtime/runtime'
 import { orchestrateGenerate } from '../../generation/orchestrate'
 import { runWithExecutionContext } from '../../runtime/execution-context'
 import { CostLimitError, modelPricing, withCostTracking } from '../../cost'
 
 function install(plugin: ReturnType<ReturnType<typeof withCostTracking>['asPlugin']>) {
-  const applied = applyPlugins([plugin], getRuntime())
-  setRuntime(applied.runtime)
+  const applied = applyPlugins([plugin], getHooks())
+  setHooks(applied.hooks)
   return applied
 }
 
@@ -56,7 +56,7 @@ async function generateOnce(options: {
 
 describe('withCostTracking', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
     vi.restoreAllMocks()
   })
 

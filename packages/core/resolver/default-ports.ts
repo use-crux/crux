@@ -6,7 +6,7 @@
  * context cache, `Date.now`, `countTokens`, `configure()` policy flags, and
  * `console.warn` (context-cache instrumentation is a no-op by default; it is
  * delivered through the observability graph). Reads are deliberately lazy (per
- * event, not captured at bind time), so `setRuntime()` /
+ * event, not captured at bind time), so `setHooks()` /
  * `configureObservability()` / `setTokenizer()` keep taking effect on the very
  * next resolution.
  *

@@ -10,7 +10,7 @@
  */
 
 import { observe } from '../observability'
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import type { JsonObject } from '../storage'
 import type { MiddlewareResult } from '../runtime/types'
 import {

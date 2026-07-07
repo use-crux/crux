@@ -5,7 +5,7 @@
  * access, the context resolver cache, a clock, sanitization policy, warning
  * output, and instrumentation hooks. Each is expressed as a small interface
  * (a *port*) so the pipeline can run against production adapters in apps and
- * in-memory fakes in tests — no `setRuntime()` setup, no global cleanup, and
+ * in-memory fakes in tests — no `setHooks()` setup, no global cleanup, and
  * a deterministic clock when you want one.
  *
  * `compilePrompt(config, { ports })` accepts a partial {@link ResolverPorts};
@@ -14,7 +14,7 @@
  * ports is identical to the ambient prompt pipeline.
  *
  * Adapter reads are deliberately lazy (per event, not per resolver): calling
- * `setRuntime()` or `configureObservability()` mid-process takes effect on
+ * `setHooks()` or `configureObservability()` mid-process takes effect on
  * the very next prompt resolution, exactly as before.
  *
  * Contributor-internal I/O (memory stores, retriever indexes, blackboard

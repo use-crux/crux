@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   config,
   inMemoryRecordStore,
-  resetRuntime,
+  resetHooks,
   workspace,
 } from "@use-crux/core";
 import { node } from "@use-crux/core/runtime";
@@ -14,7 +14,7 @@ import type {
 } from "../../workspace";
 
 afterEach(() => {
-  resetRuntime();
+  resetHooks();
 });
 
 describe("workspace watch", () => {

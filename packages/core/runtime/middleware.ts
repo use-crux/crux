@@ -5,7 +5,7 @@
  * stream-progress, stream-start).
  *
  * Types are defined here; runtime state lives in `./runtime`.
- * Consumers read hooks via `getRuntime()` from `./runtime`.
+ * Consumers read hooks via `getHooks()` from `./runtime`.
  *
  * @module
  */

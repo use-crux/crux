@@ -1,17 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { resetRuntime, prompt as cruxPrompt } from '@use-crux/core'
+import { config, resetHooks } from '@use-crux/core'
 import { observe, resetObservabilityRuntime, subscribeObservability } from '@use-crux/core/observability'
 import { SpanStatusCode, trace } from '@opentelemetry/api'
 import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
-import { configure } from '../../core/runtime/configure'
 import { withTelemetry } from '../index'
 import { createCallbackExporter, createUrlExporter } from '../exporter'
 import { __resetOpenTelemetryFallbackForTesting, createOpenTelemetrySpanManager } from '../otel-span-manager'
 import type { TraceSpan } from '../types'
-
-function makePrompt(id: string) {
-  return cruxPrompt({ id, system: `Prompt ${id}` })
-}
 
 function makeSpan(overrides?: Partial<TraceSpan>): TraceSpan {
   return {
@@ -29,7 +24,7 @@ function makeSpan(overrides?: Partial<TraceSpan>): TraceSpan {
 
 describe('withTelemetry', () => {
   beforeEach(() => {
-    resetRuntime()
+    resetHooks()
     resetObservabilityRuntime()
     __resetOpenTelemetryFallbackForTesting()
     trace.disable()
@@ -42,14 +37,12 @@ describe('withTelemetry', () => {
     expect(typeof plugin.install).toBe('function')
   })
 
-  it('installs via configure() without errors', () => {
-    const reg = configure({
-      prompts: [makePrompt('a')],
+  it('installs via config() without errors', () => {
+    const crux = config({
       plugins: [withTelemetry({ serviceName: 'test-app' })],
     })
 
-    expect(reg.get('a')).toBeDefined()
-    reg.dispose()
+    crux.dispose()
   })
 
   it('uses the globally registered OTel tracer when no lightweight exporter is configured', async () => {
@@ -90,8 +83,7 @@ describe('withTelemetry', () => {
       install: () => ({ dispose: subscribeObservability(subscriber) }),
     }
 
-    const reg = configure({
-      prompts: [makePrompt('a')],
+    const crux = config({
       plugins: [withTelemetry({ exporter: () => {} }), otherPlugin],
     })
 
@@ -99,7 +91,7 @@ describe('withTelemetry', () => {
 
     expect(subscriber).toHaveBeenCalledWith(expect.objectContaining({ type: 'span:start', primitive: 'tool.call' }))
 
-    reg.dispose()
+    crux.dispose()
   })
 
   it('guards against double telemetry installs so spans are exported once', async () => {

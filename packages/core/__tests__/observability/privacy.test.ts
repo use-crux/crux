@@ -9,7 +9,7 @@ import {
   subscribeObservability,
   type CruxGraphRecord,
 } from '../../observability'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 
 const exemptArtifactKinds = new Set([
   'error.stack',
@@ -26,7 +26,7 @@ const exemptArtifactKinds = new Set([
 describe('observability privacy capture policy', () => {
   afterEach(() => {
     resetObservabilityRuntime()
-    resetRuntime()
+    resetHooks()
   })
 
   it('keeps disabled output payloads out of subscribers and transports', async () => {
@@ -36,7 +36,7 @@ describe('observability privacy capture policy', () => {
     subscribeObservability((record) => {
       subscriberRecords.push(record)
     })
-    updateRuntime({
+    updateHooks({
       observabilityCapture: {
         recordOutputs: false,
       },
@@ -100,7 +100,7 @@ describe('observability privacy capture policy', () => {
   it('supports off mode by omitting payload previews and reference metadata', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport, { scheduledDelayMs: 0 })
-    updateRuntime({
+    updateHooks({
       observabilityCapture: {
         recordOutputs: 'off',
       },
@@ -146,7 +146,7 @@ describe('observability privacy capture policy', () => {
   it('strips previews for every non-exempt canonical artifact kind when capture is disabled', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport, { scheduledDelayMs: 0 })
-    updateRuntime({
+    updateHooks({
       observabilityCapture: {
         recordInputs: false,
         recordOutputs: false,
@@ -189,7 +189,7 @@ describe('observability privacy capture policy', () => {
   it('drops records when redactRecord returns null or throws', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport, { scheduledDelayMs: 0 })
-    updateRuntime({
+    updateHooks({
       observabilityCapture: {
         redactRecord: (record) => {
           if (record.type === 'span:event' && record.name === 'drop-me')

@@ -13,7 +13,7 @@ import { toolMiddleware, approvalMiddleware } from '../../../tools/middleware'
 import { appendToolApprovalResponse } from '../../../tools/approvals'
 import { createSkillActivationSession } from '../../../skill'
 import { LOAD_SKILL_TOOL_NAME } from '../../../skill/tools'
-import { updateRuntime, resetRuntime } from '../../../runtime/runtime'
+import { updateHooks, resetHooks } from '../../../runtime/runtime'
 import type { AdapterResponse } from '../../../adapter/types'
 import type { Message } from '../../../generation/messages'
 import type { ResolvedPrompt } from '../../../resolver/types'
@@ -578,7 +578,7 @@ describe('createToolLifecycle — resume', () => {
 // ─────────────────────────────────────────────────────────────────
 
 describe('createToolLifecycle — applySkillLoads', () => {
-  afterEach(() => resetRuntime())
+  afterEach(() => resetHooks())
 
   function skillFixture() {
     const session = createSkillActivationSession({

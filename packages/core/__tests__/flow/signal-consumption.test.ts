@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { flow, InvalidSignalPayloadError, noPayload, signalFlow, type FlowSnapshot } from '../../flow'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 import { inMemoryRecordStore, type JsonValue } from '../../storage'
 
 describe('flow signal consumption', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
   it('consumes a delivered signal before user code continues past suspend', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow('consume delivered signal', async (scope) => {
       await scope.suspend('approval')
@@ -47,7 +47,7 @@ describe('flow signal consumption', () => {
 
   it('rejects payloads for noPayload signals before and during delivery', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
     const release = flow(
       'no payload validation',
       { signals: { release: noPayload() } },
@@ -86,7 +86,7 @@ describe('flow signal consumption', () => {
 
   it('preserves explicit null signal payloads', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
     const passthrough = flow('null payload signal', async (scope) => {
       return scope.suspend('done')
     })
@@ -103,7 +103,7 @@ describe('flow signal consumption', () => {
 
   it('persists resume-attempt progress when a flow expires', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
     const flowId = 'flow-expired-keeps-progress'
     const now = Date.now()
     const expiredTimeout = now - 1

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { flow } from '../../flow'
-import { resetRuntime } from '../../runtime/runtime'
+import { resetHooks } from '../../runtime/runtime'
 
 describe('flow step identity', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
   it('rejects duplicate step labels before ambiguous replay cache use', async () => {

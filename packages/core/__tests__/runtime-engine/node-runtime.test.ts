@@ -14,11 +14,11 @@ import {
   type WorkId,
   type WorkItem,
 } from '@use-crux/core/runtime'
-import { config, resetRuntime } from '@use-crux/core'
+import { config, resetHooks } from '@use-crux/core'
 import { flow } from '@use-crux/core/flow'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 describe('node() Runtime Engine composer', () => {

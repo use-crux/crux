@@ -4,7 +4,7 @@
  *
  * Companion to `public-root-imports.ts`, scoped to the types the structure
  * refactor relocates into `packages/core/runtime/` (`CruxConfig`, `CruxPlugin`,
- * `CruxRuntime`, `CruxPluginResult`, `PromptMiddleware`). Imports come
+ * `CruxHooks`, `CruxPluginResult`, `PromptMiddleware`). Imports come
  * exclusively from `@use-crux/core`, so the file must keep type-checking with
  * zero edits once the implementation moves into the `runtime/` domain.
  *
@@ -14,9 +14,9 @@
  * Pins, per the naming/testing contract:
  * - `config()` accepts a `CruxConfig` and returns a `Crux` exposing the raw
  *   config;
- * - a `CruxPlugin.install()` returns a `CruxPluginResult` (partial runtime +
+ * - a `CruxPlugin.install()` returns a `CruxPluginResult` (partial hooks +
  *   optional dispose);
- * - the runtime store is typed by `CruxRuntime`;
+ * - the hook store is typed by `CruxHooks`;
  * - public runtime types stay strongly typed (no `any` leak);
  * - the surface uses TypeScript 5.5-compatible syntax.
  */
@@ -24,9 +24,9 @@
 import { expectTypeOf } from 'vitest'
 import {
   config,
-  mergeRuntime,
+  mergeHooks,
   applyPlugins,
-  getRuntime,
+  getHooks,
   pushHooksLayer,
   restoreHooksLayer,
 } from '@use-crux/core'
@@ -35,7 +35,7 @@ import type {
   CruxConfig,
   CruxPlugin,
   CruxPluginResult,
-  CruxRuntime,
+  CruxHooks,
   HooksLayerToken,
   PromptMiddleware,
 } from '@use-crux/core'
@@ -55,13 +55,13 @@ expectTypeOf(crux.dispose).toEqualTypeOf<() => void>()
 expectTypeOf<NonNullable<NonNullable<CruxConfig['generation']>['middleware']>>().toEqualTypeOf<PromptMiddleware>()
 
 // ─────────────────────────────────────────────────────────────────
-// CruxPlugin — install returns a partial runtime patch
+// CruxPlugin — install returns a partial hook patch
 // ─────────────────────────────────────────────────────────────────
 
 const tracer: CruxPlugin = {
   name: 'tracer',
-  install(runtime) {
-    expectTypeOf(runtime).toEqualTypeOf<Readonly<CruxRuntime>>()
+  install(hooks) {
+    expectTypeOf(hooks).toEqualTypeOf<Readonly<CruxHooks>>()
     return {
       dispose: () => {},
     }
@@ -71,14 +71,14 @@ const tracer: CruxPlugin = {
 expectTypeOf(tracer.install).returns.toEqualTypeOf<CruxPluginResult>()
 
 // ─────────────────────────────────────────────────────────────────
-// mergeRuntime / applyPlugins / getRuntime — runtime-typed seams
+// mergeHooks / applyPlugins / getHooks — hook-typed seams
 // ─────────────────────────────────────────────────────────────────
 
-expectTypeOf(mergeRuntime).returns.toEqualTypeOf<CruxRuntime>()
-expectTypeOf(applyPlugins).returns.toMatchTypeOf<{ runtime: CruxRuntime; dispose: () => void }>()
-expectTypeOf(getRuntime()).toEqualTypeOf<Readonly<CruxRuntime>>()
+expectTypeOf(mergeHooks).returns.toEqualTypeOf<CruxHooks>()
+expectTypeOf(applyPlugins).returns.toMatchTypeOf<{ hooks: CruxHooks; dispose: () => void }>()
+expectTypeOf(getHooks()).toEqualTypeOf<Readonly<CruxHooks>>()
 expectTypeOf(pushHooksLayer).returns.toEqualTypeOf<HooksLayerToken>()
 expectTypeOf(restoreHooksLayer).parameter(0).toEqualTypeOf<HooksLayerToken>()
 
-// `middleware` on the runtime is a `PromptMiddleware | undefined`, never `any`.
-expectTypeOf<CruxRuntime['middleware']>().toEqualTypeOf<PromptMiddleware | undefined>()
+// `middleware` on the hooks store is a `PromptMiddleware | undefined`, never `any`.
+expectTypeOf<CruxHooks['middleware']>().toEqualTypeOf<PromptMiddleware | undefined>()

@@ -9,10 +9,10 @@ import { createSafety, GuardrailBlockedError, ConstraintViolationError } from '.
 import type { SafetyCallOptions } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
-import { resetRuntime } from '../../runtime/runtime'
+import { resetHooks } from '../../runtime/runtime'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 const session = (options?: Partial<SafetyCallOptions>) => createSafety({ promptId: 'p1', model: 'm1', ...options })

@@ -25,7 +25,7 @@ import { appendToolApprovalResponse } from '../../tools/approvals'
 import { skill } from '../../skill'
 import { LOAD_SKILL_TOOL_NAME } from '../../skill/tools'
 import { ValidationExhaustedError } from '../../generation/validation-retry'
-import { updateRuntime, resetRuntime } from '../../runtime/runtime'
+import { updateHooks, resetHooks } from '../../runtime/runtime'
 import type { Message } from '../../generation/messages'
 import {
   createInMemoryObservabilityTransport,
@@ -37,7 +37,7 @@ import {
 } from '../../observability'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
   resetObservabilityRuntime()
 })
 
@@ -430,7 +430,7 @@ describe('dialect parity — constraint retry protocol', () => {
       constraints: [needsShip()],
     })
     const nativeProtocol = [...nativeEvents]
-    resetRuntime()
+    resetHooks()
 
     // LoopRuntimePort dialect: same script.
     const executorEvents = recordSafetyProtocol()
@@ -478,7 +478,7 @@ describe('dialect parity — constraint retry protocol', () => {
       .then(() => undefined)
       .catch((error: unknown) => error)
     const nativeProtocol = [...nativeEvents]
-    resetRuntime()
+    resetHooks()
 
     const executorEvents = recordSafetyProtocol()
     const fake = fakeLoopRuntime({ loops: [[{ text: 'wrong' }], [{ text: 'wrong' }], [{ text: 'wrong' }]] })
@@ -517,7 +517,7 @@ describe('dialect parity — clean pass and blocks', () => {
       constraints: [passConstraint()],
     })
     const nativeProtocol = [...nativeEvents]
-    resetRuntime()
+    resetHooks()
 
     const executorEvents = recordSafetyProtocol()
     const fake = fakeLoopRuntime({ loops: [[{ text: 'a ship!' }]] })
@@ -998,7 +998,7 @@ describe('dialect parity — clean tool round protocol', () => {
       tools: tools(),
     })
     const nativeProtocol = [...nativeEvents]
-    resetRuntime()
+    resetHooks()
 
     const executorEvents = recordToolProtocol()
     const fake = fakeLoopRuntime({ loops: [[{ text: 'calling', toolCalls: [toolCall] }, { text: 'done' }]] })
@@ -1144,7 +1144,7 @@ describe('dialect parity — approval protocol observability', () => {
       tools: { dangerous: { description: 'risky', needsApproval: true, execute: vi.fn() } },
     })
     const nativeProtocol = [...nativeEvents]
-    resetRuntime()
+    resetHooks()
 
     const executorEvents = recordToolProtocol()
     const fake = fakeLoopRuntime({ loops: [[{ text: 'need approval', toolCalls: [toolCall] }]] })
@@ -1219,7 +1219,7 @@ describe('dialect parity — approval protocol observability', () => {
               })
             })()
       const protocol = [...events]
-      resetRuntime()
+      resetHooks()
 
       const deniedRound = resumed.messages.find((m) => m.role === 'tool' && m.metadata?.toolCallId === toolCall.id)
       return { execute, protocol, deniedRound, text: resumed.text }
@@ -1294,7 +1294,7 @@ describe('dialect parity — approval protocol observability', () => {
         })
       }
       const protocol = [...events]
-      resetRuntime()
+      resetHooks()
       return protocol
     }
 

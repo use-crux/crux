@@ -11,7 +11,7 @@
 
 import { runWithExecutionContext, getExecutionContext } from '../runtime/execution-context'
 import { captureSource } from '../project-index/source'
-import { getRuntime, resolveRecords } from '../runtime/runtime'
+import { getHooks, resolveRecords } from '../runtime/runtime'
 import type { ResolvedRuntimeEngine } from '../runtime/api/create-runtime'
 import { createRuntimeWithHostContext } from '../runtime/api/host-context'
 import {
@@ -424,7 +424,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       }
 
       // Verify store is available before suspending
-      const flowStore = store ?? getRuntime().records
+      const flowStore = store ?? getHooks().records
       if (!flowStore) {
         throw new Error('flow.suspend() requires a RecordStore. Configure one via config({ persistence: { records } }).')
       }
@@ -457,7 +457,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       }
 
       // Condition not met — verify store and suspend
-      const flowStore = store ?? getRuntime().records
+      const flowStore = store ?? getHooks().records
       if (!flowStore) {
         throw new Error('flow.waitUntil() requires a RecordStore. Configure one via config({ persistence: { records } }).')
       }
@@ -693,7 +693,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         return runtimeExecution.result as FlowResult<T>
       }
 
-      const flowStore = store ?? getRuntime().records
+      const flowStore = store ?? getHooks().records
       if (flowStore) {
         const timeoutAt = error.options?.timeout ? Date.now() + parseDuration(error.options.timeout) : undefined
         if (flowInput !== undefined) {
@@ -756,7 +756,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         return runtimeExecution.result as FlowResult<T>
       }
 
-      const flowStore = store ?? getRuntime().records
+      const flowStore = store ?? getHooks().records
       if (flowStore) {
         const cancelledAt = Date.now()
         if (error.reason !== undefined) {
@@ -794,7 +794,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
 
     // Handle expiration
     if (error instanceof FlowExpiredError) {
-      const flowStore = store ?? getRuntime().records
+      const flowStore = store ?? getHooks().records
       if (flowStore) {
         const expiredAt = Date.now()
         const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
@@ -1016,7 +1016,7 @@ export function flow(
   async function withRuntime<T>(
     useRuntime: (runtime: ResolvedRuntimeEngine, runtimeRef: RuntimeFlowTargetRef) => Promise<T>,
   ): Promise<T> {
-    const runtimeDefinition = getRuntime().runtimeEngine
+    const runtimeDefinition = getHooks().runtimeEngine
     if (!runtimeDefinition) {
       throw new Error('No Crux runtime engine is configured.')
     }
@@ -1155,7 +1155,7 @@ export function flow(
 
     run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
       const runOptions = normalizeRunArgs(args, handlerExpectsInput)
-      if (getRuntime().runtimeEngine) {
+      if (getHooks().runtimeEngine) {
         return runWithRuntime({
           ...runOptions,
           signals: definitionOptions?.signals,
@@ -1172,7 +1172,7 @@ export function flow(
     },
 
     resume(flowId: string, options?: FlowResumeOptions): Promise<FlowResult<unknown>> {
-      if (getRuntime().runtimeEngine) {
+      if (getHooks().runtimeEngine) {
         return resumeWithRuntime(flowId, options)
       }
       return executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
@@ -1194,7 +1194,7 @@ export function flow(
       const signalOptions = payloadIsOptions && options === undefined ? payload : options
       const signalPayload = payloadIsOptions ? {} : payload
       const parsedPayload = validateSignalPayload(signalName, signalSpec, signalPayload)
-      if (getRuntime().runtimeEngine) {
+      if (getHooks().runtimeEngine) {
         await signalWithRuntime(flowId, signalName, parsedPayload as JsonValue, signalOptions)
         return
       }

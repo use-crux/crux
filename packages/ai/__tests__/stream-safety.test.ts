@@ -7,12 +7,12 @@
 
 import { describe, it, expect, afterEach } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt, guardrail, resetRuntime } from '@use-crux/core'
+import { prompt as makePrompt, guardrail, resetHooks } from '@use-crux/core'
 import { createCruxAi } from '../index'
 import { streamingModel } from './mock-model'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 const textPrompt = makePrompt({

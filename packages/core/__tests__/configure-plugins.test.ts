@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { config } from '../runtime/config'
 import type { CruxPlugin } from '../runtime/plugin'
-import { resetRuntime } from '../runtime/runtime'
+import { resetHooks } from '../runtime/runtime'
 
 describe('config — plugins', () => {
   beforeEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
-  it('calls plugin install() with the current runtime', () => {
+  it('calls plugin install() with the current hooks', () => {
     const install = vi.fn().mockReturnValue({})
     const plugin: CruxPlugin = { name: 'test-plugin', install }
 
@@ -20,16 +20,16 @@ describe('config — plugins', () => {
 
     try {
       expect(install).toHaveBeenCalledOnce()
-      const receivedRuntime = install.mock.calls[0][0]
-      expect(Object.isFrozen(receivedRuntime)).toBe(true)
+      const receivedHooks = install.mock.calls[0][0]
+      expect(Object.isFrozen(receivedHooks)).toBe(true)
     } finally {
       crux.dispose()
     }
   })
 
-  it("second plugin sees first plugin's hooks in the runtime", () => {
+  it("second plugin sees first plugin's hooks", () => {
     const hook1 = vi.fn()
-    const seenRuntimes: Record<string, unknown>[] = []
+    const seenHooks: Record<string, unknown>[] = []
     const plugin1: CruxPlugin = {
       name: 'plugin-1',
       install() {
@@ -38,8 +38,8 @@ describe('config — plugins', () => {
     }
     const plugin2: CruxPlugin = {
       name: 'plugin-2',
-      install(runtime) {
-        seenRuntimes.push({ ...runtime })
+      install(hooks) {
+        seenHooks.push({ ...hooks })
         return {}
       },
     }
@@ -47,7 +47,7 @@ describe('config — plugins', () => {
     const crux = config({ plugins: [plugin1, plugin2] })
 
     try {
-      expect(seenRuntimes[0].executionHook).toBeDefined()
+      expect(seenHooks[0].executionHook).toBeDefined()
     } finally {
       crux.dispose()
     }

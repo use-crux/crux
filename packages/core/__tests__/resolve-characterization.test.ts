@@ -21,7 +21,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../observability'
-import { updateRuntime, resetRuntime } from '../runtime/runtime'
+import { updateHooks, resetHooks } from '../runtime/runtime'
 import { setTokenizer, defaultTokenizer } from '../shared/tokenizer'
 import type { Constraint } from '../safety/constraint/types'
 import type { Guardrail } from '../safety/guardrail/types'
@@ -32,7 +32,7 @@ import type { PromptConfig } from '../prompt/prompt-types'
 afterEach(() => {
   setTokenizer(defaultTokenizer)
   resetObservabilityRuntime()
-  resetRuntime()
+  resetHooks()
   vi.restoreAllMocks()
 })
 

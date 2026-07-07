@@ -14,7 +14,7 @@ import {
   type RuntimeConfigPlan,
   type RuntimeConfigTransactionPorts,
 } from '../runtime/config-transaction'
-import type { CruxRuntime, HooksLayerToken } from '../runtime/runtime'
+import type { CruxHooks, HooksLayerToken } from '../runtime/runtime'
 
 const plan = planRuntimeConfig({
   env: { CRUX_INDEX: '0' },
@@ -26,8 +26,8 @@ const plan = planRuntimeConfig({
     plugins: [
       {
         name: 'typed-plugin',
-        install(runtime) {
-          expectTypeOf(runtime).toEqualTypeOf<Readonly<CruxRuntime>>()
+        install(hooks) {
+          expectTypeOf(hooks).toEqualTypeOf<Readonly<CruxHooks>>()
           return { semanticCacheInstalled: true }
         },
       },
@@ -38,26 +38,26 @@ const plan = planRuntimeConfig({
 expectTypeOf(plan).toEqualTypeOf<RuntimeConfigPlan>()
 expectTypeOf(plan.inert).toEqualTypeOf<boolean>()
 expectTypeOf(plan.config).toMatchTypeOf<Readonly<{ generation?: unknown }>>()
-expectTypeOf(plan.runtimePatch).toMatchTypeOf<Partial<CruxRuntime>>()
+expectTypeOf(plan.hooksPatch).toMatchTypeOf<Partial<CruxHooks>>()
 expectTypeOf(plan.configureOptions.prompts).not.toBeAny()
 expectTypeOf(plan.plugins).toMatchTypeOf<RuntimeConfigPlan['plugins']>()
 expectTypeOf(plan.plugins[0]?.install).toMatchTypeOf<
-  ((runtime: Readonly<CruxRuntime>) => unknown) | undefined
+  ((hooks: Readonly<CruxHooks>) => unknown) | undefined
 >()
 
 const layerToken = {} as HooksLayerToken
 
 const ports = {
-  runtime: {
+  hooks: {
     get: () => ({ semanticCacheInstalled: true }),
-    set(runtime) {
-      expectTypeOf(runtime).toEqualTypeOf<CruxRuntime>()
+    set(hooks) {
+      expectTypeOf(hooks).toEqualTypeOf<CruxHooks>()
     },
     update(patch) {
-      expectTypeOf(patch).toEqualTypeOf<Partial<CruxRuntime>>()
+      expectTypeOf(patch).toEqualTypeOf<Partial<CruxHooks>>()
     },
     pushLayer(patch) {
-      expectTypeOf(patch).toEqualTypeOf<Partial<CruxRuntime>>()
+      expectTypeOf(patch).toEqualTypeOf<Partial<CruxHooks>>()
       return layerToken
     },
     restoreLayer(token) {
@@ -65,13 +65,13 @@ const ports = {
     },
   },
   plugins: {
-    apply(plugins, runtime) {
+    apply(plugins, hooks) {
       expectTypeOf(plugins).toMatchTypeOf<
         ReadonlyArray<{ readonly name: string }>
       >()
-      expectTypeOf(runtime).toEqualTypeOf<CruxRuntime>()
+      expectTypeOf(hooks).toEqualTypeOf<CruxHooks>()
       return {
-        runtime,
+        hooks,
         async dispose() {},
       }
     },
@@ -82,4 +82,4 @@ const transaction = createRuntimeConfigTransaction({ config: {} }, ports)
 
 expectTypeOf(transaction.inert).toEqualTypeOf<boolean>()
 expectTypeOf(transaction.config).toMatchTypeOf<Readonly<{}>>()
-expectTypeOf(transaction.apply().runtime).toMatchTypeOf<Readonly<CruxRuntime>>()
+expectTypeOf(transaction.apply().hooks).toMatchTypeOf<Readonly<CruxHooks>>()

@@ -9,7 +9,7 @@
  */
 
 import { observe } from '../observability'
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import { isFailedLoadResult, isSuccessfulLoadResult } from './source'
 import type {
   CorpusProgressEvent,

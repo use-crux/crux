@@ -9,7 +9,7 @@
 
 import type { Plan, PlanHandle, CreatePlanInput, PlanUpdate, JsonValue } from './types'
 import { PLAN_PREFIX, matchesMetadataFilter, metadataFilter, planKey } from './helpers'
-import { getRuntime, resolveRecords } from '../runtime/runtime'
+import { getHooks, resolveRecords } from '../runtime/runtime'
 import { observe } from '../observability'
 import { getExecutionContext } from '../runtime/execution-context'
 import type { JsonObject as StorageJsonObject } from '../storage'

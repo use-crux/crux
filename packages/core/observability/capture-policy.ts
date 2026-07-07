@@ -8,7 +8,7 @@
  * @module
  */
 
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import {
   CRUX_CANONICAL_ARTIFACT_KINDS,
   type CruxAttributes,
@@ -178,7 +178,7 @@ export function applyObservabilityCapturePolicyToRecord(
   record: CruxGraphRecord,
 ): ObservabilityCaptureResult {
   const modes = resolveCaptureModes()
-  const policy = getRuntime().observabilityCapture
+  const policy = getHooks().observabilityCapture
   const policyRecord = applyCaptureModesToRecord(record, modes)
 
   try {
@@ -268,7 +268,7 @@ function stripRecordPayloadAttributes(
 }
 
 function resolveCaptureModes(): ResolvedCaptureModes {
-  const policy = getRuntime().observabilityCapture
+  const policy = getHooks().observabilityCapture
   return {
     input: normalizeCaptureMode(policy?.recordInputs),
     output: normalizeCaptureMode(policy?.recordOutputs),

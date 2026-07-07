@@ -269,8 +269,8 @@ Both default to `true`. When disabled, matching artifacts keep `sizeBytes` and `
 ## Plugin system
 
 ```ts
-import type { CruxPlugin, CruxRuntime, CruxPluginResult } from '@use-crux/core'
-import { mergeRuntime, applyPlugins } from '@use-crux/core'
+import type { CruxPlugin, CruxHooks, CruxPluginResult } from '@use-crux/core'
+import { mergeHooks, applyPlugins } from '@use-crux/core'
 ```
 
 ### `CruxPlugin`
@@ -278,26 +278,26 @@ import { mergeRuntime, applyPlugins } from '@use-crux/core'
 | Field     | Type                                                   | Description                      |
 | --------- | ------------------------------------------------------ | -------------------------------- |
 | `name`    | `string`                                               | Unique plugin name for debugging |
-| `install` | `(runtime: Readonly<CruxRuntime>) => CruxPluginResult` | Install hooks into the runtime   |
+| `install` | `(hooks: Readonly<CruxHooks>) => CruxPluginResult` | Install hooks into the hook store |
 
-`CruxPluginResult` extends `Partial<CruxRuntime>` with optional `dispose?: () => void`.
+`CruxPluginResult` extends `Partial<CruxHooks>` with optional `dispose?: () => void`.
 
 | Built-in plugin           | Package                                             |
 | ------------------------- | --------------------------------------------------- |
 | `withDevtools(options)`   | `@use-crux/core/observability` — name `'crux:devtools'` |
 | `withTelemetry(options?)` | `@use-crux/otel` — name `'crux:otel'`                   |
 
-### `mergeRuntime(base, patch)`
+### `mergeHooks(base, patch)`
 
-Compose two runtimes with fan-out semantics:
+Compose two hook states with fan-out semantics:
 
 - **Hooks** — both handlers fire for every event
 - **Middleware** — patch wraps base
 - **Collector** — last-write-wins
 
-### `applyPlugins(plugins, initialRuntime)`
+### `applyPlugins(plugins, initialHooks)`
 
-Process an ordered list of plugins. Returns `{ runtime, dispose }`.
+Process an ordered list of plugins. Returns `{ hooks, dispose }`.
 
 ## Observability context
 

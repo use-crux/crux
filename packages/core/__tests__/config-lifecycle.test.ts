@@ -3,18 +3,18 @@ import { enableDevtools, resetObservabilityRuntime } from '../observability'
 import { config } from '../runtime/config'
 import type { ExecutionHookArgs } from '../runtime/middleware'
 import type { CruxPlugin } from '../runtime/plugin'
-import { getRuntime, resetRuntime } from '../runtime/runtime'
+import { getHooks, resetHooks } from '../runtime/runtime'
 import type { PromptMiddleware, PromptMiddlewareArgs } from '../runtime/types'
 
 describe('config lifecycle', () => {
   beforeEach(() => {
-    resetRuntime()
+    resetHooks()
     resetObservabilityRuntime()
   })
 
   afterEach(() => {
     vi.unstubAllGlobals()
-    resetRuntime()
+    resetHooks()
     resetObservabilityRuntime()
   })
 
@@ -25,11 +25,11 @@ describe('config lifecycle', () => {
     const third = config({ plugins: [lifecyclePlugin('three', events)] })
 
     try {
-      await getRuntime().middleware?.(middlewareArgs, async () => {
+      await getHooks().middleware?.(middlewareArgs, async () => {
         events.push('middleware:next')
         return { text: 'ok' }
       })
-      await getRuntime().executionHook?.(executionArgs)
+      await getHooks().executionHook?.(executionArgs)
 
       expect(events).toEqual([
         'dispose:one',
@@ -55,15 +55,15 @@ describe('config lifecycle', () => {
     })
 
     try {
-      const transport = getRuntime().observabilityTransport
+      const transport = getHooks().observabilityTransport
 
-      expect(getRuntime().middleware).toBe(middleware)
+      expect(getHooks().middleware).toBe(middleware)
       expect(transport).toBeDefined()
 
       crux.dispose()
 
-      expect(getRuntime().middleware).toBeUndefined()
-      expect(getRuntime().observabilityTransport).toBe(transport)
+      expect(getHooks().middleware).toBeUndefined()
+      expect(getHooks().observabilityTransport).toBe(transport)
     } finally {
       cleanupDevtools()
       crux.dispose()

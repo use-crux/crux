@@ -2,6 +2,8 @@
 "@use-crux/core": minor
 "@use-crux/postgres": minor
 "@use-crux/convex": minor
+"@use-crux/ai": minor
+"@use-crux/otel": minor
 ---
 
 Declare `@use-crux/core/runtime` and its store-adapter contract experimental while Runtime Engine stabilization continues.
@@ -17,3 +19,5 @@ Fence Runtime Engine wake commits with lease tokens and heartbeat leases while t
 Add named Runtime Engine composite commits and the optional store-adapter `runComposite(kind, input)` override. Core keeps the default `transact()` runner, and the Convex runtime component now routes composites through one mutation for atomic host-bound commits.
 
 Make `config()` lifecycle-safe by installing one hook layer per active config, replacing the previous active config on repeat calls, and keeping independent layers such as imperative devtools intact when a config is disposed.
+
+Hard-rename the global hook-store API from the runtime family to the hooks family: `CruxHooks`, `getHooks()`, `setHooks()`, `updateHooks()`, `resetHooks()`, and `mergeHooks()`. The old hook-store names are removed with no deprecated aliases so Runtime Engine terminology can stay unambiguous.

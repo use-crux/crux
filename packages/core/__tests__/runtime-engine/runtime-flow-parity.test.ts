@@ -2,11 +2,11 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { config, flow, noPayload } from '@use-crux/core'
 import { node } from '@use-crux/core/runtime'
 import { getExecutionContext } from '../../runtime/execution-context'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 import { inMemoryRecordStore } from '../../storage'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 describe('runtime flow parity', () => {
@@ -92,9 +92,9 @@ async function expectRuntimeParity<T>(
   name: string,
   runScenario: (name: string) => Promise<T>,
 ): Promise<void> {
-  updateRuntime({ records: inMemoryRecordStore() })
+  updateHooks({ records: inMemoryRecordStore() })
   const objectBound = await runScenario(`${name}-object`)
-  resetRuntime()
+  resetHooks()
 
   const runtime = node({
     namespace: `${name}-runtime-namespace`,
@@ -113,9 +113,9 @@ async function expectRuntimeRejection(
   name: string,
   runScenario: (name: string) => Promise<void>,
 ): Promise<void> {
-  updateRuntime({ records: inMemoryRecordStore() })
+  updateHooks({ records: inMemoryRecordStore() })
   await expect(runScenario(`${name}-object`)).rejects.toThrow('expected no payload')
-  resetRuntime()
+  resetHooks()
 
   const runtime = node({
     namespace: `${name}-runtime-namespace`,

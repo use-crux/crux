@@ -6,19 +6,19 @@ import {
   setObservabilityTransport,
 } from '../../observability'
 import { plan, updatePlan } from '../../plan/plans'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 import { inMemoryRecordStore } from '../../storage'
 
 describe('canonical plan observability', () => {
   afterEach(() => {
     resetObservabilityRuntime()
-    resetRuntime()
+    resetHooks()
   })
 
     it('records plan mutations with full plan artifact data for devtools read models', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    updateRuntime({ records: inMemoryRecordStore() })
+    updateHooks({ records: inMemoryRecordStore() })
 
     const created = await plan({
       title: 'Fact check plan',

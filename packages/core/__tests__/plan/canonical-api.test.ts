@@ -6,16 +6,16 @@ import { task } from '../../plan/task-spec'
 import * as planEntrypoint from '../../plan'
 import * as tasksEntrypoint from '../../tasks'
 import * as rootEntrypoint from '../../index'
-import { updateRuntime, resetRuntime } from '../../runtime/runtime'
+import { updateHooks, resetHooks } from '../../runtime/runtime'
 
 /** Register a fresh in-memory store for each test. */
 function setup() {
   const store = inMemoryRecordStore()
-  updateRuntime({ records: store })
+  updateHooks({ records: store })
   return store
 }
 
-afterEach(() => resetRuntime())
+afterEach(() => resetHooks())
 
 describe('canonical Plans & Tasks API', () => {
   it('public entrypoints export canonical names and omit removed names', () => {

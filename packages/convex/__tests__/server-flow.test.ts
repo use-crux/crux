@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { resetRuntime, updateRuntime } from '@use-crux/core'
+import { resetHooks, updateHooks } from '@use-crux/core'
 import { resetObservabilityRuntime } from '@use-crux/core/observability'
 import { noPayload } from '@use-crux/core/flow'
 import { inMemoryRecordStore } from '@use-crux/core/storage'
@@ -9,12 +9,12 @@ import { flow } from '../server'
 describe('@use-crux/convex/server flow', () => {
   afterEach(() => {
     resetObservabilityRuntime()
-    resetRuntime()
+    resetHooks()
     vi.restoreAllMocks()
   })
 
   it('validates declared signal payloads before scheduling a resume action', async () => {
-    updateRuntime({ records: inMemoryRecordStore() })
+    updateHooks({ records: inMemoryRecordStore() })
     const scheduler = {
       runAfter: vi.fn(async () => undefined),
     }
@@ -47,7 +47,7 @@ describe('@use-crux/convex/server flow', () => {
   })
 
   it('resumes Convex flows with validated declared signal payloads', async () => {
-    updateRuntime({ records: inMemoryRecordStore() })
+    updateHooks({ records: inMemoryRecordStore() })
     const scheduled: Array<{ ref: unknown; args: Record<string, unknown> }> = []
     const scheduler = {
       runAfter: vi.fn(async (_delayMs: number, ref: unknown, args: Record<string, unknown>) => {
@@ -90,7 +90,7 @@ describe('@use-crux/convex/server flow', () => {
   })
 
   it('resumes a flow without declared signals from a zero-argument signal call', async () => {
-    updateRuntime({ records: inMemoryRecordStore() })
+    updateHooks({ records: inMemoryRecordStore() })
     const scheduled: Array<{ ref: unknown; args: Record<string, unknown> }> = []
     const scheduler = {
       runAfter: vi.fn(async (_delayMs: number, ref: unknown, args: Record<string, unknown>) => {
@@ -127,7 +127,7 @@ describe('@use-crux/convex/server flow', () => {
   })
 
   it('resumes a declared noPayload signal from a zero-argument signal call', async () => {
-    updateRuntime({ records: inMemoryRecordStore() })
+    updateHooks({ records: inMemoryRecordStore() })
     const scheduled: Array<{ ref: unknown; args: Record<string, unknown> }> = []
     const scheduler = {
       runAfter: vi.fn(async (_delayMs: number, ref: unknown, args: Record<string, unknown>) => {

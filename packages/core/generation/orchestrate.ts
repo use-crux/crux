@@ -21,7 +21,7 @@
 
 import { observe } from '../observability'
 import { warnMissingSemanticCachePlugin } from '../cache'
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import type { MiddlewareResult } from '../runtime/types'
 import type { AnyPromptConfig } from '../prompt/prompt-types'
 import { withAttemptTimeout } from './attempt-timeout'
@@ -120,7 +120,7 @@ async function orchestrateGenerateInner<TArgs extends Record<string, unknown>, T
   spec: OrchestrationSpec<TArgs>,
   doGenerate: (args: TArgs) => Promise<TResult>,
 ): Promise<TResult> {
-  const middleware = getRuntime().middleware
+  const middleware = getHooks().middleware
   const start = Date.now()
   maybeWarnMissingSemanticCache(spec)
 
@@ -239,7 +239,7 @@ async function orchestrateStreamInner<TArgs extends Record<string, unknown>, TRe
   >,
   doStream: (args: TArgs) => Promise<TResult>,
 ): Promise<TResult> {
-  const middleware = getRuntime().middleware
+  const middleware = getHooks().middleware
   maybeWarnMissingSemanticCache(spec)
 
   try {
@@ -274,7 +274,7 @@ function maybeWarnMissingSemanticCache(
   spec: Pick<OrchestrationSpec<Record<string, unknown>>, 'promptId' | 'promptConfig'>,
 ): void {
   const semantic = (spec.promptConfig as { cache?: { semantic?: unknown } }).cache?.semantic
-  if (semantic !== undefined && semantic !== false && !getRuntime().semanticCacheInstalled) {
+  if (semantic !== undefined && semantic !== false && !getHooks().semanticCacheInstalled) {
     warnMissingSemanticCachePlugin(spec.promptId)
   }
 }

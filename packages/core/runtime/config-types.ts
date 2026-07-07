@@ -284,7 +284,7 @@ export interface CruxConfig {
   readonly observability?: CruxObservabilityConfig
   /**
    * Plugins to install. Processed in order; each plugin's `install()` receives
-   * the cumulative runtime from all prior plugins.
+   * the cumulative hook state from all prior plugins.
    */
   readonly plugins?: readonly CruxPlugin[]
 }

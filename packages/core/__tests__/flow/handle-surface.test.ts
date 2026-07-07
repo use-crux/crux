@@ -1,17 +1,17 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { cancelFlow, flow, listFlows, noPayload } from '../../flow'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 import { inMemoryRecordStore } from '../../storage'
 
 describe('flow handle surface', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
   it('persists run input and restores it for resume', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow('input resume', async (scope, input: { docId: string }) => {
       const loaded = await scope.step('load', () => ({ docId: input.docId }))
@@ -43,7 +43,7 @@ describe('flow handle surface', () => {
 
   it('signals typed local signal maps through the flow handle', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow(
       'typed signal map',
@@ -104,7 +104,7 @@ describe('flow handle surface', () => {
 
   it('rejects invalid typed signal payloads before writing them', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow(
       'typed signal send validation',
@@ -135,7 +135,7 @@ describe('flow handle surface', () => {
 
   it('rejects invalid persisted signal payloads during resume delivery', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow(
       'typed signal resume validation',
@@ -166,7 +166,7 @@ describe('flow handle surface', () => {
 
   it('marks resumed flows completed instead of leaving a suspended snapshot', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow('terminal completion snapshot', async (scope) => {
       await scope.suspend('approval')
@@ -194,7 +194,7 @@ describe('flow handle surface', () => {
 
   it('rejects terminal snapshots before executing the flow handler', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
     const executions: string[] = []
 
     const review = flow('terminal resume guard', async (scope) => {
@@ -236,7 +236,7 @@ describe('flow handle surface', () => {
 
   it('persists terminal metadata for cancelled and expired snapshots', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const internalCancel = flow('internal cancel metadata', async (scope) => {
       await scope.step('plan', () => ({ planId: 'internal' }))

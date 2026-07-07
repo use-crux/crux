@@ -245,7 +245,7 @@ export const acmeSdkRuntime = defineProviderRuntime({
 
 Thanks to the shared orchestration, your adapter **does not** need to implement:
 
-- Middleware integration (`getRuntime().middleware` / wrapping)
+- Middleware integration (`getHooks().middleware` / wrapping)
 - Hook dispatch (`onGenerate`, `onError`)
 - Fallback loop logic
 - Timeout handling

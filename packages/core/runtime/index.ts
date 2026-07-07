@@ -44,21 +44,21 @@ export type { PromptRegistry } from './configure'
 // ─────────────────────────────────────────────────────────────────
 
 export {
-  getRuntime,
+  getHooks,
   pushHooksLayer,
-  resetRuntime,
+  resetHooks,
   restoreHooksLayer,
   resolveRecords,
-  setRuntime,
-  updateRuntime,
+  setHooks,
+  updateHooks,
 } from './runtime'
-export type { CruxRuntime, HooksLayerToken } from './runtime'
+export type { CruxHooks, HooksLayerToken } from './runtime'
 
 // ─────────────────────────────────────────────────────────────────
 // Plugins
 // ─────────────────────────────────────────────────────────────────
 
-export { mergeRuntime, applyPlugins } from './plugin'
+export { mergeHooks, applyPlugins } from './plugin'
 export type { CruxPlugin, CruxPluginResult, ApplyPluginsResult } from './plugin'
 
 // ─────────────────────────────────────────────────────────────────

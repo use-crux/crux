@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cancelFlow, flow } from '../../flow'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 import { inMemoryRecordStore } from '../../storage'
 
 describe('flow serialization guards', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
   it('rejects non-serializable input before writing a suspended snapshot', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow('reject non-json input', async (scope, input: { value: unknown }) => {
       await scope.suspend('approval')
@@ -29,7 +29,7 @@ describe('flow serialization guards', () => {
 
   it('rejects non-serializable step output before writing a suspended snapshot', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow('reject non-json step output', async (scope) => {
       await scope.step('load', () => ({ value: () => undefined }))
@@ -47,7 +47,7 @@ describe('flow serialization guards', () => {
 
   it('rejects non-serializable signal payload before writing the pending signal', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow('reject non-json signal payload', async (scope) => {
       await scope.suspend('approval')
@@ -69,7 +69,7 @@ describe('flow serialization guards', () => {
 
   it('rejects non-serializable lifecycle metadata before writing a terminal snapshot', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow('reject non-json lifecycle metadata', async (scope) => {
       scope.cancel({ value: () => undefined } as unknown as string)
@@ -85,7 +85,7 @@ describe('flow serialization guards', () => {
 
   it('rejects non-serializable external cancellation metadata before updating a snapshot', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const review = flow('reject non-json external cancel metadata', async (scope) => {
       await scope.suspend('approval')

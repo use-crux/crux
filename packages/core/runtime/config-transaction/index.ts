@@ -13,6 +13,6 @@ export type {
   RuntimeConfigTransaction,
   RuntimeConfigTransactionInput,
   RuntimeConfigTransactionPorts,
-  RuntimeStorePort,
+  HooksStorePort,
   TokenizerPort,
 } from './types'

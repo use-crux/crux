@@ -12,7 +12,7 @@ import type {
   VectorStore,
   VectorStoreCapabilities,
 } from '@use-crux/core/storage'
-import { getRuntime } from '@use-crux/core'
+import { getHooks } from '@use-crux/core'
 
 export { CONVEX_RUNTIME_ENTRY, convex } from './runtime-engine/definition'
 export type { ConvexRuntimeEngineDefinition, ConvexRuntimeEngineOptions } from './runtime-engine/definition'
@@ -140,7 +140,7 @@ function popRuntime(runtime: ConvexCruxRuntime): void {
 function resolveRuntimeStorage(): Storage {
   const runtimeStorage = getConvexCruxRuntime()?.storage
   if (runtimeStorage) return runtimeStorage
-  const runtimeRecords = getRuntime().records
+  const runtimeRecords = getHooks().records
   if (!runtimeRecords) {
     throw new Error(
       'No Convex Crux runtime storage is active. Use createCruxConvex(...).run(), convexAgent(), or pass explicit storage.',

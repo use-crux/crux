@@ -10,10 +10,10 @@ import {
 } from '@use-crux/core/runtime'
 import { runtimeTargetMap } from '../../runtime/api/target-registry'
 import { getExecutionContext } from '../../runtime/execution-context'
-import { resetRuntime } from '../../runtime/runtime'
+import { resetHooks } from '../../runtime/runtime'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 describe('runtime-backed flows', () => {

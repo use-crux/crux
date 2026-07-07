@@ -9,7 +9,7 @@ This recipe layers Crux's three observability mechanisms into one stack: devtool
 
 - `withDevtools()` from `@use-crux/core/observability`
 - `withTelemetry()` from `@use-crux/otel`
-- A custom `CruxPlugin` implementing `install(runtime)` with hooks
+- A custom `CruxPlugin` implementing `install(hooks)` with hooks
 - `config({ plugins: [...] })` to compose them
 
 ## When to reach for this pattern
@@ -23,7 +23,7 @@ This recipe layers Crux's three observability mechanisms into one stack: devtool
 ### `lib/ai/plugins/cost-tracker.ts`
 
 ```ts
-import type { CruxPlugin, CruxRuntime } from '@use-crux/core'
+import type { CruxPlugin, CruxHooks } from '@use-crux/core'
 
 interface CostTrackerOptions {
   onCost: (event: {
@@ -40,13 +40,13 @@ interface CostTrackerOptions {
 export function withCostTracker(options: CostTrackerOptions): CruxPlugin {
   return {
     name: 'app:cost-tracker',
-    install(runtime: Readonly<CruxRuntime>) {
+    install(hooks: Readonly<CruxHooks>) {
       return {
         observability subscribers: {
-          ...runtime.observability subscribers,
+          ...hooks.observability subscribers,
           onGenerateEnd: async (event) => {
             // Forward to existing handlers (fan-out)
-            await runtime.observability subscribers?.onGenerateEnd?.(event)
+            await hooks.observability subscribers?.onGenerateEnd?.(event)
 
             // Push cost metric
             await options.onCost({
@@ -163,7 +163,7 @@ Use `@use-crux/convex/server` boundaries and `ctx.crux.runAction()` so spans acr
   />
   <Card
     title="Plugins guide"
-    description="CruxPlugin interface and mergeRuntime semantics."
+    description="CruxPlugin interface and mergeHooks semantics."
     href="/docs/guides/observability/plugins"
   />
   <Card

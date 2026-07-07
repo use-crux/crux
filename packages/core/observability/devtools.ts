@@ -28,10 +28,10 @@ import type { Context } from '../prompt/context-types'
 import type { CruxPlugin, CruxPluginResult } from '../runtime/plugin'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
 import {
-  getRuntime,
+  getHooks,
   pushHooksLayer,
   restoreHooksLayer,
-  type CruxRuntime,
+  type CruxHooks,
   type HooksLayerToken,
 } from '../runtime/runtime'
 import { configureObservability, observe } from './observe'
@@ -97,8 +97,8 @@ export interface EnableDevtoolsOptions {
 export function withDevtools(options: EnableDevtoolsOptions): CruxPlugin {
   return {
     name: 'crux:devtools',
-    install(runtime) {
-      return buildDevtoolsRuntime(options, runtime)
+    install(hooks) {
+      return buildDevtoolsRuntime(options, hooks)
     },
   }
 }
@@ -130,7 +130,7 @@ const devtoolsRuntimeLayers = new Map<number, DevtoolsRuntimeLayer>()
  */
 function buildDevtoolsRuntime(
   options: EnableDevtoolsOptions,
-  _existingRuntime: Readonly<CruxRuntime>,
+  _existingRuntime: Readonly<CruxHooks>,
 ): CruxPluginResult {
   const transport = createHttpObservabilityTransport({
     serverUrl: options.serverUrl,
@@ -211,7 +211,7 @@ async function registerIndexSnapshot(
 
 export function enableDevtools(options: EnableDevtoolsOptions): () => void {
   const token = nextDevtoolsToken++
-  const previousRuntime = getRuntime()
+  const previousRuntime = getHooks()
 
   const { dispose, ...runtimePatch } = buildDevtoolsRuntime(
     options,

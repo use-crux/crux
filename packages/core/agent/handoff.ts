@@ -18,7 +18,7 @@ import type { JsonObject, RecordStore } from '../storage'
 import type { Context } from '../prompt/context-types'
 import { contextWithFamily } from '../prompt/context'
 import type { GenerateTextFn } from '../compaction/types'
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import { observe } from '../observability'
 
 // ── Types ───────────────────────────────────────────────────────────

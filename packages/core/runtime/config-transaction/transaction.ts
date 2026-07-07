@@ -29,7 +29,7 @@ export function createRuntimeConfigTransaction(
     apply(): RuntimeConfigInstallation {
       if (plan.inert) {
         return {
-          runtime: Object.freeze({}),
+          hooks: Object.freeze({}),
           restore() {},
           connectBridge() {
             return undefined

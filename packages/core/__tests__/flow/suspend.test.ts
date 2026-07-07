@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { flow as makeFlow, signalFlow, listFlows } from '../../flow/scope'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 import { inMemoryRecordStore } from '../../storage'
 import {
   createInMemoryObservabilityTransport,
@@ -14,13 +14,13 @@ import { z } from 'zod'
 let store: RecordStore
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
   resetObservabilityRuntime()
 })
 
 function setupStore() {
   store = inMemoryRecordStore()
-  updateRuntime({ records: store })
+  updateHooks({ records: store })
   return store
 }
 
@@ -244,7 +244,7 @@ describe('flow suspend with typed signal payload', () => {
 describe('flow suspend error handling', () => {
   it('throws clear error when suspend is called without a store', async () => {
     // No store configured
-    resetRuntime()
+    resetHooks()
 
     await expect(
       makeFlow('no-store', async (flow) => {
@@ -266,7 +266,7 @@ describe('config store integration', () => {
   it('uses store from config globally', async () => {
     const store = inMemoryRecordStore()
     // Simulate what config does — sets store on runtime
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const run = await makeFlow('cfg-test', async (flow) => {
       await flow.step('plan', async () => ({ planId: '1' }))
@@ -647,7 +647,7 @@ describe('listFlows', () => {
 
 describe('suspend/resume instrumentation hooks', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
     it('preserves trace context (sessionId, parentFlowId) across resume', async () => {

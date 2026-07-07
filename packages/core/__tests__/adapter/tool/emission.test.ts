@@ -6,13 +6,13 @@
  */
 
 import { describe, it, expect, afterEach } from 'vitest'
-import { resetRuntime } from '../../../runtime/runtime'
+import { resetHooks } from '../../../runtime/runtime'
 import { resetObservabilityRuntime, subscribeObservability } from '../../../observability'
 import { instrumentToolSet, renderToolModelOutput } from '../../../adapter/tool/emission'
 import type { ToolModelOutput } from '../../../types/tool'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
   resetObservabilityRuntime()
 })
 

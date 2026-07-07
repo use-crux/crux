@@ -8,20 +8,20 @@ import {
   type CruxObservabilityTransport,
 } from '../observability'
 import type { CruxPlugin } from '../runtime/plugin'
-import { getRuntime, resetRuntime, updateRuntime } from '../runtime/runtime'
+import { getHooks, resetHooks, updateHooks } from '../runtime/runtime'
 import { inMemoryRecordStore } from '../storage'
 import { countTokens, defaultTokenizer, setTokenizer } from '../shared/tokenizer'
 import type { PromptMiddleware } from '../runtime/types'
 
 describe('config — runtime domain mapping', () => {
   beforeEach(() => {
-    resetRuntime()
+    resetHooks()
     resetObservabilityRuntime()
     setTokenizer(defaultTokenizer)
   })
 
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
     resetObservabilityRuntime()
     setTokenizer(defaultTokenizer)
   })
@@ -29,9 +29,9 @@ describe('config — runtime domain mapping', () => {
   it('does not install observability transport from config defaults', () => {
     const crux = config({})
 
-    expect(getRuntime().observabilityTransport).toBeUndefined()
-    expect(getRuntime().observabilityDelivery).toBeUndefined()
-    expect(getRuntime().observabilityCapture).toBeUndefined()
+    expect(getHooks().observabilityTransport).toBeUndefined()
+    expect(getHooks().observabilityDelivery).toBeUndefined()
+    expect(getHooks().observabilityCapture).toBeUndefined()
     expect(currentObservabilityTransport()).toBeUndefined()
 
     crux.dispose()
@@ -45,11 +45,11 @@ describe('config — runtime domain mapping', () => {
       },
     })
 
-    expect(getRuntime().observabilityCapture).toEqual({
+    expect(getHooks().observabilityCapture).toEqual({
       recordInputs: false,
       recordOutputs: false,
     })
-    expect(getRuntime().observabilityTransport).toBeUndefined()
+    expect(getHooks().observabilityTransport).toBeUndefined()
     expect(currentObservabilityTransport()).toBeUndefined()
 
     crux.dispose()
@@ -60,11 +60,11 @@ describe('config — runtime domain mapping', () => {
     const delivery = { maxPendingDeliveries: 2 }
     const plugin: CruxPlugin = {
       name: 'observability-server-url-plugin',
-      install(runtime) {
+      install(hooks) {
         seen.push({
-          runtimeTransport: runtime.observabilityTransport,
+          runtimeTransport: hooks.observabilityTransport,
           activeTransport: currentObservabilityTransport(),
-          delivery: runtime.observabilityDelivery,
+          delivery: hooks.observabilityDelivery,
         })
         return {}
       },
@@ -85,8 +85,8 @@ describe('config — runtime domain mapping', () => {
         delivery,
       },
     ])
-    expect(getRuntime().observabilityTransport).toBeDefined()
-    expect(getRuntime().observabilityDelivery).toBe(delivery)
+    expect(getHooks().observabilityTransport).toBeDefined()
+    expect(getHooks().observabilityDelivery).toBe(delivery)
     expect(currentObservabilityTransport()).toBeDefined()
 
     crux.dispose()
@@ -122,9 +122,9 @@ describe('config — runtime domain mapping', () => {
     const seenTransports: Array<{ runtime: unknown; active: unknown }> = []
     const plugin: CruxPlugin = {
       name: 'explicit-observability-plugin',
-      install(runtime) {
+      install(hooks) {
         seenTransports.push({
-          runtime: runtime.observabilityTransport,
+          runtime: hooks.observabilityTransport,
           active: currentObservabilityTransport(),
         })
         return {}
@@ -138,7 +138,7 @@ describe('config — runtime domain mapping', () => {
     })
 
     expect(seenTransports).toEqual([{ runtime: transport, active: transport }])
-    expect(getRuntime().observabilityTransport).toBe(transport)
+    expect(getHooks().observabilityTransport).toBe(transport)
     expect(currentObservabilityTransport()).toBe(transport)
 
     crux.dispose()
@@ -149,8 +149,8 @@ describe('config — runtime domain mapping', () => {
     const seenTransports: unknown[] = []
     const plugin: CruxPlugin = {
       name: 'devtools-aware-plugin',
-      install(runtime) {
-        seenTransports.push(runtime.observabilityTransport)
+      install(hooks) {
+        seenTransports.push(hooks.observabilityTransport)
         return {}
       },
     }
@@ -169,13 +169,13 @@ describe('config — runtime domain mapping', () => {
     it('disables observability before plugins run', () => {
     const previousTransport: CruxObservabilityTransport = { send: vi.fn() }
     const restorePrevious = configureObservability({ transport: previousTransport })
-    updateRuntime({ observabilityTransport: previousTransport })
+    updateHooks({ observabilityTransport: previousTransport })
     const seenTransports: Array<{ runtime: unknown; active: unknown }> = []
     const plugin: CruxPlugin = {
       name: 'observability-disabled-plugin',
-      install(runtime) {
+      install(hooks) {
         seenTransports.push({
-          runtime: runtime.observabilityTransport,
+          runtime: hooks.observabilityTransport,
           active: currentObservabilityTransport(),
         })
         return {}
@@ -190,7 +190,7 @@ describe('config — runtime domain mapping', () => {
       })
 
       expect(seenTransports).toEqual([{ runtime: undefined, active: undefined }])
-      expect(getRuntime().observabilityTransport).toBeUndefined()
+      expect(getHooks().observabilityTransport).toBeUndefined()
       expect(currentObservabilityTransport()).toBeUndefined()
 
       crux.dispose()
@@ -209,7 +209,7 @@ describe('config — runtime domain mapping', () => {
       },
     })
 
-    expect(getRuntime().middleware).toBe(promptMiddleware)
+    expect(getHooks().middleware).toBe(promptMiddleware)
     expect(countTokens('abcde')).toBe(5)
 
     crux.dispose()
@@ -227,7 +227,7 @@ describe('config — runtime domain mapping', () => {
     const previousTransport: CruxObservabilityTransport = { send: vi.fn() }
     const restorePrevious = configureObservability({ transport: previousTransport })
     setTokenizer((text) => text.length * 2)
-    updateRuntime({
+    updateHooks({
       records: previousStore,
       middleware: previousMiddleware,
       observabilityTransport: previousTransport,
@@ -246,18 +246,18 @@ describe('config — runtime domain mapping', () => {
       })
 
       expect(install).not.toHaveBeenCalled()
-      expect(getRuntime().records).toBe(previousStore)
-      expect(getRuntime().middleware).toBe(previousMiddleware)
-      expect(getRuntime().observabilityTransport).toBe(previousTransport)
+      expect(getHooks().records).toBe(previousStore)
+      expect(getHooks().middleware).toBe(previousMiddleware)
+      expect(getHooks().observabilityTransport).toBe(previousTransport)
       expect(currentObservabilityTransport()).toBe(previousTransport)
       expect(countTokens('abc')).toBe(6)
 
       crux.dispose()
-      expect(getRuntime().records).toBe(previousStore)
+      expect(getHooks().records).toBe(previousStore)
       expect(currentObservabilityTransport()).toBe(previousTransport)
     } finally {
       restorePrevious()
-      resetRuntime()
+      resetHooks()
       resetObservabilityRuntime()
       setTokenizer(defaultTokenizer)
       if (previous === undefined) {

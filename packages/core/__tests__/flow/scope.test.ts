@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flow as makeFlow, createFlowId, signalFlow, type FlowScope } from '../../flow/scope'
-import { updateRuntime, resetRuntime } from '../../runtime/runtime'
+import { updateHooks, resetHooks } from '../../runtime/runtime'
 import { getExecutionContext, runWithExecutionContext, withSession } from '../../runtime/execution-context'
 import { inMemoryRecordStore } from '../../storage'
 
@@ -18,7 +18,7 @@ describe('createFlowId', () => {
 
 describe('flow', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
     it('runs the function and returns its result wrapped in FlowResult', async () => {
@@ -72,7 +72,7 @@ describe('flow', () => {
 
 describe('flow.step', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
     it('runs the step function and returns its result', async () => {
@@ -138,7 +138,7 @@ describe('flow.step', () => {
 
 describe('step retry', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
     it('retries on failure up to attempts count', async () => {
@@ -220,7 +220,7 @@ describe('step retry', () => {
 })
 describe('nested flows', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
     it('sets parentFlowId when nesting flow calls', async () => {
@@ -329,7 +329,7 @@ describe('nested flows', () => {
 
 describe('flow.input', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
     it('is accessible within step functions when input is provided', async () => {
@@ -364,7 +364,7 @@ describe('flow.input', () => {
 
     it('survives suspend/resume (persisted in snapshot)', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     type Input = { topic: string; audience: string }
     let inputOnResume: unknown
@@ -400,7 +400,7 @@ describe('flow.input', () => {
 
 describe('flow.results', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
     it('is empty {} at the start of a fresh flow', async () => {
@@ -431,7 +431,7 @@ describe('flow.results', () => {
 
     it('is pre-populated from cache on resume and includes skip-replayed steps', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const stepsExecuted: string[] = []
     let resultsAfterResume: Record<string, unknown> | undefined
@@ -486,7 +486,7 @@ describe('flow.results', () => {
 
 describe('flow.step auto-pass', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
     it('passes flow scope to step functions that accept a parameter', async () => {

@@ -9,7 +9,7 @@
  */
 
 import type { JsonValue } from '../../storage'
-import { getRuntime } from '../runtime'
+import { getHooks } from '../runtime'
 import type { ResolvedRuntimeEngine } from './create-runtime'
 import { createRuntimeWithHostContext } from './host-context'
 import { runtimeRequiredError } from './runtime-required'
@@ -190,7 +190,7 @@ async function withRuntime<T>(
     readonly runtimeRef: RuntimeTargetRuntimeRef
   }) => Promise<T>,
 ): Promise<T> {
-  const runtimeDefinition = getRuntime().runtimeEngine
+  const runtimeDefinition = getHooks().runtimeEngine
   if (!runtimeDefinition) throw runtimeRequiredError({ api })
 
   const runtimeRef: RuntimeTargetRuntimeRef = {}

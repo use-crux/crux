@@ -8,7 +8,7 @@
  * @module
  */
 
-import { getRuntime } from '../runtime'
+import { getHooks } from '../runtime'
 import { createRuntime } from '../api/create-runtime'
 import type {
   CreateRuntimeOptions,
@@ -65,7 +65,7 @@ export function createRuntimeHandler(
   options: CreateRuntimeHandlerOptions,
 ): RuntimeFetchHandlers {
   const runtimeDefinition =
-    options.runtime ?? getRuntime().runtimeEngine ?? missingRuntime()
+    options.runtime ?? getHooks().runtimeEngine ?? missingRuntime()
   if (runtimeDefinition.kind === 'host-bound') {
     throw runtimeHostOnlyError({
       api: 'createRuntimeHandler()',

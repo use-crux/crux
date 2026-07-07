@@ -10,7 +10,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 import { appendToolApprovalResponse } from '../../tools/approvals'
 import type { ToolModelOutput } from '../../types/tool'
 
@@ -84,7 +84,7 @@ function testAdapter(responses: AdapterResponse[]) {
 describe('canonical tool observability', () => {
   afterEach(() => {
     resetObservabilityRuntime()
-    resetRuntime()
+    resetHooks()
   })
 
     it('records tool calls with args, raw result, model output, and relation edges', async () => {
@@ -166,7 +166,7 @@ describe('canonical tool observability', () => {
     it('omits tool input and output previews when capture policy disables them', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    updateRuntime({
+    updateHooks({
       observabilityCapture: {
         recordInputs: false,
         recordOutputs: false,

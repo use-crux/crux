@@ -29,7 +29,7 @@
 
 import type { Message } from '../generation/messages'
 import type { TraceMeta } from '../generation/types'
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import type {
   Constraint,
   ConstraintAudit,
@@ -278,7 +278,7 @@ function mergeScopes<TPolicy extends { readonly name: string }>(
  * Create the per-call safety session.
  *
  * Reads runtime globals once at creation and
- * snapshots them, so a mid-call `setRuntime()` cannot half-instrument a
+ * snapshots them, so a mid-call `setHooks()` cannot half-instrument a
  * run.
  *
  * @example
@@ -306,9 +306,9 @@ function mergeScopes<TPolicy extends { readonly name: string }>(
  * ```
  */
 export function createSafety(options: SafetyCallOptions): Safety {
-  // Snapshot runtime state once — a mid-call setRuntime() cannot
+  // Snapshot runtime state once — a mid-call setHooks() cannot
   // half-instrument this run.
-  const runtime = getRuntime()
+  const runtime = getHooks()
 
   const constraintBindings = mergeScopes(
     options.call?.constraints,

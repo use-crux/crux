@@ -12,23 +12,23 @@
  * What this suite pins:
  * - the documented runtime values resolve and are callable;
  * - `config()` applies persistence + returns a frozen `Crux`;
- * - the runtime hook store round-trips via `setRuntime`/`getRuntime`/
- *   `updateRuntime`/`resetRuntime`;
- * - `mergeRuntime`/`applyPlugins` compose plugin runtime patches;
+ * - the hooks store round-trips via `setHooks`/`getHooks`/
+ *   `updateHooks`/`resetHooks`;
+ * - `mergeHooks`/`applyPlugins` compose plugin hook patches;
  * - the execution-context helpers propagate session metadata.
  */
 
 import { describe, it, expect } from 'vitest'
 import {
   config,
-  getRuntime,
+  getHooks,
   pushHooksLayer,
-  setRuntime,
-  updateRuntime,
-  resetRuntime,
+  setHooks,
+  updateHooks,
+  resetHooks,
   restoreHooksLayer,
   resolveRecords,
-  mergeRuntime,
+  mergeHooks,
   applyPlugins,
   withSession,
   createSessionId,
@@ -36,7 +36,7 @@ import {
   runWithExecutionContext,
   inMemoryRecordStore,
 } from '@use-crux/core'
-import type { CruxPlugin, CruxRuntime } from '@use-crux/core'
+import type { CruxHooks, CruxPlugin } from '@use-crux/core'
 
 // ─────────────────────────────────────────────────────────────────
 // Documented runtime entry points
@@ -45,14 +45,14 @@ import type { CruxPlugin, CruxRuntime } from '@use-crux/core'
 describe('@use-crux/core (runtime surface)', () => {
   it('exposes the documented runtime values', () => {
     expect(typeof config).toBe('function')
-    expect(typeof getRuntime).toBe('function')
+    expect(typeof getHooks).toBe('function')
     expect(typeof pushHooksLayer).toBe('function')
-    expect(typeof setRuntime).toBe('function')
-    expect(typeof updateRuntime).toBe('function')
-    expect(typeof resetRuntime).toBe('function')
+    expect(typeof setHooks).toBe('function')
+    expect(typeof updateHooks).toBe('function')
+    expect(typeof resetHooks).toBe('function')
     expect(typeof restoreHooksLayer).toBe('function')
     expect(typeof resolveRecords).toBe('function')
-    expect(typeof mergeRuntime).toBe('function')
+    expect(typeof mergeHooks).toBe('function')
     expect(typeof applyPlugins).toBe('function')
     expect(typeof withSession).toBe('function')
     expect(typeof createSessionId).toBe('function')
@@ -81,13 +81,13 @@ describe('@use-crux/core config()', () => {
   })
 
   it('installs generation middleware and plugins through the public config surface', () => {
-    resetRuntime()
+    resetHooks()
     const events: string[] = []
-    const middleware: NonNullable<CruxRuntime['middleware']> = (args, next) => next(args)
+    const middleware: NonNullable<CruxHooks['middleware']> = (args, next) => next(args)
     const plugin: CruxPlugin = {
       name: 'public-config-plugin',
-      install(runtime) {
-        events.push(runtime.middleware === middleware ? 'saw-middleware' : 'missing-middleware')
+      install(hooks) {
+        events.push(hooks.middleware === middleware ? 'saw-middleware' : 'missing-middleware')
         return { semanticCacheInstalled: true }
       },
     }
@@ -99,8 +99,8 @@ describe('@use-crux/core config()', () => {
 
     try {
       expect(events).toEqual(['saw-middleware'])
-      expect(getRuntime().middleware).toBe(middleware)
-      expect(getRuntime().semanticCacheInstalled).toBe(true)
+      expect(getHooks().middleware).toBe(middleware)
+      expect(getHooks().semanticCacheInstalled).toBe(true)
     } finally {
       crux.dispose()
     }
@@ -111,26 +111,26 @@ describe('@use-crux/core config()', () => {
 // Runtime hook store
 // ─────────────────────────────────────────────────────────────────
 
-describe('@use-crux/core runtime hook store', () => {
-  it('round-trips runtime state and clears on reset', () => {
-    resetRuntime()
-    expect(getRuntime()).toEqual({})
+describe('@use-crux/core hooks store', () => {
+  it('round-trips hook state and clears on reset', () => {
+    resetHooks()
+    expect(getHooks()).toEqual({})
 
-    const middleware: NonNullable<CruxRuntime['middleware']> = (args, next) => next(args)
-    setRuntime({ middleware })
-    expect(getRuntime().middleware).toBe(middleware)
+    const middleware: NonNullable<CruxHooks['middleware']> = (args, next) => next(args)
+    setHooks({ middleware })
+    expect(getHooks().middleware).toBe(middleware)
 
-    updateRuntime({ semanticCacheInstalled: true })
-    expect(getRuntime().middleware).toBe(middleware)
-    expect(getRuntime().semanticCacheInstalled).toBe(true)
+    updateHooks({ semanticCacheInstalled: true })
+    expect(getHooks().middleware).toBe(middleware)
+    expect(getHooks().semanticCacheInstalled).toBe(true)
 
-    resetRuntime()
-    expect(getRuntime()).toEqual({})
+    resetHooks()
+    expect(getHooks()).toEqual({})
   })
 
-    it('getRuntime() returns a frozen snapshot', () => {
-    resetRuntime()
-    expect(Object.isFrozen(getRuntime())).toBe(true)
+    it('getHooks() returns a frozen snapshot', () => {
+    resetHooks()
+    expect(Object.isFrozen(getHooks())).toBe(true)
   })
 })
 
@@ -146,8 +146,8 @@ describe('@use-crux/core plugin composition', () => {
       { name: 'second', install: () => ({ dispose: () => order.push('dispose:second') }) },
     ]
 
-    const { runtime, dispose } = applyPlugins(plugins, {})
-    expect(runtime).toBeDefined()
+    const { hooks, dispose } = applyPlugins(plugins, {})
+    expect(hooks).toBeDefined()
     dispose()
     expect(order).toEqual(['dispose:second', 'dispose:first'])
   })

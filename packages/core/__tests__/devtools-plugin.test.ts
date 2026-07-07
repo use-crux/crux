@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { resetRuntime, getRuntime } from '../runtime/runtime'
+import { resetHooks, getHooks } from '../runtime/runtime'
 import { withDevtools, enableDevtools } from '../observability'
 import { configure } from '../runtime/configure'
 import { prompt as cruxPrompt } from '../prompt/prompt'
@@ -12,7 +12,7 @@ function makePrompt(id: string) {
 
 describe('withDevtools — CruxPlugin', () => {
   beforeEach(() => {
-    resetRuntime()
+    resetHooks()
     resetObservabilityRuntime()
   })
 
@@ -40,7 +40,7 @@ describe('withDevtools — CruxPlugin', () => {
       serverUrl: 'http://localhost:4400',
     })
 
-    plugin.install(getRuntime())
+    plugin.install(getHooks())
     await Promise.resolve()
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -60,12 +60,12 @@ describe('withDevtools — CruxPlugin', () => {
       serverUrl: 'http://localhost:4400',
     })
 
-    const rt = getRuntime()
+    const rt = getHooks()
     expect(rt.middleware).toBeUndefined()
     expect(rt.observabilityTransport).toBeDefined()
 
     cleanup()
-    expect(getRuntime().observabilityTransport).toBeUndefined()
+    expect(getHooks().observabilityTransport).toBeUndefined()
     fetchMock.mockClear()
 
     await observe.run({ name: 'after-cleanup', rootPrimitive: 'custom.operation' }, async () => undefined)
@@ -80,23 +80,23 @@ describe('withDevtools — CruxPlugin', () => {
       prompts: [],
       serverUrl: 'http://localhost:4400',
     })
-    const firstTransport = getRuntime().observabilityTransport
+    const firstTransport = getHooks().observabilityTransport
 
     const cleanupSecond = enableDevtools({
       prompts: [],
       serverUrl: 'http://localhost:4401',
     })
-    const secondTransport = getRuntime().observabilityTransport
+    const secondTransport = getHooks().observabilityTransport
 
     expect(firstTransport).toBeDefined()
     expect(secondTransport).toBeDefined()
     expect(secondTransport).not.toBe(firstTransport)
 
     cleanupSecond()
-    expect(getRuntime().observabilityTransport).toBe(firstTransport)
+    expect(getHooks().observabilityTransport).toBe(firstTransport)
 
     cleanupFirst()
-    expect(getRuntime().observabilityTransport).toBeUndefined()
+    expect(getHooks().observabilityTransport).toBeUndefined()
   })
 
   it('passes the devtools sessionId through as an observability default correlator', async () => {

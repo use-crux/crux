@@ -14,13 +14,13 @@ import { createCallbackExporter } from '../exporter'
 import { createOtelRecordSubscriber } from '../record-mapper'
 import { createLightweightSpanManager } from '../span-manager'
 import type { TraceSpan } from '../types'
-import { resetRuntime, updateRuntime } from '../../core/runtime/runtime'
+import { resetHooks, updateHooks } from '../../core/runtime/runtime'
 import { messageContentAttributesForArtifact } from '../message-content'
 
 describe('GenAI semconv projection', () => {
   afterEach(() => {
     resetObservabilityRuntime()
-    resetRuntime()
+    resetHooks()
   })
 
   it('exports generation spans with the versioned GenAI semantic convention table', async () => {
@@ -161,7 +161,7 @@ describe('GenAI semconv projection', () => {
         spans.push(...batch)
       },
     }).install({})
-    updateRuntime({
+    updateHooks({
       observabilityCapture: {
         recordOutputs: 'off',
       },

@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, afterEach } from 'vitest'
 import { flow as makeFlow, signalFlow, type FlowScope } from '../../flow/scope'
-import { updateRuntime, resetRuntime } from '../../runtime/runtime'
+import { updateHooks, resetHooks } from '../../runtime/runtime'
 import { inMemoryRecordStore } from '../../storage'
 
 // ── External step functions (simulating separate files) ────────
@@ -57,7 +57,7 @@ async function publishStep(flow: FlowScope<ContentInput>) {
 
 // ── Tests ──────────────────────────────────────────────────────
 
-afterEach(() => resetRuntime())
+afterEach(() => resetHooks())
 
 describe('step composition: end-to-end', () => {
   it('external steps use flow.input and flow.results across a full flow', async () => {
@@ -91,7 +91,7 @@ describe('step composition: end-to-end', () => {
 
     it('flow.input and flow.results survive suspend/resume with external steps', async () => {
     const store = inMemoryRecordStore()
-    updateRuntime({ records: store })
+    updateHooks({ records: store })
 
     const stepsExecuted: string[] = []
 

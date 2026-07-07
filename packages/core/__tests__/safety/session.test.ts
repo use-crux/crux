@@ -12,11 +12,11 @@ import { createSafety, GuardrailBlockedError, ConstraintViolationError } from '.
 import type { SafetyOutput } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
-import { updateRuntime, resetRuntime } from '../../runtime/runtime'
+import { updateHooks, resetHooks } from '../../runtime/runtime'
 import type { Message } from '../../generation/messages'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -71,7 +71,7 @@ describe('createSafety — enabled', () => {
     expect(identity({ call: { guardrails: [passGuard('g', 'input')] } }).enabled).toBe(true)
     expect(identity({ resolved: { constraints: [passingConstraint('c')] } }).enabled).toBe(true)
 
-    updateRuntime({ globalGuardrails: [passGuard('global-g', 'output')] })
+    updateHooks({ globalGuardrails: [passGuard('global-g', 'output')] })
     expect(identity().enabled).toBe(true)
   })
 })
@@ -84,7 +84,7 @@ describe('createSafety — scope precedence', () => {
     const promptSpy = vi.fn()
     const callSpy = vi.fn()
 
-    updateRuntime({ globalGuardrails: [passGuard('shared', 'input', globalSpy)] })
+    updateHooks({ globalGuardrails: [passGuard('shared', 'input', globalSpy)] })
     const safety = identity({
       resolved: { guardrails: [passGuard('shared', 'input', promptSpy)] },
       call: { guardrails: [passGuard('shared', 'input', callSpy)] },
@@ -99,7 +99,7 @@ describe('createSafety — scope precedence', () => {
 
     it('differently named policies from all scopes all run', async () => {
     const spies = { a: vi.fn(), b: vi.fn(), c: vi.fn() }
-    updateRuntime({ globalConstraints: [passingConstraint('a', spies.a)] })
+    updateHooks({ globalConstraints: [passingConstraint('a', spies.a)] })
     const safety = identity({
       resolved: { constraints: [passingConstraint('b', spies.b)] },
       call: { constraints: [passingConstraint('c', spies.c)] },
@@ -115,7 +115,7 @@ describe('createSafety — scope precedence', () => {
     it('per-prompt constraint overrides same-named global constraint', async () => {
     const globalSpy = vi.fn()
     const promptSpy = vi.fn()
-    updateRuntime({ globalConstraints: [passingConstraint('shared', globalSpy)] })
+    updateHooks({ globalConstraints: [passingConstraint('shared', globalSpy)] })
     const safety = identity({ resolved: { constraints: [passingConstraint('shared', promptSpy)] } })
 
     await safety.finalizeOutput({ text: 'fine' }, noRegen)

@@ -4,7 +4,7 @@
  * @module
  */
 
-import { getRuntime } from "../../runtime/runtime";
+import { getHooks } from "../../runtime/runtime";
 import type { ResolvedRuntimeEngine } from "../../runtime/api/create-runtime";
 import { createRuntimeWithHostContext } from "../../runtime/api/host-context";
 import { runtimeRequiredError } from "../../runtime/api/runtime-required";
@@ -33,7 +33,7 @@ export function createWorkspaceChangeEmitter(): WorkspaceChangeEmitter {
 
 /** Resolve the runtime required by `workspace.watch()`. */
 export function createWorkspaceWatchRuntime(): ResolvedRuntimeEngine {
-  const runtimeDefinition = getRuntime().runtimeEngine;
+  const runtimeDefinition = getHooks().runtimeEngine;
   if (!runtimeDefinition) {
     throw runtimeRequiredError({ api: "workspace.watch()" });
   }
@@ -43,7 +43,7 @@ export function createWorkspaceWatchRuntime(): ResolvedRuntimeEngine {
 async function withOptionalWorkspaceRuntime(
   fn: (runtime: ResolvedRuntimeEngine) => Promise<void>,
 ): Promise<void> {
-  const runtimeDefinition = getRuntime().runtimeEngine;
+  const runtimeDefinition = getHooks().runtimeEngine;
   if (!runtimeDefinition) return;
 
   let runtime: ResolvedRuntimeEngine | undefined;
@@ -71,7 +71,7 @@ async function withOptionalWorkspaceRuntime(
 }
 
 function createWorkspaceRuntime(
-  runtimeDefinition: NonNullable<ReturnType<typeof getRuntime>["runtimeEngine"]>,
+  runtimeDefinition: NonNullable<ReturnType<typeof getHooks>["runtimeEngine"]>,
 ): ResolvedRuntimeEngine {
   const runtimeRef: RuntimeTargetRuntimeRef = {};
   const runtime = createRuntimeWithHostContext({

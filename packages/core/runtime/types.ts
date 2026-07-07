@@ -2,9 +2,9 @@
  * Runtime middleware contracts owned by the `runtime/` domain.
  *
  * {@link PromptMiddleware} wraps every adapter `generate()`/`stream()` call. It
- * is installed on the runtime via `config({ generation: { middleware } })` or
- * `updateRuntime({ middleware })`, and composed with layered chaining by
- * `mergeRuntime()`. The argument/return shapes here describe the data that
+ * is installed in the hooks store via `config({ generation: { middleware } })` or
+ * `updateHooks({ middleware })`, and composed with layered chaining by
+ * `mergeHooks()`. The argument/return shapes here describe the data that
  * devtools, caches, and cost trackers read as a call flows back through the
  * middleware stack.
  *
@@ -24,7 +24,7 @@ import type { TraceMeta } from '../generation/types'
  *
  * @example
  * ```ts
- * updateRuntime({
+ * updateHooks({
  *   middleware: async (args, next) => {
  *     const start = Date.now()
  *     const result = await next(args)

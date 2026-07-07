@@ -1,8 +1,8 @@
 /**
- * Runtime merge semantics for plugin composition.
+ * Hook merge semantics for plugin composition.
  *
- * `mergeRuntime()` folds a partial runtime patch (typically a plugin's
- * `install()` result) into a base runtime. Hooks fan out (every handler is
+ * `mergeHooks()` folds a partial hook patch (typically a plugin's
+ * `install()` result) into a base hook store. Hooks fan out (every handler is
  * called), middleware layers (new wraps old), safety policies concatenate, and
  * last-write-wins fields (observability transport/delivery) overwrite. The
  * private fan-out/chaining helpers live here so `plugin.ts` can stay focused on
@@ -11,12 +11,12 @@
  * @module
  */
 
-import type { CruxRuntime } from './runtime'
+import type { CruxHooks } from './runtime'
 import type { ResolveHook, ResolveHookArgs, StreamProgressReporter } from './middleware'
 import type { PromptMiddleware } from './types'
 
 /**
- * Merge a partial runtime patch into a base runtime.
+ * Merge a partial hook patch into a base hook store.
  *
  * - **Hooks** (executionHook, resolveHook, streamStartHook): Fan-out — both
  *   base and patch handlers are called for every event.
@@ -24,17 +24,17 @@ import type { PromptMiddleware } from './types'
  * - **streamProgressHook**: Fan-out — both reporters receive chunks.
  * - **observability transport**: Last-write-wins.
  *
- * @param base - The current runtime state.
+ * @param base - The current hook state.
  * @param patch - Partial fields to merge in.
- * @returns A new merged runtime (does not mutate inputs).
+ * @returns A new merged hook state (does not mutate inputs).
  *
  * @example
  * ```ts
- * const merged = mergeRuntime(currentRuntime, plugin.install(currentRuntime))
+ * const merged = mergeHooks(currentHooks, plugin.install(currentHooks))
  * ```
  */
-export function mergeRuntime(base: CruxRuntime, patch: Partial<CruxRuntime>): CruxRuntime {
-  const result: CruxRuntime = { ...base }
+export function mergeHooks(base: CruxHooks, patch: Partial<CruxHooks>): CruxHooks {
+  const result: CruxHooks = { ...base }
 
   // Middleware: layered chaining (new wraps old)
   if (patch.middleware !== undefined) {
@@ -126,9 +126,9 @@ function fanOutResolveHook(base: ResolveHook | undefined, patch: ResolveHook): R
  * forwarded to both.
  */
 function fanOutStreamProgressHook(
-  base: CruxRuntime['streamProgressHook'],
-  patch: NonNullable<CruxRuntime['streamProgressHook']>,
-): NonNullable<CruxRuntime['streamProgressHook']> {
+  base: CruxHooks['streamProgressHook'],
+  patch: NonNullable<CruxHooks['streamProgressHook']>,
+): NonNullable<CruxHooks['streamProgressHook']> {
   if (!base) return patch
   return (traceId: string): StreamProgressReporter | undefined => {
     const r1 = base(traceId)

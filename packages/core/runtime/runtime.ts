@@ -1,11 +1,11 @@
 /**
- * Centralized runtime state for all global hooks and reporters.
+ * Centralized hook state for process-wide Crux instrumentation.
  *
  * Replaces the scattered setter/getter pairs that were spread across
  * `middleware.ts`, `testing.ts`, and `flow/scope.ts`.
- * All hook state lives in a single `CruxRuntime` object, enabling
- * atomic install/uninstall (e.g. plugin install sets everything
- * in one call, plugin dispose restores the previous state).
+ * All hook state lives in a single `CruxHooks` object. Config, plugins, and
+ * devtools can install or restore related fields atomically without sharing
+ * mutable module-level setters for each hook family.
  *
  * @module
  */
@@ -26,22 +26,22 @@ import type { RuntimeEngineDefinition } from './api/runtime-definition'
  * The set of global hooks and reporters that instrument Crux primitives.
  *
  * Devtools and config install fields atomically through layer tokens.
- * Primitives read individual fields via `getRuntime()`.
+ * Primitives read individual fields via `getHooks()`.
  *
  * @example
  * ```ts
- * import { setRuntime, resetRuntime } from '@use-crux/core'
+ * import { setHooks, resetHooks } from '@use-crux/core'
  *
  * // Install all hooks at once
- * setRuntime({
+ * setHooks({
  *   middleware: myMiddleware,
  * })
  *
  * // Tear down cleanly
- * resetRuntime()
+ * resetHooks()
  * ```
  */
-export interface CruxRuntime {
+export interface CruxHooks {
   /** Wraps every adapter `generate()` call for logging, cost tracking, observability. */
   middleware?: PromptMiddleware
   /** Fires when a prompt is resolved via the agent adapter. */
@@ -74,7 +74,7 @@ const hooksLayerBrand = Symbol('CruxHooksLayerToken')
 /**
  * Opaque handle returned by {@link pushHooksLayer}.
  *
- * Pass this token to {@link restoreHooksLayer} to restore exactly the runtime
+ * Pass this token to {@link restoreHooksLayer} to restore exactly the hook
  * keys touched by that layer. Tokens are intentionally not constructible by
  * callers; keep the value returned from `pushHooksLayer()`.
  */
@@ -84,74 +84,74 @@ export interface HooksLayerToken {
 }
 
 interface HooksLayer {
-  readonly keys: readonly (keyof CruxRuntime)[]
-  readonly previousRuntime: Readonly<CruxRuntime>
+  readonly keys: readonly (keyof CruxHooks)[]
+  readonly previousHooks: Readonly<CruxHooks>
 }
 
-let _runtime: CruxRuntime = {}
+let currentHooks: CruxHooks = {}
 let nextHooksLayerId = 1
 const hooksLayers = new Map<number, HooksLayer>()
 
 /**
- * Get the current runtime state.
+ * Get the current hook state.
  *
  * Returns a frozen shallow copy — safe to destructure, cannot be mutated.
  *
  * @example
  * ```ts
- * const { middleware, observabilityTransport } = getRuntime()
+ * const { middleware, observabilityTransport } = getHooks()
  * ```
  */
-export function getRuntime(): Readonly<CruxRuntime> {
-  return Object.freeze({ ..._runtime })
+export function getHooks(): Readonly<CruxHooks> {
+  return Object.freeze({ ...currentHooks })
 }
 
 /**
- * Replace the entire runtime atomically.
+ * Replace the entire hook store atomically.
  *
  * Used by plugin install to set all hooks in a single call,
  * and by plugin dispose to restore the previous state.
  *
- * @param runtime - The new runtime state. A defensive copy is made.
+ * @param hooks - The new hook state. A defensive copy is made.
  *
  * @example
  * ```ts
- * const previous = getRuntime()
- * setRuntime({ middleware, resolveHook, executionHook })
+ * const previous = getHooks()
+ * setHooks({ middleware, resolveHook, executionHook })
  * // later: restore
- * setRuntime(previous)
+ * setHooks(previous)
  * ```
  */
-export function setRuntime(runtime: CruxRuntime): void {
-  _runtime = { ...runtime }
+export function setHooks(hooks: CruxHooks): void {
+  currentHooks = { ...hooks }
 }
 
 /**
- * Merge partial fields into the current runtime.
+ * Merge partial fields into the current hook store.
  *
  * Unmentioned fields are preserved. Explicitly passing `undefined`
  * clears that field.
  *
- * @param patch - Fields to merge into the current runtime.
+ * @param patch - Fields to merge into the current hook store.
  *
  * @example
  * ```ts
- * updateRuntime({ middleware: myMiddleware })
- * updateRuntime({ middleware: undefined }) // clear middleware only
+ * updateHooks({ middleware: myMiddleware })
+ * updateHooks({ middleware: undefined }) // clear middleware only
  * ```
  */
-export function updateRuntime(patch: Partial<CruxRuntime>): void {
-  _runtime = { ..._runtime, ...patch }
+export function updateHooks(patch: Partial<CruxHooks>): void {
+  currentHooks = { ...currentHooks, ...patch }
 }
 
 /**
- * Install a partial runtime layer and return a token that can restore it.
+ * Install a partial hook layer and return a token that can restore it.
  *
  * Only keys present in `patch` are captured and restored. Other layers that
  * write different keys remain intact, so config teardown can coexist with
  * devtools or test-installed hooks.
  *
- * @param patch - Runtime fields installed by this layer.
+ * @param patch - Hook fields installed by this layer.
  * @returns An opaque restore token for this layer.
  *
  * @example
@@ -161,19 +161,19 @@ export function updateRuntime(patch: Partial<CruxRuntime>): void {
  * restoreHooksLayer(token)
  * ```
  */
-export function pushHooksLayer(patch: Partial<CruxRuntime>): HooksLayerToken {
+export function pushHooksLayer(patch: Partial<CruxHooks>): HooksLayerToken {
   const id = nextHooksLayerId++
-  const keys = Object.keys(patch) as (keyof CruxRuntime)[]
+  const keys = Object.keys(patch) as (keyof CruxHooks)[]
   hooksLayers.set(id, {
     keys,
-    previousRuntime: { ..._runtime },
+    previousHooks: { ...currentHooks },
   })
-  _runtime = { ..._runtime, ...patch }
+  currentHooks = { ...currentHooks, ...patch }
   return { id, [hooksLayerBrand]: true }
 }
 
 /**
- * Restore the runtime keys captured by a previous hook layer.
+ * Restore the hook keys captured by a previous hook layer.
  *
  * Restores are idempotent: calling this with an already-restored token is a
  * no-op. Out-of-order restores are allowed; the restore writes the captured
@@ -184,25 +184,25 @@ export function restoreHooksLayer(token: HooksLayerToken): void {
   if (!layer) return
 
   hooksLayers.delete(token.id)
-  const nextRuntime: CruxRuntime = { ..._runtime }
+  const nextHooks: CruxHooks = { ...currentHooks }
   for (const key of layer.keys) {
-    if (Object.prototype.hasOwnProperty.call(layer.previousRuntime, key)) {
-      copyRuntimeField(nextRuntime, layer.previousRuntime, key)
+    if (Object.prototype.hasOwnProperty.call(layer.previousHooks, key)) {
+      copyHookField(nextHooks, layer.previousHooks, key)
     } else {
-      delete nextRuntime[key]
+      delete nextHooks[key]
     }
   }
-  _runtime = nextRuntime
+  currentHooks = nextHooks
 }
 
 /**
- * Clear all runtime state.
+ * Clear all hook state.
  *
- * Equivalent to `setRuntime({})`. Used in test cleanup and
+ * Equivalent to `setHooks({})`. Used in test cleanup and
  * when tearing down devtools.
  */
-export function resetRuntime(): void {
-  _runtime = {}
+export function resetHooks(): void {
+  currentHooks = {}
   hooksLayers.clear()
 }
 
@@ -221,7 +221,7 @@ export function resetRuntime(): void {
  * ```
  */
 export function resolveRecords(): RecordStore {
-  const records = _runtime.records
+  const records = currentHooks.records
   if (!records) {
     throw new Error(
       'No RecordStore configured. Call config({ persistence: { records } }) before using plans, tasks, or flows.',
@@ -230,9 +230,9 @@ export function resolveRecords(): RecordStore {
   return records
 }
 
-function copyRuntimeField<K extends keyof CruxRuntime>(
-  target: CruxRuntime,
-  source: Readonly<CruxRuntime>,
+function copyHookField<K extends keyof CruxHooks>(
+  target: CruxHooks,
+  source: Readonly<CruxHooks>,
   key: K,
 ): void {
   target[key] = source[key]

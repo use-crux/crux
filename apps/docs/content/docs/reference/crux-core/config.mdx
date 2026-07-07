@@ -374,7 +374,7 @@ See [Observability](/docs/reference/crux-core/observability).
 
 ## `plugins`
 
-Plugins install runtime hooks in order. Each plugin receives the cumulative runtime from all previous
+Plugins install hooks in order. Each plugin receives the cumulative hook state from all previous
 plugins. Cleanup runs when the returned Crux object is disposed. Cleanup hooks may return a promise;
 Crux starts cleanup in reverse install order, and plugin runners that expose async disposal wait for
 those promises before reporting shutdown complete.
@@ -383,14 +383,14 @@ those promises before reporting shutdown complete.
 | ------------------- | ------------------------------------------------------ | -------- | ------------------------------------------------------ |
 | `plugins`           | `readonly CruxPlugin[]`                                | `[]`     | Ordered plugin list.                                   |
 | `plugins[].name`    | `string`                                               | required | Unique name for debugging and diagnostics.             |
-| `plugins[].install` | `(runtime: Readonly<CruxRuntime>) => CruxPluginResult` | required | Returns runtime fields to merge plus optional cleanup. |
+| `plugins[].install` | `(hooks: Readonly<CruxHooks>) => CruxPluginResult` | required | Returns hook fields to merge plus optional cleanup. |
 
 ```ts title="crux.config.ts"
 export default config({
   plugins: [
     {
       name: 'my-plugin',
-      install(runtime) {
+      install(hooks) {
         return {
           observability subscribers: {
             tool.call start records(event) {

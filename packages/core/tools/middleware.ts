@@ -14,7 +14,7 @@
  * @module
  */
 
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import { getExecutionContext } from '../runtime/execution-context'
 import { collectToolApprovals } from './internal/message-parsing'
 import {
