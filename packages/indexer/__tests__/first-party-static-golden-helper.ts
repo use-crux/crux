@@ -29,8 +29,8 @@ interface RustFirstPartyStaticGoldenOptions {
  *
  * The P5.4 cutover uses Rust/Oxc as the only bundled first-party extractor
  * implementation. This helper records root-independent canonical hashes rather
- * than duplicating the full fact payload, so CI can detect exact output drift
- * without keeping a parallel TypeScript baseline.
+ * than duplicating the full fact payload, so CI can detect output drift without
+ * keeping a parallel TypeScript baseline.
  */
 export async function generateRustFirstPartyStaticGolden(
   root: string,
@@ -65,7 +65,9 @@ function goldenFile(
   root: string,
   extracted: StaticFileExtraction,
 ): RustFirstPartyStaticGoldenFileFixture {
-  const facts = rootStableValue(projectStaticExtraction(extracted), root);
+  const facts = rootStableGoldenValue(
+    rootStableValue(projectStaticExtraction(extracted), root),
+  );
   const canonicalJson = canonicalStaticExtractionJson(
     facts as Parameters<typeof canonicalStaticExtractionJson>[0],
   );
@@ -135,6 +137,28 @@ function rootStableString(value: string, root: string): string {
     return `<repo>/${normalizedValue.slice(normalizedRoot.length + 1)}`;
   }
   return normalizedValue;
+}
+
+/**
+ * Removes values that are derived before root placeholder normalization.
+ *
+ * Rust native definition fingerprints currently include the absolute source
+ * file path. The public fact still carries the real fingerprint, but the
+ * golden stores per-file hashes that must be stable across checkout roots.
+ */
+function rootStableGoldenValue(value: unknown): unknown {
+  if (Array.isArray(value))
+    return value.map((item) => rootStableGoldenValue(item));
+  if (!value || typeof value !== "object") return value;
+
+  const normalized: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    normalized[key] =
+      key === "fingerprint"
+        ? "<root-derived-fingerprint>"
+        : rootStableGoldenValue(child);
+  }
+  return normalized;
 }
 
 function rootRelativePath(root: string, file: string): string {
