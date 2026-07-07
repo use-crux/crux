@@ -121,6 +121,7 @@ fn analyze_parsed_file(
             .record
             .imports
             .iter()
+            .filter(|import| import.import_kind.as_deref() != Some("type"))
             .filter_map(|import| import.resolved_file.clone())
             .collect(),
         !groups.is_empty(),

@@ -95,6 +95,36 @@ func TestInspectLoadsNodeConfigAndExtensionManifest(t *testing.T) {
 	}
 }
 
+func TestInspectDefaultManifestIncludesRuntimeTaskInterest(t *testing.T) {
+	root := t.TempDir()
+	srcDir := filepath.Join(root, "src")
+	if err := os.MkdirAll(srcDir, 0o755); err != nil {
+		t.Fatalf("mkdir src: %v", err)
+	}
+	sourceFile := filepath.Join(srcDir, "task.ts")
+	if err := os.WriteFile(sourceFile, []byte("export const embed = durableTask('embed-document', { run: async () => undefined })"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	reader := &recordingReader{
+		responses: []json.RawMessage{json.RawMessage(`{"root":` + quote(root) + `,"nativeAstEnabled":true,"extensions":[]}`)},
+	}
+
+	result, err := Inspect(context.Background(), reader, root, "", "project")
+
+	if err != nil {
+		t.Fatalf("Inspect error = %v", err)
+	}
+	if !hasString(result.Plan.CallNames, "durableTask") {
+		t.Fatalf("call names = %v, want durableTask", result.Plan.CallNames)
+	}
+	if !hasRuntimeTaskInterest(result.Plan.CallInterests) {
+		t.Fatalf("call interests = %+v, want import-qualified durableTask interest", result.Plan.CallInterests)
+	}
+	if !hasString(result.Plan.Files, sourceFile) {
+		t.Fatalf("files = %v, want runtime task source file", result.Plan.Files)
+	}
+}
+
 type recordingReader struct {
 	requests  []requestwire.Request
 	artifacts []projectindex.ProjectIndexArtifactKind
@@ -119,6 +149,16 @@ func hasString(values []string, want string) bool {
 		if value == want {
 			return true
 		}
+	}
+	return false
+}
+
+func hasRuntimeTaskInterest(values []projectindex.StaticCallInterest) bool {
+	for _, value := range values {
+		if value.Name != "durableTask" {
+			continue
+		}
+		return hasString(value.ImportFrom, "@use-crux/core") && hasString(value.ImportFrom, "@use-crux/core/runtime")
 	}
 	return false
 }

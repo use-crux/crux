@@ -34,3 +34,10 @@ func TestProjectStaticIndexSignalMatcherIncludesSafetyToolPolicy(t *testing.T) {
 		t.Fatal("matcher did not detect safety tool policy interest")
 	}
 }
+
+func TestProjectStaticIndexSignalMatcherIncludesDurableTask(t *testing.T) {
+	matcher := signalMatcherForCallNames(nil)
+	if !matcher.HasCruxInterest("export const embed = durableTask('embed-document', { run: async () => undefined })") {
+		t.Fatal("matcher did not detect runtime durable task interest")
+	}
+}

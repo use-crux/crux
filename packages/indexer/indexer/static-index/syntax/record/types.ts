@@ -232,6 +232,8 @@ export interface StaticImportRecord {
   readonly importedName: string
   /** Authored module specifier. */
   readonly moduleSpecifier: string
+  /** Whether the binding is available at runtime or only in the TypeScript type space. */
+  readonly importKind?: 'value' | 'type'
   /** Resolved local project file when the static resolver can prove one. */
   readonly resolvedFile?: string
   /** Source location of the import declaration. */

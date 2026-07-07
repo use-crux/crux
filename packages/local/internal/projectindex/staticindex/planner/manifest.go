@@ -6,7 +6,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const syntaxFrontendVersion = "oxc_parser@0.133.0+crux_native_group3.6"
+const syntaxFrontendVersion = "oxc_parser@0.133.0+crux_native_group3.7"
 
 var defaultCallNames = []string{
 	"Agent",
@@ -24,6 +24,7 @@ var defaultCallNames = []string{
 	"convexWorkspaceBlobStore",
 	"createTool",
 	"cruxFlow",
+	"durableTask",
 	"evaluate",
 	"expandParents",
 	"fallback",
@@ -76,6 +77,7 @@ var defaultCallInterestNames = []string{
 	"convexWorkspaceBlobStore",
 	"createTool",
 	"cruxFlow",
+	"durableTask",
 	"evaluate",
 	"expandParents",
 	"fallback",
@@ -121,6 +123,9 @@ func defaultCallInterests() []projectindex.StaticCallInterest {
 	out := make([]projectindex.StaticCallInterest, 0, len(defaultCallInterestNames))
 	for _, name := range defaultCallInterestNames {
 		interest := projectindex.StaticCallInterest{Name: name, Source: "extractor-pattern"}
+		if name == "durableTask" {
+			interest.ImportFrom = []string{"@use-crux/core", "@use-crux/core/runtime"}
+		}
 		if name == "evaluate" {
 			arg := 1
 			interest.ConfigArg = &arg

@@ -4,7 +4,7 @@
       "schemaVersion": 1,
       "frontend": {
         "name": "oxc-rust",
-        "version": "oxc_parser@0.133.0+crux_native_group3.6"
+        "version": "oxc_parser@0.133.0+crux_native_group3.7"
       },
       "file": "/repo/src/agent.ts",
       "sourceHash": "sha256:agent",

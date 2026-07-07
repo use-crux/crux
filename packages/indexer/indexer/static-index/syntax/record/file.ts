@@ -128,8 +128,8 @@ export async function parseStaticFactsFromSyntaxRecords(
   )
   const diagnostics = [...record.diagnostics, ...facts.flatMap((fact) => fact.diagnostics ?? [])]
   const dependencies = [
-    ...new Set([
-      ...record.imports.flatMap((item) => item.resolvedFile ?? []),
+      ...new Set([
+      ...record.imports.flatMap((item) => (item.importKind === 'type' ? [] : (item.resolvedFile ?? []))),
       ...facts.flatMap((fact) =>
         (fact.dependencies ?? [])
           .filter((dependency) => dependency.kind === 'source-file')

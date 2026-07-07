@@ -110,21 +110,24 @@ function collectImportRecords(
     const moduleSpecifier = statement.moduleSpecifier.text
     const clause = statement.importClause
     if (!clause) continue
+    const declarationKind = clause.isTypeOnly ? 'type' : 'value'
     if (clause.name) {
-      records.push(importRecord(clause.name.text, 'default', moduleSpecifier, statement, resolvedByLocalName))
+      records.push(importRecord(clause.name.text, 'default', moduleSpecifier, declarationKind, statement, resolvedByLocalName))
     }
     const namedBindings = clause.namedBindings
     if (!namedBindings) continue
     if (ts.isNamespaceImport(namedBindings)) {
-      records.push(importRecord(namedBindings.name.text, '*', moduleSpecifier, statement, resolvedByLocalName))
+      records.push(importRecord(namedBindings.name.text, '*', moduleSpecifier, declarationKind, statement, resolvedByLocalName))
       continue
     }
     for (const element of namedBindings.elements) {
+      const importKind = declarationKind === 'type' || element.isTypeOnly ? 'type' : 'value'
       records.push(
         importRecord(
           element.name.text,
           element.propertyName?.text ?? element.name.text,
           moduleSpecifier,
+          importKind,
           statement,
           resolvedByLocalName,
         ),
@@ -138,6 +141,7 @@ function importRecord(
   localName: string,
   importedName: string,
   moduleSpecifier: string,
+  importKind: 'value' | 'type',
   statement: ts.ImportDeclaration,
   resolvedByLocalName: ReadonlyMap<string, { readonly file: string }>,
 ): StaticImportRecord {
@@ -146,6 +150,7 @@ function importRecord(
     localName,
     importedName,
     moduleSpecifier,
+    importKind,
     ...(resolved ? { resolvedFile: resolved.file } : {}),
     source: sourceForNode(statement.getSourceFile(), statement),
   }
