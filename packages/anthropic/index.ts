@@ -24,6 +24,8 @@
 // from @use-crux/ai or another embedding provider for retrieval/indexing.
 
 export { createAnthropic, anthropicProviderRuntime } from './native'
+export { fromResponse, toParams } from './codec'
+export type { AnthropicCodecOptions } from './codec'
 export type { AnthropicRerankerConfig, AnthropicRetrievalModelConfig } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { anthropicTranscript, fromMessages, toMessages } from './message-codec'

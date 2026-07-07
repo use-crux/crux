@@ -30,10 +30,14 @@ import { createCompositions } from "../agent/create-compositions";
 import type { AgentExecutor } from "../agent/executor";
 import { coreStepDialect, createAdapterExecution } from "./execution/session";
 import { assertStreamHandle } from "./execution/stream-handle-guard";
+import { transportDialect } from "./execution/transport-dialect";
+import { CruxTransportStreamUnsupportedError } from "./transport";
 import type {
   AdapterGenerateOptions,
   AdapterGenerateResult,
   AdapterStreamOptions,
+  AdapterTransport,
+  AdapterTransportInfo,
   CruxAdapter,
 } from "./define-adapter-types";
 import { createStreamResult, type StreamResult } from "./result-accumulator";
@@ -42,6 +46,8 @@ export type {
   AdapterGenerateOptions,
   AdapterGenerateResult,
   AdapterStreamOptions,
+  AdapterTransport,
+  AdapterTransportInfo,
   CruxAdapter,
 } from "./define-adapter-types";
 
@@ -101,13 +107,15 @@ export function adapter<
   TRawResponse = unknown,
   TRawStream = unknown,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
+  TParams = unknown,
 >(
-  spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra>,
-): (client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra> {
+  spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TParams>,
+): (client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra, TParams> {
   return (
     client: TClient,
-  ): CruxAdapter<TClient, TRawResponse, TRawStream, TExtra> => {
-    const execution = createAdapterExecution(coreStepDialect(spec, client));
+  ): CruxAdapter<TClient, TRawResponse, TRawStream, TExtra, TParams> => {
+    const baseDialect = coreStepDialect(spec, client);
+    const execution = createAdapterExecution(baseDialect);
 
     // ── generate() ──────────────────────────────────────────────
 
@@ -117,9 +125,12 @@ export function adapter<
       TRuntimeContext = unknown,
     >(
       prompt: TPrompt,
-      opts: AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext>,
+      opts: AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
     ): Promise<AdapterGenerateResult<TRawResponse>> {
-      return (await execution.generate({
+      const activeExecution = opts.transport
+        ? createAdapterExecution(transportDialect(baseDialect, opts.transport))
+        : execution;
+      return (await activeExecution.generate({
         prompt,
         model: opts.model,
         modelInfo: {
@@ -155,8 +166,9 @@ export function adapter<
       TRuntimeContext = unknown,
     >(
       prompt: TPrompt,
-      opts: AdapterStreamOptions<TExtra, TCallTools, TPrompt, TRuntimeContext>,
+      opts: AdapterStreamOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
     ): Promise<StreamResult<TRawStream>> {
+      if (opts.transport) throw new CruxTransportStreamUnsupportedError(spec.providerId);
       const handle = await execution.stream({
         prompt,
         model: opts.model,
@@ -187,6 +199,46 @@ export function adapter<
       return createStreamResult(handle);
     }
 
+    // ── prepare() ──────────────────────────────────────────────
+
+    async function prepare<
+      TPrompt extends AnyPrompt,
+      TCallTools extends AnyToolSet | undefined = undefined,
+      TRuntimeContext = unknown,
+    >(
+      prompt: TPrompt,
+      opts: AdapterGenerateOptions<TExtra, TCallTools, TPrompt, TRuntimeContext, TParams, TRawResponse>,
+    ) {
+      if (!execution.prepare) {
+        throw new TypeError(`Adapter "${spec.providerId}" does not expose public call handles.`);
+      }
+      return execution.prepare({
+        prompt,
+        model: opts.model,
+        modelInfo: {
+          provider: opts.provider ?? spec.providerId,
+          modelId: opts.model,
+        },
+        input: opts.input,
+        provider: opts.provider,
+        tokenBudget: opts.tokenBudget,
+        maxSteps: opts.maxSteps,
+        settings: opts.settings,
+        extra: opts.extra,
+        messages: opts.messages,
+        tools: opts.tools,
+        toolsContext: opts.toolsContext,
+        runtimeContext: opts.runtimeContext,
+        toolMiddleware: opts.toolMiddleware,
+        toolApproval: opts.toolApproval,
+        validationRetry: opts.validationRetry,
+        constraints: opts.constraints,
+        constraintMaxRetries: opts.constraintMaxRetries,
+        guardrails: opts.guardrails,
+        timeout: opts.timeout,
+      });
+    }
+
     // ── Agent executor ──────────────────────────────────────────
 
     const executor: AgentExecutor = async (agent, options) => {
@@ -201,7 +253,7 @@ export function adapter<
           ? withMergedPromptTools(agent.prompt, mergedTools)
           : agent.prompt;
 
-      const generateOpts: AdapterGenerateOptions<TExtra> = {
+      const generateOpts: AdapterGenerateOptions<TExtra, undefined, AnyPrompt, unknown, TParams, TRawResponse> = {
         model,
         input: options.input as Record<string, unknown>,
         maxSteps: options.maxSteps,
@@ -227,6 +279,7 @@ export function adapter<
       providerId: spec.providerId,
       generate,
       stream: streamFn,
+      ...(execution.prepare ? { prepare } : {}),
       parallel: compositions.parallel,
       pipeline: compositions.pipeline,
       consensus: compositions.consensus,

@@ -31,6 +31,7 @@ import { generateCore } from './generate-core'
 import { generateSdk } from './generate-sdk'
 import { streamCore } from './stream-core'
 import { streamSdk } from './stream-sdk'
+import { prepareCoreHandle } from './handle-core'
 
 export type {
   AdapterExecution,
@@ -58,9 +59,10 @@ export function createAdapterExecution<
   TRawResponse,
   TRawStream,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
+  TParams = unknown,
 >(
-  dialect: CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra>,
-): AdapterExecution<string, TRawResponse, TRawStream, TExtra>
+  dialect: CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra, TParams>,
+): AdapterExecution<string, TRawResponse, TRawStream, TExtra, TParams>
 
 /**
  * Create a shared execution facade for an SDK-loop dialect.
@@ -101,5 +103,23 @@ export function createAdapterExecution<
     return streamSdk(dialect, args as AdapterExecutionStreamArgs<TModel, Record<string, unknown>>)
   }
 
-  return Object.freeze({ generate, stream })
+  async function prepare(args: AdapterExecutionGenerateArgs<TModel, TExtra>) {
+    if (dialect.kind !== 'core-step' || !dialect.toParams || !dialect.fromResponse) {
+      throw new TypeError(`Adapter "${dialect.id}" does not expose public call-handle codecs.`)
+    }
+    return prepareCoreHandle(
+      dialect,
+      args as AdapterExecutionGenerateArgs<string, TExtra>,
+      {
+        toParams: dialect.toParams,
+        fromResponse: dialect.fromResponse,
+      },
+    )
+  }
+
+  return Object.freeze({
+    generate,
+    stream,
+    ...(dialect.kind === 'core-step' && dialect.toParams && dialect.fromResponse ? { prepare } : {}),
+  })
 }

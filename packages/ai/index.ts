@@ -60,9 +60,13 @@ import type { DenseEmbedding } from "@use-crux/core/embedding";
 import type { Reranker, RetrievalModel } from "@use-crux/core/retrieval";
 import type {
   ApprovalRequestInfo,
+  CallHandle,
   ExecutorModelArg,
   GenerateResult,
   StreamResult,
+} from "@use-crux/core/adapter";
+import {
+  CruxTransportStreamUnsupportedError,
 } from "@use-crux/core/adapter";
 import type { ToolApprovalMap, ToolMiddleware, FallbackModel } from "@use-crux/core";
 import { isRouter, isCascade, resolveModel } from "@use-crux/core/routing";
@@ -74,7 +78,7 @@ import type {
 import type { ValidationRetryOptions } from "@use-crux/core";
 import type { SdkGateway } from "./src/gateway";
 import { liveSdkGateway } from "./src/gateway";
-import type { AIExtra, AIGenerateOptions } from "./src/options";
+import type { AIExtra, AIGenerateOptions, AITransport } from "./src/options";
 import type { SdkLoopResultLike } from "./src/executor";
 import type {
   AIEmbeddingConfig,
@@ -85,12 +89,19 @@ import { aiSdkProviderRuntime } from "./src/profile";
 import { extractModelInfo } from "./src/provider-profile";
 import { createAiStreamResult } from "./src/stream-result";
 import { createStructuredGenerateObjectFn } from "./src/structured-generation";
+import {
+  aiSdkHandleFor,
+  createManualAiSdkGatewayController,
+  transportGateway,
+} from "./src/call-handle";
+export { fromResponse, toParams } from "./src/codec";
+export type { AiSdkCodecOptions } from "./src/codec";
 
 // ─────────────────────────────────────────────────────────────────
 // Options Types
 // ─────────────────────────────────────────────────────────────────
 
-export type { AIExtra, AIGenerateOptions } from "./src/options";
+export type { AIExtra, AIGenerateOptions, AITransport, AITransportInfo } from "./src/options";
 
 // ─────────────────────────────────────────────────────────────────
 // Result Types
@@ -242,6 +253,24 @@ export interface CruxAi {
       TRuntimeContext
     >,
   ): Promise<StreamReturn<TOutput>>;
+  /** Prepare a sans-I/O AI SDK call handle for one `generateText()` or `generateObject()` request. */
+  prepare?<
+    TOwnInput extends z.ZodType,
+    TOutput extends z.ZodType | undefined,
+    TContexts extends readonly Context<z.ZodType>[],
+    TPromptTools extends AnyToolSet | undefined = undefined,
+    TCallTools extends ToolSet | undefined = undefined,
+    TRuntimeContext = unknown,
+  >(
+    prompt: Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+    opts: AIGenerateOptions<
+      TOwnInput,
+      TContexts,
+      TCallTools,
+      Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+      TRuntimeContext
+    >,
+  ): Promise<CallHandle<Record<string, unknown>, SdkLoopResultLike, GenerateReturn<TOutput>>>;
   /** See the package-level {@link generateTextFn}. */
   generateTextFn: GenerateTextFn;
   /** See the package-level {@link generateObjectFn}. */
@@ -274,6 +303,7 @@ type CallOpts = Record<string, unknown> & {
   guardrails?: Guardrail[];
   safety?: SafetyTuneOptions;
   input?: Record<string, unknown>;
+  transport?: AITransport;
 };
 
 /**
@@ -297,10 +327,11 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   const gateway = options.gateway ?? liveSdkGateway();
   const executor = aiSdkProviderRuntime.create(gateway);
 
-  async function generateImpl(
+  async function runGenerate(
+    activeExecutor: typeof executor,
     prompt: AnyPrompt,
     opts: CallOpts,
-  ): Promise<SdkLoopResultLike> {
+  ): Promise<GenerateResult<SdkLoopResultLike | undefined>> {
     const {
       model,
       tools,
@@ -320,10 +351,11 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       guardrails,
       safety,
       input,
+      transport: _transport,
       ...settings
     } = opts;
 
-    const result = await executor.generate(prompt, {
+    const result = await activeExecutor.generate(prompt, {
       model,
       input,
       tools: tools as Record<string, unknown> | undefined,
@@ -347,7 +379,42 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       extra,
     });
 
-    return result as unknown as SdkLoopResultLike;
+    return result as GenerateResult<SdkLoopResultLike | undefined>;
+  }
+
+  async function generateImpl(
+    prompt: AnyPrompt,
+    opts: CallOpts,
+  ): Promise<GenerateResult<SdkLoopResultLike | undefined>> {
+    if (opts.transport) {
+      return runGenerate(aiSdkProviderRuntime.create(transportGateway(opts.transport)), prompt, opts);
+    }
+    return runGenerate(executor, prompt, opts);
+  }
+
+  async function prepareImpl(
+    prompt: AnyPrompt,
+    opts: CallOpts,
+  ): Promise<CallHandle<Record<string, unknown>, SdkLoopResultLike, GenerateResult<SdkLoopResultLike | undefined>>> {
+    const controller = createManualAiSdkGatewayController();
+    const manualExecutor = aiSdkProviderRuntime.create({
+      generateText: (args) => controller.generateText(args),
+      generateObject: (args) => controller.generateObject(args),
+      streamText: () => {
+        throw new TypeError("AI SDK call handles do not support streamText().");
+      },
+      streamObject: () => {
+        throw new TypeError("AI SDK call handles do not support streamObject().");
+      },
+      embedMany: gateway.embedMany,
+      rerank: gateway.rerank,
+    });
+
+    void runGenerate(manualExecutor, prompt, opts)
+      .then((result) => controller.complete(result))
+      .catch((error) => controller.fail(error));
+
+    return aiSdkHandleFor(await controller.first(), controller);
   }
 
   async function streamImpl(
@@ -373,8 +440,11 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       guardrails,
       safety,
       input,
+      transport,
       ...settings
     } = opts;
+
+    if (transport) throw new CruxTransportStreamUnsupportedError("ai-sdk");
 
     const handle = await executor.stream(prompt, {
       model,
@@ -402,6 +472,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
   const generateFn = generateImpl as unknown as CruxAi["generate"];
   const streamFn = streamImpl as unknown as CruxAi["stream"];
+  const prepareFn = prepareImpl as unknown as NonNullable<CruxAi["prepare"]>;
 
   const generateObjectFnImpl: GenerateObjectFn =
     createStructuredGenerateObjectFn(gateway);
@@ -433,6 +504,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   return {
     generate: generateFn,
     stream: streamFn,
+    prepare: prepareFn,
     generateTextFn: generateTextFnImpl,
     generateObjectFn: generateObjectFnImpl,
     embedding: executor.embedding,
@@ -496,6 +568,9 @@ export const generate = defaultAi.generate;
  * ```
  */
 export const stream = defaultAi.stream;
+
+/** Prepare a sans-I/O AI SDK call handle. */
+export const prepare = defaultAi.prepare!;
 
 /**
  * AI SDK `generateText` wrapped as a `GenerateTextFn`.

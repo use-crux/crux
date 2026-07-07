@@ -279,6 +279,7 @@ The adapter interface returned by the factory.
 | `providerId`             | `string`                                       | Provider identifier from the spec                                        |
 | `generate(prompt, opts)` | `Promise<AdapterGenerateResult<TRawResponse>>` | Execute a prompt (non-streaming) with automatic tool loop                |
 | `stream(prompt, opts)`   | `Promise<StreamResult<TRawStream>>`            | Execute a prompt and return canonical text deltas plus raw stream access |
+| `prepare(prompt, opts)`  | `Promise<CallHandle<...>>`                     | Headless handle: prepare params, then feed provider or SDK responses     |
 | `parallel`               | `function`                                     | Run multiple agents concurrently                                         |
 | `pipeline`               | `function`                                     | Chain agents sequentially                                                |
 | `consensus`              | `function`                                     | Run agents and pick a winner via voting                                  |

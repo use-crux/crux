@@ -30,6 +30,8 @@ export type {
   ToolResultEntry,
   StatusDelta,
 } from "./types";
+export { callArgsFromResolvedPrompt } from "./codec";
+export type { ResolvedPromptCodecOptions } from "./codec";
 
 // Adapter specification interface (core-driven loop)
 export type { AdapterSpec } from "./spec";
@@ -37,11 +39,15 @@ export type { AdapterSpec } from "./spec";
 // Factory + result/option types (core-driven loop)
 export { adapter } from "./define-adapter";
 export { createResultAccumulator } from "./result-accumulator";
+export { CruxIncompleteCallError, CruxStaleHandleError } from "./call-handle";
+export { CruxTransportStreamUnsupportedError } from "./transport";
 export type {
   CruxAdapter,
   AdapterGenerateOptions,
   AdapterStreamOptions,
   AdapterGenerateResult,
+  AdapterTransport,
+  AdapterTransportInfo,
 } from "./define-adapter";
 export type {
   FinalStepInfo,
@@ -49,6 +55,11 @@ export type {
   StreamCompletion,
   StreamResult,
 } from "./result-accumulator";
+export type {
+  CallHandle,
+  CallHandleResponseDecoder,
+  CallStepOutcome,
+} from "./call-handle";
 
 // Native single-turn provider contracts
 export type {

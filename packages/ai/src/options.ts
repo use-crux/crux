@@ -37,12 +37,33 @@ import type {
   SafetyTuneOptions,
 } from "@use-crux/core/safety";
 import type { SdkGateway } from "./gateway";
+import type { SdkLoopResultLike } from "./sdk-codec";
 
 type AiProviderOptions = Parameters<
   SdkGateway["generateText"]
 >[0]["providerOptions"];
 type AiHeaders = Parameters<SdkGateway["generateText"]>[0]["headers"];
 type AiMaxRetries = Parameters<SdkGateway["generateText"]>[0]["maxRetries"];
+type AiTransportParams =
+  | Parameters<SdkGateway["generateText"]>[0]
+  | Parameters<SdkGateway["generateObject"]>[0];
+type AiTransportResult = SdkLoopResultLike;
+
+/** Metadata passed to an AI SDK adapter `transport` callback. */
+export interface AITransportInfo {
+  /** Zero-based SDK call index for this managed run. */
+  readonly stepIndex: number;
+  /** Concrete model id selected for this SDK call. */
+  readonly modelId: string;
+  /** Cooperative abort signal for this SDK call. */
+  readonly signal: AbortSignal;
+}
+
+/** User-supplied AI SDK wire function for BYO transport mode. */
+export type AITransport = (
+  params: AiTransportParams,
+  info: AITransportInfo,
+) => Promise<AiTransportResult>;
 
 /**
  * AI SDK-native, non-portable options for `generate()` and `stream()`.
@@ -116,6 +137,8 @@ interface AIGenerateBaseOptions<
   tokenBudget?: number;
   /** Structured timeout budgets for this managed call. */
   timeout?: TimeoutOptions;
+  /** User-supplied SDK call transport using this adapter's public codec params. */
+  transport?: AITransport;
   /**
    * Validation-feedback retry for structured output.
    * Uses AI SDK's `experimental_repairText` for cheap text fixes first,

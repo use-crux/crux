@@ -25,6 +25,7 @@ import type { StreamHandle } from '../types'
 import type { ExecutorStreamHandle, StepObserver } from '../executor-types'
 import type { ApprovalRequestInfo } from '../tool/approval'
 import type { FinalStepInfo } from '../result-accumulator'
+import type { CallHandle } from '../call-handle'
 
 export type ExecutionResolveOpts = Parameters<AnyPrompt['resolve']>[0]
 
@@ -186,10 +187,14 @@ export interface AdapterExecution<
   TRawResponse,
   TRawStream,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
+  TParams = unknown,
 > {
   /** Run a prompt to completion, including tools, validation retry, and safety. */
   generate(args: AdapterExecutionGenerateArgs<TModel, TExtra>): Promise<AdapterExecutionGenerateResult<TRawResponse>>
 
   /** Start a streaming prompt run and wrap completion for safety/memory capture. */
   stream(args: AdapterExecutionStreamArgs<TModel, TExtra>): Promise<AdapterExecutionStreamResult<TRawStream>>
+
+  /** Prepare a sans-I/O call handle when the dialect exposes public codecs. */
+  prepare?(args: AdapterExecutionGenerateArgs<TModel, TExtra>): Promise<CallHandle<TParams, TRawResponse, AdapterExecutionGenerateResult<TRawResponse>>>
 }

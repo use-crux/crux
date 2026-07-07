@@ -211,13 +211,13 @@ export interface NativeChatProvider<
   specFor<TClient>(
     bind: (client: TClient) => NativeProviderPort<TRequest, TRawResponse, TRawStream>,
     ...deps: NativeProviderDepsArg<TDeps>
-  ): AdapterSpec<TClient, TRawResponse, TRawStream, TExtra>
+  ): AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TRequest>
 
   /** Compile the profile into the public Crux adapter factory. */
   createFor<TClient>(
     bind: (client: TClient) => NativeProviderPort<TRequest, TRawResponse, TRawStream>,
     ...deps: NativeProviderDepsArg<TDeps>
-  ): (client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra>
+  ): (client: TClient) => CruxAdapter<TClient, TRawResponse, TRawStream, TExtra, TRequest>
 
   /** Create lightweight helpers from the same request/response profile. */
   helpers<TClient>(

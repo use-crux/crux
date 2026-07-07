@@ -86,9 +86,9 @@ export function defineNativeChatProvider<
       client: TClient,
     ) => NativeProviderPort<TRequest, TRawResponse, TRawStream>,
     ...depsArg: NativeProviderDepsArg<TDeps>
-  ): AdapterSpec<TClient, TRawResponse, TRawStream, TExtra> {
+  ): AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TRequest> {
     const deps = resolveDeps(depsArg);
-    const spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra> = {
+    const spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TRequest> = {
       providerId: profile.providerId,
 
       async call(client, args) {
@@ -115,6 +115,15 @@ export function defineNativeChatProvider<
           extractTextDelta: profile.stream.textDelta,
           completion: async () => profile.stream.completion?.(rawStream),
         };
+      },
+      toParams(args) {
+        return profile.request(requestArgsFor(profile, args), {
+          mode: callModeFor(args),
+          deps,
+        });
+      },
+      fromResponse(raw) {
+        return responseFor(profile, raw);
       },
       appendToolRound: (messages, assistant, results) => {
         const append =

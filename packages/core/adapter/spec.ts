@@ -28,21 +28,33 @@ import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '.
  * @typeParam TRawResponse - The provider's raw API response type
  * @typeParam TRawStream - The provider's raw stream type
  * @typeParam TExtra - Provider-specific options (e.g., tool_choice for Anthropic)
+ * @typeParam TParams - Provider-native non-streaming request params.
  */
 export interface AdapterSpec<
   TClient,
   TRawResponse = unknown,
   TRawStream = unknown,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
+  TParams = unknown,
 > {
   /** Provider identifier for adaptation matching (e.g., 'anthropic', 'openai'). */
   readonly providerId: string
 
   /** Execute a non-streaming API call. Returns canonical + raw SDK response. */
-  call(client: TClient, args: CallArgs<TExtra>): Promise<{ raw: TRawResponse; extracted: AdapterResponse }>
+  call(
+    client: TClient,
+    args: CallArgs<TExtra>,
+    context?: { readonly signal: AbortSignal | undefined },
+  ): Promise<{ raw: TRawResponse; extracted: AdapterResponse }>
 
   /** Execute a streaming API call. Returns a stream handle. */
   stream(client: TClient, args: CallArgs<TExtra>): Promise<StreamHandle<TRawStream>>
+
+  /** Translate canonical call args into provider-native params for public codecs and handles. */
+  toParams?(args: CallArgs<TExtra>): TParams | Promise<TParams>
+
+  /** Normalize a provider-native response supplied to a call handle. */
+  fromResponse?(response: TRawResponse): AdapterResponse
 
   /**
    * Format assistant response + tool results for the next tool loop turn.

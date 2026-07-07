@@ -38,6 +38,7 @@ Create an adapter bound to an OpenAI client.
 | ---------------------------- | ------------------------------------------------------------------------------ |
 | `.generate(prompt, options)` | Execute a prompt via `chat.completions.parse` (structured) or `.create` (text) |
 | `.stream(prompt, options)`   | Stream a prompt execution                                                      |
+| `.prepare(prompt, options)`  | Prepare a sans-I/O call handle with OpenAI params                              |
 | `.retrievalModel(config)`    | Bind OpenAI generation to core retrieval recipe steps                          |
 | `.reranker(config)`          | Create a judge-backed core `Reranker`                                          |
 
@@ -70,6 +71,7 @@ result.finalStep;
 | `options.toolApproval`              | `ToolApprovalMap?`                             | Call-site approval policy; exact tool names beat `'*'`.                             |
 | `options.toolsContext`              | `Record<string, unknown>?`                     | Required for composed tools that declare `contextSchema`; values are Zod-validated before the tool loop starts. |
 | `options.runtimeContext`            | `unknown?`                                     | Shared per-run context visible to tool `execute`, middleware, and function-form `toolApproval` policies. |
+| `options.transport`                 | `(params, info) => Promise<ChatCompletion>`    | BYO wire call. Crux still owns tools, approvals, validation retry, routing, and timeouts. |
 | `options.extra.tools`               | `ChatCompletionTool[]?`                        | OpenAI-native tools that bypass Crux tool conversion                                |
 | `options.extra.tool_choice`         | `string?`                                      | OpenAI-native tool selection                                                        |
 | `options.extra.parallel_tool_calls` | `boolean?`                                     | Allow parallel tool calls                                                           |
@@ -108,6 +110,29 @@ Stream a prompt execution.
 - `result.textStream` — provider-neutral text deltas
 - `result.raw` — raw OpenAI SDK stream
 - `result.completion` — promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
+
+### `toParams(resolved, options)` / `fromResponse(response)`
+
+`toParams()` converts a `ResolvedPrompt` plus `{ model, settings?, extra? }`
+into OpenAI chat-completion params. `ResolvedPrompt` does not include a model,
+so `options.model` is required. `fromResponse()` normalizes an OpenAI response
+into Crux `AdapterResponse` facts.
+
+These codecs are translation-only. Use managed `generate()`/`stream()` when
+Crux should run tools, approvals, validation retry, memory capture, safety, and
+observability.
+
+### `adapter.prepare(prompt, options)`
+
+Prepare a headless OpenAI call. Crux resolves the prompt and returns public
+OpenAI params without making the SDK call. Feed a raw OpenAI response back with
+`finish(response)`, or use `step(response)` when tools, validation retry, or
+approval suspension may need another provider turn.
+
+`generate(prompt, { ...options, transport })` is the BYO-wire mode where Crux
+keeps owning the loop and invokes your callback for each OpenAI request.
+`stream()` with `transport` is intentionally unsupported and rejects with
+`CruxTransportStreamUnsupportedError`.
 
 ### `adapter.retrievalModel(config)`
 

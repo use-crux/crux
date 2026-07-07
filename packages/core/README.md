@@ -69,6 +69,30 @@ total.
 for the SDK stream handle, and a `completion` promise resolving to the same
 envelope fields except `.raw` and `_meta`.
 
+## Public Codecs And Headless Calls
+
+Adapter packages export `toParams(resolved, options)` and
+`fromResponse(response)` for power users who own the SDK call. `ResolvedPrompt`
+is provider-neutral and intentionally does not carry a model, so
+`options.model` is required. Codecs translate only: they do not run tool
+middleware, approvals, validation retry, memory capture, safety, or
+observability.
+
+Every first-party generation adapter exposes the headless ladder:
+
+```ts
+const call = await anthropic.prepare(myPrompt, { model, input });
+const response = await client.messages.create(call.params);
+const result = await call.finish(response);
+```
+
+Use `step(response)` instead of `finish(response)` when a run may need another
+provider turn for tools, validation retry, or approval suspension. The handle
+uses the same executor path as managed `generate()`. `generate()` also accepts
+`transport: (params, info) => response` when Crux should own the loop but your
+code should own the wire call. `stream()` with `transport` is intentionally not
+supported and rejects with `CruxTransportStreamUnsupportedError`.
+
 ## Tool Approvals
 
 Tool definitions stay policy-free. Require human approval where tools are

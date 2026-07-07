@@ -184,7 +184,7 @@ export async function generateCore<
         lastCallArgs = callArgs;
 
         const { raw, extracted } = await withBudget(
-          () => dialect.call(dialect.client, callArgs),
+          (signal) => dialect.call(dialect.client, callArgs, { signal }),
           {
             budget: "step",
             limitMs: args.timeout?.stepMs,
@@ -293,11 +293,11 @@ export async function generateCore<
             messages = dialect.appendToolRound(messages, lastExtracted!, []);
             messages = [...messages, ...corrective];
             const regen = await withBudget(
-              () =>
+              (signal) =>
                 dialect.call(dialect.client, {
                   ...lastCallArgs!,
                   messages,
-                }),
+                }, { signal }),
               { budget: "step", limitMs: args.timeout?.stepMs },
             );
             lastRaw = regen.raw;

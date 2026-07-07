@@ -54,6 +54,21 @@ Per request, skip caching with `extra: { cachedContent: { skip: true } }` or ove
 
 The package exports `googleProviderRuntime` for advanced adapter composition. Internally, Google uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; `createGoogle()` is the bundle's mapped `create(client, opts)` factory, which resolves the CachedContent option into a lifecycle before core receives it.
 
+`toParams(resolved, { model })` converts a resolved prompt into Google
+`generateContent` params, and `fromResponse(response)` normalizes a Google
+response into Crux response facts. Pass `cachedContentLifecycle` when codec
+calls should use the same CachedContent planner as `createGoogle()`; otherwise
+the codec uses the inline disabled-cache fallback. These codecs are
+translation-only; use managed `generate()`/`stream()` when Crux should run
+tools, approvals, memory, validation retry, safety, and observability.
+
+For headless orchestration, `google.prepare(prompt, opts)` returns `{ params,
+step, finish }` over the same executor path as managed `generate()`. Use
+`generate(prompt, { ...opts, transport })` when Crux should keep owning the
+loop and your callback should make each Google call from public params. Streaming
+with `transport` is not supported and rejects with
+`CruxTransportStreamUnsupportedError`.
+
 Portable `GenerationSettings.reasoning` maps to Google `thinkingConfig.thinkingLevel` (`LOW` / `MEDIUM` / `HIGH`). `toolApproval` declares portable human-in-the-loop approval policy by tool name at context, prompt, or call site. Tools that declare `contextSchema` require `toolsContext.<toolName>` at the call site, and `runtimeContext` is threaded through tool execution, middleware, and function-form approval policies. `timeout` accepts structured budgets (`totalMs`, `stepMs`, `chunkMs`, `toolMs`, and `tools[name]`) and expired budgets reject with `TimeoutError`. Exact thinking budgets and thought-output controls are Google-native settings and belong in typed `extra`.
 
 See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) and the [Crux docs](https://cruxjs.dev) for the full API.

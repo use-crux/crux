@@ -41,6 +41,19 @@ The adapter also exposes `stream()` and agent composition methods (parallel, pip
 
 The package exports `openaiProviderRuntime` for advanced adapter composition. Internally, OpenAI uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; adapter authors building similar single-turn providers should start there.
 
+`toParams(resolved, { model })` converts a resolved prompt into OpenAI
+chat-completion params, and `fromResponse(response)` normalizes an OpenAI
+response into Crux response facts. These codecs are translation-only; use
+managed `generate()`/`stream()` when Crux should run tools, approvals, memory,
+validation retry, safety, and observability.
+
+For headless orchestration, `openai.prepare(prompt, opts)` returns `{ params,
+step, finish }` over the same executor path as managed `generate()`. Use
+`generate(prompt, { ...opts, transport })` when Crux should keep owning the
+loop and your callback should make each OpenAI call from public params. Streaming
+with `transport` is not supported and rejects with
+`CruxTransportStreamUnsupportedError`.
+
 Crux maps portable `GenerationSettings.toolChoice` values to OpenAI `tool_choice`: `'auto'`, `'none'`, `'required'`, and `{ tool }` → `{ type: 'function', function: { name } }`. Portable `reasoning` maps to OpenAI `reasoning_effort`. `toolApproval` declares portable human-in-the-loop approval policy by tool name at context, prompt, or call site. Tools that declare `contextSchema` require `toolsContext.<toolName>` at the call site, and `runtimeContext` is threaded through tool execution, middleware, and function-form approval policies. `timeout` accepts structured budgets (`totalMs`, `stepMs`, `chunkMs`, `toolMs`, and `tools[name]`) and expired budgets reject with `TimeoutError`. OpenAI-native options that Crux does not model portably belong in the typed `extra` option.
 
 See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) and the [Crux docs](https://cruxjs.dev) for the full API.
