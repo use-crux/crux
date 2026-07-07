@@ -8,7 +8,6 @@ const (
 	RequestKindPreviousDefinitions = "previousIndex:definitions"
 	RequestKindPreviousSources     = "previousIndex:sources"
 	RequestKindSourceProfileBatch  = "sourceProfile:batch"
-	RequestKindSyntaxRecords       = "syntaxRecords"
 )
 
 func HasPreviousRows(index *store.IndexData) bool {

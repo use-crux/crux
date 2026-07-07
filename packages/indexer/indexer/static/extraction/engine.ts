@@ -1,5 +1,5 @@
 import {
-  createProjectIndexCompilerRuntime,
+  createStaticExtensionHostRuntime,
   cruxCoreCompilerProfile,
 } from "../../compiler/profile";
 import { mapBounded } from "../../pipeline";
@@ -72,7 +72,7 @@ export function createStaticExtraction(
     options.profile ?? cruxCoreCompilerProfile,
     options.extensions ?? [],
   );
-  const runtime = createProjectIndexCompilerRuntime(profile);
+  const runtime = createStaticExtensionHostRuntime(profile);
   const callNames = staticExtractionCallNames(
     profile,
     runtime.extensionRuntime,

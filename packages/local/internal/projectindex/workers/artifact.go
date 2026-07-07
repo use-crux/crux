@@ -7,6 +7,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
+	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
 // ResolveProjectModel returns the JSON-safe source-discovery Project Model for
@@ -46,11 +47,13 @@ func (w *Bundle) InspectProjectConfig(ctx context.Context, root, configPath, pro
 	return resp, nil
 }
 
-// GenerateRuntimeArtifacts runs the TypeScript runtime artifact generator for root.
-func (w *Bundle) GenerateRuntimeArtifacts(ctx context.Context, root string) (json.RawMessage, error) {
+// GenerateRuntimeArtifacts runs the TypeScript runtime artifact generator from
+// native Project Index definitions. Source discovery is owned by Go/Rust.
+func (w *Bundle) GenerateRuntimeArtifacts(ctx context.Context, root string, definitions []store.ProjectDefinition) (json.RawMessage, error) {
 	req := requestwire.Request{
-		Method: "generateRuntimeArtifacts",
-		Root:   root,
+		Method:      "generateRuntimeArtifacts",
+		Root:        root,
+		Definitions: definitions,
 	}
 	return w.streamArtifact(ctx, req, projectindex.ProjectIndexArtifactRuntimeArtifacts)
 }

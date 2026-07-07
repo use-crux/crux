@@ -11,17 +11,9 @@ describe('API freeze guardrails', () => {
 
     expect(source).not.toMatch(/export\s+\*\s+from/)
     expect(namedValueExports(source)).toEqual([
-      'astIndexPatchFromCompilerResult',
-      'compileProjectIndex',
-      'createProjectIndexCompiler',
-      'projectIndexSnapshotFromCompilerResult',
-      'createStaticExtraction',
       'inspectProjectStaticIndexConfig',
       'inspectProjectStaticSyntaxPlan',
       'staticDefinitionFiles',
-      'createTypeScriptStaticSyntaxFrontend',
-      'indexProjectAstFromSyntaxRecordProviderForHost',
-      'indexProjectAstFromSyntaxRecordsForHost',
       'createNativeSemanticBackend',
       'createSemanticIndexService',
       'createTypeScriptSemanticBackend',
@@ -30,7 +22,6 @@ describe('API freeze guardrails', () => {
       'typescriptSemanticBackendCapabilities',
       'typescriptSemanticBackendIdentity',
       'indexProjectRuntimeForHost',
-      'runtimeIndexPatchFromCompilerResult',
       'diffRuntimeArtifactDrift',
       'generateRuntimeArtifacts',
       'manifestFromDefinitions',
@@ -41,18 +32,20 @@ describe('API freeze guardrails', () => {
       'extractStaticEvidenceBatchForProject',
       'loadStaticExtensionHostManifestForProject',
     ])
-    expect(namedTypeExports(source)).toContain('IndexProjectAstFromSyntaxRecordsHostOptions')
-    expect(namedTypeExports(source)).toContain('IndexProjectAstFromSyntaxRecordProviderHostOptions')
-    expect(namedTypeExports(source)).toContain('NativeFactProjectionMode')
+    expect(namedValueExports(source)).not.toEqual(
+      expect.arrayContaining([
+        'compileProjectIndex',
+        'createProjectIndexCompiler',
+        'createStaticExtraction',
+        'indexProjectAstFromSyntaxRecordsForHost',
+        'runtimeIndexPatchFromCompilerResult',
+      ]),
+    )
   })
 })
 
 function namedValueExports(source: string): readonly string[] {
   return [...source.matchAll(/export\s+\{\s*([^}]+?)\s*\}/gs)].flatMap((match) => exportedNames(match[1] ?? ''))
-}
-
-function namedTypeExports(source: string): readonly string[] {
-  return [...source.matchAll(/export\s+type\s+\{\s*([^}]+?)\s*\}/gs)].flatMap((match) => exportedNames(match[1] ?? ''))
 }
 
 function exportedNames(block: string): readonly string[] {

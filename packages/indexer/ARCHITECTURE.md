@@ -18,20 +18,20 @@ architecture decisions should use this language:
 - Public system name: **Crux Indexer**.
 - Target package name: `@use-crux/indexer`.
 - Output/read model: **Project Index**.
-- Internal engine: **Project Index Compiler**.
+- Internal engine: **Rust Static Index compiler + TypeScript extension host**.
 - Extension ecosystem: **Indexer Extensions**.
 
 The Indexer is a compiler-style project intelligence system, not an AST plugin framework. The public
-extension contract should expose facts, relation specs, diagnostics, rules, and read models. The
-compiler owns parser traversal, TypeScript internals, graph assembly, cache identity, diagnostics
-policy, resolver/emitter internals, and output projection.
+extension contract should expose facts, relation specs, diagnostics, rules, and read models. The Rust
+Static Index compiler owns first-party parser traversal, graph assembly, bundled lint finalization,
+and source patch projection. TypeScript owns third-party extension hosting, semantic backends,
+config/runtime host work, cache identity helpers, and JSON-safe contract mirrors.
 
-Static source extraction is composed behind `createStaticExtraction`. The engine owns the extension
-runtime manifest, compiler-profile projection, parser call names, rule descriptors, source reader,
-per-run parse memo, cache store, and deterministic cache identity. Host callers pass a syntax
-frontend explicitly. Cache identity includes extension and extractor identities, compiler
-profile/projections, and the selected syntax frontend identity, so parser/frontend upgrades
-invalidate static extraction structurally instead of relying only on manual epoch bumps.
+The internal TypeScript static extraction engine exists for extension fixtures and compatibility
+tests that run against explicit syntax-record frontends. It is not a host source-patch API and is not
+the bundled first-party implementation. Cache identity includes extension and extractor identities,
+profile/projection inputs, and the selected syntax frontend identity, so parser/frontend upgrades
+invalidate fixture extraction structurally instead of relying only on manual epoch bumps.
 
 Accepted public package surfaces after the rename:
 
@@ -61,8 +61,8 @@ default and reports the selected producer on `trace.syntaxFrontend`.
 `@use-crux/indexer/contracts/*` is the TypeScript-owned contract spine for worker-event, Static Syntax,
 Static Index, and Semantic Evidence protocols. The contract manifest records the canonical fixture,
 version, and Go/Rust mirror inventory that `scripts/check-indexer-contracts.mjs` validates.
-`@use-crux/indexer/host/*` exposes focused Crux-owned worker bridges for static indexing, semantic
-enrichment, runtime patch conversion, and Static Index compatibility-host calls. Before public
+`@use-crux/indexer/host/*` exposes focused Crux-owned worker bridges for static planning/config,
+semantic enrichment, runtime patching, and Static Index compatibility-host calls. Before public
 release, each host-only surface must be removed, made intentionally public, or kept package-private
 through build output.
 
@@ -74,9 +74,9 @@ The stability promise is granular:
 - `@use-crux/indexer/extensions` remains experimental. Its `ExtractContext` reader/builder shape is
   frozen, but third-party loading, trust UX, rule execution, and fixture package contracts are not
   stable plugin ecosystem promises yet.
-- `@use-crux/indexer/host/*` is host-only. `host/static-index` owns worker controls such as
-  `indexProjectAstFromSyntaxRecordsForHost`, validated static cache hits, provided-record cache
-  sizing, and native fact projection mode so root options do not expose host knobs.
+- `@use-crux/indexer/host/*` is host-only. `host/static-index` owns static config/plan inspection.
+  `host/static-compat` owns the Node calls used by the Rust Static Index compiler for third-party
+  extension evidence and rule checks.
 
 Local TypeScript worker bundles are owned by the private `packages/local-workers` package.
 `@use-crux/devtools` owns only the React/Vite UI and UI-local tests.
@@ -108,26 +108,23 @@ loading/trust decisions, and code-is-config project discovery boundary.
 
 ```mermaid
 flowchart TD
-  A["Project root"] --> B["Project Index Compiler"]
-  B --> C["Compiler Profile"]
-  C --> D["Extension Runtime"]
-  B --> E["Load compiler inputs"]
-  E --> F["Select static source files"]
-  F --> G["Discover compiler facts"]
-  D --> G
-  G --> H["Merge definitions and relations"]
-  H --> I["Run index rules"]
-  D --> I
-  I --> J["Apply lint config and suppressions"]
-  J --> K["Project source graph rows"]
-  K --> L["Compiler result"]
-  L --> M["ProjectIndexSnapshot"]
-  L --> N["IndexPatch"]
+  A["Project root"] --> B["Go Static Index session"]
+  B --> C["Static syntax plan"]
+  C --> D["Rust/Oxc Static Index compiler"]
+  D --> E["Native first-party facts and bundled lints"]
+  D --> F["Extension evidence jobs"]
+  F --> G["TypeScript static extension host"]
+  G --> H["Third-party facts"]
+  E --> I["Rust finalize"]
+  H --> I
+  I --> J["AST IndexPatch"]
+  J --> K["Go Project Index read model"]
 ```
 
 The public package root is the extension-authoring SDK and record-contract
 surface. Crux-owned execution facades live under `host/*` and are consumed by
-local worker bundles after Go/Rust has produced native syntax records.
+local worker bundles for config/runtime/semantic work and third-party Static
+Index extension evidence. Go/Rust produce source patches.
 
 - `resolveProjectModel(...)` is host-only and produces the JSON-safe config/read-model view with provenance for selected root, package metadata, config status, source roots, ignored conventions, config-derived definitions, Quality defaults, and Project Model diagnostics.
 - `inspectProjectConfig(...)` (in `indexer/project-config-inspect.ts`) produces the effective-config
@@ -136,22 +133,14 @@ local worker bundles after Go/Rust has produced native syntax records.
   value with an origin (`config` / `default` / `package.json` / `set` / `none`). It reuses
   `resolveProjectModel` for the compact discovery summary and degrades to all-defaults with an
   `import-failed` status on a broken config.
-- `compileProjectIndex(...)` exposes the compiler-owned result boundary for tests and worker
-  orchestration.
+Internally, `cruxCoreCompilerProfile` records stable profile/projection identity used by the
+TypeScript extension host and fixture extraction. Profiles keep extension execution instance-local;
+there is no process-wide public extension registration.
 
-Internally, `createProjectIndexCompiler(...)` creates an instance from a Compiler Profile. The
-default `cruxCoreCompilerProfile` owns the first-party Crux extension manifest plus explicit
-compiler-owned projections such as source-reference projection, runtime prepare projection, and
-prompt/context tree path projection. Profiles keep extension execution instance-local; there is no
-process-wide public extension registration.
-
-The current foundation is intentionally not described as a pure compiler shell yet. Most first-party
-syntax extraction runs through the Extension Runtime, including Convex agent compatibility,
-constructor compatibility, and bare object-literal tool schema compatibility. The remaining
-compiler-owned projections are parser/resolver responsibilities: source-reference helper projection,
-runtime prepare projection, and prompt/context tree-path projection. These behaviors remain explicit
-`CompilerOwnedProjection` values with cache identity until they either become internal extension/runtime
-slots or are deliberately retained as compiler-owned parser responsibilities.
+First-party syntax extraction, relation finalization, and bundled lint evaluation are Rust-owned in
+the binary. TypeScript extension runtime remains for third-party extractor and rule manifests that
+run against Rust-produced syntax/evidence records. The remaining profile projection records are cache
+identity inputs for fixture and extension-host construction rather than a second bundled projector.
 
 Semantic analysis remains compiler-owned internal analyzer code. Public extension authors should see
 semantic capability through `SemanticReadModel` and `requires: ['semantic']`, not through raw
@@ -162,12 +151,12 @@ authoring remains reserved.
 Internal package code is organized around compiler responsibilities instead of keeping every engine
 module in the `indexer/` root:
 
-- `indexer/compiler/`: full-index compiler orchestration and compiler profiles.
+- `indexer/compiler/`: profile/runtime identity helpers for extension-host construction.
 - `indexer/static/`: source-local parsing, static fact extraction, static cache, static discovery, and
   compiler-owned static projections such as runtime prepare/use facts.
 - `indexer/semantic/`: semantic fact orchestration, analyzer registry, semantic candidates, expression
   resolution, source refs, and data-access relation discovery.
-- `indexer/lints/`: built-in rule descriptor readers, rule profiles, config, and suppressions. Bundled lint evaluation lives in Rust.
+- `indexer/lints/`: built-in rule descriptor readers sourced from the Rust descriptor fixture.
 - `indexer/relations/`: relation policy types, grouped policy catalogs, relation lookup, and relation
   id/build helpers.
 - `indexer/extensions/`, `indexer/incremental/`, `indexer/graph/`, and

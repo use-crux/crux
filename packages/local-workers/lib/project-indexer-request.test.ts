@@ -1,117 +1,89 @@
 import { describe, expect, it } from 'vitest'
-import { createProjectIndexWorkerRequestAssembler, type ProjectIndexWorkerRequest } from './project-indexer-request'
-
-type SyntaxRecord = NonNullable<ProjectIndexWorkerRequest['syntaxRecords']>[number]
+import { createProjectIndexWorkerRequestAssembler } from './project-indexer-request'
 
 describe('createProjectIndexWorkerRequestAssembler', () => {
-  it('spools syntax records from chunked worker request events', async () => {
-    const previousLiveProjection = process.env.CRUX_INDEXER_LIVE_SYNTAX_PROJECTION
-    process.env.CRUX_INDEXER_LIVE_SYNTAX_PROJECTION = '1'
-    try {
-      const assemble = createProjectIndexWorkerRequestAssembler()
-      const firstRecord = {
-        schemaVersion: 1,
-        frontend: { name: 'oxc-rust', version: 'test' },
-        file: '/repo/src/a.ts',
-      } as SyntaxRecord
-      const secondRecord = {
-        schemaVersion: 1,
-        frontend: { name: 'oxc-rust', version: 'test' },
-        file: '/repo/src/b.ts',
-      } as SyntaxRecord
+  it('assembles previous index definition and source batches for chunked worker requests', async () => {
+    const assemble = createProjectIndexWorkerRequestAssembler()
 
-      const started = await assemble({
+    await expect(
+      assemble({
         protocolVersion: 2,
-        method: 'indexProjectAstFromSyntaxRecords',
-        requestId: 'syntax:1',
+        method: 'indexProjectSemantic',
+        requestId: 'semantic:1',
         requestKind: 'start',
         root: '/repo',
-        syntaxFrontendIdentity: { name: 'oxc-rust', version: 'test' },
-      })
-      expect(started?.requestKind).toBeUndefined()
-      expect(started?.syntaxRecords).toBeUndefined()
-      expect(started?.liveSyntaxRecordProjection).toBe(true)
+        previousIndex: {
+          schemaVersion: 1,
+          project: { root: '/repo' },
+          indexedAt: '2026-01-01T00:00:00.000Z',
+          prompts: [],
+          contexts: [],
+          definitions: [],
+          relations: [],
+          diagnostics: [],
+          lintFindings: [],
+          ruleDescriptors: [],
+          sources: [],
+          sourceGraph: {
+            schemaVersion: 1,
+            producedBy: '@use-crux/indexer',
+            capabilities: [],
+          },
+        },
+      }),
+    ).resolves.toBeUndefined()
 
-      await expect(
-        assemble({
-          protocolVersion: 2,
-          method: 'indexProjectAstFromSyntaxRecords',
-          requestId: 'syntax:1',
-          requestKind: 'syntaxRecords',
-          root: '/repo',
-          syntaxRecordsBatch: [firstRecord],
-        }),
-      ).resolves.toBeUndefined()
-      await expect(
-        assemble({
-          protocolVersion: 2,
-          method: 'indexProjectAstFromSyntaxRecords',
-          requestId: 'syntax:1',
-          requestKind: 'syntaxRecords',
-          root: '/repo',
-          syntaxRecordsBatch: [secondRecord],
-        }),
-      ).resolves.toBeUndefined()
-
-      const completed = await assemble({
+    await expect(
+      assemble({
         protocolVersion: 2,
-        method: 'indexProjectAstFromSyntaxRecords',
-        requestId: 'syntax:1',
-        requestKind: 'done',
+        method: 'indexProjectSemantic',
+        requestId: 'semantic:1',
+        requestKind: 'previousIndex:definitions',
         root: '/repo',
-      })
+        previousIndexDefinitions: [
+          {
+            id: 'prompt:writer',
+            kind: 'prompt',
+            name: 'writer',
+            fidelity: 'resolved',
+          },
+        ],
+      }),
+    ).resolves.toBeUndefined()
 
-      expect(completed).toBeUndefined()
-      await expect(started?.syntaxRecordProvider?.read('/repo/src/a.ts')).resolves.toEqual(firstRecord)
-      await expect(started?.syntaxRecordProvider?.read('/repo/src/b.ts')).resolves.toEqual(secondRecord)
-      await expect(started?.syntaxRecordProvider?.readMany?.(['/repo/src/a.ts', '/repo/src/b.ts'])).resolves.toEqual(
-        new Map([
-          ['/repo/src/a.ts', firstRecord],
-          ['/repo/src/b.ts', secondRecord],
-        ]),
-      )
-      await started?.cleanup?.()
-    } finally {
-      restoreEnv('CRUX_INDEXER_LIVE_SYNTAX_PROJECTION', previousLiveProjection)
-    }
-  })
-
-  it('does not enable live projection from the low-RSS memory profile alone', async () => {
-    const previousLiveProjection = process.env.CRUX_INDEXER_LIVE_SYNTAX_PROJECTION
-    const previousMemoryProfile = process.env.CRUX_INDEXER_MEMORY_PROFILE
-    delete process.env.CRUX_INDEXER_LIVE_SYNTAX_PROJECTION
-    process.env.CRUX_INDEXER_MEMORY_PROFILE = 'low-rss'
-    try {
-      const assemble = createProjectIndexWorkerRequestAssembler()
-      const started = await assemble({
+    await expect(
+      assemble({
         protocolVersion: 2,
-        method: 'indexProjectAstFromSyntaxRecords',
-        requestId: 'syntax:low-rss',
-        requestKind: 'start',
+        method: 'indexProjectSemantic',
+        requestId: 'semantic:1',
+        requestKind: 'previousIndex:sources',
         root: '/repo',
-        syntaxFrontendIdentity: { name: 'oxc-rust', version: 'test' },
-      })
+        previousIndexSources: [
+          {
+            file: '/repo/src/prompt.ts',
+            status: 'indexed',
+            dependencies: [],
+            dependents: [],
+            definitionIds: ['prompt:writer'],
+            diagnostics: [],
+          },
+        ],
+      }),
+    ).resolves.toBeUndefined()
 
-      expect(started?.liveSyntaxRecordProjection).not.toBe(true)
-      await assemble({
-        protocolVersion: 2,
-        method: 'indexProjectAstFromSyntaxRecords',
-        requestId: 'syntax:low-rss',
-        requestKind: 'done',
-        root: '/repo',
-      })
-      await started?.cleanup?.()
-    } finally {
-      restoreEnv('CRUX_INDEXER_LIVE_SYNTAX_PROJECTION', previousLiveProjection)
-      restoreEnv('CRUX_INDEXER_MEMORY_PROFILE', previousMemoryProfile)
-    }
+    const completed = await assemble({
+      protocolVersion: 2,
+      method: 'indexProjectSemantic',
+      requestId: 'semantic:1',
+      requestKind: 'done',
+      root: '/repo',
+    })
+
+    expect(completed?.previousIndex?.definitions.map((definition) => definition.id)).toEqual([
+      'prompt:writer',
+    ])
+    expect(completed?.previousIndex?.sources.map((source) => source.file)).toEqual([
+      '/repo/src/prompt.ts',
+    ])
   })
 })
-
-function restoreEnv(name: string, value: string | undefined): void {
-  if (value === undefined) {
-    delete process.env[name]
-  } else {
-    process.env[name] = value
-  }
-}

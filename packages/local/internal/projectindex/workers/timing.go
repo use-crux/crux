@@ -12,7 +12,6 @@ import (
 type ProjectIndexAstTiming struct {
 	PlanMs                  float64
 	NativeParseAndForwardMs float64
-	NodeProjectionMs        float64
 	TotalMs                 float64
 	NodeTimings             []projectindex.ProjectIndexPhaseTiming
 	NodeStarted             bool
@@ -20,10 +19,6 @@ type ProjectIndexAstTiming struct {
 	NodeReasons             []string
 	NativeOnlyEligible      bool
 	NativeOnlyReasons       []string
-	RecordCount             int
-	RecordBytes             int
-	ChunkCount              int
-	MaxChunkBytes           int
 }
 
 // LastAstTiming returns timing metadata from the most recent AST index run.
@@ -63,15 +58,13 @@ func (w *Bundle) recordLastAstTimingNodeRequired(reasons ...string) {
 }
 
 const (
-	projectIndexNodeReasonTypeScriptStaticCompiler = "typescript-static-compiler"
-	projectIndexNodeReasonStaticPlanInspection     = "static-plan-inspection"
-	projectIndexNodeReasonStaticIndexConfig        = planner.ReasonConfig
-	projectIndexNodeReasonStaticIndexExtensions    = planner.ReasonExtensions
-	projectIndexNodeReasonSyntaxRecordProjection   = "syntax-record-projection"
-	projectIndexNodeReasonStaticIndexEmpty         = session.ReasonEmpty
-	projectIndexNodeReasonStaticIndexEvidence      = session.ReasonEvidence
-	projectIndexNodeReasonStaticIndexRules         = "static-index-rules"
-	projectIndexNodeReasonStaticIndexIncomplete    = session.ReasonIncomplete
+	projectIndexNodeReasonStaticPlanInspection  = "static-plan-inspection"
+	projectIndexNodeReasonStaticIndexConfig     = planner.ReasonConfig
+	projectIndexNodeReasonStaticIndexExtensions = planner.ReasonExtensions
+	projectIndexNodeReasonStaticIndexEmpty      = session.ReasonEmpty
+	projectIndexNodeReasonStaticIndexEvidence   = session.ReasonEvidence
+	projectIndexNodeReasonStaticIndexRules      = "static-index-rules"
+	projectIndexNodeReasonStaticIndexIncomplete = session.ReasonIncomplete
 
 	projectIndexNativeOnlyReasonStaticIndexCompilerSetup = "static-index-compiler-setup"
 )

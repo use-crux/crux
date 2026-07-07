@@ -1,30 +1,16 @@
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import type { SemanticBackendSelection } from '@use-crux/indexer'
 import type {
-  NativeFactProjectionMode,
-  ProvidedStaticSyntaxRecordProvider,
-  StaticParseCacheHit,
-  StaticSyntaxFileRecord,
-  StaticSyntaxFrontendIdentity,
-} from '@use-crux/indexer/host/static-index'
-import type {
   CheckStaticRulesInput,
   ExtractStaticEvidenceBatchInput,
   LoadStaticExtensionHostManifestInput,
 } from '@use-crux/indexer/host/static-compat'
-import {
-  createProjectIndexSyntaxRecordSpool,
-  type ProjectIndexSyntaxRecordSpool,
-} from './project-indexer-syntax-record-spool'
-
-export type { NativeFactProjectionMode, StaticSyntaxFileRecord, StaticSyntaxFrontendIdentity }
 
 /** Chunk event names accepted by the Project Index worker request assembler. */
 export type ProjectIndexWorkerRequestKind =
   | 'start'
   | 'previousIndex:definitions'
   | 'previousIndex:sources'
-  | 'syntaxRecords'
   | 'done'
 
 /** JSON-line request envelope accepted by the Project Index worker. */
@@ -40,20 +26,12 @@ export interface ProjectIndexWorkerRequest {
   readonly previousIndex?: ProjectIndexSnapshot
   readonly previousIndexDefinitions?: ProjectIndexSnapshot['definitions']
   readonly previousIndexSources?: ProjectIndexSnapshot['sources']
+  /** Native Project Index definitions used to generate runtime artifacts. */
+  readonly definitions?: ProjectIndexSnapshot['definitions']
   readonly files?: readonly string[]
   readonly deletedFiles?: readonly string[]
   readonly mode?: string
   readonly semanticBackend?: SemanticBackendSelection
-  /**
-   * Complete syntax records for legacy one-line requests and completed
-   * reassembled chunked requests.
-   */
-  readonly syntaxRecords?: readonly StaticSyntaxFileRecord[]
-  /**
-   * Transport-only syntax record slice. The worker writes these chunks to a
-   * request-scoped provider before invoking the compiler API.
-   */
-  readonly syntaxRecordsBatch?: readonly StaticSyntaxFileRecord[]
   readonly includeStaticCacheStatus?: boolean
   /** Runtime operation requested by `crux runtime` CLI commands. */
   readonly runtimeOperation?: string
@@ -61,10 +39,6 @@ export interface ProjectIndexWorkerRequest {
   readonly runtimeWorkId?: string
   /** Include bounded work/timer/outbox rows in runtime status responses. */
   readonly runtimeIncludeDetails?: boolean
-  /** Internal validated static cache hits supplied by the native parser plan. */
-  readonly staticCacheHits?: readonly StaticParseCacheHit[]
-  /** Internal native syntax-record fact lane requested by the host. */
-  readonly nativeFactProjection?: NativeFactProjectionMode
   /** Native compiler protocol version supported by a manifest-loading caller. */
   readonly nativeCompilerProtocolVersion?: LoadStaticExtensionHostManifestInput['nativeCompilerProtocolVersion']
   /** Static Index evidence jobs forwarded to the TypeScript compatibility host. */
@@ -73,15 +47,6 @@ export interface ProjectIndexWorkerRequest {
   readonly graph?: CheckStaticRulesInput['graph']
   /** Optional auxiliary facts available to TypeScript index rules. */
   readonly availableFacts?: CheckStaticRulesInput['availableFacts']
-  /**
-   * Internal, non-JSON syntax record provider attached after chunk assembly.
-   */
-  readonly syntaxRecordProvider?: ProvidedStaticSyntaxRecordProvider
-  /** Internal cleanup hook for request-scoped temporary resources. */
-  readonly cleanup?: () => Promise<void>
-  /** Internal marker telling the worker that projection may run before chunk completion. */
-  readonly liveSyntaxRecordProjection?: boolean
-  readonly syntaxFrontendIdentity?: StaticSyntaxFrontendIdentity
   readonly maxAffectedFiles?: number
 }
 
@@ -91,8 +56,6 @@ export type ProjectIndexWorkerRequestAssembler = (
 
 interface PendingProjectIndexWorkerRequest {
   readonly request: ProjectIndexWorkerRequest
-  readonly syntaxRecordSpool?: ProjectIndexSyntaxRecordSpool
-  readonly liveSyntaxRecordProjection?: boolean
 }
 
 /**
@@ -114,20 +77,7 @@ async function assembleProjectIndexWorkerRequest(
   if (!req.requestId) throw new Error('chunked project index worker request requires requestId')
   switch (req.requestKind) {
     case 'start': {
-      const liveSyntaxRecordProjection = liveSyntaxRecordProjectionEnabled(req)
-      const syntaxRecordSpool =
-        req.method === 'indexProjectAstFromSyntaxRecords'
-          ? createProjectIndexSyntaxRecordSpool({ identity: req.syntaxFrontendIdentity })
-          : undefined
-      try {
-        if (syntaxRecordSpool && req.syntaxRecords) await syntaxRecordSpool.writeBatch(req.syntaxRecords)
-      } catch (error) {
-        await syntaxRecordSpool?.dispose()
-        throw error
-      }
       chunkedRequests.set(req.requestId, {
-        syntaxRecordSpool,
-        liveSyntaxRecordProjection,
         request: {
           ...req,
           requestKind: undefined,
@@ -138,24 +88,9 @@ async function assembleProjectIndexWorkerRequest(
                 sources: [],
               }
             : undefined,
-          syntaxRecords: req.method === 'indexProjectAstFromSyntaxRecords' ? undefined : req.syntaxRecords,
-          syntaxRecordsBatch: undefined,
-          syntaxRecordProvider: syntaxRecordSpool?.provider,
-          cleanup: syntaxRecordSpool ? () => syntaxRecordSpool.dispose() : undefined,
-          liveSyntaxRecordProjection,
         },
       })
-      return liveSyntaxRecordProjection
-        ? {
-            ...req,
-            requestKind: undefined,
-            syntaxRecords: undefined,
-            syntaxRecordsBatch: undefined,
-            syntaxRecordProvider: syntaxRecordSpool?.provider,
-            cleanup: syntaxRecordSpool ? () => syntaxRecordSpool.dispose() : undefined,
-            liveSyntaxRecordProjection: true,
-          }
-        : undefined
+      return undefined
     }
     case 'previousIndex:definitions': {
       const pendingRequest = requirePendingProjectIndexRequest(chunkedRequests, req.requestId)
@@ -189,37 +124,12 @@ async function assembleProjectIndexWorkerRequest(
       })
       return undefined
     }
-    case 'syntaxRecords': {
-      const pendingRequest = requirePendingProjectIndexRequest(chunkedRequests, req.requestId)
-      if (pendingRequest.request.method !== 'indexProjectAstFromSyntaxRecords') {
-        throw new Error(`project index worker request ${req.requestId} does not accept syntaxRecords chunks`)
-      }
-      if (!pendingRequest.syntaxRecordSpool) {
-        throw new Error(`project index worker request ${req.requestId} has no syntax record spool`)
-      }
-      try {
-        await pendingRequest.syntaxRecordSpool.writeBatch(req.syntaxRecordsBatch ?? [])
-      } catch (error) {
-        chunkedRequests.delete(req.requestId)
-        await pendingRequest.syntaxRecordSpool.dispose()
-        throw error
-      }
-      return undefined
-    }
     case 'done': {
       const completed = requirePendingProjectIndexRequest(chunkedRequests, req.requestId)
       chunkedRequests.delete(req.requestId)
-      completed.syntaxRecordSpool?.close()
-      if (completed.liveSyntaxRecordProjection) return undefined
       return completed.request
     }
   }
-}
-
-function liveSyntaxRecordProjectionEnabled(req: ProjectIndexWorkerRequest): boolean {
-  if (req.method !== 'indexProjectAstFromSyntaxRecords') return false
-  const value = process.env.CRUX_INDEXER_LIVE_SYNTAX_PROJECTION?.toLowerCase()
-  return value === '1' || value === 'true' || value === 'on'
 }
 
 function requirePendingProjectIndexRequest(

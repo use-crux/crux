@@ -63,9 +63,10 @@ describe('bundled Rust-only indexing architecture', () => {
       false,
     )
 
-    const compiler = readRepoFile('packages/indexer/indexer/compiler/index.ts')
-    expect(compiler).not.toContain('indexLintFindings')
-    expect(compiler).not.toContain('runCompilerIndexRules')
+    expect(existsSync(path.join(indexerRoot, 'indexer/compiler/index.ts'))).toBe(false)
+    expect(existsSync(path.join(indexerRoot, 'indexer/lints/config.ts'))).toBe(false)
+    expect(existsSync(path.join(indexerRoot, 'indexer/lints/suppressions.ts'))).toBe(false)
+    expect(existsSync(path.join(indexerRoot, 'indexer/lints/profiles.ts'))).toBe(false)
 
     const staticWorker = readRepoFile(
       'packages/indexer/indexer/static-index/extension-host/evidence/worker.ts',
@@ -101,6 +102,22 @@ describe('bundled Rust-only indexing architecture', () => {
       'packages/indexer/indexer/static-index/extension-host/evidence/host.ts',
     )
     expect(evidenceHost).not.toContain('typescript-bundled-extractors')
+  })
+
+  it('does not keep the monolithic TypeScript Project Index compiler or syntax-record patch RPC', () => {
+    expect(existsSync(path.join(indexerRoot, 'indexer/compiler/index.ts'))).toBe(false)
+    expect(existsSync(path.join(indexerRoot, 'indexer/index.ts'))).toBe(false)
+
+    const hostIndex = readRepoFile('packages/indexer/host/index.ts')
+    const hostStatic = readRepoFile('packages/indexer/host/static-index.ts')
+    const localWorker = readRepoFile('packages/local-workers/bin/project-indexer.ts')
+
+    for (const source of [hostIndex, hostStatic, localWorker]) {
+      expect(source).not.toContain('compileProjectIndex')
+      expect(source).not.toContain('createProjectIndexCompiler')
+      expect(source).not.toContain('indexProjectAstFromSyntaxRecords')
+      expect(source).not.toContain('indexProjectAstFromSyntaxRecordProvider')
+    }
   })
 })
 

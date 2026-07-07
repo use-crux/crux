@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 527,
+    "files": 517,
     "definitions": 321,
     "relations": 183,
     "diagnostics": 4,
-    "dependencies": 1628,
-    "canonicalBytes": 2416666
+    "dependencies": 1593,
+    "canonicalBytes": 2414117
   },
   "files": [
     {
@@ -3038,24 +3038,6 @@
       "dependencies": 5
     },
     {
-      "file": "packages/indexer/indexer/compiler/diagnostics.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
-      "file": "packages/indexer/indexer/compiler/index.ts",
-      "sha256": "5b2a9246c9ad4fd83970b06153bdf812a1f5014703b66638187721814081c834",
-      "bytes": 1353,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 25
-    },
-    {
       "file": "packages/indexer/indexer/compiler/profile.ts",
       "sha256": "fa911e206c05a1a8ac431e8dff03b6003c3d4d9d7cb1403795ebf91924015d79",
       "bytes": 121,
@@ -3299,45 +3281,9 @@
       "dependencies": 0
     },
     {
-      "file": "packages/indexer/indexer/lints/config.ts",
-      "sha256": "e65610d1d8bcf3fe3bb055c774659e26ad7dd1df1fa17dd73c097ca01197c5d7",
-      "bytes": 171,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 2
-    },
-    {
-      "file": "packages/indexer/indexer/lints/profiles.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
-      "file": "packages/indexer/indexer/lints/rule-ids.ts",
-      "sha256": "8ab617aec08e14de2f9574f8c900ff1dcca40fe74f2ae991119fc7971a771f42",
-      "bytes": 116,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 1
-    },
-    {
       "file": "packages/indexer/indexer/lints/rules.ts",
       "sha256": "3853382ced571c57b32ddbd58ddc652885c768094f66534124ef707d3972c48d",
       "bytes": 134,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 1
-    },
-    {
-      "file": "packages/indexer/indexer/lints/suppressions.ts",
-      "sha256": "fc24f6ae852a05fa63aba7a83c0a6ed99d4cc916210f9800d8c43e318240d118",
-      "bytes": 119,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
@@ -4155,12 +4101,12 @@
     },
     {
       "file": "packages/local-workers/bin/project-indexer.ts",
-      "sha256": "6af4f951f296f6ffa82656001189a48b199423637930bf1316b0384e2ed58440",
-      "bytes": 330,
+      "sha256": "8d5886f24f20193bf9f8ff521c516bab44c1680b1dcea60fec1f6c72ae998f0a",
+      "bytes": 261,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 4
+      "dependencies": 3
     },
     {
       "file": "packages/local-workers/bin/project-runtime-indexer.ts",
@@ -4208,34 +4154,7 @@
       "dependencies": 0
     },
     {
-      "file": "packages/local-workers/lib/indexer-static-canonical.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
-      "file": "packages/local-workers/lib/indexer-static-comparison.ts",
-      "sha256": "21cf528896dd230685e8a4cd28117de30bb9cd3fd8b2969f0cea5dd7cdb9b609",
-      "bytes": 131,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 1
-    },
-    {
       "file": "packages/local-workers/lib/project-indexer-request.ts",
-      "sha256": "7a3d58db71aa9a28e5b485b7122fa08b6791df6b97ed0105ccb2e17962a3d607",
-      "bytes": 142,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 1
-    },
-    {
-      "file": "packages/local-workers/lib/project-indexer-syntax-record-spool.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -4314,15 +4233,6 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
-    },
-    {
-      "file": "packages/local-workers/scripts/indexer-static-extension-guard.ts",
-      "sha256": "b7533f9cfc09d2306f97e4a73d30b4f066b8b1c84ada5e83c6f5e7fad23f2c4d",
-      "bytes": 244,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 3
     },
     {
       "file": "packages/local/npm/local/bin/crux.cjs",

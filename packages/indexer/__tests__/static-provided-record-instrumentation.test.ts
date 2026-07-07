@@ -2,10 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { StaticExtractionTiming } from '..'
-import { indexProjectAstFromSyntaxRecordProviderForHost as indexProjectAstFromSyntaxRecordProvider } from '../host/static-index'
 import { createProvidedStaticSyntaxFrontend, createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
-import { createRustOxcStaticSyntaxFrontend } from '../testing/rust-oxc-frontend'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -21,51 +18,6 @@ afterEach(async () => {
 })
 
 describe('provided static syntax record instrumentation', () => {
-  it('splits serialized provider reads from JSON materialization', async () => {
-    const root = await fixtureRoot()
-    await mkdir(join(root, 'src'), { recursive: true })
-    const file = join(root, 'src/writer.ts')
-    const source = [
-      "import { prompt } from '@use-crux/core'",
-      '',
-      "export const writerPrompt = prompt({ id: 'writer.serialized-provider' })",
-    ].join('\n')
-    await writeFile(file, source)
-
-    const frontend = createRustOxcStaticSyntaxFrontend({ callNames: ['prompt'] })
-    const record = await frontend.parseFile({ root, file, source })
-    const serializedByFile = new Map([[file, JSON.stringify(record)]])
-    const timings: StaticExtractionTiming[] = []
-
-    const patch = await indexProjectAstFromSyntaxRecordProvider({
-      root,
-      projectName: 'provided-record-instrumentation',
-      recordProvider: {
-        identity: record.frontend,
-        read: () => undefined,
-        readSerialized: (requestedFile) => serializedByFile.get(requestedFile),
-        readManySerialized: (requestedFiles) =>
-          new Map(
-            requestedFiles.flatMap((requestedFile) => {
-              const serialized = serializedByFile.get(requestedFile)
-              return serialized ? [[requestedFile, serialized] as const] : []
-            }),
-          ),
-      },
-      staticInstrumentation: {
-        onTiming: (timing) => {
-          timings.push(timing)
-        },
-      },
-    })
-
-    expect((patch.facts.definitions ?? []).map((definition) => definition.id)).toContain(
-      'prompt:writer.serialized-provider',
-    )
-    expect(timings.map((timing) => timing.name)).toContain('static.syntax_record.provider_read')
-    expect(timings.map((timing) => timing.name)).toContain('static.syntax_record.provider_json_parse')
-  })
-
   it('memoizes provided records across batch and single-file reads', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })

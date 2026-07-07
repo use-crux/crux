@@ -1,6 +1,7 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { ProjectDefinition } from '@use-crux/core/project-index'
 import { afterEach, describe, expect, it } from 'vitest'
 import { diffRuntimeArtifactDrift, generateRuntimeArtifacts } from '../indexer/runtime-artifacts'
 
@@ -54,6 +55,45 @@ describe('runtime artifacts', () => {
     await expect(readFile(join(root, 'convex/crux.ts'), 'utf8')).rejects.toMatchObject({
       code: 'ENOENT',
     })
+  })
+
+  it('projects supplied Project Index definitions into runtime artifacts', async () => {
+    const root = await fixtureRoot()
+    const sourceFile = join(root, 'src/review.ts')
+    await mkdir(dirname(sourceFile), { recursive: true })
+    await writeFile(
+      sourceFile,
+      [
+        "import { flow } from '@use-crux/core/flow'",
+        '',
+        "export const reviewFlow = flow('review', async () => undefined)",
+      ].join('\n'),
+    )
+
+    const definitions = [
+      {
+        id: 'flow:review',
+        kind: 'flow',
+        name: 'review',
+        fidelity: 'resolved',
+        source: { file: sourceFile, line: 1 },
+        metadata: { exportName: 'reviewFlow' },
+      },
+    ] satisfies readonly ProjectDefinition[]
+
+    const result = await generateRuntimeArtifacts({ root, host: 'next', definitions })
+
+    expect(result.manifest.targets).toEqual([
+      {
+        name: 'review',
+        kind: 'flow',
+        module: './src/review.ts',
+        export: 'reviewFlow',
+      },
+    ])
+    await expect(readFile(join(root, 'crux.generated/next.ts'), 'utf8')).resolves.toContain(
+      "import { reviewFlow as target0 } from '../src/review'",
+    )
   })
 
   it('writes split Convex entry files without a top-level shim', async () => {

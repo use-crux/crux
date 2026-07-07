@@ -32,27 +32,8 @@ func TestWorkerStaticIndexErrorsWhenFinalizeHasNoPatch(t *testing.T) {
 	if err := os.WriteFile(script, []byte(`
 		import readline from 'node:readline'
 		const rl = readline.createInterface({ input: process.stdin, terminal: false })
-		const pending = new Map()
-		function assemble(req) {
-			if (!req.requestKind) return req
-			if (req.requestKind === 'start') {
-				pending.set(req.requestId, { ...req, requestKind: undefined, syntaxRecords: [] })
-				return undefined
-			}
-			if (req.requestKind === 'syntaxRecords') {
-				pending.get(req.requestId)?.syntaxRecords.push(...(req.syntaxRecordsBatch ?? []))
-				return undefined
-			}
-			if (req.requestKind === 'done') {
-				const completed = pending.get(req.requestId)
-				pending.delete(req.requestId)
-				return completed
-			}
-			return undefined
-		}
 		rl.on('line', (line) => {
-			const req = assemble(JSON.parse(line))
-			if (!req) return
+			const req = JSON.parse(line)
 			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
@@ -71,10 +52,6 @@ func TestWorkerStaticIndexErrorsWhenFinalizeHasNoPatch(t *testing.T) {
 				}) + '\n')
 				return
 			}
-				if (req.method === 'indexProjectAstFromSyntaxRecords') {
-					process.stdout.write(JSON.stringify({ error: 'unexpected method: ' + req.method }) + '\n')
-					return
-				}
 				process.stdout.write(JSON.stringify({ error: 'unexpected method: ' + req.method }) + '\n')
 			})
 		`), 0o600); err != nil {
@@ -102,9 +79,6 @@ func TestWorkerStaticIndexErrorsWhenFinalizeHasNoPatch(t *testing.T) {
 	}
 	if !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexEmpty) {
 		t.Fatalf("timing.NodeReasons = %v, want %q", timing.NodeReasons, projectIndexNodeReasonStaticIndexEmpty)
-	}
-	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonSyntaxRecordProjection) {
-		t.Fatalf("timing.NodeReasons = %v, want no syntax-record projection", timing.NodeReasons)
 	}
 	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection) {
 		t.Fatalf("timing.NodeReasons = %v, want no static-plan inspection", timing.NodeReasons)

@@ -788,8 +788,8 @@ type ProjectIndexingStatus struct {
 	Error    string                      `json:"error,omitempty"`
 }
 
-// IndexLintConfig is the serialized project lint policy produced by the
-// TypeScript indexer and consumed by Go read-model enrichers.
+// IndexLintConfig is the serialized project lint policy carried in the Project
+// Index read model and consumed by Go read-model enrichers.
 type IndexLintConfig struct {
 	Profile string                         `json:"profile,omitempty"`
 	Rules   map[string]IndexLintRuleConfig `json:"rules,omitempty"`

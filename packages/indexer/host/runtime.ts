@@ -1,10 +1,9 @@
 /**
  * Runtime Index host facade.
  *
- * Runtime-rich indexing uses the same compiler result model as source indexing
- * but emits a runtime patch with a distinct producer and invalidation shape.
- * This host-only entry point exposes that conversion without widening the root
- * SDK surface.
+ * Runtime-rich indexing emits a runtime patch from config/runtime metadata
+ * without invoking bundled source projection. This host-only entry point stays
+ * separate from the root SDK surface.
  *
  * @module
  */
@@ -14,9 +13,6 @@ import type { ProjectIdentity, ProjectIndexSnapshot } from '@use-crux/core/proje
 import { indexDefinitionsFromSnapshot, serializeIndex } from '@use-crux/core/project-index/serializers'
 import { loadProjectConfig } from '../indexer/config'
 import type { IndexPatch } from '../indexer/patches'
-
-export { runtimeIndexPatchFromCompilerResult } from '../indexer/compiler'
-export type { ProjectIndexCompilerResult } from '../indexer/compiler'
 
 /** Host-only options for the runtime-rich worker phase. */
 export interface IndexProjectRuntimeHostOptions {

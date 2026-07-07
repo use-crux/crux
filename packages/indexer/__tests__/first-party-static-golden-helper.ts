@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { relative } from "node:path";
 import { canonicalStaticExtractionJson } from "../contracts/parity";
+import { staticDefinitionFiles } from "../indexer/files";
 import {
   createStaticExtraction,
-  staticDefinitionFiles,
   type StaticFileExtraction,
-  type StaticSyntaxFrontendFactory,
-} from "../host/static-index";
+} from "../indexer/static/extraction/engine";
+import type { StaticSyntaxFrontendFactory } from "../indexer/static-index/syntax";
 import type {
   RustFirstPartyStaticGoldenFileFixture,
   RustFirstPartyStaticGoldenSharedFixture,

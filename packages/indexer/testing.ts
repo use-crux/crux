@@ -1,7 +1,7 @@
 /**
  * Public testing helpers for Crux Indexer Extensions.
  *
- * The helpers exercise real source-text extraction through an in-memory source
+ * The helpers exercise source-text extraction through an in-memory source
  * reader. They are intended for extension authors who need deterministic
  * fixtures without depending on parser-native contexts, TypeScript AST nodes,
  * or package-internal compiler helpers.
@@ -111,14 +111,14 @@ export function validateIndexerExtensionFixture(
 }
 
 /**
- * Runs one source fixture through the same static extraction path as production.
+ * Runs one source fixture through the extension static extraction fixture path.
  *
  * Pass a string for the common case where the source file name does not matter. Pass `{ file,
  * source }` when path-sensitive behavior matters, such as import resolution or source references.
  *
  * The fixture engine disables cache and uses an in-memory source reader. That keeps tests fast and
- * deterministic while still covering the real parser, registry, runtime context, and projection
- * code.
+ * deterministic while still covering parser dispatch, registry construction, runtime context, and
+ * extension projection code.
  *
  * @example
  * ```ts

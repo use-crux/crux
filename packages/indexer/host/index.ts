@@ -3,46 +3,18 @@
  *
  * Host modules are intentionally separate from the public root package and the
  * extension authoring surface. They are narrow bridges for bundled workers and
- * local runtime integrations that need compiler, semantic, runtime, or Static
- * Index compatibility-host capabilities.
+ * local runtime integrations that need semantic, runtime, config, or Static
+ * Index extension-host capabilities.
  *
  * @module
  */
 
 export {
-  astIndexPatchFromCompilerResult,
-  compileProjectIndex,
-  createProjectIndexCompiler,
-  projectIndexSnapshotFromCompilerResult,
-  createStaticExtraction,
   inspectProjectStaticIndexConfig,
   inspectProjectStaticSyntaxPlan,
   staticDefinitionFiles,
-  createTypeScriptStaticSyntaxFrontend,
-  indexProjectAstFromSyntaxRecordProviderForHost,
-  indexProjectAstFromSyntaxRecordsForHost,
 } from './static-index'
 export type {
-  CompilerOwnedProjection,
-  IndexProjectAstFromSyntaxRecordProviderHostOptions,
-  IndexProjectAstFromSyntaxRecordsHostOptions,
-  NativeFactProjectionMode,
-  ProjectIndexCompileMode,
-  ProjectIndexCompiler,
-  ProjectIndexCompilerInput,
-  ProjectIndexCompilerProfile,
-  ProjectIndexCompilerResult,
-  ProvidedStaticSyntaxRecordProvider,
-  SourceReader,
-  StaticExtractionEngine,
-  StaticExtractionInstrumentation,
-  StaticExtractionOptions,
-  StaticFileExtraction,
-  StaticParseCacheHit,
-  StaticParseCacheStore,
-  StaticSyntaxFileRecord,
-  StaticSyntaxFrontendFactory,
-  StaticSyntaxFrontendIdentity,
   InspectProjectStaticIndexConfigOptions,
   InspectProjectStaticSyntaxPlanOptions,
   ProjectStaticIndexConfig,
@@ -88,7 +60,7 @@ export type {
   SemanticSyntaxView,
   TypeScriptSemanticBackendOptions,
 } from './semantic'
-export { indexProjectRuntimeForHost, runtimeIndexPatchFromCompilerResult } from './runtime'
+export { indexProjectRuntimeForHost } from './runtime'
 export type { IndexProjectRuntimeHostOptions } from './runtime'
 export {
   diffRuntimeArtifactDrift,

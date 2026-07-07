@@ -2,10 +2,12 @@ package workers
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/use-crux/crux/packages/local/internal/projectindex"
+	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 )
 
 func TestWorkerAcceptsPatchStreamsOverSingleLineByteLimit(t *testing.T) {
@@ -81,16 +83,18 @@ func TestWorkerAcceptsPatchStreamsOverSingleLineByteLimit(t *testing.T) {
 	worker := newTestWorkerWithProjectScript(t, script)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstFromSyntaxRecordsPatch(
+	patches, err := worker.streamPatches(
 		context.Background(),
-		t.TempDir(),
-		"",
-		"large-stream",
-		[]json.RawMessage{json.RawMessage(`{"kind":"source","sourceFile":"src/writer.ts"}`)},
+		requestwire.Request{Method: "indexProjectRuntime", Root: t.TempDir(), ProjectName: "large-stream"},
+		projectindex.IndexPatchBudget{},
 	)
 	if err != nil {
-		t.Fatalf("IndexProjectAstPatch error = %v", err)
+		t.Fatalf("streamPatches error = %v", err)
 	}
+	if len(patches) != 1 {
+		t.Fatalf("patches = %d, want 1", len(patches))
+	}
+	patch := patches[0]
 	if len(patch.Facts.Diagnostics) != 10 {
 		t.Fatalf("diagnostics = %d, want 10", len(patch.Facts.Diagnostics))
 	}

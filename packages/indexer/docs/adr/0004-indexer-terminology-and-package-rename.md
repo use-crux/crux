@@ -22,7 +22,6 @@ functions to Index terminology in the same compatibility-breaking slice:
 - `IndexDiagnostic` -> `IndexDiagnostic`
 - `IndexLintFinding` -> `IndexLintFinding`
 - `IndexPatch` -> `IndexPatch`
-- `compileProjectIndex` -> `compileProjectIndex`
 
 Use **Crux Indexer** as the public system name, **Project Index** as the artifact/read model, and
 **Project Index Compiler** as the internal compiler engine. Keep **compiler** as architecture

@@ -84,11 +84,9 @@ var projectIndexSemanticTimingBenchmarkNames = []string{
 }
 
 var projectIndexNodeReasonBenchmarkNames = []string{
-	projectIndexNodeReasonTypeScriptStaticCompiler,
 	projectIndexNodeReasonStaticPlanInspection,
 	projectIndexNodeReasonStaticIndexConfig,
 	projectIndexNodeReasonStaticIndexExtensions,
-	projectIndexNodeReasonSyntaxRecordProjection,
 	projectIndexNodeReasonStaticIndexEmpty,
 	projectIndexNodeReasonStaticIndexEvidence,
 	projectIndexNodeReasonStaticIndexRules,
@@ -143,15 +141,10 @@ func BenchmarkWorkerIndexProjectAstPatch(b *testing.B) {
 		b.ReportMetric(bytesToMiB(memory.peakBytes), "tree_rss_peak_mb/op")
 		b.ReportMetric(timing.PlanMs, "plan_ms/op")
 		b.ReportMetric(timing.NativeParseAndForwardMs, "native_parse_forward_ms/op")
-		b.ReportMetric(timing.NodeProjectionMs, "node_projection_ms/op")
 		b.ReportMetric(timing.TotalMs, "pipeline_total_ms/op")
 		b.ReportMetric(boolMetric(timing.NodeStarted), "node_started/op")
 		b.ReportMetric(boolMetric(timing.NativeOnlyEligible), "native_only_eligible/op")
 		reportTimingReasonMetrics(b, timing)
-		b.ReportMetric(float64(timing.RecordCount), "syntax_records/op")
-		b.ReportMetric(float64(timing.RecordBytes), "syntax_record_bytes/op")
-		b.ReportMetric(float64(timing.ChunkCount), "syntax_chunks/op")
-		b.ReportMetric(float64(timing.MaxChunkBytes), "syntax_max_chunk_bytes/op")
 		reportStaticTimingMetrics(b, timing)
 	}
 }
@@ -215,7 +208,6 @@ func BenchmarkWorkerReindexProjectGraphPipeline(b *testing.B) {
 		b.ReportMetric(bytesToMiB(memory.peakBytes), "tree_rss_peak_mb/op")
 		b.ReportMetric(timing.PlanMs, "plan_ms/op")
 		b.ReportMetric(timing.NativeParseAndForwardMs, "native_parse_forward_ms/op")
-		b.ReportMetric(timing.NodeProjectionMs, "node_projection_ms/op")
 		b.ReportMetric(timing.TotalMs, "ast_pipeline_total_ms/op")
 		b.ReportMetric(boolMetric(timing.NodeStarted), "node_started/op")
 		b.ReportMetric(boolMetric(timing.NativeOnlyEligible), "native_only_eligible/op")
@@ -457,9 +449,6 @@ func assertProductionStaticIndexPathRan(b *testing.B, timing ProjectIndexAstTimi
 	b.Helper()
 	if !timing.UsedStaticIndex {
 		b.Fatalf("benchmark did not use Static Index compiler path: %+v", timing)
-	}
-	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonTypeScriptStaticCompiler) {
-		b.Fatalf("benchmark used TypeScript static compiler path: %+v", timing)
 	}
 }
 

@@ -17,7 +17,7 @@ export interface ProjectIndexCompilerProfile {
   readonly projections?: readonly CompilerOwnedProjection[]
 }
 
-export interface ProjectIndexCompilerRuntime {
+export interface StaticExtensionHostRuntime {
   readonly profile: ProjectIndexCompilerProfile
   readonly extensionRuntime: IndexerExtensionRuntime
 }
@@ -50,9 +50,9 @@ export const cruxCoreCompilerProfile = {
   projections: cruxCoreCompilerProjections,
 } as const satisfies ProjectIndexCompilerProfile
 
-export function createProjectIndexCompilerRuntime(
+export function createStaticExtensionHostRuntime(
   profile: ProjectIndexCompilerProfile = cruxCoreCompilerProfile,
-): ProjectIndexCompilerRuntime {
+): StaticExtensionHostRuntime {
   return {
     profile,
     extensionRuntime: createIndexerExtensionRuntime({ extensions: profile.extensions }),

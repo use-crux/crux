@@ -18,14 +18,12 @@ const projectIndexFactProducer = {
 } as const satisfies ProjectIndexFactProducer
 
 const projectIndexMaxFactsPerBatchByMethod = {
-  indexProjectAstFromSyntaxRecords: 200,
   indexProjectSemantic: 100,
   indexProjectRuntime: 100,
 } as const satisfies Record<ProjectIndexPatchMethod, number>
 
 /** Patch-producing project-indexer request methods. */
 export type ProjectIndexPatchMethod =
-  | 'indexProjectAstFromSyntaxRecords'
   | 'indexProjectSemantic'
   | 'indexProjectRuntime'
 
@@ -148,7 +146,6 @@ export function errorContextForMethod(method: string | undefined): ProjectIndexW
       return { kind: 'artifact', method, artifact: 'runtimeArtifacts' }
     case 'runRuntimeOperation':
       return { kind: 'artifact', method, artifact: 'runtimeOperation' }
-    case 'indexProjectAstFromSyntaxRecords':
     case 'indexProjectSemantic':
     case 'indexProjectRuntime':
       return { kind: 'phase', method, phase: phaseForMethod(method) }
@@ -174,8 +171,6 @@ function phaseForMethod(method: ProjectIndexPatchMethod): IndexPatch['phase']
 function phaseForMethod(method: string | undefined): IndexPatch['phase'] | undefined
 function phaseForMethod(method: string | undefined): IndexPatch['phase'] | undefined {
   switch (method) {
-    case 'indexProjectAstFromSyntaxRecords':
-      return 'ast'
     case 'indexProjectSemantic':
       return 'semantic'
     case 'indexProjectRuntime':
@@ -192,7 +187,6 @@ function maxFactsPerBatchForMethod(method: string): number {
 
 function isProjectIndexPatchMethod(method: string): method is ProjectIndexPatchMethod {
   return (
-    method === 'indexProjectAstFromSyntaxRecords' ||
     method === 'indexProjectSemantic' ||
     method === 'indexProjectRuntime'
   )

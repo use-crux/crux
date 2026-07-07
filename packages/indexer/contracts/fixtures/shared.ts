@@ -149,11 +149,11 @@ export interface RelationSpecsSharedFixture {
 
 /** Shared built-in rule descriptor fixture. */
 export interface RuleDescriptorsSharedFixture {
-  /** Rule descriptors sampled from the TypeScript-owned built-in lint catalog. */
+  /** Rule descriptors sampled from the Rust-owned built-in lint catalog. */
   readonly descriptors: readonly IndexRuleDescriptor[];
 }
 
-/** Fixture class proving a lint rule's normalized TypeScript and native outputs. */
+/** Fixture class proving a lint rule's normalized native finding behavior. */
 export type LintRuleParityEvidenceClass = "positive" | "negative";
 
 /** Worker-backed parity evidence for one built-in lint rule. */
@@ -166,11 +166,11 @@ export interface LintRuleParityEvidenceFixture {
   readonly negativeFixture: string;
 }
 
-/** Built-in lint rule that is intentionally evaluated only by the TypeScript indexer. */
-export interface TypeScriptOnlyLintRuleFixture {
-  /** Built-in rule id omitted from native parity evidence. */
+/** Built-in lint rule omitted from native fact parity evidence. */
+export interface NativeParityOmittedLintRuleFixture {
+  /** Built-in rule id omitted from native fact parity evidence. */
   readonly ruleId: IndexLintRuleId;
-  /** Human-readable reason this rule cannot be evaluated from native facts alone. */
+  /** Human-readable reason this rule is covered by policy/finalize paths instead. */
   readonly reason: string;
 }
 
@@ -180,8 +180,8 @@ export interface LintRuleParityCoverageSharedFixture {
   readonly requiredEvidence: readonly LintRuleParityEvidenceClass[];
   /** Worker-backed parity fixtures for every built-in finding-producing rule. */
   readonly rules: readonly LintRuleParityEvidenceFixture[];
-  /** Rules that are explicitly TypeScript-only and must not claim native parity. */
-  readonly typeScriptOnlyRules?: readonly TypeScriptOnlyLintRuleFixture[];
+  /** Rules covered outside the native fact parity fixture set. */
+  readonly nativeParityOmittedRules?: readonly NativeParityOmittedLintRuleFixture[];
   /** Fixture proving config, profile, suppression, and diagnostic behavior through the native worker. */
   readonly policyFixture: string;
 }

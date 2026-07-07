@@ -2,15 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  indexProjectAstFromSyntaxRecordsForHost as indexProjectAstFromSyntaxRecords,
-  inspectProjectStaticSyntaxPlan,
-} from '../host/static-index'
-import {
-  createTypeScriptStaticSyntaxFrontend,
-  type StaticSyntaxFileRecord,
-} from '../indexer/static-index/syntax'
-import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from '../indexer/static-index/syntax'
+import { inspectProjectStaticSyntaxPlan } from '../host/static-index'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -55,35 +47,6 @@ describe('static syntax plan support files', () => {
     expect(plan.filesToParse).toContain(contextFile)
     expect(plan.filesToParse).toContain(helperFile)
 
-    const contextRecord = await createRustIdentityRecord({ root, file: contextFile, source: contextSource })
-    const helperRecord = await createRustIdentityRecord({ root, file: helperFile, source: helperSource })
-    await indexProjectAstFromSyntaxRecords({
-      root,
-      projectName: 'support-files',
-      records: [contextRecord, helperRecord],
-      frontendIdentity: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
-    })
-
-    const warmPlan = await inspectProjectStaticSyntaxPlan({
-      root,
-      projectName: 'support-files',
-      includeCacheStatus: true,
-    })
-
-    expect(warmPlan.cacheHits).toEqual([contextFile])
-    expect(warmPlan.cacheMisses).toEqual([])
-    expect(warmPlan.filesToParse).toEqual([helperFile])
+    expect(plan.cacheHits).toEqual([])
   })
 })
-
-async function createRustIdentityRecord(input: {
-  readonly root: string
-  readonly file: string
-  readonly source: string
-}): Promise<StaticSyntaxFileRecord> {
-  const record = await createTypeScriptStaticSyntaxFrontend({ callNames: ['context'] }).parseFile(input)
-  return {
-    ...record,
-    frontend: OXC_STATIC_SYNTAX_FRONTEND_IDENTITY,
-  }
-}

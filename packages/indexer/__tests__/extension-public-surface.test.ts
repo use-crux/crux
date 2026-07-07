@@ -138,45 +138,21 @@ describe('public indexer extension surface', () => {
     const staticCompat = await readFile(join(testDir, '..', 'host/static-compat.ts'), 'utf8')
 
     expect(namedValueExports(staticIndex)).toEqual([
-      'astIndexPatchFromCompilerResult',
-      'compileProjectIndex',
-      'createProjectIndexCompiler',
-      'projectIndexSnapshotFromCompilerResult',
-      'createStaticExtraction',
       'staticDefinitionFiles',
       'inspectProjectStaticIndexConfig',
       'inspectProjectStaticSyntaxPlan',
-      'createTypeScriptStaticSyntaxFrontend',
-      'indexProjectAstFromSyntaxRecordProviderForHost',
-      'indexProjectAstFromSyntaxRecordsForHost',
     ])
     expect(namedTypeExports(staticIndex)).toEqual([
-      'ProjectIndexCompileMode',
-      'ProjectIndexCompiler',
-      'ProjectIndexCompilerInput',
-      'ProjectIndexCompilerResult',
-      'CompilerOwnedProjection',
-      'ProjectIndexCompilerProfile',
-      'SourceReader',
-      'StaticExtractionEngine',
-      'StaticExtractionInstrumentation',
-      'StaticExtractionOptions',
-      'StaticFileExtraction',
       'InspectProjectStaticIndexConfigOptions',
       'ProjectStaticIndexConfig',
       'ProjectStaticIndexExtensionReference',
       'InspectProjectStaticSyntaxPlanOptions',
       'ProjectStaticSyntaxPlan',
-      'StaticParseCacheHit',
-      'StaticParseCacheStore',
-      'IndexProjectAstFromSyntaxRecordProviderHostOptions',
-      'IndexProjectAstFromSyntaxRecordsHostOptions',
-      'NativeFactProjectionMode',
-      'ProvidedStaticSyntaxRecordProvider',
-      'StaticSyntaxFileRecord',
-      'StaticSyntaxFrontendIdentity',
-      'StaticSyntaxFrontendFactory',
     ])
+    expect(staticIndex).not.toContain('compileProjectIndex')
+    expect(staticIndex).not.toContain('createStaticExtraction')
+    expect(staticIndex).not.toContain('createTypeScriptStaticSyntaxFrontend')
+    expect(staticIndex).not.toContain('indexProjectAstFromSyntaxRecords')
     expect(namedValueExports(semantic)).toEqual([
       'createNativeSemanticBackend',
       'createSemanticIndexService',
@@ -216,8 +192,9 @@ describe('public indexer extension surface', () => {
       'SemanticSyntaxView',
       'TypeScriptSemanticBackendOptions',
     ])
-    expect(namedValueExports(runtime)).toEqual(['runtimeIndexPatchFromCompilerResult'])
-    expect(namedTypeExports(runtime)).toEqual(['ProjectIndexCompilerResult'])
+    expect(namedValueExports(runtime)).toEqual([])
+    expect(namedTypeExports(runtime)).toEqual([])
+    expect(runtime).not.toContain('runtimeIndexPatchFromCompilerResult')
     expect(namedValueExports(staticCompat)).toEqual([
       'checkStaticRulesForProject',
       'extractStaticEvidenceBatchForProject',

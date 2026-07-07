@@ -26,7 +26,7 @@ describe('loadQualityProject', () => {
     }
   })
 
-  it('loads source-discovered prompt tests without config registration', async () => {
+  it('does not source-project prompt tests without config registration', async () => {
     const fixtureRoot = join(__dirname, '__fixtures__/quality-config')
     mkdirSync(fixtureRoot, { recursive: true })
     const projectRoot = mkdtempSync(join(fixtureRoot, 'source-prompts-'))
@@ -52,7 +52,8 @@ describe('loadQualityProject', () => {
       const project = await loadQualityProject()
 
       expect(project.quality).toEqual({})
-      expect(project.prompts.map((prompt) => prompt.id)).toEqual(['source.greeter'])
+      expect(project.prompts).toEqual([])
+      expect(project.promptDiagnostics).toEqual([])
       expect(project.configDir).toBe(projectRoot)
       expect(project.configPath).toBeUndefined()
     } finally {

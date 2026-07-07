@@ -71,15 +71,12 @@ func hasIndexPatchFacts(facts projectindex.IndexPatchFacts) bool {
 
 func assertNativeStaticIndexPathRan(t testing.TB, timing ProjectIndexAstTiming) {
 	t.Helper()
-	if timing.RecordCount > 0 && timing.NativeParseAndForwardMs > 0 {
-		return
-	}
-	if timing.NativeParseAndForwardMs > 0 && !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonSyntaxRecordProjection) {
+	if timing.UsedStaticIndex && timing.NativeParseAndForwardMs > 0 {
 		return
 	}
 	t.Fatalf(
-		"native static index path did not run: recordCount=%d nativeParseForwardMs=%0.3f nodeReasons=%v totalMs=%0.3f",
-		timing.RecordCount,
+		"native static index path did not run: usedStaticIndex=%v nativeParseForwardMs=%0.3f nodeReasons=%v totalMs=%0.3f",
+		timing.UsedStaticIndex,
 		timing.NativeParseAndForwardMs,
 		timing.NodeReasons,
 		timing.TotalMs,

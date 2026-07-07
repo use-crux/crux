@@ -9,8 +9,6 @@
     "build": "node ./scripts/build-workers.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "perf:indexer-static": "tsx ./scripts/indexer-static-benchmark.ts",
-    "perf:indexer-static:extensions": "tsx ./scripts/indexer-static-extension-guard.ts",
     "parity:indexer-semantic": "tsx ./lib/indexer-semantic-parity.ts"
   },
   "dependencies": {

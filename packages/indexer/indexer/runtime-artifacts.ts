@@ -9,9 +9,6 @@ import type {
 import { createRuntimeError } from "@use-crux/core/runtime";
 import ts from "typescript";
 import { loadProjectConfig } from "./config";
-import { staticDefinitionFiles } from "./files";
-import { createStaticExtraction } from "./static/extraction/engine";
-import { createTypeScriptStaticSyntaxFrontend } from "./static-index/syntax";
 
 const GENERATED_HEADER = [
   "/*",
@@ -28,8 +25,14 @@ export type RuntimeArtifactHost = "next" | "convex";
 export interface GenerateRuntimeArtifactsOptions {
   /** Project root containing authored Crux source files. */
   readonly root: string;
-  /** Optional explicit source files. Defaults to Project Index static discovery. */
-  readonly files?: readonly string[];
+  /**
+   * Project Index definitions to project into runtime targets.
+   *
+   * The local runtime supplies these from the native Project Index snapshot.
+   * This generator intentionally does not parse source files or run bundled
+   * extraction in-process.
+   */
+  readonly definitions?: readonly ProjectDefinition[];
   /** Runtime host entry to generate. Defaults to `config({ runtime })` or Next. */
   readonly host?: RuntimeArtifactHost;
 }
@@ -63,18 +66,9 @@ export async function generateRuntimeArtifacts(
   options: GenerateRuntimeArtifactsOptions,
 ): Promise<RuntimeArtifactGenerationResult> {
   const host = await resolveRuntimeArtifactHost(options);
-  const files = options.files ?? staticDefinitionFiles(options.root);
-  const extraction = createStaticExtraction({
-    root: options.root,
-    syntaxFrontend: createTypeScriptStaticSyntaxFrontend,
-    cache: "none",
-  });
-  const extracted = await extraction.extractFiles(
-    [...files].sort(compareCodepoint),
-  );
   const manifest = manifestFromDefinitions({
     root: options.root,
-    definitions: extracted.flatMap((item) => item.definitions),
+    definitions: options.definitions ?? [],
   });
   await validateTargetExports(options.root, manifest.targets);
   const canonicalManifest = `${JSON.stringify(manifest, null, 2)}\n`;

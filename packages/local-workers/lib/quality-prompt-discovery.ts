@@ -1,11 +1,10 @@
 /**
- * Source-discovered prompt-test discovery for the Quality runner.
+ * Project Model prompt-test discovery for the Quality runner.
  *
- * The runner uses the public Project Model read model to find prompt source
- * files instead of asking users to register prompts in `crux.config.ts`.
- * Prompt-test dependency diagnostics are returned before importing prompt
- * modules so definition errors stay actionable and do not collapse into raw
- * JavaScript import failures.
+ * The runner uses the public Project Model read model plus any already-loaded
+ * config module to find prompt values with colocated tests. It does not run
+ * source projection itself; authored source discovery is owned by the native
+ * Project Index pipeline.
  *
  * @module
  */
@@ -15,17 +14,17 @@ import type { AnyPrompt } from '@use-crux/core'
 import type { ProjectModelDiagnostic, ResolvedProjectModel } from '@use-crux/core/project-index'
 import { resolveProjectModel } from '@use-crux/indexer/host'
 
-/** Prompts and prompt-test diagnostics discovered from project source. */
+/** Prompts and prompt-test diagnostics discovered from Project Model evidence. */
 export interface DiscoveredQualityPrompts {
-  /** Prompt instances imported from source-visible prompt modules. */
+  /** Prompt instances imported from model-visible modules or config exports. */
   readonly prompts: readonly AnyPrompt[]
   /** Diagnostics that should fail prompt-test collection before execution. */
   readonly diagnostics: readonly ProjectModelDiagnostic[]
 }
 
-/** Options for source-discovered Quality prompt-test collection. */
+/** Options for Quality prompt-test collection from Project Model evidence. */
 export interface DiscoverQualityPromptTestsOptions {
-  /** Project root used for Project Model resolution and module imports. */
+  /** Project root used for Project Model resolution and model-visible imports. */
   readonly rootDir: string
   /** Crux config selected by the CLI, when one exists. */
   readonly configPath?: string
@@ -37,8 +36,8 @@ export interface DiscoverQualityPromptTestsOptions {
  * Discover prompt values that declare colocated Quality tests.
  *
  * The returned diagnostics are limited to prompt-test-blocking Project Model
- * diagnostics. Informational project facts such as source-only discovery stay
- * on `crux config inspect` and do not fail Quality collection.
+ * diagnostics. This worker intentionally does not fall back to TypeScript
+ * source projection when the Project Model has no source-derived definitions.
  */
 export async function discoverQualityPromptTests(
   options: DiscoverQualityPromptTestsOptions,

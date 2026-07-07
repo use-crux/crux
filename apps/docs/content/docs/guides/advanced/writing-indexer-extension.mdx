@@ -227,7 +227,7 @@ Use package-level fixture projects for loader and trust behavior, not as the onl
 1. Create a fixture project with a `node_modules/@acme/crux-indexer/package.json`.
 2. Export the compiled extension manifest from that package.
 3. Add `crux.config.ts` with `indexer.extensions` and `trust.allow`.
-4. Run `indexProject(...)` against the fixture root.
+4. Run the fixture through the Crux Local Project Index reindex path.
 5. Assert definitions, source refs, relations, diagnostics, and `ruleDescriptors`.
 
 Also test failure paths:

@@ -8,9 +8,9 @@ import type {
 import { loadConfigPolicyProjectConfig, loadProjectConfig } from '../../config'
 import {
   compilerProfileWithResolvedExtensions,
-  createProjectIndexCompilerRuntime,
+  createStaticExtensionHostRuntime,
   cruxCoreCompilerProfile,
-  type ProjectIndexCompilerRuntime,
+  type StaticExtensionHostRuntime,
 } from '../../compiler/profile'
 import { loadIndexerExtensionReferences } from '../../extensions'
 import type {
@@ -143,7 +143,7 @@ export async function inspectProjectStaticSyntaxPlan(
     loaded.loaded.experimental,
     resolutionMode,
   )
-  const runtimeResult = await projectIndexCompilerRuntimeForPlan(root, loaded.loaded.indexer)
+  const runtimeResult = await staticExtensionHostRuntimeForPlan(root, loaded.loaded.indexer)
   const runtime = runtimeResult.runtime
   const callNames = [...staticExtractionCallNames(runtime.profile, runtime.extensionRuntime)].sort()
   const staticSelection = staticDefinitionFileSelection(root, {
@@ -224,7 +224,7 @@ async function staticIndexSyntaxSelectionForPlan(
 async function staticIndexSyntaxCacheStatus(input: {
   readonly root: string
   readonly files: readonly string[]
-  readonly runtime: ProjectIndexCompilerRuntime
+  readonly runtime: StaticExtensionHostRuntime
   readonly additionalCacheInputs: readonly IndexDependency[]
 }): Promise<{
   readonly cacheHits: readonly string[]
@@ -244,14 +244,14 @@ async function staticIndexSyntaxCacheStatus(input: {
   })
 }
 
-async function projectIndexCompilerRuntimeForPlan(
+async function staticExtensionHostRuntimeForPlan(
   root: string,
   indexerConfig: Awaited<ReturnType<typeof loadProjectConfig>>['loaded']['indexer'],
 ): Promise<{
-  readonly runtime: ProjectIndexCompilerRuntime
+  readonly runtime: StaticExtensionHostRuntime
   readonly cacheInputs: readonly IndexDependency[]
 }> {
-  const baseRuntime = createProjectIndexCompilerRuntime(cruxCoreCompilerProfile)
+  const baseRuntime = createStaticExtensionHostRuntime(cruxCoreCompilerProfile)
   const configuredExtensions = indexerConfig?.extensions ?? []
   if (configuredExtensions.length === 0) return { runtime: baseRuntime, cacheInputs: [] }
 
@@ -261,7 +261,7 @@ async function projectIndexCompilerRuntimeForPlan(
   })
   if (loaded.extensions.length === 0) return { runtime: baseRuntime, cacheInputs: [] }
   return {
-    runtime: createProjectIndexCompilerRuntime(
+    runtime: createStaticExtensionHostRuntime(
       compilerProfileWithResolvedExtensions(baseRuntime.profile, loaded.extensions),
     ),
     cacheInputs: extensionPackageCacheInputs(loaded.extensions),
@@ -285,7 +285,7 @@ function staticSyntaxPlanPrimaryFiles(files: readonly string[], configFile: stri
   return [...new Set([...files, configFile])].sort()
 }
 
-function constructorNamesFromRuntime(runtime: ProjectIndexCompilerRuntime): readonly string[] {
+function constructorNamesFromRuntime(runtime: StaticExtensionHostRuntime): readonly string[] {
   return [
     ...new Set([
       ...DEFAULT_CONSTRUCTOR_NAMES,

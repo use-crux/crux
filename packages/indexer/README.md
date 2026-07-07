@@ -20,10 +20,10 @@ For the package architecture, source graph model, and incremental planner direct
 
 The static source pass classifies candidate files before AST parsing. It indexes ordinary authored source with Crux signals, ignores universal output/cache directories, skips generated/bundled/base64 artifact files through content signals, and emits an index diagnostic when an oversized authored-looking source file is skipped for safety. This keeps local devtools responsive without relying on project-specific folder-name ignores.
 
-Crux-owned host work runs through explicit `host/*` subpaths. `compileProjectIndex`
-and `createStaticExtraction` are host facades for projecting caller-provided
-syntax records, third-party extension output, graph evidence, and patch facts.
-There is no implicit TypeScript bundled frontend and no root package API that
+Crux-owned host work runs through explicit `host/*` subpaths. Static source
+patch production is a Crux Local binary feature: Go drives the Rust/Oxc Static
+Index compiler, and Node is used only for config/runtime/semantic work plus the
+third-party Static Index extension host. There is no root package API that
 spawns or substitutes for the native binary.
 
 `resolveProjectModel(...)` is a Crux-owned host facade for config/read-model inspection. It returns the JSON-safe `ResolvedProjectModel` contract from `@use-crux/core/project-index`, including selected root, package name, config status, source roots, ignored conventions, config-derived definitions, Quality defaults, and Project Model diagnostics with provenance. Authored source discovery comes from the native Project Index pipeline.
@@ -131,12 +131,9 @@ import {
 Crux-owned worker hosts can use private host subpaths while the package remains private:
 
 ```ts
-import {
-  compileProjectIndex,
-  createStaticExtraction,
-  indexProjectAstFromSyntaxRecordsForHost,
-} from "@use-crux/indexer/host/static-index";
+import { inspectProjectStaticSyntaxPlan } from "@use-crux/indexer/host/static-index";
+import { extractStaticEvidenceBatchForProject } from "@use-crux/indexer/host/static-compat";
 import { indexPatchFromWorkerEvents } from "@use-crux/indexer/contracts/worker-events";
 ```
 
-Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `createStaticExtraction` and `indexProjectAstFromSyntaxRecordsForHost` are Crux-owned host boundaries for bundled tools and workers that need source-file facts, explicit syntax frontends, validated native cache hits, or native projection controls. `@use-crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party extension support is stabilized. Internal `indexer/*` modules are not package exports; `host/*` subpaths are Crux-owned worker bridges, and `contracts/*` subpaths are JSON-safe cross-runtime contracts rather than general SDK entry points.
+Most applications should not import this package directly. It is primarily an internal dependency of Crux local devtools, documented as a separate package so the architecture boundary is explicit. `@use-crux/indexer/testing` is the supported source-text fixture surface for extension tests. The `extensions` subpath is experimental and exists to migrate first-party internals before third-party extension support is stabilized. Internal `indexer/*` modules are not package exports; `host/*` subpaths are Crux-owned worker bridges, and `contracts/*` subpaths are JSON-safe cross-runtime contracts rather than general SDK entry points.

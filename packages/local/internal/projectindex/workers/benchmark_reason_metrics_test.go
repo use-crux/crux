@@ -8,11 +8,9 @@ func TestProjectIndexAstBenchmarkReasonMetricsCoverNodeStartReasons(t *testing.T
 		got[reason] = true
 	}
 	for _, reason := range []string{
-		projectIndexNodeReasonTypeScriptStaticCompiler,
 		projectIndexNodeReasonStaticPlanInspection,
 		projectIndexNodeReasonStaticIndexConfig,
 		projectIndexNodeReasonStaticIndexExtensions,
-		projectIndexNodeReasonSyntaxRecordProjection,
 		projectIndexNodeReasonStaticIndexEmpty,
 		projectIndexNodeReasonStaticIndexEvidence,
 		projectIndexNodeReasonStaticIndexRules,

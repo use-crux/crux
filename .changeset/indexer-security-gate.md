@@ -22,6 +22,8 @@ Add first-party static golden checks so Rust/Oxc output is compared against the 
 
 Retire the legacy TypeScript first-party static parser, bundled extractors, bundled lint evaluator, and root in-process project indexing APIs. `@use-crux/indexer` is now the extension-authoring SDK plus Project Index record contracts; bundled first-party extraction and linting are Rust-only binary features owned by Crux Local and the CLI. The TypeScript host remains only for third-party extension contributions and host/config/semantic support lanes.
 
+Remove the monolithic `compileProjectIndex` host pipeline and syntax-record patch RPC from the TypeScript worker path. Runtime artifact generation now projects supplied native Project Index definitions instead of parsing source in-process, and no-config Quality prompt-test collection no longer falls back to TypeScript source projection.
+
 Make root/host `createStaticExtraction()` require an explicit syntax frontend, while keeping the TypeScript syntax-record producer as the documented `/testing` fixture default. Fixture traces now report the syntax producer identity used for the run.
 
 Ship Crux Local platform packages with an enforced Rust/Oxc static-index worker sibling: staged release validation now rejects platform tarballs that omit `bin/crux-static-index-worker` or carry mismatched `os`/`cpu` metadata. The staged `@use-crux/local` manifest injects platform packages as optional dependencies, while committed workspace manifests are guarded against platform optional dependencies so workspace and Karyla installs stay local-path based.
