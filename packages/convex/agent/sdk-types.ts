@@ -1,8 +1,7 @@
 import { Agent as ConvexAgent } from '@convex-dev/agent'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import type { ContextEntry, Prompt, ResolvedPrompt } from '@use-crux/core'
+import type { ResolvedPrompt } from '@use-crux/core'
 import type { RecordStore, Storage } from '@use-crux/core/storage'
-import type { z } from 'zod'
 import type { ComponentApi } from '../src/component/_generated/component'
 import type { ConvexRuntimeTarget } from '../runtime'
 import type {
@@ -29,6 +28,7 @@ import type {
   ConvexAgentPersistenceConfig,
   ConvexAgentThreadTarget,
   CruxConvexThread,
+  AnyConvexPrompt,
   PromptInput,
 } from './lifecycle-types'
 import type { ConvexAgentContextMessage } from './driver'
@@ -89,9 +89,7 @@ export interface ConvexAgentCruxRuntimeConfig {
 }
 
 /** Crux-owned lifecycle controls for `convexAgent()`. */
-export interface ConvexAgentCruxConfig<
-  TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
-> {
+export interface ConvexAgentCruxConfig<TPrompt extends AnyConvexPrompt> {
   /** Advanced adapter override used by tests and custom Convex Agent runtimes. */
   driver?: ConvexAgentDriver
   /** Runtime binding for request-scoped Crux storage and namespace state. */
@@ -108,7 +106,7 @@ export interface ConvexAgentCruxConfig<
 
 /** Public `convexAgent()` configuration before model binding. */
 export interface ConvexAgentBaseConfig<
-  TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
+  TPrompt extends AnyConvexPrompt,
 > extends ConvexAgentPassthroughOptions {
   /**
    * Convex components used by the agent boundary.
@@ -133,11 +131,11 @@ export interface ConvexAgentBaseConfig<
 }
 
 /** Complete config for a profile-backed Convex Agent helper. */
-export type ConvexAgentConfig<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>> =
+export type ConvexAgentConfig<TPrompt extends AnyConvexPrompt> =
   ConvexAgentBaseConfig<TPrompt> & ConvexAgentModelConfig
 
 /** Public profile-backed Convex Agent helper returned by `convexAgent()`. */
-export interface CruxConvexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>> {
+export interface CruxConvexAgent<TPrompt extends AnyConvexPrompt> {
   /** Public agent name. */
   readonly name: string
   /** Prompt resolved for each turn. */

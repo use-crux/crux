@@ -10,15 +10,14 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "main": "./runtime.ts",
   "types": "./runtime.ts",
   "exports": {
     "./runtime": {
       "types": "./runtime.ts",
-      "import": "./runtime.ts",
-      "require": "./runtime.ts"
+      "import": "./runtime.ts"
     }
   },
   "dependencies": {

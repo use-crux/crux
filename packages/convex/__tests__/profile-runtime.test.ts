@@ -16,6 +16,8 @@ import {
   type CruxGraphRecord,
 } from '@use-crux/core/observability'
 
+const directToolOptions = { toolCallId: 'direct-test', runtimeContext: undefined }
+
 describe('Convex profile runtime', () => {
   afterEach(() => {
     vi.restoreAllMocks()
@@ -70,7 +72,7 @@ describe('Convex profile runtime', () => {
         records: inMemoryRecordStore(),
         target: { threadId: 'thread-2' },
       },
-      () => runtimeTool.execute({ value: 'ok' }),
+      () => runtimeTool.execute({ value: 'ok' }, directToolOptions),
     )
 
     expect(result).toEqual({
@@ -247,7 +249,7 @@ describe('Convex profile runtime', () => {
           records: inMemoryRecordStore(),
           target: { threadId: 'thread-first' },
         },
-        () => runtimeTool.execute({ label: 'first' }),
+        () => runtimeTool.execute({ label: 'first' }, directToolOptions),
       ),
       runWithConvexCruxRuntime(
         {
@@ -256,7 +258,7 @@ describe('Convex profile runtime', () => {
           records: inMemoryRecordStore(),
           target: { threadId: 'thread-second' },
         },
-        () => runtimeTool.execute({ label: 'second' }),
+        () => runtimeTool.execute({ label: 'second' }, directToolOptions),
       ),
     ])
 

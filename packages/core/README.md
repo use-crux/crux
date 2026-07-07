@@ -13,6 +13,8 @@ Your app still owns product logic, routing, deployment, and data. Your model SDK
 
 ## Install
 
+Crux packages are ESM-only and require Node.js 22 or newer.
+
 Most apps install `@use-crux/core` with an execution adapter. For Vercel AI SDK:
 
 ```bash
@@ -636,6 +638,8 @@ Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 | `@use-crux/core/runtime/testing` | Runtime Engine store and kernel conformance suites for adapter authors.                                                                                                     |
 | `@use-crux/core/observability`   | Canonical graph records, presentation read-model types, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
 | `@use-crux/core/project-index`   | Public Project Index contracts for local devtools and source intelligence.                                                                                                  |
+| `@use-crux/core/skill`           | Edge-safe skill authoring with inline and registry loaders.                                                                                                                 |
+| `@use-crux/core/skill/node`      | Node-only local SKILL.md loading with `skill.fromFile()` and `fileSkill()`.                                                                                                 |
 
 See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) for every subpath and API.
 

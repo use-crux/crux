@@ -243,9 +243,11 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── handoff.ts      handoff() — schema-validated inter-agent context transfer
 │   └── delegate.ts     delegate() — handoff + subagent execution as callable tool
 ├── skill/
-│   ├── index.ts        Barrel: skill.inline, skill.fromFile, skill.fromRegistry, registry, generateIndex
+│   ├── index.ts        Universal barrel: skill.inline, skill.fromRegistry, registry, generateIndex
+│   ├── node.ts         Node-only barrel: fileSkill and skill.fromFile for local SKILL.md files
 │   ├── types.ts        Skill, SkillMeta, SkillReference, InlineSkillConfig, LazySkill, SkillLoadError
-│   ├── loaders.ts      inlineSkill(), fileSkill() — create Skill objects from inline text or SKILL.md files
+│   ├── loaders.ts      inlineSkill() — create Skill objects from inline text
+│   ├── file-loader.ts  fileSkill() — Node filesystem loader for SKILL.md files and references
 │   ├── frontmatter.ts  parseFrontmatter() — lightweight YAML frontmatter parser for SKILL.md
 │   ├── index.ts      generateIndex() — system prompt section listing available skills
 │   ├── session-contract.ts  SkillActivationSession public contract, snapshots, persistence port

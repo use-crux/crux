@@ -39,7 +39,8 @@ import { tool } from '@use-crux/convex/tools'
 | Subpath                    | Classification                       | Export behavior                                                                                                                    |
 | -------------------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `@use-crux/convex/context` | Identical re-export                  | Same API as `@use-crux/core/context`.                                                                                              |
-| `@use-crux/convex/skill`   | Identical re-export + Convex adapter | Same skill authoring/session API as `@use-crux/core/skill`; adds `convexSkillActivationPersistence()` for Convex record snapshots. |
+| `@use-crux/convex/skill`   | Identical re-export + Convex adapter | Same edge-safe skill authoring/session API as `@use-crux/core/skill`; adds `convexSkillActivationPersistence()` for Convex record snapshots. |
+| `@use-crux/convex/skill/node` | Node-only mirror | Re-exports `@use-crux/core/skill/node` for Node-side local SKILL.md loading plus Convex skill persistence helpers. |
 | `@use-crux/convex/memory`  | Convex-bound drop-in                 | Re-exports memory block helpers and changes only `memory()` storage defaults.                                                      |
 | `@use-crux/convex/tools`   | Convex-bound drop-in                 | Mirrors `tool()` and injects Convex runtime metadata into execution.                                                               |
 | `@use-crux/convex/agent`   | Mixed                                | Convex-Agent-compatible `Agent` facade plus the profile-backed `convexAgent()` helper.                                             |

@@ -19,12 +19,36 @@ The stable beta surface is:
 - `.resolve()` and `.inspect()`
 - `ResolvedPrompt`, `SystemBlock`, and `InspectResult`
 - `GenerationSettings` and `ProviderAdaptations`
-- the `generate` and `stream` result contract
+- the `generate` and `stream` result contract, including the canonical result
+  envelope and stream `completion` envelope
 - `AdapterSpec`, `LoopRuntimePort`, `ExecutorRequest`, and `ExecutorOutcome`
+- public adapter codecs and headless call handles
+- adapter `transport` callbacks for `generate()`; `stream()` with `transport`
+  is explicitly unsupported unless a future subpath documents support
 
 Everything else is labelled by subpath. Memory, retrieval, skills, agents,
 flows, quality, and local/devtools surfaces keep their existing beta or
 experimental status unless their own subpath documentation says otherwise.
+
+## Platform Floor
+
+Published Crux packages are ESM-only and require Node.js 22 or newer. Package
+exports provide `types` and `import` entries only; CommonJS `require`
+conditions are intentionally not part of the pre-1.0 contract.
+
+## Experimental Surface & Graduation
+
+Unstable user-facing APIs ship under the `experimental` config object or an
+`experimental`-prefixed export, mirroring the existing
+`experimental.indexer.*` convention. Graduation renames the API to its stable
+name. Pre-1.0, graduation and every other breaking change are hard breaks in a
+minor release: no deprecated aliases, no compatibility shims, no codemods —
+the CHANGELOG migration note is the migration tool. Crux will not reach 1.0
+with any `experimental` name already known to be graduating.
+
+From 1.0, the discipline inverts: breaking changes require a major release,
+renames ship with a deprecated alias for at least one minor, and larger
+migrations ship codemods.
 
 ## Ordering Guarantee
 
