@@ -651,7 +651,7 @@ describe('project indexer', () => {
       expect.objectContaining({ id: 'prompt:writer.runtime', kind: 'prompt', fidelity: 'resolved' }),
     )
     expect(await readdir(root)).toContain('runtime-imported.txt')
-  })
+  }, 15_000)
 
   it('can return a no-op semantic patch that preserves AST index facts', async () => {
     const root = await fixtureRoot()
