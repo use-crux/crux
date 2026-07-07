@@ -67,6 +67,7 @@ export const REQUIRED_COLUMNS: Readonly<Record<RuntimePostgresTable, readonly st
     'timeout_at',
     'timer_id',
     'state',
+    'settled_at',
   ],
   timers: [
     'timer_id',
@@ -78,14 +79,17 @@ export const REQUIRED_COLUMNS: Readonly<Record<RuntimePostgresTable, readonly st
     'work',
     'idempotency_key',
     'state',
+    'settled_at',
   ],
   outbox: [
     'outbox_id',
     'namespace',
+    'work_id',
     'envelope',
     'state',
     'attempts',
     'next_attempt_at',
+    'confirmed_at',
   ],
   idempotency: ['namespace', 'key', 'completed_at'],
   leases: ['resource', 'token', 'expires_at', 'owner_id'],
@@ -160,8 +164,11 @@ export function ddlStatements(schema: string): readonly string[] {
       work jsonb NOT NULL,
       timeout_at timestamptz,
       timer_id text,
-      state text NOT NULL
+      state text NOT NULL,
+      settled_at timestamptz
     )`,
+    `ALTER TABLE ${waiters}
+      ADD COLUMN IF NOT EXISTS settled_at timestamptz`,
     `CREATE TABLE IF NOT EXISTS ${timers} (
       timer_id text PRIMARY KEY,
       namespace text NOT NULL,
@@ -171,16 +178,25 @@ export function ddlStatements(schema: string): readonly string[] {
       idle_scope text,
       work jsonb NOT NULL,
       idempotency_key text,
-      state text NOT NULL
+      state text NOT NULL,
+      settled_at timestamptz
     )`,
+    `ALTER TABLE ${timers}
+      ADD COLUMN IF NOT EXISTS settled_at timestamptz`,
     `CREATE TABLE IF NOT EXISTS ${outbox} (
       outbox_id text PRIMARY KEY,
       namespace text NOT NULL,
+      work_id text,
       envelope jsonb NOT NULL,
       state text NOT NULL,
       attempts integer NOT NULL,
-      next_attempt_at timestamptz NOT NULL
+      next_attempt_at timestamptz NOT NULL,
+      confirmed_at timestamptz
     )`,
+    `ALTER TABLE ${outbox}
+      ADD COLUMN IF NOT EXISTS work_id text`,
+    `ALTER TABLE ${outbox}
+      ADD COLUMN IF NOT EXISTS confirmed_at timestamptz`,
     `CREATE TABLE IF NOT EXISTS ${idempotency} (
       namespace text NOT NULL,
       key text NOT NULL,
@@ -201,6 +217,8 @@ export function ddlStatements(schema: string): readonly string[] {
     )`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_event_id_idx')}
       ON ${events} (namespace, event_id)`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_appended_at_idx')}
+      ON ${events} (namespace, appended_at)`,
     `CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_duplicate_key_idx')}
       ON ${events} (namespace, duplicate_key) WHERE duplicate_key IS NOT NULL`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'waiters_armed_event_idx')}
@@ -209,20 +227,32 @@ export function ddlStatements(schema: string): readonly string[] {
       ON ${waiters} (work_id)`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'waiters_timeout_armed_idx')}
       ON ${waiters} (timeout_at) WHERE state = 'armed'`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'waiters_settled_at_idx')}
+      ON ${waiters} (namespace, settled_at) WHERE state <> 'armed'`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'work_status_not_before_idx')}
       ON ${work} (namespace, status, not_before)`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'work_status_updated_at_idx')}
       ON ${work} (namespace, status, updated_at)`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'snapshots_status_updated_at_idx')}
+      ON ${snapshots} (namespace, status, updated_at)`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'timers_scheduled_fire_at_idx')}
       ON ${timers} (fire_at) WHERE state = 'scheduled'`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'timers_work_id_idx')}
       ON ${timers} (work_id)`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'timers_settled_at_idx')}
+      ON ${timers} (namespace, settled_at) WHERE state IN ('fired', 'cancelled')`,
     `CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIndex(schema, 'timers_namespace_idempotency_key_idx')}
       ON ${timers} (namespace, idempotency_key) WHERE idempotency_key IS NOT NULL`,
-	    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_pending_next_attempt_idx')}
-	      ON ${outbox} (next_attempt_at) WHERE state = 'pending'`,
-	    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_claimable_next_attempt_idx')}
-	      ON ${outbox} (namespace, next_attempt_at) WHERE state <> 'confirmed'`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_pending_next_attempt_idx')}
+      ON ${outbox} (next_attempt_at) WHERE state = 'pending'`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_claimable_next_attempt_idx')}
+      ON ${outbox} (namespace, next_attempt_at) WHERE state <> 'confirmed'`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_work_pending_idx')}
+      ON ${outbox} (work_id) WHERE state = 'pending'`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'outbox_confirmed_at_idx')}
+      ON ${outbox} (namespace, confirmed_at) WHERE state = 'confirmed'`,
+    `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'idempotency_completed_at_idx')}
+      ON ${idempotency} (namespace, completed_at)`,
 	  ]
 }
 
@@ -283,18 +313,25 @@ export async function checkDdl(
   const existingIndexes = new Set(indexResult.rows.map((row) => row.indexname))
   const requiredIndexes = [
     'events_namespace_event_id_idx',
+    'events_namespace_appended_at_idx',
     'events_namespace_duplicate_key_idx',
     'waiters_armed_event_idx',
     'waiters_work_id_idx',
     'waiters_timeout_armed_idx',
+    'waiters_settled_at_idx',
     'work_status_not_before_idx',
     'work_status_updated_at_idx',
+    'snapshots_status_updated_at_idx',
     'timers_scheduled_fire_at_idx',
     'timers_work_id_idx',
-	    'timers_namespace_idempotency_key_idx',
-	    'outbox_pending_next_attempt_idx',
-	    'outbox_claimable_next_attempt_idx',
-	  ]
+    'timers_settled_at_idx',
+    'timers_namespace_idempotency_key_idx',
+    'outbox_pending_next_attempt_idx',
+    'outbox_claimable_next_attempt_idx',
+    'outbox_work_pending_idx',
+    'outbox_confirmed_at_idx',
+    'idempotency_completed_at_idx',
+  ]
   const missingIndexes = requiredIndexes.filter(
     (name) => !existingIndexes.has(name),
   )

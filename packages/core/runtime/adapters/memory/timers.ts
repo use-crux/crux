@@ -6,8 +6,13 @@ import type {
   RuntimeTimerState,
   RuntimeTimerStorePort,
 } from '../../store'
-import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
+import type {
+  MemoryRuntimeData,
+  MemoryRuntimeTimerRecord,
+  MemoryWriteRecorder,
+} from './data'
 import { scopedKey } from './data'
+import { matchesPruneNamespace, olderThan, pruneMapValues } from './retention'
 import { cloneRuntimeWork } from './state'
 
 export function createMemoryTimerStore(
@@ -25,7 +30,7 @@ export function createMemoryTimerStore(
       if (existing) return cloneTimerRecord(existing)
 
       recordWrite?.()
-      const stored: RuntimeTimerRecord = Object.freeze({
+      const stored: MemoryRuntimeTimerRecord = Object.freeze({
         namespace: timer.namespace,
         fireAt: new Date(timer.fireAt),
         workId: timer.workId,
@@ -87,8 +92,35 @@ export function createMemoryTimerStore(
       const timer = data.timers.get(timerId)
       if (!timer || timer.state !== from) return false
       recordWrite?.()
-      data.timers.set(timerId, cloneTimerRecord({ ...timer, state: to }))
+      data.timers.set(
+        timerId,
+        cloneStoredTimerRecord({
+          ...timer,
+          state: to,
+          ...(to === 'fired' || to === 'cancelled'
+            ? { settledAt: new Date() }
+            : {}),
+        }),
+      )
       return true
+    },
+
+    async prune(options) {
+      const result = pruneMapValues(
+        data.timers,
+        options,
+        (timer) =>
+          matchesPruneNamespace(timer, options.namespace) &&
+          (timer.state === 'fired' || timer.state === 'cancelled') &&
+          olderThan(timer.settledAt, options.before),
+        (timer) => {
+          for (const [key, value] of data.timerDuplicateKeys.entries()) {
+            if (value.timerId === timer.timerId) data.timerDuplicateKeys.delete(key)
+          }
+        },
+      )
+      if (result.removed > 0) recordWrite?.()
+      return result
     },
   }
 }
@@ -96,6 +128,23 @@ export function createMemoryTimerStore(
 export function cloneTimerRecord(
   timer: RuntimeTimerRecord,
 ): RuntimeTimerRecord {
+  const stored = cloneStoredTimerRecord(timer)
+  return Object.freeze({
+    namespace: stored.namespace,
+    fireAt: stored.fireAt,
+    workId: stored.workId,
+    waiterId: stored.waiterId,
+    idleScope: stored.idleScope,
+    work: stored.work,
+    idempotencyKey: stored.idempotencyKey,
+    timerId: stored.timerId,
+    state: stored.state,
+  })
+}
+
+function cloneStoredTimerRecord(
+  timer: RuntimeTimerRecord | MemoryRuntimeTimerRecord,
+): MemoryRuntimeTimerRecord {
   return Object.freeze({
     namespace: timer.namespace,
     fireAt: new Date(timer.fireAt),
@@ -106,5 +155,9 @@ export function cloneTimerRecord(
     idempotencyKey: timer.idempotencyKey,
     timerId: timer.timerId,
     state: timer.state,
+    settledAt:
+      'settledAt' in timer && timer.settledAt
+        ? new Date(timer.settledAt)
+        : undefined,
   })
 }

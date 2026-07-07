@@ -9,6 +9,7 @@ import type {
 import type { PostgresStoreFaults } from './faults'
 import { recordWrite } from './faults'
 import { decodeRuntimeEvent, encodeJson } from './codec'
+import { pruneNamespaceFilters, prunePostgresRows } from './prune'
 import type { PgExecutor } from './sql'
 import { table } from './sql'
 
@@ -62,6 +63,19 @@ export function createPostgresEventPort(
       const readEvents = result.rows.map(decodeRuntimeEvent)
       const cursor = readEvents.at(-1)?.eventId
       return cursor ? { events: readEvents, cursor } : { events: readEvents }
+    },
+
+    async prune(options) {
+      const { filters, values } = pruneNamespaceFilters(options)
+      filters.push(`appended_at < $1`)
+      recordWrite(faults)
+      return await prunePostgresRows(db, {
+        table: events,
+        filters,
+        values,
+        orderBy: 'appended_at ASC, event_id ASC',
+        limit: options.limit,
+      })
     },
   }
 

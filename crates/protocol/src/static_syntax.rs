@@ -104,6 +104,8 @@ pub struct StaticImportRecord {
     pub imported_name: String,
     pub module_specifier: String,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub import_kind: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub resolved_file: Option<String>,
     pub source: SourceLocation,
 }

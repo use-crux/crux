@@ -18,20 +18,20 @@ afterEach(async () => {
 })
 
 describe('runtime artifacts', () => {
-  it('discovers exported flow and runtime task targets and writes deterministic artifacts for Next', async () => {
+  it('discovers exported flow and durable task targets and writes deterministic artifacts for Next', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
     await writeFile(
       join(root, 'src/review.ts'),
       [
         "import { flow } from '@use-crux/core/flow'",
-        "import { task } from '@use-crux/core/runtime'",
+        "import { durableTask } from '@use-crux/core/runtime'",
         '',
         "export const reviewFlow = flow('review', async (flow) => {",
         "  await flow.suspend('approved')",
         '})',
         '',
-        "export const embedDocument = task('embed-document', {",
+        "export const embedDocument = durableTask('embed-document', {",
         '  run: async () => undefined,',
         '})',
       ].join('\n'),
@@ -162,10 +162,10 @@ describe('runtime artifacts', () => {
       join(root, 'src/review.ts'),
       [
         "import { flow } from '@use-crux/core/flow'",
-        "import { task } from '@use-crux/core/runtime'",
+        "import { durableTask } from '@use-crux/core/runtime'",
         '',
         "export const zeta = flow('zeta', async () => undefined)",
-        "export const alpha = task('alpha', { run: async () => undefined })",
+        "export const alpha = durableTask('alpha', { run: async () => undefined })",
       ].join('\n'),
     )
     const previousLang = process.env.LANG

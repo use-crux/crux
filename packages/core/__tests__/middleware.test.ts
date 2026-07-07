@@ -1,61 +1,61 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { getRuntime, updateRuntime, resetRuntime } from '../runtime/runtime'
+import { getHooks, updateHooks, resetHooks } from '../runtime/runtime'
 
 // Clean up all global state after each test
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
-describe('updateRuntime / getRuntime — middleware', () => {
+describe('updateHooks / getHooks — middleware', () => {
   it('initially returns undefined', () => {
-    expect(getRuntime().middleware).toBeUndefined()
+    expect(getHooks().middleware).toBeUndefined()
   })
 
     it('set and get middleware', () => {
     const mw = async (args: any, next: any) => next(args)
-    updateRuntime({ middleware: mw })
-    expect(getRuntime().middleware).toBe(mw)
+    updateHooks({ middleware: mw })
+    expect(getHooks().middleware).toBe(mw)
   })
 
     it('clear with undefined', () => {
-    updateRuntime({ middleware: async (args, next) => next(args) })
-    updateRuntime({ middleware: undefined })
-    expect(getRuntime().middleware).toBeUndefined()
+    updateHooks({ middleware: async (args, next) => next(args) })
+    updateHooks({ middleware: undefined })
+    expect(getHooks().middleware).toBeUndefined()
   })
 })
 
-describe('updateRuntime / getRuntime — resolveHook', () => {
+describe('updateHooks / getHooks — resolveHook', () => {
   it('initially returns undefined', () => {
-    expect(getRuntime().resolveHook).toBeUndefined()
+    expect(getHooks().resolveHook).toBeUndefined()
   })
 
     it('set and get hook', () => {
     const hook = () => {}
-    updateRuntime({ resolveHook: hook })
-    expect(getRuntime().resolveHook).toBe(hook)
+    updateHooks({ resolveHook: hook })
+    expect(getHooks().resolveHook).toBe(hook)
   })
 
     it('clear with undefined', () => {
-    updateRuntime({ resolveHook: () => {} })
-    updateRuntime({ resolveHook: undefined })
-    expect(getRuntime().resolveHook).toBeUndefined()
+    updateHooks({ resolveHook: () => {} })
+    updateHooks({ resolveHook: undefined })
+    expect(getHooks().resolveHook).toBeUndefined()
   })
 })
 
-describe('updateRuntime / getRuntime — executionHook', () => {
+describe('updateHooks / getHooks — executionHook', () => {
   it('initially returns undefined', () => {
-    expect(getRuntime().executionHook).toBeUndefined()
+    expect(getHooks().executionHook).toBeUndefined()
   })
 
     it('set and get hook', () => {
     const hook = () => {}
-    updateRuntime({ executionHook: hook })
-    expect(getRuntime().executionHook).toBe(hook)
+    updateHooks({ executionHook: hook })
+    expect(getHooks().executionHook).toBe(hook)
   })
 
     it('clear with undefined', () => {
-    updateRuntime({ executionHook: () => {} })
-    updateRuntime({ executionHook: undefined })
-    expect(getRuntime().executionHook).toBeUndefined()
+    updateHooks({ executionHook: () => {} })
+    updateHooks({ executionHook: undefined })
+    expect(getHooks().executionHook).toBeUndefined()
   })
 })

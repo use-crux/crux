@@ -1,7 +1,7 @@
 import { v } from 'convex/values'
 import { mutation } from '../_generated/server.js'
 import type { MutationCtx } from '../_generated/server.js'
-import { limitRows } from './shared'
+import { limitRows, pruneBatch, randomId } from './shared'
 
 export const append = mutation({
   args: { event: v.any(), idempotencyKey: v.optional(v.string()) },
@@ -10,10 +10,9 @@ export const append = mutation({
     const existing = await findDuplicate(ctx, event.namespace, event.eventId, idempotencyKey)
     if (existing) return toRuntimeEvent(existing)
 
-    const eventId = await nextCounter(ctx, `${event.namespace}:events`)
     const record = {
       ...event,
-      eventId,
+      eventId: generatedEventCursor(),
       eventKey: event.eventId,
       idempotencyKey,
       appendedAt: event.appendedAt ?? Date.now(),
@@ -31,19 +30,47 @@ export const read = mutation({
   },
   returns: v.any(),
   handler: async (ctx, { namespace, after, limit }) => {
-    const afterNumber = after ? await cursorNumber(ctx, namespace, after) : 0
     const rows = await ctx.db
       .query('runtimeEvents')
       .withIndex('by_namespace_event_id', (q) => q.eq('namespace', namespace))
       .collect()
+    const sorted = [...rows].sort(compareEventRows)
+    const afterIndex = after
+      ? sorted.findIndex((row) => matchesEventCursor(row, after))
+      : -1
     const events = limitRows(
-      rows
-        .filter((row) => row.eventId > afterNumber)
-        .sort((left, right) => left.eventId - right.eventId)
-        .map(toRuntimeEvent),
+      sorted.slice(afterIndex + 1).map(toRuntimeEvent),
       limit,
     )
     return { events, cursor: events.at(-1)?.eventId ?? after }
+  },
+})
+
+export const prune = mutation({
+  args: {
+    namespace: v.optional(v.string()),
+    before: v.number(),
+    limit: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, { namespace, before, limit }) => {
+    const rows = namespace
+      ? await ctx.db
+          .query('runtimeEvents')
+          .withIndex('by_namespace_appended', (q) => q.eq('namespace', namespace))
+          .take(Math.max(0, Math.floor(limit)) + 1)
+      : await ctx.db
+          .query('runtimeEvents')
+          .withIndex('by_appended')
+          .take(Math.max(0, Math.floor(limit)) + 1)
+    const batch = pruneBatch(
+      rows
+        .filter((row) => row.appendedAt < before)
+        .sort((left, right) => left.appendedAt - right.appendedAt),
+      limit,
+    )
+    for (const row of batch.selected) await ctx.db.delete(row._id)
+    return { removed: batch.selected.length, truncated: batch.truncated }
   },
 })
 
@@ -71,19 +98,9 @@ async function findDuplicate(
   return null
 }
 
-async function cursorNumber(ctx: MutationCtx, namespace: string, cursor: string): Promise<number> {
-  const numeric = Number(cursor)
-  if (Number.isFinite(numeric)) return numeric
-  const event = await ctx.db
-    .query('runtimeEvents')
-    .withIndex('by_namespace_event_key', (q) => q.eq('namespace', namespace).eq('eventKey', cursor))
-    .first()
-  return event?.eventId ?? 0
-}
-
-function toRuntimeEvent(record: { eventId: number; eventKey?: string }) {
+function toRuntimeEvent(record: { eventId: string | number; eventKey?: string }) {
   const { _id, _creationTime, ...event } = record as Record<string, unknown> & {
-    eventId: number
+    eventId: string | number
     eventKey?: string
   }
   void _id
@@ -91,13 +108,24 @@ function toRuntimeEvent(record: { eventId: number; eventKey?: string }) {
   return { ...event, eventId: record.eventKey ?? String(record.eventId) }
 }
 
-async function nextCounter(ctx: MutationCtx, key: string): Promise<number> {
-  const existing = await ctx.db
-    .query('runtimeCounters')
-    .withIndex('by_key', (q) => q.eq('key', key))
-    .first()
-  const value = (existing?.value ?? 0) + 1
-  if (existing) await ctx.db.patch(existing._id, { value })
-  else await ctx.db.insert('runtimeCounters', { key, value })
-  return value
+function generatedEventCursor(): string {
+  return `cvx:${randomId('event')}`
+}
+
+function matchesEventCursor(
+  record: { eventId: string | number; eventKey?: string },
+  cursor: string,
+): boolean {
+  return String(record.eventId) === cursor || record.eventKey === cursor
+}
+
+function compareEventRows(
+  left: { eventId: string | number; appendedAt?: number; _creationTime?: number; _id?: unknown },
+  right: { eventId: string | number; appendedAt?: number; _creationTime?: number; _id?: unknown },
+): number {
+  const appended = (left.appendedAt ?? 0) - (right.appendedAt ?? 0)
+  if (appended !== 0) return appended
+  const created = (left._creationTime ?? 0) - (right._creationTime ?? 0)
+  if (created !== 0) return created
+  return String(left._id ?? left.eventId).localeCompare(String(right._id ?? right.eventId))
 }

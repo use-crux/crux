@@ -13,11 +13,11 @@
 import { afterEach, describe, it, expect, vi } from 'vitest'
 import { boundary, createSafety, GuardrailBlockedError } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
-import { resetRuntime } from '../../runtime/runtime'
+import { resetHooks } from '../../runtime/runtime'
 import type { Message } from '../../generation/messages'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 const identity = (options?: Partial<Parameters<typeof createSafety>[0]>) =>

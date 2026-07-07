@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import { prompt, resetRuntime, setRuntime } from '@use-crux/core'
-import type { CruxRuntime } from '@use-crux/core'
+import { prompt, resetHooks, setHooks } from '@use-crux/core'
+import type { CruxHooks } from '@use-crux/core'
 import { resolve } from '@use-crux/ai/agent'
 import { emissionModel } from './mock-model'
 
-type ResolveEvent = Parameters<NonNullable<CruxRuntime['resolveHook']>>[0]
-type ExecutionEvent = Parameters<NonNullable<CruxRuntime['executionHook']>>[0]
+type ResolveEvent = Parameters<NonNullable<CruxHooks['resolveHook']>>[0]
+type ExecutionEvent = Parameters<NonNullable<CruxHooks['executionHook']>>[0]
 
 interface GeneratableModel {
   doGenerate(options: unknown): Promise<unknown>
 }
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 describe('@use-crux/ai/agent', () => {
@@ -22,7 +22,7 @@ describe('@use-crux/ai/agent', () => {
     const resolveEvents: ResolveEvent[] = []
     const executionEvents: ExecutionEvent[] = []
 
-    setRuntime({
+    setHooks({
       resolveHook(event) {
         resolveEvents.push(event)
         return { traceId: 'resolve-trace-1' }

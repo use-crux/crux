@@ -11,7 +11,7 @@
  */
 
 import { observe } from '../observability'
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import { getExecutionContext } from '../runtime/execution-context'
 import type { PromptMiddlewareArgs } from '../runtime/types'
 import type { TokenUsage, TraceMeta } from '../generation/types'

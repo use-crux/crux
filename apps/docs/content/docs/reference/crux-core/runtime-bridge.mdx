@@ -17,11 +17,13 @@ import {
 
 The Runtime Bridge is the local-dev command plane between the `@use-crux/local` Go service and a live application runtime. It is used for inspectable resources and framework-specific local commands. It is not the execution trace transport; runtime traces use `@use-crux/core/observability`.
 
+The stable runtime-peer command surface currently includes `store.read` for registered inspectable resources. Arbitrary runtime evaluation is intentionally not part of the bridge command contract.
+
 ## Command errors
 
 Failed commands return `command.error` with a stable `error` message and structured `details`. Runtime peers normalize thrown values with the same observability error contract used by spans, including `thrown`, `summary`, `name`, `message`, optional `stack`, safe raw data, `phase`, and `errorKind` when known.
 
-The local Go bridge preserves those details for WebSocket, HTTP, and embedded eval-runner commands, and emits `command.failed` events for failed dispatches. Eval-runner process failures also become command errors, so devtools and the TUI can show bridge/eval failures even when no application span exists.
+The local Go bridge preserves those details for WebSocket and HTTP bridge commands, and emits `command.failed` events for failed dispatches.
 
 ## Schemas
 

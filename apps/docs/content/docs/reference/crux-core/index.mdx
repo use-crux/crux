@@ -76,7 +76,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   <Card title="Flow" description="flow, signalFlow, cancelFlow, listFlows." href="/docs/reference/crux-core/flow" />
   <Card
     title="Runtime Engine"
-    description="node, serverless, createRuntimeHandler, task, runtime diagnostics, and conformance helpers."
+    description="node, serverless, createRuntimeHandler, durableTask, runtime diagnostics, and testing helpers."
     href="/docs/reference/crux-core/runtime-engine"
   />
   <Card title="Plan" description="plan, plan handles, list, ref, and creation tools." href="/docs/reference/crux-core/plan" />
@@ -141,7 +141,7 @@ import { memory, workingState, episodes, facts, procedures } from '@use-crux/cor
 import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@use-crux/core/compaction'
 import { agent, blackboard, handoff, delegate } from '@use-crux/core/agent'
 import { flow, signalFlow, cancelFlow, listFlows, createFlowId } from '@use-crux/core/flow'
-import { node, serverless, createRuntimeHandler, task as runtimeTask } from '@use-crux/core/runtime'
+import { node, serverless, createRuntimeHandler, durableTask } from '@use-crux/core/runtime'
 import { plan } from '@use-crux/core/plan'
 import { task, tasks } from '@use-crux/core/tasks'
 import { skill } from '@use-crux/core/skill'
@@ -230,8 +230,16 @@ For defaults, stability notes, and every nested option, see [Config](/docs/refer
 | `plugins`                     | `CruxPlugin[]`             | Composable runtime extensions.                                                       |
 
 **Returns:** `Crux` — exposes the raw `.config`, lifecycle `.dispose()`, and compatibility registry methods. Source-discovered projects should use their authored prompt/context exports directly rather than looking them up through `config()`.
+
+`config()` is one-config-per-process. Calling it again replaces the previous active installation
+before applying the new one, which keeps hot reload from stacking middleware or duplicating plugin
+hook fan-out. `dispose()` restores only the hook layer installed by that config; independent layers
+such as imperative devtools remain active.
+
+| Member | Description |
+| --- | --- |
 | `.config` | `Readonly<CruxConfig>` |
-| `.dispose()` | Tear down middleware, devtools, globals |
+| `.dispose()` | Tear down the Runtime Bridge and restore this config's hooks, plugins, and observability |
 
 Observability capture controls live under `observability`:
 
@@ -261,8 +269,8 @@ Both default to `true`. When disabled, matching artifacts keep `sizeBytes` and `
 ## Plugin system
 
 ```ts
-import type { CruxPlugin, CruxRuntime, CruxPluginResult } from '@use-crux/core'
-import { mergeRuntime, applyPlugins } from '@use-crux/core'
+import type { CruxPlugin, CruxHooks, CruxPluginResult } from '@use-crux/core'
+import { mergeHooks, applyPlugins } from '@use-crux/core'
 ```
 
 ### `CruxPlugin`
@@ -270,26 +278,26 @@ import { mergeRuntime, applyPlugins } from '@use-crux/core'
 | Field     | Type                                                   | Description                      |
 | --------- | ------------------------------------------------------ | -------------------------------- |
 | `name`    | `string`                                               | Unique plugin name for debugging |
-| `install` | `(runtime: Readonly<CruxRuntime>) => CruxPluginResult` | Install hooks into the runtime   |
+| `install` | `(hooks: Readonly<CruxHooks>) => CruxPluginResult` | Install hooks into the hook store |
 
-`CruxPluginResult` extends `Partial<CruxRuntime>` with optional `dispose?: () => void`.
+`CruxPluginResult` extends `Partial<CruxHooks>` with optional `dispose?: () => void`.
 
 | Built-in plugin           | Package                                             |
 | ------------------------- | --------------------------------------------------- |
 | `withDevtools(options)`   | `@use-crux/core/observability` — name `'crux:devtools'` |
 | `withTelemetry(options?)` | `@use-crux/otel` — name `'crux:otel'`                   |
 
-### `mergeRuntime(base, patch)`
+### `mergeHooks(base, patch)`
 
-Compose two runtimes with fan-out semantics:
+Compose two hook states with fan-out semantics:
 
 - **Hooks** — both handlers fire for every event
 - **Middleware** — patch wraps base
 - **Collector** — last-write-wins
 
-### `applyPlugins(plugins, initialRuntime)`
+### `applyPlugins(plugins, initialHooks)`
 
-Process an ordered list of plugins. Returns `{ runtime, dispose }`.
+Process an ordered list of plugins. Returns `{ hooks, dispose }`.
 
 ## Observability context
 

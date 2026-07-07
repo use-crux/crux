@@ -2,7 +2,7 @@
  * In-memory fakes for every resolver port.
  *
  * Pass these through `compilePrompt(config, { ports })` and prompt resolution
- * becomes fully observable and deterministic in tests: no `setRuntime()`
+ * becomes fully observable and deterministic in tests: no `setHooks()`
  * setup, no observability transport, no global cleanup between tests, and a
  * clock you control. Exported from `@use-crux/core` so SDK consumers get the same
  * seams the core test suite uses.
@@ -331,7 +331,7 @@ export interface ResolverFakes {
  * This is the canonical test seam for the `compilePrompt()` boundary: every
  * ambient dependency (observability, skill source, context cache, clock,
  * tokenizer, policy, diagnostics, instrumentation) is a deterministic fake with
- * no `setRuntime()` setup and no global cleanup between tests. The clock and
+ * no `setHooks()` setup and no global cleanup between tests. The clock and
  * the cache share one instance, so TTL expiry follows the clock you advance.
  *
  * @example

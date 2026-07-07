@@ -12,7 +12,12 @@ import { config } from '@use-crux/core'
 import { convex } from '@use-crux/convex/runtime'
 
 export default config({
-  runtime: convex(),
+  runtime: convex({
+    retention: {
+      terminalWork: '7d',
+      terminalSnapshots: '30d',
+    },
+  }),
 })
 ```
 
@@ -51,16 +56,22 @@ export const { executeTarget } = createConvexRuntimeTargetExecutor({
 
 Convex scheduler calls these handlers for wake, signal, resume, task, and timer delivery. App-facing APIs stay in your own Convex functions.
 
+The generated component includes `runtime.composites.run`. The Convex store adapter routes each named Runtime Engine composite through that single mutation, so task enqueue, event delivery, wake completion, retry/failure, cancellation, and maintenance commits are atomic in Convex while still using the core kernel's shared composite bodies.
+
+Convex maintenance queries are namespace-scoped and bounded. The component stores work ids on outbox rows for targeted orphan recovery, and event append uses opaque event cursors rather than a shared namespace counter.
+
 When app code starts runtime-backed work directly from a Convex action, wrap the
-call in `createCruxConvex(...).run(ctx, target, fn)` or the equivalent
-`createConvexRuntimeBridge(...).run(...)` helper. The bridge binds the current
-Convex `ctx`, component refs, and scheduler before core starts the durable flow.
+call in `createCruxConvex(...).run(ctx, target, fn)`. The profile binds the
+current Convex `ctx`, component refs, and scheduler before core starts the
+durable flow.
 
 ## Rules
 
 - Import targets statically; generated files should not rely on dynamic import.
 - Use top-level named exports and literal target names.
 - Do not call runtime-backed APIs from a Next server process configured with `runtime: convex()`.
+- Configure retention on `convex({ retention })`; the component prunes terminal runtime rows during host-bound maintenance.
+- Convex runtime execution is fencing-only: stale final commits are rejected with `LEASE_LOST`, and Convex host bindings pass `leaseExtension: false` so isolate and Node action paths do not run in-process heartbeat timers. Keep target work below the configured lease TTL or increase `leaseTtlMs` for long actions.
 - Use Convex setup/deploy flow for component tables; Crux setup commands report host-specific diagnostics rather than creating paid resources.
 
 ## Related

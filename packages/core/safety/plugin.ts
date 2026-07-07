@@ -1,5 +1,5 @@
 import type { CruxPlugin, CruxPluginResult } from '../runtime/plugin'
-import type { CruxRuntime } from '../runtime/runtime'
+import type { CruxHooks } from '../runtime/runtime'
 import type { Constraint } from './constraint/types'
 import type { Guardrail } from './guardrail/types'
 
@@ -28,7 +28,7 @@ export function createSafetyPlugin(policy: SafetyPolicy): CruxPlugin {
   return {
     name: 'crux:safety',
 
-    install(_runtime: Readonly<CruxRuntime>): CruxPluginResult {
+    install(_hooks: Readonly<CruxHooks>): CruxPluginResult {
       return {
         ...(policy.guardrails && policy.guardrails.length > 0 ? { globalGuardrails: [...policy.guardrails] } : {}),
         ...(policy.constraints && policy.constraints.length > 0 ? { globalConstraints: [...policy.constraints] } : {}),

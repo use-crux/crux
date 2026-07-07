@@ -12,6 +12,9 @@ import type { CruxEngineCapabilities } from '../ports'
 import { createRuntimeError } from '../engine/errors'
 import type { RuntimeEngineDefinition } from './runtime-definition'
 
+const RUNTIME_ADAPTER_GUIDE_URL =
+  'https://cruxjs.dev/docs/guides/runtime/custom-adapters'
+
 /** Throw `CAPABILITY_MISSING` when a runtime composer lacks required support. */
 export function assertRuntimeCapabilities(
   runtime: RuntimeEngineDefinition,
@@ -36,7 +39,7 @@ function requiredCapability(
       name: 'durable event cursor reads',
       why: 'Runtime waits and signal delivery need an append-only event log with resumable cursors.',
       nextStep:
-        'Use node(), convex(), or serverless({ store: postgres(), wake: qstash() }).',
+        `Choose a Runtime Engine adapter that implements durable event cursor reads, then run its setup check or conformance tests. See ${RUNTIME_ADAPTER_GUIDE_URL}.`,
     }
   }
   if (!capabilities.waiters.durable) {
@@ -44,7 +47,7 @@ function requiredCapability(
       name: 'durable waiter registration',
       why: 'Runtime-bound waits must survive after the current process exits.',
       nextStep:
-        'Choose a runtime adapter with durable waiters, such as node() for local use or postgres() for serverless use.',
+        `Choose a Runtime Engine adapter that implements durable waiters, then run its setup check or conformance tests. See ${RUNTIME_ADAPTER_GUIDE_URL}.`,
     }
   }
   if (!capabilities.timers.durable) {
@@ -52,7 +55,7 @@ function requiredCapability(
       name: 'durable timers',
       why: 'Runtime timers must be recorded before a flow can safely suspend with a timeout.',
       nextStep:
-        'Choose a runtime adapter with durable timers or a store-backed timer scanner.',
+        `Choose a Runtime Engine adapter that implements durable timers or a store-backed timer scanner. See ${RUNTIME_ADAPTER_GUIDE_URL}.`,
     }
   }
   if (!capabilities.wake.atLeastOnce) {
@@ -60,7 +63,7 @@ function requiredCapability(
       name: 'at-least-once wake delivery',
       why: 'Runtime work can only be reliable when wake delivery is retried until the kernel handles it idempotently.',
       nextStep:
-        'Configure a wake adapter that can deliver at least once, such as node() locally or qstash() in serverless deployments.',
+        `Configure wake delivery that can deliver at least once, then run a wake-handler smoke test. See ${RUNTIME_ADAPTER_GUIDE_URL}.`,
     }
   }
   if (!capabilities.leases.durable) {
@@ -68,7 +71,7 @@ function requiredCapability(
       name: 'durable leases',
       why: 'The kernel needs leases to exclude concurrent workers while still recovering expired attempts.',
       nextStep:
-        'Use a runtime store adapter that implements the LeasePort contract.',
+        `Choose a Runtime Engine store adapter that implements the LeasePort contract, then run the store conformance suite. See ${RUNTIME_ADAPTER_GUIDE_URL}.`,
     }
   }
   return undefined

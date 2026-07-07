@@ -22,15 +22,6 @@ export function flowEventResumeKey(
   return `resume:${workId}:${eventId}`
 }
 
-/** Build the idempotency key for a flow resume caused by a signal delivery. */
-export function flowSignalResumeKey(
-  workId: WorkId,
-  signalName: string,
-  deliveryId: string,
-): string {
-  return `resume:${workId}:signal:${signalName}:${deliveryId}`
-}
-
 /** Build the idempotency key for a manual flow resume request. */
 export function flowManualResumeKey(workId: WorkId, now: Date): string {
   return `resume:${workId}:manual:${uniqueInvocationSuffix(now)}`
@@ -59,14 +50,6 @@ export function waiterTimeoutKey(waiterId: WaiterId): string {
 /** Build the idempotency key for a task work item. */
 export function taskRunKey(workId: WorkId): string {
   return `task:${workId}`
-}
-
-/** Build the idempotency key for a workspace/watch cursor delivery. */
-export function watchDeliverKey(
-  subscriptionId: string,
-  cursor: EventCursor,
-): string {
-  return `watch:${subscriptionId}:${cursor}`
 }
 
 function epochMsBase36(now: Date): string {

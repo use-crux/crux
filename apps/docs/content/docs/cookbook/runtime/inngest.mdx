@@ -7,14 +7,15 @@ Inngest is a recipe and adapter-author target in v1, not a bundled Crux runtime 
 
 ## User-authored Crux targets
 
-Users should still write Crux flows and runtime tasks, not Inngest-specific functions.
+Users should still write Crux flows and durable tasks, not Inngest-specific functions.
 
 ```ts
 import { flow } from '@use-crux/core/flow'
-import { task } from '@use-crux/core/runtime'
+import { durableTask, type RuntimeTaskContext } from '@use-crux/core/runtime'
 
-export const embedDocument = task('embed-document', {
-  run: async ({ documentId }: { documentId: string }) => {
+export const embedDocument = durableTask('embed-document', {
+  run: async (input: { documentId: string }, _context: RuntimeTaskContext) => {
+    const { documentId } = input
     await embeddings.write(documentId)
   },
 })

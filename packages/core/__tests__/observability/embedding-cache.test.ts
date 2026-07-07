@@ -11,12 +11,12 @@ import {
 } from '../../observability'
 import { orchestrateGenerate } from '../../generation/orchestrate'
 import { applyPlugins } from '../../runtime/plugin'
-import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
+import { getHooks, resetHooks, setHooks } from '../../runtime/runtime'
 import { inMemoryRecordStore, inMemoryStorage } from '../../storage'
 
 function install(plugin: ReturnType<typeof createSemanticCache>) {
-  const applied = applyPlugins([plugin], getRuntime())
-  setRuntime(applied.runtime)
+  const applied = applyPlugins([plugin], getHooks())
+  setHooks(applied.hooks)
   return applied
 }
 
@@ -32,7 +32,7 @@ function cacheablePrompt() {
 
 describe('canonical embedding and cache observability', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
     resetObservabilityRuntime()
     vi.restoreAllMocks()
   })

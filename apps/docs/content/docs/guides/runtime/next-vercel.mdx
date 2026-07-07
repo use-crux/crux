@@ -25,6 +25,11 @@ export default config({
     wake: qstash(),
     publicUrl: process.env.CRUX_PUBLIC_URL,
     namespace: process.env.CRUX_RUNTIME_NAMESPACE,
+    retention: {
+      events: '24h',
+      terminalWork: '7d',
+      terminalSnapshots: '30d',
+    },
   }),
 })
 ```
@@ -66,6 +71,7 @@ Use `crux runtime setup --apply` only when you want Crux to create missing Crux-
 
 - Keep `DATABASE_URL`, QStash credentials, and `CRUX_PUBLIC_URL` in deployment secrets.
 - Use an explicit `CRUX_RUNTIME_NAMESPACE` when preview and production share the same substrate.
+- Keep `retention.idempotencyKeys` at least as long as QStash's max wake delay, or set it to `false`.
 - Regenerate artifacts in CI and fail builds on `ARTIFACTS_STALE`.
 - Inspect stuck work with `crux runtime inspect <workId>`; retry blocked/dead-letter work with `crux runtime retry <workId>` after fixing the cause.
 

@@ -13,7 +13,7 @@ export type RuntimeArtifactTargetKind = 'flow' | 'task' | 'watcher' | 'trigger'
 
 /** One statically importable runtime target. */
 export interface RuntimeArtifactManifestTarget {
-  /** Stable durable target id from `flow("name")` or runtime `task("name")`. */
+  /** Stable durable target id from `flow("name")` or `durableTask("name")`. */
   readonly name: string
   /** Runtime target family. v1 generation emits only `flow` and `task`. */
   readonly kind: RuntimeArtifactTargetKind

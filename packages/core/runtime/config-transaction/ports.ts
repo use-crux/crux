@@ -2,21 +2,29 @@ import { configureObservability, createHttpObservabilityTransport } from '../../
 import { connectRuntimeBridge } from '../../runtime-bridge'
 import { setTokenizer } from '../../shared/tokenizer'
 import { applyPlugins } from '../plugin'
-import { getRuntime, setRuntime, updateRuntime } from '../runtime'
+import {
+  getHooks,
+  pushHooksLayer,
+  restoreHooksLayer,
+  setHooks,
+  updateHooks,
+} from '../runtime'
 import type {
   ObservabilityConfigPort,
   PluginInstallerPort,
   RuntimeBridgePort,
   RuntimeConfigTransactionPorts,
-  RuntimeStorePort,
+  HooksStorePort,
   TokenizerPort,
 } from './types'
 
-/** Runtime-store port backed by Core's global runtime module. */
-export const defaultRuntimeStorePort: RuntimeStorePort = {
-  get: getRuntime,
-  set: setRuntime,
-  update: updateRuntime,
+/** Hooks-store port backed by Core's global hooks module. */
+export const defaultHooksStorePort: HooksStorePort = {
+  get: getHooks,
+  set: setHooks,
+  update: updateHooks,
+  pushLayer: pushHooksLayer,
+  restoreLayer: restoreHooksLayer,
 }
 
 /** Observability port backed by Core's canonical observability runtime. */
@@ -43,7 +51,7 @@ export const defaultPluginInstallerPort: PluginInstallerPort = {
 /** Fill omitted transaction ports with production Core adapters. */
 export function resolveRuntimeConfigPorts(ports: RuntimeConfigTransactionPorts = {}): RequiredPorts {
   return {
-    runtime: ports.runtime ?? defaultRuntimeStorePort,
+    hooks: ports.hooks ?? defaultHooksStorePort,
     observability: {
       ...defaultObservabilityConfigPort,
       ...ports.observability,
@@ -58,7 +66,7 @@ export function resolveRuntimeConfigPorts(ports: RuntimeConfigTransactionPorts =
 
 /** Fully resolved port set used by the effectful installer. */
 export interface RequiredPorts {
-  readonly runtime: RuntimeStorePort
+  readonly hooks: HooksStorePort
   readonly observability: ObservabilityConfigPort
   readonly bridge: RuntimeBridgePort
   readonly tokenizer: TokenizerPort

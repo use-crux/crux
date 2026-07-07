@@ -24,7 +24,7 @@
 import { wrapLanguageModel } from 'ai'
 import type { z } from 'zod'
 import type { ContextEntry, Prompt } from '@use-crux/core'
-import { getRuntime } from '@use-crux/core'
+import { getHooks } from '@use-crux/core'
 import { resolveAgentInstructions } from './prompt-resolution'
 import { createTracingMiddleware } from './tracing-middleware'
 import type { AgentResolveOptions, AgentResolveResult } from './types'
@@ -47,7 +47,7 @@ export async function resolve<
   opts: AgentResolveOptions<TOwnInput, TContexts>,
 ): Promise<AgentResolveResult> {
   const resolved = await resolveAgentInstructions(prompt, opts)
-  const executionHook = getRuntime().executionHook
+  const executionHook = getHooks().executionHook
   const model = executionHook
     ? wrapLanguageModel({
         model: resolved.model,

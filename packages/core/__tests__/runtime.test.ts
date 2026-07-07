@@ -1,42 +1,75 @@
-import { describe, it, expect, beforeEach } from 'vitest'
-import { getRuntime, setRuntime, updateRuntime, resetRuntime, type CruxRuntime } from '../runtime/runtime'
+import { beforeEach, describe, expect, it } from 'vitest'
+import type { PromptMiddleware } from '../runtime/types'
+import {
+  getHooks,
+  pushHooksLayer,
+  resetHooks,
+  restoreHooksLayer,
+  setHooks,
+  updateHooks,
+  type CruxHooks,
+} from '../runtime/runtime'
 
-describe('CruxRuntime', () => {
+describe('CruxHooks', () => {
   beforeEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
-describe('getRuntime', () => {
+  describe('getHooks', () => {
     it('returns empty object initially', () => {
-      const rt = getRuntime()
-      expect(rt).toEqual({})
+      expect(getHooks()).toEqual({})
     })
 
     it('returns a frozen object', () => {
-      const rt = getRuntime()
-      expect(Object.isFrozen(rt)).toBe(true)
+      expect(Object.isFrozen(getHooks())).toBe(true)
     })
   })
 
-describe('setRuntime', () => {
+  describe('setHooks', () => {
     it('replaces the entire runtime', () => {
-      const middleware = async (args: any, next: any) => next(args)
-      setRuntime({ middleware })
-      expect(getRuntime().middleware).toBe(middleware)
+      const middleware: PromptMiddleware = async (args, next) => next(args)
+
+      setHooks({ middleware })
+
+      expect(getHooks().middleware).toBe(middleware)
     })
 
     it('does not share reference with the passed object', () => {
-      const input: CruxRuntime = {}
-      setRuntime(input)
-      ;(input as any).middleware = 'injected'
-      expect(getRuntime().middleware).toBeUndefined()
+      const input: CruxHooks = {}
+
+      setHooks(input)
+      input.middleware = async (args, next) => next(args)
+
+      expect(getHooks().middleware).toBeUndefined()
     })
   })
 
-describe('updateRuntime', () => {    it('can set a field to undefined to clear it', () => {
-      const middleware = async (args: any, next: any) => next(args)
-      setRuntime({ middleware })
-      updateRuntime({ middleware: undefined })
-      expect(getRuntime().middleware).toBeUndefined()
+  describe('updateHooks', () => {
+    it('can set a field to undefined to clear it', () => {
+      const middleware: PromptMiddleware = async (args, next) => next(args)
+
+      setHooks({ middleware })
+      updateHooks({ middleware: undefined })
+
+      expect(getHooks().middleware).toBeUndefined()
     })
-  })})
+  })
+
+  describe('hook layers', () => {
+    it('restores only the keys captured by the layer token', () => {
+      const middleware: PromptMiddleware = async (args, next) => next(args)
+      const executionHook: NonNullable<CruxHooks['executionHook']> = () => undefined
+
+      const middlewareToken = pushHooksLayer({ middleware })
+      const hookToken = pushHooksLayer({ executionHook })
+
+      restoreHooksLayer(middlewareToken)
+
+      expect(getHooks().middleware).toBeUndefined()
+      expect(getHooks().executionHook).toBe(executionHook)
+
+      restoreHooksLayer(hookToken)
+      expect(getHooks()).toEqual({})
+    })
+  })
+})

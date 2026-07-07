@@ -58,11 +58,17 @@ describe('RuntimeKernel event delivery recording', () => {
       pendingSuspends: [
         {
           label: 'approval',
-          delivered: { eventId: 'evt_1' },
+          delivered: {
+            eventId: 'evt_1',
+            payload: { documentId: 'doc_1' },
+          },
         },
         {
           label: 'legal',
-          delivered: { eventId: 'evt_2' },
+          delivered: {
+            eventId: 'evt_2',
+            payload: { documentId: 'doc_1' },
+          },
         },
       ],
     })

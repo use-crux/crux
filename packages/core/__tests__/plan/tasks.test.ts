@@ -5,16 +5,16 @@ import { plan } from '../../plan/plans'
 import { task } from '../../plan/task-spec'
 import { getTaskList, tasks } from '../../plan/tasks'
 import type { JsonObject, JsonValue, TasksHandle } from '../../plan/types'
-import { updateRuntime, resetRuntime } from '../../runtime/runtime'
+import { updateHooks, resetHooks } from '../../runtime/runtime'
 
 /** Create a fresh store and register it in the runtime. */
 function setup() {
   const store = inMemoryRecordStore()
-  updateRuntime({ records: store })
+  updateHooks({ records: store })
   return store
 }
 
-afterEach(() => resetRuntime())
+afterEach(() => resetHooks())
 
 describe('Task ledger lifecycle', () => {
   it('tasks() persists immediately with optional plan, title, and metadata', async () => {

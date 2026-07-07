@@ -1,7 +1,7 @@
 /**
  * Boundary tests for `compilePrompt()` on fake ports.
  *
- * Everything here runs without `setRuntime()`, observability transports, or
+ * Everything here runs without `setHooks()`, observability transports, or
  * any global cleanup — the seams the contributor-contract refactor
  * (use-crux/crux#29) introduced. Covers the behaviors the characterization
  * suite pins through the global path, plus the paths that were untestable

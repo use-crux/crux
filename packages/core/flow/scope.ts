@@ -11,8 +11,9 @@
 
 import { runWithExecutionContext, getExecutionContext } from '../runtime/execution-context'
 import { captureSource } from '../project-index/source'
-import { getRuntime, resolveRecords } from '../runtime/runtime'
+import { getHooks, resolveRecords } from '../runtime/runtime'
 import type { ResolvedRuntimeEngine } from '../runtime/api/create-runtime'
+import type { RuntimeEngineDefinition } from '../runtime/api/runtime-definition'
 import { createRuntimeWithHostContext } from '../runtime/api/host-context'
 import {
   runtimeFlowNotFoundError,
@@ -187,12 +188,14 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   options?: FlowExecutionOptions<TInput, TSignals>,
 ): Promise<FlowResult<T>> {
   const runtimeExecution = options?.runtime
+  const currentTime = () => runtimeExecution?.runtime.now() ?? new Date()
+  const currentTimeMs = () => currentTime().getTime()
   const isRuntimeExecution = runtimeExecution !== undefined
   const isResume = !!options?.resume || (isRuntimeExecution && runtimeExecution.snapshot.status !== 'running')
   const flowId = runtimeExecution?.snapshot.flowId ?? options?.resume ?? options?.flowId ?? createFlowId()
   const existing = getExecutionContext()
   const parentFlowId = options?.parentFlowId ?? existing?.flowId
-  const startedAt = Date.now()
+  const startedAt = currentTimeMs()
 
   // Load snapshot for resume
   let snapshot: FlowSnapshot | null = null
@@ -296,7 +299,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         stepId,
         stepLabel: label,
       }
-      const stepStartedAt = Date.now()
+      const stepStartedAt = currentTimeMs()
 
       // Capture source location and emit step start hook
       const stepSource = captureSource()
@@ -337,7 +340,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         // Cache the step output for potential suspend serialization
         completedSteps[label] = {
           output: result as JsonValue,
-          durationMs: Date.now() - stepStartedAt,
+          durationMs: currentTimeMs() - stepStartedAt,
         }
 
         // Populate the results accumulator
@@ -395,7 +398,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       // On resume, first check for expiration
       if (isResume && snapshot) {
         const timeoutAt = snapshot.timeoutAt as number | undefined
-        if (timeoutAt && Date.now() > timeoutAt) {
+        if (timeoutAt && currentTimeMs() > timeoutAt) {
           // Flow has expired — invoke callback and throw
           if (suspendOptions?.onExpired) {
             await suspendOptions.onExpired({ flowId, suspendedAt: _name })
@@ -424,7 +427,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       }
 
       // Verify store is available before suspending
-      const flowStore = store ?? getRuntime().records
+      const flowStore = store ?? getHooks().records
       if (!flowStore) {
         throw new Error('flow.suspend() requires a RecordStore. Configure one via config({ persistence: { records } }).')
       }
@@ -441,7 +444,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       // On resume, check expiration first
       if (isResume && snapshot) {
         const timeoutAt = snapshot.timeoutAt as number | undefined
-        if (timeoutAt && Date.now() > timeoutAt) {
+        if (timeoutAt && currentTimeMs() > timeoutAt) {
           if (_options?.onExpired) {
             await _options.onExpired({ flowId, suspendedAt: _name })
           }
@@ -457,7 +460,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       }
 
       // Condition not met — verify store and suspend
-      const flowStore = store ?? getRuntime().records
+      const flowStore = store ?? getHooks().records
       if (!flowStore) {
         throw new Error('flow.waitUntil() requires a RecordStore. Configure one via config({ persistence: { records } }).')
       }
@@ -549,7 +552,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         namespace: runtimeExecution.work.namespace,
         targetId: taskTarget.targetId,
         taskId: `${flowId}:${key}:${taskTarget.name}` as TaskId,
-        fireAt: new Date(Date.now() + parseDuration(delay)),
+        fireAt: new Date(currentTimeMs() + parseDuration(delay)),
         input: input as JsonValue,
         idleScope: `flow:${flowId}`,
       })
@@ -621,7 +624,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     }
 
     if (isResume && store && snapshot) {
-      const completedAt = Date.now()
+      const completedAt = currentTimeMs()
       const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
       const completedSnapshot: FlowSnapshot = {
         ...snapshot,
@@ -643,7 +646,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     if (error instanceof FlowSuspendedError) {
       if (runtimeExecution) {
         runtimeExecution.fingerprint.complete()
-        const timeoutAt = error.options?.timeout ? new Date(Date.now() + parseDuration(error.options.timeout)) : undefined
+        const timeoutAt = error.options?.timeout ? new Date(currentTimeMs() + parseDuration(error.options.timeout)) : undefined
         const runtimeDeliveryKey = suspendDeliveryKey(suspendCount, error.suspendPoint)
         if (flowInput !== undefined) {
           assertFlowJsonValue(flowInput, { boundary: 'flow input' })
@@ -693,9 +696,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         return runtimeExecution.result as FlowResult<T>
       }
 
-      const flowStore = store ?? getRuntime().records
+      const flowStore = store ?? getHooks().records
       if (flowStore) {
-        const timeoutAt = error.options?.timeout ? Date.now() + parseDuration(error.options.timeout) : undefined
+        const timeoutAt = error.options?.timeout ? currentTimeMs() + parseDuration(error.options.timeout) : undefined
         if (flowInput !== undefined) {
           assertFlowJsonValue(flowInput, { boundary: 'flow input' })
         }
@@ -711,7 +714,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
           observabilityContext: resumeObservabilityContext as unknown as JsonObject,
           createdAt: snapshot?.createdAt ?? startedAt,
-          updatedAt: Date.now(),
+          updatedAt: currentTimeMs(),
           ...(timeoutAt !== undefined ? { timeoutAt } : {}),
           ...(flowInput !== undefined ? { input: flowInput as unknown as JsonValue } : {}),
         }
@@ -756,9 +759,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         return runtimeExecution.result as FlowResult<T>
       }
 
-      const flowStore = store ?? getRuntime().records
+      const flowStore = store ?? getHooks().records
       if (flowStore) {
-        const cancelledAt = Date.now()
+        const cancelledAt = currentTimeMs()
         if (error.reason !== undefined) {
           assertFlowJsonValue(error.reason, { boundary: 'flow snapshot metadata', path: '$.cancelReason' })
         }
@@ -794,9 +797,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
 
     // Handle expiration
     if (error instanceof FlowExpiredError) {
-      const flowStore = store ?? getRuntime().records
+      const flowStore = store ?? getHooks().records
       if (flowStore) {
-        const expiredAt = Date.now()
+        const expiredAt = currentTimeMs()
         const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
         const snapshotData = {
           ...(snapshot ?? {}),
@@ -983,7 +986,7 @@ export function flow(
           error: {
             code: 'TARGET_NOT_FOUND',
             message: `Runtime flow snapshot \`${runtimeFlowId}\` could not be found.`,
-            at: new Date(),
+            at: runtime.now(),
           },
         }
       }
@@ -1014,22 +1017,30 @@ export function flow(
   })
 
   async function withRuntime<T>(
-    useRuntime: (runtime: ResolvedRuntimeEngine, runtimeRef: RuntimeFlowTargetRef) => Promise<T>,
+    useRuntime: (
+      runtime: ResolvedRuntimeEngine,
+      runtimeRef: RuntimeFlowTargetRef,
+      runtimeDefinition: RuntimeEngineDefinition,
+    ) => Promise<T>,
   ): Promise<T> {
-    const runtimeDefinition = getRuntime().runtimeEngine
+    const runtimeDefinition = getHooks().runtimeEngine
     if (!runtimeDefinition) {
       throw new Error('No Crux runtime engine is configured.')
     }
     const runtimeRef: RuntimeFlowTargetRef = {}
+    const newWorkId =
+      runtimeDefinition.kind === 'in-process' && runtimeDefinition.newWorkId
+        ? undefined
+        : createRuntimeWorkIdGenerator()
     const runtime = createRuntimeWithHostContext({
       runtime: runtimeDefinition,
       targets: runtimeTargetMap(runtimeRef),
-      newWorkId: createRuntimeWorkIdGenerator(),
+      ...(newWorkId ? { newWorkId } : {}),
       startMaintenance: false,
     })
     runtimeRef.current = runtime
     try {
-      return await useRuntime(runtime, runtimeRef)
+      return await useRuntime(runtime, runtimeRef, runtimeDefinition)
     } finally {
       runtime.dispose()
     }
@@ -1038,11 +1049,15 @@ export function flow(
   async function runWithRuntime(
     runOptions: FlowExecutionOptions<unknown, FlowSignalMap | undefined>,
   ): Promise<FlowResult<unknown>> {
-    return await withRuntime(async (runtime, runtimeRef) => {
+    return await withRuntime(async (runtime, runtimeRef, runtimeDefinition) => {
       const flowId = (runOptions.flowId ?? createFlowId()) as RuntimeFlowId
-      const workId = runtimeWorkId()
+      const workId =
+        runtimeDefinition.kind === 'in-process' && runtimeDefinition.newWorkId
+          ? runtimeDefinition.newWorkId()
+          : runtimeWorkId()
       const input = runtimeInputValue(runOptions.input)
       runtimeRef.executionOptions = runOptions
+      const now = runtime.now()
       const work = await runtime.store.transact(async (tx) => {
         const created = await tx.state.createWork({
           workId,
@@ -1050,7 +1065,7 @@ export function flow(
           work: { kind: 'flow.resume', flowId },
           targetId: name as RuntimeTargetId,
           idempotencyKey: flowStartResumeKey(workId),
-          now: new Date(),
+          now,
         })
         await tx.state.putSnapshot({
           flowId,
@@ -1063,7 +1078,7 @@ export function flow(
           fingerprint: [],
           pendingSuspends: [],
           scheduledEffects: {},
-          updatedAt: new Date(),
+          updatedAt: now,
         })
         return created
       })
@@ -1155,7 +1170,7 @@ export function flow(
 
     run(...args: readonly unknown[]): Promise<FlowResult<unknown>> {
       const runOptions = normalizeRunArgs(args, handlerExpectsInput)
-      if (getRuntime().runtimeEngine) {
+      if (getHooks().runtimeEngine) {
         return runWithRuntime({
           ...runOptions,
           signals: definitionOptions?.signals,
@@ -1172,7 +1187,7 @@ export function flow(
     },
 
     resume(flowId: string, options?: FlowResumeOptions): Promise<FlowResult<unknown>> {
-      if (getRuntime().runtimeEngine) {
+      if (getHooks().runtimeEngine) {
         return resumeWithRuntime(flowId, options)
       }
       return executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
@@ -1194,7 +1209,7 @@ export function flow(
       const signalOptions = payloadIsOptions && options === undefined ? payload : options
       const signalPayload = payloadIsOptions ? {} : payload
       const parsedPayload = validateSignalPayload(signalName, signalSpec, signalPayload)
-      if (getRuntime().runtimeEngine) {
+      if (getHooks().runtimeEngine) {
         await signalWithRuntime(flowId, signalName, parsedPayload as JsonValue, signalOptions)
         return
       }

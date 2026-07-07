@@ -261,9 +261,9 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
     ),
     first_party(
         "runtime.task",
-        &["task"],
+        &["durableTask"],
         &[],
-        &["task"],
+        &["durableTask"],
         &["task:"],
         &[],
         SCOPED_REFERENCE_FORMS,

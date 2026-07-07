@@ -8,7 +8,7 @@
  * @module
  */
 
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 import { type CruxArtifactKind, type CruxGraphRecord } from './contract'
 import type { ObserveArtifactOptions } from './observe'
 import {
@@ -89,7 +89,7 @@ export function applyObservabilityCapturePolicyToRecord(
   record: CruxGraphRecord,
 ): ObservabilityCaptureResult {
   const modes = resolveCaptureModes()
-  const policy = getRuntime().observabilityCapture
+  const policy = getHooks().observabilityCapture
   const policyRecord = applyCaptureModesToRecord(record, modes)
 
   try {
@@ -242,7 +242,7 @@ function captureModeFromLevel(
 }
 
 function resolveCaptureModes(): ResolvedCaptureModes {
-  const policy = getRuntime().observabilityCapture
+  const policy = getHooks().observabilityCapture
   const capture = normalizeCaptureConfig(policy?.capture)
   return {
     input:

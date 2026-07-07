@@ -11,7 +11,7 @@ import {
 import { plan, updatePlan } from "../../plan/plans";
 import { tasks } from "../../plan/tasks";
 import { configure } from "../../runtime/configure";
-import { resetRuntime, updateRuntime } from "../../runtime/runtime";
+import { resetHooks, updateHooks } from "../../runtime/runtime";
 import { fileSkill } from "../../skill/file-loader";
 import {
   clearCache,
@@ -30,7 +30,7 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
   });
 
   afterEach(() => {
-    resetRuntime();
+    resetHooks();
     resetObservabilityRuntime();
     clearCache();
     rmSync(fixtureRoot, { recursive: true, force: true });
@@ -184,7 +184,7 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
   it("records plan and task mutations as plan/task spans", async () => {
     const transport = createInMemoryObservabilityTransport();
     setObservabilityTransport(transport);
-    updateRuntime({ records: inMemoryRecordStore() });
+    updateHooks({ records: inMemoryRecordStore() });
 
     const p = await plan({ title: "Migration Plan", content: "Do the work." });
     await updatePlan(p.id, { content: "Do the better work." });

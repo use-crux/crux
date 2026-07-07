@@ -1,5 +1,5 @@
 import type { PromptRegistry } from '../configure'
-import type { CruxRuntime } from '../runtime'
+import type { CruxHooks } from '../runtime'
 import { defaultRuntimeConfigCruxFactory } from './crux'
 import type { RequiredPorts } from './ports'
 import type { RuntimeConfigInstallation, RuntimeConfigPlan } from './types'
@@ -7,7 +7,7 @@ import type { RuntimeConfigInstallation, RuntimeConfigPlan } from './types'
 /**
  * Apply a runtime config plan through side-effect ports.
  *
- * Installation owns global runtime patching, observability transport state,
+ * Installation owns global hook patching, observability transport state,
  * tokenizer mutation, plugin application, bridge connection, and final Crux
  * object teardown. Prompt registry construction remains in `configure()`.
  */
@@ -16,7 +16,8 @@ export function installRuntimeConfigPlan(
   ports: RequiredPorts,
 ): RuntimeConfigInstallation {
   let restoreObservability: (() => void) | undefined
-  const runtimePatch = { ...plan.runtimePatch }
+  const previousHooks = ports.hooks.get()
+  const hooksPatch = { ...plan.hooksPatch }
 
   if (plan.observability.kind === 'owned') {
     restoreObservability = ports.observability.configure({
@@ -28,25 +29,25 @@ export function installRuntimeConfigPlan(
       serverUrl: plan.observability.serverUrl,
       token: plan.observability.token,
     })
-    runtimePatch.observabilityTransport = transport
-    runtimePatch.observabilityDelivery = plan.observability.delivery
+    hooksPatch.observabilityTransport = transport
+    hooksPatch.observabilityDelivery = plan.observability.delivery
     restoreObservability = ports.observability.configure({
       transport,
       delivery: plan.observability.delivery,
     })
   }
 
-  ports.runtime.update(runtimePatch)
-
-  let runtime: CruxRuntime = { ...ports.runtime.get() }
+  let hooks: CruxHooks = { ...previousHooks, ...hooksPatch }
   const plugins =
     plan.plugins.length > 0
-      ? ports.plugins.apply(plan.plugins, runtime)
+      ? ports.plugins.apply(plan.plugins, hooks)
       : undefined
   if (plugins) {
-    runtime = { ...plugins.runtime }
-    ports.runtime.set(runtime)
+    hooks = { ...plugins.hooks }
   }
+
+  const layerPatch = changedHookFields(previousHooks, hooks, hooksPatch)
+  const layerToken = ports.hooks.pushLayer(layerPatch)
 
   if (plan.tokenizer) {
     ports.tokenizer.setTokenizer(plan.tokenizer)
@@ -56,12 +57,13 @@ export function installRuntimeConfigPlan(
   const restore = () => {
     if (restored) return
     restored = true
+    ports.hooks.restoreLayer(layerToken)
     void plugins?.dispose()
     restoreObservability?.()
   }
 
   return {
-    runtime: Object.freeze({ ...runtime }),
+    hooks: Object.freeze({ ...hooks }),
     restore,
     connectBridge(registry: PromptRegistry) {
       void registry
@@ -81,4 +83,31 @@ export function installRuntimeConfigPlan(
       })
     },
   }
+}
+
+function changedHookFields(
+  previousHooks: Readonly<CruxHooks>,
+  hooks: Readonly<CruxHooks>,
+  forcedPatch: Partial<CruxHooks>,
+): Partial<CruxHooks> {
+  const keys = new Set<keyof CruxHooks>([
+    ...(Object.keys(previousHooks) as (keyof CruxHooks)[]),
+    ...(Object.keys(hooks) as (keyof CruxHooks)[]),
+    ...(Object.keys(forcedPatch) as (keyof CruxHooks)[]),
+  ])
+  const patch: Partial<CruxHooks> = {}
+  for (const key of keys) {
+    if (previousHooks[key] !== hooks[key] || key in forcedPatch) {
+      copyHookField(patch, hooks, key)
+    }
+  }
+  return patch
+}
+
+function copyHookField<K extends keyof CruxHooks>(
+  target: Partial<CruxHooks>,
+  source: Readonly<CruxHooks>,
+  key: K,
+): void {
+  target[key] = source[key]
 }

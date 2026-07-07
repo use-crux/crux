@@ -47,7 +47,7 @@ React bindings live in **`@use-crux/react`** (`CruxProvider`, hooks, transports,
 ## Plugin System
 
 - Plugins implement `CruxPlugin` interface
-- `mergeRuntime()` for composing plugin state
+- `mergeHooks()` for composing plugin state
 - `withDevtools()` is the reference plugin implementation
 
 ## Documentation Requirement

@@ -21,12 +21,16 @@ import type {
   RetryWorkInput,
   RecordSuspensionInput,
   RuntimeKernel,
+  RuntimeLeaseExtensionOptions,
+  RuntimeLeaseExtensionSchedule,
   RuntimeKernelOptions,
   MaintenanceTickOptions,
   ScanTimersOptions,
   ScheduleTimerInput,
 } from './kernel-types'
 import { handleWake } from './kernel-wake'
+import { resolveRuntimeRetentionConfig } from './retention'
+import { runDefaultRuntimeComposite } from './composites'
 
 const DEFAULT_LEASE_TTL_MS = 60_000
 
@@ -50,6 +54,8 @@ export type {
   RuntimeSuspensionSnapshotInput,
   RuntimeScheduledEffectIntent,
   RuntimeScheduledEffectFlushRecord,
+  RuntimeLeaseExtensionOptions,
+  RuntimeLeaseExtensionSchedule,
   RuntimeTarget,
   RuntimeTargetContext,
   RuntimeTargetMap,
@@ -66,14 +72,28 @@ export function createRuntimeKernel(
   const now = options.now ?? (() => new Date())
   const verifyWake = options.verifyWake ?? (() => true)
   const leaseTtlMs = options.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS
+  const retention = resolveRuntimeRetentionConfig(options.retention, {
+    redeliveryHorizonMs: options.redeliveryHorizonMs,
+  })
+  const compositeDeps = {
+    now,
+    newWorkId: options.newWorkId,
+  }
+  const runComposite =
+    options.store.runComposite ??
+    ((kind, input) =>
+      runDefaultRuntimeComposite(options.store, compositeDeps, kind, input))
   const deps = Object.freeze({
     store: options.store,
+    runComposite,
     targets: options.targets,
     verifyWake,
     newWorkId: options.newWorkId,
     now,
     rng: options.rng,
     leaseTtlMs,
+    leaseExtension: options.leaseExtension,
+    retention,
   })
 
   return Object.freeze({

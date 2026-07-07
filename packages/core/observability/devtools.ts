@@ -27,7 +27,13 @@ import type { AnyPrompt } from '../prompt/prompt-types'
 import type { Context } from '../prompt/context-types'
 import type { CruxPlugin, CruxPluginResult } from '../runtime/plugin'
 import type { RuntimeBridgeOptions } from '../runtime-bridge'
-import { getRuntime, setRuntime, type CruxRuntime } from '../runtime/runtime'
+import {
+  getHooks,
+  pushHooksLayer,
+  restoreHooksLayer,
+  type CruxHooks,
+  type HooksLayerToken,
+} from '../runtime/runtime'
 import { configureObservability, observe } from './observe'
 import { createHttpObservabilityTransport } from './transport'
 import { IndexSnapshotSchema } from '../project-index'
@@ -91,14 +97,14 @@ export interface EnableDevtoolsOptions {
 export function withDevtools(options: EnableDevtoolsOptions): CruxPlugin {
   return {
     name: 'crux:devtools',
-    install(runtime) {
-      return buildDevtoolsRuntime(options, runtime)
+    install(hooks) {
+      return buildDevtoolsRuntime(options, hooks)
     },
   }
 }
 
 interface DevtoolsRuntimeLayer {
-  previousRuntime: Readonly<CruxRuntime>
+  layerToken: HooksLayerToken
   dispose: () => void | Promise<void>
   parentToken: number
 }
@@ -124,7 +130,7 @@ const devtoolsRuntimeLayers = new Map<number, DevtoolsRuntimeLayer>()
  */
 function buildDevtoolsRuntime(
   options: EnableDevtoolsOptions,
-  _existingRuntime: Readonly<CruxRuntime>,
+  _existingRuntime: Readonly<CruxHooks>,
 ): CruxPluginResult {
   const transport = createHttpObservabilityTransport({
     serverUrl: options.serverUrl,
@@ -205,23 +211,19 @@ async function registerIndexSnapshot(
 
 export function enableDevtools(options: EnableDevtoolsOptions): () => void {
   const token = nextDevtoolsToken++
-  const previousRuntime = getRuntime()
+  const previousRuntime = getHooks()
 
-  // Build and install all hooks via shared builder
   const { dispose, ...runtimePatch } = buildDevtoolsRuntime(
     options,
     previousRuntime,
   )
+  const layerToken = pushHooksLayer(runtimePatch)
   devtoolsRuntimeLayers.set(token, {
-    previousRuntime,
+    layerToken,
     dispose: dispose ?? (() => undefined),
     parentToken: activeDevtoolsToken,
   })
   activeDevtoolsToken = token
-
-  setRuntime({
-    ...runtimePatch,
-  })
 
   return () => disableDevtools(token)
 }
@@ -241,11 +243,13 @@ export function disableDevtools(token = activeDevtoolsToken): void {
 
   const tokensToDispose = activeDevtoolsTokensThrough(token)
   for (const activeToken of tokensToDispose) {
-    void devtoolsRuntimeLayers.get(activeToken)?.dispose()
+    const activeLayer = devtoolsRuntimeLayers.get(activeToken)
+    if (!activeLayer) continue
+    void activeLayer.dispose()
+    restoreHooksLayer(activeLayer.layerToken)
     devtoolsRuntimeLayers.delete(activeToken)
   }
 
-  setRuntime(layer.previousRuntime)
   activeDevtoolsToken = layer.parentToken
 }
 

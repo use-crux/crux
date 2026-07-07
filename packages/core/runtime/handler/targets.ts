@@ -19,13 +19,13 @@ import type { RuntimeTarget, RuntimeTargetMap } from '../engine/kernel'
 export type RuntimeHandlerTarget =
   | RuntimeTarget
   | {
-      /** Stable target name returned by `flow()` handles and runtime `task()`. */
+      /** Stable target name returned by `flow()` handles and `durableTask()`. */
       readonly name: string
     }
 
 /** Options for resolving handler targets into a kernel map. */
 export interface NormalizeRuntimeHandlerTargetsOptions {
-  /** Exported `flow()` handles and runtime `task()` targets. */
+  /** Exported `flow()` handles and `durableTask()` targets. */
   readonly targets: readonly RuntimeHandlerTarget[]
   /** Mutable runtime reference used by process-local target factories. */
   readonly runtimeRef: RuntimeTargetRuntimeRef
@@ -88,7 +88,7 @@ function unresolvedTargetError(name: string, entry: string): never {
     whatFailed: `Runtime target \`${name}\` could not be resolved by ${entry}.`,
     why: 'The entry received only a target name, but no process-local runtime target factory exists for that name.',
     whatStillWorks:
-      'Concrete runtime `task()` targets and exported `flow()` handles in the same entry can still run.',
+      'Concrete `durableTask()` targets and exported `flow()` handles in the same entry can still run.',
     nextStep:
       `Pass the exported target object for \`${name}\` directly or run \`crux runtime generate\` so the entry imports it.`,
   })

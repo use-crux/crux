@@ -10,12 +10,18 @@
  */
 
 import type { WakeEnvelope } from './engine/envelope'
+import type {
+  RuntimeCompositeInput,
+  RuntimeCompositeKind,
+  RuntimeCompositeResult,
+} from './engine/composites'
 import type { DurableEventPort } from './ports/events'
 import type { LeasePort } from './ports/leases'
 import type { TimerId, WaiterId, WorkId } from './ports/ids'
 import type { RuntimeStatePort } from './ports/state'
 import type { RuntimeWork } from './ports/work'
 import type { RuntimeWaiter, WaiterPort } from './ports/waiters'
+import type { RuntimePruneOptions, RuntimePruneResult } from './ports/retention'
 
 /** Timer record lifecycle stored by a runtime store adapter. */
 export type RuntimeTimerState = 'scheduled' | 'fired' | 'cancelled'
@@ -89,6 +95,8 @@ export interface RuntimeTimerStorePort {
     from: RuntimeTimerState,
     to: RuntimeTimerState,
   ): Promise<boolean>
+  /** Delete a bounded batch of fired or cancelled timers before a cutoff. */
+  prune(options: RuntimePruneOptions): Promise<RuntimePruneResult>
 }
 
 /** Runtime outbox row written inside a store transaction. */
@@ -133,6 +141,16 @@ export interface ListOutboxOptions {
   readonly limit?: number
 }
 
+/** Bounded outbox listing options for one owning work item. */
+export interface ListOutboxByWorkOptions {
+  /** Namespace to filter within. Omit only for namespace-agnostic inspection. */
+  readonly namespace?: string
+  /** Current outbox state to include. Omit to include every state. */
+  readonly state?: RuntimeOutboxState
+  /** Maximum number of rows to return. */
+  readonly limit?: number
+}
+
 /** Store-backed outbox operations used by dispatchers and maintenance. */
 export interface RuntimeOutboxPort {
   /** Persist a wake envelope for delivery after the surrounding transaction commits. */
@@ -148,10 +166,17 @@ export interface RuntimeOutboxPort {
   ): Promise<readonly RuntimeOutboxItem[]>
   /** List bounded outbox rows for operator/devtools inspection. */
   list(options: ListOutboxOptions): Promise<readonly RuntimeOutboxItem[]>
+  /** List bounded outbox rows owned by one work item. */
+  listByWork(
+    workId: WorkId,
+    options?: ListOutboxByWorkOptions,
+  ): Promise<readonly RuntimeOutboxItem[]>
   /** Mark a delivered row confirmed. */
   confirm(outboxId: string): Promise<void>
   /** Requeue a row after a delivery failure. */
   retryLater(outboxId: string, nextAttemptAt: Date): Promise<void>
+  /** Delete a bounded batch of confirmed outbox rows before a cutoff. */
+  prune(options: RuntimePruneOptions): Promise<RuntimePruneResult>
 }
 
 /** Waiter store operations needed in addition to the public waiter port. */
@@ -168,6 +193,8 @@ export interface RuntimeWaiterStorePort extends WaiterPort {
     from: RuntimeWaiter['state'],
     to: RuntimeWaiter['state'],
   ): Promise<boolean>
+  /** Delete a bounded batch of resolved, timed-out, or cancelled waiters. */
+  prune(options: RuntimePruneOptions): Promise<RuntimePruneResult>
 }
 
 /** Options for claiming expired waiter registrations. */
@@ -195,6 +222,16 @@ export interface RuntimeStoreAdapter extends RuntimeStoreTransaction {
   readonly id: string
   /** Durable leases for concurrent workers. */
   readonly leases: LeasePort
+  /**
+   * Run one named kernel composite as an adapter-native atomic operation.
+   *
+   * Adapters can omit this method to use the core default, which wraps the
+   * kernel-owned composite body in {@link RuntimeStoreAdapter.transact}.
+   */
+  runComposite?<K extends RuntimeCompositeKind>(
+    kind: K,
+    input: RuntimeCompositeInput[K],
+  ): Promise<RuntimeCompositeResult[K]>
   /** Run a function against an atomic transaction scope. */
   transact<T>(fn: (tx: RuntimeStoreTransaction) => Promise<T>): Promise<T>
 }

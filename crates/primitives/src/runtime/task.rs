@@ -11,9 +11,9 @@ pub(crate) fn runtime_task_facts(
     context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
 ) -> Option<Value> {
-    if parts.callee_name != "task"
+    if parts.callee_name != "durableTask"
         || parts.callee_direct == Some(false)
-        || parts.callee_module_specifier != Some("@use-crux/core/runtime")
+        || !is_runtime_task_module(parts.callee_module_specifier)
     {
         return None;
     }
@@ -80,6 +80,13 @@ pub(crate) fn runtime_task_facts(
         Vec::new(),
         source_refs,
     ))
+}
+
+fn is_runtime_task_module(module_specifier: Option<&str>) -> bool {
+    matches!(
+        module_specifier,
+        Some("@use-crux/core") | Some("@use-crux/core/runtime")
+    )
 }
 
 fn string_argument(value: Option<&StaticSyntaxValue>) -> Option<String> {

@@ -104,7 +104,10 @@ describe('RuntimeKernel event and suspension composites', () => {
       pendingSuspends: [
         {
           label: 'approval',
-          delivered: { eventId: 'evt_1' },
+          delivered: {
+            eventId: 'evt_1',
+            payload: { documentId: 'doc_1' },
+          },
         },
       ],
     })

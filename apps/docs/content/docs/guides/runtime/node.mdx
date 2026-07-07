@@ -30,6 +30,10 @@ import { postgres } from '@use-crux/postgres/runtime'
 export default config({
   runtime: node({
     store: postgres({ url: process.env.DATABASE_URL }),
+    retention: {
+      terminalWork: '7d',
+      terminalSnapshots: '30d',
+    },
   }),
 })
 ```
@@ -42,7 +46,9 @@ crux runtime setup --check
 
 ## Maintenance
 
-`node()` starts the maintenance loop by default. It dispatches pending outbox rows, scans due timers, reclaims expired leases, expires waiters, and resolves scoped idle.
+`node()` starts the maintenance loop by default. It dispatches pending outbox rows, scans due timers, reclaims expired leases, expires waiters, resolves scoped idle, and prunes retained terminal records.
+
+Outbox delivery is bounded and defaults to eight in-flight wake deliveries per maintenance pass.
 
 For tests or custom hosts, disable auto-start and call maintenance explicitly through the resolved runtime:
 

@@ -1,6 +1,6 @@
 import type { LanguageModel, StopCondition, ToolSet } from "ai";
 import type { z } from "zod";
-import { getRuntime } from "@use-crux/core";
+import { getHooks } from "@use-crux/core";
 import { observe } from "@use-crux/core/observability";
 import type {
   ExecutorRequest,
@@ -117,7 +117,7 @@ export async function createStreamCallPlan(
 
   const traceId = observe.captureContext()?.traceId;
   const progress = traceId
-    ? getRuntime().streamProgressHook?.(traceId)
+    ? getHooks().streamProgressHook?.(traceId)
     : undefined;
 
   if (request.safety) {

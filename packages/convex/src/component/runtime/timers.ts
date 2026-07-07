@@ -1,7 +1,7 @@
 import { v } from 'convex/values'
 import { mutation } from '../_generated/server.js'
 import type { MutationCtx } from '../_generated/server.js'
-import { limitRows, randomId } from './shared'
+import { limitRows, pruneBatch, randomId, requireRuntimeNamespace } from './shared'
 
 const TIMER_STATES = ['scheduled', 'fired', 'cancelled'] as const
 
@@ -29,12 +29,11 @@ export const claimDue = mutation({
   args: { namespace: v.optional(v.string()), now: v.number(), limit: v.optional(v.number()) },
   returns: v.any(),
   handler: async (ctx, { namespace, now, limit }) => {
-    const rows = namespace
-      ? await ctx.db
-          .query('runtimeTimers')
-          .withIndex('by_namespace_state_fire', (q) => q.eq('namespace', namespace).eq('state', 'scheduled'))
-          .collect()
-      : await ctx.db.query('runtimeTimers').collect()
+    const resolvedNamespace = requireRuntimeNamespace(namespace, 'timers.claimDue')
+    const rows = await ctx.db
+      .query('runtimeTimers')
+      .withIndex('by_namespace_state_fire', (q) => q.eq('namespace', resolvedNamespace).eq('state', 'scheduled'))
+      .take(limit ?? 1_000)
     return limitRows(rows.filter((row) => row.state === 'scheduled' && row.fireAt <= now), limit)
   },
 })
@@ -74,11 +73,52 @@ export const transition = mutation({
   handler: async (ctx, { timerId, from, to }) => {
     const timer = await byId(ctx, timerId)
     if (!timer || timer.state !== from) return false
-    await ctx.db.patch(timer._id, { state: to })
+    await ctx.db.patch(timer._id, {
+      state: to,
+      ...(to === 'fired' || to === 'cancelled' ? { settledAt: Date.now() } : {}),
+    })
     return true
+  },
+})
+
+export const prune = mutation({
+  args: {
+    namespace: v.optional(v.string()),
+    before: v.number(),
+    limit: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, { namespace, before, limit }) => {
+    const rows = await rowsByStates(ctx, namespace, ['fired', 'cancelled'], limit)
+    const batch = pruneBatch(
+      rows.filter((row) => row.settledAt === undefined || row.settledAt < before),
+      limit,
+    )
+    for (const row of batch.selected) await ctx.db.delete(row._id)
+    return { removed: batch.selected.length, truncated: batch.truncated }
   },
 })
 
 async function byId(ctx: MutationCtx, timerId: string) {
   return await ctx.db.query('runtimeTimers').withIndex('by_timer_id', (q) => q.eq('timerId', timerId)).first()
+}
+
+async function rowsByStates(ctx: MutationCtx, namespace: string | undefined, states: readonly string[], limit: number) {
+  const take = Math.max(0, Math.floor(limit)) + 1
+  const rows = (
+    await Promise.all(
+      states.map((state) =>
+        namespace
+          ? ctx.db
+              .query('runtimeTimers')
+              .withIndex('by_namespace_state_settled', (q) => q.eq('namespace', namespace).eq('state', state))
+              .take(take)
+          : ctx.db
+              .query('runtimeTimers')
+              .withIndex('by_state_settled', (q) => q.eq('state', state))
+              .take(take),
+      ),
+    )
+  ).flat()
+  return rows.sort((left, right) => (left.settledAt ?? 0) - (right.settledAt ?? 0))
 }

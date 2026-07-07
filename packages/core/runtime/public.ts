@@ -39,6 +39,12 @@ export type {
   RuntimeFailureClassification,
   RuntimeFailureClassificationOptions,
 } from './engine/retry'
+export type {
+  ResolvedRuntimeRetentionConfig,
+  ResolveRuntimeRetentionOptions,
+  RuntimeRetentionConfig,
+  RuntimeRetentionDurationInput,
+} from './engine/retention'
 
 export { transition } from './engine/work'
 export type {
@@ -61,6 +67,8 @@ export type {
   RetryWorkInput,
   RetryWorkResult,
   RuntimeKernel,
+  RuntimeLeaseExtensionOptions,
+  RuntimeLeaseExtensionSchedule,
   RuntimeKernelOptions,
   RuntimeScheduledEffectFlushRecord,
   RuntimeScheduledEffectIntent,
@@ -75,6 +83,19 @@ export type {
   ScanTimersResult,
   ScheduleTimerInput,
 } from './engine/kernel'
+
+export {
+  runDefaultRuntimeComposite,
+  runtimeCompositeBodies,
+} from './engine/composites'
+export type {
+  RuntimeCompositeBody,
+  RuntimeCompositeDeps,
+  RuntimeCompositeInput,
+  RuntimeCompositeKind,
+  RuntimeCompositeResult,
+  RuntimeCompositeRunner,
+} from './engine/composites'
 
 export { bindHostRuntime } from './api/bind-host-runtime'
 export { createRuntime } from './api/create-runtime'
@@ -114,7 +135,7 @@ export type {
 export { runtimeTargetMap } from './api/target-registry'
 export type { RuntimeTargetRuntimeRef } from './api/target-registry'
 
-export { task } from './api/task'
+export { durableTask } from './api/task'
 export type {
   RuntimeTaskContext,
   RuntimeTaskInput,
@@ -180,18 +201,72 @@ export type {
 export {
   flowEventResumeKey,
   flowManualResumeKey,
-  flowSignalResumeKey,
   flowStartResumeKey,
   operatorRetryEventName,
   operatorRetryKey,
   taskRunKey,
   timerKey,
   waiterTimeoutKey,
-  watchDeliverKey,
 } from './engine/idempotency'
 export { runtimeSignalEventName } from './engine/replay'
 
-export type * from './ports'
+export type {
+  CruxEngineCapabilities,
+  DeploymentSupport,
+} from './ports/capabilities'
+export type {
+  AppendEventOptions,
+  DurableEventPort,
+  NewRuntimeEvent,
+  ReadEventsOptions,
+  ReadEventsResult,
+  RuntimeEvent,
+} from './ports/events'
+export type {
+  EventCursor,
+  FlowId,
+  LeaseToken,
+  RuntimeTargetId,
+  TaskId,
+  TimerId,
+  WaiterId,
+  WorkId,
+} from './ports/ids'
+export type {
+  ClaimOptions,
+  Lease,
+  LeasePort,
+  LeaseResource,
+} from './ports/leases'
+export type {
+  RuntimeSetupApplyOptions,
+  RuntimeSetupFinding,
+  RuntimeSetupMode,
+  RuntimeSetupOptions,
+  RuntimeSetupPort,
+  RuntimeSetupResult,
+} from './ports/setup'
+export type { RuntimePruneOptions, RuntimePruneResult } from './ports/retention'
+export type {
+  CountWorkOptions,
+  FlowSnapshot,
+  IdempotencyRecord,
+  MarkSnapshotDeliveredOptions,
+  NewWorkItem,
+  RuntimeDeliveredSuspend,
+  RuntimePendingSuspend,
+  RuntimeStatePort,
+  RuntimeStateReadOptions,
+  SetWorkPendingOptions,
+  WorkStatusCount,
+} from './ports/state'
+export type {
+  NewRuntimeWaiter,
+  ResolveWaiterOptions,
+  RuntimeWaiter,
+  WaiterPort,
+} from './ports/waiters'
+export type { RuntimeWork } from './ports/work'
 export type * from './store'
 
 export { inMemoryRuntimeStore } from './adapters/memory'

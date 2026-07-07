@@ -1,22 +1,95 @@
 import { describe, expect, it } from 'vitest'
 import {
+  allowUnsignedDevWake,
   CruxRuntimeError,
   createRuntimeHandler,
   encodeWakeEnvelope,
   inMemoryRuntimeStore,
   node,
   serverless,
-  task,
+  durableTask,
   wakeEnvelopeForWork,
   type TaskId,
   type WorkId,
 } from '@use-crux/core/runtime'
 
 describe('createRuntimeHandler', () => {
+  it('fails closed in production when no wake verifier is configured', () => {
+    const originalNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      expect(() =>
+        createRuntimeHandler({
+          runtime: node({
+            store: inMemoryRuntimeStore(),
+            namespace: 'tenant-a',
+            autoStartMaintenance: false,
+          }),
+          targets: [],
+        }),
+      ).toThrow(CruxRuntimeError)
+      expect(() =>
+        createRuntimeHandler({
+          runtime: node({
+            store: inMemoryRuntimeStore(),
+            namespace: 'tenant-a',
+            autoStartMaintenance: false,
+          }),
+          targets: [],
+        }),
+      ).toThrow(/Code: WAKE_UNVERIFIED/)
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv
+    }
+  })
+
+  it('allows unsigned wake requests in production only when explicitly configured', async () => {
+    const originalNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      const { GET } = createRuntimeHandler({
+        runtime: node({
+          store: inMemoryRuntimeStore(),
+          namespace: 'tenant-a',
+          autoStartMaintenance: false,
+        }),
+        targets: [],
+        verify: allowUnsignedDevWake,
+      })
+
+      await expect(
+        GET(new Request('https://example.com/api/crux')),
+      ).resolves.toMatchObject({ status: 200 })
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv
+    }
+  })
+
+  it('keeps unsigned wake requests available by default in development', async () => {
+    const originalNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'development'
+    try {
+      const { GET } = createRuntimeHandler({
+        runtime: node({
+          store: inMemoryRuntimeStore(),
+          namespace: 'tenant-a',
+          autoStartMaintenance: false,
+        }),
+        targets: [],
+      })
+
+      await expect(
+        GET(new Request('https://example.com/api/crux')),
+      ).resolves.toMatchObject({ status: 200 })
+    } finally {
+      process.env.NODE_ENV = originalNodeEnv
+    }
+  })
+
   it('rejects unverified wake requests before durable writes or target execution', async () => {
     const store = inMemoryRuntimeStore()
     let executed = false
-    const embedDocument = task('embed-document', {
+    const embedDocument = durableTask('embed-document', {
       run: () => {
         executed = true
       },
@@ -92,7 +165,7 @@ describe('createRuntimeHandler', () => {
   it('maps processed, duplicate, and busy kernel outcomes to the HTTP protocol', async () => {
     const store = inMemoryRuntimeStore()
     const seenInputs: unknown[] = []
-    const embedDocument = task('embed-document-http-status', {
+    const embedDocument = durableTask('embed-document-http-status', {
       run: (input: { documentId: string }) => {
         seenInputs.push(input)
       },
@@ -159,8 +232,8 @@ describe('createRuntimeHandler', () => {
 
   it('throws TARGET_DUPLICATE when an entry file exposes the same target twice', () => {
     const store = inMemoryRuntimeStore()
-    const first = task('duplicate-runtime-target', { run: () => undefined })
-    const second = task('duplicate-runtime-target', { run: () => undefined })
+    const first = durableTask('duplicate-runtime-target', { run: () => undefined })
+    const second = durableTask('duplicate-runtime-target', { run: () => undefined })
 
     expect(() =>
       createRuntimeHandler({
@@ -211,7 +284,7 @@ describe('createRuntimeHandler', () => {
 
   it('uses the configured wake adapter verifier when no override is supplied', async () => {
     const store = inMemoryRuntimeStore()
-    const embedDocument = task('verified-by-wake-adapter', {
+    const embedDocument = durableTask('verified-by-wake-adapter', {
       run: () => undefined,
     })
     const runtime = serverless({

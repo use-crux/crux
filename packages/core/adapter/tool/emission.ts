@@ -10,7 +10,7 @@
  * @module
  */
 
-import { getRuntime } from '../../runtime/runtime'
+import { getHooks } from '../../runtime/runtime'
 import { currentObservabilityTransport, hasObservabilitySubscribers, observe } from '../../observability'
 import { redactSensitiveValue } from '../../shared/redaction'
 import type { JsonValue, ToolContentPart, ToolModelOutput } from '../../types/tool'
@@ -354,7 +354,7 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
   options?: InstrumentToolSetOptions,
 ): TTools | undefined {
   if (!tools) return tools
-  const runtime = getRuntime()
+  const runtime = getHooks()
   const shouldInstrument =
     hasObservabilitySubscribers() ||
     currentObservabilityTransport() !== undefined ||

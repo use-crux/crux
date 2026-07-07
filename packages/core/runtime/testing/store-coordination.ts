@@ -164,7 +164,11 @@ export function registerStoreCoordinationTests<
         store.leases.claim('work:work_1', { ttlMs: 1_000 }),
       ).resolves.toBeNull()
 
+      const firstToken = first!.token
+      const firstExpiresAt = first!.expiresAt
       const extended = await store.leases.extend(first!, 2_000)
+      expect(extended.token).toBe(firstToken)
+      expect(extended.expiresAt.getTime()).toBeGreaterThan(firstExpiresAt.getTime())
       vi.advanceTimersByTime(1_500)
       await expect(
         store.leases.claim('work:work_1', { ttlMs: 1_000 }),
@@ -219,10 +223,38 @@ export function registerStoreCoordinationTests<
         store.timers.transition(timer.timerId, 'scheduled', 'cancelled'),
       ).resolves.toBe(false)
 
+      await store.outbox.put(
+        makeConformanceWakeEnvelope(
+          makeConformanceWorkItem({
+            namespace: 'tenant-b',
+            workId: work.workId,
+            idempotencyKey: 'task:tenant-b-collision',
+          }),
+        ),
+        { deliverAt: dueAt },
+      )
       const delayedOutbox = await store.outbox.put(
         makeConformanceWakeEnvelope(work),
         { deliverAt: dueAt },
       )
+      await store.outbox.put(
+        makeConformanceWakeEnvelope(
+          makeConformanceWorkItem({ workId: 'work_other_1' as WorkId }),
+        ),
+        { deliverAt: dueAt },
+      )
+      await expect(
+        store.outbox.listByWork(work.workId, {
+          namespace: 'tenant-a',
+          state: 'pending',
+          limit: 1,
+        }),
+      ).resolves.toEqual([
+        expect.objectContaining({
+          outboxId: delayedOutbox.outboxId,
+          envelope: expect.objectContaining({ workId: work.workId }),
+        }),
+      ])
       await expect(
         store.outbox.claimPending({
           namespace: 'tenant-a',

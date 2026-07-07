@@ -5,7 +5,7 @@ import { createSemanticCache, semanticCachePolicies } from '../../cache'
 import { embedding } from '../../embedding'
 import { inMemoryStorage } from '../../storage'
 import { applyPlugins } from '../../runtime/plugin'
-import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
+import { getHooks, resetHooks, setHooks } from '../../runtime/runtime'
 import { orchestrateGenerate, orchestrateStream } from '../../generation/orchestrate'
 
 function denseEmbedding() {
@@ -36,8 +36,8 @@ function sparseEmbedding() {
 }
 
 function install(plugin: ReturnType<typeof createSemanticCache>) {
-  const applied = applyPlugins([plugin], getRuntime())
-  setRuntime(applied.runtime)
+  const applied = applyPlugins([plugin], getHooks())
+  setHooks(applied.hooks)
   return applied
 }
 
@@ -53,7 +53,7 @@ function cacheablePrompt() {
 
 describe('createSemanticCache', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
     vi.restoreAllMocks()
   })
 

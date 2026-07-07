@@ -4,7 +4,7 @@ title: runtime.non_literal_target_name
 
 ## What it checks
 
-Crux emits this finding when a runtime target name is not written as a literal string in the `flow()` or runtime `task()` call.
+Crux emits this finding when a runtime target name is not written as a literal string in the `flow()` or `durableTask()` call.
 
 ## Why it matters
 
@@ -12,7 +12,7 @@ Generated runtime artifacts need durable names before deployment. Dynamic names 
 
 ## How to fix
 
-Use a literal name such as `flow("review", ...)` or `task("embed", ...)`, then run `crux runtime generate`.
+Use a literal name such as `flow("review", ...)` or `durableTask("embed", ...)`, then run `crux runtime generate`.
 
 ## When to suppress
 

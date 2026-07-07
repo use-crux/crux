@@ -199,7 +199,7 @@ export interface TargetInternal {
  * signatures.
  */
 export interface AnyTarget {
-  /** Discriminant tag for runtime task lifting. */
+  /** Discriminant tag for durable task lifting. */
   readonly _tag: 'QualityTarget'
   /** The wrapped task kind. */
   readonly kind: 'prompt' | 'flow' | 'agent' | 'retriever' | 'fn'

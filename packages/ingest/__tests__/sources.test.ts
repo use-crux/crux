@@ -2,7 +2,7 @@ import { Buffer } from 'node:buffer'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resetRuntime } from '@use-crux/core'
+import { resetHooks } from '@use-crux/core'
 import {
   subscribeObservability,
   type CruxGraphRecord,
@@ -18,7 +18,7 @@ import type { IngestParser } from '..'
 const tempDirs: string[] = []
 
 afterEach(async () => {
-  resetRuntime()
+  resetHooks()
   while (tempDirs.length > 0) {
     const path = tempDirs.pop()!
     await rm(path, { recursive: true, force: true })

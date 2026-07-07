@@ -3,17 +3,17 @@ import { config, flow } from '@use-crux/core'
 import {
   createRuntime,
   node,
-  task,
+  durableTask,
   type FlowId,
   type RuntimeTargetId,
   type WorkId,
 } from '@use-crux/core/runtime'
 import { runtimeTargetMap } from '../../runtime/api/target-registry'
 import { getExecutionContext } from '../../runtime/execution-context'
-import { resetRuntime } from '../../runtime/runtime'
+import { resetHooks } from '../../runtime/runtime'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 describe('runtime-backed flows', () => {
@@ -24,7 +24,7 @@ describe('runtime-backed flows', () => {
     })
     const crux = config({ runtime })
     const embedded: unknown[] = []
-    const embedDocument = task('embed-document', {
+    const embedDocument = durableTask('embed-document', {
       run: async (input: { documentId: string }) => {
         embedded.push(input)
       },
@@ -78,7 +78,7 @@ describe('runtime-backed flows', () => {
     })
     const crux = config({ runtime })
     const reminders: unknown[] = []
-    const sendReminder = task('send-reminder', {
+    const sendReminder = durableTask('send-reminder', {
       run: async (input: { userId: string }) => {
         reminders.push(input)
       },
@@ -127,7 +127,7 @@ describe('runtime-backed flows', () => {
     })
     const crux = config({ runtime })
     const embedded: unknown[] = []
-    const embedDocument = task('embed-for-idle', {
+    const embedDocument = durableTask('embed-for-idle', {
       run: async (input: { documentId: string }) => {
         embedded.push(input)
       },
@@ -270,9 +270,42 @@ describe('runtime-backed flows', () => {
     crux.dispose()
   })
 
+  it('validates name-bound signal flow id and target name before emitting', async () => {
+    const runtime = node({
+      namespace: 'tenant-a',
+      autoStartMaintenance: false,
+    })
+    const crux = config({ runtime })
+    const reviewFlow = flow('signal-validation-review', async (scope) => {
+      await scope.suspend('approval')
+      return 'done'
+    })
+
+    const suspended = await reviewFlow.run()
+
+    await expect(
+      crux.flows.signal('signal-validation-review', 'missing_flow', 'approval', {}),
+    ).rejects.toMatchObject({
+      code: 'TARGET_NOT_FOUND',
+      message: expect.stringContaining(
+        'crux.flows.signal() could not find runtime-backed flow `missing_flow`.',
+      ),
+    })
+    await expect(
+      crux.flows.signal('other-signal-target', suspended.flowId, 'approval', {}),
+    ).rejects.toMatchObject({
+      code: 'TARGET_NOT_FOUND',
+      message: expect.stringContaining(
+        `crux.flows.signal() could not operate on flow \`${suspended.flowId}\` through target \`other-signal-target\`.`,
+      ),
+    })
+
+    crux.dispose()
+  })
+
   it('throws the standard runtime-required diagnostic for runtime-only flow APIs', async () => {
     const crux = config({})
-    const embedDocument = task('missing-runtime-embed', {
+    const embedDocument = durableTask('missing-runtime-embed', {
       run: async (_input: { documentId: string }) => undefined,
     })
     const reviewFlow = flow('review', async (scope) => {

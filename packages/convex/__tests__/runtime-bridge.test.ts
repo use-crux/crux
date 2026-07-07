@@ -1,9 +1,10 @@
-import { config, resetRuntime } from '@use-crux/core'
+import { config, resetHooks } from '@use-crux/core'
 import { createRuntimeWithHostContext } from '@use-crux/core/runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { convexRuntimeRecords, createConvexRuntimeBridge, getConvexCruxRuntime, type ConvexCtxPort } from '../index'
+import { convexRuntimeRecords, getConvexCruxRuntime, type ConvexCtxPort } from '../index'
 import { inMemoryRecordStore, memory, memoryBlock } from '../memory'
 import { convex } from '../runtime'
+import { createConvexRuntimeBridge } from '../runtime-bridge'
 
 interface TenantCtx extends ConvexCtxPort {
   tenantId: string
@@ -28,7 +29,7 @@ type TestHttpAction = {
 }
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 describe('Convex runtime bridge', () => {

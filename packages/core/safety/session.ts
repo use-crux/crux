@@ -30,8 +30,8 @@
 
 import type { Message } from '../generation/messages'
 import type { TraceMeta } from '../generation/types'
+import { getHooks } from '../runtime/runtime'
 import type { z } from 'zod'
-import { getRuntime } from '../runtime/runtime'
 import type { BoundaryDef } from './boundary'
 import { buildSafetyRegistry, type SafetyBinding } from './registry'
 import type { SafetyTuneOptions } from './tune'
@@ -326,7 +326,7 @@ function disabledGuardrailEntries(bindings: readonly SafetyBinding[]): Guardrail
  * Create the per-call safety session.
  *
  * Reads runtime globals once at creation and
- * snapshots them, so a mid-call `setRuntime()` cannot half-instrument a
+ * snapshots them, so a mid-call `setHooks()` cannot half-instrument a
  * run.
  *
  * @example
@@ -354,9 +354,9 @@ function disabledGuardrailEntries(bindings: readonly SafetyBinding[]): Guardrail
  * ```
  */
 export function createSafety(options: SafetyCallOptions): Safety {
-  // Snapshot runtime state once — a mid-call setRuntime() cannot
+  // Snapshot runtime state once — a mid-call setHooks() cannot
   // half-instrument this run.
-  const runtime = getRuntime()
+  const runtime = getHooks()
 
   const registry = buildSafetyRegistry({
     global: {

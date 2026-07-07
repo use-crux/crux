@@ -1,9 +1,9 @@
 import type { LanguageModelV3Middleware, LanguageModelV3StreamPart, SharedV3ProviderMetadata } from '@ai-sdk/provider'
 import {
   getExecutionContext,
-  getRuntime,
+  getHooks,
   runWithExecutionContext,
-  type CruxRuntime,
+  type CruxHooks,
   type InspectResult,
   type TokenUsage,
 } from '@use-crux/core'
@@ -14,7 +14,7 @@ import { observeAgentToolCall } from './observability'
 import { emitEstimatedToolEnds, cleanStaleStepTimings, recordStepTiming } from './tool-timing'
 import { generateExecTraceId, safeParseJson } from './utils'
 
-type ExecutionHook = NonNullable<CruxRuntime['executionHook']>
+type ExecutionHook = NonNullable<CruxHooks['executionHook']>
 
 interface ToolCallTrace {
   id?: string
@@ -167,13 +167,13 @@ export function createTracingMiddleware(
       const startedAt = Date.now()
       const traceId = generateExecTraceId()
       const ctx = getExecutionContext()
-      const progress = getRuntime().streamProgressHook?.(traceId)
+      const progress = getHooks().streamProgressHook?.(traceId)
       const timingKey = parentResolveTraceId ?? traceId
 
       emitEstimatedToolEnds(params, timingKey)
       cleanStaleStepTimings()
 
-      const streamStartHook = getRuntime().streamStartHook
+      const streamStartHook = getHooks().streamStartHook
       const streamStartSent = !!streamStartHook
       if (streamStartHook) {
         await streamStartHook({

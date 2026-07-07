@@ -7,6 +7,18 @@ import type { RuntimeOutboxItem, RuntimeTimerRecord } from '../../store'
 
 export type MemoryWriteRecorder = () => void
 
+export interface MemoryRuntimeTimerRecord extends RuntimeTimerRecord {
+  readonly settledAt?: Date
+}
+
+export interface MemoryRuntimeWaiter extends RuntimeWaiter {
+  readonly settledAt?: Date
+}
+
+export interface MemoryRuntimeOutboxItem extends RuntimeOutboxItem {
+  readonly confirmedAt?: Date
+}
+
 export interface MemoryRuntimeData {
   work: Map<string, WorkItem>
   snapshots: Map<string, FlowSnapshot>
@@ -14,10 +26,10 @@ export interface MemoryRuntimeData {
   leases: Map<string, Lease>
   readonly events: RuntimeEvent[]
   eventsByDuplicateKey: Map<string, RuntimeEvent>
-  waiters: Map<string, RuntimeWaiter>
-  timers: Map<string, RuntimeTimerRecord>
-  timerDuplicateKeys: Map<string, RuntimeTimerRecord>
-  outbox: Map<string, RuntimeOutboxItem>
+  waiters: Map<string, MemoryRuntimeWaiter>
+  timers: Map<string, MemoryRuntimeTimerRecord>
+  timerDuplicateKeys: Map<string, MemoryRuntimeTimerRecord>
+  outbox: Map<string, MemoryRuntimeOutboxItem>
   idleCounters: Map<string, number>
   nextEventId: number
   nextWaiterId: number

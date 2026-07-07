@@ -14,13 +14,13 @@ import { prompt as makePrompt } from '../../prompt/prompt'
 import { fallback } from '../../generation/fallback'
 import { ValidationExhaustedError } from '../../generation/validation-retry'
 import { appendToolApprovalResponse } from '../../tools/approvals'
-import { resetRuntime } from '../../runtime/runtime'
+import { resetHooks } from '../../runtime/runtime'
 import { boundary, guardrail, SafetyStructuredSyncError } from '../../safety'
 import type { Message } from '../../generation/messages'
 import type { StepDirective } from '../../adapter/executor-types'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 function textPrompt() {

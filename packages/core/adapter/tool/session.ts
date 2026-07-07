@@ -44,7 +44,7 @@ import { applyToolMiddleware, notifyToolApprovalResponses } from '../../tools/mi
 import { findToolApprovalRequests, findToolApprovalDecision, deniedToolModelOutput } from '../../tools/approvals'
 import type { ToolMiddleware } from '../../tools/types'
 import type { ApprovalDeclaration, ToolApprovalMap } from '../../tools/approval-policy'
-import { getRuntime } from '../../runtime/runtime'
+import { getHooks } from '../../runtime/runtime'
 import { getExecutionContext } from '../../runtime/execution-context'
 import { observe } from '../../observability'
 import {
@@ -462,7 +462,7 @@ function normalizeMiddlewareChain(
  * Create the per-call tool-lifecycle session.
  *
  * Reads runtime instrumentation hooks once at creation and snapshots them,
- * so a mid-call `setRuntime()` cannot half-instrument a run.
+ * so a mid-call `setHooks()` cannot half-instrument a run.
  */
 export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycle {
   const transcript: ToolProtocolEvent[] = []
@@ -510,7 +510,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   const settledToolResults = new Map<string, ToolResultEntry>()
   const announcedSkills = new Set<string>()
 
-  // Snapshot runtime hooks once — a mid-call setRuntime() cannot
+  // Snapshot runtime hooks once — a mid-call setHooks() cannot
   // half-instrument this run (same rule as createSafety).
   const now = options.now ?? (() => Date.now())
   const mintToken = options.createApprovalToken ?? defaultCreateApprovalToken

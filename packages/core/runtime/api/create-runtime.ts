@@ -48,6 +48,8 @@ export interface CreateRuntimeOptions<
   readonly verifyWake?: RuntimeKernelOptions['verifyWake']
   /** Lease TTL for wake processing. Defaults to the kernel default. */
   readonly leaseTtlMs?: number
+  /** Extend the wake lease while target code runs. Pass `false` to disable. */
+  readonly leaseExtension?: RuntimeKernelOptions['leaseExtension']
   /** Override whether the composer maintenance loop starts immediately. */
   readonly startMaintenance?: boolean
 }
@@ -115,14 +117,21 @@ export function createRuntime<TStore extends RuntimeStoreAdapter>(
   assertRuntimeCapabilities(options.runtime)
 
   const namespace = options.namespace ?? options.runtime.namespace ?? 'local'
-  const now = options.now ?? (() => new Date())
+  const now = options.now ?? options.runtime.now ?? (() => new Date())
+  const newWorkId =
+    options.newWorkId ??
+    options.runtime.newWorkId ??
+    createDefaultWorkIdGenerator()
   const kernel = createRuntimeKernel({
     store: options.runtime.store,
     targets: options.targets ?? {},
     verifyWake: options.verifyWake,
-    newWorkId: options.newWorkId ?? createDefaultWorkIdGenerator(),
+    newWorkId,
     now,
     leaseTtlMs: options.leaseTtlMs,
+    leaseExtension: options.leaseExtension,
+    retention: options.runtime.retention,
+    redeliveryHorizonMs: options.runtime.capabilities.timers.maxDelayMs,
   })
   const deliver = options.runtime.createWake({
     store: options.runtime.store,

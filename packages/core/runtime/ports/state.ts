@@ -20,6 +20,7 @@ import type {
 } from './ids'
 import type { RuntimeWork } from './work'
 import type { WorkStatus } from '../engine/work'
+import type { RuntimePruneOptions, RuntimePruneResult } from './retention'
 
 /** Flow snapshot shape persisted by runtime-backed flow replay. */
 export interface FlowSnapshot {
@@ -84,8 +85,10 @@ export interface RuntimePendingSuspend {
 
 /** Delivered event metadata recorded for replay to consume later. */
 export interface RuntimeDeliveredSuspend {
-  /** Durable event cursor containing the payload to replay. */
+  /** Durable event cursor that produced the replay payload. */
   readonly eventId: EventCursor
+  /** JSON payload copied from the delivered event for snapshot-only replay. */
+  readonly payload: JsonValue
 }
 
 /** Occurrence-keyed delivered suspend cursors retained across replay barriers. */
@@ -150,8 +153,10 @@ export interface SetWorkPendingOptions extends RuntimeStateReadOptions {
 export interface MarkSnapshotDeliveredOptions extends RuntimeStateReadOptions {
   /** Waiter that won the event/timeout race. */
   readonly waiterId: WaiterId
-  /** Durable event cursor containing the delivered payload. */
+  /** Durable event cursor that produced the delivered payload. */
   readonly eventId: EventCursor
+  /** JSON payload copied into the snapshot for future replay. */
+  readonly payload: JsonValue
 }
 
 /** Bounded work-listing options used by kernel-owned maintenance. */
@@ -230,6 +235,15 @@ export interface RuntimeStatePort {
   listWork(options: ListWorkOptions): Promise<readonly WorkItem[]>
 
   /**
+   * Delete completed, cancelled, and dead-lettered work updated before a cutoff.
+   *
+   * Pending, leased, suspended, and blocked work is never pruned by retention.
+   */
+  pruneTerminalWork(
+    options: RuntimePruneOptions,
+  ): Promise<RuntimePruneResult>
+
+  /**
    * Count work records for operator/devtools status without sampling rows.
    *
    * SQL-style adapters should return exact grouped counts. Bounded platforms may
@@ -271,10 +285,20 @@ export interface RuntimeStatePort {
   putSnapshot(snapshot: FlowSnapshot): Promise<void>
 
   /**
+   * Delete terminal flow snapshots updated before a cutoff.
+   *
+   * Running and suspended snapshots are never pruned by retention.
+   */
+  pruneTerminalSnapshots(
+    options: RuntimePruneOptions,
+  ): Promise<RuntimePruneResult>
+
+  /**
    * Record which durable event delivered a pending suspend point.
    *
    * Called inside the same transaction that fires the waiter and resumes the
-   * owning work item. Replay later reads the event payload by cursor.
+   * owning work item. Replay later reads the copied payload from the snapshot,
+   * so event retention does not affect already-delivered suspends.
    */
   markSnapshotDelivered(
     workId: WorkId,
@@ -295,6 +319,11 @@ export interface RuntimeStatePort {
    * crash can never record one without the other.
    */
   putIdempotencyKey(record: IdempotencyRecord): Promise<void>
+
+  /** Delete completed idempotency markers older than the retention cutoff. */
+  pruneIdempotencyKeys(
+    options: RuntimePruneOptions,
+  ): Promise<RuntimePruneResult>
 
   /**
    * Increment a scoped-idle counter and return the new count.

@@ -1,7 +1,7 @@
 import type { z } from 'zod'
 import type { ContextEntry, Prompt } from '@use-crux/core'
 import type { SkillActivationSession } from '@use-crux/core/skill'
-import { getRuntime } from '@use-crux/core'
+import { getHooks } from '@use-crux/core'
 import { captureSource } from '@use-crux/core/project-index'
 import type { AgentResolveOptions, AgentResolveResult } from './types'
 
@@ -50,7 +50,7 @@ export async function resolveAgentInstructions<
     inspect.tools = [...new Set([...existing, ...optsRecord.tools])]
   }
 
-  const hookResult = await getRuntime().resolveHook?.({
+  const hookResult = await getHooks().resolveHook?.({
     promptId: prompt.id,
     input,
     inspect,

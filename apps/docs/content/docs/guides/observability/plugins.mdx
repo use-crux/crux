@@ -32,7 +32,7 @@ config({
 })
 ```
 
-Plugins are processed in order. Each plugin's `install()` receives the cumulative runtime from all prior plugins.
+Plugins are processed in order. Each plugin's `install()` receives the cumulative hook state from all prior plugins.
 
 <Callout type="info">
   When you explicitly set `devtools.serverUrl` and no `observability` transport is configured, Crux installs the local
@@ -88,7 +88,7 @@ import type { CruxPlugin } from '@use-crux/core'
 export function createMyPlugin(options: { endpoint: string }): CruxPlugin {
   return {
     name: 'my-tracer',
-    install(runtime) {
+    install(hooks) {
       return {
         observability subscribers: {
           tool.call start records: (e) => {
@@ -109,11 +109,11 @@ export function createMyPlugin(options: { endpoint: string }): CruxPlugin {
 
 ### What `install()` receives
 
-The `runtime` parameter is a frozen snapshot of the current `CruxRuntime` — all hooks installed by previous plugins. You don't need to manually call previous hooks; the framework composes them for you.
+The `hooks` parameter is a frozen snapshot of the current `CruxHooks` — all hooks installed by previous plugins. You don't need to manually call previous hooks; the framework composes them for you.
 
 ### What `install()` returns
 
-Return a `CruxPluginResult` — any subset of `CruxRuntime` fields plus an optional `dispose` function:
+Return a `CruxPluginResult` — any subset of `CruxHooks` fields plus an optional `dispose` function:
 
 | Field                    | Type                           | Description                                      |
 | ------------------------ | ------------------------------ | ------------------------------------------------ |

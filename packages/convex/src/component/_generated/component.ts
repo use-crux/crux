@@ -67,6 +67,15 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     runtime: {
+      composites: {
+        run: FunctionReference<
+          "mutation",
+          "internal",
+          { input: any; kind: string },
+          any,
+          Name
+        >;
+      };
       events: {
         append: FunctionReference<
           "mutation",
@@ -132,6 +141,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           "mutation",
           "internal",
           { limit?: number; namespace: string; state?: string },
+          any,
+          Name
+        >;
+        listByWork: FunctionReference<
+          "mutation",
+          "internal",
+          { limit?: number; namespace?: string; state?: string; workId: string },
           any,
           Name
         >;
@@ -225,6 +241,7 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           {
             eventId: string;
             namespace: string;
+            payload: unknown;
             waiterId: string;
             workId: string;
           },

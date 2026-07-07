@@ -8,13 +8,13 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 import { expectBalancedGraph } from './helpers/expect-balanced-graph'
 
 describe('generation observability', () => {
   afterEach(() => {
     resetObservabilityRuntime()
-    resetRuntime()
+    resetHooks()
   })
 
     it('emits an implicit run, generation span, artifacts, edges, and usage for generate', async () => {
@@ -73,7 +73,7 @@ describe('generation observability', () => {
     it('omits generation input and output previews when capture policy disables them', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    updateRuntime({
+    updateHooks({
       observabilityCapture: {
         recordInputs: false,
         recordOutputs: false,

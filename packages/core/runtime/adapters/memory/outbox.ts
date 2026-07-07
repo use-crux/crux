@@ -1,6 +1,11 @@
 import type { WakeEnvelope } from '../../engine/envelope'
 import type { RuntimeOutboxItem, RuntimeOutboxPort } from '../../store'
-import type { MemoryRuntimeData, MemoryWriteRecorder } from './data'
+import type {
+  MemoryRuntimeData,
+  MemoryRuntimeOutboxItem,
+  MemoryWriteRecorder,
+} from './data'
+import { matchesPruneNamespace, olderThan, pruneMapValues } from './retention'
 
 export interface MemoryOutboxFaults {
   crashBeforeConfirm: boolean
@@ -24,7 +29,7 @@ export function createMemoryOutboxPort(
       if (existing) return cloneOutboxItem(existing)
 
       recordWrite?.()
-      const stored: RuntimeOutboxItem = Object.freeze({
+      const stored: MemoryRuntimeOutboxItem = Object.freeze({
         outboxId: `outbox_${data.nextOutboxId}`,
         namespace: envelope.ns,
         envelope: cloneWakeEnvelope(envelope),
@@ -78,6 +83,18 @@ export function createMemoryOutboxPort(
       return rows.map((item) => cloneOutboxItem(item))
     },
 
+    async listByWork(workId, options = {}): Promise<readonly RuntimeOutboxItem[]> {
+      const rows = [...data.outbox.values()]
+        .filter(
+          (item) =>
+            item.envelope.workId === workId &&
+            (options.namespace === undefined || item.namespace === options.namespace) &&
+            (options.state === undefined || item.state === options.state),
+        )
+        .slice(0, options.limit)
+      return rows.map((item) => cloneOutboxItem(item))
+    },
+
     async confirm(outboxId: string): Promise<void> {
       if (faults.crashBeforeConfirm) {
         faults.crashBeforeConfirm = false
@@ -93,6 +110,7 @@ export function createMemoryOutboxPort(
           envelope: cloneWakeEnvelope(item.envelope),
           state: 'confirmed',
           nextAttemptAt: new Date(item.nextAttemptAt),
+          confirmedAt: new Date(),
         }),
       )
     },
@@ -111,10 +129,37 @@ export function createMemoryOutboxPort(
         }),
       )
     },
+
+    async prune(options) {
+      const result = pruneMapValues(
+        data.outbox,
+        options,
+        (item) =>
+          matchesPruneNamespace(item, options.namespace) &&
+          item.state === 'confirmed' &&
+          olderThan(item.confirmedAt, options.before),
+      )
+      if (result.removed > 0) recordWrite?.()
+      return result
+    },
   }
 }
 
 export function cloneOutboxItem(item: RuntimeOutboxItem): RuntimeOutboxItem {
+  const stored = cloneStoredOutboxItem(item)
+  return Object.freeze({
+    outboxId: stored.outboxId,
+    namespace: stored.namespace,
+    envelope: stored.envelope,
+    state: stored.state,
+    attempts: stored.attempts,
+    nextAttemptAt: stored.nextAttemptAt,
+  })
+}
+
+function cloneStoredOutboxItem(
+  item: RuntimeOutboxItem | MemoryRuntimeOutboxItem,
+): MemoryRuntimeOutboxItem {
   return Object.freeze({
     outboxId: item.outboxId,
     namespace: item.namespace,
@@ -122,6 +167,10 @@ export function cloneOutboxItem(item: RuntimeOutboxItem): RuntimeOutboxItem {
     state: item.state,
     attempts: item.attempts,
     nextAttemptAt: new Date(item.nextAttemptAt),
+    confirmedAt:
+      'confirmedAt' in item && item.confirmedAt
+        ? new Date(item.confirmedAt)
+        : undefined,
   })
 }
 

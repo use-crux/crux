@@ -11,6 +11,7 @@
 
 import type { JsonValue } from '../../storage'
 import type { EventCursor } from './ids'
+import type { RuntimePruneOptions, RuntimePruneResult } from './retention'
 
 /** Event input accepted by {@link DurableEventPort.append}. */
 export interface NewRuntimeEvent {
@@ -76,4 +77,12 @@ export interface DurableEventPort {
    * order for a namespace must be stable enough for polling and replay.
    */
   read(options: ReadEventsOptions): Promise<ReadEventsResult>
+
+  /**
+   * Delete a bounded batch of events appended before the retention cutoff.
+   *
+   * Event replay reads delivered payloads from snapshots, so retained events
+   * are for future waiter matching and diagnostics only.
+   */
+  prune(options: RuntimePruneOptions): Promise<RuntimePruneResult>
 }

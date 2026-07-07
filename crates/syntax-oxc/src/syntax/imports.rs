@@ -25,18 +25,39 @@ pub fn collect_import_records(
                 .as_ref()
                 .into_iter()
                 .flatten()
-                .map(move |specifier| {
+                .map(|specifier| {
                     let (local_name, imported_name) = import_specifier_names(specifier);
                     StaticImportRecord {
                         local_name,
                         imported_name,
                         module_specifier: module_specifier.clone(),
+                        import_kind: Some(import_specifier_kind(import, specifier).to_string()),
                         resolved_file: resolved_file.clone(),
                         source: view.location_for_span(&**import),
                     }
                 })
+                .collect::<Vec<_>>()
         })
         .collect()
+}
+
+fn import_specifier_kind(
+    import: &ImportDeclaration<'_>,
+    specifier: &ImportDeclarationSpecifier<'_>,
+) -> &'static str {
+    if import.import_kind == ImportOrExportKind::Type {
+        return "type";
+    }
+    match specifier {
+        ImportDeclarationSpecifier::ImportSpecifier(specifier)
+            if specifier.import_kind == ImportOrExportKind::Type =>
+        {
+            "type"
+        }
+        ImportDeclarationSpecifier::ImportDefaultSpecifier(_)
+        | ImportDeclarationSpecifier::ImportNamespaceSpecifier(_)
+        | ImportDeclarationSpecifier::ImportSpecifier(_) => "value",
+    }
 }
 
 fn import_specifier_names(specifier: &ImportDeclarationSpecifier<'_>) -> (String, String) {

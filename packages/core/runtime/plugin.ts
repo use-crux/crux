@@ -1,7 +1,7 @@
 /**
- * Plugin system for composable runtime hook installation.
+ * Plugin system for composable hook installation.
  *
- * Plugins receive the current runtime state and return a partial patch that is
+ * Plugins receive the current hook state and return a partial patch that is
  * merged using fan-out semantics for per-call hooks and layered chaining for
  * middleware (new wraps old). The merge mechanics live in
  * `./merge-runtime`; this module owns the plugin contract and the ordered
@@ -10,12 +10,12 @@
  * @module
  */
 
-import type { CruxRuntime } from './runtime'
-import { mergeRuntime } from './merge-runtime'
+import type { CruxHooks } from './runtime'
+import { mergeHooks } from './merge-runtime'
 
 // Re-export the merge entry point so `@use-crux/core` and intra-package callers
 // keep a single `plugin` import site for plugin composition.
-export { mergeRuntime } from './merge-runtime'
+export { mergeHooks } from './merge-runtime'
 
 // ─────────────────────────────────────────────────────────────────
 // Plugin interface
@@ -24,24 +24,24 @@ export { mergeRuntime } from './merge-runtime'
 /**
  * Result returned by a plugin's `install()` method.
  *
- * Contains partial runtime fields to merge plus an optional `dispose`
+ * Contains partial hook fields to merge plus an optional `dispose`
  * function for cleanup when the registry is torn down.
  */
-export interface CruxPluginResult extends Partial<CruxRuntime> {
+export interface CruxPluginResult extends Partial<CruxHooks> {
   /**
    * Called when the plugin is uninstalled.
    *
    * Return a promise when cleanup must drain asynchronous resources, such as
-   * telemetry transports, before restoring the previous runtime layer.
+ * telemetry transports, before restoring the previous hook layer.
    */
   dispose?: () => void | Promise<void>
 }
 
 /**
- * A composable plugin that hooks into the Crux runtime.
+ * A composable plugin that hooks into Crux.
  *
  * Plugins are installed in order via `config({ plugins: [...] })`.
- * Each plugin's `install()` receives the cumulative runtime from all
+ * Each plugin's `install()` receives the cumulative hooks from all
  * prior plugins, enabling layered composition.
  *
  * @example
@@ -50,7 +50,7 @@ export interface CruxPluginResult extends Partial<CruxRuntime> {
  *
  * const myPlugin: CruxPlugin = {
  *   name: 'my-tracer',
- *   install(runtime) {
+ *   install(hooks) {
  *     const unsubscribe = subscribeObservability((record) => console.log(record.type))
  *     return { dispose: unsubscribe }
  *   },
@@ -61,65 +61,65 @@ export interface CruxPlugin {
   /** Unique plugin name for debugging and error messages. */
   readonly name: string
   /**
-   * Install the plugin. Receives the cumulative runtime. Returns runtime
+   * Install the plugin. Receives the cumulative hook state. Returns hook
    * fields to merge.
    *
-   * @param runtime - Frozen snapshot of the current cumulative runtime.
-   * @returns Partial runtime patch with optional dispose function.
+   * @param hooks - Frozen snapshot of the current cumulative hook state.
+   * @returns Partial hook patch with optional dispose function.
    */
-  install(runtime: Readonly<CruxRuntime>): CruxPluginResult
+  install(hooks: Readonly<CruxHooks>): CruxPluginResult
 }
 
 // ─────────────────────────────────────────────────────────────────
 // applyPlugins
 // ─────────────────────────────────────────────────────────────────
 
-/** Result of applying plugins — the merged runtime and a combined dispose function. */
+/** Result of applying plugins — the merged hooks and a combined dispose function. */
 export interface ApplyPluginsResult {
-  /** The merged runtime after all plugins have been applied. */
-  runtime: CruxRuntime
+  /** The merged hooks after all plugins have been applied. */
+  hooks: CruxHooks
   /** Dispose all plugins in reverse order. */
   dispose: () => Promise<void>
 }
 
 /**
- * Apply an ordered list of plugins to an initial runtime.
+ * Apply an ordered list of plugins to an initial hook state.
  *
- * Each plugin's `install()` receives the cumulative runtime from all
- * prior plugins. Results are merged using {@link mergeRuntime}.
+ * Each plugin's `install()` receives the cumulative hook state from all
+ * prior plugins. Results are merged using {@link mergeHooks}.
  * Dispose functions are collected and called in reverse order.
  *
  * @param plugins - Ordered list of plugins to apply.
- * @param initialRuntime - The base runtime before any plugins.
- * @returns The final merged runtime and a combined dispose function.
+ * @param initialHooks - The base hook state before any plugins.
+ * @returns The final merged hooks and a combined dispose function.
  *
  * @example
  * ```ts
- * const { runtime, dispose } = applyPlugins(
+ * const { hooks, dispose } = applyPlugins(
  *   [withDevtools({ serverUrl }), withTelemetry({ serviceName: 'app' })],
- *   getRuntime(),
+ *   getHooks(),
  * )
- * setRuntime(runtime)
+ * setHooks(hooks)
  * // later: dispose()
  * ```
  */
 export function applyPlugins(
   plugins: ReadonlyArray<CruxPlugin>,
-  initialRuntime: CruxRuntime,
+  initialHooks: CruxHooks,
 ): ApplyPluginsResult {
   const disposeFns: Array<() => void | Promise<void>> = []
-  let runtime = { ...initialRuntime }
+  let hooks = { ...initialHooks }
 
   for (const plugin of plugins) {
-    const { dispose, ...patch } = plugin.install(Object.freeze({ ...runtime }))
-    runtime = mergeRuntime(runtime, patch)
+    const { dispose, ...patch } = plugin.install(Object.freeze({ ...hooks }))
+    hooks = mergeHooks(hooks, patch)
     if (dispose) {
       disposeFns.push(dispose)
     }
   }
 
   return {
-    runtime,
+    hooks,
     dispose() {
       // Reverse order: last installed → first disposed
       const pending: Promise<void>[] = []

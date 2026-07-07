@@ -123,7 +123,7 @@ export function withTelemetry(options?: TelemetryOptions): CruxPlugin {
 
   return {
     name: 'crux:otel',
-    install(runtime) {
+    install(_hooks) {
       if (telemetryInstalled) {
         warnAboutDoubleInstall()
         return {

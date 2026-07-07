@@ -15,7 +15,7 @@ import {
   normalizeStopConditions,
   type StopCondition,
 } from "../../generation/tool-control";
-import { getRuntime } from "../../runtime/runtime";
+import { getHooks } from "../../runtime/runtime";
 import { ValidationExhaustedError } from "../../generation/validation-retry";
 import { createSafety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";

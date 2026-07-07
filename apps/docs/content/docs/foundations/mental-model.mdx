@@ -145,7 +145,7 @@ Every interesting moment in the pipeline can emit an event:
 - `onBlackboardUpdate`, `onHandoffPrepare`, `onDelegateStart`, `onDelegateComplete`
 - `onFlowStep`, `onFlowSuspend`, `onFlowResume`
 
-Plugins install themselves into these hooks via `mergeRuntime()`. The same event fans out to all installed plugins — OTel spans, custom telemetry, policy hooks — without primitives ever knowing they're being watched. Devtools tracing uses the canonical `@use-crux/core/observability` graph transport so the Go backend owns tree and relation assembly for both the web UI and TUI.
+Plugins install themselves into these hooks via `mergeHooks()`. The same event fans out to all installed plugins — OTel spans, custom telemetry, policy hooks — without primitives ever knowing they're being watched. Devtools tracing uses the canonical `@use-crux/core/observability` graph transport so the Go backend owns tree and relation assembly for both the web UI and TUI.
 
 ```ts
 import { config } from '@use-crux/core'

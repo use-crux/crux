@@ -42,7 +42,7 @@ export async function flushScheduledEffectsInTransaction(
         idleScope: effect.idleScope,
         now: now(),
       })
-      await tx.outbox.put(wakeEnvelopeForWork(work))
+      await tx.outbox.put(wakeEnvelopeForWork(work), { deliverAt: now() })
       records.push({ key: effect.key, workId: work.workId })
       continue
     }

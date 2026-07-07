@@ -14,7 +14,7 @@ import type { TokenizerFn } from '../../shared/tokenizer'
 import type { ConfigureOptions, PromptRegistry } from '../configure'
 import type { CruxConfig } from '../config-types'
 import type { ApplyPluginsResult, CruxPlugin } from '../plugin'
-import type { CruxRuntime } from '../runtime'
+import type { CruxHooks, HooksLayerToken } from '../runtime'
 import type { Crux, RuntimeConfigCruxFactory } from './crux'
 
 /**
@@ -36,14 +36,18 @@ export interface RuntimeConfigTransactionInput {
   readonly env?: RuntimeConfigEnvironment
 }
 
-/** Port for reading and mutating the global Crux runtime store. */
-export interface RuntimeStorePort {
-  /** Read the current runtime snapshot. */
-  get(): Readonly<CruxRuntime>
-  /** Replace the runtime snapshot. */
-  set(runtime: CruxRuntime): void
-  /** Merge a partial runtime patch into the current snapshot. */
-  update(patch: Partial<CruxRuntime>): void
+/** Port for reading and mutating the global Crux hooks store. */
+export interface HooksStorePort {
+  /** Read the current hooks snapshot. */
+  get(): Readonly<CruxHooks>
+  /** Replace the hooks snapshot. */
+  set(hooks: CruxHooks): void
+  /** Merge a partial hooks patch into the current snapshot. */
+  update(patch: Partial<CruxHooks>): void
+  /** Install a hooks layer and return an opaque restore token. */
+  pushLayer(patch: Partial<CruxHooks>): HooksLayerToken
+  /** Restore a previously installed hooks layer. */
+  restoreLayer(token: HooksLayerToken): void
 }
 
 /** Port for configuring canonical observability transport state. */
@@ -68,8 +72,8 @@ export interface TokenizerPort {
 
 /** Port for ordered plugin installation. */
 export interface PluginInstallerPort {
-  /** Install plugins against the cumulative runtime snapshot. */
-  apply(plugins: ReadonlyArray<CruxPlugin>, runtime: CruxRuntime): ApplyPluginsResult
+  /** Install plugins against the cumulative hook snapshot. */
+  apply(plugins: ReadonlyArray<CruxPlugin>, hooks: CruxHooks): ApplyPluginsResult
 }
 
 /** Diagnostic sink for lifecycle events that should not throw. */
@@ -85,7 +89,7 @@ export interface RuntimeConfigDiagnostics {
  * fakes to verify ordering without observing global state directly.
  */
 export interface RuntimeConfigTransactionPorts {
-  readonly runtime?: RuntimeStorePort
+  readonly hooks?: HooksStorePort
   readonly observability?: Partial<ObservabilityConfigPort>
   readonly bridge?: RuntimeBridgePort
   readonly tokenizer?: TokenizerPort
@@ -115,8 +119,8 @@ export interface RuntimeConfigPlan {
   readonly inert: boolean
   /** Frozen shallow copy of the user config returned on the Crux instance. */
   readonly config: Readonly<CruxConfig>
-  /** Runtime fields installed before plugins and registry construction. */
-  readonly runtimePatch: Partial<CruxRuntime>
+  /** Hook fields installed before plugins and registry construction. */
+  readonly hooksPatch: Partial<CruxHooks>
   /** Whether config owns active observability state and must restore it later. */
   readonly ownsObservability: boolean
   /** Observability installation action for the effectful phase. */
@@ -125,7 +129,7 @@ export interface RuntimeConfigPlan {
   readonly configureOptions: ConfigureOptions
   /** Runtime bridge input derived from config and persistence. */
   readonly bridgeOptions: RuntimeBridgeManifestInput
-  /** Config plugins installed after the runtime patch. */
+  /** Config plugins installed after the hook patch. */
   readonly plugins: readonly CruxPlugin[]
   /** Optional tokenizer installed before registry construction. */
   readonly tokenizer?: TokenizerFn
@@ -147,8 +151,8 @@ export interface RuntimeConfigTransaction {
 
 /** Installed runtime config transaction with explicit teardown hooks. */
 export interface RuntimeConfigInstallation {
-  /** Runtime snapshot after config runtime patching and plugin installation. */
-  readonly runtime: Readonly<CruxRuntime>
+  /** Hook snapshot after config hook patching and plugin installation. */
+  readonly hooks: Readonly<CruxHooks>
   /** Restore config-owned effects such as plugins and observability. */
   restore(): void
   /** Connect the devtools runtime bridge for a prompt registry. */

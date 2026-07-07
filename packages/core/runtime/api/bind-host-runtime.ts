@@ -43,6 +43,8 @@ export interface HostRuntimeBinding<
   readonly verifyWake?: RuntimeKernelOptions['verifyWake']
   /** Lease TTL for wake processing. Defaults to the kernel default. */
   readonly leaseTtlMs?: number
+  /** Extend the wake lease while target code runs. Pass `false` for timerless hosts. */
+  readonly leaseExtension?: RuntimeKernelOptions['leaseExtension']
   /** Override whether the automatic maintenance loop starts immediately. */
   readonly startMaintenance?: boolean
 }
@@ -65,6 +67,7 @@ export function bindHostRuntime<TStore extends RuntimeStoreAdapter>(
     store: binding.store,
     capabilities: definition.capabilities,
     namespace: binding.namespace ?? definition.namespace,
+    ...(definition.retention ? { retention: definition.retention } : {}),
     ...(binding.verifyWakeRequest
       ? { verifyWakeRequest: binding.verifyWakeRequest }
       : {}),
@@ -78,6 +81,9 @@ export function bindHostRuntime<TStore extends RuntimeStoreAdapter>(
     ...(binding.now ? { now: binding.now } : {}),
     ...(binding.verifyWake ? { verifyWake: binding.verifyWake } : {}),
     ...(binding.leaseTtlMs ? { leaseTtlMs: binding.leaseTtlMs } : {}),
+    ...(binding.leaseExtension !== undefined
+      ? { leaseExtension: binding.leaseExtension }
+      : {}),
     ...(binding.startMaintenance !== undefined
       ? { startMaintenance: binding.startMaintenance }
       : {}),

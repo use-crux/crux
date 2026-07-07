@@ -120,8 +120,8 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── config.ts / config-types.ts   config() + CruxConfig shape
 │   ├── config-transaction/   Internal runtime config transaction: plan, ports, install, Crux object factory
 │   ├── configure.ts / configure-registry.ts   configure() registry build + global security flags
-│   ├── runtime.ts      CruxRuntime — global hooks/reporters (getRuntime/setRuntime/updateRuntime/resetRuntime)
-│   ├── plugin.ts / merge-runtime.ts   CruxPlugin, applyPlugins(), mergeRuntime() layered composition
+│   ├── runtime.ts      CruxHooks — global hooks/reporters (getHooks/setHooks/updateHooks/resetHooks)
+│   ├── plugin.ts / merge-runtime.ts   CruxPlugin, applyPlugins(), mergeHooks() layered composition
 │   ├── middleware.ts / instrumentation-hooks.ts   per-call hook function types + the graph-record subscribers contract
 │   ├── execution-context.ts   session/execution context helpers
 │   └── types.ts        Runtime middleware contracts (PromptMiddleware, PromptMiddlewareArgs, MiddlewareResult)
@@ -188,7 +188,10 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── lint/
 │   └── index.ts        Authored-graph lint contract types and schemas
 ├── runtime-bridge/
-│   ├── index.ts        Runtime bridge command-plane schemas, manifest helpers, and client helpers
+│   ├── index.ts        Curated barrel for runtime bridge protocol, client, and command helpers
+│   ├── protocol.ts     Runtime bridge schemas and inferred command-plane types
+│   ├── client.ts       Manifest derivation, bridge URL helpers, and WebSocket client lifecycle
+│   ├── commands.ts     Runtime bridge command execution for inspectable resources
 │   └── resources.ts    Inspectable resource registration for memory, blackboards, stores, and future runtime resources
 ├── embedding/
 │   └── index.ts        embedding() — dense/sparse embedding primitive with batching, governance, and instrumentation
@@ -261,7 +264,7 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── safety/
 │   ├── index.ts        Curated @use-crux/core/safety surface: authoring (guardrail/constraint), the Safety session, createSafetyPlugin, errors, evaluate helpers
 │   ├── session.ts      createSafety() — THE consumption entry point (one session per generate/stream call). Owns three-scope merge (call > prompt > global, reads runtime globals + hooks once and snapshots), guarded-content selection with redaction write-back (guardInput), constraints-then-output-guards ordering with injectable corrective-feedback formatter (finalizeOutput), suspension policy (output safety skipped on tool-approval suspension), audit accumulation + TraceMeta stamping, protocol transcript for the parity suite, and the streaming sub-protocol (openStream: per-chunk holds/transforms, buffer:'full' flush validation, report-only constraints at finish)
-│   ├── plugin.ts       createSafetyPlugin({ guardrails, constraints }) — CruxPlugin registering global policies (mergeRuntime concats so multiple plugins compose)
+│   ├── plugin.ts       createSafetyPlugin({ guardrails, constraints }) — CruxPlugin registering global policies (mergeHooks concats so multiple plugins compose)
 │   └── guardrail/
 │       ├── index.ts        Authoring barrel: guardrail, isGuardrail, evaluateGuardrail, GuardrailBlockedError (execution is session-only)
 │       ├── types.ts        GuardrailContext, phase-conditional result types (InputGuardrailResult, OutputGuardrailResult, ChunkGuardrailResult), GuardrailStreamConfig, GuardrailAudit, optional category (risk-type aggregation)
@@ -464,7 +467,7 @@ The entry-resolution half of the pipeline lives in `resolver/` (use-crux/crux#29
 - **`resolver/lower.ts`** — `lowerEntry(entry, index)` turns each member of the `ContextEntry` union (context, `when()` wrapper, `match()` spec, skill, memory, blackboard, private inject-shaped primitives, `contributor()` entry, falsy) into an internal `LoweredContributor` answering up to four questions: `gate` (sync include/exclude with reason + observability facts), `children` (sync nesting), `contribute` (async, the only I/O point), and — at definition time — `collectSchemaContributions()` (the "shape" question for input-schema merging). This is the only module that knows the union; family classification lives here too and reads `Context.family`, declared through internal helpers by primitive factories — memory, blackboard, retriever/grounding, handoff, and the skill surface (no id sniffing).
 - **`resolver/driver.ts`** — `resolveUse()` walks lowered contributors: gate facts emit first, children merge before the entry's own contribution, `Contribution.use` re-enters the pipeline with branch-local indices, tool collisions throw with the owning entry attributed, and all `context.contribution` artifact emission happens at exactly two sites (gate steps + contribution facts).
 - **`resolver/skills.ts`** — the cross-entry collector for skills. The shared pass calls it from the post-merge phase before either `PromptResolution.args` or `PromptResolution.inspect()` is projected, so skill indexing, lazy registry fetches, and loaded-skill contexts cannot drift between resolve and inspect. Registry fetch, skill-index generation, and activation-session creation all flow through the `SkillSourcePort` (no direct skill-module imports in the pass). Resolve-mode skill tools are bound to a `SkillActivationSession` and the resolved prompt carries `_skillSession` as the explicit activation boundary.
-- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports (pure contracts): `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + index + activation-session creation), `ContextCachePort`, `ClockPort`, `TokenizerPort` (every reported token count flows through it, so a deterministic counter pins budget behavior), `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. The production adapters live in `resolver/default-ports.ts`; `withDefaultResolverPorts()` wraps the pre-existing globals lazily, so `setRuntime()` / `configureObservability()` / `setTokenizer()` keep their install-takes-effect-immediately semantics. `compilePrompt(config, { ports })` binds the pipeline to explicit ports; in-memory fakes for every port — plus the one-call `createResolverFakes()` bundle — ship from `@use-crux/core` (`resolver/fakes.ts`).
+- **`resolver/ports.ts`** — the pipeline's ambient capabilities as injectable ports (pure contracts): `ObservabilityPort` (spans + artifact/edge choreography), `SkillSourcePort` (registry fetch + index + activation-session creation), `ContextCachePort`, `ClockPort`, `TokenizerPort` (every reported token count flows through it, so a deterministic counter pins budget behavior), `policy()` (auto-escape / security warnings), `DiagnosticsPort`, `InstrumentationPort`. The production adapters live in `resolver/default-ports.ts`; `withDefaultResolverPorts()` wraps the pre-existing globals lazily, so `setHooks()` / `configureObservability()` / `setTokenizer()` keep their install-takes-effect-immediately semantics. `compilePrompt(config, { ports })` binds the pipeline to explicit ports; in-memory fakes for every port — plus the one-call `createResolverFakes()` bundle — ship from `@use-crux/core` (`resolver/fakes.ts`).
 - Contributor-internal I/O (memory stores, retriever indexes, blackboard stores) deliberately has **no pipeline port** — those factories take their dependencies explicitly (`memory({ store })`), which is the correct seam.
 - The lowered `Contributor` contract types are exported from `@use-crux/core` as advanced API for adapter and primitive authors. The lowering, driver, and schema collection functions stay internal to the compiled prompt boundary. The everyday authoring surface is `contributor()` — a first-class `use:` entry with `when` gating, nested `use`, and full-channel contributions through the same channels as other entries.
 - Memory entries contribute their context (reported with family `memory`) and a memory binding; memory tools are opt-in via `memory.asTools()` and are neither merged nor reported as injected. The legacy sync `flattenContextEntries()` pass has been removed — the driver is the only gating code path.
@@ -481,7 +484,7 @@ The internal system composer handles the token budget:
 
 The observability graph mirrors the same state. Resolved context artifacts use the canonical `context.contribution` artifact kind and carry source, state, inclusion, priority, token, cache, injection, and freshness metadata. Prompt resolution emits a redacted `prompt.input` preview under the canonical `input` artifact kind; it contains top-level provided/schema/required/missing/unexpected keys and validation status, but never input values. Segmented system content preserves `segments: { text, dynamic, source?, observedAt?, sourceVersion? }[]` plus `staticTokens` / `dynamicTokens` on contribution previews, prompt inspect parts, system blocks, and budget-dropped previews. Inspect parts and contribution previews also report `servedFrom`, `resolvedAt`, and memo-hit `age`; part-level `observedAt` is the oldest segment observation time, and `sourceVersion` is the first segment version. When a prompt or context function returns a plain string, direct interpolation of unambiguous primitive input values is inferred into static/dynamic segments; transformed values still require explicit `{ segments }` for perfect provenance. Predicate failures and unmatched `match()` branches emit `state: "checked-not-included"` with `reason` and `branch` when available. Budgeted resolution emits a `prompt.budget` artifact containing `usedTokens`, `totalTokens`, dropped contribution payloads, and `prefixOverflow: true` when the stable provider-cache prefix is larger than the requested budget, then generation spans link that artifact as consumed. Generation `messages` artifacts include request tool names. The Go RunDetail projection composes these records into `RunDetailNode.request`, using exact generation requests for generation nodes, inherited nearest-ancestor requests for nested framework agent steps that only emit output-shaped message artifacts, and a final-descendant representative with `turns[]` for run/stream/agent/flow/composition aggregators. Contribution artifacts referenced from `messages.systemBlocks[].artifactId` are recovered through the graph index even when the producer span, not the generation span, owns the artifact. For framework agents whose prompt resolves under `agent.run` before the model stream, the projection also collects context contributions and prompt budgets produced under the nearest request scope before the generation starts; later child tool/flow generations are outside that time window. Convex Agent `thread-context` message artifacts are preferred over `call-args` when both are available, their prior-turn fields remain on `request.messages`, and inherited agent steps add earlier sibling generation outputs as `previousStepMessages`. Base-prompt provenance uses the concrete generation `promptId` where known, falling back to `messages.system` / `messages.prompt` for raw request fields. Model provenance is projected into `request.modelSummary`, per-turn `model` / `provider`, and flattened `RunDetail.rows[]`, preferring output artifact `meta.actualModelId` over selected/requested model attributes. Convex Agent wrapper spans emit the configured Agent `languageModel` on the aggregate stream/call and each AI SDK step span so framework turns are modelled even when no nested Crux generation exists; child tool/flow generations keep their own model provenance. UI clients should render that projection instead of walking descendant artifacts.
 
-The tokenizer is pluggable via `setTokenizer()` or `configure({ tokenizer })` for the ambient runtime; inside the pipeline every token count flows through the `TokenizerPort`, whose default adapter wraps that global. The default estimates tokens as `Math.ceil(text.length / 4)`. Tests pass a deterministic counter (e.g. `staticTokenizer()`, word count) through the port to pin budget decisions without depending on the estimate.
+The tokenizer is pluggable via `setTokenizer()` or `config({ generation: { tokenizer } })` for the ambient runtime; inside the pipeline every token count flows through the `TokenizerPort`, whose default adapter wraps that global. The default estimates tokens as `Math.ceil(text.length / 4)`. Tests pass a deterministic counter (e.g. `staticTokenizer()`, word count) through the port to pin budget decisions without depending on the estimate.
 
 ### Context Resolver Memoization
 
@@ -673,15 +676,25 @@ Corpus and indexing observability write the canonical graph directly. `indexer()
 
 ## Durable Runtime Engine
 
-The durable Runtime Engine lives under `runtime/` and is provider-agnostic. Public users compose it through `@use-crux/core/runtime` (`node()`, `serverless()`, `createRuntimeHandler()`, `task()`, diagnostics, wake envelopes, and adapter conformance helpers). Provider packages such as `@use-crux/postgres`, `@use-crux/upstash`, and `@use-crux/convex` depend on this surface; core never imports those adapters.
+The durable Runtime Engine lives under `runtime/` and is provider-agnostic. Public users compose it through `@use-crux/core/runtime` (`node()`, `serverless()`, `createRuntimeHandler()`, `durableTask()`, diagnostics, wake envelopes, and adapter conformance helpers). Provider packages such as `@use-crux/postgres`, `@use-crux/upstash`, and `@use-crux/convex` depend on this surface; core never imports those adapters. The Runtime Engine and store-adapter contract are stable beta while Crux remains pre-1.0.
 
 Correctness is centralized in the kernel modules under `runtime/engine/`: task enqueue, suspension/event delivery, timer firing, retry/dead-letter policy, operator retry, cancellation, outbox dispatch, idempotency keys, and wake execution. Stores implement narrow ports only (`state`, `events`, `waiters`, `timers`, `outbox`, `leases`, idle counters, and `transact()`); adapters must not duplicate policy decisions such as retry timing, waiter timeout behavior, or terminal-state handling.
 
-Flow replay remains in `flow/` and bridges to the Runtime Engine through explicit snapshot conversion helpers. Object-bound flows are a permanent baseline mode; runtime-backed execution persists snapshots, pending suspends, delivered suspend payloads, and scheduled effects through the same replay model instead of introducing a second flow interpreter.
+Kernel-owned multi-write commits are named composites in `runtime/engine/composites.ts`. The default runner wraps each composite body in `RuntimeStoreAdapter.transact()`. Substrate-native adapters may override `RuntimeStoreAdapter.runComposite(kind, input)` when their atomic boundary must live outside the normal process, as Convex does by invoking one component mutation that imports the shared core composite body registry. Composite names are part of the adapter contract, but the policy and state-machine code stay in core.
 
-Generated and hand-written wake entries meet the kernel through `createRuntimeHandler({ targets })`, which normalizes exported flow/task targets, verifies HTTP wake requests before envelope decode, and returns fetch-compatible `GET`/`POST` handlers. Host-bound adapters such as Convex use `bindHostRuntime()` to supply request-scoped store and wake bindings while still delegating to `createRuntime()` and the same kernel path.
+Flow replay remains in `flow/` and bridges to the Runtime Engine through explicit snapshot conversion helpers. Object-bound flows are a permanent baseline mode; runtime-backed execution persists snapshots, pending suspends, delivered suspend payloads, and scheduled effects through the same replay model instead of introducing a second flow interpreter. When an event wins a waiter race, the kernel copies that event payload into the snapshot's delivered-suspend record; replay reads the snapshot only, so event-log retention cannot break an already-delivered flow resume.
 
-Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The stable code set is `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`, `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`, `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`, `SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `NAMESPACE_AMBIGUOUS`, and `RUNTIME_HOST_ONLY`; raw adapter errors stay as causes.
+Retention is kernel-owned and adapter-proven. Composers carry `RuntimeRetentionConfig` into the resolved engine; maintenance computes per-class cutoffs from injected time and calls bounded store prune methods for events, terminal work, terminal snapshots, confirmed outbox rows, idempotency keys, settled timers, and settled waiters. Store adapters stamp `settled_at`/`confirmed_at` internally where a record type had no settled timestamp, and conformance tests require terminal-only pruning, limit obedience, and truncation reporting. The in-memory, Postgres, and Convex runtime stores implement the same contract; there is no Upstash RuntimeStoreAdapter in this checkout.
+
+Outbox dispatch is bounded and defaults to eight in-flight deliveries per pass. Outbox row ordering is not a cross-row correctness contract. Store adapters expose `outbox.listByWork(workId, { namespace?, state?, limit? })` so orphan-work recovery can check targeted pending wake rows without namespace-wide scans; Postgres and Convex persist `workId` on outbox rows for that index.
+
+Lease ownership is a kernel-level fencing contract. `handleWake()` claims a store lease, records the token on the leased work row, heartbeats that lease while target code runs when the host supports timers, and re-checks the same token inside every finalizing commit transaction. If maintenance has reclaimed the work or another worker has re-leased it, completion, suspension, retry, and failure commits abort with `LEASE_LOST`; the stale executor acknowledges the wake without consuming attempts or overwriting the current owner. Timerless host bindings pass `leaseExtension: false` and rely on fencing plus an appropriately sized `leaseTtlMs`; Convex does this for both isolate handlers and Node actions. Store adapters only implement `leases.claim/extend/release` and transactional state reads/writes.
+
+Generated and hand-written wake entries meet the kernel through `createRuntimeHandler({ targets })`, which normalizes exported flow/task targets, verifies HTTP wake requests before envelope decode, and returns fetch-compatible `GET`/`POST` handlers. Host-bound adapters such as Convex use `bindHostRuntime()` to supply request-scoped store, wake, and host-safe lease-extension settings while still delegating to `createRuntime()` and the same kernel path.
+
+App-level runtime tests use `createTestRuntime()` from `runtime/testing`. The harness normalizes the same target arrays accepted by `createRuntimeHandler()`, installs a temporary hook layer with an in-memory runtime definition, and drives `reviewFlow.run()` through the production object-bound flow path. Its controllable clock rides on the runtime definition (`now` and `newWorkId`), and `createRuntime()` inherits those hooks for every resolved instance. Runtime-backed flow deadline math reads the resolved engine clock, so `flow.after()` and suspend timeouts remain deterministic without a separate test-only interpreter.
+
+Public Runtime Engine failures cross package boundaries only as `CruxRuntimeError` diagnostics. The current code set is `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`, `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`, `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`, `SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `LEASE_LOST`, `NAMESPACE_AMBIGUOUS`, and `RUNTIME_HOST_ONLY`; raw adapter errors stay as causes.
 
 ## Middleware Pipeline
 
@@ -707,16 +720,16 @@ Return result to caller
 
 ### Hook Types
 
-All global hooks live in the `CruxRuntime` object (`runtime/runtime.ts`). Use `setRuntime()` to install atomically, `getRuntime()` to read:
+All global hooks live in the `CruxHooks` object (`runtime/runtime.ts`). Use `setHooks()` to install atomically, `getHooks()` to read:
 
-| Hook                       | Scope          | Runtime field                       | Purpose                                               |
+| Hook                       | Scope          | Hooks field                         | Purpose                                               |
 | -------------------------- | -------------- | ----------------------------------- | ----------------------------------------------------- |
-| `PromptMiddleware`         | All prompts    | `runtime.middleware`                | Wrap every generate/stream call                       |
-| `ResolveHook`              | Agent adapter  | `runtime.resolveHook`               | Observe `.resolve()` calls without generation         |
-| `ExecutionHook`            | Agent adapter  | `runtime.executionHook`             | Observe model calls from agent frameworks             |
-| `StreamProgressHook`       | Streaming      | `runtime.streamProgressHook`        | Live streaming metrics (TTFT, chunks)                 |
-| `StreamStartHook`          | Streaming      | `runtime.streamStartHook`           | Eager hook before first chunk                         |
-| `graph-record subscribers` | All primitives | `runtime.observability subscribers` | Observe memory, compaction, scoring, agent operations |
+| `PromptMiddleware`         | All prompts    | `hooks.middleware`                  | Wrap every generate/stream call                       |
+| `ResolveHook`              | Agent adapter  | `hooks.resolveHook`                 | Observe `.resolve()` calls without generation         |
+| `ExecutionHook`            | Agent adapter  | `hooks.executionHook`               | Observe model calls from agent frameworks             |
+| `StreamProgressHook`       | Streaming      | `hooks.streamProgressHook`          | Live streaming metrics (TTFT, chunks)                 |
+| `StreamStartHook`          | Streaming      | `hooks.streamStartHook`             | Eager hook before first chunk                         |
+| `graph-record subscribers` | All primitives | `hooks.observability subscribers`   | Observe memory, compaction, scoring, agent operations |
 | `onPrepare`                | Single prompt  | `prompt({ hooks: { onPrepare } })`  | After system assembly, before generation              |
 | `onGenerate`               | Single prompt  | `prompt({ hooks: { onGenerate } })` | After successful generation                           |
 | `onError`                  | Single prompt  | `prompt({ hooks: { onError } })`    | After failed generation                               |
@@ -727,8 +740,8 @@ The plugin system enables composable hook installation. Three key functions:
 
 | Function                             | Purpose                                                                                                               |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `mergeRuntime(base, patch)`          | Compose two runtimes: fan-out for hooks, layered chaining for middleware, last-write-wins for observability transport |
-| `applyPlugins(plugins, initial)`     | Process plugins in order, each seeing cumulative state. Returns merged runtime + dispose                              |
+| `mergeHooks(base, patch)`          | Compose two hook states: fan-out for hooks, layered chaining for middleware, last-write-wins for observability transport |
+| `applyPlugins(plugins, initial)`     | Process plugins in order, each seeing cumulative state. Returns merged hooks + dispose                                  |
 | `withDevtools()` / `withTelemetry()` | Built-in plugins returning `CruxPluginResult`                                                                         |
 
 **Fan-out semantics**: When two plugins install the same hook (e.g., `tool.call start records`), both handlers are called for every event. Neither can suppress the other.
@@ -737,19 +750,22 @@ The plugin system enables composable hook installation. Three key functions:
 
 **Layered middleware**: When two plugins install middleware, the later plugin wraps the earlier one. Calling `next()` in the outer middleware invokes the inner middleware.
 
-**Plugin processing in `config()` / `configure()`**:
+**Plugin processing in `config()`**:
 
 1. `config()` creates a runtime config transaction and exits early in `CRUX_INDEX=1` mode.
-2. The transaction applies config-owned runtime state first: persistence store, explicit
-   observability ownership, capture policy, generation middleware, and tokenizer.
+2. The planner resolves config-owned runtime state: persistence store, explicit observability
+   ownership, capture policy, generation middleware, tokenizer, and plugin order.
 3. If the `observability` domain owns the transport (`enabled: false`, custom `transport`, or
-   `serverUrl`), the transaction applies user plugins after those runtime fields so plugins see the
-   owned transport/store state.
-4. If observability does not own the transport, `configure()` keeps devtools fallback ownership:
-   it auto-prepends `withDevtools()` for explicit `devtools.serverUrl`, then appends user plugins so
-   local devtools instrumentation installs before custom plugins.
-5. Plugin `dispose()` functions run before config-owned observability restore. Runtime Bridge
-   disposal runs before registry/plugin disposal.
+   `serverUrl`), user plugins install after those hook fields so plugins see the owned
+   transport/store state.
+4. If observability does not own the transport, the planner prepends `withDevtools()` for explicit
+   `devtools.serverUrl`, then appends user plugins so local devtools instrumentation installs before
+   custom plugins.
+5. The installer computes the final runtime once and installs the changed fields as one hook layer.
+   Re-running `config()` restores the previous active layer first, so hot reload leaves one live
+   middleware/hook chain.
+6. Runtime Bridge disposal runs before registry disposal. Config restore removes its hook layer,
+   then plugin `dispose()` functions run before config-owned observability restore.
 
 ### Chaining (Legacy)
 
@@ -817,35 +833,32 @@ graph in the same backend whenever quality runs are executed with devtools attac
 to `runtime/config-transaction/`, a deep module with a pure planner and effectful installer:
 
 - `planRuntimeConfig()` reads only `CruxConfig` plus optional environment data. It decides index
-  mode, observability ownership, runtime patches, bridge inputs, tokenizer policy, and whether user
-  plugins belong to the transaction or to `configure()` behind devtools fallback.
+  mode, observability ownership, runtime patches, bridge inputs, tokenizer policy, and ordered
+  plugins, including the devtools fallback plugin when applicable.
 - `installRuntimeConfigPlan()` takes the plan plus narrow ports for runtime state, observability,
   bridge connection, tokenizer, plugins, diagnostics, and Crux object creation. Tests use fake ports
   to verify ordering without inspecting global state.
-- Production ports call the existing domain owners: `updateRuntime()` / `setRuntime()`,
+- Production ports call the existing domain owners: `pushHooksLayer()` / `restoreHooksLayer()`,
   `configureObservability()`, `createHttpObservabilityTransport()`, `connectRuntimeBridge()`,
   `setTokenizer()`, and `applyPlugins()`.
 
-The transaction boundary owns application and teardown order. It must not duplicate observability
-protocols, bridge protocols, plugin merge semantics, or prompt registry construction; those stay in
-their existing domains. `configure()` remains available for lower-level prompt registry tests and
-direct legacy use.
+The transaction boundary owns application and teardown order. `config()` is a one-config-per-process
+API: the last call replaces the previous active installation, and multi-tenant/per-request config
+scoping is out of scope. The transaction must not duplicate observability protocols, bridge
+protocols, plugin merge semantics, or prompt registry construction; those stay in their existing
+domains. `configure()` remains available for lower-level prompt registry tests and direct legacy use.
 
 ## configure() Internals
 
 `configure(options)` does the following in order:
 
 1. **Extract flat lists** — Walk tree (via `_all` property or recursive traversal) or use arrays directly
-2. **Compute namespace paths** — If trees were passed, map each prompt/context ID to its path in the tree (e.g., `'draft-edit' → ['editor', 'edit']`)
-3. **Auto-collect contexts** — Deduplicate contexts from prompts' `use` arrays with explicitly passed contexts
-4. **Validate** — All prompts must have an `id`, no duplicate IDs allowed
-5. **Build indexes** — `byId: Map<string, Prompt>`, `tagIndex: Map<string, Prompt[]>`
-6. **Apply globals for direct use** — `setTokenizer()`, `setRuntime()` for middleware if provided
-7. **Build plugins array** — Auto-prepend `withDevtools()` only for explicit `devtools.serverUrl`
-   local/tunnel config when `observability` has not already claimed the transport, then append user
-   `plugins`
-8. **Apply plugins** — `applyPlugins()` processes in order, each receiving cumulative runtime. Final runtime set via `setRuntime()`
-9. **Return frozen registry** — `get`, `find`, `list`, `byTag`, `byTags`, `tags`, `dispose` (dispose calls plugin cleanups in reverse order)
+2. **Auto-collect contexts** — Deduplicate contexts from prompts' `use` arrays with explicitly passed contexts
+3. **Validate** — All prompts must have an `id`, no duplicate IDs allowed
+4. **Build indexes** — `byId: Map<string, Prompt>`, `tagIndex: Map<string, Prompt[]>`
+5. **Apply registry policy flags** — `autoEscape` and `securityWarnings` stay module-local for
+   resolver defaults
+6. **Return frozen registry** — `get`, `find`, `list`, `byTag`, `byTags`, `tags`, `dispose`
 
 ### Tree Walking
 
@@ -854,8 +867,6 @@ direct legacy use.
 - **Flat array** — Pass through directly
 - **Object with `_all`** — Use the pre-computed flat list from `createPrompts()`/`createContexts()`
 - **Plain nested object** — Recursively walk, collect leaves where `_tag === 'Prompt'` or `_tag === 'Context'`
-
-`computePaths()` recursively traverses the tree, building path arrays as it descends. Each leaf's ID is mapped to its full path (e.g., `{ editor: { edit: promptInstance } }` → `'draft-edit' → ['editor', 'edit']`).
 
 ## createPrompts() / createContexts()
 
@@ -879,10 +890,11 @@ The result provides typed autocomplete at every nesting level while also exposin
 2. Configure `@use-crux/core/observability` to deliver graph record batches to the Go backend
 3. Return `observabilityTransport` + `dispose()` that restores the previous observability runtime
 
-`enableDevtools()` remains for imperative use — delegates to `buildDevtoolsRuntime()` and calls `setRuntime()` directly.
+`enableDevtools()` remains for imperative use — delegates to `buildDevtoolsRuntime()` and installs
+its own hook layer so config teardown does not clobber imperative devtools hooks.
 
 When `config({ devtools: { serverUrl } })` is used without an explicit `observability` override,
-`configure()` auto-prepends `withDevtools()` so the local devtools transport is installed before
+the config planner auto-prepends `withDevtools()` so the local devtools transport is installed before
 custom plugins. `devtools` remains the local UI/control/tunnel/bridge domain; production export,
 remote collectors, and delivery policy belong under `observability` or telemetry plugins. When the
 server URL is a tokenized tunnel URL, the HTTP transport preserves the query token while appending
@@ -898,7 +910,7 @@ The Runtime Bridge is the local-dev command plane. It is intentionally separate 
 - Project Index snapshots: runtime -> Go through `POST /api/index/snapshot`.
 - Runtime Bridge: Go -> runtime through typed `command.request` messages and `command.result` / `command.error` replies.
 
-`@use-crux/core/runtime-bridge` owns the TypeScript schemas and inferred types for `runtime.hello`, `runtime.heartbeat`, `command.request`, `command.progress`, `command.result`, and `command.error`. `config()` starts a local Node WebSocket peer when `devtools.bridge` resolves to `transport: 'ws'`; the peer advertises derived capabilities, including `store.read` for an explicit `persistence.records` store and any inspectable resources registered by primitives. Memory and blackboard definitions register those resources as they are created, keeping user DX focused on composing primitives rather than manually wiring devtools stores. `eval.run` is part of the typed command contract and is executed by the Go bridge service through the embedded eval runner so quality persistence and observability reuse the existing eval path. Runtime peers must only advertise `eval.run` if they provide their own direct execution path. Bridge failures are logged as dev warnings and must never throw into user code. HTTP/framework transports are registered by integration packages such as `@use-crux/convex`; those endpoints derive their public URL from the framework request when possible, advertise request-scoped store capabilities, and convert malformed command bodies into structured `command.error` responses. `crux dev` auto-discovers framework HTTP peers from `CRUX_BRIDGE_URL`, `CONVEX_SITE_URL`, `CONVEX_URL`, or `NEXT_PUBLIC_CONVEX_URL` in the shell or project `.env.local` / `.env`, fetching `/crux/bridge` and registering the manifest-backed peer in Go. Go owns peer selection, command dispatch, subscriptions, and read-model side effects.
+`@use-crux/core/runtime-bridge` owns the TypeScript schemas and inferred types for `runtime.hello`, `runtime.heartbeat`, `command.request`, `command.progress`, `command.result`, and `command.error`. `config()` starts a local Node WebSocket peer when `devtools.bridge` resolves to `transport: 'ws'`; the peer advertises derived capabilities, including `store.read` for an explicit `persistence.records` store and any inspectable resources registered by primitives. Memory and blackboard definitions register those resources as they are created, keeping user DX focused on composing primitives rather than manually wiring devtools stores. The stable runtime-peer command surface is `store.read`; arbitrary runtime evaluation is intentionally outside the bridge command contract. Bridge failures are logged as dev warnings and must never throw into user code. HTTP/framework transports are registered by integration packages such as `@use-crux/convex`; those endpoints derive their public URL from the framework request when possible, advertise request-scoped store capabilities, and convert malformed command bodies into structured `command.error` responses. `crux dev` auto-discovers framework HTTP peers from `CRUX_BRIDGE_URL`, `CONVEX_SITE_URL`, `CONVEX_URL`, or `NEXT_PUBLIC_CONVEX_URL` in the shell or project `.env.local` / `.env`, fetching `/crux/bridge` and registering the manifest-backed peer in Go. Go owns peer selection, command dispatch, subscriptions, and read-model side effects.
 
 Resource Inspection is the product-facing Go service layered above the bridge. Web devtools, the TUI, CLI commands, and future IDE integrations ask Go for capabilities and resources through stable product-shaped calls such as `GET /api/resources/capabilities`, `GET /api/resources/{resourceId}`, and `GET /api/resources/{resourceId}/entries`. The service maps `blackboard:*`, `memory:*`, and `crux.store` requests to bridge `store.read` only when a live peer is available, otherwise it returns structured `unavailable` or `partial` results with reasons such as `bridge_required`, `runtime_unavailable`, `unsupported_resource`, `ambiguous_peer`, or `command_failed`. Clients must not call Convex `/crux/bridge` or construct bridge command envelopes directly. Domain read models can embed this service when that keeps clients simpler: `GET /api/memory/stores/{id}` returns projected memory/blackboard state and an optional `inspection` object. `inspection.status="ok"` plus `source="mixed"` means live entries were joined with the projection; `inspection.status="partial"` plus `source="projection"` means the projection is usable while live runtime inspection is unavailable or failed.
 
@@ -1067,7 +1079,7 @@ interface graph-record subscribers {
 }
 ```
 
-`— zero cost when no hooks are installed. Plugins install hooks via the plugin system;`mergeRuntime()` automatically fan-outs multiple handlers for the same hook.
+`— zero cost when no hooks are installed. Plugins install hooks via the plugin system;`mergeHooks()` automatically fan-outs multiple handlers for the same hook.
 
 The `evalId` field on `onJudgeResult` enables correlation: callers that run judges inside a larger evaluation can pass an id through `JudgeScoreOptions`, and the judge includes it in the hook event so devtools can link individual judge scores back to the run that triggered them. (Quality cells don't need it — judge calls made by `scorers.judge()` nest inside the cell's observed run.)
 

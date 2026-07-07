@@ -13,7 +13,9 @@
 import { describe } from 'vitest'
 import type { RuntimeStoreAdapter } from '../store'
 import { registerStoreCoordinationTests } from './store-coordination'
+import { registerStoreCompositeTests } from './store-composites'
 import { registerStoreRecordTests } from './store-records'
+import { registerStoreRetentionTests } from './store-retention'
 import type { RunStoreAdapterTestsOptions } from './store-types'
 
 export type { RunStoreAdapterTestsOptions } from './store-types'
@@ -24,6 +26,8 @@ export function runStoreAdapterTests<TStore extends RuntimeStoreAdapter>(
 ): void {
   describe(`${options.name} RuntimeStoreAdapter conformance`, () => {
     registerStoreRecordTests(options)
+    registerStoreRetentionTests(options)
+    registerStoreCompositeTests(options)
     registerStoreCoordinationTests(options)
   })
 }

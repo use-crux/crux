@@ -5,7 +5,7 @@ import {
   createRuntimeHandler,
   genericQueue,
   serverless,
-  task,
+  durableTask,
   type RuntimeFetchHandlers,
   type RuntimeTargetMap,
   type RuntimeWakeMessage,
@@ -55,7 +55,7 @@ describe('Postgres + HTTP wake runtime path', () => {
     const store = await createStore()
     const delivered: RuntimeWakeMessage[] = []
     let executed = 0
-    const embedDocument = task('postgres-http-embed-document', {
+    const embedDocument = durableTask('postgres-http-embed-document', {
       run: () => {
         executed += 1
       },

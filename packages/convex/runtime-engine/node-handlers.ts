@@ -47,7 +47,7 @@ export interface CreateConvexRuntimeTargetExecutorOptions extends Omit<
   CreateConvexRuntimeHandlersOptions,
   'targetExecutor' | 'targets'
 > {
-  /** Exported Convex `flow()` handles, core `flow()` handles, and runtime `task()` targets. */
+  /** Exported Convex `flow()` handles, core `flow()` handles, and `durableTask()` targets. */
   readonly targets: readonly RuntimeHandlerTarget[]
 }
 
@@ -69,6 +69,7 @@ export function createConvexRuntimeTargetExecutor(
       namespace: options.namespace,
       targets,
       newWorkId: options.newWorkId ?? createConvexWorkIdGenerator(),
+      leaseExtension: false,
       createWake: () => async (envelope) => {
         await ctx.scheduler.runAfter(0, executor.executeTarget, { envelope })
       },

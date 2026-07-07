@@ -30,6 +30,21 @@ Everything else is labelled by subpath. Memory, retrieval, skills, agents,
 flows, quality, and local/devtools surfaces keep their existing beta or
 experimental status unless their own subpath documentation says otherwise.
 
+## Runtime Engine (`@use-crux/core/runtime`)
+
+The durable Runtime Engine and its runtime store adapter contract are stable
+beta. This includes `node()`, `serverless()`, `genericQueue()`,
+`createRuntimeHandler()`, `createRuntime()`, `bindHostRuntime()`,
+`durableTask()` targets, wake envelopes, diagnostics, `RuntimeStoreAdapter`,
+named kernel composites, retention and lease behavior, and the runtime
+conformance suites under `@use-crux/core/runtime/testing`.
+
+Breaking Runtime Engine changes require the same minor-version bump and
+migration-note treatment as the core stable beta surface while Crux remains
+pre-1.0. Patch releases may add optional fields, diagnostics, helpers, and
+compatible behavior fixes. Host-specific integrations and adapters not covered
+by their package documentation may still be experimental.
+
 ## Platform Floor
 
 Published Crux packages are ESM-only and require Node.js 22 or newer. Package

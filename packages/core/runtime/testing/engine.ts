@@ -8,12 +8,12 @@
  * @module
  */
 
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_RUNTIME_MAX_ATTEMPTS } from '../engine/retry'
 import type { FlowId, RuntimeTargetId, TaskId, TimerId, WaiterId, WorkId } from '../ports'
 import type { RuntimeStoreAdapter } from '../store'
 import type { RuntimeKernel } from '../engine/kernel'
-import { wakeEnvelopeForWork } from '../engine/kernel'
+import { createRuntimeKernel, wakeEnvelopeForWork } from '../engine/kernel'
 import { createOutboxDispatcher } from '../engine/outbox'
 import type { WorkItem } from '../engine/work'
 
@@ -94,6 +94,86 @@ export function runRuntimeEngineAdapterTests<
         status: 'blocked',
         lastError: { code: 'TARGET_NOT_FOUND' },
       })
+    })
+
+    it('invariant: stale final commits after lease reclaim are rejected', async () => {
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(new Date('2026-07-02T00:00:00.000Z'))
+        const harness = await options.createHarness()
+        let executions = 0
+        let releaseFirst!: () => void
+        let resolveFirstStarted!: () => void
+        const firstStarted = new Promise<void>((resolve) => {
+          resolveFirstStarted = resolve
+        })
+        const firstCanFinish = new Promise<void>((resolve) => {
+          releaseFirst = resolve
+        })
+        const targetId = 'lease-race-target' as RuntimeTargetId
+        const kernel = createRuntimeKernel({
+          store: harness.store,
+          targets: {
+            [targetId]: {
+              targetId,
+              kind: 'task',
+              execute: async () => {
+                executions += 1
+                if (executions === 1) {
+                  resolveFirstStarted()
+                  await firstCanFinish
+                  return {
+                    status: 'blocked',
+                    error: {
+                      code: 'STALE_WORKER',
+                      message: 'stale worker should not commit',
+                      at: new Date('2026-07-02T00:00:02.000Z'),
+                    },
+                  }
+                }
+                return { status: 'completed' }
+              },
+            },
+          },
+          newWorkId: () => 'work_lease_race_1' as WorkId,
+          leaseTtlMs: 1_000,
+          leaseExtension: false,
+        })
+        const enqueued = await kernel.enqueueTask({
+          namespace: 'tenant-a',
+          taskId: 'task_lease_race_1' as TaskId,
+          targetId,
+        })
+        const envelope = wakeEnvelopeForWork(enqueued)
+
+        const staleWake = kernel.handleWake(envelope)
+        await firstStarted
+        vi.advanceTimersByTime(1_001)
+        await expect(
+          kernel.maintenanceTick({
+            namespace: 'tenant-a',
+            now: new Date('2026-07-02T00:00:01.001Z'),
+          }),
+        ).resolves.toMatchObject({ leasesReclaimed: 1 })
+
+        await expect(kernel.handleWake(envelope)).resolves.toMatchObject({
+          status: 200,
+          outcome: 'processed',
+        })
+        releaseFirst()
+        await expect(staleWake).resolves.toEqual({
+          status: 200,
+          outcome: 'lease-lost',
+        })
+        await expect(
+          harness.store.state.getWork(enqueued.workId, {
+            namespace: 'tenant-a',
+          }),
+        ).resolves.toMatchObject({ status: 'completed' })
+        expect(executions).toBe(2)
+      } finally {
+        vi.useRealTimers()
+      }
     })
 
     it('invariant: timers mint task work, scoped idle reaches zero, and cancellation owns registrations', async () => {

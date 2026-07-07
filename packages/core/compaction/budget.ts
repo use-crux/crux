@@ -10,7 +10,7 @@
 
 import type { BudgetConfig, BudgetManager, BudgetState } from './types'
 import { observe } from '../observability'
-import { getRuntime } from '../runtime/runtime'
+import { getHooks } from '../runtime/runtime'
 
 /**
  * Create a budget manager that tracks token usage and reports pressure levels.

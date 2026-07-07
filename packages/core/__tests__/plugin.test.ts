@@ -1,26 +1,26 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { resetRuntime } from '../runtime/runtime'
-import type { CruxRuntime } from '../runtime/runtime'
-import { mergeRuntime, applyPlugins } from '../runtime/plugin'
+import { resetHooks } from '../runtime/runtime'
+import type { CruxHooks } from '../runtime/runtime'
+import { mergeHooks, applyPlugins } from '../runtime/plugin'
 import type { CruxPlugin } from '../runtime/plugin'
 
 describe('CruxPlugin system', () => {
   beforeEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
   // ─────────────────────────────────────────────────────────────
-  // mergeRuntime
+  // mergeHooks
   // ─────────────────────────────────────────────────────────────
 
-  describe('mergeRuntime', () => {
+  describe('mergeHooks', () => {
     it('returns union when base and patch have no overlapping fields', () => {
       const middleware = vi.fn()
       const streamStartHook = vi.fn()
-      const base: CruxRuntime = { middleware: middleware as any }
-      const patch: Partial<CruxRuntime> = { streamStartHook }
+      const base: CruxHooks = { middleware: middleware as any }
+      const patch: Partial<CruxHooks> = { streamStartHook }
 
-      const merged = mergeRuntime(base, patch)
+      const merged = mergeHooks(base, patch)
 
       expect(merged.middleware).toBe(middleware)
       expect(merged.streamStartHook).toBe(streamStartHook)
@@ -29,10 +29,10 @@ describe('CruxPlugin system', () => {
     it('fan-outs executionHook — both handlers called', async () => {
       const hook1 = vi.fn()
       const hook2 = vi.fn()
-      const base: CruxRuntime = { executionHook: hook1 }
-      const patch: Partial<CruxRuntime> = { executionHook: hook2 }
+      const base: CruxHooks = { executionHook: hook1 }
+      const patch: Partial<CruxHooks> = { executionHook: hook2 }
 
-      const merged = mergeRuntime(base, patch)
+      const merged = mergeHooks(base, patch)
       const args = {
         promptId: 'test',
         startedAt: Date.now(),
@@ -49,10 +49,10 @@ describe('CruxPlugin system', () => {
     it('fan-outs resolveHook — both handlers called', async () => {
       const hook1 = vi.fn().mockResolvedValue({ traceId: 'trace-1' })
       const hook2 = vi.fn().mockResolvedValue({ traceId: 'trace-2' })
-      const base: CruxRuntime = { resolveHook: hook1 }
-      const patch: Partial<CruxRuntime> = { resolveHook: hook2 }
+      const base: CruxHooks = { resolveHook: hook1 }
+      const patch: Partial<CruxHooks> = { resolveHook: hook2 }
 
-      const merged = mergeRuntime(base, patch)
+      const merged = mergeHooks(base, patch)
       const args = { promptId: 'test', input: {}, inspect: {} as any }
       const result = await merged.resolveHook!(args)
 
@@ -65,10 +65,10 @@ describe('CruxPlugin system', () => {
     it('fan-outs streamStartHook — both handlers called', async () => {
       const hook1 = vi.fn()
       const hook2 = vi.fn()
-      const base: CruxRuntime = { streamStartHook: hook1 }
-      const patch: Partial<CruxRuntime> = { streamStartHook: hook2 }
+      const base: CruxHooks = { streamStartHook: hook1 }
+      const patch: Partial<CruxHooks> = { streamStartHook: hook2 }
 
-      const merged = mergeRuntime(base, patch)
+      const merged = mergeHooks(base, patch)
       const args = {
         traceId: 't',
         promptId: 'p',
@@ -87,10 +87,10 @@ describe('CruxPlugin system', () => {
       const reporter2 = { onChunk: vi.fn(), flush: vi.fn(), dispose: vi.fn() }
       const hook1 = vi.fn().mockReturnValue(reporter1)
       const hook2 = vi.fn().mockReturnValue(reporter2)
-      const base: CruxRuntime = { streamProgressHook: hook1 }
-      const patch: Partial<CruxRuntime> = { streamProgressHook: hook2 }
+      const base: CruxHooks = { streamProgressHook: hook1 }
+      const patch: Partial<CruxHooks> = { streamProgressHook: hook2 }
 
-      const merged = mergeRuntime(base, patch)
+      const merged = mergeHooks(base, patch)
       const combined = merged.streamProgressHook!('trace-1')
 
       combined!.onChunk('hello')
@@ -112,10 +112,10 @@ describe('CruxPlugin system', () => {
         order.push('new-after')
         return result
       })
-      const base: CruxRuntime = { middleware: oldMiddleware }
-      const patch: Partial<CruxRuntime> = { middleware: newMiddleware }
+      const base: CruxHooks = { middleware: oldMiddleware }
+      const patch: Partial<CruxHooks> = { middleware: newMiddleware }
 
-      const merged = mergeRuntime(base, patch)
+      const merged = mergeHooks(base, patch)
       const mockNext = vi.fn(async () => 'result')
       await merged.middleware!({} as any, mockNext)
 
@@ -124,10 +124,10 @@ describe('CruxPlugin system', () => {
 
     it('uses patch middleware directly when base has none', async () => {
       const patchMiddleware = vi.fn(async (args: any, next: any) => next(args))
-      const base: CruxRuntime = {}
-      const patch: Partial<CruxRuntime> = { middleware: patchMiddleware }
+      const base: CruxHooks = {}
+      const patch: Partial<CruxHooks> = { middleware: patchMiddleware }
 
-      const merged = mergeRuntime(base, patch)
+      const merged = mergeHooks(base, patch)
       expect(merged.middleware).toBe(patchMiddleware)
     })
   })
@@ -138,34 +138,34 @@ describe('CruxPlugin system', () => {
 
   describe('applyPlugins', () => {
     it('processes plugins in order, each seeing cumulative state', () => {
-      const seenRuntimes: CruxRuntime[] = []
+      const seenHooks: CruxHooks[] = []
       const hook1 = vi.fn()
       const hook2 = vi.fn()
 
       const plugin1: CruxPlugin = {
         name: 'plugin-1',
-        install(runtime) {
-          seenRuntimes.push({ ...runtime })
+        install(hooks) {
+          seenHooks.push({ ...hooks })
           return { executionHook: hook1 }
         },
       }
       const plugin2: CruxPlugin = {
         name: 'plugin-2',
-        install(runtime) {
-          seenRuntimes.push({ ...runtime })
+        install(hooks) {
+          seenHooks.push({ ...hooks })
           return { streamStartHook: hook2 }
         },
       }
 
       const result = applyPlugins([plugin1, plugin2], {})
 
-      // plugin-1 sees empty runtime
-      expect(seenRuntimes[0].executionHook).toBeUndefined()
+      // plugin-1 sees empty hooks
+      expect(seenHooks[0].executionHook).toBeUndefined()
       // plugin-2 sees plugin-1's hook
-      expect(seenRuntimes[1].executionHook).toBeDefined()
-      // Final runtime has both
-      expect(result.runtime.executionHook).toBeDefined()
-      expect(result.runtime.streamStartHook).toBeDefined()
+      expect(seenHooks[1].executionHook).toBeDefined()
+      // Final hooks have both
+      expect(result.hooks.executionHook).toBeDefined()
+      expect(result.hooks.streamStartHook).toBeDefined()
     })
 
     it('returns dispose functions from all plugins', () => {
@@ -191,10 +191,10 @@ describe('CruxPlugin system', () => {
       expect(order[0]).toBeLessThan(order[1])
     })
 
-    it('returns initial runtime when plugins array is empty', () => {
-      const initial: CruxRuntime = { observabilityDelivery: { timeoutMs: 100 } }
+    it('returns initial hooks when plugins array is empty', () => {
+      const initial: CruxHooks = { observabilityDelivery: { timeoutMs: 100 } }
       const result = applyPlugins([], initial)
-      expect(result.runtime).toEqual(initial)
+      expect(result.hooks).toEqual(initial)
     })
 
     it('dispose is a no-op when no plugins have dispose', () => {

@@ -2,7 +2,7 @@ import { describe, expect, it, vi, afterEach } from 'vitest'
 import { z } from 'zod'
 import { prompt } from '../../prompt/prompt'
 import { blackboard } from '../../agent'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 
 const boardSchema = z.object({
   goal: z.string(),
@@ -11,7 +11,7 @@ const boardSchema = z.object({
 })
 
   afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 describe('blackboard prompt use integration', () => {

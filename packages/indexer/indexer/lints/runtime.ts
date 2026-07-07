@@ -94,7 +94,7 @@ function closureDeferFindings(flows: readonly ProjectDefinition[]): IndexLintFin
         indexLintFinding({
           ruleId: 'runtime.closure_defer',
           key: `${flow.id}:defer:${index}`,
-          message: `Flow "${flow.name}" passes an inline closure to flow.defer(). Durable background work must use an exported runtime task target.`,
+          message: `Flow "${flow.name}" passes an inline closure to flow.defer(). Durable background work must use an exported durable task target.`,
           ...(sourceLocation(usage) ? { source: sourceLocation(usage) } : flow.source ? { source: flow.source } : {}),
           primaryDefinitionId: flow.id,
           relatedDefinitionIds: [flow.id],

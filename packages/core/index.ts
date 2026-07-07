@@ -315,7 +315,7 @@ export type {
 export { setTokenizer, countTokens } from "./shared/tokenizer";
 
 // Plugin system
-export { mergeRuntime, applyPlugins } from "./runtime";
+export { mergeHooks, applyPlugins } from "./runtime";
 export type {
   CruxPlugin,
   CruxPluginResult,
@@ -376,13 +376,15 @@ export type {
 
 // Runtime hooks — prefer `config()` for centralized setup
 export {
-  getRuntime,
-  setRuntime,
-  updateRuntime,
-  resetRuntime,
+  getHooks,
+  pushHooksLayer,
+  setHooks,
+  updateHooks,
+  resetHooks,
+  restoreHooksLayer,
   resolveRecords,
 } from "./runtime";
-export type { CruxRuntime } from "./runtime";
+export type { CruxHooks, HooksLayerToken } from "./runtime";
 export type { PromptMiddleware, PromptMiddlewareArgs } from "./runtime";
 
 // Canonical observability graph contract.

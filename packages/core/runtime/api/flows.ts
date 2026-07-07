@@ -9,7 +9,7 @@
  */
 
 import type { JsonValue } from '../../storage'
-import { getRuntime } from '../runtime'
+import { getHooks } from '../runtime'
 import type { ResolvedRuntimeEngine } from './create-runtime'
 import { createRuntimeWithHostContext } from './host-context'
 import { runtimeRequiredError } from './runtime-required'
@@ -72,7 +72,24 @@ export function createCruxFlowRuntimeControls(): CruxFlowRuntimeControls {
       payload: JsonValue = {},
     ) =>
       withRuntime('crux.flows.signal()', async ({ runtime }) => {
-        void targetName
+        const snapshot = await runtime.store.state.getSnapshot(flowId as FlowId, {
+          namespace: runtime.namespace,
+        })
+        if (!snapshot) {
+          throw runtimeFlowNotFoundError({
+            api: 'crux.flows.signal()',
+            flowId,
+          })
+        }
+        if (snapshot.targetId !== (targetName as RuntimeTargetId)) {
+          throw runtimeFlowTargetMismatchError({
+            api: 'crux.flows.signal()',
+            flowId,
+            expected: snapshot.targetId,
+            actual: targetName,
+          })
+        }
+
         await runtime.kernel.emitEvent({
           namespace: runtime.namespace,
           name: runtimeSignalEventName(flowId, signalName),
@@ -173,7 +190,7 @@ async function withRuntime<T>(
     readonly runtimeRef: RuntimeTargetRuntimeRef
   }) => Promise<T>,
 ): Promise<T> {
-  const runtimeDefinition = getRuntime().runtimeEngine
+  const runtimeDefinition = getHooks().runtimeEngine
   if (!runtimeDefinition) throw runtimeRequiredError({ api })
 
   const runtimeRef: RuntimeTargetRuntimeRef = {}

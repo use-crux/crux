@@ -80,13 +80,21 @@ describe('RuntimeKernel maintenance and cancellation composites', () => {
       limit: 1,
     })
     await store.outbox.confirm(dispatched.outboxId)
+    const originalList = store.outbox.list
+    store.outbox.list = async () => {
+      throw new Error('orphan requeue must not scan namespace outbox rows')
+    }
 
-    await expect(
-      kernel.maintenanceTick({
-        namespace: 'tenant-a',
-        now: new Date('2026-07-02T00:00:11.000Z'),
-      }),
-    ).resolves.toMatchObject({ pendingRequeued: 1 })
+    try {
+      await expect(
+        kernel.maintenanceTick({
+          namespace: 'tenant-a',
+          now: new Date('2026-07-02T00:00:11.000Z'),
+        }),
+      ).resolves.toMatchObject({ pendingRequeued: 1 })
+    } finally {
+      store.outbox.list = originalList
+    }
     await expect(
       store.outbox.claimPending({
         namespace: 'tenant-a',
@@ -98,6 +106,51 @@ describe('RuntimeKernel maintenance and cancellation composites', () => {
         envelope: expect.objectContaining({ workId: 'work_task_1' }),
         state: 'dispatched',
       }),
+    ])
+  })
+
+  it('does not re-enqueue due work when any same-namespace pending wake exists', async () => {
+    const store = inMemoryRuntimeStore()
+    const kernel = createRuntimeKernel({
+      store,
+      targets: {},
+      newWorkId: () => 'unused' as WorkId,
+      now: () => new Date('2026-07-02T00:00:00.000Z'),
+    })
+    const dueAt = new Date('2026-07-02T00:00:10.000Z')
+    const work = makeTaskWork({
+      notBefore: dueAt,
+      updatedAt: new Date('2026-07-02T00:00:09.000Z'),
+    })
+    const otherTenantWork = makeTaskWork({
+      namespace: 'tenant-b',
+      workId: work.workId,
+      idempotencyKey: 'task:tenant-b-collision',
+    })
+    await store.state.putWork(work)
+    await store.state.putWork(otherTenantWork)
+    await store.outbox.put(wakeEnvelopeForWork(otherTenantWork), { deliverAt: dueAt })
+    const currentWake = await store.outbox.put(
+      {
+        ...wakeEnvelopeForWork(work),
+        idempotencyKey: 'resume:work_task_1:replacement',
+      },
+      { deliverAt: dueAt },
+    )
+
+    await expect(
+      kernel.maintenanceTick({
+        namespace: 'tenant-a',
+        now: new Date('2026-07-02T00:00:11.000Z'),
+      }),
+    ).resolves.toMatchObject({ pendingRequeued: 0 })
+    await expect(
+      store.outbox.listByWork(work.workId, {
+        namespace: 'tenant-a',
+        state: 'pending',
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({ outboxId: currentWake.outboxId }),
     ])
   })
 
@@ -311,6 +364,7 @@ describe('RuntimeKernel maintenance and cancellation composites', () => {
       ],
     })
   })
+
 })
 
 function makeFlowWork(overrides: Partial<WorkItem> = {}): WorkItem {

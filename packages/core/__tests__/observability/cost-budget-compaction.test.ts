@@ -12,12 +12,12 @@ import {
 } from '../../observability'
 import { orchestrateGenerate } from '../../generation/orchestrate'
 import { applyPlugins } from '../../runtime/plugin'
-import { getRuntime, resetRuntime, setRuntime } from '../../runtime/runtime'
+import { getHooks, resetHooks, setHooks } from '../../runtime/runtime'
 import { runWithExecutionContext } from '../../runtime/execution-context'
 
 function install(plugin: ReturnType<ReturnType<typeof withCostTracking>['asPlugin']>) {
-  const applied = applyPlugins([plugin], getRuntime())
-  setRuntime(applied.runtime)
+  const applied = applyPlugins([plugin], getHooks())
+  setHooks(applied.hooks)
   return applied
 }
 
@@ -60,7 +60,7 @@ async function generateOnce(options: { cost?: number; model?: string; provider?:
 
 describe('canonical cost, budget, and compaction observability', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
     resetObservabilityRuntime()
     vi.restoreAllMocks()
   })

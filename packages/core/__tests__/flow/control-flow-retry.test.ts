@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { flow } from '../../flow'
-import { resetRuntime, updateRuntime } from '../../runtime/runtime'
+import { resetHooks, updateHooks } from '../../runtime/runtime'
 import { inMemoryRecordStore } from '../../storage'
 
 describe('flow retry control-flow safety', () => {
   afterEach(() => {
-    resetRuntime()
+    resetHooks()
   })
 
   it('does not retry a step that suspends the flow', async () => {
-    updateRuntime({ records: inMemoryRecordStore() })
+    updateHooks({ records: inMemoryRecordStore() })
     let calls = 0
 
     const review = flow('step suspend retry safety', async (scope) => {
@@ -35,7 +35,7 @@ describe('flow retry control-flow safety', () => {
   })
 
   it('does not retry a step that cancels the flow', async () => {
-    updateRuntime({ records: inMemoryRecordStore() })
+    updateHooks({ records: inMemoryRecordStore() })
     let calls = 0
 
     const review = flow('step cancel retry safety', async (scope) => {
@@ -60,7 +60,7 @@ describe('flow retry control-flow safety', () => {
   })
 
   it('does not run step fallback for lifecycle control-flow', async () => {
-    updateRuntime({ records: inMemoryRecordStore() })
+    updateHooks({ records: inMemoryRecordStore() })
     const fallbackCalls: string[] = []
 
     const suspending = flow('step suspend fallback safety', async (scope) => {

@@ -1,13 +1,15 @@
 import type { ConfigureOptions } from '../configure'
 import type { CruxConfig } from '../config-types'
-import type { CruxRuntime } from '../runtime'
+import type { CruxPlugin } from '../plugin'
+import type { CruxHooks } from '../runtime'
+import { withDevtools } from '../../observability'
 import type { RuntimeConfigEnvironment, RuntimeConfigPlan, RuntimeConfigTransactionInput } from './types'
 
 /**
  * Build a side-effect-free runtime config plan.
  *
  * The plan owns lifecycle decisions that should be easy to test without
- * touching globals: index mode, runtime patches, observability ownership,
+ * touching globals: index mode, hook patches, observability ownership,
  * devtools fallback behavior, plugin ordering, and bridge inputs.
  */
 export function planRuntimeConfig(input: RuntimeConfigTransactionInput): RuntimeConfigPlan {
@@ -17,9 +19,11 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
   const observability = config.observability
   const observabilityCapture = observabilityCapturePolicy(observability)
   const ownsObservability =
-    observability?.enabled === false || observability?.transport !== undefined || observability?.serverUrl !== undefined
+    observability?.enabled === false ||
+    observability?.transport !== undefined ||
+    observability?.serverUrl !== undefined
 
-  const runtimePatch: Partial<CruxRuntime> = {
+  const hooksPatch: Partial<CruxHooks> = {
     ...(records ? { records } : {}),
     ...(config.runtime ? { runtimeEngine: config.runtime } : {}),
     ...(config.generation?.middleware ? { middleware: config.generation.middleware } : {}),
@@ -32,27 +36,26 @@ export function planRuntimeConfig(input: RuntimeConfigTransactionInput): Runtime
     ...(observabilityCapture ? { observabilityCapture } : {}),
   }
 
+  const plugins = planPlugins(config, ownsObservability)
+
   const configureOptions: ConfigureOptions = {
     prompts: [],
-    devtools: ownsObservability ? undefined : config.devtools,
     autoEscape: config.generation?.autoEscape,
     securityWarnings: config.generation?.securityWarnings,
-    plugins: ownsObservability ? undefined : config.plugins ? [...config.plugins] : undefined,
   }
 
   return {
     inert,
     config,
-    runtimePatch,
+    hooksPatch,
     ownsObservability,
     observability: planObservability(config),
     configureOptions,
     bridgeOptions: {
       devtools: config.devtools,
-      quality: config.quality,
       records,
     },
-    plugins: ownsObservability && config.plugins ? [...config.plugins] : [],
+    plugins,
     tokenizer: config.generation?.tokenizer,
   }
 }
@@ -81,6 +84,25 @@ function planObservability(config: Readonly<CruxConfig>): RuntimeConfigPlan['obs
     }
   }
   return { kind: 'none' }
+}
+
+function planPlugins(
+  config: Readonly<CruxConfig>,
+  ownsObservability: boolean,
+): readonly CruxPlugin[] {
+  const plugins = [...(config.plugins ?? [])]
+  if (!ownsObservability && config.devtools?.serverUrl) {
+    plugins.unshift(
+      withDevtools({
+        prompts: [],
+        contexts: [],
+        serverUrl: config.devtools.serverUrl,
+        bridge: config.devtools.bridge,
+        sessionId: config.devtools.sessionId,
+      }),
+    )
+  }
+  return plugins
 }
 
 function observabilityCapturePolicy(

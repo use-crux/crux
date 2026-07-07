@@ -84,20 +84,13 @@ export const crux = createCruxConvex({
 })
 ```
 
-## Runtime Bridge Only
+## Lower-Level Runtime Work
 
-Use `createConvexRuntimeBridge()` when custom Convex actions or normal Convex Agent-shaped code need Crux runtime plumbing without the profile-backed `convexAgent()` helper:
-
-```ts title="convex/crux/runtime.ts"
-import { createConvexRuntimeBridge } from '@use-crux/convex'
-import { components } from '../_generated/api'
-
-export const runtime = createConvexRuntimeBridge({
-  component: components.crux,
-})
-```
-
-The bridge exposes the same `storage(ctx)`, `run(ctx, target, fn)`, and `bridge(http, cruxConfig)` methods as the runtime part of `createCruxConvex()`. `createCruxConvex()` delegates those methods to this lower-level bridge.
+Use `createCruxConvex().run(ctx, target, fn)` when custom Convex actions or
+normal Convex Agent-shaped code need Crux runtime plumbing without the
+profile-backed `convexAgent()` helper. The same profile exposes
+`storage(ctx)` and `bridge(http, cruxConfig)` for lower-level storage and
+devtools integration.
 
 ## Runtime Layout
 
@@ -109,8 +102,7 @@ convex/
     support.ts          # prompt(), context(), agent() definitions
   crux/
     storage.ts          # cruxRecords(ctx) for record-only code
-    profile.ts          # createCruxConvex({ components }) for profile-backed Convex Agent code
-    runtime.ts          # createConvexRuntimeBridge({ component }) for bridge-only/runtime-only code
+    profile.ts          # createCruxConvex({ components }) for profile-backed and lower-level runtime code
   chat/
     actions.ts          # @use-crux/convex/server action() entrypoints
   agent/

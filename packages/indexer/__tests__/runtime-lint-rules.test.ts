@@ -9,7 +9,7 @@ import { applyIndexLintSuppressions } from '../indexer/lints/suppressions'
 import { builtInIndexRuleDescriptors } from '../indexer/lints/rules'
 
 describe('runtime lint rules', () => {
-  it('reports duplicate durable target names across flow and runtime task definitions', () => {
+  it('reports duplicate durable target names across flow and durable task definitions', () => {
     const findings = indexLintFindings({
       definitions: [
         runtimeDefinition({ id: 'flow:review', kind: 'flow', name: 'review' }),
@@ -68,11 +68,11 @@ describe('runtime lint rules', () => {
         file,
         [
           "import { flow } from '@use-crux/core/flow'",
-          "import { task } from '@use-crux/core/runtime'",
+          "import { durableTask } from '@use-crux/core/runtime'",
           '',
           "const dynamicName = 'review'",
           'export const dynamicFlow = flow(dynamicName, async () => undefined)',
-          "const localTask = task('local-task', { run: async () => undefined })",
+          "const localTask = durableTask('local-task', { run: async () => undefined })",
         ].join('\n'),
       )
 
@@ -98,9 +98,9 @@ describe('runtime lint rules', () => {
         file,
         [
           "import { flow } from '@use-crux/core/flow'",
-          "import { task } from '@use-crux/core/runtime'",
+          "import { durableTask } from '@use-crux/core/runtime'",
           '',
-          "export const embed = task('embed', { run: async () => undefined })",
+          "export const embed = durableTask('embed', { run: async () => undefined })",
           "export const reviewFlow = flow('review', async (flow) => {",
           '  Date.now()',
           "  await flow.waitFor('approved')",

@@ -1,6 +1,13 @@
 import { v } from 'convex/values'
 import { mutation } from '../_generated/server.js'
-import type { MutationCtx } from '../_generated/server.js'
+import {
+  mergeDeliveredSuspend,
+  pruneCompletedIdempotencyRows,
+  pruneTerminalSnapshotRows,
+  pruneTerminalWorkRows,
+  readIdle,
+  updateIdle,
+} from './state-helpers'
 import { limitRows } from './shared'
 
 const WORK_STATUSES = ['pending', 'leased', 'suspended', 'completed', 'cancelled', 'blocked', 'dead-letter'] as const
@@ -62,7 +69,7 @@ export const listWork = mutation({
     const rows = await ctx.db
       .query('runtimeWork')
       .withIndex('by_namespace_status_updated', (q) => q.eq('namespace', namespace).eq('status', status))
-      .collect()
+      .take(limit ?? 1_000)
     return limitRows(
       rows.filter((row) => updatedBefore === undefined || row.updatedAt < updatedBefore),
       limit,
@@ -95,6 +102,18 @@ export const countWork = mutation({
       }
     }
     return [...counts.values()]
+  },
+})
+
+export const pruneTerminalWork = mutation({
+  args: {
+    namespace: v.optional(v.string()),
+    before: v.number(),
+    limit: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, { namespace, before, limit }) => {
+    return await pruneTerminalWorkRows(ctx, { namespace, before, limit })
   },
 })
 
@@ -162,10 +181,28 @@ export const getSnapshot = mutation({
   },
 })
 
+export const pruneTerminalSnapshots = mutation({
+  args: {
+    namespace: v.optional(v.string()),
+    before: v.number(),
+    limit: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, { namespace, before, limit }) => {
+    return await pruneTerminalSnapshotRows(ctx, { namespace, before, limit })
+  },
+})
+
 export const markSnapshotDelivered = mutation({
-  args: { workId: v.string(), namespace: v.string(), waiterId: v.string(), eventId: v.string() },
+  args: {
+    workId: v.string(),
+    namespace: v.string(),
+    waiterId: v.string(),
+    eventId: v.string(),
+    payload: v.any(),
+  },
   returns: v.null(),
-  handler: async (ctx, { workId, namespace, waiterId, eventId }) => {
+  handler: async (ctx, { workId, namespace, waiterId, eventId, payload }) => {
     const snapshot = await ctx.db
       .query('runtimeSnapshots')
       .withIndex('by_flow', (q) => q.eq('namespace', namespace))
@@ -173,37 +210,19 @@ export const markSnapshotDelivered = mutation({
       .first()
     if (!snapshot) return null
     const pendingSuspends = (snapshot.pendingSuspends as Array<Record<string, unknown>>).map((suspend) =>
-      suspend.waiterId === waiterId ? { ...suspend, delivered: { eventId } } : suspend,
+      suspend.waiterId === waiterId ? { ...suspend, delivered: { eventId, payload } } : suspend,
     )
     const deliveredSuspends = mergeDeliveredSuspend(
       snapshot.deliveredSuspends as Record<string, unknown> | undefined,
       snapshot.pendingSuspends as Array<Record<string, unknown>>,
       waiterId,
       eventId,
+      payload,
     )
     await ctx.db.patch(snapshot._id, { pendingSuspends, deliveredSuspends })
     return null
   },
 })
-
-function mergeDeliveredSuspend(
-  current: Record<string, unknown> | undefined,
-  pendingSuspends: Array<Record<string, unknown>>,
-  waiterId: string,
-  eventId: string,
-): Record<string, unknown> | undefined {
-  const suspend = pendingSuspends.find((pending) => pending.waiterId === waiterId)
-  const deliveryKey = typeof suspend?.deliveryKey === 'string'
-    ? suspend.deliveryKey
-    : typeof suspend?.label === 'string'
-      ? suspend.label
-      : undefined
-  if (!deliveryKey) return current
-  return {
-    ...(current ?? {}),
-    [deliveryKey]: { eventId },
-  }
-}
 
 export const hasIdempotencyKey = mutation({
   args: { namespace: v.string(), key: v.string() },
@@ -230,6 +249,18 @@ export const putIdempotencyKey = mutation({
   },
 })
 
+export const pruneIdempotencyKeys = mutation({
+  args: {
+    namespace: v.optional(v.string()),
+    before: v.number(),
+    limit: v.number(),
+  },
+  returns: v.any(),
+  handler: async (ctx, { namespace, before, limit }) => {
+    return await pruneCompletedIdempotencyRows(ctx, { namespace, before, limit })
+  },
+})
+
 export const getIdleCount = mutation({
   args: { namespace: v.string(), scope: v.string() },
   returns: v.number(),
@@ -249,28 +280,3 @@ export const decrementIdle = mutation({
   returns: v.number(),
   handler: async (ctx, { namespace, scope }) => updateIdle(ctx, namespace, scope, -1),
 })
-
-async function readIdle(ctx: MutationCtx, namespace: string, scope: string): Promise<number> {
-  const existing = await ctx.db
-    .query('runtimeIdleCounters')
-    .withIndex('by_namespace_scope', (q) => q.eq('namespace', namespace).eq('scope', scope))
-    .first()
-  return existing?.count ?? 0
-}
-
-async function updateIdle(
-  ctx: MutationCtx,
-  namespace: string,
-  scope: string,
-  delta: number,
-): Promise<number> {
-  const existing = await ctx.db
-    .query('runtimeIdleCounters')
-    .withIndex('by_namespace_scope', (q) => q.eq('namespace', namespace).eq('scope', scope))
-    .first()
-  const count = (existing?.count ?? 0) + delta
-  if (count < 0) throw new Error(`Runtime idle counter ${namespace}:${scope} went negative.`)
-  if (existing) await ctx.db.patch(existing._id, { count })
-  else await ctx.db.insert('runtimeIdleCounters', { namespace, scope, count })
-  return count
-}

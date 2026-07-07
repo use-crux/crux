@@ -223,9 +223,9 @@ When devtools is enabled and `securityWarnings` is active, suspicious input patt
 Security warnings are emitted from the devtools middleware with full trace correlation — each warning links to the `generate()` call that triggered it. The `onSecurityWarning` instrumentation hook is also available for custom integrations:
 
 ```ts
-import { updateRuntime } from '@use-crux/core'
+import { updateHooks } from '@use-crux/core'
 
-updateRuntime({
+updateHooks({
   observability subscribers: {
     onSecurityWarning: (event) => {
       // event: { promptId, field, pattern, message, inputPreview }

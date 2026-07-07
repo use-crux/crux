@@ -101,6 +101,7 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
       namespace: 'tenant-a',
       waiterId: 'waiter_1' as WaiterId,
       eventId: 'evt_1' as EventCursor,
+      payload: { decision: 'approved', nested: { score: 1 } },
     })
     const snapshot = await store.state.getSnapshot('flow_1' as FlowId, {
       namespace: 'tenant-a',
@@ -110,9 +111,18 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
       {
         label: 'approval',
         waiterId: 'waiter_1',
-        delivered: { eventId: 'evt_1' },
+        delivered: {
+          eventId: 'evt_1',
+          payload: { decision: 'approved', nested: { score: 1 } },
+        },
       },
     ])
+    expect(snapshot?.deliveredSuspends).toEqual({
+      approval: {
+        eventId: 'evt_1',
+        payload: { decision: 'approved', nested: { score: 1 } },
+      },
+    })
     ;(
       snapshot as unknown as { completedSteps: { load: { ok: boolean } } }
     ).completedSteps.load.ok = false
@@ -296,4 +306,5 @@ export function registerStoreRecordTests<TStore extends RuntimeStoreAdapter>(
       store.state.decrementIdle('tenant-a', 'flow:flow_1'),
     ).rejects.toThrow('went negative')
   })
+
 }

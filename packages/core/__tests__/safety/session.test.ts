@@ -12,11 +12,11 @@ import { boundary, createSafety, GuardrailBlockedError, ConstraintViolationError
 import type { SafetyOutput } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
-import { updateRuntime, resetRuntime } from '../../runtime/runtime'
+import { updateHooks, resetHooks } from '../../runtime/runtime'
 import type { Message } from '../../generation/messages'
 
 afterEach(() => {
-  resetRuntime()
+  resetHooks()
 })
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -72,7 +72,7 @@ describe('createSafety — enabled', () => {
     expect(identity({ call: { guardrails: [passGuard('g', 'input')] } }).enabled).toBe(true)
     expect(identity({ resolved: { constraints: [passingConstraint('c')] } }).enabled).toBe(true)
 
-    updateRuntime({ globalGuardrails: [passGuard('global-g', 'output')] })
+    updateHooks({ globalGuardrails: [passGuard('global-g', 'output')] })
     expect(identity().enabled).toBe(true)
   })
 })
@@ -84,9 +84,7 @@ describe('createSafety — policy identity', () => {
     const globalSpy = vi.fn()
     const callSpy = vi.fn()
 
-    updateRuntime({
-      globalGuardrails: [passGuard('shared', 'input', globalSpy)],
-    })
+    updateHooks({ globalGuardrails: [passGuard('shared', 'input', globalSpy)] })
     expect(() =>
       identity({
         call: { guardrails: [passGuard('shared', 'output', callSpy)] },
@@ -98,7 +96,7 @@ describe('createSafety — policy identity', () => {
 
   it('differently named policies from all scopes all run', async () => {
     const spies = { a: vi.fn(), b: vi.fn(), c: vi.fn() }
-    updateRuntime({ globalConstraints: [passingConstraint('a', spies.a)] })
+    updateHooks({ globalConstraints: [passingConstraint('a', spies.a)] })
     const safety = identity({
       resolved: { constraints: [passingConstraint('b', spies.b)] },
       call: { constraints: [passingConstraint('c', spies.c)] },
@@ -114,9 +112,7 @@ describe('createSafety — policy identity', () => {
   it('rejects duplicate constraint ids instead of applying scope precedence', () => {
     const globalSpy = vi.fn()
     const promptSpy = vi.fn()
-    updateRuntime({
-      globalConstraints: [passingConstraint('shared', globalSpy)],
-    })
+    updateHooks({ globalConstraints: [passingConstraint('shared', globalSpy)] })
 
     expect(() =>
       identity({

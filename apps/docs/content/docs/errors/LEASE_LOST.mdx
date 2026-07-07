@@ -1,0 +1,20 @@
+---
+title: LEASE_LOST
+description: A stale worker tried to commit after losing its lease.
+---
+
+## What failed
+
+A Runtime Engine worker reached its final commit after another worker reclaimed or replaced its work lease.
+
+## Why
+
+Leases are fencing tokens. Before completion, suspension, retry, or failure is recorded, the kernel checks that the stored work row still carries the executor's lease token.
+
+## What still works
+
+The stale worker exits without retrying, dead-lettering, or overwriting the current owner. The worker that owns the current lease can continue and commit normally.
+
+## Fix
+
+No action is needed for occasional races. For consistently long-running work, keep the lease heartbeat enabled where the host supports timers or increase `leaseTtlMs`.

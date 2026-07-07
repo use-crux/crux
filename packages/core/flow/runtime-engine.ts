@@ -16,16 +16,16 @@ import type { ReplayFingerprint } from '../runtime/engine/replay'
 import type { WorkItem } from '../runtime/engine/work'
 import type { FlowResumeOptions } from './types'
 import type {
-  EventCursor,
   FlowId as RuntimeFlowId,
   WorkId,
 } from '../runtime/ports/ids'
-import type { RuntimeEvent } from '../runtime/ports/events'
 import type {
   FlowSnapshot as RuntimeFlowSnapshot,
+  RuntimeDeliveredSuspend,
 } from '../runtime/ports/state'
 import type { FlowResult } from './types'
 import { assertFlowJsonValue } from './serialization'
+import { createRuntimeError } from '../runtime/engine/errors'
 
 /** Mutable execution bridge for one runtime-backed flow target invocation. */
 export interface RuntimeFlowExecution {
@@ -110,7 +110,7 @@ export function runtimeFlowSnapshot(
     pendingSuspends: [],
     deliveredSuspends: execution.snapshot.deliveredSuspends,
     scheduledEffects: options.scheduledEffects ?? execution.snapshot.scheduledEffects ?? {},
-    updatedAt: new Date(),
+    updatedAt: execution.runtime.now(),
   }
 }
 
@@ -126,21 +126,23 @@ export function flowIdForRuntimeWork(work: WorkItem): RuntimeFlowId {
   }
 }
 
-/** Load delivered suspend payloads from the runtime event log. */
+/** Load delivered suspend payloads from the runtime snapshot only. */
 export async function deliveredRuntimePayloads(
-  runtime: ResolvedRuntimeEngine,
+  _runtime: ResolvedRuntimeEngine,
   snapshot: RuntimeFlowSnapshot,
 ): Promise<ReadonlyMap<string, JsonValue>> {
   const delivered = new Map<string, JsonValue>()
   for (const [deliveryKey, delivery] of Object.entries(snapshot.deliveredSuspends ?? {})) {
     if (!delivery) continue
-    const event = await readRuntimeEvent(runtime, snapshot.namespace, delivery.eventId)
-    if (event) delivered.set(deliveryKey, event.payload)
+    delivered.set(deliveryKey, deliveredPayload(delivery, deliveryKey))
   }
   for (const suspend of snapshot.pendingSuspends) {
     if (!suspend.delivered) continue
-    const event = await readRuntimeEvent(runtime, snapshot.namespace, suspend.delivered.eventId)
-    if (event) delivered.set(suspend.deliveryKey ?? suspend.label, event.payload)
+    const deliveryKey = suspend.deliveryKey ?? suspend.label
+    delivered.set(
+      deliveryKey,
+      deliveredPayload(suspend.delivered, deliveryKey),
+    )
   }
   return delivered
 }
@@ -165,11 +167,21 @@ export function runtimeSignalEventId(flowId: string, signalName: string): string
   return `signal:${flowId}:${signalName}:${Date.now().toString(36)}:${runtimeWorkCounter}`
 }
 
-async function readRuntimeEvent(
-  runtime: ResolvedRuntimeEngine,
-  namespace: string,
-  eventId: EventCursor,
-): Promise<RuntimeEvent | undefined> {
-  const result = await runtime.store.events.read({ namespace })
-  return result.events.find((event) => event.eventId === eventId)
+function deliveredPayload(
+  delivery: RuntimeDeliveredSuspend,
+  deliveryKey: string,
+): JsonValue {
+  const payload = (
+    delivery as RuntimeDeliveredSuspend & { readonly payload?: JsonValue }
+  ).payload
+  if (payload !== undefined) return payload
+  throw createRuntimeError({
+    code: 'REPLAY_DIVERGED',
+    whatFailed: `Runtime flow replay could not load delivered payload for suspend \`${deliveryKey}\`.`,
+    why: 'The stored flow snapshot predates runtime payload embedding.',
+    whatStillWorks:
+      'New runtime-backed flows and newly delivered suspends can replay without reading the event log.',
+    nextStep:
+      'Restart this flow so its delivered suspend payloads are written into the runtime snapshot.',
+  })
 }

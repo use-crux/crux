@@ -366,6 +366,42 @@ mod tests {
     }
 
     #[test]
+    fn streaming_batch_marks_type_only_import_records() {
+        let source = [
+            "import type { TypeOnly } from './types';",
+            "import { value, type MixedType } from './value';",
+            "export const writer = value({ id: 'writer' });",
+        ]
+        .join("\n");
+        let request: WorkerRequest = serde_json::from_value(serde_json::json!({
+            "id": 12,
+            "files": [{ "root": "/repo", "file": "/repo/src/writer.ts", "source": source }],
+            "callNames": ["value"],
+            "stream": true
+        }))
+        .expect("streaming request should deserialize");
+
+        let mut output = Vec::new();
+        write_response(&mut output, request).expect("streaming response should write");
+        let text = String::from_utf8(output).expect("response should be utf8");
+        let first_line = text.lines().next().expect("record event should exist");
+        let event: serde_json::Value =
+            serde_json::from_str(first_line).expect("record event should parse");
+        let imports = event["record"]["imports"]
+            .as_array()
+            .expect("record should contain imports");
+
+        assert_eq!(imports.len(), 3);
+        assert_eq!(imports[0]["localName"], "TypeOnly");
+        assert_eq!(imports[0]["importKind"], "type");
+        assert_eq!(imports[1]["localName"], "value");
+        assert_eq!(imports[1]["importKind"], "value");
+        assert_eq!(imports[1]["moduleSpecifier"], "./value");
+        assert_eq!(imports[2]["localName"], "MixedType");
+        assert_eq!(imports[2]["importKind"], "type");
+    }
+
+    #[test]
     fn streaming_batch_prunes_declared_config_properties() {
         let source = [
             "import { definePolicy } from '@acme/policy';",

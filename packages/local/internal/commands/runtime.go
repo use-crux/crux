@@ -45,7 +45,7 @@ func NewRuntimeCmd(f *cli.Factory) *cobra.Command {
 		Short: "Generate Runtime Engine manifest and host entry files",
 		Long: `Generate the Runtime Engine manifest and host entry files for the current project.
 
-The command discovers exported flow() handles and runtime task() targets, writes
+The command discovers exported flow() handles and durableTask() targets, writes
 .crux/generated/runtime/manifest.json, and refreshes the default Next and Convex
 entry files. It does not create infrastructure or mutate runtime state.`,
 		Example: `  crux runtime generate

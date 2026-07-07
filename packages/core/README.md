@@ -544,18 +544,40 @@ config({
 
 `recordInputs` and `recordOutputs` accept `true | false | "inline" | "reference" | "off"`. `"reference"` keeps only size/hash metadata, while `"off"` removes preview, size, hash, and URI payload metadata. The emit path also strips payload-shaped span/event attributes such as `text`, `query`, `messages`, `output`, `body`, and `filter`. `redactRecord()` runs after capture policy; returning `null` or throwing drops the record and increments `observabilityDiagnostics().redactedRecords`.
 
+## Configuration Lifecycle
+
+`config()` is process-global: one active project config owns the hook layer for
+middleware, plugins, persistence, observability policy, and runtime engine
+definition. Re-running `config()` replaces the previous installation before
+applying the new one, so hot reload does not stack middleware or duplicate hook
+fan-out. Disposing a returned `Crux` object restores only the layer it installed;
+independent layers such as imperative devtools remain intact. Multi-tenant or
+per-request config scoping is intentionally out of scope for this process-global
+API.
+
 ## Runtime Engine
 
 Runtime-bound APIs use a configured Runtime Engine for durable work, timers,
 event waiters, wake delivery, and maintenance. For local development and tests,
 use the in-process `node()` composer:
 
+`@use-crux/core/runtime` and the Runtime Engine store-adapter contract are
+stable beta while Crux remains pre-1.0. Breaking changes require a minor-version
+bump and migration notes.
+
 ```ts
 import { config } from "@use-crux/core";
 import { node } from "@use-crux/core/runtime";
 
 export default config({
-  runtime: node(),
+  runtime: node({
+    retention: {
+      events: "24h",
+      terminalWork: "7d",
+      terminalSnapshots: "30d",
+      sweepLimit: 200,
+    },
+  }),
 });
 ```
 
@@ -566,14 +588,37 @@ work with `flow.defer(task, input)`, schedule task timers with
 `flow.after(task, delay, input)`, and wait for child work with
 `flow.untilIdle({ scope: "current-flow" })`.
 
+Delivered event payloads are copied into the durable flow snapshot when a waiter
+fires. Flow replay reads those snapshot payloads directly instead of scanning
+the event log, so maintenance can prune old events without breaking replay.
+Runtime composers accept a `retention` block for events, terminal work,
+confirmed outbox rows, idempotency keys, settled timers/waiters, terminal
+snapshots, and per-class `sweepLimit`. Defaults keep events for 24h, terminal
+work and idempotency keys for 7d, confirmed outbox/timers/waiters for 24h, and
+terminal snapshots for 30d. Set a class to `false` to keep it indefinitely.
+
+Outbox dispatch is bounded and defaults to eight in-flight deliveries per
+maintenance pass. Store adapters expose `outbox.listByWork(...)` with
+`namespace`, `state`, and `limit` options so orphan recovery can check the
+specific work item's wake rows without namespace-wide scans.
+
+Wake execution fences every final commit with the worker's lease token. If
+maintenance reclaims a long-running item and another worker finishes it first,
+the stale worker exits with `LEASE_LOST` instead of retrying, dead-lettering, or
+overwriting the winner. Hosts that can schedule timers heartbeat leases while
+targets run; timerless hosts can pass `leaseExtension: false` and should size
+`leaseTtlMs` for their longest target. Convex host bindings disable the
+heartbeat and rely on fencing.
+
 Executable durable task targets are defined from the runtime subpath, not the
 root Plans & Tasks ledger `task()` helper:
 
 ```ts
-import { task } from "@use-crux/core/runtime";
+import { durableTask, type RuntimeTaskContext } from "@use-crux/core/runtime";
 
-export const embedDocument = task("embed-document", {
-  run: async ({ documentId }: { documentId: string }) => {
+export const embedDocument = durableTask("embed-document", {
+  run: async (input: { documentId: string }, _context: RuntimeTaskContext) => {
+    const { documentId } = input;
     await embed(documentId);
   },
 });
@@ -611,14 +656,42 @@ export const { GET, POST } = createRuntimeHandler({
 
 Advanced and generated entry files can resolve a composer explicitly with
 `createRuntime({ runtime, targets })`. The `@use-crux/core/runtime/testing`
-subpath exposes the shared store and kernel conformance suites for adapter
-authors.
+subpath exposes `createTestRuntime()` for app-level flow and task tests, plus
+the shared store and kernel conformance suites for adapter authors.
+
+```ts
+import { flow } from "@use-crux/core";
+import { durableTask } from "@use-crux/core/runtime";
+import { createTestRuntime } from "@use-crux/core/runtime/testing";
+
+const sendReminder = durableTask("send-reminder", {
+  run: async (input: { userId: string }) => {
+    await sendEmail(input.userId);
+  },
+});
+
+const onboarding = flow("onboarding", async (scope, input: { userId: string }) => {
+  await scope.after(sendReminder, "2d", { userId: input.userId });
+  await scope.suspend("approval");
+});
+
+const rt = createTestRuntime({ targets: [onboarding, sendReminder] });
+await onboarding.run({ userId: "user_1" });
+await rt.clock.advance("2d");
+rt.dispose();
+```
+
+Runtime store adapters may implement `runComposite(kind, input)` to execute one
+kernel-owned named composite atomically in their native substrate. Ordinary
+stores can omit it and use the default `transact()` wrapper; host-bound adapters
+such as Convex use it to run the same core composite bodies inside one component
+mutation.
 
 Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`,
 `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`,
 `ARTIFACTS_STALE`, `WAKE_UNVERIFIED`, `PUBLIC_URL_UNRESOLVED`,
-`SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`,
+`SETUP_REQUIRED`, `PAYLOAD_NOT_JSON`, `WORK_DEAD_LETTERED`, `LEASE_LOST`,
 `NAMESPACE_AMBIGUOUS`, and `RUNTIME_HOST_ONLY`.
 
 ## Import Paths
@@ -635,7 +708,7 @@ Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 | `@use-crux/core/agent`           | Agents, blackboards, handoffs, delegates, parallel, pipeline, consensus, and swarm.                                                                                         |
 | `@use-crux/core/flow`            | Suspendable typed workflows.                                                                                                                                                |
 | `@use-crux/core/runtime`         | Runtime Engine composers, port contracts, diagnostics, wake envelopes, kernel composites, outbox dispatch, pure retry/state helpers, and the in-memory runtime store.       |
-| `@use-crux/core/runtime/testing` | Runtime Engine store and kernel conformance suites for adapter authors.                                                                                                     |
+| `@use-crux/core/runtime/testing` | App-level Runtime Engine test harness plus store and kernel conformance suites for adapter authors.                                                                         |
 | `@use-crux/core/observability`   | Canonical graph records, presentation read-model types, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
 | `@use-crux/core/project-index`   | Public Project Index contracts for local devtools and source intelligence.                                                                                                  |
 | `@use-crux/core/skill`           | Edge-safe skill authoring with inline and registry loaders.                                                                                                                 |

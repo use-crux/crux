@@ -4,8 +4,8 @@
  * This module owns the per-call hook *function* types (resolve, execution,
  * stream-progress, stream-start).
  *
- * Types are defined here; runtime state lives in `./runtime`.
- * Consumers read hooks via `getRuntime()` from `./runtime`.
+ * Types are defined here; hook state lives in `./runtime`.
+ * Consumers read hooks via `getHooks()` from `./runtime`.
  *
  * @module
  */

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { prompt } from '../../prompt/prompt'
 import { inMemoryBlobStore, inMemoryRecordStore, storage } from '../../storage'
 import { workspace, workspaceToolNames } from '../../workspace'
-import { resetRuntime, setRuntime } from '../../runtime/runtime'
+import { resetHooks, setHooks } from '../../runtime/runtime'
 
 describe('workspace()', () => {
   it('creates default /workspace and /outputs mounts', async () => {

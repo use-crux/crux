@@ -144,7 +144,7 @@ const pluginCode: CodeLine[] = [
   { text: `}): CruxPlugin {`, type: 'code' },
   { text: `  return {`, type: 'code' },
   { text: `    name: 'slack-alerts',`, type: 'code' },
-  { text: `    install(runtime) {`, type: 'highlight' },
+  { text: `    install(hooks) {`, type: 'highlight' },
   { text: `      const unsubscribe = subscribeObservability((record) => {`, type: 'highlight' },
   { text: `        if (record.type !== 'span:end') return`, type: 'code' },
   { text: `        if (record.status === 'error') {`, type: 'code' },
