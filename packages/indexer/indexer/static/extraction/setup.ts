@@ -4,10 +4,6 @@ import type { ProjectIndexCompilerProfile } from '../../compiler/profile'
 import { compareCodepoint } from '../../sort'
 import type { StaticSyntaxCallInterest, StaticSyntaxConstructorInterest } from '../../static-index/syntax/record'
 
-const nativeRoutingPruneCalls = new Set(['router', 'cascade', 'fallback'])
-const cruxCoreExtensionName = '@use-crux/indexer/crux-core'
-const cruxCoreRoutingExtractor = 'routing'
-
 /** Appends caller-provided extensions to a compiler profile without mutating the base profile. */
 export function compilerProfileWithExtensions(
   profile: ProjectIndexCompilerProfile,
@@ -53,24 +49,9 @@ export function staticExtractionConstructorInterests(
 
 /** Computes native-covered call names whose heavy match evidence is not needed by TS extractors. */
 export function staticExtractionNativeFactPruneCallNames(
-  extensionRuntime: IndexerExtensionRuntime,
+  _extensionRuntime: IndexerExtensionRuntime,
 ): ReadonlySet<string> {
-  const prunable = new Set<string>()
-  for (const callName of nativeRoutingPruneCalls) {
-    const interested = extensionRuntime.manifest.extractors.filter((extractor) =>
-      extractor.patterns.some((pattern) => pattern.kind === 'call' && pattern.name === callName),
-    )
-    if (
-      interested.length > 0 &&
-      interested.every(
-        (extractor) =>
-          extractor.extension.name === cruxCoreExtensionName && extractor.name === cruxCoreRoutingExtractor,
-      )
-    ) {
-      prunable.add(callName)
-    }
-  }
-  return prunable
+  return new Set()
 }
 
 function uniqueCallInterests(interests: readonly StaticSyntaxCallInterest[]): readonly StaticSyntaxCallInterest[] {

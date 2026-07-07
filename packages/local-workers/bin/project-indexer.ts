@@ -8,16 +8,14 @@
 
 import { createInterface } from 'node:readline'
 import {
-  indexProjectAst,
-  indexProjectIncremental,
+  generateRuntimeArtifacts,
   inspectProjectStaticIndexConfig,
   inspectProjectStaticSyntaxPlan,
   inspectProjectConfig,
   resolveProjectModel,
-  generateRuntimeArtifacts,
   runRuntimeOperation,
   type RuntimeOperationKind,
-} from '@use-crux/indexer'
+} from '@use-crux/indexer/host'
 import {
   indexProjectAstFromSyntaxRecordProviderForHost,
   indexProjectAstFromSyntaxRecordsForHost,
@@ -31,7 +29,6 @@ import {
   assertProjectIndexWorkerProtocolV2,
   errorContextForMethod,
   writeArtifactEvent,
-  writeIncrementalEvents,
   writePatchEvents,
   writeProjectIndexArtifactError,
   writeProjectIndexPhaseError,
@@ -203,19 +200,6 @@ async function runAssembledRequest(
           await writeArtifactEvent(writeResponse, 'runtimeOperation', result, req.root)
           break
         }
-        case 'indexProjectAst': {
-          if (!req.root) throw new Error('indexProjectAst requires root')
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const staticTimings = createStaticTimingCollector()
-          const patch = await indexProjectAst({
-            root: req.root,
-            configPath: req.configPath,
-            projectName: req.projectName,
-            staticInstrumentation: staticTimings.instrumentation,
-          })
-          await writePatchEvents(writeResponse, 'indexProjectAst', patch, { timings: staticTimings.summary() })
-          break
-        }
         case 'indexProjectAstFromSyntaxRecords': {
           if (!req.root) throw new Error('indexProjectAstFromSyntaxRecords requires root')
           assertProjectIndexWorkerProtocolV2(req.protocolVersion)
@@ -246,24 +230,6 @@ async function runAssembledRequest(
           await writePatchEvents(writeResponse, 'indexProjectAstFromSyntaxRecords', patch, {
             timings: staticTimings.summary(),
           })
-          break
-        }
-        case 'indexProjectIncremental': {
-          if (!req.root) throw new Error('indexProjectIncremental requires root')
-          if (!req.previousIndex) throw new Error('indexProjectIncremental requires previousIndex')
-          assertProjectIndexWorkerProtocolV2(req.protocolVersion)
-          const result = await indexProjectIncremental({
-            root: req.root,
-            configPath: req.configPath,
-            projectName: req.projectName,
-            previousIndex: req.previousIndex,
-            files: req.files ?? [],
-            deletedFiles: req.deletedFiles,
-            mode: req.mode ?? 'ast',
-            semanticBackend: req.semanticBackend,
-            maxAffectedFiles: req.maxAffectedFiles,
-          })
-          await writeIncrementalEvents(writeResponse, result)
           break
         }
         default:

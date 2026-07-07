@@ -5,13 +5,10 @@ export type {
   FullReindexRequiredDecision,
   GraphConfidence,
   IncrementalDecisionExplanation,
-  IncrementalExecutionMode,
   IncrementalExecutionReport,
   IncrementalIndexDecision,
-  IncrementalIndexExecutionResult,
   IncrementalPatchCounts,
   IncrementalSemanticStatus,
-  IndexProjectIncrementalOptions,
   IndexFilesOptions,
   SemanticClosureReindexDecision,
   SourceFileReindexDecision,
@@ -19,7 +16,6 @@ export type {
 export {
   indexInvalidationFromDecision,
   explainIncrementalDecision,
-  indexProjectIncremental,
   planIndexFiles,
   planIndexFilesDryRun,
 } from './incremental/index'

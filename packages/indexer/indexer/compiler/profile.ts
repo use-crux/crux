@@ -1,6 +1,5 @@
 import type { IndexerExtension, IndexerExtensionRuntime, ResolvedIndexerExtension } from '../extensions'
 import { createIndexerExtensionRuntime } from '../extensions'
-import { cruxCoreExtension } from '../extractors/crux-core-extension'
 export { compilerProfileCacheInputs } from '../cache-identity'
 
 export interface CompilerOwnedProjection {
@@ -47,7 +46,7 @@ export const cruxCoreCompilerProjections = [
 export const cruxCoreCompilerProfile = {
   name: '@use-crux/indexer/crux-core-profile',
   version: '1',
-  extensions: [cruxCoreExtension],
+  extensions: [],
   projections: cruxCoreCompilerProjections,
 } as const satisfies ProjectIndexCompilerProfile
 

@@ -2,7 +2,7 @@
 
 import { spawnSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -47,6 +47,8 @@ const localPlatformPackages = new Map([
 ])
 
 const failures = []
+
+await validateCommittedWorkspaceManifests(failures)
 
 for (const staged of index.packages) {
   const packageDir = join(stageRoot, staged.path)
@@ -167,4 +169,48 @@ function hasLocalScopePackageImport(content) {
 
 function matchesSingleValueArray(value, expected) {
   return Array.isArray(value) && value.length === 1 && value[0] === expected
+}
+
+async function validateCommittedWorkspaceManifests(failures) {
+  const manifests = await committedPackageManifests(repoRoot)
+  for (const manifestPath of manifests) {
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'))
+    const platformOptionalDeps = Object.keys(manifest.optionalDependencies ?? {}).filter((name) =>
+      localPlatformPackages.has(name),
+    )
+    if (platformOptionalDeps.length > 0) {
+      failures.push(
+        `${relativeToRepo(manifestPath)}: Platform optionalDependencies must be staged for @use-crux/local publish output only; remove ${platformOptionalDeps.join(', ')}`,
+      )
+    }
+  }
+}
+
+async function committedPackageManifests(root) {
+  const ignoredDirectories = new Set([
+    '.git',
+    '.tmp',
+    '.turbo',
+    'dist',
+    'node_modules',
+    'target',
+    'tmp',
+  ])
+  const entries = await readdir(root, { withFileTypes: true })
+  const manifests = []
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      if (ignoredDirectories.has(entry.name)) continue
+      manifests.push(...(await committedPackageManifests(join(root, entry.name))))
+      continue
+    }
+    if (entry.isFile() && entry.name === 'package.json') {
+      manifests.push(join(root, entry.name))
+    }
+  }
+  return manifests
+}
+
+function relativeToRepo(file) {
+  return file.startsWith(`${repoRoot}/`) ? file.slice(repoRoot.length + 1) : file
 }

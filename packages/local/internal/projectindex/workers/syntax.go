@@ -60,19 +60,9 @@ func (w *Bundle) indexProjectAstPatchResultFromNativeSyntaxRecords(ctx context.C
 	timing := projectIndexAstTimingFromStaticIndexSession(result)
 	timing.PlanMs = elapsedMs(planStarted)
 	if result.Status == session.StatusDisabled {
-		patch, err := w.indexProjectAstPatchFromTypeScript(ctx, root, configPath, projectName)
-		fallbackTiming := w.LastAstTiming()
-		fallbackTiming.PlanMs = timing.PlanMs
-		fallbackTiming.NodeTimings = append(result.PlanTimings, fallbackTiming.NodeTimings...)
-		for _, reason := range result.NodeReasons {
-			fallbackTiming = projectIndexAstTimingNodeRequired(fallbackTiming, reason)
-		}
-		fallbackTiming.TotalMs = elapsedMs(started)
-		w.recordLastAstTiming(fallbackTiming)
-		if err != nil {
-			return projectindex.ProjectAstIndexResult{}, err
-		}
-		return projectindex.ProjectAstIndexResult{Patch: patch}, nil
+		timing.TotalMs = elapsedMs(started)
+		w.recordLastAstTiming(timing)
+		return projectindex.ProjectAstIndexResult{}, fmt.Errorf("Static Index AST indexing is disabled; TypeScript bundled fallback has been removed")
 	}
 	if result.Status == session.StatusMissingCompiler {
 		timing = projectIndexAstTimingNativeOnlyBlocked(timing, projectIndexNativeOnlyReasonStaticIndexCompilerSetup)

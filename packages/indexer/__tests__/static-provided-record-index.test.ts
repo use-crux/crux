@@ -3,12 +3,11 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  indexProjectAst,
-  indexProjectAstFromSyntaxRecordProvider,
-  indexProjectAstFromSyntaxRecords,
+  indexProjectAstFromSyntaxRecordProviderForHost as indexProjectAstFromSyntaxRecordProvider,
+  indexProjectAstFromSyntaxRecordsForHost as indexProjectAstFromSyntaxRecords,
   inspectProjectStaticSyntaxPlan,
-} from '..'
-import { createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
+} from '../host/static-index'
+import { createRustOxcStaticSyntaxFrontend } from '../testing/rust-oxc-frontend'
 import type { IndexPatch } from '../indexer/patches'
 
 const roots: string[] = []
@@ -77,14 +76,10 @@ describe('provided static syntax record indexing', () => {
 
     expect(plan.root).toBe(root)
     expect(plan.files).toEqual([file])
-    expect(plan.callNames).toContain('prompt')
-    expect(plan.constructorNames).toContain('Agent')
-    expect(plan.pruneNativeFactCallNames).toEqual(['cascade', 'fallback', 'router'])
-    expect(plan.relationSpecs).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ type: 'prompt.uses_context', fidelity: 'partial', runtimeJoin: true }),
-      ]),
-    )
+    expect(plan.callNames).toEqual([])
+    expect(plan.constructorNames).toEqual(['Agent'])
+    expect(plan.pruneNativeFactCallNames).toEqual([])
+    expect(plan.relationSpecs).toEqual([])
     expect(plan.ruleDescriptors).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: 'prompt.missing_input_schema', source: 'builtin' }),
@@ -152,7 +147,7 @@ describe('provided static syntax record indexing', () => {
     expect(plan.files).toContain(configFile)
   })
 
-  it('builds the same AST patch facts as the parser-backed static path', async () => {
+  it('projects AST patch facts from provided static syntax records', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')
@@ -166,7 +161,7 @@ describe('provided static syntax record indexing', () => {
     ].join('\n')
     await writeFile(file, source)
 
-    const record = await createTypeScriptStaticSyntaxFrontend({ callNames: ['prompt'] }).parseFile({
+    const record = await createRustOxcStaticSyntaxFrontend({ callNames: ['prompt'] }).parseFile({
       root,
       file,
       source,
@@ -176,10 +171,13 @@ describe('provided static syntax record indexing', () => {
       projectName: 'provided-records',
       records: [record],
     })
-    await rm(join(root, '.crux'), { recursive: true, force: true })
-    const baseline = await indexProjectAst({ root, projectName: 'provided-records' })
 
-    expect(normalizedPatchFacts(provided)).toEqual(normalizedPatchFacts(baseline))
+    expect(normalizedPatchFacts(provided)).toMatchObject({
+      project: { root, name: 'provided-records' },
+      diagnostics: [expect.objectContaining({ code: 'index.source_only' })],
+      definitions: [expect.objectContaining({ id: 'prompt:writer.provided' })],
+      relations: [],
+    })
   })
 
   it('surfaces stale imported provided records as degraded diagnostics', async () => {
@@ -197,7 +195,7 @@ describe('provided static syntax record indexing', () => {
     await writeFile(file, source)
     await writeFile(helperFile, helperSource)
 
-    const frontend = createTypeScriptStaticSyntaxFrontend({ callNames: ['prompt'] })
+    const frontend = createRustOxcStaticSyntaxFrontend({ callNames: ['prompt'] })
     const record = await frontend.parseFile({ root, file, source })
     const staleHelperRecord = await frontend.parseFile({ root, file: helperFile, source: helperSource })
     await writeFile(helperFile, "export const helper = 'changed'")
@@ -217,7 +215,7 @@ describe('provided static syntax record indexing', () => {
     )
   })
 
-  it('builds the same AST patch facts from a lazy syntax record provider', async () => {
+  it('projects AST patch facts from a lazy syntax record provider', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
     const file = join(root, 'src/writer.ts')
@@ -238,7 +236,7 @@ describe('provided static syntax record indexing', () => {
     await writeFile(file, source)
     await writeFile(secondFile, secondSource)
 
-    const frontend = createTypeScriptStaticSyntaxFrontend({ callNames: ['prompt'] })
+    const frontend = createRustOxcStaticSyntaxFrontend({ callNames: ['prompt'] })
     const record = await frontend.parseFile({
       root,
       file,
@@ -275,14 +273,15 @@ describe('provided static syntax record indexing', () => {
         },
       },
     })
-    await rm(join(root, '.crux'), { recursive: true, force: true })
-    const baseline = await indexProjectAst({ root, projectName: 'provided-record-provider' })
 
     expect(batchReads.flat()).toContain(file)
     expect(batchReads.flat()).toContain(secondFile)
     expect(reads).not.toContain(file)
     expect(reads).not.toContain(secondFile)
-    expect(normalizedPatchFacts(provided)).toEqual(normalizedPatchFacts(baseline))
+    expect((provided.facts.definitions ?? []).map((definition) => definition.id).sort()).toEqual([
+      'prompt:editor.provider',
+      'prompt:writer.provider',
+    ])
   })
 
   it('indexes an empty project from an explicit native syntax frontend identity', async () => {

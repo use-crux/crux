@@ -1,9 +1,9 @@
 # Native AST Beta Readiness
 
 This report records the beta gate for `experimental.indexer.nativeAst`. It is a
-release-readiness artifact, not a default-switch approval. The TypeScript Static
-Index path remains the correctness baseline, and Rust/Oxc earns beta status only
-by exact normalized Project Index parity.
+release-readiness artifact, not a default-switch approval. Rust/Oxc is now the
+only bundled first-party static path, and the beta gate checks it against the
+Rust-owned golden plus Go host behavior.
 
 ## Status
 
@@ -14,15 +14,10 @@ approval for that switch.
 
 ## Current Evidence
 
-Last Phase 7 verification run: 2026-06-27.
+Last Phase 5 verification run: 2026-07-07.
 
 ```bash
-cargo build --package crux-static-index-worker --bin crux-static-index-worker
-cargo test
-CRUX_STATIC_INDEX_WORKER="$PWD/target/debug/crux-static-index-worker" pnpm --filter @use-crux/indexer test
-CRUX_STATIC_INDEX_WORKER="$PWD/target/debug/crux-static-index-worker" pnpm --filter @use-crux/local-workers parity:indexer-static -- --root="$PWD" --concurrency=8 --max-mismatches=20
-(cd packages/local && CRUX_INDEXER_PARITY_ROOT="$(git rev-parse --show-toplevel)" CRUX_STATIC_INDEX_WORKER="$(git rev-parse --show-toplevel)/target/debug/crux-static-index-worker" go test ./internal/projectindex/workers -run TestWorkerStaticIndexMatchesTypeScriptProductionPath -count=1 -v)
-make local
+node scripts/native-ast-parity-gate.mjs
 ```
 
 Observed gate coverage:
@@ -30,29 +25,28 @@ Observed gate coverage:
 | Surface                         | Evidence                                                                                                                                                                                        |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Rust worker build               | `cargo build --package crux-static-index-worker --bin crux-static-index-worker` passed.                                                                                                         |
-| Rust tests                      | `cargo test` passed, including `static-compiler` 62 tests, `worker` 18 tests, `syntax-oxc` 1 test, and doc tests.                                                                               |
-| Full indexer suite              | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 87 files and 467 tests.                                                       |
-| Repository static parity corpus | Local worker parity passed with `files=442 matched=442 canonicalMismatches=0 rawMismatches=30 errors=0`. Definitions, relations, and diagnostics matched exactly after canonical normalization. |
-| Go production path              | `TestWorkerStaticIndexMatchesTypeScriptProductionPath` passed from `packages/local` with the built Rust worker.                                                                                 |
-| Local build path                | `make local` passed. It built local worker bundles and devtools UI, embedded assets, built the release Rust/Oxc worker, and built the Go `crux` binary.                                         |
-| Public docs                     | `pnpm --filter docs build` passed, including MDX generation, TypeScript, and 433 static pages.                                                                                                  |
+| Rust tests                      | `cargo test` passed, including `static-compiler` 68 tests, `worker` 19 tests, `syntax-oxc` 8 tests, and doc tests.                                                                              |
+| Rust first-party golden         | `rust-first-party-static-golden.test.ts` compares Rust/Oxc output with `contracts/fixtures/rust-first-party-static-golden.json`.                                                                |
+| Full indexer suite              | `CRUX_STATIC_INDEX_WORKER=target/debug/crux-static-index-worker pnpm --filter @use-crux/indexer test` passed with 73 files, 330 tests, and 1 skipped env-gated test.                            |
+| Go production path              | `go test ./internal/projectindex/... -count=1` passed from `packages/local` with the built Rust worker and embedded local worker bundle.                                                         |
+| Local worker embed path         | The gate built `@use-crux/local-workers`, embedded the generated worker assets, and then ran the Go Project Index packages against those assets.                                                  |
 
 `pnpm test:native-ast-parity` is the release command because it builds the
-current Rust/Oxc worker, points every worker-backed test at that binary, builds
-and embeds the TypeScript worker assets for Go host tests, and sets
-`CRUX_INDEXER_PARITY_REQUIRED=1` so env-gated parity cannot silently skip in CI.
+current Rust/Oxc worker, points every worker-backed test at that binary, compares
+Rust output with the Rust-owned golden, builds and embeds the TypeScript worker
+assets that remain for extension/config/semantic host work, and runs the Go host
+packages with required gate environment.
 
 ## Coverage
 
-- 29 built-in lint rules have full descriptor coverage and worker-backed
-  TypeScript/Rust finding parity, including default/profile/config behavior,
-  active suppressions, unused suppressions, unknown-rule diagnostics, and final
-  production lint patch parity.
-- 17 first-party extractor families have positive and negative native parity
-  evidence across definitions, relations, source refs, diagnostics,
-  dependencies, source rows/source graph, runtime metadata, degraded behavior,
-  and provided records where present.
-- TypeScript extension fallback is covered in the Go production path with a
+- Built-in lint rules are described from the Rust-owned descriptor fixture and
+  evaluated by the Rust `crates/lints` implementation. TypeScript no longer
+  contains a bundled first-party lint evaluator.
+- First-party extractor families are Rust-only in the binary and verified
+  against the Rust-owned static golden across definitions, relations, source
+  refs, diagnostics, dependencies, source rows/source graph, runtime metadata,
+  degraded behavior, and provided records where present.
+- TypeScript extension host coverage remains for third-party extensions with a
   TS-authored extractor, a TS-authored lint rule, and mixed native plus
   extension output.
 - Warm cache, incremental source edits, config/lint-profile fallback, static
@@ -75,11 +69,7 @@ from `experimental.indexer.native`, which selects the semantic backend.
 Run these before announcing or releasing the beta:
 
 ```bash
-cargo build --package crux-static-index-worker --bin crux-static-index-worker
-cargo test
-CRUX_STATIC_INDEX_WORKER="$PWD/target/debug/crux-static-index-worker" pnpm --filter @use-crux/indexer test
-CRUX_STATIC_INDEX_WORKER="$PWD/target/debug/crux-static-index-worker" pnpm --filter @use-crux/local-workers parity:indexer-static -- --root="$PWD" --concurrency=8 --max-mismatches=20
-(cd packages/local && CRUX_INDEXER_PARITY_ROOT="$(git rev-parse --show-toplevel)" CRUX_STATIC_INDEX_WORKER="$(git rev-parse --show-toplevel)/target/debug/crux-static-index-worker" go test ./internal/projectindex/workers -run TestWorkerStaticIndexMatchesTypeScriptProductionPath -count=1 -v)
+node scripts/native-ast-parity-gate.mjs
 make local
 ```
 

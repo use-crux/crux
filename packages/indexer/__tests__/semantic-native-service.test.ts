@@ -1,7 +1,6 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { indexProjectSemantic } from '..'
 import type { IndexPatchFacts } from '../indexer/patches'
 import {
   createNativeSemanticBackend,
@@ -273,7 +272,7 @@ describe('native semantic index service', () => {
       `,
     )
 
-    const patch = await indexProjectSemantic({ root })
+    const patch = await createSemanticIndexService().indexProject({ root })
     expect(patch.status).toBe('ok')
     expect(patch.facts.diagnostics ?? []).toEqual([])
   })

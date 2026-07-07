@@ -234,7 +234,7 @@ func BenchmarkWorkerProductionWatchLeafPath(b *testing.B) {
 		b.Fatalf("stat CRUX_INDEXER_BENCH_ROOT: %v", err)
 	}
 	root := prepareBenchmarkWatchRoot(b, sourceRoot)
-	configPath := writeStaticIndexParityConfig(b, root)
+	configPath := writeStaticIndexNativeConfig(b, root)
 	qualityRoot := b.TempDir()
 	worker := newTestWorker(b)
 	defer worker.Close()
@@ -341,7 +341,7 @@ func benchmarkStaticIndexConfig(b *testing.B, root string) string {
 	if configPath := os.Getenv("CRUX_INDEXER_BENCH_CONFIG"); configPath != "" {
 		return configPath
 	}
-	return writeStaticIndexParityConfig(b, root)
+	return writeStaticIndexNativeConfig(b, root)
 }
 
 func prepareBenchmarkWatchRoot(b *testing.B, root string) string {

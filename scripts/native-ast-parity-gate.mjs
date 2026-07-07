@@ -49,12 +49,7 @@ const requiredGoParityEnv = {
   CRUX_INDEXER_PARITY_REQUIRED: "1",
 };
 
-/** Environment that enables the intentionally slow TypeScript static reference golden check. */
-const requiredTypescriptStaticGoldenEnv = {
-  CRUX_TS_FIRST_PARTY_STATIC_GOLDEN_REQUIRED: "1",
-};
-
-/** Environment that compares Rust/Oxc output against the captured TypeScript static golden. */
+/** Environment that compares Rust/Oxc output against the captured Rust static golden. */
 const requiredRustStaticGoldenEnv = {
   ...workerEnv,
   CRUX_RUST_FIRST_PARTY_STATIC_GOLDEN_REQUIRED: "1",
@@ -79,20 +74,7 @@ const commands = [
     args: ["test"],
   },
   {
-    label: "Verify TypeScript first-party static reference golden",
-    command: "pnpm",
-    args: [
-      "--filter",
-      "@use-crux/indexer",
-      "exec",
-      "vitest",
-      "run",
-      "__tests__/ts-first-party-static-golden.test.ts",
-    ],
-    env: requiredTypescriptStaticGoldenEnv,
-  },
-  {
-    label: "Verify Rust first-party static output against TypeScript golden",
+    label: "Verify Rust first-party static output against Rust golden",
     command: "pnpm",
     args: [
       "--filter",
@@ -108,20 +90,6 @@ const commands = [
     label: "Run full indexer suite with Rust worker",
     command: "pnpm",
     args: ["--filter", "@use-crux/indexer", "test"],
-    env: workerEnv,
-  },
-  {
-    label: "Run local-workers static parity over repository corpus",
-    command: "pnpm",
-    args: [
-      "--filter",
-      "@use-crux/local-workers",
-      "parity:indexer-static",
-      "--",
-      `--root=${repoRoot}`,
-      "--concurrency=8",
-      "--max-mismatches=20",
-    ],
     env: workerEnv,
   },
   {

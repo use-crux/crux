@@ -248,16 +248,6 @@ func TestWorker_indexProjectAstPatchErrorsWhenStaticSyntaxEnabledWithoutStaticIn
 		rl.on('line', (line) => {
 			const req = assemble(JSON.parse(line))
 			if (!req) return
-			if (req.method === 'indexProjectAst') {
-				process.stdout.write(JSON.stringify({
-					protocolVersion: 2,
-					type: 'phase:error',
-					transactionId: 'tx-error',
-					phase: 'ast',
-					error: { message: 'unexpected TypeScript AST fallback' }
-				}) + '\n')
-				return
-			}
 			if (req.method === 'inspectProjectStaticIndexConfig') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
@@ -362,7 +352,7 @@ func TestWorker_indexProjectAstPatchErrorsWhenStaticSyntaxEnabledWithoutStaticIn
 	}
 }
 
-func TestWorker_indexProjectAstPatchFallsBackWhenNativeAstConfigDisabled(t *testing.T) {
+func TestWorker_indexProjectAstPatchErrorsWhenNativeAstConfigDisabled(t *testing.T) {
 	if _, err := findNodePath(); err != nil {
 		t.Skipf("node unavailable: %v", err)
 	}
@@ -405,52 +395,7 @@ func TestWorker_indexProjectAstPatchFallsBackWhenNativeAstConfigDisabled(t *test
 				}) + '\n')
 				return
 			}
-			if (req.method !== 'indexProjectAst') {
-				process.stdout.write(JSON.stringify({ error: 'unexpected method: ' + req.method }) + '\n')
-				return
-			}
-			const tx = 'tx-ts-ast'
-			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
-				type: 'phase:start',
-				transactionId: tx,
-				phase: 'ast',
-				root: req.root,
-				startedAt: new Date(0).toISOString()
-			}) + '\n')
-			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
-				type: 'fact:batch',
-				transactionId: tx,
-				sequence: 0,
-				facts: [{
-					schemaVersion: 1,
-					factId: 'definitions:prompt:ts',
-					kind: 'definitions',
-					phase: 'ast',
-					projectRoot: req.root,
-					producer: { name: '@use-crux/indexer/project-indexer', version: 'test' },
-					fidelity: 'authoritative',
-					provenance: { kind: 'runtime', attribute: 'test.typescript' },
-					fact: { id: 'prompt:ts', kind: 'prompt', name: 'ts', fidelity: 'resolved', status: 'active' }
-				}]
-			}) + '\n')
-			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
-				type: 'phase:done',
-				transactionId: tx,
-				phase: 'ast',
-				patch: {
-					schemaVersion: 1,
-					phase: 'ast',
-					project: { root: req.root, name: req.projectName },
-					startedAt: new Date(0).toISOString(),
-					finishedAt: new Date(0).toISOString(),
-					status: 'ok',
-					invalidates: { all: true }
-				},
-				summary: { factCount: 1 }
-			}) + '\n')
+			process.stdout.write(JSON.stringify({ error: 'unexpected method: ' + req.method }) + '\n')
 		})
 	`), 0o600); err != nil {
 		t.Fatalf("write script: %v", err)
@@ -462,23 +407,16 @@ func TestWorker_indexProjectAstPatchFallsBackWhenNativeAstConfigDisabled(t *test
 	worker.WithSyntaxParser(syntaxParser)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-disabled")
-	if err != nil {
-		t.Fatalf("IndexProjectAstPatch error = %v", err)
+	_, err := worker.IndexProjectAstPatch(context.Background(), root, "", "native-disabled")
+	if err == nil {
+		t.Fatal("IndexProjectAstPatch error = nil, want disabled Static Index error")
 	}
-	if len(patch.Facts.Definitions) != 1 || patch.Facts.Definitions[0].ID != "prompt:ts" {
-		t.Fatalf("definitions = %+v, want TypeScript AST fallback result", patch.Facts.Definitions)
+	if !strings.Contains(err.Error(), "TypeScript bundled fallback has been removed") {
+		t.Fatalf("IndexProjectAstPatch error = %v, want removed fallback error", err)
 	}
 	timing := worker.LastAstTiming()
-	if !containsTimingReason(timing.NodeReasons, projectIndexNodeReasonTypeScriptStaticCompiler) {
-		t.Fatalf("timing.NodeReasons = %v, want %q", timing.NodeReasons, projectIndexNodeReasonTypeScriptStaticCompiler)
-	}
-	if containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticPlanInspection) ||
-		containsTimingReason(timing.NodeReasons, projectIndexNodeReasonStaticIndexConfig) {
-		t.Fatalf("timing.NodeReasons = %v, want no native planning Node reason without config", timing.NodeReasons)
-	}
-	if !timing.NodeStarted || timing.NativeOnlyEligible {
-		t.Fatalf("timing = %+v, want node-required native-only-ineligible fallback", timing)
+	if timing.NodeStarted {
+		t.Fatalf("timing = %+v, want disabled native config to avoid Node projection", timing)
 	}
 }
 

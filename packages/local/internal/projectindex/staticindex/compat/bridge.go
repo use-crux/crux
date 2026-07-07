@@ -82,14 +82,13 @@ func CheckRuleFacts(
 		return nil, fmt.Errorf("marshal static rule graph: %w", err)
 	}
 	req := requestwire.Request{
-		Method:             "checkStaticRules",
-		Root:               root,
-		ConfigPath:         configPath,
-		ProjectName:        projectName,
-		ResolutionMode:     "config-policy",
-		Graph:              graph,
-		Files:              append([]string(nil), files...),
-		NativeLintFinalize: true,
+		Method:         "checkStaticRules",
+		Root:           root,
+		ConfigPath:     configPath,
+		ProjectName:    projectName,
+		ResolutionMode: "config-policy",
+		Graph:          graph,
+		Files:          append([]string(nil), files...),
 	}
 	resp, err := reader.ReadArtifact(ctx, req, projectindex.ProjectIndexArtifactStaticRuleCheck)
 	if err != nil {

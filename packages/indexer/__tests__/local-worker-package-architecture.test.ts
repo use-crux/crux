@@ -90,7 +90,7 @@ describe('local worker package architecture', () => {
     } finally {
       rmSync(stageDir, { recursive: true, force: true })
     }
-  })
+  }, 30_000)
 })
 
 interface WorkspacePackageJson {

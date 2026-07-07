@@ -42,11 +42,10 @@ rows below.
 
 ## Migration Notes
 
-- The mandatory P5.4 TS first-party fact snapshot is captured as
-  `contracts/fixtures/ts-first-party-static-golden.json`, a root-stable
-  digest over the current TypeScript static output. Use it as the Rust oracle
-  target before deleting or replacing the current first-party TS static
-  extractor path.
+- The mandatory P5.4 first-party fact snapshot is captured as
+  `contracts/fixtures/rust-first-party-static-golden.json`, a root-stable
+  digest over the Rust/Oxc static output. Use it as the Rust oracle for bundled
+  first-party static output drift.
 - The first Rust move should target facts already expressible as primitive
   config projection: schema metadata/source refs, direct callback source refs,
   injection facts, routing children/relations, and agent config relations.

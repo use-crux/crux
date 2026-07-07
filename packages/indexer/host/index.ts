@@ -15,6 +15,8 @@ export {
   createProjectIndexCompiler,
   projectIndexSnapshotFromCompilerResult,
   createStaticExtraction,
+  inspectProjectStaticIndexConfig,
+  inspectProjectStaticSyntaxPlan,
   staticDefinitionFiles,
   createTypeScriptStaticSyntaxFrontend,
   indexProjectAstFromSyntaxRecordProviderForHost,
@@ -41,6 +43,11 @@ export type {
   StaticSyntaxFileRecord,
   StaticSyntaxFrontendFactory,
   StaticSyntaxFrontendIdentity,
+  InspectProjectStaticIndexConfigOptions,
+  InspectProjectStaticSyntaxPlanOptions,
+  ProjectStaticIndexConfig,
+  ProjectStaticIndexExtensionReference,
+  ProjectStaticSyntaxPlan,
 } from './static-index'
 export {
   createNativeSemanticBackend,
@@ -81,7 +88,37 @@ export type {
   SemanticSyntaxView,
   TypeScriptSemanticBackendOptions,
 } from './semantic'
-export { runtimeIndexPatchFromCompilerResult } from './runtime'
+export { indexProjectRuntimeForHost, runtimeIndexPatchFromCompilerResult } from './runtime'
+export type { IndexProjectRuntimeHostOptions } from './runtime'
+export {
+  diffRuntimeArtifactDrift,
+  generateRuntimeArtifacts,
+  manifestFromDefinitions,
+} from '../indexer/runtime-artifacts'
+export { runRuntimeOperation } from '../indexer/runtime-ops'
+export type {
+  GenerateRuntimeArtifactsOptions,
+  RuntimeArtifactDriftReport,
+  RuntimeArtifactGenerationResult,
+  RuntimeArtifactMissingTarget,
+} from '../indexer/runtime-artifacts'
+export type {
+  RuntimeOperationKind,
+  RuntimeOperationOptions,
+  RuntimeOperationResult,
+} from '../indexer/runtime-ops'
+export type { ResolveProjectModelOptions } from '../indexer/project-model'
+export { resolveProjectModel } from '../indexer/project-model'
+export type {
+  InspectProjectConfigOptions,
+  ProjectConfigFileOrigin,
+  ProjectConfigFileStatus,
+  ProjectConfigInspect,
+  ProjectConfigList,
+  ProjectConfigOrigin,
+  ProjectConfigSetting,
+} from '../indexer/project-config-inspect'
+export { inspectProjectConfig } from '../indexer/project-config-inspect'
 export {
   checkStaticRulesForProject,
   extractStaticEvidenceBatchForProject,

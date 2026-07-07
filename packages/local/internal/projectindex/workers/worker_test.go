@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -65,11 +66,18 @@ func TestWorker_contextCancellationKillsStuckStreamWorker(t *testing.T) {
 	}
 
 	worker := newTestWorkerWithProjectScript(t, script)
+	defer worker.Close()
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 	defer cancel()
 
 	start := time.Now()
-	_, err := worker.IndexProjectAstPatch(ctx, t.TempDir(), "", "stuck-project")
+	_, err := worker.IndexProjectAstFromSyntaxRecordsPatch(
+		ctx,
+		t.TempDir(),
+		"",
+		"stuck-project",
+		[]json.RawMessage{json.RawMessage(`{"kind":"source","sourceFile":"src/writer.ts"}`)},
+	)
 	if err == nil {
 		t.Fatal("IndexProjectAstPatch error = nil, want caller deadline exceeded")
 	}

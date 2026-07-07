@@ -6,15 +6,19 @@ import type {
   SourceLocation,
   SourceSnippet,
 } from '@use-crux/core/project-index'
-import type { StaticFoundDefinition, StaticRelationRef } from '../types'
+import type { StaticFoundDefinition, StaticRelationRef } from '../../../types'
 
 /**
- * Parser-Static Index call context used by first-party compatibility helpers.
+ * Compiler-owned parser call context used by the TypeScript compatibility
+ * frontend and extension fixture helpers.
  *
- * This is distinct from the stable extension `ExtractContext`: it still contains TypeScript nodes and
- * parser helper functions for internal extractors that have not been fully reduced to stable readers.
+ * Public extractors receive the stable `ExtractContext` reader surface. This
+ * context is intentionally internal because it still carries TypeScript parser
+ * nodes for compatibility execution.
+ *
+ * @internal
  */
-export interface ExtractContext {
+export interface StaticCallContext {
   readonly root: string
   readonly file: string
   readonly sourceFile: ts.SourceFile
@@ -30,18 +34,17 @@ export interface ExtractContext {
   readonly localInitializers: ReadonlyMap<string, ts.Expression>
   readonly importName?: string
   readonly importSource?: string
-  readonly helpers: ExtractHelpers
-  readonly safeId: ExtractHelpers['safeId']
-  readonly define: ExtractHelpers['define']
+  readonly helpers: StaticCallHelpers
+  readonly safeId: StaticCallHelpers['safeId']
+  readonly define: StaticCallHelpers['define']
 }
 
 /**
- * Parser helper functions carried by the Static Index call context.
+ * Parser helper functions carried by the internal static call context.
  *
- * Helpers centralize id sanitization, schema projection, definition defaults, and relation-ref
- * construction so compatibility helpers do not each reimplement parser rules.
+ * @internal
  */
-export interface ExtractHelpers {
+export interface StaticCallHelpers {
   readonly safeId: (value: string) => string
   readonly schemaProperty: (
     object: ts.ObjectLiteralExpression,
@@ -58,7 +61,5 @@ export interface ExtractHelpers {
   readonly relationRef: (type: string, target: { toVariable?: string; toId?: string }) => StaticRelationRef
 }
 
-/**
- * Alias used by traversal-heavy first-party helpers to make their static-parser dependency explicit.
- */
-export type StaticCallContext = ExtractContext
+/** Legacy alias retained for narrow host internals. */
+export type ExtractContext = StaticCallContext

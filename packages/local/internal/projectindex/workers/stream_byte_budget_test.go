@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -57,11 +58,11 @@ func TestWorkerAcceptsPatchStreamsOverSingleLineByteLimit(t *testing.T) {
 				}) + '\n')
 			}
 
-			process.stdout.write(JSON.stringify({
-				protocolVersion: 2,
-				type: 'phase:done',
-				transactionId: tx,
-				phase: 'ast',
+				process.stdout.write(JSON.stringify({
+					protocolVersion: 2,
+					type: 'phase:done',
+					transactionId: tx,
+					phase: 'ast',
 				patch: {
 					schemaVersion: 1,
 					phase: 'ast',
@@ -70,17 +71,23 @@ func TestWorkerAcceptsPatchStreamsOverSingleLineByteLimit(t *testing.T) {
 					finishedAt: new Date(0).toISOString(),
 					status: 'ok'
 				},
-				summary: { factCount: 10 }
-			}) + '\n')
-		})
-	`), 0o600); err != nil {
+					summary: { factCount: 10 }
+				}) + '\n', () => process.exit(0))
+			})
+		`), 0o600); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 
 	worker := newTestWorkerWithProjectScript(t, script)
 	defer worker.Close()
 
-	patch, err := worker.IndexProjectAstPatch(context.Background(), t.TempDir(), "", "large-stream")
+	patch, err := worker.IndexProjectAstFromSyntaxRecordsPatch(
+		context.Background(),
+		t.TempDir(),
+		"",
+		"large-stream",
+		[]json.RawMessage{json.RawMessage(`{"kind":"source","sourceFile":"src/writer.ts"}`)},
+	)
 	if err != nil {
 		t.Fatalf("IndexProjectAstPatch error = %v", err)
 	}

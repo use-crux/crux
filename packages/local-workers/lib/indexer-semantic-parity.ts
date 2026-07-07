@@ -12,15 +12,14 @@
 
 import { existsSync, rmSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import {
-  indexProjectAst,
-  indexProjectSemantic,
   type IndexPatch,
   type IndexPatchFacts,
   type SemanticBackendName,
   type SemanticBackendSelection,
+  type SemanticIndexInstrumentation,
 } from '@use-crux/indexer'
+import { createSemanticIndexService } from '@use-crux/indexer/host/semantic'
 
 interface SemanticParityArgs {
   /** Project root to analyze. */
@@ -59,6 +58,7 @@ const factKeys = [
 type FactKey = (typeof factKeys)[number]
 type FactCount = number | 'present' | 'missing'
 type FactCounts = Readonly<Record<FactKey, FactCount>>
+type NativeCoverageEvent = Parameters<NonNullable<SemanticIndexInstrumentation['onNativeCoverage']>>[0]
 
 const DEFAULT_BACKEND_ROOT = '/home/henri/private/karyla/packages/backend'
 
@@ -69,10 +69,8 @@ async function main(): Promise<void> {
   console.log(`Semantic parity root: ${args.root}`)
   if (args.clearCache) clearIndexCache(args.root)
 
-  const astPatch = await indexProjectAst({ root: args.root, projectName: 'semantic-parity' })
-  const previousIndex = projectIndexSnapshotFromAstPatch(astPatch)
-  const typeScript = await runBackend('typescript', args, previousIndex, astPatch.semanticSourceProfile)
-  const native = await runBackend('native', args, previousIndex, astPatch.semanticSourceProfile)
+  const typeScript = await runBackend('typescript', args)
+  const native = await runBackend('native', args)
 
   printRun(typeScript)
   printRun(native)
@@ -94,19 +92,15 @@ async function main(): Promise<void> {
 async function runBackend(
   backend: SemanticBackendName,
   args: SemanticParityArgs,
-  previousIndex: ProjectIndexSnapshot,
-  semanticSourceProfile: IndexPatch['semanticSourceProfile'],
 ): Promise<BackendParityRun> {
   const nativeCoverage: string[] = []
   if (args.clearCache) clearIndexCache(args.root)
-  const patch = await indexProjectSemantic({
+  const patch = await createSemanticIndexService().indexProject({
     root: args.root,
     projectName: `semantic-parity-${backend}`,
     semanticBackend: semanticBackendSelection(backend),
-    previousIndex,
-    semanticSourceProfile,
     semanticInstrumentation: {
-      onNativeCoverage: (coverage) => nativeCoverage.push(JSON.stringify(coverage)),
+      onNativeCoverage: (coverage: NativeCoverageEvent) => nativeCoverage.push(JSON.stringify(coverage)),
     },
   })
   return {
@@ -234,25 +228,6 @@ function printRun(run: BackendParityRun): void {
       .filter((part): part is string => Boolean(part))
       .join(' '),
   )
-}
-
-function projectIndexSnapshotFromAstPatch(patch: IndexPatch): ProjectIndexSnapshot {
-  return {
-    schemaVersion: 1,
-    project: patch.project,
-    indexedAt: patch.finishedAt ?? patch.startedAt,
-    prompts: patch.facts.prompts ? [...patch.facts.prompts] : [],
-    contexts: patch.facts.contexts ? [...patch.facts.contexts] : [],
-    tools: patch.facts.tools ? [...patch.facts.tools] : [],
-    lint: patch.facts.lint,
-    definitions: patch.facts.definitions ? [...patch.facts.definitions] : [],
-    relations: patch.facts.relations ? [...patch.facts.relations] : [],
-    diagnostics: patch.facts.diagnostics ? [...patch.facts.diagnostics] : [],
-    lintFindings: patch.facts.lintFindings ? [...patch.facts.lintFindings] : [],
-    ruleDescriptors: patch.facts.ruleDescriptors ? [...patch.facts.ruleDescriptors] : [],
-    sources: patch.facts.sources ? [...patch.facts.sources] : [],
-    sourceGraph: patch.facts.sourceGraph,
-  }
 }
 
 function parseArgs(argv: readonly string[]): SemanticParityArgs {

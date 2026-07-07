@@ -82,9 +82,6 @@ func (c Client) Collector(
 		Producer:         c.Producer,
 	})
 	err := c.PatchRequest(ctx, req, collector.Handle, func() bool {
-		if req.Method == "indexProjectIncremental" {
-			return collector.HasIncrementalReport()
-		}
 		return collector.CompletedPatchCount() >= 1
 	})
 	if err != nil {

@@ -184,9 +184,7 @@ describe('project Static Index extension host manifest', () => {
 
     const rules = await checkStaticRulesForProject({
       root,
-      nativeLintFinalize: true,
       graph: { definitions: evidence.facts.definitions ?? [], relations: [] },
-      files: [join(root, 'src', 'workflow.ts')],
     })
 
     expect(rules.diagnostics).toEqual([])

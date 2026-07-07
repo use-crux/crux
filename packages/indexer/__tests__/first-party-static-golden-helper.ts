@@ -3,15 +3,14 @@ import { relative } from "node:path";
 import { canonicalStaticExtractionJson } from "../contracts/parity";
 import {
   createStaticExtraction,
-  createTypeScriptStaticSyntaxFrontend,
   staticDefinitionFiles,
   type StaticFileExtraction,
   type StaticSyntaxFrontendFactory,
 } from "../host/static-index";
 import type {
-  TsFirstPartyStaticGoldenFileFixture,
-  TsFirstPartyStaticGoldenSharedFixture,
-  TsFirstPartyStaticGoldenTotalsFixture,
+  RustFirstPartyStaticGoldenFileFixture,
+  RustFirstPartyStaticGoldenSharedFixture,
+  RustFirstPartyStaticGoldenTotalsFixture,
 } from "../contracts/fixtures";
 
 interface StaticExtractionProjection {
@@ -21,36 +20,22 @@ interface StaticExtractionProjection {
   readonly dependencies: StaticFileExtraction["dependencies"];
 }
 
-type FirstPartyStaticGoldenFrontend = "typescript" | "oxc-rust";
-
-type FirstPartyStaticGoldenSnapshot<
-  Frontend extends FirstPartyStaticGoldenFrontend,
-> = Omit<TsFirstPartyStaticGoldenSharedFixture, "frontend"> & {
-  readonly frontend: Frontend;
-};
-
-interface FirstPartyStaticGoldenOptions<
-  Frontend extends FirstPartyStaticGoldenFrontend,
-> {
-  readonly frontend: Frontend;
+interface RustFirstPartyStaticGoldenOptions {
   readonly syntaxFrontend: StaticSyntaxFrontendFactory;
 }
 
 /**
- * Regenerates a compact first-party static golden with the requested syntax frontend.
+ * Regenerates the Rust-owned first-party static golden.
  *
- * The P5 Rust-default cutover needs a stable TypeScript reference snapshot for
- * first-party static output. This helper records
- * root-independent canonical hashes rather than duplicating the full fact
- * payload, so later Rust-oracle checks can detect exact drift without checking
- * in megabytes of generated JSON.
+ * The P5.4 cutover uses Rust/Oxc as the only bundled first-party extractor
+ * implementation. This helper records root-independent canonical hashes rather
+ * than duplicating the full fact payload, so CI can detect exact output drift
+ * without keeping a parallel TypeScript baseline.
  */
-export async function generateFirstPartyStaticGolden<
-  Frontend extends FirstPartyStaticGoldenFrontend,
->(
+export async function generateRustFirstPartyStaticGolden(
   root: string,
-  options: FirstPartyStaticGoldenOptions<Frontend>,
-): Promise<FirstPartyStaticGoldenSnapshot<Frontend>> {
+  options: RustFirstPartyStaticGoldenOptions,
+): Promise<RustFirstPartyStaticGoldenSharedFixture> {
   const extraction = createStaticExtraction({
     root,
     cache: "none",
@@ -66,7 +51,7 @@ export async function generateFirstPartyStaticGolden<
 
   return {
     schemaVersion: 1,
-    frontend: options.frontend,
+    frontend: "oxc-rust",
     rootPlaceholder: "<repo>",
     fileSelection: "staticDefinitionFiles(root)",
     projection:
@@ -76,20 +61,10 @@ export async function generateFirstPartyStaticGolden<
   };
 }
 
-/** Regenerates the TypeScript first-party static reference golden. */
-export async function generateTsFirstPartyStaticGolden(
-  root: string,
-): Promise<TsFirstPartyStaticGoldenSharedFixture> {
-  return generateFirstPartyStaticGolden(root, {
-    frontend: "typescript",
-    syntaxFrontend: createTypeScriptStaticSyntaxFrontend,
-  });
-}
-
 function goldenFile(
   root: string,
   extracted: StaticFileExtraction,
-): TsFirstPartyStaticGoldenFileFixture {
+): RustFirstPartyStaticGoldenFileFixture {
   const facts = rootStableValue(projectStaticExtraction(extracted), root);
   const canonicalJson = canonicalStaticExtractionJson(
     facts as Parameters<typeof canonicalStaticExtractionJson>[0],
@@ -117,9 +92,9 @@ function projectStaticExtraction(
 }
 
 function totalsFromFiles(
-  files: readonly TsFirstPartyStaticGoldenFileFixture[],
-): TsFirstPartyStaticGoldenTotalsFixture {
-  return files.reduce<TsFirstPartyStaticGoldenTotalsFixture>(
+  files: readonly RustFirstPartyStaticGoldenFileFixture[],
+): RustFirstPartyStaticGoldenTotalsFixture {
+  return files.reduce<RustFirstPartyStaticGoldenTotalsFixture>(
     (totals, file) => ({
       files: totals.files + 1,
       definitions: totals.definitions + file.definitions,

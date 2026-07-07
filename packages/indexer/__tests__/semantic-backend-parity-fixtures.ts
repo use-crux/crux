@@ -567,7 +567,6 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           "flow.step.uses_scorer",
           "flow.step.runs_eval",
         ],
-        lintRuleIds: ["resource.write_without_read"],
       },
     },
   ];

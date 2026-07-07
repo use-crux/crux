@@ -10,7 +10,6 @@ import (
 type Manifest struct {
 	NativeOnlyEligible                  bool `json:"nativeOnlyEligible"`
 	TypeScriptRuleCount                 int  `json:"typeScriptRuleCount"`
-	RequiresTypeScriptHostForBundled    bool `json:"requiresTypeScriptHostForBundled"`
 	RequiresTypeScriptHostForRules      bool `json:"requiresTypeScriptHostForRules"`
 	RequiresTypeScriptHostForExtensions bool `json:"requiresTypeScriptHostForExtensions"`
 	RequiresCompatibilityEvidence       bool `json:"requiresCompatibilityEvidence"`
@@ -25,7 +24,6 @@ func NativeOnlyEligible(plan projectindex.ProjectStaticSyntaxPlan) bool {
 	host, ok := Decode(plan)
 	return ok &&
 		host.NativeOnlyEligible &&
-		!host.RequiresTypeScriptHostForBundled &&
 		!host.RequiresTypeScriptHostForExtensions &&
 		!host.RequiresTypeScriptHostForRules &&
 		!host.RequiresCompatibilityEvidence

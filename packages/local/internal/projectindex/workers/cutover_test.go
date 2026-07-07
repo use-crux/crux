@@ -73,7 +73,7 @@ func TestWorkerStaticIndexCutoverUsesFinalizePatchEvents(t *testing.T) {
 				}) + '\n')
 				return
 			}
-			if (req.method === 'indexProjectAstFromSyntaxRecords' || req.method === 'indexProjectAst') {
+			if (req.method === 'indexProjectAstFromSyntaxRecords') {
 				process.stdout.write(JSON.stringify({
 					protocolVersion: 2,
 					type: 'phase:error',

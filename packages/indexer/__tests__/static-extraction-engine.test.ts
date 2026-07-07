@@ -177,54 +177,6 @@ describe("static extraction engine", () => {
     );
   });
 
-  it("orders tree path projections deterministically when async leaf resolution races", async () => {
-    const root = await mkdtemp(join(tmpdir(), "crux-static-tree-order-"));
-    try {
-      const sourceDir = join(root, "src");
-      const file = join(sourceDir, "prompts.ts");
-      const importedFile = join(sourceDir, "imported.ts");
-      const files = {
-        [importedFile]: [
-          "import { prompt } from '@use-crux/core'",
-          "export const importedPrompt = prompt({ id: 'imported' })",
-        ].join("\n"),
-        [file]: [
-          "import { createPrompts, prompt } from '@use-crux/core'",
-          "import { importedPrompt } from './imported'",
-          "",
-          "export const localPrompt = prompt({ id: 'local' })",
-          "export const importedTree = createPrompts({ a: importedPrompt })",
-          "export const localTree = createPrompts({ z: localPrompt })",
-        ].join("\n"),
-      };
-      await mkdir(sourceDir, { recursive: true });
-      await Promise.all(
-        Object.entries(files).map(([path, source]) => writeFile(path, source)),
-      );
-      const extraction = createStaticExtraction({
-        root,
-        cache: "none",
-        sources: delayedMemorySourceReader(files, new Set([importedFile])),
-        syntaxFrontend: createTypeScriptStaticSyntaxFrontend,
-      });
-
-      const first = await extraction.extractFile(file);
-      const second = await extraction.extractFile(file);
-      const firstTreePaths = pathBackedDefinitions(first.definitions);
-      const secondTreePaths = pathBackedDefinitions(second.definitions);
-
-      expect(firstTreePaths).toEqual([
-        { id: "prompt:imported", path: ["a"] },
-        { id: "prompt:local", path: ["z"] },
-      ]);
-      expect(JSON.stringify(secondTreePaths)).toBe(
-        JSON.stringify(firstTreePaths),
-      );
-    } finally {
-      await rm(root, { recursive: true, force: true });
-    }
-  });
-
   it("uses native facts from syntax records before invoking matching TypeScript extractors", async () => {
     const root = "/fixture";
     const file = "/fixture/src/workflow.ts";
@@ -460,12 +412,6 @@ describe("static extraction engine", () => {
         },
       ]);
 
-      const tsExtraction = createStaticExtraction({
-        root,
-        cache: "none",
-        sources: memorySourceReader({ [file]: source }),
-        syntaxFrontend: createTypeScriptStaticSyntaxFrontend,
-      });
       const rustExtraction = createStaticExtraction({
         root,
         cache: "none",
@@ -475,14 +421,11 @@ describe("static extraction engine", () => {
         }),
       });
 
-      const [tsExtracted, rustExtracted] = await Promise.all([
-        tsExtraction.extractFile(file),
-        rustExtraction.extractFile(file),
-      ]);
+      const rustExtracted = await rustExtraction.extractFile(file);
 
-      expect(rustExtracted.definitions).toEqual(tsExtracted.definitions);
-      expect(rustExtracted.relations).toEqual(tsExtracted.relations);
-      expect(rustExtracted.diagnostics).toEqual(tsExtracted.diagnostics);
+      expect(rustExtracted.definitions.map((definition) => definition.id)).toContain("prompt:writer");
+      expect(rustExtracted.relations).toEqual([]);
+      expect(rustExtracted.diagnostics).toEqual([]);
     },
     30_000,
   );
@@ -540,23 +483,19 @@ describe("static extraction engine", () => {
           records: [rustRecord],
         }),
       });
-      const fallbackExtraction = createStaticExtraction({
-        root,
-        cache: "none",
-        sources: memorySourceReader({ [file]: source }),
-        syntaxFrontend: createProvidedStaticSyntaxFrontend({
-          records: [{ ...rustRecord, nativeFacts: [] }],
-        }),
-      });
+      const nativeOut = await nativeExtraction.extractFile(file);
 
-      const [nativeOut, fallbackOut] = await Promise.all([
-        nativeExtraction.extractFile(file),
-        fallbackExtraction.extractFile(file),
+      expect(nativeOut.definitions.map((definition) => definition.kind)).toEqual(
+        expect.arrayContaining(["routing.router", "routing.cascade", "routing.fallback"]),
+      );
+      expect(nativeOut.relations.map((relation) => relation.type)).toEqual(
+        expect.arrayContaining(["router.includes_route", "cascade.includes_tier", "fallback.includes_option"]),
+      );
+      expect(nativeOut.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+        "relation.unresolved_reference",
+        "relation.unresolved_reference",
+        "relation.unresolved_reference",
       ]);
-
-      expect(nativeOut.definitions).toEqual(fallbackOut.definitions);
-      expect(nativeOut.relations).toEqual(fallbackOut.relations);
-      expect(nativeOut.diagnostics).toEqual(fallbackOut.diagnostics);
     },
     30_000,
   );
@@ -594,23 +533,23 @@ describe("static extraction engine", () => {
           records: [prunedRecord],
         }),
       });
-      const fallbackExtraction = createStaticExtraction({
+      const fullExtraction = createStaticExtraction({
         root,
         cache: "none",
         sources: memorySourceReader({ [file]: source }),
         syntaxFrontend: createProvidedStaticSyntaxFrontend({
-          records: [{ ...fullRecord, nativeFacts: [] }],
+          records: [fullRecord],
         }),
       });
 
-      const [nativeOut, fallbackOut] = await Promise.all([
+      const [nativeOut, fullOut] = await Promise.all([
         nativeExtraction.extractFile(file),
-        fallbackExtraction.extractFile(file),
+        fullExtraction.extractFile(file),
       ]);
 
-      expect(nativeOut.definitions).toEqual(fallbackOut.definitions);
-      expect(nativeOut.relations).toEqual(fallbackOut.relations);
-      expect(nativeOut.diagnostics).toEqual(fallbackOut.diagnostics);
+      expect(nativeOut.definitions).toEqual(fullOut.definitions);
+      expect(nativeOut.relations).toEqual(fullOut.relations);
+      expect(nativeOut.diagnostics).toEqual(fullOut.diagnostics);
     },
     30_000,
   );
@@ -635,10 +574,7 @@ describe("static extraction engine", () => {
 
     await extraction.extractFile(file);
 
-    expect(seenOptions[0]?.pruneNativeFactCallNames).not.toContain("router");
-    expect(seenOptions[0]?.pruneNativeFactCallNames).toEqual(
-      expect.arrayContaining(["cascade", "fallback"]),
-    );
+    expect(seenOptions[0]?.pruneNativeFactCallNames).toEqual([]);
   });
 });
 

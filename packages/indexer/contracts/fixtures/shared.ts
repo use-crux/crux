@@ -22,7 +22,7 @@ import type { ProjectIndexWorkerEvent } from "../worker-events/schema";
 import type { SemanticEvidenceBatch } from "../semantic/schema";
 import type { IndexRelationPolicy } from "../../indexer/relations/types";
 import type { IndexLintRuleId } from "../../indexer/lints/rules";
-import type { TsFirstPartyStaticGoldenSharedFixture } from "./ts-first-party-static-golden";
+import type { RustFirstPartyStaticGoldenSharedFixture } from "./rust-first-party-static-golden";
 
 /** File-backed fixture names that are intended to be consumed across runtimes. */
 export type StaticIndexRuntimeSharedFixtureName =
@@ -39,7 +39,7 @@ export type StaticIndexRuntimeSharedFixtureName =
   | "rule-descriptors"
   | "lint-rule-parity-coverage"
   | "primitive-coverage-identities"
-  | "ts-first-party-static-golden";
+  | "rust-first-party-static-golden";
 
 /** Typed payload for the shared Static Index protocol fixture. */
 export interface StaticIndexProtocolSharedFixture {
@@ -245,7 +245,7 @@ export interface StaticIndexRuntimeSharedFixtureMap {
   readonly "rule-descriptors": RuleDescriptorsSharedFixture;
   readonly "lint-rule-parity-coverage": LintRuleParityCoverageSharedFixture;
   readonly "primitive-coverage-identities": PrimitiveCoverageIdentitiesSharedFixture;
-  readonly "ts-first-party-static-golden": TsFirstPartyStaticGoldenSharedFixture;
+  readonly "rust-first-party-static-golden": RustFirstPartyStaticGoldenSharedFixture;
 }
 
 const fixtureDirectory = dirname(fileURLToPath(import.meta.url));
@@ -264,7 +264,7 @@ const fixtureFiles = {
   "rule-descriptors": "rule-descriptors.json",
   "lint-rule-parity-coverage": "lint-rule-parity-coverage.json",
   "primitive-coverage-identities": "primitive-coverage-identities.json",
-  "ts-first-party-static-golden": "ts-first-party-static-golden.json",
+  "rust-first-party-static-golden": "rust-first-party-static-golden.json",
 } as const satisfies Record<StaticIndexRuntimeSharedFixtureName, string>;
 
 /**

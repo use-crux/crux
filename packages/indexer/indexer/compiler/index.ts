@@ -21,12 +21,7 @@ import {
   serializeIndex,
 } from "@use-crux/core/project-index/serializers";
 import { applyIndexLintConfig } from "../lints/config";
-import { indexLintFindings } from "../lints/findings";
 import { applyIndexLintSuppressions } from "../lints/suppressions";
-import {
-  builtInIndexRuleDescriptors,
-  validateBuiltInIndexRuleManifests,
-} from "../lints/rules";
 import { loadProjectConfig, type LoadedProjectConfig } from "../config";
 import {
   discoverProjectDefinitions,
@@ -76,7 +71,6 @@ import type {
   StaticSyntaxFrontend,
   StaticSyntaxFrontendFactory,
 } from "../static-index/syntax";
-import { createTypeScriptStaticSyntaxFrontend } from "../static-index/syntax";
 import type {
   SemanticSourceProfile,
   SemanticSourceProfileFile,
@@ -101,17 +95,15 @@ export interface ProjectIndexCompilerInput {
   readonly mode?: ProjectIndexCompileMode;
   readonly indexedAt?: string;
   /**
-   * Internal syntax frontend override for compiler-owned static extraction.
+   * Syntax frontend for compiler-owned static extraction.
    *
-   * Embedders use this to project syntax records produced by another process
-   * through the normal compiler, extension, lint, graph, and patch pipeline.
-   * When omitted, the compiler uses the TypeScript syntax-record producer as
-   * compatibility infrastructure. Lower-level `createStaticExtraction(...)`
-   * callers must pass a frontend explicitly.
+   * Crux-owned hosts use this to project syntax records produced by Rust/Oxc
+   * through the extension host, graph, and patch merge pipeline. There is no
+   * implicit TypeScript bundled frontend.
    *
    * @internal
    */
-  readonly staticSyntaxFrontend?:
+  readonly staticSyntaxFrontend:
     | StaticSyntaxFrontend
     | StaticSyntaxFrontendFactory;
   /**
@@ -214,12 +206,6 @@ export function createProjectIndexCompiler(
     readonly profile?: ProjectIndexCompilerProfile;
   } = {},
 ): ProjectIndexCompiler {
-  const builtInRuleManifestErrors = validateBuiltInIndexRuleManifests();
-  if (builtInRuleManifestErrors.length > 0) {
-    throw new Error(
-      `Invalid built-in Project Index rule manifests:\n${builtInRuleManifestErrors.join("\n")}`,
-    );
-  }
   const runtime = createProjectIndexCompilerRuntime(
     input.profile ?? cruxCoreCompilerProfile,
   );
@@ -252,8 +238,7 @@ async function compileProjectIndexWithRuntime(input: {
   const extraction = createStaticExtraction({
     root: loadedInputs.root,
     profile: runtimeResult.runtime.profile,
-    syntaxFrontend:
-      input.input.staticSyntaxFrontend ?? createTypeScriptStaticSyntaxFrontend,
+    syntaxFrontend: input.input.staticSyntaxFrontend,
     additionalCacheInputs: runtimeResult.cacheInputs,
     instrumentation: input.input.staticInstrumentation,
     cacheHits: input.input.staticCacheHits,
@@ -600,7 +585,7 @@ async function compilerResultFromDiscovery(
     configFile: loaded.configFile,
     staticFiles,
   });
-  const ruleResult = runCompilerIndexRules({
+  const ruleResult = checkCompilerExtensionRules({
     extensionRuntime: input.extensionRuntime,
     definitions: merged.definitions,
     relations: merged.relations,
@@ -657,10 +642,7 @@ async function compilerResultFromDiscovery(
 function compilerRuleDescriptors(
   extensionRuntime: ExtensionRuntime,
 ): readonly IndexRuleDescriptor[] {
-  const entries = [
-    ...builtInIndexRuleDescriptors(),
-    ...extensionRuntime.ruleDescriptors,
-  ];
+  const entries = [...extensionRuntime.ruleDescriptors];
   const seen = new Set<string>();
   const duplicateIds = [];
   for (const entry of entries) {
@@ -713,7 +695,7 @@ async function mergeCompilerFacts(input: {
   };
 }
 
-function runCompilerIndexRules(input: {
+function checkCompilerExtensionRules(input: {
   readonly extensionRuntime: ExtensionRuntime;
   readonly definitions: readonly ProjectDefinition[];
   readonly relations: readonly ProjectRelation[];
@@ -725,14 +707,7 @@ function runCompilerIndexRules(input: {
     ...(input.runtime ? { runtime: input.runtime } : {}),
   });
   return {
-    outputs: [
-      ...indexLintFindings({
-        definitions: input.definitions,
-        relations: input.relations,
-        ...(input.runtime ? { runtime: input.runtime } : {}),
-      }),
-      ...extensionRules.outputs,
-    ],
+    outputs: extensionRules.outputs,
     diagnostics: extensionRules.diagnostics,
   };
 }

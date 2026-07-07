@@ -8,11 +8,13 @@ import (
 	"os"
 	"os/exec"
 	"sync"
+	"time"
 )
 
 const (
 	defaultMaxResponseBytes = 16 * 1024 * 1024
 	stdoutBufferBytes       = 64 * 1024
+	closeGracePeriod        = 500 * time.Millisecond
 )
 
 // Script identifies a worker script that can be extracted and run with Node.js.
@@ -104,7 +106,24 @@ func (w *Worker) Close() error {
 	if w.stdin != nil {
 		_ = w.stdin.Close()
 	}
-	err := w.cmd.Wait()
+	cmd := w.cmd
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- cmd.Wait()
+	}()
+	var err error
+	select {
+	case err = <-errCh:
+	case <-time.After(closeGracePeriod):
+		slog.Warn("worker process did not exit after stdin close; killing process group", "script", w.script.Name)
+		killProcessGroup(cmd)
+		err = <-errCh
+		if err != nil {
+			err = fmt.Errorf("worker process close timed out; killed process group: %w", err)
+		} else {
+			err = fmt.Errorf("worker process close timed out; killed process group")
+		}
+	}
 	w.resetLocked()
 	return err
 }

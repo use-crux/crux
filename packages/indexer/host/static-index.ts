@@ -17,6 +17,8 @@ export {
 } from '../indexer/compiler'
 export { createStaticExtraction } from '../indexer/static/extraction/engine'
 export { staticDefinitionFiles } from '../indexer/files'
+export { inspectProjectStaticIndexConfig } from '../indexer/static-index/config/inspect'
+export { inspectProjectStaticSyntaxPlan } from '../indexer/static-index/plan'
 export { createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
 export {
   indexProjectAstFromSyntaxRecordProviderForHost,
@@ -37,6 +39,12 @@ export type {
   StaticExtractionOptions,
   StaticFileExtraction,
 } from '../indexer/static/extraction/engine'
+export type {
+  InspectProjectStaticIndexConfigOptions,
+  ProjectStaticIndexConfig,
+  ProjectStaticIndexExtensionReference,
+} from '../indexer/static-index/config/inspect'
+export type { InspectProjectStaticSyntaxPlanOptions, ProjectStaticSyntaxPlan } from '../indexer/static-index/plan'
 export type {
   StaticParseCacheHit,
   StaticParseCacheStore,

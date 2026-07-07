@@ -1,15 +1,15 @@
 /**
- * Shared fixture types for the TypeScript first-party static reference golden.
+ * Shared fixture types for the Rust first-party static golden.
  *
- * The fixture stores canonical per-file digests instead of the full fact payload
- * so the P5 Rust-default cutover has an exact baseline without adding megabytes
- * of duplicated generated facts.
+ * The fixture stores canonical per-file digests instead of the full fact
+ * payload so Rust-owned bundled indexing has an exact regression oracle
+ * without checking in megabytes of generated facts.
  *
  * @module
  */
 
-/** Golden digest for one file in the TypeScript first-party static reference baseline. */
-export interface TsFirstPartyStaticGoldenFileFixture {
+/** Golden digest for one file in the Rust first-party static baseline. */
+export interface RustFirstPartyStaticGoldenFileFixture {
   /** Root-relative POSIX path for the indexed source file. */
   readonly file: string;
   /** SHA-256 of the root-stable canonical static extraction projection. */
@@ -26,8 +26,8 @@ export interface TsFirstPartyStaticGoldenFileFixture {
   readonly dependencies: number;
 }
 
-/** Totals for the TypeScript first-party static reference baseline. */
-export interface TsFirstPartyStaticGoldenTotalsFixture {
+/** Totals for the Rust first-party static baseline. */
+export interface RustFirstPartyStaticGoldenTotalsFixture {
   /** Number of files selected by production static discovery. */
   readonly files: number;
   /** Total definitions in the canonical baseline. */
@@ -42,12 +42,12 @@ export interface TsFirstPartyStaticGoldenTotalsFixture {
   readonly canonicalBytes: number;
 }
 
-/** Shared TypeScript first-party static reference output golden. */
-export interface TsFirstPartyStaticGoldenSharedFixture {
+/** Shared Rust first-party static golden. */
+export interface RustFirstPartyStaticGoldenSharedFixture {
   /** Fixture schema version. */
   readonly schemaVersion: 1;
-  /** Frontend that produced this baseline before P5.4 deletion. */
-  readonly frontend: "typescript";
+  /** Frontend that produced this bundled baseline. */
+  readonly frontend: "oxc-rust";
   /** Placeholder used for absolute repo-root paths before hashing. */
   readonly rootPlaceholder: "<repo>";
   /** Production file selector used to choose the corpus. */
@@ -55,7 +55,7 @@ export interface TsFirstPartyStaticGoldenSharedFixture {
   /** Canonical projection contract hashed for each file. */
   readonly projection: "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)";
   /** Aggregate counts for quick regression checks. */
-  readonly totals: TsFirstPartyStaticGoldenTotalsFixture;
+  readonly totals: RustFirstPartyStaticGoldenTotalsFixture;
   /** Per-file canonical projection hashes. */
-  readonly files: readonly TsFirstPartyStaticGoldenFileFixture[];
+  readonly files: readonly RustFirstPartyStaticGoldenFileFixture[];
 }

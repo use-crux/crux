@@ -46,8 +46,6 @@ export async function writeStaticHostArtifactRequest(
         resolutionMode: requestResolutionMode(req.resolutionMode),
         graph: req.graph,
         ...(req.availableFacts ? { availableFacts: req.availableFacts } : {}),
-        ...(req.files ? { files: req.files } : {}),
-        ...(req.nativeLintFinalize ? { nativeLintFinalize: true } : {}),
       })
       await writeArtifactEvent(write, 'staticRuleCheck', result, req.root)
       return

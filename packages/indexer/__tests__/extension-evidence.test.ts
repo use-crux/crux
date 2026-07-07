@@ -97,10 +97,8 @@ describe('indexer extension evidence contract', () => {
     expect(runtime.manifest.staticHost).toEqual(
       expect.objectContaining({
         bundledNativeExtractorCount: 0,
-        bundledTypeScriptExtractorCount: 0,
         extensionTypeScriptExtractorCount: 2,
         typeScriptRuleCount: 0,
-        requiresTypeScriptHostForBundled: false,
         requiresTypeScriptHostForExtensions: true,
         requiresTypeScriptHostForRules: false,
         requiresCompatibilityEvidence: false,
@@ -143,9 +141,7 @@ describe('indexer extension evidence contract', () => {
     expect(runtime.manifest.staticHost).toEqual(
       expect.objectContaining({
         bundledNativeExtractorCount: 2,
-        bundledTypeScriptExtractorCount: 0,
         extensionTypeScriptExtractorCount: 0,
-        requiresTypeScriptHostForBundled: false,
         nativeOnlyEligible: true,
       }),
     )

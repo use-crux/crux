@@ -53,7 +53,7 @@ import {
   WORKSPACE_MOUNT_SOURCE_CAPABILITY_PROPERTIES,
   type WorkspaceMountMetadata,
   type WorkspaceMountSourceMetadata,
-} from '../extractors/workspace-mount-metadata'
+} from './workspace-mount-metadata'
 
 type SemanticNode = SemanticAnalyzerNode<SemanticAnalyzerView>
 

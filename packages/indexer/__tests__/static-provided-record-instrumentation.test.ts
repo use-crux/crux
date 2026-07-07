@@ -2,11 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  indexProjectAstFromSyntaxRecordProvider,
-  type StaticExtractionTiming,
-} from '..'
+import type { StaticExtractionTiming } from '..'
+import { indexProjectAstFromSyntaxRecordProviderForHost as indexProjectAstFromSyntaxRecordProvider } from '../host/static-index'
 import { createProvidedStaticSyntaxFrontend, createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
+import { createRustOxcStaticSyntaxFrontend } from '../testing/rust-oxc-frontend'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')
@@ -33,7 +32,7 @@ describe('provided static syntax record instrumentation', () => {
     ].join('\n')
     await writeFile(file, source)
 
-    const frontend = createTypeScriptStaticSyntaxFrontend({ callNames: ['prompt'] })
+    const frontend = createRustOxcStaticSyntaxFrontend({ callNames: ['prompt'] })
     const record = await frontend.parseFile({ root, file, source })
     const serializedByFile = new Map([[file, JSON.stringify(record)]])
     const timings: StaticExtractionTiming[] = []

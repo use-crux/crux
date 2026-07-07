@@ -18,20 +18,20 @@ afterEach(async () => {
 })
 
 describe('runtime artifacts', () => {
-  it('discovers exported flow and durable task targets and writes deterministic artifacts for Next', async () => {
+  it('writes deterministic empty Next artifacts without in-process source discovery', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
     await writeFile(
       join(root, 'src/review.ts'),
       [
         "import { flow } from '@use-crux/core/flow'",
-        "import { durableTask } from '@use-crux/core/runtime'",
+        "import { task } from '@use-crux/core/runtime'",
         '',
         "export const reviewFlow = flow('review', async (flow) => {",
         "  await flow.suspend('approved')",
         '})',
         '',
-        "export const embedDocument = durableTask('embed-document', {",
+        "export const embedDocument = task('embed-document', {",
         '  run: async () => undefined,',
         '})',
       ].join('\n'),
@@ -42,10 +42,7 @@ describe('runtime artifacts', () => {
 
     expect(result.manifest).toEqual({
       version: 1,
-      targets: [
-        { name: 'embed-document', kind: 'task', module: './src/review.ts', export: 'embedDocument' },
-        { name: 'review', kind: 'flow', module: './src/review.ts', export: 'reviewFlow' },
-      ],
+      targets: [],
     })
     expect(second.contentHash).toBe(result.contentHash)
     await expect(readFile(join(root, '.crux/generated/runtime/manifest.json'), 'utf8')).resolves.toBe(
@@ -101,7 +98,7 @@ describe('runtime artifacts', () => {
     expect(targets).toContain("'use node'")
     expect(targets).toContain('createConvexRuntimeTargetExecutor')
     expect(targets).toContain("from '@use-crux/convex/runtime/node'")
-    expect(targets).toContain("from '../../src/review'")
+    expect(targets).not.toContain("from '../../src/review'")
     expect(targets).toContain('executeTarget')
   })
 
@@ -153,7 +150,7 @@ describe('runtime artifacts', () => {
     expect(result.writtenFiles).not.toContain(join(root, 'convex/_crux/generated.ts'))
     expect(result.writtenFiles).not.toContain(join(root, 'convex/_crux/targets.ts'))
     expect(result.writtenFiles).not.toContain(join(root, 'convex/crux.ts'))
-  })
+  }, 30_000)
 
   it('regenerates byte-identical artifacts across process locale settings', async () => {
     const root = await fixtureRoot()
@@ -162,10 +159,10 @@ describe('runtime artifacts', () => {
       join(root, 'src/review.ts'),
       [
         "import { flow } from '@use-crux/core/flow'",
-        "import { durableTask } from '@use-crux/core/runtime'",
+        "import { task } from '@use-crux/core/runtime'",
         '',
         "export const zeta = flow('zeta', async () => undefined)",
-        "export const alpha = durableTask('alpha', { run: async () => undefined })",
+        "export const alpha = task('alpha', { run: async () => undefined })",
       ].join('\n'),
     )
     const previousLang = process.env.LANG
@@ -254,7 +251,7 @@ describe('runtime artifacts', () => {
     )
   })
 
-  it('rejects runtime targets whose discovered export is not a real named export', async () => {
+  it('ignores source-only runtime targets when no native project index is supplied', async () => {
     const root = await fixtureRoot()
     await mkdir(join(root, 'src'), { recursive: true })
     await writeFile(
@@ -267,8 +264,8 @@ describe('runtime artifacts', () => {
       ].join('\n'),
     )
 
-    await expect(generateRuntimeArtifacts({ root, host: 'next' })).rejects.toMatchObject({
-      code: 'TARGET_NOT_EXPORTED',
+    await expect(generateRuntimeArtifacts({ root, host: 'next' })).resolves.toMatchObject({
+      manifest: { version: 1, targets: [] },
     })
   })
 

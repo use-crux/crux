@@ -296,9 +296,9 @@ _Avoid_: hints, assumptions
 - **Cache Identity** means structured input plus an explicit epoch. Structured inputs cover source/config hashes, extension/extractor/rule identity, compiler profile identity, compiler-owned projection identity, TypeScript version, and semantic compiler options. Current hard migration epochs are `static-parse-v54`, `semantic-facts-v21`, and Go snapshot `epoch-26` under `.crux/cache/index-v2/`. Epochs live in `indexer/cache-identity.ts` and `@use-crux/local`'s `projectindex/cache/identity.go`; they are migration levers, not hidden magic constants.
 - **Index Rule** metadata provides docs, option schema, and message declarations before a rule can run.
 - An **Indexer Extension** contributes **Extracted Facts** through the **Extension Boundary**.
-- First-party static primitive call names are owned by `cruxCoreExtension` extension extractors. Extractors emit **Extracted Facts**; the removed primitive extractor registry is not part of the extension boundary.
+- First-party static primitive call names are owned by the Rust/Oxc Static Index primitive manifest. Bundled primitives do not have a TypeScript implementation.
 - An **Indexer Extension** may declare zero or more **Relation Specs**.
-- `cruxCoreExtension` contributes the built-in **Index Rule** used by full and AST-partial indexing.
+- Built-in **Index Rules** are evaluated by the Rust `crates/lints` implementation. TypeScript exposes descriptor/contract readers and the third-party extension rule surface.
 - An **Internal Traversal Helper** may support first-party extractors, but it is not part of the stable **Extension Boundary**.
 - An **Extracted Fact** may contain an **Unresolved Reference**.
 - A **Resolved Relation** is produced from an **Unresolved Reference** and a matching **Relation Spec**.

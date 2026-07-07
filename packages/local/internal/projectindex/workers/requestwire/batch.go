@@ -44,7 +44,7 @@ func shouldChunk(req Request) bool {
 	switch req.Method {
 	case "indexProjectAstFromSyntaxRecords":
 		return true
-	case "indexProjectIncremental", "indexProjectRuntime":
+	case "indexProjectRuntime":
 		return HasPreviousRows(req.PreviousIndex)
 	case "indexProjectSemantic":
 		return HasPreviousRows(req.PreviousIndex) || (req.SourceProfile != nil && len(req.SourceProfile.Files) > 0)

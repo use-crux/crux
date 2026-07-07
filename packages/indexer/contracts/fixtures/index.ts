@@ -28,10 +28,10 @@ export {
   type WorkerEventsSharedFixture,
 } from "./shared";
 export type {
-  TsFirstPartyStaticGoldenFileFixture,
-  TsFirstPartyStaticGoldenSharedFixture,
-  TsFirstPartyStaticGoldenTotalsFixture,
-} from "./ts-first-party-static-golden";
+  RustFirstPartyStaticGoldenFileFixture,
+  RustFirstPartyStaticGoldenSharedFixture,
+  RustFirstPartyStaticGoldenTotalsFixture,
+} from "./rust-first-party-static-golden";
 
 export {
   workerEventFixtureOptions,

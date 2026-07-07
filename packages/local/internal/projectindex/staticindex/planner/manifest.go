@@ -189,10 +189,8 @@ func defaultHost() json.RawMessage {
 	payload := map[string]any{
 		"extractors":                          extractors,
 		"bundledNativeExtractorCount":         len(extractors),
-		"bundledTypeScriptExtractorCount":     0,
 		"extensionTypeScriptExtractorCount":   0,
 		"typeScriptRuleCount":                 0,
-		"requiresTypeScriptHostForBundled":    false,
 		"requiresTypeScriptHostForExtensions": false,
 		"requiresTypeScriptHostForRules":      false,
 		"requiresCompatibilityEvidence":       false,

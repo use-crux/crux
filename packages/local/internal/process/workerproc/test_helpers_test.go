@@ -33,6 +33,16 @@ done
 	return writeShellScript(t, "prewarm-worker.sh", script)
 }
 
+func fakeStubbornWorker(t *testing.T) string {
+	t.Helper()
+	script := `while IFS= read -r line; do
+  printf '{"value":"ok"}\n'
+done
+while :; do sleep 10; done
+`
+	return writeShellScript(t, "stubborn-worker.sh", script)
+}
+
 func fakeStreamWorker(t *testing.T) string {
 	t.Helper()
 	script := `printf '{"type":"first"}\n'

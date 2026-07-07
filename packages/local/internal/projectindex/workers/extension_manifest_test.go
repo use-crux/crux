@@ -142,13 +142,11 @@ func staticIndexExtensionManifestIndexerScript(cacheInputs string) string {
 								calls: [{ name: 'defineWorkflow', importFrom: ['@acme/workflows'], configArg: 0, source: 'extractor-pattern' }],
 								compatibility: { mode: 'declared' }
 							},
-							staticHost: {
+								staticHost: {
 								extractors: [{ extension: { name: '@acme/workflows', version: '1' }, name: 'workflow.define', mode: 'typescript-extension' }],
 								bundledNativeExtractorCount: 0,
-								bundledTypeScriptExtractorCount: 0,
 								extensionTypeScriptExtractorCount: 1,
 								typeScriptRuleCount: 1,
-								requiresTypeScriptHostForBundled: false,
 								requiresTypeScriptHostForExtensions: true,
 								requiresTypeScriptHostForRules: true,
 								requiresCompatibilityEvidence: false,

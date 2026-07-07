@@ -1,6 +1,5 @@
-import type { IndexLintFinding, ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@use-crux/core/project-index'
+import type { ProjectDefinition, ProjectRelation, ProjectSourceRef } from '@use-crux/core/project-index'
 import type { IndexPatchFacts } from '../../patches'
-import { semanticLintFactAnalyzer } from '../analyzers/lint-fact'
 import type {
   SemanticAnalyzerContext,
   SemanticAnalyzerSourceFile,
@@ -17,10 +16,10 @@ import {
 } from './projection'
 import { semanticRelationsForCandidate } from '../relation-facts'
 import { createSemanticAnalyzers, type SemanticDefinitionAnalyzer } from '../registry'
-import { mergeSemanticAnalyzerResults, runSemanticIndexAnalyzers } from '../runner'
+import { mergeSemanticAnalyzerResults } from '../runner'
 import { semanticSchemaCandidates } from '../schema-candidates'
 import { semanticSourceRefCandidates } from '../source-ref-candidates'
-import type { SemanticAnalyzerResult, SemanticIndexAnalyzer, SemanticIndexAnalyzerContext } from '../types'
+import type { SemanticAnalyzerResult } from '../types'
 import { measureSemanticTiming } from '../instrumentation'
 import {
   createTypeScriptSemanticFactInput,
@@ -62,11 +61,6 @@ interface SemanticDefinitionEnrichmentIndexFacts {
   readonly diagnostics: []
 }
 
-interface SemanticLintIndexFacts {
-  readonly lintFindings: readonly IndexLintFinding[]
-  readonly diagnostics: []
-}
-
 const semanticAnalyzers = createSemanticAnalyzers({
   schemaCandidates: (candidate, view) => semanticSchemaCandidates(candidate, view.syntax),
   sourceRefCandidates: (candidate, view) => semanticSourceRefCandidates(candidate, view.syntax),
@@ -88,8 +82,6 @@ const [
   semanticRelationAnalyzer,
   semanticDefinitionEnrichmentAnalyzer,
 ] = semanticAnalyzers
-
-const semanticIndexAnalyzers: readonly SemanticIndexAnalyzer[] = [semanticLintFactAnalyzer]
 
 /**
  * Runs the complete semantic index pass for the provided files.
@@ -129,16 +121,11 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<TView extends Semant
     return
   }
   const result = runSemanticAnalyzers(input.sourceFiles, input.view, semanticAnalyzers, options)
-  const indexResult = runSemanticIndexAnalyzers(semanticIndexAnalyzers, {
-    definitions: result.definitions,
-    relations: result.relations,
-  })
 
   yield* semanticEvidenceBatchesFromFacts({
     definitions: result.definitions,
     sourceRefs: result.sourceRefs,
     relations: result.relations,
-    lintFindings: indexResult.lintFindings,
     diagnostics: [],
   })
 }
@@ -197,17 +184,6 @@ export function semanticDefinitionEnrichmentIndexFacts(
     definitions: result.definitions,
     sourceRefs: result.sourceRefs,
     relations: result.relations,
-    diagnostics: [],
-  }
-}
-
-/**
- * Runs index-level semantic analyzers such as lint-fact generation.
- */
-export function semanticLintIndexFacts(input: SemanticIndexAnalyzerContext): SemanticLintIndexFacts {
-  const result = runSemanticIndexAnalyzers(semanticIndexAnalyzers, input)
-  return {
-    lintFindings: result.lintFindings,
     diagnostics: [],
   }
 }

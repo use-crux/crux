@@ -6,7 +6,7 @@ import {
   createRustOxcStaticSyntaxFrontend,
   rustOxcSyntaxFrontendTestStatus,
 } from "../testing/rust-oxc-frontend";
-import { generateFirstPartyStaticGolden } from "./ts-first-party-static-golden-helper";
+import { generateRustFirstPartyStaticGolden } from "./first-party-static-golden-helper";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const runFullRustGolden =
@@ -22,14 +22,13 @@ const itWhenRustGoldenRequired =
 
 describe("Rust first-party static golden", () => {
   itWhenRustGoldenRequired(
-    "matches the captured TypeScript first-party static reference output",
+    "matches the captured Rust first-party static golden",
     async () => {
       const expected = readStaticIndexRuntimeSharedFixture(
-        "ts-first-party-static-golden",
+        "rust-first-party-static-golden",
       );
 
-      const actual = await generateFirstPartyStaticGolden(repoRoot, {
-        frontend: "oxc-rust",
+      const actual = await generateRustFirstPartyStaticGolden(repoRoot, {
         syntaxFrontend: createRustOxcStaticSyntaxFrontend,
       });
 

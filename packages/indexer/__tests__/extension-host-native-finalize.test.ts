@@ -5,7 +5,6 @@ describe('static extension host native lint finalization', () => {
   it('returns raw extension rule facts when native finalization owns linting', async () => {
     const result = await checkStaticRulesForProject({
       root: '/project',
-      nativeLintFinalize: true,
       graph: {
         definitions: [
           {

@@ -125,16 +125,11 @@ flowchart TD
   L --> N["IndexPatch"]
 ```
 
-The public package entry points are intentionally small:
+The public package root is the extension-authoring SDK and record-contract
+surface. Crux-owned execution facades live under `host/*` and are consumed by
+local worker bundles after Go/Rust has produced native syntax records.
 
-- `indexProject(...)` creates a complete index snapshot.
-- `indexProjectAst(...)` produces AST patch facts.
-- `indexProjectSemantic(...)` produces semantic patch facts.
-- `indexProjectIncremental(...)` consumes the incremental planner and produces ordered AST/semantic
-  index patches, falling back to full indexing when graph evidence is unsafe.
-- `resolveProjectModel(...)` produces the JSON-safe source-discovery read model with provenance for
-  selected root, package metadata, config status, source roots, ignored conventions, definitions,
-  Quality defaults, and Project Model diagnostics.
+- `resolveProjectModel(...)` is host-only and produces the JSON-safe config/read-model view with provenance for selected root, package metadata, config status, source roots, ignored conventions, config-derived definitions, Quality defaults, and Project Model diagnostics.
 - `inspectProjectConfig(...)` (in `indexer/project-config-inspect.ts`) produces the effective-config
   read model behind `crux config inspect`. It imports `crux.config.ts` via `loadProjectConfig`
   (`CRUX_INDEX=1`, inert), merges built-in defaults across every `CruxConfig` domain, and tags each
@@ -172,11 +167,10 @@ module in the `indexer/` root:
   compiler-owned static projections such as runtime prepare/use facts.
 - `indexer/semantic/`: semantic fact orchestration, analyzer registry, semantic candidates, expression
   resolution, source refs, and data-access relation discovery.
-- `indexer/lints/`: built-in index rule descriptors, lint finding generation, rule profiles, config,
-  suppressions, and the first-party lint extension.
+- `indexer/lints/`: built-in rule descriptor readers, rule profiles, config, and suppressions. Bundled lint evaluation lives in Rust.
 - `indexer/relations/`: relation policy types, grouped policy catalogs, relation lookup, and relation
   id/build helpers.
-- `indexer/extensions/`, `indexer/extractors/`, `indexer/incremental/`, `indexer/graph/`, and
+- `indexer/extensions/`, `indexer/incremental/`, `indexer/graph/`, and
   `indexer/ast/`: existing compiler subdomains.
 
 The root `indexer/` folder should stay reserved for small package-level orchestration and shared
@@ -271,12 +265,12 @@ flowchart LR
   E --> F["emitters"]
 ```
 
-V1 wires current first-party static extractors through the extension registry while preserving the
-stable `indexProject*` entry points. Normal extractors should emit immutable intermediate facts,
-unresolved references, source refs, diagnostics, and dependency declarations. Resolver slots link
-unresolved references into validated Project Index relations after definitions are known. Rules run
-over resolved index facts. Emitters remain compiler-internal and produce snapshots, patches, source
-rows, and reports.
+Bundled first-party static facts are emitted by the Rust Static Index binary. The TypeScript
+extension host remains only for third-party extractor and rule contributions, which emit immutable
+intermediate facts, unresolved references, source refs, diagnostics, and dependency declarations.
+Resolver slots link unresolved references into validated Project Index relations after definitions
+are known. Rules run over resolved index facts. Emitters remain compiler-internal and produce
+snapshots, patches, source rows, and reports.
 
 The boundary is intentionally pure-functional at the slot level: extensions return values, and the
 compiler owns validation, merge order, source graph projection, cache keys, patch invalidation, and
@@ -285,26 +279,17 @@ compiler-owned functional module that normalizes Crux Indexer Extension manifest
 deterministic contribution identity, runs compiler slot contributions, and returns immutable result
 objects. The runtime must not be a mutable plugin manager or global registry service.
 
-First-party static extractors now emit immutable `ExtractedFacts` through the extension runtime, and
-the parser projects those facts into the current index snapshot/patch contracts. Degraded extractor
-diagnostics and declared source-file dependencies travel with the extracted facts so compiler output
-and source rows can explain partial extraction. Production linting also executes through the internal
-`rules` slot: `cruxCoreExtension` contributes the built-in index lint rule, and full plus
-AST-partial indexing ask the Extension Runtime to run rules over resolved definitions and relations
-before applying lint config and suppression policy. Project Index snapshots and AST patches also
-carry `ruleDescriptors`, a metadata list for built-in rules and extension-provided rules whether or not
-they fired findings. Index rules must declare metadata with docs, schema, and message ids before
-registry construction succeeds. Some first-party helpers still use an unstable compiler-owned native
-context for traversal-heavy TypeScript inspection. Raw TypeScript nodes are not a stable extension
-API.
+Third-party static extractors emit immutable `ExtractedFacts` through the extension runtime, and
+the host projection path merges those facts with native Rust/Oxc output. Bundled first-party
+extractors and lints are Rust-only. Project Index snapshots and AST patches still carry
+`ruleDescriptors`, a metadata list for built-in rules and extension-provided rules whether or not they
+fired findings. Extension index rules must declare metadata with docs, schema, and message ids before
+registry construction succeeds. Raw TypeScript nodes are not a stable extension API.
 
-The stable static extractor context now has enough shared preparation for current first-party static
-compiler work: `ctx.args` for factory arguments, `ctx.config` for object-literal/static JSON/schema
-projection, and `ctx.sourceRef` for property, callback, schema, template interpolation, and helper
-source refs. Prompt, context, tool, agent, composition, memory, routing, eval, flow, RAG, safety,
-workspace, and scorer discovery are registered through `cruxCoreExtension`. Traversal-heavy modules
-use internal unstable helpers that complement the extension boundary without becoming a public visitor
-API.
+The static extractor context remains available for third-party extensions:
+`ctx.args` for factory arguments, `ctx.config` for object-literal/static
+JSON/schema projection, and `ctx.sourceRef` for property, callback, schema,
+template interpolation, and helper source refs.
 
 The `@use-crux/indexer/extensions` subpath is experimental. It is documented so first-party
 internals and tests can use the same shape that future external extension loading may adopt, but it
@@ -590,10 +575,10 @@ tests or `never` exhaustiveness checks should protect discriminated-union handli
 The incremental planner is not the incremental executor. Planner modules stay pure and explainable;
 executor modules own analyzer calls, patch construction, fallback routing, and execution reports.
 
-The Go runtime remains the read-model owner. The `project-indexer.mjs` worker exposes
-`indexProjectIncremental`; `@use-crux/local` can call it with a previous index plus changed/deleted
-files, then apply the returned ordered patches through the same index patch state used by AST and
-semantic refreshes.
+The Go runtime remains the read-model owner. Static incremental execution is
+Go/Rust-owned; `@use-crux/local` can call it with a previous index plus
+changed/deleted files, then apply the returned patches through the same index
+patch state used by AST and semantic refreshes.
 
 ## Incremental Execution Architecture
 
@@ -658,11 +643,10 @@ and publish partial results only after equivalence is stable across fixtures.
 
 Implemented v1 behavior:
 
-- `indexProjectIncremental({ mode: 'ast' })` emits exact-invalidation AST patches for
+- Go/Rust incremental indexing emits exact-invalidation AST patches for
   `source-file-reindex` and `dependency-closure-reindex` decisions.
-- `indexProjectIncremental({ mode: 'ast-and-semantic' })` emits the AST patch followed by semantic
-  enrichment for known index-owning source files and semantic source-ref support files in the
-  affected closure.
+- Semantic enrichment follows through the semantic worker for known index-owning
+  source files and semantic source-ref support files in the affected closure.
 - Unsafe plans, old snapshots, unknown files, config changes, unsupported semantic closures, and
   incomplete graph evidence fall back to full indexing.
 - Safe deleted leaf files emit invalidation-only AST patches.

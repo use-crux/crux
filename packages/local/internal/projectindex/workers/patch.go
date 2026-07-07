@@ -9,7 +9,7 @@ func staticPatchOptions(root string) session.PatchOptions {
 	return session.PatchOptions{
 		Root:             root,
 		MaxBytes:         workerMaxResponseStreamBytes,
-		MaxFactsPerBatch: requestwire.MaxFactsPerBatch("indexProjectAst"),
+		MaxFactsPerBatch: requestwire.MaxFactsPerBatch("indexProjectAstFromSyntaxRecords"),
 		Producer:         workerProducer,
 	}
 }

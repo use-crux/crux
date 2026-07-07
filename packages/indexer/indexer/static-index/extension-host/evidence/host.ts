@@ -34,7 +34,6 @@ export type StaticExtensionHostMethod =
 
 /** Machine-readable reason the Static Index run needs the Node compatibility host. */
 export type StaticExtensionHostNodeReason =
-  | 'typescript-bundled-extractors'
   | 'typescript-extension-extractors'
   | 'typescript-rules'
   | 'compatibility-evidence'
@@ -287,7 +286,6 @@ function hostNodeReasons(
   diagnostics: readonly IndexDiagnostic[],
 ): readonly StaticExtensionHostNodeReason[] {
   const reasons: StaticExtensionHostNodeReason[] = []
-  if (manifest.staticHost.requiresTypeScriptHostForBundled) reasons.push('typescript-bundled-extractors')
   if (manifest.staticHost.requiresTypeScriptHostForExtensions) reasons.push('typescript-extension-extractors')
   if (manifest.staticHost.requiresTypeScriptHostForRules) reasons.push('typescript-rules')
   if (manifest.staticHost.requiresCompatibilityEvidence) reasons.push('compatibility-evidence')

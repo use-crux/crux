@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
-	"github.com/use-crux/crux/packages/local/internal/projectindex/workers/requestwire"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
 
@@ -30,23 +29,5 @@ func (w *Bundle) IndexProjectIncremental(ctx context.Context, root, configPath, 
 	if w.canUseStaticIndexIncremental(previousIndex, mode) {
 		return w.indexProjectIncrementalFromStaticIndex(ctx, root, configPath, projectName, previousIndex, files, deletedFiles)
 	}
-	return w.indexProjectIncrementalFromTypeScript(ctx, root, configPath, projectName, previousIndex, files, deletedFiles, mode)
-}
-
-func (w *Bundle) indexProjectIncrementalFromTypeScript(ctx context.Context, root, configPath, projectName string, previousIndex store.IndexData, files []string, deletedFiles []string, mode string) (projectindex.ProjectIndexIncrementalResult, error) {
-	req := requestwire.Request{
-		Method:        "indexProjectIncremental",
-		Root:          root,
-		ConfigPath:    configPath,
-		ProjectName:   projectName,
-		PreviousIndex: &previousIndex,
-		Files:         files,
-		DeletedFiles:  deletedFiles,
-		Mode:          mode,
-	}
-	collector, err := w.streamCollector(ctx, req, projectindex.IndexPatchBudget{})
-	if err != nil {
-		return projectindex.ProjectIndexIncrementalResult{}, err
-	}
-	return collector.IncrementalResult()
+	return projectindex.ProjectIndexIncrementalResult{}, fmt.Errorf("Static Index incremental is unavailable for this request")
 }

@@ -1,8 +1,4 @@
 import type {
-  IndexProjectAstFromSyntaxRecordProviderOptions,
-  IndexProjectAstFromSyntaxRecordsOptions,
-} from "../index";
-import type {
   ArgumentReader,
   ConfigReader,
   DefinitionBuilder,
@@ -35,23 +31,6 @@ type RootAstHostOnlyKeys =
   | "providedRecordCacheSize"
   | "staticCacheHits"
   | "staticSyntaxFrontend";
-
-type PublicRecordsDoNotExposeHostOnlyKeys = Expect<
-  Equal<
-    Extract<keyof IndexProjectAstFromSyntaxRecordsOptions, RootAstHostOnlyKeys>,
-    never
-  >
->;
-
-type PublicProviderDoNotExposeHostOnlyKeys = Expect<
-  Equal<
-    Extract<
-      keyof IndexProjectAstFromSyntaxRecordProviderOptions,
-      RootAstHostOnlyKeys
-    >,
-    never
-  >
->;
 
 type HostRecordsExposeHostOnlyKeys = Expect<
   Equal<

@@ -4,7 +4,7 @@ import {
   isPropertyAccessExpression,
   type Node,
 } from "@typescript/native-preview/unstable/ast";
-import { dataAccessKindForMethod } from "../../../../extractors/data-access-manifest";
+import { dataAccessKindForMethod } from "../../../data-access-manifest";
 import type { NativeDefinition } from "./types";
 import type { NativeSourceBinding } from "./types";
 import { propertyInitializer } from "./object";

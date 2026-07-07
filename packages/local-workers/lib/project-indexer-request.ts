@@ -1,8 +1,5 @@
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
-import type {
-  IncrementalExecutionMode,
-  SemanticBackendSelection,
-} from '@use-crux/indexer'
+import type { SemanticBackendSelection } from '@use-crux/indexer'
 import type {
   NativeFactProjectionMode,
   ProvidedStaticSyntaxRecordProvider,
@@ -45,7 +42,7 @@ export interface ProjectIndexWorkerRequest {
   readonly previousIndexSources?: ProjectIndexSnapshot['sources']
   readonly files?: readonly string[]
   readonly deletedFiles?: readonly string[]
-  readonly mode?: IncrementalExecutionMode
+  readonly mode?: string
   readonly semanticBackend?: SemanticBackendSelection
   /**
    * Complete syntax records for legacy one-line requests and completed
@@ -76,8 +73,6 @@ export interface ProjectIndexWorkerRequest {
   readonly graph?: CheckStaticRulesInput['graph']
   /** Optional auxiliary facts available to TypeScript index rules. */
   readonly availableFacts?: CheckStaticRulesInput['availableFacts']
-  /** Native finalization owns lint config/suppression for rule outputs. */
-  readonly nativeLintFinalize?: boolean
   /**
    * Internal, non-JSON syntax record provider attached after chunk assembly.
    */

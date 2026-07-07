@@ -39,7 +39,6 @@ type Request struct {
 	Jobs                          []json.RawMessage                        `json:"jobs,omitempty"`
 	Graph                         json.RawMessage                          `json:"graph,omitempty"`
 	AvailableFacts                json.RawMessage                          `json:"availableFacts,omitempty"`
-	NativeLintFinalize            bool                                     `json:"nativeLintFinalize,omitempty"`
 	DependencyClosure             []string                                 `json:"dependencyClosure,omitempty"`
 	SourceProfile                 *projectindex.SemanticSourceProfile      `json:"sourceProfile,omitempty"`
 	SourceProfileFiles            []projectindex.SemanticSourceProfileFile `json:"sourceProfileFiles,omitempty"`
@@ -64,7 +63,7 @@ func MaxFactsPerBatch(method string) int {
 	switch method {
 	case "indexProjectSemantic":
 		return 100
-	case "indexProjectAst", "indexProjectAstFromSyntaxRecords", "indexProjectIncremental":
+	case "indexProjectAstFromSyntaxRecords":
 		return 200
 	default:
 		return 100

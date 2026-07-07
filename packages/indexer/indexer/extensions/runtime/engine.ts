@@ -7,7 +7,6 @@ import type {
   ProjectRelation,
 } from '@use-crux/core/project-index'
 import ts from 'typescript'
-import type { StaticCallContext } from '../../extractors/types'
 import type { StaticFoundDefinition } from '../../types'
 import {
   callbackSourceRefForProperty,
@@ -28,6 +27,7 @@ import {
   type ExtensionRegistry,
 } from './registry'
 import { createNativeSyntaxHandle } from '../../static-index/compatibility/syntax-record-bridge/native-context'
+import type { StaticCallContext } from '../../static-index/compatibility/syntax-record-bridge/static-call-context'
 import { extensionIdentity, runtimeResultFromExtractResult, runtimeResultFromExtractorError } from './results'
 import { ruleFailedDiagnostic } from './diagnostics'
 import { indexRuleAvailability } from './rule-availability'

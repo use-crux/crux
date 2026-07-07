@@ -41,7 +41,7 @@ type RootPackageJson = {
 };
 
 describe("native AST beta readiness docs", () => {
-  it("documents the beta gate, release checks, extension fallback, and default-readiness criteria", async () => {
+  it("documents the beta gate, release checks, extension host, and default-readiness criteria", async () => {
     const [
       readiness,
       publishing,
@@ -59,10 +59,11 @@ describe("native AST beta readiness docs", () => {
     ]);
 
     expect(readiness).toContain("pnpm test:native-ast-parity");
-    expect(readiness).toMatch(/files=\d+ matched=\d+ canonicalMismatches=0/);
-    expect(readiness).toContain("29 built-in lint rules");
-    expect(readiness).toContain("17 first-party extractor families");
-    expect(readiness).toContain("TypeScript extension fallback");
+    expect(readiness).toContain("rust-first-party-static-golden.test.ts");
+    expect(readiness).toContain("rust-first-party-static-golden.json");
+    expect(readiness).toContain("Rust-owned descriptor fixture");
+    expect(readiness).toContain("First-party extractor families are Rust-only in the binary");
+    expect(readiness).toContain("TypeScript extension host");
     expect(readiness).toContain("Default-readiness checklist");
 
     expect(publishing).toContain("Native AST beta parity");

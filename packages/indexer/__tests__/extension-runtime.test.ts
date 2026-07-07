@@ -14,7 +14,6 @@ import {
 } from '../indexer/extensions'
 import { internalStaticCallContext, internalTypeScriptContext } from '../indexer/static-index/compatibility/syntax-record-bridge/native-context'
 import { createExtractContext } from '../indexer/extensions/runtime/engine'
-import { indexLintFinding } from '../indexer/lints/rules'
 
 describe('indexer extension runtime', () => {
   it('exposes deterministic manifest identity for unordered extension manifests', () => {
@@ -927,13 +926,22 @@ function extension(input: IndexerExtension): IndexerExtension {
 }
 
 function lintFinding(id: string): IndexLintFinding {
-  return indexLintFinding({
+  return {
+    id: `definition.missing_eval_coverage:${id}`,
+    severity: 'warning',
     ruleId: 'definition.missing_eval_coverage',
-    key: id,
+    category: 'quality',
+    maturity: 'preview',
+    confidence: 'medium',
+    profiles: ['recommended'],
+    title: id,
     message: id,
+    rationale: id,
     relatedDefinitionIds: [],
     evidence: [],
-  })
+    fixes: [],
+    docsUrl: 'https://cruxjs.dev/docs/reference/indexer',
+  }
 }
 
 function ruleManifest(id: string, description: string) {
