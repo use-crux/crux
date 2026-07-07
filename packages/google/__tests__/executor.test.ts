@@ -56,6 +56,8 @@ describe('Google adapter via adapter', () => {
       inputTokens: 10,
       outputTokens: 5,
       totalTokens: 15,
+      inputTokenDetails: {},
+      outputTokenDetails: {},
     })
     expect(result._meta.finishReason).toBe('stop')
   })

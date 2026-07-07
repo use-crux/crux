@@ -7,11 +7,13 @@ import type { DenseEmbedding } from '../embedding'
 import { getHooks } from '../runtime/runtime'
 import { observe } from '../observability'
 import { registerInspectableResource } from '../runtime-bridge/resources'
+import { redactSensitiveValue } from '../shared/redaction'
 import {
   resolveMemoryNamespace,
   resolveMemoryNamespaceSync,
   type MemoryNamespace,
 } from './namespace'
+import { applyMemoryPolicy, type MemoryPolicyDecisionEvent } from './policy-safety'
 import type {
   Memory,
   MemoryBlock,
@@ -276,7 +278,7 @@ function omitSnapshot(extra: Record<string, unknown>): Record<string, unknown> {
   void _snapshot
   void _recall
   void _diff
-  return attributes
+  return redactSensitiveValue(attributes) as Record<string, unknown>
 }
 
 interface MemoryRecallArtifactInput {
@@ -508,11 +510,11 @@ function isMemoryBlockSummary(value: unknown): value is MemoryBlockSummary {
 }
 
 function previewText(value: unknown): string {
-  if (typeof value === 'string') return value.slice(0, 240)
+  if (typeof value === 'string') return String(redactSensitiveValue(value)).slice(0, 240)
   try {
-    return JSON.stringify(value)?.slice(0, 240) ?? String(value)
+    return JSON.stringify(redactSensitiveValue(value))?.slice(0, 240) ?? String(value)
   } catch {
-    return String(value).slice(0, 240)
+    return String(redactSensitiveValue(value)).slice(0, 240)
   }
 }
 
@@ -545,11 +547,19 @@ function memoryDiffPreview(
     memoryType: args.memoryType,
     blockKind: args.blockKind,
     operation: args.operation,
-    ...('before' in diff ? { before: diff.before } : {}),
-    ...('after' in diff ? { after: diff.after } : {}),
-    ...(diff.added ? { added: diff.added.map((entry) => ({ blockKind: args.blockKind, ...entry })) } : {}),
-    ...(diff.removed ? { removed: diff.removed.map((entry) => ({ blockKind: args.blockKind, ...entry })) } : {}),
-    ...(diff.updated ? { updated: diff.updated.map((entry) => ({ blockKind: args.blockKind, ...entry })) } : {}),
+    ...('before' in diff ? { before: redactSensitiveValue(diff.before) } : {}),
+    ...('after' in diff ? { after: redactSensitiveValue(diff.after) } : {}),
+    ...(diff.added ? { added: diff.added.map((entry) => memorySummaryPreview(entry, args.blockKind)) } : {}),
+    ...(diff.removed ? { removed: diff.removed.map((entry) => memorySummaryPreview(entry, args.blockKind)) } : {}),
+    ...(diff.updated ? { updated: diff.updated.map((entry) => memorySummaryPreview(entry, args.blockKind)) } : {}),
+  }
+}
+
+function memorySummaryPreview(entry: MemoryBlockSummary, blockKind: string): MemoryBlockSummary & { blockKind: string } {
+  return {
+    blockKind,
+    ...entry,
+    preview: previewText(entry.preview),
   }
 }
 
@@ -569,7 +579,7 @@ function memorySnapshotPreview(
     memoryType: args.memoryType,
     blockKind: args.blockKind,
     operation: args.operation,
-    ...body,
+    ...(redactSensitiveValue(body) as Record<string, unknown>),
     ...(typeof args.attributes.writeMode === 'string' ? { mode: args.attributes.writeMode } : {}),
     ...(typeof args.attributes.proposalStatus === 'string' ? { status: args.attributes.proposalStatus } : {}),
     ...args.metadata,
@@ -666,25 +676,24 @@ function emitMemoryRenderObservation(
   }
 }
 
-async function applyPolicy<T>(
-  candidate: T,
-  policy: MemoryPolicy<T> | undefined,
+function emitMemoryPolicyDecision(
   ctx: MemoryBlockContext,
-): Promise<T | null> {
-  let next = candidate
-  if (policy?.redact) {
-    next = await policy.redact(next, ctx)
-  }
-  if (policy?.validate) {
-    const parsed = policy.validate.safeParse(next)
-    if (!parsed.success) return null
-    next = parsed.data
-  }
-  if (policy?.shouldRemember) {
-    const shouldRemember = await policy.shouldRemember(next, ctx)
-    if (!shouldRemember) return null
-  }
-  return next
+  block: Pick<MemoryBlock, 'id' | 'kind'>,
+  event: MemoryPolicyDecisionEvent,
+): void {
+  const { decision } = event
+  emitBlockWrite(ctx, block, `policy.${event.hook}`, {
+    safetyPolicyId: decision.policyId,
+    safetyDecisionKind: decision.kind,
+    safetyBoundary: decision.boundary,
+    safetyMode: decision.mode,
+    safetyDecisionAction: decision.action,
+    ...(decision.reason ? { safetyReason: decision.reason } : {}),
+    durationMs: decision.durationMs,
+    snapshot: {
+      safetyDecision: decision,
+    },
+  })
 }
 
 function defaultPriority(kind: MemoryBlockKind): number {
@@ -1591,7 +1600,12 @@ function extractiveBlock(
   async function captureTurn(turn: MemoryTurn, ctx: MemoryBlockContext) {
     const candidates = await extract(turn, ctx)
     for (const candidate of candidates) {
-      const safe = await applyPolicy(candidate, config.policy, ctx)
+      const blockIdentity = { id: config.id, kind }
+      const safe = await applyMemoryPolicy(candidate, config.policy, ctx, {
+        policyIdPrefix: `memory.${config.id}.policy`,
+        now,
+        onDecision: (event) => emitMemoryPolicyDecision(ctx, blockIdentity, event),
+      })
       if (!safe) continue
       if (writeMode === 'auto') {
         await add(safe, ctx)

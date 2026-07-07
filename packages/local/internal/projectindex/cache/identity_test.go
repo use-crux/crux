@@ -9,8 +9,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 24 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want existing epoch 24", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 25 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want existing epoch 25", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")

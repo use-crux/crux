@@ -72,5 +72,8 @@
   "bugs": {
     "url": "https://github.com/use-crux/crux/issues"
   },
-  "homepage": "https://cruxjs.dev/docs/reference/crux-core/devtools"
+  "homepage": "https://cruxjs.dev/docs/reference/crux-core/devtools",
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

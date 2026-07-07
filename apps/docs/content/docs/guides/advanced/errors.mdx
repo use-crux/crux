@@ -164,20 +164,28 @@ Same as above, but for `createContexts()`. Every leaf must be a `Context` instan
 You called `judge.score()` without providing a `generate` function — either in the judge config or in the `score()` call.
 
 ```ts
+import { judge } from '@use-crux/core/scoring'
+
 // Bad — no generate anywhere
-const judge = llmJudge({ id: 'quality', criteria: '...' })
-await judge.score({ input: '...', output: '...' }) // throws
+const missingGeneratorJudge = judge({
+  id: 'quality',
+  criteria: 'Does the output satisfy the quality bar?',
+  scale: { min: 1, max: 5 },
+})
+await missingGeneratorJudge.score({ input: '...', output: '...' }) // throws
 
 // Good — provide in config
-const judge = llmJudge({
+const configuredJudge = judge({
   id: 'quality',
-  criteria: '...',
+  criteria: 'Does the output satisfy the quality bar?',
+  scale: { min: 1, max: 5 },
   generate: generateObjectFn,
   model: myModel,
 })
+await configuredJudge.score({ input: '...', output: '...' })
 
 // Good — provide per-call
-await judge.score({ input: '...', output: '...' }, { generate: generateObjectFn, model })
+await missingGeneratorJudge.score({ input: '...', output: '...' }, { generate: generateObjectFn, model })
 ```
 
 ### `Judge "{id}": no model provided`

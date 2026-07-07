@@ -1,7 +1,7 @@
 /**
  * Shared tool instrumentation policy for adapter factories.
  *
- * Owns the wrapping of tool `execute`/`needsApproval`/`toModelOutput`
+ * Owns the wrapping of tool `execute`/`toModelOutput`
  * with canonical observability graph records, plus the helpers for
  * shaping, rendering, and measuring tool model output. Used by both
  * `adapter()` (core-driven loop) and `loopRuntimeAdapter()` (SDK-driven
@@ -12,6 +12,7 @@
 
 import { getHooks } from '../../runtime/runtime'
 import { currentObservabilityTransport, hasObservabilitySubscribers, observe } from '../../observability'
+import { redactSensitiveValue } from '../../shared/redaction'
 import type { JsonValue, ToolContentPart, ToolModelOutput } from '../../types/tool'
 
 // ─────────────────────────────────────────────────────────────────
@@ -187,7 +188,7 @@ export function emitToolArgsArtifact(
     kind: 'tool.args',
     contentType: 'application/json',
     encoding: 'json',
-    preview: toJsonValue(args),
+    preview: toJsonValue(redactSensitiveValue(args)),
     attributes: {
       toolName,
       toolCallId,
@@ -216,7 +217,7 @@ export function emitToolResultArtifact(
     kind: 'tool.result',
     contentType: 'application/json',
     encoding: 'json',
-    preview: toJsonValue(result),
+    preview: toJsonValue(redactSensitiveValue(result)),
     attributes: {
       toolName,
       toolCallId,
@@ -246,7 +247,7 @@ export function emitToolRequestArtifacts(
       preview: {
         toolName: toolCall.name,
         toolCallId: toolCall.id,
-        args: toJsonValue(toolCall.args),
+        args: toJsonValue(redactSensitiveValue(toolCall.args)),
       },
       attributes: {
         toolName: toolCall.name,
@@ -274,7 +275,15 @@ export function emitToolRequestArtifacts(
  * generic in SDK land; the wrappers are passthroughs, so structural typing
  * is sufficient here.
  */
-type ToolExecute = (input: unknown, options: { toolCallId?: string; [key: string]: unknown }) => unknown
+interface InstrumentedToolExecutionOptions {
+  readonly toolCallId?: string
+  readonly messages?: readonly unknown[]
+  readonly context?: unknown
+  readonly runtimeContext?: unknown
+  readonly abortSignal?: AbortSignal
+}
+
+type ToolExecute = (input: unknown, options?: InstrumentedToolExecutionOptions) => unknown
 type ToolToModelOutput = (args: {
   toolCallId: string
   input: unknown
@@ -323,7 +332,7 @@ const DEFAULT_MAX_PENDING = 1000
  *   the shaped output. The in-flight result is parked in a bounded
  *   pending map keyed by `toolCallId`; the same span is closed when the
  *   model-facing output is known.
- * - `needsApproval` is NOT wrapped here: approval lifecycle records are
+ * - Approval policy is NOT wrapped here: approval lifecycle records are
  *   emitted by the tool session at gate suspension or `suspend()` sealing.
  *
  * Pending state cannot leak: entries are deleted when `toModelOutput`
@@ -391,14 +400,18 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
       execute: async function instrumentedExecute(
         this: unknown,
         input: unknown,
-        options: { toolCallId?: string; [key: string]: unknown },
+        options?: InstrumentedToolExecutionOptions,
       ) {
         const toolCallId = options?.toolCallId ?? `tc_${Date.now()}`
+        const executionOptions: InstrumentedToolExecutionOptions = {
+          ...(options ?? {}),
+          toolCallId,
+        }
         const start = Date.now()
         const span = openToolCallSpan(name, toolCallId, input)
         try {
           span.withContext(() => emitToolArgsArtifact(span.spanId, name, toolCallId, input))
-          const result = await span.withContext(() => originalExecute.call(this, input, options))
+          const result = await span.withContext(() => originalExecute.call(this, input, executionOptions))
           const outputSize = measureUnknown(result)
           if (originalToModelOutput) {
             rememberPending(toolCallId, { start, input, output: result, outputSize, span })

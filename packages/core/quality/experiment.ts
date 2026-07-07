@@ -16,6 +16,7 @@
 import type { GateResult } from './gates'
 import type { ReplayMode } from './replay'
 import type { QualitySourceFrame } from './source-frame'
+import type { TokenUsage } from '../generation/types'
 
 /** Resolved variant-name union: the implicit `'default'` when none declared. @internal */
 export type VariantNamesOf<TVariants extends string> = [TVariants] extends [never] ? 'default' : TVariants
@@ -230,7 +231,7 @@ export interface ExperimentCell<TInput = unknown, TOutput = unknown> {
   }
   durationMs: number
   costUsd?: number
-  usage?: { inputTokens: number; outputTokens: number }
+  usage?: TokenUsage
   /** Devtools trace run(s) this cell produced — the failure → trace deep link. */
   traceIds: readonly string[]
   /** Which signal families were actually captured (drives honest-fail diagnostics). */

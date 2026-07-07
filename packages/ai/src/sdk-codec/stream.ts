@@ -73,6 +73,11 @@ export async function createStreamCallPlan(
       rejectCompletion = reject;
     },
   );
+  completionPromise.catch(() => {
+    // Callers may only consume textStream. Keep the original promise rejecting
+    // for callers that await completion, but mark it observed for runtimes that
+    // report unhandled rejections eagerly.
+  });
 
   if (request.schema) {
     warnForStructuredStreamTools(request);
@@ -116,7 +121,12 @@ export async function createStreamCallPlan(
     : undefined;
 
   if (request.safety) {
-    args.experimental_transform = createSafetyStreamTransform(request.safety);
+    args.experimental_transform = createSafetyStreamTransform(request.safety, {
+      onError: (error, source) => {
+        progress?.dispose();
+        if (source === "finish") rejectCompletion(error);
+      },
+    });
   }
 
   args.onChunk = async (event: SdkStreamChunkEvent) => {
@@ -131,14 +141,15 @@ export async function createStreamCallPlan(
     try {
       await progress?.flush();
       const durationMs = deps.clock() - streamStartTime;
-      const outputTokens = event.totalUsage?.outputTokens;
+      const usage = normalizeUsage(event.totalUsage);
+      const outputTokens = usage?.outputTokens;
       const tokensPerSecond =
         durationMs > 0 && outputTokens
           ? Math.round((outputTokens / durationMs) * 1000)
           : undefined;
 
       resolveCompletion({
-        usage: normalizeUsage(event.totalUsage),
+        usage,
         finishReason: event.finishReason,
         toolCalls:
           event.toolCalls && event.toolCalls.length > 0

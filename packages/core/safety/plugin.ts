@@ -12,10 +12,10 @@ export interface SafetyPolicy {
 /**
  * Create a CruxPlugin that registers global guardrails and constraints.
  *
- * Global policies apply to all `generate()`/`stream()` calls and are merged
- * with per-prompt and per-call policies via union merge — per-call wins
- * over per-prompt wins over global when names collide. Multiple safety
- * plugins compose: their policies concatenate.
+ * Global policies apply to all `generate()`/`stream()` calls. The per-call
+ * Safety registry composes global, prompt/context, and call-site policies,
+ * then rejects duplicate policy ids so policy identity stays explicit.
+ * Multiple safety plugins compose by concatenating their policies.
  *
  * @example
  * ```ts

@@ -12,6 +12,7 @@
 
 // ── Tool authoring ──────────────────────────────────────────────
 export { tool } from './define-tool'
+export { toolPolicy } from '../safety/toolPolicy'
 
 // ── Tool middleware ─────────────────────────────────────────────
 export { toolMiddleware, approvalMiddleware, applyToolMiddleware, notifyToolApprovalResponses } from './middleware'
@@ -25,6 +26,20 @@ export {
   findToolApprovalDecision,
   deniedToolModelOutput,
 } from './approvals'
+export {
+  approvalPolicyKind,
+  inspectToolApprovalPolicies,
+  resolveApprovalPolicy,
+} from './approval-policy'
+export type {
+  ApprovalDeclaration,
+  ResolvedApprovalPolicy,
+  ToolApprovalContext,
+  ToolApprovalInspection,
+  ToolApprovalLayer,
+  ToolApprovalMap,
+  ToolApprovalPolicy,
+} from './approval-policy'
 
 // ── Entity composition ──────────────────────────────────────────
 export { composeTools } from './entity'
@@ -56,3 +71,11 @@ export type {
   ToolModelOutput,
   ToModelOutputArgs,
 } from './types'
+export type {
+  KnownToolsFor,
+  MergeKnownTools,
+  PromptToolsOf,
+  ToolContextOf,
+  ToolsContextOf,
+  ToolsContextOption,
+} from './context-types'

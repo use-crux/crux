@@ -159,7 +159,7 @@ Use `observe.run()` for user-facing execution roots and `observe.span()` for ins
 
 Crux's built-in orchestration helpers emit these records automatically. `parallel()` creates sibling `agent.run` spans, `pipeline()` records `flow.step` plus nested `agent.run` spans, `flow()` records `flow.run`, step children, and `flow.suspension` timeline markers for intentional waits, `consensus()` records voter `agent.run` spans directly under `composition.consensus`, and `swarm` / `delegate` handoffs create `handoff.prepare` spans, canonical input/output artifacts, `handoff.payload` artifacts, and relation edges.
 
-Generation and streaming orchestration record operation deadlines when a timeout is configured. `@use-crux/ai` passes `timeoutMs` into core orchestration, which records `timeoutMs` / `deadlineAt` and emits `operation.deadline` before the provider call begins.
+Generation and streaming orchestration record operation deadlines when a structured timeout is configured. Adapters pass `timeout.totalMs` into core orchestration, which records `totalTimeoutMs` / `deadlineAt` and emits `operation.deadline` before the provider call begins.
 
 Generation terminal span records also carry client-side performance metrics in the existing `metrics` field:
 
@@ -283,7 +283,7 @@ In-process subscriber errors are isolated from user code and counted in
 The default runtime path is non-blocking: transport failures are captured as diagnostics and never throw into user code. In serverless runtimes, await a bounded flush before returning so queued records are not killed with the request:
 
 ```ts
-await observe.flush({ timeoutMs: 5000 });
+await observe.flush({ timeout: 5000 });
 ```
 
 Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. Failed batches retry on a capped backoff without waiting for another emitted record, while runtime reset and transport replacement count stale in-flight failures as dropped instead of requeueing them into a later transport. HTTP delivery normalizes unknown preview values into JSON-safe shapes, sends `observability.token` / `CRUX_DEVTOOLS_TOKEN` as bearer auth when configured, and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
@@ -346,11 +346,26 @@ config({
   observability: {
     recordInputs: false,
     recordOutputs: false,
+    capture: {
+      default: "evidence",
+      overrides: {
+        "guardrail.report": "safe",
+        "constraint.report": "safe",
+        "tool.args": "off",
+      },
+      redactRecord: (record) => record,
+    },
   },
 });
 ```
 
-When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`. Output-family artifacts include model outputs, stream timelines, tool results, retrieval hits, memory snapshots/recalls/diffs, guardrail and constraint reports, handoff payloads, delegate reports, composition outputs, compaction summaries, judge reasoning, citation quotes, rendered context, and raw error payloads. The runtime's canonical artifact-kind map is exhaustive, so adding a new built-in artifact kind requires an explicit `input`, `output`, or `exempt` privacy decision before it can compile. Custom artifact kinds default to captured payloads only when the active capture policy allows their declared direction.
+`capture.default` accepts `"full"`, `"safe"`, `"evidence"`, or `"off"`.
+Per-artifact overrides use canonical artifact kinds. The Safety family includes
+`guardrail.report`, `constraint.report`, `score.report`, `approval.request`,
+`validation.feedback`, `memory.write`, `quality.snapshot`, `tool.args`, and
+`tool.result`.
+
+When disabled, input-family artifacts (`messages`, `input`, `system`, `prompt`, `tool.args`, `tool.request`) and output-family artifacts are still emitted, but as `encoding: 'reference'` with `sizeBytes` and `hash` instead of `preview`. Output-family artifacts include model outputs, stream timelines, tool results, retrieval hits, memory snapshots/recalls/diffs, guardrail and constraint reports, handoff payloads, delegate reports, composition outputs, compaction summaries, judge reasoning, citation quotes, rendered context, and raw error payloads. The runtime's canonical artifact-kind map is exhaustive, so adding a new built-in artifact kind requires an explicit `input`, `output`, `safety`, or `exempt` privacy decision before it can compile. Custom artifact kinds default to captured payloads only when the active capture policy allows their declared direction.
 
 The `observability` domain is explicit export configuration. `config()` with no `observability`
 block does not install telemetry, cloud upload, or raw-content capture. Use `devtools` only for local

@@ -132,6 +132,11 @@
       "negativeFixture": "index-lint-native-parity.test.ts"
     },
     {
+      "ruleId": "safety.duplicate_policy_id",
+      "positiveFixture": "index-lint-native-parity.test.ts",
+      "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
       "ruleId": "memory.long_lived_without_retention",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "negativeFixture": "index-lint-native-parity.test.ts"

@@ -29,6 +29,7 @@ import type {
   ResolvedPrompt,
 } from "../resolver/types";
 import type { ToolMiddleware } from "../tools/types";
+import type { ToolApprovalMap } from "../tools/approval-policy";
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
 
@@ -91,6 +92,7 @@ export interface PromptBaseConfig<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
   TContexts extends readonly ContextEntry[],
+  TTools extends AnyToolSet | undefined = undefined,
 > {
   /** Unique identifier for registry lookup and introspection. */
   id?: string;
@@ -137,7 +139,15 @@ export interface PromptBaseConfig<
    * owners named. Call-site `generate()`/`stream()` tools are the only
    * override path and intentionally win after prompt resolution.
    */
-  tools?: AnyToolSet;
+  tools?: TTools;
+  /**
+   * Approval policy for the prompt's full composed toolset.
+   *
+   * Exact-name entries and `'*'` are resolved with context and call-site
+   * declarations at execution time. Tool definitions themselves remain
+   * policy-free.
+   */
+  toolApproval?: ToolApprovalMap;
   /** Middleware applied to tools before adapter execution. */
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
 
@@ -241,7 +251,8 @@ export type PromptConfig<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
   TContexts extends readonly ContextEntry[],
-> = PromptBaseConfig<TOwnInput, TOutput, TContexts> &
+  TTools extends AnyToolSet | undefined = undefined,
+> = PromptBaseConfig<TOwnInput, TOutput, TContexts, TTools> &
   PromptContent<PromptInputArg<MergedInput<TOwnInput, TContexts>>>;
 
 // ─────────────────────────────────────────────────────────────────
@@ -343,6 +354,7 @@ export interface Prompt<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
   TContexts extends readonly ContextEntry[],
+  TTools extends AnyToolSet | undefined = undefined,
 > {
   /** Discriminant tag for runtime type checking. */
   readonly _tag: "Prompt";
@@ -361,7 +373,7 @@ export interface Prompt<
   /** `true` if this prompt has an `output` schema (structured mode), `false` otherwise. */
   readonly hasOutput: TOutput extends z.ZodType ? true : false;
   /** The raw prompt configuration — exposed for adapters and the inspector. */
-  readonly config: PromptConfig<TOwnInput, TOutput, TContexts>;
+  readonly config: PromptConfig<TOwnInput, TOutput, TContexts, TTools>;
 
   /**
    * Resolve the prompt into SDK-agnostic data without executing.
@@ -401,7 +413,8 @@ export interface Prompt<
 export type AnyPrompt = Prompt<
   z.ZodType,
   z.ZodType | undefined,
-  readonly ContextEntry[]
+  readonly ContextEntry[],
+  AnyToolSet | undefined
 >;
 
 /**
@@ -409,7 +422,7 @@ export type AnyPrompt = Prompt<
  * Any `PromptConfig<TInput, TOutput, TContexts>` is assignable to `AnyPromptConfig`.
  */
 type ErasedPromptBaseConfig = Omit<
-  PromptBaseConfig<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
+  PromptBaseConfig<z.ZodType, z.ZodType | undefined, readonly ContextEntry[], AnyToolSet | undefined>,
   "cache" | "rawFields" | "sanitize" | "tests"
 > & {
   cache?: PromptCacheOptions<Record<string, unknown>>;

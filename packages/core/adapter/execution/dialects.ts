@@ -28,10 +28,11 @@ export function coreStepDialect<
   TRawResponse,
   TRawStream,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
+  TParams = unknown,
 >(
-  spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra>,
+  spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TParams>,
   client: TClient,
-): CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra> {
+): CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra, TParams> {
   return {
     kind: 'core-step',
     id: spec.providerId,
@@ -39,6 +40,8 @@ export function coreStepDialect<
     mapSettings: spec.mapSettings,
     call: spec.call,
     stream: spec.stream,
+    toParams: spec.toParams,
+    fromResponse: spec.fromResponse,
     appendToolRound: spec.appendToolRound,
     sanitizeToolSchema: spec.sanitizeToolSchema,
     wrapOutputSchema: spec.wrapOutputSchema,

@@ -110,6 +110,7 @@ function observabilityCapturePolicy(
 ): NonNullable<CruxConfig['observability']> | undefined {
   if (!observability) return undefined
   if (
+    observability.capture === undefined &&
     observability.recordInputs === undefined &&
     observability.recordOutputs === undefined &&
     observability.redactRecord === undefined
@@ -117,6 +118,7 @@ function observabilityCapturePolicy(
     return undefined
   }
   return {
+    ...(observability.capture !== undefined ? { capture: observability.capture } : {}),
     ...(observability.recordInputs !== undefined ? { recordInputs: observability.recordInputs } : {}),
     ...(observability.recordOutputs !== undefined ? { recordOutputs: observability.recordOutputs } : {}),
     ...(observability.redactRecord !== undefined ? { redactRecord: observability.redactRecord } : {}),

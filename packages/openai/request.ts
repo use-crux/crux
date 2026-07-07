@@ -40,6 +40,7 @@ export function openAISettings(
     result.temperature = settings.temperature;
   if (settings.maxTokens !== undefined) result.max_tokens = settings.maxTokens;
   if (settings.topP !== undefined) result.top_p = settings.topP;
+  if (settings.seed !== undefined) result.seed = settings.seed;
   if (settings.frequencyPenalty !== undefined)
     result.frequency_penalty = settings.frequencyPenalty;
   if (settings.presencePenalty !== undefined)
@@ -48,18 +49,22 @@ export function openAISettings(
     result.stop = settings.stopSequences;
   if (settings.toolChoice !== undefined)
     result.tool_choice = openAIToolChoice(settings.toolChoice);
+  if (settings.reasoning !== undefined)
+    result.reasoning_effort = settings.reasoning;
 
   const knownKeys = new Set([
     "temperature",
     "maxTokens",
     "topP",
     "topK",
+    "seed",
     "frequencyPenalty",
     "presencePenalty",
     "stopSequences",
     "toolChoice",
     "stopWhen",
     "maxSteps",
+    "reasoning",
   ]);
   for (const [key, value] of Object.entries(settings)) {
     if (value !== undefined && !knownKeys.has(key) && !(key in result)) {

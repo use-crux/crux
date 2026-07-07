@@ -626,11 +626,11 @@ describe('swarm', () => {
           transfer: 'billing',
           reason: 'billing',
           output: 'transferring',
-          usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+          usage: { inputTokens: 100, outputTokens: 50, totalTokens: 150, inputTokenDetails: {}, outputTokenDetails: {} },
         },
         billing: {
           output: 'done',
-          usage: { inputTokens: 200, outputTokens: 100, totalTokens: 300 },
+          usage: { inputTokens: 200, outputTokens: 100, totalTokens: 300, inputTokenDetails: {}, outputTokenDetails: {} },
         },
       })
       const swarm = createSwarm(executor)
@@ -663,7 +663,18 @@ describe('swarm', () => {
 
     it('abort() stops the swarm and returns last result', async () => {
       const executor = createSwarmExecutor({
-        triage: { transfer: 'billing', reason: 'billing', output: 'transferring', usage: { totalTokens: 100 } },
+        triage: {
+          transfer: 'billing',
+          reason: 'billing',
+          output: 'transferring',
+          usage: {
+            inputTokens: 40,
+            outputTokens: 60,
+            totalTokens: 100,
+            inputTokenDetails: {},
+            outputTokenDetails: {},
+          },
+        },
         billing: { output: 'done' },
       })
       const swarm = createSwarm(executor)

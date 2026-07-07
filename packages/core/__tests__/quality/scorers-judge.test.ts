@@ -153,8 +153,8 @@ describe('scorers.judge — choiceScores mode', () => {
   })
 })
 
-describe('scorers.judge — chain-of-thought envelope', () => {
-  it('requests step-by-step reasoning by default and drops it with useCoT: false', async () => {
+describe('scorers.judge — explanation envelope', () => {
+  it('requests an explanation by default and drops it with useCoT: false', async () => {
     const stub = judgeGenerateStub({ reasoning: 'r', score: 1 })
     const withCoT = evaluate('judge.cot-on', {
       task: async () => 'out',
@@ -162,7 +162,7 @@ describe('scorers.judge — chain-of-thought envelope', () => {
       scorers: [scorers.judge({ name: 'j', rubric: 'Good?' })],
     })
     await run(withCoT, { generate: stub.generate, model: 'm' })
-    expect(stub.calls[0]!.system).toMatch(/step by step/i)
+    expect(stub.calls[0]!.system).toMatch(/concise explanation/i)
 
     const stubOff = judgeGenerateStub({ reasoning: '', score: 1 })
     const withoutCoT = evaluate('judge.cot-off', {
@@ -171,7 +171,7 @@ describe('scorers.judge — chain-of-thought envelope', () => {
       scorers: [scorers.judge({ name: 'j', rubric: 'Good?', useCoT: false })],
     })
     await run(withoutCoT, { generate: stubOff.generate, model: 'm' })
-    expect(stubOff.calls[0]!.system).not.toMatch(/step by step/i)
+    expect(stubOff.calls[0]!.system).not.toMatch(/concise explanation/i)
   })
 })
 

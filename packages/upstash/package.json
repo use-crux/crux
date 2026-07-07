@@ -9,7 +9,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "keywords": [
     "ai",
@@ -26,13 +26,11 @@
   "exports": {
     ".": {
       "types": "./index.ts",
-      "import": "./index.ts",
-      "require": "./index.ts"
+      "import": "./index.ts"
     },
     "./runtime": {
       "types": "./runtime.ts",
-      "import": "./runtime.ts",
-      "require": "./runtime.ts"
+      "import": "./runtime.ts"
     }
   },
   "dependencies": {

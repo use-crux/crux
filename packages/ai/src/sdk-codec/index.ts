@@ -5,7 +5,7 @@ import type {
   StopCondition as CruxStopCondition,
   ToolChoice as CruxToolChoice,
 } from "@use-crux/core";
-import { extractModelInfo } from "../provider-profile";
+import { aiSdkReasoningProviderOptions, extractModelInfo } from "../provider-profile";
 import { createLoopCallPlan } from "./loop";
 import { replayStream } from "./replay";
 import { createStructuredCallPlan } from "./structured";
@@ -44,7 +44,7 @@ export function createAiSdkCodec(deps: AiSdkCodecDeps = {}): AiSdkCodec {
 /** Map neutral Crux generation settings into AI SDK call settings. */
 export function mapAiSdkSettings(
   settings: GenerationSettings,
-  _model?: ModelInfo,
+  model?: ModelInfo,
 ): Record<string, unknown> {
   const mapped: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(settings)) {
@@ -54,11 +54,13 @@ export function mapAiSdkSettings(
   }
   if (settings.temperature !== undefined)
     mapped.temperature = settings.temperature;
-  if (settings.maxTokens !== undefined) mapped.maxTokens = settings.maxTokens;
+  if (settings.maxTokens !== undefined)
+    mapped.maxOutputTokens = settings.maxTokens;
   if (settings.topP !== undefined) mapped.topP = settings.topP;
   if (settings.topK !== undefined) mapped.topK = settings.topK;
   if (settings.stopSequences !== undefined)
     mapped.stopSequences = settings.stopSequences;
+  if (settings.seed !== undefined) mapped.seed = settings.seed;
   if (settings.frequencyPenalty !== undefined)
     mapped.frequencyPenalty = settings.frequencyPenalty;
   if (settings.presencePenalty !== undefined)
@@ -67,6 +69,15 @@ export function mapAiSdkSettings(
     mapped.toolChoice = aiToolChoice(settings.toolChoice);
   if (settings.stopWhen !== undefined)
     mapped.stopWhen = aiStopConditions(settings.stopWhen);
+  if (settings.reasoning !== undefined && model !== undefined) {
+    const providerOptions = aiSdkReasoningProviderOptions(model, settings.reasoning);
+    if (providerOptions !== undefined) {
+      mapped.providerOptions = mergeProviderOptions(
+        mapped.providerOptions,
+        providerOptions,
+      );
+    }
+  }
   return mapped;
 }
 
@@ -76,12 +87,30 @@ const AI_SDK_MAPPED_SETTING_KEYS = new Set([
   "topP",
   "topK",
   "stopSequences",
+  "seed",
   "frequencyPenalty",
   "presencePenalty",
   "toolChoice",
   "stopWhen",
   "maxSteps",
+  "reasoning",
 ]);
+
+function mergeProviderOptions(
+  current: unknown,
+  additions: Record<string, Record<string, unknown>>,
+): Record<string, unknown> {
+  const merged: Record<string, unknown> = isRecord(current) ? { ...current } : {};
+  for (const [provider, options] of Object.entries(additions)) {
+    const existing = isRecord(merged[provider]) ? merged[provider] : {};
+    merged[provider] = { ...existing, ...options };
+  }
+  return merged;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
 
 function aiToolChoice(toolChoice: CruxToolChoice): unknown {
   if (typeof toolChoice === "string") return toolChoice;

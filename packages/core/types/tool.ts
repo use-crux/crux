@@ -30,11 +30,37 @@ export interface ToModelOutputArgs<TInput, TOutput> {
   output: Awaited<TOutput>
 }
 
+/** Shared per-run context supplied to every tool invocation. */
+export type ToolExecutionOptions<
+  TContext = never,
+  TRuntimeContext = unknown,
+> = {
+  /** Provider-owned tool call id for this invocation. */
+  readonly toolCallId: string
+  /** Current conversation history, when available to the execution path. */
+  readonly messages?: readonly unknown[]
+  /** Shared caller-provided context for this generation run. */
+  readonly runtimeContext: TRuntimeContext
+  /** Abort signal for the active tool budget, when one is available. */
+  readonly abortSignal?: AbortSignal
+} & ([TContext] extends [never]
+  ? Record<never, never>
+  : { readonly context: TContext })
+
 /** A single tool definition compatible with AI SDK tool format. */
-export interface ToolDef<TInput = Record<string, unknown>, TOutput = unknown> {
+export interface ToolDef<
+  TInput = Record<string, unknown>,
+  TOutput = unknown,
+  TContext = never,
+  TRuntimeContext = unknown,
+> {
   description: string
   parameters: z.ZodType<TInput>
-  execute: (args: TInput) => TOutput | Promise<TOutput>
+  contextSchema?: z.ZodType<TContext>
+  execute: (
+    args: TInput,
+    options: ToolExecutionOptions<TContext, TRuntimeContext>,
+  ) => TOutput | Promise<TOutput>
   toModelOutput?: (args: ToModelOutputArgs<TInput, TOutput>) => ToolModelOutput | Promise<ToolModelOutput>
 }
 

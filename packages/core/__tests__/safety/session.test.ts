@@ -8,7 +8,7 @@
  */
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../safety'
+import { boundary, createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../safety'
 import type { SafetyOutput } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
@@ -24,20 +24,21 @@ afterEach(() => {
 const identity = (options?: Partial<Parameters<typeof createSafety>[0]>) =>
   createSafety({ promptId: 'p1', model: 'm1', ...options })
 
-const passGuard = (name: string, phase: 'input' | 'output', spy?: ReturnType<typeof vi.fn>) =>
+const passGuard = (id: string, target: 'input' | 'output', spy?: ReturnType<typeof vi.fn>) =>
   guardrail({
-    name,
-    phase,
-    validate: async (content) => {
+    id,
+    on: target === 'input' ? boundary.input.text() : boundary.output.text(),
+    run: async (content) => {
       spy?.(content)
-      return { action: 'pass' as const }
+      return { action: 'allow' as const }
     },
   })
 
-const passingConstraint = (name: string, spy?: ReturnType<typeof vi.fn>) =>
+const passingConstraint = (id: string, spy?: ReturnType<typeof vi.fn>) =>
   constraint({
-    name,
-    check: async (output) => {
+    id,
+    on: boundary.output.both(),
+    run: async (output) => {
       spy?.(output)
       return { pass: true as const }
     },
@@ -67,7 +68,7 @@ describe('createSafety — enabled', () => {
     expect(safety.transcript).toEqual([])
   })
 
-    it('is enabled when a guardrail or constraint applies from any scope', () => {
+  it('is enabled when a guardrail or constraint applies from any scope', () => {
     expect(identity({ call: { guardrails: [passGuard('g', 'input')] } }).enabled).toBe(true)
     expect(identity({ resolved: { constraints: [passingConstraint('c')] } }).enabled).toBe(true)
 
@@ -76,28 +77,24 @@ describe('createSafety — enabled', () => {
   })
 })
 
-// ── Three-scope precedence merge ───────────────────────────────────
+// ── Policy identity ────────────────────────────────────────────────
 
-describe('createSafety — scope precedence', () => {
-  it('per-call beats per-prompt beats global for same-named guardrails', async () => {
+describe('createSafety — policy identity', () => {
+  it('rejects duplicate guardrail ids across scopes and targets instead of silently overriding', () => {
     const globalSpy = vi.fn()
-    const promptSpy = vi.fn()
     const callSpy = vi.fn()
 
     updateHooks({ globalGuardrails: [passGuard('shared', 'input', globalSpy)] })
-    const safety = identity({
-      resolved: { guardrails: [passGuard('shared', 'input', promptSpy)] },
-      call: { guardrails: [passGuard('shared', 'input', callSpy)] },
-    })
-
-    await safety.guardInput({ messages: [userMessage('hi')] })
-
-    expect(callSpy).toHaveBeenCalledTimes(1)
-    expect(promptSpy).not.toHaveBeenCalled()
+    expect(() =>
+      identity({
+        call: { guardrails: [passGuard('shared', 'output', callSpy)] },
+      }),
+    ).toThrow(/duplicate|shared/i)
     expect(globalSpy).not.toHaveBeenCalled()
+    expect(callSpy).not.toHaveBeenCalled()
   })
 
-    it('differently named policies from all scopes all run', async () => {
+  it('differently named policies from all scopes all run', async () => {
     const spies = { a: vi.fn(), b: vi.fn(), c: vi.fn() }
     updateHooks({ globalConstraints: [passingConstraint('a', spies.a)] })
     const safety = identity({
@@ -112,16 +109,54 @@ describe('createSafety — scope precedence', () => {
     expect(spies.c).toHaveBeenCalledTimes(1)
   })
 
-    it('per-prompt constraint overrides same-named global constraint', async () => {
+  it('rejects duplicate constraint ids instead of applying scope precedence', () => {
     const globalSpy = vi.fn()
     const promptSpy = vi.fn()
     updateHooks({ globalConstraints: [passingConstraint('shared', globalSpy)] })
-    const safety = identity({ resolved: { constraints: [passingConstraint('shared', promptSpy)] } })
 
-    await safety.finalizeOutput({ text: 'fine' }, noRegen)
-
-    expect(promptSpy).toHaveBeenCalledTimes(1)
+    expect(() =>
+      identity({
+        resolved: { constraints: [passingConstraint('shared', promptSpy)] },
+      }),
+    ).toThrow(/duplicate|shared/i)
+    expect(promptSpy).not.toHaveBeenCalled()
     expect(globalSpy).not.toHaveBeenCalled()
+  })
+})
+
+// ── safety.tune ───────────────────────────────────────────────────
+
+describe('createSafety — safety.tune', () => {
+  it('rejects tune entries for unknown policy ids', () => {
+    expect(() =>
+      identity({
+        call: { guardrails: [passGuard('known', 'input')] },
+        safety: { tune: { missing: { enabled: false } } },
+      }),
+    ).toThrow(/unknown|missing/i)
+  })
+
+  it('audits enabled:false and skips the disabled guardrail', async () => {
+    const blocker = guardrail({
+      id: 'disable-me',
+      on: boundary.input.text(),
+      run: async () => ({ action: 'block' as const, reason: 'would block' }),
+    })
+    const safety = identity({
+      call: { guardrails: [blocker] },
+      safety: { tune: { 'disable-me': { enabled: false } } },
+    })
+
+    const result = await safety.guardInput({ messages: [userMessage('leave unchanged')] })
+
+    expect(result.messages).toEqual([userMessage('leave unchanged')])
+    expect(safety.audit.guardrails?.applied).toContainEqual(
+      expect.objectContaining({
+        guard: 'disable-me',
+        action: 'allow',
+        reason: 'disabled by call site',
+      }),
+    )
   })
 })
 
@@ -130,9 +165,12 @@ describe('createSafety — scope precedence', () => {
 describe('createSafety — guardInput', () => {
   it('throws GuardrailBlockedError when an input guard blocks', async () => {
     const blocker = guardrail({
-      name: 'no-secrets',
-      phase: 'input',
-      validate: async () => ({ action: 'block' as const, reason: 'secret detected' }),
+      id: 'no-secrets',
+      on: boundary.input.text(),
+      run: async () => ({
+        action: 'block' as const,
+        reason: 'secret detected',
+      }),
     })
     const safety = identity({ call: { guardrails: [blocker] } })
 
@@ -141,11 +179,15 @@ describe('createSafety — guardInput', () => {
     )
   })
 
-    it('writes redacted content back into the returned messages', async () => {
+  it('writes redacted content back into the returned messages', async () => {
     const redactor = guardrail({
-      name: 'pii',
-      phase: 'input',
-      validate: async (content) => ({ action: 'redact' as const, content: content.replace('123-45-6789', '[SSN]') }),
+      id: 'pii',
+      on: boundary.input.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('123-45-6789', '[SSN]'),
+        rewrite: { kind: 'redact' as const },
+      }),
     })
     const safety = identity({ call: { guardrails: [redactor] } })
 
@@ -156,34 +198,43 @@ describe('createSafety — guardInput', () => {
     expect(result.messages.at(-1)?.content).toBe('ssn is [SSN]')
     // Earlier messages untouched.
     expect(result.messages[0]?.content).toBe('first')
-    // Audit keeps the original.
+    // Safe-by-default audit must not expose the raw pre-redaction input.
     expect(safety.audit.guardrails?.applied[0]).toMatchObject({
       guard: 'pii',
       phase: 'input',
       action: 'redact',
-      original: 'ssn is 123-45-6789',
     })
+    expect(safety.audit.guardrails?.applied[0]).not.toHaveProperty('original')
   })
 
-    it('falls back to prompt text when history has no user message', async () => {
+  it('falls back to prompt text when history has no user message', async () => {
     const redactor = guardrail({
-      name: 'pii',
-      phase: 'input',
-      validate: async () => ({ action: 'redact' as const, content: 'clean prompt' }),
+      id: 'pii',
+      on: boundary.input.text(),
+      run: async () => ({
+        action: 'rewrite' as const,
+        value: 'clean prompt',
+        rewrite: { kind: 'redact' as const },
+      }),
     })
     const safety = identity({ call: { guardrails: [redactor] } })
 
-    const result = await safety.guardInput({ messages: [], prompt: 'dirty prompt' })
+    const result = await safety.guardInput({
+      messages: [],
+      prompt: 'dirty prompt',
+    })
 
     expect(result.prompt).toBe('clean prompt')
     expect(result.messages).toEqual([])
   })
 
-    it('only runs input-phase guards', async () => {
+  it('only runs input-phase guards', async () => {
     const inputSpy = vi.fn()
     const outputSpy = vi.fn()
     const safety = identity({
-      call: { guardrails: [passGuard('in', 'input', inputSpy), passGuard('out', 'output', outputSpy)] },
+      call: {
+        guardrails: [passGuard('in', 'input', inputSpy), passGuard('out', 'output', outputSpy)],
+      },
     })
 
     await safety.guardInput({ messages: [userMessage('hi')] })
@@ -192,10 +243,16 @@ describe('createSafety — guardInput', () => {
     expect(outputSpy).not.toHaveBeenCalled()
   })
 
-    it('records an input.guard transcript event with applied actions', async () => {
-    const safety = identity({ call: { guardrails: [passGuard('in', 'input')] } })
+  it('records an input.guard transcript event with applied actions', async () => {
+    const safety = identity({
+      call: { guardrails: [passGuard('in', 'input')] },
+    })
     await safety.guardInput({ messages: [userMessage('hi')] })
 
-    expect(safety.transcript).toContainEqual({ t: 'input.guard', guards: 1, actions: ['pass'] })
+    expect(safety.transcript).toContainEqual({
+      t: 'input.guard',
+      guards: 1,
+      actions: ['allow'],
+    })
   })
 })

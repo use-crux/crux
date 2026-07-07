@@ -4,6 +4,7 @@
   "pages": [
     "type-system",
     "building-adapters",
+    "headless",
     "writing-indexer-extension",
     "errors",
     "llms-txt"

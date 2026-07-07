@@ -8,11 +8,11 @@
  * @module
  */
 
-import type { Crux, ContextEntry, Prompt } from '@use-crux/core'
-import type { z } from 'zod'
+import type { Crux } from '@use-crux/core'
 import type { CruxConvexBridgeHttpRouter } from './bridge'
 import { convexAgent as createConvexAgent } from './agent'
 import type { ConvexAgentBaseConfig, ConvexAgentComponent, ConvexAgentModelConfig, CruxConvexAgent } from './agent'
+import type { AnyConvexPrompt } from './agent/lifecycle-types'
 import { assertConvexCtxPort, type CruxConvexProfileStorageOptions } from './profile-store'
 import { createConvexRuntimeBridge } from './runtime-bridge'
 import type { ConvexRunScope, ConvexRuntimeBridge, ConvexRuntimeBridgeSetupOptions } from './runtime-bridge'
@@ -30,7 +30,7 @@ export interface CruxConvexComponents {
 
 /** Config accepted by a profile-created Convex agent. */
 export type CruxConvexProfileAgentConfig<
-  TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>,
+  TPrompt extends AnyConvexPrompt,
 > = Omit<ConvexAgentBaseConfig<TPrompt>, 'components' | 'storage'> & ConvexAgentModelConfig
 
 /** Scope passed to `CruxConvexProfile.run()`. */
@@ -44,7 +44,7 @@ export interface CruxConvexProfile<TCtx extends ConvexCtxPort = ConvexCtxPort> e
   /** Component refs captured by the profile. */
   readonly components: CruxConvexComponents
   /** Create a Convex Agent wrapper using this profile's components and storage. */
-  convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
+  convexAgent<TPrompt extends AnyConvexPrompt>(
     config: CruxConvexProfileAgentConfig<TPrompt>,
   ): CruxConvexAgent<TPrompt>
   /** Register the HTTP devtools bridge using this profile's store path. */
@@ -109,7 +109,7 @@ export function createCruxConvex<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   const profile: CruxConvexProfile<TCtx> = {
     ...runtime,
     components: options.components,
-    convexAgent<TPrompt extends Prompt<z.ZodType, z.ZodType | undefined, readonly ContextEntry[]>>(
+    convexAgent<TPrompt extends AnyConvexPrompt>(
       config: CruxConvexProfileAgentConfig<TPrompt>,
     ): CruxConvexAgent<TPrompt> {
       return createConvexAgent({

@@ -76,7 +76,7 @@ describe('provider runtime RFC contract', () => {
               id: 'resp_turn',
               model: 'runtime-turn-actual',
               text: 'turn text',
-              usage: { inputTokens: 4, outputTokens: 6, totalTokens: 10 },
+              usage: { inputTokens: 4, outputTokens: 6, totalTokens: 10, inputTokenDetails: {}, outputTokenDetails: {} },
             }
           },
           async runStream() {
@@ -164,7 +164,7 @@ describe('provider runtime RFC contract', () => {
               response: {
                 text: 'bound loop text',
                 finishReason: 'stop',
-                usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+                usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, inputTokenDetails: {}, outputTokenDetails: {} },
               },
               messages: [{ role: 'assistant' as const, content: 'bound loop text' }],
               steps: 1,
@@ -178,7 +178,7 @@ describe('provider runtime RFC contract', () => {
               response: {
                 text: '{"ok":true}',
                 finishReason: 'stop',
-                usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+                usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, inputTokenDetails: {}, outputTokenDetails: {} },
               },
               object: { ok: true },
             }

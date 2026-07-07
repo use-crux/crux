@@ -61,6 +61,7 @@ export type SemanticDefinitionKind = Extract<
   | 'routing.fallback'
   | 'constraint'
   | 'guardrail'
+  | 'toolPolicy'
   | 'memory'
   | 'memory.block'
   | 'blackboard'

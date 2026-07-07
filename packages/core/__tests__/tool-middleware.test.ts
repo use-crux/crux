@@ -1,5 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
-import { applyToolMiddleware, approvalMiddleware, notifyToolApprovalResponses, toolMiddleware } from '../tools/middleware'
+import {
+  applyToolMiddleware,
+  approvalMiddleware,
+  evaluateApprovalMiddleware,
+  notifyToolApprovalResponses,
+  toolMiddleware,
+} from '../tools/middleware'
 import { toolApprovalResponse } from '../tools/approvals'
 
 describe('toolMiddleware()', () => {
@@ -138,7 +144,14 @@ describe('approvalMiddleware()', () => {
       }),
     )
 
-    await expect(tools.sendEmail.needsApproval?.({ subject: 'Hello' }, { toolCallId: 'call-1' })).resolves.toBe(true)
+    await expect(
+      evaluateApprovalMiddleware(tools.sendEmail, {
+        toolName: 'sendEmail',
+        toolCallId: 'call-1',
+        input: { subject: 'Hello' },
+        options: { toolCallId: 'call-1' },
+      }),
+    ).resolves.toBe(true)
     expect(execute).not.toHaveBeenCalled()
     expect(onRequest).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -194,7 +207,6 @@ describe('approvalMiddleware()', () => {
         },
         readOnlyLookup: {
           description: 'Lookup',
-          needsApproval: true,
           execute: vi.fn().mockResolvedValue('lookup'),
         },
       },
@@ -206,9 +218,14 @@ describe('approvalMiddleware()', () => {
       }),
     )
 
-    await expect(tools.readOnlyLookup.needsApproval?.({ query: 'status' }, { toolCallId: 'call-1' })).resolves.toBe(
-      true,
-    )
+    await expect(
+      evaluateApprovalMiddleware(tools.readOnlyLookup, {
+        toolName: 'readOnlyLookup',
+        toolCallId: 'call-1',
+        input: { query: 'status' },
+        options: { toolCallId: 'call-1' },
+      }),
+    ).resolves.toBe(false)
     await notifyToolApprovalResponses(tools, approvalMessages({ toolName: 'readOnlyLookup', approved: false }))
 
     expect(onRequest).not.toHaveBeenCalled()

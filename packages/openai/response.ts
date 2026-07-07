@@ -17,23 +17,31 @@ export function openAIResponse(result: ChatCompletion): AdapterResponse {
 /** Read response metadata that is not owned by OpenAI transcript conversion. */
 export function openAIResponseMeta(result: ChatCompletion): NativeResponseMetadata {
   const choice = result.choices?.[0]
+  const usage = result.usage ?? undefined
 
   return {
-    usage: result.usage
-      ? {
-          inputTokens: result.usage.prompt_tokens ?? undefined,
-          outputTokens: result.usage.completion_tokens ?? undefined,
-          totalTokens:
-            result.usage.total_tokens ??
-            (result.usage.prompt_tokens != null && result.usage.completion_tokens != null
-              ? result.usage.prompt_tokens + result.usage.completion_tokens
-              : undefined),
-        }
-      : { inputTokens: undefined, outputTokens: undefined, totalTokens: undefined },
+    usage:
+      usage !== undefined
+        ? {
+            inputTokens: usage.prompt_tokens,
+            outputTokens: usage.completion_tokens,
+            totalTokens: usage.total_tokens,
+            inputTokenDetails: {
+              ...optionalTokenDetail('cacheReadTokens', usage.prompt_tokens_details?.cached_tokens),
+            },
+            outputTokenDetails: {
+              ...optionalTokenDetail('reasoningTokens', usage.completion_tokens_details?.reasoning_tokens),
+            },
+          }
+        : undefined,
     finishReason: choice?.finish_reason,
     responseId: result.id,
     actualModelId: result.model,
   }
+}
+
+function optionalTokenDetail<K extends string>(key: K, value: number | undefined): Partial<Record<K, number>> {
+  return value === undefined ? {} : ({ [key]: value } as Record<K, number>)
 }
 
 /** Prefer OpenAI parsed structured output over transcript text when present. */

@@ -11,7 +11,10 @@ import { cascade, router } from '../../routing'
 import { resolveModel } from '../../routing/resolve'
 
 function result(text: string, cost = 0.01) {
-  return { text, _meta: { cost, usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 } } }
+  return {
+    text,
+    _meta: { cost, usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, inputTokenDetails: {}, outputTokenDetails: {} } },
+  }
 }
 
 const extractModelId = (model: string) => model

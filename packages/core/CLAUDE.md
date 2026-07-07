@@ -14,7 +14,7 @@ SDK-agnostic AI orchestration toolkit for TypeScript. See README.md for full API
 - **`/indexing`** — `indexer()` (chunk + embed + write documents to record/vector stores)
 - **`/retrieval`** — `knowledgeBase()`, `retriever()`, `retrievalRecipe()` (indexed knowledge → scored hits, tools, grounding)
 - **`/compaction`** — `summarizeMessages()`, `createSlidingWindow()`, `createBudgetManager()`, `extractKeyFacts()`
-- **`/scoring`** — `llmJudge()`, pre-built metrics, `judgeConstraint()` (judge → `Constraint` bridge)
+- **`/scoring`** — `judge()`, pre-built metrics; runtime enforcement uses `constraint.judge(...)` from `/safety`
 - **`/quality`** — `evaluate()`, `target.*`, `scorers.*`, `dataset()`, `cassette()` (the Quality system: evaluations → experiments → baselines, replay at the executor boundary)
 - **`/agent`** — `agent()`, `parallel()`, `pipeline()`, `consensus()`, `swarm()`, `blackboard()`, `handoff()`, `delegate()`
 - **`/storage`** — `RecordStore`, `VectorStore`, `BlobStore`, `storage()`, `inMemoryStorage()`

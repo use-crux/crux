@@ -63,6 +63,7 @@
     "workspace.operation": "workspace"
   },
   "artifactKinds": [
+    "approval.request",
     "cache.report",
     "citation.report",
     "compaction.report",
@@ -84,10 +85,12 @@
     "memory.diff",
     "memory.recall",
     "memory.snapshot",
+    "memory.write",
     "messages",
     "output",
     "prompt",
     "prompt.budget",
+    "quality.snapshot",
     "retrieval.hits",
     "routing.report",
     "score.report",
@@ -96,7 +99,8 @@
     "system",
     "tool.args",
     "tool.request",
-    "tool.result"
+    "tool.result",
+    "validation.feedback"
   ],
   "edgeTypes": [
     "called",

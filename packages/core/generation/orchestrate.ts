@@ -9,7 +9,7 @@
  *
  * The orchestration concerns are split across focused modules in this domain:
  * - {@link ./orchestrate-types | orchestrate-types} — the adapter boundary contracts;
- * - {@link ./attempt-timeout | attempt-timeout} — the per-attempt deadline helper;
+ * - {@link ./timeout | timeout} — structured timeout budget helpers;
  * - {@link ./result-meta | result-meta} — `_meta` reading and usage attributes;
  * - {@link ./orchestrate-observability | orchestrate-observability} — span/artifact wiring;
  * - {@link ./fallback-loop | fallback-loop} — the generic model fallback loop;
@@ -24,9 +24,9 @@ import { warnMissingSemanticCachePlugin } from '../cache'
 import { getHooks } from '../runtime/runtime'
 import type { MiddlewareResult } from '../runtime/types'
 import type { AnyPromptConfig } from '../prompt/prompt-types'
-import { withAttemptTimeout } from './attempt-timeout'
 import type { OrchestrationSpec } from './orchestrate-types'
 import { getMeta, generationUsageAttributes } from './result-meta'
+import { withBudget } from './timeout'
 import {
   attachStreamObservability,
   emitOperationDeadline,
@@ -79,7 +79,7 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
   const performance = createGenerationPerformanceTracker()
   try {
     const result = await span.withContext(async () => {
-      emitOperationDeadline(spec.timeoutMs)
+      emitOperationDeadline(spec.timeout?.totalMs)
       const inputArtifactId = observe.artifact({
         kind: 'messages',
         contentType: 'application/json',
@@ -89,7 +89,10 @@ export async function orchestrateGenerate<TArgs extends Record<string, unknown>,
       linkActiveSpanToArtifact('consumed', inputArtifactId)
       linkResolvedContextArtifacts(spec.resolved)
 
-      const result = await withAttemptTimeout(() => orchestrateGenerateInner(spec, doGenerate), spec.timeoutMs)
+      const result = await withBudget(() => orchestrateGenerateInner(spec, doGenerate), {
+        budget: 'total',
+        limitMs: spec.timeout?.totalMs,
+      })
       const meta = getMeta(result)
       const usageAttributes = generationUsageAttributes(meta)
       if (usageAttributes) {
@@ -193,7 +196,7 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
     | 'resolved'
     | 'outputMode'
     | 'createCachedStreamResult'
-    | 'timeoutMs'
+    | 'timeout'
   >,
   doStream: (args: TArgs) => Promise<TResult>,
 ): Promise<TResult> {
@@ -205,7 +208,7 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
   const performance = createGenerationPerformanceTracker()
   try {
     return await span.withContext(async () => {
-      emitOperationDeadline(spec.timeoutMs)
+      emitOperationDeadline(spec.timeout?.totalMs)
       const inputArtifactId = observe.artifact({
         kind: 'messages',
         contentType: 'application/json',
@@ -214,8 +217,11 @@ export async function orchestrateStream<TArgs extends Record<string, unknown>, T
       })
       linkActiveSpanToArtifact('consumed', inputArtifactId)
       linkResolvedContextArtifacts(spec.resolved)
-      const result = await withAttemptTimeout(() => orchestrateStreamInner(spec, doStream), spec.timeoutMs)
-      attachStreamObservability(result, span, performance)
+      const result = await withBudget(() => orchestrateStreamInner(spec, doStream), {
+        budget: 'total',
+        limitMs: spec.timeout?.totalMs,
+      })
+      attachStreamObservability(result, span, performance, spec.timeout?.chunkMs)
       return result
     })
   } catch (error) {

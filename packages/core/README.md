@@ -13,6 +13,8 @@ Your app still owns product logic, routing, deployment, and data. Your model SDK
 
 ## Install
 
+Crux packages are ESM-only and require Node.js 22 or newer.
+
 Most apps install `@use-crux/core` with an execution adapter. For Vercel AI SDK:
 
 ```bash
@@ -54,6 +56,92 @@ result.object.sentiment; // 'positive' | 'negative' | 'neutral'
 ```
 
 That is a complete Crux program: typed input, typed output, and your SDK still making the model call.
+
+## Adapter Results
+
+Core-step adapters such as `@use-crux/openai`, `@use-crux/anthropic`, and
+`@use-crux/google` return the canonical `GenerateResult` envelope from
+`generate()`: accumulated `text`, optional accumulated `usage`, optional
+`cost`, `steps`, `finalStep`, provider-neutral `messages`, typed `.raw`, and
+retained `_meta` for observability plumbing. `usage` is present only when every
+provider-call step reported usage; Crux never presents a partial token sum as a
+total.
+
+`stream()` returns `StreamResult`: provider-neutral `textStream`, typed `.raw`
+for the SDK stream handle, and a `completion` promise resolving to the same
+envelope fields except `.raw` and `_meta`.
+
+## Public Codecs And Headless Calls
+
+Adapter packages export `toParams(resolved, options)` and
+`fromResponse(response)` for power users who own the SDK call. `ResolvedPrompt`
+is provider-neutral and intentionally does not carry a model, so
+`options.model` is required. Codecs translate only: they do not run tool
+middleware, approvals, validation retry, memory capture, safety, or
+observability.
+
+Every first-party generation adapter exposes the headless ladder:
+
+```ts
+const call = await anthropic.prepare(myPrompt, { model, input });
+const response = await client.messages.create(call.params);
+const result = await call.finish(response);
+```
+
+Use `step(response)` instead of `finish(response)` when a run may need another
+provider turn for tools, validation retry, or approval suspension. The handle
+uses the same executor path as managed `generate()`. `generate()` also accepts
+`transport: (params, info) => response` when Crux should own the loop but your
+code should own the wire call. `stream()` with `transport` is intentionally not
+supported and rejects with `CruxTransportStreamUnsupportedError`.
+
+## Tool Approvals
+
+Tool definitions stay policy-free. Require human approval where tools are
+composed: `context({ toolApproval })`, `prompt({ toolApproval })`, or the
+call-site `generate()`/`stream()` options. Exact tool names beat wildcards;
+within the selected exact or wildcard declarations, call site wins over prompt
+and prompt wins over context.
+
+```ts
+const result = await adapter.generate(assistant, {
+  model: "gpt-4o",
+  input,
+  toolApproval: {
+    deletePost: "always",
+    "*": "never",
+  },
+});
+```
+
+When a call suspends, persist `result.messages`, append a
+`tool-approval-response` with `appendToolApprovalResponse()`, and call the
+adapter again with the resumed messages.
+
+## Tool Context
+
+Tools can declare per-tool dependencies with `contextSchema`. Any adapter call
+that composes that tool must pass a matching `toolsContext.<toolName>` value;
+Crux validates it before the tool loop starts, rejects `toolsContext` keys for
+tools without `contextSchema`, and passes the parsed value to `execute`,
+middleware, and approval middleware. `runtimeContext` is shared across the
+whole run and is also visible to function-form `toolApproval` policies.
+
+```ts
+const weather = tool({
+  description: "Get weather.",
+  input: z.object({ city: z.string() }),
+  contextSchema: z.object({ apiKey: z.string() }),
+  execute: async ({ city }, { context, runtimeContext }) =>
+    fetchWeather(city, context.apiKey, runtimeContext),
+});
+
+await generate(assistant, {
+  model,
+  toolsContext: { weather: { apiKey: process.env.WEATHER_API_KEY } },
+  runtimeContext: { tenantId: "tenant_1" },
+});
+```
 
 ## Input Escaping
 
@@ -121,7 +209,7 @@ The `use` array is the bus. Memory, retrieval, guardrails, skills, blackboards, 
 import { prompt } from "@use-crux/core";
 import { memory, facts, recentMessages } from "@use-crux/core/memory";
 import { retriever } from "@use-crux/core/retrieval";
-import { constraint, guardrail } from "@use-crux/core/safety";
+import { boundary, constraint, guardrail } from "@use-crux/core/safety";
 import { generate } from "@use-crux/ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
@@ -146,16 +234,24 @@ const docs = retriever({
 });
 
 const injection = guardrail({
-  name: "injection",
-  phase: "input",
-  validate: detectPromptInjection,
+  id: "injection",
+  on: boundary.input.text(),
+  run: guardrail.injection({ action: "block" }),
 });
 
+const ReplyOutputSchema = z.object({
+  answer: z.string(),
+  citations: z.array(z.object({ title: z.string(), url: z.string() })),
+});
+
+type ReplyOutput = z.infer<typeof ReplyOutputSchema>;
+
 const grounded = constraint({
-  name: "grounded",
+  id: "grounded",
+  on: boundary.output.object<ReplyOutput>(),
   severity: "assert",
-  check: async (output) =>
-    output.parsed.citations.length > 0
+  run: async (output) =>
+    output.citations.length > 0
       ? { pass: true }
       : { pass: false, feedback: "Cite at least one source." },
 });
@@ -164,10 +260,7 @@ const reply = prompt({
   id: "reply",
   use: [chat, docs],
   input: z.object({ userId: z.string(), question: z.string() }),
-  output: z.object({
-    answer: z.string(),
-    citations: z.array(z.object({ title: z.string(), url: z.string() })),
-  }),
+  output: ReplyOutputSchema,
   system: "Answer from memory and product docs. Do not invent facts.",
   prompt: ({ input }) => input.question,
 });
@@ -377,6 +470,14 @@ Portable tool-loop controls live in `GenerationSettings`: `toolChoice`,
 `stopWhen`, `maxSteps`, plus the `maxSteps(n)` and `hasToolCall(name)` helpers.
 Adapters map those settings to provider-native fields. Provider-specific tool
 controls that are not portable belong in that adapter's typed `extra` option.
+`GenerationSettings.reasoning` provides a portable `'low' | 'medium' | 'high'`
+reasoning-effort hint; exact provider budgets, summaries, and disable controls
+also belong in `extra`.
+
+Managed `generate()` / `stream()` calls use structured `timeout` budgets:
+`totalMs` for the whole call, `stepMs` for provider attempts, `chunkMs` for
+stream inactivity, and `toolMs` / `tools[name]` for tool execution. Expired
+budgets reject with `TimeoutError`.
 
 ## How It Works
 
@@ -610,6 +711,8 @@ Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 | `@use-crux/core/runtime/testing` | App-level Runtime Engine test harness plus store and kernel conformance suites for adapter authors.                                                                         |
 | `@use-crux/core/observability`   | Canonical graph records, presentation read-model types, devtools transport, subscribers, diagnostics channel, and the per-turn `TurnDecisionReport` explanation read model. |
 | `@use-crux/core/project-index`   | Public Project Index contracts for local devtools and source intelligence.                                                                                                  |
+| `@use-crux/core/skill`           | Edge-safe skill authoring with inline and registry loaders.                                                                                                                 |
+| `@use-crux/core/skill/node`      | Node-only local SKILL.md loading with `skill.fromFile()` and `fileSkill()`.                                                                                                 |
 
 See the full [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) for every subpath and API.
 

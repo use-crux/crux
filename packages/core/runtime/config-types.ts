@@ -165,6 +165,14 @@ export interface CruxObservabilityConfig {
   /** Set `false` to explicitly disable an already configured observability transport. */
   readonly enabled?: boolean
   /**
+   * Stable-beta capture ladder for Safety-sensitive artifacts.
+   *
+   * `full` keeps payload previews, `safe` keeps already-safe previews,
+   * `evidence` keeps size/hash evidence without content previews, and `off`
+   * removes payload previews and evidence metadata.
+   */
+  readonly capture?: CruxObservabilityCapturePolicy['capture']
+  /**
    * Capture input-family payloads in the canonical observability graph.
    *
    * `true`/`'inline'` keeps payload previews, `false`/`'reference'` emits

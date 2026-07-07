@@ -15,6 +15,12 @@ import type { Message } from '../../generation/messages'
 import type { LoopRuntimePort } from '../loop-runtime-port'
 import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '../types'
 
+/** Per-call context passed to provider wire hooks. */
+export interface CoreStepCallContext {
+  /** Cooperative abort signal for the current provider step. */
+  readonly signal: AbortSignal | undefined
+}
+
 /**
  * Append an assistant/tool result round in the format expected by a provider.
  *
@@ -39,12 +45,14 @@ export type AppendToolRound = (
  * @typeParam TRawResponse - Provider response returned from non-streaming calls.
  * @typeParam TRawStream - Provider stream object returned from streaming calls.
  * @typeParam TExtra - Provider-specific per-call options.
+ * @typeParam TParams - Provider-native non-streaming request params.
  */
 export interface CoreStepDialect<
   TClient,
   TRawResponse,
   TRawStream,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
+  TParams = unknown,
 > {
   /** Discriminant for the Crux-driven step loop. */
   readonly kind: 'core-step'
@@ -59,10 +67,20 @@ export interface CoreStepDialect<
   mapSettings(settings: GenerationSettings): Record<string, unknown>
 
   /** Execute exactly one provider call and return its normalized extraction. */
-  call(client: TClient, args: CallArgs<TExtra>): Promise<{ raw: TRawResponse; extracted: AdapterResponse }>
+  call(
+    client: TClient,
+    args: CallArgs<TExtra>,
+    context?: CoreStepCallContext,
+  ): Promise<{ raw: TRawResponse; extracted: AdapterResponse }>
 
   /** Start one provider stream using fully prepared Crux call arguments. */
   stream(client: TClient, args: CallArgs<TExtra>): Promise<StreamHandle<TRawStream>>
+
+  /** Translate canonical call args into provider-native params for public codecs and handles. */
+  toParams?: (args: CallArgs<TExtra>) => TParams | Promise<TParams>
+
+  /** Normalize a provider-native response supplied to a call handle. */
+  fromResponse?: (response: TRawResponse) => AdapterResponse
 
   /** Format the assistant response and tool results for the next provider call. */
   appendToolRound: AppendToolRound
@@ -105,6 +123,7 @@ export type AdapterExecutionDialect<
   TRawResponse,
   TRawStream,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
+  TParams = unknown,
 > =
-  | CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra>
+  | CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra, TParams>
   | SdkLoopDialect<TModel, TRawResponse, TRawStream>

@@ -3,7 +3,7 @@
  *
  * These matchers let evaluations protect setup behavior that is not visible
  * in the final model output: context inclusion, routing, freshness, cache
- * acceptance, and the stable reason codes that explain those outcomes.
+ * acceptance, safety decisions, and the stable reason codes that explain those outcomes.
  *
  * @module
  */
@@ -85,6 +85,18 @@ export interface TurnDecisionReportCacheExpect {
   ): void
 }
 
+/** Matchers over Safety decision rows in a captured `TurnDecisionReport`. */
+export interface TurnDecisionReportSafetyExpect {
+  /**
+   * Assert that a guardrail, constraint, or tool policy recorded the expected outcome.
+   *
+   * @param policyId - Stable safety policy id.
+   * @param outcome - Expected decision outcome, such as `block`, `rewrite`, or `request_approval`.
+   * @param options - Optional stable reason-code assertion.
+   */
+  toHaveOutcome(policyId: string, outcome: string, options?: TurnDecisionReportReasonOptions): void
+}
+
 /** Assertion namespace for captured `TurnDecisionReport` rows. */
 export interface TurnDecisionReportExpect {
   /** Context inclusion, checked, dropped, and disabled behavior. */
@@ -97,4 +109,6 @@ export interface TurnDecisionReportExpect {
   freshness: TurnDecisionReportFreshnessExpect
   /** Cache reuse/write evidence and its explicit freshness gate outcome. */
   cache: TurnDecisionReportCacheExpect
+  /** Guardrail, constraint, and tool-policy decisions. */
+  safety: TurnDecisionReportSafetyExpect
 }

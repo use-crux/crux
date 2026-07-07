@@ -39,7 +39,13 @@ const SETTINGS_SAMPLE: GenerationSettings = {
 }
 
 const BASE_MESSAGES: readonly Message[] = [{ role: 'user', content: 'Run the conformance scenario.' }]
-const SAMPLE_USAGE = { inputTokens: 13, outputTokens: 8, totalTokens: 21 } as const
+const SAMPLE_USAGE = {
+  inputTokens: 13,
+  outputTokens: 8,
+  totalTokens: 21,
+  inputTokenDetails: {},
+  outputTokenDetails: {},
+} as const
 
 /**
  * Run the native adapter contract suite against an `AdapterSpec`.

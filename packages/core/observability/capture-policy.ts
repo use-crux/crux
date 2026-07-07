@@ -9,110 +9,31 @@
  */
 
 import { getHooks } from '../runtime/runtime'
-import {
-  CRUX_CANONICAL_ARTIFACT_KINDS,
-  type CruxAttributes,
-  type CruxCanonicalArtifactKind,
-  type CruxArtifactKind,
-  type CruxGraphRecord,
-} from './contract'
+import { type CruxArtifactKind, type CruxGraphRecord } from './contract'
 import type { ObserveArtifactOptions } from './observe'
+import {
+  ARTIFACT_CAPTURE_DECISIONS,
+  PAYLOAD_ATTRIBUTE_KEYS,
+  isCanonicalArtifactKind,
+  type CruxObservabilityArtifactDirection,
+  type CruxObservabilityCaptureConfig,
+  type CruxObservabilityCaptureLevel,
+  type CruxObservabilityCaptureMode,
+} from './capture-policy-contract'
+import { byteLength, hashString, serializePreview } from './capture-policy-utils'
+import { stripRecordPayloadAttributes } from './capture-policy-payload'
 
-/** Capture mode for a privacy-sensitive payload direction. */
-export type CruxObservabilityCaptureMode = 'inline' | 'reference' | 'off'
-
-/**
- * Keys whose values can carry prompt, retrieval, generation, or body text.
- *
- * These are stripped from record attributes when either capture direction is
- * disabled, and by the OTel mapper as defense in depth.
- */
-export const PAYLOAD_ATTRIBUTE_KEYS = [
-  'text',
-  'query',
-  'prompt',
-  'messages',
-  'input',
-  'output',
-  'preview',
-  'content',
-  'delta',
-  'body',
-  'filter',
-] as const
-
-/** Runtime policy for how observability payloads are captured. */
-export interface CruxObservabilityCapturePolicy {
-  /**
-   * Capture input-family payloads such as prompt messages and tool arguments.
-   *
-   * `true` is sugar for `'inline'`; `false` is sugar for `'reference'`.
-   *
-   * @default true
-   */
-  readonly recordInputs?: boolean | CruxObservabilityCaptureMode
-  /**
-   * Capture output-family payloads such as model responses, retrieved content,
-   * memory snapshots, token text, and raw error evidence.
-   *
-   * `true` is sugar for `'inline'`; `false` is sugar for `'reference'`.
-   *
-   * @default true
-   */
-  readonly recordOutputs?: boolean | CruxObservabilityCaptureMode
-  /**
-   * Last-mile record redaction hook.
-   *
-   * Runs after capture policy and before sanitization. Returning `null` drops
-   * the record. Throwing also drops the record, so privacy hooks fail closed.
-   */
-  readonly redactRecord?: (record: CruxGraphRecord) => CruxGraphRecord | null
-}
-
-export type CruxObservabilityArtifactDirection = 'input' | 'output'
-type CruxObservabilityArtifactCaptureDecision =
-  | CruxObservabilityArtifactDirection
-  | 'exempt'
-
-const ARTIFACT_CAPTURE_DECISIONS = {
-  input: 'input',
-  messages: 'input',
-  system: 'input',
-  context: 'input',
-  'context.contribution': 'input',
-  prompt: 'input',
-  'prompt.budget': 'input',
-  'tool.args': 'input',
-  'tool.request': 'input',
-  output: 'output',
-  'stream.timeline': 'output',
-  'tool.result': 'output',
-  'retrieval.hits': 'output',
-  'memory.snapshot': 'output',
-  'memory.recall': 'output',
-  'memory.diff': 'output',
-  'error.raw': 'output',
-  'guardrail.report': 'output',
-  'handoff.payload': 'output',
-  'delegate.report': 'output',
-  'composition.report': 'output',
-  'compaction.report': 'output',
-  'score.report': 'output',
-  'citation.report': 'output',
-  'comparison.report': 'output',
-  'error.stack': 'exempt',
-  'routing.report': 'exempt',
-  'cache.report': 'exempt',
-  'embedding.report': 'exempt',
-  'indexing.report': 'exempt',
-  'ingest.report': 'exempt',
-  'corpus.report': 'exempt',
-  'security.report': 'exempt',
-  'constraint.report': 'exempt',
-} as const satisfies Record<
-  CruxCanonicalArtifactKind,
-  CruxObservabilityArtifactCaptureDecision
->
+export { PAYLOAD_ATTRIBUTE_KEYS } from './capture-policy-contract'
+export { stripPayloadAttributes } from './capture-policy-payload'
+export type {
+  CruxObservabilityArtifactDirection,
+  CruxObservabilityCaptureConfig,
+  CruxObservabilityCaptureLevel,
+  CruxObservabilityCaptureMode,
+  CruxObservabilityCapturePolicy,
+  CruxObservabilityCaptureTarget,
+  CruxSafetyArtifactKind,
+} from './capture-policy-contract'
 
 type ArtifactOptions = ObserveArtifactOptions
 
@@ -123,6 +44,13 @@ export type ObservabilityCaptureResult =
 interface ResolvedCaptureModes {
   readonly input: CruxObservabilityCaptureMode
   readonly output: CruxObservabilityCaptureMode
+  readonly capture?: ResolvedCaptureConfig
+}
+
+interface ResolvedCaptureConfig {
+  readonly default?: CruxObservabilityCaptureLevel
+  readonly overrides: ReadonlyMap<string, CruxObservabilityCaptureLevel>
+  readonly redactRecord?: (record: CruxGraphRecord) => CruxGraphRecord | null
 }
 
 /**
@@ -135,25 +63,10 @@ export function applyObservabilityCapturePolicy(
   direction: CruxObservabilityArtifactDirection,
   artifact: ArtifactOptions,
 ): ArtifactOptions {
-  const mode = modeForDirection(resolveCaptureModes(), direction)
-  if (mode === 'inline' || artifact.preview === undefined) return artifact
-
-  const { preview: _preview, ...rest } = artifact
-  if (mode === 'off') {
-    const { sizeBytes: _sizeBytes, hash: _hash, uri: _uri, ...offRest } = rest
-    return {
-      ...offRest,
-      encoding: 'reference',
-    }
-  }
-
-  const serialized = serializePreview(artifact.preview)
-  return {
-    ...rest,
-    encoding: 'reference',
-    sizeBytes: artifact.sizeBytes ?? byteLength(serialized),
-    hash: artifact.hash ?? hashString(serialized),
-  }
+  return applyCaptureLevelToArtifact(
+    captureLevelForDirection(resolveCaptureModes(), direction),
+    artifact,
+  )
 }
 
 /** Apply capture policy for known input/output artifact families. */
@@ -161,10 +74,8 @@ export function applyConfiguredObservabilityCapturePolicy(
   artifact: ArtifactOptions,
 ): ArtifactOptions {
   const modes = resolveCaptureModes()
-  const direction = artifactCaptureDirection(artifact.kind, modes)
-  return direction
-    ? applyObservabilityCapturePolicy(direction, artifact)
-    : artifact
+  const level = captureLevelForArtifact(modes, artifact.kind)
+  return level ? applyCaptureLevelToArtifact(level, artifact) : artifact
 }
 
 /**
@@ -182,43 +93,14 @@ export function applyObservabilityCapturePolicyToRecord(
   const policyRecord = applyCaptureModesToRecord(record, modes)
 
   try {
-    const redacted = policy?.redactRecord
-      ? policy.redactRecord(policyRecord)
+    const redactRecord = modes.capture?.redactRecord ?? policy?.redactRecord
+    const redacted = redactRecord
+      ? redactRecord(policyRecord)
       : policyRecord
     return redacted ? { ok: true, record: redacted } : { ok: false }
   } catch (error) {
     return { ok: false, error }
   }
-}
-
-/** Remove known payload-bearing attributes without mutating the input object. */
-export function stripPayloadAttributes(
-  attributes: CruxAttributes | undefined,
-): CruxAttributes | undefined {
-  if (!attributes) return undefined
-  const nextEntries = Object.entries(attributes).filter(
-    ([key]) => !isPayloadAttributeKey(key),
-  )
-  return nextEntries.length > 0 ? Object.fromEntries(nextEntries) : undefined
-}
-
-function artifactCaptureDirection(
-  kind: CruxArtifactKind,
-  modes?: ResolvedCaptureModes,
-): CruxObservabilityArtifactDirection | undefined {
-  if (kind.startsWith('custom.')) {
-    if (!modes || !shouldStripPayloadAttributes(modes)) return undefined
-    return 'output'
-  }
-  if (!isCanonicalArtifactKind(kind)) return undefined
-  const decision = ARTIFACT_CAPTURE_DECISIONS[kind]
-  return decision === 'exempt' ? undefined : decision
-}
-
-function isCanonicalArtifactKind(
-  kind: CruxArtifactKind,
-): kind is CruxCanonicalArtifactKind {
-  return (CRUX_CANONICAL_ARTIFACT_KINDS as readonly string[]).includes(kind)
 }
 
 function applyCaptureModesToRecord(
@@ -230,15 +112,20 @@ function applyCaptureModesToRecord(
     : record
   if (strippedRecord.type !== 'artifact') return strippedRecord
 
-  const direction = artifactCaptureDirection(strippedRecord.kind, modes)
-  if (!direction) return strippedRecord
+  const level = captureLevelForArtifact(modes, strippedRecord.kind)
+  if (!level) return strippedRecord
+  return applyCaptureLevelToRecord(level, strippedRecord)
+}
 
-  const mode = modeForDirection(modes, direction)
-  if (mode === 'inline' || strippedRecord.preview === undefined)
-    return strippedRecord
+function applyCaptureLevelToArtifact(
+  level: CruxObservabilityCaptureLevel,
+  artifact: ArtifactOptions,
+): ArtifactOptions {
+  if ((level === 'full' || level === 'safe') || artifact.preview === undefined)
+    return artifact
 
-  const { preview: _preview, ...rest } = strippedRecord
-  if (mode === 'off') {
+  const { preview: _preview, ...rest } = artifact
+  if (level === 'off') {
     const { sizeBytes: _sizeBytes, hash: _hash, uri: _uri, ...offRest } = rest
     return {
       ...offRest,
@@ -246,32 +133,140 @@ function applyCaptureModesToRecord(
     }
   }
 
-  const serialized = serializePreview(strippedRecord.preview)
+  const serialized = serializePreview(artifact.preview)
   return {
     ...rest,
     encoding: 'reference',
-    sizeBytes: strippedRecord.sizeBytes ?? byteLength(serialized),
-    hash: strippedRecord.hash ?? hashString(serialized),
+    sizeBytes: artifact.sizeBytes ?? byteLength(serialized),
+    hash: artifact.hash ?? hashString(serialized),
   }
 }
 
-function stripRecordPayloadAttributes(
-  record: CruxGraphRecord,
+function applyCaptureLevelToRecord(
+  level: CruxObservabilityCaptureLevel,
+  record: Extract<CruxGraphRecord, { readonly type: 'artifact' }>,
 ): CruxGraphRecord {
-  if (!('attributes' in record) || record.attributes === undefined)
+  if ((level === 'full' || level === 'safe') || record.preview === undefined)
     return record
-  const attributes = stripPayloadAttributes(record.attributes)
-  if (attributes) return { ...record, attributes } as CruxGraphRecord
 
-  const { attributes: _attributes, ...rest } = record
-  return rest as CruxGraphRecord
+  const { preview: _preview, ...rest } = record
+  if (level === 'off') {
+    const { sizeBytes: _sizeBytes, hash: _hash, uri: _uri, ...offRest } = rest
+    return {
+      ...offRest,
+      encoding: 'reference',
+    }
+  }
+
+  const serialized = serializePreview(record.preview)
+  return {
+    ...rest,
+    encoding: 'reference',
+    sizeBytes: record.sizeBytes ?? byteLength(serialized),
+    hash: record.hash ?? hashString(serialized),
+  }
+}
+
+function captureLevelForArtifact(
+  modes: ResolvedCaptureModes,
+  kind: CruxArtifactKind,
+): CruxObservabilityCaptureLevel | undefined {
+  if (kind.startsWith('custom.')) {
+    if (!shouldStripPayloadAttributes(modes)) return undefined
+    return 'evidence'
+  }
+  if (!isCanonicalArtifactKind(kind)) return undefined
+
+  const decision = ARTIFACT_CAPTURE_DECISIONS[kind]
+  if (decision === 'exempt') return undefined
+
+  const override = modes.capture?.overrides.get(kind)
+  if (override) return override
+
+  if (decision === 'input' || decision === 'output') {
+    return captureLevelForDirection(modes, decision)
+  }
+
+  return defaultSafetyCaptureLevel(modes)
+}
+
+function captureLevelForDirection(
+  modes: ResolvedCaptureModes,
+  direction: CruxObservabilityArtifactDirection,
+): CruxObservabilityCaptureLevel {
+  const override = modes.capture?.overrides.get(direction)
+  if (override) return override
+  if (modes.capture?.default) return modes.capture.default
+  return levelFromMode(modeForDirection(modes, direction))
+}
+
+function levelFromMode(
+  mode: CruxObservabilityCaptureMode,
+): CruxObservabilityCaptureLevel {
+  switch (mode) {
+    case 'inline':
+      return 'full'
+    case 'reference':
+      return 'evidence'
+    case 'off':
+      return 'off'
+  }
+}
+
+function defaultSafetyCaptureLevel(
+  modes: ResolvedCaptureModes,
+): CruxObservabilityCaptureLevel {
+  if (modes.capture?.default) return modes.capture.default
+  const inputLevel = levelFromMode(modes.input)
+  const outputLevel = levelFromMode(modes.output)
+  if (inputLevel === 'off' || outputLevel === 'off') return 'off'
+  if (inputLevel === 'evidence' || outputLevel === 'evidence')
+    return 'evidence'
+  return 'safe'
+}
+
+function captureModeFromLevel(
+  level: CruxObservabilityCaptureLevel | undefined,
+): CruxObservabilityCaptureMode | undefined {
+  switch (level) {
+    case 'full':
+    case 'safe':
+      return 'inline'
+    case 'evidence':
+      return 'reference'
+    case 'off':
+      return 'off'
+    case undefined:
+      return undefined
+  }
 }
 
 function resolveCaptureModes(): ResolvedCaptureModes {
   const policy = getHooks().observabilityCapture
+  const capture = normalizeCaptureConfig(policy?.capture)
   return {
-    input: normalizeCaptureMode(policy?.recordInputs),
-    output: normalizeCaptureMode(policy?.recordOutputs),
+    input:
+      captureModeFromLevel(capture?.overrides.get('input') ?? capture?.default) ??
+      normalizeCaptureMode(policy?.recordInputs),
+    output:
+      captureModeFromLevel(capture?.overrides.get('output') ?? capture?.default) ??
+      normalizeCaptureMode(policy?.recordOutputs),
+    ...(capture ? { capture } : {}),
+  }
+}
+
+function normalizeCaptureConfig(
+  config: CruxObservabilityCaptureConfig | undefined,
+): ResolvedCaptureConfig | undefined {
+  if (!config) return undefined
+  if (typeof config === 'string') {
+    return { default: config, overrides: new Map() }
+  }
+
+  return {
+    ...(config.default ? { default: config.default } : {}),
+    overrides: new Map(Object.entries(config.overrides ?? {})),
+    ...(config.redactRecord ? { redactRecord: config.redactRecord } : {}),
   }
 }
 
@@ -292,48 +287,4 @@ function modeForDirection(
 
 function shouldStripPayloadAttributes(modes: ResolvedCaptureModes): boolean {
   return modes.input !== 'inline' || modes.output !== 'inline'
-}
-
-function isPayloadAttributeKey(key: string): boolean {
-  return (PAYLOAD_ATTRIBUTE_KEYS as readonly string[]).includes(key)
-}
-
-function serializePreview(value: unknown): string {
-  if (typeof value === 'string') return value
-  try {
-    return JSON.stringify(value, stableReplacer()) ?? String(value)
-  } catch {
-    return String(value)
-  }
-}
-
-function stableReplacer(): (key: string, value: unknown) => unknown {
-  const seen = new WeakSet<object>()
-  return (_key, value) => {
-    if (!value || typeof value !== 'object') return value
-    if (seen.has(value)) return '[Circular]'
-    seen.add(value)
-    if (Array.isArray(value)) return value
-    return Object.fromEntries(
-      Object.entries(value).sort(([left], [right]) =>
-        left.localeCompare(right),
-      ),
-    )
-  }
-}
-
-function byteLength(value: string): number {
-  if (typeof TextEncoder !== 'undefined') {
-    return new TextEncoder().encode(value).length
-  }
-  return value.length
-}
-
-function hashString(value: string): string {
-  let hash = 2166136261
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index)
-    hash = Math.imul(hash, 16777619)
-  }
-  return `fnv1a:${(hash >>> 0).toString(16).padStart(8, '0')}`
 }

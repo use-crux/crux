@@ -13,7 +13,10 @@ function fakeGenerate(model: string, opts?: { cost?: number }) {
   return {
     text: `response from ${model}`,
     object: { quality: 0.9 },
-    _meta: { cost: opts?.cost ?? 0.001, usage: { inputTokens: 10, outputTokens: 20 } },
+    _meta: {
+      cost: opts?.cost ?? 0.001,
+      usage: { inputTokens: 10, outputTokens: 20, totalTokens: 30, inputTokenDetails: {}, outputTokenDetails: {} },
+    },
   }
 }
 

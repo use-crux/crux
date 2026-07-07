@@ -7,17 +7,18 @@
  * {@link createSafety}. The session owns everything the adapter dialects
  * used to coordinate by hand:
  *
- * - Three-scope policy merge (per-call > per-prompt > global) including
- *   reading runtime globals — callers never touch the registry.
- * - Phase splitting and guarded-content selection (last user message with
- *   prompt-text fallback), including redaction write-back.
- * - The constraint retry state machine and corrective-message phrasing
- *   (injectable via {@link ConstraintFeedbackFormatter}).
+ * - Policy registry construction across global, prompt, and call scopes.
+ *   Duplicate policy ids fail fast, and callers tune posture explicitly with
+ *   `safety.tune` instead of relying on implicit override precedence.
+ * - Boundary splitting and input guarding for every user message, including
+ *   redaction/rewrite write-back before provider execution.
+ * - The guardrails-before-constraints convergence loop and corrective-message
+ *   phrasing (injectable via {@link ConstraintFeedbackFormatter}).
  * - Suspension policy: output safety is skipped on tool-approval suspension.
  * - Instrumentation hook fan-out and all safety observability emission.
  * - Audit accumulation across phases and `TraceMeta` shaping via `stamp()`.
- * - The streaming sub-protocol ("LLM Suspense"): per-chunk guard evaluation
- *   with hold buffers, mid-stream transforms, and flush-time validation.
+ * - The streaming sub-protocol: sentence-gated stage cascades, explicit
+ *   hold/final/disabled modes, and final constraint reporting.
  *
  * Adapter dialects must contain zero safety policy: construct a session,
  * call `guardInput()` before the first provider call, call
@@ -30,6 +31,10 @@
 import type { Message } from '../generation/messages'
 import type { TraceMeta } from '../generation/types'
 import { getHooks } from '../runtime/runtime'
+import type { z } from 'zod'
+import type { BoundaryDef } from './boundary'
+import { buildSafetyRegistry, type SafetyBinding } from './registry'
+import type { SafetyTuneOptions } from './tune'
 import type {
   Constraint,
   ConstraintAudit,
@@ -37,18 +42,16 @@ import type {
   ConstraintContext,
   ConstraintFailure,
 } from './constraint/types'
-import { runConstraints, observeConstraintCheck } from './constraint/runner'
-import { ConstraintViolationError } from './constraint/errors'
+import { observeConstraintCheck, runConstraints } from './constraint/runner'
 import type {
-  ChunkGuardrailResult,
   Guardrail,
   GuardrailAudit,
   GuardrailAuditEntry,
   GuardrailContext,
-  GuardrailPhase,
 } from './guardrail/types'
 import { createGuardrailPipeline } from './guardrail/pipeline'
-import { GuardrailBlockedError } from './guardrail/errors'
+import { createSafetyStream } from './stream/engine'
+import { resyncStructuredText } from './structured'
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -80,6 +83,14 @@ export interface SafetyCallOptions {
    * byte-for-byte.
    */
   readonly formatter?: ConstraintFeedbackFormatter
+  /**
+   * Explicit per-call safety posture overrides keyed by policy id.
+   *
+   * Tuning can only adjust enforcement/reporting, stream posture, or whether
+   * an attached policy is enabled for this call. It never replaces policy
+   * logic, boundaries, or identity.
+   */
+  readonly safety?: SafetyTuneOptions
   // Global scope (runtime globals) is read internally — callers never touch the registry.
 }
 
@@ -138,11 +149,13 @@ export interface SafetyStreamSeal extends SafetyOutput {
 }
 
 /**
- * Streaming sub-protocol ("LLM Suspense"): per-chunk guard evaluation with
- * hold buffers and mid-stream transforms. Owns `buffer: 'none'` vs `'full'`
- * routing, held-content accumulation/release, and flush-time validation.
- * Constraints run report-only at `finish()` — a live stream cannot
- * regenerate. Constraint `onChunk` may abort a stream that is going wrong.
+ * Streaming sub-protocol for one model output stream.
+ *
+ * Text flows through a gated stage cascade: each stage consumes the cleared
+ * output of the previous stage, and content is emitted only after every
+ * enforcing stream guard has allowed, rewritten, or warned on the segment.
+ * Constraints run report-only at `finish()` because a live stream cannot
+ * regenerate earlier text.
  */
 export interface SafetyStream {
   /**
@@ -156,8 +169,8 @@ export interface SafetyStream {
   feed(chunk: string): Promise<SafetyStreamDirective>
 
   /**
-   * End of stream: release held content, run `buffer: 'full'` guards on the
-   * accumulated text, run constraints report-only, return the final seal.
+   * End of stream: flush held segments, run final-only guards and
+   * report-mode constraints, then return the final seal.
    */
   finish(): Promise<SafetyStreamSeal>
 
@@ -175,10 +188,12 @@ export interface Safety {
   readonly enabled: boolean
 
   /**
-   * Input phase. Owns last-user-message extraction (with prompt-text
-   * fallback) and writes redacted/transformed content back into the
-   * returned messages (or prompt). Throws {@link GuardrailBlockedError} on
-   * block.
+   * Input boundary pass.
+   *
+   * Runs input guardrails over every user message in order. Rewrites are
+   * written back into the returned messages before the provider sees them.
+   * If no user message exists, the optional prompt fallback is guarded.
+   * Throws {@link GuardrailBlockedError} on block.
    */
   guardInput(input: {
     readonly messages: readonly Message[]
@@ -186,10 +201,13 @@ export interface Safety {
   }): Promise<{ readonly messages: readonly Message[]; readonly prompt?: string }>
 
   /**
-   * Output phase, fixed order: constraints (parallel check,
-   * combined-feedback retries via `regenerate`) then output guardrails on
-   * the surviving text. `suspended: true` (tool-approval) skips output
-   * safety — that policy is owned here, not by dialects. Throws
+   * Output boundary pass.
+   *
+   * Fixed order: output guardrails first, then constraints over the guarded
+   * candidate. Constraint retries call `regenerate`, guard the regenerated
+   * candidate, and then re-check constraints. `suspended: true`
+   * (tool-approval) skips output safety because the response is an approval
+   * request, not final model output. Throws
    * {@link ConstraintViolationError} / {@link GuardrailBlockedError}.
    *
    * `regenerate` is the only dialect-specific concern: append the
@@ -199,7 +217,7 @@ export interface Safety {
   finalizeOutput(
     output: SafetyOutput,
     regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
-    opts?: { readonly suspended?: boolean; readonly messages?: readonly Message[] },
+    opts?: { readonly suspended?: boolean; readonly messages?: readonly Message[]; readonly schema?: z.ZodType },
   ): Promise<SafetyOutput>
 
   /** Audits accumulated so far (exact `GuardrailAudit` / `ConstraintAudit` shapes). */
@@ -238,36 +256,66 @@ export const defaultConstraintFeedbackFormatter: ConstraintFeedbackFormatter = {
   },
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Internal: merged policy bindings
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * One merged policy binding. `mode` is reserved for attachment-time
- * enforcement control (`'report'` shadow rollouts); v1 always binds
- * `'enforce'`, but the merge produces bindings so adding the knob later
- * does not require re-plumbing precedence.
- */
-interface SafetyBinding<TPolicy> {
-  readonly policy: TPolicy
-  readonly mode: 'enforce'
+/** Keep declaration order while collapsing repeated object references. */
+function uniquePolicies<TPolicy extends object>(policies: readonly TPolicy[]): TPolicy[] {
+  const seen = new Set<TPolicy>()
+  const unique: TPolicy[] = []
+  for (const policy of policies) {
+    if (seen.has(policy)) continue
+    seen.add(policy)
+    unique.push(policy)
+  }
+  return unique
 }
 
-/**
- * Union merge with name-keyed precedence: per-call wins over per-prompt
- * wins over global. Lets a call site soften or replace a globally
- * configured policy without touching global config.
- */
-function mergeScopes<TPolicy extends { readonly name: string }>(
-  perCall: readonly TPolicy[] | undefined,
-  perPrompt: readonly TPolicy[] | undefined,
-  global: readonly TPolicy[] | undefined,
-): SafetyBinding<TPolicy>[] {
-  const seen = new Map<string, SafetyBinding<TPolicy>>()
-  for (const policy of global ?? []) seen.set(policy.name, { policy, mode: 'enforce' })
-  for (const policy of perPrompt ?? []) seen.set(policy.name, { policy, mode: 'enforce' })
-  for (const policy of perCall ?? []) seen.set(policy.name, { policy, mode: 'enforce' })
-  return [...seen.values()]
+function effectiveGuardrails(bindings: readonly SafetyBinding[]): Guardrail[] {
+  const seen = new Set<Guardrail>()
+  const guards: Guardrail[] = []
+  for (const binding of bindings) {
+    if (binding.kind !== 'guardrail' || !binding.enabled) continue
+    const guard = binding.policy as Guardrail
+    if (seen.has(guard)) continue
+    seen.add(guard)
+    guards.push(effectiveGuardrail(guard, binding))
+  }
+  return guards
+}
+
+function constraintsForMode(bindings: readonly SafetyBinding[], mode: 'enforce' | 'report'): Constraint[] {
+  return uniquePolicies(
+    bindings
+      .filter((binding) => binding.kind === 'constraint' && binding.enabled && binding.mode === mode)
+      .map((binding) => binding.policy as Constraint),
+  )
+}
+
+function effectiveGuardrail(guard: Guardrail, binding: SafetyBinding): Guardrail {
+  if (binding.mode === guard.mode && binding.stream === guard.stream) return guard
+  return Object.freeze({
+    ...guard,
+    mode: binding.mode,
+    stream: binding.stream,
+  })
+}
+
+function disabledGuardrailEntries(bindings: readonly SafetyBinding[]): GuardrailAuditEntry[] {
+  const seen = new Set<Guardrail>()
+  const entries: GuardrailAuditEntry[] = []
+  for (const binding of bindings) {
+    if (binding.kind !== 'guardrail' || binding.enabled) continue
+    const guard = binding.policy as Guardrail
+    if (seen.has(guard)) continue
+    seen.add(guard)
+    entries.push({
+      guard: guard.id,
+      ...(guard.category !== undefined ? { category: guard.category } : {}),
+      phase: guardPhase(guard),
+      action: 'allow',
+      reason: 'disabled by call site',
+      durationMs: 0,
+    })
+  }
+  return entries
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -310,31 +358,43 @@ export function createSafety(options: SafetyCallOptions): Safety {
   // half-instrument this run.
   const runtime = getHooks()
 
-  const constraintBindings = mergeScopes(
-    options.call?.constraints,
-    options.resolved?.constraints,
-    runtime.globalConstraints,
-  )
-  const guardrailBindings = mergeScopes(
-    options.call?.guardrails,
-    options.resolved?.guardrails,
-    runtime.globalGuardrails,
-  )
+  const registry = buildSafetyRegistry({
+    global: {
+      constraints: runtime.globalConstraints,
+      guardrails: runtime.globalGuardrails,
+    },
+    prompt: {
+      constraints: options.resolved?.constraints,
+      guardrails: options.resolved?.guardrails,
+    },
+    call: {
+      constraints: options.call?.constraints,
+      guardrails: options.call?.guardrails,
+    },
+    tune: options.safety,
+  })
 
-  const constraints = constraintBindings.map((b) => b.policy)
-  const guardrails = guardrailBindings.map((b) => b.policy)
+  const constraints = constraintsForMode(registry.bindings, 'enforce')
+  const reportConstraints = constraintsForMode(registry.bindings, 'report')
+  const guardrails = effectiveGuardrails(registry.bindings)
+  const disabledGuardEntries = disabledGuardrailEntries(registry.bindings)
 
   // Phase dispatch is keyed, not branched — the phase vocabulary can grow
   // (tool-args, tool-result, context-inject) without session surgery.
-  const guardsByPhase = new Map<GuardrailPhase, Guardrail[]>()
+  const guardsByPhase = new Map<'input' | 'output', Guardrail[]>()
   for (const guard of guardrails) {
-    const list = guardsByPhase.get(guard.phase) ?? []
+    const phase = guardPhase(guard)
+    const list = guardsByPhase.get(phase) ?? []
     list.push(guard)
-    guardsByPhase.set(guard.phase, list)
+    guardsByPhase.set(phase, list)
   }
-  const phaseGuards = (phase: GuardrailPhase): readonly Guardrail[] => guardsByPhase.get(phase) ?? []
+  const phaseGuards = (phase: 'input' | 'output'): readonly Guardrail[] => guardsByPhase.get(phase) ?? []
 
-  const enabled = constraints.length > 0 || guardrails.length > 0
+  const enabled =
+    constraints.length > 0 ||
+    reportConstraints.length > 0 ||
+    guardrails.length > 0 ||
+    disabledGuardEntries.length > 0
   const formatter = options.formatter ?? defaultConstraintFeedbackFormatter
   const metadata = options.resolved?.metadata ?? {}
   const traceId = options.traceId
@@ -344,8 +404,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
   let constraintAudit: ConstraintAudit | undefined
   let lastMessages: readonly Message[] = []
 
-  const guardContext = (phase: GuardrailPhase, messages: readonly Message[]): GuardrailContext => ({
-    phase,
+  const guardContext = (_phase: 'input' | 'output', messages: readonly Message[]): GuardrailContext => ({
     promptId: options.promptId,
     model: options.model,
     messages,
@@ -376,6 +435,10 @@ export function createSafety(options: SafetyCallOptions): Safety {
     }
   }
 
+  if (disabledGuardEntries.length > 0) {
+    appendGuardrailAudit({ applied: disabledGuardEntries, blocked: false })
+  }
+
   const toCorrectiveMessages = (formatted: string | readonly Message[]): readonly Message[] =>
     typeof formatted === 'string' ? [{ role: 'user', content: formatted }] : formatted
 
@@ -384,6 +447,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
   async function applyConstraints(
     output: SafetyOutput,
     regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
+    guardCandidate: (candidate: SafetyOutput) => Promise<SafetyOutput>,
   ): Promise<SafetyOutput> {
     let rounds = 0
     const result = await runConstraints(
@@ -393,7 +457,8 @@ export function createSafety(options: SafetyCallOptions): Safety {
       async (_feedback, failures) => {
         const corrective = toCorrectiveMessages(formatter.format(failures, formatterContext()))
         const next = await regenerate(corrective)
-        return { text: next.text, parsed: next.parsed }
+        const guarded = await guardCandidate({ text: next.text, parsed: next.parsed })
+        return { text: guarded.text, parsed: guarded.parsed }
       },
       {
         constraintMaxRetries: options.call?.constraintMaxRetries,
@@ -412,191 +477,70 @@ export function createSafety(options: SafetyCallOptions): Safety {
     return { text: result.output.text, parsed: result.output.parsed }
   }
 
-  async function applyOutputGuards(text: string, messages: readonly Message[]): Promise<string> {
+  async function applyReportConstraints(output: SafetyOutput): Promise<void> {
+    if (reportConstraints.length === 0) return
+
+    const checks = await Promise.all(
+      reportConstraints.map(async (constraint) =>
+        observeConstraintCheck(constraint, { text: output.text, parsed: output.parsed }, constraintContext()),
+      ),
+    )
+    const entries: ConstraintAuditEntry[] = checks.map((check) => ({
+      constraint: check.constraint.id,
+      ...(check.constraint.category !== undefined ? { category: check.constraint.category } : {}),
+      severity: check.constraint.severity,
+      pass: check.result.pass,
+      feedback: check.result.pass ? undefined : check.result.feedback,
+      attempts: 1,
+      durationMs: check.durationMs,
+      metadata: check.result.metadata,
+    }))
+    const prior = constraintAudit
+    const hasSuggestFailures = entries.some((entry) => !entry.pass && entry.severity === 'suggest')
+    const hasAssertFailures = entries.some((entry) => !entry.pass && entry.severity === 'assert')
+    constraintAudit = {
+      entries: [...(prior?.entries ?? []), ...entries],
+      allPassed: (prior?.allPassed ?? true) && entries.every((entry) => entry.pass),
+      suggestFallback: prior?.suggestFallback === true || (hasSuggestFailures && !hasAssertFailures),
+    }
+  }
+
+  async function applyOutputGuards(
+    output: SafetyOutput,
+    messages: readonly Message[],
+    schema: z.ZodType | undefined,
+  ): Promise<SafetyOutput> {
     const outputGuards = phaseGuards('output')
     const pipeline = createGuardrailPipeline(outputGuards)
-    const result = await pipeline.runOutput(text, guardContext('output', messages))
+    const result = await pipeline.runOutput(output.text, guardContext('output', messages))
     appendGuardrailAudit(result.audit)
     transcript.push({
       t: 'output.guard',
       guards: outputGuards.length,
       actions: result.audit.applied.map((entry) => entry.action),
     })
-    return result.content
+    return resyncStructuredText(output, result.content, {
+      schema,
+      policyId: latestRewritePolicyId(result.audit.applied),
+    })
   }
 
   // ── Streaming sub-protocol ─────────────────────────────────────
 
   function openStream(): SafetyStream {
-    const outputGuards = phaseGuards('output')
-    const noneGuards = outputGuards.filter((g) => g.stream?.buffer === 'none' && g.onChunk)
-    const fullGuards = outputGuards.filter((g) => g.stream?.buffer === 'full')
-    const chunkConstraints = constraints.filter((c) => c.onChunk)
-    const streamCtx = (): GuardrailContext => guardContext('output', lastMessages)
-
-    let accumulated = ''
-    let emittedLength = 0
-    const holdBuffers = new Map<string, string>()
-
-    const recordChunkAction = (guard: Guardrail, result: ChunkGuardrailResult, original: string): void => {
-      if (result.action === 'pass' || result.action === 'hold') return
-      const entry: GuardrailAuditEntry = {
-        guard: guard.name,
-        ...(guard.category !== undefined ? { category: guard.category } : {}),
-        phase: 'output',
-        action: result.action,
-        ...(result.action === 'redact' || result.action === 'transform' ? { original } : {}),
-        durationMs: 0,
-      }
-      appendGuardrailAudit({ applied: [entry], blocked: result.action === 'block' })
-    }
-
-    async function feed(chunk: string): Promise<SafetyStreamDirective> {
-      accumulated += chunk
-      let currentChunk = chunk
-      let held = false
-
-      for (const guard of noneGuards) {
-        // Prepend any held content from this guard's buffer.
-        const heldContent = holdBuffers.get(guard.name) ?? ''
-        const guardInput = heldContent + currentChunk
-
-        const result: ChunkGuardrailResult = await guard.onChunk!(guardInput, accumulated, streamCtx())
-
-        switch (result.action) {
-          case 'pass':
-            holdBuffers.delete(guard.name)
-            currentChunk = guardInput
-            break
-
-          case 'hold':
-            holdBuffers.set(guard.name, guardInput)
-            held = true
-            break
-
-          case 'transform':
-          case 'redact':
-            holdBuffers.delete(guard.name)
-            recordChunkAction(guard, result, guardInput)
-            accumulated = accumulated.slice(0, accumulated.length - guardInput.length) + result.content
-            currentChunk = result.content
-            break
-
-          case 'block':
-            holdBuffers.delete(guard.name)
-            recordChunkAction(guard, result, guardInput)
-            throw new GuardrailBlockedError({
-              guardrailId: guard.name,
-              phase: 'output',
-              reason: result.reason,
-            })
-
-          case 'warn':
-            holdBuffers.delete(guard.name)
-            recordChunkAction(guard, result, guardInput)
-            currentChunk = guardInput
-            break
-        }
-
-        // If any guard held, emit nothing and skip remaining guards.
-        if (held) break
-      }
-
-      if (held) {
-        transcript.push({ t: 'stream.chunk', directive: 'hold' })
-        return { kind: 'hold' }
-      }
-
-      // Constraint onChunk — report-only with respect to retries, but may
-      // abort a stream that is going wrong.
-      for (const c of chunkConstraints) {
-        const verdict = await c.onChunk!(currentChunk, accumulated, constraintContext())
-        if (verdict.abort) {
-          throw new ConstraintViolationError({
-            failedConstraints: [{ name: c.name, feedback: verdict.feedback }],
-            audit: { entries: constraintAudit?.entries ?? [], allPassed: false, suggestFallback: false },
-            lastOutput: accumulated,
-            totalAttempts: 1,
-          })
-        }
-      }
-
-      // Full-buffer guards validate the complete text at finish() — until
-      // then the whole stream is held.
-      if (fullGuards.length > 0) {
-        transcript.push({ t: 'stream.chunk', directive: 'hold' })
-        return { kind: 'hold' }
-      }
-
-      emittedLength += currentChunk.length
-      transcript.push({ t: 'stream.chunk', directive: 'emit' })
-      return { kind: 'emit', content: currentChunk }
-    }
-
-    async function finish(): Promise<SafetyStreamSeal> {
-      holdBuffers.clear()
-      let text = accumulated
-
-      if (fullGuards.length > 0) {
-        // Run buffer:'full' guards through the pipeline engine so spans,
-        // artifacts, audits, and block semantics match the non-streamed
-        // output phase exactly.
-        const pipeline = createGuardrailPipeline(fullGuards)
-        const result = await pipeline.runOutput(accumulated, streamCtx())
-        appendGuardrailAudit(result.audit)
-        text = result.content
-      }
-
-      // Constraints run report-only — a live stream cannot regenerate.
-      if (constraints.length > 0) {
-        const checks = await Promise.all(
-          constraints.map(async (c) => observeConstraintCheck(c, { text, parsed: undefined }, constraintContext())),
-        )
-        const entries: ConstraintAuditEntry[] = checks.map((check) => ({
-          constraint: check.constraint.name,
-          ...(check.constraint.category !== undefined ? { category: check.constraint.category } : {}),
-          severity: check.constraint.severity,
-          pass: check.result.pass,
-          feedback: check.result.pass ? undefined : check.result.feedback,
-          attempts: 1,
-          durationMs: check.durationMs,
-          metadata: check.result.metadata,
-        }))
-        const allPassed = entries.every((entry) => entry.pass)
-        const hasAssertFailures = entries.some((entry) => !entry.pass && entry.severity === 'assert')
-        constraintAudit = {
-          entries: [...(constraintAudit?.entries ?? []), ...entries],
-          allPassed,
-          suggestFallback: !allPassed && !hasAssertFailures,
-        }
-      }
-
-      transcript.push({ t: 'stream.finish' })
-
-      // With full-buffer guards nothing was released during feed(); without
-      // them, only held remnants are pending.
-      const pending = fullGuards.length > 0 ? text : accumulated.slice(emittedLength)
-      return { text, parsed: undefined, pending }
-    }
-
-    function transform(): TransformStream<string, string> {
-      return new TransformStream<string, string>({
-        async transform(chunk, controller) {
-          const directive = await feed(chunk)
-          if (directive.kind === 'emit' && directive.content.length > 0) {
-            controller.enqueue(directive.content)
-          }
-        },
-        async flush(controller) {
-          const seal = await finish()
-          if (seal.pending.length > 0) {
-            controller.enqueue(seal.pending)
-          }
-        },
-      })
-    }
-
-    return { feed, finish, transform }
+    return createSafetyStream({
+      outputGuards: phaseGuards('output'),
+      constraints: [...constraints, ...reportConstraints],
+      messages: () => lastMessages,
+      guardContext: () => guardContext('output', lastMessages),
+      constraintContext,
+      appendGuardrailAudit,
+      getConstraintAudit: () => constraintAudit,
+      setConstraintAudit: (audit) => {
+        constraintAudit = audit
+      },
+      transcript,
+    })
   }
 
   // ── The session ────────────────────────────────────────────────
@@ -609,29 +553,42 @@ export function createSafety(options: SafetyCallOptions): Safety {
       lastMessages = input.messages
       if (inputGuards.length === 0) return input
 
-      const lastUserMessage = [...input.messages].reverse().find((message) => message.role === 'user')
-      const guarded =
-        lastUserMessage && typeof lastUserMessage.content === 'string' ? lastUserMessage.content : input.prompt
-      if (guarded === undefined) return input
-
       const pipeline = createGuardrailPipeline(inputGuards)
-      const result = await pipeline.runInput(guarded, guardContext('input', input.messages))
+      const actions: string[] = []
+      let messages = input.messages
+      let guardedAnyMessage = false
+
+      for (let index = 0; index < messages.length; index++) {
+        const message = messages[index]
+        if (!message || message.role !== 'user') continue
+
+        guardedAnyMessage = true
+        const result = await pipeline.runInput(message.content, guardContext('input', messages))
+        appendGuardrailAudit(result.audit)
+        actions.push(...result.audit.applied.map((entry) => entry.action))
+
+        if (result.content !== message.content) {
+          messages = messages.map((entry, entryIndex) =>
+            entryIndex === index ? { ...entry, content: result.content } : entry,
+          )
+        }
+      }
+
+      if (guardedAnyMessage) {
+        lastMessages = messages
+        transcript.push({ t: 'input.guard', guards: inputGuards.length, actions })
+        return { messages, prompt: input.prompt }
+      }
+
+      if (input.prompt === undefined) return input
+
+      const result = await pipeline.runInput(input.prompt, guardContext('input', input.messages))
       appendGuardrailAudit(result.audit)
       transcript.push({
         t: 'input.guard',
         guards: inputGuards.length,
         actions: result.audit.applied.map((entry) => entry.action),
       })
-
-      if (result.content === guarded) return input
-
-      if (lastUserMessage && typeof lastUserMessage.content === 'string') {
-        const messages = input.messages.map((message) =>
-          message === lastUserMessage ? { ...message, content: result.content } : message,
-        )
-        lastMessages = messages
-        return { messages, prompt: input.prompt }
-      }
       return { messages: input.messages, prompt: result.content }
     },
 
@@ -647,14 +604,14 @@ export function createSafety(options: SafetyCallOptions): Safety {
         return output
       }
 
-      let current = output
+      const guardCandidate = async (candidate: SafetyOutput): Promise<SafetyOutput> =>
+        phaseGuards('output').length > 0 ? applyOutputGuards(candidate, lastMessages, opts?.schema) : candidate
+
+      let current = await guardCandidate(output)
       if (constraints.length > 0) {
-        current = await applyConstraints(current, regenerate)
+        current = await applyConstraints(current, regenerate, guardCandidate)
       }
-      if (phaseGuards('output').length > 0) {
-        const text = await applyOutputGuards(current.text, lastMessages)
-        if (text !== current.text) current = { ...current, text }
-      }
+      await applyReportConstraints(current)
       return current
     },
 
@@ -681,4 +638,24 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
     transcript,
   }
+}
+
+function latestRewritePolicyId(entries: readonly GuardrailAuditEntry[]): string | undefined {
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const entry = entries[index]
+    if (!entry) continue
+    if (entry.action === 'redact' || entry.action === 'transform' || entry.action === 'rewrite') {
+      return entry.guard
+    }
+  }
+  return undefined
+}
+
+function guardPhase(guard: Guardrail): 'input' | 'output' {
+  const boundaries = Array.isArray(guard.on) ? guard.on : [guard.on]
+  return boundaries.some(isInputBoundary) ? 'input' : 'output'
+}
+
+function isInputBoundary(boundary: BoundaryDef): boolean {
+  return boundary.id === 'user.input' || boundary.id === 'model.input'
 }

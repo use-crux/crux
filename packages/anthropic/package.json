@@ -16,7 +16,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "private": true,
   "type": "module",
@@ -25,8 +25,7 @@
   "exports": {
     ".": {
       "types": "./index.ts",
-      "import": "./index.ts",
-      "require": "./index.ts"
+      "import": "./index.ts"
     }
   },
   "scripts": {

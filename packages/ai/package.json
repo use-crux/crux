@@ -16,7 +16,7 @@
     "access": "public"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "private": true,
   "type": "module",
@@ -25,18 +25,15 @@
   "exports": {
     ".": {
       "types": "./index.ts",
-      "import": "./index.ts",
-      "require": "./index.ts"
+      "import": "./index.ts"
     },
     "./agent": {
       "types": "./agent/index.ts",
-      "import": "./agent/index.ts",
-      "require": "./agent/index.ts"
+      "import": "./agent/index.ts"
     },
     "./stream": {
       "types": "./stream/index.ts",
-      "import": "./stream/index.ts",
-      "require": "./stream/index.ts"
+      "import": "./stream/index.ts"
     }
   },
   "scripts": {

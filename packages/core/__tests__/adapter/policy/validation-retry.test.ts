@@ -41,14 +41,32 @@ describe('validateStructuredOutput', () => {
 })
 
 describe('formatValidationFeedback', () => {
-  it('includes the failed output and each issue with its path', () => {
+  it('includes each issue path without leaking the failed raw output', () => {
     const parsed = schema.safeParse({ title: 1, count: 'two' })
     if (parsed.success) throw new Error('expected validation failure')
 
-    const feedback = formatValidationFeedback('{"title":1,"count":"two"}', parsed.error)
-    expect(feedback).toContain('{"title":1,"count":"two"}')
+    const failedOutput = '{"title":1,"count":"two","apiKey":"sk-live-secret"}'
+    const feedback = formatValidationFeedback(failedOutput, parsed.error)
+
+    expect(feedback).not.toContain(failedOutput)
+    expect(feedback).not.toContain('sk-live-secret')
+    expect(feedback).toContain('[redacted-secret]')
     expect(feedback).toContain('at "title"')
     expect(feedback).toContain('at "count"')
     expect(feedback).toContain('Validation failed')
+  })
+
+  it('does not leak raw text from JSON parse errors', () => {
+    const failedOutput = 'not json sk-live-secret private@example.com'
+    const result = validateStructuredOutput(failedOutput, schema)
+    if (result.valid || !result.error) throw new Error('expected validation failure')
+
+    const feedback = formatValidationFeedback(failedOutput, result.error)
+
+    expect(feedback).not.toContain('sk-live-secret')
+    expect(feedback).not.toContain('private@example.com')
+    expect(feedback).toContain('[redacted-secret]')
+    expect(feedback).toContain('[redacted-email]')
+    expect(feedback).toContain('Invalid JSON')
   })
 })

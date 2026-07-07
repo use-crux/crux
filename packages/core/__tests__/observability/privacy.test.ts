@@ -20,7 +20,6 @@ const exemptArtifactKinds = new Set([
   'ingest.report',
   'corpus.report',
   'security.report',
-  'constraint.report',
 ])
 
 describe('observability privacy capture policy', () => {
@@ -186,6 +185,93 @@ describe('observability privacy capture policy', () => {
     expect(serialized).not.toContain('PAYLOAD-custom.payload')
   })
 
+  it('applies safety capture presets and artifact overrides to safety artifacts', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport, { scheduledDelayMs: 0 })
+    updateHooks({
+      observabilityCapture: {
+        capture: {
+          default: 'safe',
+          overrides: {
+            'guardrail.report': 'evidence',
+            'memory.write': 'evidence',
+            'validation.feedback': 'off',
+          },
+        },
+      },
+    })
+
+    await observe.span(
+      {
+        name: 'safety artifacts',
+        primitive: 'guardrail.run',
+      },
+      async () => {
+        for (const kind of [
+          'guardrail.report',
+          'constraint.report',
+          'approval.request',
+          'validation.feedback',
+          'memory.write',
+          'quality.snapshot',
+        ] as const) {
+          observe.artifact({
+            kind,
+            contentType: 'application/json',
+            encoding: 'json',
+            sizeBytes: 24,
+            hash: `hash:${kind}`,
+            uri: `memory://${kind}`,
+            preview: { kind, content: `SAFE-PREVIEW-${kind}` },
+          })
+        }
+      },
+    )
+    await observe.flush()
+
+    const guardrail = findArtifact(transport.records, 'guardrail.report')
+    expect(guardrail).toMatchObject({
+      kind: 'guardrail.report',
+      encoding: 'reference',
+      sizeBytes: 24,
+      hash: 'hash:guardrail.report',
+    })
+    expect(guardrail).not.toHaveProperty('preview')
+
+    const memoryWrite = findArtifact(transport.records, 'memory.write')
+    expect(memoryWrite).toMatchObject({
+      kind: 'memory.write',
+      encoding: 'reference',
+      sizeBytes: 24,
+      hash: 'hash:memory.write',
+    })
+    expect(memoryWrite).not.toHaveProperty('preview')
+
+    const validationFeedback = findArtifact(
+      transport.records,
+      'validation.feedback',
+    )
+    expect(validationFeedback).toMatchObject({
+      kind: 'validation.feedback',
+      encoding: 'reference',
+    })
+    expect(validationFeedback).not.toHaveProperty('preview')
+    expect(validationFeedback).not.toHaveProperty('sizeBytes')
+    expect(validationFeedback).not.toHaveProperty('hash')
+    expect(validationFeedback).not.toHaveProperty('uri')
+
+    for (const kind of [
+      'constraint.report',
+      'approval.request',
+      'quality.snapshot',
+    ] as const) {
+      expect(findArtifact(transport.records, kind)).toMatchObject({
+        kind,
+        preview: { kind, content: `SAFE-PREVIEW-${kind}` },
+      })
+    }
+  })
+
   it('drops records when redactRecord returns null or throws', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport, { scheduledDelayMs: 0 })
@@ -246,4 +332,14 @@ function expectPayloadStringsAbsent(records: readonly CruxGraphRecord[]): void {
   for (const payload of payloadStrings) {
     expect(serialized).not.toContain(payload)
   }
+}
+
+function findArtifact(
+  records: readonly CruxGraphRecord[],
+  kind: string,
+): Extract<CruxGraphRecord, { readonly type: 'artifact' }> | undefined {
+  return records.find(
+    (record): record is Extract<CruxGraphRecord, { readonly type: 'artifact' }> =>
+      record.type === 'artifact' && record.kind === kind,
+  )
 }

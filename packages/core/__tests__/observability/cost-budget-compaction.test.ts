@@ -46,7 +46,13 @@ async function generateOnce(options: { cost?: number; model?: string; provider?:
       text: 'summary',
       _meta: {
         cost: options.cost,
-        usage: { inputTokens: 1_000, outputTokens: 2_000, totalTokens: 3_000 },
+        usage: {
+          inputTokens: 1_000,
+          outputTokens: 2_000,
+          totalTokens: 3_000,
+          inputTokenDetails: {},
+          outputTokenDetails: {},
+        },
       },
     }),
   )

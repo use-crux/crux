@@ -131,6 +131,12 @@ describe('raw() inside safe', () => {
     expect(safe`Content: ${raw(html)}`).toBe('Content: <strong>bold</strong>')
   })
 
+    it('brands wrappers with the public Crux safe symbol', () => {
+    const wrapped = raw('<strong>bold</strong>') as unknown as Record<PropertyKey, unknown>
+    expect(wrapped[Symbol.for('crux.safe')]).toBe(true)
+    expect(wrapped[Symbol.for('karyla.safe')]).toBeUndefined()
+  })
+
     it('escapes non-raw values alongside raw values', () => {
     const trusted = '<b>ok</b>'
     const untrusted = '<script>bad</script>'

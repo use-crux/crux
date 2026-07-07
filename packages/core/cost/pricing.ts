@@ -42,9 +42,9 @@ export function modelPricing(prices: Record<string, ModelPrice>): ModelPricing {
 
       const input = usage.inputTokens ?? 0
       const output = usage.outputTokens ?? 0
-      const cacheRead = usage.cacheReadTokens ?? 0
-      const cacheWrite = usage.cacheWriteTokens ?? 0
-      const reasoning = usage.reasoningTokens ?? 0
+      const cacheRead = usage.inputTokenDetails?.cacheReadTokens ?? 0
+      const cacheWrite = usage.inputTokenDetails?.cacheWriteTokens ?? 0
+      const reasoning = usage.outputTokenDetails?.reasoningTokens ?? 0
       return (
         (input * price.input +
           output * price.output +

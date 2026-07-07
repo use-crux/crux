@@ -12,9 +12,12 @@ import { z } from "zod";
 import { prompt as makePrompt } from "@use-crux/core";
 import { fallback } from "@use-crux/core";
 import { ValidationExhaustedError } from "@use-crux/core";
+import { assertCanonicalResult } from "@use-crux/core/adapter/testing";
+import type { StreamResult } from "@use-crux/core/adapter";
 import type { SystemBlock } from "@use-crux/core";
 import type { LanguageModel, StopCondition, ToolSet } from "ai";
 import { createCruxAi } from "../index";
+import { createUIMessageStreamResponse } from "../index";
 import { scriptedGateway, objectGenerationError } from "./scripted-gateway";
 import {
   buildSystemArg,
@@ -54,9 +57,12 @@ describe("generate — text mapping", () => {
       model: model(),
       input: { message: "Say hi" },
       temperature: 0.3,
-      maxRetries: 2,
-      headers: { "x-test": "yes" },
-      providerOptions: { openai: { store: false } },
+      maxTokens: 64,
+      extra: {
+        maxRetries: 2,
+        headers: { "x-test": "yes" },
+        providerOptions: { openai: { store: false } },
+      },
     });
 
     expect(result.text).toBe("hi there");
@@ -64,6 +70,7 @@ describe("generate — text mapping", () => {
     expect(args.system).toBe("You are terse.");
     expect(args.prompt).toBe("Say hi");
     expect(args.temperature).toBe(0.3);
+    expect(args.maxOutputTokens).toBe(64);
     expect(args.maxRetries).toBe(2);
     expect(args.headers).toEqual({ "x-test": "yes" });
     expect(args.providerOptions).toEqual({ openai: { store: false } });
@@ -92,6 +99,45 @@ describe("generate — text mapping", () => {
     expect((meta.usage as { totalTokens: number }).totalTokens).toBe(20);
     expect(meta.cost).toBe(0.0042);
     expect(meta.finishReason).toBe("stop");
+  });
+
+  it("returns the canonical envelope and preserves the raw SDK result", async () => {
+    const scripted = scriptedGateway({
+      generateText: [
+        {
+          text: "enveloped",
+          usage: { inputTokens: 4, outputTokens: 6, totalTokens: 10 },
+          providerMetadata: { openrouter: { usage: { cost: 0.0025 } } },
+          finishReason: "stop",
+        },
+      ],
+    });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+
+    const result = await ai.generate(textPrompt, {
+      model: model("gpt-5", "openrouter"),
+      input: { message: "go" },
+    });
+
+    assertCanonicalResult(result, {
+      steps: [
+        {
+          text: "enveloped",
+          usage: {
+            inputTokens: 4,
+            outputTokens: 6,
+            totalTokens: 10,
+            inputTokenDetails: {},
+            outputTokenDetails: {},
+          },
+          finishReason: "stop",
+          responseId: "scripted-resp",
+          modelId: "scripted-model",
+        },
+      ],
+    });
+    expect(result.raw).toMatchObject({ text: "enveloped" });
+    expect(result.cost).toBe(0.0025);
   });
 
   it("merges prompt tools with call-site tools (call-site wins)", async () => {
@@ -156,6 +202,39 @@ describe("generate — text mapping", () => {
       expect.arrayContaining([configuredStopWhen]),
     );
     expect(args.stopWhen).toHaveLength(3);
+  });
+
+  it("maps portable reasoning to AI SDK v6 provider options", async () => {
+    const scripted = scriptedGateway({ generateText: [{ text: "reasoned" }] });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+
+    await ai.generate(textPrompt, {
+      model: model("gpt-5", "openai"),
+      input: { message: "go" },
+      reasoning: "high",
+      extra: { providerOptions: { openai: { store: false } } },
+    });
+    expect(scripted.calls.generateText[0]!.providerOptions).toEqual({
+      openai: { store: false, reasoningEffort: "high" },
+    });
+
+    await ai.generate(textPrompt, {
+      model: model("claude-sonnet-4-5", "anthropic"),
+      input: { message: "go" },
+      reasoning: "medium",
+    });
+    expect(scripted.calls.generateText[1]!.providerOptions).toEqual({
+      anthropic: { thinking: { type: "enabled", budgetTokens: 8000 } },
+    });
+
+    await ai.generate(textPrompt, {
+      model: model("gemini-3-pro-preview", "google"),
+      input: { message: "go" },
+      reasoning: "low",
+    });
+    expect(scripted.calls.generateText[2]!.providerOptions).toEqual({
+      google: { thinkingConfig: { thinkingLevel: "low" } },
+    });
   });
 });
 
@@ -283,7 +362,7 @@ describe("generate — routing", () => {
 });
 
 describe("stream — metrics and completion", () => {
-  it("exposes a typed completion with TTFT, chunk count, and text", async () => {
+  it("returns the canonical stream envelope with raw SDK access", async () => {
     const scripted = scriptedGateway({
       streamText: [
         {
@@ -300,17 +379,15 @@ describe("stream — metrics and completion", () => {
       model: model(),
       input: { message: "stream" },
     });
-    const meta = await result.completion;
+    let streamed = "";
+    for await (const delta of result.textStream) streamed += delta;
+    const completion = await result.completion;
 
-    expect(meta?.text).toBe("hello");
-    expect(meta?.streaming?.totalChunks).toBe(2);
-    expect(meta?.streaming?.ttftMs).toBeGreaterThanOrEqual(0);
-    expect(meta?.usage?.outputTokens).toBe(9);
-    // Legacy location still works for older middleware.
-    const legacy = (
-      result as unknown as { _meta: { _streamCompletion: Promise<unknown> } }
-    )._meta._streamCompletion;
-    await expect(legacy).resolves.toMatchObject({ text: "hello" });
+    expect(streamed).toBe("hello");
+    expect(result.raw).toMatchObject({ kind: "scripted-text-stream" });
+    expect(completion.text).toBe("hello");
+    expect(completion.finalStep.usage?.outputTokens).toBe(9);
+    expect(completion.usage?.totalTokens).toBe(12);
   });
 
   it("warns for each structured stream request whose tools cannot be observed", async () => {
@@ -371,6 +448,45 @@ describe("stream — metrics and completion", () => {
         input: { message: "go" },
       }),
     ).rejects.toThrow(/cascade\(\) does not support stream\(\)/);
+  });
+});
+
+describe("UI-message helpers", () => {
+  it("creates an SSE response from the raw AI SDK UI-message stream", async () => {
+    let called = 0;
+    const result = {
+      textStream: (async function* () {})(),
+      raw: {
+        toUIMessageStream() {
+          called++;
+          return new ReadableStream({
+            start(controller) {
+              controller.close();
+            },
+          });
+        },
+      },
+      completion: Promise.resolve({
+        text: "",
+        steps: 1,
+        finalStep: {
+          text: "",
+          finishReason: undefined,
+          responseId: undefined,
+          modelId: undefined,
+        },
+        messages: [],
+      }),
+    } satisfies StreamResult<{
+      toUIMessageStream(): ReadableStream;
+    }>;
+
+    const response = createUIMessageStreamResponse(result);
+
+    expect(called).toBe(1);
+    expect(response.headers.get("content-type")).toContain(
+      "text/event-stream",
+    );
   });
 });
 

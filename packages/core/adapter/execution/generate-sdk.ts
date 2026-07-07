@@ -14,6 +14,7 @@ import type { Message } from "../../generation/messages";
 import { createSafety } from "../../safety/session";
 import type { Safety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
+import { createBudgetSignal, type BudgetSignal } from "../../generation/timeout";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -31,11 +32,16 @@ import type {
   AdapterExecutionGenerateResult,
   SdkLoopDialect,
 } from "./types";
+import type { ResultStepFacts } from "../result-accumulator";
 import { initialMessageState } from "./messages";
 import { buildTraceMeta } from "./metadata";
 import {
+  finalizeSdkResultEnvelope,
+  sdkResponseFacts,
+  sdkStepFacts,
+} from "./sdk-result-envelope";
+import {
   buildResolveOpts,
-  createTimeoutSignal,
   DEFAULT_MAX_STEPS,
   inspectForDevtools,
   mergeDirectives,
@@ -78,9 +84,16 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   const lifecycle = createToolLifecycle({
     regime: "sdk",
     resolved,
-    call: { tools: args.tools, toolMiddleware: args.toolMiddleware },
+    call: {
+      tools: args.tools,
+      toolsContext: args.toolsContext,
+      runtimeContext: args.runtimeContext,
+      toolMiddleware: args.toolMiddleware,
+      toolApproval: args.toolApproval,
+    },
     promptId: prompt.id,
     input: args.input ?? {},
+    timeout: args.timeout,
     reresolve: (skillSession) =>
       prompt.resolve(withSkillActivationInput(resolveOpts, skillSession)),
   });
@@ -100,6 +113,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       guardrails: args.guardrails,
       constraintMaxRetries: args.constraintMaxRetries,
     },
+    safety: args.safety,
     resolved: {
       constraints: resolved.constraints,
       guardrails: resolved.guardrails,
@@ -111,8 +125,12 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     systemPrompt: resolved.system,
   });
 
+  let stepBudget: BudgetSignal = createBudgetSignal(undefined);
+  const stepFacts: ResultStepFacts[] = [];
   const loopObserver: StepObserver = {
-    onStepFinish: async (step) => {
+    onStepEnd: async (step) => {
+      stepBudget.refresh();
+      stepFacts.push(sdkStepFacts(step));
       const amendment = await lifecycle.applySkillLoads(step.toolCalls);
       let factoryDirective: StepDirective = { kind: "continue" };
       if (amendment) {
@@ -130,7 +148,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           refundStep: true,
         };
       }
-      const callerDirective = await args.observer?.onStepFinish(step);
+      const callerDirective = await args.observer?.onStepEnd(step);
       return mergeDirectives(factoryDirective, callerDirective);
     },
   };
@@ -146,6 +164,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     messages,
     settings: mappedSettings,
     tools: lifecycle.tools,
+    toolApproval: (call) =>
+      lifecycle.requiresApproval(
+        { id: call.toolCallId, name: call.toolName, args: call.input },
+        call.messages ?? messages,
+      ),
     activeTools: args.activeTools,
     maxSteps,
     observer: loopObserver,
@@ -177,10 +200,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       provider: modelInfo.provider || dialect.id,
       resolved,
       outputMode: resolved.schema ? "object" : "text",
-      timeoutMs: args.timeoutMs,
+      timeout: args.timeout,
     },
     async () => {
-      const { signal, dispose } = createTimeoutSignal(args.timeoutMs);
       try {
         const guardedInput = await safety.guardInput({
           messages,
@@ -188,7 +210,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         });
         messages = [...guardedInput.messages];
         promptText = guardedInput.prompt;
-        const request = buildRequest(signal);
+        stepBudget = createBudgetSignal({
+          budget: "step",
+          limitMs: args.timeout?.stepMs,
+        });
+        const request = buildRequest(stepBudget.signal);
         const result = resolved.schema
           ? await generateSdkStructured({
               dialect,
@@ -199,12 +225,13 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
               retryId,
               promptId: prompt.id,
               describeCall,
+              stepFacts,
             })
           : await generateLoop(request);
         result._meta = safety.stamp(result._meta);
         return result;
       } finally {
-        dispose();
+        stepBudget.dispose();
       }
     },
   );
@@ -256,8 +283,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       return result;
     }
 
-    let steps = outcome.steps;
     let finalText = outcome.response.text;
+    let finalRaw = outcome.raw;
+    let finalResponse = outcome.response;
+    let finalCostUsd = outcome.meta.costUsd;
+    const resultStepFacts = [...(outcome.stepFacts ?? stepFacts)];
     let resultMessages = [...outcome.messages];
     const finalOutput = await safety.finalizeOutput(
       { text: finalText, parsed: undefined },
@@ -274,28 +304,49 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           describeCall("loop", regenRequest),
           () => dialect.runTextLoop(regenRequest),
         );
-        steps++;
         if (regen.status === "complete") {
+          if (resultStepFacts.length > 0) {
+            const previous = resultStepFacts[resultStepFacts.length - 1]!;
+            resultStepFacts[resultStepFacts.length - 1] = {
+              ...previous,
+              text: "",
+            };
+          }
           finalText = regen.response.text;
+          finalRaw = regen.raw;
+          finalResponse = regen.response;
+          finalCostUsd = regen.meta.costUsd;
           resultMessages = [...regen.messages];
+          resultStepFacts.push(sdkResponseFacts(regen.response));
           return { text: regen.response.text, parsed: undefined };
         }
         return { text: finalText, parsed: undefined };
       },
       { messages: resultMessages },
     );
-    if (finalOutput.text !== finalText) finalText = finalOutput.text;
+    if (finalOutput.text !== finalText) {
+      finalText = finalOutput.text;
+      if (resultStepFacts.length > 0) {
+        const previous = resultStepFacts[resultStepFacts.length - 1]!;
+        resultStepFacts[resultStepFacts.length - 1] = {
+          ...previous,
+          text: finalText,
+        };
+      }
+    }
 
-    return {
-      raw: outcome.raw,
+    return finalizeSdkResultEnvelope({
+      raw: finalRaw,
+      response: finalResponse,
       text: finalText,
       _meta: buildTraceMeta({
-        response: { ...outcome.response, text: finalText },
-        costUsd: outcome.meta.costUsd,
+        response: { ...finalResponse, text: finalText },
+        costUsd: finalCostUsd,
       }),
-      steps,
       messages: resultMessages,
-    };
+      stepFacts: resultStepFacts,
+      finalStepMode: "preserve",
+    });
   }
 
   /** Convert an SDK approval suspension into the shared adapter result shape. */
@@ -307,8 +358,12 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       outcome.assistantResponse,
       outcome.messages,
     );
-    return {
+    return finalizeSdkResultEnvelope<TRawResponse>({
       raw: undefined,
+      response: {
+        ...outcome.assistantResponse,
+        finishReason: "tool_approval_required",
+      },
       text: outcome.assistantResponse.text,
       _meta: buildTraceMeta({
         response: {
@@ -316,9 +371,9 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           finishReason: "tool_approval_required",
         },
       }),
-      steps: outcome.steps,
       messages: sealed.messages,
       pendingApprovals: sealed.requests,
-    };
+      stepFacts,
+    });
   }
 }

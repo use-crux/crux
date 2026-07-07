@@ -9,6 +9,10 @@ import { registry, skill, skillsSh } from '@use-crux/core/skill'
 
 Skills are Markdown instruction sets that an LLM loads on-demand. When placed in a prompt's `use` array, the resolution pipeline generates a skill index in the system prompt and injects `LoadSkill`/`LoadReference` tools. Loaded skills are injected at the **system prompt level** via executor re-resolution.
 
+The root `@use-crux/core/skill` entry is safe for edge and serverless bundles:
+it includes inline and registry loaders only. Local file loading is Node-only
+and lives at `@use-crux/core/skill/node`.
+
 ## `skill.inline(config)`
 
 Create a skill from inline text.
@@ -30,7 +34,7 @@ const tone = skill.inline({
 })
 ```
 
-## `skill.fromFile(path)`
+## `skill.fromFile(path)` From `@use-crux/core/skill/node`
 
 Load a SKILL.md file. Reads synchronously at import time. Parses YAML frontmatter.
 
@@ -43,7 +47,10 @@ Automatically discovers `.md` files in a sibling `references/` directory.
 **Throws:** `SkillLoadError` if file not found or frontmatter invalid.
 
 ```ts
+import { skill, fileSkill } from '@use-crux/core/skill/node'
+
 const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
+const same = fileSkill('./skills/seo-analysis/SKILL.md')
 ```
 
 ### SKILL.md Format

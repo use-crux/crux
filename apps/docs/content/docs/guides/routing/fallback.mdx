@@ -46,7 +46,7 @@ Not all errors trigger fallback. Crux classifies errors into categories:
 | Category | Triggers | Examples |
 |---|---|---|
 | `rate_limit` | HTTP 429 | Provider rate limit exceeded |
-| `timeout` | `ETIMEDOUT`, `AbortError` | Model took too long to respond |
+| `timeout` | `TimeoutError`, `ETIMEDOUT`, `AbortError` | Model took too long to respond |
 | `server_error` | HTTP 500-599 | Provider internal error, bad gateway |
 | `connection_error` | `ECONNREFUSED`, `ENOTFOUND`, fetch failures | DNS failure, provider unreachable |
 | `auth_error` | HTTP 401, 403 | Invalid API key, insufficient permissions |

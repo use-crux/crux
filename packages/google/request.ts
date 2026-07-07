@@ -39,15 +39,21 @@ export function googleSettings(settings: GenerationSettings): Record<string, unk
   if (settings.topP !== undefined) config.topP = settings.topP
   if (settings.topK !== undefined) config.topK = settings.topK
   if (settings.stopSequences !== undefined) config.stopSequences = settings.stopSequences
+  if (settings.seed !== undefined) config.seed = settings.seed
+  if (settings.reasoning !== undefined) {
+    config.thinkingConfig = { thinkingLevel: googleThinkingLevel(settings.reasoning) }
+  }
 
   const knownKeys = new Set([
     'temperature',
     'maxTokens',
     'topP',
     'topK',
+    'seed',
     'stopSequences',
     'frequencyPenalty',
     'presencePenalty',
+    'reasoning',
   ])
   for (const [key, value] of Object.entries(settings)) {
     if (value !== undefined && !knownKeys.has(key) && !(key in config)) {
@@ -56,6 +62,23 @@ export function googleSettings(settings: GenerationSettings): Record<string, unk
   }
 
   return config
+}
+
+/**
+ * Google GenAI's native SDK models thinking levels as enum values.
+ *
+ * Exact Gemini 2.5 thinking budgets and thought-output controls remain
+ * provider-specific and belong in Google `extra`.
+ */
+function googleThinkingLevel(reasoning: NonNullable<GenerationSettings['reasoning']>): 'LOW' | 'MEDIUM' | 'HIGH' {
+  switch (reasoning) {
+    case 'low':
+      return 'LOW'
+    case 'medium':
+      return 'MEDIUM'
+    case 'high':
+      return 'HIGH'
+  }
 }
 
 /** Convert a Zod schema into Google structured JSON-output params. */

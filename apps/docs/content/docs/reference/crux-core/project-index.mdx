@@ -202,7 +202,14 @@ Definitions can also include `metadata.intelligence` when Crux has source-backed
 
 The intelligence contract is additive. If Crux cannot prove a fact from source or runtime data, the field is omitted rather than filled with an empty placeholder. Clients should render `definitions`, `relations`, and `metadata.intelligence` directly and should not reconstruct flow, pipeline, parallel, consensus, or swarm structure by parsing source snippets.
 
-When a candidate source file is import-safe, the indexer imports it in `CRUX_INDEX=1` mode and upgrades exported rich primitives to resolved definitions. Today that covers agents, flows, RAG retrievers and pipelines, memory, blackboards, constraints, guardrails, and scorers. Static `flow.step` definitions remain source-derived because flow handles do not expose their internal handler graph at runtime.
+Safety definitions include `guardrail`, `constraint`, and `toolPolicy` rows.
+Static facts preserve stable `policyId`, boundary targets such as
+`model.output.text` or `tool.call`, built-in strategy helper kinds such as
+`guardrail.pii` / `constraint.judge`, and safe tool-policy match metadata.
+The safety lint set flags duplicate policy ids when the index has reliable
+evidence.
+
+When a candidate source file is import-safe, the indexer imports it in `CRUX_INDEX=1` mode and upgrades exported rich primitives to resolved definitions. Today that covers agents, flows, RAG retrievers and pipelines, memory, blackboards, constraints, guardrails, tool policies, and scorers. Static `flow.step` definitions remain source-derived because flow handles do not expose their internal handler graph at runtime.
 
 Composition index entries are source-derived call sites for the immediate APIs: `parallel({ agents })`, `pipeline({ steps })`, `consensus({ agents })`, and `swarm({ agents })`. Adapter factory helpers such as `createParallel()` are not indexed as user-authored composition definitions.
 

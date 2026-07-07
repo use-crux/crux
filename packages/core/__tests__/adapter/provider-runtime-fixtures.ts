@@ -9,12 +9,14 @@ import {
   type NativeResponseMetadata,
 } from "../../adapter";
 import type { Message } from "../../generation/messages";
-import type { GenerationSettings, TraceMeta } from "../../generation/types";
+import type { GenerationSettings, TokenUsage, TraceMeta } from "../../generation/types";
 
 const RUNTIME_USAGE = {
   inputTokens: 10,
   outputTokens: 20,
   totalTokens: 30,
+  inputTokenDetails: {},
+  outputTokenDetails: {},
 } as const;
 
 export interface RuntimeToolCall {
@@ -46,7 +48,7 @@ export interface RuntimeRawResponse {
   readonly text: string;
   readonly toolCalls?: readonly RuntimeToolCall[];
   readonly finishReason?: string;
-  readonly usage: Partial<typeof RUNTIME_USAGE>;
+  readonly usage: TokenUsage | undefined;
 }
 
 export interface RuntimeStream extends AsyncIterable<{

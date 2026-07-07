@@ -6,7 +6,7 @@
  */
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { createSafety, ConstraintViolationError, GuardrailBlockedError, createSafetyPlugin } from '../../safety'
+import { boundary, createSafety, ConstraintViolationError, GuardrailBlockedError, createSafetyPlugin } from '../../safety'
 import type { SafetyCallOptions, SafetyOutput } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { constraint } from '../../safety/constraint'
@@ -26,20 +26,25 @@ const noRegen = async (): Promise<SafetyOutput> => {
 }
 
 /** A constraint that fails until the output text contains `needle`. */
-const needsNeedle = (name: string, needle: string, opts?: { severity?: 'assert' | 'suggest'; maxRetries?: number }) =>
+const needsNeedle = (id: string, needle: string, opts?: { severity?: 'assert' | 'suggest'; maxRetries?: number }) =>
   constraint({
-    name,
+    id,
+    on: boundary.output.both(),
     severity: opts?.severity,
     maxRetries: opts?.maxRetries,
-    check: async (output) =>
-      output.text.includes(needle) ? { pass: true as const } : { pass: false as const, feedback: `must mention ${needle}` },
+    run: async (output) =>
+      output.text.includes(needle)
+        ? { pass: true as const }
+        : { pass: false as const, feedback: `must mention ${needle}` },
   })
 
 // ── finalizeOutput: constraint retry machine ──────────────────────
 
 describe('finalizeOutput — constraints', () => {
   it('calls regenerate with the default-formatted corrective message and accepts the fixed output', async () => {
-    const safety = session({ call: { constraints: [needsNeedle('mentions-ship', 'ship')] } })
+    const safety = session({
+      call: { constraints: [needsNeedle('mentions-ship', 'ship')] },
+    })
     const regenerate = vi.fn(async (): Promise<SafetyOutput> => ({ text: 'a ship appears' }))
 
     const final = await safety.finalizeOutput({ text: 'no boats here' }, regenerate)
@@ -58,8 +63,12 @@ describe('finalizeOutput — constraints', () => {
     })
   })
 
-    it('throws ConstraintViolationError with audit attached when assert retries are exhausted', async () => {
-    const safety = session({ call: { constraints: [needsNeedle('strict', 'unicorn', { maxRetries: 1 })] } })
+  it('throws ConstraintViolationError with audit attached when assert retries are exhausted', async () => {
+    const safety = session({
+      call: {
+        constraints: [needsNeedle('strict', 'unicorn', { maxRetries: 1 })],
+      },
+    })
     const regenerate = vi.fn(async (): Promise<SafetyOutput> => ({ text: 'still wrong' }))
 
     const error = await safety
@@ -74,9 +83,45 @@ describe('finalizeOutput — constraints', () => {
     expect(regenerate).toHaveBeenCalledTimes(1)
   })
 
-    it('enforces the shared constraintMaxRetries cap across constraints', async () => {
+  it('keeps raw failed output out of exhausted constraint errors by default', async () => {
     const safety = session({
-      call: { constraints: [needsNeedle('never-happy', 'unicorn', { maxRetries: 10 })], constraintMaxRetries: 2 },
+      call: {
+        constraints: [
+          constraint({
+            id: 'no-secret',
+            on: boundary.output.both(),
+            maxRetries: 0,
+            run: async () => ({
+              pass: false as const,
+              feedback: 'raw secret output rejected',
+            }),
+          }),
+        ],
+      },
+    })
+
+    const error = await safety
+      .finalizeOutput({ text: 'secret email a@b.c' }, noRegen)
+      .then(() => undefined)
+      .catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(ConstraintViolationError)
+    const violation = error as ConstraintViolationError & {
+      readonly lastOutput?: unknown
+      readonly decisions?: readonly unknown[]
+    }
+    expect(violation.lastOutput).toMatchObject({
+      hash: expect.any(String),
+    })
+    expect(JSON.stringify(violation)).not.toContain('a@b.c')
+  })
+
+  it('enforces the shared constraintMaxRetries cap across constraints', async () => {
+    const safety = session({
+      call: {
+        constraints: [needsNeedle('never-happy', 'unicorn', { maxRetries: 10 })],
+        constraintMaxRetries: 2,
+      },
     })
     const regenerate = vi.fn(async (): Promise<SafetyOutput> => ({ text: 'nope' }))
 
@@ -84,8 +129,12 @@ describe('finalizeOutput — constraints', () => {
     expect(regenerate).toHaveBeenCalledTimes(2)
   })
 
-    it('suggest failures never regenerate and surface as suggestFallback in the audit', async () => {
-    const safety = session({ call: { constraints: [needsNeedle('soft', 'unicorn', { severity: 'suggest' })] } })
+  it('suggest failures never regenerate and surface as suggestFallback in the audit', async () => {
+    const safety = session({
+      call: {
+        constraints: [needsNeedle('soft', 'unicorn', { severity: 'suggest' })],
+      },
+    })
 
     const final = await safety.finalizeOutput({ text: 'plain output' }, noRegen)
 
@@ -94,7 +143,7 @@ describe('finalizeOutput — constraints', () => {
     expect(safety.audit.constraints?.allPassed).toBe(false)
   })
 
-    it('a custom formatter receives structured failures and call identity', async () => {
+  it('a custom formatter receives structured failures and call identity', async () => {
     const format = vi.fn(() => 'FIX IT')
     const safety = session({
       call: { constraints: [needsNeedle('brand-voice', 'ship')] },
@@ -105,13 +154,24 @@ describe('finalizeOutput — constraints', () => {
     await safety.finalizeOutput({ text: 'wrong' }, regenerate)
 
     expect(format).toHaveBeenCalledWith(
-      [{ name: 'brand-voice', category: undefined, severity: 'assert', feedback: 'must mention ship' }],
-      expect.objectContaining({ promptId: 'p1', model: 'm1', traceId: 'trace-1' }),
+      [
+        {
+          name: 'brand-voice',
+          category: undefined,
+          severity: 'assert',
+          feedback: 'must mention ship',
+        },
+      ],
+      expect.objectContaining({
+        promptId: 'p1',
+        model: 'm1',
+        traceId: 'trace-1',
+      }),
     )
     expect(regenerate.mock.calls[0]![0]).toEqual([{ role: 'user', content: 'FIX IT' }])
   })
 
-    it('a formatter may return full messages, forwarded to regenerate as-is', async () => {
+  it('a formatter may return full messages, forwarded to regenerate as-is', async () => {
     const corrective: Message[] = [
       { role: 'assistant', content: 'I will fix this.' },
       { role: 'user', content: 'do better' },
@@ -133,44 +193,173 @@ describe('finalizeOutput — constraints', () => {
 describe('finalizeOutput — output guardrails', () => {
   it('redacts the final text via output guards after constraints pass', async () => {
     const redactor = guardrail({
-      name: 'no-emails',
-      phase: 'output',
-      validate: async (content) => ({ action: 'redact' as const, content: content.replace('a@b.c', '[EMAIL]') }),
+      id: 'no-emails',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('a@b.c', '[EMAIL]'),
+        rewrite: { kind: 'redact' as const },
+      }),
     })
     const safety = session({
-      call: { constraints: [needsNeedle('has-contact', 'contact')], guardrails: [redactor] },
+      call: {
+        constraints: [needsNeedle('has-contact', 'contact')],
+        guardrails: [redactor],
+      },
     })
 
     const final = await safety.finalizeOutput({ text: 'contact: a@b.c' }, noRegen)
 
     expect(final.text).toBe('contact: [EMAIL]')
     expect(safety.audit.constraints?.allPassed).toBe(true)
-    expect(safety.audit.guardrails?.applied).toContainEqual(expect.objectContaining({ guard: 'no-emails', action: 'redact' }))
+    expect(safety.audit.guardrails?.applied).toContainEqual(
+      expect.objectContaining({ guard: 'no-emails', action: 'redact' }),
+    )
   })
 
-    it('throws GuardrailBlockedError when an output guard blocks', async () => {
+  it('throws GuardrailBlockedError with safe decision metadata when an output guard blocks', async () => {
     const blocker = guardrail({
-      name: 'toxicity',
-      phase: 'output',
-      validate: async () => ({ action: 'block' as const, reason: 'toxic' }),
+      id: 'toxicity',
+      on: boundary.output.text(),
+      run: async () => ({ action: 'block' as const, reason: 'toxic' }),
     })
     const safety = session({ call: { guardrails: [blocker] } })
 
-    await expect(safety.finalizeOutput({ text: 'bad output' }, noRegen)).rejects.toBeInstanceOf(GuardrailBlockedError)
+    const error = await safety
+      .finalizeOutput({ text: 'bad output' }, noRegen)
+      .then(() => undefined)
+      .catch((e: unknown) => e)
+
+    expect(error).toBeInstanceOf(GuardrailBlockedError)
+    const terminal = error as {
+      readonly decisions?: readonly Record<string, unknown>[]
+      readonly audit?: {
+        readonly applied?: readonly Record<string, unknown>[]
+      }
+    }
+    const decisions = terminal.decisions ?? terminal.audit?.applied ?? []
+    expect(decisions).toContainEqual(expect.objectContaining({ action: 'block', reason: 'toxic' }))
+    expect(JSON.stringify(decisions)).not.toContain('bad output')
   })
 
-    it('preserves the parsed object while guards rewrite only text', async () => {
+  it('resynchronizes the parsed object when a structured text guard rewrites JSON', async () => {
     const transformer = guardrail({
-      name: 'suffix',
-      phase: 'output',
-      validate: async (content) => ({ action: 'transform' as const, content: `${content}!` }),
+      id: 'email-redactor',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('a@b.c', '[EMAIL]'),
+        rewrite: { kind: 'normalize' as const },
+      }),
     })
     const safety = session({ call: { guardrails: [transformer] } })
 
-    const final = await safety.finalizeOutput({ text: 'data', parsed: { a: 1 } }, noRegen)
+    const final = await safety.finalizeOutput({ text: '{"email":"a@b.c"}', parsed: { email: 'a@b.c' } }, noRegen)
 
-    expect(final.text).toBe('data!')
-    expect(final.parsed).toEqual({ a: 1 })
+    expect(final.text).toBe('{"email":"[EMAIL]"}')
+    expect(final.parsed).toEqual({ email: '[EMAIL]' })
+  })
+
+  it('runs output guardrails before constraints so constraints see guarded content', async () => {
+    const seenByConstraint: string[] = []
+    const redactor = guardrail({
+      id: 'pii',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('a@b.c', '[EMAIL]'),
+        rewrite: { kind: 'redact' as const },
+      }),
+    })
+    const noRawEmail = constraint({
+      id: 'judge-safe',
+      on: boundary.output.both(),
+      run: async (output) => {
+        seenByConstraint.push(output.text)
+        return { pass: true as const }
+      },
+    })
+    const safety = session({
+      call: { guardrails: [redactor], constraints: [noRawEmail] },
+    })
+
+    const final = await safety.finalizeOutput({ text: 'contact a@b.c' }, noRegen)
+
+    expect(final.text).toBe('contact [EMAIL]')
+    expect(seenByConstraint).toEqual(['contact [EMAIL]'])
+  })
+
+  it('records report-mode output guardrails without changing the final text', async () => {
+    const redactor = guardrail({
+      id: 'shadow-pii',
+      on: boundary.output.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('a@b.c', '[EMAIL]'),
+        rewrite: { kind: 'redact' as const },
+      }),
+    })
+    const safety = session({
+      call: { guardrails: [redactor] },
+      safety: { tune: { 'shadow-pii': { mode: 'report' } } },
+    })
+
+    const final = await safety.finalizeOutput({ text: 'contact a@b.c' }, noRegen)
+
+    expect(final.text).toBe('contact a@b.c')
+    expect(safety.audit.guardrails?.applied).toContainEqual(
+      expect.objectContaining({ guard: 'shadow-pii', action: 'redact' }),
+    )
+  })
+
+  it('records report-mode constraints without retrying or throwing', async () => {
+    const reportOnly = constraint({
+      id: 'shadow-judge',
+      on: boundary.output.both(),
+      maxRetries: 3,
+      run: async () => ({ pass: false as const, feedback: 'shadow finding' }),
+    })
+    const safety = session({
+      call: { constraints: [reportOnly] },
+      safety: { tune: { 'shadow-judge': { mode: 'report' } } },
+    })
+
+    const final = await safety.finalizeOutput({ text: 'unchanged' }, noRegen)
+
+    expect(final.text).toBe('unchanged')
+    expect(safety.audit.constraints?.entries).toContainEqual(
+      expect.objectContaining({
+        constraint: 'shadow-judge',
+        pass: false,
+        feedback: 'shadow finding',
+      }),
+    )
+  })
+
+  it('fails closed when an output guardrail returns an unknown action', async () => {
+    const malformed = guardrail({
+      id: 'unknown-action',
+      on: boundary.output.text(),
+      run: async () => ({ action: 'approve' }) as never,
+    })
+    const safety = session({ call: { guardrails: [malformed] } })
+
+    await expect(safety.finalizeOutput({ text: 'unsafe' }, noRegen)).rejects.toThrow(/invalid|malformed|safety|result/i)
+  })
+})
+
+// ── Runtime result validation ─────────────────────────────────────
+
+describe('finalizeOutput — malformed constraint results', () => {
+  it('fails closed when a constraint returns a non-boolean pass field', async () => {
+    const malformed = constraint({
+      id: 'malformed',
+      on: boundary.output.both(),
+      run: async () => ({ pass: 'maybe' }) as never,
+    })
+    const safety = session({ call: { constraints: [malformed] } })
+
+    await expect(safety.finalizeOutput({ text: 'unsafe' }, noRegen)).rejects.toThrow(/invalid|malformed|safety|result/i)
   })
 })
 
@@ -184,8 +373,9 @@ describe('finalizeOutput — suspension', () => {
       call: {
         constraints: [
           constraint({
-            name: 'c',
-            check: async () => {
+            id: 'c',
+            on: boundary.output.both(),
+            run: async () => {
               checkSpy()
               return { pass: true as const }
             },
@@ -193,11 +383,11 @@ describe('finalizeOutput — suspension', () => {
         ],
         guardrails: [
           guardrail({
-            name: 'g',
-            phase: 'output',
-            validate: async (content) => {
+            id: 'g',
+            on: boundary.output.text(),
+            run: async () => {
               guardSpy()
-              return { action: 'pass' as const, content } as never
+              return { action: 'allow' as const }
             },
           }),
         ],
@@ -205,7 +395,9 @@ describe('finalizeOutput — suspension', () => {
     })
 
     const output = { text: 'asked for tool approval' }
-    const final = await safety.finalizeOutput(output, noRegen, { suspended: true })
+    const final = await safety.finalizeOutput(output, noRegen, {
+      suspended: true,
+    })
 
     expect(final).toEqual(output)
     expect(checkSpy).not.toHaveBeenCalled()
@@ -221,21 +413,30 @@ describe('stamp', () => {
   it('attaches audits iff non-empty and preserves other meta fields', async () => {
     const safety = session({
       call: {
-        guardrails: [guardrail({ name: 'g', phase: 'input', validate: async () => ({ action: 'pass' as const }) })],
+        guardrails: [
+          guardrail({
+            id: 'g',
+            on: boundary.input.text(),
+            run: async () => ({ action: 'allow' as const }),
+          }),
+        ],
         constraints: [needsNeedle('c', 'fine')],
       },
     })
     await safety.guardInput({ messages: [{ role: 'user', content: 'hi' }] })
     await safety.finalizeOutput({ text: 'fine' }, noRegen)
 
-    const meta = safety.stamp({ finishReason: 'stop', usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 } })
+    const meta = safety.stamp({
+      finishReason: 'stop',
+      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, inputTokenDetails: {}, outputTokenDetails: {} },
+    })
 
     expect(meta.finishReason).toBe('stop')
     expect(meta.guardrails?.applied).toHaveLength(1)
     expect(meta.constraints?.entries).toHaveLength(1)
   })
 
-    it('attaches nothing when no safety ran', () => {
+  it('attaches nothing when no safety ran', () => {
     const safety = session({ call: { constraints: [needsNeedle('c', 'x')] } })
     const meta = safety.stamp({ finishReason: 'stop' })
     expect('guardrails' in meta).toBe(false)
@@ -250,18 +451,34 @@ describe('category metadata', () => {
     const safety = session({
       call: {
         guardrails: [
-          guardrail({ name: 'pii-scan', category: 'pii', phase: 'input', validate: async () => ({ action: 'pass' as const }) }),
+          guardrail({
+            id: 'pii-scan',
+            on: boundary.input.text(),
+            category: 'pii',
+            run: async () => ({ action: 'allow' as const }),
+          }),
         ],
         constraints: [
-          constraint({ name: 'grounded', category: 'grounding', check: async () => ({ pass: true as const }) }),
+          constraint({
+            id: 'grounded',
+            on: boundary.output.both(),
+            category: 'grounding',
+            run: async () => ({ pass: true as const }),
+          }),
         ],
       },
     })
     await safety.guardInput({ messages: [{ role: 'user', content: 'hi' }] })
     await safety.finalizeOutput({ text: 'ok' }, noRegen)
 
-    expect(safety.audit.guardrails?.applied[0]).toMatchObject({ guard: 'pii-scan', category: 'pii' })
-    expect(safety.audit.constraints?.entries[0]).toMatchObject({ constraint: 'grounded', category: 'grounding' })
+    expect(safety.audit.guardrails?.applied[0]).toMatchObject({
+      guard: 'pii-scan',
+      category: 'pii',
+    })
+    expect(safety.audit.constraints?.entries[0]).toMatchObject({
+      constraint: 'grounded',
+      category: 'grounding',
+    })
   })
 })
 
@@ -274,18 +491,19 @@ describe('createSafetyPlugin', () => {
     const plugin = createSafetyPlugin({
       guardrails: [
         guardrail({
-          name: 'global-guard',
-          phase: 'input',
-          validate: async () => {
+          id: 'global-guard',
+          on: boundary.input.text(),
+          run: async () => {
             guardSpy()
-            return { action: 'pass' as const }
+            return { action: 'allow' as const }
           },
         }),
       ],
       constraints: [
         constraint({
-          name: 'global-constraint',
-          check: async () => {
+          id: 'global-constraint',
+          on: boundary.output.both(),
+          run: async () => {
             checkSpy()
             return { pass: true as const }
           },
@@ -306,15 +524,23 @@ describe('createSafetyPlugin', () => {
   })
 
   it('multiple safety plugins compose — policies concatenate', () => {
-    const g1 = guardrail({ name: 'g1', phase: 'input', validate: async () => ({ action: 'pass' as const }) })
-    const g2 = guardrail({ name: 'g2', phase: 'input', validate: async () => ({ action: 'pass' as const }) })
+    const g1 = guardrail({
+      id: 'g1',
+      on: boundary.input.text(),
+      run: async () => ({ action: 'allow' as const }),
+    })
+    const g2 = guardrail({
+      id: 'g2',
+      on: boundary.input.text(),
+      run: async () => ({ action: 'allow' as const }),
+    })
 
     const { hooks } = applyPlugins(
       [createSafetyPlugin({ guardrails: [g1] }), createSafetyPlugin({ guardrails: [g2] })],
       getHooks(),
     )
 
-    expect(hooks.globalGuardrails?.map((g) => g.name)).toEqual(['g1', 'g2'])
+    expect(hooks.globalGuardrails?.map((g) => g.id)).toEqual(['g1', 'g2'])
   })
 })
 
@@ -323,17 +549,23 @@ describe('createSafetyPlugin', () => {
 describe('finalizeOutput — output guardrail pipeline', () => {
   it('runs output guards in declaration order, threading each guard output into the next', async () => {
     const seen: string[] = []
-    const tagging = (name: string, suffix: string) =>
+    const tagging = (id: string, suffix: string) =>
       guardrail({
-        name,
-        phase: 'output' as const,
-        validate: async (content) => {
-          seen.push(`${name}:${content}`)
-          return { action: 'transform' as const, content: `${content}${suffix}` }
+        id,
+        on: boundary.output.text(),
+        run: async (content) => {
+          seen.push(`${id}:${content}`)
+          return {
+            action: 'rewrite' as const,
+            value: `${content}${suffix}`,
+            rewrite: { kind: 'normalize' as const },
+          }
         },
       })
 
-    const safety = session({ call: { guardrails: [tagging('o1', '-1'), tagging('o2', '-2')] } })
+    const safety = session({
+      call: { guardrails: [tagging('o1', '-1'), tagging('o2', '-2')] },
+    })
     const final = await safety.finalizeOutput({ text: 'y' }, noRegen)
 
     // o1 sees the raw text; o2 sees o1's transformed output.
@@ -341,19 +573,19 @@ describe('finalizeOutput — output guardrail pipeline', () => {
     expect(final.text).toBe('y-1-2')
   })
 
-    it('stops at the first blocking output guard — a later guard never runs', async () => {
+  it('stops at the first blocking output guard — a later guard never runs', async () => {
     const later = vi.fn()
     const blocker = guardrail({
-      name: 'blk',
-      phase: 'output',
-      validate: async () => ({ action: 'block' as const, reason: 'bad' }),
+      id: 'blk',
+      on: boundary.output.text(),
+      run: async () => ({ action: 'block' as const, reason: 'bad' }),
     })
     const after = guardrail({
-      name: 'aft',
-      phase: 'output',
-      validate: async () => {
+      id: 'aft',
+      on: boundary.output.text(),
+      run: async () => {
         later()
-        return { action: 'pass' as const }
+        return { action: 'allow' as const }
       },
     })
 
@@ -363,11 +595,11 @@ describe('finalizeOutput — output guardrail pipeline', () => {
     expect(later).not.toHaveBeenCalled()
   })
 
-    it('throws a GuardrailBlockedError carrying phase "output"', async () => {
+  it('throws a GuardrailBlockedError carrying phase "output"', async () => {
     const blocker = guardrail({
-      name: 'toxicity',
-      phase: 'output',
-      validate: async () => ({ action: 'block' as const, reason: 'toxic' }),
+      id: 'toxicity',
+      on: boundary.output.text(),
+      run: async () => ({ action: 'block' as const, reason: 'toxic' }),
     })
     const safety = session({ call: { guardrails: [blocker] } })
 
@@ -388,7 +620,11 @@ describe('finalizeOutput — output guardrail pipeline', () => {
 
 describe('finalizeOutput — multiple constraints', () => {
   it('combines every failing constraint feedback into one corrective message for regenerate', async () => {
-    const safety = session({ call: { constraints: [needsNeedle('a', 'alpha'), needsNeedle('b', 'beta')] } })
+    const safety = session({
+      call: {
+        constraints: [needsNeedle('a', 'alpha'), needsNeedle('b', 'beta')],
+      },
+    })
     const regenerate = vi.fn(async (): Promise<SafetyOutput> => ({ text: 'alpha and beta' }))
 
     const final = await safety.finalizeOutput({ text: 'neither' }, regenerate)
@@ -418,8 +654,16 @@ describe('audit accumulation across phases', () => {
     const safety = session({
       call: {
         guardrails: [
-          guardrail({ name: 'in', phase: 'input', validate: async () => ({ action: 'pass' as const }) }),
-          guardrail({ name: 'out', phase: 'output', validate: async () => ({ action: 'pass' as const }) }),
+          guardrail({
+            id: 'in',
+            on: boundary.input.text(),
+            run: async () => ({ action: 'allow' as const }),
+          }),
+          guardrail({
+            id: 'out',
+            on: boundary.output.text(),
+            run: async () => ({ action: 'allow' as const }),
+          }),
         ],
       },
     })

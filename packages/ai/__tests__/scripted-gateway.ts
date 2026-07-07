@@ -106,7 +106,10 @@ export function scriptedGateway(config: ScriptedGatewayConfig = {}): ScriptedGat
       const finish = materialize({ text: script.chunks.join(''), ...script.finish }, kind)
       await onFinish?.(finish)
     })()
-    return { kind: `scripted-${kind}-stream` }
+    async function* textStream() {
+      for (const chunk of script.chunks) yield chunk
+    }
+    return { kind: `scripted-${kind}-stream`, textStream: textStream() }
   }
 
   const gateway: SdkGateway = {

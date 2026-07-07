@@ -49,9 +49,12 @@ const legal = skill.fromRegistry(internal, 'legal/disclosure-language')
 
 ## Loading from Disk
 
-For skills you own and version-control inside your repo, use `skill.fromFile()`:
+For skills you own and version-control inside your repo, import the Node
+subpath and use `skill.fromFile()`:
 
 ```ts
+import { skill } from '@use-crux/core/skill/node'
+
 const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
 ```
 
@@ -65,13 +68,15 @@ All three loaders throw `SkillLoadError` (a tagged error) when something goes wr
 
 | Cause                   | When                                                                                 |
 | ----------------------- | ------------------------------------------------------------------------------------ |
-| File not found          | `skill.fromFile()` with a bad path                                                   |
+| File not found          | `skill.fromFile()` from `@use-crux/core/skill/node` with a bad path                  |
 | Invalid frontmatter     | Missing `name` or `description`, or malformed YAML                                   |
 | Missing path            | `skill.fromRegistry(internal)` without a registry-local skill path                   |
 | Unknown registry value  | Passing a value that is not a `Registry`                                             |
 | Network failure / 404   | Registry fetch fails at resolve time                                                 |
 
-For `fromFile` and `inline`, errors surface at import time. For `fromRegistry`, remote fetch errors surface at the first `prompt.resolve()` because registry content is loaded lazily.
+For `fromFile` and `inline`, errors surface at import time. For
+`fromRegistry`, remote fetch errors surface at the first `prompt.resolve()`
+because registry content is loaded lazily.
 
 ```ts
 import { SkillLoadError } from '@use-crux/core/skill'

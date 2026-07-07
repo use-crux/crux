@@ -19,15 +19,14 @@
   },
   "type": "module",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "main": "./index.ts",
   "types": "./index.ts",
   "exports": {
     ".": {
       "types": "./index.ts",
-      "import": "./index.ts",
-      "require": "./index.ts"
+      "import": "./index.ts"
     },
     "./swarm": {
       "types": "./swarm.ts",
@@ -91,6 +90,10 @@
     },
     "./_generated/component.js": {
       "types": "./src/component/_generated/component.ts"
+    },
+    "./skill/node": {
+      "types": "./skill-node.ts",
+      "import": "./skill-node.ts"
     }
   },
   "dependencies": {

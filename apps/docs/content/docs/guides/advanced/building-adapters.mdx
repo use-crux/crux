@@ -198,14 +198,16 @@ function acmeResponseMeta(result: AcmeResponse): NativeResponseMetadata {
   const outputTokens = result.usage?.output;
 
   return {
-    usage: {
-      inputTokens,
-      outputTokens,
-      totalTokens:
-        inputTokens !== undefined && outputTokens !== undefined
-          ? inputTokens + outputTokens
-          : undefined,
-    },
+    usage:
+      inputTokens !== undefined && outputTokens !== undefined
+        ? {
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            inputTokenDetails: {},
+            outputTokenDetails: {},
+          }
+        : undefined,
     finishReason: result.finish_reason,
     responseId: result.id,
     actualModelId: result.model,

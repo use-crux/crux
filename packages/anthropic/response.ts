@@ -30,19 +30,38 @@ export function extractAdapterResponse(result: AnthropicParsedMessage): AdapterR
 
 /** Read response metadata that is not owned by Anthropic transcript conversion. */
 export function anthropicResponseMeta(result: AnthropicParsedMessage): NativeResponseMetadata {
-  const inputTokens = result.usage?.input_tokens
-  const outputTokens = result.usage?.output_tokens
+  const usage = result.usage
+  const inputTokens = usage?.input_tokens
+  const outputTokens = usage?.output_tokens
 
   return {
-    usage: {
-      inputTokens,
-      outputTokens,
-      totalTokens: inputTokens != null && outputTokens != null ? inputTokens + outputTokens : undefined,
-    },
+    usage:
+      inputTokens !== undefined && outputTokens !== undefined
+        ? {
+            inputTokens,
+            outputTokens,
+            totalTokens: inputTokens + outputTokens,
+            inputTokenDetails: {
+              ...optionalTokenDetail('cacheReadTokens', nullableNumber(usage.cache_read_input_tokens)),
+              ...optionalTokenDetail('cacheWriteTokens', nullableNumber(usage.cache_creation_input_tokens)),
+            },
+            outputTokenDetails: {
+              ...optionalTokenDetail('reasoningTokens', nullableNumber(usage.output_tokens_details?.thinking_tokens)),
+            },
+          }
+        : undefined,
     finishReason: result.stop_reason ?? undefined,
     responseId: result.id,
     actualModelId: result.model,
   }
+}
+
+function nullableNumber(value: number | null | undefined): number | undefined {
+  return value === null ? undefined : value
+}
+
+function optionalTokenDetail<K extends string>(key: K, value: number | undefined): Partial<Record<K, number>> {
+  return value === undefined ? {} : ({ [key]: value } as Record<K, number>)
 }
 
 /** Prefer Anthropic parsed structured output over transcript text when present. */

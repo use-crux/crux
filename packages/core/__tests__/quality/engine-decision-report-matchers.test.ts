@@ -108,6 +108,19 @@ function decisionReport(): TurnDecisionReport {
           evidenceLevel: 'declared',
         },
       },
+      {
+        id: 'decision:safety:1:pii:model.output.text',
+        phase: 'checks',
+        kind: 'safety.guardrail',
+        subject: { kind: 'guardrail', id: 'pii', name: 'pii' },
+        outcome: 'rewrite',
+        reason: {
+          code: 'guardrail.redacted',
+          text: 'Guardrail pii rewrote output.',
+          evidenceLevel: 'observed',
+          source: 'artifact',
+        },
+      },
     ],
     source: [],
     coverage: { covered: 0, total: 6, areas: [] },
@@ -174,6 +187,23 @@ describe('Quality runner — TurnDecisionReport matchers', () => {
         ctx.expect.decisionReport.freshness.toHaveStatus('context:customerProfile', 'stale-rejected')
         ctx.expect.decisionReport.cache.toHaveFreshnessAcceptance('context:customerProfile', 'rejected', {
           reasonCode: 'cache.freshness.rejected',
+        })
+      },
+    })
+
+    const experiment = await run(evaluation)
+    const cell = experiment.perCase[0]!
+    expect(cell.status).toBe('passed')
+    expect(cell.assertions.failures).toEqual([])
+  })
+
+  it('asserts safety policy outcomes by stable reason code', async () => {
+    const evaluation = evaluate({
+      task: target.agent(supportAgent, { generate: generateWithDecisionReport }),
+      data: [{ input: { question: 'How do refunds work?' } }],
+      expect: (ctx) => {
+        ctx.expect.decisionReport.safety.toHaveOutcome('pii', 'rewrite', {
+          reasonCode: 'guardrail.redacted',
         })
       },
     })

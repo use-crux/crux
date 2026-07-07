@@ -1,126 +1,165 @@
 import type { Message } from '../../generation/messages'
+import type { BoundaryDef, BoundaryInput, SubjectOf } from '../boundary'
+import type { SafetyFinding, SafetyRunContext } from '../decision'
+import { SafetyResultError } from '../errors'
+import type { GuardrailStreamOption } from '../stream/types'
 
-// ── Phase ──────────────────────────────────────────────────────────
+export type GuardrailMode = 'enforce' | 'report'
+export type GuardrailRewriteKind = 'redact' | 'mask' | 'hash' | 'normalize'
 
-export type GuardrailPhase = 'input' | 'output'
+/** Result returned by guardrail policy callbacks. */
+export type GuardrailRunResult<TValue = string> =
+  | { readonly action: 'allow' }
+  | { readonly action: 'block'; readonly reason: string }
+  | { readonly action: 'warn'; readonly reason: string }
+  | {
+      readonly action: 'rewrite'
+      readonly value: TValue
+      readonly rewrite: { readonly kind: GuardrailRewriteKind }
+      readonly findings?: readonly SafetyFinding[]
+    }
+  | { readonly action: 'hold' }
 
-// ── Context ────────────────────────────────────────────────────────
+/** Callable guardrail body, optionally carrying first-party strategy metadata. */
+export interface GuardrailRun<B extends BoundaryInput> {
+  (subject: SubjectOf<B>, ctx: SafetyRunContext<B>):
+    | GuardrailRunResult<SubjectOf<B>>
+    | Promise<GuardrailRunResult<SubjectOf<B>>>
+  readonly strategy?: {
+    readonly kind: string
+    readonly config: Readonly<Record<string, unknown>>
+  }
+}
 
+/** Public guardrail authoring config. */
+export interface GuardrailConfig<B extends BoundaryInput = BoundaryDef> {
+  readonly id: string
+  readonly on: B
+  readonly category?: string
+  readonly mode?: GuardrailMode
+  readonly stream?: GuardrailStreamOption
+  readonly run: GuardrailRun<B>
+}
+
+/** Frozen guardrail object. */
+export interface Guardrail<B extends BoundaryInput = BoundaryDef> {
+  readonly _tag: 'Guardrail'
+  readonly id: string
+  readonly on: B
+  readonly category: string | undefined
+  readonly mode: GuardrailMode
+  readonly stream: GuardrailStreamOption | undefined
+  readonly run: GuardrailConfig<B>['run']
+  readonly strategy?: {
+    readonly kind: string
+    readonly config: Readonly<Record<string, unknown>>
+  }
+}
+
+/** Internal call context used by the Safety session when running guardrails. */
 export interface GuardrailContext {
-  readonly phase: GuardrailPhase
+  readonly mode?: GuardrailMode
   readonly promptId: string | undefined
   readonly model: string | undefined
   readonly messages: readonly Message[]
   readonly systemPrompt: string | undefined
   readonly traceId: string | undefined
   readonly metadata: Readonly<Record<string, unknown>>
+  readonly stream?: {
+    readonly segment: true
+    readonly last: boolean
+    readonly heldChars: number
+    readonly heldMs: number
+  }
 }
-
-// ── Stream Config ──────────────────────────────────────────────────
-
-export interface GuardrailStreamConfig {
-  readonly buffer: 'none' | 'full'
-}
-
-// ── Result Types (phase-dependent) ─────────────────────────────────
-
-/** Result when content passes without modification. */
-export interface GuardrailPass {
-  readonly action: 'pass'
-}
-
-/** Result when content is blocked (hard stop). */
-export interface GuardrailBlock {
-  readonly action: 'block'
-  readonly reason: string
-}
-
-/** Result when content is redacted (destructive safety removal). */
-export interface GuardrailRedact {
-  readonly action: 'redact'
-  readonly content: string
-  readonly entities?: readonly unknown[]
-}
-
-/** Result when content is transformed (constructive quality improvement). */
-export interface GuardrailTransform {
-  readonly action: 'transform'
-  readonly content: string
-}
-
-/** Result when a warning is logged but content continues. */
-export interface GuardrailWarn {
-  readonly action: 'warn'
-  readonly reason: string
-}
-
-/** Actions available on input guards. */
-export type InputGuardrailResult = GuardrailPass | GuardrailBlock | GuardrailRedact | GuardrailTransform | GuardrailWarn
-
-/** Actions available on output guards. */
-export type OutputGuardrailResult = GuardrailPass | GuardrailBlock | GuardrailRedact | GuardrailTransform | GuardrailWarn
-
-/** Result when the guard needs more data — holds this chunk and merges it into the next. */
-export interface GuardrailHold {
-  readonly action: 'hold'
-}
-
-/** Actions available on streaming chunk handlers. */
-export type ChunkGuardrailResult =
-  | GuardrailPass
-  | GuardrailBlock
-  | GuardrailRedact
-  | GuardrailTransform
-  | GuardrailWarn
-  | GuardrailHold
-
-/** Phase-conditional result type. Input and output guards share the same action set. */
-export type GuardrailResult<TPhase extends GuardrailPhase> = TPhase extends 'input'
-  ? InputGuardrailResult
-  : OutputGuardrailResult
-
-// ── Config ─────────────────────────────────────────────────────────
-
-export interface GuardrailConfig<TPhase extends GuardrailPhase = GuardrailPhase> {
-  readonly name: string
-  /**
-   * Optional risk-category label (e.g. `'pii'`, `'jailbreak'`, `'toxicity'`).
-   * Carried through audit entries and observability artifacts so devtools
-   * and reporting can aggregate by risk type instead of by policy name.
-   */
-  readonly category?: string
-  readonly phase: TPhase
-  readonly validate: (content: string, context: GuardrailContext) => Promise<GuardrailResult<TPhase>>
-  readonly stream?: GuardrailStreamConfig
-  readonly onChunk?: (chunk: string, accumulated: string, context: GuardrailContext) => Promise<ChunkGuardrailResult>
-}
-
-// ── Frozen Guardrail Object ────────────────────────────────────────
-
-export interface Guardrail<TPhase extends GuardrailPhase = GuardrailPhase> {
-  readonly _tag: 'Guardrail'
-  readonly name: string
-  readonly category: string | undefined
-  readonly phase: TPhase
-  readonly validate: (content: string, context: GuardrailContext) => Promise<GuardrailResult<TPhase>>
-  readonly stream: GuardrailStreamConfig | undefined
-  readonly onChunk:
-    | ((chunk: string, accumulated: string, context: GuardrailContext) => Promise<ChunkGuardrailResult>)
-    | undefined
-}
-
-// ── Audit ──────────────────────────────────────────────────────────
 
 export interface GuardrailAuditEntry {
   readonly guard: string
   readonly category?: string
-  readonly phase: GuardrailPhase
+  readonly phase: 'input' | 'output'
   readonly action: string
-  readonly original?: string
+  readonly reason?: string
   readonly durationMs: number
 }
 
 export interface GuardrailAudit {
   readonly applied: readonly GuardrailAuditEntry[]
   readonly blocked: boolean
+}
+
+/** Validate a JS/unknown guardrail result and fail closed on malformed values. */
+export function validateGuardrailRunResult(
+  value: unknown,
+  opts: {
+    readonly streaming: boolean
+    readonly last: boolean
+    readonly policyId?: string
+    readonly boundary?: string
+  },
+): GuardrailRunResult<unknown> {
+  if (!isRecord(value) || typeof value.action !== 'string') {
+    throw resultError(opts, 'result must be an object with an action string')
+  }
+
+  switch (value.action) {
+    case 'allow':
+      return { action: 'allow' }
+    case 'block':
+      if (typeof value.reason !== 'string' || value.reason.length === 0) {
+        throw resultError(opts, 'block results require a reason')
+      }
+      return { action: 'block', reason: value.reason }
+    case 'warn':
+      if (typeof value.reason !== 'string' || value.reason.length === 0) {
+        throw resultError(opts, 'warn results require a reason')
+      }
+      return { action: 'warn', reason: value.reason }
+    case 'rewrite':
+      if (!('value' in value)) throw resultError(opts, 'rewrite results require a value')
+      if (!isRecord(value.rewrite) || !isRewriteKind(value.rewrite.kind)) {
+        throw resultError(opts, 'rewrite results require a valid rewrite.kind')
+      }
+      return {
+        action: 'rewrite',
+        value: value.value,
+        rewrite: { kind: value.rewrite.kind },
+        ...(isSafetyFindings(value.findings) ? { findings: value.findings } : {}),
+      }
+    case 'hold':
+      if (!opts.streaming || opts.last) {
+        throw resultError(opts, 'hold is only valid for non-final stream segments')
+      }
+      return { action: 'hold' }
+    default:
+      throw resultError(opts, `unknown guardrail action "${value.action}"`)
+  }
+}
+
+function isRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === 'object' && value !== null
+}
+
+function isRewriteKind(value: unknown): value is GuardrailRewriteKind {
+  return value === 'redact' || value === 'mask' || value === 'hash' || value === 'normalize'
+}
+
+function isSafetyFindings(value: unknown): value is readonly SafetyFinding[] {
+  return (
+    Array.isArray(value) &&
+    value.every((finding) => isRecord(finding) && typeof finding.type === 'string')
+  )
+}
+
+function resultError(
+  opts: { readonly policyId?: string; readonly boundary?: string },
+  problem: string,
+): SafetyResultError {
+  const policyId = opts.policyId ?? 'unknown'
+  const boundary = opts.boundary ?? 'unknown'
+  return new SafetyResultError({
+    message: `Safety policy "${policyId}" returned an invalid result: ${problem}.`,
+    policyId,
+    boundary,
+    problem,
+  })
 }

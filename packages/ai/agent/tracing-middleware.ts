@@ -5,6 +5,7 @@ import {
   runWithExecutionContext,
   type CruxHooks,
   type InspectResult,
+  type TokenUsage,
 } from '@use-crux/core'
 import type { SkillActivationSession } from '@use-crux/core/skill'
 import { extractCost } from './metadata'
@@ -26,6 +27,26 @@ interface GenerateToolCallPart {
   toolCallId?: string
   toolName: string
   input: string
+}
+
+/**
+ * Convert AI SDK finish usage into Crux usage.
+ *
+ * The SDK can omit either side; Crux records usage only when the top-level
+ * input/output counts are both present.
+ */
+function tokenUsageFromFinish(
+  inputTokens: number | undefined,
+  outputTokens: number | undefined,
+): TokenUsage | undefined {
+  if (inputTokens === undefined || outputTokens === undefined) return undefined
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens: inputTokens + outputTokens,
+    inputTokenDetails: {},
+    outputTokenDetails: {},
+  }
 }
 
 function isGenerateToolCallPart(part: unknown): part is GenerateToolCallPart {
@@ -115,10 +136,7 @@ export function createTracingMiddleware(
           durationMs,
           model: model.modelId,
           provider: model.provider,
-          usage: {
-            inputTokens: result.usage.inputTokens?.total,
-            outputTokens: result.usage.outputTokens?.total,
-          },
+          usage: tokenUsageFromFinish(result.usage.inputTokens?.total, result.usage.outputTokens?.total),
           ...(cost != null ? { cost } : {}),
           modelId: model.modelId,
           finishReason: result.finishReason.unified,
@@ -181,7 +199,7 @@ export function createTracingMiddleware(
           () => doStream(),
         )
 
-        let usage: { inputTokens?: number; outputTokens?: number } | undefined
+        let usage: TokenUsage | undefined
         let finishReason: string | undefined
         let ttftMs: number | undefined
         let totalChunks = 0
@@ -191,10 +209,7 @@ export function createTracingMiddleware(
         const transform = new TransformStream<LanguageModelV3StreamPart, LanguageModelV3StreamPart>({
           transform(chunk, controller) {
             if (chunk.type === 'finish') {
-              usage = {
-                inputTokens: chunk.usage.inputTokens?.total,
-                outputTokens: chunk.usage.outputTokens?.total,
-              }
+              usage = tokenUsageFromFinish(chunk.usage.inputTokens?.total, chunk.usage.outputTokens?.total)
               finishReason = chunk.finishReason.unified
               streamProviderMetadata = (chunk as { providerMetadata?: SharedV3ProviderMetadata }).providerMetadata
             } else if (chunk.type === 'tool-call') {

@@ -34,6 +34,8 @@
 
 import { z } from 'zod'
 import type { ResolvedPrompt } from '../../resolver/types'
+import type { TimeoutOptions } from '../../generation/timeout'
+import { TimeoutError, toolBudgetMs, withBudget } from '../../generation/timeout'
 import type { Message } from '../../generation/messages'
 import type { JsonValue, ToolModelOutput } from '../../types/tool'
 import type { SystemBlock } from '../../resolver/types'
@@ -41,6 +43,7 @@ import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
 import { applyToolMiddleware, notifyToolApprovalResponses } from '../../tools/middleware'
 import { findToolApprovalRequests, findToolApprovalDecision, deniedToolModelOutput } from '../../tools/approvals'
 import type { ToolMiddleware } from '../../tools/types'
+import type { ApprovalDeclaration, ToolApprovalMap } from '../../tools/approval-policy'
 import { getHooks } from '../../runtime/runtime'
 import { getExecutionContext } from '../../runtime/execution-context'
 import { observe } from '../../observability'
@@ -72,6 +75,13 @@ import {
   emitToolApprovalObservation,
 } from './approval'
 import type { ApprovalRequestInfo } from './approval'
+import { callApprovalDeclarations, requiresToolApproval } from './approval-policy-evaluator'
+import { resolveToolsContext, type ResolvedToolsContext } from './context'
+import {
+  withToolLifecycleExecutionOptions,
+  type PartialToolLifecycleExecutionOptions,
+  type ToolLifecycleExecutionOptions,
+} from './execution-options'
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -109,10 +119,15 @@ export interface ToolLifecycleOptions {
   readonly call?: {
     readonly tools?: Record<string, unknown>
     readonly toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
+    readonly toolApproval?: ToolApprovalMap
+    readonly toolsContext?: Readonly<Record<string, unknown>>
+    readonly runtimeContext?: unknown
   }
   /** Identity threaded into spans, hooks, and memory capture. */
   readonly promptId: string | undefined
   readonly input?: Record<string, unknown>
+  /** Structured timeout budgets for tool execution in this session. */
+  readonly timeout?: TimeoutOptions
   /**
    * Dialect-owned re-resolution closure: how to resolve the prompt again
    * after `LoadSkill` activates a skill. The session owns everything else
@@ -198,6 +213,16 @@ export type ToolProtocolEvent =
       readonly verdict: 'execute' | 'denied' | 'suspend' | 'not-found'
       readonly origin: 'live' | 'replay'
     }
+  | {
+      readonly t: 'approval.policy'
+      readonly toolCallId: string
+      readonly toolName: string
+      readonly policy: 'always' | 'never' | 'function'
+      readonly result: 'approve' | 'suspend'
+      readonly layer?: 'call' | 'prompt' | 'context'
+      readonly key?: string
+      readonly owner?: string
+    }
   | { readonly t: 'execute.settle'; readonly toolCallId: string; readonly outcome: 'ok' | 'error' }
   | { readonly t: 'suspend.mint'; readonly toolCallId: string; readonly approvalId: string }
   | { readonly t: 'skill.load'; readonly skillId: string }
@@ -227,6 +252,15 @@ export interface ToolLifecycle {
   readonly descriptors: readonly ToolDescriptor[] | undefined
 
   /**
+   * SDK regime: evaluate the effective approval policy for one tool call.
+   * Core regime uses the same logic inside `executeRound()`.
+   */
+  requiresApproval(
+    toolCall: { readonly id: string; readonly name: string; readonly args: unknown },
+    messages: readonly Message[],
+  ): Promise<boolean>
+
+  /**
    * Fire approvalMiddleware `onApproved`/`onDenied` callbacks for decisions
    * found in history, exactly once. Stream paths call this alone; generate
    * paths get it implicitly via `resume()`.
@@ -247,7 +281,7 @@ export interface ToolLifecycle {
    * Core regime only — one full round for the calls the dialect extracted:
    * per call, middleware → approval gate → span wrap → execute → normalize.
    * Suspension is a value, not a throw: stops at the first undecided
-   * `needsApproval` and returns the minted request + suspension message.
+   * approval policy and returns the minted request + suspension message.
    * @throws in the `'sdk'` regime (the SDK owns the loop — RFC #28).
    */
   executeRound(response: AdapterResponse, messages: readonly Message[]): Promise<ToolRoundOutcome>
@@ -311,7 +345,6 @@ function convertTools(
       description?: string
       parameters?: unknown
       execute?: ToolDescriptor['execute']
-      needsApproval?: ToolDescriptor['needsApproval']
       toModelOutput?: ToolDescriptor['toModelOutput']
     }
 
@@ -339,7 +372,6 @@ function convertTools(
       description: t.description ?? '',
       parameters,
       execute: t.execute ?? (() => undefined),
-      needsApproval: t.needsApproval,
       toModelOutput: t.toModelOutput,
     }
   })
@@ -353,14 +385,8 @@ function convertTools(
 interface SessionToolShape {
   readonly execute?: (
     input: unknown,
-    options: { readonly toolCallId?: string; readonly messages?: readonly unknown[] },
+    options: ToolLifecycleExecutionOptions,
   ) => unknown
-  readonly needsApproval?:
-    | boolean
-    | ((
-        input: unknown,
-        options: { toolCallId?: string; messages?: readonly Message[] },
-      ) => boolean | PromiseLike<boolean>)
   readonly toModelOutput?: (args: {
     toolCallId: string
     input: Record<string, unknown>
@@ -447,6 +473,8 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   let descriptors: ToolDescriptor[] | undefined
   let middlewareCount = 0
   let skillSession: SkillActivationSession | undefined
+  let approvalDeclarations: readonly ApprovalDeclaration[] = []
+  let toolContexts: ResolvedToolsContext = {}
 
   function arm(resolved: ResolvedPrompt): void {
     skillSession = readSkillActivationSession(resolved)
@@ -457,11 +485,18 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     middlewareCount = middlewareChain.length
     const merged = { ...(resolved.tools ?? {}), ...(options.call?.tools ?? {}) }
     wrappedTools = applyToolMiddleware(merged, middleware)
+    toolContexts = resolveToolsContext(wrappedTools, options.call?.toolsContext)
+    approvalDeclarations = [
+      ...(resolved.toolApprovalDeclarations ?? []),
+      ...callApprovalDeclarations(options.call?.toolApproval),
+    ]
     if (options.regime === 'core') {
       descriptors = convertTools(wrappedTools, options.sanitizeToolSchema)
     } else {
       const keys = Object.keys(wrappedTools)
-      armedTools = keys.length > 0 ? instrumentToolSet(wrappedTools) : undefined
+      armedTools = keys.length > 0
+        ? instrumentToolSet(withToolLifecycleExecutionOptions(wrappedTools, executionOptionsForSdkTool))
+        : undefined
     }
   }
 
@@ -482,6 +517,34 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
   const appendRound: AppendToolRound = options.appendToolRound ?? canonicalAppendToolRound
 
   const currentTraceId = (): string | undefined => getExecutionContext()?.traceId ?? observe.captureContext()?.traceId
+
+  function executionOptionsFor(
+    toolCall: SessionToolCall,
+    messages: readonly Message[],
+  ): ToolLifecycleExecutionOptions {
+    const base = {
+      toolCallId: toolCall.id,
+      messages,
+      runtimeContext: options.call?.runtimeContext,
+    }
+    return Object.prototype.hasOwnProperty.call(toolContexts, toolCall.name)
+      ? { ...base, context: toolContexts[toolCall.name] }
+      : base
+  }
+
+  function executionOptionsForSdkTool(
+    toolName: string,
+    rawOptions: PartialToolLifecycleExecutionOptions | undefined,
+  ): ToolLifecycleExecutionOptions {
+    const base = {
+      ...(rawOptions ?? {}),
+      toolCallId: rawOptions?.toolCallId ?? `tc_${now()}`,
+      runtimeContext: options.call?.runtimeContext,
+    }
+    return Object.prototype.hasOwnProperty.call(toolContexts, toolName)
+      ? { ...base, context: toolContexts[toolName] }
+      : base
+  }
 
   // ── The kernel: gate → execute → settle ─────────────────────────
 
@@ -577,7 +640,14 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     try {
       span.withContext(() => emitToolArgsArtifact(span.spanId, toolCall.name, toolCall.id, toolCall.args))
       const execute = tool.execute ?? (() => undefined)
-      const result = await span.withContext(() => execute(toolCall.args, { toolCallId: toolCall.id, messages }))
+      const toolOptions = executionOptionsFor(toolCall, messages)
+      const result = await span.withContext(() =>
+        withBudget(() => Promise.resolve(execute(toolCall.args, toolOptions)), {
+          budget: 'tool',
+          limitMs: toolBudgetMs(options.timeout, toolCall.name),
+          toolName: toolCall.name,
+        }),
+      )
       const modelOutput = await span.withContext(() =>
         createToolModelOutput({
           tool,
@@ -623,6 +693,14 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
         modelOutputSize,
       }
     } catch (err) {
+      if (err instanceof TimeoutError) {
+        span.error(err, {
+          isError: true,
+          phase: 'tool.execute',
+          errorKind: 'timeout',
+        })
+        throw err
+      }
       const modelOutput: ToolModelOutput = {
         type: 'error-json',
         value: { error: err instanceof Error ? err.message : String(err) },
@@ -661,21 +739,22 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
     }
   }
 
-  async function evaluateNeedsApproval(
-    tool: SessionToolShape,
-    toolCall: SessionToolCall,
-    messages: readonly Message[],
-  ): Promise<boolean> {
-    if (tool.needsApproval === undefined) return false
-    if (typeof tool.needsApproval === 'boolean') return tool.needsApproval
-    return Boolean(
-      await tool.needsApproval(toolCall.args, { toolCallId: toolCall.id, messages: messages as Message[] }),
-    )
+  async function requiresApproval(toolCall: SessionToolCall, messages: readonly Message[]): Promise<boolean> {
+    const tool = wrappedTools[toolCall.name]
+    return requiresToolApproval({
+      tool,
+      toolCall,
+      messages,
+      runtimeContext: options.call?.runtimeContext,
+      toolContext: toolContexts[toolCall.name],
+      declarations: approvalDeclarations,
+      onPolicyTrace: (trace) => transcript.push({ t: 'approval.policy', ...trace }),
+    })
   }
 
   /**
    * The per-call verdict gate. Order is part of the protocol: the history
-   * decision (and its token check) comes BEFORE `needsApproval`, so a
+   * decision (and its token check) comes BEFORE approval policy, so a
    * token mismatch throws even for tools that no longer require approval.
    */
   async function gate(
@@ -745,7 +824,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       return { kind: 'execute', run: () => runTool(toolCall, shaped, messages, traceId) }
     }
 
-    if (await evaluateNeedsApproval(shaped, toolCall, messages)) {
+    if (await requiresApproval(toolCall, messages)) {
       const minted: ApprovalRequestInfo = {
         approvalId,
         toolCallId: toolCall.id,
@@ -791,6 +870,8 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       return descriptors
     },
 
+    requiresApproval,
+
     notifyDecisions,
 
     async resume(messages) {
@@ -809,7 +890,7 @@ export function createToolLifecycle(options: ToolLifecycleOptions): ToolLifecycl
       for (const toolCall of replayCalls) {
         const verdict = await gate(toolCall, messages, 'replay')
         // `suspend` is unreachable here: the scan only returns decided calls
-        // and the gate consults the decision before `needsApproval`.
+        // and the gate consults the decision before approval policy.
         if (verdict.kind === 'execute') results.push(await verdict.run())
         else if (verdict.kind !== 'suspend') results.push(verdict.settled)
       }

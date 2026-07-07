@@ -9,6 +9,8 @@
  */
 
 export { createGoogle, googleProviderRuntime } from './native'
+export { fromResponse, googleCodecCachedContent, toParams } from './codec'
+export type { GoogleCodecOptions } from './codec'
 export type { CreateGoogleOptions, GoogleRerankerConfig, GoogleRetrievalModelConfig } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { embedding } from './embedding'

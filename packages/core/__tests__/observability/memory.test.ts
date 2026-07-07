@@ -289,4 +289,55 @@ describe('canonical memory observability', () => {
       }),
     )
   })
+
+  it('records memory policy decisions with redacted evidence', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const store = inMemoryRecordStore()
+    const factBlock = facts({
+      id: 'facts',
+      extract: async () => [
+        {
+          content: 'Customer private@example.com uses sk-live-secret',
+          confidence: 0.9,
+        },
+      ],
+      write: { mode: 'auto' },
+      policy: {
+        redact: async (candidate) => ({
+          ...candidate,
+          content: candidate.content.replace('Customer', 'User'),
+        }),
+      },
+    })
+    const mem = memory({
+      id: 'profile',
+      records: store,
+      namespace: 'user:1',
+      blocks: [factBlock],
+      capture: { mode: 'inline' },
+    })
+
+    await mem.captureTurn({
+      messages: [{ role: 'user', content: 'Remember this preference' }],
+    })
+    await observe.flush()
+
+    const policySpan = transport.records.find(
+      (record) => record.type === 'span:start' && record.primitive === 'memory.write' && record.name === 'facts.policy.redact',
+    )
+    expect(policySpan).toMatchObject({
+      attributes: expect.objectContaining({
+        safetyBoundary: 'memory.write',
+        safetyDecisionAction: 'rewrite',
+        safetyPolicyId: 'memory.facts.policy.redact',
+      }),
+    })
+
+    const rendered = JSON.stringify(transport.records)
+    expect(rendered).not.toContain('private@example.com')
+    expect(rendered).not.toContain('sk-live-secret')
+    expect(rendered).toContain('[redacted-email]')
+    expect(rendered).toContain('[redacted-secret]')
+  })
 })

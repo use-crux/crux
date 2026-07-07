@@ -105,7 +105,7 @@ export interface SdkLoopResultLike {
     approvalId?: string
     toolCall?: { toolCallId?: string; toolName?: string; input?: unknown }
   }>
-  steps?: ReadonlyArray<unknown>
+  steps?: ReadonlyArray<SdkStepResultLike>
   toolCalls?: Array<{ toolCallId: string; toolName: string; input?: unknown; args?: unknown }>
   usage?: SdkUsageLike
   totalUsage?: SdkUsageLike
@@ -113,6 +113,14 @@ export interface SdkLoopResultLike {
   response?: { id?: string; modelId?: string; messages?: ReadonlyArray<unknown> }
   providerMetadata?: unknown
   _meta?: Record<string, unknown>
+}
+
+/** Structural shape of one AI SDK step result the codec reads. */
+export interface SdkStepResultLike {
+  text?: string
+  usage?: SdkUsageLike
+  finishReason?: string
+  response?: { id?: string; modelId?: string }
 }
 
 /** Structural shape of AI SDK stream results this executor returns. */

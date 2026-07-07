@@ -1,0 +1,54 @@
+import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
+import { prompt } from '@use-crux/core'
+import { fromResponse, toParams } from '../index'
+import type { AnthropicParsedMessage } from '../response'
+
+describe('public Anthropic codecs', () => {
+  it('turns a resolved prompt into Anthropic params and normalizes the response', async () => {
+    const p = prompt({
+      id: 'anthropic-codec-test',
+      system: 'Speak plainly.',
+      prompt: ({ input }) => `Say ${input.word}.`,
+      input: z.object({ word: z.string() }),
+      settings: { temperature: 0.2 },
+    })
+
+    const resolved = await p.resolve({
+      input: { word: 'hello' },
+      provider: 'anthropic',
+      modelId: 'claude-codec',
+    })
+    const params = toParams(resolved, {
+      model: 'claude-codec',
+      settings: { maxTokens: 123 },
+    })
+
+    expect(params).toMatchObject({
+      model: 'claude-codec',
+      system: 'Speak plainly.',
+      max_tokens: 123,
+      temperature: 0.2,
+      messages: [{ role: 'user', content: 'Say hello.' }],
+    })
+
+    const facts = fromResponse({
+      id: 'msg_codec',
+      type: 'message',
+      role: 'assistant',
+      model: 'claude-codec-actual',
+      content: [{ type: 'text', text: 'hello' }],
+      stop_reason: 'end_turn',
+      stop_sequence: null,
+      usage: { input_tokens: 3, output_tokens: 4 },
+    } as AnthropicParsedMessage)
+
+    expect(facts).toMatchObject({
+      text: 'hello',
+      finishReason: 'end_turn',
+      responseId: 'msg_codec',
+      actualModelId: 'claude-codec-actual',
+      usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },
+    })
+  })
+})

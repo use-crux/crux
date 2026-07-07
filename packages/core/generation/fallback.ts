@@ -155,8 +155,8 @@ export function classifyError(error: unknown): ErrorCategory | null {
     }
   }
 
-  // AbortError (from AbortController timeout)
-  if (error.name === 'AbortError') return 'timeout'
+  // Crux structured timeout and AbortError (from provider AbortController timeout).
+  if (error.name === 'TimeoutError' || error.name === 'AbortError') return 'timeout'
 
   // fetch TypeError ("fetch failed", "network error")
   if (error instanceof TypeError && /fetch failed|network/i.test(error.message)) {

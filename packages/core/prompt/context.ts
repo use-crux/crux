@@ -13,6 +13,7 @@ import type {
 } from './context-types'
 import type { DeepReadonly, InferContextInput } from './type-utils'
 import type { AnyToolSet } from '../types'
+import type { ToolApprovalMap } from '../tools/approval-policy'
 import { captureSource } from '../project-index/source'
 import type { CruxContextInjectableKind } from '../observability/contract'
 import { getInputShapeKeys } from './schema-shape'
@@ -55,6 +56,13 @@ interface StaticContextDef {
   priority?: number
   /** Static tools to contribute to prompts that `use` this context. */
   tools?: AnyToolSet
+  /**
+   * Approval policy for tools contributed by this context.
+   *
+   * Exact keys must name this context's own tools. The `'*'` key applies only
+   * to this context's own tools.
+   */
+  toolApproval?: ToolApprovalMap
   /**
    * Predicate evaluated at resolve time. When false, context is excluded.
    * For static contexts, the predicate receives an empty input object.
@@ -147,6 +155,7 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
             })
 
   const toolsValue: unknown = 'tools' in def ? def.tools : undefined
+  const toolApproval = 'toolApproval' in def ? def.toolApproval : undefined
   const toolsFn: ((input: Record<string, unknown>) => AnyToolSet) | undefined =
     toolsValue === undefined
       ? undefined
@@ -204,6 +213,7 @@ export function context(def: StaticContextDef | ContextDef<z.ZodType>): Context<
     useEntries: Object.freeze(useEntries),
     priority,
     toolsFn,
+    toolApproval,
     rawFields: Object.freeze(rawFields),
     when: whenFn,
     memoTtl,

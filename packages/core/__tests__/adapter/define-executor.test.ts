@@ -15,6 +15,7 @@ import { fallback } from '../../generation/fallback'
 import { ValidationExhaustedError } from '../../generation/validation-retry'
 import { appendToolApprovalResponse } from '../../tools/approvals'
 import { resetHooks } from '../../runtime/runtime'
+import { boundary, guardrail, SafetyStructuredSyncError } from '../../safety'
 import type { Message } from '../../generation/messages'
 import type { StepDirective } from '../../adapter/executor-types'
 
@@ -99,7 +100,7 @@ describe('loopRuntimeAdapter — text generation', () => {
       model: 'fake:m-1',
       input: { instruction: 'go' },
       tools: { noop: { execute: async () => 'ok' } },
-      observer: { onStepFinish: async () => directives.shift() ?? { kind: 'continue' } },
+      observer: { onStepEnd: async () => directives.shift() ?? { kind: 'continue' } },
     })
 
     expect(result.steps).toBe(1)
@@ -120,6 +121,57 @@ describe('loopRuntimeAdapter — structured output + validation retry', () => {
     expect(result.object).toEqual({ title: 'hi', count: 2 })
     expect(result.steps).toBe(1)
     expect(fake.calls.runStructuredAttempt).toHaveLength(1)
+  })
+
+  it('returns the synchronized object when output safety rewrites structured text', async () => {
+    const fake = fakeLoopRuntime({ structured: ['{"title":"private","count":2}'] })
+    const executor = loopRuntimeAdapter(fake.runtime)
+
+    const result = await executor.generate(structuredPrompt(), {
+      model: 'fake:m-1',
+      input: { instruction: 'make json' },
+      guardrails: [
+        guardrail({
+          id: 'redact-title',
+          on: boundary.output.text(),
+          run: (text) => ({
+            action: 'rewrite',
+            value: text.replace('private', '[redacted]'),
+            rewrite: { kind: 'redact' },
+          }),
+        }),
+      ],
+    })
+
+    expect(result.text).toBe('{"title":"[redacted]","count":2}')
+    expect(result.object).toEqual({ title: '[redacted]', count: 2 })
+  })
+
+  it('fails closed with the rewriting policy id when structured safety violates the schema', async () => {
+    const fake = fakeLoopRuntime({ structured: ['{"title":"private","count":2}'] })
+    const executor = loopRuntimeAdapter(fake.runtime)
+
+    const error = await executor
+      .generate(structuredPrompt(), {
+        model: 'fake:m-1',
+        input: { instruction: 'make json' },
+        guardrails: [
+          guardrail({
+            id: 'break-count',
+            on: boundary.output.text(),
+            run: (text) => ({
+              action: 'rewrite',
+              value: text.replace('"count":2', '"count":"two"'),
+              rewrite: { kind: 'normalize' },
+            }),
+          }),
+        ],
+      })
+      .then(() => undefined)
+      .catch((caught: unknown) => caught)
+
+    expect(error).toBeInstanceOf(SafetyStructuredSyncError)
+    expect(error).toMatchObject({ policyId: 'break-count' })
   })
 
     it('retries with corrective feedback on invalid output, then succeeds', async () => {
@@ -188,10 +240,11 @@ describe('loopRuntimeAdapter — routing dispatch', () => {
 
 describe('loopRuntimeAdapter — tool approval protocol', () => {
   const dangerousTools = (execute: ReturnType<typeof vi.fn>) => ({
-    dangerous: { description: 'risky', needsApproval: true, execute },
+    dangerous: { description: 'risky', execute },
   })
+  const dangerousApproval = { dangerous: 'always' } as const
 
-    it('suspends on approval-needing tools with a minted token and request message', async () => {
+    it('suspends on approval-gated tools with a minted token and request message', async () => {
     const execute = vi.fn()
     const fake = fakeLoopRuntime({
       loops: [[{ text: 'I need approval', toolCalls: [{ name: 'dangerous', args: { target: 'db' } }] }]],
@@ -202,6 +255,7 @@ describe('loopRuntimeAdapter — tool approval protocol', () => {
       model: 'fake:m-1',
       input: { instruction: 'do it' },
       tools: dangerousTools(execute),
+      toolApproval: dangerousApproval,
     })
 
     expect(execute).not.toHaveBeenCalled()
@@ -234,6 +288,7 @@ describe('loopRuntimeAdapter — tool approval protocol', () => {
       model: 'fake:m-1',
       input: { instruction: 'do it' },
       tools,
+      toolApproval: dangerousApproval,
     })
     const approval = suspended.pendingApprovals![0]!
 
@@ -247,6 +302,7 @@ describe('loopRuntimeAdapter — tool approval protocol', () => {
       model: 'fake:m-1',
       input: { instruction: 'do it' },
       tools,
+      toolApproval: dangerousApproval,
       messages: resumeMessages,
     })
 
@@ -291,7 +347,7 @@ describe('loopRuntimeAdapter — streaming', () => {
         executor.stream(textPrompt(), {
           model: 'fake:m-1',
           input: { instruction: 'stream it' },
-          timeoutMs: 1_000,
+          timeout: { stepMs: 1_000 },
         }),
       ).rejects.toThrow(setupError)
       expect(clearTimeoutSpy).toHaveBeenCalled()

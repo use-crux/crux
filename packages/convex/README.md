@@ -39,7 +39,8 @@ The mirrored subpaths intentionally stay close to `@use-crux/core`:
 | Import                        | Classification       | Notes                                                                                                            |
 | ----------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `@use-crux/convex/context`    | Identical re-export  | Re-exports core context helpers.                                                                                 |
-| `@use-crux/convex/skill`      | Identical re-export  | Re-exports core skill helpers.                                                                                   |
+| `@use-crux/convex/skill`      | Identical re-export  | Re-exports edge-safe core skill helpers.                                                                         |
+| `@use-crux/convex/skill/node` | Node-only re-export  | Re-exports core Node file skill helpers for local SKILL.md loading.                                              |
 | `@use-crux/convex/memory`     | Convex-bound drop-in | Same block API; `memory()` late-binds the active Convex Crux store and defaults to the current thread namespace. |
 | `@use-crux/convex/retrieval`  | Convex-bound drop-in | Same Retrieval/RAG beta API; `knowledgeBase()` and store-backed `retriever()` late-bind active Convex storage.   |
 | `@use-crux/convex/tools`      | Convex-bound drop-in | Same tool authoring shape; `execute()` receives Convex runtime metadata.                                         |

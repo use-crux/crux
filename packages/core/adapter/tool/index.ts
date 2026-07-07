@@ -33,6 +33,20 @@ export type {
   ToolProtocolEvent,
 } from './session'
 export type { ApprovalRequestInfo } from './approval'
+export {
+  approvalPolicyKind,
+  inspectToolApprovalPolicies,
+  resolveApprovalPolicy,
+} from '../../tools/approval-policy'
+export type {
+  ApprovalDeclaration,
+  ResolvedApprovalPolicy,
+  ToolApprovalContext,
+  ToolApprovalInspection,
+  ToolApprovalLayer,
+  ToolApprovalMap,
+  ToolApprovalPolicy,
+} from '../../tools/approval-policy'
 
 // ── Middleware authoring ───────────────────────────────────────────
 export { toolMiddleware, approvalMiddleware } from '../../tools/middleware'

@@ -16,7 +16,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { constraint, createSafety, guardrail, GuardrailBlockedError } from '../../safety'
+import { boundary, constraint, createSafety, guardrail, GuardrailBlockedError } from '../../safety'
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
@@ -359,9 +359,10 @@ describe('canonical context and safety observability', () => {
     setObservabilityTransport(transport)
     let attempt = 0
     const mustMentionShip = constraint({
-      name: 'must-mention-ship',
+      id: 'must-mention-ship',
+      on: boundary.output.both(),
       maxRetries: 1,
-      check: async () => {
+      run: async () => {
         attempt += 1
         return attempt > 1 ? { pass: true } : { pass: false, feedback: 'Mention ship.' }
       },
@@ -412,14 +413,14 @@ describe('canonical context and safety observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const warn = guardrail({
-      name: 'warn-sensitive',
-      phase: 'input',
-      validate: async () => ({ action: 'warn', warning: 'Sensitive topic.' }),
+      id: 'warn-sensitive',
+      on: boundary.input.text(),
+      run: async () => ({ action: 'warn', reason: 'Sensitive topic.' }),
     })
     const block = guardrail({
-      name: 'block-secret',
-      phase: 'input',
-      validate: async () => ({ action: 'block', reason: 'Secret detected.' }),
+      id: 'block-secret',
+      on: boundary.input.text(),
+      run: async () => ({ action: 'block', reason: 'Secret detected.' }),
     })
     const safety = createSafety({ promptId: 'guardrail-test', model: undefined, call: { guardrails: [warn, block] } })
 
@@ -439,11 +440,11 @@ describe('canonical context and safety observability', () => {
         preview: expect.objectContaining({
           kind: 'guardrail.report',
           action: 'block',
-          beforePreview: 'secret',
           reason: 'Secret detected.',
         }),
       }),
     )
+    expect(JSON.stringify(transport.records)).not.toContain('"beforePreview":"secret"')
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'guardrail.blocked' }))
   })
 })

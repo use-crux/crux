@@ -12,6 +12,7 @@
 
 import { z } from 'zod'
 import { repairJsonText } from '../../generation/repair-json'
+import { safeCaptureSummary } from '../../safety/errors'
 
 /** Result of validating structured output against a Zod schema. */
 export interface ValidationResult {
@@ -71,7 +72,7 @@ export function validateStructuredOutput(text: string, schema: z.ZodType): Valid
       {
         code: 'custom',
         path: [],
-        message: `Invalid JSON: ${text.slice(0, 200)}`,
+        message: 'Invalid JSON',
       },
     ])
     return { valid: false, repairedText: textToValidate, error }
@@ -90,10 +91,11 @@ export function validateStructuredOutput(text: string, schema: z.ZodType): Valid
  * Format a validation failure as a corrective user message the model can
  * act on in the next attempt.
  *
- * The message quotes the model's failed output verbatim and lists every
- * Zod issue with its JSON path (`- Expected number at "count"`), which is
- * what makes self-correction reliable: the model sees exactly which fields
- * to fix rather than a generic "invalid JSON" complaint.
+ * The message lists every Zod issue with its JSON path
+ * (`- Expected number at "count"`) and includes only a sanitized preview of
+ * the failed output. Raw failed output can contain secrets or PII; retry
+ * feedback crosses back into the model boundary and must stay safe by
+ * default.
  *
  * Both `adapter()` and `loopRuntimeAdapter()` inject this message on each
  * validation retry, so the corrective phrasing models are tuned against
@@ -104,6 +106,7 @@ export function validateStructuredOutput(text: string, schema: z.ZodType): Valid
  * @returns A user-role message body to append before re-calling the model.
  */
 export function formatValidationFeedback(failedOutput: string, error: z.ZodError): string {
+  const capture = safeCaptureSummary(failedOutput)
   const issueLines = error.issues
     .map((issue) => {
       const path = issue.path.length > 0 ? ` at "${issue.path.join('.')}"` : ''
@@ -114,8 +117,8 @@ export function formatValidationFeedback(failedOutput: string, error: z.ZodError
   return [
     'Validation failed for your previous output. Please fix these issues and return valid JSON.',
     '',
-    'Your output:',
-    failedOutput,
+    'Sanitized output preview:',
+    capture.preview ?? '[unavailable]',
     '',
     'Validation errors:',
     issueLines,

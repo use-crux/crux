@@ -12,11 +12,13 @@
 
 import { z } from "zod";
 import { context, prompt as makePrompt } from "../../prompt";
+import type { TokenUsage } from "../../generation/types";
 import { appendToolApprovalResponse } from "../../tools/approvals";
 import type {
   DefinedProviderRuntime,
   ProviderRuntimeDepsArg,
 } from "../provider-runtime";
+import { assertCanonicalResult } from "./canonical-result";
 import type { ConformanceViolation } from "../testing";
 import type {
   ProviderRuntimeConformanceGenerateOptions,
@@ -39,6 +41,20 @@ export type {
 const TEXT_INPUT = { instruction: "Run the conformance scenario." } as const;
 const TOOL_INPUT = { instruction: "Use the echo tool." } as const;
 const STREAM_INPUT = { instruction: "Stream a greeting." } as const;
+const FIRST_STEP_USAGE: TokenUsage = {
+  inputTokens: 2,
+  outputTokens: 3,
+  totalTokens: 5,
+  inputTokenDetails: {},
+  outputTokenDetails: {},
+};
+const FINAL_STEP_USAGE: TokenUsage = {
+  inputTokens: 4,
+  outputTokens: 5,
+  totalTokens: 9,
+  inputTokenDetails: {},
+  outputTokenDetails: {},
+};
 
 const textPrompt = makePrompt({
   id: "crux-provider-conformance-text",
@@ -183,7 +199,7 @@ export async function providerRuntimeConformance<
 
   await run("usage honesty", async () => {
     const prepared = await harness.prepare({
-      emissions: [{ text: "unmetered response", usage: {} }],
+      emissions: [{ text: "unmetered response", usage: null }],
     });
     const result = await bindRuntime(runtime, prepared).generate(
       textPrompt,
@@ -281,6 +297,45 @@ export async function providerRuntimeConformance<
   }
 
   if (capabilities?.toolCalls) {
+    await run("canonical envelope accumulation", async () => {
+      const prepared = await harness.prepare({
+        emissions: [
+          {
+            text: "checking ",
+            usage: FIRST_STEP_USAGE,
+            toolCalls: [
+              { id: "call_echo", name: "echo", args: { value: "hello" } },
+            ],
+          },
+          { text: "done", usage: FINAL_STEP_USAGE },
+        ],
+      });
+      const result = await bindRuntime(runtime, prepared).generate(
+        textPrompt,
+        {
+          ...baseOptions(prepared.model),
+          input: TOOL_INPUT,
+          maxSteps: 5,
+          tools: {
+            echo: echoTool(),
+          },
+        },
+      );
+
+      assertCanonicalResult(result, {
+        steps: [
+          {
+            text: "checking ",
+            usage: FIRST_STEP_USAGE,
+          },
+          {
+            text: "done",
+            usage: FINAL_STEP_USAGE,
+          },
+        ],
+      });
+    });
+
     await run("tool-call continuation", async () => {
       const prepared = await harness.prepare({
         emissions: [
@@ -338,7 +393,6 @@ export async function providerRuntimeConformance<
       const guardedTools = {
         guarded: {
           ...echoTool(),
-          needsApproval: true,
           execute: async () => {
             executed = true;
             return "approved output";
@@ -348,6 +402,7 @@ export async function providerRuntimeConformance<
       const result = await bound.generate(textPrompt, {
         ...baseOptions(prepared.model),
         tools: guardedTools,
+        toolApproval: { guarded: "always" },
       });
 
       if (executed)
@@ -409,7 +464,6 @@ export async function providerRuntimeConformance<
       const guardedTools = {
         guarded: {
           ...echoTool(),
-          needsApproval: true,
           execute: async () => {
             executed = true;
             return "approved output";
@@ -419,10 +473,14 @@ export async function providerRuntimeConformance<
       const result = await bound.generate(textPrompt, {
         ...baseOptions(prepared.model),
         tools: guardedTools,
+        toolApproval: { guarded: "always" },
       });
       const approval = firstApproval(result.pendingApprovals);
       if (!approval) {
-        fail("approval invalid-token resume", "pending approval did not expose approval id");
+        fail(
+          "approval invalid-token resume",
+          "pending approval did not expose approval id",
+        );
         return;
       }
 
@@ -437,7 +495,10 @@ export async function providerRuntimeConformance<
       });
 
       if (executed) {
-        fail("approval invalid-token resume", "tool executed after invalid approval token");
+        fail(
+          "approval invalid-token resume",
+          "tool executed after invalid approval token",
+        );
       }
       if (resumed.text !== "invalid approval handled") {
         fail(
@@ -446,7 +507,10 @@ export async function providerRuntimeConformance<
         );
       }
       if (!JSON.stringify(resumed.messages).includes("approval-invalid")) {
-        fail("approval invalid-token resume", "transcript did not include an approval-invalid tool result");
+        fail(
+          "approval invalid-token resume",
+          "transcript did not include an approval-invalid tool result",
+        );
       }
     });
   }
@@ -470,7 +534,7 @@ export async function providerRuntimeConformance<
         maxSteps: 5,
         tools: { echo: echoTool() },
         observer: {
-          onStepFinish: async () => {
+          onStepEnd: async () => {
             observed++;
             return { kind: "stop", reason: "conformance" };
           },
@@ -546,20 +610,30 @@ export async function providerRuntimeConformance<
         input: STREAM_INPUT,
       });
 
-      if (handle.rawStream && handle.extractTextDelta) {
+      if (handle.textStream) {
+        const text = await drainStringStream(handle.textStream);
+        if (text !== "hello")
+          fail("streaming", `expected streamed text "hello", got "${text}"`);
+      } else if (handle.rawStream && handle.extractTextDelta) {
         const text = await drainText(handle.rawStream, handle.extractTextDelta);
         if (text !== "hello")
           fail("streaming", `expected streamed text "hello", got "${text}"`);
       } else if (!("raw" in handle)) {
-        fail("streaming", "stream handle exposed neither rawStream nor raw");
+        fail(
+          "streaming",
+          "stream handle exposed neither textStream, rawStream, nor raw",
+        );
       }
 
-      if (typeof handle.completion !== "function")
-        fail("streaming", "stream handle is missing completion()");
+      if (
+        typeof handle.completion !== "function" &&
+        !isPromiseLike(handle.completion)
+      )
+        fail("streaming", "stream handle is missing completion metadata");
       const consumedRawText = await consumeKnownRawStream(handle.raw);
       const completion =
-        handle.rawStream || consumedRawText
-          ? await handle.completion()
+        handle.textStream || handle.rawStream || consumedRawText
+          ? await resolveCompletion(handle.completion)
           : undefined;
       if (
         completion !== undefined &&
@@ -661,6 +735,20 @@ async function drainText(
   return text;
 }
 
+async function drainStringStream(
+  stream: AsyncIterable<string>,
+): Promise<string> {
+  let text = "";
+  for await (const chunk of stream) text += chunk;
+  return text;
+}
+
+function resolveCompletion(
+  completion: Promise<unknown> | (() => Promise<unknown>),
+): Promise<unknown> {
+  return typeof completion === "function" ? completion() : completion;
+}
+
 async function consumeKnownRawStream(
   raw: unknown,
 ): Promise<string | undefined> {
@@ -684,5 +772,13 @@ function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
     typeof (value as { readonly [Symbol.asyncIterator]?: unknown })[
       Symbol.asyncIterator
     ] === "function"
+  );
+}
+
+function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    typeof (value as { readonly then?: unknown }).then === "function"
   );
 }

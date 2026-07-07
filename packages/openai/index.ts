@@ -20,6 +20,8 @@
  */
 
 export { createOpenAI, openaiProviderRuntime } from './native'
+export { fromResponse, toParams } from './codec'
+export type { OpenAICodecOptions } from './codec'
 export type { OpenAIRerankerConfig, OpenAIRetrievalModelConfig } from './native'
 export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
 export { embedding } from './embedding'

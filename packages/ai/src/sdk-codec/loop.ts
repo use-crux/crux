@@ -9,7 +9,15 @@ import { buildSystemArg } from "../provider-profile";
 import { extractResponse } from "../result-shape";
 import { canonicalBase, buildBaseArgs } from "./request-args";
 import { withToolCallRepair } from "./tool-call-repair";
-import type { AiSdkCallPlan, SdkLoopResultLike } from "./types";
+import type {
+  AiSdkCallPlan,
+  SdkLoopResultLike,
+  SdkStepResultLike,
+} from "./types";
+
+type LoopStepFacts = NonNullable<
+  Extract<ExecutorOutcome<SdkLoopResultLike>, { status: "complete" }>["stepFacts"]
+>;
 
 const APPROVAL_PART = "tool-approval-request";
 
@@ -75,7 +83,7 @@ export function createLoopCallPlan(
       finishReason?: string;
       usage?: SdkUsageLike;
     }) => {
-      const directive = await observer.onStepFinish({
+      const directive = await observer.onStepEnd({
         index: stepIndex,
         text: step.text,
         toolCalls: step.toolCalls.map((tc) => ({
@@ -175,9 +183,37 @@ function decodeLoopResult(
       ...fromResponseMessages(result.response?.messages ?? []),
     ],
     steps: budgetSteps,
+    stepFacts: sdkStepFacts(result.steps),
     meta: {
       costUsd: extractCost(result.providerMetadata),
       providerMetadata: result.providerMetadata,
     },
   };
+}
+
+function sdkStepFacts(
+  steps: ReadonlyArray<SdkStepResultLike> | undefined,
+): LoopStepFacts | undefined {
+  if (!steps || steps.length === 0) return undefined;
+  const facts = steps.map((step) => {
+    const usage = normalizeUsage(step.usage);
+    return {
+      text: step.text ?? "",
+      ...(usage !== undefined ? { usage } : {}),
+      finishReason: step.finishReason,
+      responseId: step.response?.id,
+      modelId: step.response?.modelId,
+    };
+  });
+  return facts.some(hasStepFact) ? facts : undefined;
+}
+
+function hasStepFact(fact: LoopStepFacts[number]): boolean {
+  return (
+    fact.text !== "" ||
+    fact.usage !== undefined ||
+    fact.finishReason !== undefined ||
+    fact.responseId !== undefined ||
+    fact.modelId !== undefined
+  );
 }

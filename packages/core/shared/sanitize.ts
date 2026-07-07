@@ -44,7 +44,7 @@ export function truncate(str: string, maxLength = 10_000, suffix = '…'): strin
 // Branded Wrappers (for composable helpers inside `safe`)
 // ─────────────────────────────────────────────────────────────────
 
-const SAFE_BRAND = Symbol.for('karyla.safe')
+const SAFE_BRAND = Symbol.for('crux.safe')
 
 interface SafeWrapper {
   readonly [SAFE_BRAND]: true

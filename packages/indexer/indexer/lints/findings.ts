@@ -54,6 +54,7 @@ import {
   workspaceAllowsWrites,
 } from './finding-helpers'
 import { qualityMissingBaselineFinding } from './quality'
+import { safetyLintFindings } from './safety'
 
 const RAG_RECIPE_STEP_TARGET_RELATIONS = new Set([
   'rag.recipe.step.uses_retriever',
@@ -87,6 +88,7 @@ export function indexLintFindings(input: {
   const findings: IndexLintFinding[] = []
 
   findings.push(...runtimeLintFindings(input.definitions, { runtimeConfigured: input.runtime?.configured }))
+  findings.push(...safetyLintFindings(input.definitions))
 
   for (const definition of input.definitions) {
     findings.push(...flowLintFindings(definition))

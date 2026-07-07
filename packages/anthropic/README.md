@@ -37,11 +37,32 @@ result.text; // extracted text
 result.raw; // raw Anthropic.Message
 ```
 
+`generate()` returns the canonical Crux envelope: `text`, `object` when present,
+optional accumulated `usage`, optional `cost`, `steps`, `finalStep`,
+provider-neutral `messages`, typed `raw`, and retained `_meta` for observability.
+`usage` is present only when every provider-call step reported usage. `stream()`
+returns `{ textStream, raw, completion }`, where `completion` resolves to the
+same envelope fields without `raw`/`_meta`.
+
 `createAnthropic()` returns a `CruxAdapter` with `generate()`, `stream()`, and agent composition methods (`parallel`, `pipeline`, `consensus`, `swarm`). Use `createGenerateObjectFn(client, model)` / `createGenerateTextFn(client, model)` to satisfy `@use-crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`). `createGenerateObjectFn()` is provider-native: it uses Anthropic structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
+
+For headless use, `toParams(resolved, { model })` converts a resolved prompt
+into Anthropic request params and `fromResponse(response)` normalizes an
+Anthropic response into Crux response facts. `adapter.prepare(prompt, opts)`
+returns a sans-I/O handle with `params`, `step(response)`, and
+`finish(response)`. The handle uses the same Crux executor as `generate()`, so
+tools, approvals, typed tool context, validation retry, safety, memory capture,
+and observability stay managed by Crux while your code owns
+`client.messages.create(call.params)`.
+
+Use `generate(prompt, { ...opts, transport })` when Crux should keep owning the
+loop and your callback should make each Anthropic call from public params.
+Streaming with `transport` is not supported and rejects with
+`CruxTransportStreamUnsupportedError`.
 
 The package exports `anthropicProviderRuntime` for advanced adapter composition. Internally, Anthropic uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; adapter authors building similar single-turn providers should start there.
 
-Crux maps portable `GenerationSettings.toolChoice` values to Anthropic `tool_choice`: `'auto'` → `{ type: 'auto' }`, `'none'` → `{ type: 'none' }`, `'required'` → `{ type: 'any' }`, and `{ tool }` → `{ type: 'tool', name }`. Anthropic-native options that Crux does not model portably belong in the typed `extra` option.
+Crux maps portable `GenerationSettings.toolChoice` values to Anthropic `tool_choice`: `'auto'` → `{ type: 'auto' }`, `'none'` → `{ type: 'none' }`, `'required'` → `{ type: 'any' }`, and `{ tool }` → `{ type: 'tool', name }`. Portable `reasoning` maps to Claude thinking budgets (`low` 2k, `medium` 8k, `high` 24k tokens). `toolApproval` declares portable human-in-the-loop approval policy by tool name at context, prompt, or call site. Tools that declare `contextSchema` require `toolsContext.<toolName>` at the call site, and `runtimeContext` is threaded through tool execution, middleware, and function-form approval policies. `timeout` accepts structured budgets (`totalMs`, `stepMs`, `chunkMs`, `toolMs`, and `tools[name]`) and expired budgets reject with `TimeoutError`. Anthropic-native options that Crux does not model portably belong in the typed `extra` option.
 
 For provider prompt caching, Crux resolves cached contexts into a stable prefix and marks the final cached `SystemBlock` with `cacheBoundary`. This adapter places Anthropic `cache_control: { type: 'ephemeral' }` on that boundary block only.
 

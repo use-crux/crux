@@ -17,7 +17,9 @@ export const searchDocs = tool({
   input: z.object({
     query: z.string(),
   }),
-  execute: async ({ query }) => {
+  contextSchema: z.object({ apiKey: z.string() }),
+  execute: async ({ query }, { context }) => {
+    // context is typed as { apiKey: string }
     return searchDocumentation(query)
   },
 })
@@ -39,7 +41,8 @@ Index discovers statically visible `tool(...)` definitions from source; do not r
 | `description` | `string` | Model-facing description. |
 | `input` | `ZodType?` | Tool input schema. |
 | `parameters` | `ZodType?` | Alias for `input`, matching AI SDK naming. |
-| `execute` | `(input) => output \| Promise<output>` | Application code that runs the tool. |
+| `contextSchema` | `ZodType?` | Per-tool dependency schema. Calls that compose this tool must pass `toolsContext.<toolName>`. |
+| `execute` | `(input, options) => output \| Promise<output>` | Application code that runs the tool. `options.context` is present and typed when `contextSchema` is declared; `options.runtimeContext` is shared for the run. |
 | `toModelOutput` | `(args) => ToolModelOutput \| Promise<ToolModelOutput>` | Optional mapper from raw output to the model-facing output. |
 
 If neither `input` nor `parameters` is provided, the tool receives an empty object.
@@ -51,6 +54,33 @@ const now = tool({
   execute: () => ({ timestamp: Date.now() }),
 })
 ```
+
+## Tool Context
+
+Use `contextSchema` for secrets, clients, request metadata, or tenant-scoped
+dependencies that should be explicit at the call site instead of hidden in
+global state:
+
+```ts
+const weather = tool({
+  description: 'Get weather.',
+  input: z.object({ city: z.string() }),
+  contextSchema: z.object({ apiKey: z.string() }),
+  execute: async ({ city }, { context, runtimeContext }) =>
+    fetchWeather(city, context.apiKey, runtimeContext),
+})
+
+await generate(answerQuestion, {
+  model,
+  toolsContext: { weather: { apiKey: process.env.WEATHER_API_KEY } },
+  runtimeContext: { tenantId: 'tenant_1' },
+})
+```
+
+`toolsContext` is keyed by the final tool name. If a composed tool declares
+`contextSchema`, omitting or mis-shaping its context fails before the tool loop
+starts, with the tool name in the error. Passing `toolsContext` for a tool
+without `contextSchema` also fails.
 
 ## Prompt Usage
 

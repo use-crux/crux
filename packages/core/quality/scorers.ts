@@ -110,7 +110,7 @@ export interface JudgeBacked {
   generate?: GenerateFn
   /** Judge model supplied by the eval or an eval-local helper. */
   model?: ModelRef
-  /** Chain-of-thought before verdict. Default true. */
+  /** Concise explanation before verdict. Default true. */
   useCoT?: boolean
 }
 
@@ -126,7 +126,7 @@ export interface JudgeOptionsBase<N extends string> {
   generate?: GenerateFn
   /** Judge model supplied by the eval or an eval-local helper. */
   model?: ModelRef
-  /** Chain-of-thought before verdict. Default true. Rationale → metadata. */
+  /** Concise explanation before verdict. Default true. Rationale → metadata. */
   useCoT?: boolean
 }
 

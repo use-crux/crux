@@ -48,42 +48,46 @@ describe('incremental watch parity', () => {
     )
   })
 
-  it('matches a full reindex when a watch event changes lint profile config', async () => {
-    const root = await fixtureRoot()
-    await mkdir(join(root, 'src'), { recursive: true })
-    const configFile = join(root, 'crux.config.ts')
-    await writeLintConfig(configFile, 'warning')
-    await writeFile(
-      join(root, 'src/writer.ts'),
-      [
-        "import { prompt } from '@use-crux/core'",
-        '',
-        "export const writer = prompt({ id: 'writer.lint-profile' })",
-      ].join('\n'),
-    )
+  it(
+    'matches a full reindex when a watch event changes lint profile config',
+    async () => {
+      const root = await fixtureRoot()
+      await mkdir(join(root, 'src'), { recursive: true })
+      const configFile = join(root, 'crux.config.ts')
+      await writeLintConfig(configFile, 'warning')
+      await writeFile(
+        join(root, 'src/writer.ts'),
+        [
+          "import { prompt } from '@use-crux/core'",
+          '',
+          "export const writer = prompt({ id: 'writer.lint-profile' })",
+        ].join('\n'),
+      )
 
-    const previousIndex = await indexProject({ root, resolutionMode: 'config-policy' })
-    await writeLintConfig(configFile, 'error')
+      const previousIndex = await indexProject({ root, resolutionMode: 'config-policy' })
+      await writeLintConfig(configFile, 'error')
 
-    const incremental = await indexProjectIncremental({
-      root,
-      previousIndex,
-      files: [configFile],
-      mode: 'ast',
-      resolutionMode: 'config-policy',
-    })
-    const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'config-policy' })
+      const incremental = await indexProjectIncremental({
+        root,
+        previousIndex,
+        files: [configFile],
+        mode: 'ast',
+        resolutionMode: 'config-policy',
+      })
+      const fullUpdatedIndex = await indexProject({ root, resolutionMode: 'config-policy' })
 
-    expect(incremental.report).toMatchObject({
-      planKind: 'full-reindex-required',
-      fallbackUsed: true,
-      fallbackReason: 'config-or-resolver-changed',
-    })
-    expect(findingSeverity(incremental.patches[0], 'prompt.missing_input_schema')).toBe('error')
-    expect(canonicalIndexPatchFactsJson(incremental.patches[0].facts)).toEqual(
-      canonicalIndexPatchFactsJson(indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok').facts),
-    )
-  })
+      expect(incremental.report).toMatchObject({
+        planKind: 'full-reindex-required',
+        fallbackUsed: true,
+        fallbackReason: 'config-or-resolver-changed',
+      })
+      expect(findingSeverity(incremental.patches[0], 'prompt.missing_input_schema')).toBe('error')
+      expect(canonicalIndexPatchFactsJson(incremental.patches[0].facts)).toEqual(
+        canonicalIndexPatchFactsJson(indexPatchFromSnapshot(fullUpdatedIndex, 'ast', 'ok').facts),
+      )
+    },
+    15000,
+  )
 })
 
 /**

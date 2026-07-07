@@ -1,4 +1,5 @@
 import type { z } from 'zod'
+import type { AnyToolSet } from '../types'
 import type { ContextEntry } from './context-types'
 import type { Prompt, PromptConfig, PrepareHookArgs } from './prompt-types'
 import type { ResolveOptions, ResolvedPrompt, InspectResult } from '../resolver/types'
@@ -51,7 +52,8 @@ export function prompt<
   TOwnInput extends z.ZodType = z.ZodType<{}>,
   TOutput extends z.ZodType | undefined = undefined,
   const TContexts extends readonly ContextEntry[] = readonly [],
->(config: PromptConfig<TOwnInput, TOutput, TContexts>): Prompt<TOwnInput, TOutput, TContexts> {
+  const TTools extends AnyToolSet | undefined = undefined,
+>(config: PromptConfig<TOwnInput, TOutput, TContexts, TTools>): Prompt<TOwnInput, TOutput, TContexts, TTools> {
   // Capture call-site for devtools source map resolution (one stack trace per prompt, at module load)
   const defSource = captureSource()
 
@@ -59,7 +61,7 @@ export function prompt<
 
   const compiled = compilePrompt(config)
 
-  const prompt: Prompt<TOwnInput, TOutput, TContexts> = Object.freeze({
+  const prompt: Prompt<TOwnInput, TOutput, TContexts, TTools> = Object.freeze({
     _tag: 'Prompt' as const,
     id: config.id,
     description: config.description,
@@ -68,7 +70,7 @@ export function prompt<
     inputSchema: compiled.inputSchema,
     outputSchema: config.output as TOutput,
     hasOutput: (config.output !== undefined) as TOutput extends z.ZodType ? true : false,
-    config: config as PromptConfig<TOwnInput, TOutput, TContexts>,
+    config: config as PromptConfig<TOwnInput, TOutput, TContexts, TTools>,
 
     async resolve(opts: ResolveOptions<TOwnInput, TContexts>): Promise<ResolvedPrompt> {
       const pass = await compiled.resolve(opts as ResolveCallOptions)

@@ -66,11 +66,24 @@ export type {
   TokenUsage,
   TraceMeta,
 } from "./types";
+export {
+  TimeoutError,
+  normalizeBudgetMs,
+  toolBudgetMs,
+  createBudgetSignal,
+  withBudget,
+} from "./timeout";
+export type {
+  TimeoutBudget,
+  TimeoutOptions,
+  TimeoutErrorOptions,
+  BudgetOptions,
+  BudgetSignal,
+} from "./timeout";
 
 // Generate/stream orchestration (composed by adapter packages)
 export { orchestrateGenerate, orchestrateStream } from "./orchestrate";
 export { executeFallbackLoop } from "./fallback-loop";
-export { withAttemptTimeout } from "./attempt-timeout";
 export { wrapStreamIterable } from "./stream-interception";
 export type {
   OrchestrationSpec,

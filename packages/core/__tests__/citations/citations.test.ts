@@ -8,6 +8,8 @@ import {
   resolveCitations,
 } from '../../citations'
 import type { RetrieverHit } from '../../retrieval'
+import type { BoundaryDef, SafetyRunContext, SubjectOf } from '../../safety'
+import type { Constraint } from '../../safety/constraint'
 
 function hit(overrides: Partial<RetrieverHit> = {}): RetrieverHit {
   return {
@@ -19,6 +21,24 @@ function hit(overrides: Partial<RetrieverHit> = {}): RetrieverHit {
     score: 0.9,
     ...overrides,
   }
+}
+
+function makeRunCtx<B extends BoundaryDef>(c: Constraint<B>): SafetyRunContext<B> {
+  return {
+    policy: { id: c.id, mode: 'enforce' },
+    boundary: { id: c.on.id as never, kind: c.on.id as never },
+    prompt: { id: 'answer' },
+    model: { id: 'test' },
+    trace: {},
+    attempt: { index: 0, kind: 'initial' },
+    metadata: {},
+    findings: { add() {} },
+    ...(c.on.path ? { path: c.on.path } : {}),
+  }
+}
+
+async function runConstraint<B extends BoundaryDef>(c: Constraint<B>, subject: SubjectOf<B>) {
+  return c.run(subject, makeRunCtx(c))
 }
 
 describe('resolveCitations()', () => {
@@ -133,10 +153,11 @@ describe('citationConstraint()', () => {
       quotes: 'required',
     })
 
-    const result = await check.check(
+    const result = await runConstraint(
+      check,
       {
         text: '',
-        parsed: {
+        object: {
           answer: 'Hybrid search improves recall.',
           citations: [
             {
@@ -147,7 +168,6 @@ describe('citationConstraint()', () => {
           ],
         },
       },
-      { promptId: 'answer', model: 'test', traceId: undefined, attempt: 0, metadata: {} },
     )
 
     expect(result.pass).toBe(true)
@@ -172,10 +192,11 @@ describe('citationConstraint()', () => {
 
     await session.recordHits([hit(), hit({ score: 0.7 })], 'tool')
 
-    const result = await check.check(
+    const result = await runConstraint(
+      check,
       {
         text: '',
-        parsed: {
+        object: {
           citations: [
             {
               sourceId: 'guide.md',
@@ -185,7 +206,6 @@ describe('citationConstraint()', () => {
           ],
         },
       },
-      { promptId: 'answer', model: 'test', traceId: undefined, attempt: 0, metadata: {} },
     )
 
     expect(result.pass).toBe(true)
@@ -201,17 +221,14 @@ describe('citationConstraint()', () => {
     })
   })
 
-    it('fails with actionable feedback when citations are missing', async () => {
+  it('fails with actionable feedback when citations are missing', async () => {
     const check = citationConstraint({
       hits: [hit()],
       required: true,
       quotes: 'required',
     })
 
-    const result = await check.check(
-      { text: 'No sources.', parsed: { answer: 'No sources.' } },
-      { promptId: 'answer', model: 'test', traceId: undefined, attempt: 0, metadata: {} },
-    )
+    const result = await runConstraint(check, { text: 'No sources.', object: { answer: 'No sources.' } })
 
     expect(result.pass).toBe(false)
     expect(result.feedback).toContain('citations')
