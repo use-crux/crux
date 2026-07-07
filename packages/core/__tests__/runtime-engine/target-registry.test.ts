@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { task } from '@use-crux/core/runtime'
+import { durableTask } from '@use-crux/core/runtime'
 
 describe('runtime target registry', () => {
   afterEach(() => {
@@ -9,9 +9,9 @@ describe('runtime target registry', () => {
   it('warns once when a durable target name is registered with a different definition', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
-    task('duplicate-registry-warning', { run: () => undefined })
-    task('duplicate-registry-warning', { run: () => undefined })
-    task('duplicate-registry-warning', { run: () => undefined })
+    durableTask('duplicate-registry-warning', { run: () => undefined })
+    durableTask('duplicate-registry-warning', { run: () => undefined })
+    durableTask('duplicate-registry-warning', { run: () => undefined })
 
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn).toHaveBeenCalledWith(

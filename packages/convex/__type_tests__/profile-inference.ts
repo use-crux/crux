@@ -5,7 +5,7 @@ import { Agent as ConvexAgentBase } from '@convex-dev/agent'
 import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { ToolDef } from '@use-crux/core/tools'
 import * as convexRoot from '../index'
-import { createConvexRuntimeBridge, createCruxConvex, prompt, type ConvexCtxPort } from '../index'
+import { createCruxConvex, prompt, type ConvexCtxPort } from '../index'
 import { Agent, convexAgent } from '../agent'
 import { context } from '../context'
 import { memory, recentMessages, workingState } from '../memory'
@@ -28,6 +28,8 @@ expectTypeOf(agentMemory._tag).toEqualTypeOf<'Memory'>()
 
 // @ts-expect-error high-level `agent()` is intentionally not exported from the Convex profile root.
 convexRoot.agent
+// @ts-expect-error lower-level runtime bridge plumbing is internal; use createCruxConvex().run().
+convexRoot.createConvexRuntimeBridge
 
 const editorialContext = context({
   id: 'editorial',
@@ -260,11 +262,7 @@ const tenantRunResult = tenantProfile.run(tenantCtx, { threadId: 'thread-1', att
 
 expectTypeOf(tenantRunResult).toEqualTypeOf<Promise<{ ok: true }>>()
 
-const runtimeBridge = createConvexRuntimeBridge<TenantConvexCtx>({
-  component: { crux: true } as never,
-})
-
-const runtimeBridgeResult = runtimeBridge.run(tenantCtx, { threadId: 'thread-1', attempt: 1 }, (scope) => {
+const profileRunResult = tenantProfile.run(tenantCtx, { threadId: 'thread-1', attempt: 1 }, (scope) => {
   expectTypeOf(scope.ctx.tenantId).toEqualTypeOf<string>()
   expectTypeOf(scope.target?.attempt).toEqualTypeOf<number | undefined>()
   expectTypeOf(scope.storage).toEqualTypeOf<Storage>()
@@ -272,7 +270,7 @@ const runtimeBridgeResult = runtimeBridge.run(tenantCtx, { threadId: 'thread-1',
   return { runtime: true as const }
 })
 
-expectTypeOf(runtimeBridgeResult).toEqualTypeOf<Promise<{ runtime: true }>>()
+expectTypeOf(profileRunResult).toEqualTypeOf<Promise<{ runtime: true }>>()
 
 type CruxAgentGenerateTextArgs = Parameters<Agent<TenantConvexCtx>['generateText']>
 type ConvexAgentGenerateTextArgs = Parameters<ConvexAgentBase<TenantConvexCtx>['generateText']>

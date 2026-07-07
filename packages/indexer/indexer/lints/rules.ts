@@ -872,7 +872,7 @@ export const indexLintRules = {
     profiles: ['recommended', 'strict'],
     title: 'Runtime target name is duplicated',
     rationale:
-      'Durable runtime target names are persisted as routing identities. Each flow or runtime task name must resolve to exactly one target so resumed work wakes the intended code.',
+      'Durable runtime target names are persisted as routing identities. Each flow or durable task name must resolve to exactly one target so resumed work wakes the intended code.',
     impact:
       'Duplicate target names make generated runtime artifacts ambiguous and can block or misroute pending durable work.',
     docsSlug: 'runtime-duplicate-target-name',
@@ -880,7 +880,7 @@ export const indexLintRules = {
       {
         title: 'Rename one runtime target',
         description:
-          'Give each flow() or runtime task() declaration a distinct literal name, then run crux runtime generate.',
+          'Give each flow() or durableTask() declaration a distinct literal name, then run crux runtime generate.',
         kind: 'manual',
         command: 'crux runtime generate',
       },
@@ -902,7 +902,8 @@ export const indexLintRules = {
     fixes: [
       {
         title: 'Use a literal durable name',
-        description: 'Change flow(name, ...) or task(name, ...) to a literal string name and regenerate runtime artifacts.',
+        description:
+          'Change flow(name, ...) or durableTask(name, ...) to a literal string name and regenerate runtime artifacts.',
         kind: 'manual',
         command: 'crux runtime generate',
       },
@@ -941,14 +942,14 @@ export const indexLintRules = {
     profiles: ['recommended', 'strict'],
     title: 'Durable defer target is an inline closure',
     rationale:
-      'Durable background work must name a runtime task target so Crux can import and wake it in a later process. Inline closures are request-scoped code, not durable targets.',
+      'Durable background work must name a durable task target so Crux can import and wake it in a later process. Inline closures are request-scoped code, not durable targets.',
     impact: 'The deferred work cannot be represented in generated runtime artifacts or resumed after process exit.',
     docsSlug: 'runtime-closure-defer',
     fixes: [
       {
-        title: 'Use a named runtime task',
+        title: 'Use a named durable task',
         description:
-          'Move the closure into an exported task() from @use-crux/core/runtime, or use request-scoped defer(callback) when RFC #135 lands.',
+          'Move the closure into an exported durableTask() from @use-crux/core/runtime, or use request-scoped defer(callback) when RFC #135 lands.',
         kind: 'manual',
         docsUrl: 'https://github.com/use-crux/crux/issues/135',
       },

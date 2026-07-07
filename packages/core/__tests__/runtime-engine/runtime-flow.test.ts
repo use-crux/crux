@@ -3,7 +3,7 @@ import { config, flow } from '@use-crux/core'
 import {
   createRuntime,
   node,
-  task,
+  durableTask,
   type FlowId,
   type RuntimeTargetId,
   type WorkId,
@@ -24,7 +24,7 @@ describe('runtime-backed flows', () => {
     })
     const crux = config({ runtime })
     const embedded: unknown[] = []
-    const embedDocument = task('embed-document', {
+    const embedDocument = durableTask('embed-document', {
       run: async (input: { documentId: string }) => {
         embedded.push(input)
       },
@@ -78,7 +78,7 @@ describe('runtime-backed flows', () => {
     })
     const crux = config({ runtime })
     const reminders: unknown[] = []
-    const sendReminder = task('send-reminder', {
+    const sendReminder = durableTask('send-reminder', {
       run: async (input: { userId: string }) => {
         reminders.push(input)
       },
@@ -127,7 +127,7 @@ describe('runtime-backed flows', () => {
     })
     const crux = config({ runtime })
     const embedded: unknown[] = []
-    const embedDocument = task('embed-for-idle', {
+    const embedDocument = durableTask('embed-for-idle', {
       run: async (input: { documentId: string }) => {
         embedded.push(input)
       },
@@ -305,7 +305,7 @@ describe('runtime-backed flows', () => {
 
   it('throws the standard runtime-required diagnostic for runtime-only flow APIs', async () => {
     const crux = config({})
-    const embedDocument = task('missing-runtime-embed', {
+    const embedDocument = durableTask('missing-runtime-embed', {
       run: async (_input: { documentId: string }) => undefined,
     })
     const reviewFlow = flow('review', async (scope) => {

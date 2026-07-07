@@ -6,7 +6,7 @@ import {
   genericQueue,
   inMemoryRuntimeStore,
   serverless,
-  task,
+  durableTask,
   wakeEnvelopeForWork,
   type RuntimeWakeMessage,
   type TaskId,
@@ -18,7 +18,7 @@ describe('HTTP wake HMAC verification', () => {
     const store = inMemoryRuntimeStore()
     const delivered: RuntimeWakeMessage[] = []
     let executed = 0
-    const embedDocument = task('hmac-verified-task', {
+    const embedDocument = durableTask('hmac-verified-task', {
       run: () => {
         executed += 1
       },

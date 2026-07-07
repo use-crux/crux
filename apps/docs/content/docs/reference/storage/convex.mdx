@@ -13,7 +13,6 @@ import {
   createContextHandler,
   createCruxConvex,
   createConvexTransport,
-  createConvexRuntimeBridge,
   convexRecordStore,
   convexVectorStore,
   convexStorage,
@@ -136,25 +135,6 @@ export const crux = createCruxConvex({
   },
 })
 ```
-
-### `createConvexRuntimeBridge(options)`
-
-Create only the Crux-in-Convex runtime bridge: request-scoped storage creation, ambient runtime binding, namespace defaults, and Runtime Bridge HTTP setup. Use this when custom Convex actions or normal Convex Agent-shaped code need Crux runtime plumbing without adopting the profile-backed `convexAgent()` helper.
-
-```ts
-import { createConvexRuntimeBridge } from '@use-crux/convex'
-import { components } from './_generated/api'
-
-export const runtime = createConvexRuntimeBridge({
-  component: components.crux,
-})
-
-await runtime.run(ctx, { threadId }, async ({ records }) => {
-  await records.put(`blackboard:${threadId}`, { status: 'ready' })
-})
-```
-
-`createCruxConvex()` delegates its `storage()`, `run()`, and `bridge()` methods to this lower-level bridge. Prefer the profile when you also want `crux.convexAgent()` to own prompt resolution, memory, skills, tools, and post-turn persistence.
 
 ### `convexRecordStore(config)`
 

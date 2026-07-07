@@ -86,18 +86,18 @@ describe('first-party Phase 7 flow native fixtures', () => {
   )
 
   itWithRustOxc(
-    'emits exact native runtime task facts from Rust/Oxc records',
+    'emits exact native durable task facts from Rust/Oxc records',
     async () => {
       const source = [
-        "import { task } from '@use-crux/core/runtime'",
+        "import { durableTask } from '@use-crux/core/runtime'",
         '',
-        "export const embedDocument = task('embed-document', {",
+        "export const embedDocument = durableTask('embed-document', {",
         '  run: async (input: { documentId: string }) => input.documentId,',
         '})',
       ].join('\n')
       const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
         source,
-        callNames: ['task'],
+        callNames: ['durableTask'],
       })
 
       expect(nativeFactCount(record, 'runtime.task')).toBe(1)
@@ -107,7 +107,7 @@ describe('first-party Phase 7 flow native fixtures', () => {
   )
 
   itWithRustOxc(
-    'does not emit runtime task facts for task lookalikes from other modules',
+    'does not emit durable task facts for task lookalikes from other modules',
     async () => {
       const source = [
         "import { task as planTask } from '@use-crux/core/plan'",
@@ -116,7 +116,7 @@ describe('first-party Phase 7 flow native fixtures', () => {
       ].join('\n')
       const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
         source,
-        callNames: ['task'],
+        callNames: ['durableTask'],
       })
 
       expect(nativeFactCount(record, 'runtime.task')).toBe(0)

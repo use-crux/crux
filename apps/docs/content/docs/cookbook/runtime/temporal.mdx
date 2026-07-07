@@ -11,10 +11,11 @@ Keep user code in Crux terms. A future adapter can discover these exported targe
 
 ```ts
 import { flow } from '@use-crux/core/flow'
-import { task } from '@use-crux/core/runtime'
+import { durableTask, type RuntimeTaskContext } from '@use-crux/core/runtime'
 
-export const chargeCustomer = task('charge-customer', {
-  run: async ({ invoiceId }: { invoiceId: string }) => {
+export const chargeCustomer = durableTask('charge-customer', {
+  run: async (input: { invoiceId: string }, _context: RuntimeTaskContext) => {
+    const { invoiceId } = input
     await billing.charge(invoiceId)
   },
 })
@@ -63,7 +64,7 @@ export async function invoiceWorkflow(input: { invoiceId: string }) {
 
 ## Worker activity sketch
 
-The activity resolves a Crux runtime task target by durable target name. A real adapter should use generated artifacts rather than a hand-written map.
+The activity resolves a Crux durable task target by durable target name. A real adapter should use generated artifacts rather than a hand-written map.
 
 ```ts
 import { Worker } from '@temporalio/worker'

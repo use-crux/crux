@@ -1,7 +1,7 @@
 import {
   CruxRuntimeError,
   encodeWakeEnvelope,
-  task,
+  durableTask,
   type RuntimeTargetId,
   type WakeEnvelope,
   type WorkId,
@@ -26,7 +26,7 @@ const component = {
 
 describe('createConvexRuntimeHandlers()', () => {
   it('creates operational internal handler names for generated Convex entries', () => {
-    const embedDocument = task('embed-document', {
+    const embedDocument = durableTask('embed-document', {
       run: async () => undefined,
     })
 
@@ -43,8 +43,8 @@ describe('createConvexRuntimeHandlers()', () => {
   })
 
   it('rejects duplicate durable target names', () => {
-    const first = task('embed-document', { run: async () => undefined })
-    const second = task('embed-document', { run: async () => undefined })
+    const first = durableTask('embed-document', { run: async () => undefined })
+    const second = durableTask('embed-document', { run: async () => undefined })
 
     expect(() =>
       createConvexRuntimeHandlers({
@@ -119,7 +119,7 @@ describe('createConvexRuntimeHandlers()', () => {
   })
 
   it('creates a Node target executor action for generated target modules', () => {
-    const embedDocument = task('embed-document', {
+    const embedDocument = durableTask('embed-document', {
       run: async () => undefined,
     })
 

@@ -655,7 +655,7 @@ Corpus and indexing observability write the canonical graph directly. `indexer()
 
 ## Durable Runtime Engine
 
-The durable Runtime Engine lives under `runtime/` and is provider-agnostic. Public users compose it through `@use-crux/core/runtime` (`node()`, `serverless()`, `createRuntimeHandler()`, `task()`, diagnostics, wake envelopes, and adapter conformance helpers). Provider packages such as `@use-crux/postgres`, `@use-crux/upstash`, and `@use-crux/convex` depend on this surface; core never imports those adapters. The Runtime Engine and store-adapter contract are still experimental until the stabilization work upgrades them to stable beta in `STABILITY.md`.
+The durable Runtime Engine lives under `runtime/` and is provider-agnostic. Public users compose it through `@use-crux/core/runtime` (`node()`, `serverless()`, `createRuntimeHandler()`, `durableTask()`, diagnostics, wake envelopes, and adapter conformance helpers). Provider packages such as `@use-crux/postgres`, `@use-crux/upstash`, and `@use-crux/convex` depend on this surface; core never imports those adapters. The Runtime Engine and store-adapter contract are still experimental until the stabilization work upgrades them to stable beta in `STABILITY.md`.
 
 Correctness is centralized in the kernel modules under `runtime/engine/`: task enqueue, suspension/event delivery, timer firing, retry/dead-letter policy, operator retry, cancellation, outbox dispatch, idempotency keys, and wake execution. Stores implement narrow ports only (`state`, `events`, `waiters`, `timers`, `outbox`, `leases`, idle counters, and `transact()`); adapters must not duplicate policy decisions such as retry timing, waiter timeout behavior, or terminal-state handling.
 

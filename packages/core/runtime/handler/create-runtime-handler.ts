@@ -35,7 +35,7 @@ export type { RuntimeHandlerTarget } from './targets'
 
 /** Options for {@link createRuntimeHandler}. */
 export interface CreateRuntimeHandlerOptions {
-  /** Exported `flow()` handles and runtime `task()` targets. */
+  /** Exported `flow()` handles and `durableTask()` targets. */
   readonly targets: readonly RuntimeHandlerTarget[]
   /** Runtime composer. Defaults to the globally configured `config({ runtime })`. */
   readonly runtime?: RuntimeEngineDefinition

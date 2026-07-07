@@ -59,9 +59,9 @@ Convex scheduler calls these handlers for wake, signal, resume, task, and timer 
 The generated component includes `runtime.composites.run`. The Convex store adapter routes each named Runtime Engine composite through that single mutation, so task enqueue, event delivery, wake completion, retry/failure, cancellation, and maintenance commits are atomic in Convex while still using the core kernel's shared composite bodies.
 
 When app code starts runtime-backed work directly from a Convex action, wrap the
-call in `createCruxConvex(...).run(ctx, target, fn)` or the equivalent
-`createConvexRuntimeBridge(...).run(...)` helper. The bridge binds the current
-Convex `ctx`, component refs, and scheduler before core starts the durable flow.
+call in `createCruxConvex(...).run(ctx, target, fn)`. The profile binds the
+current Convex `ctx`, component refs, and scheduler before core starts the
+durable flow.
 
 ## Rules
 

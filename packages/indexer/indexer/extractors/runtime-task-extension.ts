@@ -1,9 +1,9 @@
 import { facts, type IndexExtractor } from '../extensions'
 
-/** Extracts executable Runtime Engine `task(...)` targets from `@use-crux/core/runtime`. */
+/** Extracts executable Runtime Engine `durableTask(...)` targets from `@use-crux/core/runtime`. */
 export const runtimeTaskIndexExtractor: IndexExtractor = {
   name: 'runtime.task',
-  patterns: [{ kind: 'call', name: 'task', importFrom: ['@use-crux/core/runtime'] }],
+  patterns: [{ kind: 'call', name: 'durableTask', importFrom: ['@use-crux/core/runtime'] }],
   extract: (ctx) => {
     const explicitName = ctx.args.string(0)
     const targetName = explicitName ?? ctx.source.variableName

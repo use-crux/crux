@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
+import * as runtimePublic from '@use-crux/core/runtime'
 import {
   createOutboxDispatcher,
   createRuntime,
   createRuntimeKernel,
+  durableTask,
   inMemoryRuntimeStore,
   node,
   runtimeRequiredError,
@@ -20,6 +22,8 @@ describe('@use-crux/core runtime store public surface', () => {
     expect(typeof createRuntimeKernel).toBe('function')
     expect(typeof createOutboxDispatcher).toBe('function')
     expect(typeof createRuntime).toBe('function')
+    expect(typeof durableTask).toBe('function')
+    expect('task' in runtimePublic).toBe(false)
     expect(typeof node).toBe('function')
     expect(typeof runtimeRequiredError).toBe('function')
     expect(typeof runStoreAdapterTests).toBe('function')

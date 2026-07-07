@@ -422,7 +422,7 @@ export function cloneRuntimeWork(work: RuntimeWork): RuntimeWork {
         input:
           work.input === undefined
             ? undefined
-            : cloneJsonValue(work.input, 'runtime task input'),
+            : cloneJsonValue(work.input, 'durable task input'),
       }
     case 'watch.deliver':
       return {

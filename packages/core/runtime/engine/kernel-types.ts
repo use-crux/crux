@@ -64,7 +64,7 @@ export interface RuntimeTargetContext {
 
 /** Runtime target entry supplied by hand-written or generated handlers. */
 export interface RuntimeTarget {
-  /** Durable target id from `flow("name")` or future `task("name")`. */
+  /** Durable target id from `flow("name")` or `durableTask("name")`. */
   readonly targetId: RuntimeTargetId
   /** Target kind used for diagnostics and future flow replay routing. */
   readonly kind: 'flow' | 'task'

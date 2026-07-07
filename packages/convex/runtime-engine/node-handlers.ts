@@ -47,7 +47,7 @@ export interface CreateConvexRuntimeTargetExecutorOptions extends Omit<
   CreateConvexRuntimeHandlersOptions,
   'targetExecutor' | 'targets'
 > {
-  /** Exported Convex `flow()` handles, core `flow()` handles, and runtime `task()` targets. */
+  /** Exported Convex `flow()` handles, core `flow()` handles, and `durableTask()` targets. */
   readonly targets: readonly RuntimeHandlerTarget[]
 }
 

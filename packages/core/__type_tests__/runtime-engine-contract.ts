@@ -13,7 +13,9 @@ import type {
   HostBoundRuntimeEngineDefinition,
   InMemoryRuntimeStore,
   InProcessRuntimeEngineDefinition,
+  LeaseToken,
   ResolvedRuntimeEngine,
+  RuntimeTaskContext,
   RuntimeTaskTarget,
   RuntimeKernel,
   RuntimeEngineDefinition,
@@ -34,7 +36,7 @@ import {
   node,
   runtimeRequiredError,
   runWithRuntimeHost,
-  task,
+  durableTask,
   taskRunKey,
   waiterTimeoutKey,
 } from '@use-crux/core/runtime'
@@ -82,15 +84,23 @@ for (const work of workItems) {
 const badTaskWork: RuntimeWork = { kind: 'task.run', taskId: flowId, targetId }
 void badTaskWork
 
-const runtimeTask = task('embed-document', {
+const runtimeTask = durableTask('embed-document', {
   run: async (input: { documentId: string }) => input.documentId,
 })
-expectTypeOf(runtimeTask).toMatchTypeOf<RuntimeTaskTarget<{ documentId: string }, string>>()
+expectTypeOf(runtimeTask).toMatchTypeOf<RuntimeTaskTarget<{ documentId: string }>>()
 expectTypeOf(runtimeTask.kind).toEqualTypeOf<'task'>()
 const ledgerTask = planTask('Draft launch plan')
 // @ts-expect-error Plans & Tasks ledger specs are not executable runtime targets.
 const wrongRuntimeTask: RuntimeTaskTarget = ledgerTask
 void wrongRuntimeTask
+
+const documentedDurableTask = durableTask('documented-embed-document', {
+  run: async (input: { documentId: string }, context: RuntimeTaskContext) => {
+    expectTypeOf(context.lease.token).toEqualTypeOf<LeaseToken>()
+    return input.documentId
+  },
+})
+expectTypeOf(documentedDurableTask).toMatchTypeOf<RuntimeTaskTarget<{ documentId: string }>>()
 
 expectTypeOf(inMemoryRuntimeStore()).toMatchTypeOf<RuntimeStoreAdapter>()
 

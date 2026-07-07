@@ -134,13 +134,13 @@ const approval = await flow.waitFor(
 
 ### `defer(task, input)`
 
-Buffer an executable runtime task to run independently. The task becomes durable at the next suspension or completion barrier, so replay cannot enqueue it twice.
+Buffer an executable durable task to run independently. The task becomes durable at the next suspension or completion barrier, so replay cannot enqueue it twice.
 
 ```ts
 const { workId } = await flow.defer(embedDocument, { documentId })
 ```
 
-The target must be a runtime `task()` from `@use-crux/core/runtime`, not a plan-ledger task.
+The target must be a `durableTask()` from `@use-crux/core/runtime`, not a plan-ledger task.
 
 ### `after(task, delay, input)`
 

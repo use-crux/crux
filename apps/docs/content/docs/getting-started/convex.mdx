@@ -169,7 +169,7 @@ It keeps the Convex Agent call shape while Crux handles the request-scoped lifec
 
 Use `languageModel` for new `convexAgent()` code to match Convex Agent terminology; `model` remains accepted for existing call sites.
 
-Use `createConvexRuntimeBridge()` when custom actions or normal Convex Agent-shaped code need the Crux runtime/storage/bridge without the profile-backed agent helper.
+Use `crux.run(ctx, target, fn)` when custom actions or normal Convex Agent-shaped code need the profile's Crux runtime, storage, and bridge plumbing.
 
 ## Action timeouts
 

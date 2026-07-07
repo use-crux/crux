@@ -11,7 +11,7 @@ pub(crate) fn runtime_task_facts(
     context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
 ) -> Option<Value> {
-    if parts.callee_name != "task"
+    if parts.callee_name != "durableTask"
         || parts.callee_direct == Some(false)
         || parts.callee_module_specifier != Some("@use-crux/core/runtime")
     {

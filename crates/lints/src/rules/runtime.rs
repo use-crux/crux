@@ -154,7 +154,7 @@ fn flow_runtime_usage_findings(
                 &format!("{}:defer:{}", flow.id, index),
                 flow,
                 format!(
-                    "Flow \"{}\" passes an inline closure to flow.defer(). Durable background work must use an exported runtime task target.",
+                    "Flow \"{}\" passes an inline closure to flow.defer(). Durable background work must use an exported durable task target.",
                     flow.name
                 ),
                 "Flow uses flow.defer with an inline closure target",

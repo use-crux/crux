@@ -141,7 +141,7 @@ import { memory, workingState, episodes, facts, procedures } from '@use-crux/cor
 import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@use-crux/core/compaction'
 import { agent, blackboard, handoff, delegate } from '@use-crux/core/agent'
 import { flow, signalFlow, cancelFlow, listFlows, createFlowId } from '@use-crux/core/flow'
-import { node, serverless, createRuntimeHandler, task as runtimeTask } from '@use-crux/core/runtime'
+import { node, serverless, createRuntimeHandler, durableTask } from '@use-crux/core/runtime'
 import { plan } from '@use-crux/core/plan'
 import { task, tasks } from '@use-crux/core/tasks'
 import { skill } from '@use-crux/core/skill'

@@ -506,10 +506,11 @@ Executable durable task targets are defined from the runtime subpath, not the
 root Plans & Tasks ledger `task()` helper:
 
 ```ts
-import { task } from "@use-crux/core/runtime";
+import { durableTask, type RuntimeTaskContext } from "@use-crux/core/runtime";
 
-export const embedDocument = task("embed-document", {
-  run: async ({ documentId }: { documentId: string }) => {
+export const embedDocument = durableTask("embed-document", {
+  run: async (input: { documentId: string }, _context: RuntimeTaskContext) => {
+    const { documentId } = input;
     await embed(documentId);
   },
 });

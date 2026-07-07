@@ -4,6 +4,7 @@
 "@use-crux/convex": minor
 "@use-crux/ai": minor
 "@use-crux/otel": minor
+"@use-crux/indexer": minor
 ---
 
 Declare `@use-crux/core/runtime` and its store-adapter contract experimental while Runtime Engine stabilization continues.
@@ -21,3 +22,5 @@ Add named Runtime Engine composite commits and the optional store-adapter `runCo
 Make `config()` lifecycle-safe by installing one hook layer per active config, replacing the previous active config on repeat calls, and keeping independent layers such as imperative devtools intact when a config is disposed.
 
 Hard-rename the global hook-store API from the runtime family to the hooks family: `CruxHooks`, `getHooks()`, `setHooks()`, `updateHooks()`, `resetHooks()`, and `mergeHooks()`. The old hook-store names are removed with no deprecated aliases so Runtime Engine terminology can stay unambiguous.
+
+Rename the Runtime Engine task target factory from `task()` to `durableTask()` and remove the dead task output generic. Project Index runtime target discovery and lint guidance now recognize `durableTask()` declarations. Remove `createConvexRuntimeBridge` from the public `@use-crux/convex` root and package subpath; use `createCruxConvex().run()`, `.storage()`, and `.bridge()` as the single Convex entry point.

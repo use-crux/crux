@@ -33,7 +33,7 @@ const internalMutation = internalMutationGeneric as ConvexMutationBuilder
 export interface CreateConvexRuntimeHandlersOptions {
   /** Crux Convex component refs, normally `components.crux`. */
   readonly component: ConvexRuntimeComponent
-  /** Exported `flow()` handles and runtime `task()` targets for hand-written inline entries. */
+  /** Exported `flow()` handles and `durableTask()` targets for hand-written inline entries. */
   readonly targets?: readonly RuntimeHandlerTarget[]
   /**
    * Convex action reference that executes target code.

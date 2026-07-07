@@ -135,7 +135,7 @@ export type {
 export { runtimeTargetMap } from './api/target-registry'
 export type { RuntimeTargetRuntimeRef } from './api/target-registry'
 
-export { task } from './api/task'
+export { durableTask } from './api/task'
 export type {
   RuntimeTaskContext,
   RuntimeTaskInput,

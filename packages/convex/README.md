@@ -45,7 +45,6 @@ The mirrored subpaths intentionally stay close to `@use-crux/core`:
 | `@use-crux/convex/tools`      | Convex-bound drop-in | Same tool authoring shape; `execute()` receives Convex runtime metadata.                                         |
 | `convexAgent()`               | Convex-only API      | Profile-backed helper that resolves a Crux prompt per Convex Agent turn.                                         |
 | `createCruxConvex()`          | Convex-only API      | Creates a reusable Convex runtime profile from `components.crux` and `components.agent`.                         |
-| `createConvexRuntimeBridge()` | Convex-only API      | Creates the Crux-in-Convex runtime bridge without the Convex Agent profile helper.                               |
 
 Avoid split imports inside Convex files when a Convex profile exists. For example, import memory blocks from `@use-crux/convex/memory`, not `memory` from `@use-crux/convex/memory` plus `recentMessages` from `@use-crux/core/memory`.
 
@@ -99,29 +98,6 @@ export const crux = createCruxConvex({
 ```
 
 Profile-backed agent calls through `convexAgent()` install the runtime automatically.
-
-### `createConvexRuntimeBridge(options)`
-
-Create only the Crux-in-Convex runtime bridge: request-scoped storage creation, runtime binding, namespace defaults, and Runtime Bridge HTTP setup. Use this when you want normal Convex Agent APIs or custom Convex actions to share Crux runtime plumbing without using the profile-backed `convexAgent()` helper.
-
-```ts
-import { createConvexRuntimeBridge } from '@use-crux/convex'
-import { components } from './_generated/api'
-
-export const runtime = createConvexRuntimeBridge({
-  component: components.crux,
-})
-
-await runtime.run(ctx, { threadId }, async ({ records }) => {
-  await records.put(`blackboard:${threadId}`, { status: 'ready' })
-})
-```
-
-Direct starts of runtime-backed flows or name-bound controls should run inside
-this boundary too. That lets Crux bind the current Convex `ctx`, component refs,
-and scheduler before the durable runtime path starts.
-
-If you also want the profile-backed Crux prompt lifecycle, prefer `createCruxConvex()`. Its `storage()`, `run()`, and `bridge()` methods delegate to this lower-level runtime bridge.
 
 ### Runtime Engine host
 

@@ -7,7 +7,7 @@ import {
   inMemoryRuntimeStore,
   node,
   serverless,
-  task,
+  durableTask,
   wakeEnvelopeForWork,
   type TaskId,
   type WorkId,
@@ -89,7 +89,7 @@ describe('createRuntimeHandler', () => {
   it('rejects unverified wake requests before durable writes or target execution', async () => {
     const store = inMemoryRuntimeStore()
     let executed = false
-    const embedDocument = task('embed-document', {
+    const embedDocument = durableTask('embed-document', {
       run: () => {
         executed = true
       },
@@ -165,7 +165,7 @@ describe('createRuntimeHandler', () => {
   it('maps processed, duplicate, and busy kernel outcomes to the HTTP protocol', async () => {
     const store = inMemoryRuntimeStore()
     const seenInputs: unknown[] = []
-    const embedDocument = task('embed-document-http-status', {
+    const embedDocument = durableTask('embed-document-http-status', {
       run: (input: { documentId: string }) => {
         seenInputs.push(input)
       },
@@ -232,8 +232,8 @@ describe('createRuntimeHandler', () => {
 
   it('throws TARGET_DUPLICATE when an entry file exposes the same target twice', () => {
     const store = inMemoryRuntimeStore()
-    const first = task('duplicate-runtime-target', { run: () => undefined })
-    const second = task('duplicate-runtime-target', { run: () => undefined })
+    const first = durableTask('duplicate-runtime-target', { run: () => undefined })
+    const second = durableTask('duplicate-runtime-target', { run: () => undefined })
 
     expect(() =>
       createRuntimeHandler({
@@ -284,7 +284,7 @@ describe('createRuntimeHandler', () => {
 
   it('uses the configured wake adapter verifier when no override is supplied', async () => {
     const store = inMemoryRuntimeStore()
-    const embedDocument = task('verified-by-wake-adapter', {
+    const embedDocument = durableTask('verified-by-wake-adapter', {
       run: () => undefined,
     })
     const runtime = serverless({

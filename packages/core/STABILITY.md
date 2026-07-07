@@ -30,7 +30,7 @@ experimental status unless their own subpath documentation says otherwise.
 
 The durable Runtime Engine and its runtime store adapter contract are
 experimental in this release line. This includes `node()`, `serverless()`,
-`genericQueue()`, `createRuntimeHandler()`, runtime `task()` targets, wake
+`genericQueue()`, `createRuntimeHandler()`, `durableTask()` targets, wake
 envelopes, diagnostics, `RuntimeStoreAdapter`, and the runtime conformance
 suites under `@use-crux/core/runtime/testing`.
 

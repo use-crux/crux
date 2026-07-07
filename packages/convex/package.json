@@ -69,10 +69,6 @@
       "types": "./runtime-node.ts",
       "import": "./runtime-node.ts"
     },
-    "./runtime-bridge": {
-      "types": "./runtime-bridge.ts",
-      "import": "./runtime-bridge.ts"
-    },
     "./workspace": {
       "types": "./workspace.ts",
       "import": "./workspace.ts"

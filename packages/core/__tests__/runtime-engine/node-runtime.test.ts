@@ -6,7 +6,7 @@ import {
   inMemoryRuntimeStore,
   node,
   runWithRuntimeHost,
-  task,
+  durableTask,
   type FlowId,
   type HostBoundRuntimeEngineDefinition,
   type RuntimeTargetId,
@@ -80,14 +80,14 @@ describe('node() Runtime Engine composer', () => {
     ).resolves.toMatchObject({ status: 'completed', output: 'doc_1' })
   })
 
-  it('runs executable runtime task targets with persisted JSON input', async () => {
+  it('runs executable durable task targets with persisted JSON input', async () => {
     let nextWork = 0
     const runtimeDefinition = node({
       namespace: 'tenant-a',
       autoStartMaintenance: false,
     })
     const seenInputs: unknown[] = []
-    const embedDocument = task('embed-document', {
+    const embedDocument = durableTask('embed-document', {
       run: async (input: { documentId: string }) => {
         seenInputs.push(input)
       },
@@ -110,7 +110,7 @@ describe('node() Runtime Engine composer', () => {
     runtime.dispose()
   })
 
-  it('runs task, event, timer, cancellation, and scoped-idle paths in-process', async () => {
+  it('runs durableTask, event, timer, cancellation, and scoped-idle paths in-process', async () => {
     let nextWork = 0
     const flowRuns: string[] = []
     const runtimeDefinition = node({

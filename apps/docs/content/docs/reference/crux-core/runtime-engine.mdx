@@ -47,19 +47,20 @@ export default config({
 
 ## Runtime targets
 
-`task(name, { run })` defines executable durable background work. Import it from `@use-crux/core/runtime`; it is intentionally separate from the plan-ledger `task()` exported by `@use-crux/core/tasks`.
+`durableTask(name, { run })` defines executable durable background work. Import it from `@use-crux/core/runtime`; it is intentionally separate from the plan-ledger `task()` exported by `@use-crux/core/tasks`.
 
 ```ts
-import { task } from '@use-crux/core/runtime'
+import { durableTask, type RuntimeTaskContext } from '@use-crux/core/runtime'
 
-export const embedDocument = task('embed-document', {
-  run: async ({ documentId }: { documentId: string }) => {
+export const embedDocument = durableTask('embed-document', {
+  run: async (input: { documentId: string }, _context: RuntimeTaskContext) => {
+    const { documentId } = input
     await embed(documentId)
   },
 })
 ```
 
-Runtime targets must be top-level named exports with literal names so generated entry files can import them. `flow.defer()`, `flow.after()`, and `createRuntimeHandler({ targets })` accept runtime task targets and exported flow handles.
+Runtime targets must be top-level named exports with literal names so generated entry files can import them. `flow.defer()`, `flow.after()`, and `createRuntimeHandler({ targets })` accept durable task targets and exported flow handles.
 
 ## HTTP handler
 
