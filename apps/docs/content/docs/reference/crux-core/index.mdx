@@ -1,5 +1,5 @@
 ---
-title: '@use-crux/core'
+title: "@use-crux/core"
 description: The base Crux package — package overview, config, registry API, and shared utilities.
 ---
 
@@ -27,7 +27,11 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     description="context, when, match, createContexts."
     href="/docs/reference/crux-core/contexts"
   />
-  <Card title="Tools" description="tool and SDK-agnostic ToolDef authoring." href="/docs/reference/crux-core/tools" />
+  <Card
+    title="Tools"
+    description="tool and SDK-agnostic ToolDef authoring."
+    href="/docs/reference/crux-core/tools"
+  />
   <Card
     title="Tool Middleware"
     description="toolMiddleware, approvalMiddleware, resumable approvals."
@@ -73,14 +77,26 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     description="agent, blackboard, handoff, delegate, compositions."
     href="/docs/reference/crux-core/agent"
   />
-  <Card title="Flow" description="flow, signalFlow, cancelFlow, listFlows." href="/docs/reference/crux-core/flow" />
+  <Card
+    title="Flow"
+    description="flow, signalFlow, cancelFlow, listFlows."
+    href="/docs/reference/crux-core/flow"
+  />
   <Card
     title="Runtime Engine"
     description="node, serverless, createRuntimeHandler, durableTask, runtime diagnostics, and testing helpers."
     href="/docs/reference/crux-core/runtime-engine"
   />
-  <Card title="Plan" description="plan, plan handles, list, ref, and creation tools." href="/docs/reference/crux-core/plan" />
-  <Card title="Tasks" description="tasks, task, task-ledger handles, and workers." href="/docs/reference/crux-core/tasks" />
+  <Card
+    title="Plan"
+    description="plan, plan handles, list, ref, and creation tools."
+    href="/docs/reference/crux-core/plan"
+  />
+  <Card
+    title="Tasks"
+    description="tasks, task, task-ledger handles, and workers."
+    href="/docs/reference/crux-core/tasks"
+  />
   <Card
     title="Skill"
     description="skill.inline, skill.fromRegistry, and Node file loading."
@@ -131,35 +147,103 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
 ## Subpath imports
 
 ```ts
-import { prompt, context, createPrompts, createContexts, config, when, match } from '@use-crux/core'
-import { tool } from '@use-crux/core/tools'
-import { toolMiddleware, approvalMiddleware } from '@use-crux/core/tool-middleware'
-import { adapter, loopRuntimeAdapter, defineProviderRuntime, defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
-import { providerRuntimeConformance, transcriptCodecConformance } from '@use-crux/core/adapter/testing'
-import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
-import { memory, workingState, episodes, facts, procedures } from '@use-crux/core/memory'
-import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@use-crux/core/compaction'
-import { agent, blackboard, handoff, delegate } from '@use-crux/core/agent'
-import { flow, signalFlow, cancelFlow, listFlows, createFlowId } from '@use-crux/core/flow'
-import { node, serverless, createRuntimeHandler, durableTask } from '@use-crux/core/runtime'
-import { plan } from '@use-crux/core/plan'
-import { task, tasks } from '@use-crux/core/tasks'
-import { skill } from '@use-crux/core/skill'
-import { guardrail } from '@use-crux/core/safety'
-import { constraint } from '@use-crux/core/safety'
-import { judge, metrics } from '@use-crux/core/scoring'
-import { constraintScorer, expect, quality, suite, target } from '@use-crux/core/quality'
-import { createSemanticCache, semanticCachePolicies } from '@use-crux/core/cache'
-import { embedding } from '@use-crux/core/embedding'
-import { knowledgeBase, retriever, retrievalRecipe, retrieve, rerank } from '@use-crux/core/retrieval'
-import { grounding, citationSchema } from '@use-crux/core/citations'
-import { corpus, indexer } from '@use-crux/core/indexing'
-import { CruxProvider, usePlan, useTasks, createSSETransport, createPollingTransport } from '@use-crux/react'
-import { cruxSSEHandler } from '@use-crux/react/server'
-import { withDevtools } from '@use-crux/core/observability'
-import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
-import { serializeProjectIndex } from '@use-crux/core/project-index/serializers'
-import type { CruxIndexerConfig, CruxLintConfig, ToolContentPart, ToolModelOutput, ToModelOutputArgs } from '@use-crux/core'
+import {
+  prompt,
+  context,
+  createPrompts,
+  createContexts,
+  config,
+  when,
+  match,
+} from "@use-crux/core";
+import { tool } from "@use-crux/core/tools";
+import {
+  toolMiddleware,
+  approvalMiddleware,
+} from "@use-crux/core/tool-middleware";
+import {
+  adapter,
+  loopRuntimeAdapter,
+  defineProviderRuntime,
+  defineSingleTurnProviderBundle,
+} from "@use-crux/core/adapter";
+import {
+  providerRuntimeConformance,
+  transcriptCodecConformance,
+} from "@use-crux/core/adapter/testing";
+import { describeCruxAdapterConformance } from "@use-crux/core/adapter/testing/vitest";
+import {
+  memory,
+  workingState,
+  episodes,
+  facts,
+  procedures,
+} from "@use-crux/core/memory";
+import {
+  createSlidingWindow,
+  createBudgetManager,
+  extractKeyFacts,
+  summarizeMessages,
+} from "@use-crux/core/compaction";
+import { agent, blackboard, handoff, delegate } from "@use-crux/core/agent";
+import {
+  flow,
+  signalFlow,
+  cancelFlow,
+  listFlows,
+  createFlowId,
+} from "@use-crux/core/flow";
+import {
+  node,
+  serverless,
+  createRuntimeHandler,
+  durableTask,
+} from "@use-crux/core/runtime";
+import { plan } from "@use-crux/core/plan";
+import { task, tasks } from "@use-crux/core/tasks";
+import { skill } from "@use-crux/core/skill";
+import { guardrail } from "@use-crux/core/safety";
+import { constraint } from "@use-crux/core/safety";
+import { judge, metrics } from "@use-crux/core/scoring";
+import {
+  constraintScorer,
+  expect,
+  quality,
+  suite,
+  target,
+} from "@use-crux/core/quality";
+import {
+  createSemanticCache,
+  semanticCachePolicies,
+} from "@use-crux/core/cache";
+import { embedding } from "@use-crux/core/embedding";
+import {
+  knowledgeBase,
+  retriever,
+  retrievalRecipe,
+  retrieve,
+  rerank,
+} from "@use-crux/core/retrieval";
+import { grounding, citationSchema } from "@use-crux/core/citations";
+import { corpus, indexer } from "@use-crux/core/indexing";
+import {
+  CruxProvider,
+  usePlan,
+  useTasks,
+  createSSETransport,
+  createPollingTransport,
+} from "@use-crux/react";
+import { cruxSSEHandler } from "@use-crux/react/server";
+import { withDevtools } from "@use-crux/core/observability";
+import type { ProjectIndexSnapshot } from "@use-crux/core/project-index";
+import { serializeProjectIndex } from "@use-crux/core/project-index/serializers";
+import type {
+  CruxIndexerConfig,
+  CruxLintConfig,
+  ToolContentPart,
+  ToolModelOutput,
+  ToModelOutputArgs,
+} from "@use-crux/core";
 ```
 
 ## Tooling Config
@@ -180,28 +264,28 @@ Crux APIs are designed to preserve inference across composition. Context input s
 const brand = context({
   input: z.object({ brandVoice: z.string() }),
   system: ({ input }) => `Voice: ${input.brandVoice}`,
-})
+});
 
 const answer = prompt({
   use: [brand],
   input: z.object({ question: z.string() }),
   system: ({ input }) => input.question,
-})
+});
 
 answer.resolve({
   input: {
-    question: 'How do refunds work?',
-    brandVoice: 'Concise and direct',
+    question: "How do refunds work?",
+    brandVoice: "Concise and direct",
   },
-})
+});
 
 const tools = docs.asTools({
-  prefix: 'docs',
-  include: ['search', 'getSource'],
-})
+  prefix: "docs",
+  include: ["search", "getSource"],
+});
 
-tools.docsSearch
-tools.docsGetSource
+tools.docsSearch;
+tools.docsGetSource;
 ```
 
 `@use-crux/core` also has a package-local `typecheck` task that runs strict TypeScript plus compile-time API tests. New production `any` usage is blocked by an explicit-`any` checker; existing legacy entries are tracked as debt and should only shrink.
@@ -220,7 +304,7 @@ For defaults, stability notes, and every nested option, see [Config](/docs/refer
 | `lint`                        | `CruxLintConfig`           | Project Index lint profile and rule overrides.                                       |
 | `indexer`                     | `CruxIndexerConfig`        | Extension references, extension trust policy, and indexer rule options.              |
 | `experimental`                | `CruxExperimentalConfig`   | Unstable opt-in tooling features such as the TypeScript-Go semantic indexer backend. |
-| `persistence.records`         | `RecordStore`                | Explicit runtime persistence for flows, plans, and bridge reads.                     |
+| `persistence.records`         | `RecordStore`              | Explicit runtime persistence for flows, plans, and bridge reads.                     |
 | `generation.middleware`       | `PromptMiddleware`         | Global generate/stream wrapper.                                                      |
 | `generation.tokenizer`        | `(text: string) => number` | Custom token counting.                                                               |
 | `generation.autoEscape`       | `boolean`                  | Auto-escape top-level XML-like user input fields. Defaults to `true`.                |
@@ -236,9 +320,9 @@ before applying the new one, which keeps hot reload from stacking middleware or 
 hook fan-out. `dispose()` restores only the hook layer installed by that config; independent layers
 such as imperative devtools remain active.
 
-| Member | Description |
-| --- | --- |
-| `.config` | `Readonly<CruxConfig>` |
+| Member       | Description                                                                              |
+| ------------ | ---------------------------------------------------------------------------------------- |
+| `.config`    | `Readonly<CruxConfig>`                                                                   |
 | `.dispose()` | Tear down the Runtime Bridge and restore this config's hooks, plugins, and observability |
 
 Observability capture controls live under `observability`:
@@ -249,7 +333,7 @@ config({
     recordInputs: false,
     recordOutputs: false,
   },
-})
+});
 ```
 
 Both default to `true`. When disabled, matching artifacts keep `sizeBytes` and `hash` but omit inline previews.
@@ -269,21 +353,21 @@ Both default to `true`. When disabled, matching artifacts keep `sizeBytes` and `
 ## Plugin system
 
 ```ts
-import type { CruxPlugin, CruxHooks, CruxPluginResult } from '@use-crux/core'
-import { mergeHooks, applyPlugins } from '@use-crux/core'
+import type { CruxPlugin, CruxHooks, CruxPluginResult } from "@use-crux/core";
+import { mergeHooks, applyPlugins } from "@use-crux/core";
 ```
 
 ### `CruxPlugin`
 
-| Field     | Type                                                   | Description                      |
-| --------- | ------------------------------------------------------ | -------------------------------- |
-| `name`    | `string`                                               | Unique plugin name for debugging |
+| Field     | Type                                               | Description                       |
+| --------- | -------------------------------------------------- | --------------------------------- |
+| `name`    | `string`                                           | Unique plugin name for debugging  |
 | `install` | `(hooks: Readonly<CruxHooks>) => CruxPluginResult` | Install hooks into the hook store |
 
 `CruxPluginResult` extends `Partial<CruxHooks>` with optional `dispose?: () => void`.
 
-| Built-in plugin           | Package                                             |
-| ------------------------- | --------------------------------------------------- |
+| Built-in plugin           | Package                                                 |
+| ------------------------- | ------------------------------------------------------- |
 | `withDevtools(options)`   | `@use-crux/core/observability` — name `'crux:devtools'` |
 | `withTelemetry(options?)` | `@use-crux/otel` — name `'crux:otel'`                   |
 
@@ -302,8 +386,8 @@ Process an ordered list of plugins. Returns `{ hooks, dispose }`.
 ## Observability context
 
 ```ts
-import { observe } from '@use-crux/core/observability'
-import { withSession, createSessionId, createFlowId } from '@use-crux/core'
+import { observe } from "@use-crux/core/observability";
+import { withSession, createSessionId, createFlowId } from "@use-crux/core";
 ```
 
 ### `withSession(sessionId, fn)`
@@ -330,46 +414,61 @@ Snapshot and restore observability context across async boundaries. In Convex, p
 ## Model fallback
 
 ```ts
-import { fallback, isFallback, classifyError, shouldAttemptFallback } from '@use-crux/core'
+import {
+  fallback,
+  isFallback,
+  classifyError,
+  shouldAttemptFallback,
+} from "@use-crux/core";
 ```
 
-### `fallback(...models, options?)`
+### `fallback(models, options?)`
 
 Wraps multiple models into a single reference that tries each in order on qualifying failure.
 
 ```ts
-const model = fallback(gpt4o, claudeSonnet)
-const model = fallback(gpt4o, claudeSonnet, { on: ['rate_limit', 'timeout'], timeout: 10_000 })
+const model = fallback([gpt4o, claudeSonnet]);
+const model = fallback([gpt4o, claudeSonnet], {
+  on: ["rate_limit", "timeout"],
+  timeout: { attempt: 10_000, firstToken: 2_000 },
+});
 ```
 
-| Option           | Type                               | Description                                      |
-| ---------------- | ---------------------------------- | ------------------------------------------------ |
-| `on`             | `ErrorCategory[]?`                 | Which categories trigger fallback (default: all) |
-| `shouldFallback` | `(error: Error) => boolean?`       | Custom predicate (takes priority over `on`)      |
-| `timeout`        | `number?`                          | Per-attempt timeout in ms                        |
-| `onAttemptError` | `(error, attempt, model) => void?` | Called on each failed attempt                    |
+| Option           | Type                                      | Description                                                                                  |
+| ---------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------- |
+| `id`             | `string?`                                 | Stable id for Project Index and trace joins                                                  |
+| `description`    | `string?`                                 | Human-readable label for docs/devtools                                                       |
+| `on`             | `ErrorCategory[]?`                        | Which categories trigger fallback (default: all)                                             |
+| `shouldFallback` | `(error: Error) => boolean?`              | Custom error predicate (takes priority over `on`)                                            |
+| `when`           | `(result) => boolean \| Promise<boolean>` | Successful-result predicate that triggers `invalid_response` fallback when it returns `true` |
+| `timeout`        | `{ attempt?, firstToken? }?`              | Per-attempt and stream first-token budgets in ms                                             |
+| `onFallback`     | `(info) => void \| Promise<void>`         | Called before moving from a failed model to the next one                                     |
 
-`ErrorCategory` = `'rate_limit' | 'timeout' | 'server_error' | 'connection_error' | 'auth_error' | 'validation_exhausted'`
+`ErrorCategory` = `'rate_limit' | 'timeout' | 'server_error' | 'connection_error' | 'auth_error' | 'invalid_response'`
 
 ### `classifyError(error)`
 
 Classifies an error into an `ErrorCategory` or `null`.
 
-| Error                       | Category               |
-| --------------------------- | ---------------------- |
-| HTTP 429                    | `rate_limit`           |
-| HTTP 500–599                | `server_error`         |
-| HTTP 401/403                | `auth_error`           |
-| `TimeoutError`, `ETIMEDOUT`, `AbortError` | `timeout`              |
-| `ECONNREFUSED`, `ENOTFOUND` | `connection_error`     |
-| `ValidationExhaustedError`  | `validation_exhausted` |
-| HTTP 400, unknown           | `null` (no fallback)   |
+| Error                                     | Category             |
+| ----------------------------------------- | -------------------- |
+| HTTP 429                                  | `rate_limit`         |
+| HTTP 500–599                              | `server_error`       |
+| HTTP 401/403                              | `auth_error`         |
+| `TimeoutError`, `ETIMEDOUT`, `AbortError` | `timeout`            |
+| `ECONNREFUSED`, `ENOTFOUND`               | `connection_error`   |
+| invalid response predicate                | `invalid_response`   |
+| HTTP 400, unknown                         | `null` (no fallback) |
 
 ## Validation retry
 
 ```ts
-import { ValidationExhaustedError, isValidationExhaustedError, repairJsonText } from '@use-crux/core'
-import type { ValidationRetryOptions } from '@use-crux/core'
+import {
+  ValidationExhaustedError,
+  isValidationExhaustedError,
+  repairJsonText,
+} from "@use-crux/core";
+import type { ValidationRetryOptions } from "@use-crux/core";
 ```
 
 ### `ValidationRetryOptions`
@@ -393,7 +492,16 @@ See the [Validation retry guide](/docs/guides/safety/validation-retry).
 ## Security utilities
 
 ```ts
-import { safe, raw, limit, wrap, escapeXml, truncate, userContent, detectSuspiciousPatterns } from '@use-crux/core'
+import {
+  safe,
+  raw,
+  limit,
+  wrap,
+  escapeXml,
+  truncate,
+  userContent,
+  detectSuspiciousPatterns,
+} from "@use-crux/core";
 ```
 
 | Function                         | Signature                             | Description                               |
@@ -410,7 +518,7 @@ import { safe, raw, limit, wrap, escapeXml, truncate, userContent, detectSuspici
 ## Embedding
 
 ```ts
-import { embedding } from '@use-crux/core/embedding'
+import { embedding } from "@use-crux/core/embedding";
 ```
 
 Creates a reusable dense or sparse embedding primitive with built-in batching, governance, and concurrency control. See the [Embeddings guide](/docs/guides/retrieval/embeddings) for usage.
@@ -445,27 +553,37 @@ Hybrid search uses both embeddings through `retriever()` or `VectorStore.search(
 Hybrid retrieval is composed _above_ this layer through stores or retrievers.
 
 ```ts
-import { embedding, embeddingCache, normalizeText } from '@use-crux/core/embedding'
+import {
+  embedding,
+  embeddingCache,
+  normalizeText,
+} from "@use-crux/core/embedding";
 
 const dense = embedding({
-  kind: 'dense',
-  name: 'docs-embedding',
+  kind: "dense",
+  name: "docs-embedding",
   dimensions: 1536,
   maxInputTokens: 8191,
   batch: { maxSize: 100, concurrency: 3 },
   preprocess: normalizeText({ trim: true, collapseWhitespace: true }),
-  truncate: { strategy: 'fail' },
+  truncate: { strategy: "fail" },
   retry: { maxAttempts: 3, baseDelayMs: 250 },
-  cache: embeddingCache({ store, namespace: 'embed-cache' }),
+  cache: embeddingCache({ store, namespace: "embed-cache" }),
   rateLimit: { concurrency: 3 },
   embed: async (texts) => ({ embeddings: await provider.embedMany(texts) }),
-})
+});
 ```
 
 ## Retrieval
 
 ```ts
-import { knowledgeBase, retriever, retrievalRecipe, retrieve, rerank } from '@use-crux/core/retrieval'
+import {
+  knowledgeBase,
+  retriever,
+  retrievalRecipe,
+  retrieve,
+  rerank,
+} from "@use-crux/core/retrieval";
 ```
 
 Creates a query-first retriever that turns text into scored hits, prompt context, and query tools. See the [Retrieval guide](/docs/guides/retrieval) for the full architecture.
@@ -474,33 +592,33 @@ Use `retriever()` as the app-facing search object:
 
 ```ts
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
-  search: { mode: 'hybrid' },
-})
+  search: { mode: "hybrid" },
+});
 
-const hits = await docs.retrieve('refund policy')
+const hits = await docs.retrieve("refund policy");
 
 const answer = prompt({
   use: [docs],
-  system: 'Answer from the retrieved docs.',
-})
+  system: "Answer from the retrieved docs.",
+});
 ```
 
-| Field       | Type                                           | Description                                      |
-| ----------- | ---------------------------------------------- | ------------------------------------------------ |
-| `id`        | `string`                                       | Stable retriever identifier                      |
-| `indexerId` | `string?`                                      | Writer indexer id when it differs from `id`      |
-| `namespace` | `string`                                       | Required corpus boundary                         |
-| `records`   | `RecordStore?`                                   | JSON record hydration for record-backed retrieval |
-| `vectors`   | `VectorStore?`                                 | Dense, sparse, or hybrid vector search           |
-| `dense`     | `DenseEmbedding?`                              | Dense query embedding                            |
-| `sparse`    | `SparseEmbedding?`                             | Sparse query embedding                           |
-| `retrieve`  | `(query, options) => Promise<RetrieverHit[]>?` | Fully custom retrieval path                      |
+| Field       | Type                                           | Description                                       |
+| ----------- | ---------------------------------------------- | ------------------------------------------------- |
+| `id`        | `string`                                       | Stable retriever identifier                       |
+| `indexerId` | `string?`                                      | Writer indexer id when it differs from `id`       |
+| `namespace` | `string`                                       | Required corpus boundary                          |
+| `records`   | `RecordStore?`                                 | JSON record hydration for record-backed retrieval |
+| `vectors`   | `VectorStore?`                                 | Dense, sparse, or hybrid vector search            |
+| `dense`     | `DenseEmbedding?`                              | Dense query embedding                             |
+| `sparse`    | `SparseEmbedding?`                             | Sparse query embedding                            |
+| `retrieve`  | `(query, options) => Promise<RetrieverHit[]>?` | Fully custom retrieval path                       |
 
 Retrievers expose:
 
@@ -515,7 +633,7 @@ Use `grounding()` from `@use-crux/core/citations` when retrieval context must be
 ## Indexing
 
 ```ts
-import { indexer } from '@use-crux/core/indexing'
+import { indexer } from "@use-crux/core/indexing";
 ```
 
 Creates the write-time document indexing primitive. It owns chunking, transforms, embedding at write time, and store writes.
@@ -524,7 +642,7 @@ Creates the write-time document indexing primitive. It owns chunking, transforms
 | ------------ | ------------------- | ---------------------------------------- |
 | `id`         | `string`            | Stable indexer identifier                |
 | `namespace`  | `string`            | Required corpus boundary                 |
-| `records`    | `RecordStore`         | Chunk, parent, and corpus record storage |
+| `records`    | `RecordStore`       | Chunk, parent, and corpus record storage |
 | `vectors`    | `VectorStore?`      | Dense, sparse, or hybrid vector index    |
 | `dense`      | `DenseEmbedding?`   | Dense write-time embedding               |
 | `sparse`     | `SparseEmbedding?`  | Sparse write-time embedding              |
@@ -541,11 +659,11 @@ Indexers expose:
 
 ## Routing
 
-`@use-crux/core/routing` exports `router`, `cascade`, `fallback`, the type guards `isRouter`, `isCascade`, `isFallback`, and `resolveModel`. Stable `id` fields on router/cascade/fallback configs are optional for execution but recommended for index and trace joins. See the [Routing guide](/docs/guides/routing) for full coverage.
+`@use-crux/core/routing` exports `router`, `split`, `retry`, `fallback`, `cascade`, their type guards, routing receipt helpers, and `resolveModel`. Stable `id` fields are optional for execution but recommended for index and trace joins. See the [Routing guide](/docs/guides/routing) for full coverage.
 
 ## Internal orchestration
 
-`@use-crux/core` exports orchestration primitives (`orchestrateGenerate`, `orchestrateStream`, `executeFallbackLoop`, `wrapStreamIterable`, `withBudget`) used by adapter packages. They're stable for adapter authors but not intended for general application code. See [Building custom adapters](/docs/guides/advanced/building-adapters).
+`@use-crux/core` exports orchestration primitives (`orchestrateGenerate`, `orchestrateStream`, `resolveModel`, `wrapStreamIterable`, `withBudget`) used by adapter packages. They're stable for adapter authors but not intended for general application code. See [Building custom adapters](/docs/guides/advanced/building-adapters).
 
 ## Types
 
@@ -588,7 +706,7 @@ import type {
   FlowSummary,
   StepOptions,
   SuspendOptions,
-} from '@use-crux/core'
+} from "@use-crux/core";
 ```
 
 `PromptResolution`, `SystemBlock`, `ResolvedPrompt`, `ModelInfo`, and `AnyPrompt` are re-exported from `@use-crux/core` for adapter authors who consume `.resolve()` output directly. Adapter packages constrain their context tuple as `readonly Context<z.ZodType>[]` (rather than `Context<any>[]`) so `MergedInput<TOwnInput, TContexts>` carries through `generate()` / `stream()` without explicit type arguments at the call site.

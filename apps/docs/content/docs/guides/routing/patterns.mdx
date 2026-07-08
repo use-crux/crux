@@ -1,91 +1,88 @@
 ---
 title: Patterns
-description: Compose router, cascade, and fallback into production model policies.
+description: Compose router, split, retry, fallback, and cascade into production model policies.
 ---
 
-The routing primitives are small on purpose. Product behavior comes from composing them into named policies.
+The routing primitives are intentionally small. Product behavior comes from composing named policies.
+
+## Retry Then Fallback
+
+Retry transient failures on the preferred model before moving sideways.
+
+```ts
+const resilient = fallback([
+  retry(gpt5, { id: "gpt5-retry", attempts: 2, backoff: "exponential" }),
+  sonnet,
+  { model: gemini, maxTokens: 2000 },
+]);
+```
 
 ## Router To Cascade
 
-Use this when simple requests should stay cheap, but complex requests need quality escalation.
+Use a router for up-front task classification, then a cascade for result-aware quality escalation.
 
 ```ts
-const routedQualityModel = router({
-  id: 'support-routing-policy',
-  classify: (input) => {
-    if (input.accountTier === 'enterprise') return 'quality'
-    if (String(input.question ?? '').length > 2_000) return 'quality'
-    return 'fast'
-  },
+const productionModel = router({
+  id: "support-routing-policy",
+  classify: ({ input, context }: RouteArgs<AuthContext, SupportInput>) =>
+    context.tier === "enterprise" || input.question.length > 2000
+      ? "quality"
+      : "fast",
   routes: {
-    fast: resilientFastModel,
+    fast: fallback([gpt5nano, haiku]),
     quality: answerCascade,
     default: answerCascade,
   },
-})
+});
+```
+
+## Canary Inside A Route
+
+Use `split()` when one branch of a router needs a stable rollout.
+
+```ts
+const fastBranch = split({
+  id: "fast-model-canary",
+  seed: ({ context }: RouteArgs<{ sessionId: string }>) => context.sessionId,
+  routes: {
+    stable: { model: gpt4oMini, weight: 95 },
+    canary: { model: gpt5mini, weight: 5 },
+  },
+});
 ```
 
 ## Cascade With Fallback Tiers
 
-Use this when each quality tier needs a provider backup.
+Wrap tier models in fallback when provider resilience and quality escalation are both needed.
 
 ```ts
 const productionCascade = cascade({
-  id: 'production-answer-cascade',
+  id: "production-answer-cascade",
   tiers: [
-    {
-      model: fallback(openai('gpt-4o-mini'), anthropic('claude-haiku-4-20250514')),
-      evaluate: fastQualityCheck,
-    },
-    {
-      model: fallback(anthropic('claude-sonnet-4-20250514'), openai('gpt-4o')),
-      evaluate: strongQualityCheck,
-    },
-    {
-      model: anthropic('claude-opus-4-20250514'),
-    },
+    { model: fallback([gpt4oMini, haiku]), evaluate: fastQualityCheck },
+    { model: fallback([sonnet, gpt5]), evaluate: strongQualityCheck },
+    { model: opus },
   ],
-})
+});
 ```
 
 ## Manual Overrides
 
-Put manual controls at the edge and keep authored policy stable.
+Keep authored policy stable and pass request-specific controls at the call site.
 
 ```ts
-function modelForRequest(mode: 'auto' | 'cheap' | 'deep') {
-  if (mode === 'cheap') return supportRouter.with({ preferCheap: true })
-  if (mode === 'deep') return supportRouter.select('deep')
-  return supportRouter
-}
+await generate(prompt, {
+  model: productionModel,
+  input,
+  routing,
+  route: adminMode === "deep" ? "quality" : undefined,
+});
 ```
 
-## Observability Checklist
+## Checklist
 
-Add stable `id` fields to policies that represent product behavior.
-
-```ts
-const model = router({
-  id: 'support-routing-policy',
-  classify,
-  routes,
-})
-```
-
-The project index records:
-
-| Definition | Children |
-|---|---|
-| `routing.router` | `routing.router.route` |
-| `routing.cascade` | `routing.cascade.tier` |
-| `routing.fallback` | `routing.fallback.option` |
-
-Runtime traces surface routing spans, tier attempts, fallback attempts, route overrides, evaluator notes, confidence values, cost metadata, and budget events.
-
-## What To Avoid
-
-- Do not use `fallback()` as a quality gate. It only reacts to retryable errors.
-- Do not use `cascade()` as outage recovery. It does not catch provider errors.
-- Do not omit `default` from routers.
-- Do not put a cascade tier without `evaluate` before later tiers.
-- Do not hide product policy in scattered call-site conditionals.
+- Give durable product policies a stable `id`.
+- Include `default` on routers.
+- Use `routing:` for app context, not prompt input.
+- Use `route:` for deterministic overrides.
+- Inspect `result.routing` instead of legacy `_meta.router`, `_meta.cascade`, or `_meta.fallback`.

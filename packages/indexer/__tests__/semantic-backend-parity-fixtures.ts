@@ -354,6 +354,64 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       },
     },
     {
+      name: "routing-split-retry-array-fallback",
+      files: {
+        "src/routing.ts": `
+        import { prompt } from '@use-crux/core'
+        import { cascade, fallback, retry, router, split } from '@use-crux/core/routing'
+
+        function seedSession() {
+          return 'session-1'
+        }
+        function classifyRoute() {
+          return 'draft'
+        }
+
+        export const writerPrompt = prompt({ id: 'writer-route-target' })
+        export const backupPrompt = prompt({ id: 'backup-route-target' })
+        export const retriedWriter = retry(writerPrompt, { id: 'retried-writer', attempts: 2 })
+        export const resilientWriter = fallback([retriedWriter, backupPrompt], { id: 'resilient-writer' })
+        export const canarySplit = split({
+          id: 'canary-split',
+          seed: seedSession,
+          routes: {
+            stable: { model: writerPrompt, weight: 95 },
+            canary: { model: backupPrompt, weight: 5 },
+          },
+        })
+        export const qualityCascade = cascade({
+          id: 'quality-routing',
+          tiers: [{ model: canarySplit }, { model: resilientWriter }],
+        })
+        export const qualityRouter = router({
+          id: 'quality-router',
+          classify: classifyRoute,
+          routes: {
+            draft: { model: qualityCascade, maxTokens: 1200 },
+            default: resilientWriter,
+          },
+        })
+      `,
+      },
+      expect: {
+        definitionIds: [
+          "routing.retry:retried-writer:target:1",
+          "routing.split:canary-split:route:stable",
+          "routing.split:canary-split:route:canary",
+          "routing.fallback:resilient-writer:option:1",
+          "routing.router:quality-router:route:draft",
+        ],
+        relationTypes: [
+          "retry.target.uses_prompt",
+          "split.route.uses_prompt",
+          "fallback.option.uses_retry",
+          "cascade.tier.uses_split",
+          "router.route.uses_cascade",
+        ],
+        sourceRefRoles: ["callback", "config"],
+      },
+    },
+    {
       name: "workspace-history-read-relation",
       files: {
         "src/resources.ts": `

@@ -1,0 +1,38 @@
+---
+title: Split
+description: Deterministically divide traffic across weighted model routes.
+---
+
+`split()` selects a route by hashing a seed. Use it for canaries, A/B tests, and gradual model rollouts.
+
+```ts
+import { split, type RouteArgs } from "@use-crux/core/routing";
+
+export const canaryModel = split({
+  id: "gpt-5-mini-canary",
+  seed: ({ context }: RouteArgs<{ sessionId: string }>) => context.sessionId,
+  routes: {
+    stable: { model: gpt4o, weight: 95 },
+    canary: { model: gpt5mini, weight: 5 },
+  },
+});
+```
+
+Callers provide the seed context through `routing:`.
+
+```ts
+await generate(prompt, {
+  model: canaryModel,
+  input,
+  routing: { sessionId },
+});
+```
+
+Split receipts record the selected bucket and raw seed for application-side analysis:
+
+```ts
+result.routing?.trace;
+// [{ kind: 'split', id: 'gpt-5-mini-canary', route: 'canary', seed: 'sess_123' }]
+```
+
+Observability events include a hashed seed only; raw seed values stay in the receipt.

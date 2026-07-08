@@ -3,16 +3,17 @@ use serde_json::{Map, Value, json};
 use crate::{
     context::{CallParts, PrimitiveContext, source_ref_for_property},
     definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
+    protocol::StaticSyntaxValue,
     record_values::{
-        direct_string_property, has_property, object_map_model_entries, object_value,
+        direct_string_property, has_property, model_reference, number_property, object_value,
         property_value,
     },
     routing::output::{extracted_facts, routing_target_relation_refs},
 };
 
-pub(crate) fn router_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
+pub(crate) fn split_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     let config = object_value(parts.object_arg?)?;
-    let routes = object_map_model_entries(property_value(config, "routes"), &context.initializers);
+    let routes = split_route_entries(config, context);
     if routes.is_empty() {
         return None;
     }
@@ -21,30 +22,20 @@ pub(crate) fn router_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
     let routing_id = authored_id
         .clone()
         .unwrap_or_else(|| parts.variable_name.to_string());
-    let id = format!("routing.router:{}", safe_id(&routing_id));
+    let id = format!("routing.split:{}", safe_id(&routing_id));
     let route_children = routes
         .iter()
         .enumerate()
-        .map(|(index, (route_key, target_variable))| {
-            route_child(
-                context,
-                parts,
-                &id,
-                &routing_id,
-                route_key,
-                target_variable,
-                index,
-            )
-        })
+        .map(|(index, route)| route_child(context, parts, &id, &routing_id, route, index))
         .collect::<Vec<_>>();
 
-    let classify_ref = match source_ref_for_property(context, &id, config, "classify")? {
+    let seed_ref = match source_ref_for_property(context, &id, config, "seed")? {
         Some(source_ref) => vec![source_ref],
         None => Vec::new(),
     };
     let route_keys = routes
         .iter()
-        .map(|(key, _)| key.clone())
+        .map(|route| route.key.clone())
         .collect::<Vec<_>>();
     let child_ids = route_children
         .iter()
@@ -67,23 +58,18 @@ pub(crate) fn router_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
     metadata.insert("routeKeys".to_string(), json!(route_keys));
     metadata.insert("routeCount".to_string(), json!(routes.len()));
     metadata.insert(
-        "hasDefaultRoute".to_string(),
-        Value::Bool(routes.iter().any(|(key, _)| key == "default")),
-    );
-    metadata.insert(
-        "hasClassify".to_string(),
-        Value::Bool(has_property(config, "classify")),
+        "hasSeed".to_string(),
+        Value::Bool(has_property(config, "seed")),
     );
     metadata.insert(
         "facts".to_string(),
         json!({
-            "kind": "routing.router",
+            "kind": "routing.split",
             "routingId": routing_id,
             "hasStableId": metadata.get("hasStableId").and_then(Value::as_bool).unwrap_or(false),
             "routeKeys": metadata.get("routeKeys").cloned().unwrap_or_else(|| json!([])),
             "routeCount": routes.len(),
-            "hasDefaultRoute": metadata.get("hasDefaultRoute").and_then(Value::as_bool).unwrap_or(false),
-            "hasClassify": has_property(config, "classify"),
+            "hasSeed": has_property(config, "seed"),
         }),
     );
     metadata.insert(
@@ -95,64 +81,99 @@ pub(crate) fn router_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
         parts.variable_name,
         static_index_definition(NativeDefinitionInput {
             id: id.clone(),
-            kind: "routing.router",
+            kind: "routing.split",
             name: routing_id,
             file: context.file,
             source: parts.source,
             snippet: parts.snippet,
             metadata,
         }),
-        route_children.iter().map(|(_, definition, _)| definition.clone()).collect(),
         route_children
             .iter()
-            .map(|(definition_id, _, _)| json!({"type": "router.includes_route", "toId": definition_id}))
+            .map(|(_, definition, _)| definition.clone())
+            .collect(),
+        route_children
+            .iter()
+            .map(|(definition_id, _, _)| json!({"type": "split.includes_route", "toId": definition_id}))
             .chain(route_children.iter().flat_map(|(definition_id, _, target)| {
-                routing_target_relation_refs(definition_id, Some(target), "router.route")
+                routing_target_relation_refs(definition_id, Some(target), "split.route")
             }))
             .collect(),
-        classify_ref,
+        seed_ref,
     ))
+}
+
+struct SplitRoute {
+    key: String,
+    target: String,
+    weight: Option<f64>,
+}
+
+fn split_route_entries(
+    config: &StaticSyntaxValue,
+    context: &PrimitiveContext<'_>,
+) -> Vec<SplitRoute> {
+    let Some(StaticSyntaxValue::Object { properties, .. }) = property_value(config, "routes")
+    else {
+        return Vec::new();
+    };
+    properties
+        .iter()
+        .filter(|property| property.spread != Some(true))
+        .filter_map(|property| {
+            model_reference(&property.value, &context.initializers).map(|target| SplitRoute {
+                key: property.name.clone(),
+                target,
+                weight: number_property(&property.value, "weight", &context.initializers),
+            })
+        })
+        .collect()
 }
 
 fn route_child(
     context: &PrimitiveContext<'_>,
     parts: &CallParts<'_>,
-    router_id: &str,
+    split_id: &str,
     routing_id: &str,
-    route_key: &str,
-    target_variable: &str,
+    route: &SplitRoute,
     index: usize,
 ) -> (String, Value, String) {
-    let definition_id = format!("{router_id}:route:{}", safe_id(route_key));
+    let definition_id = format!("{split_id}:route:{}", safe_id(&route.key));
     let mut metadata = Map::new();
     metadata.insert(
-        "routerDefinitionId".to_string(),
-        Value::String(router_id.to_string()),
+        "splitDefinitionId".to_string(),
+        Value::String(split_id.to_string()),
     );
     metadata.insert(
         "routingId".to_string(),
         Value::String(routing_id.to_string()),
     );
-    metadata.insert("routeKey".to_string(), Value::String(route_key.to_string()));
+    metadata.insert("routeKey".to_string(), Value::String(route.key.clone()));
     metadata.insert("index".to_string(), json!(index));
-    metadata.insert("isDefault".to_string(), Value::Bool(route_key == "default"));
     metadata.insert(
         "indexPresentation".to_string(),
-        folded_index_child(router_id, "router.includes_route", "route", index),
+        folded_index_child(split_id, "split.includes_route", "route", index),
     );
     metadata.insert(
         "targetVariable".to_string(),
-        Value::String(target_variable.to_string()),
+        Value::String(route.target.clone()),
     );
+    metadata.insert(
+        "modelVariable".to_string(),
+        Value::String(route.target.clone()),
+    );
+    if let Some(weight) = route.weight {
+        metadata.insert("weight".to_string(), json!(weight));
+    }
     metadata.insert(
         "facts".to_string(),
         json!({
-            "kind": "routing.router.route",
-            "parentDefinitionId": router_id,
+            "kind": "routing.split.route",
+            "parentDefinitionId": split_id,
             "routingId": routing_id,
-            "routeKey": route_key,
-            "isDefault": route_key == "default",
-            "targetVariable": target_variable,
+            "routeKey": route.key,
+            "weight": route.weight,
+            "targetVariable": route.target,
         }),
     );
     metadata.insert(
@@ -161,12 +182,12 @@ fn route_child(
     );
     let definition = static_index_definition(NativeDefinitionInput {
         id: definition_id.clone(),
-        kind: "routing.router.route",
-        name: route_key.to_string(),
+        kind: "routing.split.route",
+        name: route.key.clone(),
         file: context.file,
         source: parts.source,
         snippet: parts.snippet,
         metadata,
     });
-    (definition_id, definition, target_variable.to_string())
+    (definition_id, definition, route.target.clone())
 }

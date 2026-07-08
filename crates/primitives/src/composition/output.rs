@@ -218,6 +218,8 @@ fn child_target_ref(call_name: &str, uses_type: &str, child_id: &str, target: &s
             "prompt": prompt,
             "tool": tool,
             "routing.router": routing,
+            "routing.split": routing,
+            "routing.retry": routing,
             "routing.cascade": routing,
             "routing.fallback": routing,
         },

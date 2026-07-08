@@ -1,0 +1,37 @@
+---
+title: Routing Receipts
+description: Inspect the concrete model and every routing decision for a call.
+---
+
+A routed call produces one append-only `RoutingReceipt`.
+
+```ts
+interface RoutingReceipt {
+  model: string;
+  cost: number | undefined;
+  trace: RoutingStep[];
+}
+```
+
+`model` is always the final concrete provider model id. `trace` is ordered from outermost decision to nested decision.
+
+```ts
+const result = await generate(prompt, {
+  model: productionModel,
+  input,
+  routing,
+});
+
+console.log(result.routing?.model);
+console.log(result.routing?.trace);
+```
+
+Receipts are exposed on:
+
+- `result.routing` for `generate()`
+- `(await streamResult.completion).routing` for `stream()`
+- `FallbackExhaustedError.routing`
+- `CascadeExhaustedError.routing`
+- stream completion errors after mid-stream failure
+
+The `routing.report` observability artifact uses the same receipt shape.

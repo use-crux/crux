@@ -34,16 +34,38 @@ pub(crate) fn routing_target_relation_refs(
     let Some(target) = target else {
         return Vec::new();
     };
-    let (router, cascade, fallback, agent, prompt) = match owner {
+    let (router, split, retry, cascade, fallback, agent, prompt) = match owner {
         "router.route" => (
             "router.route.uses_router",
+            "router.route.uses_split",
+            "router.route.uses_retry",
             "router.route.uses_cascade",
             "router.route.uses_fallback",
             "router.route.uses_agent",
             "router.route.uses_prompt",
         ),
+        "split.route" => (
+            "split.route.uses_router",
+            "split.route.uses_split",
+            "split.route.uses_retry",
+            "split.route.uses_cascade",
+            "split.route.uses_fallback",
+            "split.route.uses_agent",
+            "split.route.uses_prompt",
+        ),
+        "retry.target" => (
+            "retry.target.uses_router",
+            "retry.target.uses_split",
+            "retry.target.uses_retry",
+            "retry.target.uses_cascade",
+            "retry.target.uses_fallback",
+            "retry.target.uses_agent",
+            "retry.target.uses_prompt",
+        ),
         "cascade.tier" => (
             "cascade.tier.uses_router",
+            "cascade.tier.uses_split",
+            "cascade.tier.uses_retry",
             "cascade.tier.uses_cascade",
             "cascade.tier.uses_fallback",
             "cascade.tier.uses_agent",
@@ -51,6 +73,8 @@ pub(crate) fn routing_target_relation_refs(
         ),
         _ => (
             "fallback.option.uses_router",
+            "fallback.option.uses_split",
+            "fallback.option.uses_retry",
             "fallback.option.uses_cascade",
             "fallback.option.uses_fallback",
             "fallback.option.uses_agent",
@@ -61,6 +85,8 @@ pub(crate) fn routing_target_relation_refs(
         "type": router,
         "typeByTargetKind": {
             "routing.router": router,
+            "routing.split": split,
+            "routing.retry": retry,
             "routing.cascade": cascade,
             "routing.fallback": fallback,
             "agent": agent,

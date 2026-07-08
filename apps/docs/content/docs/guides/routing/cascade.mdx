@@ -1,161 +1,98 @@
 ---
 title: Cascade
-description: Try cheaper models first and escalate when quality checks reject the result.
+description: Generate with cheaper tiers first and escalate when evaluators reject the result.
 ---
 
-`cascade()` is for quality-based escalation. It runs tiers in order. Each tier can inspect the generated result and either accept it or move to the next tier.
+`cascade()` runs tiers in order. Each tier may inspect the completed result and accept it or escalate to the next tier.
 
-Use a cascade when the same task can often be handled by a cheaper model, but some inputs need a stronger model.
-
-```ts title="answer-cascade.ts"
-import { cascade } from '@use-crux/core/routing'
-import { openai } from '@ai-sdk/openai'
-import { anthropic } from '@ai-sdk/anthropic'
+```ts
+import { cascade, fallback } from "@use-crux/core/routing";
 
 export const answerCascade = cascade({
-  id: 'answer-quality-cascade',
-  description: 'Escalate support answers until evidence and completeness are good enough.',
+  id: "support-answer-cascade",
+  prompt: supportPrompt,
   tiers: [
     {
-      model: openai('gpt-4o-mini'),
-      budget: 0.75,
-      evaluate: (result) => {
-        const answer = result as { object?: { confidence?: number; citations?: unknown[] } }
-        const confidence = answer.object?.confidence ?? 0
-        const hasCitations = (answer.object?.citations?.length ?? 0) > 0
-
+      model: fallback([haiku, gpt5nano], {
+        on: ["rate_limit", "server_error"],
+      }),
+      escalateOn: ["invalid_response"],
+      evaluate: async ({
+        result,
+        input,
+        cost,
+        totalCost,
+        tierIndex,
+        report,
+      }) => {
+        const score = await report(
+          helpfulness.score({ input: input.question, output: result.text }),
+        );
         return {
-          accepted: confidence >= 0.75 && hasCitations,
-          confidence,
-          budget: 0.75,
-          note: hasCitations ? undefined : 'missing citations',
-        }
+          accepted: score.score >= 0.8,
+          confidence: score.score,
+          note: `tier ${tierIndex}; total cost ${totalCost}; model cost ${cost ?? "unknown"}`,
+        };
       },
     },
-    {
-      model: anthropic('claude-sonnet-4-20250514'),
-      budget: 0.85,
-      evaluate: (result) => {
-        const answer = result as { object?: { confidence?: number } }
-        const confidence = answer.object?.confidence ?? 0
-
-        return {
-          accepted: confidence >= 0.85,
-          confidence,
-          budget: 0.85,
-        }
-      },
-    },
-    {
-      model: anthropic('claude-opus-4-20250514'),
-    },
+    { model: opus },
   ],
-  budget: {
-    maxCost: 0.05,
-    maxLatencyMs: 8_000,
-  },
-})
+  budget: { maxCost: 0.05, maxLatencyMs: 5000 },
+});
 ```
 
-The final tier usually has no `evaluate`, which means "accept whatever this model returns." If every tier has `evaluate` and every evaluator rejects, Crux throws `CascadeExhaustedError`.
+When `prompt` is provided, `evaluate({ result, input })` is typed from that prompt. A prompt-bound cascade can only be used with the same prompt.
 
-## Evaluation Results
+## Evaluators
 
-An evaluator can return a boolean or a structured result.
+`evaluate` receives one object:
 
-```ts
-type CascadeEvaluation =
-  | boolean
-  | {
-      accepted: boolean
-      confidence?: number
-      budget?: number
-      note?: string
-    }
-```
+| Field       | Meaning                                                            |
+| ----------- | ------------------------------------------------------------------ |
+| `result`    | The prompt output for bound cascades, otherwise `unknown`          |
+| `input`     | The prompt input for bound cascades                                |
+| `model`     | Concrete model id for the tier                                     |
+| `cost`      | Provider-reported tier cost, when available                        |
+| `totalCost` | Cumulative tier and judge cost so far                              |
+| `tierIndex` | Zero-based tier index                                              |
+| `report`    | Awaits a judge/scorer result and folds its `cost` into `totalCost` |
 
-Prefer structured results in production. They make devtools and trace reports explain why a tier was rejected.
-
-```ts
-evaluate: (result, context) => ({
-  accepted: score(result) >= 0.8,
-  confidence: score(result),
-  budget: 0.8,
-  note: `tier ${context.tierIndex} cost ${context.cost ?? 'unknown'}`,
-})
-```
-
-The evaluation context includes:
-
-| Field | Meaning |
-|---|---|
-| `model` | The selected model id. |
-| `cost` | Tier cost, when the provider reports it. |
-| `tierIndex` | Zero-based tier index. |
-| `totalCost` | Cumulative cost across attempted tiers. |
+Return `true`, `false`, or `{ accepted, confidence?, note? }`.
 
 ## Budgets
 
-Cascade budgets are best-effort.
+`budget.maxCost` uses measured provider cost plus cost reported through `report()`. `budget.maxLatencyMs` aborts in-flight tier work. If latency expires after at least one tier returned, Crux returns the best result and marks the cascade receipt with `budgetExceeded: true`; otherwise it throws `CascadeExhaustedError`.
 
-| Budget | Behavior |
-|---|---|
-| `maxCost` | Checked only when the provider returns cost metadata. OpenRouter exposes cost; some direct SDKs do not. |
-| `maxLatencyMs` | Checked against wall-clock time across all attempted tiers. |
+## Invalid Responses
 
-If a budget is exceeded after a tier runs, Crux returns the last result and sets `_meta.cascade.budgetExceeded = true`. It does not throw just because the budget was exceeded.
-
-## Error Handling
-
-Cascade does not catch provider errors. It only handles quality rejections from `evaluate`.
-
-Wrap tier models in [`fallback()`](/docs/guides/routing/fallback) when you also need rate-limit, timeout, or outage resilience.
+Use `escalateOn: ['invalid_response']` when structured validation exhaustion should reject a tier and continue.
 
 ```ts
-const productionCascade = cascade({
-  id: 'production-answer-cascade',
+const extraction = cascade({
+  prompt: invoicePrompt,
   tiers: [
-    { model: fallback(gpt4oMini, claudeHaiku), evaluate: fastQualityCheck },
-    { model: fallback(claudeSonnet, gpt4o), evaluate: strongQualityCheck },
-    { model: claudeOpus },
+    { model: fallback([gpt5nano, haiku]), escalateOn: ["invalid_response"] },
+    { model: opus },
   ],
-})
+});
 ```
 
-## Exhaustion
+## Receipts
 
-If all tiers reject, Crux throws `CascadeExhaustedError` with the last result and tier details attached.
-
-```ts
-import { CascadeExhaustedError } from '@use-crux/core/routing'
-
-try {
-  await generate(prompt, { model: strictCascade, input })
-} catch (error) {
-  if (error instanceof CascadeExhaustedError) {
-    console.log(error.lastResult)
-    console.log(error.tierDetails)
-  }
-}
-```
-
-## Metadata
-
-Cascade metadata is attached to `result._meta.cascade`. It includes attempted tier count, accepted tier, budget status, and every configured tier in order. Skipped tiers are included with `status: 'skipped'` and `note: 'not reached'`.
+Cascade decisions appear in `result.routing.trace`.
 
 ```ts
-result._meta.cascade
-// {
-//   tiersAttempted: 2,
-//   totalTiers: 3,
+result.routing?.trace;
+// [{
+//   kind: 'cascade',
+//   id: 'support-answer-cascade',
 //   acceptedAtTier: 1,
 //   budgetExceeded: false,
-//   tiers: [...]
-// }
+//   tiers: [
+//     { model: 'claude-haiku', status: 'rejected', confidence: 0.62, judgeCost: 0.0028 },
+//     { model: 'claude-opus', status: 'accepted' },
+//   ],
+// }]
 ```
 
-## Avoid
-
-- Do not use cascade for provider errors. Use [`fallback()`](/docs/guides/routing/fallback).
-- Do not put a tier without `evaluate` before later tiers; that tier always accepts.
-- Do not use cascade with `stream()`. Cascade works with `generate()` because it needs the completed result.
+`cascade()` is generate-only. Use `router`, `split`, `retry`, or `fallback` for streaming model selection.

@@ -453,7 +453,7 @@ data-access facts preserve exact operations such as `grep`, `history`, `diff`,
 | Retrieval          | Indexers, corpora, retrievers, rerankers, grounding, citations, and custom RAG pipelines.                                            |
 | Tools              | Prompt tools, context tools, middleware, approval flows, and audit events.                                                           |
 | Safety             | Guardrails for input/output filtering plus constraints for semantic output validation and retry.                                     |
-| Routing and cost   | Model routers, fallback, semantic cache, pricing tables, budgets, and cost spans.                                                    |
+| Routing and cost   | Model routers, deterministic splits, retries, fallback, cascade escalation, semantic cache, pricing tables, budgets, and cost spans. |
 | Evaluation         | Quality suites, prompt tests, judges, variants, cassettes, baselines, and CI-friendly runs.                                          |
 | Agents and flows   | Agents, pipelines, parallel runs, consensus, swarms, blackboards, handoffs, delegates, suspendable flows, plans, and tasks.          |
 | Observability      | Trace records, local devtools, subscribers, diagnostics channel export, source catalog, and OpenTelemetry export.                    |
@@ -670,10 +670,13 @@ const sendReminder = durableTask("send-reminder", {
   },
 });
 
-const onboarding = flow("onboarding", async (scope, input: { userId: string }) => {
-  await scope.after(sendReminder, "2d", { userId: input.userId });
-  await scope.suspend("approval");
-});
+const onboarding = flow(
+  "onboarding",
+  async (scope, input: { userId: string }) => {
+    await scope.after(sendReminder, "2d", { userId: input.userId });
+    await scope.suspend("approval");
+  },
+);
 
 const rt = createTestRuntime({ targets: [onboarding, sendReminder] });
 await onboarding.run({ userId: "user_1" });

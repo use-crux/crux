@@ -1,106 +1,137 @@
 ---
-title: Routing & Fallback
-description: Decide which model should run, when to escalate, and how to recover when providers fail.
+title: Routing
+description: Choose, retry, split, escalate, and fail over between models with one receipt.
 ---
 
-Routing and fallback are model-level policies. They do not change what a prompt says; they decide which model reference reaches the adapter and what should happen when that model is not the right one.
+Routing primitives are model values. Pass them as the `model` option to `generate()` or `stream()`, and Crux resolves them to one concrete provider model before the adapter call.
 
 ```package-install
 @use-crux/core
 @use-crux/ai
 ```
 
-## The Mental Model
+## Primitives
 
-A Crux call has three separate concerns:
+| Need                                                  | Use                                           |
+| ----------------------------------------------------- | --------------------------------------------- |
+| Choose a route before generation                      | [`router()`](/docs/guides/routing/router)     |
+| Send a stable percentage of traffic to each route     | [`split()`](/docs/guides/routing/split)       |
+| Retry the same model before giving up                 | [`retry()`](/docs/guides/routing/retry)       |
+| Try another model after failure or unusable output    | [`fallback()`](/docs/guides/routing/fallback) |
+| Generate, inspect the result, then escalate if needed | [`cascade()`](/docs/guides/routing/cascade)   |
 
-| Concern | Owned by |
-|---|---|
-| What work should the model do? | `prompt()` |
-| Which model should run that work? | `router()` or `cascade()` |
-| What happens if a provider fails? | `fallback()` |
-
-Keep those concerns separate. Prompt authors should not have to scatter provider `if` statements through every call site, and runtime code should not have to know every quality tier in your product.
-
-```ts title="run.ts"
-await generate(supportPrompt, {
-  model: supportModelPolicy,
-  input: {
-    accountTier: 'enterprise',
-    question: 'Can you summarize this invoice dispute?',
-  },
-})
-```
-
-## Which Primitive Should I Use?
-
-| Need | Use | Why |
-|---|---|---|
-| Pick a model before generation starts | [`router()`](/docs/guides/routing/router) | Classify input once, then run the selected route. |
-| Try cheap first and escalate when quality is low | [`cascade()`](/docs/guides/routing/cascade) | Evaluate each result before deciding whether to pay for the next tier. |
-| Try another model when the provider errors | [`fallback()`](/docs/guides/routing/fallback) | Recover from rate limits, timeouts, outages, and other retryable failures. |
-
-The most common production setup combines them:
+All five compose recursively. `router`, `split`, `retry`, and `fallback` work with `generate()` and `stream()`. `cascade` is generate-only because it must inspect complete results.
 
 ```ts
-const supportModelPolicy = router({
-  id: 'support-model-policy',
-  classify: classifySupportRequest,
+import {
+  fallback,
+  retry,
+  router,
+  split,
+  type RouteArgs,
+} from "@use-crux/core/routing";
+
+const canary = split({
+  id: "gpt-5-mini-canary",
+  seed: ({ context }: RouteArgs<{ sessionId: string }>) => context.sessionId,
   routes: {
-    fast: fallback(gpt4oMini, claudeHaiku),
-    careful: cascade({
-      id: 'careful-answer-cascade',
-      tiers: [
-        { model: fallback(gpt4oMini, claudeHaiku), evaluate: quickQualityCheck },
-        { model: fallback(claudeSonnet, gpt4o), evaluate: strongQualityCheck },
-        { model: claudeOpus },
-      ],
-    }),
-    default: fallback(claudeSonnet, gpt4o),
+    stable: { model: gpt4o, weight: 95 },
+    canary: { model: gpt5mini, weight: 5 },
   },
-})
+});
+
+export const supportModel = router({
+  id: "support-model",
+  classify: ({
+    input,
+    context,
+  }: RouteArgs<{ tier: "free" | "enterprise" }, { question: string }>) =>
+    context.tier === "enterprise" || input.question.length > 2000
+      ? "deep"
+      : "fast",
+  routes: {
+    fast: fallback([
+      retry(gpt5nano, { id: "nano-retry", attempts: 2 }),
+      canary,
+    ]),
+    deep: sonnet,
+    default: sonnet,
+  },
+});
 ```
 
-## How They Compose
-
-All three primitives wrap models:
-
-- A router route can point at a raw model, fallback, cascade, or another routed policy.
-- A cascade tier can use a raw model or fallback.
-- A fallback option can be a raw model or another model wrapper.
-
-Keep composition boring and named. If a routing policy is product behavior, give it a stable `id` so devtools, traces, and the project index can connect runtime behavior back to source.
-
-## Observability
-
-Routing decisions are written into result metadata and Crux observability records.
+Use call-site options for request-specific context and overrides:
 
 ```ts
 const result = await generate(supportPrompt, {
-  model: supportModelPolicy,
-  input,
-})
-
-console.log(result._meta.router)
-console.log(result._meta.cascade)
-console.log(result._meta.fallback)
+  model: supportModel,
+  input: { question },
+  routing: { tier: account.tier, sessionId },
+  route: "deep",
+});
 ```
 
-The project index records authored routing definitions:
+## Receipts
 
-| Definition | Children |
-|---|---|
-| `routing.router` | `routing.router.route` |
-| `routing.cascade` | `routing.cascade.tier` |
+Every routed result exposes one append-only receipt:
+
+```ts
+result.routing;
+// {
+//   model: 'claude-sonnet-4-5',
+//   cost: 0.018,
+//   trace: [
+//     { kind: 'router', id: 'support-model', route: 'deep', forced: true },
+//     { kind: 'fallback', attempts: [...] },
+//   ],
+// }
+```
+
+The same receipt is available on stream completions and routing errors such as `FallbackExhaustedError` and `CascadeExhaustedError`.
+
+## Project Index
+
+The Project Index records authored routing definitions and folded child rows:
+
+| Definition         | Children                  |
+| ------------------ | ------------------------- |
+| `routing.router`   | `routing.router.route`    |
+| `routing.split`    | `routing.split.route`     |
+| `routing.retry`    | `routing.retry.target`    |
+| `routing.cascade`  | `routing.cascade.tier`    |
 | `routing.fallback` | `routing.fallback.option` |
 
-Index lints warn when a policy has no stable `id`, a router omits `default`, a target cannot be resolved, or a cascade tier accepts before later tiers can run.
-
-## Pick A Topic
+Stable `id` values let runtime spans, receipts, decision reports, and indexed source definitions join reliably.
 
 <Cards>
-  <Card title="Router" description="Classify input and select a route before generation starts." href="/docs/guides/routing/router" />
-  <Card title="Cascade" description="Escalate through quality tiers with evaluators and budgets." href="/docs/guides/routing/cascade" />
-  <Card title="Fallback" description="Recover from rate limits, timeouts, outages, and other retryable errors." href="/docs/guides/routing/fallback" />
-  <Card title="Patterns" description="Combine router, cascade, and fallback without hiding product policy." href="/docs/guides/routing/patterns" />
+  <Card
+    title="Router"
+    description="Classify input and select a route before generation."
+    href="/docs/guides/routing/router"
+  />
+  <Card
+    title="Split"
+    description="Run deterministic weighted traffic splits."
+    href="/docs/guides/routing/split"
+  />
+  <Card
+    title="Retry"
+    description="Retry a model with bounded attempts."
+    href="/docs/guides/routing/retry"
+  />
+  <Card
+    title="Fallback"
+    description="Recover from failures and invalid responses."
+    href="/docs/guides/routing/fallback"
+  />
+  <Card
+    title="Cascade"
+    description="Escalate through result-aware quality tiers."
+    href="/docs/guides/routing/cascade"
+  />
+  <Card
+    title="Streaming"
+    description="Understand first-token and mid-stream failure rules."
+    href="/docs/guides/routing/streaming"
+  />
 </Cards>

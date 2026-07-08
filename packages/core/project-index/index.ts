@@ -420,6 +420,10 @@ export type ProjectDefinitionKind =
   | "composition.consensus"
   | "routing.router"
   | "routing.router.route"
+  | "routing.split"
+  | "routing.split.route"
+  | "routing.retry"
+  | "routing.retry.target"
   | "routing.cascade"
   | "routing.cascade.tier"
   | "routing.fallback"
@@ -621,13 +625,20 @@ export interface CompositionChildFacts {
 }
 
 export interface RoutingFacts {
-  kind: "routing.router" | "routing.cascade" | "routing.fallback";
+  kind:
+    | "routing.router"
+    | "routing.split"
+    | "routing.retry"
+    | "routing.cascade"
+    | "routing.fallback";
   routingId?: string;
   hasStableId?: boolean;
   routeKeys?: string[];
   routeCount?: number;
   hasDefaultRoute?: boolean;
   hasClassify?: boolean;
+  hasSeed?: boolean;
+  attempts?: number;
   tierCount?: number;
   optionCount?: number;
   hasBudget?: boolean;
@@ -637,10 +648,14 @@ export interface RoutingFacts {
 export interface RoutingChildFacts {
   kind:
     | "routing.router.route"
+    | "routing.split.route"
+    | "routing.retry.target"
     | "routing.cascade.tier"
     | "routing.fallback.option";
   routingId?: string;
   routeKey?: string;
+  weight?: number;
+  targetIndex?: number;
   tierIndex?: number;
   optionIndex?: number;
   parentDefinitionId?: string;
@@ -710,66 +725,73 @@ export interface IndexedStorageCapabilities {
   /** JSON record-store capabilities when the definition is a record store or bundle. */
   record?: {
     /** TTL support: backend-native, adapter-managed lazy expiry, unsupported, or unknown statically. */
-    ttl?: 'native' | 'lazy' | false | 'unknown'
+    ttl?: "native" | "lazy" | false | "unknown";
     /** Exact top-level scalar filter support. */
-    filter?: 'native' | 'scan' | false | 'unknown'
+    filter?: "native" | "scan" | false | "unknown";
     /** Whether record watch subscriptions are available. */
-    watch?: boolean | 'unknown'
+    watch?: boolean | "unknown";
     /** Whether native batch record operations are available. */
-    batch?: boolean | 'unknown'
-  }
+    batch?: boolean | "unknown";
+  };
   /** Vector-index capabilities when the definition is a vector store or bundle. */
   vector?: {
     /** Whether dense-vector similarity search is available. */
-    dense?: boolean | 'unknown'
+    dense?: boolean | "unknown";
     /** Whether sparse-vector search is available. */
-    sparse?: boolean | 'unknown'
+    sparse?: boolean | "unknown";
     /** Whether dense and sparse queries can be combined by the same store. */
-    hybrid?: boolean | 'unknown'
+    hybrid?: boolean | "unknown";
     /** Supported hybrid result fusion algorithms, or `unknown` when the adapter cannot report them. */
-    fusion?: readonly ('rrf' | 'dbsf')[] | 'unknown'
+    fusion?: readonly ("rrf" | "dbsf")[] | "unknown";
     /** Whether metadata filters run before vector search, after vector search, or not at all. */
-    filter?: 'pre' | 'post' | false | 'unknown'
+    filter?: "pre" | "post" | false | "unknown";
     /** Read-after-write visibility expected from the vector backend. */
-    consistency?: 'strong' | 'eventual' | 'unknown'
-  }
+    consistency?: "strong" | "eventual" | "unknown";
+  };
   /** Blob-store capabilities when the definition is a blob store or bundle. */
   blob?: {
     /** Whether multipart uploads are available for large blobs. */
-    multipart?: boolean | 'unknown'
+    multipart?: boolean | "unknown";
     /** Whether the adapter can mint signed URLs for direct blob access. */
-    signedUrls?: boolean | 'unknown'
+    signedUrls?: boolean | "unknown";
     /** Maximum blob size in bytes when known statically. */
-    maxBytes?: number | 'unknown'
-  }
+    maxBytes?: number | "unknown";
+  };
 }
 
 /** First-class Storage Beta definition facts emitted by Project Index. */
 export interface StorageFacts {
-  kind: 'storage.recordStore' | 'storage.vectorStore' | 'storage.blobStore' | 'storage.bundle' | 'storage.scope'
+  kind:
+    | "storage.recordStore"
+    | "storage.vectorStore"
+    | "storage.blobStore"
+    | "storage.bundle"
+    | "storage.scope";
   /** Store or bundle factory name when statically known, for example `inMemoryStorage`. */
-  backend?: string
+  backend?: string;
   /** Authored variable bound to this storage definition. */
-  variableName?: string
+  variableName?: string;
   /** Capabilities provided by this storage definition, or `unknown` fields for conservative static output. */
-  capabilities?: IndexedStorageCapabilities
+  capabilities?: IndexedStorageCapabilities;
   /** Record store variable or definition id used by a bundle. */
-  records?: string
+  records?: string;
   /** Vector store variable or definition id used by a bundle. */
-  vectors?: string
+  vectors?: string;
   /** Blob store variable or definition id used by a bundle. */
-  blobs?: string
+  blobs?: string;
   /** Base storage variable or definition id wrapped by a scope. */
-  storage?: string
+  storage?: string;
   /** Key prefix used by a scoped storage wrapper when statically known. */
-  prefix?: string
+  prefix?: string;
 }
 
 export interface SafetyStrategyFacts extends Readonly<Record<string, unknown>> {
   kind: string;
 }
 
-export interface SafetyToolPolicyMatchFacts extends Readonly<Record<string, unknown>> {
+export interface SafetyToolPolicyMatchFacts extends Readonly<
+  Record<string, unknown>
+> {
   tool?: string;
 }
 
@@ -1247,6 +1269,10 @@ export const ProjectDefinitionKindSchema = z.enum([
   "composition.consensus",
   "routing.router",
   "routing.router.route",
+  "routing.split",
+  "routing.split.route",
+  "routing.retry",
+  "routing.retry.target",
   "routing.cascade",
   "routing.cascade.tier",
   "routing.fallback",

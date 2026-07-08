@@ -1,5 +1,15 @@
 {
   "title": "Routing & Fallback",
   "description": "Choose, escalate, and fail over between models without scattering provider logic through your app.",
-  "pages": ["index", "router", "cascade", "fallback", "patterns"]
+  "pages": [
+    "index",
+    "router",
+    "split",
+    "retry",
+    "fallback",
+    "cascade",
+    "receipts",
+    "streaming",
+    "patterns"
+  ]
 }

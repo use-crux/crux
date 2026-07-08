@@ -1,0 +1,38 @@
+---
+title: Routing And Streaming
+description: Understand which routing primitives can stream and when fallback can retry.
+---
+
+`router()`, `split()`, `retry()`, and `fallback()` can stream. `cascade()` is generate-only.
+
+```ts
+const streamResult = await stream(chatPrompt, {
+  model: router({
+    id: "chat-router",
+    classify: () => "default",
+    routes: { default: fallback([primary, backup]) },
+  }),
+  input,
+});
+```
+
+Fallback can retry a stream only before the first token reaches the caller. `timeout.firstToken` is designed for this:
+
+```ts
+fallback([primary, backup], {
+  timeout: { firstToken: 3000, attempt: 10000 },
+});
+```
+
+After token 1, Crux does not restart the stream with another model. The stream errors, and the completion error carries the routing receipt with `midStreamFailure: true` on the fallback step.
+
+```ts
+try {
+  for await (const delta of streamResult.textStream) {
+    send(delta);
+  }
+  await streamResult.completion;
+} catch (error) {
+  console.log(error.routing);
+}
+```

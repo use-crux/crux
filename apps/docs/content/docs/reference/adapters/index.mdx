@@ -48,7 +48,18 @@ Built-in adapters are built on this abstraction: `@use-crux/openai`, `@use-crux/
 | Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `loop-owned`  | `loop`    | `@use-crux/ai`                                                |
 | Needs a bespoke non-chat boundary                                                         | n/a           | core IR   | custom provider                                               |
 
-Never implement more than one generation runtime for one SDK. In either branch, core owns the policy layer — prompt resolution, `fallback()`/`router()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A provider runtime implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
+Never implement more than one generation runtime for one SDK. In either branch, core owns the policy layer — prompt resolution, `router()`/`split()`/`retry()`/`fallback()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A provider runtime implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
+
+## Routing wrapper support
+
+Routing wrappers are authored in `@use-crux/core/routing` and resolved by the managed adapter execution loop. Codecs such as `toParams()` and headless provider SDK calls are translation-only and require a raw model.
+
+| Adapter family                                                                              | `generate()`                                                | `stream()`                                     | Notes                                                                     |
+| ------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------- |
+| `@use-crux/ai`                                                                              | `router()`, `split()`, `retry()`, `fallback()`, `cascade()` | `router()`, `split()`, `retry()`, `fallback()` | `cascade()` needs complete tier results and is generate-only.             |
+| Native single-turn adapters (`@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) | `router()`, `split()`, `retry()`, `fallback()`, `cascade()` | `router()`, `split()`, `retry()`, `fallback()` | The adapter loop resolves wrappers before each provider call.             |
+| Headless `prepare()` / `transport`                                                          | Same as the managed method that owns the loop               | Same as the managed method that owns the loop  | `transport` receives raw provider params after routing resolution.        |
+| `toParams()` / `fromResponse()`                                                             | Raw model only                                              | Raw model only                                 | These helpers do not run prompt policy, routing, tools, or observability. |
 
 Under the hood, `turn` compiles to `AdapterSpec`: core calls `call()` once per loop turn and `appendToolRound()` formats results. `loop.bind()` compiles to a `LoopRuntimePort`: the SDK owns the loop and core steers each step through a `StepObserver`. `bind(client)` returns the client-dependent operations (`BoundLoopRuntime`), which core assembles with `id`, `describeModel`, and `mapSettings(settings, model)` into a gateway-closed `LoopRuntimePort`:
 

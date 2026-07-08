@@ -48,6 +48,12 @@ fn routing_target_kind_for_relation(relation_type: &str) -> Option<&'static str>
     if relation_type.ends_with(".uses_router") {
         return Some("routing.router");
     }
+    if relation_type.ends_with(".uses_split") {
+        return Some("routing.split");
+    }
+    if relation_type.ends_with(".uses_retry") {
+        return Some("routing.retry");
+    }
     if relation_type.ends_with(".uses_cascade") {
         return Some("routing.cascade");
     }
@@ -65,6 +71,8 @@ fn routing_target_kind_for_relation(relation_type: &str) -> Option<&'static str>
 
 fn is_routing_target_relation(relation_type: &str) -> bool {
     relation_type.starts_with("router.route.uses_")
+        || relation_type.starts_with("split.route.uses_")
+        || relation_type.starts_with("retry.target.uses_")
         || relation_type.starts_with("cascade.tier.uses_")
         || relation_type.starts_with("fallback.option.uses_")
 }
