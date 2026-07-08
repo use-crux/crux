@@ -15,6 +15,7 @@ import { appendToolApprovalResponse } from '../../../tools/approvals'
 import { createSkillActivationSession } from '../../../skill'
 import { LOAD_SKILL_TOOL_NAME } from '../../../skill/tools'
 import { updateHooks, resetHooks } from '../../../runtime/runtime'
+import { imagePart, textPart } from '../../../content'
 import type { AdapterResponse } from '../../../adapter/types'
 import type { Message } from '../../../generation/messages'
 import type { ResolvedPrompt } from '../../../resolver/types'
@@ -830,6 +831,38 @@ describe('createToolLifecycle — captureTurn', () => {
       toolEvents: [{ toolCallId: 'tc1', toolName: 'echo', args: {} }],
     })
     expect(lifecycle.transcript.filter((e) => e.t === 'memory.capture')).toEqual([{ t: 'memory.capture', bindings: 2 }])
+  })
+
+  it('captures multimodal user messages through the canonical text projection', async () => {
+    const capture = vi.fn(async () => {})
+    const flush = vi.fn(async () => {})
+    const lifecycle = createToolLifecycle({
+      regime: 'core',
+      resolved: resolvedWith({
+        memoryBindings: [{ memory: { captureTurn: capture, flush } }] as never,
+      }),
+      promptId: 'p1',
+    })
+
+    await lifecycle.captureTurn({
+      messages: [
+        {
+          role: 'user',
+          content: [
+            textPart('please remember this chart'),
+            imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+          ],
+        },
+      ],
+      assistantText: 'noted',
+    })
+
+    expect(capture.mock.calls[0]![0].messages).toEqual([
+      { role: 'user', content: expect.stringContaining('please remember this chart') },
+      { role: 'assistant', content: 'noted' },
+    ])
+    expect(capture.mock.calls[0]![0].messages[0].content).toContain('[image image/png 3B sha256:')
+    expect(capture.mock.calls[0]![0].messages[0].content).not.toContain('AQID')
   })
 
   it('preserves settled tool results and errors when capturing adapter turns', async () => {

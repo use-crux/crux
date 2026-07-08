@@ -1,4 +1,5 @@
-import type { ResolvedPrompt } from '@use-crux/core'
+import { contentText } from '@use-crux/core'
+import type { ContentPart, MessageContent, ResolvedPrompt } from '@use-crux/core'
 import type { SkillActivationSession } from '@use-crux/core/skill'
 import { observe } from '@use-crux/core/observability'
 import { flushObservability } from '../observability'
@@ -164,7 +165,7 @@ async function captureResolvedMemory(
     added: [
       ...messages.map((message) => ({
         key: message.role,
-        preview: `${message.role}: ${message.content}`.slice(0, 240),
+        preview: memoryPreviewLine(message).slice(0, 240),
       })),
       ...toolEvents.map((event) => ({
         key: event.toolName,
@@ -172,6 +173,10 @@ async function captureResolvedMemory(
       })),
     ],
   }
+}
+
+function memoryPreviewLine(message: { readonly role: string; readonly content: string }): string {
+  return `${message.role}: ${message.content}`
 }
 
 function emitConvexMemoryDiff(
@@ -273,19 +278,45 @@ function lastUserText(resolved: ResolvedPrompt): string | undefined {
 }
 
 function messageContentText(content: unknown): string | undefined {
-  if (typeof content === 'string') {
-    const text = content.trim()
-    return text ? text : undefined
-  }
-  if (!Array.isArray(content)) return undefined
-
-  const parts: string[] = []
-  for (const part of content) {
-    if (isRecord(part) && typeof part.text === 'string') parts.push(part.text)
-  }
-
-  const text = parts.join('').trim()
+  if (!isMessageContent(content)) return undefined
+  const text = contentText(content).trim()
   return text ? text : undefined
+}
+
+function isMessageContent(value: unknown): value is MessageContent {
+  return typeof value === 'string' || (Array.isArray(value) && value.every(isContentPart))
+}
+
+function isContentPart(value: unknown): value is ContentPart {
+  if (!isRecord(value) || typeof value.type !== 'string') return false
+  switch (value.type) {
+    case 'text':
+      return typeof value.text === 'string'
+    case 'image-data':
+      return typeof value.data === 'string' && typeof value.mediaType === 'string'
+    case 'image-url':
+      return typeof value.url === 'string' && optionalString(value.mediaType)
+    case 'image-file-id':
+      return typeof value.fileId === 'string' || isStringRecord(value.fileId)
+    case 'file-data':
+      return typeof value.data === 'string' && typeof value.mediaType === 'string' && optionalString(value.filename)
+    case 'file-url':
+      return typeof value.url === 'string' && optionalString(value.mediaType) && optionalString(value.filename)
+    case 'file-id':
+      return typeof value.fileId === 'string' || isStringRecord(value.fileId)
+    case 'custom':
+      return true
+    default:
+      return false
+  }
+}
+
+function optionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string'
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string')
 }
 
 function extractAssistantText(value: unknown): string | undefined {
@@ -301,16 +332,10 @@ function extractAssistantTextFromMessages(value: unknown): string | undefined {
   const texts: string[] = []
   for (const message of value) {
     if (!isRecord(message) || message.role !== 'assistant') continue
-    if (typeof message.content === 'string') {
-      texts.push(message.content)
-      continue
-    }
-    if (!Array.isArray(message.content)) continue
-    for (const part of message.content) {
-      if (isRecord(part) && typeof part.text === 'string') texts.push(part.text)
-    }
+    const text = messageContentText(message.content)
+    if (text) texts.push(text)
   }
-  return texts.length > 0 ? texts.join('') : undefined
+  return texts.length > 0 ? texts.join('\n') : undefined
 }
 
 function collectResultToolCalls(

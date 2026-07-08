@@ -31,7 +31,7 @@
 import type { Message } from '../generation/messages'
 import type { MessageContent } from '../types/content'
 import type { TraceMeta } from '../generation/types'
-import { messageText } from '../content'
+import { contentText, messageText } from '../content'
 import { getHooks } from '../runtime/runtime'
 import type { z } from 'zod'
 import type { BoundaryDef } from './boundary'
@@ -572,7 +572,9 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
         if (result.content !== originalContent) {
           messages = messages.map((entry, entryIndex) =>
-            entryIndex === index ? { ...entry, content: replaceProjectedContent(entry.content, result.content) } : entry,
+            entryIndex === index
+              ? { ...entry, content: replaceProjectedContent(entry.content, originalContent, result.content) }
+              : entry,
           )
         }
       }
@@ -643,8 +645,23 @@ export function createSafety(options: SafetyCallOptions): Safety {
   }
 }
 
-function replaceProjectedContent(content: MessageContent, replacement: string): MessageContent {
+function replaceProjectedContent(content: MessageContent, originalProjection: string, replacement: string): MessageContent {
   if (typeof content === 'string') return replacement
+  if (contentText(content) !== originalProjection) return replaceFirstTextPart(content, replacement)
+
+  const updatedTextParts = textPartReplacements(content, replacement)
+  if (!updatedTextParts) return replaceFirstTextPart(content, replacement)
+
+  let textIndex = 0
+  return content.map((part) => {
+    if (part.type !== 'text') return part
+    const text = updatedTextParts[textIndex] ?? ''
+    textIndex++
+    return { ...part, text }
+  })
+}
+
+function replaceFirstTextPart(content: Exclude<MessageContent, string>, replacement: string): MessageContent {
   let replaced = false
   return content.map((part) => {
     if (part.type !== 'text') return part
@@ -654,6 +671,41 @@ function replaceProjectedContent(content: MessageContent, replacement: string): 
     }
     return { ...part, text: '' }
   })
+}
+
+function textPartReplacements(content: Exclude<MessageContent, string>, replacement: string): readonly string[] | null {
+  const textCount = content.filter((part) => part.type === 'text').length
+  if (textCount === 0) return []
+
+  const out: string[] = []
+  let cursor = 0
+  let pendingText = 0
+
+  for (const part of content) {
+    if (part.type === 'text') {
+      pendingText++
+      continue
+    }
+
+    const placeholder = contentText([part])
+    const placeholderIndex = replacement.indexOf(placeholder, cursor)
+    if (placeholderIndex < 0) return null
+    assignTextChunk(out, pendingText, replacement.slice(cursor, placeholderIndex), placeholderIndex > cursor)
+    pendingText = 0
+    cursor = placeholderIndex + placeholder.length
+  }
+
+  assignTextChunk(out, pendingText, replacement.slice(cursor), false)
+  return out.length <= textCount ? out : null
+}
+
+function assignTextChunk(out: string[], pendingText: number, chunk: string, beforeMedia: boolean): void {
+  if (pendingText === 0) return
+  let text = chunk
+  if (text.startsWith('\n')) text = text.slice(1)
+  if (beforeMedia && text.endsWith('\n')) text = text.slice(0, -1)
+  out.push(text)
+  for (let index = 1; index < pendingText; index++) out.push('')
 }
 
 function latestRewritePolicyId(entries: readonly GuardrailAuditEntry[]): string | undefined {

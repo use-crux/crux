@@ -6,6 +6,8 @@ import { inMemoryStorage } from '../storage'
 import type { DenseEmbedding } from '../embedding'
 import { getHooks } from '../runtime/runtime'
 import { observe } from '../observability'
+import { contentText } from '../content'
+import { isMessageContent } from '../content/guards'
 import { registerInspectableResource } from '../runtime-bridge/resources'
 import { redactSensitiveValue } from '../shared/redaction'
 import {
@@ -124,13 +126,24 @@ function valueToEntry(entry: { key: string; value: JsonObject }, score?: number)
   const metadata = isRecord(entry.value.metadata) ? entry.value.metadata : {}
   return {
     key: entry.key,
-    content: String(entry.value.content ?? ''),
+    content: storedContentText(entry.value.content),
     metadata,
     confidence: typeof entry.value.confidence === 'number' ? entry.value.confidence : undefined,
     score,
     createdAt: typeof entry.value.createdAt === 'number' ? entry.value.createdAt : 0,
     updatedAt: typeof entry.value.updatedAt === 'number' ? entry.value.updatedAt : 0,
   }
+}
+
+function storedContentText(content: unknown): string {
+  if (content === undefined || content === null) return ''
+  return isMessageContent(content) ? contentText(content) : String(content)
+}
+
+function memoryMessageLine(message: { readonly role?: unknown; readonly content?: unknown }): string {
+  const role = String(message.role ?? '')
+  const content = storedContentText(message.content)
+  return `${role}: ${content}`
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1095,7 +1108,7 @@ export function recentMessages(config: { id: string; maxMessages?: number; prior
     }
     emitBlockWrite(options, { id: config.id, kind: 'recent' }, 'addTurn', {
       content: turn.messages
-        .map((message) => `${message.role}: ${message.content}`)
+        .map(memoryMessageLine)
         .join('\n')
         .slice(0, 200),
       snapshot: messages.map((message, index) => ({ key: `${prefix}${String(index).padStart(6, '0')}`, ...message })),
@@ -1103,7 +1116,7 @@ export function recentMessages(config: { id: string; maxMessages?: number; prior
         before: existing,
         after: messages,
         added: turn.messages.map((message) => ({
-          preview: `${message.role}: ${message.content}`.slice(0, 240),
+          preview: memoryMessageLine(message).slice(0, 240),
         })),
       },
       durationMs: now() - startedAt,
@@ -1116,7 +1129,7 @@ export function recentMessages(config: { id: string; maxMessages?: number; prior
     const sortedEntries = [...result.entries].sort((a, b) => String(a.key).localeCompare(String(b.key)))
     const messages = sortedEntries.map((entry) => ({
         role: String(entry.value.role ?? ''),
-        content: String(entry.value.content ?? ''),
+        content: storedContentText(entry.value.content),
         metadata: isRecord(entry.value.metadata) ? entry.value.metadata : undefined,
       }))
     emitBlockRead(options, { id: config.id, kind: 'recent' }, 'list', messages.length, startedAt, {
@@ -1126,7 +1139,7 @@ export function recentMessages(config: { id: string; maxMessages?: number; prior
           valueToEntry({
             key: entry.key,
             value: {
-              content: `${String(entry.value.role ?? '')}: ${String(entry.value.content ?? '')}`,
+              content: memoryMessageLine({ role: entry.value.role, content: entry.value.content }),
               metadata: isRecord(entry.value.metadata) ? entry.value.metadata : {},
               createdAt: typeof entry.value.createdAt === 'number' ? entry.value.createdAt : 0,
               updatedAt: typeof entry.value.updatedAt === 'number' ? entry.value.updatedAt : 0,
@@ -1148,7 +1161,7 @@ export function recentMessages(config: { id: string; maxMessages?: number; prior
         after: [],
         removed: result.entries.map((entry) => ({
           key: entry.key,
-          preview: `${String(entry.value.role ?? '')}: ${String(entry.value.content ?? '')}`.slice(0, 240),
+          preview: memoryMessageLine({ role: entry.value.role, content: entry.value.content }).slice(0, 240),
         })),
       },
     })
@@ -1399,7 +1412,7 @@ export function episodes(config: {
     priority: config.priority,
     captureTurn: async (turn, ctx) => {
       for (const message of turn.messages) {
-        await record({ content: `${message.role}: ${message.content}`, metadata: message.metadata }, ctx)
+        await record({ content: memoryMessageLine(message), metadata: message.metadata }, ctx)
       }
     },
     captureToolEvent: async (event, ctx) => {
@@ -1588,7 +1601,7 @@ function extractiveBlock(
   async function extract(turn: MemoryTurn, ctx: MemoryBlockContext): Promise<ExtractiveCandidate[]> {
     if (!config.extract) return []
     if (typeof config.extract === 'function') return config.extract(turn, ctx)
-    const transcript = turn.messages.map((message) => `${message.role}: ${message.content}`).join('\n')
+    const transcript = turn.messages.map(memoryMessageLine).join('\n')
     const result = await config.extract.generate({
       model: config.extract.model,
       system: `Extract ${kind} from the transcript. Return JSON array with content, confidence, and metadata.`,

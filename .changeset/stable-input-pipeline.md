@@ -4,6 +4,7 @@
 "@use-crux/anthropic": minor
 "@use-crux/convex": minor
 "@use-crux/google": minor
+"@use-crux/otel": minor
 "@use-crux/openai": minor
 ---
 
@@ -60,3 +61,5 @@ Make native transcript codecs content-aware beneath the existing public `toParam
 Retire the AI SDK adapter's blind content-array passthrough for recognizable parts: canonical multimodal messages now encode to AI SDK text/image/file parts, AI SDK model-message parts normalize back to canonical `ContentPart[]`, legacy v6 `media` parts decode as `file-data`, and SDK control parts move into `Message.metadata`. Unrecognized SDK parts still pass through with a diagnostics warning.
 
 Add native multimodal part tables for OpenAI and Google. OpenAI chat now encodes image, audio, and file data through provider content parts, decodes assistant/user media back into canonical content, and no longer flattens rich tool results with raw base64 text. Google now encodes inline and URI-backed media through `inlineData`/`fileData`, decodes assistant inline media into canonical content, and requires `mediaType` before sending URI-backed parts natively.
+
+Route guardrails, compaction, memory capture, semantic cache keys, resolver system folding, Convex memory persistence, and OTel message-content export through the canonical `messageText()` projection. Multimodal message previews now use bounded placeholders instead of `[object Object]` or raw base64, and `@use-crux/convex` re-exports the core multimodal content helpers.

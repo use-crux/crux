@@ -22,6 +22,8 @@ import {
 } from './capture-policy-contract'
 import { byteLength, hashString, serializePreview } from './capture-policy-utils'
 import { stripRecordPayloadAttributes } from './capture-policy-payload'
+import { contentText } from '../content'
+import { isContentPart } from '../content/guards'
 
 export { PAYLOAD_ATTRIBUTE_KEYS } from './capture-policy-contract'
 export { stripPayloadAttributes } from './capture-policy-payload'
@@ -36,6 +38,8 @@ export type {
 } from './capture-policy-contract'
 
 type ArtifactOptions = ObserveArtifactOptions
+
+const FULL_CAPTURE_DATA_INLINE_THRESHOLD = 8 * 1024
 
 export type ObservabilityCaptureResult =
   | { readonly ok: true; readonly record: CruxGraphRecord }
@@ -121,8 +125,15 @@ function applyCaptureLevelToArtifact(
   level: CruxObservabilityCaptureLevel,
   artifact: ArtifactOptions,
 ): ArtifactOptions {
-  if ((level === 'full' || level === 'safe') || artifact.preview === undefined)
+  if (artifact.preview === undefined)
     return artifact
+
+  if (level === 'full' || level === 'safe') {
+    return {
+      ...artifact,
+      preview: sanitizePreviewForCapture(level, artifact.preview),
+    }
+  }
 
   const { preview: _preview, ...rest } = artifact
   if (level === 'off') {
@@ -146,8 +157,15 @@ function applyCaptureLevelToRecord(
   level: CruxObservabilityCaptureLevel,
   record: Extract<CruxGraphRecord, { readonly type: 'artifact' }>,
 ): CruxGraphRecord {
-  if ((level === 'full' || level === 'safe') || record.preview === undefined)
+  if (record.preview === undefined)
     return record
+
+  if (level === 'full' || level === 'safe') {
+    return {
+      ...record,
+      preview: sanitizePreviewForCapture(level, record.preview),
+    }
+  }
 
   const { preview: _preview, ...rest } = record
   if (level === 'off') {
@@ -165,6 +183,48 @@ function applyCaptureLevelToRecord(
     sizeBytes: record.sizeBytes ?? byteLength(serialized),
     hash: record.hash ?? hashString(serialized),
   }
+}
+
+function sanitizePreviewForCapture(
+  level: Extract<CruxObservabilityCaptureLevel, 'full' | 'safe'>,
+  value: unknown,
+  seen = new WeakSet<object>(),
+): unknown {
+  if (Array.isArray(value)) {
+    if (seen.has(value)) return '[Circular]'
+    seen.add(value)
+    const out = value.map((item) => sanitizePreviewForCapture(level, item, seen))
+    seen.delete(value)
+    return out
+  }
+  if (!isRecord(value)) return value
+  if (seen.has(value)) return '[Circular]'
+  seen.add(value)
+
+  if (isContentPart(value) && 'data' in value && shouldReplaceData(level, value.data)) {
+    seen.delete(value)
+    return {
+      ...value,
+      data: contentText([value]),
+    }
+  }
+
+  const out = Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [key, sanitizePreviewForCapture(level, child, seen)]),
+  )
+  seen.delete(value)
+  return out
+}
+
+function shouldReplaceData(
+  level: Extract<CruxObservabilityCaptureLevel, 'full' | 'safe'>,
+  data: string,
+): boolean {
+  return level === 'safe' || data.length > FULL_CAPTURE_DATA_INLINE_THRESHOLD
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function captureLevelForArtifact(

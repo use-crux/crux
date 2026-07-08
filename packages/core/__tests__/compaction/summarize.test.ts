@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { summarizeMessages, formatTranscript } from '../../compaction/summarize'
 import type { Message } from '../../generation/messages'
 import type { GenerateTextFn } from '../../compaction/types'
+import { imagePart, textPart } from '../../content'
 
 const sampleMessages: Message[] = [
   { role: 'user', content: 'What is the capital of France?' },
@@ -28,9 +29,23 @@ describe('formatTranscript', () => {
     expect(formatTranscript([])).toBe('')
   })
 
-    it('handles single message', () => {
+  it('handles single message', () => {
     const result = formatTranscript([{ role: 'user', content: 'Hello' }])
     expect(result).toBe('[1] user: Hello')
+  })
+
+  it('projects multimodal messages without object coercion or raw base64', () => {
+    const result = formatTranscript([
+      {
+        role: 'user',
+        content: [textPart('Summarize this chart'), imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' })],
+      },
+    ])
+
+    expect(result).toContain('[1] user: Summarize this chart')
+    expect(result).toContain('[image image/png 3B sha256:')
+    expect(result).not.toContain('[object Object]')
+    expect(result).not.toContain('AQID')
   })
 })
 

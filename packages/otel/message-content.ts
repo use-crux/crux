@@ -8,6 +8,7 @@
  */
 
 import type { CruxGraphRecord } from '@use-crux/core/observability'
+import { contentText, type ContentPart, type MessageContent } from '@use-crux/core'
 import type { OtelAttributes } from './attribute-mapper'
 import {
   GEN_AI_INPUT_MESSAGES,
@@ -116,8 +117,49 @@ function textFromRecord(record: Record<string, unknown>): string | undefined {
   for (const key of ['content', 'text', 'answer', 'value', 'output']) {
     const value = record[key]
     if (typeof value === 'string' && value.length > 0) return value
+    if (isMessageContent(value)) return contentText(value)
   }
   return undefined
+}
+
+function isMessageContent(value: unknown): value is MessageContent {
+  return typeof value === 'string' || (Array.isArray(value) && value.every(isContentPart))
+}
+
+function isContentPart(value: unknown): value is ContentPart {
+  if (!isRecord(value) || typeof value.type !== 'string') return false
+  switch (value.type) {
+    case 'text':
+      return typeof value.text === 'string'
+    case 'image-data':
+      return typeof value.data === 'string' && typeof value.mediaType === 'string'
+    case 'image-url':
+      return typeof value.url === 'string' && optionalString(value.mediaType)
+    case 'image-file-id':
+      return typeof value.fileId === 'string' || isStringRecord(value.fileId)
+    case 'file-data':
+      return typeof value.data === 'string' && typeof value.mediaType === 'string' && optionalString(value.filename)
+    case 'file-url':
+      return typeof value.url === 'string' && optionalString(value.mediaType) && optionalString(value.filename)
+    case 'file-id':
+      return typeof value.fileId === 'string' || isStringRecord(value.fileId)
+    case 'custom':
+      return true
+    default:
+      return false
+  }
+}
+
+function optionalString(value: unknown): boolean {
+  return value === undefined || typeof value === 'string'
+}
+
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string')
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
 }
 
 function systemInstructionsFromPreview(preview: object): string | undefined {
