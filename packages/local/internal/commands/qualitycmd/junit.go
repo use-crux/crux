@@ -86,9 +86,9 @@ func writeQualityJUnit(path string, reporter *qualityReporter) error {
 				if cell := firstWithStatus(group, "errored"); cell != nil {
 					testcase.Error = &junitMessage{Message: cell.Error.Message}
 				} else if cell := firstWithStatus(group, "failed"); cell != nil {
-					if len(cell.Assertions.Failures) > 0 {
-						failure := cell.Assertions.Failures[0]
-						body := failure.Message
+					if failures := failedAssertionOutcomes(cell.Assertions.Outcomes); len(failures) > 0 {
+						failure := failures[0]
+						body := nonEmptyString(failure.Message, failure.Matcher)
 						if failure.SourceRef != "" {
 							body += "\nat " + failure.SourceRef
 						}

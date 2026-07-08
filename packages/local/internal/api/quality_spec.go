@@ -142,7 +142,7 @@ type QualityExperimentDetail struct {
 	Replay            QualityExperimentReplay        `json:"replay"`
 	BaselineRef       *QualityExperimentBaselineRef  `json:"baselineRef,omitempty"`
 	Variants          []QualityExperimentVariantDecl `json:"variants"`
-	Cases             []QualityExperimentCell        `json:"cases"`
+	Cells             []QualityExperimentCell        `json:"cells"`
 	Aggregates        QualityExperimentAggregates    `json:"aggregates"`
 	Comparison        *QualityExperimentComparison   `json:"comparison,omitempty"`
 	Gates             QualityExperimentGates         `json:"gates"`
@@ -233,19 +233,7 @@ type QualityCellScore struct {
 type QualityCellAssertions struct {
 	Ran          int                       `json:"ran"`
 	NotEvaluated int                       `json:"notEvaluated"`
-	Failures     []QualityAssertionFailure `json:"failures"`
-	Outcomes     []QualityAssertionOutcome `json:"outcomes,omitempty"`
-}
-
-type QualityAssertionFailure struct {
-	Level           string `json:"level"`
-	Index           int    `json:"index"`
-	Matcher         string `json:"matcher"`
-	Soft            bool   `json:"soft"`
-	Message         string `json:"message"`
-	ExpectedPreview string `json:"expectedPreview,omitempty"`
-	ActualPreview   string `json:"actualPreview,omitempty"`
-	SourceRef       string `json:"sourceRef,omitempty"`
+	Outcomes     []QualityAssertionOutcome `json:"outcomes"`
 }
 
 type QualityAssertionOutcome struct {

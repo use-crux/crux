@@ -18,8 +18,8 @@ import { config } from '../runtime/config'
 import { agent } from '../agent/agent'
 import { flow } from '../flow/scope'
 import { retriever } from '../retrieval'
-import { evaluate, target, scorers, dataset, cassette } from '../quality'
-import type { CaseOf, Scorer } from '../quality'
+import { evaluate, target, scorers, dataset, cassette, UncapturedSignalError } from '../quality'
+import type { CaseOf, Scorer, ScorerLibrary, StepAccessor } from '../quality'
 
 const supportPrompt = prompt({
   id: 'support',
@@ -134,7 +134,7 @@ export const scoreAsserted = evaluate('support.score-asserted', {
   data: [
     {
       input: { question: 'How do refunds work?', locale: 'en' },
-      assert: (ctx) => {
+      afterScores: (ctx) => {
         const citationValid: number = ctx.score.citation_valid
         const runtimeScores = ctx.scores.map((score) => score.name)
         ctx.expect(citationValid).toBeGreaterThanOrEqual(0.7)
@@ -145,7 +145,7 @@ export const scoreAsserted = evaluate('support.score-asserted', {
     },
   ],
   scorers: [citationValidScorer, dynamicRuntimeScore],
-  assert: (ctx) => {
+  afterScores: (ctx) => {
     const citationValid: number = ctx.score.citation_valid
     const runtimeScores = ctx.scores.map((score) => score.name)
     ctx.expect(citationValid).toBeGreaterThanOrEqual(0.7)
@@ -243,7 +243,7 @@ export const diagnosed = evaluate({
     ctx.expect.soft(ctx.output.answer).toContain('refund')
     ctx.expect.soft(ctx.output.answer).toContain('14 days')
     // ad-hoc per-case score — joins the same score model as scorers
-    ctx.score('answer-length', Math.min(1, ctx.output.answer.length / 200))
+    ctx.recordScore('answer-length', Math.min(1, ctx.output.answer.length / 200))
   },
 })
 
@@ -351,6 +351,13 @@ export const retrievalEval = evaluate('docs.retrieval', {
   scorers: [scorers.retrieval.recallAtK(5), scorers.retrieval.mrr()],
 })
 
+declare const docsRecipe: Parameters<typeof target.retrievalRecipe>[0]
+
+export const retrievalRecipeEval = evaluate('docs.retrieval-recipe', {
+  task: target.retrievalRecipe(docsRecipe),
+  data: [{ input: { query: 'how do refunds work' } }],
+})
+
 // ─────────────────────────────────────────────────────────────────
 // Recipe: RAG — judge-backed faithfulness/relevancy over a pipeline
 // that retrieves and answers. Retrieved context comes from captured
@@ -410,3 +417,9 @@ export const qualityConfigured = config({
     defaults: { trials: 1, timeoutMs: 60_000, replay: 'replay-strict' },
   },
 })
+
+const scorerLibrary: ScorerLibrary = scorers
+declare const stepAccessor: StepAccessor
+void scorerLibrary
+void stepAccessor
+void (UncapturedSignalError instanceof Function)

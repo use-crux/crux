@@ -2,15 +2,14 @@
  * Assertion outcome helpers for the Quality engine.
  *
  * The expect runtime records matcher facts while user callbacks execute. The
- * engine later redacts those facts and projects them into both the rich
- * `assertions.outcomes` ledger and the legacy `assertions.failures` view.
+ * engine later redacts those facts and stores them in the ordered
+ * `assertions.outcomes` ledger.
  *
  * @internal Not exported from `@use-crux/core/quality` - engine plumbing only.
  * @module
  */
 
 import type {
-  CellAssertionFailure,
   CellAssertionExpression,
   CellAssertionOutcome,
   CellAssertionPhase,
@@ -65,23 +64,9 @@ export function outcomeId(
   return `${phase}:${level}:${index}`
 }
 
-/** Whether an outcome should appear in the legacy `assertions.failures` view. */
+/** Whether an outcome makes its cell fail. */
 export function isFailureOutcome(outcome: CellAssertionOutcome): boolean {
   return outcome.status === 'failed' || outcome.status === 'uncaptured'
-}
-
-/** Convert a rich outcome into the compatibility failure projection. */
-export function failureFromOutcome(outcome: CellAssertionOutcome): CellAssertionFailure {
-  return {
-    level: outcome.level,
-    index: outcome.index,
-    matcher: outcome.matcher,
-    soft: outcome.soft,
-    message: outcome.message ?? `${outcome.matcher} did not pass`,
-    ...(outcome.expected !== undefined ? { expectedPreview: outcome.expected.preview } : {}),
-    ...(outcome.actual !== undefined ? { actualPreview: outcome.actual.preview } : {}),
-    ...(outcome.sourceRef !== undefined ? { sourceRef: outcome.sourceRef } : {}),
-  }
 }
 
 /**

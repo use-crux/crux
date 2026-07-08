@@ -149,7 +149,7 @@ export interface CellSignals {
   constraints: readonly ConstraintSignal[]
   memoryOps: readonly MemoryOpSignal[]
   routing: readonly RoutingSignal[]
-  decisionReports: readonly TurnDecisionReportSignal[]
+  decisionReport: readonly TurnDecisionReportSignal[]
   /** Completed span durations — the population behind `latency.p95()`. */
   operationDurations: readonly number[]
   /** Count of spans that ended with `error` status. */
@@ -178,7 +178,7 @@ export function emptyCellSignals(): CellSignals {
     constraints: [],
     memoryOps: [],
     routing: [],
-    decisionReports: [],
+    decisionReport: [],
     operationDurations: [],
     erroredSpans: 0,
     retries: 0,
@@ -427,7 +427,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
   const constraints: ConstraintSignal[] = []
   const memoryOps: MemoryOpSignal[] = []
   const routing: RoutingSignal[] = []
-  const decisionReports = extractTurnDecisionReportSignals(artifactRecords)
+  const decisionReport = extractTurnDecisionReportSignals(artifactRecords)
   const operationDurations: number[] = []
   let erroredSpans = runErrored ? 1 : 0
   let retries = 0
@@ -435,7 +435,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
   let costUsd: number | undefined
   let usage: TokenUsage | undefined
 
-  if (decisionReports.length > 0) captured.add('decisionReports')
+  if (decisionReport.length > 0) captured.add('decisionReport')
 
   const artifactPreview = (spanId: string, kind: string): unknown => {
     const artifact = artifactsBySpan.get(spanId)?.find((entry) => entry.kind === kind)
@@ -643,7 +643,7 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
     constraints,
     memoryOps,
     routing,
-    decisionReports,
+    decisionReport,
     operationDurations,
     erroredSpans,
     retries,

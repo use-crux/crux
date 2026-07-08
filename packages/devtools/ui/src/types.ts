@@ -1641,17 +1641,6 @@ export interface QualityCellScore {
   metadata?: { readonly [key: string]: QualityJsonValue }
 }
 
-export interface QualityAssertionFailure {
-  level: string
-  index: number
-  matcher: string
-  soft: boolean
-  message: string
-  expectedPreview?: string
-  actualPreview?: string
-  sourceRef?: string
-}
-
 export interface QualityAssertionValue {
   label: string
   value: QualityJsonValue
@@ -1742,7 +1731,7 @@ export type QualitySourceFrame =
 export interface QualityAssertionOutcome {
   id: string
   level: 'evaluation' | 'case'
-  phase: 'expect' | 'assert'
+  phase: 'expect' | 'afterScores'
   index: number
   status: 'passed' | 'failed' | 'not-evaluated' | 'uncaptured'
   matcher: string
@@ -1781,8 +1770,7 @@ export interface QualityExperimentCell {
   assertions: {
     ran: number
     notEvaluated: number
-    failures: readonly QualityAssertionFailure[]
-    outcomes?: readonly QualityAssertionOutcome[]
+    outcomes: readonly QualityAssertionOutcome[]
   }
   error?: QualityCellError
   durationMs: number
@@ -1846,7 +1834,7 @@ export interface QualityExperimentDetail {
   replay: QualityExperimentReplay
   baselineRef?: QualityExperimentBaselineRef
   variants: readonly QualityExperimentVariantDecl[]
-  cases: readonly QualityExperimentCell[]
+  cells: readonly QualityExperimentCell[]
   aggregates: { perVariant: Readonly<Record<string, QualityVariantAggregate>> }
   comparison?: QualityExperimentComparison
   gates: {
@@ -1859,7 +1847,7 @@ export interface QualityExperimentDetail {
 
 export type QualityCellEvidenceStatus = 'passed' | 'failed' | 'errored' | 'skipped'
 
-export type QualityCellEvidenceErrorPhase = 'execute' | 'expect' | 'assert' | 'score' | 'replay' | 'timeout'
+export type QualityCellEvidenceErrorPhase = 'execute' | 'expect' | 'afterScores' | 'score' | 'replay' | 'timeout'
 
 /**
  * Backend-owned evidence record for one case x variant x trial cell.

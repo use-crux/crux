@@ -29,7 +29,7 @@ func TestCellEvidenceAPIReanchorsDiskSourceFrameToAssertionSubject(t *testing.T)
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "delegates-writer-for-content-creation",
     "variantName": "default",
     "trial": 0,
@@ -40,7 +40,7 @@ func TestCellEvidenceAPIReanchorsDiskSourceFrameToAssertionSubject(t *testing.T)
     "assertions": {
       "ran": 1,
       "notEvaluated": 0,
-      "failures": [],
+      "outcomes": [],
       "outcomes": [{
         "id": "expect:case:0",
         "level": "case",

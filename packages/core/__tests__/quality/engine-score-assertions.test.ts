@@ -27,7 +27,7 @@ describe('Quality runner - score-aware assertions', () => {
           frameEndLine: 33,
           lines: [
             { line: 29, text: 'export const citations = evaluate({', role: 'context' },
-            { line: 30, text: '  assert: (ctx) => {', role: 'context' },
+            { line: 30, text: '  afterScores: (ctx) => {', role: 'context' },
             {
               line: 31,
               text: '    ctx.expect(ctx.score.citation_valid).toBeGreaterThanOrEqual(0.7)',
@@ -47,13 +47,13 @@ describe('Quality runner - score-aware assertions', () => {
       task: answerTask,
       data: [{ input: { q: 'refunds' } }],
       scorers: [citationValidScorer],
-      assert: (ctx) => {
+      afterScores: (ctx) => {
         ctx.expect(ctx.score.citation_valid).toBeGreaterThanOrEqual(0.7)
       },
     })
 
     const experiment = await run(evaluation, undefined, { sourceFrameResolver: resolver })
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     const failed = cell.assertions.outcomes?.[0]
 
     expect(cell.status).toBe('failed')
@@ -64,9 +64,9 @@ describe('Quality runner - score-aware assertions', () => {
       ]),
     )
     expect(failed).toMatchObject({
-      id: 'assert:evaluation:0',
+      id: 'afterScores:evaluation:0',
       level: 'evaluation',
-      phase: 'assert',
+      phase: 'afterScores',
       index: 0,
       status: 'failed',
       matcher: 'toBeGreaterThanOrEqual',
@@ -100,7 +100,7 @@ describe('Quality runner - score-aware assertions', () => {
       data: [
         {
           input: { q: 'refunds' },
-          assert: (ctx) => {
+          afterScores: (ctx) => {
             order.push(`case-assert:${scorerCalls}`)
             ctx.expect(ctx.score.citation_valid).toBeGreaterThanOrEqual(0.5)
           },
@@ -108,7 +108,7 @@ describe('Quality runner - score-aware assertions', () => {
       ],
       expect: (ctx) => {
         order.push(`expect:${scorerCalls}`)
-        ctx.score('answer-length', Math.min(1, ctx.output.answer.length / 100))
+        ctx.recordScore('answer-length', Math.min(1, ctx.output.answer.length / 100))
         ctx.expect(ctx.output.answer).toContain('refunds')
       },
       scorers: [
@@ -121,7 +121,7 @@ describe('Quality runner - score-aware assertions', () => {
           { scorerName: 'citation_valid' as const, costClass: 'code' as const },
         ),
       ],
-      assert: (ctx) => {
+      afterScores: (ctx) => {
         order.push(`evaluation-assert:${scorerCalls}`)
         ctx.expect(ctx.score.citation_valid).toBeGreaterThanOrEqual(0.9)
         ctx.expect(ctx.scores.map((score) => score.name)).toContain('answer-length')
@@ -129,7 +129,7 @@ describe('Quality runner - score-aware assertions', () => {
     })
 
     const experiment = await run(evaluation)
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
 
     expect(cell.status).toBe('passed')
     expect(order).toEqual(['expect:0', 'scorer', 'evaluation-assert:1', 'case-assert:1'])
@@ -144,9 +144,9 @@ describe('Quality runner - score-aware assertions', () => {
       cell.assertions.outcomes?.map(({ level, phase, status, matcher }) => ({ level, phase, status, matcher })),
     ).toEqual([
       { level: 'evaluation', phase: 'expect', status: 'passed', matcher: 'toContain' },
-      { level: 'evaluation', phase: 'assert', status: 'passed', matcher: 'toBeGreaterThanOrEqual' },
-      { level: 'evaluation', phase: 'assert', status: 'passed', matcher: 'toContain' },
-      { level: 'case', phase: 'assert', status: 'passed', matcher: 'toBeGreaterThanOrEqual' },
+      { level: 'evaluation', phase: 'afterScores', status: 'passed', matcher: 'toBeGreaterThanOrEqual' },
+      { level: 'evaluation', phase: 'afterScores', status: 'passed', matcher: 'toContain' },
+      { level: 'case', phase: 'afterScores', status: 'passed', matcher: 'toBeGreaterThanOrEqual' },
     ])
   })
 })

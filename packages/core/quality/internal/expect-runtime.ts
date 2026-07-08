@@ -29,8 +29,8 @@ import type {
 import { UncapturedSignalError } from '../expect'
 import type {
   CellAssertionExpressionOperator,
-  CellAssertionFailure,
   CellAssertionOutcome,
+  CellAssertionPhase,
   CellAssertionValue,
 } from '../experiment'
 import type { StandardSchemaV1 } from '../standard-schema'
@@ -39,7 +39,6 @@ import type { CellSignals } from './signals'
 import { createDecisionReportExpect } from './decision-report-matchers'
 import {
   assertionValue,
-  failureFromOutcome,
   isFailureOutcome,
   outcomeId,
   previewAssertionValue as preview,
@@ -74,7 +73,7 @@ const CAPTURING_KINDS: Record<Capability, readonly string[]> = {
   safety: ['prompt', 'flow', 'agent'],
   memory: ['flow', 'agent'],
   routing: ['flow', 'agent'],
-  decisionReports: ['prompt', 'flow', 'agent'],
+  decisionReport: ['prompt', 'flow', 'agent'],
 }
 
 /**
@@ -85,13 +84,11 @@ const CAPTURING_KINDS: Record<Capability, readonly string[]> = {
  * @internal
  */
 export interface AssertionRecorder {
-  phase: 'expect' | 'assert'
+  phase: CellAssertionPhase
   level: 'evaluation' | 'case'
   mode: 'real' | 'counting'
   /** Assertions that executed in the real callback pass. */
   readonly ran: number
-  /** Legacy failed-only projection, derived from `outcomes`. */
-  readonly failures: readonly CellAssertionFailure[]
   /** Ordered assertion ledger for the cell. */
   readonly outcomes: readonly CellAssertionOutcome[]
   /** Record one value/signal matcher result. */
@@ -126,9 +123,6 @@ export function createAssertionRecorder(): AssertionRecorder {
     mode: 'real',
     get ran() {
       return ran
-    },
-    get failures() {
-      return outcomes.filter(isFailureOutcome).map(failureFromOutcome)
     },
     get outcomes() {
       return outcomes
@@ -1090,9 +1084,9 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
       },
     },
     decisionReport: createDecisionReportExpect({
-      reports: signals.decisionReports,
+      reports: signals.decisionReport,
       assertOn,
-      requireCaptured: () => requireCaptured('decisionReports'),
+      requireCaptured: () => requireCaptured('decisionReport'),
     }),
     modelCalls: {
       count() {
@@ -1123,10 +1117,6 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
   surface.cost = alwaysOn.cost
   surface.errors = alwaysOn.errors
   for (const capability of runtime.capabilities) {
-    if (capability === 'decisionReports') {
-      surface.decisionReport = signalNamespaces.decisionReport
-      continue
-    }
     if (capability in signalNamespaces) {
       surface[capability] = signalNamespaces[capability as keyof SignalExpect]
     }

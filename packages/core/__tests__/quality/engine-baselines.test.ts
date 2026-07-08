@@ -109,7 +109,7 @@ describe('promotion (Experiment.promote)', () => {
 
     const record = JSON.parse(await readFile(path, 'utf8')) as BaselineRecordJson
     expect(record).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       baselineId,
       evaluationId: 'baselines.promote',
       experimentId: experiment.experimentId,

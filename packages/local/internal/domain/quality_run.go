@@ -117,7 +117,7 @@ type QualityCell struct {
 	Assertions struct {
 		Ran          int                       `json:"ran"`
 		NotEvaluated int                       `json:"notEvaluated"`
-		Failures     []QualityAssertionFailure `json:"failures"`
+		Outcomes     []QualityAssertionOutcome `json:"outcomes"`
 	} `json:"assertions"`
 
 	Error *struct {
@@ -131,16 +131,23 @@ type QualityCell struct {
 	Metadata        *json.RawMessage `json:"metadata,omitempty"`
 }
 
-// QualityAssertionFailure is one recorded expect failure (spec 02 §1).
-type QualityAssertionFailure struct {
-	Level           string `json:"level"`
-	Index           int    `json:"index"`
-	Matcher         string `json:"matcher"`
-	Soft            bool   `json:"soft"`
-	Message         string `json:"message"`
-	ExpectedPreview string `json:"expectedPreview,omitempty"`
-	ActualPreview   string `json:"actualPreview,omitempty"`
-	SourceRef       string `json:"sourceRef,omitempty"`
+// QualityAssertionOutcome is one recorded assertion outcome (spec 02 §1).
+type QualityAssertionOutcome struct {
+	ID        string                 `json:"id"`
+	Level     string                 `json:"level"`
+	Phase     string                 `json:"phase"`
+	Index     int                    `json:"index"`
+	Status    string                 `json:"status"`
+	Matcher   string                 `json:"matcher"`
+	Soft      bool                   `json:"soft"`
+	Message   string                 `json:"message,omitempty"`
+	Actual    *QualityAssertionValue `json:"actual,omitempty"`
+	Expected  *QualityAssertionValue `json:"expected,omitempty"`
+	SourceRef string                 `json:"sourceRef,omitempty"`
+}
+
+type QualityAssertionValue struct {
+	Preview string `json:"preview"`
 }
 
 // QualityAggregates mirrors ExperimentRecord.aggregates.

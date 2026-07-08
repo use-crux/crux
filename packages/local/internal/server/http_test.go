@@ -502,7 +502,7 @@ func TestHTTPServer_project_index_reindex_endpoint(t *testing.T) {
 		"status":"completed",
 		"summary":{"total":1,"passed":1,"failed":0,"errored":0},
 		"variants":[{"id":"candidate","targetId":"p1","definitionFingerprint":"fp-old"}],
-		"cases":[{"caseId":"case-1","variantId":"candidate","status":"passed","traceId":"trace-1"}]
+		"cells":[{"caseId":"case-1","variantId":"candidate","status":"passed","traceId":"trace-1"}]
 	}`)
 	writeQualityRecordFixture(t, dir, "baselines", "baseline-1", `{
 		"_tag":"QualityBaseline",
@@ -950,7 +950,7 @@ func TestHTTPServer_quality_runs_endpoint_enriches_traces_for_workbench(t *testi
 		"id":"support-v1",
 		"suite":{"id":"support","caseCount":1},
 		"summary":{"total":1,"passed":1,"failed":0,"errored":0},
-		"cases":[{"caseId":"refunds","variantId":"main","status":"passed","traceId":"tr-1","scores":[{"kind":"numeric","name":"quality","value":0.92}]}]
+		"cells":[{"caseId":"refunds","variantId":"main","status":"passed","traceId":"tr-1","scores":[{"kind":"numeric","name":"quality","value":0.92}]}]
 	}`)
 	if err := os.MkdirAll(filepath.Join(dir, "feedback"), 0755); err != nil {
 		t.Fatalf("mkdir feedback: %v", err)
@@ -1098,7 +1098,7 @@ func TestHTTPServer_quality_insights_endpoint_derives_attention_items(t *testing
 		"aggregates":{"perVariant":{"main":{"cells":2,"passed":1,"failed":1,"errored":0,"skipped":0,"passRate":0.5,"scores":{},"latency":{"meanMs":1,"p95Ms":1}}}},
 		"gates":{"passed":false,"informational":false,"results":[]},
 		"passed":false,
-		"cases":[{"caseId":"okta","variantName":"main","trial":0,"status":"failed","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"failures":[]},"durationMs":1,"traceIds":[],"capturedSignals":[]}]
+		"cells":[{"caseId":"okta","variantName":"main","trial":0,"status":"failed","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"outcomes":[]},"durationMs":1,"traceIds":[],"capturedSignals":[]}]
 	}`)
 	if err := os.MkdirAll(filepath.Join(dir, "feedback"), 0755); err != nil {
 		t.Fatalf("mkdir feedback: %v", err)
@@ -1162,7 +1162,7 @@ func TestHTTPServer_quality_insight_status_persists(t *testing.T) {
 		"aggregates":{"perVariant":{"main":{"cells":1,"passed":0,"failed":1,"errored":0,"skipped":0,"passRate":0,"scores":{},"latency":{"meanMs":1,"p95Ms":1}}}},
 		"gates":{"passed":false,"informational":false,"results":[]},
 		"passed":false,
-		"cases":[{"caseId":"okta","variantName":"main","trial":0,"status":"failed","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"failures":[]},"durationMs":1,"traceIds":[],"capturedSignals":[]}]
+		"cells":[{"caseId":"okta","variantName":"main","trial":0,"status":"failed","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"outcomes":[]},"durationMs":1,"traceIds":[],"capturedSignals":[]}]
 	}`)
 	s := store.NewStore()
 	srv := NewHTTPServer(s, ServerOptions{QualityDir: dir})
@@ -1412,7 +1412,7 @@ func specOverviewExperimentFixture(id string, passed int, failed int) string {
 	}
 	for i, status := range statuses {
 		cells = append(cells, fmt.Sprintf(
-			`{"caseId":"case-%d","variantName":"main","trial":0,"status":"%s","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"failures":[]},"durationMs":1,"traceIds":["tr-%d"],"capturedSignals":[]}`,
+			`{"caseId":"case-%d","variantName":"main","trial":0,"status":"%s","input":{},"scores":[],"assertions":{"ran":1,"notEvaluated":0,"outcomes":[]},"durationMs":1,"traceIds":["tr-%d"],"capturedSignals":[]}`,
 			i+1, status, i+1,
 		))
 	}
@@ -1434,7 +1434,7 @@ func specOverviewExperimentFixture(id string, passed int, failed int) string {
 		"aggregates":{"perVariant":{"main":{"cells":%d,"passed":%d,"failed":%d,"errored":0,"skipped":0,"passRate":%g,"scores":{},"latency":{"meanMs":1,"p95Ms":1}}}},
 		"gates":{"passed":%t,"informational":false,"results":[]},
 		"passed":%t,
-		"cases":[%s]
+		"cells":[%s]
 	}`, id, total, passed, failed, passRate, failed == 0, failed == 0, strings.Join(cells, ","))
 }
 
@@ -1476,7 +1476,7 @@ func qualityExperimentFixture(id string, variant string, status string, duration
 		"suite":{"id":"support","caseCount":1},
 		"summary":{"total":1,"passed":1,"failed":0,"errored":0},
 		"variants":[{"id":%q,"targetId":"support"}],
-		"cases":[{
+		"cells":[{
 			"caseId":"case-1",
 			"caseName":"Case 1",
 			"variantId":%q,

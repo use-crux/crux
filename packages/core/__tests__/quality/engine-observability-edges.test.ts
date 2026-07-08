@@ -109,7 +109,7 @@ describe('Quality runner observability graph edges', () => {
       }),
     })
     expect(caseRuns.map((record) => record.runId).sort()).toEqual(
-      [...experiment.perCase.map((cell) => cell.traceIds[0]!)].sort(),
+      [...experiment.cells.map((cell) => cell.traceIds[0]!)].sort(),
     )
     expect(new Set(caseRuns.map((record) => record.traceId))).toEqual(
       new Set([evalRun!.traceId]),
@@ -256,8 +256,8 @@ describe('Quality runner observability graph edges', () => {
 
     expect(edges(transport.records, 'replay.of')).toEqual([
       expect.objectContaining({
-        from: { kind: 'run', id: replayRun.perCase[0]!.traceIds[0] },
-        to: { kind: 'run', id: recordRun.perCase[0]!.traceIds[0] },
+        from: { kind: 'run', id: replayRun.cells[0]!.traceIds[0] },
+        to: { kind: 'run', id: recordRun.cells[0]!.traceIds[0] },
       }),
     ])
   })

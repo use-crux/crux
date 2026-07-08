@@ -16,6 +16,7 @@ export { target } from './target'
 export { scorers } from './scorers'
 export { dataset } from './dataset'
 export { cassette } from './replay'
+export { UncapturedSignalError } from './expect'
 
 // ── Types ─────────────────────────────────────────────────────────
 export type { Evaluation, EvaluationCoverageTargetId, EvaluateOptions, EvaluateApi, EvaluateFunction } from './evaluate'
@@ -31,7 +32,7 @@ export type {
   SignalExpect,
   ArgsMatcher,
   StepAccess,
-  UncapturedSignalError,
+  StepAccessor,
 } from './expect'
 export type {
   TurnDecisionReportContextExpect,
@@ -55,9 +56,17 @@ export type {
   OutputOf,
   ParamsOf,
   CapsOf,
-  ExpectedOf,
 } from './target'
-export type { Scorer, ScorerArgs, Score, ScorerFactory, BoundScorerLib, EmbedFn, JudgeBacked } from './scorers'
+export type {
+  Scorer,
+  ScorerArgs,
+  Score,
+  ScorerFactory,
+  ScorerLibrary,
+  BoundScorerLib,
+  EmbedFn,
+  JudgeBacked,
+} from './scorers'
 export type { RagContextPrecisionOptions, RagMetricOptions } from './internal/rag-metrics'
 export type { Gates, ScoreGate, GateResult } from './gates'
 export type { Dataset } from './dataset'
@@ -71,7 +80,6 @@ export type {
   Comparison,
   ComparisonDelta,
   CellScore,
-  CellAssertionFailure,
   CellAssertionOutcome,
   CellAssertionPhase,
   CellAssertionStatus,

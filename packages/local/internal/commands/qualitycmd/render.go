@@ -123,13 +123,13 @@ func (r *qualityRenderer) cellFailure(cell *domain.QualityCell, indent string) {
 	fmt.Fprintf(out, "%s%s %s %s\n", indent, r.io.Status("error"), cellLabel(cell),
 		r.io.Sprint(output.Dim, fmt.Sprintf("(trial %d)", cell.Trial+1)))
 
-	for _, failure := range cell.Assertions.Failures {
-		fmt.Fprintf(out, "%s    %s\n", indent, failure.Message)
-		if failure.ExpectedPreview != "" {
-			fmt.Fprintf(out, "%s      %s %s\n", indent, r.io.Sprint(output.Dim, "Expected:"), failure.ExpectedPreview)
+	for _, failure := range failedAssertionOutcomes(cell.Assertions.Outcomes) {
+		fmt.Fprintf(out, "%s    %s\n", indent, nonEmptyString(failure.Message, failure.Matcher))
+		if failure.Expected != nil && failure.Expected.Preview != "" {
+			fmt.Fprintf(out, "%s      %s %s\n", indent, r.io.Sprint(output.Dim, "Expected:"), failure.Expected.Preview)
 		}
-		if failure.ActualPreview != "" {
-			fmt.Fprintf(out, "%s      %s %s\n", indent, r.io.Sprint(output.Dim, "Received:"), failure.ActualPreview)
+		if failure.Actual != nil && failure.Actual.Preview != "" {
+			fmt.Fprintf(out, "%s      %s %s\n", indent, r.io.Sprint(output.Dim, "Received:"), failure.Actual.Preview)
 		}
 		if failure.SourceRef != "" {
 			fmt.Fprintf(out, "%s      %s\n", indent, r.io.Sprint(output.Dim, "at "+failure.SourceRef))

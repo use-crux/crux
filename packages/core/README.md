@@ -100,6 +100,34 @@ Use `contentText()` or `messageText()` whenever existing code needs a string. Te
 
 Unsupported provider content degrades deliberately: the adapter sends the placeholder text, emits a diagnostics warning, and records a `content.degraded` span event. Pass `unsupportedContent: "error"` in generation settings when unsupported content should throw `UnsupportedContentError` before the provider call.
 
+## Quality Evaluations
+
+Quality runs live in `@use-crux/core/quality`. `evaluate()` keeps the task as
+the only inference anchor, `expect` callbacks run before scorers, and
+`afterScores` callbacks run after scorers with typed access to static scorer
+outputs through `ctx.score`.
+
+```ts
+import { evaluate, scorers } from "@use-crux/core/quality";
+
+export default evaluate({
+  task: classify,
+  data: [{ input: { text: "This is incredible." }, expected: { sentiment: "positive" } }],
+  scorers: [scorers.exact()],
+  expect: (ctx) => {
+    ctx.expect(ctx.output.sentiment).toBeDefined();
+    ctx.recordScore("has-sentiment", 1);
+  },
+  afterScores: (ctx) => {
+    ctx.expect(ctx.score.exact).toBe(1);
+  },
+});
+```
+
+Experiment records are schema-versioned JSON. Current records store executed
+cells under `cells` and assertion details under the ordered
+`assertions.outcomes` ledger.
+
 ## Adapter Results
 
 Core-step adapters such as `@use-crux/openai`, `@use-crux/anthropic`, and

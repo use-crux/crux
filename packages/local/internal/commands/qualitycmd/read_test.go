@@ -33,7 +33,7 @@ func TestQualityProgressCommandOutputsJSONReadModel(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": []
+  "cells": []
 }`)
 	writeQualityCommandFixture(t, dir, "baselines", "evals.cli.progress.json", `{
   "schemaVersion": 1,
@@ -82,7 +82,7 @@ func TestQualityCellEvidenceCommandOutputsJSONReadModel(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-cli",
     "variantName": "default",
     "trial": 0,
@@ -93,7 +93,16 @@ func TestQualityCellEvidenceCommandOutputsJSONReadModel(t *testing.T) {
     "assertions": {
       "ran": 1,
       "notEvaluated": 0,
-      "failures": [{ "level": "evaluation", "index": 0, "matcher": "toBe", "soft": false, "message": "expected ok" }]
+      "outcomes": [{
+        "id": "expect:evaluation:0",
+        "level": "evaluation",
+        "phase": "expect",
+        "index": 0,
+        "status": "failed",
+        "matcher": "toBe",
+        "soft": false,
+        "message": "expected ok"
+      }]
     },
     "durationMs": 1000,
     "traceIds": [],

@@ -2,7 +2,7 @@
  * Callback runner for Quality assertion phases.
  *
  * The engine has two assertion phases with the same control-flow contract:
- * pre-score `expect` and post-score `assert`. This module owns the replay
+ * pre-score `expect` and post-score `afterScores`. This module owns the replay
  * pass that counts not-evaluated matchers after a hard assertion failure, so
  * the large engine only wires phase-specific contexts.
  *

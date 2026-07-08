@@ -52,7 +52,7 @@ func (s *Service) evidenceBaseline(
 		return unavailableBaseline(*ref, "baseline-experiment-missing"), nil
 	}
 
-	baselineCell, found, caseExists := findBaselineCell(source.Cases, cell, ref.VariantName)
+	baselineCell, found, caseExists := findBaselineCell(source.Cells, cell, ref.VariantName)
 	if !found {
 		if caseExists {
 			return unavailableBaseline(*ref, "variant-not-comparable"), nil

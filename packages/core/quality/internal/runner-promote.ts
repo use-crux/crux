@@ -12,7 +12,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ExperimentCell } from '../experiment'
 import { buildBaselineReference, gitUserName, writeBaselineRecord, type BaselineRecord } from './baseline'
-import { experimentRecordPath } from './persist'
+import { EXPERIMENT_RECORD_SCHEMA_VERSION, experimentRecordPath } from './persist'
 import { ulid } from './ulid'
 import type {
   QualityCollectedEvaluation,
@@ -29,7 +29,7 @@ interface PersistedExperiment {
   readonly observability?: { readonly runId: string; readonly traceId: string }
   readonly filteredRun: boolean
   readonly variants: readonly { readonly name: string }[]
-  readonly cases: readonly ExperimentCell[]
+  readonly cells: readonly ExperimentCell[]
 }
 
 /** Promote a persisted experiment into a committed baseline. */
@@ -73,7 +73,7 @@ export async function promoteQualityExperiment(
   if ('error' in variant) return fail(variant.error)
 
   const baselineRecord: BaselineRecord = {
-    schemaVersion: 1,
+    schemaVersion: EXPERIMENT_RECORD_SCHEMA_VERSION,
     baselineId: ulid(),
     evaluationId: identity.evaluationId,
     experimentId: input.experimentId,
@@ -82,7 +82,7 @@ export async function promoteQualityExperiment(
     promotedAt: new Date().toISOString(),
     ...(gitUserName(rootDir) !== undefined ? { promotedBy: gitUserName(rootDir) } : {}),
     configFingerprint: record.configFingerprint,
-    reference: buildBaselineReference(record.cases, variant.variantName),
+    reference: buildBaselineReference(record.cells, variant.variantName),
   }
   const path = await writeBaselineRecord(dir, baselineRecord)
 

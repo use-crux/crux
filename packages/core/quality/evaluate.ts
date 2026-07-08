@@ -203,7 +203,7 @@ export interface EvaluateOptionsShape<TIn, TOut, TParams, TCaps extends Capabili
    * `ctx.score` exposes statically named scorer outputs; dynamic scores stay
    * in `ctx.scores`.
    */
-  assert?: (
+  afterScores?: (
     ctx: AssertContext<TIn, TOut, NoInfer<TExpected>, StaticScorerNamesOf<TScorers>, TCaps>,
   ) => void | Promise<void>
 
@@ -435,7 +435,7 @@ interface RawEvaluateOptions {
   task?: unknown
   data?: unknown
   expect?: unknown
-  assert?: unknown
+  afterScores?: unknown
   scorers?: unknown
   params?: unknown
   variants?: unknown
@@ -613,7 +613,7 @@ function createEvaluation(
     cases: Object.freeze(cases),
     datasets: Object.freeze(datasets),
     expect: options.expect as EvaluationDefinition['expect'],
-    assert: options.assert as EvaluationDefinition['assert'],
+    afterScores: options.afterScores as EvaluationDefinition['afterScores'],
     scorers: Object.freeze(scorers),
     params: options.params as EvaluationDefinition['params'],
     variants: Object.freeze(variants),

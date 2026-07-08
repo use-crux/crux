@@ -906,7 +906,7 @@ func (s *Service) ScorerStatsAPI(_ context.Context) ([]api.QualityScorerStats, e
 		if usedAt == "" {
 			usedAt = record.StartedAt
 		}
-		for _, cell := range record.Cases {
+		for _, cell := range record.Cells {
 			for _, score := range cell.Scores {
 				if score.Name == "" {
 					continue

@@ -25,7 +25,7 @@ type ExperimentRecord struct {
 	Replay            ExperimentReplay     `json:"replay"`
 	BaselineRef       *ExperimentBaseline  `json:"baselineRef,omitempty"`
 	Variants          []ExperimentVariants `json:"variants"`
-	Cases             []SpecExperimentCell `json:"cases"`
+	Cells             []SpecExperimentCell `json:"cells"`
 	Aggregates        ExperimentAggregates `json:"aggregates"`
 	Comparison        *SpecComparison      `json:"comparison,omitempty"`
 	Gates             SpecGates            `json:"gates"`
@@ -116,18 +116,19 @@ type SpecCellScore struct {
 type SpecAssertions struct {
 	Ran          int                    `json:"ran"`
 	NotEvaluated int                    `json:"notEvaluated"`
-	Failures     []SpecAssertionFailure `json:"failures"`
+	Outcomes     []SpecAssertionOutcome `json:"outcomes"`
 }
 
-type SpecAssertionFailure struct {
-	Level           string `json:"level"`
-	Index           int    `json:"index"`
-	Matcher         string `json:"matcher"`
-	Soft            bool   `json:"soft"`
-	Message         string `json:"message"`
-	ExpectedPreview string `json:"expectedPreview,omitempty"`
-	ActualPreview   string `json:"actualPreview,omitempty"`
-	SourceRef       string `json:"sourceRef,omitempty"`
+type SpecAssertionOutcome struct {
+	ID        string `json:"id"`
+	Level     string `json:"level"`
+	Phase     string `json:"phase"`
+	Index     int    `json:"index"`
+	Status    string `json:"status"`
+	Matcher   string `json:"matcher"`
+	Soft      bool   `json:"soft"`
+	Message   string `json:"message,omitempty"`
+	SourceRef string `json:"sourceRef,omitempty"`
 }
 
 type SpecCellError struct {

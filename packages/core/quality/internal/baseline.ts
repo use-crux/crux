@@ -17,7 +17,7 @@ import { sha256Hex } from './json'
 
 /** The committed baseline record (spec 02 §3). */
 export interface BaselineRecord {
-  schemaVersion: 1
+  schemaVersion: 2
   /** ULID. */
   baselineId: string
   /** Explicit (pinned) at promote time. */

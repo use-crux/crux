@@ -1043,7 +1043,7 @@ function bottomLine(
     icon: 'x',
     node: (
       <>
-        <b>Don&rsquo;t ship.</b> A blocking gate failed{exp.cases.some((c) => c.status === 'errored') ? ' and a cell errored' : ''}.
+        <b>Don&rsquo;t ship.</b> A blocking gate failed{exp.cells.some((c) => c.status === 'errored') ? ' and a cell errored' : ''}.
       </>
     ),
   }
@@ -1453,7 +1453,7 @@ interface CaseGroup {
 function groupCells(exp: QualityExperimentDetail): CaseGroup[] {
   const order: string[] = []
   const by: Record<string, CaseGroup> = {}
-  for (const cell of exp.cases) {
+  for (const cell of exp.cells) {
     if (!by[cell.caseId]) {
       by[cell.caseId] = { caseId: cell.caseId, caseName: cell.caseName, cells: {} }
       order.push(cell.caseId)

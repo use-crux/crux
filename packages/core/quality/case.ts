@@ -49,7 +49,7 @@ export interface CaseOptions<
    * Case-specific post-score assertions. Runs after scorers, with
    * statically named scorer outputs available on `ctx.score`.
    */
-  assert?: (ctx: AssertContext<TInput, TOutput, TExpected, TScoreName, TCaps>) => void | Promise<void>
+  afterScores?: (ctx: AssertContext<TInput, TOutput, TExpected, TScoreName, TCaps>) => void | Promise<void>
   /** Executions for this case. Wins over the evaluation-level `trials`. */
   trials?: number
   /** Free-form labels shown in reports and usable for filtering. */

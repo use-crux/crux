@@ -198,7 +198,7 @@ func (s *Experiments) failingCells() []api.QualityExperimentCell {
 		return nil
 	}
 	out := make([]api.QualityExperimentCell, 0)
-	for _, cell := range s.detail.Cases {
+	for _, cell := range s.detail.Cells {
 		switch cell.Status {
 		case "passed", "skipped":
 			continue

@@ -31,7 +31,7 @@ func TestCellEvidenceAPIUsesExactAssertionSpanEvidence(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-1",
     "caseName": "refund policy",
     "variantName": "candidate",
@@ -43,7 +43,7 @@ func TestCellEvidenceAPIUsesExactAssertionSpanEvidence(t *testing.T) {
     "assertions": {
       "ran": 1,
       "notEvaluated": 0,
-      "failures": [],
+      "outcomes": [],
       "outcomes": [{
         "id": "assert-0",
         "level": "evaluation",
@@ -119,7 +119,7 @@ func TestCellEvidenceAPIUsesScoreThresholdTraceHeuristic(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-1",
     "caseName": "refund policy",
     "variantName": "candidate",
@@ -131,7 +131,7 @@ func TestCellEvidenceAPIUsesScoreThresholdTraceHeuristic(t *testing.T) {
     "assertions": {
       "ran": 1,
       "notEvaluated": 0,
-      "failures": [],
+      "outcomes": [],
       "outcomes": [{
         "id": "assert-score",
         "level": "evaluation",
@@ -211,7 +211,7 @@ func TestCellEvidenceAPIPreservesRootOnlyTraceLinks(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-1",
     "caseName": "root-only callback",
     "variantName": "candidate",
@@ -223,7 +223,7 @@ func TestCellEvidenceAPIPreservesRootOnlyTraceLinks(t *testing.T) {
     "assertions": {
       "ran": 1,
       "notEvaluated": 0,
-      "failures": [],
+      "outcomes": [],
       "outcomes": [{
         "id": "assert-0",
         "level": "evaluation",

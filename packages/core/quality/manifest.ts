@@ -21,8 +21,8 @@ import { contentCaseId, slugifyCaseName } from './internal/json'
  *
  * The collect-time fields (`id` for path-derived ids, `file`, `exportName`)
  * are filled by the runner when it imports the defining module; a manifest
- * read straight off an `Evaluation` value before collection carries `''`
- * for unresolved fields and the explicit id when one was given.
+ * read straight off an `Evaluation` value before collection omits unresolved
+ * fields and carries the explicit id when one was given.
  *
  * @example
  * ```ts
@@ -35,14 +35,14 @@ import { contentCaseId, slugifyCaseName } from './internal/json'
  */
 export interface EvaluationManifest {
   schemaVersion: 1
-  /** Resolved id (explicit or path-derived; `''` pre-collection for derived ids). */
-  id: string
+  /** Resolved id (explicit or path-derived; absent pre-collection for derived ids). */
+  id?: string
   /** Whether the id was explicit in source (promotion requires explicit). */
   explicitId: boolean
-  /** Defining file relative to the quality root (`''` pre-collection). */
-  file: string
-  /** `'default'` or the named export (`''` pre-collection). */
-  exportName: string
+  /** Defining file relative to the quality root (absent pre-collection). */
+  file?: string
+  /** `'default'` or the named export (absent pre-collection). */
+  exportName?: string
   /** `'file'` for authored evaluations; `'prompt-tests'` for lowered colocated tests. */
   source: 'file' | 'prompt-tests'
   description?: string
@@ -64,7 +64,7 @@ export interface EvaluationManifest {
     /** Case-level callback present. */
     hasExpect: boolean
     /** Case-level post-score callback present. */
-    hasAssert: boolean
+    hasAfterScores: boolean
     /** Resolved trials (case override or evaluation default). */
     trials: number
     tags: string[]
@@ -74,7 +74,7 @@ export interface EvaluationManifest {
   datasets: Array<{ path: string; caseCount?: number }>
 
   hasEvaluationExpect: boolean
-  hasEvaluationAssert: boolean
+  hasEvaluationAfterScores: boolean
   /** Scorer names + cost classes; `'(dynamic)'` for unnamed plain functions. */
   scorers: Array<{ name: string; costClass: 'code' | 'model' }>
 
@@ -123,10 +123,8 @@ export function buildManifest(definition: EvaluationDefinition): EvaluationManif
 
   const manifest: EvaluationManifest = {
     schemaVersion: 1,
-    id: definition.id ?? '',
+    ...(definition.id !== undefined ? { id: definition.id } : {}),
     explicitId: definition.id !== undefined,
-    file: '',
-    exportName: '',
     source: definition.source,
     ...(definition.description !== undefined ? { description: definition.description } : {}),
     tags: [...definition.tags],
@@ -140,7 +138,7 @@ export function buildManifest(definition: EvaluationDefinition): EvaluationManif
       caseId: resolveCaseId(rawCase),
       ...(rawCase.name !== undefined ? { name: rawCase.name } : {}),
       hasExpect: typeof rawCase.expect === 'function',
-      hasAssert: typeof rawCase.assert === 'function',
+      hasAfterScores: typeof rawCase.afterScores === 'function',
       trials: rawCase.trials ?? definition.trials ?? 1,
       tags: [...(rawCase.tags ?? [])],
       ...(rawCase.skip !== undefined ? { skip: rawCase.skip } : {}),
@@ -148,7 +146,7 @@ export function buildManifest(definition: EvaluationDefinition): EvaluationManif
     })),
     datasets: definition.datasets.map((ds) => ({ path: ds.path })),
     hasEvaluationExpect: typeof definition.expect === 'function',
-    hasEvaluationAssert: typeof definition.assert === 'function',
+    hasEvaluationAfterScores: typeof definition.afterScores === 'function',
     scorers: definition.scorers.map((scorer) => ({
       name: scorer.scorerName ?? '(dynamic)',
       costClass: scorer.costClass ?? 'code',

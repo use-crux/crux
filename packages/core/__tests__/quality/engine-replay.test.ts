@@ -55,7 +55,7 @@ describe('engine replay — record-new then replay-strict', () => {
     })
 
     const recordRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } })
-    expect(recordRun.perCase[0]!.status).toBe('passed')
+    expect(recordRun.cells[0]!.status).toBe('passed')
     expect(recordRun.replay).toMatchObject({ mode: 'record-new', cassette: 'replay.smoke' })
     expect(liveCalls()).toBe(1)
     const cassetteFile = join(dir, 'cassettes', 'replay.smoke.json')
@@ -67,8 +67,8 @@ describe('engine replay — record-new then replay-strict', () => {
       { replayMode: 'replay-strict' },
     )
     expect(liveCalls()).toBe(1) // zero new live calls
-    expect(replayRun.perCase[0]!.status).toBe('passed')
-    expect(replayRun.perCase[0]!.output).toBe('recorded answer')
+    expect(replayRun.cells[0]!.status).toBe('passed')
+    expect(replayRun.cells[0]!.output).toBe('recorded answer')
     expect(replayRun.replay).toMatchObject({ mode: 'replay-strict', cassette: 'replay.smoke' })
   })
 
@@ -102,7 +102,7 @@ describe('engine replay — record-new then replay-strict', () => {
     })
 
     const experiment = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } })
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect(cell.status).toBe('errored')
     expect(cell.error?.phase).toBe('replay')
     expect(cell.error?.message).toMatch(/[0-9a-f]{64}/)
@@ -124,14 +124,14 @@ describe('engine replay — trials collapse under replay-strict', () => {
     })
 
     const recordRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } })
-    expect(recordRun.perCase).toHaveLength(3) // trials run live under record-new
+    expect(recordRun.cells).toHaveLength(3) // trials run live under record-new
 
     const replayRun = await run(
       evaluation,
       { dir, setup: { generate, model: 'fake:m1' } },
       { replayMode: 'replay-strict' },
     )
-    expect(replayRun.perCase).toHaveLength(1)
+    expect(replayRun.cells).toHaveLength(1)
     expect(replayRun.replay).toMatchObject({ mode: 'replay-strict', trialsCollapsed: true })
   })
 })
@@ -161,7 +161,7 @@ describe('engine replay — variants share one cassette', () => {
       { replayMode: 'replay-strict' },
     )
     expect(liveCalls()).toBe(2)
-    const outputs = replayRun.perCase.map((cell) => cell.output).sort()
+    const outputs = replayRun.cells.map((cell) => cell.output).sort()
     expect(outputs).toEqual(['from m1', 'from m2'])
   })
 })
@@ -191,7 +191,7 @@ describe('engine replay — judge scorers replay through the same cassette', () 
     )
     expect(replayer.fake.calls.runTextLoop).toHaveLength(0)
     expect(replayer.fake.calls.runStructuredAttempt).toHaveLength(0)
-    const judged = replayRun.perCase[0]!.scores.find((score) => score.name === 'quality')
+    const judged = replayRun.cells[0]!.scores.find((score) => score.name === 'quality')
     expect(judged).toMatchObject({ score: 0.9 })
   })
 })

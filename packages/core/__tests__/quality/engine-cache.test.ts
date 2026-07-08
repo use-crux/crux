@@ -32,13 +32,13 @@ describe('Quality runner — output cache and reuseOutputs (spec 03 §5)', () =>
     const first = await run(makeEvaluation(), undefined, { cacheDir })
     expect(taskCalls).toBe(2)
     expect(scorerCalls).toBe(2)
-    expect(first.perCase.every((cell) => cell.metadata?.cached !== true)).toBe(true)
+    expect(first.cells.every((cell) => cell.metadata?.cached !== true)).toBe(true)
 
     const second = await run(makeEvaluation(), { reuseOutputs: true }, { cacheDir })
     expect(taskCalls).toBe(2) // tasks NOT re-executed
     expect(scorerCalls).toBe(4) // scorers re-ran against cached outputs
-    expect(second.perCase).toHaveLength(2)
-    for (const cell of second.perCase) {
+    expect(second.cells).toHaveLength(2)
+    for (const cell of second.cells) {
       expect(cell.status).toBe('passed')
       expect(cell.metadata?.cached).toBe(true)
       expect(cell.output).toMatch(/^(AA|BB)$/)
@@ -68,8 +68,8 @@ describe('Quality runner — output cache and reuseOutputs (spec 03 §5)', () =>
     })
     const experiment = await run(changed, { reuseOutputs: true }, { cacheDir })
     expect(calls).toBe(2) // cache miss → live execution
-    expect(experiment.perCase[0]!.metadata?.cached).not.toBe(true)
-    expect(experiment.perCase[0]!.output).toBe('aa')
+    expect(experiment.cells[0]!.metadata?.cached).not.toBe(true)
+    expect(experiment.cells[0]!.output).toBe('aa')
   })
 
   it('reuseOutputs without any cache executes live (miss = live, never an error)', async () => {
@@ -85,7 +85,7 @@ describe('Quality runner — output cache and reuseOutputs (spec 03 §5)', () =>
     const experiment = await run(evaluation, { reuseOutputs: true }, { cacheDir })
 
     expect(calls).toBe(1)
-    expect(experiment.perCase[0]!.status).toBe('passed')
+    expect(experiment.cells[0]!.status).toBe('passed')
   })
 
   it('does not reuse the cache when reuseOutputs is not set, but keeps it warm', async () => {

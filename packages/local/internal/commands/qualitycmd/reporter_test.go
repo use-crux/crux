@@ -54,7 +54,7 @@ func TestReporterColorlessInvariant(t *testing.T) {
 	failing := domain.QualityCell{
 		CaseID: "c2", CaseName: "rejects empty", VariantName: "default", Status: "failed",
 	}
-	failing.Assertions.Failures = []domain.QualityAssertionFailure{{Message: "expected non-empty"}}
+	failing.Assertions.Outcomes = []domain.QualityAssertionOutcome{{Status: "failed", Matcher: "toBe", Message: "expected non-empty"}}
 
 	feed(reporter, 0,
 		&domain.QualityEvent{Type: "collect:done", Evaluations: make([]domain.QualityManifest, 1)},
@@ -92,7 +92,7 @@ func TestReporterColorPresentOnPassAndFailRows(t *testing.T) {
 	reporter := newQualityReporter(&qualityRunOpts{}, io, 4400)
 
 	failing := domain.QualityCell{CaseID: "c2", CaseName: "rejects empty", VariantName: "default", Status: "failed"}
-	failing.Assertions.Failures = []domain.QualityAssertionFailure{{Message: "boom"}}
+	failing.Assertions.Outcomes = []domain.QualityAssertionOutcome{{Status: "failed", Matcher: "toBe", Message: "boom"}}
 
 	reporter.handle(&domain.QualityEvent{Type: "cell:done", EvaluationID: "e", Cell: &failing})
 	reporter.handle(evalDoneEvent("e", variantAgg(3, 0, 0, 0, 1.0)))

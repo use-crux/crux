@@ -43,10 +43,10 @@ func TestInsightsLinkIndexDefinitionsAndSources(t *testing.T) {
 	  } } },
 	  "gates": { "passed": false, "informational": false, "results": [] },
 	  "passed": false,
-	  "cases": [{
+	  "cells": [{
 	    "caseId": "case-1", "variantName": "candidate", "trial": 0, "status": "failed",
 	    "input": {}, "scores": [],
-	    "assertions": { "ran": 1, "notEvaluated": 0, "failures": [] },
+	    "assertions": { "ran": 1, "notEvaluated": 0, "outcomes": [] },
 	    "durationMs": 1, "traceIds": ["trace-failed"], "capturedSignals": []
 	  }]
 	}`

@@ -36,7 +36,7 @@ describe('Quality runner — cell event callbacks (runner stream)', () => {
     })
 
     expect(events).toHaveLength(4)
-    for (const cell of experiment.perCase) {
+    for (const cell of experiment.cells) {
       const startIndex = events.indexOf(`start:${cell.caseId}:default:0`)
       const doneIndex = events.indexOf(`done:${cell.caseId}:passed`)
       expect(startIndex).toBeGreaterThanOrEqual(0)
@@ -97,7 +97,7 @@ describe('Quality runner - programmatic observability', () => {
     })
 
     const experiment = await run(evaluation)
-    const runId = experiment.perCase[0]!.traceIds[0]
+    const runId = experiment.cells[0]!.traceIds[0]
     const records = posted.flatMap((entry) => (JSON.parse(entry.body) as { records: unknown[] }).records)
 
     expect(runId).toMatch(/^run_/)
@@ -120,7 +120,7 @@ describe('Quality runner — config defaults channel (quality.defaults)', () => 
     })
     const experiment = await run(evaluation, undefined, { defaults: { trials: 3 } })
 
-    expect(experiment.perCase).toHaveLength(3)
+    expect(experiment.cells).toHaveLength(3)
   })
 
   it('declared trials win over defaults.trials', async () => {
@@ -131,7 +131,7 @@ describe('Quality runner — config defaults channel (quality.defaults)', () => 
     })
     const experiment = await run(evaluation, undefined, { defaults: { trials: 5 } })
 
-    expect(experiment.perCase).toHaveLength(2)
+    expect(experiment.cells).toHaveLength(2)
   })
 
   it('applies defaults.timeoutMs when the evaluation does not declare a timeout', async () => {
@@ -141,8 +141,8 @@ describe('Quality runner — config defaults channel (quality.defaults)', () => 
     })
     const experiment = await run(evaluation, undefined, { defaults: { timeoutMs: 10 } })
 
-    expect(experiment.perCase[0]!.status).toBe('errored')
-    expect(experiment.perCase[0]!.error?.phase).toBe('timeout')
+    expect(experiment.cells[0]!.status).toBe('errored')
+    expect(experiment.cells[0]!.error?.phase).toBe('timeout')
   })
 })
 
@@ -165,7 +165,7 @@ describe('Quality runner — capture settling must not hold cells hostage', () =
       // Forwarding QoS is not the runner's job: the capture tee receives
       // records synchronously at dispatch; settle must give up quickly.
       expect(wallMs).toBeLessThan(2_000)
-      for (const cell of experiment.perCase) {
+      for (const cell of experiment.cells) {
         expect(cell.status).toBe('passed')
         // Task latency, not capture plumbing.
         expect(cell.durationMs).toBeLessThan(1_000)

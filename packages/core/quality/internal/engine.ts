@@ -67,7 +67,6 @@ import {
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction, truncateOutput } from './redact'
 import {
-  failureFromOutcome,
   isFailureOutcome,
   redactAssertionOutcomes,
 } from './assertion-outcomes'
@@ -80,7 +79,7 @@ import {
   type AssertionCallback,
 } from './assertion-callbacks'
 import { scoreMapFromScores } from './score-map'
-import { persistExperiment } from './persist'
+import { EXPERIMENT_RECORD_SCHEMA_VERSION, persistExperiment } from './persist'
 import { compareVariants, comparePromoted } from './compare'
 import {
   buildBaselineReference,
@@ -877,7 +876,7 @@ interface CellPlan {
 
 interface CellRuntimeError {
   message: string
-  phase: 'execute' | 'expect' | 'assert' | 'score' | 'replay' | 'timeout'
+  phase: 'execute' | 'expect' | 'afterScores' | 'score' | 'replay' | 'timeout'
   /** Set for replay-strict misses: the missing cassette key. */
   missingCassetteKey?: string
   /** Best-effort `file:line:column` for callback/task crashes. */
@@ -1102,7 +1101,7 @@ async function assembleCell(args: {
     }),
     variant: { name: plan.variant.name, params: effectiveParams },
     trial: plan.trial,
-    score(name, score, metadata) {
+    recordScore(name, score, metadata) {
       adHocScores.push({
         name,
         score,
@@ -1155,7 +1154,7 @@ async function assembleCell(args: {
           cellDurationMs: () => durationMs,
           cellErrored: () => cellError !== undefined,
         }),
-        score: () => {},
+        recordScore: () => {},
       }),
     })
     notEvaluated += result.notEvaluated
@@ -1247,20 +1246,20 @@ async function assembleCell(args: {
     const callbacks: AssertionCallback<
       AssertContext<unknown, unknown, unknown, string, Capability>
     >[] = []
-    if (definition.assert !== undefined) {
+    if (definition.afterScores !== undefined) {
       callbacks.push({
-        phase: 'assert',
+        phase: 'afterScores',
         level: 'evaluation',
-        fn: definition.assert as AssertionCallback<
+        fn: definition.afterScores as AssertionCallback<
           AssertContext<unknown, unknown, unknown, string, Capability>
         >['fn'],
       })
     }
-    if (typeof rawCase.assert === 'function') {
+    if (typeof rawCase.afterScores === 'function') {
       callbacks.push({
-        phase: 'assert',
+        phase: 'afterScores',
         level: 'case',
-        fn: rawCase.assert as AssertionCallback<
+        fn: rawCase.afterScores as AssertionCallback<
           AssertContext<unknown, unknown, unknown, string, Capability>
         >['fn'],
       })
@@ -1306,8 +1305,7 @@ async function assembleCell(args: {
       }),
     }
   }
-  const failures = outcomes.filter(isFailureOutcome).map(failureFromOutcome)
-  const passed = cellError === undefined && failures.length === 0
+  const passed = cellError === undefined && !outcomes.some(isFailureOutcome)
   scores.push({
     name: 'pass',
     score: cellError !== undefined ? 0 : passed ? 1 : 0,
@@ -1337,7 +1335,6 @@ async function assembleCell(args: {
     assertions: {
       ran: recorder.ran,
       notEvaluated,
-      failures,
       outcomes,
     },
     ...(cellError !== undefined ? { error: cellError } : {}),
@@ -1525,7 +1522,7 @@ function evaluateGates(input: {
   if (gates === undefined) {
     const noFailures =
       !erroredCells &&
-      cells.every((cell) => cell.assertions.failures.length === 0)
+      cells.every((cell) => !cell.assertions.outcomes.some(isFailureOutcome))
     results.push({
       gate: 'default.assertions',
       threshold: true,
@@ -1821,7 +1818,7 @@ async function runEvaluationInner(
           ...(typeof skip === 'string' ? { skipReason: skip } : {}),
           input: applyRedaction(resolved.raw.input, redactPaths),
           scores: [],
-          assertions: { ran: 0, notEvaluated: 0, failures: [] },
+          assertions: { ran: 0, notEvaluated: 0, outcomes: [] },
           durationMs: 0,
           traceIds: [],
           capturedSignals: [],
@@ -1874,7 +1871,7 @@ async function runEvaluationInner(
               skipReason: 'aborted',
               input: applyRedaction(plan.resolved.raw.input, redactPaths),
               scores: [],
-              assertions: { ran: 0, notEvaluated: 0, failures: [] },
+              assertions: { ran: 0, notEvaluated: 0, outcomes: [] },
               durationMs: 0,
               traceIds: [],
               capturedSignals: [],
@@ -2023,7 +2020,7 @@ async function runEvaluationInner(
     const overallGatePassed = filteredRun ? !erroredCells : gates.passed
 
     const experiment: Experiment<unknown, unknown, string, string> = {
-      schemaVersion: 1,
+      schemaVersion: EXPERIMENT_RECORD_SCHEMA_VERSION,
       experimentId: ulid(),
       evaluationId,
       qualityId,
@@ -2052,7 +2049,7 @@ async function runEvaluationInner(
           ? { overrides: context.overrides }
           : {}),
       })),
-      perCase: cells,
+      cells: cells,
       aggregates: { perVariant: aggregates },
       ...(comparison !== undefined ? { comparison } : {}),
       gates: {
@@ -2094,7 +2091,7 @@ async function runEvaluationInner(
         }
         const baselineEvaluationId = explicitId ?? opts!.id!
         const record: BaselineRecord = {
-          schemaVersion: 1,
+          schemaVersion: EXPERIMENT_RECORD_SCHEMA_VERSION,
           baselineId: ulid(),
           evaluationId: baselineEvaluationId,
           experimentId: experiment.experimentId,

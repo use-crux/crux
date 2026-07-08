@@ -354,7 +354,7 @@ func runQualityShow(f *cli.Factory, experimentID, dir string, jsonOut bool) erro
 		QualityID    string                    `json:"qualityId"`
 		StartedAt    string                    `json:"startedAt"`
 		FilteredRun  bool                      `json:"filteredRun"`
-		Cases        []domain.QualityCell      `json:"cases"`
+		Cells        []domain.QualityCell      `json:"cells"`
 		Aggregates   domain.QualityAggregates  `json:"aggregates"`
 		Gates        domain.QualityGates       `json:"gates"`
 		Passed       bool                      `json:"passed"`
@@ -370,7 +370,7 @@ func runQualityShow(f *cli.Factory, experimentID, dir string, jsonOut bool) erro
 	renderer := newQualityRenderer(io, f.Port)
 	state := &qualityEvalState{
 		evaluationID: record.EvaluationID,
-		cells:        record.Cases,
+		cells:        record.Cells,
 		aggregates:   &record.Aggregates,
 		gates:        &record.Gates,
 		filteredRun:  record.FilteredRun,
