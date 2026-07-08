@@ -44,6 +44,7 @@ import { promoteExperiment } from '../lib/quality-promote'
 import { createQualityRunId } from '../lib/quality-run-id'
 import { getArg, getRepeatedArg, hasFlag, positionalArgs } from '../lib/quality-runner-argv'
 import { discoverQualityInitTargets } from '../lib/quality-init'
+import { selectChangedEvaluations } from '../lib/quality-changed'
 
 // Redirect console.log to stderr so stdout stays clean NDJSON.
 console.log = (...args: unknown[]) => console.error(...args)
@@ -59,6 +60,11 @@ async function main(): Promise<number> {
   const configPath = getArg(args, '--config')
   const collectOnly = hasFlag(args, '--collect-only')
   const cases = getRepeatedArg(args, '--case')
+  const failed = getArg(args, '--failed')
+  const sampleArg = getArg(args, '--sample')
+  const seedArg = getArg(args, '--seed')
+  const maxCostArg = getArg(args, '--max-cost')
+  const changedSince = getArg(args, '--changed-since')
   const variants = getRepeatedArg(args, '--variant')
   const replayArg = getArg(args, '--replay')
   const rescore = hasFlag(args, '--rescore')
@@ -73,6 +79,18 @@ async function main(): Promise<number> {
   const initTargets = hasFlag(args, '--init-targets')
   const initDefinition = getArg(args, '--definition')
   const ids = positionalArgs(args)
+
+  if (sampleArg !== undefined && seedArg === undefined) {
+    emit({
+      type: 'error',
+      scope: 'execute',
+      message: '--sample requires --seed so sampled runs are reproducible.',
+    })
+    emit({ type: 'run:done', experiments: [], exitCode: 2 })
+    return 2
+  }
+  const sampleSize = sampleArg === undefined ? undefined : Number(sampleArg)
+  const maxCostUsd = maxCostArg === undefined ? undefined : Number(maxCostArg)
 
   const REPLAY_MODES: readonly ReplayMode[] = ['live', 'record-new', 'replay-strict', 'refresh']
   if (replayArg !== undefined && !REPLAY_MODES.includes(replayArg as ReplayMode)) {
@@ -229,11 +247,32 @@ async function main(): Promise<number> {
   const sourceResolver = new SourceResolver({ projectRoot: project.configDir })
 
   try {
+    let runIds = ids
+    if (changedSince !== undefined) {
+      const changed = selectChangedEvaluations({
+        projectRoot: project.configDir,
+        gitRef: changedSince,
+        collected,
+        ...(ids.length > 0 ? { ids } : {}),
+      })
+      if (changed.failOpenReason !== undefined) {
+        console.error(`warning: ${changed.failOpenReason}`)
+      } else {
+        runIds = [...changed.ids]
+      }
+      if (changed.failOpenReason === undefined && runIds.length === 0) {
+        emit({ type: 'run:done', experiments: [], exitCode: 0 })
+        return 0
+      }
+    }
     const result = await executeEvaluations({
       core,
       collected,
-      ...(ids.length > 0 ? { ids } : {}),
+      ...(runIds.length > 0 ? { ids: runIds } : {}),
       ...(cases.length > 0 ? { cases } : {}),
+      ...(failed !== undefined ? { failed } : {}),
+      ...(sampleSize !== undefined && seedArg !== undefined ? { sample: { size: sampleSize, seed: seedArg } } : {}),
+      ...(maxCostUsd !== undefined ? { maxCostUsd } : {}),
       ...(variants.length > 0 ? { variants } : {}),
       ...(replayMode !== undefined ? { replayMode } : {}),
       ...(rescore ? { reuseOutputs: true } : {}),

@@ -1,11 +1,15 @@
 /**
- * `@use-crux/core/quality` — the Quality public surface, curated exports only.
+ * `@use-crux/core/quality` — the Quality beta public surface.
  *
- * Five values: `evaluate`, `target`, `scorers`, `dataset`, `cassette`.
- * Everything else is types. The internal engine (normalization, matrix
- * execution, statistics, persistence) lives under `quality/internal/` and is
- * never exported. First-party tooling uses the separate `@internal`
- * `@use-crux/core/quality/internal/runner` facade (no stability guarantees).
+ * Quality is beta: the authoring surface (`evaluate`, `target`, `scorers`,
+ * `dataset`, `cassette`), the experiment/manifest record schemas
+ * (`quality/schemas`), CLI JSON outputs, and exit codes are stable within 0.x
+ * minors. Breaking changes get a changeset `minor` and a migration note.
+ * `quality/internal/runner` remains internal with no guarantees.
+ *
+ * The five authoring values are `evaluate`, `target`, `scorers`, `dataset`,
+ * and `cassette`. `UncapturedSignalError` is exported as a runtime error class
+ * for assertion handling; the rest of this module is types.
  *
  * @module
  */

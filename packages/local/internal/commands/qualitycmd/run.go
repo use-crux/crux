@@ -31,6 +31,11 @@ type qualityRunOpts struct {
 	cwd            string
 	ids            []string
 	cases          []string
+	failed         string
+	sample         int
+	seed           string
+	maxCost        float64
+	changedSince   string
 	variants       []string
 	trials         int
 	replay         string
@@ -49,6 +54,11 @@ func registerQualityRunFlags(cmd *cobra.Command, opts *qualityRunOpts) {
 	cmd.Flags().StringVar(&opts.configPath, "config", "", "Path to an optional crux.config.ts policy file")
 	cmd.Flags().StringVar(&opts.cwd, "cwd", "", "Working directory for project discovery (default: auto-detect)")
 	cmd.Flags().StringArrayVar(&opts.cases, "case", nil, "Filter cases by id/name (glob *), repeatable — demotes gates to informational")
+	cmd.Flags().StringVar(&opts.failed, "failed", "", "Rerun failed cells from an experiment id, or latest")
+	cmd.Flags().IntVar(&opts.sample, "sample", 0, "Deterministically sample N cases after filters; requires --seed")
+	cmd.Flags().StringVar(&opts.seed, "seed", "", "Seed for --sample")
+	cmd.Flags().Float64Var(&opts.maxCost, "max-cost", 0, "Stop scheduling new cells after this many USD")
+	cmd.Flags().StringVar(&opts.changedSince, "changed-since", "", "Run evaluations affected by files changed since a git ref")
 	cmd.Flags().StringArrayVar(&opts.variants, "variant", nil, "Run a variant subset, repeatable")
 	cmd.Flags().IntVar(&opts.trials, "trials", 0, "Override trials for this run")
 	cmd.Flags().StringVar(&opts.replay, "replay", "", "Replay mode: live | record-new | replay-strict | refresh")
@@ -203,6 +213,9 @@ func runQualityPromote(f *cli.Factory, experimentID, configPath, cwd, variant, p
 // --- run ---
 
 func runQualityRun(f *cli.Factory, opts *qualityRunOpts) error {
+	if err := validateQualityRunOpts(opts); err != nil {
+		return err
+	}
 	exitCode, err := streamQualityRun(f, opts)
 	if err != nil {
 		return err
@@ -254,6 +267,13 @@ func streamQualityRun(f *cli.Factory, opts *qualityRunOpts) (int, error) {
 		}
 	}
 	return exitCode, nil
+}
+
+func validateQualityRunOpts(opts *qualityRunOpts) error {
+	if opts.sample > 0 && opts.seed == "" {
+		return fmt.Errorf("--sample requires --seed so sampled runs are reproducible")
+	}
+	return nil
 }
 
 func runQualityList(configPath, cwd string, jsonOut bool) error {
@@ -363,6 +383,9 @@ func runQualityShow(f *cli.Factory, experimentID, dir string, jsonOut bool) erro
 // --- watch (D5: respawn loop; the worker's output cache keeps reruns cheap) ---
 
 func runQualityWatch(f *cli.Factory, opts *qualityRunOpts) error {
+	if err := validateQualityRunOpts(opts); err != nil {
+		return err
+	}
 	io := f.Streams()
 	configDir := opts.cwd
 	if configDir == "" {
@@ -479,6 +502,21 @@ func spawnQualityRunner(opts *qualityRunOpts, extraArgs []string, devtoolsURL st
 	}
 	for _, pattern := range opts.cases {
 		args = append(args, "--case", pattern)
+	}
+	if opts.failed != "" {
+		args = append(args, "--failed", opts.failed)
+	}
+	if opts.sample > 0 {
+		args = append(args, "--sample", fmt.Sprint(opts.sample))
+	}
+	if opts.seed != "" {
+		args = append(args, "--seed", opts.seed)
+	}
+	if opts.maxCost > 0 {
+		args = append(args, "--max-cost", fmt.Sprint(opts.maxCost))
+	}
+	if opts.changedSince != "" {
+		args = append(args, "--changed-since", opts.changedSince)
 	}
 	for _, variant := range opts.variants {
 		args = append(args, "--variant", variant)

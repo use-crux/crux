@@ -293,6 +293,19 @@ export interface RunOverrides<TVariants extends string = never> {
   variants?: readonly TVariants[]
   /** Run only these cases (names/ids; glob `*` allowed). */
   cases?: readonly string[]
+  /** Deterministically sample cases after other case filters. */
+  sample?: RunSampleSelection
+  /** Stop scheduling new cells after recorded cumulative cost reaches this amount. */
+  maxCostUsd?: number
+  /**
+   * Run exact case × variant pairs.
+   *
+   * This is intentionally distinct from `cases` plus `variants`, which forms
+   * a cross-product. First-party rerun tooling uses it to rerun the cells that
+   * failed in a previous experiment without accidentally running passing
+   * variants for the same cases.
+   */
+  cells?: readonly RunCellSelection<TVariants>[]
   /** Override the evaluation's trials. */
   trials?: number
   /** Override the replay mode. */
@@ -303,6 +316,26 @@ export interface RunOverrides<TVariants extends string = never> {
   signal?: AbortSignal
   /** Override execution concurrency. */
   concurrency?: number
+}
+
+/**
+ * Exact cell selector for rerun tooling.
+ *
+ * @typeParam TVariants - Declared variant names for the evaluation.
+ */
+export interface RunCellSelection<TVariants extends string = never> {
+  /** Stable case id from the manifest or experiment record. */
+  caseId: string
+  /** Variant to rerun for the case. Omit to match every selected variant. */
+  variantName?: TVariants
+}
+
+/** Deterministic case sampling controls for agent and CI reruns. */
+export interface RunSampleSelection {
+  /** Maximum number of cases to run after filters. */
+  size: number
+  /** Required seed string. The engine hashes this before PRNG use. */
+  seed: string
 }
 
 /**

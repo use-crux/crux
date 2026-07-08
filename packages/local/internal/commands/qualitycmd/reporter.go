@@ -216,6 +216,7 @@ func (r *qualityReporter) banner(exitCode int) {
 	fmt.Fprintf(out, "            %s\n", r.io.Sprint(output.Dim, fmt.Sprintf(
 		"%d evaluations · %d gates failed · %s · exit %d",
 		len(r.order), gateFailures, output.FormatDuration(elapsedMs), exitCode)))
+	fmt.Fprintf(out, "            %s\n", qualityRunPlainSummary(buildQualityRunSummary(r, exitCode, nil)))
 }
 
 // bannerWidthCap bounds the summary divider so it never spans an ultra-wide

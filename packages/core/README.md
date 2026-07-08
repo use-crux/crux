@@ -107,6 +107,10 @@ the only inference anchor, `expect` callbacks run before scorers, and
 `afterScores` callbacks run after scorers with typed access to static scorer
 outputs through `ctx.score`.
 
+Quality is beta. The authoring surface, experiment/manifest schemas, CLI JSON
+outputs, and exit codes are stable within 0.x minors; breaking changes get a
+changeset `minor` and a migration note.
+
 ```ts
 import { evaluate, scorers } from "@use-crux/core/quality";
 
@@ -146,6 +150,16 @@ untrusted prompt data, and stamp score metadata with judge model, prompt
 version, rubric fingerprint, and rationale. The local CLI can record human
 labels with `crux quality label` and compare judge-vs-human agreement with
 `crux quality judge-report --json`.
+
+Agent loops can stay narrow and deterministic. Use
+`crux quality run --failed latest --json` to rerun only the failed cells from
+the newest matching experiment, `--sample <n> --seed <value>` for reproducible
+case slices, `--max-cost <usd>` to stop scheduling new cells after a budget,
+and `--changed-since <git-ref>` to select evals affected by source changes.
+`crux quality mcp` exposes the same list, run, show, diff, evidence,
+judge-report, and label operations over MCP for assistants. Agents should also
+read `/llms.txt` and the scaffolded `.crux/skills/quality/SKILL.md` created by
+`crux quality init`.
 
 ## Adapter Results
 

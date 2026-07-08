@@ -20,6 +20,7 @@ import type { EngineOptions, EngineSetup } from './engine'
 import type { EvaluationDefinition } from './definition'
 import type { QualityCollectedEvaluation, QualityEventSink, QualityRunInput, QualityRunnerEnv, QualityRunResult } from './runner-types'
 import { getQualityEvaluationHandleState } from './runner-types'
+import { resolveFailedCellSelection } from './runner-rerun'
 
 /** Tasks whose lowered prompt-test runner needs an ambient `generate` fn. */
 const MODEL_BACKED_KINDS = new Set(['prompt', 'agent'])
@@ -41,7 +42,14 @@ export async function runQualityEvaluations(env: QualityRunnerEnv, input: Qualit
   const onlySelected = selection.selected.filter((entry) => entry.manifest.flags.only)
   const narrowedByOnly = onlySelected.length > 0 && onlySelected.length < selection.selected.length
   const toRun = narrowedByOnly ? onlySelected : selection.selected
-  const forceFiltered = input.forceFilteredRun === true || narrowedByOnly || (input.cases?.length ?? 0) > 0
+  const forceFiltered =
+    input.forceFilteredRun === true ||
+    narrowedByOnly ||
+    (input.cases?.length ?? 0) > 0 ||
+    input.sample !== undefined ||
+    input.maxCostUsd !== undefined ||
+    input.cells !== undefined ||
+    input.failed !== undefined
 
   let setup: EngineSetup | undefined
   let setupResolved = false
@@ -65,6 +73,15 @@ export async function runQualityEvaluations(env: QualityRunnerEnv, input: Qualit
         setupResolved = true
       }
 
+      const failedCells =
+        input.failed === undefined
+          ? undefined
+          : await resolveFailedCellSelection({
+              dir: env.dir ?? join(env.rootDir ?? process.cwd(), '.crux/quality'),
+              evaluationId,
+              failed: input.failed,
+            })
+
       const engineOptions = buildEngineOptions({
         env,
         input,
@@ -75,7 +92,7 @@ export async function runQualityEvaluations(env: QualityRunnerEnv, input: Qualit
         emit,
       })
       const handleState = getHandleState(entry)
-      experiment = await runEvaluation(handleState.definition, buildOverrides(input), engineOptions)
+      experiment = await runEvaluation(handleState.definition, buildOverrides(input, failedCells), engineOptions)
     } catch (error) {
       if (error instanceof QualityDefinitionError) {
         emit?.({
@@ -167,9 +184,13 @@ function buildEngineOptions(input: {
   }
 }
 
-function buildOverrides(input: QualityRunInput): RunOverrides<string> | undefined {
+function buildOverrides(input: QualityRunInput, failedCells: RunOverrides<string>['cells']): RunOverrides<string> | undefined {
+  const cells = failedCells ?? input.cells
   const overrides: RunOverrides<string> = {
     ...(input.cases !== undefined && input.cases.length > 0 ? { cases: input.cases } : {}),
+    ...(input.sample !== undefined ? { sample: input.sample } : {}),
+    ...(input.maxCostUsd !== undefined ? { maxCostUsd: input.maxCostUsd } : {}),
+    ...(cells !== undefined ? { cells } : {}),
     ...(input.variants !== undefined && input.variants.length > 0 ? { variants: input.variants } : {}),
     ...(input.replayMode !== undefined ? { replayMode: input.replayMode } : {}),
     ...(input.reuseOutputs === true ? { reuseOutputs: true } : {}),

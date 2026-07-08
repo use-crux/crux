@@ -240,12 +240,15 @@ optional policy/defaults, not a required primitive registry. See the
 crux quality init [definition-id]  # Scaffold an eval for an uncovered definition
 crux quality import-traces --definition <id> # Create JSONL cases from local traces
 crux quality run [id...]            # Run all discovered evaluations, or the listed ids
+crux quality run --failed latest --json # Rerun failed cells from the latest experiment
+crux quality run --sample 10 --seed smoke # Run a deterministic case slice
 crux quality watch [id...]          # Incremental re-run on change (also embedded in `crux dev`)
 crux quality list                   # Discovered evaluations (manifests), no execution
 crux quality show <experimentId>    # Print one persisted experiment record (human or --json)
 crux quality progress <evaluationId> # Recent runs and score series for one evaluation
 crux quality cell-evidence <experimentId> --case <caseId> --variant <name> --trial <n>
 crux quality diff <experimentA> <experimentB> --json
+crux quality mcp                    # Serve Quality tools over MCP stdio
 crux quality promote <experimentId> [--variant <name>] [--pin-id <id>]
 ```
 
@@ -292,6 +295,11 @@ or, under `--with-expected`, usable output are skipped with a reason.
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `[id...]`               | Evaluation ids (explicit or path-derived). Unknown id → exit 2 with a nearest-match suggestion                                                                    |
 | `--case <pattern>`      | Filter cases by id/name; `*` glob; repeatable. **Demotes gates to informational**                                                                                 |
+| `--failed <ref>`        | Rerun failed or errored cells from an experiment id, or `latest` for the newest matching saved experiment. Demotes gates to informational                         |
+| `--sample <n>`          | Deterministically sample `n` cases after filters. Requires `--seed` so the subset can be reproduced                                                               |
+| `--seed <value>`        | Seed used by `--sample`                                                                                                                                            |
+| `--max-cost <usd>`      | Stop scheduling new cells after cumulative reported cell cost reaches this USD budget                                                                              |
+| `--changed-since <ref>` | Select evaluations affected by files changed since a git ref. If coverage cannot be proven, the command fails open by running the selected/all evaluation set      |
 | `--variant <name>`      | Run a variant subset; repeatable. Demotes gates unless the baseline variant is included                                                                           |
 | `--trials <n>`          | Override trials for this run                                                                                                                                      |
 | `--replay <mode>`       | `live` · `record-new` · `replay-strict` · `refresh` — overrides declaration/config                                                                                |
@@ -343,6 +351,19 @@ Dataset-backed cells keep `metadata.datasetProvenance` with the dataset path
 and content fingerprint. The same compact provenance appears on failed rows in
 `crux quality run --json`, failed-cell output from `crux quality show`, and
 matched rows in `crux quality diff --json`.
+
+### `crux quality mcp`
+
+Serves Quality tools over MCP stdio for local agents:
+
+```bash
+crux quality mcp
+```
+
+The server exposes `quality_list`, `quality_run`, `quality_show`,
+`quality_diff`, `quality_cell_evidence`, `quality_judge_report`, and
+`quality_label`. Tool outputs use the same JSON contracts as the CLI summary,
+experiment record, diff, evidence, judge-report, and feedback commands.
 
 ### `crux quality progress`
 

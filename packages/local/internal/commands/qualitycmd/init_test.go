@@ -94,3 +94,20 @@ func TestRenderQualityInitEvalScaffoldsRunnableStarter(t *testing.T) {
 		}
 	}
 }
+
+func TestQualityInitSkillTemplateHasAgentRecipes(t *testing.T) {
+	for _, want := range []string{
+		"name: crux-quality",
+		"crux quality run --json",
+		"crux quality run --failed latest --json",
+		"crux quality cell-evidence",
+		"crux quality import-traces",
+		"crux quality judge-report",
+		"/llms.txt",
+		"@use-crux/core/quality/schemas",
+	} {
+		if !strings.Contains(qualityInitSkillTemplate, want) {
+			t.Fatalf("quality skill template missing %q:\n%s", want, qualityInitSkillTemplate)
+		}
+	}
+}

@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { observe } from '../../observability'
 import { evaluate } from '../../quality'
 import { createQualityRunner, type QualityRunnerEvent } from '../../quality/internal/runner'
 
@@ -221,6 +222,100 @@ describe('createQualityRunner — boundary facade', () => {
       scope: 'promote',
       message: "unknown variant 'current' — this experiment ran: candidate, cheap.",
     })
+  })
+
+  it('reruns only failed cells from the latest experiment for the selected evaluation', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'crux-runner-failed-'))
+    const evaluation = evaluate('runner.failed-rerun', {
+      task: upperTask,
+      data: [
+        { name: 'good case', input: { q: 'ok' } },
+        { name: 'bad case', input: { q: 'bad' } },
+      ],
+      expect: (ctx) => {
+        ctx.expect(ctx.output.answer).toBe('OK')
+      },
+    })
+    const runner = createQualityRunner({ dir, persist: true })
+    const collected = await runner.collect({ modules: [{ file: 'inline.eval.ts', exports: { evaluation } }] })
+
+    const firstRun = await runner.run({ evaluations: collected.evaluations })
+    expect(firstRun.exitCode).toBe(1)
+
+    const events: QualityRunnerEvent[] = []
+    const rerun = createQualityRunner({ dir, persist: false, events: (event) => events.push(event) })
+    const secondRun = await rerun.run({
+      evaluations: collected.evaluations,
+      ids: ['runner.failed-rerun'],
+      failed: 'latest',
+    })
+
+    expect(secondRun.exitCode).toBe(0)
+    expect(secondRun.experiments[0]!.filteredRun).toBe(true)
+    expect(secondRun.experiments[0]!.gates.informational).toBe(true)
+    expect(secondRun.experiments[0]!.cells.map((cell) => cell.caseId)).toEqual(['bad-case'])
+    expect(events.filter((event) => event.type === 'cell:done')).toHaveLength(1)
+  })
+
+  it('samples a deterministic case subset when given an explicit seed', async () => {
+    const evaluation = evaluate('runner.sample', {
+      task: upperTask,
+      data: [
+        { name: 'alpha', input: { q: 'a' } },
+        { name: 'bravo', input: { q: 'b' } },
+        { name: 'charlie', input: { q: 'c' } },
+        { name: 'delta', input: { q: 'd' } },
+        { name: 'echo', input: { q: 'e' } },
+      ],
+    })
+    const runner = createQualityRunner({ persist: false })
+    const collected = await runner.collect({ modules: [{ file: 'inline.eval.ts', exports: { evaluation } }] })
+
+    const first = await runner.run({
+      evaluations: collected.evaluations,
+      sample: { size: 2, seed: 'stable' },
+    })
+    const second = await runner.run({
+      evaluations: collected.evaluations,
+      sample: { size: 2, seed: 'stable' },
+    })
+
+    expect(first.experiments[0]!.cells).toHaveLength(2)
+    expect(first.experiments[0]!.filteredRun).toBe(true)
+    expect(first.experiments[0]!.gates.informational).toBe(true)
+    expect(first.experiments[0]!.cells.map((cell) => cell.caseId)).toEqual(
+      second.experiments[0]!.cells.map((cell) => cell.caseId),
+    )
+  })
+
+  it('stops scheduling new cells once max cost is reached and skips the remainder', async () => {
+    const evaluation = evaluate('runner.max-cost', {
+      task: async (input: { q: string }) => {
+        await observe.span({ name: 'costed call', primitive: 'generation.call' }, async () => {
+          observe.event({ name: 'usage.observed', attributes: { costUsd: 0.002 } })
+        })
+        return upperTask(input)
+      },
+      data: [
+        { name: 'first', input: { q: 'a' } },
+        { name: 'second', input: { q: 'b' } },
+        { name: 'third', input: { q: 'c' } },
+      ],
+    })
+    const runner = createQualityRunner({ persist: false })
+    const collected = await runner.collect({ modules: [{ file: 'inline.eval.ts', exports: { evaluation } }] })
+
+    const result = await runner.run({
+      evaluations: collected.evaluations,
+      maxCostUsd: 0.001,
+    })
+
+    const experiment = result.experiments[0]!
+    expect(result.exitCode).toBe(0)
+    expect(experiment.filteredRun).toBe(true)
+    expect(experiment.gates.informational).toBe(true)
+    expect(experiment.cells.map((cell) => cell.status)).toEqual(['passed', 'skipped', 'skipped'])
+    expect(experiment.cells.slice(1).map((cell) => cell.skipReason)).toEqual(['budget', 'budget'])
   })
 })
 

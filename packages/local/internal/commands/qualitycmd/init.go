@@ -3,6 +3,7 @@ package qualitycmd
 import (
 	"bufio"
 	"bytes"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -259,15 +260,8 @@ func ensureQualityInitSkill(projectDir string) error {
 	return os.WriteFile(path, []byte(qualityInitSkillTemplate), 0o644)
 }
 
-const qualityInitSkillTemplate = `# Crux Quality
-
-Use this project-local skill when working on Quality evals.
-
-- Run all evals: ` + "`crux quality run --json`" + `
-- Add regression cases from traces: ` + "`crux quality import-traces --definition <id>`" + `
-- Compare experiments: ` + "`crux quality diff <experiment-a> <experiment-b> --json`" + `
-- Promote a baseline only after a full, unfiltered run passes.
-`
+//go:embed assets/SKILL.md
+var qualityInitSkillTemplate string
 
 func initTargetIDs(targets []qualityInitTarget) string {
 	ids := make([]string, 0, len(targets))

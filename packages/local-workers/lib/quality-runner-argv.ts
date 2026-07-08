@@ -11,6 +11,11 @@
 const VALUE_FLAGS = new Set([
   '--config',
   '--case',
+  '--failed',
+  '--sample',
+  '--seed',
+  '--max-cost',
+  '--changed-since',
   '--variant',
   '--replay',
   '--trials',

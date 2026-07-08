@@ -200,6 +200,12 @@ export interface QualityRunInput {
   readonly evaluations: readonly QualityCollectedEvaluation[]
   readonly ids?: readonly string[]
   readonly cases?: readonly string[]
+  readonly sample?: RunOverrides<string>['sample']
+  readonly maxCostUsd?: number
+  /** Exact case × variant pairs; unlike `cases` + `variants`, does not cross-product. */
+  readonly cells?: RunOverrides<string>['cells']
+  /** Previous experiment id, or `latest`, whose failed cells should be rerun. */
+  readonly failed?: string
   readonly variants?: readonly string[]
   readonly replayMode?: ReplayMode
   readonly reuseOutputs?: boolean

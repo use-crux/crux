@@ -188,6 +188,20 @@ describe('quality-runner worker (subprocess e2e)', () => {
     expect(events.some((event) => event.type === 'eval:start')).toBe(false)
   }, 60_000)
 
+  it('--sample without --seed fails closed before execution', async () => {
+    const { exitCode, events } = await runWorker(['evals.passing', '--sample', '1'])
+
+    expect(exitCode).toBe(2)
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'error',
+        scope: 'execute',
+        message: expect.stringContaining('--sample requires --seed') as string,
+      }),
+    )
+    expect(events.some((event) => event.type === 'eval:start')).toBe(false)
+  }, 60_000)
+
   it('--replay wins over project config replay defaults', async () => {
     const defaulted = await runWorker(['evals.passing'], { config: REPLAY_DEFAULT_CONFIG })
     expect(defaulted.exitCode, defaulted.stderr).toBe(0)

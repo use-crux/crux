@@ -3,10 +3,17 @@ title: Quality
 description: '@use-crux/core/quality — evaluate(), target, scorers, dataset(), cassette(), UncapturedSignalError, and the Experiment/Manifest/Baseline records.'
 ---
 
-`@use-crux/core/quality` is the Quality system's public surface: six values
-plus types. Authoring lives in `*.eval.ts` files (or colocated
+`@use-crux/core/quality` is the Quality system's public surface: five
+authoring values, the `UncapturedSignalError` runtime error class, and types.
+Authoring lives in `*.eval.ts` files (or colocated
 `prompt({ tests })`), execution in `evaluation.run()` and the
 [`crux quality` CLI](/docs/reference/local#crux-quality).
+
+Quality is **beta**: the authoring surface (`evaluate`, `target`, `scorers`,
+`dataset`, `cassette`), the experiment/manifest record schemas
+(`quality/schemas`), CLI JSON outputs, and exit codes are stable within 0.x
+minors. Breaking changes get a changeset `minor` and a migration note.
+`quality/internal/runner` remains internal with no guarantees.
 
 ```ts
 import { evaluate, target, scorers, dataset, cassette, UncapturedSignalError } from '@use-crux/core/quality'

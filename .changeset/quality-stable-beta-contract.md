@@ -17,3 +17,7 @@ Harden the Quality local pipeline by making `crux quality run --json` emit a sin
 Add the Quality machine contract surface: `@use-crux/core/quality/schemas` exports validation schemas and JSON Schema generation for records and CLI JSON, experiment records embed agent-readable `failures` artifacts, and `crux quality diff <expA> <expB> --json` compares saved experiment records through core-owned diff policy.
 
 Add the Quality adoption path: `crux quality init` scaffolds first evals for uncovered prompt definitions, `crux quality import-traces` converts retained local traces into JSONL dataset rows, and dataset-backed failures now surface dataset path plus content fingerprint in persisted records, run summaries, failure artifacts, and experiment diffs.
+
+Add the Quality agent loop: `crux quality run` now supports `--failed`, deterministic `--sample`/`--seed`, `--max-cost`, and `--changed-since` subsets, `crux quality mcp` exposes list/run/show/diff/evidence/judge-report/label tools over MCP, and `crux quality init` scaffolds a local Quality skill for coding agents.
+
+Declare Quality beta: the authoring surface, experiment/manifest schemas, CLI JSON outputs, and exit codes are stable within 0.x minors; future breaking changes require a minor bump and migration note while the first-party runner facade remains internal.

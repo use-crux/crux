@@ -38,6 +38,7 @@ records for progress, baselines, and cell-level debugging evidence.`,
 		NewQualityDiffCmd(f),
 		NewQualityLabelCmd(f),
 		NewQualityJudgeReportCmd(f),
+		NewQualityMCPCmd(f),
 		NewQualityPromoteCmd(f),
 	)
 	return cmd

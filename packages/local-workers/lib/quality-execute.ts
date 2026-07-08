@@ -37,6 +37,12 @@ export interface ExecuteOptions {
   ids?: readonly string[]
   /** Case id/name filters (glob `*`), forwarded to the engine. */
   cases?: readonly string[]
+  /** Previous experiment id, or `latest`, whose failed cells should be rerun. */
+  failed?: string
+  /** Deterministic case sampling after other filters. */
+  sample?: { size: number; seed: string }
+  /** Stop scheduling new cells after recorded cumulative cost reaches this amount. */
+  maxCostUsd?: number
   /** Variant subset; excluding the baseline variant demotes gates (spec 03 §4). */
   variants?: readonly string[]
   /** Replay mode override (non-live modes land in phase 5). */
@@ -105,6 +111,9 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
     evaluations: options.collected,
     ...(options.ids !== undefined ? { ids: options.ids } : {}),
     ...(options.cases !== undefined ? { cases: options.cases } : {}),
+    ...(options.failed !== undefined ? { failed: options.failed } : {}),
+    ...(options.sample !== undefined ? { sample: options.sample } : {}),
+    ...(options.maxCostUsd !== undefined ? { maxCostUsd: options.maxCostUsd } : {}),
     ...(options.variants !== undefined ? { variants: options.variants } : {}),
     ...(options.replayMode !== undefined ? { replayMode: options.replayMode } : {}),
     ...(options.reuseOutputs !== undefined ? { reuseOutputs: options.reuseOutputs } : {}),

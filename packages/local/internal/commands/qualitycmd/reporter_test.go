@@ -148,13 +148,14 @@ func pinClock(reporter *qualityReporter, d time.Duration) {
 
 func TestReporterBannerSummarizesRun(t *testing.T) {
 	tests := []struct {
-		name      string
-		exitCode  int
-		wantToken string
+		name        string
+		exitCode    int
+		wantToken   string
+		wantSummary string
 	}{
-		{"pass", 0, "PASS"},
-		{"fail", 1, "FAIL"},
-		{"error", 2, "ERROR"},
+		{"pass", 0, "PASS", "alpha passed: 7/10 cells passed."},
+		{"fail", 1, "FAIL", "alpha regressed: 1 case failed vs baseline; failures point at alpha."},
+		{"error", 2, "ERROR", "alpha regressed: 1 case failed vs baseline; failures point at alpha."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -176,6 +177,7 @@ func TestReporterBannerSummarizesRun(t *testing.T) {
 				tt.wantToken,
 				"12 passed", "1 failed", "0 errored", "3 skipped",
 				"2 evaluations", "1 gates failed", "18.4s",
+				tt.wantSummary,
 			} {
 				if !strings.Contains(stdout, want) {
 					t.Errorf("banner missing %q:\n%s", want, stdout)

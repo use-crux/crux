@@ -305,6 +305,62 @@ function caseMatchesFilter(resolved: ResolvedCase, filters: readonly string[]): 
   })
 }
 
+function validateCellSelections(
+  selections: RunOverrides<string>['cells'] | undefined,
+  knownVariants: ReadonlySet<string>,
+): void {
+  if (selections === undefined) return
+  for (const selection of selections) {
+    if (selection.variantName !== undefined && !knownVariants.has(selection.variantName)) {
+      throw new QualityDefinitionError(`unknown variant '${selection.variantName}' in failed-cell rerun selection.`)
+    }
+  }
+}
+
+function cellSelectionMatches(
+  selections: RunOverrides<string>['cells'] | undefined,
+  caseId: string,
+  variantName: string,
+): boolean {
+  if (selections === undefined) return true
+  return selections.some((selection) => {
+    if (selection.caseId !== caseId) return false
+    return selection.variantName === undefined || selection.variantName === variantName
+  })
+}
+
+function sampleCases(
+  cases: readonly ResolvedCase[],
+  sample: RunOverrides<string>['sample'] | undefined,
+): ResolvedCase[] {
+  if (sample === undefined) return [...cases]
+  if (!Number.isInteger(sample.size) || sample.size < 0) {
+    throw new QualityDefinitionError(`--sample must be a non-negative integer; got ${String(sample.size)}.`)
+  }
+  if (sample.size >= cases.length) return [...cases]
+  const random = mulberry32(seedNumber(sample.seed))
+  return [...cases]
+    .sort((left, right) => left.caseId.localeCompare(right.caseId))
+    .map((entry) => ({ entry, order: random() }))
+    .sort((left, right) => left.order - right.order || left.entry.caseId.localeCompare(right.entry.caseId))
+    .slice(0, sample.size)
+    .map(({ entry }) => entry)
+}
+
+function seedNumber(seed: string): number {
+  return Number.parseInt(sha256Hex(seed).slice(0, 8), 16) >>> 0
+}
+
+function mulberry32(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let value = Math.imul(state ^ (state >>> 15), state | 1)
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61)
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296
+  }
+}
+
 function escapeRegExp(text: string): string {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
@@ -696,6 +752,27 @@ interface CellPlan {
   resolved: ResolvedCase
   trial: number
   variant: VariantContext
+}
+
+function skippedPlanCell(
+  plan: CellPlan,
+  reason: string,
+  redactPaths: readonly string[],
+): ExperimentCell<unknown, unknown> {
+  return {
+    caseId: plan.resolved.caseId,
+    ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
+    variantName: plan.variant.name,
+    trial: plan.trial,
+    status: 'skipped',
+    skipReason: reason,
+    input: applyRedaction(plan.resolved.raw.input, redactPaths),
+    scores: [],
+    assertions: { ran: 0, notEvaluated: 0, outcomes: [] },
+    durationMs: 0,
+    traceIds: [],
+    capturedSignals: [],
+  }
 }
 
 interface CellRuntimeError {
@@ -1460,6 +1537,7 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
     variantSubsetDemotes = subset && (definition.baseline === undefined || !filterSet.has(definition.baseline))
   }
   const selectedVariantNames = variantContexts.map((context) => context.name)
+  validateCellSelections(overrides?.cells, new Set(allVariantContexts.map((context) => context.name)))
 
   // Output cache context (spec 03 §5). Reads are opt-in via reuseOutputs;
   // writes happen on every successful execution when a cacheDir is set.
@@ -1500,18 +1578,29 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
   const onlyCases = allCases.filter((resolved) => resolved.raw.only === true)
   const caseFilters = overrides?.cases
   const hasFilter = (caseFilters?.length ?? 0) > 0 || onlyCases.length > 0
-  const selected = allCases.filter((resolved) => {
+  const filteredCases = allCases.filter((resolved) => {
     if (caseFilters !== undefined && caseFilters.length > 0 && !caseMatchesFilter(resolved, caseFilters)) return false
     if (onlyCases.length > 0 && resolved.raw.only !== true) return false
     return true
   })
-  const filteredRun = (hasFilter && selected.length < allCases.length) || options.forceFilteredRun === true || variantSubsetDemotes
+  const selected = sampleCases(filteredCases, overrides?.sample)
+  const sampledRun = selected.length < filteredCases.length
+  const filteredRun =
+    (hasFilter && filteredCases.length < allCases.length) ||
+    sampledRun ||
+    options.forceFilteredRun === true ||
+    variantSubsetDemotes ||
+    overrides?.cells !== undefined ||
+    overrides?.maxCostUsd !== undefined
 
   const evaluationSkipped = definition.flags.skip
   const trialsDefault = overrides?.trials ?? definition.trials ?? options.defaults?.trials ?? 1
   let trialsCollapsed = false
   const timeoutMs = definition.timeoutMs ?? options.defaults?.timeoutMs ?? 60_000
   const concurrency = overrides?.concurrency ?? definition.concurrency ?? options.defaults?.concurrency ?? 5
+  if (overrides?.maxCostUsd !== undefined && (!Number.isFinite(overrides.maxCostUsd) || overrides.maxCostUsd < 0)) {
+    throw new QualityDefinitionError(`--max-cost must be a non-negative finite number; got ${String(overrides.maxCostUsd)}.`)
+  }
 
   const plans: CellPlan[] = []
   const skippedCells: ExperimentCell<unknown, unknown>[] = []
@@ -1533,6 +1622,7 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
           traceIds: [],
           capturedSignals: [],
         }
+        if (!cellSelectionMatches(overrides?.cells, resolved.caseId, variant.name)) continue
         skippedCells.push(skippedCell)
         options.events?.onCellDone?.(skippedCell)
         continue
@@ -1543,6 +1633,7 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
       const trials = replay.mode === 'replay-strict' ? 1 : declaredTrials
       if (trials < declaredTrials) trialsCollapsed = true
       for (let trial = 0; trial < trials; trial++) {
+        if (!cellSelectionMatches(overrides?.cells, resolved.caseId, variant.name)) continue
         plans.push({ resolved, trial, variant })
       }
     }
@@ -1566,71 +1657,71 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
   const limiter = createLimiter(Math.max(1, concurrency))
   let cells: ExperimentCell<unknown, unknown>[]
   try {
-    cells = await withSignalCapture(capture, () =>
-      Promise.all(
-        plans.map((plan) =>
-          limiter(async () => {
-            if (overrides?.signal?.aborted === true) {
-              const abortedCell = {
-                caseId: plan.resolved.caseId,
-                ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
-                variantName: plan.variant.name,
-                trial: plan.trial,
-                status: 'skipped',
-                skipReason: 'aborted',
-                input: applyRedaction(plan.resolved.raw.input, redactPaths),
-                scores: [],
-                assertions: { ran: 0, notEvaluated: 0, outcomes: [] },
-                durationMs: 0,
-                traceIds: [],
-                capturedSignals: [],
-              } satisfies ExperimentCell<unknown, unknown>
-              options.events?.onCellDone?.(abortedCell)
-              return abortedCell
-            }
-            options.events?.onCellStart?.({
-              caseId: plan.resolved.caseId,
-              ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
-              variantName: plan.variant.name,
-              trial: plan.trial,
+    const executePlan = async (plan: CellPlan): Promise<ExperimentCell<unknown, unknown>> => {
+      if (overrides?.signal?.aborted === true) {
+        const abortedCell = skippedPlanCell(plan, 'aborted', redactPaths)
+        options.events?.onCellDone?.(abortedCell)
+        return abortedCell
+      }
+      options.events?.onCellStart?.({
+        caseId: plan.resolved.caseId,
+        ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
+        variantName: plan.variant.name,
+        trial: plan.trial,
+      })
+      const execute = () =>
+        executeCell({
+          plan,
+          definition,
+          timeoutMs,
+          capture,
+          redactPaths,
+          evaluationId,
+          evaluationTraceId: evalRun.traceId,
+          setup: options.setup,
+          cache: cacheContext,
+          sourceFrameResolver: options.sourceFrameResolver,
+          sourceFrameRadius: options.sourceFrameRadius,
+        })
+      // The cassette scope covers scoring too — judge calls record and replay
+      // through the same cassette as task calls.
+      const cell = cassetteSession === undefined ? await execute() : await withCassetteSession(cassetteSession, execute)
+      for (const runId of cell.traceIds) {
+        evalRun.withContext(() => {
+          emitEvalCaseOfEdge({
+            caseRunId: runId,
+            evalRunId: evalRun.runId,
+          })
+          if (replay.mode === 'replay-strict' && cassetteSession?.recorded !== undefined) {
+            emitReplayOfEdge({
+              replay: { runId, traceId: evalRun.traceId },
+              recorded: cassetteSession.recorded,
             })
-            const execute = () =>
-              executeCell({
-                plan,
-                definition,
-                timeoutMs,
-                capture,
-                redactPaths,
-                evaluationId,
-                evaluationTraceId: evalRun.traceId,
-                setup: options.setup,
-                cache: cacheContext,
-                sourceFrameResolver: options.sourceFrameResolver,
-                sourceFrameRadius: options.sourceFrameRadius,
-              })
-            // The cassette scope covers scoring too — judge calls record and
-            // replay through the same cassette as task calls.
-            const cell = cassetteSession === undefined ? await execute() : await withCassetteSession(cassetteSession, execute)
-            for (const runId of cell.traceIds) {
-              evalRun.withContext(() => {
-                emitEvalCaseOfEdge({
-                  caseRunId: runId,
-                  evalRunId: evalRun.runId,
-                })
-                if (replay.mode === 'replay-strict' && cassetteSession?.recorded !== undefined) {
-                  emitReplayOfEdge({
-                    replay: { runId, traceId: evalRun.traceId },
-                    recorded: cassetteSession.recorded,
-                  })
-                }
-              })
-            }
-            options.events?.onCellDone?.(cell)
-            return cell
-          }),
-        ),
-      ),
-    )
+          }
+        })
+      }
+      options.events?.onCellDone?.(cell)
+      return cell
+    }
+    cells = await withSignalCapture(capture, async () => {
+      if (overrides?.maxCostUsd === undefined) {
+        return Promise.all(plans.map((plan) => limiter(() => executePlan(plan))))
+      }
+      const budgeted: ExperimentCell<unknown, unknown>[] = []
+      let cost = 0
+      for (const plan of plans) {
+        if (cost >= overrides.maxCostUsd) {
+          const skipped = skippedPlanCell(plan, 'budget', redactPaths)
+          budgeted.push(skipped)
+          options.events?.onCellDone?.(skipped)
+          continue
+        }
+        const cell = await executePlan(plan)
+        budgeted.push(cell)
+        cost += cell.costUsd ?? 0
+      }
+      return budgeted
+    })
   } catch (error) {
     evalRun.error(error)
     throw error

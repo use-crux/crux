@@ -12,6 +12,13 @@ statistically honest aggregates — and **gates** drive CI exit codes. A
 every later run auto-compares against it. **Cassettes** replay model calls
 deterministically at the executor boundary.
 
+Quality is **beta**: the authoring surface (`evaluate`, `target`, `scorers`,
+`dataset`, `cassette`), the experiment/manifest record schemas
+(`@use-crux/core/quality/schemas`), CLI JSON outputs, and exit codes are stable
+within 0.x minors. Breaking changes get a changeset `minor` and a migration
+note. The first-party `quality/internal/runner` facade is for Crux tooling and
+does not carry that stability guarantee.
+
 ## First eval in 10 minutes
 
 Start from the Crux definition you already ship. Quality is most useful when
@@ -153,6 +160,8 @@ crux quality list                 # discovered evaluations, no execution
 crux quality run                  # everything discovered in the project
 crux quality run support.refunds  # one evaluation by id
 crux quality run --ci             # CI reporter + exit codes
+crux quality run --failed latest --json # rerun failed cells from the latest experiment
+crux quality run --sample 10 --seed ci-smoke # deterministic case slice
 crux quality watch support.refunds # rerun changed cells on save
 crux quality show <experiment-id> --json
 crux quality progress support.refunds --limit 10 --json
@@ -163,6 +172,16 @@ crux quality promote <experiment-id>
 
 Quality is the evaluation system, and `crux quality ...` is the CLI namespace
 for running, watching, listing, inspecting, and promoting evaluations.
+
+Agents should prefer narrow, reproducible reruns over full-suite churn:
+`--failed latest` replays only failed or errored cells from the newest saved
+experiment, `--sample <n> --seed <value>` picks a deterministic case slice,
+`--max-cost <usd>` stops scheduling new cells once the run reaches a spend
+budget, and `--changed-since <git-ref>` selects evaluations affected by source
+changes. `crux quality mcp` serves the same list, run, show, diff,
+cell-evidence, judge-report, and label operations over MCP. `crux quality init`
+also writes `.crux/skills/quality/SKILL.md`, so local coding agents can follow
+the project-specific Quality loop after reading [`/llms.txt`](/llms.txt).
 
 Exit codes are CI-ready: `0` all blocking gates passed, `1` a gate/assertion
 failed or a cell errored, `2` definition error (nothing executed). See the
