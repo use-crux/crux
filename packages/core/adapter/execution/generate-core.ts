@@ -19,7 +19,7 @@ import { getHooks } from "../../runtime/runtime";
 import { ValidationExhaustedError } from "../../generation/validation-retry";
 import { createSafety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
-import { withBudget } from "../../generation/timeout";
+import { composeAbortSignals, withBudget } from "../../generation/timeout";
 import type { AdapterResponse, CallArgs } from "../types";
 import {
   createResultAccumulator,
@@ -184,7 +184,10 @@ export async function generateCore<
         lastCallArgs = callArgs;
 
         const { raw, extracted } = await withBudget(
-          (signal) => dialect.call(dialect.client, callArgs, { signal }),
+          (signal) =>
+            dialect.call(dialect.client, callArgs, {
+              signal: composeAbortSignals(args.signal, signal),
+            }),
           {
             budget: "step",
             limitMs: args.timeout?.stepMs,
@@ -294,10 +297,14 @@ export async function generateCore<
             messages = [...messages, ...corrective];
             const regen = await withBudget(
               (signal) =>
-                dialect.call(dialect.client, {
-                  ...lastCallArgs!,
-                  messages,
-                }, { signal }),
+                dialect.call(
+                  dialect.client,
+                  {
+                    ...lastCallArgs!,
+                    messages,
+                  },
+                  { signal: composeAbortSignals(args.signal, signal) },
+                ),
               { budget: "step", limitMs: args.timeout?.stepMs },
             );
             lastRaw = regen.raw;

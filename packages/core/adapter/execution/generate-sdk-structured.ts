@@ -10,41 +10,57 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { Message } from '../../generation/messages'
-import { createBudgetSignal } from '../../generation/timeout'
-import { getHooks } from '../../runtime/runtime'
-import type { Safety } from '../../safety/session'
-import { ValidationExhaustedError } from '../../generation/validation-retry'
-import type { ExecutorRequest, StructuredRequest } from '../executor-types'
-import { interceptGeneration, type InterceptedGeneration } from '../interception'
-import { formatValidationFeedback } from '../policy/validation-retry'
-import type { ResultStepFacts } from '../result-accumulator'
-import type { AdapterExecutionGenerateArgs, AdapterExecutionGenerateResult, SdkLoopDialect } from './types'
-import { appendCorrectiveExchange, appendCorrectiveMessages } from './messages'
-import { buildTraceMeta } from './metadata'
-import { finalizeSdkResultEnvelope, sdkResponseFacts } from './sdk-result-envelope'
+import type { z } from "zod";
+import type { Message } from "../../generation/messages";
+import {
+  composeAbortSignals,
+  createBudgetSignal,
+} from "../../generation/timeout";
+import { getHooks } from "../../runtime/runtime";
+import type { Safety } from "../../safety/session";
+import { ValidationExhaustedError } from "../../generation/validation-retry";
+import type { ExecutorRequest, StructuredRequest } from "../executor-types";
+import {
+  interceptGeneration,
+  type InterceptedGeneration,
+} from "../interception";
+import { formatValidationFeedback } from "../policy/validation-retry";
+import type { ResultStepFacts } from "../result-accumulator";
+import type {
+  AdapterExecutionGenerateArgs,
+  AdapterExecutionGenerateResult,
+  SdkLoopDialect,
+} from "./types";
+import { appendCorrectiveExchange, appendCorrectiveMessages } from "./messages";
+import { buildTraceMeta } from "./metadata";
+import {
+  finalizeSdkResultEnvelope,
+  sdkResponseFacts,
+} from "./sdk-result-envelope";
 
 /** Inputs shared by the SDK-loop structured retry helper. */
 interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
   /** Normalized SDK-loop dialect for one bound SDK client. */
-  readonly dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>
+  readonly dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream>;
   /** Original prepared execution arguments, including retry hooks. */
-  readonly args: AdapterExecutionGenerateArgs<TModel, Record<string, unknown>>
+  readonly args: AdapterExecutionGenerateArgs<TModel, Record<string, unknown>>;
   /** Fully prepared executor request for the current model attempt. */
-  readonly request: ExecutorRequest<TModel>
+  readonly request: ExecutorRequest<TModel>;
   /** Zod schema that the structured output must satisfy. */
-  readonly schema: z.ZodType
+  readonly schema: z.ZodType;
   /** Safety session created by the parent SDK-loop execution. */
-  readonly safety: Safety
+  readonly safety: Safety;
   /** Stable retry id used for validation instrumentation hooks. */
-  readonly retryId: string
+  readonly retryId: string;
   /** Prompt id for exhaustion diagnostics. */
-  readonly promptId: string | undefined
+  readonly promptId: string | undefined;
   /** Produces interception metadata for each SDK structured attempt. */
-  readonly describeCall: (kind: 'structured', request: ExecutorRequest<TModel>) => InterceptedGeneration
+  readonly describeCall: (
+    kind: "structured",
+    request: ExecutorRequest<TModel>,
+  ) => InterceptedGeneration;
   /** Step facts collected by the parent SDK-loop execution. */
-  readonly stepFacts: ResultStepFacts[]
+  readonly stepFacts: ResultStepFacts[];
 }
 
 /**
@@ -60,27 +76,46 @@ interface GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream> {
 export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
   ctx: GenerateSdkStructuredContext<TModel, TRawResponse, TRawStream>,
 ): Promise<AdapterExecutionGenerateResult<TRawResponse>> {
-  const { dialect, args, request, schema, safety, retryId, promptId, describeCall, stepFacts } = ctx
-  const validationRetry = args.validationRetry
-  const maxRetries = validationRetry?.maxRetries ?? 0
-  let attempts = 0
-  let currentMessages = request.messages ? [...request.messages] : []
-  let currentPrompt = request.prompt
+  const {
+    dialect,
+    args,
+    request,
+    schema,
+    safety,
+    retryId,
+    promptId,
+    describeCall,
+    stepFacts,
+  } = ctx;
+  const validationRetry = args.validationRetry;
+  const maxRetries = validationRetry?.maxRetries ?? 0;
+  let attempts = 0;
+  let currentMessages = request.messages ? [...request.messages] : [];
+  let currentPrompt = request.prompt;
 
-  const runStructuredAttempt = async (attemptRequest: StructuredRequest<TModel>) => {
+  const runStructuredAttempt = async (
+    attemptRequest: StructuredRequest<TModel>,
+  ) => {
     const attemptBudget = createBudgetSignal({
-      budget: 'step',
+      budget: "step",
       limitMs: args.timeout?.stepMs,
-    })
-    const requestWithSignal = { ...attemptRequest, abortSignal: attemptBudget.signal }
+    });
+    const requestWithSignal = {
+      ...attemptRequest,
+      abortSignal: composeAbortSignals(
+        request.abortSignal,
+        attemptBudget.signal,
+      ),
+    };
     try {
-      return await interceptGeneration(describeCall('structured', requestWithSignal), () =>
-        dialect.runStructuredAttempt(requestWithSignal),
-      )
+      return await interceptGeneration(
+        describeCall("structured", requestWithSignal),
+        () => dialect.runStructuredAttempt(requestWithSignal),
+      );
     } finally {
-      attemptBudget.dispose()
+      attemptBudget.dispose();
     }
-  }
+  };
 
   for (;;) {
     const attemptRequest = {
@@ -88,95 +123,102 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
       prompt: currentPrompt,
       messages: currentMessages,
       schema,
-    }
-    const attempt = await runStructuredAttempt(attemptRequest)
+    };
+    const attempt = await runStructuredAttempt(attemptRequest);
 
-    if (attempt.status === 'ok') {
-      let steps = 1 + attempts
-      let finalText = attempt.response.text
-      let finalObject = attempt.object
-      let finalRaw = attempt.raw
-      let finalResponse = attempt.response
+    if (attempt.status === "ok") {
+      let steps = 1 + attempts;
+      let finalText = attempt.response.text;
+      let finalObject = attempt.object;
+      let finalRaw = attempt.raw;
+      let finalResponse = attempt.response;
       const finalOutput = await safety.finalizeOutput(
         { text: finalText, parsed: finalObject },
         async (corrective) => {
-          const regenMessages = appendCorrectiveMessages(currentPrompt, currentMessages, finalText, corrective)
-          currentPrompt = undefined
-          currentMessages = regenMessages
+          const regenMessages = appendCorrectiveMessages(
+            currentPrompt,
+            currentMessages,
+            finalText,
+            corrective,
+          );
+          currentPrompt = undefined;
+          currentMessages = regenMessages;
           const regenRequest = {
             ...request,
             prompt: undefined,
             messages: regenMessages,
             schema,
-          }
-          const regen = await runStructuredAttempt(regenRequest)
-          steps++
-          if (regen.status === 'ok') {
+          };
+          const regen = await runStructuredAttempt(regenRequest);
+          steps++;
+          if (regen.status === "ok") {
             if (stepFacts.length > 0) {
-              const previous = stepFacts[stepFacts.length - 1]!
-              stepFacts[stepFacts.length - 1] = { ...previous, text: '' }
+              const previous = stepFacts[stepFacts.length - 1]!;
+              stepFacts[stepFacts.length - 1] = { ...previous, text: "" };
             }
-            finalText = regen.response.text
-            finalObject = regen.object
-            finalRaw = regen.raw
-            finalResponse = regen.response
-            stepFacts.push(sdkResponseFacts(regen.response))
-            return { text: regen.response.text, parsed: regen.object }
+            finalText = regen.response.text;
+            finalObject = regen.object;
+            finalRaw = regen.raw;
+            finalResponse = regen.response;
+            stepFacts.push(sdkResponseFacts(regen.response));
+            return { text: regen.response.text, parsed: regen.object };
           }
-          return { text: regen.rawText, parsed: undefined }
+          return { text: regen.rawText, parsed: undefined };
         },
         { messages: currentMessages, schema },
-      )
-      finalText = finalOutput.text
-      finalObject = finalOutput.parsed
+      );
+      finalText = finalOutput.text;
+      finalObject = finalOutput.parsed;
 
       const resultMessages: Message[] = [
         ...(currentMessages.length > 0
           ? currentMessages
           : currentPrompt
-            ? [{ role: 'user' as const, content: currentPrompt }]
+            ? [{ role: "user" as const, content: currentPrompt }]
             : []),
-        { role: 'assistant' as const, content: finalText },
-      ]
+        { role: "assistant" as const, content: finalText },
+      ];
 
       return finalizeSdkResultEnvelope({
         raw: finalRaw,
         response: finalResponse,
         text: finalText,
         object: finalObject,
-        _meta: buildTraceMeta({ response: { ...finalResponse, text: finalText } }),
+        _meta: buildTraceMeta({
+          response: { ...finalResponse, text: finalText },
+        }),
         messages: resultMessages,
         stepFacts,
-        finalStepMode: stepFacts.length < steps ? 'append' : 'replace',
-      })
+        finalStepMode: stepFacts.length < steps ? "append" : "replace",
+      });
     }
 
     if (attempts < maxRetries) {
-      attempts++
-      validationRetry?.onRetry?.(attempts, attempt.error)
+      attempts++;
+      validationRetry?.onRetry?.(attempts, attempt.error);
       stepFacts.push({
-        text: '',
+        text: "",
         finishReason: undefined,
         responseId: undefined,
         modelId: undefined,
-      })
+      });
       currentMessages = appendCorrectiveExchange(
         currentPrompt,
         currentMessages,
         attempt.rawText,
         formatValidationFeedback(attempt.rawText, attempt.error),
-      )
-      currentPrompt = undefined
-      continue
+      );
+      currentPrompt = undefined;
+      continue;
     }
 
-    validationRetry?.onExhausted?.(attempts, attempt.error)
+    validationRetry?.onExhausted?.(attempts, attempt.error);
     throw new ValidationExhaustedError({
       lastRawOutput: attempt.rawText,
       zodErrors: attempt.error,
       attempts,
       maxAttempts: maxRetries,
-      promptId: promptId ?? 'unknown',
-    })
+      promptId: promptId ?? "unknown",
+    });
   }
 }

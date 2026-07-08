@@ -67,10 +67,13 @@ export type {
   TraceMeta,
 } from "./types";
 export {
+  Deadline,
   TimeoutError,
+  composeAbortSignals,
   normalizeBudgetMs,
   toolBudgetMs,
   createBudgetSignal,
+  withAbortSignal,
   withBudget,
 } from "./timeout";
 export type {

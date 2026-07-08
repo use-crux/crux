@@ -14,7 +14,11 @@ import type { Message } from "../../generation/messages";
 import { createSafety } from "../../safety/session";
 import type { Safety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
-import { createBudgetSignal, type BudgetSignal } from "../../generation/timeout";
+import {
+  composeAbortSignals,
+  createBudgetSignal,
+  type BudgetSignal,
+} from "../../generation/timeout";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -172,7 +176,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     activeTools: args.activeTools,
     maxSteps,
     observer: loopObserver,
-    abortSignal: signal,
+    abortSignal: composeAbortSignals(args.signal, signal),
     extra: args.extra,
   });
 

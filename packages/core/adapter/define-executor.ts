@@ -19,28 +19,33 @@
  * @module
  */
 
-import type { AnyPrompt } from '../prompt/prompt-types'
-import type { GenerationSettings, TraceMeta } from '../generation/types'
-import type { TimeoutOptions } from '../generation/timeout'
-import type { Message } from '../generation/messages'
-import type { LoopRuntimePort } from './loop-runtime-port'
-import type { ExecutorStreamHandle, StepObserver } from './executor-types'
-import type { ApprovalRequestInfo } from './tool/approval'
-import type { ValidationRetryOptions } from '../generation/validation-retry'
-import type { Constraint } from '../safety/constraint/types'
-import type { Guardrail } from '../safety/guardrail/types'
-import type { SafetyTuneOptions } from '../safety/tune'
-import { executeFallbackLoop } from '../generation/fallback-loop'
-import { isFallback } from '../generation/fallback'
-import type { FallbackModel } from '../generation/fallback'
-import { isRouter, isCascade } from '../routing'
-import { resolveModel } from '../routing/resolve'
-import type { AnyRouterModel, CascadeModel } from '../routing'
-import type { ToolMiddleware } from '../tools/types'
-import type { ToolApprovalMap } from '../tools/approval-policy'
-import { createCompositions } from '../agent/create-compositions'
-import type { AgentExecutor } from '../agent/executor'
-import { createAdapterExecution, sdkLoopDialect } from './execution/session'
+import type { AnyPrompt } from "../prompt/prompt-types";
+import type { GenerationSettings, TraceMeta } from "../generation/types";
+import { Deadline } from "../generation/timeout";
+import type { TimeoutOptions } from "../generation/timeout";
+import type { Message } from "../generation/messages";
+import type { LoopRuntimePort } from "./loop-runtime-port";
+import type { ExecutorStreamHandle, StepObserver } from "./executor-types";
+import type { ApprovalRequestInfo } from "./tool/approval";
+import type { ValidationRetryOptions } from "../generation/validation-retry";
+import type { Constraint } from "../safety/constraint/types";
+import type { Guardrail } from "../safety/guardrail/types";
+import type { SafetyTuneOptions } from "../safety/tune";
+import { executeFallbackLoop } from "../generation/fallback-loop";
+import { isFallback } from "../generation/fallback";
+import type { FallbackModel } from "../generation/fallback";
+import { isRouter, isCascade } from "../routing";
+import { resolveModel } from "../routing/resolve";
+import type { AnyRouterModel, CascadeModel } from "../routing";
+import type { ToolMiddleware } from "../tools/types";
+import type { ToolApprovalMap } from "../tools/approval-policy";
+import { createCompositions } from "../agent/create-compositions";
+import type { AgentExecutor } from "../agent/executor";
+import { createAdapterExecution, sdkLoopDialect } from "./execution/session";
+
+interface AttemptSignalOptions {
+  readonly signal?: AbortSignal;
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Options & results
@@ -51,71 +56,77 @@ import { createAdapterExecution, sdkLoopDialect } from './execution/session'
  * SDK model or any core routing wrapper around one. Routing is resolved by
  * the factory; the spec only ever receives a plain `TModel`.
  */
-export type ExecutorModelArg<TModel> = TModel | FallbackModel<TModel> | AnyRouterModel<TModel> | CascadeModel<TModel>
+export type ExecutorModelArg<TModel> =
+  | TModel
+  | FallbackModel<TModel>
+  | AnyRouterModel<TModel>
+  | CascadeModel<TModel>;
 
 /** Options for executor `generate()` calls. */
 export interface ExecutorGenerateOptions<TModel> {
   /** The model to use — plain, `fallback()`, `router()`, or `cascade()`. */
-  model: ExecutorModelArg<TModel>
+  model: ExecutorModelArg<TModel>;
   /** Input for the prompt. */
-  input?: Record<string, unknown>
+  input?: Record<string, unknown>;
   /** Additional tools merged at call time (highest precedence). */
-  tools?: Record<string, unknown>
+  tools?: Record<string, unknown>;
   /** Per-tool context values keyed by tools that declare `contextSchema`. */
-  toolsContext?: Readonly<Record<string, unknown>>
+  toolsContext?: Readonly<Record<string, unknown>>;
   /** Shared context threaded through tool execution, middleware, approvals, and step hooks. */
-  runtimeContext?: unknown
+  runtimeContext?: unknown;
   /** Tool middleware applied after prompt tools and call-site tools are merged. */
-  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
+  toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
   /** Call-site approval policy with final-word precedence over prompt/context declarations. */
-  toolApproval?: ToolApprovalMap
+  toolApproval?: ToolApprovalMap;
   /**
    * Message history override — used for conversation continuations and for
    * resuming after a tool-approval decision (append a
    * `tool-approval-response` message to the suspended result's history).
    */
-  messages?: Message[]
+  messages?: Message[];
   /** Maximum loop steps. Refunded steps (e.g. `LoadSkill`) don't count. @defaultValue 10 */
-  maxSteps?: number
+  maxSteps?: number;
   /** Call-site generation settings (highest precedence). */
-  settings?: GenerationSettings
+  settings?: GenerationSettings;
   /** Token budget for the system message. */
-  tokenBudget?: number
+  tokenBudget?: number;
   /** Structured timeout budgets for this managed call. */
-  timeout?: TimeoutOptions
+  timeout?: TimeoutOptions;
   /**
    * Validation-feedback retry for structured output. Each retry makes one
    * additional `attemptStructured` call with the Zod errors injected as a
    * corrective message.
    */
-  validationRetry?: ValidationRetryOptions
+  validationRetry?: ValidationRetryOptions;
   /** Semantic constraints checked after structural validation passes. */
-  constraints?: Constraint[]
+  constraints?: Constraint[];
   /** Shared cap on total constraint retries across all constraints. */
-  constraintMaxRetries?: number
+  constraintMaxRetries?: number;
   /** Guardrails to run on input/output during generation. */
-  guardrails?: Guardrail[]
+  guardrails?: Guardrail[];
   /**
    * Per-call safety posture overrides keyed by policy id.
    *
    * Tune enforcement/reporting, stream posture, or whether a policy is
    * enabled for this call without replacing the policy logic.
    */
-  safety?: SafetyTuneOptions
+  safety?: SafetyTuneOptions;
   /**
    * Per-step steering observer. Runs after the factory's own steering
    * (skill re-resolution); on conflict, `stop` wins over `amend` wins over
    * `continue`, and caller `amend` fields override factory ones.
    */
-  observer?: StepObserver
+  observer?: StepObserver;
   /** Restrict which tools the model may call. */
-  activeTools?: readonly string[]
+  activeTools?: readonly string[];
   /** Spec-specific passthrough options (e.g. AI SDK `toolChoice`). */
-  extra?: Record<string, unknown>
+  extra?: Record<string, unknown>;
 }
 
 /** Options for executor `stream()` calls. */
-export interface ExecutorStreamOptions<TModel> extends ExecutorGenerateOptions<TModel> {}
+export interface ExecutorStreamOptions<
+  TModel,
+> extends ExecutorGenerateOptions<TModel> {}
 
 /**
  * Result of an executor `generate()` call.
@@ -128,44 +139,54 @@ export interface ExecutorStreamOptions<TModel> extends ExecutorGenerateOptions<T
  */
 export interface ExecutorGenerateResult<TRawResponse> {
   /** The SDK's own result object. `undefined` only when suspended on approval. */
-  raw: TRawResponse | undefined
+  raw: TRawResponse | undefined;
   /** Final assistant text (or serialized JSON for structured output). */
-  text: string
+  text: string;
   /** The parsed, schema-valid object — present for structured prompts. */
-  object?: unknown
+  object?: unknown;
   /** Normalized metadata (usage, finish reason, cost, audits, routing). */
-  _meta: TraceMeta
+  _meta: TraceMeta;
   /** Budget-consuming steps taken (validation retries count; refunds don't). */
-  steps: number
+  steps: number;
   /** Canonical message history, including approval request/resume messages. */
-  messages: Message[]
+  messages: Message[];
   /** Approval requests awaiting a decision — present only when suspended. */
-  pendingApprovals?: readonly ApprovalRequestInfo[]
+  pendingApprovals?: readonly ApprovalRequestInfo[];
 }
 
 /** The executor interface returned by the factory. */
-export interface CruxExecutor<TModel, TRawResponse = unknown, TRawStream = unknown> {
+export interface CruxExecutor<
+  TModel,
+  TRawResponse = unknown,
+  TRawStream = unknown,
+> {
   /** Executor identifier from the port. */
-  readonly executorId: string
+  readonly executorId: string;
 
   /** Execute a prompt (non-streaming) through the SDK-owned loop. */
-  generate(prompt: AnyPrompt, opts: ExecutorGenerateOptions<TModel>): Promise<ExecutorGenerateResult<TRawResponse>>
+  generate(
+    prompt: AnyPrompt,
+    opts: ExecutorGenerateOptions<TModel>,
+  ): Promise<ExecutorGenerateResult<TRawResponse>>;
 
   /**
    * Stream a prompt. Returns the SDK's stream result untouched (`raw`)
    * plus a typed `completion()` resolving with usage/cost/timing metadata.
    * `cascade()` models are rejected — tier evaluation needs full results.
    */
-  stream(prompt: AnyPrompt, opts: ExecutorStreamOptions<TModel>): Promise<ExecutorStreamHandle<TRawStream>>
+  stream(
+    prompt: AnyPrompt,
+    opts: ExecutorStreamOptions<TModel>,
+  ): Promise<ExecutorStreamHandle<TRawStream>>;
 
   /** Run multiple agents concurrently and merge results. */
-  parallel: ReturnType<typeof createCompositions>['parallel']
+  parallel: ReturnType<typeof createCompositions>["parallel"];
   /** Chain agents sequentially with typed data flow. */
-  pipeline: ReturnType<typeof createCompositions>['pipeline']
+  pipeline: ReturnType<typeof createCompositions>["pipeline"];
   /** Run multiple agents and pick a winner via voting. */
-  consensus: ReturnType<typeof createCompositions>['consensus']
+  consensus: ReturnType<typeof createCompositions>["consensus"];
   /** Run a swarm of agents with peer-to-peer routing via tool calls. */
-  swarm: ReturnType<typeof createCompositions>['swarm']
+  swarm: ReturnType<typeof createCompositions>["swarm"];
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -203,47 +224,80 @@ export interface CruxExecutor<TModel, TRawResponse = unknown, TRawStream = unkno
  *   model: 'fake:m-1',
  *   input: { instruction: 'Say hello' },
  *   validationRetry: { maxRetries: 2 },
-   *   timeout: { totalMs: 30_000 },
+ *   timeout: { totalMs: 30_000 },
  * })
  * ```
  */
-export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = unknown>(
+export function loopRuntimeAdapter<
+  TModel,
+  TRawResponse = unknown,
+  TRawStream = unknown,
+>(
   port: LoopRuntimePort<TModel, TRawResponse, TRawStream>,
 ): CruxExecutor<TModel, TRawResponse, TRawStream> {
-  type GenerateResult = ExecutorGenerateResult<TRawResponse>
-  const execution = createAdapterExecution(sdkLoopDialect(port))
+  type GenerateResult = ExecutorGenerateResult<TRawResponse>;
+  const execution = createAdapterExecution(sdkLoopDialect(port));
 
   const modelLabel = (model: TModel): string => {
-    const info = port.describeModel(model)
-    return info.modelId || info.provider
-  }
+    const info = port.describeModel(model);
+    return info.modelId || info.provider;
+  };
 
   // ── generate() ──────────────────────────────────────────────
 
-  async function generate(prompt: AnyPrompt, opts: ExecutorGenerateOptions<TModel>): Promise<GenerateResult> {
-    const runWithModel = (model: TModel): Promise<GenerateResult> => generateSingle(prompt, opts, model)
+  async function generate(
+    prompt: AnyPrompt,
+    opts: ExecutorGenerateOptions<TModel>,
+  ): Promise<GenerateResult> {
+    const deadline = Deadline.after(opts.timeout?.totalMs);
+    const runWithModel = (
+      model: TModel,
+      attemptOptions: AttemptSignalOptions = {},
+    ): Promise<GenerateResult> =>
+      generateSingle(
+        prompt,
+        opts,
+        model,
+        deadline.compose(attemptOptions.signal),
+      );
 
-    const dispatch = (model: TModel | FallbackModel<TModel>): Promise<GenerateResult> =>
-      isFallback(model) ? executeFallbackLoop(model, runWithModel, modelLabel) : runWithModel(model)
+    const dispatch = (
+      model: TModel | FallbackModel<TModel>,
+      attemptOptions: AttemptSignalOptions = {},
+    ): Promise<GenerateResult> =>
+      isFallback(model)
+        ? executeFallbackLoop(model, runWithModel, modelLabel, { deadline })
+        : runWithModel(model, attemptOptions);
 
-    if (isRouter(opts.model) || isCascade(opts.model)) {
-      return resolveModel<TModel | FallbackModel<TModel>, GenerateResult>(
-        opts.model as TModel | FallbackModel<TModel>,
-        opts.input ?? {},
-        dispatch,
-        (model) => (isFallback(model) ? 'fallback' : modelLabel(model)),
-      )
+    try {
+      if (isRouter(opts.model) || isCascade(opts.model)) {
+        return await resolveModel<
+          TModel | FallbackModel<TModel>,
+          GenerateResult
+        >(
+          opts.model as TModel | FallbackModel<TModel>,
+          opts.input ?? {},
+          dispatch,
+          (model) => (isFallback(model) ? "fallback" : modelLabel(model)),
+          { deadline },
+        );
+      }
+      if (isFallback(opts.model)) {
+        return await executeFallbackLoop(opts.model, runWithModel, modelLabel, {
+          deadline,
+        });
+      }
+      return await runWithModel(opts.model as TModel);
+    } finally {
+      deadline.dispose();
     }
-    if (isFallback(opts.model)) {
-      return executeFallbackLoop(opts.model, runWithModel, modelLabel)
-    }
-    return runWithModel(opts.model as TModel)
   }
 
   async function generateSingle(
     prompt: AnyPrompt,
     opts: ExecutorGenerateOptions<TModel>,
     model: TModel,
+    signal: AbortSignal | undefined,
   ): Promise<GenerateResult> {
     return (await execution.generate({
       prompt,
@@ -267,7 +321,8 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       observer: opts.observer,
       activeTools: opts.activeTools,
       extra: opts.extra,
-    })) as GenerateResult
+      signal,
+    })) as GenerateResult;
   }
 
   // ── stream() ────────────────────────────────────────────────
@@ -276,32 +331,58 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
     prompt: AnyPrompt,
     opts: ExecutorStreamOptions<TModel>,
   ): Promise<ExecutorStreamHandle<TRawStream>> {
-    if (isCascade(opts.model)) {
-      throw new Error(
-        'cascade() does not support stream(). Use generate() instead — cascade needs full results for tier evaluation.',
-      )
-    }
+    const deadline = Deadline.after(opts.timeout?.totalMs);
+    try {
+      if (isCascade(opts.model)) {
+        throw new Error(
+          "cascade() does not support stream(). Use generate() instead — cascade needs full results for tier evaluation.",
+        );
+      }
 
-    const runWithModel = (model: TModel): Promise<ExecutorStreamHandle<TRawStream>> => streamSingle(prompt, opts, model)
+      const runWithModel = (
+        model: TModel,
+        attemptOptions: AttemptSignalOptions = {},
+      ): Promise<ExecutorStreamHandle<TRawStream>> =>
+        streamSingle(
+          prompt,
+          opts,
+          model,
+          deadline.compose(attemptOptions.signal),
+        );
 
-    if (isRouter(opts.model)) {
-      return resolveModel<TModel | FallbackModel<TModel>, ExecutorStreamHandle<TRawStream>>(
-        opts.model as TModel | FallbackModel<TModel>,
-        opts.input ?? {},
-        (model) => (isFallback(model) ? executeFallbackLoop(model, runWithModel, modelLabel) : runWithModel(model)),
-        (model) => (isFallback(model) ? 'fallback' : modelLabel(model)),
-      )
+      if (isRouter(opts.model)) {
+        return await resolveModel<
+          TModel | FallbackModel<TModel>,
+          ExecutorStreamHandle<TRawStream>
+        >(
+          opts.model as TModel | FallbackModel<TModel>,
+          opts.input ?? {},
+          (model, attemptOptions) =>
+            isFallback(model)
+              ? executeFallbackLoop(model, runWithModel, modelLabel, {
+                  deadline,
+                })
+              : runWithModel(model, attemptOptions),
+          (model) => (isFallback(model) ? "fallback" : modelLabel(model)),
+          { deadline },
+        );
+      }
+      if (isFallback(opts.model)) {
+        return await executeFallbackLoop(opts.model, runWithModel, modelLabel, {
+          deadline,
+        });
+      }
+      return await runWithModel(opts.model as TModel);
+    } finally {
+      deadline.dispose();
     }
-    if (isFallback(opts.model)) {
-      return executeFallbackLoop(opts.model, runWithModel, modelLabel)
-    }
-    return runWithModel(opts.model as TModel)
   }
 
   async function streamSingle(
     prompt: AnyPrompt,
     opts: ExecutorStreamOptions<TModel>,
     model: TModel,
+    signal: AbortSignal | undefined,
   ): Promise<ExecutorStreamHandle<TRawStream>> {
     return (await execution.stream({
       prompt,
@@ -325,35 +406,36 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
       observer: opts.observer,
       activeTools: opts.activeTools,
       extra: opts.extra,
-    })) as ExecutorStreamHandle<TRawStream>
+      signal,
+    })) as ExecutorStreamHandle<TRawStream>;
   }
 
   // ── Agent executor + compositions ───────────────────────────
 
   const agentExecutor: AgentExecutor = async (agent, options) => {
-    const model = (agent.model ?? options.model) as TModel
-    const start = Date.now()
+    const model = (agent.model ?? options.model) as TModel;
+    const start = Date.now();
 
-    const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) }
+    const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) };
     const generateOpts: ExecutorGenerateOptions<TModel> = {
       model,
       input: options.input as Record<string, unknown>,
       maxSteps: options.maxSteps,
       validationRetry: options.validationRetry,
       ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
-    }
+    };
 
-    const result = await generate(agent.prompt, generateOpts)
+    const result = await generate(agent.prompt, generateOpts);
 
     return {
       agentId: agent.id,
       output: result.object ?? result.text,
       durationMs: Date.now() - start,
       usage: result._meta.usage,
-    }
-  }
+    };
+  };
 
-  const compositions = createCompositions(agentExecutor)
+  const compositions = createCompositions(agentExecutor);
 
   return Object.freeze({
     executorId: port.id,
@@ -363,5 +445,5 @@ export function loopRuntimeAdapter<TModel, TRawResponse = unknown, TRawStream = 
     pipeline: compositions.pipeline,
     consensus: compositions.consensus,
     swarm: compositions.swarm,
-  })
+  });
 }

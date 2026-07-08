@@ -11,11 +11,15 @@
  * @internal
  */
 
-import { observe } from '../observability'
-import { withBudget } from './timeout'
-import type { FallbackModel, FallbackMeta, FallbackAttemptDetail } from './fallback'
-import { classifyError, shouldAttemptFallback } from './fallback'
-import { getMeta, setMeta } from './result-meta'
+import { observe } from "../observability";
+import { Deadline, withAbortSignal, withBudget } from "./timeout";
+import type {
+  FallbackModel,
+  FallbackMeta,
+  FallbackAttemptDetail,
+} from "./fallback";
+import { classifyError, shouldAttemptFallback } from "./fallback";
+import { getMeta, setMeta } from "./result-meta";
 
 /** Options supplied to one fallback model attempt. */
 export interface FallbackTryOptions {
@@ -26,7 +30,13 @@ export interface FallbackTryOptions {
    * The loop still races the timeout itself, so providers that ignore the
    * signal cannot block fallback progress.
    */
-  readonly signal?: AbortSignal
+  readonly signal?: AbortSignal;
+}
+
+/** Execution controls shared by every attempt in one fallback loop. */
+export interface FallbackLoopOptions {
+  /** Whole-call deadline inherited from the caller's timeout policy. */
+  readonly deadline?: Deadline;
 }
 
 /**
@@ -60,173 +70,202 @@ export async function executeFallbackLoop<M, R>(
   fb: FallbackModel<M>,
   tryModel: (model: M, options: FallbackTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
+  options: FallbackLoopOptions = {},
 ): Promise<R> {
-  const { models, options: fallbackOpts } = fb
-  const errors: Error[] = []
-  const details: FallbackAttemptDetail[] = []
-  let previousFailedSpanId: ReturnType<typeof observe.openSpan>['spanId'] | undefined
-  let previousFailedModelId: string | undefined
+  const { models, options: fallbackOpts } = fb;
+  const deadline = options.deadline ?? Deadline.after(undefined);
+  const ownsDeadline = options.deadline === undefined;
+  const errors: Error[] = [];
+  const details: FallbackAttemptDetail[] = [];
+  let previousFailedSpanId:
+    | ReturnType<typeof observe.openSpan>["spanId"]
+    | undefined;
+  let previousFailedModelId: string | undefined;
 
-  for (let i = 0; i < models.length; i++) {
-    const model = models[i]
-    const modelId = extractModelId(model)
-    const attemptStart = Date.now()
-    const attemptSpan = observe.openSpan({
-      name: 'fallback.attempt',
-      primitive: 'fallback.attempt',
-      attributes: {
-        attempt: i + 1,
-        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
-        ...(fallbackOpts.description ? { routingDescription: fallbackOpts.description } : {}),
-        model: modelId,
-        totalModels: models.length,
-        hasTimeout: fallbackOpts.timeout !== undefined,
-      },
-    })
-
-    try {
-      const result = await attemptSpan.withContext(() =>
-        withBudget((signal) => tryModel(model, { signal }), { budget: 'step', limitMs: fallbackOpts.timeout }),
-      )
-      const durationMs = Date.now() - attemptStart
-
-      details.push({
-        model: modelId,
-        durationMs,
-        status: 'success',
-        cost: getMeta(result)?.cost,
-      })
-
-      // Only attach fallback meta if there were failed attempts
-      if (errors.length > 0) {
-        setMeta(result, {
-          fallback: {
-            attempts: i + 1,
-            failedModels: details.filter((d) => d.status === 'error').map((d) => d.model),
-            details,
-          } satisfies FallbackMeta,
-        })
-      }
-
-      if (previousFailedSpanId && previousFailedModelId) {
-        observe.edge({
-          edgeType: 'fallback.attempt',
-          from: { kind: 'span', id: previousFailedSpanId },
-          to: { kind: 'span', id: attemptSpan.spanId },
-          attributes: {
-            fromModel: previousFailedModelId,
-            toModel: modelId,
-            attempt: i + 1,
-          },
-        })
-      }
-      emitFallbackRoutingReport(attemptSpan.spanId, {
-        kind: 'routing.report',
-        routingKind: 'fallback',
-        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
-        chosen: modelId,
-        tiers: details.map(fallbackTierPreview),
-      })
-      attemptSpan.end({
+  try {
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
+      const modelId = extractModelId(model);
+      const attemptStart = Date.now();
+      const attemptSpan = observe.openSpan({
+        name: "fallback.attempt",
+        primitive: "fallback.attempt",
         attributes: {
           attempt: i + 1,
           ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
+          ...(fallbackOpts.description
+            ? { routingDescription: fallbackOpts.description }
+            : {}),
           model: modelId,
           totalModels: models.length,
-          attemptStatus: 'success',
-          durationMs,
-          cost: getMeta(result)?.cost,
-          fallbackOccurred: errors.length > 0,
+          hasTimeout: fallbackOpts.timeout !== undefined,
         },
-      })
-      return result
-    } catch (error) {
-      const err = error instanceof Error ? error : new Error(String(error))
-      const durationMs = Date.now() - attemptStart
-      const errorCategory = classifyError(err)
-      const willAttemptFallback = shouldAttemptFallbackSafely(err, fallbackOpts, attemptSpan)
+      });
 
-      details.push({
-        model: modelId,
-        durationMs,
-        status: 'error',
-        error: err.message,
-        errorCategory,
-      })
+      try {
+        const result = await attemptSpan.withContext(() =>
+          withBudget(
+            (signal) => {
+              const composed = deadline.compose(signal);
+              return withAbortSignal(
+                () => tryModel(model, { signal: composed }),
+                composed,
+              );
+            },
+            { budget: "step", limitMs: fallbackOpts.timeout },
+          ),
+        );
+        const durationMs = Date.now() - attemptStart;
 
-      // Check if this error should trigger fallback
-      if (!willAttemptFallback) {
+        details.push({
+          model: modelId,
+          durationMs,
+          status: "success",
+          cost: getMeta(result)?.cost,
+        });
+
+        // Only attach fallback meta if there were failed attempts
+        if (errors.length > 0) {
+          setMeta(result, {
+            fallback: {
+              attempts: i + 1,
+              failedModels: details
+                .filter((d) => d.status === "error")
+                .map((d) => d.model),
+              details,
+            } satisfies FallbackMeta,
+          });
+        }
+
+        if (previousFailedSpanId && previousFailedModelId) {
+          observe.edge({
+            edgeType: "fallback.attempt",
+            from: { kind: "span", id: previousFailedSpanId },
+            to: { kind: "span", id: attemptSpan.spanId },
+            attributes: {
+              fromModel: previousFailedModelId,
+              toModel: modelId,
+              attempt: i + 1,
+            },
+          });
+        }
         emitFallbackRoutingReport(attemptSpan.spanId, {
-          kind: 'routing.report',
-          routingKind: 'fallback',
+          kind: "routing.report",
+          routingKind: "fallback",
+          ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
+          chosen: modelId,
+          tiers: details.map(fallbackTierPreview),
+        });
+        attemptSpan.end({
+          attributes: {
+            attempt: i + 1,
+            ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
+            model: modelId,
+            totalModels: models.length,
+            attemptStatus: "success",
+            durationMs,
+            cost: getMeta(result)?.cost,
+            fallbackOccurred: errors.length > 0,
+          },
+        });
+        return result;
+      } catch (error) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        const durationMs = Date.now() - attemptStart;
+        const errorCategory = classifyError(err);
+        const willAttemptFallback = shouldAttemptFallbackSafely(
+          err,
+          fallbackOpts,
+          attemptSpan,
+        );
+
+        details.push({
+          model: modelId,
+          durationMs,
+          status: "error",
+          error: err.message,
+          errorCategory,
+        });
+
+        // Check if this error should trigger fallback
+        if (!willAttemptFallback) {
+          emitFallbackRoutingReport(attemptSpan.spanId, {
+            kind: "routing.report",
+            routingKind: "fallback",
+            ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
+            fallbackReason: errorCategory,
+            tiers: details.map(fallbackTierPreview),
+          });
+          attemptSpan.error(err, {
+            attempt: i + 1,
+            ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
+            model: modelId,
+            totalModels: models.length,
+            attemptStatus: "error",
+            errorCategory,
+            willAttemptFallback: false,
+            durationMs,
+          });
+          throw err;
+        }
+
+        errors.push(err);
+        emitFallbackRoutingReport(attemptSpan.spanId, {
+          kind: "routing.report",
+          routingKind: "fallback",
           ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
           fallbackReason: errorCategory,
           tiers: details.map(fallbackTierPreview),
-        })
+        });
         attemptSpan.error(err, {
           attempt: i + 1,
           ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
           model: modelId,
           totalModels: models.length,
-          attemptStatus: 'error',
+          attemptStatus: "error",
           errorCategory,
-          willAttemptFallback: false,
+          willAttemptFallback: i < models.length - 1,
           durationMs,
-        })
-        throw err
+        });
+        previousFailedSpanId = attemptSpan.spanId;
+        previousFailedModelId = modelId;
+        notifyAttemptErrorSafely(fallbackOpts, err, i + 1, model, attemptSpan);
       }
-
-      errors.push(err)
-      emitFallbackRoutingReport(attemptSpan.spanId, {
-        kind: 'routing.report',
-        routingKind: 'fallback',
-        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
-        fallbackReason: errorCategory,
-        tiers: details.map(fallbackTierPreview),
-      })
-      attemptSpan.error(err, {
-        attempt: i + 1,
-        ...(fallbackOpts.id ? { routingId: fallbackOpts.id } : {}),
-        model: modelId,
-        totalModels: models.length,
-        attemptStatus: 'error',
-        errorCategory,
-        willAttemptFallback: i < models.length - 1,
-        durationMs,
-      })
-      previousFailedSpanId = attemptSpan.spanId
-      previousFailedModelId = modelId
-      notifyAttemptErrorSafely(fallbackOpts, err, i + 1, model, attemptSpan)
     }
-  }
 
-  throw new AggregateError(errors, `All ${models.length} fallback models failed`)
+    throw new AggregateError(
+      errors,
+      `All ${models.length} fallback models failed`,
+    );
+  } finally {
+    if (ownsDeadline) deadline.dispose();
+  }
 }
 
 function notifyAttemptErrorSafely<M>(
-  fallbackOpts: FallbackModel<M>['options'],
+  fallbackOpts: FallbackModel<M>["options"],
   err: Error,
   attempt: number,
   model: M,
   attemptSpan: ReturnType<typeof observe.openSpan>,
 ): void {
   try {
-    fallbackOpts.onAttemptError?.(err, attempt, model)
+    fallbackOpts.onAttemptError?.(err, attempt, model);
   } catch (hookError) {
-    emitRoutingHookError(attemptSpan, 'onAttemptError', hookError)
+    emitRoutingHookError(attemptSpan, "onAttemptError", hookError);
   }
 }
 
 function shouldAttemptFallbackSafely<M>(
   err: Error,
-  fallbackOpts: FallbackModel<M>['options'],
+  fallbackOpts: FallbackModel<M>["options"],
   attemptSpan: ReturnType<typeof observe.openSpan>,
 ): boolean {
   try {
-    return shouldAttemptFallback(err, fallbackOpts)
+    return shouldAttemptFallback(err, fallbackOpts);
   } catch (hookError) {
-    emitRoutingHookError(attemptSpan, 'shouldFallback', hookError)
-    return false
+    emitRoutingHookError(attemptSpan, "shouldFallback", hookError);
+    return false;
   }
 }
 
@@ -237,17 +276,20 @@ function emitRoutingHookError(
 ): void {
   span.withContext(() => {
     observe.event({
-      name: 'routing.hook_error',
+      name: "routing.hook_error",
       attributes: {
-        routingKind: 'fallback',
+        routingKind: "fallback",
         hook,
         error: error instanceof Error ? error.message : String(error),
       },
-    })
-  })
+    });
+  });
 }
 
-function fallbackTierPreview(detail: FallbackAttemptDetail, index: number): Record<string, unknown> {
+function fallbackTierPreview(
+  detail: FallbackAttemptDetail,
+  index: number,
+): Record<string, unknown> {
   return {
     tier: index,
     model: detail.model,
@@ -255,28 +297,28 @@ function fallbackTierPreview(detail: FallbackAttemptDetail, index: number): Reco
     ...(detail.error ? { note: detail.error } : {}),
     ...(detail.cost !== undefined ? { cost: detail.cost } : {}),
     durationMs: detail.durationMs,
-  }
+  };
 }
 
 function emitFallbackRoutingReport(
-  spanId: ReturnType<typeof observe.openSpan>['spanId'],
+  spanId: ReturnType<typeof observe.openSpan>["spanId"],
   preview: Record<string, unknown>,
 ): void {
   const artifactId = observe.artifact({
-    kind: 'routing.report',
-    contentType: 'application/json',
-    encoding: 'json',
+    kind: "routing.report",
+    contentType: "application/json",
+    encoding: "json",
     preview,
     attributes: {
-      primitive: 'fallback.attempt',
-      routingKind: 'fallback',
+      primitive: "fallback.attempt",
+      routingKind: "fallback",
     },
-  })
-  if (!artifactId) return
+  });
+  if (!artifactId) return;
   observe.edge({
-    edgeType: 'produced',
-    from: { kind: 'span', id: spanId },
-    to: { kind: 'artifact', id: artifactId },
-    attributes: { primitive: 'fallback.attempt', routingKind: 'fallback' },
-  })
+    edgeType: "produced",
+    from: { kind: "span", id: spanId },
+    to: { kind: "artifact", id: artifactId },
+    attributes: { primitive: "fallback.attempt", routingKind: "fallback" },
+  });
 }

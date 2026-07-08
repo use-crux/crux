@@ -9,17 +9,17 @@
  * @module
  */
 
-import type { MiddlewareResult } from '../../runtime/types'
-import { createSafety } from '../../safety/session'
-import { orchestrateStream } from '../../generation/orchestrate'
-import { withBudget } from '../../generation/timeout'
-import type { CallArgs, StreamHandle } from '../types'
-import { createToolLifecycle } from '../tool/session'
-import type { AdapterExecutionStreamArgs, CoreStepDialect } from './types'
-import { initialCoreMessages } from './messages'
-import { createCachedStreamHandle } from './metadata'
-import { buildResolveOpts } from './shared'
-import { createSafetyTextChunk, isSafetyTextChunk } from './stream-safety'
+import type { MiddlewareResult } from "../../runtime/types";
+import { createSafety } from "../../safety/session";
+import { orchestrateStream } from "../../generation/orchestrate";
+import { composeAbortSignals, withBudget } from "../../generation/timeout";
+import type { CallArgs, StreamHandle } from "../types";
+import { createToolLifecycle } from "../tool/session";
+import type { AdapterExecutionStreamArgs, CoreStepDialect } from "./types";
+import { initialCoreMessages } from "./messages";
+import { createCachedStreamHandle } from "./metadata";
+import { buildResolveOpts } from "./shared";
+import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -32,23 +32,31 @@ import { createSafetyTextChunk, isSafetyTextChunk } from './stream-safety'
  * @param args - Prepared streaming arguments from the public `adapter()` facade.
  * @returns A provider-compatible stream handle.
  */
-export async function streamCore<TClient, TRawResponse, TRawStream, TExtra extends Record<string, unknown>>(
+export async function streamCore<
+  TClient,
+  TRawResponse,
+  TRawStream,
+  TExtra extends Record<string, unknown>,
+>(
   dialect: CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra>,
   args: AdapterExecutionStreamArgs<string, TExtra>,
 ): Promise<StreamHandle<TRawStream>> {
-  const prompt = args.prompt
-  const modelInfo = args.modelInfo ?? { provider: args.provider ?? dialect.id, modelId: args.model }
+  const prompt = args.prompt;
+  const modelInfo = args.modelInfo ?? {
+    provider: args.provider ?? dialect.id,
+    modelId: args.model,
+  };
   const resolveOpts = buildResolveOpts({
     input: args.input,
     provider: args.provider ?? modelInfo.provider,
     modelId: modelInfo.modelId,
     tokenBudget: args.tokenBudget,
     settings: args.settings,
-  })
-  const resolved = await prompt.resolve(resolveOpts)
-  const mappedSettings = dialect.mapSettings(resolved.settings)
+  });
+  const resolved = await prompt.resolve(resolveOpts);
+  const mappedSettings = dialect.mapSettings(resolved.settings);
   const lifecycle = createToolLifecycle({
-    regime: 'core',
+    regime: "core",
     resolved,
     call: {
       tools: args.tools,
@@ -62,10 +70,10 @@ export async function streamCore<TClient, TRawResponse, TRawStream, TExtra exten
     timeout: args.timeout,
     appendToolRound: dialect.appendToolRound,
     sanitizeToolSchema: dialect.sanitizeToolSchema,
-  })
-  const tools = lifecycle.descriptors ? [...lifecycle.descriptors] : undefined
-  let messages = initialCoreMessages(resolved, args.messages)
-  messages = (await lifecycle.resume(messages)).messages
+  });
+  const tools = lifecycle.descriptors ? [...lifecycle.descriptors] : undefined;
+  let messages = initialCoreMessages(resolved, args.messages);
+  messages = (await lifecycle.resume(messages)).messages;
   const safety = createSafety({
     call: {
       constraints: args.constraints,
@@ -73,16 +81,20 @@ export async function streamCore<TClient, TRawResponse, TRawStream, TExtra exten
       constraintMaxRetries: args.constraintMaxRetries,
     },
     safety: args.safety,
-    resolved: { constraints: resolved.constraints, guardrails: resolved.guardrails, metadata: resolved.metadata },
+    resolved: {
+      constraints: resolved.constraints,
+      guardrails: resolved.guardrails,
+      metadata: resolved.metadata,
+    },
     promptId: prompt.id,
     model: modelInfo.modelId,
     systemPrompt: resolved.system,
-  })
-  messages = [...(await safety.guardInput({ messages })).messages]
+  });
+  messages = [...(await safety.guardInput({ messages })).messages];
 
-  let schemaParams: Record<string, unknown> | undefined
+  let schemaParams: Record<string, unknown> | undefined;
   if (resolved.schema && dialect.wrapOutputSchema) {
-    schemaParams = dialect.wrapOutputSchema(resolved.schema)
+    schemaParams = dialect.wrapOutputSchema(resolved.schema);
   }
 
   const callArgs: CallArgs<TExtra> = {
@@ -95,7 +107,7 @@ export async function streamCore<TClient, TRawResponse, TRawStream, TExtra exten
     schemaParams,
     tools,
     extra: (args.extra ?? {}) as TExtra,
-  }
+  };
 
   const handle = await orchestrateStream(
     {
@@ -106,61 +118,70 @@ export async function streamCore<TClient, TRawResponse, TRawStream, TExtra exten
       provider: modelInfo.provider,
       model: modelInfo.modelId,
       resolved,
-      outputMode: resolved.schema ? 'object' : 'text',
+      outputMode: resolved.schema ? "object" : "text",
       timeout: args.timeout,
-      createCachedStreamResult: (cached) => createCachedStreamHandle(cached) as unknown as MiddlewareResult,
+      createCachedStreamResult: (cached) =>
+        createCachedStreamHandle(cached) as unknown as MiddlewareResult,
     },
     async () =>
-      withBudget(() => dialect.stream(dialect.client, callArgs), {
-        budget: 'step',
-        limitMs: args.timeout?.stepMs,
-      }),
-  )
+      withBudget(
+        (signal) =>
+          dialect.stream(dialect.client, callArgs, {
+            signal: composeAbortSignals(args.signal, signal),
+          }),
+        {
+          budget: "step",
+          limitMs: args.timeout?.stepMs,
+        },
+      ),
+  );
 
-  const safetyStream = safety.enabled ? safety.openStream() : undefined
-  let streamedAssistantText = ''
+  const safetyStream = safety.enabled ? safety.openStream() : undefined;
+  let streamedAssistantText = "";
 
   /** Yield provider chunks while replacing held/transformed safety text deltas. */
   async function* trackedRawStream() {
-    type Chunk = Awaited<TRawStream extends AsyncIterable<infer T> ? T : never>
+    type Chunk = Awaited<TRawStream extends AsyncIterable<infer T> ? T : never>;
     for await (const chunk of handle.rawStream as AsyncIterable<unknown>) {
-      const delta = handle.extractTextDelta(chunk)
-      if (!safetyStream || delta === undefined || delta === '') {
-        if (delta) streamedAssistantText += delta
-        yield chunk as Chunk
-        continue
+      const delta = handle.extractTextDelta(chunk);
+      if (!safetyStream || delta === undefined || delta === "") {
+        if (delta) streamedAssistantText += delta;
+        yield chunk as Chunk;
+        continue;
       }
-      const directive = await safetyStream.feed(delta)
-      if (directive.kind === 'hold') continue
-      streamedAssistantText += directive.content
+      const directive = await safetyStream.feed(delta);
+      if (directive.kind === "hold") continue;
+      streamedAssistantText += directive.content;
       if (directive.content === delta) {
-        yield chunk as Chunk
+        yield chunk as Chunk;
       } else if (directive.content.length > 0) {
-        yield createSafetyTextChunk(directive.content) as Chunk
+        yield createSafetyTextChunk(directive.content) as Chunk;
       }
     }
     if (safetyStream) {
-      const seal = await safetyStream.finish()
+      const seal = await safetyStream.finish();
       if (seal.pending.length > 0) {
-        streamedAssistantText += seal.pending
-        yield createSafetyTextChunk(seal.pending) as Chunk
+        streamedAssistantText += seal.pending;
+        yield createSafetyTextChunk(seal.pending) as Chunk;
       }
     }
   }
 
   return {
     ...handle,
-    rawStream: trackedRawStream() as unknown as TRawStream & AsyncIterable<unknown>,
-    extractTextDelta: (chunk: unknown) => (isSafetyTextChunk(chunk) ? chunk.text : handle.extractTextDelta(chunk)),
+    rawStream: trackedRawStream() as unknown as TRawStream &
+      AsyncIterable<unknown>,
+    extractTextDelta: (chunk: unknown) =>
+      isSafetyTextChunk(chunk) ? chunk.text : handle.extractTextDelta(chunk),
     completion: async () => {
-      const meta = await handle.completion()
-      const stamped = meta ? safety.stamp(meta) : meta
+      const meta = await handle.completion();
+      const stamped = meta ? safety.stamp(meta) : meta;
       await lifecycle.captureTurn({
         messages,
         assistantText: streamedAssistantText || undefined,
         toolCalls: stamped?.toolCalls,
-      })
-      return stamped
+      });
+      return stamped;
     },
-  }
+  };
 }
