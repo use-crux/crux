@@ -8,7 +8,8 @@ import "encoding/json"
 
 // QualityEvent is one line of the quality runner NDJSON stream.
 type QualityEvent struct {
-	Type string `json:"type"`
+	Type  string `json:"type"`
+	RunID string `json:"runId,omitempty"`
 
 	// collect:done
 	Evaluations []QualityManifest     `json:"evaluations,omitempty"`
@@ -46,9 +47,15 @@ type QualityEvent struct {
 	// run:done
 	Experiments []string `json:"experiments,omitempty"`
 	ExitCode    int      `json:"exitCode,omitempty"`
+	OK          bool     `json:"ok,omitempty"`
+	RunError    *struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
 
 	// error
 	Scope   string `json:"scope,omitempty"`
+	Code    string `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
 	File    string `json:"file,omitempty"`
 	Line    int    `json:"line,omitempty"`

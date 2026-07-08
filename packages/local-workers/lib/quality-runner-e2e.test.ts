@@ -118,6 +118,9 @@ describe('quality-runner worker (subprocess e2e)', () => {
     if (runDone.type !== 'run:done') throw new Error('expected run:done last')
     expect(runDone.exitCode).toBe(1)
     expect(runDone.experiments).toHaveLength(3)
+    const runIds = new Set(events.map((event) => event.runId))
+    expect(runIds.size).toBe(1)
+    expect([...runIds][0]).toMatch(/^[0-9A-Z]{26}$/)
   }, 60_000)
 
   it('a variant bakeoff produces paired comparison deltas and trips minDeltaVsBaseline (exit 1)', async () => {

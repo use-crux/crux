@@ -23,6 +23,9 @@ import type {
   QualityRunnerEnv,
 } from './runner-types'
 
+/** Current first-party local worker <-> core runner protocol version. */
+export const QUALITY_RUNNER_PROTOCOL = 1
+
 export type {
   QualityCollectedEvaluation,
   QualityCollectError,

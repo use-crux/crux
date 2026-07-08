@@ -372,6 +372,7 @@ type QualityOverviewRecord struct {
 	RunCount                    int                 `json:"runCount"`
 	ExperimentCount             int                 `json:"experimentCount"`
 	BaselineCount               int                 `json:"baselineCount"`
+	SkippedRecords              int                 `json:"skippedRecords,omitempty"`
 	FeedbackCount               int                 `json:"feedbackCount"`
 	FeedbackNeedingReviewCount  int                 `json:"feedbackNeedingReviewCount"`
 	CassetteCount               int                 `json:"cassetteCount"`

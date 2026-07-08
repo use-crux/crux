@@ -34,11 +34,13 @@ type qualityReporter struct {
 	progress runProgress
 	quiet    bool
 	verbose  bool
+	machine  bool
 
 	evals       map[string]*qualityEvalState
 	order       []string
 	recordPaths []string
 	hadErrors   bool
+	runID       string
 
 	// startedAt anchors the banner's wall-clock duration; nowFn is the clock
 	// (overridable in tests for a deterministic elapsed).
@@ -64,11 +66,14 @@ func newQualityReporter(opts *qualityRunOpts, io *output.IO, port int) *qualityR
 		render:    newQualityRenderer(io, port),
 		quiet:     opts.quiet,
 		verbose:   opts.verbose,
+		machine:   opts.jsonStdout,
 		evals:     map[string]*qualityEvalState{},
 		startedAt: time.Now(),
 		nowFn:     time.Now,
 	}
-	if useLiveProgress(io, opts) {
+	if r.machine {
+		r.progress = silentProgress{}
+	} else if useLiveProgress(io, opts) {
 		r.progress = newLiveProgress(io, r.elapsedSeconds)
 	} else {
 		r.progress = newPlainProgress(io, opts)
@@ -100,6 +105,9 @@ func (r *qualityReporter) state(evaluationID string) *qualityEvalState {
 // §1): diagnostics and progress to stderr, results (eval tables, promote) to
 // stdout.
 func (r *qualityReporter) handle(ev *domain.QualityEvent) {
+	if ev.RunID != "" && r.runID == "" {
+		r.runID = ev.RunID
+	}
 	switch ev.Type {
 	case "collect:done":
 		r.progress.collected(len(ev.Evaluations))
@@ -128,9 +136,14 @@ func (r *qualityReporter) handle(ev *domain.QualityEvent) {
 			r.recordPaths = append(r.recordPaths, ev.RecordPath)
 		}
 		r.progress.clear()
-		r.render.evaluation(state, r.quiet)
+		if !r.machine {
+			r.render.evaluation(state, r.quiet)
+		}
 	case "promote:done":
 		r.progress.clear()
+		if r.machine {
+			return
+		}
 		out := r.io.Out
 		fmt.Fprintf(out, "  %s promoted %s → baseline %s (%s)\n",
 			r.io.Status("success"), ev.ExperimentID, ev.BaselineID, ev.EvaluationID)
@@ -141,6 +154,9 @@ func (r *qualityReporter) handle(ev *domain.QualityEvent) {
 	case "error":
 		r.hadErrors = true
 		r.progress.clear()
+		if r.machine {
+			return
+		}
 		location := ""
 		if ev.File != "" {
 			location = " (" + ev.File + ")"
@@ -159,6 +175,9 @@ func (r *qualityReporter) handle(ev *domain.QualityEvent) {
 // with no escape bytes.
 func (r *qualityReporter) banner(exitCode int) {
 	r.progress.clear() // idempotent: ensure no live line lingers under the banner
+	if r.machine {
+		return
+	}
 	out := r.io.Out
 
 	var passed, failed, errored, skipped, gateFailures int

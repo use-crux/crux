@@ -99,14 +99,26 @@ export interface QualityCollectResult {
   readonly errors: readonly QualityCollectError[]
 }
 
+/** Tooling-only error codes added by the local runner protocol. */
+export type QualityRunnerProtocolErrorCode = 'protocol-mismatch' | 'runner-crash' | 'worker-crash'
+
+/** Error codes emitted on the Quality runner event stream. */
+export type QualityRunnerErrorCode = QualityDefinitionDiagnosticCode | QualityRunnerProtocolErrorCode
+
+interface QualityRunnerEventBase {
+  /** Stable id for one local worker process run. Added by first-party tooling. */
+  readonly runId?: string
+}
+
 /** Events emitted by the facade while running or promoting evaluations. */
-export type QualityRunnerEvent =
-  | {
-      type: 'collect:done'
-      evaluations: EvaluationManifest[]
-      errors: QualityCollectError[]
-    }
-  | { type: 'eval:start'; evaluationId: string; cells: number }
+export type QualityRunnerEvent = QualityRunnerEventBase &
+  (
+    | {
+        type: 'collect:done'
+        evaluations: EvaluationManifest[]
+        errors: QualityCollectError[]
+      }
+    | { type: 'eval:start'; evaluationId: string; cells: number }
   | {
       type: 'cell:start'
       evaluationId: string
@@ -138,15 +150,22 @@ export type QualityRunnerEvent =
       variantName?: string
       pinHint?: string
     }
-  | { type: 'run:done'; experiments: string[]; exitCode: 0 | 1 | 2 }
-  | {
-      type: 'error'
-      scope: 'collect' | 'execute' | 'promote'
-      message: string
-      code?: QualityDefinitionDiagnosticCode
-      file?: string
-      line?: number
-    }
+    | {
+        type: 'run:done'
+        experiments: string[]
+        exitCode: 0 | 1 | 2
+        ok?: boolean
+        error?: { code: QualityRunnerProtocolErrorCode; message: string }
+      }
+    | {
+        type: 'error'
+        scope: 'collect' | 'execute' | 'promote'
+        message: string
+        code?: QualityRunnerErrorCode
+        file?: string
+        line?: number
+      }
+  )
 
 /** Receives runner lifecycle events, usually serialized to NDJSON by tooling. */
 export type QualityEventSink = (event: QualityRunnerEvent) => void

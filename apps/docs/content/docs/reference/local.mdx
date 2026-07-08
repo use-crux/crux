@@ -259,8 +259,8 @@ Quality is the supported evaluation CLI namespace.
 | `--replay <mode>`       | `live` · `record-new` · `replay-strict` · `refresh` — overrides declaration/config                                                                                |
 | `--rescore`             | Reuse cached outputs, re-run scorers/expects only (token-free judge iteration)                                                                                    |
 | `--experiment <label>`  | Grouping label stored on the record(s)                                                                                                                            |
-| `--json`                | Write the Experiment record(s) (versioned schema) as a JSON array to stdout (bool, consistent with every other quality subcommand)                                |
-| `--json-out <path>`     | Write the same JSON array to a file path instead of stdout                                                                                                        |
+| `--json`                | Suppress human stdout and write one machine-readable run summary object (verdict, record paths, failed cells, evidence commands, cost, duration)                  |
+| `--json-out <path>`     | Write the same run summary object to a file path while keeping human stdout                                                                                       |
 | `--junit <path>`        | Write JUnit XML (one testsuite per evaluation × variant; gate failures as a synthetic `gates` testcase; experimentId/configFingerprint/score means in properties) |
 | `--ci`                  | Force plain, non-animated output and no color, even on a TTY. Pair with explicit `--replay replay-strict` for token-free CI posture                               |
 | `--max-concurrency <n>` | Cap parallel cells across all evaluations                                                                                                                         |

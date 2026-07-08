@@ -52,7 +52,7 @@ type judgeReportAccumulator struct {
 }
 
 func (s *Service) JudgeReportAPI(_ context.Context, evaluationID string) (QualityJudgeReport, bool, error) {
-	fs := qualityfs.Open(s.dir)
+	fs := s.fs
 	files, _, err := fs.ReadExperimentRecords()
 	if err != nil {
 		return QualityJudgeReport{}, false, err

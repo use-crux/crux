@@ -29,7 +29,8 @@ const (
 // presentation rows, newest first. Native clients still use this flat list;
 // the HTTP /api/quality/experiments route uses ExperimentsPageAPI below.
 func (s *Service) ExperimentSummariesAPI(_ context.Context) ([]api.QualityExperimentSummary, error) {
-	return s.allExperimentSummaries(time.Now())
+	summaries, _, err := s.allExperimentSummaries(time.Now())
+	return summaries, err
 }
 
 // ExperimentsPageAPI lists experiment summaries with server-side filtering,
@@ -37,7 +38,7 @@ func (s *Service) ExperimentSummariesAPI(_ context.Context) ([]api.QualityExperi
 func (s *Service) ExperimentsPageAPI(_ context.Context, opts api.QualityExperimentsOptions) (api.QualityExperimentsPage, error) {
 	now := time.Now().UTC()
 	opts = normalizeQualityExperimentsOptions(opts)
-	summaries, err := s.allExperimentSummaries(now)
+	summaries, skippedRecords, err := s.allExperimentSummaries(now)
 	if err != nil {
 		return api.QualityExperimentsPage{}, err
 	}
@@ -90,11 +91,12 @@ func (s *Service) ExperimentsPageAPI(_ context.Context, opts api.QualityExperime
 	pageRows := matching[start:end]
 
 	page := api.QualityExperimentsPage{
-		Tag:          "QualityExperimentsPage",
-		Experiments:  pageRows,
-		Total:        total,
-		StatusCounts: statusCounts,
-		Evaluations:  evaluations,
+		Tag:            "QualityExperimentsPage",
+		Experiments:    pageRows,
+		Total:          total,
+		SkippedRecords: skippedRecords,
+		StatusCounts:   statusCounts,
+		Evaluations:    evaluations,
 	}
 	if end < total {
 		page.NextCursor = strconv.Itoa(end)
@@ -102,10 +104,10 @@ func (s *Service) ExperimentsPageAPI(_ context.Context, opts api.QualityExperime
 	return page, nil
 }
 
-func (s *Service) allExperimentSummaries(now time.Time) ([]api.QualityExperimentSummary, error) {
-	records, _, err := qualityfs.Open(s.dir).ReadExperimentRecords()
+func (s *Service) allExperimentSummaries(now time.Time) ([]api.QualityExperimentSummary, int, error) {
+	records, skippedRecords, err := s.fs.ReadExperimentRecords()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var running []api.QualityExperimentSummary
 	if s.bus != nil {
@@ -117,7 +119,7 @@ func (s *Service) allExperimentSummaries(now time.Time) ([]api.QualityExperiment
 		summaries = append(summaries, experimentSummary(file.Record))
 	}
 	sortExperimentSummariesNewestFirst(summaries)
-	return summaries, nil
+	return summaries, skippedRecords, nil
 }
 
 func normalizeQualityExperimentsOptions(opts api.QualityExperimentsOptions) api.QualityExperimentsOptions {
@@ -235,13 +237,13 @@ func experimentSummaryStatus(record qualityfs.ExperimentRecord) string {
 // ExperimentRecordAPI returns one spec-02 experiment record VERBATIM — the
 // stored bytes, never a struct round-trip (the schema evolves additively).
 func (s *Service) ExperimentRecordAPI(_ context.Context, experimentID string) (json.RawMessage, bool, error) {
-	return qualityfs.Open(s.dir).ReadExperimentRecordRaw(experimentID)
+	return s.fs.ReadExperimentRecordRaw(experimentID)
 }
 
 // BaselineRecordsAPI lists all committed spec-02 baseline records verbatim,
 // newest promotion first.
 func (s *Service) BaselineRecordsAPI(_ context.Context) ([]json.RawMessage, error) {
-	records, _, err := qualityfs.Open(s.dir).ReadBaselineRecords()
+	records, _, err := s.fs.ReadBaselineRecords()
 	if err != nil {
 		return nil, err
 	}
@@ -255,13 +257,13 @@ func (s *Service) BaselineRecordsAPI(_ context.Context) ([]json.RawMessage, erro
 // BaselineRecordAPI returns the committed baseline for one evaluation id,
 // verbatim (spec-02 filename rule: `baselines/<evaluationId>.json`).
 func (s *Service) BaselineRecordAPI(_ context.Context, evaluationID string) (json.RawMessage, bool, error) {
-	return qualityfs.Open(s.dir).ReadBaselineRecordRaw(evaluationID)
+	return s.fs.ReadBaselineRecordRaw(evaluationID)
 }
 
 // CassetteFilesAPI lists the engine's executor-boundary cassettes with the
 // 90-day staleness flag the replay layer applies.
 func (s *Service) CassetteFilesAPI(_ context.Context) ([]api.QualityCassetteFileRecord, error) {
-	infos, err := qualityfs.Open(s.dir).ReadCassetteFiles(time.Now())
+	infos, err := s.fs.ReadCassetteFiles(time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -291,13 +293,13 @@ func (s *Service) OverviewRecordAPI(ctx context.Context, windows ...string) (api
 		windowName = windows[0]
 	}
 	window := newQualityOverviewWindow(windowName, now)
-	fs := qualityfs.Open(s.dir)
-	experiments, _, err := fs.ReadExperimentRecords()
+	fs := s.fs
+	experiments, experimentSkipped, err := fs.ReadExperimentRecords()
 	if err != nil {
 		return api.QualityOverviewRecord{}, err
 	}
 	experiments = filterSpecExperimentsForOverviewWindow(experiments, window)
-	baselines, _, err := fs.ReadBaselineRecords()
+	baselines, baselineSkipped, err := fs.ReadBaselineRecords()
 	if err != nil {
 		return api.QualityOverviewRecord{}, err
 	}
@@ -348,6 +350,7 @@ func (s *Service) OverviewRecordAPI(ctx context.Context, windows ...string) (api
 		RunCount:                   len(runs),
 		ExperimentCount:            len(experiments),
 		BaselineCount:              len(baselines),
+		SkippedRecords:             experimentSkipped + baselineSkipped,
 		CassetteCount:              len(cassettes),
 		FeedbackCount:              len(feedback),
 		FeedbackNeedingReviewCount: feedbackNeedingReview,
@@ -486,7 +489,7 @@ func specPassRateHistory(records []qualityfs.ExperimentRecordFile, now time.Time
 // ExperimentDetailAPI parses one spec-02 experiment record into the typed
 // mirror for native (TUI) rendering. HTTP serves the bytes verbatim instead.
 func (s *Service) ExperimentDetailAPI(_ context.Context, experimentID string) (api.QualityExperimentDetail, bool, error) {
-	raw, found, err := qualityfs.Open(s.dir).ReadExperimentRecordRaw(experimentID)
+	raw, found, err := s.fs.ReadExperimentRecordRaw(experimentID)
 	if err != nil || !found {
 		return api.QualityExperimentDetail{}, found, err
 	}
@@ -500,7 +503,7 @@ func (s *Service) ExperimentDetailAPI(_ context.Context, experimentID string) (a
 // PromotedBaselinesAPI lists committed spec-02 baselines as typed mirrors
 // for native rendering.
 func (s *Service) PromotedBaselinesAPI(_ context.Context) ([]api.QualityPromotedBaseline, error) {
-	records, _, err := qualityfs.Open(s.dir).ReadBaselineRecords()
+	records, _, err := s.fs.ReadBaselineRecords()
 	if err != nil {
 		return nil, err
 	}
@@ -524,7 +527,7 @@ const (
 // evaluation. Unlike the progress read model, this is a collection relation:
 // unknown or not-yet-run evaluation ids return an empty relation, not a 404.
 func (s *Service) EvaluationExperimentsAPI(_ context.Context, evaluationID string, limit int) (api.QualityEvaluationExperiments, error) {
-	records, _, err := qualityfs.Open(s.dir).ReadExperimentRecords()
+	records, _, err := s.fs.ReadExperimentRecords()
 	if err != nil {
 		return api.QualityEvaluationExperiments{}, err
 	}
@@ -561,7 +564,7 @@ func (s *Service) EvaluationExperimentsAPI(_ context.Context, evaluationID strin
 // evaluation for list screens that need the relation without client-side
 // scans over every experiment row.
 func (s *Service) EvaluationExperimentGroupsAPI(_ context.Context, limit int) (api.QualityEvaluationExperimentGroups, error) {
-	records, _, err := qualityfs.Open(s.dir).ReadExperimentRecords()
+	records, _, err := s.fs.ReadExperimentRecords()
 	if err != nil {
 		return api.QualityEvaluationExperimentGroups{}, err
 	}
@@ -632,7 +635,7 @@ func (s *Service) EvaluationExperimentGroupsAPI(_ context.Context, limit int) (a
 // EvaluationProgressAPI builds the server-owned progress read model for one
 // evaluation from recent spec-02 experiment records and the current baseline.
 func (s *Service) EvaluationProgressAPI(_ context.Context, evaluationID string, limit int) (api.QualityEvaluationProgress, bool, error) {
-	fs := qualityfs.Open(s.dir)
+	fs := s.fs
 	records, _, err := fs.ReadExperimentRecords()
 	if err != nil {
 		return api.QualityEvaluationProgress{}, false, err
@@ -887,7 +890,7 @@ func meanBaselineScores(reference map[string]map[string]float64) map[string]floa
 // records: evaluations using each scorer, scored cell count, and the mean
 // over non-null scores.
 func (s *Service) ScorerStatsAPI(_ context.Context) ([]api.QualityScorerStats, error) {
-	records, _, err := qualityfs.Open(s.dir).ReadExperimentRecords()
+	records, _, err := s.fs.ReadExperimentRecords()
 	if err != nil {
 		return nil, err
 	}

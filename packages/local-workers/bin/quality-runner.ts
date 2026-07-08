@@ -30,7 +30,7 @@ import type { ProjectModelDiagnostic } from '@use-crux/core/project-index'
 import type { ReplayMode } from '@use-crux/core/quality'
 import { SourceResolver } from '@use-crux/indexer/source-resolver'
 import { loadEnv } from '../lib/env'
-import { loadObservabilityCore, loadRunnerCore } from '../lib/quality-core-bridge'
+import { loadObservabilityCore, loadRunnerCore, QualityRunnerProtocolMismatchError } from '../lib/quality-core-bridge'
 import { loadQualityProject, resolveQualityRunnerSettings, ensureQualityGitignore } from '../lib/quality-config'
 import {
   collectEvaluationFiles,
@@ -41,12 +41,15 @@ import {
 import { executeEvaluations, type QualityRunEvent } from '../lib/quality-execute'
 import { enableQualityRunnerObservability, flushQualityRunnerObservability } from '../lib/quality-observability'
 import { promoteExperiment } from '../lib/quality-promote'
+import { createQualityRunId } from '../lib/quality-run-id'
 
 // Redirect console.log to stderr so stdout stays clean NDJSON.
 console.log = (...args: unknown[]) => console.error(...args)
 
+const runId = createQualityRunId()
+
 function emit(event: QualityRunEvent): void {
-  process.stdout.write(`${JSON.stringify(event)}\n`)
+  process.stdout.write(`${JSON.stringify({ ...event, runId })}\n`)
 }
 
 async function main(): Promise<number> {
@@ -92,8 +95,19 @@ async function main(): Promise<number> {
     observabilityCore = await loadObservabilityCore(project.configDir)
     restoreObservability = enableQualityRunnerObservability(observabilityCore, process.env.CRUX_DEVTOOLS_URL)
   } catch (error) {
-    emit({ type: 'error', scope: 'collect', message: describeError(error) })
-    emit({ type: 'run:done', experiments: [], exitCode: 2 })
+    emit({
+      type: 'error',
+      scope: 'collect',
+      message: describeError(error),
+      ...(qualityRunnerErrorCode(error) ? { code: qualityRunnerErrorCode(error) } : {}),
+    })
+    emit({
+      type: 'run:done',
+      experiments: [],
+      exitCode: 2,
+      ok: false,
+      error: { code: qualityRunnerErrorCode(error) ?? 'runner-crash', message: describeError(error) },
+    })
     return 2
   }
 
@@ -267,6 +281,22 @@ function collectErrorFromProjectModelDiagnostic(diagnostic: ProjectModelDiagnost
 main()
   .then((exitCode) => process.exit(exitCode))
   .catch((error: unknown) => {
-    emit({ type: 'error', scope: 'execute', message: describeError(error) })
+    emit({
+      type: 'error',
+      scope: 'execute',
+      message: describeError(error),
+      ...(qualityRunnerErrorCode(error) ? { code: qualityRunnerErrorCode(error) } : {}),
+    })
+    emit({
+      type: 'run:done',
+      experiments: [],
+      exitCode: 2,
+      ok: false,
+      error: { code: qualityRunnerErrorCode(error) ?? 'runner-crash', message: describeError(error) },
+    })
     process.exit(2)
   })
+
+function qualityRunnerErrorCode(error: unknown): 'protocol-mismatch' | undefined {
+  return error instanceof QualityRunnerProtocolMismatchError ? error.code : undefined
+}

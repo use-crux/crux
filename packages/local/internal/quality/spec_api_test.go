@@ -212,6 +212,28 @@ func TestExperimentSummariesAPIIncludesRunningRows(t *testing.T) {
 	}
 }
 
+func TestExperimentSummariesAPITracksConcurrentRunsByRunID(t *testing.T) {
+	svc := NewService(store.NewStore(), t.TempDir())
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:start","runId":"run-a","evaluationId":"evals.concurrent","cells":2}`))
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:start","runId":"run-b","evaluationId":"evals.concurrent","cells":3}`))
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"cell:done","runId":"run-a","evaluationId":"evals.concurrent","cell":{"status":"passed"}}`))
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"run:done","runId":"run-a","experiments":[],"exitCode":0}`))
+
+	summaries, err := svc.ExperimentSummariesAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("summaries len = %d, want only run-b still active: %+v", len(summaries), summaries)
+	}
+	if summaries[0].EvaluationID != "evals.concurrent" || summaries[0].Cells != 3 {
+		t.Fatalf("remaining running summary = %+v, want run-b", summaries[0])
+	}
+	if !strings.Contains(summaries[0].ExperimentID, "run-b") {
+		t.Fatalf("running experiment id should include run id, got %q", summaries[0].ExperimentID)
+	}
+}
+
 func TestExperimentsPageAPIFiltersPagesAndFacets(t *testing.T) {
 	svc := newSpecService(t)
 	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:start","evaluationId":"evals.running","cells":3}`))
@@ -220,7 +242,7 @@ func TestExperimentsPageAPIFiltersPagesAndFacets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Tag != "QualityExperimentsPage" || page.Total != 3 || page.NextCursor != "1" || len(page.Experiments) != 1 {
+	if page.Tag != "QualityExperimentsPage" || page.Total != 3 || page.SkippedRecords != 1 || page.NextCursor != "1" || len(page.Experiments) != 1 {
 		t.Fatalf("page = %+v", page)
 	}
 	if page.Experiments[0].Status != "running" || page.Experiments[0].EvaluationID != "evals.running" {

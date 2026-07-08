@@ -2,11 +2,26 @@ package quality
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+func TestResolveDiskSourceFrameRejectsAbsolutePathOutsideRoot(t *testing.T) {
+	root := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.ts")
+	if err := os.WriteFile(outside, []byte("export const secret = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	frame := resolveDiskSourceFrame(outside+":1:1", root)
+	if frame.Kind != "unavailable" || frame.Reason != "source-outside-root" {
+		t.Fatalf("frame = %+v, want source-outside-root unavailable", frame)
+	}
+}
 
 func TestCellEvidenceAPIReanchorsDiskSourceFrameToAssertionSubject(t *testing.T) {
 	dir := t.TempDir()

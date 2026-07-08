@@ -372,15 +372,18 @@ committed Baseline record (explicit id required; filtered runs refused).
 
 Records are versioned JSON contracts (`schemaVersion`, additive-only within a
 major): the **Experiment record**
-(`.crux/quality/experiments/<ulid>.json`, gitignored, also `--json`), the
+(`.crux/quality/experiments/<ulid>.json`, gitignored, readable with
+`crux quality show <experiment-id> --json`), the
 **Evaluation manifest** (`crux quality list --json`, devtools pre-run
 rendering; includes `covers` when explicit Project Index coverage targets are
 declared), and the **Baseline record**
 (`.crux/quality/baselines/<evaluationId>.json`, committed — how CI knows the
 reference; `configFingerprint` drift demotes comparisons to informational).
-Manifest + Experiment record are the complete agent-facing contract: list
-evaluations, run one, read the assertion outcome ledger with `sourceRef` +
-`traceIds`, edit, rerun — no parsing of human-oriented output.
+`crux quality run --json` emits a compact run summary that points at these
+records and failing-cell evidence commands. Manifest + Experiment record are the
+complete agent-facing contract: list evaluations, run one, read the assertion
+outcome ledger with `sourceRef` + `traceIds`, edit, rerun — no parsing of
+human-oriented output.
 
 ## Identity and discovery
 

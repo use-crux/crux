@@ -67,12 +67,13 @@ type QualityExperimentStatusCounts struct {
 // GET /api/quality/experiments. Experiments is the current page; Total counts
 // all rows matching the active filters before pagination.
 type QualityExperimentsPage struct {
-	Tag          string                        `json:"_tag"`
-	Experiments  []QualityExperimentSummary    `json:"experiments"`
-	Total        int                           `json:"total"`
-	NextCursor   string                        `json:"nextCursor,omitempty"`
-	StatusCounts QualityExperimentStatusCounts `json:"statusCounts"`
-	Evaluations  []string                      `json:"evaluations"`
+	Tag            string                        `json:"_tag"`
+	Experiments    []QualityExperimentSummary    `json:"experiments"`
+	Total          int                           `json:"total"`
+	SkippedRecords int                           `json:"skippedRecords,omitempty"`
+	NextCursor     string                        `json:"nextCursor,omitempty"`
+	StatusCounts   QualityExperimentStatusCounts `json:"statusCounts"`
+	Evaluations    []string                      `json:"evaluations"`
 }
 
 // QualityEvaluationExperiments is the backend-owned relation read model that

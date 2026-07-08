@@ -42,6 +42,15 @@ type runProgress interface {
 	clear()
 }
 
+type silentProgress struct{}
+
+func (silentProgress) start()                       {}
+func (silentProgress) collected(int)                {}
+func (silentProgress) evalStart(string, int)        {}
+func (silentProgress) cellStart(string)             {}
+func (silentProgress) cellDone(*domain.QualityCell) {}
+func (silentProgress) clear()                       {}
+
 // useLiveProgress decides whether a run gets the animated live reporter. It is
 // the binding selection rule from spec 02 §3: animate only on an interactive
 // stderr that is not under an explicit `--ci` override, not in a detected CI

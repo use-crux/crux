@@ -1156,6 +1156,7 @@ export interface QualityOverviewRecord {
   runCount: number
   experimentCount: number
   baselineCount: number
+  skippedRecords?: number
   feedbackCount: number
   feedbackNeedingReviewCount: number
   cassetteCount: number
@@ -1570,6 +1571,7 @@ export interface QualityExperimentsPage {
   _tag: 'QualityExperimentsPage'
   experiments: readonly QualityExperimentSummary[]
   total: number
+  skippedRecords?: number
   nextCursor?: string
   statusCounts: QualityExperimentStatusCounts
   evaluations: readonly string[]
