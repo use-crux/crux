@@ -17,6 +17,18 @@ import type { FallbackModel, FallbackMeta, FallbackAttemptDetail } from './fallb
 import { classifyError, shouldAttemptFallback } from './fallback'
 import { getMeta, setMeta } from './result-meta'
 
+/** Options supplied to one fallback model attempt. */
+export interface FallbackTryOptions {
+  /**
+   * Cooperative cancellation signal for the current fallback attempt.
+   *
+   * Adapters should pass this to the underlying provider call when supported.
+   * The loop still races the timeout itself, so providers that ignore the
+   * signal cannot block fallback progress.
+   */
+  readonly signal?: AbortSignal
+}
+
 /**
  * Generic fallback loop for adapter packages. Tries each model in order,
  * tracking per-attempt timing, error classification, and cost. Attaches
@@ -24,7 +36,8 @@ import { getMeta, setMeta } from './result-meta'
  *
  * @param fb - A `FallbackModel` wrapper created by `fallback(modelA, modelB, ...)`
  * @param tryModel - Adapter-specific callback that executes a single model attempt.
- *   Receives the model and returns the SDK result with `_meta` attached.
+ *   Receives the model and per-attempt options, including the cooperative
+ *   timeout signal, and returns the SDK result with `_meta` attached.
  * @param extractModelId - Extracts a human-readable model identifier from the
  *   adapter's model type (e.g., `(m) => m` for string models, `(m) => m.modelId` for AI SDK)
  * @returns The result from the first successful model, with `_meta.fallback`
@@ -45,7 +58,7 @@ import { getMeta, setMeta } from './result-meta'
  */
 export async function executeFallbackLoop<M, R>(
   fb: FallbackModel<M>,
-  tryModel: (model: M) => Promise<R>,
+  tryModel: (model: M, options: FallbackTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
 ): Promise<R> {
   const { models, options: fallbackOpts } = fb
@@ -73,7 +86,7 @@ export async function executeFallbackLoop<M, R>(
 
     try {
       const result = await attemptSpan.withContext(() =>
-        withBudget(() => tryModel(model), { budget: 'step', limitMs: fallbackOpts.timeout }),
+        withBudget((signal) => tryModel(model, { signal }), { budget: 'step', limitMs: fallbackOpts.timeout }),
       )
       const durationMs = Date.now() - attemptStart
 
@@ -131,7 +144,7 @@ export async function executeFallbackLoop<M, R>(
       const err = error instanceof Error ? error : new Error(String(error))
       const durationMs = Date.now() - attemptStart
       const errorCategory = classifyError(err)
-      const willAttemptFallback = shouldAttemptFallback(err, fallbackOpts)
+      const willAttemptFallback = shouldAttemptFallbackSafely(err, fallbackOpts, attemptSpan)
 
       details.push({
         model: modelId,
@@ -183,11 +196,55 @@ export async function executeFallbackLoop<M, R>(
       })
       previousFailedSpanId = attemptSpan.spanId
       previousFailedModelId = modelId
-      fallbackOpts.onAttemptError?.(err, i + 1, model)
+      notifyAttemptErrorSafely(fallbackOpts, err, i + 1, model, attemptSpan)
     }
   }
 
   throw new AggregateError(errors, `All ${models.length} fallback models failed`)
+}
+
+function notifyAttemptErrorSafely<M>(
+  fallbackOpts: FallbackModel<M>['options'],
+  err: Error,
+  attempt: number,
+  model: M,
+  attemptSpan: ReturnType<typeof observe.openSpan>,
+): void {
+  try {
+    fallbackOpts.onAttemptError?.(err, attempt, model)
+  } catch (hookError) {
+    emitRoutingHookError(attemptSpan, 'onAttemptError', hookError)
+  }
+}
+
+function shouldAttemptFallbackSafely<M>(
+  err: Error,
+  fallbackOpts: FallbackModel<M>['options'],
+  attemptSpan: ReturnType<typeof observe.openSpan>,
+): boolean {
+  try {
+    return shouldAttemptFallback(err, fallbackOpts)
+  } catch (hookError) {
+    emitRoutingHookError(attemptSpan, 'shouldFallback', hookError)
+    return false
+  }
+}
+
+function emitRoutingHookError(
+  span: ReturnType<typeof observe.openSpan>,
+  hook: string,
+  error: unknown,
+): void {
+  span.withContext(() => {
+    observe.event({
+      name: 'routing.hook_error',
+      attributes: {
+        routingKind: 'fallback',
+        hook,
+        error: error instanceof Error ? error.message : String(error),
+      },
+    })
+  })
 }
 
 function fallbackTierPreview(detail: FallbackAttemptDetail, index: number): Record<string, unknown> {

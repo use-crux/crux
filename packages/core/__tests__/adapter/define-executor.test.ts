@@ -17,7 +17,7 @@ import { appendToolApprovalResponse } from '../../tools/approvals'
 import { resetHooks } from '../../runtime/runtime'
 import { boundary, guardrail, SafetyStructuredSyncError } from '../../safety'
 import type { Message } from '../../generation/messages'
-import type { StepDirective } from '../../adapter/executor-types'
+import type { StepDirective, StructuredRequest } from '../../adapter/executor-types'
 
 afterEach(() => {
   resetHooks()
@@ -40,6 +40,12 @@ function structuredPrompt() {
     input: z.object({ instruction: z.string() }),
     output: z.object({ title: z.string(), count: z.number() }),
   })
+}
+
+function waitForAbort(signal: AbortSignal | undefined): Promise<void> {
+  if (!signal) return Promise.reject(new Error('expected a step timeout signal'))
+  if (signal.aborted) return Promise.resolve()
+  return new Promise((resolve) => signal.addEventListener('abort', () => resolve(), { once: true }))
 }
 
 describe('loopRuntimeAdapter — text generation', () => {
@@ -196,6 +202,46 @@ describe('loopRuntimeAdapter — structured output + validation retry', () => {
     const contents = (retryRequest.messages ?? []).map((m) => m.content)
     expect(contents.some((c) => typeof c === 'string' && c.includes('"count":"two"'))).toBe(true)
     expect(contents.some((c) => typeof c === 'string' && c.includes('Validation failed'))).toBe(true)
+  })
+
+    it('gives each structured validation retry a fresh step timeout signal', async () => {
+    vi.useFakeTimers()
+    const fake = fakeLoopRuntime({
+      structured: ['{"title":"hi","count":"two"}', '{"title":"hi","count":2}'],
+    })
+    const calls: StructuredRequest<string>[] = []
+    const runtime = {
+      ...fake.runtime,
+      async runStructuredAttempt(request: StructuredRequest<string>) {
+        calls.push(request)
+        if (calls.length === 1) {
+          await waitForAbort(request.abortSignal)
+        } else if (request.abortSignal?.aborted) {
+          throw new Error('retry inherited an aborted step signal')
+        }
+        return fake.runtime.runStructuredAttempt(request)
+      },
+    }
+    const executor = loopRuntimeAdapter(runtime)
+
+    const resultPromise = executor.generate(structuredPrompt(), {
+      model: 'fake:m-1',
+      input: { instruction: 'make json' },
+      timeout: { stepMs: 20 },
+      validationRetry: { maxRetries: 1 },
+    })
+
+    try {
+      await vi.advanceTimersByTimeAsync(20)
+      const result = await resultPromise
+
+      expect(result.object).toEqual({ title: 'hi', count: 2 })
+      expect(calls).toHaveLength(2)
+      expect(calls[0]!.abortSignal).not.toBe(calls[1]!.abortSignal)
+      expect(calls[1]!.abortSignal?.aborted).toBe(false)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
     it('throws ValidationExhaustedError when retries run out', async () => {

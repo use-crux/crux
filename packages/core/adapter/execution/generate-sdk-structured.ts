@@ -12,10 +12,11 @@
 
 import type { z } from 'zod'
 import type { Message } from '../../generation/messages'
+import { createBudgetSignal } from '../../generation/timeout'
 import { getHooks } from '../../runtime/runtime'
 import type { Safety } from '../../safety/session'
 import { ValidationExhaustedError } from '../../generation/validation-retry'
-import type { ExecutorRequest } from '../executor-types'
+import type { ExecutorRequest, StructuredRequest } from '../executor-types'
 import { interceptGeneration, type InterceptedGeneration } from '../interception'
 import { formatValidationFeedback } from '../policy/validation-retry'
 import type { ResultStepFacts } from '../result-accumulator'
@@ -66,6 +67,21 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
   let currentMessages = request.messages ? [...request.messages] : []
   let currentPrompt = request.prompt
 
+  const runStructuredAttempt = async (attemptRequest: StructuredRequest<TModel>) => {
+    const attemptBudget = createBudgetSignal({
+      budget: 'step',
+      limitMs: args.timeout?.stepMs,
+    })
+    const requestWithSignal = { ...attemptRequest, abortSignal: attemptBudget.signal }
+    try {
+      return await interceptGeneration(describeCall('structured', requestWithSignal), () =>
+        dialect.runStructuredAttempt(requestWithSignal),
+      )
+    } finally {
+      attemptBudget.dispose()
+    }
+  }
+
   for (;;) {
     const attemptRequest = {
       ...request,
@@ -73,9 +89,7 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
       messages: currentMessages,
       schema,
     }
-    const attempt = await interceptGeneration(describeCall('structured', attemptRequest), () =>
-      dialect.runStructuredAttempt(attemptRequest),
-    )
+    const attempt = await runStructuredAttempt(attemptRequest)
 
     if (attempt.status === 'ok') {
       let steps = 1 + attempts
@@ -95,9 +109,7 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
             messages: regenMessages,
             schema,
           }
-          const regen = await interceptGeneration(describeCall('structured', regenRequest), () =>
-            dialect.runStructuredAttempt(regenRequest),
-          )
+          const regen = await runStructuredAttempt(regenRequest)
           steps++
           if (regen.status === 'ok') {
             if (stepFacts.length > 0) {

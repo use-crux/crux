@@ -361,6 +361,32 @@ describe("generate — routing", () => {
   });
 });
 
+describe("generateTextFn — routing", () => {
+  it("falls back to the next model and preserves fallback meta", async () => {
+    const scripted = scriptedGateway({
+      generateText: [
+        Object.assign(new Error("rate limited"), { status: 429 }),
+        { text: "from backup" },
+      ],
+    });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+
+    const result = await ai.generateTextFn({
+      model: fallback(model("primary"), model("backup")),
+      prompt: "go",
+    });
+
+    expect(result.text).toBe("from backup");
+    expect(scripted.calls.generateText).toHaveLength(2);
+    expect(scripted.calls.generateText.map((args) => (args.model as { modelId?: unknown }).modelId)).toEqual([
+      "primary",
+      "backup",
+    ]);
+    const meta = result as unknown as { readonly _meta?: { readonly fallback?: { readonly attempts: number } } };
+    expect(meta._meta?.fallback?.attempts).toBe(2);
+  });
+});
+
 describe("stream — metrics and completion", () => {
   it("returns the canonical stream envelope with raw SDK access", async () => {
     const scripted = scriptedGateway({

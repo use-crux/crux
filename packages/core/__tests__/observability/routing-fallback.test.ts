@@ -279,4 +279,43 @@ describe('canonical routing and fallback observability', () => {
       }),
     )
   })
+
+    it('records fallback hook errors on the active attempt span', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const providerError = Object.assign(new Error('rate limited'), { status: 429 })
+    const fb = fallback('model-a', 'model-b', {
+      shouldFallback: () => {
+        throw new Error('predicate failed')
+      },
+    }) as FallbackModel<string>
+    const tryModel = vi.fn().mockRejectedValueOnce(providerError)
+
+    await observe.run({ name: 'fallback request', rootPrimitive: 'fallback.attempt' }, async () => {
+      await expect(executeFallbackLoop(fb, tryModel, extractModelId)).rejects.toBe(providerError)
+    })
+    await observe.flush()
+
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:event',
+        name: 'routing.hook_error',
+        attributes: expect.objectContaining({
+          routingKind: 'fallback',
+          hook: 'shouldFallback',
+          error: 'predicate failed',
+        }),
+      }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:end',
+        status: 'error',
+        attributes: expect.objectContaining({
+          model: 'model-a',
+          willAttemptFallback: false,
+        }),
+      }),
+    )
+  })
 })

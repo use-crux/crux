@@ -761,6 +761,7 @@ export type {
   TimeoutErrorOptions,
   BudgetOptions,
   BudgetSignal,
+  FallbackTryOptions,
   OrchestrationSpec,
   TextDeltaExtractor,
 } from "./generation";

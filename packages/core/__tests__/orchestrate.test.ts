@@ -137,6 +137,7 @@ describe('withBudget', () => {
 
 describe('executeFallbackLoop', () => {
   const extractId = (m: string) => m
+  type FallbackTryOptions = { signal?: AbortSignal }
 
   it('uses first model when it succeeds (no fallback metadata)', async () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
@@ -266,6 +267,60 @@ describe('executeFallbackLoop', () => {
 
     expect(result.text).toBe('from B')
     expect(result._meta.fallback.details[0].errorCategory).toBe('timeout')
+  })
+
+    it('passes the fallback timeout signal to the active model attempt', async () => {
+    const fb = fallback('model-a', 'model-b', {
+      timeout: 50,
+    }) as FallbackModel<string>
+    const aborted = vi.fn()
+    const tryModel = vi.fn((model: string, opts?: FallbackTryOptions) => {
+      if (model === 'model-b') return Promise.resolve(mockResult('from B'))
+      if (!opts?.signal) return Promise.reject(new Error('model-a did not receive a timeout signal'))
+      return new Promise((_, reject) => {
+        opts.signal?.addEventListener(
+          'abort',
+          () => {
+            aborted()
+            reject(opts.signal?.reason)
+          },
+          { once: true },
+        )
+      })
+    })
+
+    const result = await executeFallbackLoop(fb, tryModel, extractId)
+
+    expect(result.text).toBe('from B')
+    expect(aborted).toHaveBeenCalledOnce()
+    expect(tryModel).toHaveBeenCalledTimes(2)
+  })
+
+    it('surfaces the provider error when shouldFallback throws', async () => {
+    const providerError = rateLimitError('primary rate limited')
+    const fb = fallback('model-a', 'model-b', {
+      shouldFallback: () => {
+        throw new Error('predicate failed')
+      },
+    }) as FallbackModel<string>
+    const tryModel = vi.fn().mockRejectedValueOnce(providerError)
+
+    await expect(executeFallbackLoop(fb, tryModel, extractId)).rejects.toBe(providerError)
+    expect(tryModel).toHaveBeenCalledTimes(1)
+  })
+
+    it('continues recovery when onAttemptError throws', async () => {
+    const fb = fallback('model-a', 'model-b', {
+      onAttemptError: () => {
+        throw new Error('callback failed')
+      },
+    }) as FallbackModel<string>
+    const tryModel = vi.fn().mockRejectedValueOnce(rateLimitError()).mockResolvedValueOnce(mockResult('from B'))
+
+    const result = await executeFallbackLoop(fb, tryModel, extractId)
+
+    expect(result.text).toBe('from B')
+    expect(tryModel).toHaveBeenCalledTimes(2)
   })
 
     it('works with 3+ models', async () => {

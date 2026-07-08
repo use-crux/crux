@@ -210,16 +210,11 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         });
         messages = [...guardedInput.messages];
         promptText = guardedInput.prompt;
-        stepBudget = createBudgetSignal({
-          budget: "step",
-          limitMs: args.timeout?.stepMs,
-        });
-        const request = buildRequest(stepBudget.signal);
         const result = resolved.schema
           ? await generateSdkStructured({
               dialect,
               args,
-              request,
+              request: buildRequest(undefined),
               schema: resolved.schema,
               safety,
               retryId,
@@ -227,7 +222,13 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
               describeCall,
               stepFacts,
             })
-          : await generateLoop(request);
+          : await (async () => {
+              stepBudget = createBudgetSignal({
+                budget: "step",
+                limitMs: args.timeout?.stepMs,
+              });
+              return generateLoop(buildRequest(stepBudget.signal));
+            })();
         result._meta = safety.stamp(result._meta);
         return result;
       } finally {
