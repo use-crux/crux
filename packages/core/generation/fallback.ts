@@ -6,6 +6,13 @@
  */
 
 import { isValidationExhaustedError } from './validation-retry'
+import type {
+  BoundOf,
+  ComposedCtx,
+  ComposedStream,
+  InOf,
+  RoutingPhantom,
+} from '../routing/types'
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -20,6 +27,26 @@ export type ErrorCategory =
   | 'auth_error'
   | 'validation_exhausted'
 
+/** Per-fallback timeout budgets. */
+export interface FallbackTimeoutOptions {
+  /** Maximum time for one fallback attempt. */
+  readonly attempt?: number
+  /** Maximum time to first stream token for one attempt. */
+  readonly firstToken?: number
+}
+
+/** Information passed to the fallback transition hook. */
+export interface FallbackHookInfo<M = unknown> {
+  /** Model that just failed. */
+  readonly from: M
+  /** Next model that will be attempted. */
+  readonly to: M
+  /** 1-based attempt number that failed. */
+  readonly attempt: number
+  /** Original provider/runtime error. */
+  readonly error: Error
+}
+
 /** Options for configuring fallback behavior. */
 export interface FallbackOptions {
   /** Stable id used to join authored index definitions with fallback attempt spans. */
@@ -30,14 +57,21 @@ export interface FallbackOptions {
   on?: ErrorCategory[]
   /** Custom predicate — when set, takes priority over `on`. */
   shouldFallback?: (error: Error) => boolean
-  /** Per-attempt timeout in milliseconds. Uses AbortController internally. */
-  timeout?: number
-  /** Called when an attempt fails (before trying the next model). */
-  onAttemptError?: (error: Error, attempt: number, model: unknown) => void
+  /** Per-attempt and first-token timeout budgets. */
+  timeout?: FallbackTimeoutOptions
+  /** Called when a failed attempt is about to fall through to the next model. */
+  onFallback?: (info: FallbackHookInfo) => void | Promise<void>
 }
 
 /** A fallback model wrapper — recognized by adapters via `isFallback()`. */
-export interface FallbackModel<M = unknown> {
+export interface FallbackModel<M = unknown>
+  extends RoutingPhantom<
+    InOf<M>,
+    ComposedCtx<object, M>,
+    ComposedStream<M>,
+    BoundOf<M>,
+    never
+  > {
   readonly _tag: 'crux.fallback'
   readonly models: readonly M[]
   readonly options: FallbackOptions
@@ -50,33 +84,25 @@ export interface FallbackModel<M = unknown> {
 /**
  * Create a fallback model wrapper that tries models in order.
  *
- * Pass 2+ models, optionally followed by an options object.
+ * Pass a readonly tuple of at least two models, optionally followed by
+ * fallback options.
  *
  * @example
  * ```ts
  * import { fallback } from '@use-crux/core'
  *
- * const model = fallback(gpt4o, claudeSonnet, geminiFlash)
+ * const model = fallback([gpt4o, claudeSonnet, geminiFlash])
  *
- * const model = fallback(gpt4o, claudeSonnet, {
+ * const model = fallback([gpt4o, claudeSonnet], {
  *   on: ['rate_limit', 'timeout'],
- *   timeout: 10_000,
+ *   timeout: { attempt: 10_000 },
  * })
  * ```
  */
-export function fallback<M>(...args: [...M[], FallbackOptions] | M[]): FallbackModel<M> {
-  // Separate options from models
-  let models: M[]
-  let options: FallbackOptions = {}
-
-  const lastArg = args[args.length - 1]
-  if (lastArg !== null && typeof lastArg === 'object' && !isModel(lastArg)) {
-    options = lastArg as FallbackOptions
-    models = args.slice(0, -1) as M[]
-  } else {
-    models = args as M[]
-  }
-
+export function fallback<const Ms extends readonly [unknown, unknown, ...unknown[]]>(
+  models: Ms,
+  options: FallbackOptions = {},
+): FallbackModel<Ms[number]> {
   if (models.length < 2) {
     throw new Error('fallback() requires at least 2 models')
   }
@@ -85,6 +111,7 @@ export function fallback<M>(...args: [...M[], FallbackOptions] | M[]): FallbackM
     _tag: 'crux.fallback' as const,
     models: Object.freeze([...models]),
     options,
+    __phantom: undefined as unknown as FallbackModel<Ms[number]>['__phantom'],
   })
 }
 
@@ -171,25 +198,3 @@ export function shouldAttemptFallback(error: Error, options: FallbackOptions): b
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Heuristic to distinguish model objects from options objects.
- * Models are SDK objects (with provider/modelId) or strings; options have our known keys.
- */
-function isModel(value: unknown): boolean {
-  if (typeof value !== 'object' || value === null) return true
-  const obj = value as Record<string, unknown>
-
-  // If it has _tag it's a crux object (Context, Prompt, etc.) — not options
-  if ('_tag' in obj) return true
-
-  // If it has provider/modelId it's a model info object
-  if ('provider' in obj && 'modelId' in obj) return true
-
-  // Only a pure FallbackOptions-shaped object is options. Real model objects may
-  // also expose common metadata fields such as id or description.
-  const optionKeys = ['id', 'description', 'on', 'shouldFallback', 'timeout', 'onAttemptError']
-  return !Object.keys(obj).every((key) => optionKeys.includes(key))
-}

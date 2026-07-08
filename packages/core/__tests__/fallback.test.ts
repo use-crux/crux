@@ -7,30 +7,30 @@ describe('fallback()', () => {
   it('returns a FallbackModel with correct _tag and models', () => {
     const modelA = { provider: 'openai', modelId: 'gpt-4o' }
     const modelB = { provider: 'anthropic', modelId: 'claude-sonnet' }
-    const fb = fallback(modelA, modelB)
+    const fb = fallback([modelA, modelB])
 
     expect(fb._tag).toBe('crux.fallback')
     expect(fb.models).toEqual([modelA, modelB])
   })
 
     it('accepts 3+ models', () => {
-    const fb = fallback('model-a', 'model-b', 'model-c')
+    const fb = fallback(['model-a', 'model-b', 'model-c'])
     expect(fb.models).toEqual(['model-a', 'model-b', 'model-c'])
   })
 
     it('extracts options object from last argument', () => {
-    const fb = fallback('model-a', 'model-b', {
+    const fb = fallback(['model-a', 'model-b'], {
       id: 'resilient-model',
       description: 'Try backup providers on provider failures',
       on: ['rate_limit', 'timeout'],
-      timeout: 5000,
+      timeout: { attempt: 5000 },
     })
 
     expect(fb.models).toEqual(['model-a', 'model-b'])
     expect(fb.options.id).toBe('resilient-model')
     expect(fb.options.description).toBe('Try backup providers on provider failures')
     expect(fb.options.on).toEqual(['rate_limit', 'timeout'])
-    expect(fb.options.timeout).toBe(5000)
+    expect(fb.options.timeout).toEqual({ attempt: 5000 })
   })
 
     it('keeps model objects with option-like metadata in the model list', () => {
@@ -40,31 +40,31 @@ describe('fallback()', () => {
       description: 'SDK model object with metadata',
       doGenerate: async () => ({ text: 'ok' }),
     }
-    const fb = fallback(modelA, modelB)
+    const fb = fallback([modelA, modelB])
 
     expect(fb.models).toEqual([modelA, modelB])
     expect(fb.options).toEqual({})
   })
 
     it('defaults options when none provided', () => {
-    const fb = fallback('a', 'b')
+    const fb = fallback(['a', 'b'])
     expect(fb.options).toEqual({})
   })
 
     it('throws when fewer than 2 models are provided', () => {
-    expect(() => fallback('only-one' as any)).toThrow(/at least 2 models/)
+    expect(() => fallback(['only-one'] as unknown as [string, string])).toThrow(/at least 2 models/)
   })
 
-    it('supports onAttemptError callback in options', () => {
+  it('supports onFallback callback in options', () => {
     const handler = () => {}
-    const fb = fallback('a', 'b', { onAttemptError: handler })
-    expect(fb.options.onAttemptError).toBe(handler)
+    const fb = fallback(['a', 'b'], { onFallback: handler })
+    expect(fb.options.onFallback).toBe(handler)
   })
 })
 
 describe('isFallback()', () => {
   it('returns true for FallbackModel', () => {
-    const fb = fallback('a', 'b')
+    const fb = fallback(['a', 'b'])
     expect(isFallback(fb)).toBe(true)
   })
 

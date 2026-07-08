@@ -174,7 +174,8 @@ describe('createStructuredGenerateObjectFn', () => {
     })
     const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
     const routedModel = router({
-      classify: (input) => (input.prompt === 'choose' ? 'fast' : 'default'),
+      classify: ({ input }: import('@use-crux/core/routing').RouteArgs<object, { prompt: string }>) =>
+        input.prompt === 'choose' ? 'fast' : 'default',
       routes: {
         fast: model('fast'),
         default: model('default'),
@@ -219,7 +220,7 @@ describe('createStructuredGenerateObjectFn', () => {
     const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
 
     const result = await generateObject({
-      model: fallback(model('primary'), model('backup')),
+      model: fallback([model('primary'), model('backup')]),
       prompt: 'json please',
       schema,
     })

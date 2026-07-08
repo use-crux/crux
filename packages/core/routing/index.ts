@@ -1,7 +1,9 @@
 /**
  * Cost-aware model routing primitives.
  *
- * - `router()` — classifier-based model selection with typed hints
+ * - `router()` — classifier-based model selection with typed routing context
+ * - `split()` — deterministic weighted bucket selection
+ * - `retry()` — retry one model on retryable failures
  * - `cascade()` — sequential quality escalation with budget enforcement
  * - `fallback()` — ordered provider/model fallback with attempt spans
  *
@@ -10,6 +12,34 @@
 
 export { router, isRouter } from './router'
 export type { RouterConfig, RouterModel, AnyRouterModel } from './router'
+
+export { split, isSplit } from './split'
+export type { SplitConfig, SplitModel, SplitRoute } from './split'
+
+export { retry, isRetry } from './retry'
+export type { RetryBackoff, RetryModel, RetryOptions } from './retry'
+
+export type {
+  AnyRoutable,
+  BoundOf,
+  BoundOk,
+  CallProfile,
+  CallProfileParams,
+  ComposedCtx,
+  ComposedStream,
+  CtxOf,
+  InOf,
+  InputOk,
+  KeysOf,
+  ModelOf,
+  Prettify,
+  PromptInputOf,
+  PromptOutputSchemaOf,
+  RouteArgs,
+  RoutingCallOptions,
+  RoutingPhantom,
+  StreamOf,
+} from './types'
 
 export { cascade, isCascade } from './cascade'
 export type {
@@ -43,7 +73,6 @@ export type {
 export {
   CascadeExhaustedError,
   FallbackExhaustedError,
-  RouterClassifyError,
   createRoutingStreamError,
   isRoutingStreamError,
 } from './errors'

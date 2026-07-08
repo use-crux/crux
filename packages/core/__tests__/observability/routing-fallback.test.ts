@@ -32,7 +32,8 @@ describe('canonical routing and fallback observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const routed = router({
-      classify: (input) => ((input.big as boolean) ? 'large' : 'small'),
+      classify: ({ input }: { input: { big?: boolean }; context: object }) =>
+        input.big ? 'large' : 'small',
       routes: {
         large: 'model-large',
         small: 'model-small',
@@ -54,7 +55,6 @@ describe('canonical routing and fallback observability', () => {
         attributes: expect.objectContaining({
           routeCount: 3,
           overridden: false,
-          hasHints: false,
         }),
       }),
     )
@@ -223,7 +223,7 @@ describe('canonical routing and fallback observability', () => {
     it('records fallback attempts with failed and successful model relations', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const fb = fallback('model-a', 'model-b') as FallbackModel<string>
+    const fb = fallback(['model-a', 'model-b']) as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(Object.assign(new Error('rate limited'), { status: 429 }))
     tryModel.mockResolvedValueOnce(result('from model-b'))
 
@@ -290,7 +290,7 @@ describe('canonical routing and fallback observability', () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const providerError = Object.assign(new Error('rate limited'), { status: 429 })
-    const fb = fallback('model-a', 'model-b', {
+    const fb = fallback(['model-a', 'model-b'], {
       shouldFallback: () => {
         throw new Error('predicate failed')
       },

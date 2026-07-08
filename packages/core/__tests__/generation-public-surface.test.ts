@@ -67,7 +67,7 @@ describe('@use-crux/core (generation surface)', () => {
 
 describe('@use-crux/core fallback()', () => {
   it('wraps models into a recognizable fallback reference', () => {
-    const fb = fallback('model-a', 'model-b', { on: ['rate_limit', 'timeout'] })
+    const fb = fallback(['model-a', 'model-b'], { on: ['rate_limit', 'timeout'] })
 
     expect(isFallback(fb)).toBe(true)
     expect(fb.models).toEqual(['model-a', 'model-b'])

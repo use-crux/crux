@@ -8,6 +8,10 @@
 
 import { isRouter } from "./router";
 import type { RouterModel } from "./router";
+import { isSplit } from "./split";
+import type { SplitModel } from "./split";
+import { isRetry } from "./retry";
+import type { RetryModel } from "./retry";
 import { isCascade } from "./cascade";
 import type {
   CascadeModel,
@@ -24,7 +28,10 @@ import {
 } from "../generation/timeout";
 import { isFallback, type FallbackModel } from "../generation/fallback";
 import { resolveFallback } from "./resolve-fallback";
+import { resolveRetry } from "./resolve-retry";
+import { resolveSplit } from "./resolve-split";
 import { gateFirstToken } from "./first-token";
+import type { CallProfileParams } from "./types";
 import {
   createRoutingReceipt,
   ensureRoutingResult,
@@ -40,6 +47,8 @@ import {
 export interface ResolveTryOptions {
   /** Cooperative cancellation signal composed from routing deadlines. */
   readonly signal?: AbortSignal;
+  /** Generation params from a selected call profile. */
+  readonly params?: CallProfileParams;
 }
 
 /** Shared controls for one recursive model resolution. */
@@ -54,6 +63,12 @@ export interface ResolveModelOptions {
   readonly signal?: AbortSignal;
   /** Stream first-token timeout budget inherited from the call site. */
   readonly firstTokenMs?: number;
+  /** Context supplied by the call site's `routing:` option. */
+  readonly context?: unknown;
+  /** Route override supplied by the call site's `route:` option. */
+  readonly forcedRoute?: string;
+  /** Generation params inherited from an enclosing call profile. */
+  readonly params?: CallProfileParams;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -73,7 +88,7 @@ export interface ResolveModelOptions {
  */
 export async function resolveModel<M, R>(
   model: M,
-  input: Record<string, unknown>,
+  input: unknown,
   tryModel: (model: M, options?: ResolveTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
   options: ResolveModelOptions = {},
@@ -82,14 +97,75 @@ export async function resolveModel<M, R>(
   const ownsDeadline = options.deadline === undefined;
 
   try {
+    const callProfile = asCallProfile(model);
+    if (callProfile) {
+      const { model: innerModel, ...params } = callProfile;
+      return await resolveModel(
+        innerModel as M,
+        input,
+        (candidate, attemptOptions = {}) =>
+          tryModel(candidate, {
+            ...attemptOptions,
+            params: mergeCallProfileParams(params, attemptOptions.params),
+          }),
+        extractModelId,
+        {
+          ...options,
+          params: mergeCallProfileParams(options.params, params),
+        },
+      );
+    }
+
     // ── Router ──
     if (isRouter(model)) {
       return await resolveRouter(
-        model as unknown as RouterModel<string, M>,
+        model as unknown as RouterModel<string, Record<string, M>>,
         input,
         tryModel,
         extractModelId,
-        { deadline, mode: options.mode, firstTokenMs: options.firstTokenMs },
+        {
+          deadline,
+          mode: options.mode,
+          firstTokenMs: options.firstTokenMs,
+          context: options.context,
+          forcedRoute: options.forcedRoute,
+        },
+      );
+    }
+
+    // ── Split ──
+    if (isSplit(model)) {
+      return await resolveSplit(
+        {
+          split: model as unknown as SplitModel<Record<string, { model: M; weight: number }>>,
+          input,
+          deadline,
+          mode: options.mode,
+          firstTokenMs: options.firstTokenMs,
+          context: options.context,
+          forcedRoute: options.forcedRoute,
+          resolveCandidate: (candidate, candidateOptions) =>
+            resolveModel(candidate, input, tryModel, extractModelId, candidateOptions),
+          describeModel: (candidate) => describeModel(candidate, extractModelId),
+        },
+      );
+    }
+
+    // ── Retry ──
+    if (isRetry(model)) {
+      return await resolveRetry(
+        {
+          retry: model as unknown as RetryModel<M>,
+          input,
+          deadline,
+          mode: options.mode,
+          firstTokenMs: options.firstTokenMs,
+          context: options.context,
+          forcedRoute: options.forcedRoute,
+          resolveCandidate: (candidate, candidateOptions) =>
+            resolveModel(candidate, input, tryModel, extractModelId, candidateOptions),
+          describeModel: (candidate) => describeModel(candidate, extractModelId),
+        },
       );
     }
 
@@ -103,21 +179,31 @@ export async function resolveModel<M, R>(
         input,
         tryModel,
         extractModelId,
-        { deadline, mode: options.mode, firstTokenMs: options.firstTokenMs },
+        {
+          deadline,
+          mode: options.mode,
+          firstTokenMs: options.firstTokenMs,
+          context: options.context,
+          forcedRoute: options.forcedRoute,
+        },
       );
     }
 
     // ── Fallback ──
     if (isFallback(model)) {
+      const fallbackModel = model as unknown as FallbackModel<M>;
       return await resolveFallback({
-        fallback: model as unknown as FallbackModel<M>,
+        fallback: fallbackModel,
         deadline,
         resolveCandidate: (candidate, attemptOptions) =>
           resolveModel(candidate, input, tryModel, extractModelId, {
             deadline,
             mode: options.mode,
             signal: attemptOptions.signal,
-            firstTokenMs: options.firstTokenMs,
+            firstTokenMs:
+              fallbackModel.options.timeout?.firstToken ?? options.firstTokenMs,
+            context: options.context,
+            forcedRoute: options.forcedRoute,
           }).then((result) => result),
         describeModel: (candidate) => describeModel(candidate, extractModelId),
       });
@@ -134,7 +220,7 @@ export async function resolveModel<M, R>(
       firstTokenController?.signal,
     );
     const result = await withAbortSignal(
-      () => tryModel(model, { signal: attemptSignal }),
+      () => tryModel(model, { signal: attemptSignal, params: options.params }),
       attemptSignal,
     );
     const gatedResult = await gateFirstToken(result, {
@@ -155,17 +241,20 @@ export async function resolveModel<M, R>(
 // ─────────────────────────────────────────────────────────────────
 
 async function resolveRouter<M, R>(
-  routerModel: RouterModel<string, M>,
-  input: Record<string, unknown>,
+  routerModel: RouterModel<string, Record<string, M>>,
+  input: unknown,
   tryModel: (model: M, options?: ResolveTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
   options: {
     deadline: Deadline;
     mode?: "generate" | "stream";
     firstTokenMs?: number;
+    context?: unknown;
+    forcedRoute?: string;
   },
 ): Promise<RoutableResult<R>> {
-  const { config, _forcedRoute, _hints } = routerModel;
+  const { config } = routerModel;
+  const forcedRoute = options.forcedRoute;
   const availableRoutes = Object.keys(config.routes);
   const span = observe.openSpan({
     name: "router.resolve",
@@ -176,8 +265,7 @@ async function resolveRouter<M, R>(
       ...(config.id ? { routingId: config.id } : {}),
       ...(config.description ? { routingDescription: config.description } : {}),
       availableRoutes,
-      overridden: _forcedRoute !== undefined,
-      hasHints: _hints !== undefined,
+      overridden: forcedRoute !== undefined,
     },
   });
 
@@ -186,16 +274,14 @@ async function resolveRouter<M, R>(
       let classifiedAs: string;
       let overridden: boolean;
 
-      if (_forcedRoute !== undefined) {
-        // .select() was used — skip classify
-        classifiedAs = _forcedRoute;
+      if (forcedRoute !== undefined) {
+        classifiedAs = forcedRoute;
         overridden = true;
       } else {
-        // Run classify (may be async)
-        classifiedAs = await config.classify(
-          input,
-          _hints as Parameters<typeof config.classify>[1],
-        );
+        classifiedAs = await config.classify({
+          input: input as never,
+          context: asRoutingContext(options.context),
+        });
         overridden = false;
       }
 
@@ -237,7 +323,7 @@ async function resolveRouter<M, R>(
         input,
         tryModel,
         extractModelId,
-        options,
+        { ...options, forcedRoute: undefined },
       );
 
       const routerStep: RouterRoutingStep = {
@@ -274,8 +360,7 @@ async function resolveRouter<M, R>(
     span.error(error, {
       routeCount: availableRoutes.length,
       ...(config.id ? { routingId: config.id } : {}),
-      overridden: _forcedRoute !== undefined,
-      hasHints: _hints !== undefined,
+      overridden: forcedRoute !== undefined,
     });
     throw error;
   }
@@ -287,13 +372,15 @@ async function resolveRouter<M, R>(
 
 async function resolveCascade<M, R>(
   cascadeModel: CascadeModel<M>,
-  input: Record<string, unknown>,
+  input: unknown,
   tryModel: (model: M, options?: ResolveTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
   options: {
     deadline: Deadline;
     mode?: "generate" | "stream";
     firstTokenMs?: number;
+    context?: unknown;
+    forcedRoute?: string;
   },
 ): Promise<R & { _meta: Record<string, unknown> }> {
   const { tiers, budget } = cascadeModel.config;
@@ -435,6 +522,8 @@ async function resolveCascade<M, R>(
               deadline: options.deadline,
               mode: options.mode,
               signal: latencyDeadline.signal,
+              context: options.context,
+              forcedRoute: options.forcedRoute,
             }),
           );
           const resultWithMeta = ensureMeta(result);
@@ -854,9 +943,37 @@ function markSkippedTiers<M>(
 
 function describeModel<M>(model: M, extractModelId: (model: M) => string): string {
   if (isRouter(model)) return "router";
+  if (isSplit(model)) return "split";
+  if (isRetry(model)) return "retry";
   if (isCascade(model)) return "cascade";
   if (isFallback(model)) return "fallback";
+  const callProfile = asCallProfile(model);
+  if (callProfile) return describeModel(callProfile.model as M, extractModelId);
   return extractModelId(model);
+}
+
+function asRoutingContext(value: unknown): object {
+  return typeof value === "object" && value !== null ? value : {};
+}
+
+function asCallProfile(
+  value: unknown,
+): ({ readonly model: unknown } & CallProfileParams) | undefined {
+  if (!isRecord(value)) return undefined;
+  if (!Object.hasOwn(value, "model")) return undefined;
+  if (isRouter(value) || isSplit(value) || isRetry(value) || isCascade(value) || isFallback(value)) {
+    return undefined;
+  }
+  return value as { readonly model: unknown } & CallProfileParams;
+}
+
+function mergeCallProfileParams(
+  base: CallProfileParams | undefined,
+  override: CallProfileParams | undefined,
+): CallProfileParams | undefined {
+  if (base === undefined) return override;
+  if (override === undefined) return base;
+  return { ...base, ...override };
 }
 
 function normalizeCascadeTierEvaluation<M>(

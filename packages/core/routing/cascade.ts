@@ -5,6 +5,13 @@
  * @module
  */
 
+import type {
+  BoundOf,
+  ComposedCtx,
+  InOf,
+  RoutingPhantom,
+} from './types'
+
 // ─────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────
@@ -73,7 +80,14 @@ export interface CascadeConfig<M> {
 }
 
 /** A cascade model wrapper — recognized by adapters via `isCascade()`. */
-export interface CascadeModel<M = unknown> {
+export interface CascadeModel<M = unknown>
+  extends RoutingPhantom<
+    InOf<M>,
+    ComposedCtx<object, M>,
+    false,
+    BoundOf<M>,
+    never
+  > {
   readonly _tag: 'crux.cascade'
   readonly config: CascadeConfig<M>
 }
@@ -117,6 +131,7 @@ export function cascade<M>(config: CascadeConfig<M>): CascadeModel<M> {
   return Object.freeze({
     _tag: 'crux.cascade' as const,
     config,
+    __phantom: undefined as unknown as CascadeModel<M>['__phantom'],
   })
 }
 

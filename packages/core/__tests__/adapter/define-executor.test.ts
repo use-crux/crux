@@ -307,7 +307,7 @@ describe("loopRuntimeAdapter — routing dispatch", () => {
     const executor = loopRuntimeAdapter(fake.runtime);
 
     const result = await executor.generate(textPrompt(), {
-      model: fallback("fake:primary", "fake:backup"),
+      model: fallback(["fake:primary", "fake:backup"]),
       input: { instruction: "go" },
     });
 
@@ -350,7 +350,7 @@ describe("loopRuntimeAdapter — routing dispatch", () => {
     const start = Date.now();
 
     const result = executor.generate(textPrompt(), {
-      model: fallback("fake:a", "fake:b", "fake:c", { timeout: 200 }),
+      model: fallback(["fake:a", "fake:b", "fake:c"], { timeout: { attempt: 200 } }),
       input: { instruction: "go" },
       timeout: { totalMs: 300 },
     });

@@ -44,7 +44,7 @@ describe('resolveModel() regressions', () => {
     const routedFallback = router({
       classify: () => 'resilient' as const,
       routes: {
-        resilient: fallback('model-primary', 'model-backup'),
+        resilient: fallback(['model-primary', 'model-backup']),
         default: 'model-default',
       },
     })

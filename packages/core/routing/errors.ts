@@ -77,24 +77,3 @@ export function isRoutingStreamError(error: unknown): error is RoutingStreamErro
     (error as { _tag: unknown })._tag === 'RoutingStreamError'
   )
 }
-
-/**
- * Thrown when classify returns a route key that doesn't exist in routes
- * and no `default` route catches it. (Should not happen if types are correct,
- * but serves as a runtime safety net.)
- */
-export class RouterClassifyError extends Error {
-  readonly _tag = 'RouterClassifyError' as const
-
-  constructor(
-    /** The classification label that wasn't found. */
-    readonly classifiedAs: string,
-    /** The valid route keys. */
-    readonly availableRoutes: string[],
-  ) {
-    super(
-      `Router classify returned "${classifiedAs}" but no matching route found. Available: ${availableRoutes.join(', ')}`,
-    )
-    this.name = 'RouterClassifyError'
-  }
-}

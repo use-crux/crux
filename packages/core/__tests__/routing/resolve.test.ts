@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { router, cascade } from "../../routing";
+import { router, cascade, retry, split } from "../../routing";
 import { resolveModel } from "../../routing/resolve";
+import type { ResolveTryOptions } from "../../routing/resolve";
 import { fallback } from "../../generation/fallback";
 import { CascadeExhaustedError } from "../../routing/errors";
 import type {
@@ -90,7 +91,8 @@ describe("resolveModel() — router", () => {
   it("classifies input and selects the matched model", async () => {
     const r = router({
       id: "size-router",
-      classify: (input) => ((input as any).big ? "large" : "small"),
+      classify: ({ input }: { input: { big?: boolean }; context: object }) =>
+        input.big ? "large" : "small",
       routes: {
         large: "model-large",
         small: "model-small",
@@ -117,7 +119,7 @@ describe("resolveModel() — router", () => {
 
   it("falls to default when classify returns unknown key", async () => {
     const r = router({
-      classify: () => "nonexistent" as any,
+      classify: () => "nonexistent" as "known",
       routes: {
         known: "model-known",
         default: "model-default",
@@ -135,7 +137,7 @@ describe("resolveModel() — router", () => {
     });
   });
 
-  it("uses forced route from .select(), skipping classify", async () => {
+  it("uses forced route from call options, skipping classify", async () => {
     const classify = vi.fn(() => "a" as const);
     const r = router({
       classify,
@@ -144,10 +146,11 @@ describe("resolveModel() — router", () => {
 
     const { tryModel, calls } = createTryModel();
     const result = await resolveModel(
-      r.select("b"),
+      r,
       {},
       tryModel,
       extractModelId,
+      { forcedRoute: "b" },
     );
 
     expect(classify).not.toHaveBeenCalled();
@@ -159,10 +162,10 @@ describe("resolveModel() — router", () => {
     });
   });
 
-  it("passes hints from .with() to classify", async () => {
+  it("passes routing context to classify", async () => {
     const classify = vi.fn(
-      (_input: Record<string, unknown>, hints?: { cheap?: boolean }) => {
-        return hints?.cheap ? "budget" : "premium";
+      ({ context }: { input: unknown; context: { cheap?: boolean } }) => {
+        return context.cheap ? "budget" : "premium";
       },
     );
     const r = router({
@@ -176,13 +179,17 @@ describe("resolveModel() — router", () => {
 
     const { tryModel, calls } = createTryModel();
     const result = await resolveModel(
-      r.with({ cheap: true }),
+      r,
       {},
       tryModel,
       extractModelId,
+      { context: { cheap: true } },
     );
 
-    expect(classify).toHaveBeenCalledWith({}, { cheap: true });
+    expect(classify).toHaveBeenCalledWith({
+      input: {},
+      context: { cheap: true },
+    });
     expect(calls).toEqual(["model-cheap"]);
     expect(routerStep(result)).toMatchObject({
       classifiedAs: "budget",
@@ -192,9 +199,9 @@ describe("resolveModel() — router", () => {
 
   it("supports async classify", async () => {
     const r = router({
-      classify: async (input) => {
+      classify: async ({ input }: { input: { size: number }; context: object }) => {
         await new Promise((r) => setTimeout(r, 1));
-        return (input as any).size > 100 ? "big" : "small";
+        return input.size > 100 ? "big" : "small";
       },
       routes: {
         big: "model-big",
@@ -207,6 +214,116 @@ describe("resolveModel() — router", () => {
     await resolveModel(r, { size: 200 }, tryModel, extractModelId);
 
     expect(calls).toEqual(["model-big"]);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Split
+// ─────────────────────────────────────────────────────────────────
+
+describe("resolveModel() — split", () => {
+  it("selects a weighted route from the stable seed", async () => {
+    const model = split({
+      id: "canary",
+      seed: ({ context }: { input: unknown; context: { sessionId: string } }) =>
+        context.sessionId,
+      routes: {
+        stable: { model: "model-stable", weight: 95 },
+        canary: { model: "model-canary", weight: 5 },
+      },
+    });
+
+    const { tryModel, calls } = createTryModel();
+    const result = await resolveModel(model, {}, tryModel, extractModelId, {
+      context: { sessionId: "s_1" },
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(["model-stable", "model-canary"]).toContain(calls[0]);
+    expect(result.routing?.trace[0]).toMatchObject({
+      kind: "split",
+      id: "canary",
+      seed: "s_1",
+    });
+  });
+
+  it("uses call-site route override for the outer split", async () => {
+    const model = split({
+      seed: () => "same-seed",
+      routes: {
+        stable: { model: "model-stable", weight: 100 },
+        canary: { model: "model-canary", weight: 0 },
+      },
+    });
+
+    const { tryModel, calls } = createTryModel();
+    const result = await resolveModel(model, {}, tryModel, extractModelId, {
+      forcedRoute: "canary",
+    });
+
+    expect(calls).toEqual(["model-canary"]);
+    expect(result.routing?.trace[0]).toMatchObject({
+      kind: "split",
+      route: "canary",
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Retry
+// ─────────────────────────────────────────────────────────────────
+
+describe("resolveModel() — retry", () => {
+  it("retries qualifying errors and records attempt details", async () => {
+    const model = retry("model-a", {
+      attempts: 2,
+      on: ["rate_limit"],
+    });
+    const tryModel = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("rate limited"), { status: 429 }))
+      .mockResolvedValueOnce(fakeGenerate("model-a"));
+
+    const result = await resolveModel(model, {}, tryModel, extractModelId);
+
+    expect(tryModel).toHaveBeenCalledTimes(2);
+    expect(result.routing?.trace[0]).toMatchObject({
+      kind: "retry",
+      model: "model-a",
+      attempts: [
+        { model: "model-a", status: "error", errorCategory: "rate_limit" },
+        { model: "model-a", status: "ok" },
+      ],
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────
+// Call profiles
+// ─────────────────────────────────────────────────────────────────
+
+describe("resolveModel() — call profiles", () => {
+  it("passes selected route params to the concrete model attempt", async () => {
+    const routed = router({
+      classify: () => "fast" as const,
+      routes: {
+        fast: { model: "model-fast", temperature: 0, maxTokens: 80 },
+        default: "model-default",
+      },
+    });
+    const tryModel = vi.fn(
+      async (model: string, _options?: ResolveTryOptions) =>
+        fakeGenerate(`response from ${model}`),
+    );
+
+    await resolveModel(routed, {}, tryModel, extractModelId);
+
+    expect(tryModel).toHaveBeenCalledWith(
+      "model-fast",
+      expect.objectContaining({
+        params: { temperature: 0, maxTokens: 80 },
+      }),
+    );
   });
 });
 
@@ -455,7 +572,8 @@ describe("resolveModel() — cascade", () => {
 describe("resolveModel() — composition", () => {
   it("resolves nested router → cascade", async () => {
     const r = router({
-      classify: (input) => ((input as any).complex ? "hard" : "easy"),
+      classify: ({ input }: { input: { complex?: boolean }; context: object }) =>
+        input.complex ? "hard" : "easy",
       routes: {
         easy: "model-fast",
         hard: cascade({

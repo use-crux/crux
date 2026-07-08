@@ -11,7 +11,7 @@ describe('RoutingReceipt', () => {
       id: 'intent-router',
       classify: () => 'resilient' as const,
       routes: {
-        resilient: fallback('model-primary', 'model-backup'),
+        resilient: fallback(['model-primary', 'model-backup']),
         default: 'model-default',
       },
     })
@@ -122,7 +122,7 @@ describe('RoutingReceipt', () => {
   })
 
   it('throws fallback exhaustion errors with routing receipts', async () => {
-    const resilient = fallback('model-primary', 'model-backup')
+    const resilient = fallback(['model-primary', 'model-backup'])
 
     await expect(
       resolveModel(

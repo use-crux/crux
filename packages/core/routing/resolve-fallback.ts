@@ -109,7 +109,7 @@ export async function resolveFallback<M, R>({
             resolveCandidate(model, {
               signal: deadline.compose(signal),
             }),
-          { budget: "step", limitMs: options.timeout },
+          { budget: "step", limitMs: options.timeout?.attempt },
         ),
       );
       const durationMs = Date.now() - attemptStart;
@@ -232,7 +232,17 @@ export async function resolveFallback<M, R>({
       });
       previousFailedSpanId = attemptSpan.spanId;
       previousFailedModelId = modelId;
-      notifyAttemptErrorSafely(options, err, i + 1, model, attemptSpan);
+      const nextModel = models[i + 1];
+      if (nextModel !== undefined) {
+        await notifyFallbackSafely(
+          options,
+          err,
+          i + 1,
+          model,
+          nextModel,
+          attemptSpan,
+        );
+      }
     }
   }
 
@@ -254,17 +264,23 @@ export async function resolveFallback<M, R>({
   throw error;
 }
 
-function notifyAttemptErrorSafely<M>(
+async function notifyFallbackSafely<M>(
   options: FallbackModel<M>["options"],
   err: Error,
   attempt: number,
   model: M,
+  nextModel: M,
   attemptSpan: ReturnType<typeof observe.openSpan>,
-): void {
+): Promise<void> {
   try {
-    options.onAttemptError?.(err, attempt, model);
+    await options.onFallback?.({
+      from: model,
+      to: nextModel,
+      attempt,
+      error: err,
+    });
   } catch (hookError) {
-    emitRoutingHookError(attemptSpan, "onAttemptError", hookError);
+    emitRoutingHookError(attemptSpan, "onFallback", hookError);
   }
 }
 

@@ -345,7 +345,7 @@ describe("generate — routing", () => {
     const ai = createCruxAi({ gateway: scripted.gateway });
 
     const result = await ai.generate(textPrompt, {
-      model: fallback(model("primary"), model("backup")),
+      model: fallback([model("primary"), model("backup")]),
       input: { message: "go" },
     });
 
@@ -377,7 +377,7 @@ describe("generateTextFn — routing", () => {
     const ai = createCruxAi({ gateway: scripted.gateway });
 
     const result = await ai.generateTextFn({
-      model: fallback(model("primary"), model("backup")),
+      model: fallback([model("primary"), model("backup")]),
       prompt: "go",
     });
 
@@ -414,7 +414,7 @@ describe("stream — metrics and completion", () => {
     const ai = createCruxAi({ gateway: scripted.gateway });
 
     const result = await ai.stream(textPrompt, {
-      model: fallback(model("primary"), model("backup")),
+      model: fallback([model("primary"), model("backup")]),
       input: { message: "stream" },
     });
     let streamed = "";
@@ -454,7 +454,7 @@ describe("stream — metrics and completion", () => {
     const ai = createCruxAi({ gateway: scripted.gateway });
 
     const result = await ai.stream(textPrompt, {
-      model: fallback(model("primary"), model("backup")),
+      model: fallback([model("primary"), model("backup")]),
       input: { message: "stream" },
       timeout: { firstToken: 5 },
     });
@@ -498,7 +498,7 @@ describe("stream — metrics and completion", () => {
     const ai = createCruxAi({ gateway: scripted.gateway });
 
     const result = await ai.stream(textPrompt, {
-      model: fallback(model("primary"), model("backup")),
+      model: fallback([model("primary"), model("backup")]),
       input: { message: "stream" },
       timeout: { firstToken: 50 },
     });
@@ -619,7 +619,7 @@ describe("stream — metrics and completion", () => {
 
     await expect(
       ai.stream(textPrompt, {
-        model: tiers as never,
+        model: tiers as unknown as ReturnType<typeof model>,
         input: { message: "go" },
       }),
     ).rejects.toThrow(/cascade\(\) does not support stream\(\)/);

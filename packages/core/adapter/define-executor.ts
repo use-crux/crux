@@ -34,7 +34,14 @@ import type { Guardrail } from "../safety/guardrail/types";
 import type { SafetyTuneOptions } from "../safety/tune";
 import type { FallbackModel } from "../generation/fallback";
 import { resolveModel } from "../routing/resolve";
-import type { AnyRouterModel, CascadeModel } from "../routing";
+import type {
+  AnyRouterModel,
+  CascadeModel,
+  RetryModel,
+  SplitModel,
+  CallProfileParams,
+  RoutingCallOptions,
+} from "../routing";
 import type { ToolMiddleware } from "../tools/types";
 import type { ToolApprovalMap } from "../tools/approval-policy";
 import { createCompositions } from "../agent/create-compositions";
@@ -43,6 +50,7 @@ import { createAdapterExecution, sdkLoopDialect } from "./execution/session";
 
 interface AttemptSignalOptions {
   readonly signal?: AbortSignal;
+  readonly params?: CallProfileParams;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -58,12 +66,14 @@ export type ExecutorModelArg<TModel> =
   | TModel
   | FallbackModel<TModel>
   | AnyRouterModel<TModel>
-  | CascadeModel<TModel>;
+  | CascadeModel<TModel>
+  | SplitModel<Record<string, { model: TModel; weight: number }>>
+  | RetryModel<TModel>;
 
-/** Options for executor `generate()` calls. */
-export interface ExecutorGenerateOptions<TModel> {
+/** Shared fields for executor `generate()` calls. */
+export interface ExecutorGenerateBaseOptions<TModel, TSelectedModel = ExecutorModelArg<TModel>> {
   /** The model to use — plain, `fallback()`, `router()`, or `cascade()`. */
-  model: ExecutorModelArg<TModel>;
+  model: TSelectedModel;
   /** Input for the prompt. */
   input?: Record<string, unknown>;
   /** Additional tools merged at call time (highest precedence). */
@@ -121,10 +131,18 @@ export interface ExecutorGenerateOptions<TModel> {
   extra?: Record<string, unknown>;
 }
 
-/** Options for executor `stream()` calls. */
-export interface ExecutorStreamOptions<
+/** Options for executor `generate()` calls. */
+export type ExecutorGenerateOptions<
   TModel,
-> extends ExecutorGenerateOptions<TModel> {}
+  TSelectedModel = ExecutorModelArg<TModel>,
+> = ExecutorGenerateBaseOptions<TModel, TSelectedModel> &
+  RoutingCallOptions<TSelectedModel>;
+
+/** Options for executor `stream()` calls. */
+export type ExecutorStreamOptions<
+  TModel,
+  TSelectedModel = ExecutorModelArg<TModel>,
+> = ExecutorGenerateOptions<TModel, TSelectedModel>;
 
 /**
  * Result of an executor `generate()` call.
@@ -259,6 +277,7 @@ export function loopRuntimeAdapter<
         opts,
         model,
         deadline.compose(attemptOptions.signal),
+        attemptOptions.params,
       );
 
     try {
@@ -267,7 +286,12 @@ export function loopRuntimeAdapter<
         opts.input ?? {},
         runWithModel,
         modelLabel,
-        { deadline, mode: "generate" },
+        {
+          deadline,
+          mode: "generate",
+          context: opts.routing,
+          forcedRoute: opts.route,
+        },
       );
     } finally {
       deadline.dispose();
@@ -279,6 +303,7 @@ export function loopRuntimeAdapter<
     opts: ExecutorGenerateOptions<TModel>,
     model: TModel,
     signal: AbortSignal | undefined,
+    params: CallProfileParams | undefined,
   ): Promise<GenerateResult> {
     return (await execution.generate({
       prompt,
@@ -291,7 +316,7 @@ export function loopRuntimeAdapter<
       toolApproval: opts.toolApproval,
       messages: opts.messages,
       maxSteps: opts.maxSteps,
-      settings: opts.settings,
+      settings: mergeSettings(params, opts.settings),
       tokenBudget: opts.tokenBudget,
       timeout: opts.timeout,
       validationRetry: opts.validationRetry,
@@ -322,6 +347,7 @@ export function loopRuntimeAdapter<
         opts,
         model,
         deadline.compose(attemptOptions.signal),
+        attemptOptions.params,
       );
 
     try {
@@ -330,7 +356,13 @@ export function loopRuntimeAdapter<
         opts.input ?? {},
         runWithModel,
         modelLabel,
-        { deadline, mode: "stream", firstTokenMs: opts.timeout?.firstToken },
+        {
+          deadline,
+          mode: "stream",
+          firstTokenMs: opts.timeout?.firstToken,
+          context: opts.routing,
+          forcedRoute: opts.route,
+        },
       );
     } finally {
       deadline.dispose();
@@ -342,6 +374,7 @@ export function loopRuntimeAdapter<
     opts: ExecutorStreamOptions<TModel>,
     model: TModel,
     signal: AbortSignal | undefined,
+    params: CallProfileParams | undefined,
   ): Promise<ExecutorStreamHandle<TRawStream>> {
     return (await execution.stream({
       prompt,
@@ -354,7 +387,7 @@ export function loopRuntimeAdapter<
       toolApproval: opts.toolApproval,
       messages: opts.messages,
       maxSteps: opts.maxSteps,
-      settings: opts.settings,
+      settings: mergeSettings(params, opts.settings),
       tokenBudget: opts.tokenBudget,
       timeout: opts.timeout,
       validationRetry: opts.validationRetry,
@@ -382,7 +415,7 @@ export function loopRuntimeAdapter<
       maxSteps: options.maxSteps,
       validationRetry: options.validationRetry,
       ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
-    };
+    } as ExecutorGenerateOptions<TModel>;
 
     const result = await generate(agent.prompt, generateOpts);
 
@@ -405,4 +438,12 @@ export function loopRuntimeAdapter<
     consensus: compositions.consensus,
     swarm: compositions.swarm,
   });
+}
+
+function mergeSettings(
+  params: CallProfileParams | undefined,
+  settings: GenerationSettings | undefined,
+): GenerationSettings | undefined {
+  if (params === undefined) return settings;
+  return { ...params, ...settings };
 }
