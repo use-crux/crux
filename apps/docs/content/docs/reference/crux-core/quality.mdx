@@ -57,6 +57,10 @@ optional reason via the case-level `skip: string`).
 | `covers`                    | Optional Project Index definition ids, such as `prompt:support` or `flow:research`, that this eval protects when `task` is a deterministic stand-in                                            |
 | `tags` / `description`      | Metadata, surfaced in the manifest and reporter                                                                                                                                                |
 
+Timeouts are cooperative. Crux records a timeout cell and quarantines later
+trace, cassette, and score writes from that cell's async context; it does not
+forcibly kill arbitrary JavaScript user code.
+
 Inference contract: `data`, `scorers`, and `expect` are `NoInfer` positions —
 a typo'd case key errors **on the case property**, never by widening the
 task's input type. Gate keys under `gates.scores` are literal-typed from an

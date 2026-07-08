@@ -194,6 +194,8 @@ export interface ExperimentCell<TInput = unknown, TOutput = unknown> {
     sourceRef?: string
     /** Authored frame for callback/task crashes, when the runner can resolve it. */
     sourceFrame?: QualitySourceFrame
+    /** Machine-readable diagnostics for runtime hardening paths such as timeout quarantine. */
+    diagnostics?: Record<string, unknown>
   }
   durationMs: number
   costUsd?: number

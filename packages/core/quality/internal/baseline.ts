@@ -9,12 +9,14 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ExperimentCell } from '../experiment'
 import { sha256Hex } from './json'
 import { CorruptBaselineError } from './errors'
+import { writeFileAtomic } from './fs-atomic'
+import { withFileLock } from './fs-lock'
 
 /** The committed baseline record (spec 02 §3). */
 export interface BaselineRecord {
@@ -80,7 +82,7 @@ function isNotFoundError(error: unknown): boolean {
 export async function writeBaselineRecord(dir: string, record: BaselineRecord): Promise<string> {
   await mkdir(join(dir, 'baselines'), { recursive: true })
   const path = baselineRecordPath(dir, record.evaluationId)
-  await writeFile(path, `${JSON.stringify(record, null, 2)}\n`, 'utf8')
+  await withFileLock(path, () => writeFileAtomic(path, `${JSON.stringify(record, null, 2)}\n`))
   return path
 }
 

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { observe } from '../../observability'
 import { evaluate } from '../../quality'
 import { QualityRunnerHarnessError, runEvaluationWithRunner as run } from './runner-harness'
 
@@ -327,6 +328,39 @@ describe('Quality runner — trials, skip/only, filters, timeouts', () => {
     expect(peak).toBeGreaterThan(1)
   })
 
+  it('keeps trace signal capture isolated across concurrent programmatic runs', async () => {
+    const makeEvaluation = (id: string, delayMs: number) =>
+      evaluate(id, {
+        task: async (input: { q: string }) => {
+          await new Promise((resolve) => setTimeout(resolve, delayMs))
+          await observe.span(
+            {
+              name: `step-${input.q}`,
+              primitive: 'flow.step',
+              attributes: { stepLabel: `step-${input.q}` },
+            },
+            async () => {
+              observe.artifact({
+                kind: 'output',
+                contentType: 'application/json',
+                encoding: 'json',
+                preview: { answer: input.q },
+              })
+            },
+          )
+          return { answer: input.q }
+        },
+        data: [{ input: { q: id } }],
+      })
+
+    const [first, second] = await Promise.all([run(makeEvaluation('capture-a', 15)), run(makeEvaluation('capture-b', 0))])
+
+    expect(first.cells[0]!.status).toBe('passed')
+    expect(first.cells[0]!.capturedSignals).toContain('steps')
+    expect(second.cells[0]!.status).toBe('passed')
+    expect(second.cells[0]!.capturedSignals).toContain('steps')
+  })
+
   it('times out slow cells with phase timeout', async () => {
     const evaluation = evaluate({
       task: async (_input: { q: string }) => {
@@ -340,6 +374,33 @@ describe('Quality runner — trials, skip/only, filters, timeouts', () => {
     const cell = experiment.cells[0]!
     expect(cell.status).toBe('errored')
     expect(cell.error).toMatchObject({ phase: 'timeout' })
+  })
+
+  it('quarantines trace writes emitted by a task after timeout', async () => {
+    const evaluation = evaluate({
+      task: async (_input: { q: string }) => {
+        await new Promise((resolve) => setTimeout(resolve, 25))
+        observe.artifact({
+          kind: 'generation.output',
+          contentType: 'application/json',
+          encoding: 'json',
+          preview: { marker: 'after-timeout' },
+        })
+        return {}
+      },
+      data: [{ input: { q: 'slow' } }],
+      timeoutMs: 10,
+    })
+
+    const experiment = await run(evaluation)
+    const cell = experiment.cells[0]!
+    expect(cell.status).toBe('errored')
+    expect(cell.error).toMatchObject({
+      phase: 'timeout',
+      diagnostics: { quarantinedWrites: expect.any(Number) },
+    })
+    expect((cell.error as { diagnostics: { quarantinedWrites: number } }).diagnostics.quarantinedWrites).toBeGreaterThan(0)
+    expect(cell.capturedSignals).toEqual([])
   })
 
   it('reports skipped cases with their reason and excludes them from passRate', async () => {

@@ -73,7 +73,49 @@ func (f *FS) writeRecord(kind Kind, id string, record any) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(recordsDir, SafeFileName(id)+".json"), append(data, '\n'), 0644)
+	return writeFileAtomic(filepath.Join(recordsDir, SafeFileName(id)+".json"), append(data, '\n'))
+}
+
+func writeFileAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	base := filepath.Base(path)
+	tmp, err := os.CreateTemp(dir, base+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpPath := tmp.Name()
+	committed := false
+	defer func() {
+		if !committed {
+			_ = os.Remove(tmpPath)
+		}
+	}()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	committed = true
+	fsyncDirBestEffort(dir)
+	return nil
+}
+
+func fsyncDirBestEffort(dir string) {
+	handle, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+	defer handle.Close()
+	_ = handle.Sync()
 }
 
 func readJSONLines(path string) ([]json.RawMessage, error) {

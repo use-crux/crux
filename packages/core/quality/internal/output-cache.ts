@@ -15,12 +15,14 @@
  * @module
  */
 
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { Capability } from '../target'
 import type { CellSignals } from './signals'
 import { canonicalJson, sha256Hex } from './json'
 import { OUTPUT_CACHE_EPOCH, fingerprintValue } from './cache-identity'
+import { writeFileAtomic } from './fs-atomic'
+import { withFileLock } from './fs-lock'
 
 // ─────────────────────────────────────────────────────────────────
 // Keys
@@ -96,7 +98,7 @@ export async function writeCellCache(cacheDir: string, evaluationId: string, key
   try {
     const path = entryPath(cacheDir, evaluationId, key)
     await mkdir(dirname(path), { recursive: true })
-    await writeFile(path, `${JSON.stringify(entry)}\n`, 'utf8')
+    await withFileLock(path, () => writeFileAtomic(path, `${JSON.stringify(entry)}\n`))
   } catch {
     // Best-effort: a read-only disk must not fail the run.
   }

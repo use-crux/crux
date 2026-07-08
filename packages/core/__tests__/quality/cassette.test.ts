@@ -1,11 +1,15 @@
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { CassetteMissError, cassettePath, normalizedCallKey, openCassetteSession } from '../../quality/internal/cassette'
 import type { InterceptedGeneration } from '../../adapter/interception'
 
+const execFileAsync = promisify(execFile)
 const tempDirs: string[] = []
 async function tempCassette(name = 'test'): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'crux-cassette-'))
@@ -125,6 +129,27 @@ describe('cassette session — record-new', () => {
     expect(replaySession.stats).toMatchObject({ hits: 1, misses: 0 })
   })
 
+  it('single-flights concurrent identical misses to one live recording', async () => {
+    const path = await tempCassette()
+    const session = await openCassetteSession({ path, mode: 'record-new' })
+    let liveCalls = 0
+    const execute = async () => {
+      const callNumber = ++liveCalls
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      return loopOutcome(`live answer ${callNumber}`)
+    }
+
+    const [first, second] = (await Promise.all([session.intercept(call(), execute), session.intercept(call(), execute)])) as [
+      ReturnType<typeof loopOutcome>,
+      ReturnType<typeof loopOutcome>,
+    ]
+
+    expect(liveCalls).toBe(1)
+    expect(first.response.text).toBe('live answer 1')
+    expect(second.response.text).toBe('live answer 1')
+    expect(session.stats.recorded).toBe(1)
+  })
+
   it('writes metadata (recordedAt, sdkVersion, models) into the cassette file', async () => {
     const path = await tempCassette()
     const session = await openCassetteSession({ path, mode: 'record-new' })
@@ -141,6 +166,69 @@ describe('cassette session — record-new', () => {
     expect(typeof file.metadata.sdkVersion).toBe('string')
     expect(file.metadata.models).toEqual(['fake/m1'])
     expect(Object.keys(file.entries)).toHaveLength(1)
+  })
+
+  it('merges disjoint recordings when two sessions flush the same cassette file', async () => {
+    const path = await tempCassette()
+    const firstSession = await openCassetteSession({ path, mode: 'record-new' })
+    const secondSession = await openCassetteSession({ path, mode: 'record-new' })
+
+    await firstSession.intercept(call({ prompt: 'first prompt' }), async () => loopOutcome('first answer'))
+    await secondSession.intercept(call({ prompt: 'second prompt' }), async () => loopOutcome('second answer'))
+    await firstSession.flush()
+    await secondSession.flush()
+
+    const file = JSON.parse(await readFile(path, 'utf8')) as {
+      entries: Record<string, { result: { response?: { text?: string } } }>
+    }
+    expect(Object.keys(file.entries)).toHaveLength(2)
+    expect(Object.values(file.entries).map((entry) => entry.result.response?.text).sort()).toEqual(['first answer', 'second answer'])
+  })
+
+  it('merges disjoint recordings flushed by two separate processes', async () => {
+    const path = await tempCassette()
+    const worker = `
+      import { openCassetteSession } from ${JSON.stringify(pathToFileURL(join(process.cwd(), 'quality/internal/cassette.ts')).href)}
+      const path = process.env.CASSETTE_PATH
+      const prompt = process.env.CASSETTE_PROMPT
+      const text = process.env.CASSETTE_TEXT
+      if (!path || !prompt || !text) throw new Error('missing worker env')
+      const session = await openCassetteSession({ path, mode: 'record-new' })
+      await session.intercept({
+        kind: 'loop',
+        promptId: 'support.answer',
+        modelInfo: { provider: 'fake', modelId: 'm1' },
+        system: 'be terse',
+        prompt,
+        messages: undefined,
+        settings: { temperature: 0 },
+        tools: undefined,
+      }, async () => ({
+        status: 'complete',
+        raw: { sdkObject: true },
+        response: { text, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} }, finishReason: 'stop' },
+        messages: [{ role: 'assistant', content: text }],
+        steps: 1,
+        meta: {},
+      }))
+      await session.flush()
+    `
+    const tsxLoader = join(process.cwd(), '../../node_modules/.pnpm/tsx@4.22.3/node_modules/tsx/dist/esm/index.mjs')
+
+    await Promise.all([
+      execFileAsync(process.execPath, ['--import', tsxLoader, '--input-type=module', '--eval', worker], {
+        env: { ...process.env, CASSETTE_PATH: path, CASSETTE_PROMPT: 'first process', CASSETTE_TEXT: 'first answer' },
+      }),
+      execFileAsync(process.execPath, ['--import', tsxLoader, '--input-type=module', '--eval', worker], {
+        env: { ...process.env, CASSETTE_PATH: path, CASSETTE_PROMPT: 'second process', CASSETTE_TEXT: 'second answer' },
+      }),
+    ])
+
+    const file = JSON.parse(await readFile(path, 'utf8')) as {
+      entries: Record<string, { result: { response?: { text?: string } } }>
+    }
+    expect(Object.keys(file.entries)).toHaveLength(2)
+    expect(Object.values(file.entries).map((entry) => entry.result.response?.text).sort()).toEqual(['first answer', 'second answer'])
   })
 })
 

@@ -126,7 +126,9 @@ export default evaluate({
 
 Experiment records are schema-versioned JSON. Current records store executed
 cells under `cells` and assertion details under the ordered
-`assertions.outcomes` ledger.
+`assertions.outcomes` ledger. When a cell reaches `timeoutMs`, Crux records a
+timeout result and quarantines later task effects such as trace, cassette, and
+score writes; JavaScript user code is not forcibly killed.
 
 ## Adapter Results
 

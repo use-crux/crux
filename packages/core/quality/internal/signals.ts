@@ -26,13 +26,11 @@ import type {
   CruxSpanStatus,
 } from '../../observability/contract'
 import {
-  currentObservabilityTransport,
   observe,
-  setObservabilityTransport,
-  type CruxObservabilityTransport,
 } from '../../observability'
 import type { TokenUsage } from '../../generation/types'
 import type { Capability } from '../target'
+import { withQualityCaptureSession, type QualityCaptureSession } from './capture-context'
 import { extractTurnDecisionReportSignals, type TurnDecisionReportSignal } from './decision-report-signals'
 
 // ─────────────────────────────────────────────────────────────────
@@ -190,27 +188,26 @@ export function emptyCellSignals(): CellSignals {
 // Capture
 // ─────────────────────────────────────────────────────────────────
 
-/** A per-run record capture teeing into any previously configured transport. @internal */
-export interface SignalCapture {
+/** A per-run record capture. @internal */
+export interface SignalCapture extends QualityCaptureSession {
   /** Records captured for one observed run (one cell). */
   take(runId: string): CruxGraphRecord[]
   /** Drain pending deliveries so `take()` sees everything emitted so far. */
   settle(): Promise<void>
-  /** Restore the previously configured transport. */
+  /** End the capture scope. Present for the runner's existing finally path. */
   dispose(): void
 }
 
 /**
- * Install the capturing tee transport. Existing transports (devtools) keep
- * receiving everything; the capture buckets records per `runId` so concurrent
- * cells partition exactly.
+ * Create a per-run capture bucket. Existing transports (devtools) keep
+ * receiving records through the normal observability runtime; this capture is
+ * fed directly by the emitter while active in AsyncLocalStorage.
  *
  * @internal
  */
 export function installSignalCapture(): SignalCapture {
-  const previous = currentObservabilityTransport()
   const byRun = new Map<string, CruxGraphRecord[]>()
-  const captureTransport: CruxObservabilityTransport = {
+  return {
     send(records) {
       for (const record of records) {
         const bucket = byRun.get(record.runId)
@@ -218,11 +215,6 @@ export function installSignalCapture(): SignalCapture {
         else byRun.set(record.runId, [record])
       }
     },
-  }
-  const restore = setObservabilityTransport(
-    previous ? captureThenForwardTransport(captureTransport, previous) : captureTransport,
-  )
-  return {
     take(runId) {
       return byRun.get(runId) ?? []
     },
@@ -236,24 +228,14 @@ export function installSignalCapture(): SignalCapture {
       await observe.flush({ timeoutMs: 250 })
     },
     dispose() {
-      restore()
+      byRun.clear()
     },
   }
 }
 
-function captureThenForwardTransport(
-  capture: CruxObservabilityTransport,
-  forward: CruxObservabilityTransport,
-): CruxObservabilityTransport {
-  return {
-    maxRecordsPerRequest: forward.maxRecordsPerRequest,
-    send(records) {
-      capture.send(records)
-      void Promise.resolve()
-        .then(() => forward.send(records))
-        .catch(() => undefined)
-    },
-  }
+/** Run `fn` while `capture` receives Quality observability records. @internal */
+export function withSignalCapture<T>(capture: SignalCapture, fn: () => Promise<T>): Promise<T> {
+  return withQualityCaptureSession(capture, fn)
 }
 
 // ─────────────────────────────────────────────────────────────────

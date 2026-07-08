@@ -52,7 +52,8 @@ import { createAssertionRecorder, createRuntimeBoundExpect, createStepAccessor, 
 import { cellCacheKey, deserializeCellSignals, paramsFingerprint, readCellCache, serializeCellSignals, writeCellCache } from './output-cache'
 import { BASELINE_FINGERPRINT_EPOCH, fingerprintFunction, fingerprintValue } from './cache-identity'
 import { createProgrammaticSourceFrameResolver, ensureProgrammaticObservability, flushProgrammaticObservability } from './programmatic-runtime'
-import { emptyCellSignals, extractCellSignals, installSignalCapture, type CellSignals } from './signals'
+import { emptyCellSignals, extractCellSignals, installSignalCapture, withSignalCapture, type CellSignals } from './signals'
+import { createQualityCellToken, shouldQuarantineQualityWrite, withQualityCellToken } from './capture-context'
 import { emitComparisonReportEdges, emitEvalCaseOfEdge, emitReplayOfEdge, type QualityObservabilityRunRef } from './observability-edges'
 import { ulid } from './ulid'
 import { MissingQualityModelBindingError } from './errors'
@@ -692,6 +693,8 @@ interface CellRuntimeError {
   sourceRef?: string
   /** Authored frame for callback/task crashes, when the runner can resolve it. */
   sourceFrame?: QualitySourceFrame
+  /** Machine-readable diagnostics for runtime hardening paths such as timeout quarantine. */
+  diagnostics?: Record<string, unknown>
 }
 
 interface CellCacheContext {
@@ -764,6 +767,7 @@ async function executeCell(input: {
   let output: unknown
   let cellError: CellRuntimeError | undefined
   let signals: CellSignals = emptyCellSignals()
+  const token = createQualityCellToken()
 
   if (Array.isArray(rawCase.turns)) {
     cellError = {
@@ -773,7 +777,10 @@ async function executeCell(input: {
     run.error(new Error(cellError.message))
   } else {
     try {
-      output = await withTimeout(() => Promise.resolve(run.withContext(() => runner(rawCase.input, effectiveParams))), timeoutMs)
+      output = await withTimeout(
+        () => withQualityCellToken(token, () => Promise.resolve(run.withContext(() => runner(rawCase.input, effectiveParams)))),
+        timeoutMs,
+      )
       run.end()
     } catch (error) {
       if (error instanceof QualityDefinitionError) {
@@ -788,6 +795,7 @@ async function executeCell(input: {
         ...(sourceRef !== undefined ? { sourceRef } : {}),
       }
       run.error(error)
+      if (error instanceof CellTimeoutError) token.active = false
     }
   }
 
@@ -795,8 +803,17 @@ async function executeCell(input: {
   // execution time (spec 02: latency aggregates feed gates).
   const durationMs = Date.now() - startedAt
 
+  if (cellError?.phase === 'timeout') {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
   await capture.settle()
   signals = extractCellSignals(capture.take(run.runId))
+  if (cellError?.phase === 'timeout') {
+    cellError = {
+      ...cellError,
+      diagnostics: { quarantinedWrites: token.quarantined },
+    }
+  }
 
   // Keep the cache warm (best-effort): redacted but NEVER truncated output —
   // truncation is a record-display concern and would corrupt re-scoring.
@@ -871,6 +888,7 @@ async function assembleCell(args: {
     variant: { name: plan.variant.name, params: effectiveParams },
     trial: plan.trial,
     recordScore(name, score, metadata) {
+      if (shouldQuarantineQualityWrite()) return
       const invalid = invalidScoreError(name, score)
       if (invalid !== undefined) {
         cellError = invalid
@@ -1531,67 +1549,69 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
   const limiter = createLimiter(Math.max(1, concurrency))
   let cells: ExperimentCell<unknown, unknown>[]
   try {
-    cells = await Promise.all(
-      plans.map((plan) =>
-        limiter(async () => {
-          if (overrides?.signal?.aborted === true) {
-            const abortedCell = {
+    cells = await withSignalCapture(capture, () =>
+      Promise.all(
+        plans.map((plan) =>
+          limiter(async () => {
+            if (overrides?.signal?.aborted === true) {
+              const abortedCell = {
+                caseId: plan.resolved.caseId,
+                ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
+                variantName: plan.variant.name,
+                trial: plan.trial,
+                status: 'skipped',
+                skipReason: 'aborted',
+                input: applyRedaction(plan.resolved.raw.input, redactPaths),
+                scores: [],
+                assertions: { ran: 0, notEvaluated: 0, outcomes: [] },
+                durationMs: 0,
+                traceIds: [],
+                capturedSignals: [],
+              } satisfies ExperimentCell<unknown, unknown>
+              options.events?.onCellDone?.(abortedCell)
+              return abortedCell
+            }
+            options.events?.onCellStart?.({
               caseId: plan.resolved.caseId,
               ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
               variantName: plan.variant.name,
               trial: plan.trial,
-              status: 'skipped',
-              skipReason: 'aborted',
-              input: applyRedaction(plan.resolved.raw.input, redactPaths),
-              scores: [],
-              assertions: { ran: 0, notEvaluated: 0, outcomes: [] },
-              durationMs: 0,
-              traceIds: [],
-              capturedSignals: [],
-            } satisfies ExperimentCell<unknown, unknown>
-            options.events?.onCellDone?.(abortedCell)
-            return abortedCell
-          }
-          options.events?.onCellStart?.({
-            caseId: plan.resolved.caseId,
-            ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
-            variantName: plan.variant.name,
-            trial: plan.trial,
-          })
-          const execute = () =>
-            executeCell({
-              plan,
-              definition,
-              timeoutMs,
-              capture,
-              redactPaths,
-              evaluationId,
-              evaluationTraceId: evalRun.traceId,
-              setup: options.setup,
-              cache: cacheContext,
-              sourceFrameResolver: options.sourceFrameResolver,
-              sourceFrameRadius: options.sourceFrameRadius,
             })
-          // The cassette scope covers scoring too — judge calls record and
-          // replay through the same cassette as task calls.
-          const cell = cassetteSession === undefined ? await execute() : await withCassetteSession(cassetteSession, execute)
-          for (const runId of cell.traceIds) {
-            evalRun.withContext(() => {
-              emitEvalCaseOfEdge({
-                caseRunId: runId,
-                evalRunId: evalRun.runId,
+            const execute = () =>
+              executeCell({
+                plan,
+                definition,
+                timeoutMs,
+                capture,
+                redactPaths,
+                evaluationId,
+                evaluationTraceId: evalRun.traceId,
+                setup: options.setup,
+                cache: cacheContext,
+                sourceFrameResolver: options.sourceFrameResolver,
+                sourceFrameRadius: options.sourceFrameRadius,
               })
-              if (replay.mode === 'replay-strict' && cassetteSession?.recorded !== undefined) {
-                emitReplayOfEdge({
-                  replay: { runId, traceId: evalRun.traceId },
-                  recorded: cassetteSession.recorded,
+            // The cassette scope covers scoring too — judge calls record and
+            // replay through the same cassette as task calls.
+            const cell = cassetteSession === undefined ? await execute() : await withCassetteSession(cassetteSession, execute)
+            for (const runId of cell.traceIds) {
+              evalRun.withContext(() => {
+                emitEvalCaseOfEdge({
+                  caseRunId: runId,
+                  evalRunId: evalRun.runId,
                 })
-              }
-            })
-          }
-          options.events?.onCellDone?.(cell)
-          return cell
-        }),
+                if (replay.mode === 'replay-strict' && cassetteSession?.recorded !== undefined) {
+                  emitReplayOfEdge({
+                    replay: { runId, traceId: evalRun.traceId },
+                    recorded: cassetteSession.recorded,
+                  })
+                }
+              })
+            }
+            options.events?.onCellDone?.(cell)
+            return cell
+          }),
+        ),
       ),
     )
   } catch (error) {
