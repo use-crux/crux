@@ -20,7 +20,7 @@
 export { adapterSpecConformance } from './testing/native'
 export { assertCanonicalResult } from './testing/canonical-result'
 export { providerRuntimeConformance } from './testing/provider-runtime'
-export { transcriptCodecConformance } from './testing/transcript'
+export { transcriptCodecConformance, transcriptRoundTripConformance } from './testing/transcript'
 export type {
   CanonicalFinalStepInfo,
   CanonicalGenerateResultLike,
@@ -47,7 +47,12 @@ export type {
   ProviderRuntimeConformanceRuntime,
   ProviderRuntimeConformanceStreamHandle,
 } from './testing/provider-runtime'
-export type { TranscriptConformanceScenario, TranscriptWrapperExpectation } from './testing/transcript'
+export type {
+  TranscriptConformanceScenario,
+  TranscriptRoundTripConformanceSuite,
+  TranscriptRoundTripFixture,
+  TranscriptWrapperExpectation,
+} from './testing/transcript'
 
 // Loop runtime test double + contract suite (SDK-driven loop).
 export { fakeLoopRuntime } from './testing/fake-loop-runtime'

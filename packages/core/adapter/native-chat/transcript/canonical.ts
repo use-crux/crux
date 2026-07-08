@@ -22,7 +22,7 @@ import type { ProviderToolCall, ProviderToolResult, ProviderTranscriptUnit, Tool
 /**
  * Extract neutral transcript units from a canonical Crux transcript.
  *
- * System and user messages become `text` units, assistant messages become
+ * System and user messages become `content` units, assistant messages become
  * `assistant` units carrying any tool calls read from metadata, and runs of
  * adjacent `tool` messages collapse into one `tool-results` unit so a single
  * model turn's results stay together.
@@ -54,11 +54,11 @@ export function messagesToTranscriptUnits(messages: readonly Message[]): Provide
       const toolCalls = toolCallsFromMetadata(message.metadata?.toolCalls)
       units.push({
         kind: 'assistant',
-        text: contentText(message.content),
+        content: message.content,
         ...(toolCalls.length > 0 ? { toolCalls } : {}),
       })
     } else {
-      units.push({ kind: 'text', role: message.role, text: contentText(message.content) })
+      units.push({ kind: 'content', role: message.role, content: message.content })
     }
   }
 
@@ -79,13 +79,13 @@ export function messagesToTranscriptUnits(messages: readonly Message[]): Provide
 export function transcriptUnitsToMessages(units: readonly ProviderTranscriptUnit[]): Message[] {
   return units.flatMap((unit): Message[] => {
     switch (unit.kind) {
-      case 'text':
-        return [{ role: unit.role, content: unit.text }]
+      case 'content':
+        return [{ role: unit.role, content: unit.content }]
       case 'assistant':
         return [
           {
             role: 'assistant',
-            content: unit.text,
+            content: unit.content,
             ...(unit.toolCalls && unit.toolCalls.length > 0 ? { metadata: { toolCalls: [...unit.toolCalls] } } : {}),
           },
         ]
@@ -123,7 +123,7 @@ export function appendCanonicalToolRound(
     ...history,
     {
       role: 'assistant',
-      content: assistant.text,
+      content: assistant.content ?? assistant.text,
       ...(toolCalls && toolCalls.length > 0 ? { metadata: { toolCalls } } : {}),
     },
     ...results.map(

@@ -19,7 +19,7 @@ import {
   transcriptUnitsToMessages,
 } from './canonical'
 import type { NativeTranscriptCodec } from '../types'
-import type { OneOrMany, ProviderTranscriptDialect, ProviderTranscriptUnit } from './units'
+import type { OneOrMany, ProviderTranscriptDialect, ProviderTranscriptUnit, TranscriptEncodeOptions } from './units'
 
 /**
  * Compile a transcript dialect into a native transcript codec.
@@ -48,19 +48,20 @@ export function defineProviderTranscriptCodec<TProviderMessage, TRawResponse>(
 ): NativeTranscriptCodec<TProviderMessage, TRawResponse> {
   const helpers = createToolResultEncodingHelpers()
 
-  const encodeUnit = (unit: ProviderTranscriptUnit): OneOrMany<TProviderMessage> => {
+  const encodeUnit = (unit: ProviderTranscriptUnit, options: TranscriptEncodeOptions): OneOrMany<TProviderMessage> => {
     switch (unit.kind) {
-      case 'text':
-        return dialect.encodeText(unit)
+      case 'content':
+        return dialect.encodeContent(unit, options)
       case 'assistant':
-        return dialect.encodeAssistant(unit)
+        return dialect.encodeAssistant(unit, options)
       case 'tool-results':
-        return dialect.encodeToolResults(unit, helpers)
+        return dialect.encodeToolResults(unit, helpers, options)
     }
   }
 
   return {
-    fromMessages: (messages) => messagesToTranscriptUnits(messages).flatMap((unit) => toArray(encodeUnit(unit))),
+    fromMessages: (messages, options = {}) =>
+      messagesToTranscriptUnits(messages).flatMap((unit) => toArray(encodeUnit(unit, options))),
     toMessages: (messages) =>
       transcriptUnitsToMessages(messages.flatMap((message) => toArray(dialect.decodeMessage(message)))),
     readAssistant: (raw) => dialect.readAssistant(raw),

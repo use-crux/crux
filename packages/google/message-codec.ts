@@ -1,12 +1,13 @@
 import type { Content, GenerateContentResponse } from '@google/genai'
-import type { Message } from '@use-crux/core'
-import { defineProviderTranscriptCodec } from '@use-crux/core/adapter'
+import type { Message, MessageContent } from '@use-crux/core'
+import { defineProviderTranscriptCodec, degradeContentToText } from '@use-crux/core/adapter'
 import type {
   NativeAssistantTurn,
   ProviderToolCall,
   ProviderToolResult,
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
+  TranscriptEncodeOptions,
 } from '@use-crux/core/adapter'
 import { googleFunctionResponseContent, googleFunctionResponseParts, googleToolResponse } from './function-response'
 
@@ -22,8 +23,12 @@ export type GoogleAssistantTurn = NativeAssistantTurn
  * dialect only translates them to and from Google `Content` values.
  */
 const googleDialect: ProviderTranscriptDialect<Content, GenerateContentResponse> = {
-  encodeText: ({ role, text }) => (role === 'system' ? undefined : { role: 'user', parts: [{ text }] }),
-  encodeAssistant: ({ text, toolCalls }) => encodeAssistant(text, toolCalls ?? []),
+  encodeContent: ({ role, content }, options) =>
+    role === 'system'
+      ? (googleContentText(role, content, options), undefined)
+      : { role: 'user', parts: [{ text: googleContentText(role, content, options) }] },
+  encodeAssistant: ({ content, toolCalls }, options) =>
+    encodeAssistant(googleContentText('assistant', content, options), toolCalls ?? []),
   encodeToolResults: ({ results }) => results.map(encodeToolResult),
   decodeMessage: decodeMessage,
   readAssistant: readGoogleAssistant,
@@ -117,11 +122,24 @@ function decodeMessage(value: unknown): ProviderTranscriptUnit {
     const toolCalls = toolCallsFromParts(parts)
     return {
       kind: 'assistant',
-      text,
+      content: text,
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
     }
   }
-  return { kind: 'text', role: 'user', text }
+  return { kind: 'content', role: 'user', content: text }
+}
+
+function googleContentText(
+  role: 'system' | 'user' | 'assistant',
+  content: MessageContent,
+  options: TranscriptEncodeOptions,
+): string {
+  return degradeContentToText(content, {
+    provider: 'google',
+    role,
+    unsupportedContent: options.unsupportedContent,
+    reason: 'Google multimodal message content is implemented in Phase 4',
+  })
 }
 
 type GoogleInboundPart = {

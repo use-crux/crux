@@ -196,11 +196,11 @@ describe('anthropic transcript wire encoding', () => {
             type: 'tool_result',
             tool_use_id: 'toolu_file',
             content: [
-              { type: 'text', text: '[file:audio/mpeg] data:base64-audio' },
-              { type: 'text', text: '[file] https://example.com/file.csv' },
+              { type: 'text', text: '[file audio/mpeg 9B sha256:7dc2623c5c71]' },
+              { type: 'text', text: '[file https://example.com/file.csv]' },
               {
                 type: 'text',
-                text: '[custom] {"anthropic":{"id":"custom-1"}}',
+                text: '[custom]',
               },
             ],
           },
@@ -299,7 +299,7 @@ describe('anthropic transcript wire decoding', () => {
         textBlock('Then I will compare.'),
         toolUseBlock('toolu_calendar', 'calendar', { day: 'today' }),
       ],
-    } satisfies Pick<Anthropic.Message, 'content'>)
+    } as unknown as Pick<Anthropic.Message, 'content'>)
 
     expect(turn).toEqual({
       text: 'I will check. Then I will compare.',

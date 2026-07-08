@@ -11,6 +11,7 @@ import type { z } from 'zod'
 import type { GenerateObjectFn, GenerateTextFn } from '../../compaction'
 import type { Message } from '../../generation/messages'
 import type { GenerationSettings, TraceMeta } from '../../generation/types'
+import type { MessageContent } from '../../types/content'
 import type { CruxAdapter } from '../define-adapter'
 import type { AdapterSpec } from '../spec'
 import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
@@ -19,7 +20,10 @@ import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
 export type NativeCallMode = 'text' | 'structured'
 
 /** Assistant transcript data that participates in Crux tool-loop semantics. */
-export type NativeAssistantTurn = Pick<AdapterResponse, 'text' | 'toolCalls'>
+export interface NativeAssistantTurn extends Pick<AdapterResponse, 'text' | 'toolCalls'> {
+  /** Canonical assistant content when the provider response included media; `text` remains the envelope projection. */
+  readonly content?: MessageContent
+}
 
 /** Response metadata that is independent from assistant transcript content. */
 export type NativeResponseMetadata = Omit<AdapterResponse, 'text' | 'toolCalls'>
@@ -54,7 +58,10 @@ export interface NativeProviderPort<TRequest, TRawResponse, TRawStream extends A
  */
 export interface NativeTranscriptCodec<TProviderMessage = unknown, TRawResponse = unknown> {
   /** Convert canonical Crux messages into provider-native chat messages. */
-  fromMessages(messages: readonly Message[]): readonly TProviderMessage[]
+  fromMessages(
+    messages: readonly Message[],
+    options?: { readonly unsupportedContent?: NonNullable<GenerationSettings['unsupportedContent']> },
+  ): readonly TProviderMessage[]
   /** Convert provider-native chat messages back into canonical Crux messages. */
   toMessages(messages: readonly unknown[]): Message[]
   /** Read assistant text and tool-call intent from a provider-native response. */

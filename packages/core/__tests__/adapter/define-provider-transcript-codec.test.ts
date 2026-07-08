@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
+import { contentText } from '../../content'
 import { defineProviderTranscriptCodec } from '../../adapter/native-chat/transcript'
 import type { ProviderTranscriptDialect, ProviderTranscriptUnit } from '../../adapter/native-chat/transcript'
 import type { ToolResultEntry } from '../../adapter/types'
@@ -16,10 +17,12 @@ interface WireMessage {
 
 /** A minimal dialect: drops system turns, fans tool results out one message each. */
 const dialect: ProviderTranscriptDialect<WireMessage, { readonly text: string }> = {
-  encodeText: ({ role, text }) => (role === 'system' ? undefined : { role, text }),
-  encodeAssistant: ({ text, toolCalls }) => ({
+  encodeContent: ({ role, content }) => (role === 'system' ? undefined : { role, text: contentText(content) }),
+  encodeAssistant: ({ content, toolCalls }) => ({
     role: 'assistant',
-    text: toolCalls?.length ? `${text}[${toolCalls.map((c) => c.name).join(',')}]` : text,
+    text: toolCalls?.length
+      ? `${contentText(content)}[${toolCalls.map((c) => c.name).join(',')}]`
+      : contentText(content),
   }),
   encodeToolResults: ({ results }, helpers) =>
     results.map((result) => ({
@@ -35,8 +38,8 @@ const dialect: ProviderTranscriptDialect<WireMessage, { readonly text: string }>
         results: [{ toolCallId: 'tc_1', text: message.text }],
       }
     }
-    if (message.role === 'assistant') return { kind: 'assistant', text: message.text }
-    return { kind: 'text', role: 'user', text: message.text }
+    if (message.role === 'assistant') return { kind: 'assistant', content: message.text }
+    return { kind: 'content', role: 'user', content: message.text }
   },
   readAssistant: (raw) => ({ text: raw.text, toolCalls: undefined }),
 }

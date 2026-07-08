@@ -1,6 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { ContentPart, Message, ToolModelOutput } from '@use-crux/core'
-import { defineProviderTranscriptCodec } from '@use-crux/core/adapter'
+import type { ContentPart, Message, MessageContent } from '@use-crux/core'
+import { contentText } from '@use-crux/core'
+import { defineProviderTranscriptCodec, degradeContentToText } from '@use-crux/core/adapter'
 import type {
   NativeAssistantTurn,
   ProviderToolCall,
@@ -8,8 +9,15 @@ import type {
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
   ToolResultEncodingHelpers,
+  TranscriptEncodeOptions,
 } from '@use-crux/core/adapter'
-import { anthropicToolResultContent } from './tool-result-content'
+import { anthropicContentBlocks, anthropicToolResultContent } from './tool-result-content'
+import {
+  anthropicDocumentBlockToPart,
+  anthropicImageBlockToPart,
+  decodeAnthropicToolResultContent,
+  messageContentFromAnthropicParts,
+} from './content-block-decode'
 
 /**
  * Canonical assistant turn data read from Anthropic content blocks.
@@ -29,8 +37,8 @@ export type AnthropicAssistantTurn = NativeAssistantTurn
  * helpers; this dialect only translates them to and from Anthropic blocks.
  */
 const anthropicDialect: ProviderTranscriptDialect<Anthropic.MessageParam, Pick<Anthropic.Message, 'content'>> = {
-  encodeText: ({ role, text }) => (role === 'system' ? undefined : { role, content: text }),
-  encodeAssistant: ({ text, toolCalls }) => encodeAssistant(text, toolCalls ?? []),
+  encodeContent: ({ role, content }, options) => encodeContent(role, content, options),
+  encodeAssistant: ({ content, toolCalls }, options) => encodeAssistant(content, toolCalls ?? [], options),
   encodeToolResults: ({ results }, helpers) => results.map((result) => encodeToolResult(result, helpers)),
   decodeMessage: decodeMessage,
   readAssistant: readAssistantTurn,
@@ -60,11 +68,67 @@ export function toMessages(sdkMessages: readonly unknown[]): Message[] {
   return anthropicTranscript.toMessages(sdkMessages)
 }
 
-function encodeAssistant(text: string, toolCalls: readonly ProviderToolCall[]): Anthropic.MessageParam {
-  if (toolCalls.length === 0) return { role: 'assistant', content: text }
+function encodeContent(
+  role: 'system' | 'user',
+  content: MessageContent,
+  options: TranscriptEncodeOptions,
+): Anthropic.MessageParam | undefined {
+  if (role === 'system') {
+    if (Array.isArray(content)) {
+      degradeContentToText(content, {
+        provider: 'anthropic',
+        role,
+        unsupportedContent: options.unsupportedContent,
+        reason: 'Anthropic system-role content is encoded outside request messages and is text-only',
+      })
+    }
+    return undefined
+  }
+
+  return {
+    role,
+    content: typeof content === 'string'
+      ? content
+      : anthropicContentBlocks(content, {
+          provider: 'anthropic',
+          role,
+          unsupportedContent: options.unsupportedContent,
+          reason: 'unsupported Anthropic message content part',
+        }),
+  }
+}
+
+function encodeAssistant(
+  content: MessageContent,
+  toolCalls: readonly ProviderToolCall[],
+  options: TranscriptEncodeOptions,
+): Anthropic.MessageParam {
+  if (toolCalls.length === 0) {
+    return {
+      role: 'assistant',
+      content: typeof content === 'string'
+        ? content
+        : anthropicContentBlocks(content, {
+            provider: 'anthropic',
+            role: 'assistant',
+            unsupportedContent: options.unsupportedContent,
+            reason: 'unsupported Anthropic assistant content part',
+          }),
+    }
+  }
 
   const blocks: Anthropic.ContentBlockParam[] = []
-  if (text) blocks.push({ type: 'text', text })
+  const contentBlocks = typeof content === 'string'
+    ? content
+      ? ([{ type: 'text', text: content }] satisfies Anthropic.TextBlockParam[])
+      : []
+    : anthropicContentBlocks(content, {
+        provider: 'anthropic',
+        role: 'assistant',
+        unsupportedContent: options.unsupportedContent,
+        reason: 'unsupported Anthropic assistant content part',
+      })
+  blocks.push(...contentBlocks)
   for (const toolCall of toolCalls) {
     blocks.push({
       type: 'tool_use',
@@ -92,26 +156,32 @@ function encodeToolResult(result: ProviderToolResult, helpers: ToolResultEncodin
 
 function decodeMessage(value: unknown): readonly ProviderTranscriptUnit[] {
   if (!isAnthropicMessageParam(value)) {
-    return [{ kind: 'text', role: 'user', text: String(value ?? '') }]
+    return [{ kind: 'content', role: 'user', content: String(value ?? '') }]
   }
 
   if (typeof value.content === 'string') {
     return value.role === 'assistant'
-      ? [{ kind: 'assistant', text: value.content }]
-      : [{ kind: 'text', role: 'user', text: value.content }]
+      ? [{ kind: 'assistant', content: value.content }]
+      : [{ kind: 'content', role: 'user', content: value.content }]
   }
 
-  const textParts: string[] = []
+  const contentParts: ContentPart[] = []
   const toolCalls: ProviderToolCall[] = []
   const toolResults: ProviderToolResult[] = []
 
   for (const block of value.content) {
     if (block.type === 'text') {
-      textParts.push(block.text)
+      contentParts.push({ type: 'text', text: block.text })
+    } else if (block.type === 'image') {
+      const part = anthropicImageBlockToPart(block.source)
+      if (part) contentParts.push(part)
+    } else if (block.type === 'document') {
+      const part = anthropicDocumentBlockToPart(block)
+      if (part) contentParts.push(part)
     } else if (block.type === 'tool_use') {
       toolCalls.push({ id: block.id, name: block.name, args: block.input })
     } else if (block.type === 'tool_result') {
-      const decoded = toolResultContent(block.content)
+      const decoded = decodeAnthropicToolResultContent(block.content)
       toolResults.push({
         toolCallId: block.tool_use_id,
         text: decoded.text,
@@ -121,21 +191,21 @@ function decodeMessage(value: unknown): readonly ProviderTranscriptUnit[] {
     }
   }
 
-  const text = textParts.join('')
+  const content = messageContentFromAnthropicParts(contentParts)
   if (value.role === 'assistant') {
     return [
       {
         kind: 'assistant',
-        text,
+        content,
         ...(toolCalls.length > 0 ? { toolCalls } : {}),
       },
     ]
   }
 
   const units: ProviderTranscriptUnit[] = []
-  if (text) units.push({ kind: 'text', role: 'user', text })
+  if (contentParts.length > 0) units.push({ kind: 'content', role: 'user', content })
   if (toolResults.length > 0) units.push({ kind: 'tool-results', results: toolResults })
-  return units.length > 0 ? units : [{ kind: 'text', role: 'user', text: '' }]
+  return units.length > 0 ? units : [{ kind: 'content', role: 'user', content: '' }]
 }
 
 function readAssistantTurn(message: Pick<Anthropic.Message, 'content'>): AnthropicAssistantTurn {
@@ -143,74 +213,33 @@ function readAssistantTurn(message: Pick<Anthropic.Message, 'content'>): Anthrop
   if (typeof content === 'string') return { text: content, toolCalls: undefined }
   if (!Array.isArray(content)) return { text: '', toolCalls: undefined }
 
-  const textParts: string[] = []
+  const contentParts: ContentPart[] = []
   const toolCalls: ProviderToolCall[] = []
 
   for (const block of content) {
     if (block.type === 'text') {
-      textParts.push(block.text)
+      contentParts.push({ type: 'text', text: block.text })
+    } else if (block.type === 'image') {
+      const part = anthropicImageBlockToPart(block.source)
+      if (part) contentParts.push(part)
+    } else if (block.type === 'document') {
+      const part = anthropicDocumentBlockToPart(block)
+      if (part) contentParts.push(part)
     } else if (block.type === 'tool_use') {
       toolCalls.push({ id: block.id, name: block.name, args: block.input })
     }
   }
 
+  const contentValue = messageContentFromAnthropicParts(contentParts)
   return {
-    text: textParts.join(''),
+    text: typeof contentValue === 'string' ? contentValue : contentText(contentValue),
+    ...(typeof contentValue === 'string' ? {} : { content: contentValue }),
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
   }
 }
 
 function toolInput(value: unknown): Record<string, unknown> {
   return isRecord(value) ? value : { value }
-}
-
-interface DecodedToolResult {
-  readonly text: string
-  readonly modelOutput?: ToolModelOutput
-}
-
-/**
- * Decode an Anthropic `tool_result` block's content into canonical form.
- *
- * Text-only results keep a plain `text` rendering. When the block carries rich
- * blocks (images, PDFs), they are reconstructed as a `content` model output so
- * structured tool results survive `toMessages()` instead of being flattened to
- * text; `text` still holds the joined text parts as a deterministic fallback.
- */
-function toolResultContent(content: Anthropic.ToolResultBlockParam['content']): DecodedToolResult {
-  if (typeof content === 'string') return { text: content }
-  if (!Array.isArray(content)) return { text: '' }
-
-  const parts: ContentPart[] = []
-  let hasRichPart = false
-  for (const block of content) {
-    if (block.type === 'text') {
-      parts.push({ type: 'text', text: block.text })
-    } else if (block.type === 'image') {
-      const part = imageBlockToPart(block.source)
-      if (part) {
-        parts.push(part)
-        hasRichPart = true
-      }
-    } else if (block.type === 'document' && block.source.type === 'base64') {
-      parts.push({
-        type: 'file-data',
-        data: block.source.data,
-        mediaType: block.source.media_type,
-        ...(typeof block.title === 'string' ? { filename: block.title } : {}),
-      })
-      hasRichPart = true
-    }
-  }
-
-  const text = parts.flatMap((part) => (part.type === 'text' ? [part.text] : [])).join('')
-  return hasRichPart ? { text, modelOutput: { type: 'content', value: parts } } : { text }
-}
-
-function imageBlockToPart(source: Anthropic.ImageBlockParam['source']): ContentPart | undefined {
-  if (source.type === 'base64') return { type: 'image-data', data: source.data, mediaType: source.media_type }
-  if (source.type === 'url') return { type: 'image-url', url: source.url }
-  return undefined
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

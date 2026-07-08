@@ -1,13 +1,14 @@
 import type OpenAI from 'openai'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
-import type { Message } from '@use-crux/core'
-import { defineProviderTranscriptCodec, renderToolContentPartAsText } from '@use-crux/core/adapter'
+import type { Message, MessageContent } from '@use-crux/core'
+import { defineProviderTranscriptCodec, degradeContentToText, renderToolContentPartAsText } from '@use-crux/core/adapter'
 import type {
   NativeAssistantTurn,
   ProviderToolCall,
   ProviderToolResult,
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
+  TranscriptEncodeOptions,
   ToolResultEncodingHelpers,
 } from '@use-crux/core/adapter'
 
@@ -24,8 +25,8 @@ export type OpenAIAssistantTurn = NativeAssistantTurn
  * format, including JSON argument and rich-content rendering.
  */
 const openAIDialect: ProviderTranscriptDialect<OpenAI.ChatCompletionMessageParam, ChatCompletion> = {
-  encodeText: ({ role, text }) => ({ role, content: text }),
-  encodeAssistant: ({ text, toolCalls }) => encodeAssistant(text, toolCalls ?? []),
+  encodeContent: ({ role, content }, options) => ({ role, content: openAIContentText(role, content, options) }),
+  encodeAssistant: ({ content, toolCalls }, options) => encodeAssistant(openAIContentText('assistant', content, options), toolCalls ?? []),
   encodeToolResults: ({ results }, helpers) => results.map((result) => encodeToolResult(result, helpers)),
   decodeMessage: decodeMessage,
   readAssistant: readOpenAIAssistant,
@@ -128,12 +129,25 @@ function decodeMessage(value: unknown): ProviderTranscriptUnit {
     const toolCalls = toolCallsFromProvider(message.tool_calls)
     return {
       kind: 'assistant',
-      text,
+      content: text,
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
     }
   }
 
-  return { kind: 'text', role, text }
+  return { kind: 'content', role, content: text }
+}
+
+function openAIContentText(
+  role: 'system' | 'user' | 'assistant',
+  content: MessageContent,
+  options: TranscriptEncodeOptions,
+): string {
+  return degradeContentToText(content, {
+    provider: 'openai',
+    role,
+    unsupportedContent: options.unsupportedContent,
+    reason: 'OpenAI multimodal message content is implemented in Phase 4',
+  })
 }
 
 function textContent(content: unknown): string {
