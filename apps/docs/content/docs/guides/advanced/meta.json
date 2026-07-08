@@ -3,6 +3,7 @@
   "description": "Type system, custom adapters, error categories, and exposing your docs as llms.txt.",
   "pages": [
     "type-system",
+    "multimodal",
     "building-adapters",
     "headless",
     "writing-indexer-extension",
