@@ -224,7 +224,11 @@ func (s *Experiments) failingCellLines(width int) []string {
 		if len(cell.TraceIDs) > 0 {
 			trace = shortID(cell.TraceIDs[0], 8)
 		}
-		line := fmt.Sprintf("%s%s %s  %s  %s", bar, kit.StatusDot(cell.Status), cell.CaseID, cell.VariantName, trace)
+		fix := ""
+		if f := failureArtifactForCell(s.detail.Failures, cell.CaseID, cell.VariantName, cell.Trial); f != nil {
+			fix = fixSurfaceLetters(f.SuggestedFixSurfaces)
+		}
+		line := fmt.Sprintf("%s%s %s  %s  %s  %s", bar, kit.StatusDot(cell.Status), cell.CaseID, cell.VariantName, fix, trace)
 		lines = append(lines, padRow(line, width))
 	}
 	return lines

@@ -148,6 +148,10 @@ type QualityExperimentDetail struct {
 	Comparison        *QualityExperimentComparison   `json:"comparison,omitempty"`
 	Gates             QualityExperimentGates         `json:"gates"`
 	Passed            bool                           `json:"passed"`
+	// Failures are the core-owned per-cell failure artifacts embedded in the
+	// record (blueprint §6.2). They carry the fix-surface classification and
+	// dataset provenance the visualization layer renders (§12.1/§12.5).
+	Failures []QualityFailureArtifact `json:"failures,omitempty"`
 }
 
 type QualityExperimentReplay struct {

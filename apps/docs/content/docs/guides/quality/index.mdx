@@ -204,6 +204,28 @@ assertions, scores, devtools trace links, and embedded failure artifacts for
 agents. Use `@use-crux/core/quality/schemas` to validate those records or
 generate JSON Schema for custom tooling.
 
+## In the workbench
+
+Everything the machine contract exposes is also operable from Devtools, so a
+regression never requires the CLI to understand:
+
+- **Fix surfaces.** Failing cells in the experiment view carry chips derived
+  from the failure artifact's `suggestedFixSurfaces` (`prompt`, `retriever`,
+  `tool-schema`, `judge`, …). Clicking a chip jumps to the covered Project
+  Index definition. Opening a cell shows a Failure Artifact panel with the
+  dataset provenance (`path @ fingerprint`), cassette id, and the repro command.
+- **Judge trust.** A judge-class scorer row (and the evaluation detail) opens a
+  judge-report panel — agreement, a 2×2 confusion matrix, Cohen's kappa, and a
+  disagreements table linking back to each cell. Label cells Pass/Fail from the
+  cell evidence header to feed it (equivalent to `crux quality label`).
+- **Compare.** The experiment detail's Compare picker diffs the run against any
+  other run of the same evaluation — per-score and per-case deltas, unmatched
+  cases, and a drift banner when the identities are no longer comparable.
+
+The TUI mirrors the essentials: fix-surface letters (`P R`) on failing cells and
+the dataset fingerprint in the experiment detail, with a hint pointing at
+`crux quality judge-report` and `crux quality diff` for the full views.
+
 ## Discovery and model setup
 
 Quality discovery starts from source. With no `crux.config.ts`, the runner

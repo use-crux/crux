@@ -6,60 +6,26 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 )
-
-type QualityJudgeReport struct {
-	SchemaVersion int                        `json:"schemaVersion"`
-	EvaluationID  string                     `json:"evaluationId"`
-	Scorers       []QualityJudgeReportScorer `json:"scorers"`
-}
-
-type QualityJudgeReportScorer struct {
-	Name          string                           `json:"name"`
-	Threshold     float64                          `json:"threshold"`
-	Labeled       int                              `json:"labeled"`
-	Confusion     QualityJudgeReportConfusion      `json:"confusion"`
-	Agreement     float64                          `json:"agreement"`
-	Precision     float64                          `json:"precision"`
-	Recall        float64                          `json:"recall"`
-	Kappa         *float64                         `json:"kappa"`
-	Disagreements []QualityJudgeReportDisagreement `json:"disagreements"`
-}
-
-type QualityJudgeReportConfusion struct {
-	TP int `json:"tp"`
-	FP int `json:"fp"`
-	FN int `json:"fn"`
-	TN int `json:"tn"`
-}
-
-type QualityJudgeReportDisagreement struct {
-	ExperimentID string  `json:"experimentId"`
-	CaseID       string  `json:"caseId"`
-	Variant      string  `json:"variant"`
-	Trial        int     `json:"trial"`
-	Human        string  `json:"human"`
-	JudgeScore   float64 `json:"judgeScore"`
-	Rationale    string  `json:"rationale,omitempty"`
-}
 
 type judgeReportAccumulator struct {
 	name          string
 	threshold     float64
-	confusion     QualityJudgeReportConfusion
-	disagreements []QualityJudgeReportDisagreement
+	confusion     api.QualityJudgeReportConfusion
+	disagreements []api.QualityJudgeReportDisagreement
 }
 
-func (s *Service) JudgeReportAPI(_ context.Context, evaluationID string) (QualityJudgeReport, bool, error) {
+func (s *Service) JudgeReportAPI(_ context.Context, evaluationID string) (api.QualityJudgeReport, bool, error) {
 	fs := s.fs
 	files, _, err := fs.ReadExperimentRecords()
 	if err != nil {
-		return QualityJudgeReport{}, false, err
+		return api.QualityJudgeReport{}, false, err
 	}
 	snapshot, err := fs.Snapshot()
 	if err != nil {
-		return QualityJudgeReport{}, false, err
+		return api.QualityJudgeReport{}, false, err
 	}
 
 	byName := map[string]*judgeReportAccumulator{}
@@ -98,7 +64,7 @@ func (s *Service) JudgeReportAPI(_ context.Context, evaluationID string) (Qualit
 		}
 	}
 	if !foundEvaluation {
-		return QualityJudgeReport{}, false, nil
+		return api.QualityJudgeReport{}, false, nil
 	}
 
 	names := make([]string, 0, len(byName))
@@ -106,11 +72,11 @@ func (s *Service) JudgeReportAPI(_ context.Context, evaluationID string) (Qualit
 		names = append(names, name)
 	}
 	sort.Strings(names)
-	scorers := make([]QualityJudgeReportScorer, 0, len(names))
+	scorers := make([]api.QualityJudgeReportScorer, 0, len(names))
 	for _, name := range names {
 		scorers = append(scorers, byName[name].report())
 	}
-	return QualityJudgeReport{SchemaVersion: 1, EvaluationID: evaluationID, Scorers: scorers}, true, nil
+	return api.QualityJudgeReport{SchemaVersion: 1, EvaluationID: evaluationID, Scorers: scorers}, true, nil
 }
 
 func (a *judgeReportAccumulator) add(experimentID string, cell qualityfs.SpecExperimentCell, label qualityfs.Feedback, score qualityfs.SpecCellScore) {
@@ -127,7 +93,7 @@ func (a *judgeReportAccumulator) add(experimentID string, cell qualityfs.SpecExp
 		a.confusion.TN++
 	}
 	if predictedPass != humanPass {
-		a.disagreements = append(a.disagreements, QualityJudgeReportDisagreement{
+		a.disagreements = append(a.disagreements, api.QualityJudgeReportDisagreement{
 			ExperimentID: experimentID,
 			CaseID:       cell.CaseID,
 			Variant:      cell.VariantName,
@@ -139,12 +105,12 @@ func (a *judgeReportAccumulator) add(experimentID string, cell qualityfs.SpecExp
 	}
 }
 
-func (a *judgeReportAccumulator) report() QualityJudgeReportScorer {
+func (a *judgeReportAccumulator) report() api.QualityJudgeReportScorer {
 	total := a.confusion.TP + a.confusion.FP + a.confusion.FN + a.confusion.TN
 	agreement := ratio(float64(a.confusion.TP+a.confusion.TN), float64(total))
 	precision := ratio(float64(a.confusion.TP), float64(a.confusion.TP+a.confusion.FP))
 	recall := ratio(float64(a.confusion.TP), float64(a.confusion.TP+a.confusion.FN))
-	return QualityJudgeReportScorer{
+	return api.QualityJudgeReportScorer{
 		Name:          a.name,
 		Threshold:     a.threshold,
 		Labeled:       total,
@@ -243,7 +209,7 @@ func ratio(numerator float64, denominator float64) float64 {
 	return numerator / denominator
 }
 
-func cohenKappa(confusion QualityJudgeReportConfusion) *float64 {
+func cohenKappa(confusion api.QualityJudgeReportConfusion) *float64 {
 	total := confusion.TP + confusion.FP + confusion.FN + confusion.TN
 	if total == 0 {
 		return nil

@@ -2,7 +2,7 @@
 '@use-crux/core': minor
 '@use-crux/indexer': patch
 '@use-crux/local': minor
-'@use-crux/devtools': patch
+'@use-crux/devtools': minor
 ---
 
 Stabilize the Quality beta API and experiment record contract: `ctx.score()` becomes `ctx.recordScore()`, post-score callbacks are now `afterScores`, retrieval recipe targets use `target.retrievalRecipe()`, decision-report assertions use the singular `decisionReport` namespace, and experiment records now write schema-version 2 `cells` with ordered assertion `outcomes` only.
@@ -30,3 +30,5 @@ Declare Quality beta: the authoring surface, experiment/manifest schemas, CLI JS
 Finish Quality Project Index parity for beta: native static extraction now treats `afterScores` assertions as evaluation-level `ctx.expect()` sites, evaluation definitions expose catalog facts for devtools chips, spec experiment records enrich `evaluation:*` and covered definitions in the local read model, and `crux quality init` discovers uncovered targets from Project Model evidence before falling back to config exports.
 
 Complete Quality observability coverage by removing the unused `quality.snapshot` artifact kind, emitting `baseline.promotion` artifacts on successful promotion, emitting diff-mode `comparison.report` artifacts from core experiment diffs, and forwarding `quality diff` events into local activity.
+
+Make the Quality machine contract operable from the UI: devtools serves `GET /api/quality/judge-report/{evaluationId}` and `GET /api/quality/experiments/diff?a=&b=` (the latter runs the core diff op in a worker), the experiment read model surfaces core-owned `failures` artifacts, and the workbench renders fix-surface chips that deep-link to the covered definition, a Failure Artifact panel with dataset provenance and cassette id, Pass/Fail cell labeling, a judge-trust panel (agreement, confusion matrix, kappa, disagreements), and an experiment Compare picker with a per-score/per-case diff and a drift banner. The TUI shows fix-surface letters on failing cells, the dataset fingerprint, and a CLI hint for the judge-report and diff views.

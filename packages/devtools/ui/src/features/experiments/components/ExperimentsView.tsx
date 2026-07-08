@@ -41,6 +41,9 @@ import {
   type VerdictState,
 } from '@/qw/shell/qualityKit'
 import { CellEvidenceView } from './CellEvidenceView'
+import { ExperimentDiffSection } from './ExperimentDiffPanel'
+import { FixSurfaceChips } from './FixSurfaceChips'
+import { failureForCell, groupFixSurfaceChips } from '../lib/fix-surfaces'
 import { navTarget } from '@/app/navigation/navTarget'
 import { usePromoteBaselineMutation } from '@/shared/hooks/useQualityMutations'
 import {
@@ -799,6 +802,7 @@ export function ExperimentDetailView({ experimentId }: { experimentId: string })
         <QVariantRollup exp={exp} baselineRecord={comparisonBaseline} />
         {exp.comparison && <QComparison cmp={exp.comparison} />}
         {exp.gates.results.length > 0 && <QGates exp={exp} />}
+        <ExperimentDiffSection experiment={exp} />
         <QCells exp={exp} onOpenTrace={(traceId) => navigate({ view: 'run-detail', traceId })} />
       </div>
     </QwShell>
@@ -1722,6 +1726,11 @@ function QCells({ exp, onOpenTrace }: { exp: QualityExperimentDetail; onOpenTrac
           {groups.map((grp) => {
             const isOpen = open === grp.caseId
             const bad = worstStatus(grp) <= 1
+            const failingCellIds = variants
+              .map((vn) => grp.cells[vn])
+              .filter((c): c is NonNullable<typeof c> => Boolean(c) && (c.status === 'failed' || c.status === 'errored'))
+              .map((c) => ({ caseId: grp.caseId, variantName: c.variantName, trial: c.trial }))
+            const surfaceChips = groupFixSurfaceChips(exp.failures, failingCellIds)
             return (
               <div
                 key={grp.caseId}
@@ -1740,6 +1749,7 @@ function QCells({ exp, onOpenTrace }: { exp: QualityExperimentDetail; onOpenTrac
                       {grp.caseId}
                     </span>
                     <MoveChip mv={caseMove(grp, base, cand, metric)} metric={metric} />
+                    <FixSurfaceChips chips={surfaceChips} />
                   </div>
                   <div className="flex items-center gap-2">
                     {variants.map((vn) => {
@@ -1769,6 +1779,7 @@ function QCells({ exp, onOpenTrace }: { exp: QualityExperimentDetail; onOpenTrac
                             trial={cell.trial}
                             status={cell.status}
                             skipReason={cell.skipReason}
+                            failure={failureForCell(exp.failures, { caseId: grp.caseId, variantName: vn, trial: cell.trial })}
                             onOpenTrace={onOpenTrace}
                           />
                         </div>

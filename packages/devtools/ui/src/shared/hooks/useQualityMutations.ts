@@ -20,6 +20,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useCallback } from 'react'
 import { qk } from '@/shared/query/queryClient'
 import { deleteJson, expectOk, postJson } from '@/shared/services/http'
+import { qualityService, type LabelCellInput } from '@/shared/services/quality'
 import { useToast } from '@/qw/shell/useToast'
 import type {
   QualityFeedbackRecord,
@@ -383,6 +384,42 @@ export function usePromoteBaselineMutation() {
         return await mutation.mutateAsync(input)
       } catch {
         return undefined
+      }
+    },
+    [mutation],
+  )
+}
+
+// ─── Human label on a cell (blueprint §12.4) ────────────────────────
+
+export function useLabelCellMutation() {
+  const client = useQueryClient()
+  const { toast } = useToast()
+  const mutation = useMutation<void, Error, LabelCellInput>({
+    mutationFn: (input) => qualityService.labelCell(input),
+    onSuccess: (_result, input) => {
+      toast({
+        kind: 'ok',
+        title: `Labeled ${input.verdict}`,
+        message: `${input.caseId} · ${input.variant}`,
+      })
+    },
+    onError: (err) => {
+      toast({ kind: 'danger', title: 'Could not save label', message: err.message })
+    },
+    onSettled: () => {
+      // A label feeds the feedback list and shifts judge-vs-human agreement.
+      void client.invalidateQueries({ queryKey: qk.quality.feedback() })
+      void client.invalidateQueries({ queryKey: qk.quality.all })
+    },
+  })
+  return useCallback(
+    async (input: LabelCellInput) => {
+      try {
+        await mutation.mutateAsync(input)
+        return true
+      } catch {
+        return false
       }
     },
     [mutation],

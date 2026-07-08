@@ -10,7 +10,6 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/cli"
-	qualityreport "github.com/use-crux/crux/packages/local/internal/quality"
 	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 )
 
@@ -214,7 +213,7 @@ func TestQualityJudgeReportCommandOutputsJSON(t *testing.T) {
 
 	stdout := executeQualityCommand(t, "judge-report", "evals.cli.judge", "--json", "--dir", dir)
 
-	var report qualityreport.QualityJudgeReport
+	var report api.QualityJudgeReport
 	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
 		t.Fatalf("decode judge report JSON: %v\n%s", err, stdout)
 	}

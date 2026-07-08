@@ -80,6 +80,17 @@ func (c *FixtureClient) fixtureExperimentDetail() api.QualityExperimentDetail {
 				},
 			},
 		},
+		Failures: []api.QualityFailureArtifact{
+			{
+				CaseID:               "rag/typed_prompts_definition",
+				Variant:              "maxIter=3",
+				Trial:                0,
+				Phase:                "expect",
+				Covers:               []string{"prompt:docs_agent"},
+				SuggestedFixSurfaces: []string{"prompt", "retriever"},
+				DatasetProvenance:    &api.QualityFailureArtifactDataset{Path: "datasets/rag.jsonl", ContentFingerprint: "sha256:1f3c9ab27d"},
+			},
+		},
 		Gates: api.QualityExperimentGates{Passed: true},
 	}
 }
