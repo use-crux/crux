@@ -11,7 +11,9 @@ import { z } from "zod";
 import { loopRuntimeAdapter } from "../../adapter/define-executor";
 import { fakeLoopRuntime } from "../../adapter/testing";
 import { prompt as makePrompt } from "../../prompt/prompt";
+import { agent as makeAgent } from "../../agent/agent";
 import { fallback } from "../../generation/fallback";
+import { router, type RouteArgs } from "../../routing";
 import { ValidationExhaustedError } from "../../generation/validation-retry";
 import { appendToolApprovalResponse } from "../../tools/approvals";
 import { resetHooks } from "../../runtime/runtime";
@@ -297,6 +299,36 @@ describe("loopRuntimeAdapter — structured output + validation retry", () => {
 });
 
 describe("loopRuntimeAdapter — routing dispatch", () => {
+  it("injects agent identity into routing context for agent models", async () => {
+    const fake = fakeLoopRuntime({ loops: [[{ text: "from cheap" }]] });
+    const executor = loopRuntimeAdapter(fake.runtime);
+    const supportAgent = makeAgent({
+      id: "support-agent",
+      prompt: textPrompt(),
+      model: router({
+        id: "agent-phase",
+        classify: ({ context }: RouteArgs<{ readonly agent: { readonly id: string; readonly phase: string } }>) =>
+          context.agent.id === "support-agent" && context.agent.phase === "reviewer"
+            ? "cheap"
+            : "smart",
+        routes: {
+          cheap: "fake:cheap",
+          smart: "fake:smart",
+          default: "fake:smart",
+        },
+      }),
+    });
+
+    const result = await executor.parallel({
+      context: { instruction: "answer" },
+      agents: { reviewer: supportAgent },
+    });
+
+    expect(result.results.reviewer.output).toBe("from cheap");
+    expect(fake.calls.runTextLoop).toHaveLength(1);
+    expect(fake.calls.runTextLoop[0]!.modelInfo.modelId).toBe("cheap");
+  });
+
   it("falls back to the next model when the first attempt throws a retryable error", async () => {
     const rateLimited = Object.assign(new Error("rate limited"), {
       status: 429,

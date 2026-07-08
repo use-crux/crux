@@ -106,7 +106,8 @@ async function invokeAgent<TOutput>(
     )) as AgentResult<TOutput>
   }
 
-  const output = await executeWithRetry(() => agent(input.input), input.retry)
+  const run = agent as (value: unknown) => Promise<TOutput>
+  const output = await executeWithRetry(() => run(input.input), input.retry)
   return {
     agentId: input.label,
     output: output as TOutput,

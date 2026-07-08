@@ -45,7 +45,9 @@ import type {
 import type { ToolMiddleware } from "../tools/types";
 import type { ToolApprovalMap } from "../tools/approval-policy";
 import { createCompositions } from "../agent/create-compositions";
+import { agentRoutingContext } from "../agent/routing-context";
 import type { AgentExecutor } from "../agent/executor";
+import { getExecutionContext } from "../runtime/execution-context";
 import { createAdapterExecution, sdkLoopDialect } from "./execution/session";
 
 interface AttemptSignalOptions {
@@ -409,13 +411,14 @@ export function loopRuntimeAdapter<
     const start = Date.now();
 
     const mergedTools = { ...(agent.tools ?? {}), ...(options.tools ?? {}) };
-    const generateOpts: ExecutorGenerateOptions<TModel> = {
+    const generateOpts = {
       model,
       input: options.input as Record<string, unknown>,
+      routing: agentRoutingContext(agent, getExecutionContext()),
       maxSteps: options.maxSteps,
       validationRetry: options.validationRetry,
       ...(Object.keys(mergedTools).length > 0 ? { tools: mergedTools } : {}),
-    } as ExecutorGenerateOptions<TModel>;
+    } as unknown as ExecutorGenerateOptions<TModel>;
 
     const result = await generate(agent.prompt, generateOpts);
 

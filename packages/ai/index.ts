@@ -72,7 +72,14 @@ import {
 } from "@use-crux/core/adapter";
 import type { ToolApprovalMap, ToolMiddleware } from "@use-crux/core";
 import { resolveModel } from "@use-crux/core/routing";
-import type { AnyRouterModel, CascadeModel } from "@use-crux/core/routing";
+import type {
+  AnyRouterModel,
+  BoundOk,
+  CascadeModel,
+  InputOk,
+  PromptInputOf,
+  StreamOf,
+} from "@use-crux/core/routing";
 import type {
   GenerateObjectFn,
   GenerateTextFn,
@@ -229,7 +236,10 @@ export interface CruxAi {
     TRuntimeContext = unknown,
     TModel = CallOpts["model"],
   >(
-    prompt: Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+    prompt: PromptForModel<
+      AiPromptInstance<TOwnInput, TOutput, TContexts, TPromptTools>,
+      TModel
+    >,
     opts: AIGenerateOptions<
       TOwnInput,
       TContexts,
@@ -249,7 +259,10 @@ export interface CruxAi {
     TRuntimeContext = unknown,
     TModel = CallOpts["model"],
   >(
-    prompt: Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+    prompt: StreamPromptForModel<
+      AiPromptInstance<TOwnInput, TOutput, TContexts, TPromptTools>,
+      TModel
+    >,
     opts: AIGenerateOptions<
       TOwnInput,
       TContexts,
@@ -269,7 +282,10 @@ export interface CruxAi {
     TRuntimeContext = unknown,
     TModel = CallOpts["model"],
   >(
-    prompt: Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+    prompt: PromptForModel<
+      AiPromptInstance<TOwnInput, TOutput, TContexts, TPromptTools>,
+      TModel
+    >,
     opts: AIGenerateOptions<
       TOwnInput,
       TContexts,
@@ -315,6 +331,22 @@ type CallOpts = Record<string, unknown> & {
   input?: Record<string, unknown>;
   transport?: AITransport;
 };
+
+type AiPromptInstance<
+  TOwnInput extends z.ZodType,
+  TOutput extends z.ZodType | undefined,
+  TContexts extends readonly Context<z.ZodType>[],
+  TPromptTools extends AnyToolSet | undefined,
+> = Prompt<TOwnInput, TOutput, TContexts, TPromptTools>;
+
+type PromptForModel<P extends AnyPrompt, M> = P &
+  BoundOk<M, P> &
+  InputOk<M, PromptInputOf<P>>;
+
+type StreamPromptForModel<P extends AnyPrompt, M> = PromptForModel<P, M> &
+  (StreamOf<M> extends true
+    ? unknown
+    : ["model contains a cascade; cascades are generate-only"]);
 
 /**
  * Build a `@use-crux/ai` instance bound to a specific {@link SdkGateway}.
