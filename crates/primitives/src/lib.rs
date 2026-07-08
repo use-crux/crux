@@ -28,6 +28,7 @@ mod data {
 mod definition;
 mod eval {
     pub(crate) mod assertions;
+    pub(crate) mod catalog;
     pub(crate) mod facts;
 }
 mod flow {

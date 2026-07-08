@@ -12,7 +12,7 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import type { AnyPrompt, Crux } from '@use-crux/core'
-import type { ProjectModelDiagnostic } from '@use-crux/core/project-index'
+import type { ProjectModelDiagnostic, ResolvedProjectModel } from '@use-crux/core/project-index'
 import type { QualityConfig, ReplayMode } from '@use-crux/core/quality'
 import { discoverQualityPromptTests } from './quality-prompt-discovery'
 
@@ -99,6 +99,8 @@ export interface LoadedQualityProject {
   prompts: readonly AnyPrompt[]
   /** Prompt-test diagnostics discovered through the Project Model. */
   promptDiagnostics: readonly ProjectModelDiagnostic[]
+  /** Project Model evidence reused by worker-side tooling such as `quality init`. */
+  projectModel?: ResolvedProjectModel
   /** Project root for quality globs, ids, project-local imports, and persistence defaults. */
   configDir: string
   /** Imported config file, absent when Quality is running from source conventions only. */
@@ -133,6 +135,7 @@ export async function loadQualityProject(configPath?: string): Promise<LoadedQua
       quality: {},
       prompts: discovered.prompts,
       promptDiagnostics: discovered.diagnostics,
+      projectModel: discovered.projectModel,
       configDir: projectRoot.rootDir,
     }
   }
@@ -153,6 +156,7 @@ export async function loadQualityProject(configPath?: string): Promise<LoadedQua
     quality: exported.config.quality ?? {},
     prompts: discovered.prompts,
     promptDiagnostics: discovered.diagnostics,
+    projectModel: discovered.projectModel,
     configDir: projectRoot.rootDir,
     configPath: projectRoot.configPath,
     configModule: configModule as Record<string, unknown>,

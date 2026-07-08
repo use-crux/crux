@@ -20,6 +20,8 @@ export interface DiscoveredQualityPrompts {
   readonly prompts: readonly AnyPrompt[]
   /** Diagnostics that should fail prompt-test collection before execution. */
   readonly diagnostics: readonly ProjectModelDiagnostic[]
+  /** Source-discovery model used for prompt imports and init scaffolding. */
+  readonly projectModel: ResolvedProjectModel
 }
 
 /** Options for Quality prompt-test collection from Project Model evidence. */
@@ -62,7 +64,7 @@ export async function discoverQualityPromptTests(
     collectPromptExports(moduleExports, seen, prompts)
   }
 
-  return { prompts: [...prompts], diagnostics }
+  return { prompts: [...prompts], diagnostics, projectModel: model }
 }
 
 async function resolveQualityProjectModel(options: DiscoverQualityPromptTestsOptions): Promise<ResolvedProjectModel> {

@@ -62,6 +62,7 @@ export function IndexQuality({ def }: { def: ViewDef }) {
     ...(q.drift.evals ?? []).map((d) => ({ ...d, kind: 'eval' as const })),
     ...(q.drift.suites ?? []).map((d) => ({ ...d, kind: 'suite' as const })),
   ]
+  const evalListLabel = def.kind === 'evaluation' ? 'evaluation' : 'protected by'
 
   return (
     <>
@@ -202,7 +203,7 @@ export function IndexQuality({ def }: { def: ViewDef }) {
                     marginBottom: 5,
                   }}
                 >
-                  evals
+                  {evalListLabel}
                 </div>
                 <span style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
                   {q.evalIds.map((e) => (

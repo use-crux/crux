@@ -3,6 +3,7 @@ package qualityfs
 type Experiment struct {
 	Tag            string                       `json:"_tag"`
 	ID             string                       `json:"id"`
+	EvaluationID   string                       `json:"evaluationId,omitempty"`
 	QualityID      string                       `json:"qualityId"`
 	Suite          ExperimentSuite              `json:"suite"`
 	StartedAt      string                       `json:"startedAt"`

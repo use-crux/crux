@@ -1,5 +1,6 @@
 ---
 '@use-crux/core': minor
+'@use-crux/indexer': patch
 '@use-crux/local': minor
 '@use-crux/devtools': patch
 ---
@@ -25,3 +26,5 @@ Add the Quality adoption path: `crux quality init` scaffolds first evals for unc
 Add the Quality agent loop: `crux quality run` now supports `--failed`, deterministic `--sample`/`--seed`, `--max-cost`, and `--changed-since` subsets, `crux quality mcp` exposes list/run/show/diff/evidence/judge-report/label tools over MCP, and `crux quality init` scaffolds a local Quality skill for coding agents.
 
 Declare Quality beta: the authoring surface, experiment/manifest schemas, CLI JSON outputs, and exit codes are stable within 0.x minors; future breaking changes require a minor bump and migration note while the first-party runner facade remains internal.
+
+Finish Quality Project Index parity for beta: native static extraction now treats `afterScores` assertions as evaluation-level `ctx.expect()` sites, evaluation definitions expose catalog facts for devtools chips, spec experiment records enrich `evaluation:*` and covered definitions in the local read model, and `crux quality init` discovers uncovered targets from Project Model evidence before falling back to config exports.

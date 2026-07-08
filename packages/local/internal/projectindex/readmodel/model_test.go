@@ -147,6 +147,75 @@ func TestModelIndexReportsQualityLoadFailureAsDiagnostic(t *testing.T) {
 	}
 }
 
+func TestModelIndexEnrichesEvaluationQualityFromSpecRecordsAndCoverage(t *testing.T) {
+	qualityDir := t.TempDir()
+	writeJSON(t, filepath.Join(qualityDir, "experiments", "01KTEVALQUALITY0000000000000.json"), map[string]any{
+		"schemaVersion": 1,
+		"experimentId":  "01KTEVALQUALITY0000000000000",
+		"evaluationId":  "evals.support",
+		"qualityId":     "q",
+		"startedAt":     "2026-06-10T11:00:00Z",
+		"endedAt":       "2026-06-10T11:01:00Z",
+		"status":        "completed",
+		"variants": []map[string]any{{
+			"name": "current",
+		}},
+		"cells": []map[string]any{{
+			"caseId": "case-1", "variantName": "current", "status": "passed", "traceId": "trace-1",
+		}},
+		"aggregates": map[string]any{
+			"perVariant": map[string]any{
+				"current": map[string]any{
+					"cells": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "passRate": 1,
+				},
+			},
+		},
+		"passed": true,
+	})
+	writeJSON(t, filepath.Join(qualityDir, "baselines", "evals.support.json"), map[string]any{
+		"schemaVersion":     1,
+		"baselineId":        "01KTBASELINE0000000000000",
+		"evaluationId":      "evals.support",
+		"experimentId":      "01KTEVALQUALITY0000000000000",
+		"variantName":       "current",
+		"promotedAt":        "2026-06-10T11:02:00Z",
+		"configFingerprint": "cf",
+		"reference":         map[string]any{},
+	})
+
+	model := New(snapshotSource{
+		index: store.IndexData{
+			Definitions: []store.ProjectDefinition{
+				{ID: "evaluation:evals.support", Kind: "evaluation", Name: "support", Fidelity: "resolved"},
+				{ID: "prompt:support.answer", Kind: "prompt", Name: "answer", Fidelity: "resolved"},
+			},
+			Relations: []store.ProjectRelation{
+				{ID: "rel", Type: "eval.covers_definition", From: "evaluation:evals.support", To: "prompt:support.answer", Fidelity: "resolved"},
+			},
+		},
+	}, qualityDir)
+
+	got := model.Index()
+	evaluation := definitionByID(got.Definitions, "evaluation:evals.support")
+	if evaluation == nil || evaluation.Quality == nil {
+		t.Fatalf("evaluation quality missing: %+v", evaluation)
+	}
+	if evaluation.Quality.ExperimentCount != 1 || evaluation.Quality.BaselineCount != 1 {
+		t.Fatalf("evaluation quality counts = %+v", evaluation.Quality)
+	}
+	if evaluation.Quality.PassRate == nil || *evaluation.Quality.PassRate != 1 {
+		t.Fatalf("evaluation pass rate = %v, want 1", evaluation.Quality.PassRate)
+	}
+
+	prompt := definitionByID(got.Definitions, "prompt:support.answer")
+	if prompt == nil || prompt.Quality == nil {
+		t.Fatalf("covered prompt quality missing: %+v", prompt)
+	}
+	if !contains(prompt.Quality.EvalIDs, "evals.support") {
+		t.Fatalf("covered prompt eval ids = %+v, want evals.support", prompt.Quality.EvalIDs)
+	}
+}
+
 func TestApplyIndexLintPolicyAcceptsScopedExtensionRuleSuppressions(t *testing.T) {
 	root := t.TempDir()
 	sourceFile := filepath.Join(root, "workflow.ts")

@@ -3,6 +3,7 @@ use serde_json::{Map, Value, json};
 use crate::{
     context::{CallParts, PrimitiveContext},
     definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
+    eval::catalog::evaluation_catalog_facts,
     eval::assertions::assertion_sites_from_source,
     protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
@@ -33,8 +34,12 @@ pub(crate) fn eval_facts(
 
     let mut facts = Map::new();
     facts.insert("kind".to_string(), Value::String("evaluation".to_string()));
+    facts.extend(evaluation_catalog_facts(config, &context.initializers));
     if total_cases > 0 {
         facts.insert("caseCount".to_string(), json!(total_cases));
+    }
+    if let Some(covers) = coverage.metadata.clone() {
+        facts.insert("covers".to_string(), covers);
     }
     if !assertion_sites.is_empty() {
         facts.insert(
