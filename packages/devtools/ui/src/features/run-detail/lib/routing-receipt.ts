@@ -1,0 +1,263 @@
+import type {
+  CruxRoutingAttemptPreview,
+  CruxRoutingReportPreview,
+  CruxRoutingStepPreview,
+  CruxRoutingTierPreview,
+} from "@use-crux/core/observability";
+
+export type RoutingReceiptStepKind =
+  | "router"
+  | "split"
+  | "retry"
+  | "fallback"
+  | "cascade";
+
+export interface RoutingAttemptView {
+  model: string;
+  status: string;
+  durationMs?: number;
+  cost?: number;
+  errorCategory?: string;
+  error?: string;
+  delayMs?: number;
+}
+
+export interface RoutingTierView {
+  index: number;
+  model: string;
+  status: string;
+  durationMs?: number;
+  cost?: number;
+  judgeCost?: number;
+  confidence?: number;
+  budget?: number;
+  note?: string;
+}
+
+export type RoutingStepView =
+  | {
+      kind: "router";
+      id?: string;
+      classifiedAs?: string;
+      route?: string;
+      usedDefaultRoute: boolean;
+      forced: boolean;
+    }
+  | { kind: "split"; id?: string; route?: string; seed?: string }
+  | {
+      kind: "retry";
+      id?: string;
+      model?: string;
+      attempts: RoutingAttemptView[];
+    }
+  | {
+      kind: "fallback";
+      id?: string;
+      attempts: RoutingAttemptView[];
+      midStreamFailure: boolean;
+    }
+  | {
+      kind: "cascade";
+      id?: string;
+      tiers: RoutingTierView[];
+      acceptedAtTier?: number;
+      budgetExceeded: boolean;
+    };
+
+export interface RoutingReceiptFacts {
+  chosen?: string;
+  classifiedAs?: string;
+  tiers?: number;
+  escalated?: number;
+  underBudget?: boolean;
+  budget?: number;
+  why?: string;
+  hasDefaultRoute?: boolean;
+  hasMidStreamFailure?: boolean;
+}
+
+/** True when an artifact preview carries the canonical routing receipt shape. */
+export function isRoutingReportPreview(
+  value: unknown,
+): value is CruxRoutingReportPreview {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    (value as { kind?: unknown }).kind === "routing.report"
+  );
+}
+
+/** Convert receipt trace data into discriminated rows for rendering and tests. */
+export function routingStepViews(
+  report: CruxRoutingReportPreview,
+): RoutingStepView[] {
+  if (report.trace?.length) {
+    return report.trace.flatMap((step) => routingStepView(step));
+  }
+  return legacyRoutingStepViews(report);
+}
+
+/** Derive compact inspector facts from the same receipt rows used by the tab UI. */
+export function routingFactsFromReport(
+  report: CruxRoutingReportPreview,
+  attrs: Record<string, unknown> = {},
+): RoutingReceiptFacts {
+  const steps = routingStepViews(report);
+  const router = steps.find(
+    (step): step is Extract<RoutingStepView, { kind: "router" }> =>
+      step.kind === "router",
+  );
+  const cascade = [...steps]
+    .reverse()
+    .find(
+      (step): step is Extract<RoutingStepView, { kind: "cascade" }> =>
+        step.kind === "cascade",
+    );
+  const fallback = steps.find(
+    (step): step is Extract<RoutingStepView, { kind: "fallback" }> =>
+      step.kind === "fallback",
+  );
+  const acceptedAt = cascade?.acceptedAtTier;
+  const totalTiers = cascade?.tiers.length || numberFrom(attrs.totalTiers);
+  const budgetExceeded =
+    cascade?.budgetExceeded ??
+    (typeof attrs.budgetExceeded === "boolean"
+      ? attrs.budgetExceeded
+      : undefined);
+
+  const facts: RoutingReceiptFacts = {
+    chosen: report.model ?? report.chosen ?? report.selectedModel,
+    classifiedAs: router?.classifiedAs ?? report.classifiedAs,
+    hasDefaultRoute: router?.usedDefaultRoute,
+    hasMidStreamFailure: fallback?.midStreamFailure,
+  };
+  if (totalTiers) facts.tiers = totalTiers;
+  if (acceptedAt != null) facts.escalated = acceptedAt;
+  if (budgetExceeded != null) facts.underBudget = !budgetExceeded;
+  const budget = numberFrom(attrs.maxCost);
+  if (budget != null) facts.budget = budget;
+  if (acceptedAt != null && totalTiers) {
+    const notReached = Math.max(
+      0,
+      totalTiers - (cascade?.tiers.length ?? totalTiers),
+    );
+    const parts = [`accepted at tier ${acceptedAt + 1} of ${totalTiers}`];
+    if (acceptedAt > 0) parts.push(`escalated ${acceptedAt}`);
+    if (notReached > 0)
+      parts.push(
+        `${notReached} tier${notReached === 1 ? "" : "s"} not reached`,
+      );
+    facts.why = `${parts.join("; ")}.`;
+  }
+  return facts;
+}
+
+function routingStepView(step: CruxRoutingStepPreview): RoutingStepView[] {
+  switch (step.kind) {
+    case "router":
+      return [
+        {
+          kind: "router",
+          id: step.id,
+          classifiedAs: step.classifiedAs,
+          route: step.route,
+          usedDefaultRoute: step.usedDefaultRoute === true,
+          forced: step.forced === true,
+        },
+      ];
+    case "split":
+      return [
+        { kind: "split", id: step.id, route: step.route, seed: step.seed },
+      ];
+    case "retry":
+      return [
+        {
+          kind: "retry",
+          id: step.id,
+          model: step.model,
+          attempts: attemptsFrom(step.attempts),
+        },
+      ];
+    case "fallback":
+      return [
+        {
+          kind: "fallback",
+          id: step.id,
+          attempts: attemptsFrom(step.attempts),
+          midStreamFailure: step.midStreamFailure === true,
+        },
+      ];
+    case "cascade":
+      return [
+        {
+          kind: "cascade",
+          id: step.id,
+          tiers: tiersFrom(step.tiers),
+          acceptedAtTier: step.acceptedAtTier,
+          budgetExceeded: step.budgetExceeded === true,
+        },
+      ];
+  }
+}
+
+function legacyRoutingStepViews(
+  report: CruxRoutingReportPreview,
+): RoutingStepView[] {
+  if (report.routingKind === "router") {
+    return [
+      {
+        kind: "router",
+        classifiedAs: report.classifiedAs,
+        route: report.classifiedAs,
+        usedDefaultRoute: false,
+        forced: false,
+      },
+    ];
+  }
+  if (report.tiers?.length) {
+    return [
+      {
+        kind: "cascade",
+        tiers: tiersFrom(report.tiers),
+        budgetExceeded: false,
+      },
+    ];
+  }
+  return [];
+}
+
+function attemptsFrom(
+  attempts: readonly CruxRoutingAttemptPreview[] | undefined,
+): RoutingAttemptView[] {
+  return (attempts ?? []).map((attempt) => ({
+    model: attempt.model,
+    status: attempt.status,
+    durationMs: attempt.durationMs,
+    cost: attempt.cost,
+    errorCategory: attempt.errorCategory,
+    error: attempt.error,
+    delayMs: attempt.delayMs,
+  }));
+}
+
+function tiersFrom(
+  tiers: readonly CruxRoutingTierPreview[] | undefined,
+): RoutingTierView[] {
+  return (tiers ?? []).map((tier, index) => ({
+    index: tier.tier ?? index,
+    model: tier.model,
+    status: tier.status ?? tier.verdict ?? "unknown",
+    durationMs: tier.durationMs,
+    cost: tier.cost,
+    judgeCost: tier.judgeCost,
+    confidence: tier.confidence,
+    budget: tier.budget,
+    note: tier.note,
+  }));
+}
+
+function numberFrom(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
+}

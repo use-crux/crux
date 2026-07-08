@@ -120,6 +120,26 @@ func TestValidateRecordRejectsInvalidSemantics(t *testing.T) {
 	}
 }
 
+func TestRoutingStableBetaPrimitiveTaxonomy(t *testing.T) {
+	for _, primitive := range []string{
+		"routing.router",
+		"routing.split",
+		"routing.retry",
+		"routing.fallback",
+		"routing.cascade",
+	} {
+		if got := primitiveFamilyByName[primitive]; got != "routing" {
+			t.Fatalf("primitive %q family = %q, want routing", primitive, got)
+		}
+	}
+	if _, ok := canonicalEdgeTypes["fallback.attempt"]; !ok {
+		t.Fatal("fallback.attempt edge must remain canonical for fallback attempt links")
+	}
+	if _, ok := canonicalArtifactKinds["routing.report"]; !ok {
+		t.Fatal("routing.report artifact must remain canonical for routing receipts")
+	}
+}
+
 func assertValidFixtureRecord(t *testing.T, record Record, runID string) {
 	t.Helper()
 	if record.SchemaVersion != SchemaVersion {

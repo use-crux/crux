@@ -584,20 +584,62 @@ export interface CruxGuardrailReportPreview {
 export interface CruxRoutingTierPreview {
   tier: number;
   model: string;
+  status?: "accepted" | "rejected" | "skipped" | "error" | string;
   budget?: number;
   verdict?: "accepted" | "rejected" | "skipped" | "error" | string;
   note?: string;
   confidence?: number;
   cost?: number;
+  judgeCost?: number;
   durationMs?: number;
 }
 
+export interface CruxRoutingAttemptPreview {
+  model: string;
+  status: "ok" | "error" | string;
+  durationMs?: number;
+  cost?: number;
+  errorCategory?: string;
+  error?: string;
+  delayMs?: number;
+}
+
+export type CruxRoutingStepPreview =
+  | {
+      kind: "router";
+      id?: string;
+      classifiedAs?: string;
+      route?: string;
+      usedDefaultRoute?: boolean;
+      forced?: boolean;
+    }
+  | { kind: "split"; id?: string; route?: string; seed?: string }
+  | {
+      kind: "retry";
+      id?: string;
+      model?: string;
+      attempts?: readonly CruxRoutingAttemptPreview[];
+    }
+  | {
+      kind: "fallback";
+      id?: string;
+      attempts?: readonly CruxRoutingAttemptPreview[];
+      midStreamFailure?: boolean;
+    }
+  | {
+      kind: "cascade";
+      id?: string;
+      tiers?: readonly CruxRoutingTierPreview[];
+      acceptedAtTier?: number;
+      budgetExceeded?: boolean;
+    };
+
 export interface CruxRoutingReportPreview {
   kind?: "routing.report";
-  routingKind?: "router" | "cascade" | "fallback";
+  routingKind?: "router" | "split" | "retry" | "cascade" | "fallback";
   model?: string;
   cost?: number;
-  trace?: readonly Record<string, unknown>[];
+  trace?: readonly CruxRoutingStepPreview[];
   chosen?: string;
   classifiedAs?: string;
   fallbackReason?: string;
