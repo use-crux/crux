@@ -119,6 +119,7 @@ crux quality watch support.refunds # rerun changed cells on save
 crux quality show <experiment-id> --json
 crux quality progress support.refunds --limit 10 --json
 crux quality cell-evidence <experiment-id> --case simple-refund --variant default --trial 0 --json
+crux quality diff <experiment-a> <experiment-b> --json
 crux quality promote <experiment-id>
 ```
 
@@ -142,7 +143,9 @@ it('support quality', async () => {
 
 Every run persists an **Experiment record** to
 `.crux/quality/experiments/<ulid>.json` (gitignored) with per-cell outputs,
-assertions, scores, and devtools trace links.
+assertions, scores, devtools trace links, and embedded failure artifacts for
+agents. Use `@use-crux/core/quality/schemas` to validate those records or
+generate JSON Schema for custom tooling.
 
 ## Discovery and model setup
 

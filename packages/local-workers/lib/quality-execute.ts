@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { QualityRunnerEnv, QualityRunnerEvent } from '@use-crux/core/quality/internal/runner'
+import type { ExperimentDiff, QualityRunnerEnv, QualityRunnerEvent } from '@use-crux/core/quality/internal/runner'
 import type { QualitySourceFrameResolver, ReplayMode } from '@use-crux/core/quality'
 import type { CollectedEvaluation, CollectError } from './quality-collect'
 import type { RunnerCore } from './quality-core-bridge'
@@ -19,7 +19,7 @@ import type { RunnerCore } from './quality-core-bridge'
 // ─────────────────────────────────────────────────────────────────
 
 /** The worker ⇄ CLI event stream. Serialized as NDJSON on stdout. */
-export type QualityRunEvent = QualityRunnerEvent
+export type QualityRunEvent = QualityRunnerEvent | { type: 'diff:done'; runId?: string; diff: ExperimentDiff }
 
 // ─────────────────────────────────────────────────────────────────
 // Options

@@ -116,6 +116,48 @@ describe('createQualityRunner — boundary facade', () => {
     expect(labels).toEqual([record])
   })
 
+  it('compares two experiment records through the facade', async () => {
+    const runner = createQualityRunner({ qualityId: 'runner-test' })
+    const base = {
+      schemaVersion: 2,
+      evaluationId: 'runner.compare',
+      qualityId: 'test',
+      startedAt: '2026-07-08T00:00:00.000Z',
+      endedAt: '2026-07-08T00:00:01.000Z',
+      configFingerprint: 'same',
+      taskFingerprint: 'task',
+      filteredRun: false,
+      replay: { mode: 'live' },
+      variants: [{ name: 'default', overrideKeys: [] }],
+      aggregates: { perVariant: {} },
+      gates: { passed: true, informational: false, results: [] },
+      passed: true,
+    } as const
+
+    const diff = await runner.compare({
+      a: {
+        ...base,
+        experimentId: '01KTRUNNERA',
+        cells: [runnerCompareCell('case-1', 1, true)],
+      },
+      b: {
+        ...base,
+        experimentId: '01KTRUNNERB',
+        gates: { passed: false, informational: false, results: [] },
+        passed: false,
+        cells: [runnerCompareCell('case-1', 0.25, false)],
+      },
+    })
+
+    expect(diff).toMatchObject({
+      schemaVersion: 1,
+      a: { experimentId: '01KTRUNNERA' },
+      b: { experimentId: '01KTRUNNERB' },
+      gatesVerdict: { aPassed: true, bPassed: false },
+    })
+    expect(diff.scores.find((score) => score.name === 'quality')?.delta).toBe(-0.75)
+  })
+
   it('emits run completion when setup resolution fails', async () => {
     const evaluation = evaluate('runner.setup-failure', {
       task: upperTask,
@@ -181,3 +223,22 @@ describe('createQualityRunner — boundary facade', () => {
     })
   })
 })
+
+function runnerCompareCell(caseId: string, score: number, passed: boolean) {
+  return {
+    caseId,
+    variantName: 'default',
+    trial: 0,
+    status: passed ? 'passed' : 'failed',
+    input: { id: caseId },
+    output: { score },
+    scores: [
+      { name: 'quality', score, costClass: 'code' },
+      { name: 'pass', score: passed ? 1 : 0, costClass: 'code' },
+    ],
+    assertions: { ran: 1, notEvaluated: 0, outcomes: [] },
+    durationMs: 1,
+    traceIds: [],
+    capturedSignals: [],
+  } as const
+}

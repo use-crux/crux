@@ -13,3 +13,5 @@ Make Quality artifact writes atomic and safer under concurrent runs: cassette re
 Harden judge-backed scoring by pinning judge generation settings, framing untrusted output/reference/context in judge prompts, stamping judge provenance on score metadata and baseline identity, and adding human-label plus judge-report tooling for judge-vs-human agreement.
 
 Harden the Quality local pipeline by making `crux quality run --json` emit a single run summary object, adding worker/core protocol version checks and run-scoped event ids, surfacing worker crashes as structured exit-2 failures, fixing live read-model collisions and source-frame path containment, reporting skipped legacy records, and requiring an explicit devtools promotion variant.
+
+Add the Quality machine contract surface: `@use-crux/core/quality/schemas` exports validation schemas and JSON Schema generation for records and CLI JSON, experiment records embed agent-readable `failures` artifacts, and `crux quality diff <expA> <expB> --json` compares saved experiment records through core-owned diff policy.

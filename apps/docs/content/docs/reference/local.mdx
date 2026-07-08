@@ -243,6 +243,7 @@ crux quality list                   # Discovered evaluations (manifests), no exe
 crux quality show <experimentId>    # Print one persisted experiment record (human or --json)
 crux quality progress <evaluationId> # Recent runs and score series for one evaluation
 crux quality cell-evidence <experimentId> --case <caseId> --variant <name> --trial <n>
+crux quality diff <experimentA> <experimentB> --json
 crux quality promote <experimentId> [--variant <name>] [--pin-id <id>]
 ```
 
@@ -327,6 +328,19 @@ baseline comparison, and retained trace hotspots when available.
 ```bash
 crux quality cell-evidence <experimentId> --case simple-refund --variant default --trial 0
 crux quality cell-evidence <experimentId> --case simple-refund --variant default --trial 0 --json
+```
+
+### `crux quality diff`
+
+Prints a schema-versioned JSON diff between two saved experiment records. The
+arguments may be experiment ids under `.crux/quality/experiments/` or record
+paths. The diff includes score deltas, per-case pass/fail changes,
+unmatched cases, fingerprint drift, and both gate verdicts. Drifted
+fingerprints render with `comparable: false` instead of being dropped.
+
+```bash
+crux quality diff 01KTA 01KTB --json
+crux quality diff .crux/quality/experiments/01KTA.json .crux/quality/experiments/01KTB.json --json
 ```
 
 ### `crux quality promote`

@@ -17,6 +17,7 @@ import type { ReplayMode } from '../replay'
 import type { QualitySourceFrameResolver } from '../source-frame'
 import type { Evaluation } from '../evaluate'
 import type { Comparison, Experiment, ExperimentCell, RunOverrides } from '../experiment'
+import type { ExperimentDiff, ExperimentRecord } from '../schema-types'
 import type { EngineSetup } from './engine'
 import type { EvaluationDefinition } from './definition'
 import type { AnyPrompt } from '../../prompt/prompt-types'
@@ -240,6 +241,12 @@ export interface QualityPromoteResult {
   readonly baseline?: QualityPromotedBaseline
 }
 
+/** Input for {@link QualityRunner.compare}. Strings are experiment record paths. */
+export interface QualityCompareInput {
+  readonly a: string | ExperimentRecord
+  readonly b: string | ExperimentRecord
+}
+
 /** Filters accepted by {@link QualityRunnerFeedback.list}. */
 export interface QualityFeedbackListFilter {
   readonly experimentId?: string
@@ -255,7 +262,7 @@ export interface QualityRunnerFeedback {
   list(filter?: QualityFeedbackListFilter): Promise<readonly FeedbackRecord[]>
 }
 
-/** Narrow first-party runner facade for collect, run, and promote operations. */
+/** Narrow first-party runner facade for Quality tooling operations. */
 export interface QualityRunner {
   /** Discover evaluations from modules and prompt-test candidates. */
   collect(input: QualityCollectInput): Promise<QualityCollectResult>
@@ -263,6 +270,8 @@ export interface QualityRunner {
   run(input: QualityRunInput): Promise<QualityRunResult>
   /** Promote a persisted experiment into a committed baseline record. */
   promote(input: QualityPromoteInput): Promise<QualityPromoteResult>
+  /** Compare two persisted experiment records through core-owned diff policy. */
+  compare(input: QualityCompareInput): Promise<ExperimentDiff>
   /** Read and write human feedback records for first-party tooling. */
   feedback: QualityRunnerFeedback
 }

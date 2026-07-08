@@ -24,6 +24,29 @@ Type exports: `Evaluation`, `EvaluateOptions`, `Case`, `CaseContext`,
 `EvaluationManifest`, `EvaluationCoverageTargetId`, `QualityConfig`, and the
 inference utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`, and `CaseOf`.
 
+Machine-readable contracts live in the separate
+`@use-crux/core/quality/schemas` subpath:
+
+```ts
+import {
+  experimentRecordSchema,
+  evaluationManifestSchema,
+  failureArtifactSchema,
+  experimentDiffSchema,
+  runSummarySchema,
+  judgeReportSchema,
+  toJsonSchema,
+} from '@use-crux/core/quality/schemas'
+
+const schema = toJsonSchema('experiment')
+const diffSchema = toJsonSchema('diff')
+```
+
+The subpath also exports the `ExperimentRecord`, `FailureArtifact`,
+`ExperimentDiff`, `RunSummary`, and `JudgeReport` types. It is the supported
+validation surface for agents and custom dashboards that consume persisted
+records or CLI JSON.
+
 ## `evaluate(idOrOptions, options?)`
 
 Defines a runnable Evaluation. Two call forms — options only (id derived from
@@ -258,6 +281,13 @@ should render that as unavailable trace detail rather than a failed evaluation.
 A retained root trace can still have an empty compact waterfall for a
 callback-only cell that emitted no child spans; clients should expose the full
 trace link when the backend returns `retainedTraceIds`.
+
+Experiment records also embed `failures: FailureArtifact[]` for failed or
+errored cells. Each artifact includes the cell identity, redacted input,
+expected and output snapshots, failing assertion outcomes, scores and deltas
+where available, source/trace references, coverage targets from `covers`, and
+core-owned `suggestedFixSurfaces` such as `prompt`, `retriever`,
+`tool-schema`, `handoff`, `judge`, or `flake`.
 
 ## `scorers`
 

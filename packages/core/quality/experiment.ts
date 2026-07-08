@@ -17,6 +17,7 @@ import type { GateResult } from './gates'
 import type { ReplayMode } from './replay'
 import type { QualitySourceFrame } from './source-frame'
 import type { TokenUsage } from '../generation/types'
+import type { FailureArtifact } from './failure-artifact'
 
 /** Resolved variant-name union: the implicit `'default'` when none declared. @internal */
 export type VariantNamesOf<TVariants extends string> = [TVariants] extends [never] ? 'default' : TVariants
@@ -365,6 +366,8 @@ export interface Experiment<
   }>
   /** One entry per cell: case × variant × trial. */
   cells: ReadonlyArray<ExperimentCell<TInput, TOutput>>
+  /** Agent-readable artifacts for failing and errored cells. */
+  failures?: ReadonlyArray<FailureArtifact>
   aggregates: { perVariant: Record<VariantNamesOf<TVariants>, VariantAggregate<TNames>> }
   /** Present when variants > 1 or a promoted baseline was compared. */
   comparison?: Comparison<TNames>

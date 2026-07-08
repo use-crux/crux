@@ -55,6 +55,7 @@ import { createProgrammaticSourceFrameResolver, ensureProgrammaticObservability,
 import { emptyCellSignals, extractCellSignals, installSignalCapture, withSignalCapture, type CellSignals } from './signals'
 import { createQualityCellToken, shouldQuarantineQualityWrite, withQualityCellToken } from './capture-context'
 import { emitComparisonReportEdges, emitEvalCaseOfEdge, emitReplayOfEdge, type QualityObservabilityRunRef } from './observability-edges'
+import { buildFailureArtifacts } from './failure-artifacts'
 import { ulid } from './ulid'
 import { MissingQualityModelBindingError } from './errors'
 import type { QualityDefinitionDiagnosticCode } from './errors'
@@ -1688,7 +1689,7 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
     // Informational gates never fail a run; errored cells always do.
     const overallGatePassed = filteredRun ? !erroredCells : gates.passed
 
-    const experiment: Experiment<unknown, unknown, string, string> = {
+    let experiment: Experiment<unknown, unknown, string, string> = {
       schemaVersion: EXPERIMENT_RECORD_SCHEMA_VERSION,
       experimentId: ulid(),
       evaluationId,
@@ -1756,6 +1757,11 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
         const path = await writeBaselineRecord(qualityDir, record)
         return { baselineId: record.baselineId, path }
       },
+    }
+
+    const failures = buildFailureArtifacts(experiment, definition.covers)
+    if (failures.length > 0) {
+      experiment = { ...experiment, failures }
     }
 
     if (options.persist !== false) {

@@ -11,6 +11,7 @@ import { z } from 'zod'
 import { context, when, match, createContexts } from '../prompt/context'
 import { prompt } from '../prompt/prompt'
 import { evaluate, scorers, UncapturedSignalError } from '../quality'
+import { experimentRecordSchema, toJsonSchema } from '../quality/schemas'
 import type { AnyPrompt, AnyPromptConfig, Prompt } from '../prompt/prompt-types'
 import type { ConditionalContext, Context, ContextEntry, MatchSpec } from '../prompt/context-types'
 import type { MiddlewareResult, PromptMiddleware, PromptMiddlewareArgs } from '../runtime/types'
@@ -24,6 +25,7 @@ import type {
   ScoreMap,
   StepAccessor,
 } from '../quality'
+import type { ExperimentDiff, ExperimentRecord, FailureArtifact } from '../quality/schemas'
 
 // ─────────────────────────────────────────────────────────────────
 // Context inference still flows through createContexts / when / match
@@ -201,3 +203,10 @@ expectTypeOf(scorers.exact()).toMatchTypeOf<ReturnType<ScorerLibrary['exact']>>(
 
 declare const stepAccessor: StepAccessor
 expectTypeOf(stepAccessor('draft')).toEqualTypeOf<import('../quality').StepAccess<unknown>>()
+
+expectTypeOf(experimentRecordSchema.parse({})).toEqualTypeOf<ExperimentRecord>()
+expectTypeOf(toJsonSchema('experiment')).toEqualTypeOf<Record<string, unknown>>()
+expectTypeOf<ExperimentDiff['schemaVersion']>().toEqualTypeOf<1>()
+expectTypeOf<FailureArtifact['suggestedFixSurfaces'][number]>().toEqualTypeOf<
+  'prompt' | 'context' | 'retriever' | 'tool-schema' | 'handoff' | 'judge' | 'flake' | 'unknown'
+>()

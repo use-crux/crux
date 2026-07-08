@@ -126,9 +126,15 @@ export default evaluate({
 
 Experiment records are schema-versioned JSON. Current records store executed
 cells under `cells` and assertion details under the ordered
-`assertions.outcomes` ledger. When a cell reaches `timeoutMs`, Crux records a
-timeout result and quarantines later task effects such as trace, cassette, and
-score writes; JavaScript user code is not forcibly killed.
+`assertions.outcomes` ledger. Failing and errored cells also produce embedded
+`failures` artifacts with redacted input/output snapshots, failed outcomes,
+trace/source references, and suggested fix surfaces for agents. Tools can
+validate records and CLI JSON through `@use-crux/core/quality/schemas`, and
+compare saved runs with `crux quality diff <expA> <expB> --json`.
+
+When a cell reaches `timeoutMs`, Crux records a timeout result and quarantines
+later task effects such as trace, cassette, and score writes; JavaScript user
+code is not forcibly killed.
 
 Judge scorers pin deterministic generation settings, frame output/reference as
 untrusted prompt data, and stamp score metadata with judge model, prompt

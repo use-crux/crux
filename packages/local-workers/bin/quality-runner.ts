@@ -42,6 +42,7 @@ import { executeEvaluations, type QualityRunEvent } from '../lib/quality-execute
 import { enableQualityRunnerObservability, flushQualityRunnerObservability } from '../lib/quality-observability'
 import { promoteExperiment } from '../lib/quality-promote'
 import { createQualityRunId } from '../lib/quality-run-id'
+import { getArg, getRepeatedArg, hasFlag, positionalArgs } from '../lib/quality-runner-argv'
 
 // Redirect console.log to stderr so stdout stays clean NDJSON.
 console.log = (...args: unknown[]) => console.error(...args)
@@ -66,6 +67,8 @@ async function main(): Promise<number> {
   const persist = !hasFlag(args, '--no-persist')
   const promoteId = getArg(args, '--promote')
   const pinId = getArg(args, '--pin-id')
+  const diffA = getArg(args, '--diff-a')
+  const diffB = getArg(args, '--diff-b')
   const ids = positionalArgs(args)
 
   const REPLAY_MODES: readonly ReplayMode[] = ['live', 'record-new', 'replay-strict', 'refresh']
@@ -109,6 +112,42 @@ async function main(): Promise<number> {
       error: { code: qualityRunnerErrorCode(error) ?? 'runner-crash', message: describeError(error) },
     })
     return 2
+  }
+
+  if (diffA !== undefined || diffB !== undefined) {
+    try {
+      if (diffA === undefined || diffB === undefined) {
+        emit({
+          type: 'error',
+          scope: 'execute',
+          message: 'quality diff requires both --diff-a and --diff-b.',
+        })
+        emit({ type: 'run:done', experiments: [], exitCode: 2 })
+        return 2
+      }
+      const runner = core.createQualityRunner()
+      const diff = await runner.compare({ a: diffA, b: diffB })
+      emit({ type: 'diff:done', diff })
+      emit({ type: 'run:done', experiments: [], exitCode: 0 })
+      return 0
+    } catch (error) {
+      emit({
+        type: 'error',
+        scope: 'execute',
+        message: describeError(error),
+      })
+      emit({
+        type: 'run:done',
+        experiments: [],
+        exitCode: 2,
+        ok: false,
+        error: { code: 'runner-crash', message: describeError(error) },
+      })
+      return 2
+    } finally {
+      await flushQualityRunnerObservability(observabilityCore)
+      restoreObservability?.()
+    }
   }
 
   const settings = resolveQualityRunnerSettings(project.quality, project.configDir)
@@ -212,57 +251,6 @@ async function main(): Promise<number> {
     await flushQualityRunnerObservability(observabilityCore)
     restoreObservability?.()
   }
-}
-
-// ─────────────────────────────────────────────────────────────────
-// argv helpers
-// ─────────────────────────────────────────────────────────────────
-
-const VALUE_FLAGS = new Set([
-  '--config',
-  '--case',
-  '--variant',
-  '--replay',
-  '--trials',
-  '--experiment',
-  '--max-concurrency',
-  '--promote',
-  '--pin-id',
-])
-
-function positionalArgs(args: string[]): string[] {
-  const positionals: string[] = []
-  for (let index = 0; index < args.length; index++) {
-    const arg = args[index]!
-    if (VALUE_FLAGS.has(arg)) {
-      index++
-      continue
-    }
-    if (arg.startsWith('--')) continue
-    positionals.push(arg)
-  }
-  return positionals
-}
-
-function getArg(args: string[], name: string): string | undefined {
-  const idx = args.indexOf(name)
-  if (idx === -1 || idx + 1 >= args.length) return undefined
-  return args[idx + 1]
-}
-
-function getRepeatedArg(args: string[], name: string): string[] {
-  const values: string[] = []
-  for (let index = 0; index < args.length; index++) {
-    if (args[index] === name && index + 1 < args.length) {
-      values.push(args[index + 1]!)
-      index++
-    }
-  }
-  return values
-}
-
-function hasFlag(args: string[], name: string): boolean {
-  return args.includes(name)
 }
 
 function describeError(error: unknown): string {
