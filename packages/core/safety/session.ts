@@ -29,7 +29,9 @@
  */
 
 import type { Message } from '../generation/messages'
+import type { MessageContent } from '../types/content'
 import type { TraceMeta } from '../generation/types'
+import { messageText } from '../content'
 import { getHooks } from '../runtime/runtime'
 import type { z } from 'zod'
 import type { BoundaryDef } from './boundary'
@@ -563,13 +565,14 @@ export function createSafety(options: SafetyCallOptions): Safety {
         if (!message || message.role !== 'user') continue
 
         guardedAnyMessage = true
-        const result = await pipeline.runInput(message.content, guardContext('input', messages))
+        const originalContent = messageText(message)
+        const result = await pipeline.runInput(originalContent, guardContext('input', messages))
         appendGuardrailAudit(result.audit)
         actions.push(...result.audit.applied.map((entry) => entry.action))
 
-        if (result.content !== message.content) {
+        if (result.content !== originalContent) {
           messages = messages.map((entry, entryIndex) =>
-            entryIndex === index ? { ...entry, content: result.content } : entry,
+            entryIndex === index ? { ...entry, content: replaceProjectedContent(entry.content, result.content) } : entry,
           )
         }
       }
@@ -638,6 +641,19 @@ export function createSafety(options: SafetyCallOptions): Safety {
 
     transcript,
   }
+}
+
+function replaceProjectedContent(content: MessageContent, replacement: string): MessageContent {
+  if (typeof content === 'string') return replacement
+  let replaced = false
+  return content.map((part) => {
+    if (part.type !== 'text') return part
+    if (!replaced) {
+      replaced = true
+      return { ...part, text: replacement }
+    }
+    return { ...part, text: '' }
+  })
 }
 
 function latestRewritePolicyId(entries: readonly GuardrailAuditEntry[]): string | undefined {

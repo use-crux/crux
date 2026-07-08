@@ -117,7 +117,7 @@ describe('anthropic transcript wire encoding', () => {
           { type: 'text', text: 'Rendered report' },
           { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
           { type: 'image-url', url: 'https://example.com/image.png' },
-          { type: 'media', data: 'base64-pdf', mediaType: 'application/pdf' },
+          { type: 'file-data', data: 'base64-pdf', mediaType: 'application/pdf' },
           {
             type: 'file-data',
             data: 'base64-file-pdf',
@@ -178,7 +178,7 @@ describe('anthropic transcript wire encoding', () => {
       toolMessage('toolu_file', 'readFile', {
         type: 'content',
         value: [
-          { type: 'media', data: 'base64-audio', mediaType: 'audio/mpeg' },
+          { type: 'file-data', data: 'base64-audio', mediaType: 'audio/mpeg' },
           { type: 'file-url', url: 'https://example.com/file.csv' },
           {
             type: 'custom',
@@ -196,7 +196,7 @@ describe('anthropic transcript wire encoding', () => {
             type: 'tool_result',
             tool_use_id: 'toolu_file',
             content: [
-              { type: 'text', text: '[media:audio/mpeg] data:base64-audio' },
+              { type: 'text', text: '[file:audio/mpeg] data:base64-audio' },
               { type: 'text', text: '[file] https://example.com/file.csv' },
               {
                 type: 'text',

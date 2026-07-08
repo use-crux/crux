@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { Message, ToolContentPart, ToolModelOutput } from '@use-crux/core'
+import type { ContentPart, Message, ToolModelOutput } from '@use-crux/core'
 import { defineProviderTranscriptCodec } from '@use-crux/core/adapter'
 import type {
   NativeAssistantTurn,
@@ -181,7 +181,7 @@ function toolResultContent(content: Anthropic.ToolResultBlockParam['content']): 
   if (typeof content === 'string') return { text: content }
   if (!Array.isArray(content)) return { text: '' }
 
-  const parts: ToolContentPart[] = []
+  const parts: ContentPart[] = []
   let hasRichPart = false
   for (const block of content) {
     if (block.type === 'text') {
@@ -207,7 +207,7 @@ function toolResultContent(content: Anthropic.ToolResultBlockParam['content']): 
   return hasRichPart ? { text, modelOutput: { type: 'content', value: parts } } : { text }
 }
 
-function imageBlockToPart(source: Anthropic.ImageBlockParam['source']): ToolContentPart | undefined {
+function imageBlockToPart(source: Anthropic.ImageBlockParam['source']): ContentPart | undefined {
   if (source.type === 'base64') return { type: 'image-data', data: source.data, mediaType: source.media_type }
   if (source.type === 'url') return { type: 'image-url', url: source.url }
   return undefined

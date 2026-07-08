@@ -11,7 +11,8 @@
  * @module
  */
 
-import type { ToolContentPart, ToolModelOutput } from '../../../types/tool'
+import type { ContentPart } from '../../../types/content'
+import type { ToolModelOutput } from '../../../types/tool'
 import type { NativeAssistantTurn } from '../types'
 
 /**
@@ -99,7 +100,7 @@ export interface ToolResultEncodingHelpers {
   /** Deterministic plain-text rendering, used when the dialect cannot send rich content. */
   plainText(result: ProviderToolResult): string
   /** Rich content parts when the result is structured `content`, otherwise `undefined`. */
-  contentParts(result: ProviderToolResult): readonly ToolContentPart[] | undefined
+  contentParts(result: ProviderToolResult): readonly ContentPart[] | undefined
   /** Whether this result should be marked as an error on the wire. */
   errorFlag(result: ProviderToolResult): boolean
 }

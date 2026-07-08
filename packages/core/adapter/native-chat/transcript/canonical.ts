@@ -11,7 +11,9 @@
  */
 
 import type { Message } from '../../../generation/messages'
-import type { ToolContentPart, ToolModelOutput } from '../../../types/tool'
+import type { ContentPart } from '../../../types/content'
+import type { ToolModelOutput } from '../../../types/tool'
+import { contentText } from '../../../content'
 import { toolModelOutputFromMetadata } from '../../tool/emission'
 import type { ToolResultEntry } from '../../types'
 import type { NativeAssistantTurn } from '../types'
@@ -52,11 +54,11 @@ export function messagesToTranscriptUnits(messages: readonly Message[]): Provide
       const toolCalls = toolCallsFromMetadata(message.metadata?.toolCalls)
       units.push({
         kind: 'assistant',
-        text: message.content,
+        text: contentText(message.content),
         ...(toolCalls.length > 0 ? { toolCalls } : {}),
       })
     } else {
-      units.push({ kind: 'text', role: message.role, text: message.content })
+      units.push({ kind: 'text', role: message.role, text: contentText(message.content) })
     }
   }
 
@@ -171,7 +173,7 @@ function toolResultFromMessage(message: Message): ProviderToolResult | undefined
   return {
     toolCallId,
     ...(typeof metadata?.toolName === 'string' ? { toolName: metadata.toolName } : {}),
-    text: message.content,
+    text: contentText(message.content),
     ...(modelOutput ? { modelOutput } : {}),
     ...(typeof metadata?.isError === 'boolean' ? { isError: metadata.isError } : {}),
     ...(typeof metadata?.modelOutputError === 'string' ? { modelOutputError: metadata.modelOutputError } : {}),
@@ -196,7 +198,7 @@ function toolCallsFromMetadata(value: unknown): ProviderToolCall[] {
   })
 }
 
-function contentPartsOf(modelOutput: ToolModelOutput | undefined): readonly ToolContentPart[] | undefined {
+function contentPartsOf(modelOutput: ToolModelOutput | undefined): readonly ContentPart[] | undefined {
   return modelOutput?.type === 'content' ? modelOutput.value : undefined
 }
 

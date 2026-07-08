@@ -1,5 +1,5 @@
 import type { FunctionResponsePart } from '@google/genai'
-import type { ToolContentPart, ToolModelOutput } from '@use-crux/core'
+import type { ContentPart, ToolModelOutput } from '@use-crux/core'
 import { renderToolContentPartAsText } from '@use-crux/core/adapter'
 
 /**
@@ -44,16 +44,15 @@ export function googleToolResponse(
 /**
  * Extract Google inline-data parts from rich tool content.
  *
- * Only binary parts (media, image data, file data) become `inlineData`; textual
+ * Only binary parts (image data, file data) become `inlineData`; textual
  * parts are already represented in {@link googleToolResponse}'s `output` string.
  *
  * @param parts - Rich tool content parts.
  * @returns Google `functionResponse.parts`, possibly empty.
  */
-export function googleFunctionResponseParts(parts: readonly ToolContentPart[]): FunctionResponsePart[] {
+export function googleFunctionResponseParts(parts: readonly ContentPart[]): FunctionResponsePart[] {
   return parts.flatMap((part): FunctionResponsePart[] => {
     switch (part.type) {
-      case 'media':
       case 'image-data':
         return [{ inlineData: { data: part.data, mimeType: part.mediaType } }]
       case 'file-data':

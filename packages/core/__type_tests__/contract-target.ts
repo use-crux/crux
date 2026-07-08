@@ -123,6 +123,7 @@ type _GenerationSettingsKeys = Expect<
     | "maxSteps"
     | "frequencyPenalty"
     | "presencePenalty"
+    | "unsupportedContent"
   >
 >;
 type _SeedSetting = Expect<

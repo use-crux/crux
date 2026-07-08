@@ -13,7 +13,8 @@
 import { getHooks } from '../../runtime/runtime'
 import { currentObservabilityTransport, hasObservabilitySubscribers, observe } from '../../observability'
 import { redactSensitiveValue } from '../../shared/redaction'
-import type { JsonValue, ToolContentPart, ToolModelOutput } from '../../types/tool'
+import type { ContentPart } from '../../types/content'
+import type { JsonValue, ToolModelOutput } from '../../types/tool'
 
 // ─────────────────────────────────────────────────────────────────
 // Tool model output helpers
@@ -70,7 +71,7 @@ export function normalizeToolInput(input: unknown): Record<string, unknown> {
  *
  * Text variants pass through verbatim, JSON variants are serialized,
  * denials become a human-readable refusal the model can reason about, and
- * rich `content` parts (images, files, media) collapse to bracketed
+ * rich `content` parts (images, files) collapse to bracketed
  * placeholders like `[image:image/png] data:…` — enough for the model to
  * know something non-textual came back.
  */
@@ -106,12 +107,10 @@ export function isToolModelOutput(value: unknown): value is ToolModelOutput {
 }
 
 /** Render one rich tool content part to the plain-text fallback form. */
-export function renderToolContentPartAsText(part: ToolContentPart): string {
+export function renderToolContentPartAsText(part: ContentPart): string {
   switch (part.type) {
     case 'text':
       return part.text
-    case 'media':
-      return `[media:${part.mediaType}] data:${part.data}`
     case 'file-data':
       return `[file:${part.mediaType}${part.filename ? `; name=${part.filename}` : ''}] data:${part.data}`
     case 'file-url':
@@ -129,7 +128,7 @@ export function renderToolContentPartAsText(part: ToolContentPart): string {
   }
 }
 
-function renderContentParts(parts: readonly ToolContentPart[]): string {
+function renderContentParts(parts: readonly ContentPart[]): string {
   return parts.map(renderToolContentPartAsText).join('\n')
 }
 

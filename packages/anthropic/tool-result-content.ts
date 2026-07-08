@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { ToolContentPart, ToolModelOutput } from '@use-crux/core'
+import type { ContentPart, ToolModelOutput } from '@use-crux/core'
 import { renderToolContentPartAsText } from '@use-crux/core/adapter'
 
 export type AnthropicToolResultContent =
@@ -28,7 +28,7 @@ export function anthropicToolResultContent(
 }
 
 function anthropicContentBlocks(
-  parts: readonly ToolContentPart[],
+  parts: readonly ContentPart[],
 ): Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam> {
   return parts.flatMap(
     (part): Array<Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam> => {
@@ -41,14 +41,6 @@ function anthropicContentBlocks(
             : [{ type: 'text', text: renderToolContentPartAsText(part) }]
         case 'image-url':
           return [{ type: 'image', source: { type: 'url', url: part.url } }]
-        case 'media':
-          if (isAnthropicImageMediaType(part.mediaType)) {
-            return [{ type: 'image', source: { type: 'base64', data: part.data, media_type: part.mediaType } }]
-          }
-          if (part.mediaType === 'application/pdf') {
-            return [{ type: 'document', source: { type: 'base64', data: part.data, media_type: 'application/pdf' } }]
-          }
-          return [{ type: 'text', text: renderToolContentPartAsText(part) }]
         case 'file-data':
           if (part.mediaType === 'application/pdf') {
             return [
