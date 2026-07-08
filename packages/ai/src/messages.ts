@@ -12,7 +12,7 @@
  * @module
  */
 
-import type { Message } from '@use-crux/core'
+import type { ContentPart, Message } from '@use-crux/core'
 import type { AiSdkContentPartOptions } from './content-parts'
 import { decodeContentFromAiSdkParts, encodeContentForAiSdk } from './content-parts'
 
@@ -50,7 +50,7 @@ export function toModelMessages(
             type: 'tool-result',
             toolCallId,
             toolName: typeof message.metadata?.toolName === 'string' ? message.metadata.toolName : 'unknown',
-            output: { type: 'text', value: typeof message.content === 'string' ? message.content : '' },
+            output: toolResultOutputFromContent(message.content),
           },
         ],
       })
@@ -60,10 +60,13 @@ export function toModelMessages(
     if (message.role === 'assistant') {
       const toolCalls = message.metadata?.toolCalls as CanonicalToolCall[] | undefined
       if (Array.isArray(toolCalls) && toolCalls.length > 0) {
-        const parts: Array<Record<string, unknown>> = []
-        if (typeof message.content === 'string' && message.content.length > 0) {
-          parts.push({ type: 'text', text: message.content })
-        }
+        const encodedContent = encodeContentForAiSdk(message.role, message.content, options)
+        const parts: Array<Record<string, unknown>> =
+          typeof encodedContent === 'string'
+            ? encodedContent.length > 0
+              ? [{ type: 'text', text: encodedContent }]
+              : []
+            : [...encodedContent]
         for (const toolCall of toolCalls) {
           parts.push({
             type: 'tool-call',
@@ -75,7 +78,7 @@ export function toModelMessages(
         result.push({ role: 'assistant', content: parts })
         continue
       }
-      result.push({ role: 'assistant', content: message.content })
+      result.push({ role: 'assistant', content: encodeContentForAiSdk(message.role, message.content, options) })
       continue
     }
 
@@ -84,6 +87,16 @@ export function toModelMessages(
   }
 
   return result
+}
+
+type AiSdkToolResultOutput =
+  | { readonly type: 'text'; readonly value: string }
+  | { readonly type: 'content'; readonly value: readonly ContentPart[] }
+
+function toolResultOutputFromContent(content: Message['content']): AiSdkToolResultOutput {
+  return typeof content === 'string'
+    ? { type: 'text', value: content }
+    : { type: 'content', value: content }
 }
 
 interface ResponseMessagePart {
@@ -180,7 +193,7 @@ export function dropTrailingAssistant(messages: readonly Message[]): Message[] {
  * extracting the text content. Tool call/result metadata is preserved
  * in the `metadata` field.
  */
-export function toMessages(
+export function normalizeAiSdkMessages(
   sdkMessages: Array<{
     role: string
     content: unknown
@@ -251,23 +264,6 @@ export function toMessages(
       content,
       ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
     }
-  })
-}
-
-/**
- * Convert canonical `Message[]` to AI SDK `CoreMessage[]` format.
- */
-export function fromMessages(messages: Message[]): Array<{ role: string; content: string; [key: string]: unknown }> {
-  return messages.map((msg) => {
-    const result: Record<string, unknown> = {
-      role: msg.role,
-      content: msg.content,
-    }
-
-    if (msg.metadata?.toolCallId) result.toolCallId = msg.metadata.toolCallId
-    if (msg.metadata?.toolName) result.toolName = msg.metadata.toolName
-
-    return result as { role: string; content: string; [key: string]: unknown }
   })
 }
 

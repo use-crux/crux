@@ -11,6 +11,7 @@ export type AnthropicToolResultContent =
 export function anthropicToolResultContent(
   modelOutput: ToolModelOutput | undefined,
   fallback: string,
+  options: Pick<ContentDegradationContext, 'unsupportedContent'> = {},
 ): AnthropicToolResultContent {
   if (!modelOutput) return fallback
 
@@ -27,6 +28,7 @@ export function anthropicToolResultContent(
       return anthropicContentBlocks(modelOutput.value, {
         provider: 'anthropic',
         role: 'tool',
+        unsupportedContent: options.unsupportedContent,
         reason: 'unsupported Anthropic tool-result content part',
       })
   }

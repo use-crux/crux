@@ -39,7 +39,7 @@ export type AnthropicAssistantTurn = NativeAssistantTurn
 const anthropicDialect: ProviderTranscriptDialect<Anthropic.MessageParam, Pick<Anthropic.Message, 'content'>> = {
   encodeContent: ({ role, content }, options) => encodeContent(role, content, options),
   encodeAssistant: ({ content, toolCalls }, options) => encodeAssistant(content, toolCalls ?? [], options),
-  encodeToolResults: ({ results }, helpers) => results.map((result) => encodeToolResult(result, helpers)),
+  encodeToolResults: ({ results }, helpers, options) => results.map((result) => encodeToolResult(result, helpers, options)),
   decodeMessage: decodeMessage,
   readAssistant: readAssistantTurn,
 }
@@ -140,14 +140,20 @@ function encodeAssistant(
   return { role: 'assistant', content: blocks }
 }
 
-function encodeToolResult(result: ProviderToolResult, helpers: ToolResultEncodingHelpers): Anthropic.MessageParam {
+function encodeToolResult(
+  result: ProviderToolResult,
+  helpers: ToolResultEncodingHelpers,
+  options: TranscriptEncodeOptions,
+): Anthropic.MessageParam {
   return {
     role: 'user',
     content: [
       {
         type: 'tool_result',
         tool_use_id: result.toolCallId,
-        content: anthropicToolResultContent(result.modelOutput, helpers.plainText(result)),
+        content: anthropicToolResultContent(result.modelOutput, helpers.plainText(result), {
+          unsupportedContent: options.unsupportedContent,
+        }),
         ...(helpers.errorFlag(result) ? { is_error: true } : {}),
       },
     ],

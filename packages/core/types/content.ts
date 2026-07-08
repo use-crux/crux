@@ -17,5 +17,5 @@ export type ContentPart =
   | { type: 'file-id'; fileId: string | Record<string, string>; providerOptions?: ProviderOptions }
   | { type: 'custom'; providerOptions?: ProviderOptions }
 
-/** Canonical message content: legacy text or structured multimodal parts. */
+/** Canonical message content: plain text or structured multimodal parts. */
 export type MessageContent = string | readonly ContentPart[]

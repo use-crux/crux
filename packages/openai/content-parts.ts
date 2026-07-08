@@ -59,7 +59,7 @@ export function openAIMessageContent(
  *
  * The OpenAI SDK type only admits text content on `tool` messages, so rich
  * parts deliberately degrade through the shared placeholder grammar rather
- * than the legacy base64-inlining renderer.
+ * than a provider-specific base64-inlining fallback.
  */
 export function openAIToolResultContent(
   parts: readonly ContentPart[],
@@ -130,6 +130,9 @@ const openAIPartTable = {
     }
     const audioFormat = openAIAudioFormat(part.mediaType)
     if (audioFormat) return [{ type: 'input_audio', input_audio: { data: part.data, format: audioFormat } }]
+    if (part.mediaType.startsWith('audio/')) {
+      return [degradedTextPart(part, context, 'OpenAI chat completions only support wav or mp3 audio input')]
+    }
     return [
       {
         type: 'file',

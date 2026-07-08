@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { toMessages } from '../src/messages'
+import { normalizeAiSdkMessages } from '../src/messages'
 
 describe('AI SDK message normalization', () => {
   it('normalizes SDK text, image, and file parts into canonical content parts', () => {
-    const messages = toMessages([
+    const messages = normalizeAiSdkMessages([
       {
         role: 'user',
         content: [
@@ -47,7 +47,7 @@ describe('AI SDK message normalization', () => {
   })
 
   it('moves SDK control parts into message metadata', () => {
-    const messages = toMessages([
+    const messages = normalizeAiSdkMessages([
       {
         role: 'assistant',
         content: [
@@ -83,7 +83,7 @@ describe('AI SDK message normalization', () => {
 
   it('normalizes legacy AI SDK v6 media parts to file-data', () => {
     expect(
-      toMessages([
+      normalizeAiSdkMessages([
         {
           role: 'user',
           content: [{ type: 'media', data: 'SGVsbG8=', mediaType: 'audio/mpeg' }],
@@ -102,7 +102,9 @@ describe('AI SDK message normalization', () => {
     try {
       const unknownPart = { type: 'provider-widget', widgetId: 'w1', providerOptions: { test: { keep: true } } }
 
-      expect(toMessages([{ role: 'user', content: [{ type: 'text', text: 'Keep this.' }, unknownPart] }])).toEqual([
+      expect(
+        normalizeAiSdkMessages([{ role: 'user', content: [{ type: 'text', text: 'Keep this.' }, unknownPart] }]),
+      ).toEqual([
         {
           role: 'user',
           content: [{ type: 'text', text: 'Keep this.' }, unknownPart],

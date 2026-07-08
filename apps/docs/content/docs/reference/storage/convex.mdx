@@ -450,9 +450,12 @@ Create a low-level Convex Agent context handler that resolves Crux `Context` obj
 This is the manual bridge between Crux context objects and the Convex Agent SDK. Prefer `crux.convexAgent({ prompt, prepare })` for Crux-native agents; it resolves prompt `use[]`, memory, skills, and tools together. Use `createContextHandler()` only when you intentionally assemble a raw Convex Agent and need to pass already-expanded `Context` objects:
 
 ```ts
+import { messageText } from '@use-crux/convex'
+
 const contextHandler = createContextHandler({
   handler: async (ctx, args) => {
-    const message = String(args.inputPrompt.at(-1)?.content ?? '')
+    const lastMessage = args.inputPrompt.at(-1)
+    const message = lastMessage ? messageText(lastMessage) : ''
     return {
       contexts: [
         retriever.asContext({

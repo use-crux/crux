@@ -209,6 +209,28 @@ describe('anthropic multimodal transcript encoding', () => {
     ).toThrow('anthropic does not support file-data (audio/mpeg) for user messages')
   })
 
+  it('throws before encoding unsupported rich tool-result content in strict mode', () => {
+    expect(() =>
+      anthropicTranscript.fromMessages(
+        [
+          {
+            role: 'tool',
+            content: 'fallback',
+            metadata: {
+              toolCallId: 'toolu_1',
+              toolName: 'recordAudio',
+              modelOutput: {
+                type: 'content',
+                value: [{ type: 'file-data', data: 'base64-audio', mediaType: 'audio/mpeg' }],
+              },
+            },
+          },
+        ],
+        { unsupportedContent: 'error' },
+      ),
+    ).toThrow('anthropic does not support file-data (audio/mpeg) for tool messages')
+  })
+
   it('reads assistant media blocks into canonical assistant content', () => {
     const turn = anthropicTranscript.readAssistant({
       content: [

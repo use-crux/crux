@@ -143,6 +143,19 @@ describe('openai multimodal transcript encoding', () => {
         decodedMessages: [{ role: 'user', content: [{ type: 'file-data', data: 'base64-audio', mediaType: 'audio/mpeg' }] }],
       },
       {
+        name: 'unsupported-audio-file-data-degrades',
+        canonicalMessages: [
+          { role: 'user', content: [{ type: 'file-data', data: 'base64-audio', mediaType: 'audio/ogg' }] },
+        ],
+        providerMessages: [
+          {
+            role: 'user',
+            content: [{ type: 'text', text: '[file audio/ogg 9B sha256:7dc2623c5c71]' }],
+          },
+        ],
+        decodedMessages: [{ role: 'user', content: '[file audio/ogg 9B sha256:7dc2623c5c71]' }],
+      },
+      {
         name: 'system-role-media-degrades',
         canonicalMessages: [
           {

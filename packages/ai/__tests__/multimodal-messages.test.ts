@@ -3,6 +3,7 @@ import { z } from 'zod'
 import type { LanguageModel } from 'ai'
 import { prompt } from '@use-crux/core'
 import { createCruxAi } from '../index'
+import { toModelMessages } from '../src/messages'
 import { scriptedGateway } from './scripted-gateway'
 
 function model(id = 'gpt-4o', provider = 'openai'): LanguageModel {
@@ -89,6 +90,65 @@ describe('AI SDK multimodal messages', () => {
         content: [
           { type: 'text', text: 'Look.' },
           { type: 'image', image: 'AQID', mediaType: 'image/png' },
+        ],
+      },
+    ])
+  })
+
+  it('preserves multimodal tool-result content when building SDK model messages', () => {
+    expect(
+      toModelMessages([
+        {
+          role: 'tool',
+          content: [
+            { type: 'text', text: 'Screenshot captured.' },
+            { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+          ],
+          metadata: { toolCallId: 'call_1', toolName: 'screenshot' },
+        },
+      ]),
+    ).toEqual([
+      {
+        role: 'tool',
+        content: [
+          {
+            type: 'tool-result',
+            toolCallId: 'call_1',
+            toolName: 'screenshot',
+            output: {
+              type: 'content',
+              value: [
+                { type: 'text', text: 'Screenshot captured.' },
+                { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+              ],
+            },
+          },
+        ],
+      },
+    ])
+  })
+
+  it('preserves assistant multimodal content when tool calls are present', () => {
+    expect(
+      toModelMessages([
+        {
+          role: 'assistant',
+          content: [
+            { type: 'text', text: 'I inspected the image.' },
+            { type: 'file-data', data: 'JVBERi0x', mediaType: 'application/pdf', filename: 'report.pdf' },
+          ],
+          metadata: {
+            toolCalls: [{ id: 'call_1', name: 'summarize', args: { id: 'report' } }],
+          },
+        },
+      ]),
+    ).toEqual([
+      {
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'I inspected the image.' },
+          { type: 'file', data: 'JVBERi0x', mediaType: 'application/pdf', filename: 'report.pdf' },
+          { type: 'tool-call', toolCallId: 'call_1', toolName: 'summarize', input: { id: 'report' } },
         ],
       },
     ])
