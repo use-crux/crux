@@ -16,9 +16,11 @@ import type {
   CascadeTierDetail,
   CascadeTierEvaluationResult,
 } from "./cascade";
-import { CascadeExhaustedError } from "./errors";
+import { CascadeExhaustedError, createRoutingStreamError } from "./errors";
 import { observe } from "../observability";
 import { Deadline, withAbortSignal } from "../generation/timeout";
+import { isFallback, type FallbackModel } from "../generation/fallback";
+import { resolveFallback } from "./resolve-fallback";
 
 // ─────────────────────────────────────────────────────────────────
 // Metadata types
@@ -43,8 +45,14 @@ export interface ResolveTryOptions {
 
 /** Shared controls for one recursive model resolution. */
 export interface ResolveModelOptions {
+  /** Current execution mode. Cascade is generate-only, even when nested. */
+  readonly mode?: "generate" | "stream";
+  /** Preserve a top-level raw model result without adding routing metadata. */
+  readonly preserveRawResult?: boolean;
   /** Whole-call deadline inherited from the caller's timeout policy. */
   readonly deadline?: Deadline;
+  /** Narrower cancellation signal inherited from a containing wrapper. */
+  readonly signal?: AbortSignal;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -80,25 +88,47 @@ export async function resolveModel<M, R>(
         input,
         tryModel,
         extractModelId,
-        { deadline },
+        { deadline, mode: options.mode },
       );
     }
 
     // ── Cascade ──
     if (isCascade(model)) {
+      if (options.mode === "stream") {
+        throw createRoutingStreamError("cascade");
+      }
       return await resolveCascade(
         model as unknown as CascadeModel<M>,
+        input,
         tryModel,
         extractModelId,
-        { deadline },
+        { deadline, mode: options.mode },
       );
+    }
+
+    // ── Fallback ──
+    if (isFallback(model)) {
+      return await resolveFallback({
+        fallback: model as unknown as FallbackModel<M>,
+        deadline,
+        resolveCandidate: (candidate, attemptOptions) =>
+          resolveModel(candidate, input, tryModel, extractModelId, {
+            deadline,
+            mode: options.mode,
+            signal: attemptOptions.signal,
+          }).then((result) => result),
+        describeModel: (candidate) => describeModel(candidate, extractModelId),
+      });
     }
 
     // ── Raw model ──
     const result = await withAbortSignal(
-      () => tryModel(model, { signal: deadline.signal }),
-      deadline.signal,
+      () => tryModel(model, { signal: deadline.compose(options.signal) }),
+      deadline.compose(options.signal),
     );
+    if (options.preserveRawResult) {
+      return result as R & { _meta: Record<string, unknown> };
+    }
     return ensureMeta(result);
   } finally {
     if (ownsDeadline) deadline.dispose();
@@ -114,7 +144,7 @@ async function resolveRouter<M, R>(
   input: Record<string, unknown>,
   tryModel: (model: M, options?: ResolveTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
-  options: { deadline: Deadline },
+  options: { deadline: Deadline; mode?: "generate" | "stream" },
 ): Promise<R & { _meta: Record<string, unknown> }> {
   const { config, _forcedRoute, _hints } = routerModel;
   const availableRoutes = Object.keys(config.routes);
@@ -233,9 +263,10 @@ async function resolveRouter<M, R>(
 
 async function resolveCascade<M, R>(
   cascadeModel: CascadeModel<M>,
+  input: Record<string, unknown>,
   tryModel: (model: M, options?: ResolveTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
-  options: { deadline: Deadline },
+  options: { deadline: Deadline; mode?: "generate" | "stream" },
 ): Promise<R & { _meta: Record<string, unknown> }> {
   const { tiers, budget } = cascadeModel.config;
   const tierDetails: CascadeTierDetail[] = [];
@@ -345,7 +376,7 @@ async function resolveCascade<M, R>(
           return skipped;
         }
 
-        const modelId = extractModelId(tier.model);
+        const modelId = describeModel(tier.model, extractModelId);
         const tierSpan = observe.openSpan({
           name: "cascade.tier",
           primitive: "routing.cascade",
@@ -364,13 +395,11 @@ async function resolveCascade<M, R>(
         try {
           // Run the tier's model (may throw — we don't catch provider errors)
           const result = await tierSpan.withContext(() =>
-            withAbortSignal(
-              () =>
-                tryModel(tier.model, {
-                  signal: options.deadline.compose(latencyDeadline.signal),
-                }),
-              options.deadline.compose(latencyDeadline.signal),
-            ),
+            resolveModel(tier.model, input, tryModel, extractModelId, {
+              deadline: options.deadline,
+              mode: options.mode,
+              signal: latencyDeadline.signal,
+            }),
           );
           const resultWithMeta = ensureMeta(result);
           const durationMs = Date.now() - tierStart;
@@ -631,11 +660,23 @@ async function resolveCascade<M, R>(
 // ─────────────────────────────────────────────────────────────────
 
 function ensureMeta<R>(result: R): R & { _meta: Record<string, unknown> } {
-  const r = result as R & { _meta?: unknown };
-  if (!r._meta || typeof r._meta !== "object") {
-    r._meta = {};
+  if (result && typeof result === "object") {
+    const source = result as Record<PropertyKey, unknown>;
+    const meta = isRecord(source._meta) ? source._meta : {};
+    const clone = Object.assign(Object.create(Object.getPrototypeOf(result)), result) as R & {
+      _meta: Record<string, unknown>;
+    };
+    clone._meta = { ...meta };
+    return clone;
   }
-  return r as R & { _meta: Record<string, unknown> };
+
+  return { value: result, _meta: {} } as unknown as R & {
+    _meta: Record<string, unknown>;
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /**
@@ -729,7 +770,7 @@ function markSkippedTiers<M>(
 ): void {
   for (let j = fromIndex; j < tiers.length; j++) {
     tierDetails.push({
-      model: extractModelId(tiers[j].model),
+      model: describeModel(tiers[j].model, extractModelId),
       durationMs: 0,
       cost: undefined,
       status: "skipped",
@@ -737,6 +778,13 @@ function markSkippedTiers<M>(
       ...(tiers[j].budget !== undefined ? { budget: tiers[j].budget } : {}),
     });
   }
+}
+
+function describeModel<M>(model: M, extractModelId: (model: M) => string): string {
+  if (isRouter(model)) return "router";
+  if (isCascade(model)) return "cascade";
+  if (isFallback(model)) return "fallback";
+  return extractModelId(model);
 }
 
 function normalizeCascadeTierEvaluation<M>(

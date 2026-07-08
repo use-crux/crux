@@ -15,8 +15,7 @@
 import type { LanguageModel } from 'ai'
 import type { StructuredAttempt, StructuredRequest } from '@use-crux/core/adapter'
 import type { GenerateObjectFn } from '@use-crux/core/compaction'
-import { executeFallbackLoop, type FallbackModel } from '@use-crux/core'
-import { isCascade, isFallback, isRouter, resolveModel } from '@use-crux/core/routing'
+import { resolveModel } from '@use-crux/core/routing'
 import type { SdkGateway } from './gateway'
 import type { SdkLoopResultLike } from './sdk-codec'
 import { createAiSdkCodec } from './sdk-codec'
@@ -86,21 +85,13 @@ export function createStructuredGenerateObjectFn(gateway: StructuredGateway): Ge
       return { object: attempt.object as T }
     }
 
-    if (isFallback(options.model)) {
-      return executeFallbackLoop(options.model as FallbackModel<LanguageModel>, run, modelLabel)
-    }
-
-    if (isRouter(options.model) || isCascade(options.model)) {
-      const resolved = await resolveModel<LanguageModel, StructuredObjectResult<T>>(
-        options.model as unknown as LanguageModel,
-        { prompt: options.prompt },
-        run,
-        modelLabel,
-      )
-      return resolved
-    }
-
-    return run(options.model as LanguageModel)
+    return resolveModel<LanguageModel, StructuredObjectResult<T>>(
+      options.model as LanguageModel,
+      { prompt: options.prompt },
+      run,
+      modelLabel,
+      { mode: 'generate', preserveRawResult: true },
+    )
   }
 }
 

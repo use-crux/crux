@@ -4,13 +4,13 @@ import { fallback } from '../generation/fallback'
 
 import {
   TimeoutError,
-  executeFallbackLoop,
   orchestrateGenerate,
   orchestrateStream,
   withBudget,
   wrapStreamIterable,
 } from '../generation'
 import type { OrchestrationSpec, TextDeltaExtractor } from '../generation'
+import { resolveModel } from '../routing/resolve'
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers
@@ -132,18 +132,23 @@ describe('withBudget', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────
-// executeFallbackLoop
+// fallback resolution through resolveModel()
 // ─────────────────────────────────────────────────────────────────
 
-describe('executeFallbackLoop', () => {
+describe('resolveModel() fallback handling', () => {
   const extractId = (m: string) => m
   type FallbackTryOptions = { signal?: AbortSignal }
+  const resolveFallback = (
+    fb: FallbackModel<string>,
+    tryModel: (model: string, options?: FallbackTryOptions) => Promise<ReturnType<typeof mockResult>>,
+    extractModelId: (model: string) => string,
+  ) => resolveModel(fb, {}, tryModel, extractModelId)
 
   it('uses first model when it succeeds (no fallback metadata)', async () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi.fn(async (model: string) => mockResult(`from ${model}`))
 
-    const result = await executeFallbackLoop(fb, tryModel, extractId)
+    const result = await resolveFallback(fb, tryModel, extractId)
 
     expect(result.text).toBe('from model-a')
     expect(tryModel).toHaveBeenCalledTimes(1)
@@ -155,7 +160,7 @@ describe('executeFallbackLoop', () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(rateLimitError()).mockResolvedValueOnce(mockResult('from B'))
 
-    const result = await executeFallbackLoop(fb, tryModel, extractId)
+    const result = await resolveFallback(fb, tryModel, extractId)
 
     expect(result.text).toBe('from B')
     expect(tryModel).toHaveBeenCalledTimes(2)
@@ -168,7 +173,7 @@ describe('executeFallbackLoop', () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(serverError()).mockResolvedValueOnce(mockResult('from B'))
 
-    const result = await executeFallbackLoop(fb, tryModel, extractId)
+    const result = await resolveFallback(fb, tryModel, extractId)
 
     expect(result.text).toBe('from B')
     expect(result._meta.fallback.details[0].errorCategory).toBe('server_error')
@@ -178,7 +183,7 @@ describe('executeFallbackLoop', () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(clientError())
 
-    await expect(executeFallbackLoop(fb, tryModel, extractId)).rejects.toThrow('Bad request')
+    await expect(resolveFallback(fb, tryModel, extractId)).rejects.toThrow('Bad request')
     expect(tryModel).toHaveBeenCalledTimes(1)
   })
 
@@ -189,7 +194,7 @@ describe('executeFallbackLoop', () => {
       .mockRejectedValueOnce(rateLimitError('A rate limited'))
       .mockRejectedValueOnce(serverError('B server error'))
 
-    await expect(executeFallbackLoop(fb, tryModel, extractId)).rejects.toSatisfy((err: any) => {
+    await expect(resolveFallback(fb, tryModel, extractId)).rejects.toSatisfy((err: any) => {
       expect(err).toBeInstanceOf(AggregateError)
       expect(err.errors).toHaveLength(2)
       expect(err.message).toContain('All 2 fallback models failed')
@@ -201,7 +206,7 @@ describe('executeFallbackLoop', () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(rateLimitError()).mockResolvedValueOnce(mockResult('from B', 0.05))
 
-    const result = await executeFallbackLoop(fb, tryModel, extractId)
+    const result = await resolveFallback(fb, tryModel, extractId)
 
     const details = result._meta.fallback.details
     expect(details).toHaveLength(2)
@@ -221,7 +226,7 @@ describe('executeFallbackLoop', () => {
       .mockRejectedValueOnce(serverError())
       .mockResolvedValueOnce(mockResult('from C'))
 
-    const result = await executeFallbackLoop(fb, tryModel, extractId)
+    const result = await resolveFallback(fb, tryModel, extractId)
 
     const details = result._meta.fallback.details
     expect(details[0].errorCategory).toBe('rate_limit')
@@ -237,7 +242,7 @@ describe('executeFallbackLoop', () => {
     // Server error should NOT trigger fallback when `on` only includes rate_limit
     const tryModel = vi.fn().mockRejectedValueOnce(serverError())
 
-    await expect(executeFallbackLoop(fb, tryModel, extractId)).rejects.toThrow('Internal server error')
+    await expect(resolveFallback(fb, tryModel, extractId)).rejects.toThrow('Internal server error')
     expect(tryModel).toHaveBeenCalledTimes(1)
   })
 
@@ -248,7 +253,7 @@ describe('executeFallbackLoop', () => {
     }) as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(rateLimitError()).mockResolvedValueOnce(mockResult('from B'))
 
-    await executeFallbackLoop(fb, tryModel, extractId)
+    await resolveFallback(fb, tryModel, extractId)
 
     expect(onAttemptError).toHaveBeenCalledTimes(1)
     expect(onAttemptError).toHaveBeenCalledWith(expect.any(Error), 1, 'model-a')
@@ -263,7 +268,7 @@ describe('executeFallbackLoop', () => {
       .mockImplementationOnce(() => new Promise((resolve) => setTimeout(resolve, 5000)))
       .mockResolvedValueOnce(mockResult('from B'))
 
-    const result = await executeFallbackLoop(fb, tryModel, extractId)
+    const result = await resolveFallback(fb, tryModel, extractId)
 
     expect(result.text).toBe('from B')
     expect(result._meta.fallback.details[0].errorCategory).toBe('timeout')
@@ -289,7 +294,7 @@ describe('executeFallbackLoop', () => {
       })
     })
 
-    const result = await executeFallbackLoop(fb, tryModel, extractId)
+    const result = await resolveFallback(fb, tryModel, extractId)
 
     expect(result.text).toBe('from B')
     expect(aborted).toHaveBeenCalledOnce()
@@ -305,7 +310,7 @@ describe('executeFallbackLoop', () => {
     }) as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(providerError)
 
-    await expect(executeFallbackLoop(fb, tryModel, extractId)).rejects.toBe(providerError)
+    await expect(resolveFallback(fb, tryModel, extractId)).rejects.toBe(providerError)
     expect(tryModel).toHaveBeenCalledTimes(1)
   })
 
@@ -317,7 +322,7 @@ describe('executeFallbackLoop', () => {
     }) as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(rateLimitError()).mockResolvedValueOnce(mockResult('from B'))
 
-    const result = await executeFallbackLoop(fb, tryModel, extractId)
+    const result = await resolveFallback(fb, tryModel, extractId)
 
     expect(result.text).toBe('from B')
     expect(tryModel).toHaveBeenCalledTimes(2)
@@ -331,7 +336,7 @@ describe('executeFallbackLoop', () => {
       .mockRejectedValueOnce(serverError())
       .mockResolvedValueOnce(mockResult('from C'))
 
-    const result = await executeFallbackLoop(fb, tryModel, extractId)
+    const result = await resolveFallback(fb, tryModel, extractId)
 
     expect(result.text).toBe('from C')
     expect(result._meta.fallback.attempts).toBe(3)

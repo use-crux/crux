@@ -17,8 +17,8 @@
  * - `repairJsonText()` repairs malformed JSON;
  * - `ValidationExhaustedError` round-trips through its type guard;
  * - the `@internal` orchestration helpers (`orchestrateGenerate`,
- *   `orchestrateStream`, `executeFallbackLoop`, `withBudget`,
- *   `wrapStreamIterable`) are present on the package surface.
+ *   `orchestrateStream`, `withBudget`, `wrapStreamIterable`) are present on
+ *   the package surface.
  */
 
 import { describe, it, expect } from 'vitest'
@@ -32,7 +32,6 @@ import {
   isValidationExhaustedError,
   orchestrateGenerate,
   orchestrateStream,
-  executeFallbackLoop,
   TimeoutError,
   withBudget,
   wrapStreamIterable,
@@ -56,7 +55,6 @@ describe('@use-crux/core (generation surface)', () => {
     it('exposes the internal orchestration helpers', () => {
     expect(typeof orchestrateGenerate).toBe('function')
     expect(typeof orchestrateStream).toBe('function')
-    expect(typeof executeFallbackLoop).toBe('function')
     expect(typeof TimeoutError).toBe('function')
     expect(typeof withBudget).toBe('function')
     expect(typeof wrapStreamIterable).toBe('function')

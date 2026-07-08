@@ -31,10 +31,7 @@ import type { ValidationRetryOptions } from "../generation/validation-retry";
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
 import type { SafetyTuneOptions } from "../safety/tune";
-import { executeFallbackLoop } from "../generation/fallback-loop";
-import { isFallback } from "../generation/fallback";
 import type { FallbackModel } from "../generation/fallback";
-import { isRouter, isCascade } from "../routing";
 import { resolveModel } from "../routing/resolve";
 import type { AnyRouterModel, CascadeModel } from "../routing";
 import type { ToolMiddleware } from "../tools/types";
@@ -261,33 +258,14 @@ export function loopRuntimeAdapter<
         deadline.compose(attemptOptions.signal),
       );
 
-    const dispatch = (
-      model: TModel | FallbackModel<TModel>,
-      attemptOptions: AttemptSignalOptions = {},
-    ): Promise<GenerateResult> =>
-      isFallback(model)
-        ? executeFallbackLoop(model, runWithModel, modelLabel, { deadline })
-        : runWithModel(model, attemptOptions);
-
     try {
-      if (isRouter(opts.model) || isCascade(opts.model)) {
-        return await resolveModel<
-          TModel | FallbackModel<TModel>,
-          GenerateResult
-        >(
-          opts.model as TModel | FallbackModel<TModel>,
-          opts.input ?? {},
-          dispatch,
-          (model) => (isFallback(model) ? "fallback" : modelLabel(model)),
-          { deadline },
-        );
-      }
-      if (isFallback(opts.model)) {
-        return await executeFallbackLoop(opts.model, runWithModel, modelLabel, {
-          deadline,
-        });
-      }
-      return await runWithModel(opts.model as TModel);
+      return await resolveModel<TModel, GenerateResult>(
+        opts.model as TModel,
+        opts.input ?? {},
+        runWithModel,
+        modelLabel,
+        { deadline, mode: "generate" },
+      );
     } finally {
       deadline.dispose();
     }
@@ -332,47 +310,25 @@ export function loopRuntimeAdapter<
     opts: ExecutorStreamOptions<TModel>,
   ): Promise<ExecutorStreamHandle<TRawStream>> {
     const deadline = Deadline.after(opts.timeout?.totalMs);
+    const runWithModel = (
+      model: TModel,
+      attemptOptions: AttemptSignalOptions = {},
+    ): Promise<ExecutorStreamHandle<TRawStream>> =>
+      streamSingle(
+        prompt,
+        opts,
+        model,
+        deadline.compose(attemptOptions.signal),
+      );
+
     try {
-      if (isCascade(opts.model)) {
-        throw new Error(
-          "cascade() does not support stream(). Use generate() instead — cascade needs full results for tier evaluation.",
-        );
-      }
-
-      const runWithModel = (
-        model: TModel,
-        attemptOptions: AttemptSignalOptions = {},
-      ): Promise<ExecutorStreamHandle<TRawStream>> =>
-        streamSingle(
-          prompt,
-          opts,
-          model,
-          deadline.compose(attemptOptions.signal),
-        );
-
-      if (isRouter(opts.model)) {
-        return await resolveModel<
-          TModel | FallbackModel<TModel>,
-          ExecutorStreamHandle<TRawStream>
-        >(
-          opts.model as TModel | FallbackModel<TModel>,
-          opts.input ?? {},
-          (model, attemptOptions) =>
-            isFallback(model)
-              ? executeFallbackLoop(model, runWithModel, modelLabel, {
-                  deadline,
-                })
-              : runWithModel(model, attemptOptions),
-          (model) => (isFallback(model) ? "fallback" : modelLabel(model)),
-          { deadline },
-        );
-      }
-      if (isFallback(opts.model)) {
-        return await executeFallbackLoop(opts.model, runWithModel, modelLabel, {
-          deadline,
-        });
-      }
-      return await runWithModel(opts.model as TModel);
+      return await resolveModel<TModel, ExecutorStreamHandle<TRawStream>>(
+        opts.model as TModel,
+        opts.input ?? {},
+        runWithModel,
+        modelLabel,
+        { deadline, mode: "stream" },
+      );
     } finally {
       deadline.dispose();
     }

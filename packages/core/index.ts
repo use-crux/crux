@@ -747,7 +747,6 @@ export type {
 /** @internal */ export {
   orchestrateGenerate,
   orchestrateStream,
-  executeFallbackLoop,
   wrapStreamIterable,
   TimeoutError,
   normalizeBudgetMs,
@@ -761,7 +760,6 @@ export type {
   TimeoutErrorOptions,
   BudgetOptions,
   BudgetSignal,
-  FallbackTryOptions,
   OrchestrationSpec,
   TextDeltaExtractor,
 } from "./generation";

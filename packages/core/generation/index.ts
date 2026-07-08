@@ -86,8 +86,6 @@ export type {
 
 // Generate/stream orchestration (composed by adapter packages)
 export { orchestrateGenerate, orchestrateStream } from "./orchestrate";
-export { executeFallbackLoop } from "./fallback-loop";
-export type { FallbackTryOptions } from "./fallback-loop";
 export { wrapStreamIterable } from "./stream-interception";
 export type {
   OrchestrationSpec,

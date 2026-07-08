@@ -28,4 +28,10 @@ export type { FallbackModel, FallbackOptions, FallbackMeta, FallbackAttemptDetai
 export { resolveModel } from './resolve'
 export type { RouterMeta } from './resolve'
 
-export { CascadeExhaustedError, RouterClassifyError } from './errors'
+export {
+  CascadeExhaustedError,
+  RouterClassifyError,
+  createRoutingStreamError,
+  isRoutingStreamError,
+} from './errors'
+export type { RoutingStreamError } from './errors'

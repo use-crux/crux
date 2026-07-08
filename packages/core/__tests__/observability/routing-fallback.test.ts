@@ -6,7 +6,6 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { executeFallbackLoop } from '../../generation/fallback-loop'
 import { cascade, router } from '../../routing'
 import { resolveModel } from '../../routing/resolve'
 
@@ -18,6 +17,10 @@ function result(text: string, cost = 0.01) {
 }
 
 const extractModelId = (model: string) => model
+const resolveFallback = (
+  fb: FallbackModel<string>,
+  tryModel: (model: string, options?: { signal?: AbortSignal }) => Promise<ReturnType<typeof result>>,
+) => resolveModel(fb, {}, tryModel, extractModelId)
 
 describe('canonical routing and fallback observability', () => {
   afterEach(() => {
@@ -225,7 +228,7 @@ describe('canonical routing and fallback observability', () => {
     tryModel.mockResolvedValueOnce(result('from model-b'))
 
     await observe.run({ name: 'fallback request', rootPrimitive: 'fallback.attempt' }, async () => {
-      await executeFallbackLoop(fb, tryModel, extractModelId)
+      await resolveFallback(fb, tryModel)
     })
     await observe.flush()
 
@@ -292,7 +295,7 @@ describe('canonical routing and fallback observability', () => {
     const tryModel = vi.fn().mockRejectedValueOnce(providerError)
 
     await observe.run({ name: 'fallback request', rootPrimitive: 'fallback.attempt' }, async () => {
-      await expect(executeFallbackLoop(fb, tryModel, extractModelId)).rejects.toBe(providerError)
+      await expect(resolveFallback(fb, tryModel)).rejects.toBe(providerError)
     })
     await observe.flush()
 

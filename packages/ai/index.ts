@@ -68,9 +68,8 @@ import type {
 import {
   CruxTransportStreamUnsupportedError,
 } from "@use-crux/core/adapter";
-import type { ToolApprovalMap, ToolMiddleware, FallbackModel } from "@use-crux/core";
-import { executeFallbackLoop } from "@use-crux/core";
-import { isRouter, isCascade, isFallback, resolveModel } from "@use-crux/core/routing";
+import type { ToolApprovalMap, ToolMiddleware } from "@use-crux/core";
+import { resolveModel } from "@use-crux/core/routing";
 import type { AnyRouterModel, CascadeModel } from "@use-crux/core/routing";
 import type {
   GenerateObjectFn,
@@ -488,25 +487,16 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       } as Parameters<SdkGateway["generateText"]>[0]);
       return { text: result.text };
     };
-    if (isFallback(options.model)) {
-      return executeFallbackLoop(options.model as FallbackModel<LanguageModel>, run, (model) => {
+    return resolveModel<LanguageModel, { text: string }>(
+      options.model as LanguageModel,
+      { prompt: options.prompt },
+      run,
+      (model) => {
         const info = extractModelInfo(model);
         return info.modelId || info.provider;
-      });
-    }
-    if (isRouter(options.model) || isCascade(options.model)) {
-      const resolved = await resolveModel<LanguageModel, { text: string }>(
-        options.model as unknown as LanguageModel,
-        { prompt: options.prompt },
-        run,
-        (model) => {
-          const info = extractModelInfo(model);
-          return info.modelId || info.provider;
-        },
-      );
-      return resolved;
-    }
-    return run(options.model as LanguageModel);
+      },
+      { mode: "generate", preserveRawResult: true },
+    );
   };
 
   return {

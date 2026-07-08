@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cascade, router } from '../../routing'
-import { CascadeExhaustedError } from '../../routing/errors'
+import { cascade, fallback, router } from '../../routing'
+import { CascadeExhaustedError, isRoutingStreamError } from '../../routing/errors'
 import { resolveModel } from '../../routing/resolve'
 import {
   createInMemoryObservabilityTransport,
@@ -16,6 +16,105 @@ afterEach(() => {
 })
 
 describe('resolveModel() regressions', () => {
+  it('recursively resolves cascade tiers that contain router and fallback wrappers', async () => {
+    const routedFallback = router({
+      classify: () => 'resilient' as const,
+      routes: {
+        resilient: fallback('model-primary', 'model-backup'),
+        default: 'model-default',
+      },
+    })
+    const cascaded = cascade({
+      tiers: [{ model: routedFallback }],
+    })
+    const calls: string[] = []
+
+    const result = await resolveModel(
+      cascaded,
+      {},
+      async (model) => {
+        calls.push(model)
+        if (model === 'model-primary') {
+          const error = new Error('primary unavailable') as Error & { status: number }
+          error.status = 500
+          throw error
+        }
+        return resultFrom(model)
+      },
+      extractModelId,
+    )
+
+    expect(calls).toEqual(['model-primary', 'model-backup'])
+    expect(result.text).toBe('response from model-backup')
+    expect(result._meta.router).toMatchObject({
+      classifiedAs: 'resilient',
+      usedDefaultRoute: false,
+    })
+    expect(result._meta.fallback).toMatchObject({
+      attempts: 2,
+      failedModels: ['model-primary'],
+    })
+    expect(result._meta.cascade).toMatchObject({
+      acceptedAtTier: 0,
+      budgetExceeded: false,
+    })
+  })
+
+  it('rejects nested cascades in stream mode before calling a provider', async () => {
+    const routedCascade = router({
+      classify: () => 'quality' as const,
+      routes: {
+        quality: cascade({ tiers: [{ model: 'model-quality' }] }),
+        default: 'model-default',
+      },
+    })
+    const calls: string[] = []
+
+    await expect(
+      resolveModel(
+        routedCascade,
+        {},
+        async (model) => {
+          calls.push(model)
+          return resultFrom(model)
+        },
+        extractModelId,
+        { mode: 'stream' },
+      ),
+    ).rejects.toSatisfy((error: unknown) => isRoutingStreamError(error))
+    expect(calls).toEqual([])
+  })
+
+  it('merges routing metadata without mutating frozen provider results', async () => {
+    const routed = router({
+      classify: () => 'primary' as const,
+      routes: {
+        primary: 'model-primary',
+        default: 'model-default',
+      },
+    })
+    const providerResult = Object.freeze({ text: 'immutable response' })
+
+    const result = await resolveModel(
+      routed,
+      {},
+      async () => providerResult,
+      extractModelId,
+    )
+
+    expect(result).not.toBe(providerResult)
+    expect(providerResult).not.toHaveProperty('_meta')
+    expect(result).toMatchObject({
+      text: 'immutable response',
+      _meta: {
+        router: {
+          classifiedAs: 'primary',
+          selectedModel: 'model-primary',
+        },
+      },
+    })
+  })
+
   it.each(['toString', 'constructor'] as const)(
     'treats prototype route key %s as unknown and uses default',
     async (routeKey) => {
