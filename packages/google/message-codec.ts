@@ -1,14 +1,15 @@
 import type { Content, GenerateContentResponse } from '@google/genai'
-import type { Message, MessageContent } from '@use-crux/core'
-import { defineProviderTranscriptCodec, degradeContentToText } from '@use-crux/core/adapter'
+import type { Message } from '@use-crux/core'
+import { defineProviderTranscriptCodec } from '@use-crux/core/adapter'
 import type {
   NativeAssistantTurn,
   ProviderToolCall,
   ProviderToolResult,
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
-  TranscriptEncodeOptions,
 } from '@use-crux/core/adapter'
+import { googleContentParts, googleContentText, googlePartsText, messageContentFromGoogleParts } from './content-parts'
+import type { GoogleInboundPart } from './content-parts'
 import { googleFunctionResponseContent, googleFunctionResponseParts, googleToolResponse } from './function-response'
 
 /** Google assistant turn data read from a generate-content response. */
@@ -26,10 +27,10 @@ const googleDialect: ProviderTranscriptDialect<Content, GenerateContentResponse>
   encodeContent: ({ role, content }, options) =>
     role === 'system'
       ? (googleContentText(role, content, options), undefined)
-      : { role: 'user', parts: [{ text: googleContentText(role, content, options) }] },
+      : { role: 'user', parts: googleContentParts(role, content, options) },
   encodeAssistant: ({ content, toolCalls }, options) =>
     encodeAssistant(googleContentText('assistant', content, options), toolCalls ?? []),
-  encodeToolResults: ({ results }) => results.map(encodeToolResult),
+  encodeToolResults: ({ results }, _helpers, options) => results.map((result) => encodeToolResult(result, options)),
   decodeMessage: decodeMessage,
   readAssistant: readGoogleAssistant,
 }
@@ -59,8 +60,11 @@ export function toMessages(sdkMessages: readonly unknown[]): Message[] {
 export function readGoogleAssistant(response: GenerateContentResponse): GoogleAssistantTurn {
   const parts = (response.candidates?.[0]?.content?.parts ?? []) as readonly GoogleInboundPart[]
   const toolCalls = toolCallsFromParts(parts)
+  const content = messageContentFromGoogleParts(parts)
+  const projectedText = googlePartsText(parts)
   return {
-    text: response.text ?? textFromParts(parts),
+    text: Array.isArray(content) ? projectedText : (response.text ?? projectedText),
+    ...(Array.isArray(content) ? { content } : {}),
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
   }
 }
@@ -82,8 +86,16 @@ function encodeAssistant(text: string, toolCalls: readonly ProviderToolCall[]): 
   }
 }
 
-function encodeToolResult(result: ProviderToolResult): Content {
-  const parts = result.modelOutput?.type === 'content' ? googleFunctionResponseParts(result.modelOutput.value) : []
+function encodeToolResult(result: ProviderToolResult, options: { readonly unsupportedContent?: 'degrade' | 'error' }): Content {
+  const parts =
+    result.modelOutput?.type === 'content'
+      ? googleFunctionResponseParts(result.modelOutput.value, {
+          provider: 'google',
+          role: 'tool',
+          unsupportedContent: options.unsupportedContent,
+          reason: 'unsupported Google function-response content part',
+        })
+      : []
   return {
     role: 'user',
     parts: [
@@ -117,35 +129,15 @@ function decodeMessage(value: unknown): ProviderTranscriptUnit {
     }
   }
 
-  const text = textFromParts(parts)
   if (content.role === 'model') {
     const toolCalls = toolCallsFromParts(parts)
     return {
       kind: 'assistant',
-      content: text,
+      content: messageContentFromGoogleParts(parts),
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
     }
   }
-  return { kind: 'content', role: 'user', content: text }
-}
-
-function googleContentText(
-  role: 'system' | 'user' | 'assistant',
-  content: MessageContent,
-  options: TranscriptEncodeOptions,
-): string {
-  return degradeContentToText(content, {
-    provider: 'google',
-    role,
-    unsupportedContent: options.unsupportedContent,
-    reason: 'Google multimodal message content is implemented in Phase 4',
-  })
-}
-
-type GoogleInboundPart = {
-  readonly text?: string
-  readonly functionCall?: unknown
-  readonly functionResponse?: unknown
+  return { kind: 'content', role: 'user', content: messageContentFromGoogleParts(parts) }
 }
 
 interface GoogleContentLike {
@@ -163,10 +155,6 @@ interface GoogleFunctionResponse {
   readonly id?: string
   readonly name?: string
   readonly response?: unknown
-}
-
-function textFromParts(parts: readonly GoogleInboundPart[]): string {
-  return parts.flatMap((part) => (typeof part.text === 'string' ? [part.text] : [])).join('')
 }
 
 function toolCallsFromParts(parts: readonly GoogleInboundPart[]): ProviderToolCall[] {

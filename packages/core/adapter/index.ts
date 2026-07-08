@@ -179,7 +179,6 @@ export {
   isToolModelOutput,
   measureModelOutput,
   measureUnknown,
-  renderToolContentPartAsText,
   toJsonValue,
   toolModelOutputFromMetadata,
 } from "./tool/emission";
