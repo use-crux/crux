@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { cascade, fallback, router } from '../../routing'
 import { CascadeExhaustedError, isRoutingStreamError } from '../../routing/errors'
+import type {
+  CascadeRoutingStep,
+  FallbackRoutingStep,
+  RouterRoutingStep,
+} from '../../routing/receipt'
 import { resolveModel } from '../../routing/resolve'
 import {
   createInMemoryObservabilityTransport,
@@ -10,6 +15,25 @@ import {
 } from '../../observability'
 
 const extractModelId = (model: string) => model
+
+function routingStep<TKind extends 'router' | 'fallback' | 'cascade'>(
+  result: { routing?: { trace: readonly unknown[] } },
+  kind: TKind,
+) {
+  return result.routing?.trace.find(
+    (
+      step,
+    ): step is TKind extends 'router'
+      ? RouterRoutingStep
+      : TKind extends 'fallback'
+        ? FallbackRoutingStep
+        : CascadeRoutingStep =>
+      typeof step === 'object' &&
+      step !== null &&
+      'kind' in step &&
+      step.kind === kind,
+  )
+}
 
 afterEach(() => {
   resetObservabilityRuntime()
@@ -46,15 +70,17 @@ describe('resolveModel() regressions', () => {
 
     expect(calls).toEqual(['model-primary', 'model-backup'])
     expect(result.text).toBe('response from model-backup')
-    expect(result._meta.router).toMatchObject({
+    expect(routingStep(result, 'router')).toMatchObject({
       classifiedAs: 'resilient',
       usedDefaultRoute: false,
     })
-    expect(result._meta.fallback).toMatchObject({
-      attempts: 2,
-      failedModels: ['model-primary'],
+    expect(routingStep(result, 'fallback')).toMatchObject({
+      attempts: [
+        { model: 'model-primary', status: 'error' },
+        { model: 'model-backup', status: 'ok' },
+      ],
     })
-    expect(result._meta.cascade).toMatchObject({
+    expect(routingStep(result, 'cascade')).toMatchObject({
       acceptedAtTier: 0,
       budgetExceeded: false,
     })
@@ -106,11 +132,15 @@ describe('resolveModel() regressions', () => {
     expect(providerResult).not.toHaveProperty('_meta')
     expect(result).toMatchObject({
       text: 'immutable response',
-      _meta: {
-        router: {
-          classifiedAs: 'primary',
-          selectedModel: 'model-primary',
-        },
+      routing: {
+        model: 'model-primary',
+        trace: [
+          {
+            kind: 'router',
+            classifiedAs: 'primary',
+            route: 'primary',
+          },
+        ],
       },
     })
   })
@@ -138,9 +168,9 @@ describe('resolveModel() regressions', () => {
       )
 
       expect(calls).toEqual(['model-default'])
-      expect(result._meta.router).toMatchObject({
+      expect(routingStep(result, 'router')).toMatchObject({
         classifiedAs: routeKey,
-        selectedModel: 'model-default',
+        route: 'default',
         usedDefaultRoute: true,
       })
     },
@@ -201,7 +231,7 @@ describe('resolveModel() regressions', () => {
     expect(calls).toEqual(['model-nan', 'model-string', 'model-valid'])
     expect(totalCosts).toEqual([0, 0, 0.006])
     expect(result.text).toBe('response from model-valid')
-    expect(result._meta.cascade).toMatchObject({
+    expect(routingStep(result, 'cascade')).toMatchObject({
       acceptedAtTier: 2,
       budgetExceeded: true,
     })

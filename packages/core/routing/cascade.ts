@@ -89,15 +89,6 @@ export interface CascadeTierDetail {
   budget?: number
 }
 
-/** Metadata attached to `_meta.cascade` on cascade results. */
-export interface CascadeMeta {
-  tiersAttempted: number
-  totalTiers: number
-  acceptedAtTier: number
-  budgetExceeded: boolean
-  tiers: CascadeTierDetail[]
-}
-
 // ─────────────────────────────────────────────────────────────────
 // cascade()
 // ─────────────────────────────────────────────────────────────────

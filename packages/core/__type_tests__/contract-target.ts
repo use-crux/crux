@@ -78,7 +78,7 @@ type TargetTimeoutError = TimeoutError;
 type _TimeoutOptionsKeys = Expect<
   AssertEqual<
     keyof TargetTimeoutOptions,
-    "totalMs" | "stepMs" | "chunkMs" | "toolMs" | "tools"
+    "totalMs" | "stepMs" | "chunkMs" | "firstToken" | "toolMs" | "tools"
   >
 >;
 type _TimeoutToolsReadonly = Expect<
@@ -159,6 +159,7 @@ type _GenerateResultKeys = Expect<
     | "steps"
     | "finalStep"
     | "messages"
+    | "routing"
     | "pendingApprovals"
     | "raw"
     | "_meta"

@@ -26,8 +26,6 @@ export {
 export type {
   FallbackModel,
   FallbackOptions,
-  FallbackMeta,
-  FallbackAttemptDetail,
   ErrorCategory,
 } from "./fallback";
 

@@ -13,6 +13,7 @@ import type {
   GenerationSettings,
   TokenUsage,
 } from "../generation/types";
+import type { RoutingReceipt } from "../routing/receipt";
 import type { SystemBlock } from "../resolver/types";
 import type { Message } from "../generation/messages";
 import type { ToolModelOutput } from "../types/tool";
@@ -85,6 +86,8 @@ export interface StreamHandle<TRawStream> {
   raw?: TRawStream;
   rawStream: TRawStream & AsyncIterable<unknown>;
   extractTextDelta: (chunk: unknown) => string | undefined;
+  /** Routing receipt attached by core when a stream used routing wrappers. */
+  routing?: RoutingReceipt;
   completion: () => Promise<TraceMeta | undefined>;
 }
 

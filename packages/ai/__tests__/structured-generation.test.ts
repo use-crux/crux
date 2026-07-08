@@ -226,7 +226,14 @@ describe('createStructuredGenerateObjectFn', () => {
 
     expect(result.object).toEqual({ accepted: true })
     expect(scripted.calls.generateObject.map((args) => modelIdFromArg(args.model))).toEqual(['primary', 'backup'])
-    const meta = result as unknown as { readonly _meta?: { readonly fallback?: { readonly attempts: number } } }
-    expect(meta._meta?.fallback?.attempts).toBe(2)
+    expect(result.routing?.trace).toMatchObject([
+      {
+        kind: 'fallback',
+        attempts: [
+          { model: 'primary', status: 'error' },
+          { model: 'backup', status: 'ok' },
+        ],
+      },
+    ])
   })
 })

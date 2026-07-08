@@ -5,6 +5,24 @@
  */
 
 import type { CascadeTierDetail } from './cascade'
+import type { AttemptDetail, RoutingReceipt } from './receipt'
+
+/** Thrown when every fallback candidate fails. */
+export class FallbackExhaustedError extends Error {
+  readonly _tag = 'FallbackExhaustedError' as const
+
+  constructor(
+    /** Per-attempt execution details. */
+    readonly attempts: readonly AttemptDetail[],
+    /** Canonical routing receipt for the exhausted fallback. */
+    readonly routing: RoutingReceipt,
+    /** Original provider errors from each failed attempt. */
+    readonly errors: readonly Error[],
+  ) {
+    super(`All ${attempts.length} fallback models failed`)
+    this.name = 'FallbackExhaustedError'
+  }
+}
 
 /**
  * Thrown when all cascade tiers reject the result (including the last tier

@@ -11,14 +11,26 @@
  */
 
 import type {
-  FallbackAttemptDetail,
-  FallbackMeta,
   FallbackModel,
 } from "../generation/fallback";
 import { classifyError, shouldAttemptFallback } from "../generation/fallback";
-import { getMeta, setMeta } from "../generation/result-meta";
+import { getMeta } from "../generation/result-meta";
 import { Deadline, withBudget } from "../generation/timeout";
 import { observe } from "../observability";
+import { FallbackExhaustedError } from "./errors";
+import {
+  emitFallbackRoutingReport,
+  emitRoutingHookError,
+} from "./resolve-fallback-observability";
+import {
+  createRoutingReceipt,
+  prependRoutingStep,
+  routingCostFromMeta,
+  withRoutingReceipt,
+  type AttemptDetail,
+  type FallbackRoutingStep,
+  type RoutableResult,
+} from "./receipt";
 
 /** Options passed to one recursively resolved fallback candidate. */
 export interface ResolveFallbackCandidateOptions {
@@ -36,7 +48,7 @@ export interface ResolveFallbackArgs<M, R> {
   readonly resolveCandidate: (
     model: M,
     options: ResolveFallbackCandidateOptions,
-  ) => Promise<R & { _meta: Record<string, unknown> }>;
+  ) => Promise<RoutableResult<R>>;
   /** Return a human-readable id for raw models and nested wrappers. */
   readonly describeModel: (model: M) => string;
 }
@@ -44,31 +56,40 @@ export interface ResolveFallbackArgs<M, R> {
 /**
  * Resolve a fallback wrapper by trying candidates in order.
  *
- * The returned result is the first successful candidate. Existing Phase 4
- * metadata semantics are preserved: `_meta.fallback` is attached only when a
- * previous attempt failed; Phase 5 replaces this with a full receipt.
+ * The returned result is the first successful candidate with a full routing
+ * receipt. Fallback receipts are emitted even when the first candidate works.
  */
 export async function resolveFallback<M, R>({
   fallback,
   deadline,
   resolveCandidate,
   describeModel,
-}: ResolveFallbackArgs<M, R>): Promise<R & { _meta: Record<string, unknown> }> {
+}: ResolveFallbackArgs<M, R>): Promise<RoutableResult<R>> {
   const { models, options } = fallback;
   const errors: Error[] = [];
-  const details: FallbackAttemptDetail[] = [];
+  const details: AttemptDetail[] = [];
   let previousFailedSpanId:
     | ReturnType<typeof observe.openSpan>["spanId"]
     | undefined;
   let previousFailedModelId: string | undefined;
+  const fallbackStart = Date.now();
+  const fallbackSpan = observe.openSpan({
+    name: "fallback.resolve",
+    primitive: "routing.fallback",
+    attributes: {
+      totalModels: models.length,
+      ...(options.id ? { routingId: options.id } : {}),
+      ...(options.description ? { routingDescription: options.description } : {}),
+    },
+  });
 
   for (let i = 0; i < models.length; i++) {
     const model = models[i];
     const modelId = describeModel(model);
     const attemptStart = Date.now();
-    const attemptSpan = observe.openSpan({
-      name: "fallback.attempt",
-      primitive: "fallback.attempt",
+	    const attemptSpan = observe.openSpan({
+	      name: "fallback.attempt",
+	      primitive: "routing.fallback",
       attributes: {
         attempt: i + 1,
         ...(options.id ? { routingId: options.id } : {}),
@@ -96,21 +117,24 @@ export async function resolveFallback<M, R>({
       details.push({
         model: modelId,
         durationMs,
-        status: "success",
-        cost: getMeta(result)?.cost,
+        status: "ok",
+        cost: routingCostFromMeta(getMeta(result)),
       });
 
-      if (errors.length > 0) {
-        setMeta(result, {
-          fallback: {
-            attempts: i + 1,
-            failedModels: details
-              .filter((detail) => detail.status === "error")
-              .map((detail) => detail.model),
-            details,
-          } satisfies FallbackMeta,
-        });
-      }
+      const fallbackStep: FallbackRoutingStep = {
+        kind: "fallback",
+        ...(options.id ? { id: options.id } : {}),
+        attempts: details,
+      };
+      const routing =
+        result.routing !== undefined
+          ? prependRoutingStep(fallbackStep, result.routing)
+          : createRoutingReceipt(
+              modelId,
+              routingCostFromMeta(getMeta(result)),
+              [fallbackStep],
+            );
+      const routedResult = withRoutingReceipt(result, routing);
 
       if (previousFailedSpanId && previousFailedModelId) {
         observe.edge({
@@ -125,14 +149,8 @@ export async function resolveFallback<M, R>({
         });
       }
 
-      emitFallbackRoutingReport(attemptSpan.spanId, {
-        kind: "routing.report",
-        routingKind: "fallback",
-        ...(options.id ? { routingId: options.id } : {}),
-        chosen: modelId,
-        tiers: details.map(fallbackTierPreview),
-      });
-      attemptSpan.end({
+	      emitFallbackRoutingReport(fallbackSpan.spanId, routing);
+	      attemptSpan.end({
         attributes: {
           attempt: i + 1,
           ...(options.id ? { routingId: options.id } : {}),
@@ -140,11 +158,20 @@ export async function resolveFallback<M, R>({
           totalModels: models.length,
           attemptStatus: "success",
           durationMs,
-          cost: getMeta(result)?.cost,
+          cost: routingCostFromMeta(getMeta(result)),
           fallbackOccurred: errors.length > 0,
-        },
-      });
-      return result;
+	        },
+	      });
+	      fallbackSpan.end({
+	        attributes: {
+	          totalModels: models.length,
+	          attempts: details.length,
+	          chosen: routing.model,
+	          durationMs: Date.now() - fallbackStart,
+	          ...(options.id ? { routingId: options.id } : {}),
+	        },
+	      });
+	      return routedResult;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       const durationMs = Date.now() - attemptStart;
@@ -160,18 +187,11 @@ export async function resolveFallback<M, R>({
         durationMs,
         status: "error",
         error: err.message,
-        errorCategory,
+        ...(errorCategory ? { errorCategory } : {}),
       });
 
       if (!willAttemptFallback) {
-        emitFallbackRoutingReport(attemptSpan.spanId, {
-          kind: "routing.report",
-          routingKind: "fallback",
-          ...(options.id ? { routingId: options.id } : {}),
-          fallbackReason: errorCategory,
-          tiers: details.map(fallbackTierPreview),
-        });
-        attemptSpan.error(err, {
+	        attemptSpan.error(err, {
           attempt: i + 1,
           ...(options.id ? { routingId: options.id } : {}),
           model: modelId,
@@ -180,19 +200,27 @@ export async function resolveFallback<M, R>({
           errorCategory,
           willAttemptFallback: false,
           durationMs,
-        });
-        throw err;
-      }
+	        });
+	        const routing = createRoutingReceipt(modelId, undefined, [
+	          {
+	            kind: "fallback",
+	            ...(options.id ? { id: options.id } : {}),
+	            attempts: details,
+	          },
+	        ]);
+	        emitFallbackRoutingReport(fallbackSpan.spanId, routing);
+	        fallbackSpan.error(err, {
+	          totalModels: models.length,
+	          attempts: details.length,
+	          errorCategory,
+	          durationMs: Date.now() - fallbackStart,
+	          ...(options.id ? { routingId: options.id } : {}),
+	        });
+	        throw err;
+	      }
 
-      errors.push(err);
-      emitFallbackRoutingReport(attemptSpan.spanId, {
-        kind: "routing.report",
-        routingKind: "fallback",
-        ...(options.id ? { routingId: options.id } : {}),
-        fallbackReason: errorCategory,
-        tiers: details.map(fallbackTierPreview),
-      });
-      attemptSpan.error(err, {
+	      errors.push(err);
+	      attemptSpan.error(err, {
         attempt: i + 1,
         ...(options.id ? { routingId: options.id } : {}),
         model: modelId,
@@ -208,10 +236,22 @@ export async function resolveFallback<M, R>({
     }
   }
 
-  throw new AggregateError(
-    errors,
-    `All ${models.length} fallback models failed`,
-  );
+  const fallbackStep: FallbackRoutingStep = {
+    kind: "fallback",
+    ...(options.id ? { id: options.id } : {}),
+    attempts: details,
+  };
+  const finalModel = details.at(-1)?.model ?? "unknown";
+  const routing = createRoutingReceipt(finalModel, undefined, [fallbackStep]);
+  const error = new FallbackExhaustedError(details, routing, errors);
+  emitFallbackRoutingReport(fallbackSpan.spanId, routing);
+  fallbackSpan.error(error, {
+    totalModels: models.length,
+    attempts: details.length,
+    durationMs: Date.now() - fallbackStart,
+    ...(options.id ? { routingId: options.id } : {}),
+  });
+  throw error;
 }
 
 function notifyAttemptErrorSafely<M>(
@@ -239,58 +279,4 @@ function shouldAttemptFallbackSafely<M>(
     emitRoutingHookError(attemptSpan, "shouldFallback", hookError);
     return false;
   }
-}
-
-function emitRoutingHookError(
-  span: ReturnType<typeof observe.openSpan>,
-  hook: string,
-  error: unknown,
-): void {
-  span.withContext(() => {
-    observe.event({
-      name: "routing.hook_error",
-      attributes: {
-        routingKind: "fallback",
-        hook,
-        error: error instanceof Error ? error.message : String(error),
-      },
-    });
-  });
-}
-
-function fallbackTierPreview(
-  detail: FallbackAttemptDetail,
-  index: number,
-): Record<string, unknown> {
-  return {
-    tier: index,
-    model: detail.model,
-    verdict: detail.status,
-    ...(detail.error ? { note: detail.error } : {}),
-    ...(detail.cost !== undefined ? { cost: detail.cost } : {}),
-    durationMs: detail.durationMs,
-  };
-}
-
-function emitFallbackRoutingReport(
-  spanId: ReturnType<typeof observe.openSpan>["spanId"],
-  preview: Record<string, unknown>,
-): void {
-  const artifactId = observe.artifact({
-    kind: "routing.report",
-    contentType: "application/json",
-    encoding: "json",
-    preview,
-    attributes: {
-      primitive: "fallback.attempt",
-      routingKind: "fallback",
-    },
-  });
-  if (!artifactId) return;
-  observe.edge({
-    edgeType: "produced",
-    from: { kind: "span", id: spanId },
-    to: { kind: "artifact", id: artifactId },
-    attributes: { primitive: "fallback.attempt", routingKind: "fallback" },
-  });
 }

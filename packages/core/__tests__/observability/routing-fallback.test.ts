@@ -227,7 +227,7 @@ describe('canonical routing and fallback observability', () => {
     const tryModel = vi.fn().mockRejectedValueOnce(Object.assign(new Error('rate limited'), { status: 429 }))
     tryModel.mockResolvedValueOnce(result('from model-b'))
 
-    await observe.run({ name: 'fallback request', rootPrimitive: 'fallback.attempt' }, async () => {
+    await observe.run({ name: 'fallback request', rootPrimitive: 'routing.fallback' }, async () => {
       await resolveFallback(fb, tryModel)
     })
     await observe.flush()
@@ -235,7 +235,7 @@ describe('canonical routing and fallback observability', () => {
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'span:start',
-        primitive: 'fallback.attempt',
+        primitive: 'routing.fallback',
         name: 'fallback.attempt',
         attributes: expect.objectContaining({ attempt: 1, model: 'model-a', totalModels: 2 }),
       }),
@@ -271,13 +271,16 @@ describe('canonical routing and fallback observability', () => {
         type: 'artifact',
         kind: 'routing.report',
         preview: expect.objectContaining({
-          kind: 'routing.report',
-          routingKind: 'fallback',
-          chosen: 'model-b',
-          tiers: expect.arrayContaining([
-            expect.objectContaining({ tier: 0, model: 'model-a', verdict: 'error', note: 'rate limited' }),
-            expect.objectContaining({ tier: 1, model: 'model-b', verdict: 'success' }),
-          ]),
+          model: 'model-b',
+          trace: [
+            expect.objectContaining({
+              kind: 'fallback',
+              attempts: [
+                expect.objectContaining({ model: 'model-a', status: 'error', error: 'rate limited' }),
+                expect.objectContaining({ model: 'model-b', status: 'ok' }),
+              ],
+            }),
+          ],
         }),
       }),
     )
@@ -294,7 +297,7 @@ describe('canonical routing and fallback observability', () => {
     }) as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(providerError)
 
-    await observe.run({ name: 'fallback request', rootPrimitive: 'fallback.attempt' }, async () => {
+    await observe.run({ name: 'fallback request', rootPrimitive: 'routing.fallback' }, async () => {
       await expect(resolveFallback(fb, tryModel)).rejects.toBe(providerError)
     })
     await observe.flush()

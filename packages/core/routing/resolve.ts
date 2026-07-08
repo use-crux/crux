@@ -11,31 +11,30 @@ import type { RouterModel } from "./router";
 import { isCascade } from "./cascade";
 import type {
   CascadeModel,
-  CascadeMeta,
   CascadeTier,
   CascadeTierDetail,
   CascadeTierEvaluationResult,
 } from "./cascade";
 import { CascadeExhaustedError, createRoutingStreamError } from "./errors";
 import { observe } from "../observability";
-import { Deadline, withAbortSignal } from "../generation/timeout";
+import {
+  Deadline,
+  composeAbortSignals,
+  withAbortSignal,
+} from "../generation/timeout";
 import { isFallback, type FallbackModel } from "../generation/fallback";
 import { resolveFallback } from "./resolve-fallback";
-
-// ─────────────────────────────────────────────────────────────────
-// Metadata types
-// ─────────────────────────────────────────────────────────────────
-
-/** Metadata attached to `_meta.router` on routed results. */
-export interface RouterMeta {
-  routingId?: string;
-  classifiedAs: string;
-  selectedModel: string;
-  availableRoutes: string[];
-  hints: unknown | undefined;
-  overridden: boolean;
-  usedDefaultRoute: boolean;
-}
+import { gateFirstToken } from "./first-token";
+import {
+  createRoutingReceipt,
+  ensureRoutingResult,
+  prependRoutingStep,
+  routingCostFromMeta,
+  withRoutingReceipt,
+  type RoutableResult,
+  type CascadeRoutingStep,
+  type RouterRoutingStep,
+} from "./receipt";
 
 /** Options supplied to one concrete model attempt during routing resolution. */
 export interface ResolveTryOptions {
@@ -53,6 +52,8 @@ export interface ResolveModelOptions {
   readonly deadline?: Deadline;
   /** Narrower cancellation signal inherited from a containing wrapper. */
   readonly signal?: AbortSignal;
+  /** Stream first-token timeout budget inherited from the call site. */
+  readonly firstTokenMs?: number;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -76,7 +77,7 @@ export async function resolveModel<M, R>(
   tryModel: (model: M, options?: ResolveTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
   options: ResolveModelOptions = {},
-): Promise<R & { _meta: Record<string, unknown> }> {
+): Promise<RoutableResult<R>> {
   const deadline = options.deadline ?? Deadline.after(undefined);
   const ownsDeadline = options.deadline === undefined;
 
@@ -88,7 +89,7 @@ export async function resolveModel<M, R>(
         input,
         tryModel,
         extractModelId,
-        { deadline, mode: options.mode },
+        { deadline, mode: options.mode, firstTokenMs: options.firstTokenMs },
       );
     }
 
@@ -102,7 +103,7 @@ export async function resolveModel<M, R>(
         input,
         tryModel,
         extractModelId,
-        { deadline, mode: options.mode },
+        { deadline, mode: options.mode, firstTokenMs: options.firstTokenMs },
       );
     }
 
@@ -116,20 +117,34 @@ export async function resolveModel<M, R>(
             deadline,
             mode: options.mode,
             signal: attemptOptions.signal,
+            firstTokenMs: options.firstTokenMs,
           }).then((result) => result),
         describeModel: (candidate) => describeModel(candidate, extractModelId),
       });
     }
 
     // ── Raw model ──
-    const result = await withAbortSignal(
-      () => tryModel(model, { signal: deadline.compose(options.signal) }),
-      deadline.compose(options.signal),
+    const firstTokenController =
+      options.mode === "stream" && options.firstTokenMs !== undefined
+        ? new AbortController()
+        : undefined;
+    const attemptSignal = composeAbortSignals(
+      deadline.signal,
+      options.signal,
+      firstTokenController?.signal,
     );
+    const result = await withAbortSignal(
+      () => tryModel(model, { signal: attemptSignal }),
+      attemptSignal,
+    );
+    const gatedResult = await gateFirstToken(result, {
+      firstTokenMs: options.mode === "stream" ? options.firstTokenMs : undefined,
+      attemptController: firstTokenController,
+    });
     if (options.preserveRawResult) {
-      return result as R & { _meta: Record<string, unknown> };
+      return gatedResult as RoutableResult<R>;
     }
-    return ensureMeta(result);
+    return ensureRoutingResult(gatedResult);
   } finally {
     if (ownsDeadline) deadline.dispose();
   }
@@ -144,8 +159,12 @@ async function resolveRouter<M, R>(
   input: Record<string, unknown>,
   tryModel: (model: M, options?: ResolveTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
-  options: { deadline: Deadline; mode?: "generate" | "stream" },
-): Promise<R & { _meta: Record<string, unknown> }> {
+  options: {
+    deadline: Deadline;
+    mode?: "generate" | "stream";
+    firstTokenMs?: number;
+  },
+): Promise<RoutableResult<R>> {
   const { config, _forcedRoute, _hints } = routerModel;
   const availableRoutes = Object.keys(config.routes);
   const span = observe.openSpan({
@@ -221,18 +240,23 @@ async function resolveRouter<M, R>(
         options,
       );
 
-      // Attach router metadata
-      const routerMeta: RouterMeta = {
-        ...(config.id ? { routingId: config.id } : {}),
+      const routerStep: RouterRoutingStep = {
+        kind: "router",
+        ...(config.id ? { id: config.id } : {}),
         classifiedAs,
-        selectedModel: selectedModelId,
-        availableRoutes,
-        hints: _hints,
-        overridden,
+        route: usedDefaultRoute ? "default" : classifiedAs,
         usedDefaultRoute,
+        forced: overridden,
       };
-
-      result._meta = { ...result._meta, router: routerMeta };
+      const routing =
+        result.routing !== undefined
+          ? prependRoutingStep(routerStep, result.routing)
+          : createRoutingReceipt(
+              selectedModelId,
+              routingCostFromMeta(result._meta),
+              [routerStep],
+            );
+      const routedResult = withRoutingReceipt(result, routing);
       span.end({
         attributes: {
           classifiedAs,
@@ -243,7 +267,7 @@ async function resolveRouter<M, R>(
           routeCount: availableRoutes.length,
         },
       });
-      return result;
+      return routedResult;
     });
     return result;
   } catch (error) {
@@ -266,7 +290,11 @@ async function resolveCascade<M, R>(
   input: Record<string, unknown>,
   tryModel: (model: M, options?: ResolveTryOptions) => Promise<R>,
   extractModelId: (model: M) => string,
-  options: { deadline: Deadline; mode?: "generate" | "stream" },
+  options: {
+    deadline: Deadline;
+    mode?: "generate" | "stream";
+    firstTokenMs?: number;
+  },
 ): Promise<R & { _meta: Record<string, unknown> }> {
   const { tiers, budget } = cascadeModel.config;
   const tierDetails: CascadeTierDetail[] = [];
@@ -327,10 +355,14 @@ async function resolveCascade<M, R>(
               tiers.length,
               i - 1,
               true,
+              cascadeModel.config.id,
             );
             endCascadeSpan(
               cascadeSpan,
-              skipped._meta.cascade as CascadeMeta,
+              tierDetails,
+              tiers.length,
+              i - 1,
+              true,
               Date.now() - cascadeStart,
               cascadeModel.config.id,
             );
@@ -366,10 +398,14 @@ async function resolveCascade<M, R>(
             tiers.length,
             i - 1,
             true,
+            cascadeModel.config.id,
           );
           endCascadeSpan(
             cascadeSpan,
-            skipped._meta.cascade as CascadeMeta,
+            tierDetails,
+            tiers.length,
+            i - 1,
+            true,
             Date.now() - cascadeStart,
             cascadeModel.config.id,
           );
@@ -494,10 +530,14 @@ async function resolveCascade<M, R>(
                 tiers.length,
                 i,
                 false,
+                cascadeModel.config.id,
               );
               endCascadeSpan(
                 cascadeSpan,
-                acceptedResult._meta.cascade as CascadeMeta,
+                tierDetails,
+                tiers.length,
+                i,
+                false,
                 Date.now() - cascadeStart,
                 cascadeModel.config.id,
               );
@@ -528,10 +568,14 @@ async function resolveCascade<M, R>(
                 tiers.length,
                 i,
                 true,
+                cascadeModel.config.id,
               );
               endCascadeSpan(
                 cascadeSpan,
-                budgetResult._meta.cascade as CascadeMeta,
+                tierDetails,
+                tiers.length,
+                i,
+                true,
                 Date.now() - cascadeStart,
                 cascadeModel.config.id,
               );
@@ -573,10 +617,14 @@ async function resolveCascade<M, R>(
               tiers.length,
               i,
               false,
+              cascadeModel.config.id,
             );
             endCascadeSpan(
               cascadeSpan,
-              acceptedResult._meta.cascade as CascadeMeta,
+              tierDetails,
+              tiers.length,
+              i,
+              false,
               Date.now() - cascadeStart,
               cascadeModel.config.id,
             );
@@ -616,10 +664,14 @@ async function resolveCascade<M, R>(
                 tiers.length,
                 Math.max(0, i - 1),
                 true,
+                cascadeModel.config.id,
               );
               endCascadeSpan(
                 cascadeSpan,
-                budgetResult._meta.cascade as CascadeMeta,
+                tierDetails,
+                tiers.length,
+                Math.max(0, i - 1),
+                true,
                 Date.now() - cascadeStart,
                 cascadeModel.config.id,
               );
@@ -705,40 +757,55 @@ function normalizeCascadeTierCost(
 }
 
 function buildCascadeResult<R>(
-  result: R & { _meta: Record<string, unknown> },
+  result: RoutableResult<R>,
   tierDetails: CascadeTierDetail[],
-  totalTiers: number,
+  _totalTiers: number,
   acceptedAtTier: number,
   budgetExceeded: boolean,
-): R & { _meta: Record<string, unknown> } {
-  const cascadeMeta: CascadeMeta = {
-    tiersAttempted: tierDetails.filter((t) => t.status !== "skipped").length,
-    totalTiers,
+  routingId: string | undefined,
+): RoutableResult<R> {
+  const cascadeStep: CascadeRoutingStep = {
+    kind: "cascade",
+    ...(routingId ? { id: routingId } : {}),
     acceptedAtTier,
     budgetExceeded,
     tiers: tierDetails,
   };
-
-  result._meta = { ...result._meta, cascade: cascadeMeta };
-  return result;
+  const routing =
+    result.routing !== undefined
+      ? prependRoutingStep(cascadeStep, result.routing)
+      : createRoutingReceipt(
+          concreteModelFromCascadeStep(cascadeStep),
+          routingCostFromMeta(result._meta),
+          [cascadeStep],
+        );
+  return withRoutingReceipt(result, {
+    ...routing,
+    cost: routingCostFromMeta(result._meta),
+  });
 }
 
 function endCascadeSpan(
   span: ReturnType<typeof observe.openSpan>,
-  cascadeMeta: CascadeMeta,
+  tierDetails: readonly CascadeTierDetail[],
+  totalTiers: number,
+  acceptedAtTier: number,
+  budgetExceeded: boolean,
   durationMs: number,
   routingId: string | undefined,
 ): void {
+  const tiersAttempted = tierDetails.filter((tier) => tier.status !== "skipped")
+    .length;
   emitRoutingReport(span.spanId, {
     kind: "routing.report",
     routingKind: "cascade",
     ...(routingId ? { routingId } : {}),
     chosen:
-      cascadeMeta.acceptedAtTier >= 0 &&
-      cascadeMeta.tiers[cascadeMeta.acceptedAtTier]
-        ? cascadeMeta.tiers[cascadeMeta.acceptedAtTier].model
+      acceptedAtTier >= 0 &&
+      tierDetails[acceptedAtTier]
+        ? tierDetails[acceptedAtTier].model
         : undefined,
-    tiers: cascadeMeta.tiers.map((tier, index) => ({
+    tiers: tierDetails.map((tier, index) => ({
       tier: index,
       model: tier.model,
       verdict: tier.status,
@@ -751,14 +818,19 @@ function endCascadeSpan(
   });
   span.end({
     attributes: {
-      totalTiers: cascadeMeta.totalTiers,
+      totalTiers,
       ...(routingId ? { routingId } : {}),
-      tiersAttempted: cascadeMeta.tiersAttempted,
-      acceptedAtTier: cascadeMeta.acceptedAtTier,
-      budgetExceeded: cascadeMeta.budgetExceeded,
+      tiersAttempted,
+      acceptedAtTier,
+      budgetExceeded,
       durationMs,
     },
   });
+}
+
+function concreteModelFromCascadeStep(step: CascadeRoutingStep): string {
+  const acceptedTier = step.tiers[step.acceptedAtTier];
+  return acceptedTier?.model ?? "unknown";
 }
 
 function markSkippedTiers<M>(

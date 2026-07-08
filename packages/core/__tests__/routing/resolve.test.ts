@@ -3,6 +3,10 @@ import { router, cascade } from "../../routing";
 import { resolveModel } from "../../routing/resolve";
 import { fallback } from "../../generation/fallback";
 import { CascadeExhaustedError } from "../../routing/errors";
+import type {
+  CascadeRoutingStep,
+  RouterRoutingStep,
+} from "../../routing/receipt";
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers
@@ -37,6 +41,26 @@ function createTryModel(costByModel?: Record<string, number>) {
 }
 
 const extractModelId = (m: string) => m;
+
+function routerStep(result: { routing?: { trace: readonly unknown[] } }) {
+  return result.routing?.trace.find(
+    (step): step is RouterRoutingStep =>
+      typeof step === "object" &&
+      step !== null &&
+      "kind" in step &&
+      step.kind === "router",
+  );
+}
+
+function cascadeStep(result: { routing?: { trace: readonly unknown[] } }) {
+  return result.routing?.trace.find(
+    (step): step is CascadeRoutingStep =>
+      typeof step === "object" &&
+      step !== null &&
+      "kind" in step &&
+      step.kind === "cascade",
+  );
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Raw model passthrough
@@ -83,11 +107,11 @@ describe("resolveModel() — router", () => {
     );
 
     expect(calls).toEqual(["model-large"]);
-    expect(result._meta.router).toMatchObject({
-      routingId: "size-router",
+    expect(routerStep(result)).toMatchObject({
+      id: "size-router",
       classifiedAs: "large",
-      selectedModel: "model-large",
-      overridden: false,
+      route: "large",
+      forced: false,
     });
   });
 
@@ -104,8 +128,11 @@ describe("resolveModel() — router", () => {
     const result = await resolveModel(r, {}, tryModel, extractModelId);
 
     expect(calls).toEqual(["model-default"]);
-    expect(result._meta.router.classifiedAs).toBe("nonexistent");
-    expect(result._meta.router.selectedModel).toBe("model-default");
+    expect(routerStep(result)).toMatchObject({
+      classifiedAs: "nonexistent",
+      route: "default",
+      usedDefaultRoute: true,
+    });
   });
 
   it("uses forced route from .select(), skipping classify", async () => {
@@ -125,10 +152,10 @@ describe("resolveModel() — router", () => {
 
     expect(classify).not.toHaveBeenCalled();
     expect(calls).toEqual(["model-b"]);
-    expect(result._meta.router).toMatchObject({
+    expect(routerStep(result)).toMatchObject({
       classifiedAs: "b",
-      selectedModel: "model-b",
-      overridden: true,
+      route: "b",
+      forced: true,
     });
   });
 
@@ -157,7 +184,10 @@ describe("resolveModel() — router", () => {
 
     expect(classify).toHaveBeenCalledWith({}, { cheap: true });
     expect(calls).toEqual(["model-cheap"]);
-    expect(result._meta.router.hints).toEqual({ cheap: true });
+    expect(routerStep(result)).toMatchObject({
+      classifiedAs: "budget",
+      route: "budget",
+    });
   });
 
   it("supports async classify", async () => {
@@ -197,9 +227,7 @@ describe("resolveModel() — cascade", () => {
     const result = await resolveModel(c, {}, tryModel, extractModelId);
 
     expect(calls).toEqual(["model-cheap"]);
-    expect(result._meta.cascade).toMatchObject({
-      tiersAttempted: 1,
-      totalTiers: 2,
+    expect(cascadeStep(result)).toMatchObject({
       acceptedAtTier: 0,
       budgetExceeded: false,
       tiers: [
@@ -226,12 +254,11 @@ describe("resolveModel() — cascade", () => {
     const result = await resolveModel(c, {}, tryModel, extractModelId);
 
     expect(calls).toEqual(["model-cheap", "model-mid"]);
-    expect(result._meta.cascade).toMatchObject({
-      tiersAttempted: 2,
+    expect(cascadeStep(result)).toMatchObject({
       acceptedAtTier: 1,
     });
-    expect(result._meta.cascade.tiers[0].status).toBe("rejected");
-    expect(result._meta.cascade.tiers[1].status).toBe("accepted");
+    expect(cascadeStep(result)?.tiers[0]?.status).toBe("rejected");
+    expect(cascadeStep(result)?.tiers[1]?.status).toBe("accepted");
   });
 
   it("last tier without evaluate always accepts", async () => {
@@ -246,7 +273,7 @@ describe("resolveModel() — cascade", () => {
     const result = await resolveModel(c, {}, tryModel, extractModelId);
 
     expect(calls).toEqual(["model-cheap", "model-expensive"]);
-    expect(result._meta.cascade.acceptedAtTier).toBe(1);
+    expect(cascadeStep(result)?.acceptedAtTier).toBe(1);
   });
 
   it("throws CascadeExhaustedError when all tiers fail evaluation", async () => {
@@ -281,7 +308,7 @@ describe("resolveModel() — cascade", () => {
     });
     const result = await resolveModel(c, {}, tryModel, extractModelId);
 
-    expect(result._meta.cascade.budgetExceeded).toBe(true);
+    expect(cascadeStep(result)?.budgetExceeded).toBe(true);
     expect(result.text).toBe("response from model-cheap");
   });
 
@@ -308,7 +335,7 @@ describe("resolveModel() — cascade", () => {
 
     const result = await resolveModel(c, {}, tryModel, extractModelId);
 
-    expect(result._meta.cascade.budgetExceeded).toBe(true);
+    expect(cascadeStep(result)?.budgetExceeded).toBe(true);
     expect(calls).toEqual(["model-cheap"]); // never tried tier 2
   });
 
@@ -345,11 +372,11 @@ describe("resolveModel() — cascade", () => {
 
     expect(result.text).toBe("response from model-cheap");
     expect(calls).toEqual(["model-cheap", "model-slow"]);
-    expect(result._meta.cascade).toMatchObject({
+    expect(cascadeStep(result)).toMatchObject({
       budgetExceeded: true,
       acceptedAtTier: 0,
     });
-    expect(result._meta.cascade.tiers[1]).toMatchObject({
+    expect(cascadeStep(result)?.tiers[1]).toMatchObject({
       model: "model-slow",
       status: "skipped",
       note: "not reached: latency budget exceeded",
@@ -451,7 +478,11 @@ describe("resolveModel() — composition", () => {
 
     // Router selected cascade, cascade tried model-mid (rejected) then model-powerful
     expect(calls).toEqual(["model-mid", "model-powerful"]);
-    expect(result._meta.router.classifiedAs).toBe("hard");
-    expect(result._meta.cascade.acceptedAtTier).toBe(1);
+    expect(result.routing?.trace.map((step) => step.kind)).toEqual([
+      "router",
+      "cascade",
+    ]);
+    expect(routerStep(result)?.classifiedAs).toBe("hard");
+    expect(cascadeStep(result)?.acceptedAtTier).toBe(1);
   });
 });

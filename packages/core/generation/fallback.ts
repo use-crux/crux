@@ -43,26 +43,6 @@ export interface FallbackModel<M = unknown> {
   readonly options: FallbackOptions
 }
 
-/** Metadata about a single fallback attempt. */
-export interface FallbackAttemptDetail {
-  model: string
-  durationMs: number
-  status: 'success' | 'error'
-  error?: string
-  errorCategory?: ErrorCategory | null
-  cost?: number
-}
-
-/** Metadata attached to `_meta.fallback` on successful fallback results. */
-export interface FallbackMeta {
-  /** Total number of attempts (including the successful one). */
-  attempts: number
-  /** Model IDs that failed before the successful one. */
-  failedModels: string[]
-  /** Per-attempt details. */
-  details: FallbackAttemptDetail[]
-}
-
 // ─────────────────────────────────────────────────────────────────
 // fallback()
 // ─────────────────────────────────────────────────────────────────

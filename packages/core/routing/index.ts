@@ -18,18 +18,31 @@ export type {
   CascadeTier,
   CascadeTierContext,
   CascadeBudget,
-  CascadeMeta,
   CascadeTierDetail,
 } from './cascade'
 
 export { fallback, isFallback } from '../generation/fallback'
-export type { FallbackModel, FallbackOptions, FallbackMeta, FallbackAttemptDetail } from '../generation/fallback'
+export type { FallbackModel, FallbackOptions } from '../generation/fallback'
 
 export { resolveModel } from './resolve'
-export type { RouterMeta } from './resolve'
+
+export {
+  attachRoutingToError,
+  markRoutingMidStreamFailure,
+} from './receipt'
+export type {
+  AttemptDetail,
+  CascadeRoutingStep,
+  FallbackRoutingStep,
+  RoutingReceipt,
+  RoutingStep,
+  RouterRoutingStep,
+  TierDetail,
+} from './receipt'
 
 export {
   CascadeExhaustedError,
+  FallbackExhaustedError,
   RouterClassifyError,
   createRoutingStreamError,
   isRoutingStreamError,

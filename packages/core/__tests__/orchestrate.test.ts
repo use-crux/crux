@@ -10,6 +10,7 @@ import {
   wrapStreamIterable,
 } from '../generation'
 import type { OrchestrationSpec, TextDeltaExtractor } from '../generation'
+import { FallbackExhaustedError, type FallbackRoutingStep } from '../routing'
 import { resolveModel } from '../routing/resolve'
 
 // ─────────────────────────────────────────────────────────────────
@@ -25,6 +26,16 @@ function mockResult(text: string, cost?: number) {
       cost,
     },
   }
+}
+
+function fallbackStep(result: { routing?: { trace: readonly unknown[] } }) {
+  return result.routing?.trace.find(
+    (step): step is FallbackRoutingStep =>
+      typeof step === 'object' &&
+      step !== null &&
+      'kind' in step &&
+      step.kind === 'fallback',
+  )
 }
 
 /** Create a rate limit error (status 429) */
@@ -152,8 +163,11 @@ describe('resolveModel() fallback handling', () => {
 
     expect(result.text).toBe('from model-a')
     expect(tryModel).toHaveBeenCalledTimes(1)
-    // No _meta.fallback when first model succeeds
+    // Receipts include even first-try fallback success.
     expect(result._meta?.fallback).toBeUndefined()
+    expect(fallbackStep(result)?.attempts).toMatchObject([
+      { model: 'model-a', status: 'ok' },
+    ])
   })
 
     it('falls back on qualifying error (rate_limit)', async () => {
@@ -164,9 +178,10 @@ describe('resolveModel() fallback handling', () => {
 
     expect(result.text).toBe('from B')
     expect(tryModel).toHaveBeenCalledTimes(2)
-    expect(result._meta?.fallback).toBeDefined()
-    expect(result._meta.fallback.attempts).toBe(2)
-    expect(result._meta.fallback.failedModels).toEqual(['model-a'])
+    expect(fallbackStep(result)?.attempts).toMatchObject([
+      { model: 'model-a', status: 'error' },
+      { model: 'model-b', status: 'ok' },
+    ])
   })
 
     it('falls back on server error (500)', async () => {
@@ -176,7 +191,7 @@ describe('resolveModel() fallback handling', () => {
     const result = await resolveFallback(fb, tryModel, extractId)
 
     expect(result.text).toBe('from B')
-    expect(result._meta.fallback.details[0].errorCategory).toBe('server_error')
+    expect(fallbackStep(result)?.attempts[0]?.errorCategory).toBe('server_error')
   })
 
     it('does NOT fall back on non-qualifying error (400)', async () => {
@@ -187,17 +202,19 @@ describe('resolveModel() fallback handling', () => {
     expect(tryModel).toHaveBeenCalledTimes(1)
   })
 
-    it('throws AggregateError when all models fail', async () => {
+    it('throws FallbackExhaustedError when all models fail', async () => {
     const fb = fallback('model-a', 'model-b') as FallbackModel<string>
     const tryModel = vi
       .fn()
       .mockRejectedValueOnce(rateLimitError('A rate limited'))
       .mockRejectedValueOnce(serverError('B server error'))
 
-    await expect(resolveFallback(fb, tryModel, extractId)).rejects.toSatisfy((err: any) => {
-      expect(err).toBeInstanceOf(AggregateError)
+    await expect(resolveFallback(fb, tryModel, extractId)).rejects.toSatisfy((err: unknown) => {
+      expect(err).toBeInstanceOf(FallbackExhaustedError)
+      if (!(err instanceof FallbackExhaustedError)) return false
       expect(err.errors).toHaveLength(2)
       expect(err.message).toContain('All 2 fallback models failed')
+      expect(err.routing.trace[0]).toMatchObject({ kind: 'fallback' })
       return true
     })
   })
@@ -208,13 +225,13 @@ describe('resolveModel() fallback handling', () => {
 
     const result = await resolveFallback(fb, tryModel, extractId)
 
-    const details = result._meta.fallback.details
+    const details = fallbackStep(result)?.attempts ?? []
     expect(details).toHaveLength(2)
     expect(details[0].model).toBe('model-a')
     expect(details[0].status).toBe('error')
     expect(typeof details[0].durationMs).toBe('number')
     expect(details[1].model).toBe('model-b')
-    expect(details[1].status).toBe('success')
+    expect(details[1].status).toBe('ok')
     expect(typeof details[1].durationMs).toBe('number')
   })
 
@@ -228,10 +245,10 @@ describe('resolveModel() fallback handling', () => {
 
     const result = await resolveFallback(fb, tryModel, extractId)
 
-    const details = result._meta.fallback.details
+    const details = fallbackStep(result)?.attempts ?? []
     expect(details[0].errorCategory).toBe('rate_limit')
     expect(details[1].errorCategory).toBe('server_error')
-    expect(details[2].status).toBe('success')
+    expect(details[2].status).toBe('ok')
   })
 
     it('respects `on` filter', async () => {
@@ -271,7 +288,7 @@ describe('resolveModel() fallback handling', () => {
     const result = await resolveFallback(fb, tryModel, extractId)
 
     expect(result.text).toBe('from B')
-    expect(result._meta.fallback.details[0].errorCategory).toBe('timeout')
+    expect(fallbackStep(result)?.attempts[0]?.errorCategory).toBe('timeout')
   })
 
     it('passes the fallback timeout signal to the active model attempt', async () => {
@@ -339,8 +356,11 @@ describe('resolveModel() fallback handling', () => {
     const result = await resolveFallback(fb, tryModel, extractId)
 
     expect(result.text).toBe('from C')
-    expect(result._meta.fallback.attempts).toBe(3)
-    expect(result._meta.fallback.failedModels).toEqual(['model-a', 'model-b'])
+    expect(fallbackStep(result)?.attempts).toMatchObject([
+      { model: 'model-a', status: 'error' },
+      { model: 'model-b', status: 'error' },
+      { model: 'model-c', status: 'ok' },
+    ])
   })
 })
 

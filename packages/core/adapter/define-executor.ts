@@ -21,6 +21,7 @@
 
 import type { AnyPrompt } from "../prompt/prompt-types";
 import type { GenerationSettings, TraceMeta } from "../generation/types";
+import type { RoutingReceipt } from "../routing/receipt";
 import { Deadline } from "../generation/timeout";
 import type { TimeoutOptions } from "../generation/timeout";
 import type { Message } from "../generation/messages";
@@ -143,6 +144,8 @@ export interface ExecutorGenerateResult<TRawResponse> {
   object?: unknown;
   /** Normalized metadata (usage, finish reason, cost, audits, routing). */
   _meta: TraceMeta;
+  /** Routing decisions for calls that used a routing wrapper. */
+  routing?: RoutingReceipt;
   /** Budget-consuming steps taken (validation retries count; refunds don't). */
   steps: number;
   /** Canonical message history, including approval request/resume messages. */
@@ -327,7 +330,7 @@ export function loopRuntimeAdapter<
         opts.input ?? {},
         runWithModel,
         modelLabel,
-        { deadline, mode: "stream" },
+        { deadline, mode: "stream", firstTokenMs: opts.timeout?.firstToken },
       );
     } finally {
       deadline.dispose();

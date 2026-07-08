@@ -72,7 +72,7 @@ export const CRUX_PRIMITIVE_NAMES = [
   "guardrail.run",
   "routing.router",
   "routing.cascade",
-  "fallback.attempt",
+  "routing.fallback",
   "cache.lookup",
   "compaction.run",
   "eval.run",
@@ -200,7 +200,7 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   "guardrail.run": "guardrail",
   "routing.router": "routing",
   "routing.cascade": "routing",
-  "fallback.attempt": "routing",
+  "routing.fallback": "routing",
   "cache.lookup": "cache",
   "compaction.run": "compaction",
   "eval.run": "eval",
@@ -589,8 +589,11 @@ export interface CruxRoutingTierPreview {
 }
 
 export interface CruxRoutingReportPreview {
-  kind: "routing.report";
-  routingKind: "router" | "cascade" | "fallback";
+  kind?: "routing.report";
+  routingKind?: "router" | "cascade" | "fallback";
+  model?: string;
+  cost?: number;
+  trace?: readonly Record<string, unknown>[];
   chosen?: string;
   classifiedAs?: string;
   fallbackReason?: string;

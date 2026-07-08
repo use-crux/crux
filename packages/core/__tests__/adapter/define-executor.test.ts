@@ -315,9 +315,15 @@ describe("loopRuntimeAdapter — routing dispatch", () => {
     expect(fake.calls.runTextLoop).toHaveLength(2);
     expect(fake.calls.runTextLoop[0]!.modelInfo.modelId).toBe("primary");
     expect(fake.calls.runTextLoop[1]!.modelInfo.modelId).toBe("backup");
-    expect(
-      (result._meta as { fallback?: { attempts: number } }).fallback?.attempts,
-    ).toBe(2);
+    expect(result.routing?.trace).toMatchObject([
+      {
+        kind: "fallback",
+        attempts: [
+          { model: "primary", status: "error" },
+          { model: "backup", status: "ok" },
+        ],
+      },
+    ]);
   });
 
   it("applies timeout.totalMs once across three hanging fallback attempts", async () => {
@@ -349,7 +355,9 @@ describe("loopRuntimeAdapter — routing dispatch", () => {
       timeout: { totalMs: 300 },
     });
 
-    await expect(result).rejects.toMatchObject({ name: "AggregateError" });
+    await expect(result).rejects.toMatchObject({
+      name: "FallbackExhaustedError",
+    });
     expect(Date.now() - start).toBeLessThan(450);
     expect(
       fake.calls.runTextLoop.map((request) => request.modelInfo.modelId),

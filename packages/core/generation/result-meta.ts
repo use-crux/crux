@@ -10,7 +10,6 @@
  * @internal
  */
 
-import type { FallbackMeta } from './fallback'
 import type { TokenUsage } from './types'
 
 /** Metadata attached to generate/stream results by adapters. */
@@ -24,7 +23,6 @@ export interface ResultMeta {
       tokensPerSecond?: number
       totalChunks?: number
     }
-    fallback?: FallbackMeta
     [key: string]: unknown
   }
 }

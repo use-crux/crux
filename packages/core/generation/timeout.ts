@@ -9,7 +9,7 @@
  */
 
 /** Timeout budget names used by {@link TimeoutError}. */
-export type TimeoutBudget = "total" | "step" | "chunk" | "tool";
+export type TimeoutBudget = "total" | "step" | "chunk" | "tool" | "firstToken";
 
 /**
  * Timeout policy for a managed `generate()` or `stream()` call.
@@ -24,6 +24,8 @@ export interface TimeoutOptions {
   readonly stepMs?: number;
   /** Maximum inactivity gap between stream chunks. */
   readonly chunkMs?: number;
+  /** Maximum time to the first emitted stream token. */
+  readonly firstToken?: number;
   /** Default budget for each tool execution. */
   readonly toolMs?: number;
   /** Per-tool execution budgets, keyed by tool name. */
