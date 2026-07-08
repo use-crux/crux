@@ -110,12 +110,31 @@ function buildUserPrompt(input: JudgeInput): string {
   return parts.join('\n')
 }
 
-function frameUntrustedContent(value: string): string {
+function frameUntrustedContent(value: unknown): string {
   return `<untrusted-content>\n${escapeUntrustedContent(value)}\n</untrusted-content>`
 }
 
-function escapeUntrustedContent(value: string): string {
-  return value.replaceAll(UNTRUSTED_CONTENT_CLOSE_TAG, '<\\/untrusted-content>')
+function escapeUntrustedContent(value: unknown): string {
+  return stringifyJudgeContent(value).replaceAll(UNTRUSTED_CONTENT_CLOSE_TAG, '<\\/untrusted-content>')
+}
+
+/**
+ * Convert structured judge input into inspectable prompt text before framing.
+ *
+ * The scoring API is typed for text, but Safety constraints can adapt richer
+ * boundary values at runtime. Preserve strings exactly and serialize objects
+ * so the judge sees their fields instead of `[object Object]`.
+ */
+function stringifyJudgeContent(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value === undefined) return ''
+  try {
+    const json = JSON.stringify(value, null, 2)
+    if (json !== undefined) return json
+  } catch {
+    // Fall back below for values JSON cannot represent, such as cycles.
+  }
+  return String(value)
 }
 
 /**

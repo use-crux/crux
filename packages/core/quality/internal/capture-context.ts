@@ -11,6 +11,7 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks'
 import type { CruxGraphRecord } from '../../observability/contract'
+import { registerQualityObservabilityCaptureHooks } from '../../observability/quality-capture-hooks'
 
 /** Per-run capture sink consumed by the observability emitter. @internal */
 export interface QualityCaptureSession {
@@ -59,3 +60,8 @@ export function shouldQuarantineQualityWrite(): boolean {
   token.quarantined += 1
   return true
 }
+
+registerQualityObservabilityCaptureHooks({
+  currentCaptureSession: currentQualityCaptureSession,
+  shouldQuarantineWrite: shouldQuarantineQualityWrite,
+})

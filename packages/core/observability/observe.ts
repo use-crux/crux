@@ -59,9 +59,9 @@ import {
   type UnsequencedCruxGraphRecord,
 } from './sequence'
 import {
-  currentQualityCaptureSession,
-  shouldQuarantineQualityWrite,
-} from '../quality/internal/capture-context'
+  currentQualityObservabilityCaptureSession,
+  shouldQuarantineQualityObservabilityWrite,
+} from './quality-capture-hooks'
 
 export {
   subscribeObservability,
@@ -283,9 +283,9 @@ function emit(
     return
   }
 
-  if (shouldQuarantineQualityWrite()) return
+  if (shouldQuarantineQualityObservabilityWrite()) return
 
-  currentQualityCaptureSession()?.send([validated.record])
+  currentQualityObservabilityCaptureSession()?.send([validated.record])
   publishObservabilitySubscribers(validated.record)
   publishObservabilityChannel(validated.record)
   deliveryEngine.enqueue(validated.record)
@@ -312,7 +312,7 @@ function emitObserved(
 function hasActiveObservabilitySinks(): boolean {
   return (
     deliveryEngine.currentTransport() !== undefined ||
-    currentQualityCaptureSession() !== undefined ||
+    currentQualityObservabilityCaptureSession() !== undefined ||
     hasObservabilitySubscribers() ||
     channelHasSubscribers()
   )
@@ -1114,7 +1114,7 @@ export const observe = {
   },
 
   event(options: ObserveEventOptions): void {
-    if (shouldQuarantineQualityWrite()) return
+    if (shouldQuarantineQualityObservabilityWrite()) return
     const context = currentContext()
     const spanId = context?.spanStack[context.spanStack.length - 1]
     if (!context) {
@@ -1141,7 +1141,7 @@ export const observe = {
   },
 
   artifact(options: ObserveArtifactOptions): CruxArtifactId | undefined {
-    if (shouldQuarantineQualityWrite()) return undefined
+    if (shouldQuarantineQualityObservabilityWrite()) return undefined
     const context = currentContext()
     if (!context) {
       recordContextlessRecord('artifact')
@@ -1176,7 +1176,7 @@ export const observe = {
   },
 
   edge(options: ObserveEdgeOptions): void {
-    if (shouldQuarantineQualityWrite()) return
+    if (shouldQuarantineQualityObservabilityWrite()) return
     const context = currentContext()
     if (!context) {
       recordContextlessRecord('edge')
