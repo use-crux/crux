@@ -8,6 +8,7 @@ package qualitycmd
 // stream; `quality show` reuses it to render a saved record identically.
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -146,10 +147,35 @@ func (r *qualityRenderer) cellFailure(cell *domain.QualityCell, indent string) {
 			fmt.Fprintf(out, "%s      re-record with: crux quality run %s --replay record-new\n", indent, cell.CaseID)
 		}
 	}
+	if provenance, ok := datasetProvenanceFromCell(cell); ok {
+		fmt.Fprintf(out, "%s    %s\n", indent,
+			r.io.Sprint(output.Dim, fmt.Sprintf("dataset %s @ %s", provenance.Path, provenance.ContentFingerprint)))
+	}
 	for _, traceID := range cell.TraceIDs {
 		url := fmt.Sprintf("http://localhost:%d/runs/%s", r.port, traceID)
 		fmt.Fprintf(out, "%s    trace → %s\n", indent, r.io.Hyperlink(traceID, url, true))
 	}
+}
+
+type renderedDatasetProvenance struct {
+	Path               string `json:"path"`
+	ContentFingerprint string `json:"contentFingerprint"`
+}
+
+func datasetProvenanceFromCell(cell *domain.QualityCell) (renderedDatasetProvenance, bool) {
+	if cell.Metadata == nil || len(*cell.Metadata) == 0 {
+		return renderedDatasetProvenance{}, false
+	}
+	var metadata struct {
+		DatasetProvenance renderedDatasetProvenance `json:"datasetProvenance"`
+	}
+	if err := json.Unmarshal(*cell.Metadata, &metadata); err != nil {
+		return renderedDatasetProvenance{}, false
+	}
+	if metadata.DatasetProvenance.Path == "" || metadata.DatasetProvenance.ContentFingerprint == "" {
+		return renderedDatasetProvenance{}, false
+	}
+	return metadata.DatasetProvenance, true
 }
 
 // gates renders the gate results: a bold section label (with an informational

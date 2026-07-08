@@ -30,6 +30,7 @@ export interface RawCase {
   afterScores?: (ctx: never) => void | Promise<void>
   trials?: number
   tags?: readonly string[]
+  metadata?: Record<string, unknown>
   only?: boolean
   skip?: boolean | string
 }

@@ -12,6 +12,44 @@ statistically honest aggregates — and **gates** drive CI exit codes. A
 every later run auto-compares against it. **Cassettes** replay model calls
 deterministically at the executor boundary.
 
+## First eval in 10 minutes
+
+Start from the Crux definition you already ship. Quality is most useful when
+it protects a prompt, flow, agent, or retriever that the Project Index can see,
+because Devtools can then show changed definitions, missing coverage, traces,
+baselines, and failures as one connected graph.
+
+```bash
+crux quality init
+```
+
+`init` lists index-visible definitions without eval coverage, or creates a
+starter eval directly when there is one clear target. To choose explicitly:
+
+```bash
+crux quality init prompt:support-triage
+```
+
+The scaffolded file lives under `evals/`, imports the target, includes
+`covers: ['prompt:support-triage']`, and starts with one data row. Replace the
+TODO case with a real customer-shaped input, then run:
+
+```bash
+crux quality run support-triage --ci
+```
+
+After you have local traces for the same definition, turn observed behavior
+into reviewable cases:
+
+```bash
+crux quality import-traces --definition support-triage --with-expected
+```
+
+Imported rows are JSONL dataset rows tagged `trace-import`. Each row keeps
+trace provenance, and Quality records also store the dataset path plus content
+fingerprint on failed cells, run summaries, experiment diffs, and failure
+artifacts so agents can tell which source data produced a regression.
+
 ## The ladder
 
 Every feature is reachable from the previous level by **adding keys to the

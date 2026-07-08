@@ -7,6 +7,7 @@ function cell(input: {
   score: number
   passed: boolean
   output?: unknown
+  datasetProvenance?: { path: string; contentFingerprint: string }
 }): ExperimentRecord['cells'][number] {
   return {
     caseId: input.caseId,
@@ -23,6 +24,7 @@ function cell(input: {
     durationMs: 1,
     traceIds: [],
     capturedSignals: [],
+    ...(input.datasetProvenance !== undefined ? { metadata: { datasetProvenance: input.datasetProvenance } } : {}),
   }
 }
 
@@ -114,5 +116,39 @@ describe('compareExperiments', () => {
     expect(diff.comparable).toBe(false)
     expect(diff.fingerprintDrift).toEqual(['config'])
     expect(diff.scores.find((score) => score.name === 'quality')?.delta).toBe(-0.5)
+  })
+
+  it('includes dataset provenance on matched case rows when present', () => {
+    const reference = record({
+      experimentId: '01KTA',
+      cells: [
+        cell({
+          caseId: 'trace-imported',
+          score: 1,
+          passed: true,
+          datasetProvenance: { path: 'evals/datasets/support.jsonl', contentFingerprint: 'abc123' },
+        }),
+      ],
+      passed: true,
+    })
+    const candidate = record({
+      experimentId: '01KTB',
+      cells: [
+        cell({
+          caseId: 'trace-imported',
+          score: 0.5,
+          passed: false,
+          datasetProvenance: { path: 'evals/datasets/support.jsonl', contentFingerprint: 'abc123' },
+        }),
+      ],
+      passed: false,
+    })
+
+    const diff = compareExperiments(reference, candidate)
+
+    expect(diff.cases[0]).toMatchObject({
+      caseId: 'trace-imported',
+      datasetProvenance: { path: 'evals/datasets/support.jsonl', contentFingerprint: 'abc123' },
+    })
   })
 })

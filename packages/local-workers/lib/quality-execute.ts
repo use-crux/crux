@@ -13,13 +13,17 @@ import type { ExperimentDiff, QualityRunnerEnv, QualityRunnerEvent } from '@use-
 import type { QualitySourceFrameResolver, ReplayMode } from '@use-crux/core/quality'
 import type { CollectedEvaluation, CollectError } from './quality-collect'
 import type { RunnerCore } from './quality-core-bridge'
+import type { QualityInitTarget } from './quality-init'
 
 // ─────────────────────────────────────────────────────────────────
 // Event stream (spec 03 §2 — one stream, no per-kind pipelines)
 // ─────────────────────────────────────────────────────────────────
 
 /** The worker ⇄ CLI event stream. Serialized as NDJSON on stdout. */
-export type QualityRunEvent = QualityRunnerEvent | { type: 'diff:done'; runId?: string; diff: ExperimentDiff }
+export type QualityRunEvent =
+  | QualityRunnerEvent
+  | { type: 'diff:done'; runId?: string; diff: ExperimentDiff }
+  | { type: 'init:targets'; runId?: string; targets: readonly QualityInitTarget[] }
 
 // ─────────────────────────────────────────────────────────────────
 // Options

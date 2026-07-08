@@ -44,6 +44,13 @@ export interface ExperimentDiffCase {
   aPassed: boolean
   bPassed: boolean
   scoreDeltas: Record<string, number>
+  datasetProvenance?: ExperimentDiffDatasetProvenance
+}
+
+/** Dataset source fingerprint attached to imported or dataset-backed rows. */
+export interface ExperimentDiffDatasetProvenance {
+  path: string
+  contentFingerprint: string
 }
 
 /** JSON summary object emitted by `crux quality run --json`. */
@@ -76,6 +83,7 @@ export interface RunSummaryFailure {
   trial: number
   phase: string
   summary: string
+  datasetProvenance?: ExperimentDiffDatasetProvenance
   evidence: { recordPath?: string; cellEvidenceCommand?: string }
 }
 

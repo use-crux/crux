@@ -103,6 +103,8 @@ export interface LoadedQualityProject {
   configDir: string
   /** Imported config file, absent when Quality is running from source conventions only. */
   configPath?: string
+  /** Imported config module, reused by worker-side tooling that inspects exports. */
+  configModule?: Record<string, unknown>
 }
 
 function isCruxInstance(value: unknown): value is Crux {
@@ -153,6 +155,7 @@ export async function loadQualityProject(configPath?: string): Promise<LoadedQua
     promptDiagnostics: discovered.diagnostics,
     configDir: projectRoot.rootDir,
     configPath: projectRoot.configPath,
+    configModule: configModule as Record<string, unknown>,
   }
 }
 

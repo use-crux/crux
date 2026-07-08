@@ -24,6 +24,8 @@ func TestQualityRunSummaryObjectUsesReporterState(t *testing.T) {
 		DurationMs:  1250,
 		CostUsd:     0.12,
 	}
+	metadata := json.RawMessage(`{"datasetProvenance":{"path":"evals/datasets/support.jsonl","contentFingerprint":"abc123"}}`)
+	failing.Metadata = &metadata
 	failing.Assertions.Outcomes = []domain.QualityAssertionOutcome{{
 		Status:  "failed",
 		Phase:   "expect",
@@ -69,6 +71,10 @@ func TestQualityRunSummaryObjectUsesReporterState(t *testing.T) {
 	failure := failures[0].(map[string]any)
 	if failure["summary"] != "expected refund window" {
 		t.Fatalf("failure summary = %+v", failure)
+	}
+	provenance := failure["datasetProvenance"].(map[string]any)
+	if provenance["path"] != "evals/datasets/support.jsonl" || provenance["contentFingerprint"] != "abc123" {
+		t.Fatalf("failure dataset provenance = %+v", provenance)
 	}
 	evidence := failure["evidence"].(map[string]any)
 	if got := evidence["cellEvidenceCommand"].(string); !strings.Contains(got, "crux quality cell-evidence 01KTEXPERIMENT --case refund-policy --variant candidate --trial 0 --json") {

@@ -52,12 +52,13 @@ type qualityRunCellSummary struct {
 }
 
 type qualityRunFailureSummary struct {
-	CaseID   string                    `json:"caseId"`
-	Variant  string                    `json:"variant"`
-	Trial    int                       `json:"trial"`
-	Phase    string                    `json:"phase"`
-	Summary  string                    `json:"summary"`
-	Evidence qualityRunFailureEvidence `json:"evidence"`
+	CaseID            string                     `json:"caseId"`
+	Variant           string                     `json:"variant"`
+	Trial             int                        `json:"trial"`
+	Phase             string                     `json:"phase"`
+	Summary           string                     `json:"summary"`
+	DatasetProvenance *renderedDatasetProvenance `json:"datasetProvenance,omitempty"`
+	Evidence          qualityRunFailureEvidence  `json:"evidence"`
 }
 
 type qualityRunFailureEvidence struct {
@@ -130,12 +131,17 @@ func buildQualityRunEvaluationSummary(state *qualityEvalState, recordPath string
 
 func qualityRunFailure(cell domain.QualityCell, experimentID string, recordPath string) qualityRunFailureSummary {
 	phase, message := qualityRunFailureMessage(cell)
+	var datasetProvenance *renderedDatasetProvenance
+	if provenance, ok := datasetProvenanceFromCell(&cell); ok {
+		datasetProvenance = &provenance
+	}
 	return qualityRunFailureSummary{
-		CaseID:  cell.CaseID,
-		Variant: cell.VariantName,
-		Trial:   cell.Trial,
-		Phase:   phase,
-		Summary: message,
+		CaseID:            cell.CaseID,
+		Variant:           cell.VariantName,
+		Trial:             cell.Trial,
+		Phase:             phase,
+		Summary:           message,
+		DatasetProvenance: datasetProvenance,
 		Evidence: qualityRunFailureEvidence{
 			RecordPath:          recordPath,
 			CellEvidenceCommand: qualityCellEvidenceCommand(experimentID, cell),

@@ -101,6 +101,7 @@ definition time instead (unknown key → immediate `TypeError`).
   afterScores?: (ctx) => void    // case-SPECIFIC post-score assertions
   trials?: number                // wins over evaluation-level trials
   tags?: string[]
+  metadata?: Record<string, unknown> // portable row metadata, preserved on the cell
   only?: boolean
   skip?: boolean | string        // reason string shown in the reporter
 }
@@ -352,6 +353,13 @@ Schema-validated file dataset — JSON, JSONL, or CSV by extension, validated
 with any Standard Schema library (zod, valibot, arktype). Resolved lazily by
 the runner; validation failure is a definition error. Rows are pure data (no
 `expect` callbacks).
+
+Rows may include `metadata`. Quality preserves object metadata on the
+persisted cell. When a dataset row has `metadata.provenance`, the cell also
+gets `metadata.datasetProvenance` with the dataset path, the file content
+fingerprint, and the row provenance. Failure artifacts, run-summary failures,
+and experiment diffs expose the path and fingerprint so agents can trace a
+regression back to the exact imported dataset content.
 
 ## `cassette(name, opts?)` and replay
 

@@ -54,6 +54,14 @@ export interface CaseOptions<
   trials?: number
   /** Free-form labels shown in reports and usable for filtering. */
   tags?: readonly string[]
+  /**
+   * Portable row metadata carried into experiment records.
+   *
+   * Dataset imports use this for provenance such as trace id, observation time,
+   * and source. Quality treats metadata as evidence only; it never changes
+   * execution or scorer behavior.
+   */
+  metadata?: Record<string, unknown>
   /** Run only this case (and other `only` cases) in watch/dev runs. */
   only?: boolean
   /** Skip this case — `true` or a reason string (shown in the reporter). */

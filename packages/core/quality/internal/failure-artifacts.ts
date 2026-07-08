@@ -10,7 +10,13 @@
  */
 
 import type { CellAssertionOutcome, Experiment, ExperimentCell } from '../experiment'
-import type { FailureArtifact, FailureArtifactPhase, FailureArtifactScore, SuggestedFixSurface } from '../failure-artifact'
+import type {
+  FailureArtifact,
+  FailureArtifactDatasetProvenance,
+  FailureArtifactPhase,
+  FailureArtifactScore,
+  SuggestedFixSurface,
+} from '../failure-artifact'
 import { isFailureOutcome } from './assertion-outcomes'
 
 type QualityExperiment = Experiment<unknown, unknown, string, string>
@@ -35,6 +41,7 @@ function buildFailureArtifact(
   const failedOutcomes = cell.assertions.outcomes.filter(isFailureOutcome)
   const sourceRef = firstSourceRef(cell, failedOutcomes)
   const spanIds = spanIdsOf(failedOutcomes)
+  const datasetProvenance = datasetProvenanceOf(cell)
   const artifact: FailureArtifact = {
     caseId: cell.caseId,
     ...(cell.caseName !== undefined ? { caseName: cell.caseName } : {}),
@@ -53,6 +60,7 @@ function buildFailureArtifact(
     ...(cassetteIdOf(cell) !== undefined ? { cassetteId: cassetteIdOf(cell) } : {}),
     ...(cell.costUsd !== undefined ? { cost: { usd: cell.costUsd } } : {}),
     durationMs: cell.durationMs,
+    ...(datasetProvenance !== undefined ? { datasetProvenance } : {}),
     suggestedFixSurfaces: classifyFixSurfaces(experiment, cell, failedOutcomes),
   }
   return artifact
@@ -104,6 +112,17 @@ function cassetteIdOf(cell: ExperimentCell<unknown, unknown>): string | undefine
   if (missing !== undefined) return missing
   const value = cell.metadata?.cassetteId
   return typeof value === 'string' ? value : undefined
+}
+
+function datasetProvenanceOf(cell: ExperimentCell<unknown, unknown>): FailureArtifactDatasetProvenance | undefined {
+  const value = cell.metadata?.datasetProvenance
+  if (value === null || typeof value !== 'object') return undefined
+  const provenance = value as Record<string, unknown>
+  if (typeof provenance.path !== 'string' || typeof provenance.contentFingerprint !== 'string') return undefined
+  return {
+    path: provenance.path,
+    contentFingerprint: provenance.contentFingerprint,
+  }
 }
 
 function classifyFixSurfaces(

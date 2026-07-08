@@ -1,8 +1,10 @@
-import { mkdtemp, readFile } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
+import { mkdtemp, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { evaluate } from '../../quality'
+import { z } from 'zod'
+import { dataset, evaluate } from '../../quality'
 import { compareExperiments } from '../../quality/internal/compare'
 import { experimentDiffSchema, experimentRecordSchema, failureArtifactSchema, toJsonSchema } from '../../quality/schemas'
 import { runEvaluationWithRunner as run } from './runner-harness'
@@ -46,6 +48,57 @@ describe('@use-crux/core/quality/schemas', () => {
 
     expect(() => experimentRecordSchema.parse({ ...record, cells: 'not cells' })).toThrow()
     expect(toJsonSchema('experiment')).toMatchObject({ type: 'object' })
+  })
+
+  it('persists dataset provenance metadata and content fingerprint on dataset-backed failures', async () => {
+    const dir = await qualityDir()
+    const rootDir = await mkdtemp(join(tmpdir(), 'crux-quality-dataset-provenance-'))
+    await mkdir(join(rootDir, 'evals/datasets'), { recursive: true })
+    const datasetPath = 'evals/datasets/support.jsonl'
+    const row = JSON.stringify({
+      name: 'trace imported case',
+      input: { question: 'refund?' },
+      expected: { answer: '30 days' },
+      metadata: {
+        provenance: {
+          traceId: 'trace_123',
+          observedAt: '2026-07-08T12:00:00.000Z',
+          source: 'trace-import',
+        },
+      },
+    })
+    await writeFile(join(rootDir, datasetPath), `${row}\n`, 'utf8')
+    const contentFingerprint = createHash('sha256').update(`${row}\n`).digest('hex')
+
+    const evaluation = evaluate('schemas.dataset-provenance', {
+      task: (input: { question: string }) => ({ answer: `wrong: ${input.question}` }),
+      data: dataset(datasetPath, {
+        input: z.object({ question: z.string() }),
+        expected: z.object({ answer: z.string() }),
+      }),
+      expect: (ctx) => {
+        ctx.expect(ctx.output.answer).toBe(ctx.expected.answer)
+      },
+    })
+
+    const experiment = await run(evaluation, undefined, { dir, rootDir, persist: true })
+    const recordPath = join(dir, 'experiments', `${experiment.experimentId}.json`)
+    const record = experimentRecordSchema.parse(JSON.parse(await readFile(recordPath, 'utf8')) as unknown)
+    const cell = record.cells[0]!
+
+    expect(cell.metadata?.datasetProvenance).toEqual({
+      path: datasetPath,
+      contentFingerprint,
+      row: {
+        traceId: 'trace_123',
+        observedAt: '2026-07-08T12:00:00.000Z',
+        source: 'trace-import',
+      },
+    })
+    expect(record.failures?.[0]?.datasetProvenance).toEqual({
+      path: datasetPath,
+      contentFingerprint,
+    })
   })
 
   it('parses experiment diff JSON and renders its JSON Schema', async () => {

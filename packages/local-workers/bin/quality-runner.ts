@@ -43,6 +43,7 @@ import { enableQualityRunnerObservability, flushQualityRunnerObservability } fro
 import { promoteExperiment } from '../lib/quality-promote'
 import { createQualityRunId } from '../lib/quality-run-id'
 import { getArg, getRepeatedArg, hasFlag, positionalArgs } from '../lib/quality-runner-argv'
+import { discoverQualityInitTargets } from '../lib/quality-init'
 
 // Redirect console.log to stderr so stdout stays clean NDJSON.
 console.log = (...args: unknown[]) => console.error(...args)
@@ -69,6 +70,8 @@ async function main(): Promise<number> {
   const pinId = getArg(args, '--pin-id')
   const diffA = getArg(args, '--diff-a')
   const diffB = getArg(args, '--diff-b')
+  const initTargets = hasFlag(args, '--init-targets')
+  const initDefinition = getArg(args, '--definition')
   const ids = positionalArgs(args)
 
   const REPLAY_MODES: readonly ReplayMode[] = ['live', 'record-new', 'replay-strict', 'refresh']
@@ -148,6 +151,17 @@ async function main(): Promise<number> {
       await flushQualityRunnerObservability(observabilityCore)
       restoreObservability?.()
     }
+  }
+
+  if (initTargets) {
+    const targets = discoverQualityInitTargets(project)
+    const selected =
+      initDefinition === undefined ? targets : targets.filter((target) => target.definitionId === initDefinition)
+    emit({ type: 'init:targets', targets: selected })
+    emit({ type: 'run:done', experiments: [], exitCode: 0 })
+    await flushQualityRunnerObservability(observabilityCore)
+    restoreObservability?.()
+    return 0
   }
 
   const settings = resolveQualityRunnerSettings(project.quality, project.configDir)

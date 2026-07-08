@@ -202,6 +202,12 @@ interface ResolvedCase {
   raw: RawCase
 }
 
+interface DatasetProvenanceMetadata {
+  path: string
+  contentFingerprint: string
+  row?: unknown
+}
+
 async function validateRow(schema: StandardSchemaV1, value: unknown, where: string): Promise<unknown> {
   const result = await schema['~standard'].validate(value)
   if (result.issues !== undefined) {
@@ -236,6 +242,7 @@ async function loadDataset(dataset: RawDataset, rootDir: string): Promise<RawCas
   } catch (error) {
     throw new QualityDefinitionError(`dataset '${dataset.path}': cannot read file at ${path} (${error instanceof Error ? error.message : String(error)}).`)
   }
+  const contentFingerprint = sha256Hex(text)
 
   let rows: unknown[]
   if (dataset.path.endsWith('.jsonl')) {
@@ -273,6 +280,14 @@ async function loadDataset(dataset: RawDataset, rootDir: string): Promise<RawCas
       ...(expected !== undefined ? { expected } : {}),
       ...(typeof record.trials === 'number' ? { trials: record.trials } : {}),
       ...(Array.isArray(record.tags) ? { tags: record.tags as string[] } : {}),
+      metadata: {
+        ...(isRecord(record.metadata) ? record.metadata : {}),
+        datasetProvenance: {
+          path: dataset.path,
+          contentFingerprint,
+          ...(isRecord(record.metadata) && record.metadata.provenance !== undefined ? { row: record.metadata.provenance } : {}),
+        } satisfies DatasetProvenanceMetadata,
+      },
       ...(record.skip !== undefined ? { skip: record.skip as boolean | string } : {}),
       ...(record.only !== undefined ? { only: record.only as boolean } : {}),
     })
@@ -1076,6 +1091,7 @@ async function assembleCell(args: {
   const redactedOutput = truncateOutput(applyRedaction(output, input.redactPaths))
 
   const metadata: Record<string, unknown> = {
+    ...(rawCase.metadata !== undefined ? rawCase.metadata : {}),
     ...(redactedOutput.truncated ? { truncated: true } : {}),
     ...(cached ? { cached: true } : {}),
   }

@@ -827,6 +827,10 @@ on the final ingest endpoint. Flush failures are swallowed at
 this local auto-attach boundary so a dead devtools server or tunnel cannot change the Quality run's
 exit result. This keeps experiment `traceIds` and the canonical `/api/observability/runs/{runId}`
 graph in the same backend whenever quality runs are executed with devtools attached.
+Quality dataset rows may carry portable metadata; when a row includes trace-import provenance, the
+runner derives dataset provenance from the dataset path and file content fingerprint and stores it on
+cells, failure artifacts, compact run-summary failures, and experiment diffs. Consumers can therefore
+identify the exact dataset content behind a regression without rereading mutable source files.
 
 **Rules:**
 

@@ -132,6 +132,11 @@ trace/source references, and suggested fix surfaces for agents. Tools can
 validate records and CLI JSON through `@use-crux/core/quality/schemas`, and
 compare saved runs with `crux quality diff <expA> <expB> --json`.
 
+Dataset-backed cells preserve portable row `metadata`. Imported trace rows keep
+`metadata.provenance`, and persisted cells derive `metadata.datasetProvenance`
+with the dataset path and content fingerprint. That same provenance appears on
+failure artifacts, compact run-summary failures, and experiment diff case rows.
+
 When a cell reaches `timeoutMs`, Crux records a timeout result and quarantines
 later task effects such as trace, cassette, and score writes; JavaScript user
 code is not forcibly killed.

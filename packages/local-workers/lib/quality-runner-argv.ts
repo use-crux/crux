@@ -20,6 +20,7 @@ const VALUE_FLAGS = new Set([
   '--pin-id',
   '--diff-a',
   '--diff-b',
+  '--definition',
 ])
 
 /** Return positional args after skipping worker flags with values. */

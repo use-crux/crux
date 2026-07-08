@@ -237,6 +237,8 @@ optional policy/defaults, not a required primitive registry. See the
 [Quality guide](/docs/guides/quality).
 
 ```bash
+crux quality init [definition-id]  # Scaffold an eval for an uncovered definition
+crux quality import-traces --definition <id> # Create JSONL cases from local traces
 crux quality run [id...]            # Run all discovered evaluations, or the listed ids
 crux quality watch [id...]          # Incremental re-run on change (also embedded in `crux dev`)
 crux quality list                   # Discovered evaluations (manifests), no execution
@@ -248,6 +250,41 @@ crux quality promote <experimentId> [--variant <name>] [--pin-id <id>]
 ```
 
 Quality is the supported evaluation CLI namespace.
+
+### `crux quality init`
+
+Scaffold the first eval for a Project Index definition:
+
+```bash
+crux quality init
+crux quality init prompt:support-triage
+crux quality init prompt:support-triage --force
+```
+
+With no argument, `init` lists definitions that appear to lack eval coverage.
+With a single target, it writes `evals/<safe-id>.eval.ts` and seeds it with an
+imported task, `covers: ['<definition-id>']`, a TODO data row, a truthy smoke
+assertion, and `scorers.exact()`. Existing files are left untouched unless
+`--force` is set. The command also creates `.crux/skills/quality/SKILL.md`
+when the project does not already have a local Quality skill note.
+
+### `crux quality import-traces`
+
+Convert retained local traces into JSONL dataset rows:
+
+```bash
+crux quality import-traces --definition prompt:support-triage
+crux quality import-traces --definition support-triage --status ok --since 7d --limit 20
+crux quality import-traces --definition support-triage --with-expected --out evals/datasets/support.jsonl
+```
+
+`--definition` accepts the Project Index prompt id form (`prompt:<id>`) or the
+runtime prompt id form (`<id>`). The command reads local observability run
+details, uses the root input/prompt/messages artifact as `input`, and writes
+`expected` only with `--with-expected`, using the observed output artifact.
+Rows are tagged `trace-import` and include
+`metadata.provenance.{traceId,observedAt,source}`. Runs without usable input
+or, under `--with-expected`, usable output are skipped with a reason.
 
 ### `crux quality run` flags
 
@@ -301,6 +338,11 @@ Cached or replayed cells may link their `eval.case_of` observability edge to a
 historical case run rather than a run created during the current evaluation.
 Consumers should treat the edge as provenance and not require same-run
 membership.
+
+Dataset-backed cells keep `metadata.datasetProvenance` with the dataset path
+and content fingerprint. The same compact provenance appears on failed rows in
+`crux quality run --json`, failed-cell output from `crux quality show`, and
+matched rows in `crux quality diff --json`.
 
 ### `crux quality progress`
 

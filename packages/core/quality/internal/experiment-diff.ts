@@ -9,13 +9,14 @@
  */
 
 import type { ExperimentCell } from '../experiment'
-import type { ExperimentDiff, ExperimentRecord } from '../schema-types'
+import type { ExperimentDiff, ExperimentDiffDatasetProvenance, ExperimentRecord } from '../schema-types'
 
 interface DiffCaseStats {
   caseId: string
   variant: string
   passed: boolean
   scores: ReadonlyMap<string, number>
+  datasetProvenance?: ExperimentDiffDatasetProvenance
 }
 
 /** Compare two persisted experiment records for machine consumers. */
@@ -62,6 +63,7 @@ function diffCaseStats(cells: readonly ExperimentCell<unknown, unknown>[]): Map<
           variant: first.variantName,
           passed: group.every((cell) => cell.status === 'passed'),
           scores: scoreMeans(group),
+          datasetProvenance: datasetProvenanceOf(group),
         },
       ]
     }),
@@ -150,7 +152,23 @@ function diffCase(
     aPassed: aStats.passed,
     bPassed: bStats.passed,
     scoreDeltas,
+    ...(bStats.datasetProvenance ?? aStats.datasetProvenance
+      ? { datasetProvenance: bStats.datasetProvenance ?? aStats.datasetProvenance }
+      : {}),
   }
+}
+
+function datasetProvenanceOf(cells: readonly ExperimentCell<unknown, unknown>[]): ExperimentDiffDatasetProvenance | undefined {
+  for (const cell of cells) {
+    const metadata = cell.metadata
+    if (metadata === undefined || typeof metadata !== 'object' || metadata === null) continue
+    const provenance = (metadata as Record<string, unknown>).datasetProvenance
+    if (provenance === undefined || typeof provenance !== 'object' || provenance === null) continue
+    const path = (provenance as Record<string, unknown>).path
+    const contentFingerprint = (provenance as Record<string, unknown>).contentFingerprint
+    if (typeof path === 'string' && typeof contentFingerprint === 'string') return { path, contentFingerprint }
+  }
+  return undefined
 }
 
 function meanOf(values: readonly number[]): number {
