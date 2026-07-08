@@ -130,6 +130,12 @@ cells under `cells` and assertion details under the ordered
 timeout result and quarantines later task effects such as trace, cassette, and
 score writes; JavaScript user code is not forcibly killed.
 
+Judge scorers pin deterministic generation settings, frame output/reference as
+untrusted prompt data, and stamp score metadata with judge model, prompt
+version, rubric fingerprint, and rationale. The local CLI can record human
+labels with `crux quality label` and compare judge-vs-human agreement with
+`crux quality judge-report --json`.
+
 ## Adapter Results
 
 Core-step adapters such as `@use-crux/openai`, `@use-crux/anthropic`, and

@@ -81,6 +81,41 @@ describe('createQualityRunner — boundary facade', () => {
     expect(record.evaluationId).toBe('runner.promote')
   })
 
+  it('round-trips feedback records through the facade with filters', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'crux-runner-feedback-'))
+    const runner = createQualityRunner({ dir, qualityId: 'runner-test' })
+
+    const record = await runner.feedback.add({
+      experimentId: 'exp-1',
+      caseId: 'case-1',
+      rating: 1,
+      tags: ['human-label'],
+      metadata: { variant: 'default', trial: 0, scoreName: 'quality' },
+      comment: 'looks correct',
+    })
+    expect(record).toMatchObject({
+      _tag: 'QualityFeedback',
+      qualityId: 'runner-test',
+      experimentId: 'exp-1',
+      caseId: 'case-1',
+      rating: 1,
+    })
+
+    await runner.feedback.add({
+      experimentId: 'exp-2',
+      caseId: 'case-2',
+      tags: ['other'],
+    })
+
+    const labels = await runner.feedback.list({
+      experimentId: 'exp-1',
+      caseId: 'case-1',
+      tags: ['human-label'],
+    })
+
+    expect(labels).toEqual([record])
+  })
+
   it('emits run completion when setup resolution fails', async () => {
     const evaluation = evaluate('runner.setup-failure', {
       task: upperTask,

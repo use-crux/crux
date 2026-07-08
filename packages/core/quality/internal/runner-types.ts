@@ -20,6 +20,7 @@ import type { Comparison, Experiment, ExperimentCell, RunOverrides } from '../ex
 import type { EngineSetup } from './engine'
 import type { EvaluationDefinition } from './definition'
 import type { AnyPrompt } from '../../prompt/prompt-types'
+import type { FeedbackInput, FeedbackRecord } from './feedback'
 
 interface QualityEvaluationHandleState {
   readonly evaluation: Evaluation
@@ -220,6 +221,21 @@ export interface QualityPromoteResult {
   readonly baseline?: QualityPromotedBaseline
 }
 
+/** Filters accepted by {@link QualityRunnerFeedback.list}. */
+export interface QualityFeedbackListFilter {
+  readonly experimentId?: string
+  readonly caseId?: string
+  readonly tags?: readonly string[]
+}
+
+/** Feedback operations exposed through the first-party runner facade. */
+export interface QualityRunnerFeedback {
+  /** Add one feedback record to the Quality feedback store. */
+  add(input: FeedbackInput): Promise<FeedbackRecord>
+  /** List feedback records, optionally filtered by experiment, case, and tags. */
+  list(filter?: QualityFeedbackListFilter): Promise<readonly FeedbackRecord[]>
+}
+
 /** Narrow first-party runner facade for collect, run, and promote operations. */
 export interface QualityRunner {
   /** Discover evaluations from modules and prompt-test candidates. */
@@ -228,6 +244,8 @@ export interface QualityRunner {
   run(input: QualityRunInput): Promise<QualityRunResult>
   /** Promote a persisted experiment into a committed baseline record. */
   promote(input: QualityPromoteInput): Promise<QualityPromoteResult>
+  /** Read and write human feedback records for first-party tooling. */
+  feedback: QualityRunnerFeedback
 }
 
 /** Overrides accepted by the underlying engine; exported for migration only. */

@@ -17,6 +17,7 @@
  */
 
 import { canonicalJson } from './internal/json'
+import { fingerprintValue, JUDGE_PROMPT_VERSION } from './internal/cache-identity'
 import { SCORER_IDENTITY, SCORER_INTERNAL, type ContextualScorerRun } from './internal/scorer-runtime'
 import { runJudgeScorer } from './internal/judge-scorer'
 import { createRagScorerRun } from './internal/rag-scorers'
@@ -411,6 +412,7 @@ function judgeScorer(opts: JudgeOptionsBase<string> & { select?: (output: never)
       [SCORER_IDENTITY]: {
         kind: 'judge',
         name: opts.name,
+        judge: judgeIdentity(opts),
         rubric: opts.rubric,
         choiceScores: opts.choiceScores,
         model: opts.model,
@@ -419,6 +421,28 @@ function judgeScorer(opts: JudgeOptionsBase<string> & { select?: (output: never)
       },
     },
   )
+}
+
+function judgeIdentity(opts: JudgeOptionsBase<string>): Record<string, unknown> {
+  return {
+    ...(opts.model !== undefined ? { model: modelLabel(opts.model) } : {}),
+    promptVersion: JUDGE_PROMPT_VERSION,
+    rubricFingerprint: fingerprintValue({
+      rubric: opts.rubric ?? null,
+      choiceScores: opts.choiceScores ?? null,
+    }),
+  }
+}
+
+function modelLabel(model: unknown): string {
+  if (typeof model === 'string') return model
+  if (model && typeof model === 'object') {
+    const record = model as Record<string, unknown>
+    if (typeof record.modelId === 'string') return record.modelId
+    if (typeof record.id === 'string') return record.id
+    if (typeof record.model === 'string') return record.model
+  }
+  return String(model)
 }
 
 /**

@@ -31,6 +31,10 @@ export type GenerateObjectFn = <T>(options: {
   system?: string
   prompt: string
   schema: z.ZodType<T>
+  /** Provider temperature forwarded when the caller needs deterministic generation. */
+  temperature?: number
+  /** Provider nucleus-sampling setting forwarded when the caller needs deterministic generation. */
+  topP?: number
 }) => Promise<{ object: T }>
 
 // ── summarizeMessages ───────────────────────────────────────────────

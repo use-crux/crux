@@ -12,6 +12,7 @@
  */
 
 import { collectQualityEvaluations } from './runner-collect'
+import { createRunnerFeedback } from './runner-feedback'
 import { promoteQualityExperiment } from './runner-promote'
 import { runQualityEvaluations } from './runner-run'
 import type {
@@ -33,12 +34,15 @@ export type {
   QualityPromoteInput,
   QualityPromoteResult,
   QualityPromotedBaseline,
+  QualityFeedbackListFilter,
   QualityRunInput,
   QualityRunner,
+  QualityRunnerFeedback,
   QualityRunnerEnv,
   QualityRunnerEvent,
   QualityRunResult,
 } from './runner-types'
+export type { FeedbackInput, FeedbackRecord } from './feedback'
 export type { Comparison, Experiment, ExperimentCell, RunOverrides } from '../experiment'
 export type { EvaluationManifest } from '../manifest'
 export type { QualityConfig } from '../config'
@@ -72,5 +76,6 @@ export function createQualityRunner(env: QualityRunnerEnv = {}): QualityRunner {
     collect: (input: QualityCollectInput) => collectQualityEvaluations(input, env.events),
     run: (input: QualityRunInput) => runQualityEvaluations(env, input),
     promote: (input: QualityPromoteInput) => promoteQualityExperiment(env, input),
+    feedback: createRunnerFeedback(env),
   })
 }
