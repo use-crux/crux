@@ -118,4 +118,38 @@ describe('AI SDK message normalization', () => {
       warn.mockRestore()
     }
   })
+
+  it('warns before dropping malformed known SDK media parts', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      expect(
+        normalizeAiSdkMessages([
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'Keep this.' },
+              { type: 'media', data: 'SGVsbG8=' },
+              { type: 'image', image: 'AQID' },
+              { type: 'file', data: 'JVBERi0x' },
+            ],
+          },
+        ]),
+      ).toEqual([{ role: 'user', content: 'Keep this.' }])
+      expect(warn).toHaveBeenCalledTimes(3)
+      expect(warn).toHaveBeenCalledWith(
+        '[@use-crux/ai] Dropping malformed AI SDK content part.',
+        { partType: 'media', reason: 'AI SDK media parts require data and mediaType.' },
+      )
+      expect(warn).toHaveBeenCalledWith(
+        '[@use-crux/ai] Dropping malformed AI SDK content part.',
+        { partType: 'image', reason: 'AI SDK image parts require image and mediaType.' },
+      )
+      expect(warn).toHaveBeenCalledWith(
+        '[@use-crux/ai] Dropping malformed AI SDK content part.',
+        { partType: 'file', reason: 'AI SDK file parts require data and mediaType.' },
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
 })

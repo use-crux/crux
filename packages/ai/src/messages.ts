@@ -15,6 +15,7 @@
 import type { ContentPart, Message } from '@use-crux/core'
 import type { AiSdkContentPartOptions } from './content-parts'
 import { decodeContentFromAiSdkParts, encodeContentForAiSdk } from './content-parts'
+import { isRecord, readString } from './object-utils'
 
 interface CanonicalToolCall {
   id: string
@@ -161,10 +162,10 @@ export function fromResponseMessages(responseMessages: readonly unknown[]): Mess
     if (message.role === 'tool') {
       for (const part of message.content) {
         if (part.type !== 'tool-result' || typeof part.toolCallId !== 'string') continue
-        const value = part.output?.value
+        const content = toolResultContentFromResponsePart(part)
         result.push({
           role: 'tool',
-          content: typeof value === 'string' ? value : JSON.stringify(value ?? null),
+          content,
           metadata: { toolCallId: part.toolCallId, toolName: part.toolName },
         })
       }
@@ -274,11 +275,13 @@ function normalizeRole(role: string): Message['role'] {
   return 'user'
 }
 
-function readString(value: Record<string, unknown> | undefined, key: string): string | undefined {
-  const property = value?.[key]
-  return typeof property === 'string' ? property : undefined
+function toolResultContentFromResponsePart(part: ResponseMessagePart): Message['content'] {
+  const value = part.output?.value
+  if (typeof value === 'string') return value
+  if (Array.isArray(value)) return decodeContentFromAiSdkParts(value.filter(isRecord))
+  return JSON.stringify(value ?? null)
 }
 
 function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
+  return isRecord(value) ? value : undefined
 }

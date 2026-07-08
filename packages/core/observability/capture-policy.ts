@@ -125,6 +125,14 @@ function applyCaptureLevelToArtifact(
   level: CruxObservabilityCaptureLevel,
   artifact: ArtifactOptions,
 ): ArtifactOptions {
+  if (level === 'off') {
+    const { preview: _preview, sizeBytes: _sizeBytes, hash: _hash, uri: _uri, ...offRest } = artifact
+    return {
+      ...offRest,
+      encoding: 'reference',
+    }
+  }
+
   if (artifact.preview === undefined)
     return artifact
 
@@ -136,14 +144,6 @@ function applyCaptureLevelToArtifact(
   }
 
   const { preview: _preview, ...rest } = artifact
-  if (level === 'off') {
-    const { sizeBytes: _sizeBytes, hash: _hash, uri: _uri, ...offRest } = rest
-    return {
-      ...offRest,
-      encoding: 'reference',
-    }
-  }
-
   const serialized = serializePreview(artifact.preview)
   return {
     ...rest,
@@ -157,6 +157,14 @@ function applyCaptureLevelToRecord(
   level: CruxObservabilityCaptureLevel,
   record: Extract<CruxGraphRecord, { readonly type: 'artifact' }>,
 ): CruxGraphRecord {
+  if (level === 'off') {
+    const { preview: _preview, sizeBytes: _sizeBytes, hash: _hash, uri: _uri, ...offRest } = record
+    return {
+      ...offRest,
+      encoding: 'reference',
+    }
+  }
+
   if (record.preview === undefined)
     return record
 
@@ -168,14 +176,6 @@ function applyCaptureLevelToRecord(
   }
 
   const { preview: _preview, ...rest } = record
-  if (level === 'off') {
-    const { sizeBytes: _sizeBytes, hash: _hash, uri: _uri, ...offRest } = rest
-    return {
-      ...offRest,
-      encoding: 'reference',
-    }
-  }
-
   const serialized = serializePreview(record.preview)
   return {
     ...rest,
@@ -209,6 +209,14 @@ function sanitizePreviewForCapture(
     }
   }
 
+  if (isContentPart(value) && 'url' in value && shouldReplaceDataUrl(level, value.url)) {
+    seen.delete(value)
+    return {
+      ...value,
+      url: contentText([value]),
+    }
+  }
+
   const out = Object.fromEntries(
     Object.entries(value).map(([key, child]) => [key, sanitizePreviewForCapture(level, child, seen)]),
   )
@@ -221,6 +229,17 @@ function shouldReplaceData(
   data: string,
 ): boolean {
   return level === 'safe' || data.length > FULL_CAPTURE_DATA_INLINE_THRESHOLD
+}
+
+function shouldReplaceDataUrl(
+  level: Extract<CruxObservabilityCaptureLevel, 'full' | 'safe'>,
+  url: string,
+): boolean {
+  return isBase64DataUrl(url) && shouldReplaceData(level, url)
+}
+
+function isBase64DataUrl(value: string): boolean {
+  return /^data:[^,;]*(?:;[^,;]*)*;base64,/i.test(value)
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

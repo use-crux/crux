@@ -2,6 +2,7 @@ import type { DiagnosticsPort, MessageContent, ProviderOptions } from '@use-crux
 import type { Message } from '@use-crux/core'
 import { degradeContentPart, degradeContentToText } from '@use-crux/core/adapter'
 import type { ContentPart } from '@use-crux/core'
+import { isRecord, readString } from './object-utils'
 
 /** Options that affect AI SDK content-part conversion. */
 export interface AiSdkContentPartOptions {
@@ -65,6 +66,8 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
       const mediaType = readString(part, 'mediaType')
       if (data && mediaType) {
         content.push({ type: 'file-data', data, mediaType, ...providerOptionsFrom(part) })
+      } else {
+        warnMalformedPart(part, 'AI SDK media parts require data and mediaType.')
       }
       continue
     }
@@ -83,6 +86,8 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
         })
       } else if (typeof image === 'string' && mediaType) {
         content.push({ type: 'image-data', data: image, mediaType, ...providerOptionsFrom(part) })
+      } else {
+        warnMalformedPart(part, 'AI SDK image parts require image and mediaType.')
       }
       continue
     }
@@ -106,6 +111,8 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
           ...(filename ? { filename } : {}),
           ...providerOptionsFrom(part),
         })
+      } else {
+        warnMalformedPart(part, 'AI SDK file parts require data and mediaType.')
       }
       continue
     }
@@ -176,7 +183,7 @@ function encodePartForAiSdk(
       return degradedTextPart(role, contentPart, `AI SDK does not support canonical ${contentPart.type} parts`, options)
     }
     default:
-      warnUnknownPart(part)
+      warnUnknownPart(part, options.diagnostics)
       return part
   }
 }
@@ -266,17 +273,20 @@ function fileIdFrom(value: unknown): string | Record<string, string> | undefined
   return undefined
 }
 
-function readString(value: Record<string, unknown>, key: string): string | undefined {
-  const property = value[key]
-  return typeof property === 'string' ? property : undefined
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === 'object' && !Array.isArray(value)
-}
-
-function warnUnknownPart(part: Record<string, unknown>): void {
-  console.warn('[@use-crux/ai] Passing through unrecognized AI SDK content part.', {
+function warnUnknownPart(part: Record<string, unknown>, diagnostics?: DiagnosticsPort): void {
+  warnAiSdkContentPart(diagnostics, '[@use-crux/ai] Passing through unrecognized AI SDK content part.', {
     partType: readString(part, 'type') ?? 'unknown',
   })
+}
+
+function warnMalformedPart(part: Record<string, unknown>, reason: string): void {
+  warnAiSdkContentPart(undefined, '[@use-crux/ai] Dropping malformed AI SDK content part.', {
+    partType: readString(part, 'type') ?? 'unknown',
+    reason,
+  })
+}
+
+function warnAiSdkContentPart(diagnostics: DiagnosticsPort | undefined, message: string, detail: unknown): void {
+  if (diagnostics) diagnostics.warn(message, detail)
+  else console.warn(message, detail)
 }

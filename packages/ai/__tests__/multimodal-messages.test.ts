@@ -3,7 +3,7 @@ import { z } from 'zod'
 import type { LanguageModel } from 'ai'
 import { prompt } from '@use-crux/core'
 import { createCruxAi } from '../index'
-import { toModelMessages } from '../src/messages'
+import { fromResponseMessages, toModelMessages } from '../src/messages'
 import { scriptedGateway } from './scripted-gateway'
 
 function model(id = 'gpt-4o', provider = 'openai'): LanguageModel {
@@ -150,6 +150,72 @@ describe('AI SDK multimodal messages', () => {
           { type: 'file', data: 'JVBERi0x', mediaType: 'application/pdf', filename: 'report.pdf' },
           { type: 'tool-call', toolCallId: 'call_1', toolName: 'summarize', input: { id: 'report' } },
         ],
+      },
+    ])
+  })
+
+  it('routes unknown encode parts through the diagnostics sink', () => {
+    const warnings: Array<{ message: string; detail?: unknown }> = []
+
+    expect(
+      toModelMessages(
+        [
+          {
+            role: 'user',
+            content: [{ type: 'provider-widget', widgetId: 'w1' }] as never,
+          },
+        ],
+        {
+          diagnostics: {
+            warn(message, detail) {
+              warnings.push({ message, detail })
+            },
+          },
+        },
+      ),
+    ).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'provider-widget', widgetId: 'w1' }],
+      },
+    ])
+    expect(warnings).toEqual([
+      {
+        message: '[@use-crux/ai] Passing through unrecognized AI SDK content part.',
+        detail: { partType: 'provider-widget' },
+      },
+    ])
+  })
+
+  it('preserves structured tool-result content from response messages', () => {
+    expect(
+      fromResponseMessages([
+        {
+          role: 'tool',
+          content: [
+            {
+              type: 'tool-result',
+              toolCallId: 'call_1',
+              toolName: 'screenshot',
+              output: {
+                type: 'content',
+                value: [
+                  { type: 'text', text: 'Screenshot captured.' },
+                  { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+                ],
+              },
+            },
+          ],
+        },
+      ]),
+    ).toEqual([
+      {
+        role: 'tool',
+        content: [
+          { type: 'text', text: 'Screenshot captured.' },
+          { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+        ],
+        metadata: { toolCallId: 'call_1', toolName: 'screenshot' },
       },
     ])
   })

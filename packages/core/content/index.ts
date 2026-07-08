@@ -3,6 +3,8 @@ import type { ContentPart, MessageContent } from '../types/content'
 import { base64ToBytes, bytesToBase64 } from './base64'
 import { sha256Hex } from './sha256'
 
+const MAX_DESCRIPTOR_HASH_BYTES = 256 * 1024
+
 export { UnsupportedContentError } from './errors'
 export type { UnsupportedContentErrorOptions } from './errors'
 
@@ -106,8 +108,18 @@ function base64Data(data: string | Uint8Array | ArrayBuffer): string {
 }
 
 function dataDescriptor(base64: string): string {
+  const estimatedBytes = estimatedBase64Bytes(base64)
+  if (estimatedBytes > MAX_DESCRIPTOR_HASH_BYTES) {
+    return `${formatBytes(estimatedBytes)} sha256:omitted`
+  }
   const bytes = base64ToBytes(base64)
   return `${formatBytes(bytes.byteLength)} sha256:${sha256Hex(bytes).slice(0, 12)}`
+}
+
+function estimatedBase64Bytes(base64: string): number {
+  const padding =
+    base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0
+  return Math.max(0, Math.floor((base64.length * 3) / 4) - padding)
 }
 
 function formatBytes(bytes: number): string {

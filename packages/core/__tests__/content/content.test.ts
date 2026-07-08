@@ -57,6 +57,14 @@ describe("content parts", () => {
     expect(projection).not.toContain("BAUG");
   });
 
+  it("does not hash oversized base64 payloads in text projections", () => {
+    const projection = contentText([
+      { type: "image-data", data: "A".repeat(350_000), mediaType: "image/png" },
+    ]);
+
+    expect(projection).toBe("[image image/png 256.3KB sha256:omitted]");
+  });
+
   it("projects URL, id, and custom parts with escaped labels", () => {
     expect(
       contentText([

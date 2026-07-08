@@ -56,6 +56,8 @@ export function defineProviderTranscriptCodec<TProviderMessage, TRawResponse>(
         return dialect.encodeAssistant(unit, options)
       case 'tool-results':
         return dialect.encodeToolResults(unit, helpers, options)
+      default:
+        return assertNever(unit)
     }
   }
 
@@ -73,4 +75,8 @@ export function defineProviderTranscriptCodec<TProviderMessage, TRawResponse>(
 function toArray<T>(value: OneOrMany<T>): readonly T[] {
   if (value === undefined) return []
   return Array.isArray(value) ? value : [value as T]
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unhandled provider transcript unit: ${JSON.stringify(value)}`)
 }

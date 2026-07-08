@@ -117,7 +117,10 @@ function textFromRecord(record: Record<string, unknown>): string | undefined {
   for (const key of ['content', 'text', 'answer', 'value', 'output']) {
     const value = record[key]
     if (typeof value === 'string' && value.length > 0) return value
-    if (isMessageContent(value)) return contentText(value)
+    if (isMessageContent(value)) {
+      const text = contentText(value)
+      if (text.length > 0) return text
+    }
   }
   return undefined
 }
