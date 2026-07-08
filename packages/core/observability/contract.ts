@@ -1,5 +1,7 @@
 export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 1;
 
+export const CRUX_CONTENT_DEGRADED_EVENT = "content.degraded" as const;
+
 export const CRUX_PRIMITIVE_FAMILIES = [
   "run",
   "generation",
@@ -253,6 +255,14 @@ export type CruxSpanStatus = CruxRunStatus | "skipped";
 export type CruxPrimitiveFamily = (typeof CRUX_PRIMITIVE_FAMILIES)[number];
 
 export type CruxPrimitiveName = (typeof CRUX_PRIMITIVE_NAMES)[number];
+
+export interface CruxContentDegradedEventAttributes extends Record<string, unknown> {
+  partType: string;
+  mediaType?: string;
+  role: string;
+  provider: string;
+  reason: string;
+}
 
 export type CruxCustomEdgeType = `custom.${string}`;
 export type CruxCanonicalEdgeType = (typeof CRUX_CANONICAL_EDGE_TYPES)[number];

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compilePrompt } from "../../resolver/compile";
 import { context } from "../../prompt/context";
 import type { AnyPromptConfig } from "../../prompt/prompt-types";
+import { imagePart, textPart } from "../../content";
 
 describe("resolver provider adaptation contract", () => {
   it("messages mode never re-emits system after adaptation", async () => {
@@ -66,6 +67,31 @@ describe("resolver provider adaptation contract", () => {
       role: "system",
       content: "Provider head.\n\nProvider tail.\n\nExisting message system.",
     });
+  });
+
+  it("projects multimodal system messages before provider adaptation folding", async () => {
+    const config = {
+      messages: () => [
+        {
+          role: "system" as const,
+          content: [
+            textPart("Existing message system."),
+            imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: "image/png" }),
+          ],
+        },
+        { role: "user" as const, content: "Draft the reply." },
+      ],
+      adapt: {
+        openai: { prependSystem: "Provider head." },
+      },
+    } satisfies AnyPromptConfig;
+
+    const result = await compilePrompt(config).resolve({ provider: "openai" });
+
+    expect(result.args.messages?.[0]?.content).toContain("Provider head.\n\nExisting message system.");
+    expect(result.args.messages?.[0]?.content).toContain("[image image/png 3B sha256:");
+    expect(result.args.messages?.[0]?.content).not.toContain("[object Object]");
+    expect(result.args.messages?.[0]?.content).not.toContain("AQID");
   });
 
   const adaptationCases = [

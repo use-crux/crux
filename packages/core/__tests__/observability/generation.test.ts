@@ -10,6 +10,7 @@ import {
 } from '../../observability'
 import { resetHooks, updateHooks } from '../../runtime/runtime'
 import { expectBalancedGraph } from './helpers/expect-balanced-graph'
+import { imagePart, textPart } from '../../content'
 
 describe('generation observability', () => {
   afterEach(() => {
@@ -70,7 +71,7 @@ describe('generation observability', () => {
     expectBalancedGraph(transport.records)
   })
 
-    it('omits generation input and output previews when capture policy disables them', async () => {
+  it('omits generation input and output previews when capture policy disables them', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     updateHooks({
@@ -103,6 +104,53 @@ describe('generation observability', () => {
       hash: expect.any(String),
     })
     expect(outputArtifact).not.toHaveProperty('preview')
+  })
+
+  it('keeps multimodal message artifacts base64-free under safe capture', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    updateHooks({
+      observabilityCapture: {
+        capture: 'safe',
+      },
+    })
+
+    await orchestrateGenerate(
+      {
+        ...generationSpec('generate'),
+        preparedArgs: {
+          ...generationSpec('generate').preparedArgs,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                textPart('inspect this chart'),
+                imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+              ],
+            },
+          ],
+        },
+      },
+      async () => ({ text: 'hello' }),
+    )
+    await observe.flush()
+
+    const inputArtifact = transport.records.find((record) => record.type === 'artifact' && record.kind === 'messages')
+
+    expect(inputArtifact).toMatchObject({
+      preview: {
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'text', text: 'inspect this chart' },
+              { type: 'image-data', data: expect.stringContaining('[image image/png 3B sha256:') },
+            ],
+          },
+        ],
+      },
+    })
+    expect(JSON.stringify(inputArtifact)).not.toContain('AQID')
   })
 
     it('records operation deadlines on timed generation spans', async () => {

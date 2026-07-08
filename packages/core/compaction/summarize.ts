@@ -11,12 +11,13 @@ import type { CompactionResult } from '../generation/messages'
 import type { SummarizeConfig } from './types'
 import { countTokens } from '../shared/tokenizer'
 import { observe } from '../observability'
+import { messageText } from '../content'
 
 /**
  * Format messages into a numbered conversation transcript for the LLM.
  */
 export function formatTranscript(messages: SummarizeConfig['messages']): string {
-  return messages.map((m, i) => `[${i + 1}] ${m.role}: ${m.content}`).join('\n\n')
+  return messages.map((m, i) => `[${i + 1}] ${m.role}: ${messageText(m)}`).join('\n\n')
 }
 
 /**

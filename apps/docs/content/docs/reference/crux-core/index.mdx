@@ -34,6 +34,11 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     href="/docs/reference/crux-core/tool-middleware"
   />
   <Card
+    title="Multimodal Content"
+    description="ContentPart, builders, text projection, and unsupported-content behavior."
+    href="/docs/reference/crux-core/multimodal"
+  />
+  <Card
     title="Adapter Interface"
     description="defineSingleTurnProviderBundle, defineProviderRuntime, adapter IR, and conformance harnesses."
     href="/docs/reference/adapters"
@@ -154,12 +159,13 @@ import { embedding } from '@use-crux/core/embedding'
 import { knowledgeBase, retriever, retrievalRecipe, retrieve, rerank } from '@use-crux/core/retrieval'
 import { grounding, citationSchema } from '@use-crux/core/citations'
 import { corpus, indexer } from '@use-crux/core/indexing'
+import { contentText, filePart, hasMediaParts, imagePart, messageText, textPart } from '@use-crux/core'
 import { CruxProvider, usePlan, useTasks, createSSETransport, createPollingTransport } from '@use-crux/react'
 import { cruxSSEHandler } from '@use-crux/react/server'
 import { withDevtools } from '@use-crux/core/observability'
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
 import { serializeProjectIndex } from '@use-crux/core/project-index/serializers'
-import type { CruxIndexerConfig, CruxLintConfig, ToolContentPart, ToolModelOutput, ToModelOutputArgs } from '@use-crux/core'
+import type { ContentPart, CruxIndexerConfig, CruxLintConfig, MessageContent, ToolModelOutput, ToModelOutputArgs } from '@use-crux/core'
 ```
 
 ## Tooling Config

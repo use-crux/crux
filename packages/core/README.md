@@ -57,6 +57,49 @@ result.object.sentiment; // 'positive' | 'negative' | 'neutral'
 
 That is a complete Crux program: typed input, typed output, and your SDK still making the model call.
 
+## Multimodal Messages
+
+Crux messages share one canonical content vocabulary across core, adapters, tool results, observability, and Convex mirrors. `Message.content` accepts either the existing string form or a readonly `ContentPart[]`:
+
+```ts
+import { filePart, imagePart, messageText, prompt, textPart } from "@use-crux/core";
+import { generate } from "@use-crux/ai";
+import { z } from "zod";
+
+const inspectDashboard = prompt({
+  id: "inspect-dashboard",
+  input: z.object({ note: z.string() }),
+  messages: ({ input }) => [
+    {
+      role: "user",
+      content: [
+        textPart(input.note),
+        imagePart({ data: dashboardPng, mediaType: "image/png" }),
+        filePart({
+          url: "https://example.com/q2.pdf",
+          mediaType: "application/pdf",
+          filename: "q2.pdf",
+        }),
+      ],
+    },
+  ],
+});
+
+const result = await generate(inspectDashboard, {
+  model,
+  input: { note: "What changed?" },
+});
+
+result.text; // string envelope, unchanged
+result.messages; // assistant media round-trips here as ContentPart[]
+```
+
+The part kinds are `text`, `image-data`, `image-url`, `image-file-id`, `file-data`, `file-url`, `file-id`, and `custom`. Bytes are JSON-safe base64 strings; `imagePart()` and `filePart()` also accept `Uint8Array`, `ArrayBuffer`, and `URL` values and normalize them immediately.
+
+Use `contentText()` or `messageText()` whenever existing code needs a string. Text parts pass through verbatim, while images/files become bounded placeholders such as `[image image/png 210KB sha256:ab12...]`; raw base64 is never inlined into guardrails, compaction, memory, cache keys, or telemetry. `hasMediaParts()` is available for branching without parsing the projection.
+
+Unsupported provider content degrades deliberately: the adapter sends the placeholder text, emits a diagnostics warning, and records a `content.degraded` span event. Pass `unsupportedContent: "error"` in generation settings when unsupported content should throw `UnsupportedContentError` before the provider call.
+
 ## Adapter Results
 
 Core-step adapters such as `@use-crux/openai`, `@use-crux/anthropic`, and

@@ -74,6 +74,14 @@ export interface GenerationSettings {
   frequencyPenalty?: number;
   /** Penalize already-present tokens. */
   presencePenalty?: number;
+  /**
+   * How adapters handle canonical content parts unsupported by a provider.
+   *
+   * The default is `'degrade'`: unsupported parts become deterministic text
+   * placeholders with diagnostics. `'error'` makes codecs throw
+   * `UnsupportedContentError` before the provider request is made.
+   */
+  unsupportedContent?: 'degrade' | 'error';
 }
 
 // ─────────────────────────────────────────────────────────────────

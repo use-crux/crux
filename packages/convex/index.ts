@@ -71,12 +71,18 @@ export {
   contributor,
   createContexts,
   createPrompts,
+  contentText,
   escapeXml,
+  filePart,
+  hasMediaParts,
+  imagePart,
   limit,
   match,
+  messageText,
   prompt,
   raw,
   safe,
+  textPart,
   truncate,
   userContent,
   when,
@@ -88,6 +94,7 @@ export type {
   Context,
   ContextDef,
   ContextEntry,
+  ContentPart,
   ContextSystemArg,
   CompactionResult,
   ContributorConfig,
@@ -95,6 +102,7 @@ export type {
   ContributorEntry,
   MergedInput,
   Message,
+  MessageContent,
   Prompt,
   PromptConfig,
   PromptTree,
@@ -121,7 +129,7 @@ import type { z } from 'zod'
 import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@use-crux/core'
 import type { GenerateTextFn } from '@use-crux/core/compaction'
 import { summarizeMessages } from '@use-crux/core/compaction'
-import { countTokens } from '@use-crux/core'
+import { countTokens, messageText as coreMessageText } from '@use-crux/core'
 import { observeConversationCompaction } from './compaction-observability'
 import type { ConvexContext } from './store'
 
@@ -177,7 +185,7 @@ export async function compactConversation(args: CompactConversationArgs): Promis
 
   // Count only the actual evicted message tokens (exclude the summary wrapper)
   const inputTokens =
-    evictedMessages.reduce((sum, m) => sum + countTokens(m.content), 0) +
+    evictedMessages.reduce((sum, m) => sum + countTokens(coreMessageText(m)), 0) +
     (existingSummary ? countTokens(existingSummary) : 0)
 
   return await observeConversationCompaction({

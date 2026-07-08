@@ -10,6 +10,7 @@
  */
 
 import type { Message } from "../generation/messages";
+import type { GenerationSettings } from "../generation/types";
 import type { ResolvedPrompt } from "../resolver/types";
 import type { CallArgs } from "./types";
 
@@ -21,6 +22,8 @@ export interface ResolvedPromptCodecOptions<
   readonly model: string;
   /** Provider-native settings produced by the adapter's settings mapper. */
   readonly settings?: Record<string, unknown>;
+  /** Canonical unsupported-content policy kept out of provider-native settings. */
+  readonly unsupportedContent?: NonNullable<GenerationSettings["unsupportedContent"]>;
   /** Provider-specific options that belong in the adapter's `extra` escape hatch. */
   readonly extra?: TExtra;
   /** Conversation history override, matching managed `generate({ messages })`. */
@@ -49,6 +52,8 @@ export function callArgsFromResolvedPrompt<
     system: resolved.system,
     systemBlocks: resolved.systemBlocks,
     messages: initialMessages(resolved, options.messages),
+    unsupportedContent:
+      options.unsupportedContent ?? resolved.settings.unsupportedContent,
     settings: options.settings ?? {},
     schema: resolved.schema,
     schemaParams: options.schemaParams,

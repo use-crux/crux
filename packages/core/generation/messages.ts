@@ -11,6 +11,8 @@
  * @module
  */
 
+import type { MessageContent } from '../types/content'
+
 // ─────────────────────────────────────────────────────────────────
 // Canonical Message Type
 // ─────────────────────────────────────────────────────────────────
@@ -18,7 +20,7 @@
 /** Canonical framework-agnostic message. */
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool'
-  content: string
+  content: MessageContent
   metadata?: Record<string, unknown>
 }
 

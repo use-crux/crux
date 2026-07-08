@@ -40,6 +40,21 @@ The adapter package provides the public authoring surface for AI provider adapte
 
 Built-in adapters are built on this abstraction: `@use-crux/openai`, `@use-crux/anthropic`, and `@use-crux/google` export single-turn provider runtimes, while `@use-crux/ai` exports a loop-owned provider runtime for the Vercel AI SDK. Native provider packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata. Core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and small tool-output helpers those codecs share.
 
+## Multimodal Content Support
+
+All first-party generation adapters accept canonical `Message.content` values as either strings or readonly `ContentPart[]`. Each adapter uses one provider-local content part table for managed calls, public codecs, headless handles, transport mode, and rich tool-result encoding. Unsupported parts degrade to deterministic text placeholders with a diagnostics warning and a `content.degraded` span event, or throw `UnsupportedContentError` before the provider call when `unsupportedContent: "error"` is set.
+
+| Capability | `@use-crux/ai` | `@use-crux/anthropic` | `@use-crux/openai` Chat | `@use-crux/google` |
+| --- | --- | --- | --- | --- |
+| Image input, data or URL | yes | yes | yes, byte data as data URLs | yes |
+| PDF input | yes | yes, document blocks | file data yes; URL degrades | yes |
+| Audio input | model-dependent | degrades | wav/mp3 file data | yes |
+| Assistant media decode | yes | yes | yes | yes |
+| System-role media | degrades | degrades | degrades | degrades |
+| Tool-result media | SDK parts where supported | image/PDF native blocks | deterministic text references | function-response parts |
+
+`GenerateResult.text` and `StreamResult.textStream` remain string-shaped. Assistant-returned media is available in `result.messages`.
+
 ## Which contract do I implement?
 
 | Your SDK…                                                                                 | Ownership     | Mechanics | Example                                                       |

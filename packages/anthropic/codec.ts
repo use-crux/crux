@@ -30,13 +30,15 @@ export function toParams(
   resolved: ResolvedPrompt,
   options: AnthropicCodecOptions,
 ): Anthropic.MessageCreateParamsNonStreaming {
-  const settings = mapAnthropicSettings({
+  const generationSettings = {
     ...resolved.settings,
     ...(options.settings ?? {}),
-  })
+  }
+  const settings = mapAnthropicSettings(generationSettings)
   const callArgs = callArgsFromResolvedPrompt(resolved, {
       model: options.model,
       settings,
+      unsupportedContent: generationSettings.unsupportedContent,
       extra: options.extra,
       messages: options.messages,
       tools: options.tools ? [...options.tools] : undefined,
@@ -44,7 +46,9 @@ export function toParams(
     })
   const request = anthropicRequest({
     ...callArgs,
-    providerMessages: anthropicTranscript.fromMessages(callArgs.messages),
+    providerMessages: anthropicTranscript.fromMessages(callArgs.messages, {
+      unsupportedContent: callArgs.unsupportedContent,
+    }),
   })
   return asAnthropicNonStreamingParams(request)
 }

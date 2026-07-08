@@ -16,6 +16,7 @@ import { createLightweightSpanManager } from '../span-manager'
 import type { TraceSpan } from '../types'
 import { resetHooks, updateHooks } from '../../core/runtime/runtime'
 import { messageContentAttributesForArtifact } from '../message-content'
+import { imagePart, textPart } from '@use-crux/core'
 
 describe('GenAI semconv projection', () => {
   afterEach(() => {
@@ -151,6 +152,62 @@ describe('GenAI semconv projection', () => {
     } finally {
       if (descriptor) Object.defineProperty(globalThis, 'process', descriptor)
     }
+  })
+
+  it('exports multimodal message content as the canonical text projection', () => {
+    const attributes = messageContentAttributesForArtifact(
+      {
+        ...messageArtifact('fallback'),
+        preview: {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                textPart('inspect this chart'),
+                imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+              ],
+            },
+          ],
+        },
+      },
+      { captureMessageContent: true },
+    )
+
+    const inputMessages = JSON.parse(String(attributes['gen_ai.input.messages']))
+    expect(inputMessages).toEqual([
+      {
+        role: 'user',
+        parts: [
+          {
+            type: 'text',
+            content: expect.stringContaining('inspect this chart\n[image image/png 3B sha256:'),
+          },
+        ],
+      },
+    ])
+    expect(JSON.stringify(inputMessages)).not.toContain('AQID')
+  })
+
+  it('continues to fallback text fields when structured content projects empty', () => {
+    const attributes = messageContentAttributesForArtifact(
+      {
+        ...messageArtifact('fallback'),
+        kind: 'output',
+        preview: {
+          content: [],
+          answer: 'fallback answer',
+        },
+      },
+      { captureMessageContent: true },
+    )
+
+    const outputMessages = JSON.parse(String(attributes['gen_ai.output.messages']))
+    expect(outputMessages).toEqual([
+      {
+        role: 'assistant',
+        parts: [{ type: 'text', content: 'fallback answer' }],
+      },
+    ])
   })
 
   it('does not export output messages when local output capture is off even with content opt-in', async () => {

@@ -11,7 +11,8 @@
  * @module
  */
 
-import type { ToolContentPart, ToolModelOutput } from '../../../types/tool'
+import type { ContentPart, MessageContent } from '../../../types/content'
+import type { ToolModelOutput } from '../../../types/tool'
 import type { NativeAssistantTurn } from '../types'
 
 /**
@@ -64,23 +65,29 @@ export interface ProviderToolResult {
   readonly modelOutputError?: string
 }
 
+/** Options that affect provider transcript encoding without changing provider wire params. */
+export interface TranscriptEncodeOptions {
+  /** How codecs handle canonical content parts the selected provider cannot represent. */
+  readonly unsupportedContent?: 'degrade' | 'error'
+}
+
 /**
  * The neutral unit of a transcript: the smallest piece a dialect encodes.
  *
- * - `text` carries a `system` or `user` turn.
- * - `assistant` carries assistant prose plus any tool calls it requested.
+ * - `content` carries a `system` or `user` turn.
+ * - `assistant` carries assistant content plus any tool calls it requested.
  * - `tool-results` carries one round of settled tool results, already grouped
  *   from the adjacent canonical `tool` messages that produced them.
  */
 export type ProviderTranscriptUnit =
   | {
-      readonly kind: 'text'
+      readonly kind: 'content'
       readonly role: 'system' | 'user'
-      readonly text: string
+      readonly content: MessageContent
     }
   | {
       readonly kind: 'assistant'
-      readonly text: string
+      readonly content: MessageContent
       readonly toolCalls?: readonly ProviderToolCall[]
     }
   | {
@@ -99,7 +106,7 @@ export interface ToolResultEncodingHelpers {
   /** Deterministic plain-text rendering, used when the dialect cannot send rich content. */
   plainText(result: ProviderToolResult): string
   /** Rich content parts when the result is structured `content`, otherwise `undefined`. */
-  contentParts(result: ProviderToolResult): readonly ToolContentPart[] | undefined
+  contentParts(result: ProviderToolResult): readonly ContentPart[] | undefined
   /** Whether this result should be marked as an error on the wire. */
   errorFlag(result: ProviderToolResult): boolean
 }
@@ -116,14 +123,21 @@ export interface ToolResultEncodingHelpers {
  * @typeParam TRawResponse - Provider-native non-streaming response shape.
  */
 export interface ProviderTranscriptDialect<TProviderMessage, TRawResponse> {
-  /** Encode a `system`/`user` text turn into provider messages. */
-  encodeText(unit: Extract<ProviderTranscriptUnit, { kind: 'text' }>): OneOrMany<TProviderMessage>
+  /** Encode a `system`/`user` content turn into provider messages. */
+  encodeContent(
+    unit: Extract<ProviderTranscriptUnit, { kind: 'content' }>,
+    options: TranscriptEncodeOptions,
+  ): OneOrMany<TProviderMessage>
   /** Encode an assistant turn, including any requested tool calls. */
-  encodeAssistant(unit: Extract<ProviderTranscriptUnit, { kind: 'assistant' }>): OneOrMany<TProviderMessage>
+  encodeAssistant(
+    unit: Extract<ProviderTranscriptUnit, { kind: 'assistant' }>,
+    options: TranscriptEncodeOptions,
+  ): OneOrMany<TProviderMessage>
   /** Encode a round of tool results, using `helpers` for canonical rendering. */
   encodeToolResults(
     unit: Extract<ProviderTranscriptUnit, { kind: 'tool-results' }>,
     helpers: ToolResultEncodingHelpers,
+    options: TranscriptEncodeOptions,
   ): OneOrMany<TProviderMessage>
   /** Decode one provider message back into canonical transcript units. */
   decodeMessage(value: unknown): OneOrMany<ProviderTranscriptUnit>

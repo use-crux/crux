@@ -15,6 +15,7 @@ import { boundary, createSafety, GuardrailBlockedError } from '../../safety'
 import { guardrail } from '../../safety/guardrail'
 import { resetHooks } from '../../runtime/runtime'
 import type { Message } from '../../generation/messages'
+import { imagePart, messageText, textPart } from '../../content'
 
 afterEach(() => {
   resetHooks()
@@ -108,6 +109,50 @@ describe('guardInput — pipeline ordering and content flow', () => {
 
     expect(seen).toEqual(['first secret', 'second secret'])
     expect(result.messages.map((message) => message.content)).toEqual(['first [X]', 'ok', 'second [X]'])
+  })
+
+  it('validates the text projection of multimodal user messages', async () => {
+    const seen = vi.fn()
+    const inspector = guardrail({
+      id: 'multimodal-input',
+      on: boundary.input.text(),
+      run: async (content) => {
+        seen(content)
+        return { action: 'allow' as const }
+      },
+    })
+    const safety = identity({ call: { guardrails: [inspector] } })
+    const content = [
+      textPart('review this chart'),
+      imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+    ]
+
+    await safety.guardInput({ messages: [{ role: 'user', content }] })
+
+    expect(seen).toHaveBeenCalledWith(messageText({ content }))
+    expect(seen.mock.calls[0]?.[0]).toContain('[image image/png 3B sha256:')
+    expect(seen.mock.calls[0]?.[0]).not.toContain('AQID')
+  })
+
+  it('rewrites text parts while leaving media parts untouched', async () => {
+    const redactor = guardrail({
+      id: 'redact-text',
+      on: boundary.input.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('secret', '[X]'),
+        rewrite: { kind: 'redact' as const },
+      }),
+    })
+    const safety = identity({ call: { guardrails: [redactor] } })
+    const image = imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' })
+
+    const result = await safety.guardInput({
+      messages: [{ role: 'user', content: [textPart('secret caption'), image] }],
+    })
+
+    expect(result.messages[0]?.content).toEqual([textPart('[X] caption'), image])
+    expect(messageText(result.messages[0]!)).toMatch(/^\[X\] caption\n\[image image\/png 3B sha256:[a-f0-9]{12}\]$/)
   })
 })
 

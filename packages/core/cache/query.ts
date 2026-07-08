@@ -13,6 +13,8 @@ import type { RecordStore, VectorStore } from '../storage'
 import type { PromptMiddlewareArgs } from '../runtime/types'
 import type { SemanticCachePromptOptions, SemanticCacheQueryContext } from '../prompt/prompt-types'
 import type { NormalizedPromptHint, SemanticCacheConfig, SemanticCacheScopeContext } from './types'
+import { contentText } from '../content'
+import { isMessageContent } from '../content/guards'
 
 /** Default cache namespace when none is configured. */
 export const DEFAULT_NAMESPACE = 'default'
@@ -98,7 +100,13 @@ export async function resolveQueryText(hint: NormalizedPromptHint, args: PromptM
     return hint.query(ctx)
   }
   if (resolved?.messages) {
-    return resolved.messages.map((message) => `${message.role}: ${String(message.content)}`).join('\n')
+    return resolved.messages
+      .map((message) => {
+        const role = String(message.role)
+        const content = projectUnknownContent(message.content)
+        return `${role}: ${content}`
+      })
+      .join('\n')
   }
   return [resolved?.system, resolved?.prompt, fallbackPreparedText(args)].filter(Boolean).join('\n\n')
 }
@@ -110,12 +118,19 @@ function fallbackPreparedText(args: PromptMiddlewareArgs): string {
     return prepared.messages
       .map((message) => {
         const m = message as { role?: unknown; content?: unknown }
-        return `${String(m.role ?? '')}: ${String(m.content ?? '')}`
+        const role = String(m.role ?? '')
+        const content = projectUnknownContent(m.content)
+        return `${role}: ${content}`
       })
       .join('\n')
   }
   if (typeof prepared.prompt === 'string') return prepared.prompt
   return JSON.stringify(args.input ?? prepared.input ?? {})
+}
+
+function projectUnknownContent(content: unknown): string {
+  if (content === undefined || content === null) return ''
+  return isMessageContent(content) ? contentText(content) : String(content)
 }
 
 /** Whether the call carries any tools (array or record form). */

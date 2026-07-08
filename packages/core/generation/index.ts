@@ -50,6 +50,7 @@ export { repairJsonText } from "./repair-json";
 
 // Canonical message contract
 export type { Message, CompactionResult } from "./messages";
+export type { ContentPart, MessageContent } from "../types/content";
 
 // Generation policy contracts
 export { hasToolCall, maxSteps } from "./tool-control";
