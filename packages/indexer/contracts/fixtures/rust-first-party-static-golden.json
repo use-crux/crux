@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 536,
+    "files": 541,
     "definitions": 327,
     "relations": 185,
     "diagnostics": 4,
-    "dependencies": 972,
-    "canonicalBytes": 2401159
+    "dependencies": 984,
+    "canonicalBytes": 2402008
   },
   "files": [
     {
@@ -186,12 +186,12 @@
     },
     {
       "file": "packages/ai/index.ts",
-      "sha256": "db241ad0cb3bafa2731ef333d7f13bfafa3c5e0caddb7a2d47a2f7115816b62f",
-      "bytes": 316,
+      "sha256": "1f34f70517776cdf73153abc3953c8b9f0891648b4ff502cc9ad32c72d0713c0",
+      "bytes": 353,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 6
+      "dependencies": 7
     },
     {
       "file": "packages/ai/src/call-handle.ts",
@@ -210,6 +210,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 3
+    },
+    {
+      "file": "packages/ai/src/content-parts.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/ai/src/executor.ts",
@@ -240,12 +249,12 @@
     },
     {
       "file": "packages/ai/src/messages.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "sha256": "ba38cabf14d6a9f36a7dde328331215aa6fc19daadb98cf1869f0704ade683fe",
+      "bytes": 109,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/ai/src/meta.ts",
@@ -446,6 +455,15 @@
       "dependencies": 3
     },
     {
+      "file": "packages/anthropic/content-block-decode.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/anthropic/helpers.ts",
       "sha256": "4a40e209956b24f56925c7dff38cc9a33e8719093523bc4d5e4b2fb15ee02ef2",
       "bytes": 105,
@@ -465,12 +483,12 @@
     },
     {
       "file": "packages/anthropic/message-codec.ts",
-      "sha256": "468ba3ad04555167c1120303ea8ee66edf3b6df4debab6356025fa430a829b4d",
-      "bytes": 118,
+      "sha256": "f7e9d7d57c66ff3c1e3344721794f0a37053e7b4964cd9781b4ede8e5d662e22",
+      "bytes": 170,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/anthropic/native.ts",
@@ -1373,6 +1391,15 @@
       "dependencies": 1
     },
     {
+      "file": "packages/core/adapter/content-degradation.ts",
+      "sha256": "15343852af7bfb422b6564ec3a6d8ff04ba9ba7206c16ed2c11c123afd0618b3",
+      "bytes": 202,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
       "file": "packages/core/adapter/define-adapter-types.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -1788,12 +1815,12 @@
     },
     {
       "file": "packages/core/memory/block-system.ts",
-      "sha256": "e95e31c166f2b6e739ce91f81cc431ae612d422d60e4131c4d7ae73f3cd72c41",
-      "bytes": 1753,
+      "sha256": "8b6d4619d62b32a5f446dfb2063f73e0a9b3d0fc520c179ae2422b785ba7f68e",
+      "bytes": 1834,
       "definitions": 1,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 9
+      "dependencies": 11
     },
     {
       "file": "packages/core/memory/contracts.ts",
@@ -2625,12 +2652,12 @@
     },
     {
       "file": "packages/core/safety/session.ts",
-      "sha256": "29e17e41e99f5d088bab3405e9df8172dd78e3cf915e1490d9d248e3825eb2b1",
-      "bytes": 345,
+      "sha256": "8ee9dbc360f0623cbfe3e4ce1c15ca00ab2d71992cf98455a374f860cd9ac64d",
+      "bytes": 385,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 6
+      "dependencies": 7
     },
     {
       "file": "packages/core/safety/toolPolicy/types.ts",
@@ -3047,6 +3074,15 @@
       "dependencies": 4
     },
     {
+      "file": "packages/google/content-parts.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/google/embedding.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -3057,12 +3093,12 @@
     },
     {
       "file": "packages/google/function-response.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "sha256": "50271cb190b12fc102a16761e7b9e448ca30b5bc4104f37ade744c49d1d418bd",
+      "bytes": 109,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/google/helpers.ts",
@@ -3084,12 +3120,12 @@
     },
     {
       "file": "packages/google/message-codec.ts",
-      "sha256": "411a83eba31ffe86247d2d51a50275109569efcba4201a8c04ec804af5e53703",
-      "bytes": 113,
+      "sha256": "b74971cd52310f82008d31a841d9264fd1fb25cf92a742cb6145a0a4487dd591",
+      "bytes": 155,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/google/native.ts",
@@ -4406,6 +4442,15 @@
       "dependencies": 3
     },
     {
+      "file": "packages/openai/content-parts.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/openai/embedding.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -4434,12 +4479,12 @@
     },
     {
       "file": "packages/openai/message-codec.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "sha256": "22807a0d164b7b846300e9b161d9c8a6221312e792865f8e923594085370a6a1",
+      "bytes": 109,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/openai/native.ts",
