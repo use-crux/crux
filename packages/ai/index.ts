@@ -94,6 +94,7 @@ import {
   createManualAiSdkGatewayController,
   transportGateway,
 } from "./src/call-handle";
+import { toMessages as normalizeAiSdkMessages } from "./src/messages";
 export { fromResponse, toParams } from "./src/codec";
 export type { AiSdkCodecOptions } from "./src/codec";
 
@@ -363,7 +364,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       runtimeContext,
       toolMiddleware,
       toolApproval,
-      messages: messages as Message[] | undefined,
+      messages: messages ? normalizeAiSdkMessages(messages) : undefined,
       tokenBudget,
       timeout,
       validationRetry,
@@ -454,7 +455,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       runtimeContext,
       toolMiddleware,
       toolApproval,
-      messages: messages as Message[] | undefined,
+      messages: messages ? normalizeAiSdkMessages(messages) : undefined,
       tokenBudget,
       timeout,
       constraints,

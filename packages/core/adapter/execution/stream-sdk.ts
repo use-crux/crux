@@ -111,6 +111,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     prompt: promptText,
     messages,
     settings: mappedSettings,
+    unsupportedContent: resolved.settings.unsupportedContent,
     tools,
     toolApproval: (call) =>
       lifecycle.requiresApproval(

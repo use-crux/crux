@@ -163,6 +163,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     prompt: promptText,
     messages,
     settings: mappedSettings,
+    unsupportedContent: resolved.settings.unsupportedContent,
     tools: lifecycle.tools,
     toolApproval: (call) =>
       lifecycle.requiresApproval(

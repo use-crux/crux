@@ -13,10 +13,8 @@
  */
 
 import type { Message } from '@use-crux/core'
-
-// ─────────────────────────────────────────────────────────────────
-// Canonical → ModelMessage
-// ─────────────────────────────────────────────────────────────────
+import type { AiSdkContentPartOptions } from './content-parts'
+import { decodeContentFromAiSdkParts, encodeContentForAiSdk } from './content-parts'
 
 interface CanonicalToolCall {
   id: string
@@ -27,24 +25,19 @@ interface CanonicalToolCall {
 /**
  * Convert canonical Crux messages to AI SDK `ModelMessage`-shaped objects.
  *
- * Pass-through rules keep existing callers working: messages whose content
- * is already an array of SDK parts are forwarded untouched, so histories
- * captured from prior AI SDK calls survive a round-trip. Approval
- * bookkeeping messages (`tool-approval-response`, approval-request
+ * Canonical multimodal content is converted into AI SDK text/image/file
+ * parts. Approval bookkeeping messages (`tool-approval-response`, approval-request
  * metadata) are consumed by core's resume logic and are NOT sent to the
  * model — by the time conversion runs, the decided tool round is already
  * in the history as ordinary tool-call/tool-result messages.
  */
-export function toModelMessages(messages: readonly Message[]): Array<Record<string, unknown>> {
+export function toModelMessages(
+  messages: readonly Message[],
+  options: AiSdkContentPartOptions = {},
+): Array<Record<string, unknown>> {
   const result: Array<Record<string, unknown>> = []
 
   for (const message of messages) {
-    // SDK-shaped content (array of parts) passes through untouched.
-    if (Array.isArray(message.content)) {
-      result.push({ role: message.role, content: message.content })
-      continue
-    }
-
     if (message.role === 'tool') {
       // Approval responses are core-side bookkeeping, not model input.
       if (message.metadata?.toolApprovalResponse) continue
@@ -86,16 +79,12 @@ export function toModelMessages(messages: readonly Message[]): Array<Record<stri
       continue
     }
 
-    // user / system: plain text content.
-    result.push({ role: message.role, content: message.content })
+    // user / system: text or canonical multimodal content.
+    result.push({ role: message.role, content: encodeContentForAiSdk(message.role, message.content, options) })
   }
 
   return result
 }
-
-// ─────────────────────────────────────────────────────────────────
-// ResponseMessage → canonical
-// ─────────────────────────────────────────────────────────────────
 
 interface ResponseMessagePart {
   type?: string
@@ -136,12 +125,11 @@ export function fromResponseMessages(responseMessages: readonly unknown[]): Mess
     if (!Array.isArray(message.content)) continue
 
     if (message.role === 'assistant') {
-      const textParts = message.content.filter((p) => p.type === 'text')
       const toolCallParts = message.content.filter((p) => p.type === 'tool-call')
-      const text = textParts.map((p) => p.text ?? '').join('')
+      const content = decodeContentFromAiSdkParts(message.content as Record<string, unknown>[])
       result.push({
         role: 'assistant',
-        content: text,
+        content,
         ...(toolCallParts.length > 0
           ? {
               metadata: {
@@ -185,10 +173,6 @@ export function dropTrailingAssistant(messages: readonly Message[]): Message[] {
   return [...messages]
 }
 
-// ─────────────────────────────────────────────────────────────────
-// Legacy public converters (kept for compatibility)
-// ─────────────────────────────────────────────────────────────────
-
 /**
  * Convert AI SDK `CoreMessage[]` to canonical `Message[]`.
  *
@@ -208,10 +192,7 @@ export function toMessages(
       typeof msg.content === 'string'
         ? msg.content
         : Array.isArray(msg.content)
-          ? (msg.content as Array<{ type?: string; text?: string }>)
-              .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
-              .map((p) => p.text)
-              .join('')
+          ? decodeContentFromAiSdkParts(msg.content as Record<string, unknown>[])
           : String(msg.content ?? '')
 
     const role = normalizeRole(msg.role)
@@ -226,16 +207,42 @@ export function toMessages(
 
     // Preserve tool calls from assistant messages
     if (Array.isArray(msg.content)) {
-      type ToolCallPart = { type: 'tool-call'; toolCallId: string; toolName: string; args: unknown }
-      const toolCalls = (msg.content as Array<{ type?: string }>).filter(
-        (p): p is ToolCallPart => p.type === 'tool-call',
-      )
+      const parts = msg.content as Record<string, unknown>[]
+      const toolCalls = parts.filter((p) => p.type === 'tool-call')
       if (toolCalls.length > 0) {
         metadata.toolCalls = toolCalls.map((tc) => ({
-          id: tc.toolCallId,
-          name: tc.toolName,
-          args: tc.args,
+          id: readString(tc, 'toolCallId') ?? '',
+          name: readString(tc, 'toolName') ?? '',
+          args: tc.input ?? tc.args,
         }))
+      }
+      const approvalRequests = parts.filter((p) => p.type === 'tool-approval-request')
+      if (role === 'assistant' && approvalRequests.length > 0) {
+        metadata.toolApprovalRequests = approvalRequests.map((request) => {
+          const toolCall = readRecord(request.toolCall)
+          return {
+            approvalId: readString(request, 'approvalId') ?? '',
+            toolCallId: readString(request, 'toolCallId') ?? readString(toolCall, 'toolCallId') ?? '',
+            ...(readString(request, 'toolName') ?? readString(toolCall, 'toolName')
+              ? { toolName: readString(request, 'toolName') ?? readString(toolCall, 'toolName') }
+              : {}),
+            ...(request.input !== undefined || toolCall?.input !== undefined
+              ? { input: request.input ?? toolCall?.input }
+              : {}),
+            ...(readString(request, 'approvalToken') ? { approvalToken: readString(request, 'approvalToken') } : {}),
+          }
+        })
+      }
+      const approvalResponse = parts.find((p) => p.type === 'tool-approval-response')
+      if (role === 'tool' && approvalResponse) {
+        metadata.toolApprovalResponse = {
+          approvalId: readString(approvalResponse, 'approvalId') ?? '',
+          approved: approvalResponse.approved === true,
+          ...(readString(approvalResponse, 'reason') ? { reason: readString(approvalResponse, 'reason') } : {}),
+          ...(readString(approvalResponse, 'approvalToken')
+            ? { approvalToken: readString(approvalResponse, 'approvalToken') }
+            : {}),
+        }
       }
     }
 
@@ -269,4 +276,13 @@ function normalizeRole(role: string): Message['role'] {
     return role
   }
   return 'user'
+}
+
+function readString(value: Record<string, unknown> | undefined, key: string): string | undefined {
+  const property = value?.[key]
+  return typeof property === 'string' ? property : undefined
+}
+
+function readRecord(value: unknown): Record<string, unknown> | undefined {
+  return value !== null && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined
 }

@@ -38,6 +38,7 @@ export function toParams(
     prompt: options.messages?.length ? undefined : resolved.prompt,
     messages: options.messages ?? (resolved.messages as Message[] | undefined),
     settings: codec.mapSettings(settings, modelInfo),
+    unsupportedContent: settings.unsupportedContent,
     tools: undefined,
     toolApproval: undefined,
     activeTools: resolved.activeTools,
