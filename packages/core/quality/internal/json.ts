@@ -2,8 +2,8 @@
  * Canonical JSON + identity helpers for the Quality engine.
  *
  * Case identity, config fingerprints, and cassette keys all hash canonical
- * JSON — object keys sorted recursively so semantically equal values produce
- * byte-equal strings.
+ * JSON — object keys sorted recursively and non-plain identity values tagged
+ * so semantically equal values produce byte-equal strings.
  *
  * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
@@ -13,8 +13,8 @@ import { createHash } from 'node:crypto'
 
 /**
  * Serialize a value to canonical JSON: object keys sorted recursively,
- * arrays preserved in order, JSON semantics otherwise (`undefined` object
- * properties dropped; `undefined`/functions in array positions become `null`).
+ * arrays preserved in order, `undefined` object properties dropped, and
+ * Date/Map/Set/BigInt represented with explicit tags.
  *
  * @internal
  */
@@ -23,6 +23,19 @@ export function canonicalJson(value: unknown): string {
 }
 
 function sortValue(value: unknown): unknown {
+  if (typeof value === 'function') {
+    throw new TypeError('canonicalJson cannot serialize functions; fingerprint function values before canonicalization.')
+  }
+  if (typeof value === 'bigint') return { $t: 'bigint', v: value.toString() }
+  if (value instanceof Date) return { $t: 'date', v: value.toISOString() }
+  if (value instanceof Map) {
+    const entries = [...value.entries()].map(([key, entry]) => [sortValue(key), sortValue(entry)] as const).sort(([left], [right]) => canonicalString(left).localeCompare(canonicalString(right)))
+    return { $t: 'map', v: entries }
+  }
+  if (value instanceof Set) {
+    const entries = [...value].map((entry) => sortValue(entry)).sort((left, right) => canonicalString(left).localeCompare(canonicalString(right)))
+    return { $t: 'set', v: entries }
+  }
   if (Array.isArray(value)) return value.map((item) => sortValue(item))
   if (value !== null && typeof value === 'object') {
     const record = value as Record<string, unknown>
@@ -34,6 +47,10 @@ function sortValue(value: unknown): unknown {
     return sorted
   }
   return value
+}
+
+function canonicalString(value: unknown): string {
+  return JSON.stringify(value) ?? 'null'
 }
 
 /**

@@ -10,6 +10,7 @@
  */
 
 import type { ProjectModelDiagnosticCode } from '../../project-index'
+import type { QualityDefinitionDiagnosticCode } from './errors'
 import type { QualityConfig } from '../config'
 import type { EvaluationManifest } from '../manifest'
 import type { ReplayMode } from '../replay'
@@ -35,15 +36,15 @@ export interface QualityEvaluationHandle {
 
 /** Create an opaque facade handle and store engine-only data out of band. @internal */
 export function createQualityEvaluationHandle(state: QualityEvaluationHandleState): QualityEvaluationHandle {
-  const handle = Object.freeze({ _tag: 'CruxQualityEvaluationHandle' as const })
+  const handle = Object.freeze({
+    _tag: 'CruxQualityEvaluationHandle' as const,
+  })
   qualityEvaluationHandles.set(handle, state)
   return handle
 }
 
 /** Resolve engine-only data for a handle created by this facade. @internal */
-export function getQualityEvaluationHandleState(
-  handle: QualityEvaluationHandle,
-): QualityEvaluationHandleState | undefined {
+export function getQualityEvaluationHandleState(handle: QualityEvaluationHandle): QualityEvaluationHandleState | undefined {
   return qualityEvaluationHandles.get(handle)
 }
 
@@ -69,7 +70,7 @@ export interface QualityCollectInput {
 export interface QualityCollectError {
   readonly message: string
   readonly file?: string
-  readonly code?: ProjectModelDiagnosticCode
+  readonly code?: QualityDefinitionDiagnosticCode
   readonly line?: number
 }
 
@@ -141,7 +142,7 @@ export type QualityRunnerEvent =
       type: 'error'
       scope: 'collect' | 'execute' | 'promote'
       message: string
-      code?: ProjectModelDiagnosticCode
+      code?: QualityDefinitionDiagnosticCode
       file?: string
       line?: number
     }

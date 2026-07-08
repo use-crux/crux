@@ -15,16 +15,10 @@ import type { Experiment, RunOverrides } from '../experiment'
 import type { QualitySourceFrameResolver } from '../source-frame'
 import { experimentRecordPath } from './persist'
 import { QualityDefinitionError, runEvaluation } from './engine'
-import { NotImplementedError } from './errors'
+import { CorruptBaselineError, NotImplementedError } from './errors'
 import type { EngineOptions, EngineSetup } from './engine'
 import type { EvaluationDefinition } from './definition'
-import type {
-  QualityCollectedEvaluation,
-  QualityEventSink,
-  QualityRunInput,
-  QualityRunnerEnv,
-  QualityRunResult,
-} from './runner-types'
+import type { QualityCollectedEvaluation, QualityEventSink, QualityRunInput, QualityRunnerEnv, QualityRunResult } from './runner-types'
 import { getQualityEvaluationHandleState } from './runner-types'
 
 /** Tasks whose lowered prompt-test runner needs an ambient `generate` fn. */
@@ -89,6 +83,16 @@ export async function runQualityEvaluations(env: QualityRunnerEnv, input: Qualit
           scope: 'execute',
           message: `${evaluationId}: ${error.message}`,
           ...(error.code !== undefined ? { code: error.code } : {}),
+        })
+        exitCode = 2
+        continue
+      }
+      if (error instanceof CorruptBaselineError) {
+        emit?.({
+          type: 'error',
+          scope: 'execute',
+          message: `${evaluationId}: ${error.message}`,
+          code: error.code,
         })
         exitCode = 2
         continue
@@ -176,11 +180,7 @@ function buildOverrides(input: QualityRunInput): RunOverrides<string> | undefine
   return Object.keys(overrides).length > 0 ? overrides : undefined
 }
 
-function emitEvalDone(
-  env: QualityRunnerEnv,
-  emit: QualityEventSink | undefined,
-  experiment: Experiment<unknown, unknown, string, string>,
-): void {
+function emitEvalDone(env: QualityRunnerEnv, emit: QualityEventSink | undefined, experiment: Experiment<unknown, unknown, string, string>): void {
   const persisted = env.persist !== false
   const dir = env.dir ?? join(env.rootDir ?? process.cwd(), '.crux/quality')
   emit?.({
@@ -198,9 +198,7 @@ function emitEvalDone(
   })
 }
 
-function normalizeSourceFrames(
-  sourceFrames: QualityRunnerEnv['sourceFrames'],
-): { resolver: QualitySourceFrameResolver; radius?: number } | undefined {
+function normalizeSourceFrames(sourceFrames: QualityRunnerEnv['sourceFrames']): { resolver: QualitySourceFrameResolver; radius?: number } | undefined {
   if (sourceFrames === undefined) return undefined
   if ('resolveSourceFrame' in sourceFrames) return { resolver: sourceFrames }
   return {
@@ -234,10 +232,7 @@ interface QualityEvaluationSelection {
   readonly unknownId?: string
 }
 
-function selectEvaluations(
-  collected: readonly QualityCollectedEvaluation[],
-  ids: readonly string[] | undefined,
-): QualityEvaluationSelection {
+function selectEvaluations(collected: readonly QualityCollectedEvaluation[], ids: readonly string[] | undefined): QualityEvaluationSelection {
   if (ids === undefined || ids.length === 0) return { selected: [...collected] }
   const byId = new Map(collected.map((entry) => [entry.id, entry]))
   const selected: QualityCollectedEvaluation[] = []
@@ -287,7 +282,9 @@ function levenshtein(a: string, b: string): number {
   return previous[b.length]!
 }
 
-function getHandleState(entry: QualityCollectedEvaluation): { readonly definition: EvaluationDefinition } {
+function getHandleState(entry: QualityCollectedEvaluation): {
+  readonly definition: EvaluationDefinition
+} {
   const state = getQualityEvaluationHandleState(entry.handle)
   if (entry.handle._tag !== 'CruxQualityEvaluationHandle' || state === undefined) {
     throw new TypeError(`evaluation '${entry.id}' was not collected by createQualityRunner().`)

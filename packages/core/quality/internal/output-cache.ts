@@ -1,6 +1,7 @@
 /**
  * The watch-mode output cache (spec 03 §5) — per-cell task executions keyed
- * by `(caseId, variantName, trial, taskFingerprint, paramsHash, replayMode)`
+ * by semantic cell identity: evaluation id, case identity plus input
+ * fingerprint, variant, trial, task fingerprint, and params fingerprint.
  * and persisted under `<quality dir>/cache/<evaluationId>/<key>.json`
  * (gitignored via the scaffolded `.gitignore`).
  *
@@ -19,52 +20,27 @@ import { dirname, join } from 'node:path'
 import type { Capability } from '../target'
 import type { CellSignals } from './signals'
 import { canonicalJson, sha256Hex } from './json'
+import { OUTPUT_CACHE_EPOCH, fingerprintValue } from './cache-identity'
 
 // ─────────────────────────────────────────────────────────────────
 // Keys
 // ─────────────────────────────────────────────────────────────────
 
 /** The full cell cache key (spec 03 §5), hashed for use as a filename. */
-export function cellCacheKey(parts: {
-  caseId: string
-  variantName: string
-  trial: number
-  taskFingerprint: string
-  paramsHash: string
-  replayMode: string
-}): string {
-  return sha256Hex(canonicalJson(parts)).slice(0, 32)
+export function cellCacheKey(parts: { evaluationId: string; caseKey: string; variantName: string; trial: number; taskFingerprint: string; paramsFingerprint: string }): string {
+  return sha256Hex(canonicalJson({ epoch: OUTPUT_CACHE_EPOCH, ...parts })).slice(0, 32)
 }
 
 /**
- * Fingerprint the effective params for the cache key. Params may carry
- * non-serializable values (model instances, functions) — those contribute
- * their key and type tag only, so swapping one model INSTANCE for another of
- * the same shape does not bust the cache, while adding/removing/retyping a
- * param does. Serializable values contribute fully.
+ * Fingerprint the effective params for the cache key.
+ *
+ * Params may carry non-serializable values (model instances, functions).
+ * Function leaves contribute a source fingerprint; object leaves contribute
+ * their enumerable data. This can over-invalidate, but it must not reuse stale
+ * outputs after a semantic param change.
  */
 export function paramsFingerprint(params: Readonly<Record<string, unknown>>): string {
-  const projection: Record<string, unknown> = {}
-  for (const [key, value] of Object.entries(params)) {
-    projection[key] = serializableProjection(value)
-  }
-  return sha256Hex(canonicalJson(projection))
-}
-
-function serializableProjection(value: unknown): unknown {
-  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
-    return value
-  }
-  if (Array.isArray(value)) return value.map((item) => serializableProjection(item))
-  if (typeof value === 'object') {
-    const record = value as Record<string, unknown>
-    const projection: Record<string, unknown> = {}
-    for (const key of Object.keys(record)) {
-      projection[key] = serializableProjection(record[key])
-    }
-    return projection
-  }
-  return `[${typeof value}]`
+  return fingerprintValue(params)
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -82,7 +58,9 @@ export interface CachedCellExecution {
 }
 
 /** `CellSignals` with the `captured` Set lowered to an array for JSON. */
-export type SerializedCellSignals = Omit<CellSignals, 'captured'> & { captured: Capability[] }
+export type SerializedCellSignals = Omit<CellSignals, 'captured'> & {
+  captured: Capability[]
+}
 
 export function serializeCellSignals(signals: CellSignals): SerializedCellSignals {
   return { ...signals, captured: [...signals.captured] }
@@ -104,11 +82,7 @@ function entryPath(cacheDir: string, evaluationId: string, key: string): string 
 }
 
 /** Read one cached execution; any read/parse problem is a miss, never an error. */
-export async function readCellCache(
-  cacheDir: string,
-  evaluationId: string,
-  key: string,
-): Promise<CachedCellExecution | undefined> {
+export async function readCellCache(cacheDir: string, evaluationId: string, key: string): Promise<CachedCellExecution | undefined> {
   try {
     const raw = await readFile(entryPath(cacheDir, evaluationId, key), 'utf8')
     return JSON.parse(raw) as CachedCellExecution
@@ -118,12 +92,7 @@ export async function readCellCache(
 }
 
 /** Write one cached execution; failures are swallowed (the cache is best-effort). */
-export async function writeCellCache(
-  cacheDir: string,
-  evaluationId: string,
-  key: string,
-  entry: CachedCellExecution,
-): Promise<void> {
+export async function writeCellCache(cacheDir: string, evaluationId: string, key: string, entry: CachedCellExecution): Promise<void> {
   try {
     const path = entryPath(cacheDir, evaluationId, key)
     await mkdir(dirname(path), { recursive: true })

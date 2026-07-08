@@ -17,7 +17,7 @@
  */
 
 import { canonicalJson } from './internal/json'
-import { SCORER_INTERNAL, type ContextualScorerRun } from './internal/scorer-runtime'
+import { SCORER_IDENTITY, SCORER_INTERNAL, type ContextualScorerRun } from './internal/scorer-runtime'
 import { runJudgeScorer } from './internal/judge-scorer'
 import { createRagScorerRun } from './internal/rag-scorers'
 import {
@@ -136,9 +136,7 @@ export interface JudgeOptionsBase<N extends string> {
  * structured-output evaluations using text judges are a compile error, not
  * silently stringified JSON). @internal
  */
-export type JudgeSelect<O> = [O] extends [string]
-  ? { select?: (output: O) => string }
-  : { select: (output: O) => string }
+export type JudgeSelect<O> = [O] extends [string] ? { select?: (output: O) => string } : { select: (output: O) => string }
 
 // ─────────────────────────────────────────────────────────────────
 // Library interfaces (standalone + evaluation-bound)
@@ -214,21 +212,13 @@ export interface ScorerLibrary {
     /** Mean reciprocal rank of the first expected source. */
     mrr<const N extends string = 'rag.mrr'>(opts?: RagMetricOptions<N>): Scorer<unknown, unknown, unknown, N>
     /** Fraction of expected sources retrieved anywhere in the result set. */
-    expectedSourceCoverage<const N extends string = 'rag.expectedSourceCoverage'>(
-      opts?: RagMetricOptions<N>,
-    ): Scorer<unknown, unknown, unknown, N>
+    expectedSourceCoverage<const N extends string = 'rag.expectedSourceCoverage'>(opts?: RagMetricOptions<N>): Scorer<unknown, unknown, unknown, N>
     /** Fraction of returned contexts that match expected source identity. */
-    contextPrecision<const N extends string = 'rag.contextPrecision'>(
-      opts?: RagContextPrecisionOptions<N>,
-    ): Scorer<unknown, unknown, unknown, N>
+    contextPrecision<const N extends string = 'rag.contextPrecision'>(opts?: RagContextPrecisionOptions<N>): Scorer<unknown, unknown, unknown, N>
     /** Fraction of cited sources that are grounded and match expected sources when provided. */
-    citationValidity<const N extends string = 'rag.citationValidity'>(
-      opts?: RagMetricOptions<N>,
-    ): Scorer<unknown, unknown, unknown, N>
+    citationValidity<const N extends string = 'rag.citationValidity'>(opts?: RagMetricOptions<N>): Scorer<unknown, unknown, unknown, N>
     /** Validates the serializable recipe trace shape used for snapshot-style evals. */
-    traceShapeSnapshot<const N extends string = 'rag.traceShapeSnapshot'>(
-      opts?: RagMetricOptions<N>,
-    ): Scorer<unknown, unknown, unknown, N>
+    traceShapeSnapshot<const N extends string = 'rag.traceShapeSnapshot'>(opts?: RagMetricOptions<N>): Scorer<unknown, unknown, unknown, N>
     /** Is every claim in the answer supported by the retrieved context? */
     faithfulness(opts?: JudgeBacked): Scorer<unknown, unknown, unknown, string>
     /** Does the answer address the question? */
@@ -282,16 +272,10 @@ export interface BoundScorerLib<I, O, E> {
   rag: {
     recallAtK(k: number): Scorer<I, O, E, `rag.recall@${number}`>
     mrr<const N extends string = 'rag.mrr'>(opts?: RagMetricOptions<N>): Scorer<I, O, E, N>
-    expectedSourceCoverage<const N extends string = 'rag.expectedSourceCoverage'>(
-      opts?: RagMetricOptions<N>,
-    ): Scorer<I, O, E, N>
-    contextPrecision<const N extends string = 'rag.contextPrecision'>(
-      opts?: RagContextPrecisionOptions<N>,
-    ): Scorer<I, O, E, N>
+    expectedSourceCoverage<const N extends string = 'rag.expectedSourceCoverage'>(opts?: RagMetricOptions<N>): Scorer<I, O, E, N>
+    contextPrecision<const N extends string = 'rag.contextPrecision'>(opts?: RagContextPrecisionOptions<N>): Scorer<I, O, E, N>
     citationValidity<const N extends string = 'rag.citationValidity'>(opts?: RagMetricOptions<N>): Scorer<I, O, E, N>
-    traceShapeSnapshot<const N extends string = 'rag.traceShapeSnapshot'>(
-      opts?: RagMetricOptions<N>,
-    ): Scorer<I, O, E, N>
+    traceShapeSnapshot<const N extends string = 'rag.traceShapeSnapshot'>(opts?: RagMetricOptions<N>): Scorer<I, O, E, N>
     faithfulness(opts?: JudgeBacked): Scorer<I, O, E, string>
     answerRelevancy(opts?: JudgeBacked): Scorer<I, O, E, string>
     contextRecall(opts?: JudgeBacked): Scorer<I, O, E, string>
@@ -311,11 +295,7 @@ export interface BoundScorerLib<I, O, E> {
 
 type AnyScorerFn = (args: ScorerArgs<unknown, unknown, unknown>) => Score | Promise<Score>
 
-function makeScorer<N extends string>(
-  name: N,
-  costClass: 'code' | 'model',
-  fn: AnyScorerFn,
-): Scorer<unknown, unknown, unknown, N> {
+function makeScorer<N extends string>(name: N, costClass: 'code' | 'model', fn: AnyScorerFn): Scorer<unknown, unknown, unknown, N> {
   return Object.assign(fn, { scorerName: name, costClass })
 }
 
@@ -324,10 +304,7 @@ function makeScorer<N extends string>(
  * contextual run with no context (standalone/autoevals path), while the
  * engine invokes the {@link SCORER_INTERNAL} form with ambient providers.
  */
-function makeContextualScorer<N extends string>(
-  name: N,
-  run: ContextualScorerRun,
-): Scorer<unknown, unknown, unknown, N> {
+function makeContextualScorer<N extends string>(name: N, run: ContextualScorerRun): Scorer<unknown, unknown, unknown, N> {
   const plain: AnyScorerFn = (args) => run(args, undefined)
   return Object.assign(plain, {
     scorerName: name,
@@ -428,7 +405,20 @@ function judgeScorer(opts: JudgeOptionsBase<string> & { select?: (output: never)
   if (opts.choiceScores !== undefined && Object.keys(opts.choiceScores).length === 0) {
     throw new TypeError('scorers.judge(): `choiceScores` must declare at least one choice.')
   }
-  return makeContextualScorer(opts.name, (args, context) => runJudgeScorer(opts, args, context))
+  return Object.assign(
+    makeContextualScorer(opts.name, (args, context) => runJudgeScorer(opts, args, context)),
+    {
+      [SCORER_IDENTITY]: {
+        kind: 'judge',
+        name: opts.name,
+        rubric: opts.rubric,
+        choiceScores: opts.choiceScores,
+        model: opts.model,
+        useCoT: opts.useCoT,
+        select: opts.select,
+      },
+    },
+  )
 }
 
 /**
@@ -521,9 +511,7 @@ export const scorers: ScorerLibrary = {
       if (expected === undefined) return { name, score: null }
       const embed = opts?.embed ?? context?.embed
       if (embed === undefined) {
-        throw new MissingQualityModelBindingError(
-          `scorers.embeddingSimilarity('${name}') needs an embed fn — pass \`embed\` from the eval or an eval-local helper.`,
-        )
+        throw new MissingQualityModelBindingError(`scorers.embeddingSimilarity('${name}') needs an embed fn — pass \`embed\` from the eval or an eval-local helper.`)
       }
       const [outputVector, expectedVector] = await embed([outputText(output), outputText(expected)])
       if (outputVector === undefined || expectedVector === undefined) {
@@ -540,19 +528,13 @@ export const scorers: ScorerLibrary = {
     contextPrecision: ragContextPrecision,
     citationValidity: ragCitationValidity,
     traceShapeSnapshot: ragTraceShapeSnapshot,
-    faithfulness: (opts) =>
-      makeContextualScorer(opts?.name ?? 'faithfulness', createRagScorerRun('faithfulness', opts ?? {})),
-    answerRelevancy: (opts) =>
-      makeContextualScorer(opts?.name ?? 'answerRelevancy', createRagScorerRun('answerRelevancy', opts ?? {})),
-    contextRecall: (opts) =>
-      makeContextualScorer(opts?.name ?? 'contextRecall', createRagScorerRun('contextRecall', opts ?? {})),
+    faithfulness: (opts) => makeContextualScorer(opts?.name ?? 'faithfulness', createRagScorerRun('faithfulness', opts ?? {})),
+    answerRelevancy: (opts) => makeContextualScorer(opts?.name ?? 'answerRelevancy', createRagScorerRun('answerRelevancy', opts ?? {})),
+    contextRecall: (opts) => makeContextualScorer(opts?.name ?? 'contextRecall', createRagScorerRun('contextRecall', opts ?? {})),
   },
 
   retrieval: {
-    hitRateAtK: (k) =>
-      retrievalScorer(`hitRate@${k}`, (hits, sources) =>
-        hits.slice(0, k).some((hit) => sources.some((source) => hitMatches(hit, source))) ? 1 : 0,
-      ),
+    hitRateAtK: (k) => retrievalScorer(`hitRate@${k}`, (hits, sources) => (hits.slice(0, k).some((hit) => sources.some((source) => hitMatches(hit, source))) ? 1 : 0)),
     recallAtK: (k) =>
       retrievalScorer(`recall@${k}`, (hits, sources) => {
         const topK = hits.slice(0, k)
@@ -608,25 +590,14 @@ interface RankedHit {
 }
 
 function isExpectedSource(value: unknown): value is ExpectedSource {
-  return (
-    isPlainObject(value) &&
-    typeof value.sourceId === 'string' &&
-    (value.chunkId === undefined || typeof value.chunkId === 'string')
-  )
+  return isPlainObject(value) && typeof value.sourceId === 'string' && (value.chunkId === undefined || typeof value.chunkId === 'string')
 }
 
 function parseExpectedSources(expected: unknown, name: string): ExpectedSource[] {
-  if (
-    isPlainObject(expected) &&
-    Array.isArray(expected.sources) &&
-    expected.sources.length > 0 &&
-    expected.sources.every(isExpectedSource)
-  ) {
+  if (isPlainObject(expected) && Array.isArray(expected.sources) && expected.sources.length > 0 && expected.sources.every(isExpectedSource)) {
     return expected.sources
   }
-  throw new TypeError(
-    `scorers.retrieval ('${name}'): \`expected\` must be \`{ sources: Array<{ sourceId: string; chunkId?: string }> }\` with at least one source.`,
-  )
+  throw new TypeError(`scorers.retrieval ('${name}'): \`expected\` must be \`{ sources: Array<{ sourceId: string; chunkId?: string }> }\` with at least one source.`)
 }
 
 /**
@@ -635,11 +606,7 @@ function parseExpectedSources(expected: unknown, name: string): ExpectedSource[]
  * sorted by `rank` when every entry carries one.
  */
 function rankedHitsFromOutput(output: unknown): RankedHit[] | undefined {
-  const list = Array.isArray(output)
-    ? output
-    : isPlainObject(output) && Array.isArray(output.hits)
-      ? output.hits
-      : undefined
+  const list = Array.isArray(output) ? output : isPlainObject(output) && Array.isArray(output.hits) ? output.hits : undefined
   if (list === undefined || !list.every(isPlainObject)) return undefined
   const hits = list as RankedHit[]
   if (hits.length > 1 && hits.every((hit) => typeof hit.rank === 'number')) {
@@ -657,10 +624,7 @@ function hitMatches(hit: RankedHit, source: ExpectedSource): boolean {
  * and degrades honestly (`null` without `expected` or without a measurable
  * hit list).
  */
-function retrievalScorer<N extends string>(
-  name: N,
-  metric: (hits: readonly RankedHit[], sources: readonly ExpectedSource[]) => number,
-): Scorer<unknown, unknown, unknown, N> {
+function retrievalScorer<N extends string>(name: N, metric: (hits: readonly RankedHit[], sources: readonly ExpectedSource[]) => number): Scorer<unknown, unknown, unknown, N> {
   return makeScorer(name, 'code', ({ output, expected }) => {
     if (expected === undefined) return { name, score: null }
     const sources = parseExpectedSources(expected, name)

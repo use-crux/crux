@@ -40,8 +40,12 @@ export interface NormalizedCall {
   model?: string
   /** Canonicalized generation settings. */
   settings?: Record<string, unknown>
-  /** Hash of the tool schema surface offered to the model. */
-  toolSchemaHash?: string
+  /** Cache epoch for normalized-call identity semantics. */
+  epoch?: number
+  /** Fingerprint of the structured output schema, or `'none'`. */
+  outputSchemaFingerprint?: string
+  /** Fingerprints of tool parameter schemas offered to the model. */
+  toolSchemas?: ReadonlyArray<{ name: string; paramsFingerprint: string }>
   /** The call input payload. */
   input?: unknown
 }

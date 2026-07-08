@@ -25,6 +25,7 @@ import type { InterceptedGeneration } from '../../adapter/interception'
 import type { NormalizedCall, ReplayMode } from '../replay'
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction } from './redact'
+import { CASSETTE_CACHE_EPOCH, fingerprintSchema } from './cache-identity'
 
 /** Days after which a cassette's recordings are considered stale. */
 const STALE_AFTER_DAYS = 90
@@ -68,12 +69,23 @@ export function buildNormalizedCall(call: InterceptedGeneration): NormalizedCall
     }),
   )
   return {
+    epoch: CASSETTE_CACHE_EPOCH,
     kind: call.kind,
     ...(call.promptId !== undefined ? { targetId: call.promptId } : {}),
     promptHash,
     model: `${call.modelInfo.provider}/${call.modelInfo.modelId}`,
     settings: call.settings,
-    ...(call.tools !== undefined ? { toolSchemaHash: sha256Hex(canonicalJson(call.tools)) } : {}),
+    outputSchemaFingerprint: fingerprintSchema(call.outputSchema),
+    ...(call.tools !== undefined
+      ? {
+          toolSchemas: call.tools
+            .map((tool) => ({
+              name: tool.name,
+              paramsFingerprint: fingerprintSchema(tool.parameters),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        }
+      : {}),
   }
 }
 
@@ -184,7 +196,10 @@ async function sdkVersion(): Promise<string> {
   for (const candidate of ['../../package.json', '../../../package.json']) {
     try {
       const url = new URL(candidate, import.meta.url)
-      const parsed = JSON.parse(await readFile(url, 'utf8')) as { name?: unknown; version?: unknown }
+      const parsed = JSON.parse(await readFile(url, 'utf8')) as {
+        name?: unknown
+        version?: unknown
+      }
       if (parsed.name === '@use-crux/core' && typeof parsed.version === 'string') {
         cachedSdkVersion = parsed.version
         return cachedSdkVersion
@@ -240,7 +255,11 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
 
   let file: CassetteFile = {
     version: 1,
-    metadata: { recordedAt: new Date().toISOString(), sdkVersion: await sdkVersion(), models: [] },
+    metadata: {
+      recordedAt: new Date().toISOString(),
+      sdkVersion: await sdkVersion(),
+      models: [],
+    },
     entries: {},
   }
   let staleSince: string | undefined
@@ -262,16 +281,9 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
   /** Keys refreshed this run — `refresh` re-records each exercised call once. */
   const refreshed = new Set<string>()
 
-  const keyFor = (normalized: NormalizedCall): string =>
-    options.match !== undefined ? options.match(normalized) : sha256Hex(canonicalJson(normalized))
+  const keyFor = (normalized: NormalizedCall): string => (options.match !== undefined ? options.match(normalized) : sha256Hex(canonicalJson(normalized)))
 
-  async function executeAndRecord(
-    key: string,
-    normalized: NormalizedCall,
-    kind: CassetteEntry['kind'],
-    execute: () => Promise<unknown>,
-    project: (result: unknown) => unknown,
-  ): Promise<unknown> {
+  async function executeAndRecord(key: string, normalized: NormalizedCall, kind: CassetteEntry['kind'], execute: () => Promise<unknown>, project: (result: unknown) => unknown): Promise<unknown> {
     const result = await execute()
     const payload = project(result)
     if (payload !== undefined) {
@@ -302,12 +314,7 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
   }
 
   /** The shared mode logic both interception forms run through. */
-  function interceptNormalized(
-    normalized: NormalizedCall,
-    kind: CassetteEntry['kind'],
-    execute: () => Promise<unknown>,
-    project: (result: unknown) => unknown,
-  ): Promise<unknown> {
+  function interceptNormalized(normalized: NormalizedCall, kind: CassetteEntry['kind'], execute: () => Promise<unknown>, project: (result: unknown) => unknown): Promise<unknown> {
     const key = keyFor(normalized)
     const entry = file.entries[key]
 

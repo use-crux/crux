@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { evaluate } from '../../quality'
 import { QualityRunnerHarnessError, runEvaluationWithRunner as run } from './runner-harness'
 
-const upperTask = async (input: { q: string }) => ({ answer: input.q.toUpperCase() })
+const upperTask = async (input: { q: string }) => ({
+  answer: input.q.toUpperCase(),
+})
 
 describe('Quality runner — plain fn task end-to-end', () => {
   it('produces the full Experiment record shape for a passing run', async () => {
@@ -44,7 +46,14 @@ describe('Quality runner — plain fn task end-to-end', () => {
     expect(second.expected).toEqual({ answer: 'YO' })
 
     const aggregate = experiment.aggregates.perVariant.default!
-    expect(aggregate).toMatchObject({ cells: 2, passed: 2, failed: 0, errored: 0, skipped: 0, passRate: 1 })
+    expect(aggregate).toMatchObject({
+      cells: 2,
+      passed: 2,
+      failed: 0,
+      errored: 0,
+      skipped: 0,
+      passRate: 1,
+    })
     expect(aggregate.scores.pass).toEqual({ mean: 1, sem: 0, n: 2 })
     expect(aggregate.consistency).toBeUndefined()
     expect(aggregate.latency.p95Ms).toBeGreaterThanOrEqual(aggregate.latency.meanMs > 0 ? 0 : 0)
@@ -52,7 +61,14 @@ describe('Quality runner — plain fn task end-to-end', () => {
     expect(experiment.gates).toEqual({
       passed: true,
       informational: false,
-      results: [{ gate: 'default.assertions', threshold: true, actual: true, passed: true }],
+      results: [
+        {
+          gate: 'default.assertions',
+          threshold: true,
+          actual: true,
+          passed: true,
+        },
+      ],
     })
     expect(experiment.passed).toBe(true)
   })
@@ -64,7 +80,12 @@ describe('Quality runner — plain fn task end-to-end', () => {
       expect: (ctx) => {
         ctx.expect(ctx.output.answer).toBe('GOOD')
       },
-      scorers: [({ output }) => ({ name: 'length', score: (output as { answer: string }).answer.length > 2 ? 1 : 0 })],
+      scorers: [
+        ({ output }) => ({
+          name: 'length',
+          score: (output as { answer: string }).answer.length > 2 ? 1 : 0,
+        }),
+      ],
     })
     const experiment = await run(evaluation)
 
@@ -78,7 +99,12 @@ describe('Quality runner — plain fn task end-to-end', () => {
     expect(bad.assertions.ran).toBe(1)
     const badFailures = bad.assertions.outcomes.filter((outcome) => outcome.status === 'failed')
     expect(badFailures).toHaveLength(1)
-    expect(badFailures[0]).toMatchObject({ level: 'evaluation', index: 0, matcher: 'toBe', soft: false })
+    expect(badFailures[0]).toMatchObject({
+      level: 'evaluation',
+      index: 0,
+      matcher: 'toBe',
+      soft: false,
+    })
     expect(badFailures[0]!.message).toContain('BAD')
     expect(badFailures[0]!.sourceRef).toMatch(/engine\.test\.ts:\d+:\d+$/)
     // Scorers still run on expect-failed cells (semantics rule 4).
@@ -86,6 +112,26 @@ describe('Quality runner — plain fn task end-to-end', () => {
     expect(bad.scores).toContainEqual({ name: 'pass', score: 0 })
 
     expect(experiment.gates.passed).toBe(false)
+    expect(experiment.passed).toBe(false)
+  })
+
+  it('turns a non-finite scorer value into a score-phase cell error', async () => {
+    const evaluation = evaluate('engine.invalid-score', {
+      task: upperTask,
+      data: [{ input: { q: 'bad' } }],
+      scorers: [() => ({ name: 'quality', score: Number.NaN })],
+    })
+
+    const experiment = await run(evaluation)
+    const cell = experiment.cells[0]!
+
+    expect(cell.status).toBe('errored')
+    expect(cell.error).toMatchObject({
+      phase: 'score',
+      code: 'invalid-score',
+    })
+    expect(cell.error?.message).toContain("scorer 'quality'")
+    expect(experiment.aggregates.perVariant.default!.scores.quality).toBeUndefined()
     expect(experiment.passed).toBe(false)
   })
 
@@ -122,9 +168,7 @@ describe('Quality runner — plain fn task end-to-end', () => {
     expect(cell.status).toBe('failed')
     expect(cell.assertions.ran).toBe(2)
     expect(cell.assertions.notEvaluated).toBe(0)
-    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed')).toEqual([
-      expect.objectContaining({ matcher: 'soft.toBe', soft: true, index: 0 }),
-    ])
+    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed')).toEqual([expect.objectContaining({ matcher: 'soft.toBe', soft: true, index: 0 })])
   })
 
   it('runs evaluation-level and case-level expect callbacks independently', async () => {
@@ -145,10 +189,7 @@ describe('Quality runner — plain fn task end-to-end', () => {
     const experiment = await run(evaluation)
     const cell = experiment.cells[0]!
     // The evaluation-level hard failure does not prevent the case-level callback.
-    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed').map((outcome) => outcome.level)).toEqual([
-      'evaluation',
-      'case',
-    ])
+    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed').map((outcome) => outcome.level)).toEqual(['evaluation', 'case'])
   })
 
   it('marks task-thrown cells errored with phase execute (false-safe gates)', async () => {
@@ -172,9 +213,9 @@ describe('Quality runner — plain fn task end-to-end', () => {
         authoredFile: expect.stringMatching(/engine\.test\.ts$/),
       },
     })
-    expect(cell.error?.sourceFrame?.kind === 'source-frame' ? cell.error.sourceFrame.lines : []).toContainEqual(
-      expect.objectContaining({ role: 'failed', text: "        throw new Error('boom')" }),
-    )
+    const failedLine = cell.error?.sourceFrame?.kind === 'source-frame' ? cell.error.sourceFrame.lines.find((line) => line.role === 'failed') : undefined
+    expect(failedLine?.text).toContain('throw new Error')
+    expect(failedLine?.text).toContain('boom')
     expect(cell.output).toBeUndefined()
     // Errored cells get no scorer scores, only the lowered pass=0.
     expect(cell.scores).toEqual([{ name: 'pass', score: 0 }])
@@ -206,7 +247,11 @@ describe('Quality runner — plain fn task end-to-end', () => {
     })
     const experiment = await run(evaluation)
     const cell = experiment.cells[0]!
-    expect(cell.scores).toContainEqual({ name: 'answer-length', score: 0.5, metadata: { chars: 5 } })
+    expect(cell.scores).toContainEqual({
+      name: 'answer-length',
+      score: 0.5,
+      metadata: { chars: 5 },
+    })
     expect(experiment.aggregates.perVariant.default!.scores['answer-length']).toEqual({ mean: 0.5, sem: 0, n: 1 })
   })
 
@@ -300,7 +345,14 @@ describe('Quality runner — trials, skip/only, filters, timeouts', () => {
   it('reports skipped cases with their reason and excludes them from passRate', async () => {
     const evaluation = evaluate({
       task: upperTask,
-      data: [{ input: { q: 'run' } }, { name: 'flaky upstream', input: { q: 'skip' }, skip: 'broken fixture' }],
+      data: [
+        { input: { q: 'run' } },
+        {
+          name: 'flaky upstream',
+          input: { q: 'skip' },
+          skip: 'broken fixture',
+        },
+      ],
     })
     const experiment = await run(evaluation)
     expect(experiment.cells).toHaveLength(2)
@@ -312,7 +364,10 @@ describe('Quality runner — trials, skip/only, filters, timeouts', () => {
   })
 
   it('evaluate.skip skips every cell', async () => {
-    const evaluation = evaluate.skip({ task: upperTask, data: [{ input: { q: 'x' } }] })
+    const evaluation = evaluate.skip({
+      task: upperTask,
+      data: [{ input: { q: 'x' } }],
+    })
     const experiment = await run(evaluation)
     expect(experiment.cells.every((cell) => cell.status === 'skipped')).toBe(true)
   })
@@ -354,7 +409,10 @@ describe('Quality runner — trials, skip/only, filters, timeouts', () => {
   it('aborts remaining cells when the signal fires', async () => {
     const controller = new AbortController()
     controller.abort()
-    const evaluation = evaluate({ task: upperTask, data: [{ input: { q: 'x' } }] })
+    const evaluation = evaluate({
+      task: upperTask,
+      data: [{ input: { q: 'x' } }],
+    })
     const experiment = await run(evaluation, { signal: controller.signal })
     expect(experiment.cells[0]!.status).toBe('skipped')
     expect(experiment.cells[0]!.skipReason).toBe('aborted')
@@ -365,7 +423,11 @@ describe('Quality runner — phase boundaries', () => {
   const fnCases = [{ input: { q: 'x' } }]
 
   it('non-live replay without an id or cassette name is a definition error', async () => {
-    const evaluation = evaluate({ task: upperTask, data: fnCases, replay: 'replay-strict' })
+    const evaluation = evaluate({
+      task: upperTask,
+      data: fnCases,
+      replay: 'replay-strict',
+    })
     await expect(run(evaluation)).rejects.toThrowError(QualityRunnerHarnessError)
     await expect(run(evaluation)).rejects.toThrowError(/cassette name/)
   })
@@ -450,7 +512,10 @@ describe('Quality runner — definition errors', () => {
       output: z.object({ answer: z.string() }),
       system: 'answer',
     })
-    const evaluation = evaluate({ task: supportPrompt, data: [{ input: { question: 'q' } }] })
+    const evaluation = evaluate({
+      task: supportPrompt,
+      data: [{ input: { question: 'q' } }],
+    })
     await expect(run(evaluation)).rejects.toMatchObject({
       name: 'QualityRunnerHarnessError',
       code: 'project_model.model_executor_missing',

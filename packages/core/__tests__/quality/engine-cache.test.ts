@@ -2,6 +2,10 @@ import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
+import { loopRuntimeAdapter } from '../../adapter'
+import { fakeLoopRuntime } from '../../adapter/testing'
+import { prompt } from '../../prompt/prompt'
 import { evaluate } from '../../quality'
 import type { Score } from '../../quality/scorers'
 import { runEvaluationWithRunner as run } from './runner-harness'
@@ -24,7 +28,10 @@ describe('Quality runner — output cache and reuseOutputs (spec 03 §5)', () =>
         scorers: [
           ({ output }): Score => {
             scorerCalls++
-            return { name: 'len', score: typeof output === 'string' ? output.length / 10 : null }
+            return {
+              name: 'len',
+              score: typeof output === 'string' ? output.length / 10 : null,
+            }
           },
         ],
       })
@@ -70,6 +77,58 @@ describe('Quality runner — output cache and reuseOutputs (spec 03 §5)', () =>
     expect(calls).toBe(2) // cache miss → live execution
     expect(experiment.cells[0]!.metadata?.cached).not.toBe(true)
     expect(experiment.cells[0]!.output).toBe('aa')
+  })
+
+  it('a named case with changed input misses the cache and executes live', async () => {
+    const cacheDir = await mkdtemp(join(tmpdir(), 'crux-quality-cache-'))
+    let calls = 0
+    const makeEvaluation = (q: string) =>
+      evaluate('cache.named-input-drift', {
+        task: async (input: { q: string }) => {
+          calls++
+          return input.q.toUpperCase()
+        },
+        data: [{ name: 'same-name', input: { q } }],
+      })
+
+    await run(makeEvaluation('aa'), undefined, { cacheDir })
+    expect(calls).toBe(1)
+
+    const experiment = await run(makeEvaluation('bb'), { reuseOutputs: true }, { cacheDir })
+
+    expect(calls).toBe(2)
+    expect(experiment.cells[0]!.metadata?.cached).not.toBe(true)
+    expect(experiment.cells[0]!.output).toBe('BB')
+  })
+
+  it('a prompt task with changed prompt content misses the cache and executes live', async () => {
+    const cacheDir = await mkdtemp(join(tmpdir(), 'crux-quality-cache-'))
+    const fake = fakeLoopRuntime({
+      loops: [[{ text: 'old' }], [{ text: 'new' }]],
+    })
+    const executor = loopRuntimeAdapter(fake.runtime)
+    const makeEvaluation = (revision: 'old' | 'new') =>
+      evaluate('cache.prompt-drift', {
+        task: prompt({
+          id: 'cache.prompt',
+          input: z.object({ q: z.string() }),
+          prompt: revision === 'old' ? () => 'old prompt' : () => 'new prompt',
+        }),
+        data: [{ input: { q: 'same' } }],
+      })
+    const setup = {
+      generate: executor.generate.bind(executor) as never,
+      model: 'fake:m1',
+    }
+
+    await run(makeEvaluation('old'), undefined, { cacheDir, setup })
+    expect(fake.calls.runTextLoop).toHaveLength(1)
+
+    const experiment = await run(makeEvaluation('new'), { reuseOutputs: true }, { cacheDir, setup })
+
+    expect(fake.calls.runTextLoop).toHaveLength(2)
+    expect(experiment.cells[0]!.metadata?.cached).not.toBe(true)
+    expect(experiment.cells[0]!.output).toBe('new')
   })
 
   it('reuseOutputs without any cache executes live (miss = live, never an error)', async () => {
