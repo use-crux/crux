@@ -8,6 +8,14 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/cli"
 )
 
+type recordingDiffForwarder struct {
+	lines []string
+}
+
+func (r *recordingDiffForwarder) forward(line []byte) {
+	r.lines = append(r.lines, string(line))
+}
+
 func TestQualityDiffCommandRequiresJSONFlag(t *testing.T) {
 	cmd := NewQualityDiffCmd(&cli.Factory{})
 	flag := cmd.Flags().Lookup("json")
@@ -26,7 +34,7 @@ func TestConsumeQualityDiffStreamReturnsDiffEvent(t *testing.T) {
 		``,
 	}, "\n"))
 
-	result := consumeQualityDiffStream(stream, func() error { return nil })
+	result := consumeQualityDiffStream(stream, func() error { return nil }, nil)
 
 	if result.err != nil {
 		t.Fatalf("consumeQualityDiffStream error: %v", result.err)
@@ -39,10 +47,31 @@ func TestConsumeQualityDiffStreamReturnsDiffEvent(t *testing.T) {
 	}
 }
 
+func TestConsumeQualityDiffStreamForwardsEvents(t *testing.T) {
+	stream := strings.NewReader(strings.Join([]string{
+		`{"type":"diff:done","diff":{"schemaVersion":1,"a":{"experimentId":"a"},"b":{"experimentId":"b"}}}`,
+		`{"type":"run:done","experiments":[],"exitCode":0}`,
+		``,
+	}, "\n"))
+	forwarder := &recordingDiffForwarder{}
+
+	result := consumeQualityDiffStream(stream, func() error { return nil }, forwarder)
+
+	if result.err != nil {
+		t.Fatalf("consumeQualityDiffStream error: %v", result.err)
+	}
+	if len(forwarder.lines) != 2 {
+		t.Fatalf("forwarded %d lines, want 2: %#v", len(forwarder.lines), forwarder.lines)
+	}
+	if !strings.Contains(forwarder.lines[0], `"type":"diff:done"`) {
+		t.Fatalf("first forwarded line = %q", forwarder.lines[0])
+	}
+}
+
 func TestConsumeQualityDiffStreamPreservesWorkerError(t *testing.T) {
 	stream := strings.NewReader(`{"type":"run:done","experiments":[],"exitCode":2,"error":{"message":"boom"}}` + "\n")
 
-	result := consumeQualityDiffStream(stream, func() error { return errors.New("process exit 2") })
+	result := consumeQualityDiffStream(stream, func() error { return errors.New("process exit 2") }, nil)
 
 	if result.err == nil || !strings.Contains(result.err.Error(), "boom") {
 		t.Fatalf("err = %v, want worker message", result.err)

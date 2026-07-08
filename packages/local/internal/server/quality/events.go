@@ -81,6 +81,14 @@ func publishRunEventActivity(qualityEvents *qualitysvc.EventBus, raw json.RawMes
 		EvaluationID string `json:"evaluationId"`
 		ExperimentID string `json:"experimentId"`
 		BaselineID   string `json:"baselineId"`
+		Diff         *struct {
+			A struct {
+				ExperimentID string `json:"experimentId"`
+			} `json:"a"`
+			B struct {
+				ExperimentID string `json:"experimentId"`
+			} `json:"b"`
+		} `json:"diff"`
 		Gates        *struct {
 			Passed bool `json:"passed"`
 		} `json:"gates"`
@@ -112,6 +120,19 @@ func publishRunEventActivity(qualityEvents *qualitysvc.EventBus, raw json.RawMes
 			Severity:  "info",
 			Summary:   fmt.Sprintf("baseline promoted: %s", event.EvaluationID),
 			RefID:     event.BaselineID,
+		})
+	case "diff:done":
+		if event.Diff == nil || event.Diff.A.ExperimentID == "" || event.Diff.B.ExperimentID == "" {
+			return
+		}
+		refID := event.Diff.A.ExperimentID + ".." + event.Diff.B.ExperimentID
+		qualityEvents.PublishActivity(api.QualityActivityEvent{
+			Tag:       "QualityActivityEvent",
+			Timestamp: time.Now().UnixMilli(),
+			Kind:      "diff",
+			Severity:  "info",
+			Summary:   fmt.Sprintf("experiment diff completed: %s to %s", event.Diff.A.ExperimentID, event.Diff.B.ExperimentID),
+			RefID:     refID,
 		})
 	}
 }

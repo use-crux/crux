@@ -18,7 +18,6 @@ export type CruxSafetyArtifactKind = Extract<
   | 'constraint.report'
   | 'guardrail.report'
   | 'memory.write'
-  | 'quality.snapshot'
   | 'score.report'
   | 'tool.args'
   | 'tool.result'
@@ -138,7 +137,7 @@ export const ARTIFACT_CAPTURE_DECISIONS = {
   'score.report': 'safety',
   'citation.report': 'output',
   'comparison.report': 'output',
-  'quality.snapshot': 'safety',
+  'baseline.promotion': 'output',
   'error.stack': 'exempt',
   'routing.report': 'exempt',
   'cache.report': 'exempt',

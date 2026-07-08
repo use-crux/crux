@@ -193,7 +193,7 @@ func qualityMCPDiff(ctx context.Context, req *mcp.CallToolRequest, input quality
 		return nil, nil, err
 	}
 	go filterStderr(stderr)
-	result := consumeQualityDiffStream(stdout, cmd.Wait)
+	result := consumeQualityDiffStream(stdout, cmd.Wait, nil)
 	if result.err != nil {
 		return nil, nil, result.err
 	}

@@ -12,6 +12,7 @@ import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ExperimentCell } from '../experiment'
 import { buildBaselineReference, gitUserName, writeBaselineRecord, type BaselineRecord } from './baseline'
+import { emitBaselinePromotionArtifact } from './observability-edges'
 import { EXPERIMENT_RECORD_SCHEMA_VERSION, experimentRecordPath } from './persist'
 import { ulid } from './ulid'
 import type {
@@ -85,6 +86,16 @@ export async function promoteQualityExperiment(
     reference: buildBaselineReference(record.cells, variant.variantName),
   }
   const path = await writeBaselineRecord(dir, baselineRecord)
+  if (record.observability !== undefined) {
+    emitBaselinePromotionArtifact({
+      evaluationId: identity.evaluationId,
+      experimentId: input.experimentId,
+      baselineId: baselineRecord.baselineId,
+      configFingerprint: record.configFingerprint,
+      variantName: variant.variantName,
+      run: record.observability,
+    })
+  }
 
   const baseline = {
     evaluationId: identity.evaluationId,

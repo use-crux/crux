@@ -21,6 +21,10 @@ type qualityDiffOpts struct {
 	jsonOut    bool
 }
 
+type qualityDiffForwarder interface {
+	forward(line []byte)
+}
+
 // NewQualityDiffCmd creates `crux quality diff <expA> <expB>`.
 func NewQualityDiffCmd(f *cli.Factory) *cobra.Command {
 	opts := &qualityDiffOpts{}
@@ -49,12 +53,15 @@ func runQualityDiff(f *cli.Factory, out io.Writer, a, b string, opts qualityDiff
 	aPath := resolveQualityDiffRecordPath(dir, a)
 	bPath := resolveQualityDiffRecordPath(dir, b)
 	runOpts := &qualityRunOpts{configPath: opts.configPath, cwd: opts.cwd}
-	cmd, stdout, stderr, err := spawnQualityRunner(runOpts, []string{"--diff-a", aPath, "--diff-b", bPath}, "")
+	forwarder := newRunEventForwarder()
+	defer forwarder.close()
+
+	cmd, stdout, stderr, err := spawnQualityRunner(runOpts, []string{"--diff-a", aPath, "--diff-b", bPath}, forwarder.devtoolsURL())
 	if err != nil {
 		return err
 	}
 	go filterStderr(stderr)
-	result := consumeQualityDiffStream(stdout, cmd.Wait)
+	result := consumeQualityDiffStream(stdout, cmd.Wait, forwarder)
 	if result.err != nil {
 		return result.err
 	}
@@ -94,10 +101,13 @@ type qualityDiffStreamResult struct {
 	err      error
 }
 
-func consumeQualityDiffStream(stdout io.Reader, wait func() error) qualityDiffStreamResult {
+func consumeQualityDiffStream(stdout io.Reader, wait func() error, forwarder qualityDiffForwarder) qualityDiffStreamResult {
 	result := qualityDiffStreamResult{exitCode: 2}
 	scanner := bufio.NewScanner(stdout)
 	for scanner.Scan() {
+		if forwarder != nil {
+			forwarder.forward(scanner.Bytes())
+		}
 		var event struct {
 			Type     string          `json:"type"`
 			Diff     json.RawMessage `json:"diff"`

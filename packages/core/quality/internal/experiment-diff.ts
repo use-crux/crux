@@ -10,6 +10,7 @@
 
 import type { ExperimentCell } from '../experiment'
 import type { ExperimentDiff, ExperimentDiffDatasetProvenance, ExperimentRecord } from '../schema-types'
+import { emitExperimentDiffReportEdges } from './observability-edges'
 
 interface DiffCaseStats {
   caseId: string
@@ -30,7 +31,7 @@ export function compareExperiments(a: ExperimentRecord, b: ExperimentRecord): Ex
   const onlyInB = uniqueSortedCaseIds([...bKeys].filter((key) => !aKeys.has(key)), bCases)
   const fingerprintDrift = fingerprintDriftOf(a, b)
 
-  return {
+  const diff: ExperimentDiff = {
     schemaVersion: 1,
     a: { experimentId: a.experimentId },
     b: { experimentId: b.experimentId },
@@ -42,6 +43,12 @@ export function compareExperiments(a: ExperimentRecord, b: ExperimentRecord): Ex
     onlyInB,
     gatesVerdict: { aPassed: a.gates.passed, bPassed: b.gates.passed },
   }
+  emitExperimentDiffReportEdges({
+    diff,
+    ...(a.observability !== undefined ? { baseline: a.observability } : {}),
+    ...(b.observability !== undefined ? { candidate: b.observability } : {}),
+  })
+  return diff
 }
 
 function diffCaseStats(cells: readonly ExperimentCell<unknown, unknown>[]): Map<string, DiffCaseStats> {

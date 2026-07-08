@@ -153,8 +153,8 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   "stream.timeline",
   "score.report",
   "citation.report",
-  "quality.snapshot",
   "comparison.report",
+  "baseline.promotion",
   "composition.report",
   "routing.report",
   "cache.report",
@@ -457,8 +457,9 @@ export interface CruxScoreReportPreview {
   actual?: unknown;
 }
 
-export interface CruxComparisonReportPreview {
+export interface CruxRunComparisonReportPreview {
   kind: "comparison.report";
+  mode?: "run";
   comparisonKind: "variant" | "promoted";
   baseline: string;
   deltas: readonly {
@@ -473,6 +474,35 @@ export interface CruxComparisonReportPreview {
     candidateOnly: readonly string[];
   };
   demoted?: { reason: string };
+}
+
+export interface CruxDiffComparisonReportPreview {
+  kind: "comparison.report";
+  mode: "diff";
+  a: { experimentId: string };
+  b: { experimentId: string };
+  comparable: boolean;
+  fingerprintDrift: readonly string[];
+  scoreDeltas: readonly {
+    name: string;
+    delta: number;
+    sem: number;
+  }[];
+  matchedCases: number;
+  onlyInA: readonly string[];
+  onlyInB: readonly string[];
+}
+
+export type CruxComparisonReportPreview =
+  | CruxRunComparisonReportPreview
+  | CruxDiffComparisonReportPreview;
+
+export interface CruxBaselinePromotionPreview {
+  kind: "baseline.promotion";
+  evaluationId: string;
+  experimentId: string;
+  baselineId: string;
+  variant?: string;
 }
 
 export interface CruxCompositionBranchPreview {

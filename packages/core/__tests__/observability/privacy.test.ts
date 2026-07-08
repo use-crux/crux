@@ -280,7 +280,6 @@ describe('observability privacy capture policy', () => {
           'approval.request',
           'validation.feedback',
           'memory.write',
-          'quality.snapshot',
         ] as const) {
           observe.artifact({
             kind,
@@ -330,7 +329,6 @@ describe('observability privacy capture policy', () => {
     for (const kind of [
       'constraint.report',
       'approval.request',
-      'quality.snapshot',
     ] as const) {
       expect(findArtifact(transport.records, kind)).toMatchObject({
         kind,
