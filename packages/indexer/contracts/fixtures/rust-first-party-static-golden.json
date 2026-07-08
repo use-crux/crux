@@ -9,8 +9,8 @@
     "definitions": 327,
     "relations": 185,
     "diagnostics": 4,
-    "dependencies": 984,
-    "canonicalBytes": 2402008
+    "dependencies": 986,
+    "canonicalBytes": 2402089
   },
   "files": [
     {
@@ -213,12 +213,12 @@
     },
     {
       "file": "packages/ai/src/content-parts.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "sha256": "3fab3d965c5fa988561f46fa0529867420d884b8826ba93bd7e1e33981dbe951",
+      "bytes": 108,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/ai/src/executor.ts",
@@ -249,12 +249,12 @@
     },
     {
       "file": "packages/ai/src/messages.ts",
-      "sha256": "ba38cabf14d6a9f36a7dde328331215aa6fc19daadb98cf1869f0704ade683fe",
-      "bytes": 109,
+      "sha256": "c228b95160444b6bbbd66f6506663c4bc3dca4e0137c99b39e98dc9ea3fa4d9a",
+      "bytes": 150,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/ai/src/meta.ts",
