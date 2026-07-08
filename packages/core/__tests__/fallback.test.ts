@@ -154,7 +154,7 @@ describe('classifyError()', () => {
     expect(classifyError(err)).toBeNull()
   })
 
-    it('classifies ValidationExhaustedError as validation_exhausted', () => {
+    it('classifies ValidationExhaustedError as invalid_response', () => {
     const zodError = z.object({ x: z.number() }).safeParse({ x: 'bad' }).error!
     const err = new ValidationExhaustedError({
       lastRawOutput: '{}',
@@ -163,7 +163,7 @@ describe('classifyError()', () => {
       maxAttempts: 3,
       promptId: 'test',
     })
-    expect(classifyError(err)).toBe('validation_exhausted')
+    expect(classifyError(err)).toBe('invalid_response')
   })
 })
 

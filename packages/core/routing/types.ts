@@ -152,3 +152,10 @@ export type PromptInputOf<P> = P extends Prompt<infer TOwnInput, z.ZodType | und
 export type PromptOutputSchemaOf<P> = P extends Prompt<z.ZodType, infer TOutput, readonly ContextEntry[]>
   ? TOutput
   : never;
+
+/** Structured object inferred from a prompt's output schema, or `unknown` for text prompts. */
+export type PromptOutputOf<P> = P extends Prompt<z.ZodType, infer TOutput, readonly ContextEntry[]>
+  ? TOutput extends z.ZodType
+    ? z.infer<TOutput>
+    : unknown
+  : unknown;

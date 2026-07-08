@@ -113,12 +113,58 @@ export async function resolveFallback<M, R>({
         ),
       );
       const durationMs = Date.now() - attemptStart;
+      const resultCost = routingCostFromMeta(getMeta(result));
+      const invalidResponse = await shouldFallbackForResultSafely(
+        result,
+        options,
+        attemptSpan,
+      );
+
+      if (invalidResponse) {
+        const invalidResponseError = new Error("fallback when(result) matched");
+        invalidResponseError.name = "InvalidResponseError";
+        details.push({
+          model: modelId,
+          durationMs,
+          status: "error",
+          cost: resultCost,
+          error: invalidResponseError.message,
+          errorCategory: "invalid_response",
+        });
+        errors.push(invalidResponseError);
+
+        attemptSpan.error(invalidResponseError, {
+          attempt: i + 1,
+          ...(options.id ? { routingId: options.id } : {}),
+          model: modelId,
+          totalModels: models.length,
+          attemptStatus: "error",
+          errorCategory: "invalid_response",
+          willAttemptFallback: i < models.length - 1,
+          durationMs,
+          cost: resultCost,
+        });
+        previousFailedSpanId = attemptSpan.spanId;
+        previousFailedModelId = modelId;
+        const nextModel = models[i + 1];
+        if (nextModel !== undefined) {
+          await notifyFallbackSafely(
+            options,
+            invalidResponseError,
+            i + 1,
+            model,
+            nextModel,
+            attemptSpan,
+          );
+        }
+        continue;
+      }
 
       details.push({
         model: modelId,
         durationMs,
         status: "ok",
-        cost: routingCostFromMeta(getMeta(result)),
+        cost: resultCost,
       });
 
       const fallbackStep: FallbackRoutingStep = {
@@ -158,7 +204,7 @@ export async function resolveFallback<M, R>({
           totalModels: models.length,
           attemptStatus: "success",
           durationMs,
-          cost: routingCostFromMeta(getMeta(result)),
+          cost: resultCost,
           fallbackOccurred: errors.length > 0,
 	        },
 	      });
@@ -293,6 +339,19 @@ function shouldAttemptFallbackSafely<M>(
     return shouldAttemptFallback(err, options);
   } catch (hookError) {
     emitRoutingHookError(attemptSpan, "shouldFallback", hookError);
+    return false;
+  }
+}
+
+async function shouldFallbackForResultSafely<M>(
+  result: unknown,
+  options: FallbackModel<M>["options"],
+  attemptSpan: ReturnType<typeof observe.openSpan>,
+): Promise<boolean> {
+  try {
+    return (await options.when?.(result)) === true;
+  } catch (hookError) {
+    emitRoutingHookError(attemptSpan, "when", hookError);
     return false;
   }
 }

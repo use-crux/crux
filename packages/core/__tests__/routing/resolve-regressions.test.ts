@@ -191,22 +191,22 @@ describe('resolveModel() regressions', () => {
       tiers: [
         {
           model: 'model-nan',
-          evaluate: (_result, context) => {
-            totalCosts.push(context.totalCost)
+          evaluate: ({ totalCost }) => {
+            totalCosts.push(totalCost)
             return false
           },
         },
         {
           model: 'model-string',
-          evaluate: (_result, context) => {
-            totalCosts.push(context.totalCost)
+          evaluate: ({ totalCost }) => {
+            totalCosts.push(totalCost)
             return false
           },
         },
         {
           model: 'model-valid',
-          evaluate: (_result, context) => {
-            totalCosts.push(context.totalCost)
+          evaluate: ({ totalCost }) => {
+            totalCosts.push(totalCost)
             return false
           },
         },

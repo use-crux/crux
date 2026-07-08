@@ -184,7 +184,7 @@ describe('resolveModel() fallback handling', () => {
     ])
   })
 
-    it('falls back on server error (500)', async () => {
+  it('falls back on server error (500)', async () => {
     const fb = fallback(['model-a', 'model-b']) as FallbackModel<string>
     const tryModel = vi.fn().mockRejectedValueOnce(serverError()).mockResolvedValueOnce(mockResult('from B'))
 
@@ -192,6 +192,24 @@ describe('resolveModel() fallback handling', () => {
 
     expect(result.text).toBe('from B')
     expect(fallbackStep(result)?.attempts[0]?.errorCategory).toBe('server_error')
+  })
+
+    it('falls back when the result predicate flags an invalid response', async () => {
+    const when = vi.fn((result: ReturnType<typeof mockResult>) => result.text.includes('invalid'))
+    const fb = fallback(['model-a', 'model-b'], { when }) as FallbackModel<string>
+    const tryModel = vi
+      .fn()
+      .mockResolvedValueOnce(mockResult('invalid from A', 0.01))
+      .mockResolvedValueOnce(mockResult('valid from B', 0.02))
+
+    const result = await resolveFallback(fb, tryModel, extractId)
+
+    expect(result.text).toBe('valid from B')
+    expect(when).toHaveBeenCalledTimes(2)
+    expect(fallbackStep(result)?.attempts).toMatchObject([
+      { model: 'model-a', status: 'error', errorCategory: 'invalid_response', cost: 0.01 },
+      { model: 'model-b', status: 'ok', cost: 0.02 },
+    ])
   })
 
     it('does NOT fall back on non-qualifying error (400)', async () => {

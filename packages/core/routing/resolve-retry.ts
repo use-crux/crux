@@ -210,7 +210,7 @@ function shouldRetryCategory(
 ): boolean {
   if (category === null) return false;
   if (allowed && allowed.length > 0) return allowed.includes(category);
-  return category !== "auth_error" && category !== "validation_exhausted";
+  return category !== "auth_error" && category !== "invalid_response";
 }
 
 function retryDelayMs(options: RetryOptions, attemptNumber: number): number {
@@ -240,4 +240,3 @@ function sleepWithSignal(delayMs: number, signal: AbortSignal): Promise<void> {
     signal.addEventListener("abort", onAbort, { once: true });
   });
 }
-

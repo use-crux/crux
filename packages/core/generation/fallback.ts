@@ -25,7 +25,7 @@ export type ErrorCategory =
   | 'server_error'
   | 'connection_error'
   | 'auth_error'
-  | 'validation_exhausted'
+  | 'invalid_response'
 
 /** Per-fallback timeout budgets. */
 export interface FallbackTimeoutOptions {
@@ -57,6 +57,13 @@ export interface FallbackOptions {
   on?: ErrorCategory[]
   /** Custom predicate — when set, takes priority over `on`. */
   shouldFallback?: (error: Error) => boolean
+  /**
+   * Predicate for successful-but-unusable responses.
+   *
+   * Returning true records an `invalid_response` attempt and tries the next
+   * fallback candidate. Predicate errors are observed and treated as false.
+   */
+  when?: (result: unknown) => boolean | Promise<boolean>
   /** Per-attempt and first-token timeout budgets. */
   timeout?: FallbackTimeoutOptions
   /** Called when a failed attempt is about to fall through to the next model. */
@@ -140,7 +147,7 @@ export function classifyError(error: unknown): ErrorCategory | null {
   if (!(error instanceof Error)) return null
 
   // Validation exhaustion (all retries failed on structured output)
-  if (isValidationExhaustedError(error)) return 'validation_exhausted'
+  if (isValidationExhaustedError(error)) return 'invalid_response'
 
   // Check HTTP status codes (works with OpenAI APIError, Anthropic errors, etc.)
   const errShape = error as { status?: unknown; statusCode?: unknown; code?: unknown }

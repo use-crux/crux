@@ -93,7 +93,7 @@ describe('RoutingReceipt', () => {
 
     expect(result.routing).toMatchObject({
       model: 'model-strong',
-      cost: 0.009,
+      cost: 0.01,
       trace: [
         {
           kind: 'cascade',

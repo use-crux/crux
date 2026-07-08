@@ -58,6 +58,8 @@ export interface JudgeResult<TDetail = unknown> {
   reasoning: string
   /** ID of the judge/metric that produced this result. */
   metricId: string
+  /** Optional generation cost for this judge call, used by cascade `report()`. */
+  cost?: number
   /** Structured details when judge was configured with `detailSchema`. */
   detail?: TDetail
 }

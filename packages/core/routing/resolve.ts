@@ -26,7 +26,7 @@ import {
   composeAbortSignals,
   withAbortSignal,
 } from "../generation/timeout";
-import { isFallback, type FallbackModel } from "../generation/fallback";
+import { classifyError, isFallback, type FallbackModel } from "../generation/fallback";
 import { resolveFallback } from "./resolve-fallback";
 import { resolveRetry } from "./resolve-retry";
 import { resolveSplit } from "./resolve-split";
@@ -386,6 +386,7 @@ async function resolveCascade<M, R>(
   const { tiers, budget } = cascadeModel.config;
   const tierDetails: CascadeTierDetail[] = [];
   let totalCost = 0;
+  let hasMeasuredCost = false;
   const cascadeStart = Date.now();
   const latencyDeadline = Deadline.after(budget?.maxLatencyMs);
   let lastResult: R | undefined;
@@ -442,6 +443,7 @@ async function resolveCascade<M, R>(
               tiers.length,
               i - 1,
               true,
+              hasMeasuredCost ? totalCost : undefined,
               cascadeModel.config.id,
             );
             endCascadeSpan(
@@ -485,6 +487,7 @@ async function resolveCascade<M, R>(
             tiers.length,
             i - 1,
             true,
+            hasMeasuredCost ? totalCost : undefined,
             cascadeModel.config.id,
           );
           endCascadeSpan(
@@ -536,7 +539,8 @@ async function resolveCascade<M, R>(
             modelId,
           );
           if (tierCost !== undefined) {
-            totalCost += tierCost;
+            totalCost = addRoutingCost(totalCost, tierCost);
+            hasMeasuredCost = true;
           }
 
           lastResult = result;
@@ -544,13 +548,35 @@ async function resolveCascade<M, R>(
 
           // Evaluate: no evaluate fn on last tier = auto-accept, no evaluate fn on any tier = auto-accept
           if (tier.evaluate) {
+            let judgeCost = 0;
+            let hasJudgeCost = false;
+            const report = async <S extends {
+              readonly score: number;
+              readonly cost?: number;
+              readonly routing?: { readonly cost: number | undefined };
+            }>(
+              score: S | Promise<S>,
+            ): Promise<S> => {
+              const reported = await score;
+              const reportedCost = reportedScoreCost(reported);
+              if (reportedCost !== undefined) {
+                judgeCost = addRoutingCost(judgeCost, reportedCost);
+                totalCost = addRoutingCost(totalCost, reportedCost);
+                hasJudgeCost = true;
+                hasMeasuredCost = true;
+              }
+              return reported;
+            };
             const evaluation = normalizeCascadeTierEvaluation(
               await tierSpan.withContext(() =>
-                tier.evaluate!(result, {
+                tier.evaluate!({
+                  result: cascadeEvaluationResult(result),
+                  input,
                   model: modelId,
                   cost: tierCost,
                   tierIndex: i,
                   totalCost,
+                  report,
                 }),
               ),
               tier,
@@ -565,6 +591,7 @@ async function resolveCascade<M, R>(
                 accepted,
                 cost: tierCost,
                 totalCost,
+                ...(hasJudgeCost ? { judgeCost } : {}),
                 ...(evaluation.note ? { note: evaluation.note } : {}),
                 ...(evaluation.confidence !== undefined
                   ? { confidence: evaluation.confidence }
@@ -580,6 +607,7 @@ async function resolveCascade<M, R>(
               cost: tierCost,
               status: accepted ? "accepted" : "rejected",
               ...(evaluation.note ? { note: evaluation.note } : {}),
+              ...(hasJudgeCost ? { judgeCost } : {}),
               ...(evaluation.confidence !== undefined
                 ? { confidence: evaluation.confidence }
                 : {}),
@@ -594,6 +622,7 @@ async function resolveCascade<M, R>(
                 tierStatus: accepted ? "accepted" : "rejected",
                 cost: tierCost,
                 totalCost,
+                ...(hasJudgeCost ? { judgeCost } : {}),
                 durationMs,
                 ...(evaluation.note ? { note: evaluation.note } : {}),
                 ...(evaluation.confidence !== undefined
@@ -619,6 +648,7 @@ async function resolveCascade<M, R>(
                 tiers.length,
                 i,
                 false,
+                hasMeasuredCost ? totalCost : undefined,
                 cascadeModel.config.id,
               );
               endCascadeSpan(
@@ -657,6 +687,7 @@ async function resolveCascade<M, R>(
                 tiers.length,
                 i,
                 true,
+                hasMeasuredCost ? totalCost : undefined,
                 cascadeModel.config.id,
               );
               endCascadeSpan(
@@ -706,6 +737,7 @@ async function resolveCascade<M, R>(
               tiers.length,
               i,
               false,
+              hasMeasuredCost ? totalCost : undefined,
               cascadeModel.config.id,
             );
             endCascadeSpan(
@@ -753,6 +785,7 @@ async function resolveCascade<M, R>(
                 tiers.length,
                 Math.max(0, i - 1),
                 true,
+                hasMeasuredCost ? totalCost : undefined,
                 cascadeModel.config.id,
               );
               endCascadeSpan(
@@ -767,6 +800,42 @@ async function resolveCascade<M, R>(
               return budgetResult;
             }
             throw new CascadeExhaustedError(lastResult, tierDetails);
+          }
+          const errorCategory = classifyError(error);
+          if (
+            errorCategory === "invalid_response" &&
+            tier.escalateOn?.includes("invalid_response")
+          ) {
+            const durationMs = Date.now() - tierStart;
+            observe.event({
+              name: "cascade.tier_evaluated",
+              attributes: {
+                tierIndex: i,
+                model: modelId,
+                accepted: false,
+                errorCategory,
+                totalCost,
+                note: errorCategory,
+              },
+            });
+            tierDetails.push({
+              model: modelId,
+              durationMs,
+              cost: undefined,
+              status: "rejected",
+              note: errorCategory,
+            });
+            tierSpan.end({
+              attributes: {
+                tierIndex: i,
+                model: modelId,
+                tierStatus: "rejected",
+                errorCategory,
+                totalCost,
+                durationMs,
+              },
+            });
+            continue;
           }
           tierSpan.error(error, {
             tierIndex: i,
@@ -820,6 +889,28 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+function cascadeEvaluationResult(result: unknown): unknown {
+  if (!isRecord(result)) return result;
+  return Object.hasOwn(result, "object") ? result.object : result;
+}
+
+function reportedScoreCost(score: {
+  readonly cost?: number;
+  readonly routing?: { readonly cost: number | undefined };
+}): number | undefined {
+  if (typeof score.cost === "number" && Number.isFinite(score.cost)) {
+    return score.cost;
+  }
+  const routingCost = score.routing?.cost;
+  return typeof routingCost === "number" && Number.isFinite(routingCost)
+    ? routingCost
+    : undefined;
+}
+
+function addRoutingCost(total: number, cost: number): number {
+  return Number((total + cost).toFixed(12));
+}
+
 /**
  * Return a cost only when it is safe for arithmetic budget accounting.
  * Provider metadata is best-effort, so invalid reported costs are observed
@@ -851,6 +942,7 @@ function buildCascadeResult<R>(
   _totalTiers: number,
   acceptedAtTier: number,
   budgetExceeded: boolean,
+  totalCost: number | undefined,
   routingId: string | undefined,
 ): RoutableResult<R> {
   const cascadeStep: CascadeRoutingStep = {
@@ -870,7 +962,7 @@ function buildCascadeResult<R>(
         );
   return withRoutingReceipt(result, {
     ...routing,
-    cost: routingCostFromMeta(result._meta),
+    cost: totalCost,
   });
 }
 
@@ -902,6 +994,7 @@ function endCascadeSpan(
       confidence: tier.confidence,
       budget: tier.budget,
       cost: tier.cost,
+      judgeCost: tier.judgeCost,
       durationMs: tier.durationMs,
     })),
   });

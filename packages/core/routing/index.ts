@@ -34,6 +34,7 @@ export type {
   ModelOf,
   Prettify,
   PromptInputOf,
+  PromptOutputOf,
   PromptOutputSchemaOf,
   RouteArgs,
   RoutingCallOptions,

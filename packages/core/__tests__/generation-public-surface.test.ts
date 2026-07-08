@@ -118,7 +118,7 @@ describe('@use-crux/core ValidationExhaustedError', () => {
 
     expect(isValidationExhaustedError(err)).toBe(true)
     expect(err.name).toBe('ValidationExhaustedError')
-    expect(classifyError(err)).toBe('validation_exhausted')
+    expect(classifyError(err)).toBe('invalid_response')
   })
 })
 

@@ -20,6 +20,7 @@ import {
   type BoundOk,
   type InputOk,
   type PromptInputOf,
+  type PromptOutputOf,
   type RouteArgs,
   type RoutingCallOptions,
   type RoutingReceipt,
@@ -166,9 +167,40 @@ void generate(supportPrompt, {
 // @ts-expect-error — router context survives through fallback
 void generate(supportPrompt, { model: resilientTiered, input: { question: 'hi' } })
 
+const extraction = cascade({
+  prompt: invoicePrompt,
+  tiers: [
+    {
+      model: haiku,
+      evaluate: async ({ result, input, report }) => {
+        expectTypeOf(result).toEqualTypeOf<PromptOutputOf<typeof invoicePrompt>>()
+        expectTypeOf(input).toEqualTypeOf<PromptInputOf<typeof invoicePrompt>>()
+        const judged = await report(Promise.resolve({ score: 0.9, cost: 0.002 }))
+        const total: number = result.total
+        const chars: number = input.pdfText.length
+        return { accepted: total > 0 && chars > 0 && judged.score > 0.8 }
+      },
+    },
+    { model: opus },
+  ],
+  budget: { maxCost: 0.05 },
+})
+
+void generate(invoicePrompt, { model: extraction, input: { pdfText: 'x' } })
+// @ts-expect-error — cascade is bound to invoicePrompt, not supportPrompt
+void generate(supportPrompt, { model: extraction, input: { question: 'hi' } })
+// @ts-expect-error — cascade is generate-only
+void stream(invoicePrompt, { model: extraction, input: { pdfText: 'x' } })
+
 const genericCascade = cascade({
   tiers: [
-    { model: haiku, evaluate: (result) => typeof result === 'object' && result !== null },
+    {
+      model: haiku,
+      evaluate: ({ result }) => {
+        expectTypeOf(result).toEqualTypeOf<unknown>()
+        return typeof result === 'object' && result !== null
+      },
+    },
     { model: opus },
   ],
 })

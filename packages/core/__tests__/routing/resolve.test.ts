@@ -1,8 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
+import { z } from "zod";
 import { router, cascade, retry, split } from "../../routing";
 import { resolveModel } from "../../routing/resolve";
 import type { ResolveTryOptions } from "../../routing/resolve";
 import { fallback } from "../../generation/fallback";
+import type { FallbackModel } from "../../generation/fallback";
+import { ValidationExhaustedError } from "../../generation/validation-retry";
 import { CascadeExhaustedError } from "../../routing/errors";
 import type {
   CascadeRoutingStep,
@@ -408,6 +411,66 @@ describe("resolveModel() — cascade", () => {
     );
   });
 
+  it("escalates invalid structured output and then resolves provider outage through nested fallback", async () => {
+    const backup = fallback(["model-down", "model-backup"], {
+      on: ["server_error"],
+    }) as FallbackModel<string>;
+    type Model = string | FallbackModel<string>;
+    const c = cascade({
+      tiers: [
+        { model: "model-invalid", escalateOn: ["invalid_response"] },
+        { model: backup },
+      ],
+    });
+    const validationError = new ValidationExhaustedError({
+      lastRawOutput: "{}",
+      zodErrors: z.object({ ok: z.boolean() }).safeParse({ ok: "no" }).error!,
+      attempts: 1,
+      maxAttempts: 1,
+      promptId: "structured",
+    });
+    const calls: string[] = [];
+    const tryModel = vi.fn(async (model: Model) => {
+      if (typeof model !== "string") {
+        throw new Error("routing wrapper reached concrete model attempt");
+      }
+      calls.push(model);
+      if (model === "model-invalid") throw validationError;
+      if (model === "model-down") {
+        throw Object.assign(new Error("provider down"), { status: 500 });
+      }
+      return fakeGenerate(model);
+    });
+    const extract = (model: Model) => (typeof model === "string" ? model : "fallback");
+
+    const result = await resolveModel(c, {}, tryModel, extract);
+
+    expect(calls).toEqual(["model-invalid", "model-down", "model-backup"]);
+    expect(result.text).toBe("response from model-backup");
+    expect(result.routing?.trace.map((step) => step.kind)).toEqual([
+      "cascade",
+      "fallback",
+    ]);
+    expect(cascadeStep(result)).toMatchObject({
+      acceptedAtTier: 1,
+      tiers: [
+        expect.objectContaining({
+          model: "model-invalid",
+          status: "rejected",
+          note: "invalid_response",
+        }),
+        expect.objectContaining({ model: "fallback", status: "accepted" }),
+      ],
+    });
+    expect(result.routing?.trace[1]).toMatchObject({
+      kind: "fallback",
+      attempts: [
+        { model: "model-down", status: "error", errorCategory: "server_error" },
+        { model: "model-backup", status: "ok" },
+      ],
+    });
+  });
+
   it("returns last result with budgetExceeded when cost exceeds maxCost", async () => {
     const c = cascade({
       tiers: [
@@ -427,6 +490,48 @@ describe("resolveModel() — cascade", () => {
 
     expect(cascadeStep(result)?.budgetExceeded).toBe(true);
     expect(result.text).toBe("response from model-cheap");
+  });
+
+  it("folds reported judge cost into tier detail, budgets, and receipt cost", async () => {
+    const c = cascade({
+      tiers: [
+        {
+          model: "model-cheap",
+          evaluate: async ({ report }) => {
+            const judged = await report({ score: 0.4, cost: 0.01 });
+            return { accepted: judged.score > 0.8, confidence: judged.score };
+          },
+        },
+        { model: "model-expensive" },
+      ],
+      budget: { maxCost: 0.005 },
+    });
+
+    const { tryModel, calls } = createTryModel({
+      "model-cheap": 0.001,
+      "model-expensive": 0.01,
+    });
+    const result = await resolveModel(c, {}, tryModel, extractModelId);
+
+    expect(calls).toEqual(["model-cheap"]);
+    expect(result.routing?.cost).toBeCloseTo(0.011);
+    expect(cascadeStep(result)).toMatchObject({
+      acceptedAtTier: 0,
+      budgetExceeded: true,
+      tiers: [
+        expect.objectContaining({
+          model: "model-cheap",
+          status: "rejected",
+          cost: 0.001,
+          judgeCost: 0.01,
+        }),
+        expect.objectContaining({
+          model: "model-expensive",
+          status: "skipped",
+          note: "not reached: cost budget exceeded",
+        }),
+      ],
+    });
   });
 
   it("returns last result with budgetExceeded when latency is exceeded before the next tier", async () => {
@@ -554,12 +659,14 @@ describe("resolveModel() — cascade", () => {
     await resolveModel(c, {}, tryModel, extractModelId);
 
     expect(evaluateSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ text: "response from model-a" }),
       expect.objectContaining({
+        result: { quality: 0.9 },
+        input: {},
         model: "model-a",
         cost: 0.003,
         tierIndex: 0,
         totalCost: 0.003,
+        report: expect.any(Function),
       }),
     );
   });
