@@ -156,6 +156,13 @@ Pick a walkthrough:
 - [Convex](https://cruxjs.dev/docs/getting-started/convex)
 - [Expo / React Native](https://cruxjs.dev/docs/getting-started/expo)
 
+## For agents
+
+Point coding agents at [`/llms.txt`](https://cruxjs.dev/llms.txt) for the
+machine-readable docs index. Quality projects scaffold a local
+`.crux/skills/quality/SKILL.md` with the repeatable loop for listing evals,
+running targeted subsets, inspecting failures, and recording human labels.
+
 ## What the harness handles
 
 | Capability         | What Crux gives you                                                                                                        |

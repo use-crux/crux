@@ -43,6 +43,8 @@ import type {
   QualityFeedbackAnnotationRecord,
   QualityFeedbackMemoryProposalRecord,
   QualityCassetteRecord,
+  QualityJudgeReport,
+  QualityExperimentDiff,
 } from '@/types'
 export type { QualityRunsOptions } from '@/shared/services/quality'
 
@@ -299,6 +301,41 @@ export function useQualityCellEvidence(
     queryKey: key,
     queryFn: ({ signal }) => qualityService.cellEvidence(experimentId ?? '', cell!, signal),
     enabled: Boolean(experimentId && cell),
+  })
+  return useAdapted(q, key)
+}
+
+/**
+ * Judge-vs-human agreement report for one evaluation (blueprint §12.2). Gated
+ * on the id; resolves to `null` when the evaluation has no experiment records
+ * yet (404), which the panel renders as an empty state.
+ */
+export function useQualityJudgeReport(
+  evaluationId: string | null | undefined,
+): FetchState<QualityJudgeReport | null> {
+  const key = qk.quality.judgeReport(evaluationId)
+  const q = useQuery<QualityJudgeReport | null, Error>({
+    queryKey: key,
+    queryFn: ({ signal }) => qualityService.judgeReport(evaluationId ?? '', signal),
+    enabled: Boolean(evaluationId),
+  })
+  return useAdapted(q, key)
+}
+
+/**
+ * Core-owned diff of two saved experiment records (blueprint §12.3). Gated on
+ * both ids — only fetches once a comparison target is picked. Spawns the
+ * worker diff op server-side, so it is not polled.
+ */
+export function useQualityExperimentDiff(
+  a: string | null | undefined,
+  b: string | null | undefined,
+): FetchState<QualityExperimentDiff> {
+  const key = qk.quality.experimentDiff(a, b)
+  const q = useQuery<QualityExperimentDiff, Error>({
+    queryKey: key,
+    queryFn: ({ signal }) => qualityService.experimentDiff(a ?? '', b ?? '', signal),
+    enabled: Boolean(a && b),
   })
   return useAdapted(q, key)
 }

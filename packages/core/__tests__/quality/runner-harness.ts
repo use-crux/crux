@@ -89,6 +89,9 @@ export async function runEvaluationWithRunner(
   const result = await runner.run({
     evaluations: collected.evaluations,
     ...(overrides?.cases !== undefined ? { cases: overrides.cases } : {}),
+    ...(overrides?.sample !== undefined ? { sample: overrides.sample } : {}),
+    ...(overrides?.maxCostUsd !== undefined ? { maxCostUsd: overrides.maxCostUsd } : {}),
+    ...(overrides?.cells !== undefined ? { cells: overrides.cells } : {}),
     ...(overrides?.variants !== undefined ? { variants: overrides.variants } : {}),
     ...(overrides?.replayMode !== undefined ? { replayMode: overrides.replayMode } : {}),
     ...(overrides?.reuseOutputs === true ? { reuseOutputs: true } : {}),

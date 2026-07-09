@@ -15,6 +15,8 @@ interface GenerateObjectOptions<T> {
   readonly system?: string
   readonly prompt: string
   readonly schema: z.ZodType<T>
+  readonly temperature?: number
+  readonly topP?: number
 }
 
 interface GenerateObjectResult<T> {
@@ -28,6 +30,8 @@ interface ObjectResultLike {
 interface AdapterGenerateOptions {
   readonly model: unknown
   readonly input: Record<string, never>
+  readonly temperature?: number
+  readonly topP?: number
 }
 
 /**
@@ -93,6 +97,8 @@ export function createGenerateObjectFnFromGenerate(
     const adapterOptions = {
       model: generateOptions.model,
       input: {},
+      ...(generateOptions.temperature !== undefined ? { temperature: generateOptions.temperature } : {}),
+      ...(generateOptions.topP !== undefined ? { topP: generateOptions.topP } : {}),
     } satisfies AdapterGenerateOptions
 
     const result = await generate(structuredPrompt as never, adapterOptions as never)

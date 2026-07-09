@@ -24,107 +24,41 @@ import type { Retriever, RetrieveOptions } from '../../retrieval'
 import { observe, type CruxTraceId } from '../../observability'
 
 import type { AssertContext, CaseContext } from '../expect'
-import type {
-  CellScore,
-  Comparison,
-  Experiment,
-  ExperimentCell,
-  RunOverrides,
-  ScoreAggregate,
-  VariantAggregate,
-} from '../experiment'
-import type {
-  QualitySourceFrame,
-  QualitySourceFrameResolver,
-} from '../source-frame'
+import type { CellScore, Comparison, Experiment, ExperimentCell, RunOverrides, ScoreAggregate, VariantAggregate } from '../experiment'
+import type { QualitySourceFrame, QualitySourceFrameResolver } from '../source-frame'
 import type { GateResult, Gates } from '../gates'
 import type { EvaluationManifest } from '../manifest'
 import { resolveCaseId } from '../manifest'
 import { DATASET_INTERNAL, type DatasetInternal } from '../dataset'
-import {
-  TARGET_INTERNAL,
-  type AnyTarget,
-  type Capability,
-  type GenerateFn,
-  type TargetInternal,
-} from '../target'
+import { TARGET_INTERNAL, type AnyTarget, type Capability, type GenerateFn, type TargetInternal } from '../target'
 import type { StandardSchemaV1 } from '../standard-schema'
 import type { EvaluationDefinition, RawCase, RawDataset } from './definition'
 import { detectTask, type DetectedTask } from './definition'
 import type { EmbedFn } from '../scorers'
 import type { NormalizedCall, ReplayMode } from '../replay'
-import { invokeScorer, type ScorerRunContext } from './scorer-runtime'
-import {
-  CassetteMissError,
-  cassettePath,
-  openCassetteSession,
-  type CassetteSession,
-} from './cassette'
-import {
-  ensureCassetteDispatcher,
-  withCassetteSession,
-} from './cassette-context'
+import { SCORER_IDENTITY, invokeScorer, type MaybeIdentifiedScorer, type ScorerRunContext } from './scorer-runtime'
+import { CassetteMissError, cassettePath, openCassetteSession, type CassetteSession } from './cassette'
+import { ensureCassetteDispatcher, withCassetteSession } from './cassette-context'
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction, truncateOutput } from './redact'
-import {
-  failureFromOutcome,
-  isFailureOutcome,
-  redactAssertionOutcomes,
-} from './assertion-outcomes'
-import {
-  resolveAssertionSourceFrames,
-  resolveSourceFrameFromSourceRef,
-} from './source-frames'
-import {
-  runAssertionCallbacks,
-  type AssertionCallback,
-} from './assertion-callbacks'
+import { isFailureOutcome, redactAssertionOutcomes } from './assertion-outcomes'
+import { resolveAssertionSourceFrames, resolveSourceFrameFromSourceRef } from './source-frames'
+import { runAssertionCallbacks, type AssertionCallback } from './assertion-callbacks'
 import { scoreMapFromScores } from './score-map'
-import { persistExperiment } from './persist'
+import { EXPERIMENT_RECORD_SCHEMA_VERSION, persistExperiment } from './persist'
 import { compareVariants, comparePromoted } from './compare'
-import {
-  buildBaselineReference,
-  gitUserName,
-  listBaselineRecords,
-  readBaselineRecord,
-  writeBaselineRecord,
-  type BaselineRecord,
-} from './baseline'
-import {
-  createAssertionRecorder,
-  createRuntimeBoundExpect,
-  createStepAccessor,
-  captureSourceRefFromStack,
-  type AssertionRecorder,
-} from './expect-runtime'
-import {
-  cellCacheKey,
-  deserializeCellSignals,
-  paramsFingerprint,
-  readCellCache,
-  serializeCellSignals,
-  writeCellCache,
-} from './output-cache'
-import {
-  createProgrammaticSourceFrameResolver,
-  ensureProgrammaticObservability,
-  flushProgrammaticObservability,
-} from './programmatic-runtime'
-import {
-  emptyCellSignals,
-  extractCellSignals,
-  installSignalCapture,
-  type CellSignals,
-} from './signals'
-import {
-  emitComparisonReportEdges,
-  emitEvalCaseOfEdge,
-  emitReplayOfEdge,
-  type QualityObservabilityRunRef,
-} from './observability-edges'
+import { buildBaselineReference, gitUserName, listBaselineRecords, readBaselineRecord, writeBaselineRecord, type BaselineRecord } from './baseline'
+import { createAssertionRecorder, createRuntimeBoundExpect, createStepAccessor, captureSourceRefFromStack, type AssertionRecorder } from './expect-runtime'
+import { cellCacheKey, deserializeCellSignals, paramsFingerprint, readCellCache, serializeCellSignals, writeCellCache } from './output-cache'
+import { BASELINE_FINGERPRINT_EPOCH, fingerprintFunction, fingerprintValue } from './cache-identity'
+import { createProgrammaticSourceFrameResolver, ensureProgrammaticObservability, flushProgrammaticObservability } from './programmatic-runtime'
+import { emptyCellSignals, extractCellSignals, installSignalCapture, withSignalCapture, type CellSignals } from './signals'
+import { createQualityCellToken, shouldQuarantineQualityWrite, withQualityCellToken } from './capture-context'
+import { emitComparisonReportEdges, emitEvalCaseOfEdge, emitReplayOfEdge, type QualityObservabilityRunRef } from './observability-edges'
+import { buildFailureArtifacts } from './failure-artifacts'
 import { ulid } from './ulid'
 import { MissingQualityModelBindingError } from './errors'
-import type { ProjectModelDiagnosticCode } from '../../project-index'
+import type { QualityDefinitionDiagnosticCode } from './errors'
 
 // ─────────────────────────────────────────────────────────────────
 // Errors
@@ -139,12 +73,9 @@ import type { ProjectModelDiagnosticCode } from '../../project-index'
  */
 export class QualityDefinitionError extends Error {
   /** Stable diagnostic code for tooling surfaces that render definition failures. */
-  readonly code?: ProjectModelDiagnosticCode
+  readonly code?: QualityDefinitionDiagnosticCode
 
-  constructor(
-    message: string,
-    options: { code?: ProjectModelDiagnosticCode } = {},
-  ) {
+  constructor(message: string, options: { code?: QualityDefinitionDiagnosticCode } = {}) {
     super(message)
     this.name = 'QualityDefinitionError'
     this.code = options.code
@@ -222,12 +153,7 @@ export interface EngineOptions {
    * every cell, including skipped ones.
    */
   events?: {
-    onCellStart?: (cell: {
-      caseId: string
-      caseName?: string
-      variantName: string
-      trial: number
-    }) => void
+    onCellStart?: (cell: { caseId: string; caseName?: string; variantName: string; trial: number }) => void
     onCellDone?: (cell: ExperimentCell<unknown, unknown>) => void
   }
 }
@@ -253,20 +179,12 @@ function resolveReplay(
 } {
   const ref = definition.replay?.cassette
   const cassetteRef = typeof ref === 'object' ? ref : undefined
-  const mode: ReplayMode =
-    overrides?.replayMode ??
-    cassetteRef?.mode ??
-    definition.replay?.mode ??
-    options.defaults?.replay ??
-    'live'
+  const mode: ReplayMode = overrides?.replayMode ?? cassetteRef?.mode ?? definition.replay?.mode ?? options.defaults?.replay ?? 'live'
   if (mode === 'live') return { mode }
   const declaredName = typeof ref === 'string' ? ref : cassetteRef?.name
   const name = declaredName ?? (evaluationId !== '' ? evaluationId : undefined)
   if (name === undefined) {
-    throw new QualityDefinitionError(
-      `replay mode '${mode}' needs a cassette name — give the evaluation an explicit id or declare ` +
-        "`replay: { mode, cassette: '<name>' }`.",
-    )
+    throw new QualityDefinitionError(`replay mode '${mode}' needs a cassette name — give the evaluation an explicit id or declare ` + "`replay: { mode, cassette: '<name>' }`.")
   }
   return {
     mode,
@@ -284,16 +202,16 @@ interface ResolvedCase {
   raw: RawCase
 }
 
-async function validateRow(
-  schema: StandardSchemaV1,
-  value: unknown,
-  where: string,
-): Promise<unknown> {
+interface DatasetProvenanceMetadata {
+  path: string
+  contentFingerprint: string
+  row?: unknown
+}
+
+async function validateRow(schema: StandardSchemaV1, value: unknown, where: string): Promise<unknown> {
   const result = await schema['~standard'].validate(value)
   if (result.issues !== undefined) {
-    throw new QualityDefinitionError(
-      `${where}: row failed schema validation: ${result.issues.map((issue) => issue.message).join('; ')}`,
-    )
+    throw new QualityDefinitionError(`${where}: row failed schema validation: ${result.issues.map((issue) => issue.message).join('; ')}`)
   }
   return result.value
 }
@@ -312,29 +230,19 @@ function parseCsv(text: string): Record<string, string>[] {
   })
 }
 
-async function loadDataset(
-  dataset: RawDataset,
-  rootDir: string,
-): Promise<RawCase[]> {
-  const internal = (dataset as { [DATASET_INTERNAL]?: DatasetInternal })[
-    DATASET_INTERNAL
-  ]
+async function loadDataset(dataset: RawDataset, rootDir: string): Promise<RawCase[]> {
+  const internal = (dataset as { [DATASET_INTERNAL]?: DatasetInternal })[DATASET_INTERNAL]
   if (internal === undefined) {
-    throw new QualityDefinitionError(
-      `dataset '${dataset.path}': missing internal schemas (not built by dataset()).`,
-    )
+    throw new QualityDefinitionError(`dataset '${dataset.path}': missing internal schemas (not built by dataset()).`)
   }
-  const path = isAbsolute(dataset.path)
-    ? dataset.path
-    : join(rootDir, dataset.path)
+  const path = isAbsolute(dataset.path) ? dataset.path : join(rootDir, dataset.path)
   let text: string
   try {
     text = await readFile(path, 'utf8')
   } catch (error) {
-    throw new QualityDefinitionError(
-      `dataset '${dataset.path}': cannot read file at ${path} (${error instanceof Error ? error.message : String(error)}).`,
-    )
+    throw new QualityDefinitionError(`dataset '${dataset.path}': cannot read file at ${path} (${error instanceof Error ? error.message : String(error)}).`)
   }
+  const contentFingerprint = sha256Hex(text)
 
   let rows: unknown[]
   if (dataset.path.endsWith('.jsonl')) {
@@ -347,9 +255,7 @@ async function loadDataset(
   } else {
     const parsed = JSON.parse(text) as unknown
     if (!Array.isArray(parsed)) {
-      throw new QualityDefinitionError(
-        `dataset '${dataset.path}': JSON datasets must be an array of rows.`,
-      )
+      throw new QualityDefinitionError(`dataset '${dataset.path}': JSON datasets must be an array of rows.`)
     }
     rows = parsed
   }
@@ -357,62 +263,102 @@ async function loadDataset(
   const cases: RawCase[] = []
   for (const [index, row] of rows.entries()) {
     if (row === null || typeof row !== 'object') {
-      throw new QualityDefinitionError(
-        `dataset '${dataset.path}': row ${index} is not an object.`,
-      )
+      throw new QualityDefinitionError(`dataset '${dataset.path}': row ${index} is not an object.`)
     }
     const record = row as Record<string, unknown>
     if (typeof record.expect === 'function') {
-      throw new QualityDefinitionError(
-        `dataset '${dataset.path}': row ${index} carries an expect callback — dataset rows are pure data.`,
-      )
+      throw new QualityDefinitionError(`dataset '${dataset.path}': row ${index} carries an expect callback — dataset rows are pure data.`)
     }
     const inputSource = record.input !== undefined ? record.input : record
-    const input = await validateRow(
-      internal.input,
-      inputSource,
-      `dataset '${dataset.path}' row ${index}`,
-    )
+    const input = await validateRow(internal.input, inputSource, `dataset '${dataset.path}' row ${index}`)
     const expectedSource = record.expected
     const expected =
-      internal.expected !== undefined && expectedSource !== undefined
-        ? await validateRow(
-            internal.expected,
-            expectedSource,
-            `dataset '${dataset.path}' row ${index} (expected)`,
-          )
-        : expectedSource
+      internal.expected !== undefined && expectedSource !== undefined ? await validateRow(internal.expected, expectedSource, `dataset '${dataset.path}' row ${index} (expected)`) : expectedSource
     cases.push({
       ...(typeof record.name === 'string' ? { name: record.name } : {}),
       input,
       ...(expected !== undefined ? { expected } : {}),
       ...(typeof record.trials === 'number' ? { trials: record.trials } : {}),
       ...(Array.isArray(record.tags) ? { tags: record.tags as string[] } : {}),
-      ...(record.skip !== undefined
-        ? { skip: record.skip as boolean | string }
-        : {}),
+      metadata: {
+        ...(isRecord(record.metadata) ? record.metadata : {}),
+        datasetProvenance: {
+          path: dataset.path,
+          contentFingerprint,
+          ...(isRecord(record.metadata) && record.metadata.provenance !== undefined ? { row: record.metadata.provenance } : {}),
+        } satisfies DatasetProvenanceMetadata,
+      },
+      ...(record.skip !== undefined ? { skip: record.skip as boolean | string } : {}),
       ...(record.only !== undefined ? { only: record.only as boolean } : {}),
     })
   }
   return cases
 }
 
-function caseMatchesFilter(
-  resolved: ResolvedCase,
-  filters: readonly string[],
-): boolean {
+function caseMatchesFilter(resolved: ResolvedCase, filters: readonly string[]): boolean {
   return filters.some((filter) => {
     if (filter.includes('*')) {
-      const pattern = new RegExp(
-        `^${filter.split('*').map(escapeRegExp).join('.*')}$`,
-      )
-      return (
-        pattern.test(resolved.caseId) ||
-        (resolved.raw.name !== undefined && pattern.test(resolved.raw.name))
-      )
+      const pattern = new RegExp(`^${filter.split('*').map(escapeRegExp).join('.*')}$`)
+      return pattern.test(resolved.caseId) || (resolved.raw.name !== undefined && pattern.test(resolved.raw.name))
     }
     return resolved.caseId === filter || resolved.raw.name === filter
   })
+}
+
+function validateCellSelections(
+  selections: RunOverrides<string>['cells'] | undefined,
+  knownVariants: ReadonlySet<string>,
+): void {
+  if (selections === undefined) return
+  for (const selection of selections) {
+    if (selection.variantName !== undefined && !knownVariants.has(selection.variantName)) {
+      throw new QualityDefinitionError(`unknown variant '${selection.variantName}' in failed-cell rerun selection.`)
+    }
+  }
+}
+
+function cellSelectionMatches(
+  selections: RunOverrides<string>['cells'] | undefined,
+  caseId: string,
+  variantName: string,
+): boolean {
+  if (selections === undefined) return true
+  return selections.some((selection) => {
+    if (selection.caseId !== caseId) return false
+    return selection.variantName === undefined || selection.variantName === variantName
+  })
+}
+
+function sampleCases(
+  cases: readonly ResolvedCase[],
+  sample: RunOverrides<string>['sample'] | undefined,
+): ResolvedCase[] {
+  if (sample === undefined) return [...cases]
+  if (!Number.isInteger(sample.size) || sample.size < 0) {
+    throw new QualityDefinitionError(`--sample must be a non-negative integer; got ${String(sample.size)}.`)
+  }
+  if (sample.size >= cases.length) return [...cases]
+  const random = mulberry32(seedNumber(sample.seed))
+  return [...cases]
+    .sort((left, right) => left.caseId.localeCompare(right.caseId))
+    .map((entry) => ({ entry, order: random() }))
+    .sort((left, right) => left.order - right.order || left.entry.caseId.localeCompare(right.entry.caseId))
+    .slice(0, sample.size)
+    .map(({ entry }) => entry)
+}
+
+function seedNumber(seed: string): number {
+  return Number.parseInt(sha256Hex(seed).slice(0, 8), 16) >>> 0
+}
+
+function mulberry32(seed: number): () => number {
+  let state = seed >>> 0
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0
+    let value = Math.imul(state ^ (state >>> 15), state | 1)
+    value ^= value + Math.imul(value ^ (value >>> 7), value | 61)
+    return ((value ^ (value >>> 14)) >>> 0) / 4294967296
+  }
 }
 
 function escapeRegExp(text: string): string {
@@ -423,69 +369,42 @@ function escapeRegExp(text: string): string {
 // Task lifting
 // ─────────────────────────────────────────────────────────────────
 
-type TaskRunner = (
-  input: unknown,
-  params: Record<string, unknown>,
-) => Promise<unknown>
+type TaskRunner = (input: unknown, params: Record<string, unknown>) => Promise<unknown>
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
 }
 
 /** Unwrap an adapter generate result to the task output (engine contract). */
-function normalizeGenerateResult(
-  result: unknown,
-  structured: boolean,
-): unknown {
+function normalizeGenerateResult(result: unknown, structured: boolean): unknown {
   if (isRecord(result)) {
-    if (structured && 'object' in result && result.object !== undefined)
-      return result.object
-    if (!structured && 'text' in result && typeof result.text === 'string')
-      return result.text
+    if (structured && 'object' in result && result.object !== undefined) return result.object
+    if (!structured && 'text' in result && typeof result.text === 'string') return result.text
   }
   return result
 }
 
-function requireGenerate(
-  params: Record<string, unknown>,
-  setup: EngineSetup | undefined,
-  kind: string,
-): GenerateFn {
-  const generate =
-    (params.generate as GenerateFn | undefined) ?? setup?.generate
+function requireGenerate(params: Record<string, unknown>, setup: EngineSetup | undefined, kind: string): GenerateFn {
+  const generate = (params.generate as GenerateFn | undefined) ?? setup?.generate
   if (typeof generate !== 'function') {
-    throw new QualityDefinitionError(
-      `${kind} tasks need an explicit adapter generate fn: pass \`generate\` in the eval through target defaults, params, or variants.`,
-      { code: 'project_model.model_executor_missing' },
-    )
+    throw new QualityDefinitionError(`${kind} tasks need an explicit adapter generate fn: pass \`generate\` in the eval through target defaults, params, or variants.`, {
+      code: 'project_model.model_executor_missing',
+    })
   }
   return generate
 }
 
-function resolveModel(
-  params: Record<string, unknown>,
-  setup: EngineSetup | undefined,
-): unknown {
+function resolveModel(params: Record<string, unknown>, setup: EngineSetup | undefined): unknown {
   const ref = params.model ?? setup?.model
-  if (
-    typeof ref === 'string' &&
-    setup?.models !== undefined &&
-    ref in setup.models
-  )
-    return setup.models[ref]
+  if (typeof ref === 'string' && setup?.models !== undefined && ref in setup.models) return setup.models[ref]
   return ref
 }
 
-function mockTools(
-  tools: Record<string, unknown> | undefined,
-  mocks: Record<string, unknown> | undefined,
-) {
+function mockTools(tools: Record<string, unknown> | undefined, mocks: Record<string, unknown> | undefined) {
   if (tools === undefined && mocks === undefined) return undefined
   const merged: Record<string, unknown> = { ...(tools ?? {}) }
   for (const [name, mock] of Object.entries(mocks ?? {})) {
-    const original = isRecord(merged[name])
-      ? (merged[name] as Record<string, unknown>)
-      : {}
+    const original = isRecord(merged[name]) ? (merged[name] as Record<string, unknown>) : {}
     merged[name] = {
       ...original,
       execute: typeof mock === 'function' ? mock : () => mock,
@@ -494,14 +413,8 @@ function mockTools(
   return merged
 }
 
-function createTaskRunner(
-  task: unknown,
-  detected: DetectedTask,
-  setup: EngineSetup | undefined,
-): TaskRunner {
-  const internal = (task as { [TARGET_INTERNAL]?: TargetInternal })[
-    TARGET_INTERNAL as never
-  ] as TargetInternal | undefined
+function createTaskRunner(task: unknown, detected: DetectedTask, setup: EngineSetup | undefined): TaskRunner {
+  const internal = (task as { [TARGET_INTERNAL]?: TargetInternal })[TARGET_INTERNAL as never] as TargetInternal | undefined
   const primitive = internal?.primitive ?? task
 
   switch (detected.kind) {
@@ -516,22 +429,14 @@ function createTaskRunner(
     case 'prompt': {
       return async (input, params) => {
         const generate = requireGenerate(params, setup, 'prompt')
-        const activePrompt =
-          (params.prompt as AnyPrompt | undefined) ?? (primitive as AnyPrompt)
-        if (
-          params.prompt !== undefined &&
-          (params.prompt as AnyPrompt)._tag !== 'Prompt'
-        ) {
-          throw new QualityDefinitionError(
-            'params.prompt must be a Crux prompt.',
-          )
+        const activePrompt = (params.prompt as AnyPrompt | undefined) ?? (primitive as AnyPrompt)
+        if (params.prompt !== undefined && (params.prompt as AnyPrompt)._tag !== 'Prompt') {
+          throw new QualityDefinitionError('params.prompt must be a Crux prompt.')
         }
         const structured = activePrompt.outputSchema !== undefined
         const opts = {
           input,
-          ...(resolveModel(params, setup) !== undefined
-            ? { model: resolveModel(params, setup) }
-            : {}),
+          ...(resolveModel(params, setup) !== undefined ? { model: resolveModel(params, setup) } : {}),
           ...(isRecord(params.settings) ? params.settings : {}),
         }
         const result = await generate(activePrompt as never, opts as never)
@@ -544,16 +449,12 @@ function createTaskRunner(
         const agentTask = primitive as AnyAgent
         const structured = agentTask.prompt.outputSchema !== undefined
         const model = resolveModel(params, setup) ?? agentTask.model
-        const tools = mockTools(
-          agentTask.tools as Record<string, unknown> | undefined,
-          params.tools as Record<string, unknown> | undefined,
-        )
+        const tools = mockTools(agentTask.tools as Record<string, unknown> | undefined, params.tools as Record<string, unknown> | undefined)
         const opts = {
           input,
           ...(model !== undefined ? { model } : {}),
           ...(tools !== undefined ? { tools } : {}),
-          maxSteps:
-            typeof params.maxToolSteps === 'number' ? params.maxToolSteps : 15,
+          maxSteps: typeof params.maxToolSteps === 'number' ? params.maxToolSteps : 15,
           ...(isRecord(params.settings) ? params.settings : {}),
         }
         const result = await generate(agentTask.prompt as never, opts as never)
@@ -565,9 +466,7 @@ function createTaskRunner(
         const handle = primitive as FlowHandle<unknown, unknown>
         const result = await handle.run(input)
         if (result.status !== 'completed') {
-          throw new Error(
-            `flow '${handle.name}' did not complete: status '${result.status}'.`,
-          )
+          throw new Error(`flow '${handle.name}' did not complete: status '${result.status}'.`)
         }
         return result.output
       }
@@ -575,16 +474,9 @@ function createTaskRunner(
     case 'retriever': {
       return async (input, params) => {
         const retrieverTask = primitive as Retriever
-        const query =
-          internal?.query !== undefined
-            ? (internal.query as (input: unknown) => string)(input)
-            : isRecord(input) && typeof input.query === 'string'
-              ? input.query
-              : undefined
+        const query = internal?.query !== undefined ? (internal.query as (input: unknown) => string)(input) : isRecord(input) && typeof input.query === 'string' ? input.query : undefined
         if (typeof query !== 'string') {
-          throw new QualityDefinitionError(
-            'retriever tasks need a string query: case inputs must be `{ query }` or the target must declare a `query` mapper.',
-          )
+          throw new QualityDefinitionError('retriever tasks need a string query: case inputs must be `{ query }` or the target must declare a `query` mapper.')
         }
         const options = {
           ...(internal?.options ?? {}),
@@ -626,18 +518,11 @@ interface VariantContext {
 /** Param records merged per entry instead of replaced wholesale (spec 01 §5). */
 const ENTRY_MERGED_PARAM_KEYS = new Set(['steps', 'tools'])
 
-function mergeParams(
-  base: Readonly<Record<string, unknown>>,
-  override: Readonly<Record<string, unknown>>,
-): Record<string, unknown> {
+function mergeParams(base: Readonly<Record<string, unknown>>, override: Readonly<Record<string, unknown>>): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...base }
   for (const [key, value] of Object.entries(override)) {
     const existing = merged[key]
-    if (
-      ENTRY_MERGED_PARAM_KEYS.has(key) &&
-      isRecord(value) &&
-      isRecord(existing)
-    ) {
+    if (ENTRY_MERGED_PARAM_KEYS.has(key) && isRecord(value) && isRecord(existing)) {
       merged[key] = { ...existing, ...value }
     } else {
       merged[key] = value
@@ -647,28 +532,18 @@ function mergeParams(
 }
 
 function isJsonSerializable(value: unknown): boolean {
-  if (
-    value === null ||
-    typeof value === 'string' ||
-    typeof value === 'number' ||
-    typeof value === 'boolean'
-  ) {
+  if (value === null || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
     return true
   }
   if (Array.isArray(value)) return value.every(isJsonSerializable)
   if (typeof value === 'object') {
     const proto: unknown = Object.getPrototypeOf(value)
-    return (
-      (proto === Object.prototype || proto === null) &&
-      Object.values(value as Record<string, unknown>).every(isJsonSerializable)
-    )
+    return (proto === Object.prototype || proto === null) && Object.values(value as Record<string, unknown>).every(isJsonSerializable)
   }
   return false
 }
 
-function serializableOverrides(
-  overrides: Readonly<Record<string, unknown>>,
-): Record<string, unknown> | undefined {
+function serializableOverrides(overrides: Readonly<Record<string, unknown>>): Record<string, unknown> | undefined {
   const projection: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(overrides)) {
     if (isJsonSerializable(value)) projection[key] = value
@@ -685,14 +560,7 @@ function resolveVariantContexts(input: {
   baseTaskFingerprint: string
   setup: EngineSetup | undefined
 }): VariantContext[] {
-  const {
-    definition,
-    detected,
-    baseRunner,
-    baseParams,
-    baseTaskFingerprint,
-    setup,
-  } = input
+  const { definition, detected, baseRunner, baseParams, baseTaskFingerprint, setup } = input
   const declared = Object.entries(definition.variants)
   if (declared.length === 0) {
     return [
@@ -745,9 +613,7 @@ function meanOf(values: readonly number[]): number {
 function semOf(values: readonly number[]): number {
   if (values.length < 2) return 0
   const mean = meanOf(values)
-  const variance =
-    values.reduce((sum, value) => sum + (value - mean) ** 2, 0) /
-    (values.length - 1)
+  const variance = values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (values.length - 1)
   return Math.sqrt(variance / values.length)
 }
 
@@ -762,28 +628,23 @@ function p95Of(values: readonly number[]): number {
 // Fingerprints
 // ─────────────────────────────────────────────────────────────────
 
-function configFingerprintOf(definition: EvaluationDefinition): string {
+function configFingerprintOf(definition: EvaluationDefinition, rootDir: string): string {
   return sha256Hex(
     canonicalJson({
+      epoch: BASELINE_FINGERPRINT_EPOCH,
       cases: definition.cases.map((rawCase) => ({
         caseId: resolveCaseId(rawCase),
+        inputFingerprint: fingerprintValue(rawCase.input !== undefined ? rawCase.input : { turns: rawCase.turns }),
         expected: rawCase.expected,
         trials: rawCase.trials,
         skip: rawCase.skip,
         only: rawCase.only,
       })),
-      datasets: definition.datasets.map((dataset) => dataset.path),
-      scorers: definition.scorers.map(
-        (scorer) => scorer.scorerName ?? '(dynamic)',
-      ),
+      datasets: definition.datasets.map((dataset) => datasetIdentity(dataset, rootDir)),
+      scorers: definition.scorers.map((scorer) => scorerIdentity(scorer)),
       gates: definition.gates,
-      variants: Object.fromEntries(
-        Object.entries(definition.variants).map(([name, overrides]) => [
-          name,
-          Object.keys(overrides),
-        ]),
-      ),
-      paramKeys: Object.keys(definition.params ?? {}),
+      variants: Object.fromEntries(Object.entries(definition.variants).map(([name, overrides]) => [name, fingerprintValue(overrides)])),
+      paramsFingerprint: fingerprintValue(definition.params ?? {}),
       // Definition-level (declared-or-1, not config-effective) so an
       // undeclared-trials definition fingerprints identically to `trials: 1`.
       trials: definition.trials ?? 1,
@@ -799,15 +660,39 @@ function taskFingerprintOf(task: unknown, detected: DetectedTask): string {
   }
   if (detected.kind === 'fn' && typeof task === 'function') {
     identity.source = sha256Hex(task.toString())
+  } else if (task !== null && typeof task === 'object' && 'config' in task) {
+    identity.configFingerprint = fingerprintValue((task as { config?: unknown }).config)
+  } else if (task !== null && typeof task === 'object') {
+    identity.definitionFingerprint = fingerprintValue(task)
   }
   return sha256Hex(canonicalJson(identity))
 }
 
+function datasetIdentity(dataset: RawDataset, rootDir: string): Record<string, unknown> {
+  const path = isAbsolute(dataset.path) ? dataset.path : join(rootDir, dataset.path)
+  try {
+    return {
+      path: dataset.path,
+      contentFingerprint: sha256Hex(readFileSync(path, 'utf8')),
+    }
+  } catch (error) {
+    throw new QualityDefinitionError(`dataset '${dataset.path}': cannot read file at ${path} (${error instanceof Error ? error.message : String(error)}).`)
+  }
+}
+
+function scorerIdentity(scorer: EvaluationDefinition['scorers'][number]): Record<string, unknown> {
+  const explicit = (scorer as MaybeIdentifiedScorer)[SCORER_IDENTITY]
+  return {
+    name: scorer.scorerName ?? '(dynamic)',
+    costClass: scorer.costClass,
+    source: fingerprintFunction(scorer as (...args: never[]) => unknown),
+    ...(explicit !== undefined ? { identityFingerprint: fingerprintValue(explicit) } : {}),
+  }
+}
+
 function nearestPackageName(rootDir: string): string | undefined {
   try {
-    const parsed = JSON.parse(
-      readFileSync(join(rootDir, 'package.json'), 'utf8'),
-    ) as { name?: unknown }
+    const parsed = JSON.parse(readFileSync(join(rootDir, 'package.json'), 'utf8')) as { name?: unknown }
     return typeof parsed.name === 'string' ? parsed.name : undefined
   } catch {
     return undefined
@@ -845,19 +730,13 @@ class CellTimeoutError extends Error {
   }
 }
 
-async function withTimeout<T>(
-  fn: () => Promise<T>,
-  timeoutMs: number,
-): Promise<T> {
+async function withTimeout<T>(fn: () => Promise<T>, timeoutMs: number): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([
       fn(),
       new Promise<never>((_resolve, reject) => {
-        timer = setTimeout(
-          () => reject(new CellTimeoutError(timeoutMs)),
-          timeoutMs,
-        )
+        timer = setTimeout(() => reject(new CellTimeoutError(timeoutMs)), timeoutMs)
       }),
     ])
   } finally {
@@ -875,15 +754,40 @@ interface CellPlan {
   variant: VariantContext
 }
 
+function skippedPlanCell(
+  plan: CellPlan,
+  reason: string,
+  redactPaths: readonly string[],
+): ExperimentCell<unknown, unknown> {
+  return {
+    caseId: plan.resolved.caseId,
+    ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
+    variantName: plan.variant.name,
+    trial: plan.trial,
+    status: 'skipped',
+    skipReason: reason,
+    input: applyRedaction(plan.resolved.raw.input, redactPaths),
+    scores: [],
+    assertions: { ran: 0, notEvaluated: 0, outcomes: [] },
+    durationMs: 0,
+    traceIds: [],
+    capturedSignals: [],
+  }
+}
+
 interface CellRuntimeError {
   message: string
-  phase: 'execute' | 'expect' | 'assert' | 'score' | 'replay' | 'timeout'
+  phase: 'execute' | 'expect' | 'afterScores' | 'score' | 'replay' | 'timeout'
+  /** Stable machine-readable reason for definition-quality failures. */
+  code?: string
   /** Set for replay-strict misses: the missing cassette key. */
   missingCassetteKey?: string
   /** Best-effort `file:line:column` for callback/task crashes. */
   sourceRef?: string
   /** Authored frame for callback/task crashes, when the runner can resolve it. */
   sourceFrame?: QualitySourceFrame
+  /** Machine-readable diagnostics for runtime hardening paths such as timeout quarantine. */
+  diagnostics?: Record<string, unknown>
 }
 
 interface CellCacheContext {
@@ -914,26 +818,18 @@ async function executeCell(input: {
     input.cache === undefined
       ? undefined
       : cellCacheKey({
-          caseId: plan.resolved.caseId,
+          evaluationId: input.evaluationId,
+          caseKey: `${plan.resolved.caseId}:${fingerprintValue(rawCase.input !== undefined ? rawCase.input : { turns: rawCase.turns })}`,
           variantName: plan.variant.name,
           trial: plan.trial,
           taskFingerprint: plan.variant.taskFingerprint,
-          paramsHash: plan.variant.paramsHash,
-          replayMode: input.cache.replayMode,
+          paramsFingerprint: plan.variant.paramsHash,
         })
 
   // Cache hit (spec 03 §5): skip task execution entirely, reuse the stored
   // output + signals, re-run expects and scorers fresh below.
-  if (
-    input.cache?.reuse === true &&
-    cacheKey !== undefined &&
-    !Array.isArray(rawCase.turns)
-  ) {
-    const cached = await readCellCache(
-      input.cache.dir,
-      input.evaluationId,
-      cacheKey,
-    )
+  if (input.cache?.reuse === true && cacheKey !== undefined && !Array.isArray(rawCase.turns)) {
+    const cached = await readCellCache(input.cache.dir, input.evaluationId, cacheKey)
     if (cached !== undefined) {
       return assembleCell({
         input,
@@ -964,21 +860,18 @@ async function executeCell(input: {
   let output: unknown
   let cellError: CellRuntimeError | undefined
   let signals: CellSignals = emptyCellSignals()
+  const token = createQualityCellToken()
 
   if (Array.isArray(rawCase.turns)) {
     cellError = {
-      message:
-        'multi-turn `turns` cases are not executable yet — conversational execution arrives with the adapter session runtime.',
+      message: 'multi-turn `turns` cases are not executable yet — conversational execution arrives with the adapter session runtime.',
       phase: 'execute',
     }
     run.error(new Error(cellError.message))
   } else {
     try {
       output = await withTimeout(
-        () =>
-          Promise.resolve(
-            run.withContext(() => runner(rawCase.input, effectiveParams)),
-          ),
+        () => withQualityCellToken(token, () => Promise.resolve(run.withContext(() => runner(rawCase.input, effectiveParams)))),
         timeoutMs,
       )
       run.end()
@@ -987,24 +880,15 @@ async function executeCell(input: {
         run.error(error)
         throw error
       }
-      const sourceRef =
-        error instanceof Error
-          ? captureSourceRefFromStack(error.stack)
-          : undefined
+      const sourceRef = error instanceof Error ? captureSourceRefFromStack(error.stack) : undefined
       cellError = {
         message: error instanceof Error ? error.message : String(error),
-        phase:
-          error instanceof CellTimeoutError
-            ? 'timeout'
-            : error instanceof CassetteMissError
-              ? 'replay'
-              : 'execute',
-        ...(error instanceof CassetteMissError
-          ? { missingCassetteKey: error.key }
-          : {}),
+        phase: error instanceof CellTimeoutError ? 'timeout' : error instanceof CassetteMissError ? 'replay' : 'execute',
+        ...(error instanceof CassetteMissError ? { missingCassetteKey: error.key } : {}),
         ...(sourceRef !== undefined ? { sourceRef } : {}),
       }
       run.error(error)
+      if (error instanceof CellTimeoutError) token.active = false
     }
   }
 
@@ -1012,17 +896,21 @@ async function executeCell(input: {
   // execution time (spec 02: latency aggregates feed gates).
   const durationMs = Date.now() - startedAt
 
+  if (cellError?.phase === 'timeout') {
+    await new Promise((resolve) => setTimeout(resolve, 50))
+  }
   await capture.settle()
   signals = extractCellSignals(capture.take(run.runId))
+  if (cellError?.phase === 'timeout') {
+    cellError = {
+      ...cellError,
+      diagnostics: { quarantinedWrites: token.quarantined },
+    }
+  }
 
   // Keep the cache warm (best-effort): redacted but NEVER truncated output —
   // truncation is a record-display concern and would corrupt re-scoring.
-  if (
-    input.cache !== undefined &&
-    cacheKey !== undefined &&
-    cellError === undefined &&
-    !Array.isArray(rawCase.turns)
-  ) {
+  if (input.cache !== undefined && cacheKey !== undefined && cellError === undefined && !Array.isArray(rawCase.turns)) {
     await writeCellCache(input.cache.dir, input.evaluationId, cacheKey, {
       output: applyRedaction(output, input.redactPaths),
       signals: serializeCellSignals(signals),
@@ -1072,17 +960,7 @@ async function assembleCell(args: {
   traceId?: string
   cached: boolean
 }): Promise<ExperimentCell<unknown, unknown>> {
-  const {
-    input,
-    rawCase,
-    plan,
-    capabilities,
-    output,
-    signals,
-    durationMs,
-    traceIds,
-    cached,
-  } = args
+  const { input, rawCase, plan, capabilities, output, signals, durationMs, traceIds, cached } = args
   const { definition } = input
   const { effectiveParams } = plan.variant
   let cellError = args.cellError
@@ -1102,7 +980,13 @@ async function assembleCell(args: {
     }),
     variant: { name: plan.variant.name, params: effectiveParams },
     trial: plan.trial,
-    score(name, score, metadata) {
+    recordScore(name, score, metadata) {
+      if (shouldQuarantineQualityWrite()) return
+      const invalid = invalidScoreError(name, score)
+      if (invalid !== undefined) {
+        cellError = invalid
+        return
+      }
       adHocScores.push({
         name,
         score,
@@ -1120,25 +1004,19 @@ async function assembleCell(args: {
 
   let notEvaluated = 0
   if (cellError === undefined) {
-    const callbacks: AssertionCallback<
-      CaseContext<unknown, unknown, unknown, Capability>
-    >[] = []
+    const callbacks: AssertionCallback<CaseContext<unknown, unknown, unknown, Capability>>[] = []
     if (definition.expect !== undefined) {
       callbacks.push({
         phase: 'expect',
         level: 'evaluation',
-        fn: definition.expect as AssertionCallback<
-          CaseContext<unknown, unknown, unknown, Capability>
-        >['fn'],
+        fn: definition.expect as AssertionCallback<CaseContext<unknown, unknown, unknown, Capability>>['fn'],
       })
     }
     if (typeof rawCase.expect === 'function') {
       callbacks.push({
         phase: 'expect',
         level: 'case',
-        fn: rawCase.expect as AssertionCallback<
-          CaseContext<unknown, unknown, unknown, Capability>
-        >['fn'],
+        fn: rawCase.expect as AssertionCallback<CaseContext<unknown, unknown, unknown, Capability>>['fn'],
       })
     }
 
@@ -1155,7 +1033,7 @@ async function assembleCell(args: {
           cellDurationMs: () => durationMs,
           cellErrored: () => cellError !== undefined,
         }),
-        score: () => {},
+        recordScore: () => {},
       }),
     })
     notEvaluated += result.notEvaluated
@@ -1173,38 +1051,28 @@ async function assembleCell(args: {
     const scorerContext: ScorerRunContext = { ...(input.setup ?? {}), signals }
     for (const scorer of definition.scorers) {
       try {
-        const result = await invokeScorer(
-          scorer,
-          { input: rawCase.input, output, expected: rawCase.expected },
-          scorerContext,
-        )
+        const result = await invokeScorer(scorer, { input: rawCase.input, output, expected: rawCase.expected }, scorerContext)
+        const invalid = invalidScoreError(result.name, result.score)
+        if (invalid !== undefined) {
+          cellError = invalid
+          break
+        }
         scores.push({
           name: result.name,
           score: result.score,
           ...(result.label !== undefined ? { label: result.label } : {}),
-          ...(scorer.costClass !== undefined
-            ? { costClass: scorer.costClass }
-            : {}),
-          ...(result.metadata !== undefined
-            ? { metadata: result.metadata }
-            : {}),
+          ...(scorer.costClass !== undefined ? { costClass: scorer.costClass } : {}),
+          ...(result.metadata !== undefined ? { metadata: result.metadata } : {}),
         })
       } catch (error) {
         if (error instanceof MissingQualityModelBindingError) {
           throw new QualityDefinitionError(error.message, { code: error.code })
         }
-        const sourceRef =
-          error instanceof Error
-            ? captureSourceRefFromStack(error.stack)
-            : undefined
+        const sourceRef = error instanceof Error ? captureSourceRefFromStack(error.stack) : undefined
         cellError = {
-          message: `scorer '${scorer.scorerName ?? scorer.name ?? '(dynamic)'}' threw: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
+          message: `scorer '${scorer.scorerName ?? scorer.name ?? '(dynamic)'}' threw: ${error instanceof Error ? error.message : String(error)}`,
           phase: error instanceof CassetteMissError ? 'replay' : 'score',
-          ...(error instanceof CassetteMissError
-            ? { missingCassetteKey: error.key }
-            : {}),
+          ...(error instanceof CassetteMissError ? { missingCassetteKey: error.key } : {}),
           ...(sourceRef !== undefined ? { sourceRef } : {}),
         }
         break
@@ -1215,13 +1083,7 @@ async function assembleCell(args: {
 
   if (cellError === undefined) {
     const scoreMap = scoreMapFromScores(scores)
-    const assertContext: AssertContext<
-      unknown,
-      unknown,
-      unknown,
-      string,
-      Capability
-    > = {
+    const assertContext: AssertContext<unknown, unknown, unknown, string, Capability> = {
       input: rawCase.input,
       output,
       expected: rawCase.expected,
@@ -1244,25 +1106,19 @@ async function assembleCell(args: {
         ...(signals.usage !== undefined ? { usage: signals.usage } : {}),
       },
     }
-    const callbacks: AssertionCallback<
-      AssertContext<unknown, unknown, unknown, string, Capability>
-    >[] = []
-    if (definition.assert !== undefined) {
+    const callbacks: AssertionCallback<AssertContext<unknown, unknown, unknown, string, Capability>>[] = []
+    if (definition.afterScores !== undefined) {
       callbacks.push({
-        phase: 'assert',
+        phase: 'afterScores',
         level: 'evaluation',
-        fn: definition.assert as AssertionCallback<
-          AssertContext<unknown, unknown, unknown, string, Capability>
-        >['fn'],
+        fn: definition.afterScores as AssertionCallback<AssertContext<unknown, unknown, unknown, string, Capability>>['fn'],
       })
     }
-    if (typeof rawCase.assert === 'function') {
+    if (typeof rawCase.afterScores === 'function') {
       callbacks.push({
-        phase: 'assert',
+        phase: 'afterScores',
         level: 'case',
-        fn: rawCase.assert as AssertionCallback<
-          AssertContext<unknown, unknown, unknown, string, Capability>
-        >['fn'],
+        fn: rawCase.afterScores as AssertionCallback<AssertContext<unknown, unknown, unknown, string, Capability>>['fn'],
       })
     }
 
@@ -1292,10 +1148,7 @@ async function assembleCell(args: {
     resolver: input.sourceFrameResolver,
     frameRadius: input.sourceFrameRadius,
   })
-  if (
-    cellError?.sourceRef !== undefined &&
-    input.sourceFrameResolver !== undefined
-  ) {
+  if (cellError?.sourceRef !== undefined && input.sourceFrameResolver !== undefined) {
     cellError = {
       ...cellError,
       sourceFrame: await resolveSourceFrameFromSourceRef({
@@ -1306,18 +1159,16 @@ async function assembleCell(args: {
       }),
     }
   }
-  const failures = outcomes.filter(isFailureOutcome).map(failureFromOutcome)
-  const passed = cellError === undefined && failures.length === 0
+  const passed = cellError === undefined && !outcomes.some(isFailureOutcome)
   scores.push({
     name: 'pass',
     score: cellError !== undefined ? 0 : passed ? 1 : 0,
   })
 
-  const redactedOutput = truncateOutput(
-    applyRedaction(output, input.redactPaths),
-  )
+  const redactedOutput = truncateOutput(applyRedaction(output, input.redactPaths))
 
   const metadata: Record<string, unknown> = {
+    ...(rawCase.metadata !== undefined ? rawCase.metadata : {}),
     ...(redactedOutput.truncated ? { truncated: true } : {}),
     ...(cached ? { cached: true } : {}),
   }
@@ -1330,14 +1181,11 @@ async function assembleCell(args: {
     status: cellError !== undefined ? 'errored' : passed ? 'passed' : 'failed',
     input: applyRedaction(rawCase.input, input.redactPaths),
     ...(cellError === undefined ? { output: redactedOutput.value } : {}),
-    ...(rawCase.expected !== undefined
-      ? { expected: applyRedaction(rawCase.expected, input.redactPaths) }
-      : {}),
+    ...(rawCase.expected !== undefined ? { expected: applyRedaction(rawCase.expected, input.redactPaths) } : {}),
     scores,
     assertions: {
       ran: recorder.ran,
       notEvaluated,
-      failures,
       outcomes,
     },
     ...(cellError !== undefined ? { error: cellError } : {}),
@@ -1354,6 +1202,16 @@ function usageOf(signals: CellSignals): CellSignals['usage'] {
   return signals.usage
 }
 
+function invalidScoreError(name: string, score: number | null): CellRuntimeError | undefined {
+  if (score === null) return undefined
+  if (Number.isFinite(score) && score >= 0 && score <= 1) return undefined
+  return {
+    message: `scorer '${name}' returned invalid score ${String(score)}; expected null or a finite number in [0, 1].`,
+    phase: 'score',
+    code: 'invalid-score',
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Gates
 // ─────────────────────────────────────────────────────────────────
@@ -1367,14 +1225,7 @@ function evaluateVariantGates(input: {
   comparison: Comparison<string> | undefined
   comparisonBlocking: boolean
 }): GateResult[] {
-  const {
-    gates,
-    cells,
-    aggregate,
-    variantName,
-    comparison,
-    comparisonBlocking,
-  } = input
+  const { gates, cells, aggregate, variantName, comparison, comparisonBlocking } = input
   const results: GateResult[] = []
   const named = (result: Omit<GateResult, 'variantName'>): GateResult => ({
     ...result,
@@ -1417,18 +1268,13 @@ function evaluateVariantGates(input: {
     if (gate.minDeltaVsBaseline !== undefined) {
       // Requires a comparison reference (declared baseline variant or a
       // promoted baseline). The delta gate evaluates the PAIRED mean delta.
-      const delta = comparison?.deltas.find(
-        (entry) =>
-          entry.scoreName === name &&
-          (variantName === undefined || entry.variantName === variantName),
-      )
+      const delta = comparison?.deltas.find((entry) => entry.scoreName === name && (variantName === undefined || entry.variantName === variantName))
       results.push({
         ...named({
           gate: `scores.${name}.minDeltaVsBaseline`,
           threshold: gate.minDeltaVsBaseline,
           actual: delta?.meanDelta ?? 0,
-          passed:
-            delta !== undefined && delta.meanDelta >= gate.minDeltaVsBaseline,
+          passed: delta !== undefined && delta.meanDelta >= gate.minDeltaVsBaseline,
         }),
         // A drifted (informational) comparison cannot block — the case
         // populations are no longer matched (spec 02 §3).
@@ -1523,9 +1369,7 @@ function evaluateGates(input: {
   const erroredCells = cells.some((cell) => cell.status === 'errored')
 
   if (gates === undefined) {
-    const noFailures =
-      !erroredCells &&
-      cells.every((cell) => cell.assertions.failures.length === 0)
+    const noFailures = !erroredCells && cells.every((cell) => !cell.assertions.outcomes.some(isFailureOutcome))
     results.push({
       gate: 'default.assertions',
       threshold: true,
@@ -1551,9 +1395,7 @@ function evaluateGates(input: {
 
   // False-safe: errored cells fail the run regardless of declared gates.
   // Informational results (drifted baseline comparison) never block.
-  const gatesPassed =
-    results.every((result) => result.passed || result.informational === true) &&
-    !erroredCells
+  const gatesPassed = results.every((result) => result.passed || result.informational === true) && !erroredCells
   return { passed: gatesPassed, informational: filteredRun, results }
 }
 
@@ -1569,9 +1411,7 @@ function evaluateGates(input: {
  * @internal
  */
 /** Aggregate one variant's cells (skipped cells included in the counts). */
-function aggregateVariant(
-  cells: readonly ExperimentCell<unknown, unknown>[],
-): VariantAggregate<string> {
+function aggregateVariant(cells: readonly ExperimentCell<unknown, unknown>[]): VariantAggregate<string> {
   const executed = cells.filter((cell) => cell.status !== 'skipped')
   const scoreValues = new Map<string, number[]>()
   for (const cell of executed) {
@@ -1600,23 +1440,13 @@ function aggregateVariant(
   const multiTrial = [...byCase.values()].some((group) => group.length > 1)
   const consistency = multiTrial
     ? {
-        passAtK:
-          [...byCase.values()].filter((group) =>
-            group.some((cell) => cell.status === 'passed'),
-          ).length / byCase.size,
-        passAllTrials:
-          [...byCase.values()].filter((group) =>
-            group.every((cell) => cell.status === 'passed'),
-          ).length / byCase.size,
+        passAtK: [...byCase.values()].filter((group) => group.some((cell) => cell.status === 'passed')).length / byCase.size,
+        passAllTrials: [...byCase.values()].filter((group) => group.every((cell) => cell.status === 'passed')).length / byCase.size,
       }
     : undefined
 
   const durations = executed.map((cell) => cell.durationMs)
-  const totalCost = executed.reduce<number | undefined>(
-    (sum, cell) =>
-      cell.costUsd !== undefined ? (sum ?? 0) + cell.costUsd : sum,
-    undefined,
-  )
+  const totalCost = executed.reduce<number | undefined>((sum, cell) => (cell.costUsd !== undefined ? (sum ?? 0) + cell.costUsd : sum), undefined)
 
   return {
     cells: cells.length,
@@ -1624,11 +1454,7 @@ function aggregateVariant(
     failed: executed.filter((cell) => cell.status === 'failed').length,
     errored: executed.filter((cell) => cell.status === 'errored').length,
     skipped: cells.length - executed.length,
-    passRate:
-      executed.length === 0
-        ? 0
-        : executed.filter((cell) => cell.status === 'passed').length /
-          executed.length,
+    passRate: executed.length === 0 ? 0 : executed.filter((cell) => cell.status === 'passed').length / executed.length,
     scores,
     ...(consistency !== undefined ? { consistency } : {}),
     latency: { meanMs: meanOf(durations), p95Ms: p95Of(durations) },
@@ -1636,11 +1462,7 @@ function aggregateVariant(
   }
 }
 
-export async function runEvaluation(
-  definition: EvaluationDefinition,
-  overrides?: RunOverrides<string>,
-  options: EngineOptions = {},
-): Promise<Experiment<unknown, unknown, string, string>> {
+export async function runEvaluation(definition: EvaluationDefinition, overrides?: RunOverrides<string>, options: EngineOptions = {}): Promise<Experiment<unknown, unknown, string, string>> {
   const rootDir = options.rootDir ?? process.cwd()
   const observabilityEnabled = await ensureProgrammaticObservability()
   try {
@@ -1658,19 +1480,14 @@ export async function runEvaluation(
   }
 }
 
-async function runEvaluationInner(
-  definition: EvaluationDefinition,
-  overrides?: RunOverrides<string>,
-  options: EngineOptions = {},
-): Promise<Experiment<unknown, unknown, string, string>> {
+async function runEvaluationInner(definition: EvaluationDefinition, overrides?: RunOverrides<string>, options: EngineOptions = {}): Promise<Experiment<unknown, unknown, string, string>> {
   const rootDir = options.rootDir ?? process.cwd()
   const qualityDir = options.dir ?? join(rootDir, '.crux/quality')
   const evaluationId = options.evaluationId ?? definition.id ?? ''
-  const qualityId =
-    options.qualityId ?? nearestPackageName(rootDir) ?? 'quality'
+  const qualityId = options.qualityId ?? nearestPackageName(rootDir) ?? 'quality'
   const redactPaths = options.redact ?? []
   const startedAtMs = Date.now()
-  const configFingerprint = configFingerprintOf(definition)
+  const configFingerprint = configFingerprintOf(definition, rootDir)
 
   // ── Replay: resolve the mode, open the cassette session ─────────
   const replay = resolveReplay(definition, overrides, options, evaluationId)
@@ -1689,13 +1506,8 @@ async function runEvaluationInner(
   const baseRunner = createTaskRunner(definition.task, detected, options.setup)
   const taskFingerprint = taskFingerprintOf(definition.task, detected)
 
-  const targetInternal = (
-    definition.task as { [TARGET_INTERNAL]?: TargetInternal }
-  )[TARGET_INTERNAL as never] as TargetInternal | undefined
-  const baseParams = mergeParams(
-    (targetInternal?.defaults as Record<string, unknown> | undefined) ?? {},
-    definition.params ?? {},
-  )
+  const targetInternal = (definition.task as { [TARGET_INTERNAL]?: TargetInternal })[TARGET_INTERNAL as never] as TargetInternal | undefined
+  const baseParams = mergeParams((targetInternal?.defaults as Record<string, unknown> | undefined) ?? {}, definition.params ?? {})
 
   // ── Variants: declared contexts (or the implicit default), then filter ──
   const variantsDeclared = Object.keys(definition.variants).length > 0
@@ -1714,23 +1526,18 @@ async function runEvaluationInner(
     const known = new Set(allVariantContexts.map((context) => context.name))
     for (const name of variantFilter) {
       if (!known.has(name)) {
-        throw new QualityDefinitionError(
-          `unknown variant '${name}' — this evaluation declares: ${[...known].join(', ')}.`,
-        )
+        throw new QualityDefinitionError(`unknown variant '${name}' — this evaluation declares: ${[...known].join(', ')}.`)
       }
     }
     const filterSet = new Set(variantFilter)
-    variantContexts = allVariantContexts.filter((context) =>
-      filterSet.has(context.name),
-    )
+    variantContexts = allVariantContexts.filter((context) => filterSet.has(context.name))
     // A variant subset only stays blocking when the baseline variant still
     // runs — paired comparison needs the reference population (spec 03 §4).
     const subset = variantContexts.length < allVariantContexts.length
-    variantSubsetDemotes =
-      subset &&
-      (definition.baseline === undefined || !filterSet.has(definition.baseline))
+    variantSubsetDemotes = subset && (definition.baseline === undefined || !filterSet.has(definition.baseline))
   }
   const selectedVariantNames = variantContexts.map((context) => context.name)
+  validateCellSelections(overrides?.cells, new Set(allVariantContexts.map((context) => context.name)))
 
   // Output cache context (spec 03 §5). Reads are opt-in via reuseOutputs;
   // writes happen on every successful execution when a cacheDir is set.
@@ -1748,11 +1555,7 @@ async function runEvaluationInner(
   if (definition.baseline === undefined && evaluationId !== '') {
     baselineRecord = await readBaselineRecord(qualityDir, evaluationId)
     if (baselineRecord === undefined) {
-      const promotedElsewhere = (await listBaselineRecords(qualityDir)).find(
-        (record) =>
-          record.configFingerprint === configFingerprint &&
-          record.evaluationId !== evaluationId,
-      )
+      const promotedElsewhere = (await listBaselineRecords(qualityDir)).find((record) => record.configFingerprint === configFingerprint && record.evaluationId !== evaluationId)
       if (promotedElsewhere !== undefined) {
         throw new QualityDefinitionError(
           `this evaluation was promoted as '${promotedElsewhere.evaluationId}' but its id resolves to ` +
@@ -1767,42 +1570,37 @@ async function runEvaluationInner(
   for (const dataset of definition.datasets) {
     datasetCases.push(...(await loadDataset(dataset, rootDir)))
   }
-  const allCases: ResolvedCase[] = [...definition.cases, ...datasetCases].map(
-    (raw) => ({
-      caseId: resolveCaseId(raw),
-      raw,
-    }),
-  )
+  const allCases: ResolvedCase[] = [...definition.cases, ...datasetCases].map((raw) => ({
+    caseId: resolveCaseId(raw),
+    raw,
+  }))
 
   const onlyCases = allCases.filter((resolved) => resolved.raw.only === true)
   const caseFilters = overrides?.cases
   const hasFilter = (caseFilters?.length ?? 0) > 0 || onlyCases.length > 0
-  const selected = allCases.filter((resolved) => {
-    if (
-      caseFilters !== undefined &&
-      caseFilters.length > 0 &&
-      !caseMatchesFilter(resolved, caseFilters)
-    )
-      return false
+  const filteredCases = allCases.filter((resolved) => {
+    if (caseFilters !== undefined && caseFilters.length > 0 && !caseMatchesFilter(resolved, caseFilters)) return false
     if (onlyCases.length > 0 && resolved.raw.only !== true) return false
     return true
   })
+  const selected = sampleCases(filteredCases, overrides?.sample)
+  const sampledRun = selected.length < filteredCases.length
   const filteredRun =
-    (hasFilter && selected.length < allCases.length) ||
+    (hasFilter && filteredCases.length < allCases.length) ||
+    sampledRun ||
     options.forceFilteredRun === true ||
-    variantSubsetDemotes
+    variantSubsetDemotes ||
+    overrides?.cells !== undefined ||
+    overrides?.maxCostUsd !== undefined
 
   const evaluationSkipped = definition.flags.skip
-  const trialsDefault =
-    overrides?.trials ?? definition.trials ?? options.defaults?.trials ?? 1
+  const trialsDefault = overrides?.trials ?? definition.trials ?? options.defaults?.trials ?? 1
   let trialsCollapsed = false
-  const timeoutMs =
-    definition.timeoutMs ?? options.defaults?.timeoutMs ?? 60_000
-  const concurrency =
-    overrides?.concurrency ??
-    definition.concurrency ??
-    options.defaults?.concurrency ??
-    5
+  const timeoutMs = definition.timeoutMs ?? options.defaults?.timeoutMs ?? 60_000
+  const concurrency = overrides?.concurrency ?? definition.concurrency ?? options.defaults?.concurrency ?? 5
+  if (overrides?.maxCostUsd !== undefined && (!Number.isFinite(overrides.maxCostUsd) || overrides.maxCostUsd < 0)) {
+    throw new QualityDefinitionError(`--max-cost must be a non-negative finite number; got ${String(overrides.maxCostUsd)}.`)
+  }
 
   const plans: CellPlan[] = []
   const skippedCells: ExperimentCell<unknown, unknown>[] = []
@@ -1812,20 +1610,19 @@ async function runEvaluationInner(
       if (skip !== undefined && skip !== false) {
         const skippedCell: ExperimentCell<unknown, unknown> = {
           caseId: resolved.caseId,
-          ...(resolved.raw.name !== undefined
-            ? { caseName: resolved.raw.name }
-            : {}),
+          ...(resolved.raw.name !== undefined ? { caseName: resolved.raw.name } : {}),
           variantName: variant.name,
           trial: 0,
           status: 'skipped',
           ...(typeof skip === 'string' ? { skipReason: skip } : {}),
           input: applyRedaction(resolved.raw.input, redactPaths),
           scores: [],
-          assertions: { ran: 0, notEvaluated: 0, failures: [] },
+          assertions: { ran: 0, notEvaluated: 0, outcomes: [] },
           durationMs: 0,
           traceIds: [],
           capturedSignals: [],
         }
+        if (!cellSelectionMatches(overrides?.cells, resolved.caseId, variant.name)) continue
         skippedCells.push(skippedCell)
         options.events?.onCellDone?.(skippedCell)
         continue
@@ -1836,6 +1633,7 @@ async function runEvaluationInner(
       const trials = replay.mode === 'replay-strict' ? 1 : declaredTrials
       if (trials < declaredTrials) trialsCollapsed = true
       for (let trial = 0; trial < trials; trial++) {
+        if (!cellSelectionMatches(overrides?.cells, resolved.caseId, variant.name)) continue
         plans.push({ resolved, trial, variant })
       }
     }
@@ -1859,79 +1657,71 @@ async function runEvaluationInner(
   const limiter = createLimiter(Math.max(1, concurrency))
   let cells: ExperimentCell<unknown, unknown>[]
   try {
-    cells = await Promise.all(
-      plans.map((plan) =>
-        limiter(async () => {
-          if (overrides?.signal?.aborted === true) {
-            const abortedCell = {
-              caseId: plan.resolved.caseId,
-              ...(plan.resolved.raw.name !== undefined
-                ? { caseName: plan.resolved.raw.name }
-                : {}),
-              variantName: plan.variant.name,
-              trial: plan.trial,
-              status: 'skipped',
-              skipReason: 'aborted',
-              input: applyRedaction(plan.resolved.raw.input, redactPaths),
-              scores: [],
-              assertions: { ran: 0, notEvaluated: 0, failures: [] },
-              durationMs: 0,
-              traceIds: [],
-              capturedSignals: [],
-            } satisfies ExperimentCell<unknown, unknown>
-            options.events?.onCellDone?.(abortedCell)
-            return abortedCell
-          }
-          options.events?.onCellStart?.({
-            caseId: plan.resolved.caseId,
-            ...(plan.resolved.raw.name !== undefined
-              ? { caseName: plan.resolved.raw.name }
-              : {}),
-            variantName: plan.variant.name,
-            trial: plan.trial,
+    const executePlan = async (plan: CellPlan): Promise<ExperimentCell<unknown, unknown>> => {
+      if (overrides?.signal?.aborted === true) {
+        const abortedCell = skippedPlanCell(plan, 'aborted', redactPaths)
+        options.events?.onCellDone?.(abortedCell)
+        return abortedCell
+      }
+      options.events?.onCellStart?.({
+        caseId: plan.resolved.caseId,
+        ...(plan.resolved.raw.name !== undefined ? { caseName: plan.resolved.raw.name } : {}),
+        variantName: plan.variant.name,
+        trial: plan.trial,
+      })
+      const execute = () =>
+        executeCell({
+          plan,
+          definition,
+          timeoutMs,
+          capture,
+          redactPaths,
+          evaluationId,
+          evaluationTraceId: evalRun.traceId,
+          setup: options.setup,
+          cache: cacheContext,
+          sourceFrameResolver: options.sourceFrameResolver,
+          sourceFrameRadius: options.sourceFrameRadius,
+        })
+      // The cassette scope covers scoring too — judge calls record and replay
+      // through the same cassette as task calls.
+      const cell = cassetteSession === undefined ? await execute() : await withCassetteSession(cassetteSession, execute)
+      for (const runId of cell.traceIds) {
+        evalRun.withContext(() => {
+          emitEvalCaseOfEdge({
+            caseRunId: runId,
+            evalRunId: evalRun.runId,
           })
-          const execute = () =>
-            executeCell({
-              plan,
-              definition,
-              timeoutMs,
-              capture,
-              redactPaths,
-              evaluationId,
-              evaluationTraceId: evalRun.traceId,
-              setup: options.setup,
-              cache: cacheContext,
-              sourceFrameResolver: options.sourceFrameResolver,
-              sourceFrameRadius: options.sourceFrameRadius,
-            })
-          // The cassette scope covers scoring too — judge calls record and
-          // replay through the same cassette as task calls.
-          const cell =
-            cassetteSession === undefined
-              ? await execute()
-              : await withCassetteSession(cassetteSession, execute)
-          for (const runId of cell.traceIds) {
-            evalRun.withContext(() => {
-              emitEvalCaseOfEdge({
-                caseRunId: runId,
-                evalRunId: evalRun.runId,
-              })
-              if (
-                replay.mode === 'replay-strict' &&
-                cassetteSession?.recorded !== undefined
-              ) {
-                emitReplayOfEdge({
-                  replay: { runId, traceId: evalRun.traceId },
-                  recorded: cassetteSession.recorded,
-                })
-              }
+          if (replay.mode === 'replay-strict' && cassetteSession?.recorded !== undefined) {
+            emitReplayOfEdge({
+              replay: { runId, traceId: evalRun.traceId },
+              recorded: cassetteSession.recorded,
             })
           }
-          options.events?.onCellDone?.(cell)
-          return cell
-        }),
-      ),
-    )
+        })
+      }
+      options.events?.onCellDone?.(cell)
+      return cell
+    }
+    cells = await withSignalCapture(capture, async () => {
+      if (overrides?.maxCostUsd === undefined) {
+        return Promise.all(plans.map((plan) => limiter(() => executePlan(plan))))
+      }
+      const budgeted: ExperimentCell<unknown, unknown>[] = []
+      let cost = 0
+      for (const plan of plans) {
+        if (cost >= overrides.maxCostUsd) {
+          const skipped = skippedPlanCell(plan, 'budget', redactPaths)
+          budgeted.push(skipped)
+          options.events?.onCellDone?.(skipped)
+          continue
+        }
+        const cell = await executePlan(plan)
+        budgeted.push(cell)
+        cost += cell.costUsd ?? 0
+      }
+      return budgeted
+    })
   } catch (error) {
     evalRun.error(error)
     throw error
@@ -1945,32 +1735,23 @@ async function runEvaluationInner(
     // ── Aggregates, per variant ─────────────────────────────────────
     const aggregates: Record<string, VariantAggregate<string>> = {}
     for (const variant of variantContexts) {
-      aggregates[variant.name] = aggregateVariant(
-        cells.filter((cell) => cell.variantName === variant.name),
-      )
+      aggregates[variant.name] = aggregateVariant(cells.filter((cell) => cell.variantName === variant.name))
     }
 
     // ── Comparison: declared baseline variant, else promoted baseline ──
     let comparison: Comparison<string> | undefined
     let baselineRef: Experiment<unknown, unknown, string, string>['baselineRef']
-    if (
-      definition.baseline !== undefined &&
-      selectedVariantNames.includes(definition.baseline)
-    ) {
+    if (definition.baseline !== undefined && selectedVariantNames.includes(definition.baseline)) {
       comparison = compareVariants({
         cells,
         baselineName: definition.baseline,
-        candidateNames: selectedVariantNames.filter(
-          (name) => name !== definition.baseline,
-        ),
+        candidateNames: selectedVariantNames.filter((name) => name !== definition.baseline),
       })
     } else if (baselineRecord !== undefined) {
       baselineRef = {
         baselineId: baselineRecord.baselineId,
         experimentId: baselineRecord.experimentId,
-        ...(baselineRecord.variantName !== undefined
-          ? { variantName: baselineRecord.variantName }
-          : {}),
+        ...(baselineRecord.variantName !== undefined ? { variantName: baselineRecord.variantName } : {}),
       }
       comparison = comparePromoted({
         cells,
@@ -1982,32 +1763,25 @@ async function runEvaluationInner(
         comparison = {
           ...comparison,
           demoted: {
-            reason:
-              'cases or definition changed since promotion (configFingerprint mismatch) — ' +
-              'comparison is informational; re-promote to re-arm baseline gates',
+            reason: 'cases or definition changed since promotion (configFingerprint mismatch) — ' + 'comparison is informational; re-promote to re-arm baseline gates',
           },
         }
       }
     }
-    const comparisonBlocking =
-      comparison !== undefined && comparison.demoted === undefined
+    const comparisonBlocking = comparison !== undefined && comparison.demoted === undefined
 
     if (comparison !== undefined) {
       evalRun.withContext(() => {
         emitComparisonReportEdges({
           comparison,
           candidate: evalRunRef,
-          ...(baselineRecord?.observability !== undefined
-            ? { baseline: baselineRecord.observability }
-            : {}),
+          ...(baselineRecord?.observability !== undefined ? { baseline: baselineRecord.observability } : {}),
         })
       })
     }
 
     // ── Gates: per non-baseline variant (single default keeps Phase 2 shape) ──
-    const gateVariantNames = variantsDeclared
-      ? selectedVariantNames.filter((name) => name !== definition.baseline)
-      : selectedVariantNames
+    const gateVariantNames = variantsDeclared ? selectedVariantNames.filter((name) => name !== definition.baseline) : selectedVariantNames
     const gates = evaluateGates({
       gates: definition.gates,
       cells,
@@ -2022,14 +1796,12 @@ async function runEvaluationInner(
     // Informational gates never fail a run; errored cells always do.
     const overallGatePassed = filteredRun ? !erroredCells : gates.passed
 
-    const experiment: Experiment<unknown, unknown, string, string> = {
-      schemaVersion: 1,
+    let experiment: Experiment<unknown, unknown, string, string> = {
+      schemaVersion: EXPERIMENT_RECORD_SCHEMA_VERSION,
       experimentId: ulid(),
       evaluationId,
       qualityId,
-      ...(options.experimentLabel !== undefined
-        ? { experimentLabel: options.experimentLabel }
-        : {}),
+      ...(options.experimentLabel !== undefined ? { experimentLabel: options.experimentLabel } : {}),
       startedAt: new Date(startedAtMs).toISOString(),
       endedAt: new Date().toISOString(),
       configFingerprint,
@@ -2040,19 +1812,15 @@ async function runEvaluationInner(
         mode: replay.mode,
         ...(replay.name !== undefined ? { cassette: replay.name } : {}),
         ...(trialsCollapsed ? { trialsCollapsed: true as const } : {}),
-        ...(cassetteSession?.staleSince !== undefined
-          ? { staleSince: cassetteSession.staleSince }
-          : {}),
+        ...(cassetteSession?.staleSince !== undefined ? { staleSince: cassetteSession.staleSince } : {}),
       },
       ...(baselineRef !== undefined ? { baselineRef } : {}),
       variants: variantContexts.map((context) => ({
         name: context.name,
         overrideKeys: context.overrideKeys,
-        ...(context.overrides !== undefined
-          ? { overrides: context.overrides }
-          : {}),
+        ...(context.overrides !== undefined ? { overrides: context.overrides } : {}),
       })),
-      perCase: cells,
+      cells: cells,
       aggregates: { perVariant: aggregates },
       ...(comparison !== undefined ? { comparison } : {}),
       gates: {
@@ -2063,53 +1831,44 @@ async function runEvaluationInner(
       passed: overallGatePassed && !erroredCells,
       promote: async (opts?: { id?: string; variant?: string }) => {
         if (filteredRun) {
-          throw new Error(
-            'filtered runs cannot be promoted — paired baseline statistics need the full case population (spec 03 §4).',
-          )
+          throw new Error('filtered runs cannot be promoted — paired baseline statistics need the full case population (spec 03 §4).')
         }
         let variantName = opts?.variant
         if (variantName === undefined) {
-          if (selectedVariantNames.length === 1)
-            variantName = selectedVariantNames[0]!
-          else if (definition.baseline !== undefined)
-            variantName = definition.baseline
+          if (selectedVariantNames.length === 1) variantName = selectedVariantNames[0]!
+          else if (definition.baseline !== undefined) variantName = definition.baseline
           else {
-            throw new Error(
-              `promoting a multi-variant experiment needs a variant — pass { variant } (one of: ${selectedVariantNames.join(', ')}).`,
-            )
+            throw new Error(`promoting a multi-variant experiment needs a variant — pass { variant } (one of: ${selectedVariantNames.join(', ')}).`)
           }
         } else if (!selectedVariantNames.includes(variantName)) {
-          throw new Error(
-            `unknown variant '${variantName}' — this experiment ran: ${selectedVariantNames.join(', ')}.`,
-          )
+          throw new Error(`unknown variant '${variantName}' — this experiment ran: ${selectedVariantNames.join(', ')}.`)
         }
         const explicitId = definition.id
         if (explicitId === undefined && opts?.id === undefined) {
-          const suggested =
-            evaluationId !== '' ? evaluationId : 'your.evaluation.id'
-          throw new Error(
-            `promotion requires an explicit evaluation id — pin it in source: evaluate('${suggested}', { … }), ` +
-              `or pass { id: '${suggested}' } to promote().`,
-          )
+          const suggested = evaluationId !== '' ? evaluationId : 'your.evaluation.id'
+          throw new Error(`promotion requires an explicit evaluation id — pin it in source: evaluate('${suggested}', { … }), ` + `or pass { id: '${suggested}' } to promote().`)
         }
         const baselineEvaluationId = explicitId ?? opts!.id!
         const record: BaselineRecord = {
-          schemaVersion: 1,
+          schemaVersion: EXPERIMENT_RECORD_SCHEMA_VERSION,
           baselineId: ulid(),
           evaluationId: baselineEvaluationId,
           experimentId: experiment.experimentId,
           observability: experiment.observability,
           ...(variantsDeclared ? { variantName } : {}),
           promotedAt: new Date().toISOString(),
-          ...(gitUserName(rootDir) !== undefined
-            ? { promotedBy: gitUserName(rootDir) }
-            : {}),
+          ...(gitUserName(rootDir) !== undefined ? { promotedBy: gitUserName(rootDir) } : {}),
           configFingerprint,
           reference: buildBaselineReference(cells, variantName),
         }
         const path = await writeBaselineRecord(qualityDir, record)
         return { baselineId: record.baselineId, path }
       },
+    }
+
+    const failures = buildFailureArtifacts(experiment, definition.covers)
+    if (failures.length > 0) {
+      experiment = { ...experiment, failures }
     }
 
     if (options.persist !== false) {

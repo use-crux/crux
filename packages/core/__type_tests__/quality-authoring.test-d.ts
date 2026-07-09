@@ -162,7 +162,7 @@ evaluate({
 })
 
 evaluate({
-  task: target.recipe(docsRecipe, {
+  task: target.retrievalRecipe(docsRecipe, {
     query: (input: { question: string }) => input.question,
     options: { limit: 3 },
   }),
@@ -532,7 +532,7 @@ const sharedCases = [
 evaluate({ task: supportPrompt, data: sharedCases })
 
 // ─────────────────────────────────────────────────────────────────
-// 16. Experiment generics: perCase[number].output is OutputOf<T>;
+// 16. Experiment generics: cells[number].output is OutputOf<T>;
 //     aggregates keyed by scorer names (+ the lowered 'pass' score).
 // ─────────────────────────────────────────────────────────────────
 
@@ -552,10 +552,10 @@ const bakeoff = evaluate({
 
 type BakeoffExperiment = Awaited<ReturnType<typeof bakeoff.run>>
 
-expectTypeOf<BakeoffExperiment['perCase'][number]['output']>().toEqualTypeOf<
+expectTypeOf<BakeoffExperiment['cells'][number]['output']>().toEqualTypeOf<
   { answer: string; confidence: number } | undefined
 >()
-expectTypeOf<BakeoffExperiment['perCase'][number]['input']>().toEqualTypeOf<{
+expectTypeOf<BakeoffExperiment['cells'][number]['input']>().toEqualTypeOf<{
   question: string
   locale: 'en' | 'nl'
 }>()

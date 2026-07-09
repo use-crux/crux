@@ -28,10 +28,10 @@ describe('variant matrix execution', () => {
 
     // No 'default' variant — the declared ones replace it.
     expect(Object.keys(experiment.aggregates.perVariant).sort()).toEqual(['candidate', 'current'])
-    expect(experiment.perCase).toHaveLength(2)
+    expect(experiment.cells).toHaveLength(2)
 
-    const current = experiment.perCase.find((cell) => cell.variantName === 'current')!
-    const candidate = experiment.perCase.find((cell) => cell.variantName === 'candidate')!
+    const current = experiment.cells.find((cell) => cell.variantName === 'current')!
+    const candidate = experiment.cells.find((cell) => cell.variantName === 'candidate')!
     // `current` inherits params untouched; `candidate` overrides only `tier`.
     expect(current.output).toEqual({ q: 'a', tier: 'base', topK: 5 })
     expect(candidate.output).toEqual({ q: 'a', tier: 'fancy', topK: 5 })
@@ -138,8 +138,8 @@ describe('variant matrix execution', () => {
       variants: { current: {}, harness: { task: swappedTask } },
     })
     const experiment = await run(evaluation)
-    const current = experiment.perCase.find((cell) => cell.variantName === 'current')!
-    const harness = experiment.perCase.find((cell) => cell.variantName === 'harness')!
+    const current = experiment.cells.find((cell) => cell.variantName === 'current')!
+    const harness = experiment.cells.find((cell) => cell.variantName === 'harness')!
     expect(current.output).toEqual({ from: 'base' })
     expect(harness.output).toEqual({ from: 'swapped' })
     expect(experiment.variants.find((variant) => variant.name === 'harness')!.overrideKeys).toEqual(['task'])
@@ -161,12 +161,13 @@ describe('variant matrix execution', () => {
       },
     })
     const experiment = await run(evaluation)
-    const current = experiment.perCase.find((cell) => cell.variantName === 'current')!
-    const harness = experiment.perCase.find((cell) => cell.variantName === 'harness')!
+    const current = experiment.cells.find((cell) => cell.variantName === 'current')!
+    const harness = experiment.cells.find((cell) => cell.variantName === 'harness')!
     expect(current.status).toBe('passed')
     expect(harness.status).toBe('failed')
-    expect(harness.assertions.failures[0]!.matcher).toBe('steps (uncaptured)')
-    expect(harness.assertions.failures[0]!.message).toContain('no steps signal was captured')
+    const failure = harness.assertions.outcomes.find((outcome) => outcome.status === 'uncaptured')
+    expect(failure?.matcher).toBe('steps (uncaptured)')
+    expect(failure?.message).toContain('no steps signal was captured')
   })
 
   it('aggregates and consistency are computed per variant', async () => {
@@ -211,7 +212,7 @@ describe('variant filters (RunOverrides.variants)', () => {
   it('runs only the selected variants', async () => {
     const experiment = await run(evaluationWithBaseline(), { variants: ['current', 'candidate'] })
     expect(Object.keys(experiment.aggregates.perVariant).sort()).toEqual(['candidate', 'current'])
-    expect(experiment.perCase).toHaveLength(2)
+    expect(experiment.cells).toHaveLength(2)
   })
 
   it('a subset that includes the baseline keeps gates blocking', async () => {

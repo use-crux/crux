@@ -64,6 +64,7 @@
   },
   "artifactKinds": [
     "approval.request",
+    "baseline.promotion",
     "cache.report",
     "citation.report",
     "compaction.report",
@@ -90,7 +91,6 @@
     "output",
     "prompt",
     "prompt.budget",
-    "quality.snapshot",
     "retrieval.hits",
     "routing.report",
     "score.report",

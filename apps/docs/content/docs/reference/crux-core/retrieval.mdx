@@ -341,7 +341,7 @@ RAG evaluation is part of `@use-crux/core/quality`.
 import { evaluate, scorers, target } from '@use-crux/core/quality'
 
 export default evaluate({
-  task: target.recipe(docsAnswer, {
+  task: target.retrievalRecipe(docsAnswer, {
     query: ({ question }) => question,
   }),
   scorers: [

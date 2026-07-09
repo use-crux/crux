@@ -17,6 +17,7 @@ import { judge as createJudge } from '../../scoring'
 import type { JudgeInput, JudgeResult } from '../../scoring'
 import { createGenerateObjectFnFromGenerate, type GenerateObjectFn } from '../../compaction'
 import { canonicalJson } from './json'
+import { fingerprintValue, JUDGE_PROMPT_VERSION } from './cache-identity'
 import { resolveModelRef, type ScorerRunContext } from './scorer-runtime'
 import { MissingQualityModelBindingError } from './errors'
 import type { GenerateFn } from '../target'
@@ -73,6 +74,12 @@ export interface JudgeRuntimeOptions {
   select?: (output: never) => string
 }
 
+interface JudgeProvenance {
+  readonly model: string
+  readonly promptVersion: number
+  readonly rubricFingerprint: string
+}
+
 /** Select the text a judge grades from the cell output. */
 function selectOutputText(opts: JudgeRuntimeOptions, output: unknown): string {
   if (opts.select !== undefined) {
@@ -113,7 +120,13 @@ export function runJudgeScorer(
     output: outputText,
     ...(args.expected !== undefined ? { reference: asJudgeText(args.expected) } : {}),
   }
-  const scoreOptions = { generate: bridgeGenerateForJudge(generate), model }
+  const scoreOptions = {
+    generate: bridgeGenerateForJudge(generate),
+    model,
+    temperature: 0,
+    topP: 1,
+  }
+  const provenance = judgeProvenance(opts, model)
 
   if (opts.choiceScores !== undefined) {
     const choices = Object.keys(opts.choiceScores)
@@ -138,7 +151,7 @@ export function runJudgeScorer(
         name: opts.name,
         score: mapped,
         label: choice,
-        metadata: { rationale: result.reasoning },
+        metadata: { rationale: result.reasoning, judge: provenance },
       }
     })
   }
@@ -152,6 +165,28 @@ export function runJudgeScorer(
   return judge.score(judgeInput, scoreOptions).then((result: JudgeResult) => ({
     name: opts.name,
     score: result.score,
-    metadata: { rationale: result.reasoning },
+    metadata: { rationale: result.reasoning, judge: provenance },
   }))
+}
+
+function judgeProvenance(opts: JudgeRuntimeOptions, model: unknown): JudgeProvenance {
+  return {
+    model: modelLabel(model),
+    promptVersion: JUDGE_PROMPT_VERSION,
+    rubricFingerprint: fingerprintValue({
+      rubric: opts.rubric ?? null,
+      choiceScores: opts.choiceScores ?? null,
+    }),
+  }
+}
+
+function modelLabel(model: unknown): string {
+  if (typeof model === 'string') return model
+  if (model && typeof model === 'object') {
+    const record = model as Record<string, unknown>
+    if (typeof record.modelId === 'string') return record.modelId
+    if (typeof record.id === 'string') return record.id
+    if (typeof record.model === 'string') return record.model
+  }
+  return String(model)
 }

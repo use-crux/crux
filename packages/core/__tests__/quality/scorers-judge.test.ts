@@ -45,7 +45,7 @@ describe('scorers.judge — rubric mode', () => {
 
     const experiment = await run(evaluation, { generate: stub.generate, judgeModel: 'judge-model-1' })
 
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect(cell.status).toBe('passed')
     const helpful = cell.scores.find((score) => score.name === 'helpful')
     expect(helpful).toMatchObject({ name: 'helpful', score: 0.9, costClass: 'model' })
@@ -93,7 +93,7 @@ describe('scorers.judge — rubric mode', () => {
 
     const experiment = await run(evaluation, {})
 
-    expect(experiment.perCase[0]!.status).toBe('passed')
+    expect(experiment.cells[0]!.status).toBe('passed')
     expect(stub.calls[0]!.model).toBe('explicit-judge-model')
   })
 
@@ -126,7 +126,7 @@ describe('scorers.judge — choiceScores mode', () => {
     })
 
     const experiment = await run(evaluation, { generate: stub.generate, model: 'm' })
-    const tone = experiment.perCase[0]!.scores.find((score) => score.name === 'tone')
+    const tone = experiment.cells[0]!.scores.find((score) => score.name === 'tone')
     expect(tone).toMatchObject({ name: 'tone', score: 1, label: 'formal', costClass: 'model' })
     expect(tone?.metadata?.rationale).toBe('reads formal')
     // The declared choices reach the judge instructions.
@@ -142,7 +142,7 @@ describe('scorers.judge — choiceScores mode', () => {
     })
 
     const experiment = await run(evaluation, { generate: stub.generate, model: 'm' })
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect(cell.status).toBe('errored')
     expect(cell.error?.message).toMatch(/unknown choice/)
   })
@@ -191,7 +191,7 @@ describe('autoevals-compatible plain scorers', () => {
     })
 
     const experiment = await run(evaluation, { generate: stub.generate, model: 'm' })
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect(cell.scores.find((score) => score.name === 'ExactMatch')).toMatchObject({ score: 1 })
     expect(cell.scores.find((score) => score.name === 'j')).toMatchObject({ score: 0.5 })
   })
@@ -210,7 +210,7 @@ describe('scorers via the factory-lambda form', () => {
     })
 
     const experiment = await run(evaluation, { generate: stub.generate, judgeModel: 'jm' })
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect(cell.scores.find((score) => score.name === 'helpful')).toMatchObject({ score: 0.6 })
     expect(cell.scores.find((score) => score.name === 'exact')).toMatchObject({ score: 1 })
     expect(stub.calls[0]!.user).toContain('re: refunds')
@@ -234,7 +234,7 @@ describe('scorers.judge — select enforcement', () => {
     })
 
     const experiment = await run(evaluation, { generate: stub.generate, model: 'm' })
-    expect(experiment.perCase[0]!.scores.find((score) => score.name === 'graded')?.score).toBe(0.7)
+    expect(experiment.cells[0]!.scores.find((score) => score.name === 'graded')?.score).toBe(0.7)
     expect(stub.calls[0]!.user).toContain('the selected answer')
     expect(stub.calls[0]!.user).not.toContain('confidence')
   })
@@ -248,7 +248,7 @@ describe('scorers.judge — select enforcement', () => {
     })
 
     const experiment = await run(evaluation, { generate: stub.generate, model: 'm' })
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect(cell.status).toBe('errored')
     expect(cell.error?.message).toMatch(/select/)
   })

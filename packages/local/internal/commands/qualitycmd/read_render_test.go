@@ -2,11 +2,13 @@ package qualitycmd
 
 import (
 	"bytes"
+	"encoding/json"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/domain"
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
@@ -62,6 +64,30 @@ func TestProgressRendererColorlessFieldsAndDeltas(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Errorf("progress output missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestQualityRendererShowsDatasetProvenanceOnFailedCells(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	io := output.NewTestIO(&out, &errBuf, output.TestIOOptions{ColorEnabled: false})
+	r := newQualityRenderer(io, 4400)
+	metadata := json.RawMessage(`{"datasetProvenance":{"path":"evals/datasets/support.jsonl","contentFingerprint":"abc123"}}`)
+
+	r.cellFailure(&domain.QualityCell{
+		CaseID:      "trace-imported",
+		VariantName: "default",
+		Status:      "failed",
+		Metadata:    &metadata,
+		Assertions: struct {
+			Ran          int                              `json:"ran"`
+			NotEvaluated int                              `json:"notEvaluated"`
+			Outcomes     []domain.QualityAssertionOutcome `json:"outcomes"`
+		}{Ran: 1},
+	}, "  ")
+
+	got := out.String()
+	if !strings.Contains(got, "dataset evals/datasets/support.jsonl @ abc123") {
+		t.Fatalf("failed cell output missing dataset provenance:\n%s", got)
 	}
 }
 

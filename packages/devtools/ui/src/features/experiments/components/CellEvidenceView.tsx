@@ -23,12 +23,22 @@ import { Btn, Chip } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
 import type { IconName } from '@/qw/shell/nav'
 import { CellStatusChip, ScorerChip, fmtCost, fmtLatency, shortId } from '@/qw/shell/qualityKit'
-import { useQualityCellEvidence } from '@/shared/hooks/useQualityApi'
+import { useQualityCellEvidence, useQualityFeedback } from '@/shared/hooks/useQualityApi'
+import { useLabelCellMutation } from '@/shared/hooks/useQualityMutations'
+import { useNavigation } from '@/app/navigation/useNavigation'
 import { useToast } from '@/qw/shell/useToast'
 import { ValueView } from '@/shared/components/ValueView'
 import { SourceFrame } from './SourceFrameView'
-import type { QualityCellEvidence, QualityJsonValue, QualityScoreEvidence, QualityAssertionValue } from '@/types'
+import { FailureArtifactPanel } from './FailureArtifactPanel'
+import type {
+  QualityCellEvidence,
+  QualityFailureArtifact,
+  QualityJsonValue,
+  QualityScoreEvidence,
+  QualityAssertionValue,
+} from '@/types'
 import { assertionMessage, assertionStatement, decisiveCheck, evaluatedStatement } from '../lib/cell-evidence-format'
+import { latestCellLabel } from '../lib/cell-labels'
 
 type Lens = 'why' | 'baseline' | 'trace'
 
@@ -217,6 +227,7 @@ export function CellEvidenceView({
   trial,
   status,
   skipReason,
+  failure,
   onOpenTrace,
 }: {
   experimentId: string
@@ -225,6 +236,8 @@ export function CellEvidenceView({
   trial: number
   status: 'passed' | 'failed' | 'errored' | 'skipped'
   skipReason?: string
+  /** Core-owned failure artifact for this cell, when the parent record has one. */
+  failure?: QualityFailureArtifact
   onOpenTrace: (traceId: string) => void
 }) {
   // Skipped cells produced no evidence — show the reason inline, never fetch.
@@ -241,6 +254,7 @@ export function CellEvidenceView({
       caseId={caseId}
       variantName={variantName}
       trial={trial}
+      failure={failure}
       onOpenTrace={onOpenTrace}
     />
   )
@@ -251,17 +265,30 @@ function CellEvidenceBody({
   caseId,
   variantName,
   trial,
+  failure,
   onOpenTrace,
 }: {
   experimentId: string
   caseId: string
   variantName: string
   trial: number
+  failure?: QualityFailureArtifact
   onOpenTrace: (traceId: string) => void
 }) {
   const cellKey = React.useMemo(() => ({ caseId, variantName, trial }), [caseId, variantName, trial])
   const { data: ev, loading, error } = useQualityCellEvidence(experimentId, cellKey)
+  const { data: feedback = [] } = useQualityFeedback()
+  const labelCell = useLabelCellMutation()
+  const { navigate } = useNavigation()
   const { toast } = useToast()
+  const [note, setNote] = React.useState('')
+  const [noteOpen, setNoteOpen] = React.useState(false)
+  const existingLabel = latestCellLabel(feedback, { experimentId, caseId, variant: variantName, trial })
+  const onLabel = (verdict: 'pass' | 'fail') => {
+    void labelCell({ experimentId, caseId, variant: variantName, trial, verdict, note: note.trim() || undefined })
+    setNote('')
+    setNoteOpen(false)
+  }
 
   const recommended: Lens = ev?.cell.status === 'errored' ? 'trace' : 'why'
   const [lens, setLens] = React.useState<Lens>(recommended)
@@ -332,7 +359,43 @@ function CellEvidenceBody({
               {fm.label}
             </Chip>
           )}
+          {/* LABEL — human verdict on this cell (blueprint §12.4) */}
+          <div className="ml-auto flex items-center gap-2">
+            {existingLabel && (
+              <Chip tone={existingLabel.verdict === 'pass' ? 'ok' : 'danger'} title={`labeled ${existingLabel.at}`}>
+                labeled {existingLabel.verdict} · {existingLabel.at.slice(0, 10)}
+              </Chip>
+            )}
+            <Btn
+              size="xs"
+              variant="soft"
+              icon={<Icon name="check" size={11} />}
+              onClick={() => onLabel('pass')}
+            >
+              Pass
+            </Btn>
+            <Btn size="xs" variant="soft" icon={<Icon name="x" size={11} />} onClick={() => onLabel('fail')}>
+              Fail
+            </Btn>
+            <Btn
+              size="xs"
+              variant="ghost"
+              title="add a note to your next label"
+              onClick={() => setNoteOpen((v) => !v)}
+            >
+              note
+            </Btn>
+          </div>
         </div>
+        {noteOpen && (
+          <input
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder="optional note — applied to your next Pass/Fail label"
+            className="rounded-[7px] px-2.5 py-1.5 text-[12px]"
+            style={{ background: 'var(--qw-bg)', border: '1px solid var(--qw-border)', color: 'var(--qw-fg)' }}
+          />
+        )}
         <div
           className="flex flex-wrap items-center gap-4 font-mono text-[11px]"
           style={{ color: 'var(--qw-fg-muted)' }}
@@ -476,8 +539,18 @@ function CellEvidenceBody({
         })}
       </div>
 
-      <div className="p-[18px]">
-        {lens === 'why' && <WhyLens ev={ev} evaluated={evaluated} isErr={isErr} heldCount={heldCount} />}
+      <div className="flex flex-col gap-4 p-[18px]">
+        {lens === 'why' && (
+          <>
+            {failure && (
+              <FailureArtifactPanel
+                failure={failure}
+                onNavigate={(promptId) => navigate({ view: 'library-index', promptId })}
+              />
+            )}
+            <WhyLens ev={ev} evaluated={evaluated} isErr={isErr} heldCount={heldCount} />
+          </>
+        )}
         {lens === 'baseline' && <BaselineLens ev={ev} />}
         {lens === 'trace' && <TraceLens ev={ev} onOpenTrace={onOpenTrace} />}
       </div>

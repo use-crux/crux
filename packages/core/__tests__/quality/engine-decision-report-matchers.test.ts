@@ -153,10 +153,10 @@ describe('Quality runner — TurnDecisionReport matchers', () => {
     })
 
     const experiment = await run(evaluation)
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect(cell.status).toBe('passed')
-    expect(cell.assertions.failures).toEqual([])
-    expect(cell.capturedSignals).toContain('decisionReports')
+    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed' || outcome.status === 'uncaptured')).toEqual([])
+    expect(cell.capturedSignals).toContain('decisionReport')
   })
 
   it('asserts routing and fallback outcomes by stable reason code', async () => {
@@ -174,9 +174,9 @@ describe('Quality runner — TurnDecisionReport matchers', () => {
     })
 
     const experiment = await run(evaluation)
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect(cell.status).toBe('passed')
-    expect(cell.assertions.failures).toEqual([])
+    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed' || outcome.status === 'uncaptured')).toEqual([])
   })
 
   it('asserts freshness and cache acceptance separately by stable reason code', async () => {
@@ -192,9 +192,9 @@ describe('Quality runner — TurnDecisionReport matchers', () => {
     })
 
     const experiment = await run(evaluation)
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect(cell.status).toBe('passed')
-    expect(cell.assertions.failures).toEqual([])
+    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed' || outcome.status === 'uncaptured')).toEqual([])
   })
 
   it('asserts safety policy outcomes by stable reason code', async () => {
@@ -209,8 +209,8 @@ describe('Quality runner — TurnDecisionReport matchers', () => {
     })
 
     const experiment = await run(evaluation)
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect(cell.status).toBe('passed')
-    expect(cell.assertions.failures).toEqual([])
+    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed' || outcome.status === 'uncaptured')).toEqual([])
   })
 })

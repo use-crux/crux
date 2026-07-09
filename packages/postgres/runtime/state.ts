@@ -172,16 +172,17 @@ export function createPostgresStatePort(
                 idempotency_key = $4,
                 lease_token = NULL,
                 last_error = NULL,
-                updated_at = now()
+                updated_at = $5
           WHERE namespace = $1
             AND work_id = $2
-            AND status = ANY($5::text[])
+            AND status = ANY($6::text[])
           RETURNING *`,
         [
           options.namespace,
           workId,
           encodeJson(options.work),
           options.idempotencyKey,
+          options.now ?? new Date(),
           from,
         ],
       )

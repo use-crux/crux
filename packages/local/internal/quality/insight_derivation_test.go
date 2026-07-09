@@ -255,7 +255,7 @@ func TestDeriveInsightsPureBehavior(t *testing.T) {
 						ExperimentID: "experiment-1",
 						EvaluationID: "evals.sample",
 						EndedAt:      now.Format(time.RFC3339Nano),
-						Cases: []qualityfs.SpecExperimentCell{
+						Cells: []qualityfs.SpecExperimentCell{
 							{CaseID: "case-1", Status: "failed"},
 						},
 					}},

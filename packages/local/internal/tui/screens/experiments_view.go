@@ -61,6 +61,9 @@ func (s *Experiments) renderDetailLines(r kit.Rect) []string {
 
 	header := s.detailHeader(r.W)
 	lines := strings.Split(header, "\n")
+	if fp := datasetFingerprintShort(s.detail.Failures); fp != "" {
+		lines = append(lines, kvRow("dataset fp", fp, r.W))
+	}
 	if s.notice != "" {
 		lines = append(lines, padRow(" "+experimentsStyles.Green.Render(s.notice), r.W))
 	}
@@ -73,7 +76,26 @@ func (s *Experiments) renderDetailLines(r kit.Rect) []string {
 	lines = append(lines, sectionLine("VARIANT CONFIG DIFF", r.W))
 	lines = append(lines, kit.DiffBlock(s.variantDiffLines(), kit.Rect{W: r.W, H: 5}, experimentsStyles)...)
 	lines = append(lines, s.failingCellLines(r.W)...)
+	lines = append(lines, s.detailCliHint(r.W)...)
 	return blockLines(strings.Join(lines, "\n"), r)
+}
+
+// detailCliHint points at the CLI for the judge-report and diff views the TUI
+// deliberately omits (web-first; blueprint §12.5). Fix-surface letters legend:
+// P prompt · C context · R retriever · T tool-schema · H handoff · J judge · F flake.
+func (s *Experiments) detailCliHint(width int) []string {
+	if s.detail == nil {
+		return nil
+	}
+	hint := fmt.Sprintf(
+		" judge trust → crux quality judge-report %s   ·   diff → crux quality diff %s <other>",
+		s.detail.EvaluationID,
+		shortID(s.detail.ExperimentID, 12),
+	)
+	return []string{
+		sectionLine("MORE (CLI)", width),
+		padRow(experimentsStyles.Dim.Render(hint), width),
+	}
 }
 
 func (s *Experiments) detailHeader(width int) string {

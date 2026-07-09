@@ -73,7 +73,7 @@ describe('quality redaction contract', () => {
     })
 
     const experiment = await run(evaluation, undefined, { redact: ['customer.email'] })
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
 
     expect(cell.input).toEqual({ customer: { email: '[redacted]', id: 'cust_123' } })
     expect(cell.output).toEqual({ customer: { email: '[redacted]', id: 'cust_123' } })

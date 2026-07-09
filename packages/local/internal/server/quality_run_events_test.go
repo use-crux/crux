@@ -125,6 +125,38 @@ func TestQualityRunEventsAcceptArraysAndPublishActivity(t *testing.T) {
 	}
 }
 
+func TestQualityRunEventsPublishDiffActivity(t *testing.T) {
+	handler := newTestWSServer(t, store.NewStore())
+	ts := httptest.NewServer(handler)
+	defer ts.Close()
+
+	diffDone := `{"type":"diff:done","diff":{"schemaVersion":1,"a":{"experimentId":"01KTA"},"b":{"experimentId":"01KTB"}}}`
+	resp, err := http.Post(ts.URL+"/api/quality/run-events", "application/json", strings.NewReader(diffDone))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202", resp.StatusCode)
+	}
+
+	resp, err = http.Get(ts.URL + "/api/quality/activity?limit=10")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	var activity []map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&activity); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range activity {
+		if entry["kind"] == "diff" && entry["refId"] == "01KTA..01KTB" {
+			return
+		}
+	}
+	t.Errorf("diff:done must publish an activity entry: %v", activity)
+}
+
 func TestQualityRunEventsRejectInvalidJSON(t *testing.T) {
 	handler := newTestWSServer(t, store.NewStore())
 	ts := httptest.NewServer(handler)

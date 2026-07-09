@@ -41,6 +41,9 @@ import {
   type VerdictState,
 } from '@/qw/shell/qualityKit'
 import { CellEvidenceView } from './CellEvidenceView'
+import { ExperimentDiffSection } from './ExperimentDiffPanel'
+import { FixSurfaceChips } from './FixSurfaceChips'
+import { failureForCell, groupFixSurfaceChips } from '../lib/fix-surfaces'
 import { navTarget } from '@/app/navigation/navTarget'
 import { usePromoteBaselineMutation } from '@/shared/hooks/useQualityMutations'
 import {
@@ -133,6 +136,7 @@ export function ExperimentsView() {
   const counts = data?.pages[0]?.statusCounts ?? EMPTY_COUNTS
   const evaluations = data?.pages[0]?.evaluations ?? []
   const total = data?.pages[0]?.total ?? rows.length
+  const skippedRecords = data?.pages[0]?.skippedRecords ?? 0
   const anyFilter = status !== undefined || evalId !== undefined || timeWindow !== 'all'
 
   const handleOpen = (experimentId: string) => {
@@ -223,9 +227,16 @@ export function ExperimentsView() {
           {/* loaded-of-total on the left, flat ↔ by-evaluation on the right.
               Paging is infinite-scroll — see the list's bottom sentinel. */}
           <div className="flex flex-shrink-0 items-center justify-between px-8 pb-0.5 pt-2.5">
-            <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
-              {rows.length} of {total}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[11px]" style={{ color: 'var(--qw-fg-faint)' }}>
+                {rows.length} of {total}
+              </span>
+              {skippedRecords > 0 && (
+                <Chip tone="warn" mono>
+                  {skippedRecords} legacy skipped
+                </Chip>
+              )}
+            </div>
             <Seg
               value={grouped ? 'grouped' : 'flat'}
               onChange={(v) => setGrouped(v === 'grouped')}
@@ -668,6 +679,13 @@ export function ExperimentDetailView({ experimentId }: { experimentId: string })
   // Reverse-context (this run is itself a promoted baseline) only needs this
   // evaluation's recent runs, so use the scoped relation, not the full list.
   const { data: evalExperiments } = useQualityEvaluationExperiments(exp?.evaluationId)
+  const promoteVariants = React.useMemo(() => exp?.variants.map((variant) => variant.name) ?? [], [exp])
+  const defaultPromoteVariant = React.useMemo(() => (exp ? defaultPromotionVariant(exp) : ''), [exp])
+  const [selectedPromoteVariant, setSelectedPromoteVariant] = React.useState('')
+
+  React.useEffect(() => {
+    setSelectedPromoteVariant(defaultPromoteVariant)
+  }, [defaultPromoteVariant])
 
   if (!exp) {
     return (
@@ -700,8 +718,7 @@ export function ExperimentDetailView({ experimentId }: { experimentId: string })
   }
 
   const verdict = detailVerdict(exp)
-  const onPromote = () =>
-    void promote({ experimentId: exp.experimentId, variant: exp.baselineRef?.variantName ?? exp.comparison?.baseline })
+  const onPromote = () => void promote({ experimentId: exp.experimentId, variant: selectedPromoteVariant })
 
   // Reverse context: is THIS run the promoted baseline source? If so it carries
   // no comparison of its own — point at the latest run that compared against it.
@@ -740,16 +757,34 @@ export function ExperimentDetailView({ experimentId }: { experimentId: string })
           <QwConfirm
             title="Promote to baseline?"
             description={
-              `This locks ${shortId(exp.experimentId)}${exp.baselineRef?.variantName ? ` · ${exp.baselineRef.variantName}` : ''} as the bar for ${exp.evaluationId}. ` +
+              `This locks ${shortId(exp.experimentId)} · ${selectedPromoteVariant || 'select a variant'} as the bar for ${exp.evaluationId}. ` +
               `It commits baselines/${exp.evaluationId}.json — the team and CI will measure future runs against it.`
             }
             confirmLabel="Promote"
             tone="crux"
             onConfirm={onPromote}
           >
-            <Btn size="sm" variant="primary" icon={<Icon name="bookmark" size={13} />}>
-              Promote…
-            </Btn>
+            <div className="flex items-center gap-2">
+              {promoteVariants.length > 1 && (
+                <select
+                  className="h-8 rounded-md border px-2 font-mono text-[11px]"
+                  style={{ borderColor: 'var(--qw-border)', background: 'var(--qw-bg)', color: 'var(--qw-fg)' }}
+                  value={selectedPromoteVariant}
+                  onChange={(event) => setSelectedPromoteVariant(event.target.value)}
+                  aria-label="Promotion variant"
+                >
+                  <option value="">Variant</option>
+                  {promoteVariants.map((variant) => (
+                    <option key={variant} value={variant}>
+                      {variant}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <Btn size="sm" variant="primary" icon={<Icon name="bookmark" size={13} />} disabled={!selectedPromoteVariant}>
+                Promote…
+              </Btn>
+            </div>
           </QwConfirm>
         </>
       }
@@ -767,10 +802,21 @@ export function ExperimentDetailView({ experimentId }: { experimentId: string })
         <QVariantRollup exp={exp} baselineRecord={comparisonBaseline} />
         {exp.comparison && <QComparison cmp={exp.comparison} />}
         {exp.gates.results.length > 0 && <QGates exp={exp} />}
+        <ExperimentDiffSection experiment={exp} />
         <QCells exp={exp} onOpenTrace={(traceId) => navigate({ view: 'run-detail', traceId })} />
       </div>
     </QwShell>
   )
+}
+
+function defaultPromotionVariant(exp: QualityExperimentDetail): string {
+  const variants = exp.variants.map((variant) => variant.name)
+  if (variants.length === 1) return variants[0] ?? ''
+  if (exp.comparison?.kind === 'variant') {
+    const candidates = variants.filter((variant) => variant !== exp.comparison?.baseline)
+    return candidates.length === 1 ? candidates[0] ?? '' : ''
+  }
+  return ''
 }
 
 // ─── Reverse context: this run IS the active baseline ───────────────
@@ -1043,7 +1089,7 @@ function bottomLine(
     icon: 'x',
     node: (
       <>
-        <b>Don&rsquo;t ship.</b> A blocking gate failed{exp.cases.some((c) => c.status === 'errored') ? ' and a cell errored' : ''}.
+        <b>Don&rsquo;t ship.</b> A blocking gate failed{exp.cells.some((c) => c.status === 'errored') ? ' and a cell errored' : ''}.
       </>
     ),
   }
@@ -1453,7 +1499,7 @@ interface CaseGroup {
 function groupCells(exp: QualityExperimentDetail): CaseGroup[] {
   const order: string[] = []
   const by: Record<string, CaseGroup> = {}
-  for (const cell of exp.cases) {
+  for (const cell of exp.cells) {
     if (!by[cell.caseId]) {
       by[cell.caseId] = { caseId: cell.caseId, caseName: cell.caseName, cells: {} }
       order.push(cell.caseId)
@@ -1680,6 +1726,11 @@ function QCells({ exp, onOpenTrace }: { exp: QualityExperimentDetail; onOpenTrac
           {groups.map((grp) => {
             const isOpen = open === grp.caseId
             const bad = worstStatus(grp) <= 1
+            const failingCellIds = variants
+              .map((vn) => grp.cells[vn])
+              .filter((c): c is NonNullable<typeof c> => Boolean(c) && (c.status === 'failed' || c.status === 'errored'))
+              .map((c) => ({ caseId: grp.caseId, variantName: c.variantName, trial: c.trial }))
+            const surfaceChips = groupFixSurfaceChips(exp.failures, failingCellIds)
             return (
               <div
                 key={grp.caseId}
@@ -1698,6 +1749,7 @@ function QCells({ exp, onOpenTrace }: { exp: QualityExperimentDetail; onOpenTrac
                       {grp.caseId}
                     </span>
                     <MoveChip mv={caseMove(grp, base, cand, metric)} metric={metric} />
+                    <FixSurfaceChips chips={surfaceChips} />
                   </div>
                   <div className="flex items-center gap-2">
                     {variants.map((vn) => {
@@ -1727,6 +1779,7 @@ function QCells({ exp, onOpenTrace }: { exp: QualityExperimentDetail; onOpenTrac
                             trial={cell.trial}
                             status={cell.status}
                             skipReason={cell.skipReason}
+                            failure={failureForCell(exp.failures, { caseId: grp.caseId, variantName: vn, trial: cell.trial })}
                             onOpenTrace={onOpenTrace}
                           />
                         </div>

@@ -30,6 +30,14 @@ Everything else is labelled by subpath. Memory, retrieval, skills, agents,
 flows, quality, and local/devtools surfaces keep their existing beta or
 experimental status unless their own subpath documentation says otherwise.
 
+## Quality (`@use-crux/core/quality`)
+
+Quality is **beta**: the authoring surface (`evaluate`, `target`, `scorers`,
+`dataset`, `cassette`), the experiment/manifest record schemas
+(`quality/schemas`), CLI JSON outputs, and exit codes are stable within 0.x
+minors. Breaking changes get a changeset `minor` and a migration note.
+`quality/internal/runner` remains internal with no guarantees.
+
 ## Runtime Engine (`@use-crux/core/runtime`)
 
 The durable Runtime Engine and its runtime store adapter contract are stable

@@ -59,6 +59,9 @@ func resolveDiskSourceFrame(sourceRef string, sourceRoot string) api.QualitySour
 		file = filepath.Join(sourceRoot, file)
 	}
 	file = filepath.Clean(file)
+	if !diskSourceFrameWithinRoot(file, sourceRoot) {
+		return api.QualitySourceFrame{Kind: "unavailable", Reason: "source-outside-root", SourceRef: sourceRef}
+	}
 
 	if !diskSourceFrameExtensions[strings.ToLower(filepath.Ext(file))] {
 		return api.QualitySourceFrame{Kind: "unavailable", Reason: "unsupported-source-file", SourceRef: sourceRef}
@@ -106,6 +109,25 @@ func resolveDiskSourceFrame(sourceRef string, sourceRoot string) api.QualitySour
 		Stale:          true,
 		Resolver:       "disk",
 	}
+}
+
+func diskSourceFrameWithinRoot(file string, sourceRoot string) bool {
+	if sourceRoot == "" {
+		return false
+	}
+	root, err := filepath.Abs(filepath.Clean(sourceRoot))
+	if err != nil {
+		return false
+	}
+	resolved, err := filepath.Abs(filepath.Clean(file))
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(root, resolved)
+	if err != nil {
+		return false
+	}
+	return rel != "." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != ".." && !filepath.IsAbs(rel)
 }
 
 type diskSourceRef struct {

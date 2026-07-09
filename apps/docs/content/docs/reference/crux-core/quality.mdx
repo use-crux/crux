@@ -1,29 +1,58 @@
 ---
 title: Quality
-description: '@use-crux/core/quality — evaluate(), target, scorers, dataset(), cassette(), and the Experiment/Manifest/Baseline records.'
+description: '@use-crux/core/quality — evaluate(), target, scorers, dataset(), cassette(), UncapturedSignalError, and the Experiment/Manifest/Baseline records.'
 ---
 
-`@use-crux/core/quality` is the Quality system's public surface: **five values**
-plus types. Authoring lives in `*.eval.ts` files (or colocated
+`@use-crux/core/quality` is the Quality system's public surface: five
+authoring values, the `UncapturedSignalError` runtime error class, and types.
+Authoring lives in `*.eval.ts` files (or colocated
 `prompt({ tests })`), execution in `evaluation.run()` and the
 [`crux quality` CLI](/docs/reference/local#crux-quality).
 
+Quality is **beta**: the authoring surface (`evaluate`, `target`, `scorers`,
+`dataset`, `cassette`), the experiment/manifest record schemas
+(`quality/schemas`), CLI JSON outputs, and exit codes are stable within 0.x
+minors. Breaking changes get a changeset `minor` and a migration note.
+`quality/internal/runner` remains internal with no guarantees.
+
 ```ts
-import { evaluate, target, scorers, dataset, cassette } from '@use-crux/core/quality'
+import { evaluate, target, scorers, dataset, cassette, UncapturedSignalError } from '@use-crux/core/quality'
 ```
 
 Type exports: `Evaluation`, `EvaluateOptions`, `Case`, `CaseContext`,
 `AssertContext`, `BoundExpect`, `ScoreMap`, `Matchers`, `Target`,
 `Capability`, `TaskLike`, `Scorer`, `ScorerArgs`, `Score`, `ScorerFactory`,
 `Gates`, `ScoreGate`, `GateResult`, `Dataset`, `Cassette`, `ReplayMode`,
-`Experiment`, `ExperimentCell`, `CellAssertionFailure`,
-`CellAssertionOutcome`, `CellAssertionPhase`, `CellAssertionStatus`,
-`CellAssertionValue`, `CellAssertionExpression`,
+`Experiment`, `ExperimentCell`, `CellAssertionOutcome`,
+`CellAssertionPhase`, `CellAssertionStatus`, `CellAssertionValue`,
+`CellAssertionExpression`,
 `CellAssertionExpressionOperator`, `QualitySourceFrame`,
 `QualitySourceFrameSnapshot`, `QualitySourceUnavailable`, `RunOverrides`,
 `EvaluationManifest`, `EvaluationCoverageTargetId`, `QualityConfig`, and the
-inference utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`, `CaseOf`,
-`ExpectedOf`.
+inference utilities `InputOf`, `OutputOf`, `ParamsOf`, `CapsOf`, and `CaseOf`.
+
+Machine-readable contracts live in the separate
+`@use-crux/core/quality/schemas` subpath:
+
+```ts
+import {
+  experimentRecordSchema,
+  evaluationManifestSchema,
+  failureArtifactSchema,
+  experimentDiffSchema,
+  runSummarySchema,
+  judgeReportSchema,
+  toJsonSchema,
+} from '@use-crux/core/quality/schemas'
+
+const schema = toJsonSchema('experiment')
+const diffSchema = toJsonSchema('diff')
+```
+
+The subpath also exports the `ExperimentRecord`, `FailureArtifact`,
+`ExperimentDiff`, `RunSummary`, and `JudgeReport` types. It is the supported
+validation surface for agents and custom dashboards that consume persisted
+records or CLI JSON.
 
 ## `evaluate(idOrOptions, options?)`
 
@@ -46,7 +75,7 @@ optional reason via the case-level `skip: string`).
 | `task`                      | The thing under test — the **sole inference anchor** for input/output types. Any `Prompt`, `FlowHandle`, agent, retriever, plain `(input, params) => output` function, or `target.*()` wrapper |
 | `data`                      | `Case[]`, a `dataset()`, or a mixed array of both (concatenated)                                                                                                                               |
 | `expect`                    | Evaluation-level assertion callback over [`CaseContext`](#casecontext) — runs for every case, the primary assertion home                                                                       |
-| `assert`                    | Evaluation-level post-score assertion callback over [`AssertContext`](#assertcontext) — runs after scorers and can assert typed score values                                                   |
+| `afterScores`               | Evaluation-level post-score assertion callback over [`AssertContext`](#assertcontext) — runs after scorers and can assert typed score values                                              |
 | `scorers`                   | Scorer array (importable/shareable) or factory lambda `(s) => [...]` receiving the library pre-bound to the evaluation's types                                                                 |
 | `params`                    | Execution defaults — "variant zero"; same shape variants override                                                                                                                              |
 | `variants`                  | Named overrides of the task's parameter surface; entries may also swap the whole `task` (same I/O types required)                                                                              |
@@ -57,6 +86,10 @@ optional reason via the case-level `skip: string`).
 | `concurrency` / `timeoutMs` | Per-evaluation execution bounds (defaults: config, else 5 / 60 000 ms)                                                                                                                         |
 | `covers`                    | Optional Project Index definition ids, such as `prompt:support` or `flow:research`, that this eval protects when `task` is a deterministic stand-in                                            |
 | `tags` / `description`      | Metadata, surfaced in the manifest and reporter                                                                                                                                                |
+
+Timeouts are cooperative. Crux records a timeout cell and quarantines later
+trace, cassette, and score writes from that cell's async context; it does not
+forcibly kill arbitrary JavaScript user code.
 
 Inference contract: `data`, `scorers`, and `expect` are `NoInfer` positions —
 a typo'd case key errors **on the case property**, never by widening the
@@ -72,9 +105,10 @@ definition time instead (unknown key → immediate `TypeError`).
   input: TInput                  // typed from the task
   expected?: TExpected           // opaque data — delivered to scorers/expect, never matched implicitly
   expect?: (ctx) => void         // case-SPECIFIC assertions only (not portable to datasets)
-  assert?: (ctx) => void         // case-SPECIFIC post-score assertions
+  afterScores?: (ctx) => void    // case-SPECIFIC post-score assertions
   trials?: number                // wins over evaluation-level trials
   tags?: string[]
+  metadata?: Record<string, unknown> // portable row metadata, preserved on the cell
   only?: boolean
   skip?: boolean | string        // reason string shown in the reporter
 }
@@ -98,16 +132,17 @@ target.prompt(p, { prompt?, model?, settings?, generate? })
 target.flow(f, { model?, settings?, steps?, generate? })       // steps: per-step model/settings, keyed by step name
 target.agent(a, { tools?, maxToolSteps?, model?, settings?, steps?, generate? })
 target.retriever(r, { id?, query?, options? })                  // query: maps case input → query string when input ≠ { query }
+target.retrievalRecipe(recipe, { id?, query?, options? })        // maps eval input into a retrieval recipe input
 target({ id?, run: (input, params) => output })                 // custom task with a name and/or typed params
 ```
 
-| Task kind   | Capabilities (→ which `expect.*` namespaces exist)                                                      |
-| ----------- | ------------------------------------------------------------------------------------------------------- |
-| `prompt`    | `modelCalls`, `citations`, `safety`                                                                     |
-| `flow`      | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory`                                       |
-| `agent`     | `modelCalls`, `toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing` |
-| `retriever` | `retrieval`                                                                                             |
-| `fn`        | _(none — value matchers + always-on only)_                                                              |
+| Task kind   | Capabilities (→ which `expect.*` namespaces exist)                                                                      |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `prompt`    | `modelCalls`, `citations`, `safety`, `decisionReport`                                                                   |
+| `flow`      | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory`, `decisionReport`                                     |
+| `agent`     | `modelCalls`, `toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing`, `decisionReport` |
+| `retriever` | `retrieval`                                                                                                             |
+| `fn`        | _(none — value matchers + always-on only)_                                                                              |
 
 Agent `tools:` mocks are keyed by tool name; values are a static result or
 `(args) => result`. `maxToolSteps` bounds the loop (default 15).
@@ -129,7 +164,7 @@ The argument to `expect` callbacks:
   expect: BoundExpect            // see below
   variant: { name: string; params: Record<string, unknown> }
   trial: number                  // 0-based
-  score(name, score, metadata?)  // ad-hoc per-case score; joins the scorer score model
+  recordScore(name, score, metadata?) // ad-hoc per-case score; joins the scorer score model
   step(name, schema?)            // flow/agent step access; schema (Standard Schema) narrows output
   trace: { id?: string; url?: string }   // devtools deep link
   meta: { durationMs: number; costUsd?: number; usage?: TokenUsage }
@@ -138,14 +173,14 @@ The argument to `expect` callbacks:
 
 ## `AssertContext`
 
-The argument to post-score `assert` callbacks:
+The argument to post-score `afterScores` callbacks:
 
 ```ts
 {
   input: TInput
   output: TOutput
   expected: TExpected | undefined
-  expect: BoundExpect            // same matcher surface, records phase: "assert"
+  expect: BoundExpect            // same matcher surface, records phase: "afterScores"
   score: ScoreMap<TScoreName>    // statically named scorer outputs
   scores: readonly CellScore[]   // all scores, including dynamic/ad-hoc and skipped scores
   variant: { name: string; params: Record<string, unknown> }
@@ -194,18 +229,18 @@ not captured in this execution throws `UncapturedSignalError` (naming the
 signal and the task kinds that capture it) — never a vacuous pass. All
 assertion outcomes lower into a per-cell `pass` score (1/0). New experiment
 records expose `ExperimentCell.assertions.outcomes`, an ordered ledger for
-passed, failed, uncaptured, and not-evaluated assertions. `failures` remains
-the failed-outcome compatibility projection for older consumers. Outcomes
+passed, failed, uncaptured, and not-evaluated assertions. Consumers that need
+a failure list should filter failed or uncaptured outcomes. Outcomes
 retain matcher messages when the runtime exposes them. They may also include
 `sourceFrame`: either a narrow authored-source snapshot with line roles and
 `contentHash`, or `{ kind: 'unavailable', reason }` when the runner cannot
 prove authored source. When that snapshot contains the assertion call, outcomes
 may include `subjectExpr`, the authored argument passed to `ctx.expect(...)` or
-`ctx.expect.soft(...)`. Plain errors thrown from `expect`/`assert` callbacks are
+`ctx.expect.soft(...)`. Plain errors thrown from `expect`/`afterScores` callbacks are
 stored as errored cells with a best-effort `error.sourceRef`, and the local
 evidence API can resolve that source ref into the runtime-error check's source
-frame. Outcomes from post-score `assert` callbacks use
-`phase: "assert"`; outcomes from pre-score callbacks use `phase: "expect"`.
+frame. Outcomes from post-score `afterScores` callbacks use
+`phase: "afterScores"`; outcomes from pre-score callbacks use `phase: "expect"`.
 Scorers still run on expect-failed cells.
 
 Trace-backed signal outcomes may also include `spanIds`, the concrete
@@ -254,6 +289,13 @@ should render that as unavailable trace detail rather than a failed evaluation.
 A retained root trace can still have an empty compact waterfall for a
 callback-only cell that emitted no child spans; clients should expose the full
 trace link when the backend returns `retainedTraceIds`.
+
+Experiment records also embed `failures: FailureArtifact[]` for failed or
+errored cells. Each artifact includes the cell identity, redacted input,
+expected and output snapshots, failing assertion outcomes, scores and deltas
+where available, source/trace references, coverage targets from `covers`, and
+core-owned `suggestedFixSurfaces` such as `prompt`, `retriever`,
+`tool-schema`, `handoff`, `judge`, or `flake`.
 
 ## `scorers`
 
@@ -319,6 +361,13 @@ with any Standard Schema library (zod, valibot, arktype). Resolved lazily by
 the runner; validation failure is a definition error. Rows are pure data (no
 `expect` callbacks).
 
+Rows may include `metadata`. Quality preserves object metadata on the
+persisted cell. When a dataset row has `metadata.provenance`, the cell also
+gets `metadata.datasetProvenance` with the dataset path, the file content
+fingerprint, and the row provenance. Failure artifacts, run-summary failures,
+and experiment diffs expose the path and fingerprint so agents can trace a
+regression back to the exact imported dataset content.
+
 ## `cassette(name, opts?)` and replay
 
 ```ts
@@ -358,7 +407,7 @@ interface RunOverrides {
 }
 ```
 
-`Experiment` is the persisted result: `cases` (one `ExperimentCell` per case
+`Experiment` is the persisted result: `cells` (one `ExperimentCell` per case
 × variant × trial, each linking devtools `traceIds`), per-variant
 `aggregates` (mean ± SEM per score, pass@k/pass^k), `comparison` (paired
 deltas vs the baseline), `gates`, `passed`, and fingerprints
@@ -368,16 +417,18 @@ committed Baseline record (explicit id required; filtered runs refused).
 
 Records are versioned JSON contracts (`schemaVersion`, additive-only within a
 major): the **Experiment record**
-(`.crux/quality/experiments/<ulid>.json`, gitignored, also `--json`), the
+(`.crux/quality/experiments/<ulid>.json`, gitignored, readable with
+`crux quality show <experiment-id> --json`), the
 **Evaluation manifest** (`crux quality list --json`, devtools pre-run
 rendering; includes `covers` when explicit Project Index coverage targets are
 declared), and the **Baseline record**
 (`.crux/quality/baselines/<evaluationId>.json`, committed — how CI knows the
 reference; `configFingerprint` drift demotes comparisons to informational).
-Manifest + Experiment record are the complete agent-facing contract: list
-evaluations, run one, read the assertion outcome ledger or legacy failures
-with `sourceRef` + `traceIds`, edit, rerun — no parsing of human-oriented
-output.
+`crux quality run --json` emits a compact run summary that points at these
+records and failing-cell evidence commands. Manifest + Experiment record are the
+complete agent-facing contract: list evaluations, run one, read the assertion
+outcome ledger with `sourceRef` + `traceIds`, edit, rerun — no parsing of
+human-oriented output.
 
 ## Identity and discovery
 
@@ -416,7 +467,7 @@ every depth even when `redact` is empty.
 
 ## Inference utilities
 
-`InputOf<T>` / `OutputOf<T>` / `ParamsOf<T>` / `CapsOf<T>` / `ExpectedOf<T>`
+`InputOf<T>` / `OutputOf<T>` / `ParamsOf<T>` / `CapsOf<T>`
 extract an evaluation-relevant type from any task. `CaseOf<T, TExpected?>` is
 the documented one-annotation escape hatch for extracted case arrays:
 

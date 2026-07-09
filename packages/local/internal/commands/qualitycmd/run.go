@@ -31,6 +31,11 @@ type qualityRunOpts struct {
 	cwd            string
 	ids            []string
 	cases          []string
+	failed         string
+	sample         int
+	seed           string
+	maxCost        float64
+	changedSince   string
 	variants       []string
 	trials         int
 	replay         string
@@ -49,13 +54,18 @@ func registerQualityRunFlags(cmd *cobra.Command, opts *qualityRunOpts) {
 	cmd.Flags().StringVar(&opts.configPath, "config", "", "Path to an optional crux.config.ts policy file")
 	cmd.Flags().StringVar(&opts.cwd, "cwd", "", "Working directory for project discovery (default: auto-detect)")
 	cmd.Flags().StringArrayVar(&opts.cases, "case", nil, "Filter cases by id/name (glob *), repeatable — demotes gates to informational")
+	cmd.Flags().StringVar(&opts.failed, "failed", "", "Rerun failed cells from an experiment id, or latest")
+	cmd.Flags().IntVar(&opts.sample, "sample", 0, "Deterministically sample N cases after filters; requires --seed")
+	cmd.Flags().StringVar(&opts.seed, "seed", "", "Seed for --sample")
+	cmd.Flags().Float64Var(&opts.maxCost, "max-cost", 0, "Stop scheduling new cells after this many USD")
+	cmd.Flags().StringVar(&opts.changedSince, "changed-since", "", "Run evaluations affected by files changed since a git ref")
 	cmd.Flags().StringArrayVar(&opts.variants, "variant", nil, "Run a variant subset, repeatable")
 	cmd.Flags().IntVar(&opts.trials, "trials", 0, "Override trials for this run")
 	cmd.Flags().StringVar(&opts.replay, "replay", "", "Replay mode: live | record-new | replay-strict | refresh")
 	cmd.Flags().BoolVar(&opts.rescore, "rescore", false, "Reuse cached outputs, re-run scorers/expects only")
 	cmd.Flags().StringVar(&opts.experiment, "experiment", "", "Grouping label stored on the record(s)")
-	cmd.Flags().BoolVar(&opts.jsonStdout, "json", false, "Write the Experiment record(s) as a JSON array to stdout")
-	cmd.Flags().StringVar(&opts.jsonOut, "json-out", "", "Write the Experiment record(s) as a JSON array to a path")
+	cmd.Flags().BoolVar(&opts.jsonStdout, "json", false, "Write one machine-readable run summary object to stdout")
+	cmd.Flags().StringVar(&opts.jsonOut, "json-out", "", "Write one machine-readable run summary object to a path")
 	cmd.Flags().StringVar(&opts.junitOut, "junit", "", "Write JUnit XML to a path")
 	cmd.Flags().BoolVar(&opts.ci, "ci", false, "Force plain, non-animated output and no color, even on a TTY")
 	cmd.Flags().IntVar(&opts.maxConcurrency, "max-concurrency", 0, "Cap parallel cells across all evaluations")
@@ -192,21 +202,8 @@ func runQualityPromote(f *cli.Factory, experimentID, configPath, cwd, variant, p
 	defer forwarder.close()
 
 	reporter := newQualityReporter(opts, f.Streams(), f.Port)
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
-	exitCode := 2
-	for scanner.Scan() {
-		var ev domain.QualityEvent
-		if json.Unmarshal(scanner.Bytes(), &ev) != nil {
-			continue
-		}
-		forwarder.forward(scanner.Bytes())
-		reporter.handle(&ev)
-		if ev.Type == "run:done" {
-			exitCode = ev.ExitCode
-		}
-	}
-	_ = cmd.Wait()
+	result := consumeQualityRunnerStream(stdout, cmd.Wait, reporter, forwarder)
+	exitCode := result.exitCode
 	if exitCode != 0 {
 		return domain.ExitError{Code: exitCode}
 	}
@@ -216,6 +213,9 @@ func runQualityPromote(f *cli.Factory, experimentID, configPath, cwd, variant, p
 // --- run ---
 
 func runQualityRun(f *cli.Factory, opts *qualityRunOpts) error {
+	if err := validateQualityRunOpts(opts); err != nil {
+		return err
+	}
 	exitCode, err := streamQualityRun(f, opts)
 	if err != nil {
 		return err
@@ -243,24 +243,13 @@ func streamQualityRun(f *cli.Factory, opts *qualityRunOpts) (int, error) {
 	go filterStderr(stderr)
 
 	reporter := newQualityReporter(opts, io, f.Port)
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
+	result := consumeQualityRunnerStream(stdout, cmd.Wait, reporter, forwarder)
+	exitCode := result.exitCode
 
-	exitCode := 2 // worker dying before run:done is a definition/runner error
-	for scanner.Scan() {
-		var ev domain.QualityEvent
-		if json.Unmarshal(scanner.Bytes(), &ev) != nil {
-			continue
-		}
-		forwarder.forward(scanner.Bytes())
-		reporter.handle(&ev)
-		if ev.Type == "run:done" {
-			exitCode = ev.ExitCode
-		}
+	summary := buildQualityRunSummary(reporter, exitCode, result.err)
+	if !opts.jsonStdout {
+		reporter.banner(exitCode)
 	}
-	_ = cmd.Wait()
-
-	reporter.banner(exitCode)
 
 	if opts.junitOut != "" {
 		if err := writeQualityJUnit(opts.junitOut, reporter); err != nil {
@@ -268,16 +257,23 @@ func streamQualityRun(f *cli.Factory, opts *qualityRunOpts) (int, error) {
 		}
 	}
 	if opts.jsonStdout {
-		if err := writeQualityRecordsToWriter(io.Out, reporter.recordPaths); err != nil {
+		if err := writeQualityRunSummaryToWriter(io.Out, summary); err != nil {
 			fmt.Fprintf(io.Err, "warning: failed to write JSON output: %v\n", err)
 		}
 	}
 	if opts.jsonOut != "" {
-		if err := writeQualityRecordsToFile(opts.jsonOut, reporter.recordPaths); err != nil {
+		if err := writeQualityRunSummaryToFile(opts.jsonOut, summary); err != nil {
 			fmt.Fprintf(io.Err, "warning: failed to write JSON output: %v\n", err)
 		}
 	}
 	return exitCode, nil
+}
+
+func validateQualityRunOpts(opts *qualityRunOpts) error {
+	if opts.sample > 0 && opts.seed == "" {
+		return fmt.Errorf("--sample requires --seed so sampled runs are reproducible")
+	}
+	return nil
 }
 
 func runQualityList(configPath, cwd string, jsonOut bool) error {
@@ -288,21 +284,13 @@ func runQualityList(configPath, cwd string, jsonOut bool) error {
 	}
 	go filterStderr(stderr)
 
-	var manifests []domain.QualityManifest
-	var collectErrors []domain.QualityCollectError
-	scanner := bufio.NewScanner(stdout)
-	scanner.Buffer(make([]byte, 0, 1024*1024), 64*1024*1024)
-	for scanner.Scan() {
-		var ev domain.QualityEvent
-		if json.Unmarshal(scanner.Bytes(), &ev) != nil {
-			continue
-		}
-		if ev.Type == "collect:done" {
-			manifests = ev.Evaluations
-			collectErrors = ev.Errors
-		}
+	result := consumeQualityCollectStream(stdout, cmd.Wait)
+	manifests := result.manifests
+	collectErrors := result.collectErrors
+	if result.err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR: %s\n", result.err.Message)
+		return domain.ExitError{Code: result.exitCode}
 	}
-	_ = cmd.Wait()
 
 	if jsonOut {
 		data, err := json.MarshalIndent(manifests, "", "  ")
@@ -316,8 +304,11 @@ func runQualityList(configPath, cwd string, jsonOut bool) error {
 	for _, collectErr := range collectErrors {
 		fmt.Fprintf(os.Stderr, "ERROR: %s\n", collectErr.Message)
 	}
-	if len(collectErrors) > 0 {
-		return domain.ExitError{Code: 2}
+	if len(collectErrors) > 0 || result.exitCode != 0 {
+		if result.exitCode == 0 {
+			result.exitCode = 2
+		}
+		return domain.ExitError{Code: result.exitCode}
 	}
 	return nil
 }
@@ -354,7 +345,7 @@ func runQualityShow(f *cli.Factory, experimentID, dir string, jsonOut bool) erro
 		QualityID    string                    `json:"qualityId"`
 		StartedAt    string                    `json:"startedAt"`
 		FilteredRun  bool                      `json:"filteredRun"`
-		Cases        []domain.QualityCell      `json:"cases"`
+		Cells        []domain.QualityCell      `json:"cells"`
 		Aggregates   domain.QualityAggregates  `json:"aggregates"`
 		Gates        domain.QualityGates       `json:"gates"`
 		Passed       bool                      `json:"passed"`
@@ -370,7 +361,7 @@ func runQualityShow(f *cli.Factory, experimentID, dir string, jsonOut bool) erro
 	renderer := newQualityRenderer(io, f.Port)
 	state := &qualityEvalState{
 		evaluationID: record.EvaluationID,
-		cells:        record.Cases,
+		cells:        record.Cells,
 		aggregates:   &record.Aggregates,
 		gates:        &record.Gates,
 		filteredRun:  record.FilteredRun,
@@ -392,6 +383,9 @@ func runQualityShow(f *cli.Factory, experimentID, dir string, jsonOut bool) erro
 // --- watch (D5: respawn loop; the worker's output cache keeps reruns cheap) ---
 
 func runQualityWatch(f *cli.Factory, opts *qualityRunOpts) error {
+	if err := validateQualityRunOpts(opts); err != nil {
+		return err
+	}
 	io := f.Streams()
 	configDir := opts.cwd
 	if configDir == "" {
@@ -508,6 +502,21 @@ func spawnQualityRunner(opts *qualityRunOpts, extraArgs []string, devtoolsURL st
 	}
 	for _, pattern := range opts.cases {
 		args = append(args, "--case", pattern)
+	}
+	if opts.failed != "" {
+		args = append(args, "--failed", opts.failed)
+	}
+	if opts.sample > 0 {
+		args = append(args, "--sample", fmt.Sprint(opts.sample))
+	}
+	if opts.seed != "" {
+		args = append(args, "--seed", opts.seed)
+	}
+	if opts.maxCost > 0 {
+		args = append(args, "--max-cost", fmt.Sprint(opts.maxCost))
+	}
+	if opts.changedSince != "" {
+		args = append(args, "--changed-since", opts.changedSince)
 	}
 	for _, variant := range opts.variants {
 		args = append(args, "--variant", variant)

@@ -60,6 +60,7 @@ func (b *EventBus) TrackRunEvent(raw json.RawMessage) {
 		return
 	}
 	var event struct {
+		RunID        string `json:"runId"`
 		Type         string `json:"type"`
 		EvaluationID string `json:"evaluationId"`
 		Cells        int    `json:"cells"`
@@ -81,10 +82,11 @@ func (b *EventBus) TrackRunEvent(raw json.RawMessage) {
 		if event.EvaluationID == "" {
 			return
 		}
+		key := activeExperimentKey(event.RunID, event.EvaluationID)
 		b.activeSeq++
-		b.activeExperiments[event.EvaluationID] = activeQualityExperiment{
+		b.activeExperiments[key] = activeQualityExperiment{
 			summary: api.QualityExperimentSummary{
-				ExperimentID: "running:" + safeRunningExperimentID(event.EvaluationID) + ":" + fmt.Sprint(b.activeSeq),
+				ExperimentID: runningExperimentID(event.RunID, event.EvaluationID, b.activeSeq),
 				EvaluationID: event.EvaluationID,
 				StartedAt:    now.Format(time.RFC3339Nano),
 				Status:       "running",
@@ -95,7 +97,8 @@ func (b *EventBus) TrackRunEvent(raw json.RawMessage) {
 			updatedAt: now,
 		}
 	case "cell:done":
-		current, ok := b.activeExperiments[event.EvaluationID]
+		key := activeExperimentKey(event.RunID, event.EvaluationID)
+		current, ok := b.activeExperiments[key]
 		if !ok {
 			return
 		}
@@ -116,14 +119,23 @@ func (b *EventBus) TrackRunEvent(raw json.RawMessage) {
 				current.summary.Cells = done
 			}
 		}
-		b.activeExperiments[event.EvaluationID] = current
+		b.activeExperiments[key] = current
 	case "eval:done":
 		if event.EvaluationID != "" {
-			delete(b.activeExperiments, event.EvaluationID)
+			delete(b.activeExperiments, activeExperimentKey(event.RunID, event.EvaluationID))
 		}
 	case "run:done":
-		for evaluationID := range b.activeExperiments {
-			delete(b.activeExperiments, evaluationID)
+		if event.RunID == "" {
+			for key := range b.activeExperiments {
+				delete(b.activeExperiments, key)
+			}
+			return
+		}
+		prefix := event.RunID + ":"
+		for key := range b.activeExperiments {
+			if strings.HasPrefix(key, prefix) {
+				delete(b.activeExperiments, key)
+			}
 		}
 	}
 }
@@ -139,9 +151,9 @@ func (b *EventBus) RunningExperimentSummaries(now time.Time) []api.QualityExperi
 		return nil
 	}
 	out := make([]api.QualityExperimentSummary, 0, len(b.activeExperiments))
-	for evaluationID, current := range b.activeExperiments {
+	for key, current := range b.activeExperiments {
 		if now.Sub(current.updatedAt) > runningExperimentTTL {
-			delete(b.activeExperiments, evaluationID)
+			delete(b.activeExperiments, key)
 			continue
 		}
 		out = append(out, current.summary)
@@ -153,6 +165,20 @@ func (b *EventBus) RunningExperimentSummaries(now time.Time) []api.QualityExperi
 		return out[i].StartedAt > out[j].StartedAt
 	})
 	return out
+}
+
+func activeExperimentKey(runID string, evaluationID string) string {
+	if runID == "" {
+		return evaluationID
+	}
+	return runID + ":" + evaluationID
+}
+
+func runningExperimentID(runID string, evaluationID string, seq int64) string {
+	if runID == "" {
+		return "running:" + safeRunningExperimentID(evaluationID) + ":" + fmt.Sprint(seq)
+	}
+	return "running:" + safeRunningExperimentID(evaluationID) + ":" + safeRunningExperimentID(runID)
 }
 
 func safeRunningExperimentID(value string) string {

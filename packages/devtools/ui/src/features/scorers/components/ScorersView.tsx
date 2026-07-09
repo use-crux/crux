@@ -8,7 +8,7 @@
 
 import { useState } from 'react'
 import { QwShell } from '@/qw/shell/QwShell'
-import { Chip } from '@/qw/shell/primitives'
+import { Btn, Chip } from '@/qw/shell/primitives'
 import { FilterButton } from '@/qw/shell/FilterPopover'
 import { Icon } from '@/qw/shell/Icon'
 import { navTarget } from '@/app/navigation/navTarget'
@@ -17,6 +17,7 @@ import { useNavigation } from '@/app/navigation/useNavigation'
 import { useConnected } from '@/app/runtime/runtimeStore'
 import { SkeletonRows } from '@/shared/components/Skeleton'
 import { QEmpty, ScoreStat, timeAgo } from '@/qw/shell/qualityKit'
+import { JudgeReportPanel } from './JudgeReportPanel'
 
 export function ScorersView() {
   const { navigate } = useNavigation()
@@ -25,6 +26,7 @@ export function ScorersView() {
   const list = scorers ?? []
   const judges = list.filter((s) => s.costClass === 'model').length
   const [tab, setTab] = useState<'all' | 'code' | 'model'>('all')
+  const [openTrust, setOpenTrust] = useState<string | null>(null)
   const shown = tab === 'all' ? list : list.filter((s) => (s.costClass === 'model') === (tab === 'model'))
 
   return (
@@ -87,6 +89,17 @@ export function ScorersView() {
                       </div>
                     </div>
                     <ScoreStat value={s.meanScore ?? null} sem={isModel ? 0.05 : 0.01} width={72} />
+                    {isModel && s.evaluationIds.length > 0 && (
+                      <Btn
+                        size="xs"
+                        variant="soft"
+                        icon={<Icon name="compare" size={11} />}
+                        title="judge-vs-human agreement"
+                        onClick={() => setOpenTrust((cur) => (cur === s.name ? null : s.name))}
+                      >
+                        Trust
+                      </Btn>
+                    )}
                   </div>
                   <div
                     className="flex gap-4 pt-2.5 font-mono text-[11px]"
@@ -105,6 +118,18 @@ export function ScorersView() {
                       </Chip>
                     ))}
                   </div>
+                  {openTrust === s.name && (
+                    <div className="flex flex-col gap-3 pt-2" style={{ borderTop: '1px solid var(--qw-border)' }}>
+                      {s.evaluationIds.map((id) => (
+                        <div key={id} className="flex flex-col gap-1.5">
+                          <span className="font-mono text-[10.5px] uppercase tracking-[0.06em]" style={{ color: 'var(--qw-fg-faint)' }}>
+                            {id}
+                          </span>
+                          <JudgeReportPanel evaluationId={id} scorerName={s.name} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )
             })}

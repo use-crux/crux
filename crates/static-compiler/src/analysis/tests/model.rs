@@ -198,6 +198,70 @@ fn analyze_relation_refs_are_finalize_compatible() {
 }
 
 #[test]
+fn analyze_evaluation_after_scores_assertion_sites_match_quality_authoring_api() {
+    let source = [
+        "export const supportEval = evaluate('support.answer', {",
+        "  task: (input: { question: string }) => input.question,",
+        "  data: [{ name: 'refund', input: { question: 'refund?' } }],",
+        "  afterScores: (ctx) => {",
+        "    ctx.expect(ctx.score.pass).toBeTruthy()",
+        "    ctx.assert(ctx.output)",
+        "  },",
+        "})",
+    ]
+    .join("\n");
+    let facts = analyze_static_index_facts(&request_with_call_names(vec!["evaluate".to_string()], &source));
+    let facts = facts.into_wire_values();
+    let evaluation_group = facts
+        .iter()
+        .find(|fact| fact["definitions"][0]["id"] == "evaluation:support.answer")
+        .expect("evaluation fact group");
+    let assertion_sites = evaluation_group["definitions"][0]["metadata"]["facts"]["assertionSites"]
+        .as_array()
+        .expect("evaluation should expose assertion sites");
+
+    assert_eq!(
+        assertion_sites.len(),
+        1,
+        "ctx.assert is not a Quality assertion site after the Phase 1 API rename"
+    );
+    assert_eq!(assertion_sites[0]["callbackKind"], "expect");
+    assert_eq!(assertion_sites[0]["callbackLevel"], "evaluation");
+}
+
+#[test]
+fn analyze_evaluation_emits_catalog_facts_from_literal_config() {
+    let source = [
+        "export const supportEval = evaluate('support.answer', {",
+        "  task: (input: { question: string }) => input.question,",
+        "  covers: ['prompt:support.answer'],",
+        "  data: dataset('./cases/support.jsonl'),",
+        "  scorers: [scorers.exact(), scorers.judge({ name: 'helpful' }), { scorerName: 'custom' }],",
+        "  gates: { scores: { exact: { min: 1 }, helpful: { min: 0.7 } }, cost: { maxUsd: 1 } },",
+        "  variants: { baseline: {}, tuned: {} },",
+        "  trials: 3,",
+        "  replay: 'replay-strict',",
+        "})",
+    ]
+    .join("\n");
+    let facts = analyze_static_index_facts(&request_with_call_names(vec!["evaluate".to_string()], &source));
+    let facts = facts.into_wire_values();
+    let evaluation_group = facts
+        .iter()
+        .find(|fact| fact["definitions"][0]["id"] == "evaluation:support.answer")
+        .expect("evaluation fact group");
+    let facts = &evaluation_group["definitions"][0]["metadata"]["facts"];
+
+    assert_eq!(facts["datasetPaths"], json!(["./cases/support.jsonl"]));
+    assert_eq!(facts["scorerNames"], json!(["exact", "helpful", "custom"]));
+    assert_eq!(facts["gateKeys"], json!(["exact", "helpful", "cost"]));
+    assert_eq!(facts["variantNames"], json!(["baseline", "tuned"]));
+    assert_eq!(facts["trials"], json!(3));
+    assert_eq!(facts["replayMode"], json!("replay-strict"));
+    assert_eq!(facts["covers"], json!(["prompt:support.answer"]));
+}
+
+#[test]
 fn analyze_resolves_function_return_tools_with_rust_binding_evidence() {
     let source = [
         "const searchTool = tool({ name: 'search', execute: () => null })",

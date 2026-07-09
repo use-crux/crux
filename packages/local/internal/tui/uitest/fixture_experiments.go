@@ -69,15 +69,26 @@ func (c *FixtureClient) fixtureExperimentDetail() api.QualityExperimentDetail {
 			"dedupe=0.92":    fixtureVariantAggregate(4, 4, 0.95, 0.79, 4200, nil),
 			"maxIter+dedupe": fixtureVariantAggregate(4, 4, 0.97, 0.82, 4100, &costWinner),
 		}},
-		Cases: []api.QualityExperimentCell{
+		Cells: []api.QualityExperimentCell{
 			{
 				CaseID:      "rag/typed_prompts_definition",
 				VariantName: "maxIter=3",
 				Status:      "failed",
 				TraceIDs:    []string{"8af2f1c"},
 				Assertions: api.QualityCellAssertions{
-					Failures: []api.QualityAssertionFailure{{Message: "citation_required failed"}},
+					Outcomes: []api.QualityAssertionOutcome{{Status: "failed", Matcher: "toBe", Message: "citation_required failed"}},
 				},
+			},
+		},
+		Failures: []api.QualityFailureArtifact{
+			{
+				CaseID:               "rag/typed_prompts_definition",
+				Variant:              "maxIter=3",
+				Trial:                0,
+				Phase:                "expect",
+				Covers:               []string{"prompt:docs_agent"},
+				SuggestedFixSurfaces: []string{"prompt", "retriever"},
+				DatasetProvenance:    &api.QualityFailureArtifactDataset{Path: "datasets/rag.jsonl", ContentFingerprint: "sha256:1f3c9ab27d"},
 			},
 		},
 		Gates: api.QualityExperimentGates{Passed: true},

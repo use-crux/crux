@@ -34,10 +34,10 @@ const specExperimentA = `{
     { "gate": "default.assertions", "threshold": true, "actual": true, "passed": true }
   ] },
   "passed": true,
-  "cases": [{
+  "cells": [{
     "caseId": "case-1", "variantName": "default", "trial": 0, "status": "passed",
     "input": {}, "scores": [{ "name": "pass", "score": 1 }],
-    "assertions": { "ran": 1, "notEvaluated": 0, "failures": [] },
+    "assertions": { "ran": 1, "notEvaluated": 0, "outcomes": [] },
     "durationMs": 5, "traceIds": [], "capturedSignals": []
   }]
 }`
@@ -78,14 +78,14 @@ const specExperimentB = `{
     { "gate": "passRate", "variantName": "candidate", "threshold": 0.9, "actual": 0.5, "passed": false }
   ] },
   "passed": false,
-  "cases": [
+  "cells": [
     { "caseId": "c1", "variantName": "current", "trial": 0, "status": "passed", "input": {},
       "scores": [{ "name": "helpful", "score": 0.84, "costClass": "model" }],
-      "assertions": { "ran": 1, "notEvaluated": 0, "failures": [] },
+      "assertions": { "ran": 1, "notEvaluated": 0, "outcomes": [] },
       "durationMs": 10, "traceIds": [], "capturedSignals": [] },
     { "caseId": "c1", "variantName": "candidate", "trial": 0, "status": "failed", "input": {},
       "scores": [{ "name": "helpful", "score": 0.7, "costClass": "model" }],
-      "assertions": { "ran": 1, "notEvaluated": 0, "failures": [] },
+      "assertions": { "ran": 1, "notEvaluated": 0, "outcomes": [] },
       "durationMs": 9, "traceIds": [], "capturedSignals": [] }
   ]
 }`
@@ -114,7 +114,7 @@ func specDir(t *testing.T) string {
 		"experiments": {
 			"01KTAAAAAAAAAAAAAAAAAAAAAA.json": specExperimentA,
 			"01KTBBBBBBBBBBBBBBBBBBBBBB.json": specExperimentB,
-			"exp-legacy-1.json":               `{"_tag":"QualityExperiment","id":"exp-legacy-1","cases":[]}`,
+			"exp-legacy-1.json":               `{"_tag":"QualityExperiment","id":"exp-legacy-1","cells":[]}`,
 		},
 		"baselines": {"evals.bakeoff.json": specBaselineRefunds},
 		"cassettes": {"mode-auto-detect.json": specCassetteFile},
@@ -212,6 +212,28 @@ func TestExperimentSummariesAPIIncludesRunningRows(t *testing.T) {
 	}
 }
 
+func TestExperimentSummariesAPITracksConcurrentRunsByRunID(t *testing.T) {
+	svc := NewService(store.NewStore(), t.TempDir())
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:start","runId":"run-a","evaluationId":"evals.concurrent","cells":2}`))
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:start","runId":"run-b","evaluationId":"evals.concurrent","cells":3}`))
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"cell:done","runId":"run-a","evaluationId":"evals.concurrent","cell":{"status":"passed"}}`))
+	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"run:done","runId":"run-a","experiments":[],"exitCode":0}`))
+
+	summaries, err := svc.ExperimentSummariesAPI(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(summaries) != 1 {
+		t.Fatalf("summaries len = %d, want only run-b still active: %+v", len(summaries), summaries)
+	}
+	if summaries[0].EvaluationID != "evals.concurrent" || summaries[0].Cells != 3 {
+		t.Fatalf("remaining running summary = %+v, want run-b", summaries[0])
+	}
+	if !strings.Contains(summaries[0].ExperimentID, "run-b") {
+		t.Fatalf("running experiment id should include run id, got %q", summaries[0].ExperimentID)
+	}
+}
+
 func TestExperimentsPageAPIFiltersPagesAndFacets(t *testing.T) {
 	svc := newSpecService(t)
 	svc.Events().TrackRunEvent(json.RawMessage(`{"type":"eval:start","evaluationId":"evals.running","cells":3}`))
@@ -220,7 +242,7 @@ func TestExperimentsPageAPIFiltersPagesAndFacets(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Tag != "QualityExperimentsPage" || page.Total != 3 || page.NextCursor != "1" || len(page.Experiments) != 1 {
+	if page.Tag != "QualityExperimentsPage" || page.Total != 3 || page.SkippedRecords != 1 || page.NextCursor != "1" || len(page.Experiments) != 1 {
 		t.Fatalf("page = %+v", page)
 	}
 	if page.Experiments[0].Status != "running" || page.Experiments[0].EvaluationID != "evals.running" {
@@ -379,7 +401,7 @@ func TestEvaluationProgressAPIOrdersLimitsAndOverlaysBaseline(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": []
+  "cells": []
 }`)
 	writeSpecFixture(t, dir, "experiments", "01KTPROGRESSOLDER0000000000.json", `{
   "schemaVersion": 1,
@@ -401,7 +423,7 @@ func TestEvaluationProgressAPIOrdersLimitsAndOverlaysBaseline(t *testing.T) {
   } } },
   "gates": { "passed": true, "informational": false, "results": [] },
   "passed": true,
-  "cases": []
+  "cells": []
 }`)
 	writeSpecFixture(t, dir, "experiments", "01KTPROGRESSOTHER000000000.json", `{
   "schemaVersion": 1,
@@ -422,7 +444,7 @@ func TestEvaluationProgressAPIOrdersLimitsAndOverlaysBaseline(t *testing.T) {
   } } },
   "gates": { "passed": true, "informational": false, "results": [] },
   "passed": true,
-  "cases": []
+  "cells": []
 }`)
 	writeSpecFixture(t, dir, "baselines", "evals.progress.json", `{
   "schemaVersion": 1,

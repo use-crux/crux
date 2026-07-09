@@ -14,7 +14,10 @@ import type { Message } from "../../generation/messages";
 import { createSafety } from "../../safety/session";
 import type { Safety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
-import { createBudgetSignal, type BudgetSignal } from "../../generation/timeout";
+import {
+  createBudgetSignal,
+  type BudgetSignal,
+} from "../../generation/timeout";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -258,6 +261,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       prompt: request.prompt,
       messages: request.messages,
       settings: request.settings,
+      outputSchema:
+        kind === "structured" && "schema" in request
+          ? request.schema
+          : undefined,
       tools: describeTools(request.tools),
     };
   }

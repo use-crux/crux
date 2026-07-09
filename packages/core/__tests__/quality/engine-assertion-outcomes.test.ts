@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { evaluate } from '../../quality'
-import type { ExperimentCell } from '../../quality/experiment'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 const upperTask = async (input: { q: string }) => ({ answer: input.q.toUpperCase() })
@@ -18,7 +17,7 @@ describe('Quality runner — assertion outcome ledger', () => {
       },
     })
     const experiment = await run(evaluation)
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
 
     expect(cell.status).toBe('failed')
     expect(cell.assertions.ran).toBe(2)
@@ -64,15 +63,15 @@ describe('Quality runner — assertion outcome ledger', () => {
       expected: { label: 'expected', value: 'WRONG', preview: 'WRONG', redacted: false },
     })
     expect(cell.assertions.outcomes?.[1]!.sourceRef).toMatch(/engine-assertion-outcomes\.test\.ts:\d+:\d+$/)
-    expect(cell.assertions.failures).toEqual([
+    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed')).toEqual([
       expect.objectContaining({
         level: 'evaluation',
         index: 1,
         matcher: 'toBe',
         soft: false,
         message: expect.stringContaining('WRONG'),
-        actualPreview: 'X',
-        expectedPreview: 'WRONG',
+        actual: expect.objectContaining({ preview: 'X' }),
+        expected: expect.objectContaining({ preview: 'WRONG' }),
       }),
     ])
   })
@@ -87,12 +86,14 @@ describe('Quality runner — assertion outcome ledger', () => {
       },
     })
     const experiment = await run(evaluation)
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
 
     expect(cell.status).toBe('failed')
     expect(cell.assertions.ran).toBe(2)
     expect(cell.assertions.notEvaluated).toBe(0)
-    expect(cell.assertions.failures).toEqual([expect.objectContaining({ matcher: 'soft.toBe', soft: true, index: 0 })])
+    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed')).toEqual([
+      expect.objectContaining({ matcher: 'soft.toBe', soft: true, index: 0 }),
+    ])
     expect(
       cell.assertions.outcomes?.map(({ index, status, matcher, soft }) => ({
         index,
@@ -106,38 +107,6 @@ describe('Quality runner — assertion outcome ledger', () => {
     ])
   })
 
-  it('keeps old experiment cells assignable when assertion outcomes are absent', () => {
-    const oldCell: ExperimentCell<{ q: string }, { answer: string }> = {
-      caseId: 'legacy',
-      variantName: 'default',
-      trial: 0,
-      status: 'failed',
-      input: { q: 'x' },
-      output: { answer: 'X' },
-      scores: [],
-      assertions: {
-        ran: 1,
-        notEvaluated: 0,
-        failures: [
-          {
-            level: 'evaluation',
-            index: 0,
-            matcher: 'toBe',
-            soft: false,
-            message: 'expected X to be Y',
-            actualPreview: 'X',
-            expectedPreview: 'Y',
-          },
-        ],
-      },
-      durationMs: 0,
-      traceIds: [],
-      capturedSignals: [],
-    }
-
-    expect(oldCell.assertions.failures[0]!.matcher).toBe('toBe')
-  })
-
   it('redacts assertion outcome values before exposing experiment cells', async () => {
     const evaluation = evaluate({
       task: async (input: { user: { email: string }; token: string }) => input,
@@ -147,7 +116,7 @@ describe('Quality runner — assertion outcome ledger', () => {
       },
     })
     const experiment = await run(evaluation, undefined, { redact: ['user.email'] })
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
 
     expect(cell.assertions.outcomes?.[0]).toMatchObject({
       status: 'failed',

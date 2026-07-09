@@ -16,7 +16,7 @@ func (s *Service) CellEvidenceAPI(ctx context.Context, query api.QualityCellEvid
 	if err != nil || !found {
 		return api.QualityCellEvidence{}, found, err
 	}
-	cell, ok := findExperimentCell(record.Cases, query)
+	cell, ok := findExperimentCell(record.Cells, query)
 	if !ok {
 		return api.QualityCellEvidence{}, false, nil
 	}
@@ -55,7 +55,7 @@ func (s *Service) CellEvidenceAPI(ctx context.Context, query api.QualityCellEvid
 		EvaluationID:  record.EvaluationID,
 		GeneratedAt:   time.Now().UTC().Format(time.RFC3339Nano),
 		Cell:          evidenceCellIdentity(cell),
-		TrialSummary:  evidenceTrialSummary(record.Cases, cell),
+		TrialSummary:  evidenceTrialSummary(record.Cells, cell),
 		IO:            evidenceIO(cell),
 		Scores:        scores,
 		Assertions: api.QualityAssertionEvidence{
@@ -154,9 +154,6 @@ func primaryFailure(cell api.QualityExperimentCell) string {
 		if outcome.Status == "failed" || outcome.Status == "uncaptured" {
 			return nonEmptyString(outcome.Message, outcome.Matcher)
 		}
-	}
-	if len(cell.Assertions.Failures) > 0 {
-		return nonEmptyString(cell.Assertions.Failures[0].Message, cell.Assertions.Failures[0].Matcher)
 	}
 	return ""
 }

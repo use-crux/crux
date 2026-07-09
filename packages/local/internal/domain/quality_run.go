@@ -8,7 +8,8 @@ import "encoding/json"
 
 // QualityEvent is one line of the quality runner NDJSON stream.
 type QualityEvent struct {
-	Type string `json:"type"`
+	Type  string `json:"type"`
+	RunID string `json:"runId,omitempty"`
 
 	// collect:done
 	Evaluations []QualityManifest     `json:"evaluations,omitempty"`
@@ -46,9 +47,15 @@ type QualityEvent struct {
 	// run:done
 	Experiments []string `json:"experiments,omitempty"`
 	ExitCode    int      `json:"exitCode,omitempty"`
+	OK          bool     `json:"ok,omitempty"`
+	RunError    *struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+	} `json:"error,omitempty"`
 
 	// error
 	Scope   string `json:"scope,omitempty"`
+	Code    string `json:"code,omitempty"`
 	Message string `json:"message,omitempty"`
 	File    string `json:"file,omitempty"`
 	Line    int    `json:"line,omitempty"`
@@ -117,7 +124,7 @@ type QualityCell struct {
 	Assertions struct {
 		Ran          int                       `json:"ran"`
 		NotEvaluated int                       `json:"notEvaluated"`
-		Failures     []QualityAssertionFailure `json:"failures"`
+		Outcomes     []QualityAssertionOutcome `json:"outcomes"`
 	} `json:"assertions"`
 
 	Error *struct {
@@ -131,16 +138,23 @@ type QualityCell struct {
 	Metadata        *json.RawMessage `json:"metadata,omitempty"`
 }
 
-// QualityAssertionFailure is one recorded expect failure (spec 02 §1).
-type QualityAssertionFailure struct {
-	Level           string `json:"level"`
-	Index           int    `json:"index"`
-	Matcher         string `json:"matcher"`
-	Soft            bool   `json:"soft"`
-	Message         string `json:"message"`
-	ExpectedPreview string `json:"expectedPreview,omitempty"`
-	ActualPreview   string `json:"actualPreview,omitempty"`
-	SourceRef       string `json:"sourceRef,omitempty"`
+// QualityAssertionOutcome is one recorded assertion outcome (spec 02 §1).
+type QualityAssertionOutcome struct {
+	ID        string                 `json:"id"`
+	Level     string                 `json:"level"`
+	Phase     string                 `json:"phase"`
+	Index     int                    `json:"index"`
+	Status    string                 `json:"status"`
+	Matcher   string                 `json:"matcher"`
+	Soft      bool                   `json:"soft"`
+	Message   string                 `json:"message,omitempty"`
+	Actual    *QualityAssertionValue `json:"actual,omitempty"`
+	Expected  *QualityAssertionValue `json:"expected,omitempty"`
+	SourceRef string                 `json:"sourceRef,omitempty"`
+}
+
+type QualityAssertionValue struct {
+	Preview string `json:"preview"`
 }
 
 // QualityAggregates mirrors ExperimentRecord.aggregates.

@@ -114,6 +114,6 @@ func qualityRelationHTTPExperimentRecord(id, evaluationID, startedAt, endedAt st
   } } },
   "gates": { "passed": %t, "informational": false, "results": [] },
   "passed": %t,
-  "cases": []
+  "cells": []
 }`, id, evaluationID, startedAt, endedAt, passedCells, failedCells, passRate, passRate, passed, passed)
 }

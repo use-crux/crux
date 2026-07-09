@@ -63,6 +63,10 @@ export const qk = {
     ) => ['quality', 'cell-evidence', experimentId, cell ?? null] as const,
     evaluationProgress: (evaluationId: string | null | undefined, limit?: number) =>
       ['quality', 'evaluation-progress', evaluationId, limit ?? null] as const,
+    judgeReport: (evaluationId: string | null | undefined) =>
+      ['quality', 'judge-report', evaluationId] as const,
+    experimentDiff: (a: string | null | undefined, b: string | null | undefined) =>
+      ['quality', 'experiment-diff', a, b] as const,
     baselines: () => ['quality', 'baselines'] as const,
     baseline: (evaluationId: string | null | undefined) =>
       ['quality', 'baseline', evaluationId] as const,

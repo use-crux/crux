@@ -19,9 +19,9 @@ const frame: QualitySourceFrame = {
 
 function outcome(overrides: Partial<QualityAssertionOutcome>): QualityAssertionOutcome {
   return {
-    id: 'expect:assert:0',
+    id: 'afterScores:evaluation:0',
     level: 'evaluation',
-    phase: 'assert',
+    phase: 'afterScores',
     index: 0,
     status: 'failed',
     matcher: 'toBe',

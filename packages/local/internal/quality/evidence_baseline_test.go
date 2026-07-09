@@ -34,7 +34,7 @@ func TestCellEvidenceAPIOldScoreOnlyBaselineDegradesHonestly(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-baseline",
     "variantName": "candidate",
     "trial": 0,
@@ -42,7 +42,7 @@ func TestCellEvidenceAPIOldScoreOnlyBaselineDegradesHonestly(t *testing.T) {
     "input": { "q": "refund window" },
     "output": "Refunds are available for 60 days",
     "scores": [{ "name": "helpful", "score": 0.58 }],
-    "assertions": { "ran": 0, "notEvaluated": 0, "failures": [] },
+    "assertions": { "ran": 0, "notEvaluated": 0, "outcomes": [] },
     "durationMs": 1000,
     "traceIds": [],
     "capturedSignals": []
@@ -106,7 +106,7 @@ func TestCellEvidenceAPIUsesBaselineSourceExperimentEvidence(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-baseline",
     "variantName": "candidate",
     "trial": 0,
@@ -114,7 +114,7 @@ func TestCellEvidenceAPIUsesBaselineSourceExperimentEvidence(t *testing.T) {
     "input": { "q": "refund window", "secret": "[redacted]" },
     "output": "Refunds are available for 60 days",
     "scores": [{ "name": "helpful", "score": 0.58, "metadata": { "rationale": "too long" } }],
-    "assertions": { "ran": 0, "notEvaluated": 0, "failures": [] },
+    "assertions": { "ran": 0, "notEvaluated": 0, "outcomes": [] },
     "durationMs": 1000,
     "traceIds": [],
     "capturedSignals": []
@@ -139,7 +139,7 @@ func TestCellEvidenceAPIUsesBaselineSourceExperimentEvidence(t *testing.T) {
   } } },
   "gates": { "passed": true, "informational": false, "results": [] },
   "passed": true,
-  "cases": [{
+  "cells": [{
     "caseId": "case-baseline",
     "variantName": "baseline",
     "trial": 0,
@@ -147,7 +147,7 @@ func TestCellEvidenceAPIUsesBaselineSourceExperimentEvidence(t *testing.T) {
     "input": { "q": "refund window", "secret": "[redacted]" },
     "output": "Refunds are available for 30 days",
     "scores": [{ "name": "helpful", "score": 0.8, "metadata": { "rationale": "matches policy" } }],
-    "assertions": { "ran": 0, "notEvaluated": 0, "failures": [] },
+    "assertions": { "ran": 0, "notEvaluated": 0, "outcomes": [] },
     "durationMs": 1000,
     "traceIds": [],
     "capturedSignals": []

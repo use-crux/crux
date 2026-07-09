@@ -25,6 +25,9 @@ import type { CellSignals } from './signals'
 /** Storage key for a built-in scorer's contextual run function. @internal */
 export const SCORER_INTERNAL: unique symbol = Symbol('crux.quality.scorer')
 
+/** Storage key for cache/baseline identity metadata on built-in scorers. @internal */
+export const SCORER_IDENTITY: unique symbol = Symbol('crux.quality.scorer.identity')
+
 /**
  * Ambient providers + per-cell facts the engine hands to model-backed
  * scorers. `generate`/`model`/`models`/`judgeModel`/`embed` come from
@@ -43,14 +46,16 @@ export interface ScorerRunContext {
 }
 
 /** The contextual run form of a built-in scorer. @internal */
-export type ContextualScorerRun = (
-  args: ScorerArgs<unknown, unknown, unknown>,
-  context: ScorerRunContext | undefined,
-) => Score | Promise<Score>
+export type ContextualScorerRun = (args: ScorerArgs<unknown, unknown, unknown>, context: ScorerRunContext | undefined) => Score | Promise<Score>
 
 /** A scorer that may carry the contextual run form. @internal */
 type MaybeContextualScorer = Scorer<unknown, unknown, unknown, string> & {
   [SCORER_INTERNAL]?: ContextualScorerRun
+}
+
+/** A scorer that may carry explicit identity metadata. @internal */
+export type MaybeIdentifiedScorer = Scorer<unknown, unknown, unknown, string> & {
+  [SCORER_IDENTITY]?: unknown
 }
 
 /**
@@ -60,11 +65,7 @@ type MaybeContextualScorer = Scorer<unknown, unknown, unknown, string> & {
  *
  * @internal
  */
-export function invokeScorer(
-  scorer: Scorer<unknown, unknown, unknown, string>,
-  args: ScorerArgs<unknown, unknown, unknown>,
-  context: ScorerRunContext | undefined,
-): Score | Promise<Score> {
+export function invokeScorer(scorer: Scorer<unknown, unknown, unknown, string>, args: ScorerArgs<unknown, unknown, unknown>, context: ScorerRunContext | undefined): Score | Promise<Score> {
   const contextual = (scorer as MaybeContextualScorer)[SCORER_INTERNAL]
   if (contextual !== undefined) return contextual(args, context)
   return scorer(args)

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 
 	"github.com/use-crux/crux/packages/local/internal/quality"
 	qualityserver "github.com/use-crux/crux/packages/local/internal/server/quality"
@@ -20,6 +21,15 @@ func registerQualityRoutes(
 	events := qualityEvents(qualitySvc)
 	qualityserver.RegisterRunEvents(mux, hub, events)
 	qualityserver.RegisterPromote(mux, projectRoot, configPath, runner, events)
+	if qualitySvc != nil {
+		qualityDir := qualitySvc.Dir()
+		qualityserver.RegisterDiff(mux, projectRoot, configPath, runner, func(id string) string {
+			if filepath.IsAbs(id) {
+				return id
+			}
+			return filepath.Join(qualityDir, "experiments", id+".json")
+		}, events)
+	}
 
 	mux.HandleFunc("DELETE /api/quality/runs", func(w http.ResponseWriter, r *http.Request) {
 		if qualitySvc == nil {

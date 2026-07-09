@@ -78,6 +78,10 @@ export interface JudgeInput {
 export interface JudgeScoreOptions {
   model?: unknown
   generate?: GenerateObjectFn
+  /** Deterministic judge temperature forwarded to the provider when supported. */
+  temperature?: number
+  /** Deterministic judge top-p forwarded to the provider when supported. */
+  topP?: number
   /** Eval run ID — threaded to devtools instrumentation for event correlation. */
   evalId?: string
 }

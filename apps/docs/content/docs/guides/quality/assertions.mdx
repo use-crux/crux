@@ -27,9 +27,9 @@ case-specific checks (evaluation-level runs first; both report
 independently). Cases with callbacks are not portable to datasets — keep
 case `expect` the exception.
 
-Use `assert:` when a check needs scorer results. It runs after all scorers,
+Use `afterScores:` when a check needs scorer results. It runs after all scorers,
 receives the same `ctx.expect` matcher surface, and records outcomes with
-`phase: 'assert'`:
+`phase: 'afterScores'`:
 
 ```ts
 export default evaluate({
@@ -42,7 +42,7 @@ export default evaluate({
       select: (output) => output.answer,
     }),
   ],
-  assert: (ctx) => {
+  afterScores: (ctx) => {
     ctx.expect(ctx.score.citation_valid).toBeGreaterThanOrEqual(0.7)
   },
 })
@@ -57,18 +57,18 @@ export default evaluate({
 | `ctx.expect`                        | The bound assertion surface (below)                                                   |
 | `ctx.variant`                       | `{ name, params }` of the variant this cell ran under                                 |
 | `ctx.trial`                         | 0-based trial index                                                                   |
-| `ctx.score(name, score, metadata?)` | Ad-hoc per-case score (0–1) — joins the same score model as scorers                   |
+| `ctx.recordScore(name, score, metadata?)` | Ad-hoc per-case score (0–1) — joins the same score model as scorers                   |
 | `ctx.step(name, schema?)`           | Flow/agent step access with Standard Schema narrowing                                 |
 | `ctx.trace`                         | `{ id, url }` — the devtools deep link for this cell                                  |
 | `ctx.meta`                          | `{ durationMs, costUsd, usage }`                                                      |
 
-## The post-score assert context
+## The post-score `afterScores` context
 
 | Field                       | What it is                                                                 |
 | --------------------------- | -------------------------------------------------------------------------- |
 | `ctx.input` / `ctx.output`  | Same typed cell payload as `expect`                                        |
 | `ctx.expected`              | The case's `expected` payload, or `undefined`                              |
-| `ctx.expect`                | Same bound matcher surface, recording `phase: 'assert'`                    |
+| `ctx.expect`                | Same bound matcher surface, recording `phase: 'afterScores'`               |
 | `ctx.score`                 | Readonly map of statically named scorer outputs                            |
 | `ctx.scores`                | All cell scores, including dynamic/ad-hoc scores and skipped `null` scores |
 | `ctx.variant` / `ctx.trial` | Same cell coordinates as `expect`                                          |
@@ -76,7 +76,7 @@ export default evaluate({
 | `ctx.meta`                  | `{ durationMs, costUsd, usage }`                                           |
 
 Static scorer names are available as properties (`ctx.score.citation_valid`).
-Scores produced by dynamic scorer functions or pre-score `ctx.score(name, …)`
+Scores produced by dynamic scorer functions or pre-score `ctx.recordScore(name, …)`
 remain visible in `ctx.scores`, where the runtime name can be inspected
 explicitly. Numeric matchers retain a structured expression, so evidence
 surfaces can show threshold checks like `0.58 >= 0.7 => false` without parsing
@@ -97,13 +97,13 @@ ran, so reports show position: `3 ran · 2 not evaluated`. New experiment
 records also include `assertions.outcomes`, an ordered ledger of passed,
 failed, uncaptured, and not-evaluated assertions with matcher metadata,
 source refs, retained matcher messages, and actual/expected values where
-available. When the runner can resolve authored source, outcomes can also
+available. `assertions.outcomes` is the durable assertion ledger; consumers
+should filter failed or uncaptured outcomes when they need a failure list. When the runner can resolve authored source, outcomes can also
 include a narrow `sourceFrame` snapshot and `subjectExpr`, the authored
 argument passed to `ctx.expect(...)` or `ctx.expect.soft(...)`. Generated-only
 or missing source is reported as `kind: 'unavailable'` rather than shown as if
-it were authored code. The older `assertions.failures` array remains available
-for compatibility. If a helper throws a plain `Error` before a matcher records
-an outcome, the cell is still marked errored, but local evidence records a
+it were authored code. If a helper throws a plain `Error` before a matcher
+records an outcome, the cell is still marked errored, but local evidence records a
 best-effort `error.sourceRef` and can resolve it to the callback crash line. To
 record a failure and keep going, use `soft`:
 
@@ -134,7 +134,7 @@ plain callback assertions; the full trace link remains the retention signal.
 expect: (ctx) => {
   ctx.expect.soft(ctx.output.answer).toContain('refund')
   ctx.expect.soft(ctx.output.answer).toContain('14 days')
-  ctx.score('answer-length', Math.min(1, ctx.output.answer.length / 200))
+  ctx.recordScore('answer-length', Math.min(1, ctx.output.answer.length / 200))
 },
 ```
 

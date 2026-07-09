@@ -127,6 +127,8 @@ export const INDEX_KINDS: Record<string, KindDef> = {
   dataset: { label: 'Dataset', family: 'quality', glyph: 'dataset' },
   suite: { label: 'Suite', family: 'quality', glyph: 'list' },
   'suite.case': { label: 'Case', family: 'quality', glyph: 'case', child: true },
+  evaluation: { label: 'Evaluation', family: 'quality', glyph: 'sparkle' },
+  'evaluation.case': { label: 'Evaluation case', family: 'quality', glyph: 'case', child: true },
   'eval.prompt': { label: 'Prompt eval', family: 'quality', glyph: 'sparkle' },
   'eval.flow': { label: 'Flow eval', family: 'quality', glyph: 'sparkle' },
   'eval.rag': { label: 'RAG eval', family: 'quality', glyph: 'sparkle' },

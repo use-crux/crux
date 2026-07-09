@@ -118,6 +118,9 @@ describe('quality-runner worker (subprocess e2e)', () => {
     if (runDone.type !== 'run:done') throw new Error('expected run:done last')
     expect(runDone.exitCode).toBe(1)
     expect(runDone.experiments).toHaveLength(3)
+    const runIds = new Set(events.map((event) => event.runId))
+    expect(runIds.size).toBe(1)
+    expect([...runIds][0]).toMatch(/^[0-9A-Z]{26}$/)
   }, 60_000)
 
   it('a variant bakeoff produces paired comparison deltas and trips minDeltaVsBaseline (exit 1)', async () => {
@@ -182,6 +185,20 @@ describe('quality-runner worker (subprocess e2e)', () => {
 
     expect(exitCode).toBe(0)
     expect(events.some((event) => event.type === 'collect:done')).toBe(true)
+    expect(events.some((event) => event.type === 'eval:start')).toBe(false)
+  }, 60_000)
+
+  it('--sample without --seed fails closed before execution', async () => {
+    const { exitCode, events } = await runWorker(['evals.passing', '--sample', '1'])
+
+    expect(exitCode).toBe(2)
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'error',
+        scope: 'execute',
+        message: expect.stringContaining('--sample requires --seed') as string,
+      }),
+    )
     expect(events.some((event) => event.type === 'eval:start')).toBe(false)
   }, 60_000)
 

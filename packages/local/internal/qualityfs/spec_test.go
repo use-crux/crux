@@ -37,7 +37,7 @@ const specExperimentMinimal = `{
     "results": [{ "gate": "default.assertions", "threshold": true, "actual": true, "passed": true }]
   },
   "passed": true,
-  "cases": [
+  "cells": [
     {
       "caseId": "generates-concise-topic-title",
       "caseName": "generates concise topic title",
@@ -47,7 +47,7 @@ const specExperimentMinimal = `{
       "input": { "message": "Can you help me?" },
       "output": { "text": "TypeScript" },
       "scores": [{ "name": "pass", "score": 1 }],
-      "assertions": { "ran": 3, "notEvaluated": 0, "failures": [] },
+      "assertions": { "ran": 3, "notEvaluated": 0, "outcomes": [] },
       "durationMs": 5,
       "traceIds": ["run_mqbi8ai0_r2qh15b0"],
       "capturedSignals": []
@@ -107,7 +107,7 @@ const specExperimentFull = `{
     ]
   },
   "passed": false,
-  "cases": [
+  "cells": [
     {
       "caseId": "refund-after-60-days",
       "variantName": "candidate",
@@ -120,9 +120,12 @@ const specExperimentFull = `{
       "assertions": {
         "ran": 3,
         "notEvaluated": 2,
-        "failures": [{
-          "level": "evaluation", "index": 1, "matcher": "output.toMatch", "soft": false,
-          "message": "expected /30 days/", "expectedPreview": "/30 days/", "actualPreview": "Our policy…",
+        "outcomes": [{
+          "id": "expect:evaluation:1", "level": "evaluation", "phase": "expect", "index": 1,
+          "status": "failed", "matcher": "output.toMatch", "soft": false,
+          "message": "expected /30 days/",
+          "expected": { "label": "expected", "value": "/30 days/", "preview": "/30 days/", "redacted": false },
+          "actual": { "label": "actual", "value": "Our policy…", "preview": "Our policy…", "redacted": false },
           "sourceRef": "support-refunds.eval.ts:31:9"
         }]
       },
@@ -147,7 +150,7 @@ const legacyExperiment = `{
   "status": "completed",
   "summary": { "total": 3, "passed": 3, "failed": 0, "errored": 0 },
   "variants": [],
-  "cases": []
+  "cells": []
 }`
 
 func writeSpecFixtures(t *testing.T) *FS {
@@ -225,12 +228,12 @@ func TestReadExperimentRecordsParsesSpecRecordsAndSkipsLegacy(t *testing.T) {
 		t.Error("passed should be false")
 	}
 
-	cell := full.Cases[0]
+	cell := full.Cells[0]
 	if cell.Status != "failed" || cell.Assertions.NotEvaluated != 2 {
 		t.Errorf("cell: %+v", cell)
 	}
-	if len(cell.Assertions.Failures) != 1 || cell.Assertions.Failures[0].SourceRef != "support-refunds.eval.ts:31:9" {
-		t.Errorf("failures: %+v", cell.Assertions.Failures)
+	if len(cell.Assertions.Outcomes) != 1 || cell.Assertions.Outcomes[0].SourceRef != "support-refunds.eval.ts:31:9" {
+		t.Errorf("outcomes: %+v", cell.Assertions.Outcomes)
 	}
 	if cell.Error == nil || cell.Error.MissingCassetteKey != "loop:abc123" {
 		t.Errorf("cell error: %+v", cell.Error)

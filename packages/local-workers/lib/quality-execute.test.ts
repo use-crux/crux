@@ -65,7 +65,7 @@ describe('executeEvaluations — event stream and exit codes', () => {
     const cellDone = events.find((event) => event.type === 'cell:done')
     if (cellDone?.type !== 'cell:done') throw new Error('expected cell:done')
     expect(cellDone.cell.status).toBe('failed')
-    expect(cellDone.cell.assertions.failures).toHaveLength(1)
+    expect(cellDone.cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed')).toHaveLength(1)
   })
 
   it('runs only the selected ids', async () => {

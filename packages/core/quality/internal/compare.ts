@@ -12,6 +12,7 @@
  */
 
 import type { Comparison, ComparisonDelta, ExperimentCell } from '../experiment'
+export { compareExperiments } from './experiment-diff'
 
 /** caseId → scoreName → mean score (trials averaged, null scores skipped). */
 export type CaseScoreMeans = ReadonlyMap<string, ReadonlyMap<string, number>>

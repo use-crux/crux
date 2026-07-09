@@ -30,7 +30,7 @@ func TestCellEvidenceAPIIncludesFailedAssertionSourceFrameAndValues(t *testing.T
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-1",
     "caseName": "refund policy",
     "variantName": "candidate",
@@ -49,16 +49,6 @@ func TestCellEvidenceAPIIncludesFailedAssertionSourceFrameAndValues(t *testing.T
     "assertions": {
       "ran": 1,
       "notEvaluated": 0,
-      "failures": [{
-        "level": "evaluation",
-        "index": 0,
-        "matcher": "toBeGreaterThanOrEqual",
-        "soft": false,
-        "message": "expected citation_valid to be >= 0.7",
-        "expectedPreview": "0.7",
-        "actualPreview": "0.58",
-        "sourceRef": "evals/refunds.eval.ts:42:7"
-      }],
       "outcomes": [{
         "id": "assert-0",
         "level": "evaluation",
@@ -195,14 +185,14 @@ func TestCellEvidenceAPIIncludesRuntimeErrorCheck(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-error",
     "variantName": "default",
     "trial": 0,
     "status": "errored",
     "input": { "q": "boom" },
     "scores": [],
-    "assertions": { "ran": 0, "notEvaluated": 0, "failures": [] },
+    "assertions": { "ran": 0, "notEvaluated": 0, "outcomes": [] },
     "error": { "message": "model call failed", "phase": "execute" },
     "durationMs": 1000,
     "traceIds": ["trace-error"],
@@ -257,14 +247,14 @@ func TestCellEvidenceAPIUsesRuntimeErrorSourceFrame(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-error-frame",
     "variantName": "default",
     "trial": 0,
     "status": "errored",
     "input": { "q": "boom" },
     "scores": [],
-    "assertions": { "ran": 0, "notEvaluated": 0, "failures": [], "outcomes": [] },
+    "assertions": { "ran": 0, "notEvaluated": 0, "outcomes": [], "outcomes": [] },
     "error": {
       "message": "plain callback crash",
       "phase": "expect",
@@ -335,12 +325,12 @@ func TestCellEvidenceAPIBuildsFlakyTrialSummary(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [
+  "cells": [
     {
       "caseId": "case-flaky", "variantName": "default", "trial": 0, "status": "passed",
       "input": { "q": "same" }, "output": "ok",
       "scores": [{ "name": "helpful", "score": 0.9 }],
-      "assertions": { "ran": 1, "notEvaluated": 0, "failures": [], "outcomes": [{ "id": "ok-0", "level": "evaluation", "phase": "expect", "index": 0, "status": "passed", "matcher": "toBe", "soft": false }] },
+      "assertions": { "ran": 1, "notEvaluated": 0, "outcomes": [], "outcomes": [{ "id": "ok-0", "level": "evaluation", "phase": "expect", "index": 0, "status": "passed", "matcher": "toBe", "soft": false }] },
       "durationMs": 900, "traceIds": [], "capturedSignals": []
     },
     {
@@ -350,7 +340,6 @@ func TestCellEvidenceAPIBuildsFlakyTrialSummary(t *testing.T) {
 	      "assertions": {
 	        "ran": 1,
 	        "notEvaluated": 0,
-	        "failures": [{ "level": "evaluation", "index": 0, "matcher": "toBe", "soft": false, "message": "expected ok", "actualPreview": "bad", "expectedPreview": "ok" }],
 	        "outcomes": [{
 	          "id": "expect:evaluation:0",
 	          "level": "evaluation",
@@ -368,7 +357,7 @@ func TestCellEvidenceAPIBuildsFlakyTrialSummary(t *testing.T) {
       "caseId": "case-flaky", "variantName": "default", "trial": 2, "status": "passed",
       "input": { "q": "same" }, "output": "ok",
       "scores": [{ "name": "helpful", "score": 0.9 }],
-      "assertions": { "ran": 1, "notEvaluated": 0, "failures": [] },
+      "assertions": { "ran": 1, "notEvaluated": 0, "outcomes": [] },
       "durationMs": 1000, "traceIds": [], "capturedSignals": []
     }
   ]

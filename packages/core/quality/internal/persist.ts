@@ -3,22 +3,25 @@
  * §1) to `<dir>/experiments/<experimentId>.json`.
  *
  * The persisted JSON mirrors the typed `Experiment` field-for-field with two
- * differences: the cell array is named `cases` (record contract) and the
- * `promote()` method is not data. Records are gitignored by default;
- * baselines (Phase 4) are the committed artifact.
+ * difference: the `promote()` method is not data. Records are gitignored by
+ * default; baselines are the committed artifact.
  *
  * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
  */
 
-import { mkdir, writeFile } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Experiment } from '../experiment'
+import { writeFileAtomic } from './fs-atomic'
+
+/** Current persisted Experiment record schema version. */
+export const EXPERIMENT_RECORD_SCHEMA_VERSION = 2
 
 /** Convert a typed Experiment into the persisted record shape. @internal */
 export function toExperimentRecord(experiment: Experiment<unknown, unknown, string, string>): Record<string, unknown> {
-  const { perCase, promote: _promote, ...rest } = experiment
-  return { ...rest, cases: perCase }
+  const { promote: _promote, ...record } = experiment
+  return record
 }
 
 /**
@@ -45,6 +48,6 @@ export async function persistExperiment(
 ): Promise<string> {
   await mkdir(join(dir, 'experiments'), { recursive: true })
   const path = experimentRecordPath(dir, experiment.experimentId)
-  await writeFile(path, `${JSON.stringify(toExperimentRecord(experiment), null, 2)}\n`, 'utf8')
+  await writeFileAtomic(path, `${JSON.stringify(toExperimentRecord(experiment), null, 2)}\n`)
   return path
 }

@@ -33,9 +33,9 @@ describe('Quality runner - trace-backed signal span evidence', () => {
     })
 
     const experiment = await run(evaluation)
-    const outcome = experiment.perCase[0]!.assertions.outcomes?.[0]
+    const outcome = experiment.cells[0]!.assertions.outcomes?.[0]
 
-    expect(experiment.perCase[0]!.status).toBe('failed')
+    expect(experiment.cells[0]!.status).toBe('failed')
     expect(outcome).toMatchObject({
       status: 'failed',
       matcher: 'steps.toHaveSucceeded',

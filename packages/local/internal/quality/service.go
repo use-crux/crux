@@ -25,6 +25,7 @@ var ErrNotFound = errors.New("quality record not found")
 type Service struct {
 	store *store.Store
 	dir   string
+	fs    *qualityfs.FS
 	bus   *EventBus
 	obs   *observability.Service
 
@@ -63,6 +64,7 @@ func NewService(s *store.Store, dir string) *Service {
 	return &Service{
 		store:              s,
 		dir:                dir,
+		fs:                 qualityfs.Open(dir),
 		bus:                NewEventBus(dir),
 		insightSignatures:  map[string]string{},
 		cassetteSignatures: map[string]string{},
@@ -120,13 +122,7 @@ func (s *Service) RunsWithOptionsAPI(ctx context.Context, opts api.QualityRunsOp
 }
 
 func observabilityRunListOptionsForQuality(opts api.QualityRunsOptions) observability.RunListOptions {
-	if opts.Limit <= 0 {
-		if opts.Offset > 0 {
-			return observability.RunListOptions{Limit: observability.DefaultRunListLimit + opts.Offset}
-		}
-		return observability.RunListOptions{}
-	}
-	return observability.RunListOptions{Limit: opts.Limit + opts.Offset}
+	return observability.RunListOptions{}
 }
 
 func (s *Service) RunDetail(ctx context.Context, traceID string) (qualityRunDetailRecord, bool, error) {
@@ -271,7 +267,7 @@ func (s *Service) DeleteInsightSilence(_ context.Context, silenceID string) (qua
 }
 
 func (s *Service) Feedback(_ context.Context) ([]qualityFeedbackRecord, error) {
-	snapshot, err := qualityfs.Open(s.dir).Snapshot()
+	snapshot, err := s.fs.Snapshot()
 	return snapshot.Feedback, err
 }
 
@@ -280,7 +276,7 @@ func (s *Service) FeedbackAPI(ctx context.Context) ([]api.QualityFeedbackRecord,
 }
 
 func (s *Service) FeedbackAnnotations(_ context.Context) ([]json.RawMessage, error) {
-	return qualityfs.Open(s.dir).ReadStream(qualityfs.StreamFeedbackAnnotations)
+	return s.fs.ReadStream(qualityfs.StreamFeedbackAnnotations)
 }
 
 func (s *Service) FeedbackAnnotationsAPI(ctx context.Context) ([]api.QualityFeedbackAnnotationRecord, error) {
@@ -288,7 +284,7 @@ func (s *Service) FeedbackAnnotationsAPI(ctx context.Context) ([]api.QualityFeed
 }
 
 func (s *Service) MemoryProposals(_ context.Context) ([]json.RawMessage, error) {
-	return qualityfs.Open(s.dir).ReadStream(qualityfs.StreamFeedbackMemory)
+	return s.fs.ReadStream(qualityfs.StreamFeedbackMemory)
 }
 
 func (s *Service) MemoryProposalsAPI(ctx context.Context) ([]api.QualityFeedbackMemoryProposalRecord, error) {
@@ -296,7 +292,7 @@ func (s *Service) MemoryProposalsAPI(ctx context.Context) ([]api.QualityFeedback
 }
 
 func (s *Service) CreateFeedbackAnnotation(_ context.Context, req qualityFeedbackAnnotationPostRequest) (qualityFeedbackAnnotationRecord, error) {
-	record, err := qualityfs.Put(qualityfs.Open(s.dir), qualityFeedbackAnnotationRecord{
+	record, err := qualityfs.Put(s.fs, qualityFeedbackAnnotationRecord{
 		FeedbackID: req.FeedbackID,
 		Status:     req.Status,
 		Note:       req.Note,
@@ -311,7 +307,7 @@ func (s *Service) CreateFeedbackAnnotation(_ context.Context, req qualityFeedbac
 }
 
 func (s *Service) CreateFeedback(_ context.Context, req qualityFeedbackPostRequest) (qualityFeedbackRecord, error) {
-	record, err := qualityfs.Put(qualityfs.Open(s.dir), qualityFeedbackRecord{
+	record, err := qualityfs.Put(s.fs, qualityFeedbackRecord{
 		TraceID:      req.TraceID,
 		ExperimentID: req.ExperimentID,
 		CaseID:       req.CaseID,

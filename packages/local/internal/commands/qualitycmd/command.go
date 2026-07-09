@@ -27,12 +27,18 @@ records for progress, baselines, and cell-level debugging evidence.`,
   crux quality promote <experiment-id>`,
 	}
 	cmd.AddCommand(
+		NewQualityInitCmd(f),
+		NewQualityImportTracesCmd(f),
 		NewQualityRunCmd(f),
 		NewQualityWatchCmd(f),
 		NewQualityListCmd(),
 		NewQualityShowCmd(f),
 		NewQualityProgressCmd(f),
 		NewQualityCellEvidenceCmd(f),
+		NewQualityDiffCmd(f),
+		NewQualityLabelCmd(f),
+		NewQualityJudgeReportCmd(f),
+		NewQualityMCPCmd(f),
 		NewQualityPromoteCmd(f),
 	)
 	return cmd

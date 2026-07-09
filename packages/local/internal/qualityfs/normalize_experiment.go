@@ -10,7 +10,8 @@ func enrichExperiment(experiment Experiment) Experiment {
 		experiment.VariantConfigs = map[string]VariantConfigDiff{}
 	}
 	byVariant := map[string][]ExperimentCase{}
-	for _, testCase := range experiment.Cases {
+	cells := experimentCells(experiment)
+	for _, testCase := range cells {
 		byVariant[testCase.VariantID] = append(byVariant[testCase.VariantID], testCase)
 	}
 	if len(experiment.Variants) == 0 {
@@ -101,10 +102,10 @@ func enrichExperiment(experiment Experiment) Experiment {
 	}
 	if experiment.Status == "running" {
 		experiment.Progress = &ExperimentProgress{
-			CasesDone:     len(experiment.Cases),
+			CasesDone:     len(cells),
 			CasesTotal:    experiment.Summary.Total,
 			VariantsTotal: len(experiment.Variants),
-			ProviderCalls: len(experiment.Cases),
+			ProviderCalls: len(cells),
 		}
 	}
 	return experiment

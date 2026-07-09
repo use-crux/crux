@@ -31,7 +31,7 @@ func TestHTTPServerQualityCellEvidenceEndpoint(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-http",
     "variantName": "default",
     "trial": 0,
@@ -39,11 +39,7 @@ func TestHTTPServerQualityCellEvidenceEndpoint(t *testing.T) {
     "input": {},
     "output": "bad",
     "scores": [],
-    "assertions": {
-      "ran": 1,
-      "notEvaluated": 0,
-      "failures": [{ "level": "evaluation", "index": 0, "matcher": "toBe", "soft": false, "message": "expected ok" }]
-    },
+    "assertions": { "ran": 1, "notEvaluated": 0, "outcomes": [{ "id": "expect:evaluation:0", "level": "evaluation", "phase": "expect", "index": 0, "status": "failed", "matcher": "toBe", "soft": false, "message": "expected ok" }] },
     "durationMs": 1000,
     "traceIds": [],
     "capturedSignals": []

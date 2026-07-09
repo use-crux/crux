@@ -286,14 +286,9 @@ export interface SignalExpect {
  * })
  * ```
  */
-type DecisionReportNamespace<TCaps extends Capability> = 'decisionReports' extends TCaps
-  ? Pick<SignalExpect, 'decisionReport'>
-  : object
-
 export type BoundExpect<TOutput, TCaps extends Capability> = ValueExpect &
   AlwaysOnExpect &
-  Pick<SignalExpect, Extract<TCaps, Exclude<keyof SignalExpect, 'decisionReport'>>> &
-  DecisionReportNamespace<TCaps>
+  Pick<SignalExpect, Extract<TCaps, keyof SignalExpect>>
 
 // ─────────────────────────────────────────────────────────────────
 // Case context
@@ -329,7 +324,7 @@ export interface StepAccessor {
  * ```ts
  * expect: async (ctx) => {
  *   ctx.expect(ctx.output.answer).toContain(ctx.expected?.mustMention ?? '')
- *   ctx.score('answer-length', Math.min(1, ctx.output.answer.length / 400))
+ *   ctx.recordScore('answer-length', Math.min(1, ctx.output.answer.length / 400))
  * }
  * ```
  */
@@ -350,7 +345,7 @@ export interface CaseContext<TInput, TOutput, TExpected, TCaps extends Capabilit
    * Record an ad-hoc per-case score; joins the same score model as scorers
    * (reported, aggregated with mean + SEM, gateable by name).
    */
-  score(name: string, score: number, metadata?: Record<string, unknown>): void
+  recordScore(name: string, score: number, metadata?: Record<string, unknown>): void
   /**
    * Typed-unknown step access with optional schema narrowing. Only present
    * when the task captures `steps` (flows and agents).
@@ -378,11 +373,11 @@ export interface CaseContext<TInput, TOutput, TExpected, TCaps extends Capabilit
 export type ScoreMap<TScoreName extends string> = Readonly<Record<TScoreName, number>>
 
 /**
- * Everything an `assert` callback receives after scorers have run.
+ * Everything an `afterScores` callback receives after scorers have run.
  *
- * `assert` is the post-score companion to `expect`: use `expect` for
- * pre-score checks over output and captured signals, then use `assert` when a
- * check needs scorer results such as `ctx.score.citation_valid >= 0.70`.
+ * `afterScores` is the post-score companion to `expect`: use `expect` for
+ * pre-score checks over output and captured signals, then use `afterScores`
+ * when a check needs scorer results such as `ctx.score.citation_valid >= 0.70`.
  * The matcher surface is the same `ctx.expect` API, so assertion outcomes,
  * source refs, values, and redaction follow the existing ledger contract.
  *
@@ -394,7 +389,7 @@ export type ScoreMap<TScoreName extends string> = Readonly<Record<TScoreName, nu
  *
  * @example
  * ```ts
- * assert: (ctx) => {
+ * afterScores: (ctx) => {
  *   ctx.expect(ctx.score.citation_valid).toBeGreaterThanOrEqual(0.7)
  * }
  * ```
@@ -406,7 +401,7 @@ export interface AssertContext<TInput, TOutput, TExpected, TScoreName extends st
   output: TOutput
   /** The case's `expected` payload. */
   expected: TExpected | undefined
-  /** The bound assertion surface, now recording phase `"assert"`. */
+  /** The bound assertion surface, now recording phase `"afterScores"`. */
   expect: BoundExpect<TOutput, TCaps>
   /** Statically named scorer outputs, keyed by literal scorer name. */
   score: ScoreMap<TScoreName>
