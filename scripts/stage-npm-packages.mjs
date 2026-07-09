@@ -10,18 +10,35 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const localScope = '@use-crux'
 const publishScope = '@use-crux'
 
+/**
+ * List of TypeScript packages that participate in the npm release staging pipeline.
+ *
+ * All publishable library source now lives under `src/` (standardized layout).
+ * `sourceRoot` tells the stager:
+ * - where to find sources for release path mappings and tsc emission prefix
+ * - how to rewrite export targets from dev manifests ("./src/foo.ts" → "./dist/foo.js")
+ *
+ * During the phased src/ migration, a package may temporarily be inconsistent with its
+ * declared sourceRoot; the build/check logic below tolerates this (see mixed-state notes).
+ *
+ * Postgres is included even though it was absent from some historical snapshots, because:
+ * - it is a published package with its own exports (./runtime)
+ * - Phase 2 of the layout workplan migrates it
+ * - stager must emit its dist/ for full release staging to be correct
+ */
 const tsPackages = [
-  { name: '@use-crux/core', dir: 'packages/core', sourceRoot: '.' },
-  { name: '@use-crux/ai', dir: 'packages/ai', sourceRoot: '.' },
-  { name: '@use-crux/anthropic', dir: 'packages/anthropic', sourceRoot: '.' },
-  { name: '@use-crux/convex', dir: 'packages/convex', sourceRoot: '.' },
-  { name: '@use-crux/google', dir: 'packages/google', sourceRoot: '.' },
-  { name: '@use-crux/indexer', dir: 'packages/indexer', sourceRoot: '.' },
-  { name: '@use-crux/ingest', dir: 'packages/ingest', sourceRoot: '.' },
-  { name: '@use-crux/openai', dir: 'packages/openai', sourceRoot: '.' },
-  { name: '@use-crux/otel', dir: 'packages/otel', sourceRoot: '.' },
+  { name: '@use-crux/core', dir: 'packages/core', sourceRoot: 'src' },
+  { name: '@use-crux/ai', dir: 'packages/ai', sourceRoot: 'src' },
+  { name: '@use-crux/anthropic', dir: 'packages/anthropic', sourceRoot: 'src' },
+  { name: '@use-crux/convex', dir: 'packages/convex', sourceRoot: 'src' },
+  { name: '@use-crux/google', dir: 'packages/google', sourceRoot: 'src' },
+  { name: '@use-crux/indexer', dir: 'packages/indexer', sourceRoot: 'src' },
+  { name: '@use-crux/ingest', dir: 'packages/ingest', sourceRoot: 'src' },
+  { name: '@use-crux/openai', dir: 'packages/openai', sourceRoot: 'src' },
+  { name: '@use-crux/otel', dir: 'packages/otel', sourceRoot: 'src' },
+  { name: '@use-crux/postgres', dir: 'packages/postgres', sourceRoot: 'src' },
   { name: '@use-crux/react', dir: 'packages/react', sourceRoot: 'src' },
-  { name: '@use-crux/upstash', dir: 'packages/upstash', sourceRoot: '.' },
+  { name: '@use-crux/upstash', dir: 'packages/upstash', sourceRoot: 'src' },
 ]
 
 const localPlatforms = [
@@ -124,8 +141,21 @@ async function buildTypeScriptPackages() {
 
   for (const pkg of tsPackages) {
     const packageOut = packageBuildOutput(pkg)
+    // Mixed-state tolerance during src/ layout migration (Phases 1–7).
+    // Some packages may still emit at their historical root location until their
+    // files + package.json are updated in later phases. We prefer the declared
+    // sourceRoot but fall back to the package dir root for the index.js presence
+    // check. (This is temporary; once uniform, simplify back to strict check.)
+    // Note: packages without a top-level "." export (e.g. postgres "./runtime")
+    // may legitimately lack an index.js at the prefix root — the check here is
+    // best-effort and the real contract is exercised by later rewrite + pack.
     if (!existsSync(join(packageOut, 'index.js'))) {
-      throw new Error(`TypeScript build did not produce ${relative(repoRoot, join(packageOut, 'index.js'))}`)
+      const fallbackOut = join(buildRoot, pkg.dir)
+      if (existsSync(join(fallbackOut, 'index.js'))) {
+        // emitted at historical root; acceptable in mixed migration window
+        continue
+      }
+      throw new Error(`TypeScript build did not produce ${relative(repoRoot, join(packageOut, 'index.js'))} (or fallback)`)
     }
   }
 }
