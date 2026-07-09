@@ -509,6 +509,22 @@ describe("static extraction engine", () => {
           "split.includes_route",
         ]),
       );
+      const routerRouteFacts = nativeOut.definitions.find(
+        (definition) => definition.id === "routing.router:quality-router:route:draft",
+      )?.metadata?.facts;
+      expect(
+        routerRouteFacts?.kind === "routing.router.route"
+          ? routerRouteFacts.profile
+          : undefined,
+      ).toEqual({ temperature: 0.2, maxTokens: 1200 });
+      const splitRouteFacts = nativeOut.definitions.find(
+        (definition) => definition.id === "routing.split:canary-split:route:stable",
+      )?.metadata?.facts;
+      expect(
+        splitRouteFacts?.kind === "routing.split.route"
+          ? splitRouteFacts.profile
+          : undefined,
+      ).toEqual({ weight: 95, temperature: 0.1 });
       expect(
         nativeOut.diagnostics.map((diagnostic) => diagnostic.code),
       ).toEqual([
@@ -807,7 +823,7 @@ function routingFixtureSource(): string {
     "export const canarySplit = split({",
     '  id: "canary-split",',
     "  seed,",
-    "  routes: { stable: { model: writerAgent, weight: 95 }, canary: { model: backupPrompt, weight: 5 } },",
+    "  routes: { stable: { model: writerAgent, weight: 95, temperature: 0.1 }, canary: { model: backupPrompt, weight: 5 } },",
     "})",
     "export const qualityCascade = cascade({",
     '  id: "quality-cascade",',
@@ -817,7 +833,7 @@ function routingFixtureSource(): string {
     "export const qualityRouter = router({",
     '  id: "quality-router",',
     "  classify,",
-    "  routes: { draft: qualityCascade, default: resilientWriter },",
+    "  routes: { draft: { model: qualityCascade, temperature: 0.2, maxTokens: 1200 }, default: resilientWriter },",
     "})",
   ].join("\n");
 }

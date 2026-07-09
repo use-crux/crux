@@ -5,8 +5,8 @@ use crate::{
     definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
     protocol::StaticSyntaxValue,
     record_values::{
-        direct_string_property, has_property, model_reference, number_property, object_value,
-        property_value,
+        call_profile_params, direct_string_property, has_property, model_reference,
+        number_property, object_value, property_value,
     },
     routing::output::{extracted_facts, routing_target_relation_refs},
 };
@@ -107,6 +107,7 @@ struct SplitRoute {
     key: String,
     target: String,
     weight: Option<f64>,
+    profile: Option<Value>,
 }
 
 fn split_route_entries(
@@ -125,6 +126,7 @@ fn split_route_entries(
                 key: property.name.clone(),
                 target,
                 weight: number_property(&property.value, "weight", &context.initializers),
+                profile: call_profile_params(&property.value, &context.initializers),
             })
         })
         .collect()
@@ -165,17 +167,32 @@ fn route_child(
     if let Some(weight) = route.weight {
         metadata.insert("weight".to_string(), json!(weight));
     }
-    metadata.insert(
-        "facts".to_string(),
-        json!({
-            "kind": "routing.split.route",
-            "parentDefinitionId": split_id,
-            "routingId": routing_id,
-            "routeKey": route.key,
-            "weight": route.weight,
-            "targetVariable": route.target,
-        }),
+    if let Some(profile) = &route.profile {
+        metadata.insert("profile".to_string(), profile.clone());
+    }
+    let mut facts = Map::new();
+    facts.insert(
+        "kind".to_string(),
+        Value::String("routing.split.route".to_string()),
     );
+    facts.insert(
+        "parentDefinitionId".to_string(),
+        Value::String(split_id.to_string()),
+    );
+    facts.insert(
+        "routingId".to_string(),
+        Value::String(routing_id.to_string()),
+    );
+    facts.insert("routeKey".to_string(), Value::String(route.key.clone()));
+    facts.insert("weight".to_string(), json!(route.weight));
+    facts.insert(
+        "targetVariable".to_string(),
+        Value::String(route.target.clone()),
+    );
+    if let Some(profile) = &route.profile {
+        facts.insert("profile".to_string(), profile.clone());
+    }
+    metadata.insert("facts".to_string(), Value::Object(facts));
     metadata.insert(
         "intelligence".to_string(),
         json!({"confidence": "static", "control": {"mode": "routing", "ordering": "conditional"}}),

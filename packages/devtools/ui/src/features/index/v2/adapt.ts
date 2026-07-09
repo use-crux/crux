@@ -194,6 +194,9 @@ export interface IndexFacts {
   isDefault?: boolean;
   tierIndex?: number;
   hasEvaluate?: boolean;
+  routingContextType?: string;
+  routingContextRequired?: boolean;
+  profile?: Record<string, unknown>;
   // rag
   topK?: number;
   index?: number;
@@ -499,6 +502,7 @@ function buildConfig(
   facts: IndexFacts | undefined,
 ): Record<string, unknown> | undefined {
   const metaRec = meta as Record<string, unknown>;
+  const profile = routingProfile(metaRec.profile) ?? facts?.profile;
   const configuration = metaRec.configuration;
   if (
     configuration &&
@@ -506,7 +510,8 @@ function buildConfig(
     !Array.isArray(configuration)
   ) {
     const c = configuration as Record<string, unknown>;
-    if (Object.keys(c).length > 0) return c;
+    if (Object.keys(c).length > 0)
+      return profile && c.profile === undefined ? { ...c, profile } : c;
   }
   const settings = metaRec.settings;
   const merged: Record<string, unknown> = {
@@ -514,8 +519,15 @@ function buildConfig(
     ...(settings && typeof settings === "object" && !Array.isArray(settings)
       ? (settings as Record<string, unknown>)
       : {}),
+    ...(profile ? { profile } : {}),
   };
   return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function routingProfile(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 function buildContract(

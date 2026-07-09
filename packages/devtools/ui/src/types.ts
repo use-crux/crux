@@ -543,6 +543,8 @@ export type PrimitiveSpecificFacts =
       optionCount?: number;
       hasBudget?: boolean;
       budget?: Record<string, unknown>;
+      routingContextType?: string;
+      routingContextRequired?: boolean;
     }
   | {
       kind:
@@ -563,6 +565,7 @@ export type PrimitiveSpecificFacts =
       targetKind?: string;
       hasEvaluate?: boolean;
       isDefault?: boolean;
+      profile?: Record<string, unknown>;
     }
   | {
       kind:
@@ -757,6 +760,8 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
     sourceMtime?: true;
   };
   facts?: ProjectDefinitionFacts;
+  /** JSON-safe call-profile parameters captured for a routing child. */
+  profile?: Record<string, unknown>;
   extensions?: Record<string, unknown>;
 }
 

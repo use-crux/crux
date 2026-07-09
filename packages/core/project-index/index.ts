@@ -388,6 +388,8 @@ export interface ProjectDefinitionMetadata extends Record<string, unknown> {
   facts?: ProjectDefinitionFacts;
   configuration?: Record<string, unknown>;
   settings?: Record<string, unknown>;
+  /** JSON-safe call-profile parameters captured for a routing child. */
+  profile?: Record<string, unknown>;
   intelligence?: PrimitiveIntelligence;
   runtimeJoin?: ProjectRuntimeJoin;
   sourceStatus?: {
@@ -643,6 +645,10 @@ export interface RoutingFacts {
   optionCount?: number;
   hasBudget?: boolean;
   budget?: Record<string, unknown>;
+  /** Rendered `RouteArgs` context type required at the routing call site. */
+  routingContextType?: string;
+  /** Whether callers must provide a non-empty `routing:` context object. */
+  routingContextRequired?: boolean;
 }
 
 export interface RoutingChildFacts {
@@ -664,6 +670,8 @@ export interface RoutingChildFacts {
   targetKind?: ProjectDefinitionKind;
   hasEvaluate?: boolean;
   isDefault?: boolean;
+  /** JSON-safe call-profile parameters authored alongside the route model. */
+  profile?: Record<string, unknown>;
 }
 
 export interface RagFacts {

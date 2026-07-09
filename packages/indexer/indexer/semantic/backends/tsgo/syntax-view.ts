@@ -41,6 +41,7 @@ import {
   isObjectLiteralExpression,
   isParenthesizedExpression,
   isPartiallyEmittedExpression,
+  isParameterDeclaration,
   isPropertyAccessExpression,
   isPropertyAssignment,
   isPropertyDeclaration,
@@ -52,6 +53,7 @@ import {
   isSpreadElement,
   isStringLiteral,
   isTemplateExpression,
+  isTypeReferenceNode,
   isTrueLiteral,
   isTypeAliasDeclaration,
   isTypeAssertion,
@@ -170,6 +172,12 @@ export function createTsgoSemanticSyntaxView(input: TsgoSemanticSyntaxViewInput)
     },
     variableStatementDeclarations(node) {
       return isVariableStatement(node) ? nativeNodeList(node.declarationList.declarations) : []
+    },
+    parameterTypeReference(node) {
+      if (!isParameterDeclaration(node) || !node.type || !isTypeReferenceNode(node.type)) return undefined
+      return isIdentifier(node.type.typeName)
+        ? { name: node.type.typeName.text, arguments: nativeNodeList(node.type.typeArguments ?? []) }
+        : undefined
     },
     importModuleSpecifier(node) {
       if (!isImportDeclaration(node)) return undefined

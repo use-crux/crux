@@ -1,11 +1,17 @@
 import {
   isArrayLiteralExpression,
   isCallExpression,
+  isFalseLiteral,
   isIdentifier,
+  isNoSubstitutionTemplateLiteral,
+  isNullLiteral,
+  isNumericLiteral,
   isObjectLiteralExpression,
   isPropertyAccessExpression,
   isPropertyAssignment,
   isShorthandPropertyAssignment,
+  isStringLiteral,
+  isTrueLiteral,
   type ArrayLiteralExpression,
   type Expression,
   type ObjectLiteralElementLike,
@@ -120,6 +126,31 @@ export function propertyNameForRoutingMember(
     : undefined;
 }
 
+/**
+ * Reads JSON-safe literal parameters from a call-profile route expression.
+ *
+ * The routing `model` selects the target and deliberately never appears in the
+ * returned profile. Dynamic values stay absent so direct native projection
+ * cannot claim configuration it did not statically observe.
+ */
+export function literalCallProfileForExpression(
+  expression: Expression,
+  bindings: ReadonlyMap<string, NativeSourceBinding>,
+): Resolved<Record<string, unknown> | undefined> {
+  const profileObject = objectExpression(expression, bindings);
+  if (profileObject === "unsupported" || !profileObject) return profileObject;
+  const profile = Object.fromEntries(
+    nativeNodeList(profileObject.properties).flatMap((property) => {
+      const name = propertyNameForRoutingMember(property);
+      const value = propertyExpression(property);
+      if (!name || name === "model" || !value) return [];
+      const literal = literalJsonValue(value);
+      return literal === undefined ? [] : [[name, literal]];
+    }),
+  );
+  return Object.keys(profile).length > 0 ? profile : undefined;
+}
+
 function objectExpression(
   expression: Expression,
   bindings: ReadonlyMap<string, NativeSourceBinding>,
@@ -175,4 +206,28 @@ function objectPropertyValue(
 
 function isResolvableSourceExpression(expression: Expression): boolean {
   return isIdentifier(expression) || isPropertyAccessExpression(expression);
+}
+
+function literalJsonValue(expression: Expression): unknown {
+  if (isStringLiteral(expression) || isNoSubstitutionTemplateLiteral(expression))
+    return expression.text;
+  if (isNumericLiteral(expression)) return Number(expression.text);
+  if (isTrueLiteral(expression)) return true;
+  if (isFalseLiteral(expression)) return false;
+  if (isNullLiteral(expression)) return null;
+  if (isArrayLiteralExpression(expression)) {
+    const values = nativeNodeList(expression.elements).map(literalJsonValue);
+    return values.some((value) => value === undefined) ? undefined : values;
+  }
+  if (!isObjectLiteralExpression(expression)) return undefined;
+  const entries: Array<readonly [string, unknown]> = [];
+  for (const property of nativeNodeList(expression.properties)) {
+    const name = propertyNameForRoutingMember(property);
+    const value = propertyExpression(property);
+    if (!name || !value) return undefined;
+    const literal = literalJsonValue(value);
+    if (literal === undefined) return undefined;
+    entries.push([name, literal]);
+  }
+  return Object.fromEntries(entries);
 }

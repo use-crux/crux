@@ -113,10 +113,18 @@ pub(crate) fn object_map_identifier_entries(
         .collect()
 }
 
-pub(crate) fn object_map_model_entries(
+/// One statically resolved route target with its literal call-profile settings.
+pub(crate) struct ModelProfileEntry {
+    pub(crate) key: String,
+    pub(crate) target: String,
+    pub(crate) profile: Option<Value>,
+}
+
+/// Reads model targets and JSON-safe literal call-profile parameters from a route map.
+pub(crate) fn object_map_model_profile_entries(
     value: Option<&StaticSyntaxValue>,
     initializers: &HashMap<&str, &StaticInitializerRecord>,
-) -> Vec<(String, String)> {
+) -> Vec<ModelProfileEntry> {
     let resolved =
         value.map(|value| resolve_static_value(value, initializers, &mut HashSet::new()));
     let Some(StaticSyntaxValue::Object { properties, .. }) = resolved else {
@@ -126,10 +134,32 @@ pub(crate) fn object_map_model_entries(
         .iter()
         .filter(|property| property.spread != Some(true))
         .filter_map(|property| {
-            model_reference(&property.value, initializers)
-                .map(|value| (property.name.clone(), value))
+            model_reference(&property.value, initializers).map(|target| ModelProfileEntry {
+                key: property.name.clone(),
+                target,
+                profile: call_profile_params(&property.value, initializers),
+            })
         })
         .collect()
+}
+
+/// Returns literal route parameters other than the selected `model`.
+pub(crate) fn call_profile_params(
+    value: &StaticSyntaxValue,
+    initializers: &HashMap<&str, &StaticInitializerRecord>,
+) -> Option<Value> {
+    let resolved = resolve_static_value(value, initializers, &mut HashSet::new());
+    let StaticSyntaxValue::Object { properties, .. } = resolved else {
+        return None;
+    };
+    let params = properties
+        .iter()
+        .filter(|property| property.spread != Some(true) && property.name != "model")
+        .filter_map(|property| {
+            json_value(&property.value, initializers).map(|value| (property.name.clone(), value))
+        })
+        .collect::<Map<_, _>>();
+    (!params.is_empty()).then_some(Value::Object(params))
 }
 
 pub(crate) fn object_array_value<'a>(

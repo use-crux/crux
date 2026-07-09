@@ -15,9 +15,12 @@ import {
   type ObjectLiteralExpression,
 } from "@typescript/native-preview/unstable/ast";
 import { nativeNodeList, nativeSourceForNode } from "../source";
+import type { TsgoSemanticCompilerView } from "../compiler-view";
+import { routingContextFactsForCallback } from "../../../routing-context";
 import { propertyInitializer } from "./object";
 import {
   arrayPropertyExpression,
+  literalCallProfileForExpression,
   objectPropertyExpression,
   propertyExpression,
   propertyNameForRoutingMember,
@@ -70,11 +73,12 @@ export function routingEvidenceForDefinition(
   definition: NativeDefinition,
   definitions: ReadonlyMap<string, NativeDefinition>,
   bindings: ReadonlyMap<string, NativeSourceBinding>,
+  view: TsgoSemanticCompilerView,
 ): NativeRoutingEvidence | undefined {
   if (definition.kind === "routing.router")
-    return routerEvidence(definition, definitions, bindings);
+    return routerEvidence(definition, definitions, bindings, view);
   if (definition.kind === "routing.split")
-    return splitEvidence(definition, definitions, bindings);
+    return splitEvidence(definition, definitions, bindings, view);
   if (definition.kind === "routing.retry")
     return retryEvidence(definition, definitions, bindings);
   if (definition.kind === "routing.cascade")
@@ -88,6 +92,7 @@ function splitEvidence(
   definition: NativeDefinition,
   definitions: ReadonlyMap<string, NativeDefinition>,
   bindings: ReadonlyMap<string, NativeSourceBinding>,
+  view: TsgoSemanticCompilerView,
 ): NativeRoutingEvidence | undefined {
   const routes = objectPropertyExpression(
     definition.object,
@@ -95,14 +100,15 @@ function splitEvidence(
     bindings,
   );
   if (routes === "unsupported") return undefined;
-  if (!routes) return emptyRoutingEvidence();
-  return mergeRoutingEvidence(
+  if (!routes) return routingParentEvidence(definition, view, emptyRoutingEvidence());
+  const evidence = mergeRoutingEvidence(
     presentValues(
       nativeNodeList(routes.properties).map((property, index) =>
         splitRouteEvidence(definition, definitions, bindings, property, index),
       ),
     ),
   );
+  return evidence && routingParentEvidence(definition, view, evidence);
 }
 
 function retryEvidence(
@@ -132,6 +138,7 @@ function routerEvidence(
   definition: NativeDefinition,
   definitions: ReadonlyMap<string, NativeDefinition>,
   bindings: ReadonlyMap<string, NativeSourceBinding>,
+  view: TsgoSemanticCompilerView,
 ): NativeRoutingEvidence | undefined {
   const routes = objectPropertyExpression(
     definition.object,
@@ -139,14 +146,15 @@ function routerEvidence(
     bindings,
   );
   if (routes === "unsupported") return undefined;
-  if (!routes) return emptyRoutingEvidence();
-  return mergeRoutingEvidence(
+  if (!routes) return routingParentEvidence(definition, view, emptyRoutingEvidence());
+  const evidence = mergeRoutingEvidence(
     presentValues(
       nativeNodeList(routes.properties).map((property, index) =>
         routerRouteEvidence(definition, definitions, bindings, property, index),
       ),
     ),
   );
+  return evidence && routingParentEvidence(definition, view, evidence);
 }
 
 function cascadeEvidence(
@@ -315,6 +323,7 @@ function routingChildEvidence(
   input: RoutingChildInput,
 ): readonly NativeRoutingEvidence[] | undefined {
   const target = targetForExpression(input.expression, definitions, bindings);
+  const profile = literalCallProfileForExpression(input.expression, bindings);
   const sourceRef = sourceRefForExpression(
     input.id,
     "config",
@@ -325,11 +334,16 @@ function routingChildEvidence(
       routingTarget: true,
     },
   );
-  if (target === "unsupported" || sourceRef === "unsupported") return undefined;
-  if (!target && !sourceRef) return [];
+  if (
+    target === "unsupported" ||
+    sourceRef === "unsupported" ||
+    profile === "unsupported"
+  )
+    return undefined;
+  if (!target && !sourceRef && !profile) return [];
   return [
     {
-      definitions: [routingChildDefinition(input, target)],
+      definitions: [routingChildDefinition(input, target, profile)],
       relations: target
         ? relationForRoutingTarget(definition, input, target)
         : [],
@@ -341,6 +355,7 @@ function routingChildEvidence(
 function routingChildDefinition(
   input: RoutingChildInput,
   target: NativeDefinition | undefined,
+  profile: Record<string, unknown> | undefined,
 ): DefinitionFact {
   return {
     id: input.id,
@@ -358,8 +373,39 @@ function routingChildDefinition(
       ...(target
         ? { targetKind: target.kind, targetDefinitionId: target.id }
         : {}),
+      ...(profile ? { profile, facts: { kind: input.kind, profile } } : {}),
     },
     sourceRefs: [],
+  };
+}
+
+/** Adds context facts to router and split parent definitions in the direct path. */
+function routingParentEvidence(
+  definition: NativeDefinition,
+  view: TsgoSemanticCompilerView,
+  evidence: NativeRoutingEvidence,
+): NativeRoutingEvidence {
+  const property = definition.primitive.routingContext?.callbackProperty;
+  const callback = property
+    ? propertyInitializer(definition.object, property)
+    : undefined;
+  const context = callback
+    ? routingContextFactsForCallback(callback, view)
+    : undefined;
+  return {
+    ...evidence,
+    definitions: [
+      {
+        id: definition.id,
+        kind: definition.kind,
+        name: definition.name,
+        fidelity: "resolved",
+        status: "active",
+        metadata: { facts: { kind: definition.kind, ...(context ?? {}) } },
+        sourceRefs: [],
+      },
+      ...evidence.definitions,
+    ],
   };
 }
 

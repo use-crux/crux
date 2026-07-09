@@ -16,6 +16,7 @@ export const nativeDirectRoutingPrimitiveManifest = [
     schema: [],
     sourceRefs: [{ property: "classify", role: "callback" }],
     dependencies: [],
+    routingContext: { callbackProperty: "classify" },
   },
   {
     callName: "split",
@@ -25,6 +26,7 @@ export const nativeDirectRoutingPrimitiveManifest = [
     schema: [],
     sourceRefs: [{ property: "seed", role: "callback" }],
     dependencies: [],
+    routingContext: { callbackProperty: "seed" },
   },
   {
     callName: "retry",

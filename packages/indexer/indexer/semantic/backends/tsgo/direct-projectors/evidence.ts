@@ -25,6 +25,7 @@ import {
 import { hasUnsupportedSemanticProperty } from "./guards";
 import { definitionName, nativeCruxCall, propertyInitializer } from "./object";
 import { routingEvidenceForDefinition } from "./routing";
+import type { TsgoSemanticCompilerView } from "../compiler-view";
 import {
   isNativeDirectStorageInitializer,
   nativeDirectStorageEvidence,
@@ -79,13 +80,14 @@ export function nativeDirectCandidateFiles(
 export function nativeDirectEvidenceForFiles(
   project: Project,
   files: readonly string[],
+  view: TsgoSemanticCompilerView,
 ): NativeDirectEvidenceResult | undefined {
   const supported: string[] = [];
   const unsupported: string[] = [];
   const facts: IndexPatchFacts[] = [];
 
   for (const file of files) {
-    const directFacts = nativeDirectEvidence(project, [file]);
+    const directFacts = nativeDirectEvidence(project, [file], view);
     if (directFacts) {
       supported.push(file);
       facts.push(directFacts);
@@ -111,6 +113,7 @@ export function nativeDirectEvidenceForFiles(
 export function nativeDirectEvidence(
   project: Project,
   files: readonly string[],
+  view: TsgoSemanticCompilerView,
 ): IndexPatchFacts | undefined {
   const sources = presentValues(
     files.map((file) => project.program.getSourceFile(file)),
@@ -193,6 +196,7 @@ export function nativeDirectEvidence(
           definition,
           definitionsByVariable,
           bindings,
+          view,
         )
       : undefined;
   });

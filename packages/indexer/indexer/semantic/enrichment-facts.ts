@@ -45,6 +45,7 @@ import {
   unwrapExpression,
 } from "./model";
 import { semanticStorageDefinitionEnrichments } from "./storage-facts";
+import { routingContextFactsForCallback } from "./routing-context";
 import {
   compactWorkspaceMountMetadata,
   compactWorkspaceMountSourceMetadata,
@@ -108,9 +109,12 @@ function semanticSplitDefinitionEnrichments(
   candidate: SemanticDefinitionCandidate,
   view: SemanticAnalyzerView,
 ): SemanticDefinitionEnrichment[] {
+  const parent = semanticRoutingParentEnrichment(candidate, "seed", view);
   const routes = semanticObjectProperty(candidate.object, "routes", view);
-  if (!routes) return [];
-  return view.syntax.objectProperties(routes).flatMap((property, index) => {
+  if (!routes) return parent;
+  return [
+    ...parent,
+    ...view.syntax.objectProperties(routes).flatMap((property, index) => {
     const routeKey = semanticObjectPropertyName(property, view);
     const expression = objectMemberExpression(property, view);
     if (!routeKey || !expression) return [];
@@ -127,13 +131,15 @@ function semanticSplitDefinitionEnrichments(
       routeKey,
       target,
       index,
+      semanticRoutingCallProfile(expression, view),
     );
     return ref
       ? [{ definition, sourceRefs: [ref] }]
       : target
         ? [{ definition }]
         : [];
-  });
+    }),
+  ];
 }
 
 /** Builds the folded target definition and source ref for retry. */
@@ -813,9 +819,12 @@ function semanticRouterDefinitionEnrichments(
   candidate: SemanticDefinitionCandidate,
   view: SemanticAnalyzerView,
 ): SemanticDefinitionEnrichment[] {
+  const parent = semanticRoutingParentEnrichment(candidate, "classify", view);
   const routes = semanticObjectProperty(candidate.object, "routes", view);
-  if (!routes) return [];
-  return view.syntax.objectProperties(routes).flatMap((property, index) => {
+  if (!routes) return parent;
+  return [
+    ...parent,
+    ...view.syntax.objectProperties(routes).flatMap((property, index) => {
     const routeKey = semanticObjectPropertyName(property, view);
     const expression = objectMemberExpression(property, view);
     if (!routeKey || !expression) return [];
@@ -835,6 +844,7 @@ function semanticRouterDefinitionEnrichments(
               routeKey,
               target,
               index,
+              semanticRoutingCallProfile(expression, view),
             ),
             sourceRefs: [ref],
           },
@@ -848,11 +858,38 @@ function semanticRouterDefinitionEnrichments(
                 routeKey,
                 target,
                 index,
+                semanticRoutingCallProfile(expression, view),
               ),
             },
           ]
         : [];
-  });
+    }),
+  ];
+}
+
+/** Creates a semantic parent patch for router and split context metadata. */
+function semanticRoutingParentEnrichment(
+  candidate: SemanticDefinitionCandidate,
+  property: "classify" | "seed",
+  view: SemanticAnalyzerView,
+): SemanticDefinitionEnrichment[] {
+  const callback = propertyInitializer(candidate.object, property, view);
+  const context = callback
+    ? routingContextFactsForCallback(toExpression(callback, view), view)
+    : undefined;
+  return [
+    {
+      definition: {
+        ...semanticDefinitionPatchBase(candidate),
+        metadata: {
+          facts: {
+            kind: candidate.kind,
+            ...(context ?? {}),
+          },
+        },
+      },
+    },
+  ];
 }
 
 /**
@@ -981,6 +1018,7 @@ function semanticRoutingChildPatch(
   name: string,
   target?: SemanticTarget,
   order?: number,
+  profile?: Record<string, unknown>,
 ): ProjectDefinition {
   const presentation = semanticRoutingChildPresentation(id, kind, order);
   return {
@@ -994,8 +1032,54 @@ function semanticRoutingChildPatch(
       ...(target
         ? { targetKind: target.kind, targetDefinitionId: target.id }
         : {}),
+      ...(profile ? { profile, facts: { kind, profile } } : {}),
     },
   };
+}
+
+/** Reads JSON-safe literal call-profile settings without treating `model` as a setting. */
+function semanticRoutingCallProfile(
+  expression: SemanticNode,
+  view: SemanticAnalyzerView,
+): Record<string, unknown> | undefined {
+  const route = semanticObjectExpression(expression, view, new Set());
+  if (!route) return undefined;
+  const profile = Object.fromEntries(
+    view.syntax.objectProperties(route).flatMap((property) => {
+      const name = semanticObjectPropertyName(property, view);
+      const initializer = view.syntax.propertyInitializer(property);
+      if (!name || name === "model" || !initializer) return [];
+      const value = semanticRoutingJsonValue(initializer, view);
+      return value === undefined ? [] : [[name, value]];
+    }),
+  );
+  return Object.keys(profile).length > 0 ? profile : undefined;
+}
+
+function semanticRoutingJsonValue(
+  expression: SemanticNode,
+  view: SemanticAnalyzerView,
+): unknown {
+  const value = unwrapExpression(expression, view);
+  const literal = view.syntax.literalValue(value);
+  if (literal !== undefined) return literal;
+  if (view.syntax.isKind(value, "arrayLiteral")) {
+    const items = view.syntax.arrayElements(value).map((item) =>
+      semanticRoutingJsonValue(item, view),
+    );
+    return items.some((item) => item === undefined) ? undefined : items;
+  }
+  if (!view.syntax.isKind(value, "objectLiteral")) return undefined;
+  const entries: Array<readonly [string, unknown]> = [];
+  for (const property of view.syntax.objectProperties(value)) {
+    const name = semanticObjectPropertyName(property, view);
+    const initializer = view.syntax.propertyInitializer(property);
+    if (!name || !initializer) return undefined;
+    const nested = semanticRoutingJsonValue(initializer, view);
+    if (nested === undefined) return undefined;
+    entries.push([name, nested]);
+  }
+  return Object.fromEntries(entries);
 }
 
 /**

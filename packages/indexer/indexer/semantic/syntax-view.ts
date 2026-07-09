@@ -154,6 +154,8 @@ export interface SemanticSyntaxView<
   variableDeclarationInitializer(node: TNode): TNode | undefined
   /** Return declarations carried by a variable statement. */
   variableStatementDeclarations(node: TNode): readonly TNode[]
+  /** Return the name and arguments from a parameter's direct type reference. */
+  parameterTypeReference(node: TNode): { readonly name: string; readonly arguments: readonly TNode[] } | undefined
   /** Return the module specifier text from an import declaration. */
   importModuleSpecifier(node: TNode): string | undefined
   /** Return named import specifiers from an import declaration. */

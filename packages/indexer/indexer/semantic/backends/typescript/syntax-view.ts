@@ -108,6 +108,12 @@ export function createTypeScriptSemanticSyntaxView(input: TypeScriptSemanticSynt
     variableStatementDeclarations(node) {
       return ts.isVariableStatement(node) ? [...node.declarationList.declarations] : []
     },
+    parameterTypeReference(node) {
+      if (!ts.isParameter(node) || !node.type || !ts.isTypeReferenceNode(node.type)) return undefined
+      return ts.isIdentifier(node.type.typeName)
+        ? { name: node.type.typeName.text, arguments: [...(node.type.typeArguments ?? [])] }
+        : undefined
+    },
     importModuleSpecifier(node) {
       if (!ts.isImportDeclaration(node)) return undefined
       return ts.isStringLiteral(node.moduleSpecifier) ? node.moduleSpecifier.text : undefined

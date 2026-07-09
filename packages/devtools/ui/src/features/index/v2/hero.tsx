@@ -25,6 +25,7 @@ import {
   type InjectGroup,
 } from "./kit";
 import type { IndexIndex, IndexFacts, ViewDef } from "./adapt";
+import { RoutingCatalogFacts } from "./routing-catalog";
 import { useIndexIndex, useIndexSelect } from "./context";
 
 /** A single authored `use`/injection reference (a `facts.useEntries[]` item). */
@@ -1077,6 +1078,7 @@ export function IndexHero({ def }: { def: ViewDef }) {
           </HWrap>
         }
       >
+        <RoutingCatalogFacts facts={f} />
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {routes.map((r) => {
             const target = r.facts?.targetDefinitionId
@@ -1129,6 +1131,9 @@ export function IndexHero({ def }: { def: ViewDef }) {
                     default
                   </Chip>
                 )}
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <RoutingCatalogFacts compact facts={r.facts} />
+                </div>
               </div>
             );
           })}
@@ -1161,6 +1166,7 @@ export function IndexHero({ def }: { def: ViewDef }) {
           </HWrap>
         }
       >
+        <RoutingCatalogFacts facts={f} />
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {routes.map((r) => {
             const target = r.facts?.targetDefinitionId
@@ -1213,6 +1219,9 @@ export function IndexHero({ def }: { def: ViewDef }) {
                     {r.facts?.targetVariable ?? "-"}
                   </span>
                 )}
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <RoutingCatalogFacts compact facts={r.facts} />
+                </div>
               </div>
             );
           })}
