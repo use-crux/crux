@@ -14,6 +14,10 @@ import {
   type ErrorCategory,
 } from "../generation/fallback";
 import { observe } from "../observability";
+import {
+  emitRoutingReceiptReport,
+  routingSpanAttributes,
+} from "./observability";
 import type { RetryModel, RetryOptions } from "./retry";
 import {
   attachRoutingToError,
@@ -42,6 +46,8 @@ export interface ResolveRetryArgs<M, R> {
   readonly context?: unknown;
   /** Route override supplied by the call site. */
   readonly forcedRoute?: string;
+  /** Emit the canonical receipt artifact for an outermost retry. */
+  readonly emitReport?: boolean;
   /** Resolve the retried child through the top-level resolver. */
   readonly resolveCandidate: (
     model: M,
@@ -51,6 +57,7 @@ export interface ResolveRetryArgs<M, R> {
       readonly firstTokenMs?: number;
       readonly context?: unknown;
       readonly forcedRoute?: string;
+      readonly emitReport?: boolean;
     },
   ) => Promise<RoutableResult<R>>;
   /** Return a human-readable id for raw models and nested wrappers. */
@@ -66,6 +73,7 @@ export async function resolveRetry<M, R>({
   firstTokenMs,
   context,
   forcedRoute,
+  emitReport = true,
   resolveCandidate,
   describeModel,
 }: ResolveRetryArgs<M, R>): Promise<RoutableResult<R>> {
@@ -82,6 +90,7 @@ export async function resolveRetry<M, R>({
       primitive: "routing.retry",
       implicitRun: false,
       attributes: {
+        ...routingSpanAttributes("retry", deadline),
         attemptIndex,
         attempts: maxAttempts,
         model: modelId,
@@ -98,6 +107,7 @@ export async function resolveRetry<M, R>({
           firstTokenMs,
           context,
           forcedRoute,
+          emitReport: false,
         }),
       );
       const durationMs = Date.now() - attemptStart;
@@ -123,6 +133,14 @@ export async function resolveRetry<M, R>({
               [retryStep],
             );
       const routedResult = withRoutingReceipt(result, routing);
+      if (emitReport) {
+        emitRoutingReceiptReport(
+          attemptSpan.spanId,
+          "routing.retry",
+          "retry",
+          routing,
+        );
+      }
       attemptSpan.end({
         attributes: {
           attemptIndex,

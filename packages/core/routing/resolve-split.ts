@@ -10,6 +10,10 @@
 
 import type { Deadline } from "../generation/timeout";
 import { observe } from "../observability";
+import {
+  emitRoutingReceiptReport,
+  routingSpanAttributes,
+} from "./observability";
 import type { SplitModel } from "./split";
 import {
   createRoutingReceipt,
@@ -36,6 +40,8 @@ export interface ResolveSplitArgs<M, R> {
   readonly context?: unknown;
   /** Optional route override from the call site. */
   readonly forcedRoute?: string;
+  /** Emit the canonical receipt artifact for an outermost split. */
+  readonly emitReport?: boolean;
   /** Resolve the selected route model through the top-level resolver. */
   readonly resolveCandidate: (
     model: M,
@@ -45,6 +51,7 @@ export interface ResolveSplitArgs<M, R> {
       readonly firstTokenMs?: number;
       readonly context?: unknown;
       readonly forcedRoute?: string;
+      readonly emitReport?: boolean;
     },
   ) => Promise<RoutableResult<R>>;
   /** Return a human-readable id for raw models and nested wrappers. */
@@ -60,6 +67,7 @@ export async function resolveSplit<M, R>({
   firstTokenMs,
   context,
   forcedRoute,
+  emitReport = true,
   resolveCandidate,
   describeModel,
 }: ResolveSplitArgs<M, R>): Promise<RoutableResult<R>> {
@@ -71,6 +79,7 @@ export async function resolveSplit<M, R>({
     primitive: "routing.split",
     implicitRun: false,
     attributes: {
+      ...routingSpanAttributes("split", deadline),
       routeCount: routeKeys.length,
       ...(config.id ? { routingId: config.id } : {}),
       ...(config.description ? { routingDescription: config.description } : {}),
@@ -106,6 +115,7 @@ export async function resolveSplit<M, R>({
         firstTokenMs,
         context,
         forcedRoute: undefined,
+        emitReport: false,
       });
       const splitStep: SplitRoutingStep = {
         kind: "split",
@@ -122,6 +132,14 @@ export async function resolveSplit<M, R>({
               [splitStep],
             );
       const routedResult = withRoutingReceipt(result, routing);
+      if (emitReport) {
+        emitRoutingReceiptReport(
+          span.spanId,
+          "routing.split",
+          "split",
+          routing,
+        );
+      }
 
       span.end({
         attributes: {
@@ -180,4 +198,3 @@ function fnv1a(seed: string): number {
   }
   return hash >>> 0;
 }
-

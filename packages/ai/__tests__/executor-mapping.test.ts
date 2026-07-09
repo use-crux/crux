@@ -469,6 +469,7 @@ describe("stream — metrics and completion", () => {
     ]);
     expect(completion.routing).toMatchObject({
       model: "backup",
+      firstTokenAt: expect.any(Number),
       trace: [
         {
           kind: "fallback",
@@ -516,6 +517,7 @@ describe("stream — metrics and completion", () => {
       message: "stream broke",
       routing: {
         model: "primary",
+        firstTokenAt: expect.any(Number),
         trace: [
           {
             kind: "fallback",
@@ -527,6 +529,7 @@ describe("stream — metrics and completion", () => {
     });
     await expect(result.completion).rejects.toMatchObject({
       routing: {
+        firstTokenAt: expect.any(Number),
         trace: [
           {
             kind: "fallback",

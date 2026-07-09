@@ -31,6 +31,10 @@ import { resolveFallback } from "./resolve-fallback";
 import { resolveRetry } from "./resolve-retry";
 import { resolveSplit } from "./resolve-split";
 import { gateFirstToken } from "./first-token";
+import {
+  emitRoutingReceiptReport,
+  routingSpanAttributes,
+} from "./observability";
 import type { CallProfileParams } from "./types";
 import {
   createRoutingReceipt,
@@ -69,6 +73,8 @@ export interface ResolveModelOptions {
   readonly forcedRoute?: string;
   /** Generation params inherited from an enclosing call profile. */
   readonly params?: CallProfileParams;
+  /** Emit the canonical receipt artifact for this wrapper resolution. */
+  readonly emitReport?: boolean;
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -129,6 +135,7 @@ export async function resolveModel<M, R>(
           firstTokenMs: options.firstTokenMs,
           context: options.context,
           forcedRoute: options.forcedRoute,
+          emitReport: options.emitReport,
         },
       );
     }
@@ -144,6 +151,7 @@ export async function resolveModel<M, R>(
           firstTokenMs: options.firstTokenMs,
           context: options.context,
           forcedRoute: options.forcedRoute,
+          emitReport: options.emitReport,
           resolveCandidate: (candidate, candidateOptions) =>
             resolveModel(candidate, input, tryModel, extractModelId, candidateOptions),
           describeModel: (candidate) => describeModel(candidate, extractModelId),
@@ -162,6 +170,7 @@ export async function resolveModel<M, R>(
           firstTokenMs: options.firstTokenMs,
           context: options.context,
           forcedRoute: options.forcedRoute,
+          emitReport: options.emitReport,
           resolveCandidate: (candidate, candidateOptions) =>
             resolveModel(candidate, input, tryModel, extractModelId, candidateOptions),
           describeModel: (candidate) => describeModel(candidate, extractModelId),
@@ -185,6 +194,7 @@ export async function resolveModel<M, R>(
           firstTokenMs: options.firstTokenMs,
           context: options.context,
           forcedRoute: options.forcedRoute,
+          emitReport: options.emitReport,
         },
       );
     }
@@ -204,8 +214,10 @@ export async function resolveModel<M, R>(
               fallbackModel.options.timeout?.firstToken ?? options.firstTokenMs,
             context: options.context,
             forcedRoute: options.forcedRoute,
+            emitReport: false,
           }).then((result) => result),
         describeModel: (candidate) => describeModel(candidate, extractModelId),
+        emitReport: options.emitReport !== false,
       });
     }
 
@@ -251,6 +263,7 @@ async function resolveRouter<M, R>(
     firstTokenMs?: number;
     context?: unknown;
     forcedRoute?: string;
+    emitReport?: boolean;
   },
 ): Promise<RoutableResult<R>> {
   const { config } = routerModel;
@@ -261,6 +274,7 @@ async function resolveRouter<M, R>(
     primitive: "routing.router",
     implicitRun: false,
     attributes: {
+      ...routingSpanAttributes("router", options.deadline),
       routeCount: availableRoutes.length,
       ...(config.id ? { routingId: config.id } : {}),
       ...(config.description ? { routingDescription: config.description } : {}),
@@ -278,10 +292,10 @@ async function resolveRouter<M, R>(
         classifiedAs = forcedRoute;
         overridden = true;
       } else {
-        classifiedAs = await config.classify({
+        classifiedAs = normalizeClassifiedRoute(await config.classify({
           input: input as never,
           context: asRoutingContext(options.context),
-        });
+        }));
         overridden = false;
       }
 
@@ -307,15 +321,6 @@ async function resolveRouter<M, R>(
           availableRoutes,
         },
       });
-      emitRoutingReport(span.spanId, {
-        kind: "routing.report",
-        routingKind: "router",
-        ...(config.id ? { routingId: config.id } : {}),
-        chosen: selectedModelId,
-        classifiedAs,
-        selectedModel: selectedModelId,
-        availableRoutes,
-      });
 
       // Recursively resolve (model could be a cascade or another router)
       const result = await resolveModel(
@@ -323,7 +328,7 @@ async function resolveRouter<M, R>(
         input,
         tryModel,
         extractModelId,
-        { ...options, forcedRoute: undefined },
+        { ...options, forcedRoute: undefined, emitReport: false },
       );
 
       const routerStep: RouterRoutingStep = {
@@ -343,6 +348,14 @@ async function resolveRouter<M, R>(
               [routerStep],
             );
       const routedResult = withRoutingReceipt(result, routing);
+      if (options.emitReport !== false) {
+        emitRoutingReceiptReport(
+          span.spanId,
+          "routing.router",
+          "router",
+          routing,
+        );
+      }
       span.end({
         attributes: {
           classifiedAs,
@@ -381,6 +394,7 @@ async function resolveCascade<M, R>(
     firstTokenMs?: number;
     context?: unknown;
     forcedRoute?: string;
+    emitReport?: boolean;
   },
 ): Promise<R & { _meta: Record<string, unknown> }> {
   const { tiers, budget } = cascadeModel.config;
@@ -396,6 +410,7 @@ async function resolveCascade<M, R>(
     primitive: "routing.cascade",
     implicitRun: false,
     attributes: {
+      ...routingSpanAttributes("cascade", options.deadline),
       totalTiers: tiers.length,
       ...(cascadeModel.config.id ? { routingId: cascadeModel.config.id } : {}),
       ...(cascadeModel.config.description
@@ -445,6 +460,8 @@ async function resolveCascade<M, R>(
               true,
               hasMeasuredCost ? totalCost : undefined,
               cascadeModel.config.id,
+              cascadeSpan,
+              options.emitReport !== false,
             );
             endCascadeSpan(
               cascadeSpan,
@@ -489,6 +506,8 @@ async function resolveCascade<M, R>(
             true,
             hasMeasuredCost ? totalCost : undefined,
             cascadeModel.config.id,
+            cascadeSpan,
+            options.emitReport !== false,
           );
           endCascadeSpan(
             cascadeSpan,
@@ -508,6 +527,7 @@ async function resolveCascade<M, R>(
           primitive: "routing.cascade",
           implicitRun: false,
           attributes: {
+            ...routingSpanAttributes("cascade", options.deadline),
             tierIndex: i,
             ...(cascadeModel.config.id
               ? { routingId: cascadeModel.config.id }
@@ -527,6 +547,7 @@ async function resolveCascade<M, R>(
               signal: latencyDeadline.signal,
               context: options.context,
               forcedRoute: options.forcedRoute,
+              emitReport: false,
             }),
           );
           const resultWithMeta = ensureMeta(result);
@@ -650,6 +671,8 @@ async function resolveCascade<M, R>(
                 false,
                 hasMeasuredCost ? totalCost : undefined,
                 cascadeModel.config.id,
+                cascadeSpan,
+                options.emitReport !== false,
               );
               endCascadeSpan(
                 cascadeSpan,
@@ -689,6 +712,8 @@ async function resolveCascade<M, R>(
                 true,
                 hasMeasuredCost ? totalCost : undefined,
                 cascadeModel.config.id,
+                cascadeSpan,
+                options.emitReport !== false,
               );
               endCascadeSpan(
                 cascadeSpan,
@@ -739,6 +764,8 @@ async function resolveCascade<M, R>(
               false,
               hasMeasuredCost ? totalCost : undefined,
               cascadeModel.config.id,
+              cascadeSpan,
+              options.emitReport !== false,
             );
             endCascadeSpan(
               cascadeSpan,
@@ -787,6 +814,8 @@ async function resolveCascade<M, R>(
                 true,
                 hasMeasuredCost ? totalCost : undefined,
                 cascadeModel.config.id,
+                cascadeSpan,
+                options.emitReport !== false,
               );
               endCascadeSpan(
                 cascadeSpan,
@@ -799,7 +828,17 @@ async function resolveCascade<M, R>(
               );
               return budgetResult;
             }
-            throw new CascadeExhaustedError(lastResult, tierDetails);
+            throw new CascadeExhaustedError(
+              lastResult,
+              tierDetails,
+              cascadeRoutingReceipt(
+                tierDetails,
+                -1,
+                true,
+                hasMeasuredCost ? totalCost : undefined,
+                cascadeModel.config.id,
+              ),
+            );
           }
           const errorCategory = classifyError(error);
           if (
@@ -848,7 +887,17 @@ async function resolveCascade<M, R>(
       }
 
       // All tiers tried, all rejected
-      const error = new CascadeExhaustedError(lastResult, tierDetails);
+      const error = new CascadeExhaustedError(
+        lastResult,
+        tierDetails,
+        cascadeRoutingReceipt(
+          tierDetails,
+          -1,
+          false,
+          hasMeasuredCost ? totalCost : undefined,
+          cascadeModel.config.id,
+        ),
+      );
       throw error;
     });
     return result;
@@ -944,14 +993,15 @@ function buildCascadeResult<R>(
   budgetExceeded: boolean,
   totalCost: number | undefined,
   routingId: string | undefined,
+  span: ReturnType<typeof observe.openSpan>,
+  emitReport: boolean,
 ): RoutableResult<R> {
-  const cascadeStep: CascadeRoutingStep = {
-    kind: "cascade",
-    ...(routingId ? { id: routingId } : {}),
+  const cascadeStep = cascadeRoutingStep(
+    tierDetails,
     acceptedAtTier,
     budgetExceeded,
-    tiers: tierDetails,
-  };
+    routingId,
+  );
   const routing =
     result.routing !== undefined
       ? prependRoutingStep(cascadeStep, result.routing)
@@ -960,10 +1010,19 @@ function buildCascadeResult<R>(
           routingCostFromMeta(result._meta),
           [cascadeStep],
         );
-  return withRoutingReceipt(result, {
+  const routed = withRoutingReceipt(result, {
     ...routing,
     cost: totalCost,
   });
+  if (emitReport) {
+    emitRoutingReceiptReport(
+      span.spanId,
+      "routing.cascade",
+      "cascade",
+      routed.routing!,
+    );
+  }
+  return routed;
 }
 
 function endCascadeSpan(
@@ -977,27 +1036,6 @@ function endCascadeSpan(
 ): void {
   const tiersAttempted = tierDetails.filter((tier) => tier.status !== "skipped")
     .length;
-  emitRoutingReport(span.spanId, {
-    kind: "routing.report",
-    routingKind: "cascade",
-    ...(routingId ? { routingId } : {}),
-    chosen:
-      acceptedAtTier >= 0 &&
-      tierDetails[acceptedAtTier]
-        ? tierDetails[acceptedAtTier].model
-        : undefined,
-    tiers: tierDetails.map((tier, index) => ({
-      tier: index,
-      model: tier.model,
-      verdict: tier.status,
-      note: tier.note,
-      confidence: tier.confidence,
-      budget: tier.budget,
-      cost: tier.cost,
-      judgeCost: tier.judgeCost,
-      durationMs: tier.durationMs,
-    })),
-  });
   span.end({
     attributes: {
       totalTiers,
@@ -1010,9 +1048,46 @@ function endCascadeSpan(
   });
 }
 
+function cascadeRoutingStep(
+  tierDetails: readonly CascadeTierDetail[],
+  acceptedAtTier: number,
+  budgetExceeded: boolean,
+  routingId: string | undefined,
+): CascadeRoutingStep {
+  return {
+    kind: "cascade",
+    ...(routingId ? { id: routingId } : {}),
+    acceptedAtTier,
+    budgetExceeded,
+    tiers: tierDetails,
+  };
+}
+
+function cascadeRoutingReceipt(
+  tierDetails: readonly CascadeTierDetail[],
+  acceptedAtTier: number,
+  budgetExceeded: boolean,
+  totalCost: number | undefined,
+  routingId: string | undefined,
+) {
+  const step = cascadeRoutingStep(
+    tierDetails,
+    acceptedAtTier,
+    budgetExceeded,
+    routingId,
+  );
+  return createRoutingReceipt(concreteModelFromCascadeStep(step), totalCost, [
+    step,
+  ]);
+}
+
 function concreteModelFromCascadeStep(step: CascadeRoutingStep): string {
   const acceptedTier = step.tiers[step.acceptedAtTier];
-  return acceptedTier?.model ?? "unknown";
+  if (acceptedTier) return acceptedTier.model;
+  const lastAttempted = [...step.tiers]
+    .reverse()
+    .find((tier) => tier.status !== "skipped");
+  return lastAttempted?.model ?? "unknown";
 }
 
 function markSkippedTiers<M>(
@@ -1047,6 +1122,10 @@ function describeModel<M>(model: M, extractModelId: (model: M) => string): strin
 
 function asRoutingContext(value: unknown): object {
   return typeof value === "object" && value !== null ? value : {};
+}
+
+function normalizeClassifiedRoute(value: unknown): string {
+  return typeof value === "string" ? value : String(value);
 }
 
 function asCallProfile(
@@ -1132,30 +1211,4 @@ function formatRoutingNumber(value: number): string {
   return Number.isInteger(value)
     ? String(value)
     : String(Number(value.toFixed(4)));
-}
-
-function emitRoutingReport(
-  spanId: ReturnType<typeof observe.openSpan>["spanId"],
-  preview: Record<string, unknown>,
-): void {
-  const artifactId = observe.artifact({
-    kind: "routing.report",
-    contentType: "application/json",
-    encoding: "json",
-    preview,
-    attributes: {
-      primitive: "routing.report",
-      routingKind:
-        typeof preview.routingKind === "string"
-          ? preview.routingKind
-          : "routing",
-    },
-  });
-  if (!artifactId) return;
-  observe.edge({
-    edgeType: "produced",
-    from: { kind: "span", id: spanId },
-    to: { kind: "artifact", id: artifactId },
-    attributes: { primitive: "routing.report" },
-  });
 }

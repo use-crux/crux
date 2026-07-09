@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { cascade, fallback, router } from '../../routing'
-import { FallbackExhaustedError } from '../../routing/errors'
+import { CascadeExhaustedError, FallbackExhaustedError } from '../../routing/errors'
 import { resolveModel } from '../../routing/resolve'
 
 const extractModelId = (model: string) => model
@@ -167,6 +167,51 @@ describe('RoutingReceipt', () => {
         extractModelId,
       ),
     ).rejects.toBeInstanceOf(FallbackExhaustedError)
+  })
+
+  it('throws cascade exhaustion errors with routing receipts', async () => {
+    const routed = cascade({
+      id: 'exhausting-cascade',
+      tiers: [
+        { model: 'model-fast', evaluate: () => false },
+        { model: 'model-strong', evaluate: () => false },
+      ],
+    })
+
+    await expect(
+      resolveModel(
+        routed,
+        {},
+        async (model) => resultFrom(model, 0.002),
+        extractModelId,
+      ),
+    ).rejects.toMatchObject({
+      name: 'CascadeExhaustedError',
+      routing: {
+        model: 'model-strong',
+        trace: [
+          {
+            kind: 'cascade',
+            id: 'exhausting-cascade',
+            acceptedAtTier: -1,
+            budgetExceeded: false,
+            tiers: [
+              { model: 'model-fast', status: 'rejected' },
+              { model: 'model-strong', status: 'rejected' },
+            ],
+          },
+        ],
+      },
+    })
+
+    await expect(
+      resolveModel(
+        routed,
+        {},
+        async (model) => resultFrom(model, 0.002),
+        extractModelId,
+      ),
+    ).rejects.toBeInstanceOf(CascadeExhaustedError)
   })
 })
 

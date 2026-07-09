@@ -14,6 +14,8 @@ export interface RoutingReceipt {
   readonly model: string
   /** Total routed-call cost when all relevant participants reported cost. */
   readonly cost: number | undefined
+  /** Milliseconds from routed stream hand-off to the first emitted token. */
+  readonly firstTokenAt?: number
   /** Ordered routing decisions, outermost first. */
   readonly trace: readonly RoutingStep[]
 }
@@ -57,6 +59,7 @@ export interface FallbackRoutingStep {
   readonly kind: 'fallback'
   readonly id?: string
   readonly attempts: readonly AttemptDetail[]
+  readonly firstTokenAt?: number
   readonly midStreamFailure?: boolean
 }
 
@@ -145,8 +148,16 @@ export function createRoutingReceipt(
   model: string,
   cost: number | undefined,
   trace: readonly RoutingStep[],
+  options: { readonly firstTokenAt?: number } = {},
 ): RoutingReceipt {
-  return { model, cost, trace: [...trace] }
+  return {
+    model,
+    cost,
+    ...(options.firstTokenAt !== undefined
+      ? { firstTokenAt: options.firstTokenAt }
+      : {}),
+    trace: [...trace],
+  }
 }
 
 /** Prepend an outer wrapper step to a nested receipt. */
@@ -157,6 +168,9 @@ export function prependRoutingStep(
   return {
     model: nested.model,
     cost: nested.cost,
+    ...(nested.firstTokenAt !== undefined
+      ? { firstTokenAt: nested.firstTokenAt }
+      : {}),
     trace: [step, ...nested.trace],
   }
 }
@@ -181,9 +195,32 @@ export function markRoutingMidStreamFailure(
   return {
     ...routing,
     trace: routing.trace.map((step) =>
-      step.kind === "fallback" ? { ...step, midStreamFailure: true } : step,
+      step.kind === "fallback"
+        ? {
+            ...step,
+            ...(routing.firstTokenAt !== undefined
+              ? { firstTokenAt: routing.firstTokenAt }
+              : {}),
+            midStreamFailure: true,
+          }
+        : step,
     ),
   };
+}
+
+/** Add first-token timing to a receipt without mutating the original. */
+export function withRoutingFirstTokenAt(
+  routing: RoutingReceipt,
+  firstTokenAt: number | undefined,
+): RoutingReceipt {
+  if (firstTokenAt === undefined) return routing
+  return {
+    ...routing,
+    firstTokenAt,
+    trace: routing.trace.map((step) =>
+      step.kind === "fallback" ? { ...step, firstTokenAt } : step,
+    ),
+  }
 }
 
 function isStringRecord(value: unknown): value is Record<string, unknown> {

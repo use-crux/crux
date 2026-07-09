@@ -9,6 +9,7 @@
  */
 
 import { observe } from "../observability";
+import { emitRoutingReceiptReport } from "./observability";
 import type { RoutingReceipt } from "./receipt";
 
 /** Emit a hook failure without allowing the hook to control fallback flow. */
@@ -34,21 +35,5 @@ export function emitFallbackRoutingReport(
   spanId: ReturnType<typeof observe.openSpan>["spanId"],
   preview: RoutingReceipt,
 ): void {
-  const artifactId = observe.artifact({
-    kind: "routing.report",
-    contentType: "application/json",
-    encoding: "json",
-    preview,
-    attributes: {
-      primitive: "routing.fallback",
-      routingKind: "fallback",
-    },
-  });
-  if (!artifactId) return;
-  observe.edge({
-    edgeType: "produced",
-    from: { kind: "span", id: spanId },
-    to: { kind: "artifact", id: artifactId },
-    attributes: { primitive: "routing.fallback", routingKind: "fallback" },
-  });
+  emitRoutingReceiptReport(spanId, "routing.fallback", "fallback", preview);
 }

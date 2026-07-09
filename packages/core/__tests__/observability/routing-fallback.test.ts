@@ -6,7 +6,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../observability'
-import { cascade, router } from '../../routing'
+import { cascade, fallback as routedFallback, retry, router, split } from '../../routing'
 import { resolveModel } from '../../routing/resolve'
 
 function result(text: string, cost = 0.01) {
@@ -28,7 +28,7 @@ describe('canonical routing and fallback observability', () => {
     vi.restoreAllMocks()
   })
 
-    it('records router decisions with selected route metadata', async () => {
+  it('records router decisions with the canonical routing receipt artifact', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const routed = router({
@@ -41,9 +41,10 @@ describe('canonical routing and fallback observability', () => {
       },
     })
     const tryModel = vi.fn(async (model: string) => result(`from ${model}`))
+    let resolved: Awaited<ReturnType<typeof resolveModel<string, ReturnType<typeof result>>>> | undefined
 
     await observe.run({ name: 'route request', rootPrimitive: 'routing.router' }, async () => {
-      await resolveModel(routed, { big: true }, tryModel, extractModelId)
+      resolved = await resolveModel(routed, { big: true }, tryModel, extractModelId)
     })
     await observe.flush()
 
@@ -53,6 +54,8 @@ describe('canonical routing and fallback observability', () => {
         primitive: 'routing.router',
         name: 'router.resolve',
         attributes: expect.objectContaining({
+          routingKind: 'router',
+          deadlineRemainingMs: null,
           routeCount: 3,
           overridden: false,
         }),
@@ -73,14 +76,7 @@ describe('canonical routing and fallback observability', () => {
       expect.objectContaining({
         type: 'artifact',
         kind: 'routing.report',
-        preview: expect.objectContaining({
-          kind: 'routing.report',
-          routingKind: 'router',
-          chosen: 'model-large',
-          classifiedAs: 'large',
-          selectedModel: 'model-large',
-          availableRoutes: expect.arrayContaining(['large', 'small', 'default']),
-        }),
+        preview: resolved?.routing,
       }),
     )
     expect(transport.records).toContainEqual(
@@ -95,7 +91,7 @@ describe('canonical routing and fallback observability', () => {
     )
   })
 
-    it('records cascade tiers, rejection, acceptance, and terminal metadata', async () => {
+  it('records cascade tiers through the canonical routing receipt artifact', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     const cascaded = cascade({
@@ -105,9 +101,10 @@ describe('canonical routing and fallback observability', () => {
       ],
     })
     const tryModel = vi.fn(async (model: string) => result(`from ${model}`))
+    let resolved: Awaited<ReturnType<typeof resolveModel<string, ReturnType<typeof result>>>> | undefined
 
     await observe.run({ name: 'cascade request', rootPrimitive: 'routing.cascade' }, async () => {
-      await resolveModel(cascaded, {}, tryModel, extractModelId)
+      resolved = await resolveModel(cascaded, {}, tryModel, extractModelId)
     })
     await observe.flush()
 
@@ -116,7 +113,11 @@ describe('canonical routing and fallback observability', () => {
         type: 'span:start',
         primitive: 'routing.cascade',
         name: 'cascade.resolve',
-        attributes: expect.objectContaining({ totalTiers: 2 }),
+        attributes: expect.objectContaining({
+          routingKind: 'cascade',
+          deadlineRemainingMs: null,
+          totalTiers: 2,
+        }),
       }),
     )
     expect(transport.records).toContainEqual(
@@ -150,15 +151,7 @@ describe('canonical routing and fallback observability', () => {
       expect.objectContaining({
         type: 'artifact',
         kind: 'routing.report',
-        preview: expect.objectContaining({
-          kind: 'routing.report',
-          routingKind: 'cascade',
-          chosen: 'model-strong',
-          tiers: expect.arrayContaining([
-            expect.objectContaining({ tier: 0, model: 'model-cheap', verdict: 'rejected' }),
-            expect.objectContaining({ tier: 1, model: 'model-strong', verdict: 'accepted' }),
-          ]),
-        }),
+        preview: resolved?.routing,
       }),
     )
   })
@@ -189,35 +182,122 @@ describe('canonical routing and fallback observability', () => {
         type: 'artifact',
         kind: 'routing.report',
         preview: expect.objectContaining({
-          kind: 'routing.report',
-          routingKind: 'cascade',
-          chosen: 'model-cheap',
-          tiers: [
+          model: 'model-cheap',
+          trace: [
             expect.objectContaining({
-              tier: 0,
-              model: 'model-cheap',
-              verdict: 'accepted',
-              confidence: 0.93,
-              budget: 0.8,
-              note: 'confidence 0.93 >= 0.8',
-            }),
-            expect.objectContaining({
-              tier: 1,
-              model: 'model-strong',
-              verdict: 'skipped',
-              note: 'not reached',
-            }),
-            expect.objectContaining({
-              tier: 2,
-              model: 'model-opus',
-              verdict: 'skipped',
-              note: 'not reached',
-              budget: 0.95,
+              kind: 'cascade',
+              tiers: [
+                expect.objectContaining({
+                  model: 'model-cheap',
+                  status: 'accepted',
+                  confidence: 0.93,
+                  budget: 0.8,
+                  note: 'confidence 0.93 >= 0.8',
+                }),
+                expect.objectContaining({
+                  model: 'model-strong',
+                  status: 'skipped',
+                  note: 'not reached',
+                }),
+                expect.objectContaining({
+                  model: 'model-opus',
+                  status: 'skipped',
+                  note: 'not reached',
+                  budget: 0.95,
+                }),
+              ],
             }),
           ],
         }),
       }),
     )
+  })
+
+  it('emits exactly one receipt artifact for nested router to fallback resolution', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const routed = router({
+      classify: () => 'resilient' as const,
+      routes: {
+        resilient: routedFallback(['model-a', 'model-b']),
+        default: 'model-b',
+      },
+    })
+    const tryModel = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error('rate limited'), { status: 429 }))
+      .mockResolvedValueOnce(result('from model-b'))
+    let resolved: Awaited<ReturnType<typeof resolveModel<string, ReturnType<typeof result>>>> | undefined
+
+    await observe.run({ name: 'nested route request', rootPrimitive: 'routing.router' }, async () => {
+      resolved = await resolveModel(routed, {}, tryModel, extractModelId)
+    })
+    await observe.flush()
+
+    const artifacts = transport.records.filter(
+      (record) => record.type === 'artifact' && record.kind === 'routing.report',
+    )
+    expect(artifacts).toHaveLength(1)
+    expect(artifacts[0]).toMatchObject({ preview: resolved?.routing })
+    expect(resolved?.routing?.trace.map((step) => step.kind)).toEqual([
+      'router',
+      'fallback',
+    ])
+  })
+
+  it('adds shared routing attributes to every routing primitive span', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const tryModel = vi.fn(async (model: string) => result(`from ${model}`))
+
+    await observe.run({ name: 'routing attributes', rootPrimitive: 'routing.router' }, async () => {
+      await resolveModel(
+        router({
+          classify: () => 'default' as const,
+          routes: { default: 'router-model' },
+        }),
+        {},
+        tryModel,
+        extractModelId,
+      )
+      await resolveModel(
+        split({
+          seed: () => 'session-1',
+          routes: { a: { model: 'split-model', weight: 1 } },
+        }),
+        {},
+        tryModel,
+        extractModelId,
+      )
+      await resolveModel(retry('retry-model', { attempts: 1 }), {}, tryModel, extractModelId)
+      await resolveModel(routedFallback(['fallback-model', 'fallback-backup']), {}, tryModel, extractModelId)
+      await resolveModel(
+        cascade({ tiers: [{ model: 'cascade-model' }] }),
+        {},
+        tryModel,
+        extractModelId,
+      )
+    })
+    await observe.flush()
+
+    for (const [primitive, routingKind] of [
+      ['routing.router', 'router'],
+      ['routing.split', 'split'],
+      ['routing.retry', 'retry'],
+      ['routing.fallback', 'fallback'],
+      ['routing.cascade', 'cascade'],
+    ] as const) {
+      expect(transport.records).toContainEqual(
+        expect.objectContaining({
+          type: 'span:start',
+          primitive,
+          attributes: expect.objectContaining({
+            routingKind,
+            deadlineRemainingMs: null,
+          }),
+        }),
+      )
+    }
   })
 
     it('records fallback attempts with failed and successful model relations', async () => {

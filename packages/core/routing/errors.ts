@@ -36,6 +36,8 @@ export class CascadeExhaustedError extends Error {
     readonly lastResult: unknown,
     /** Per-tier execution details. */
     readonly tierDetails: CascadeTierDetail[],
+    /** Canonical routing receipt for the exhausted cascade. */
+    readonly routing: RoutingReceipt,
   ) {
     super(`All ${tierDetails.length} cascade tiers were rejected`)
     this.name = 'CascadeExhaustedError'

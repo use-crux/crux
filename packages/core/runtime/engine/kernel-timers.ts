@@ -140,7 +140,9 @@ export async function fireTimerRecord(options: {
   if (!work) return { fired: false }
   return {
     fired: true,
-    outboxItem: await options.tx.outbox.put(wakeEnvelopeForWork(work)),
+    outboxItem: await options.tx.outbox.put(wakeEnvelopeForWork(work), {
+      deliverAt: options.deps.now(),
+    }),
   }
 }
 

@@ -168,7 +168,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── retry.ts        retry() — retry one child model before surfacing a qualifying failure
 │   ├── cascade.ts      cascade() — sequential quality escalation with budget enforcement
 │   ├── resolve.ts      resolveModel() — unwraps routing _tag wrappers through the adapter tryModel callback
-│   └── errors.ts       CascadeExhaustedError and routing resolution errors
+│   └── errors.ts       FallbackExhaustedError, CascadeExhaustedError, and routing resolution errors
 ├── quality/
 │   ├── index.ts        Curated @use-crux/core/quality surface: evaluate(), target.*, scorers.*, dataset(), cassette() + types
 │   ├── evaluate.ts     evaluate() — typed Evaluation construction (two overloads, explicit Project Index coverage targets, frozen handle with .manifest/.run())
@@ -1495,7 +1495,7 @@ Adapter execution handles:
   └── Stamp metadata, memory capture, and observability
   ↓
 Return GenerateResult:
-  { text, object?, usage?, cost?, steps, finalStep, messages, pendingApprovals?, raw, _meta }
+  { text, object?, usage?, cost?, steps, finalStep, messages, routing?, pendingApprovals?, raw, _meta }
 ```
 
 ### Adapter Generic Conventions
@@ -1512,7 +1512,7 @@ Each adapter's `generate()` / `stream()` is parameterised as:
 
 Adapter packages share a small set of orchestration helpers that retain their own generic signatures across the adapter boundary:
 
-- `resolveModel<M, R>(model, input, tryModel, extractModelId)` — dispatches raw models and all routing wrappers to a per-adapter `tryModel`. Generic `M` is the adapter's model type, `R` is the result. Router and split dispatch emit `routing.router` / `routing.split`; retry emits `routing.retry` around repeated child attempts; fallback emits `fallback.attempt` attempt spans; cascade emits a parent `routing.cascade` plus child tier spans so selected routes, rejected tiers, budget skips, provider errors, and fallbacks are graph-native. Optional stable `id` fields are emitted as `routingId` so runtime spans can join to index definitions.
+- `resolveModel<M, R>(model, input, tryModel, extractModelId)` — dispatches raw models and all routing wrappers to a per-adapter `tryModel`. Generic `M` is the adapter's model type, `R` is the result. Router and split dispatch emit `routing.router` / `routing.split`; retry emits `routing.retry` around repeated child attempts; fallback emits `routing.fallback` with per-attempt spans; cascade emits a parent `routing.cascade` plus child tier spans so selected routes, rejected tiers, budget skips, provider errors, and fallbacks are graph-native. Optional stable `id` fields are emitted as `routingId` so runtime spans can join to index definitions.
 
 The indexer treats model-routing definitions as authored architecture, separate from execution observability. It indexes `routing.router` with `routing.router.route` children, `routing.split` with weighted `routing.split.route` children, `routing.retry` with a `routing.retry.target` child, `routing.cascade` with ordered `routing.cascade.tier` children, and `routing.fallback` with ordered `routing.fallback.option` children. Static and TypeScript-semantic relations connect those child nodes to index-visible agents, prompts, nested routers, splits, retries, cascades, and fallbacks when the target can be resolved across local bindings, imports, aliases, barrels, or call-profile objects such as `{ model }`. Higher-level primitives can also link to routing policies with edges such as `agent.uses_routing`, `flow.step.uses_routing`, and `composition.uses_routing`. Index lint rules warn on missing stable routing ids, routers without `default`, unresolved routing targets, and non-terminal cascade tiers that accept by default and make later tiers unreachable.
 

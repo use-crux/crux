@@ -12,6 +12,8 @@
 
 import { TimeoutError, normalizeBudgetMs } from "../generation/timeout";
 
+const ROUTING_FIRST_TOKEN_AT = "__cruxRoutingFirstTokenAt";
+
 /** Options for enforcing the first-token deadline on one stream attempt. */
 export interface FirstTokenGateOptions {
   /** Configured first-token budget in milliseconds. Disabled when absent. */
@@ -40,6 +42,15 @@ export async function gateFirstToken<R>(
   }
 
   return result;
+}
+
+/** Read first-token timing stamped by {@link gateFirstToken}. */
+export function readRoutingFirstTokenAt(value: unknown): number | undefined {
+  if (!isRecord(value)) return undefined;
+  const firstTokenAt = value[ROUTING_FIRST_TOKEN_AT];
+  return typeof firstTokenAt === "number" && Number.isFinite(firstTokenAt)
+    ? firstTokenAt
+    : undefined;
 }
 
 interface NativeStreamHandleLike {
@@ -83,10 +94,10 @@ async function gateNativeStreamHandle(
   const first = await readFirstChunk(iterator, limitMs, attemptController);
   if (first.done) return handle;
 
-  return {
+  return stampFirstTokenAt({
     ...handle,
     rawStream: prependFirstChunk(first.value, iterator),
-  };
+  }, first.firstTokenAt ?? 0);
 }
 
 async function gateExecutorStreamHandle(
@@ -101,21 +112,22 @@ async function gateExecutorStreamHandle(
   const first = await readFirstChunk(iterator, limitMs, attemptController);
   if (first.done) return handle;
 
-  return {
+  return stampFirstTokenAt({
     ...handle,
     raw: {
       ...handle.raw,
       textStream: prependFirstChunk(first.value, iterator),
     },
-  };
+  }, first.firstTokenAt ?? 0);
 }
 
 async function readFirstChunk<T>(
   iterator: AsyncIterator<T>,
   limitMs: number,
   attemptController: AbortController | undefined,
-): Promise<IteratorResult<T>> {
+): Promise<IteratorResult<T> & { readonly firstTokenAt?: number }> {
   let timer: ReturnType<typeof setTimeout> | undefined;
+  const startedAt = Date.now();
   try {
     const timeout = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
@@ -127,10 +139,22 @@ async function readFirstChunk<T>(
         reject(error);
       }, limitMs);
     });
-    return await Promise.race([iterator.next(), timeout]);
+    const first = await Promise.race([iterator.next(), timeout]);
+    return first.done
+      ? first
+      : { ...first, firstTokenAt: Date.now() - startedAt };
   } finally {
     if (timer !== undefined) clearTimeout(timer);
   }
+}
+
+function stampFirstTokenAt<T extends object>(value: T, firstTokenAt: number): T {
+  Object.defineProperty(value, ROUTING_FIRST_TOKEN_AT, {
+    value: firstTokenAt,
+    enumerable: true,
+    configurable: true,
+  });
+  return value;
 }
 
 async function* prependFirstChunk<T>(

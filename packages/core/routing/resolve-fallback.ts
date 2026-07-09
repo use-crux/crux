@@ -18,6 +18,11 @@ import { getMeta } from "../generation/result-meta";
 import { Deadline, withBudget } from "../generation/timeout";
 import { observe } from "../observability";
 import { FallbackExhaustedError } from "./errors";
+import { readRoutingFirstTokenAt } from "./first-token";
+import {
+  emitRoutingMidStreamFailure,
+  routingSpanAttributes,
+} from "./observability";
 import {
   emitFallbackRoutingReport,
   emitRoutingHookError,
@@ -27,6 +32,7 @@ import {
   prependRoutingStep,
   routingCostFromMeta,
   withRoutingReceipt,
+  withRoutingFirstTokenAt,
   type AttemptDetail,
   type FallbackRoutingStep,
   type RoutableResult,
@@ -51,6 +57,8 @@ export interface ResolveFallbackArgs<M, R> {
   ) => Promise<RoutableResult<R>>;
   /** Return a human-readable id for raw models and nested wrappers. */
   readonly describeModel: (model: M) => string;
+  /** Emit the canonical receipt artifact for an outermost fallback. */
+  readonly emitReport?: boolean;
 }
 
 /**
@@ -64,6 +72,7 @@ export async function resolveFallback<M, R>({
   deadline,
   resolveCandidate,
   describeModel,
+  emitReport = true,
 }: ResolveFallbackArgs<M, R>): Promise<RoutableResult<R>> {
   const { models, options } = fallback;
   const errors: Error[] = [];
@@ -77,6 +86,7 @@ export async function resolveFallback<M, R>({
     name: "fallback.resolve",
     primitive: "routing.fallback",
     attributes: {
+      ...routingSpanAttributes("fallback", deadline),
       totalModels: models.length,
       ...(options.id ? { routingId: options.id } : {}),
       ...(options.description ? { routingDescription: options.description } : {}),
@@ -87,10 +97,11 @@ export async function resolveFallback<M, R>({
     const model = models[i];
     const modelId = describeModel(model);
     const attemptStart = Date.now();
-	    const attemptSpan = observe.openSpan({
-	      name: "fallback.attempt",
-	      primitive: "routing.fallback",
+    const attemptSpan = observe.openSpan({
+      name: "fallback.attempt",
+      primitive: "routing.fallback",
       attributes: {
+        ...routingSpanAttributes("fallback", deadline),
         attempt: i + 1,
         ...(options.id ? { routingId: options.id } : {}),
         ...(options.description
@@ -166,20 +177,25 @@ export async function resolveFallback<M, R>({
         status: "ok",
         cost: resultCost,
       });
+      const firstTokenAt = readRoutingFirstTokenAt(result);
 
       const fallbackStep: FallbackRoutingStep = {
         kind: "fallback",
         ...(options.id ? { id: options.id } : {}),
+        ...(firstTokenAt !== undefined ? { firstTokenAt } : {}),
         attempts: details,
       };
-      const routing =
+      const routing = withRoutingFirstTokenAt(
         result.routing !== undefined
           ? prependRoutingStep(fallbackStep, result.routing)
           : createRoutingReceipt(
               modelId,
               routingCostFromMeta(getMeta(result)),
               [fallbackStep],
-            );
+              { firstTokenAt },
+            ),
+        firstTokenAt,
+      );
       const routedResult = withRoutingReceipt(result, routing);
 
       if (previousFailedSpanId && previousFailedModelId) {
@@ -195,29 +211,44 @@ export async function resolveFallback<M, R>({
         });
       }
 
-	      emitFallbackRoutingReport(fallbackSpan.spanId, routing);
-	      attemptSpan.end({
+      if (emitReport) emitFallbackRoutingReport(fallbackSpan.spanId, routing);
+      const attemptAttributes = {
+        attempt: i + 1,
+        ...(options.id ? { routingId: options.id } : {}),
+        model: modelId,
+        totalModels: models.length,
+        durationMs,
+        cost: resultCost,
+        fallbackOccurred: errors.length > 0,
+      };
+      const streamResult = withFallbackStreamAttemptFinalizer(
+        routedResult,
+        attemptSpan,
+        attemptAttributes,
+      );
+      if (streamResult) {
+        attemptSpan.setAttributes({
+          ...attemptAttributes,
+          attemptStatus: "streaming",
+        });
+      } else {
+        attemptSpan.end({
+          attributes: {
+            ...attemptAttributes,
+            attemptStatus: "success",
+          },
+        });
+      }
+      fallbackSpan.end({
         attributes: {
-          attempt: i + 1,
-          ...(options.id ? { routingId: options.id } : {}),
-          model: modelId,
           totalModels: models.length,
-          attemptStatus: "success",
-          durationMs,
-          cost: resultCost,
-          fallbackOccurred: errors.length > 0,
-	        },
-	      });
-	      fallbackSpan.end({
-	        attributes: {
-	          totalModels: models.length,
-	          attempts: details.length,
-	          chosen: routing.model,
-	          durationMs: Date.now() - fallbackStart,
-	          ...(options.id ? { routingId: options.id } : {}),
-	        },
-	      });
-	      return routedResult;
+          attempts: details.length,
+          chosen: routing.model,
+          durationMs: Date.now() - fallbackStart,
+          ...(options.id ? { routingId: options.id } : {}),
+        },
+      });
+      return streamResult ?? routedResult;
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       const durationMs = Date.now() - attemptStart;
@@ -254,7 +285,7 @@ export async function resolveFallback<M, R>({
 	            attempts: details,
 	          },
 	        ]);
-	        emitFallbackRoutingReport(fallbackSpan.spanId, routing);
+        if (emitReport) emitFallbackRoutingReport(fallbackSpan.spanId, routing);
 	        fallbackSpan.error(err, {
 	          totalModels: models.length,
 	          attempts: details.length,
@@ -300,7 +331,7 @@ export async function resolveFallback<M, R>({
   const finalModel = details.at(-1)?.model ?? "unknown";
   const routing = createRoutingReceipt(finalModel, undefined, [fallbackStep]);
   const error = new FallbackExhaustedError(details, routing, errors);
-  emitFallbackRoutingReport(fallbackSpan.spanId, routing);
+  if (emitReport) emitFallbackRoutingReport(fallbackSpan.spanId, routing);
   fallbackSpan.error(error, {
     totalModels: models.length,
     attempts: details.length,
@@ -354,4 +385,112 @@ async function shouldFallbackForResultSafely<M>(
     emitRoutingHookError(attemptSpan, "when", hookError);
     return false;
   }
+}
+
+function withFallbackStreamAttemptFinalizer<R>(
+  result: RoutableResult<R>,
+  attemptSpan: ReturnType<typeof observe.openSpan>,
+  attributes: Record<string, unknown>,
+): RoutableResult<R> | undefined {
+  if (!isRecord(result)) return undefined;
+  const record = result as Record<PropertyKey, unknown>;
+  const clone: Record<PropertyKey, unknown> = { ...record };
+
+  let finalized = false;
+  const finalizeSuccess = (): void => {
+    if (finalized) return;
+    finalized = true;
+    attemptSpan.end({
+      attributes: {
+        ...attributes,
+        attemptStatus: "success",
+      },
+    });
+  };
+  const finalizeError = (error: unknown): void => {
+    if (finalized) return;
+    finalized = true;
+    const err = error instanceof Error ? error : new Error(String(error));
+    const errorCategory = classifyError(err);
+    emitRoutingMidStreamFailure(attemptSpan, {
+      ...attributes,
+      routingKind: "fallback",
+      errorCategory,
+    });
+    attemptSpan.error(err, {
+      ...attributes,
+      attemptStatus: "error",
+      midStreamFailure: true,
+      errorCategory,
+    });
+  };
+
+  const completion = record["completion"];
+  const hasCompletion = typeof completion === "function";
+  let wrapped = false;
+  if (isAsyncIterable(record["rawStream"])) {
+    clone["rawStream"] = wrapStream(
+      record["rawStream"],
+      finalizeError,
+      hasCompletion ? undefined : finalizeSuccess,
+    );
+    wrapped = true;
+  }
+
+  const raw = record["raw"];
+  if (isRecord(raw) && isAsyncIterable(raw["textStream"])) {
+    clone["raw"] = {
+      ...raw,
+      textStream: wrapStream(
+        raw["textStream"],
+        finalizeError,
+        hasCompletion ? undefined : finalizeSuccess,
+      ),
+    };
+    wrapped = true;
+  }
+
+  if (typeof completion === "function") {
+    clone["completion"] = async (): Promise<unknown> => {
+      try {
+        const meta = await completion.call(record);
+        finalizeSuccess();
+        return meta;
+      } catch (error) {
+        finalizeError(error);
+        throw error;
+      }
+    };
+    wrapped = true;
+  }
+
+  return wrapped ? (clone as RoutableResult<R>) : undefined;
+}
+
+async function* wrapStream<T>(
+  stream: AsyncIterable<T>,
+  finalizeError: (error: unknown) => void,
+  finalizeSuccess?: () => void,
+): AsyncIterable<T> {
+  try {
+    for await (const chunk of stream) {
+      yield chunk;
+    }
+    finalizeSuccess?.();
+  } catch (error) {
+    finalizeError(error);
+    throw error;
+  }
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isAsyncIterable(value: unknown): value is AsyncIterable<unknown> {
+  return (
+    isRecord(value) &&
+    Symbol.asyncIterator in value &&
+    typeof value[Symbol.asyncIterator] === "function"
+  );
 }

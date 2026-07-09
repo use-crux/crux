@@ -1,12 +1,14 @@
 ---
-"@use-crux/core": minor
-"@use-crux/ai": minor
+"@use-crux/core": major
+"@use-crux/ai": major
 "@use-crux/devtools": patch
 "@use-crux/indexer": minor
 "@use-crux/local": minor
 ---
 
 Stabilize model routing around `router()`, `split()`, `retry()`, `fallback()`, and `cascade()` wrappers with routing receipts, generate/stream support boundaries, and updated adapter docs.
+
+Breaking routing API changes: router `.with()` and `.select()` are removed in favor of call-site `routing` and `route` options; variadic `fallback(a, b, opts)` is replaced by `fallback([models], opts)`; `_meta.router` / `_meta.cascade` / `_meta.fallback` are replaced by `result.routing`; native OpenAI, Anthropic, Google, and Convex model options now type-reject routing wrappers instead of accepting unsupported values.
 
 Extend Project Index routing facts, static extraction, native semantic parity, relation policies, and index lints to cover split routes, retry targets, array-form fallback, call-profile model targets, and RouteArgs callback source refs.
 

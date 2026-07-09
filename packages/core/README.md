@@ -501,6 +501,24 @@ data-access facts preserve exact operations such as `grep`, `history`, `diff`,
 | Agents and flows   | Agents, pipelines, parallel runs, consensus, swarms, blackboards, handoffs, delegates, suspendable flows, plans, and tasks.          |
 | Observability      | Trace records, local devtools, subscribers, diagnostics channel export, source catalog, and OpenTelemetry export.                    |
 
+### Routing
+
+`@use-crux/core/routing` provides five inert model wrappers that managed
+adapter execution resolves before any provider call:
+
+- `router()` classifies `{ input, context }` into a named route.
+- `split()` deterministically assigns weighted canary or experiment buckets.
+- `retry()` retries one child model on retryable failures.
+- `fallback([models])` tries ordered alternatives for outages, timeouts, or
+  invalid responses.
+- `cascade()` escalates across quality tiers with latency and cost budgets.
+
+Routed generate results and stream completions expose `result.routing`, a
+canonical receipt `{ model, cost, trace }` whose `model` is the concrete model
+that served the call. `FallbackExhaustedError` and `CascadeExhaustedError`
+also carry `.routing`, and stream failures after token 1 mark the fallback step
+with `midStreamFailure`.
+
 ### Tool Merge Policy
 
 Prompt-time tool names must be unique. Crux merges skill tools, context tools,
