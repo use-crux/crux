@@ -186,7 +186,7 @@ func TestProjectRunDetailAddsRuntimeDecisionEvidenceToTurnDecisionReport(t *test
 				CreatedAt:   started.Add(5 * time.Millisecond).Format(time.RFC3339Nano),
 				ContentType: "application/json",
 				Encoding:    "json",
-				Preview:     json.RawMessage(`{"kind":"routing.report","routingKind":"router","chosen":"openai/gpt-5-mini"}`),
+				Preview:     json.RawMessage(`{"model":"openai/gpt-5-mini","trace":[{"kind":"router","classifiedAs":"fast","route":"fast","usedDefaultRoute":false,"forced":false}]}`),
 			},
 			{
 				ArtifactID:  "artifact_security",
@@ -212,10 +212,10 @@ func TestProjectRunDetailAddsRuntimeDecisionEvidenceToTurnDecisionReport(t *test
 	}
 	report := generation.DecisionReport
 
-	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:span_router", "routing.router.selected", "observed")
+	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:artifact_routing:0", "routing.router.selected", "observed")
 	assertDecisionReason(t, report.Decisions, "decision:span_generation:guardrail:span_guardrail", "guardrail.passed", "observed")
 	assertDecisionReason(t, report.Decisions, "decision:span_generation:security:span_security", "security.warned", "observed")
-	if !hasDecisionTab(report.Decisions, "decision:span_generation:routing:span_router", "Routing") {
+	if !hasDecisionTab(report.Decisions, "decision:span_generation:routing:artifact_routing:0", "Routing") {
 		t.Fatalf("routing decision missing Routing tab target: %#v", report.Decisions)
 	}
 }
@@ -274,7 +274,6 @@ func TestProjectRunDetailProjectsRoutingReceiptTraceIntoTurnDecisionReport(t *te
 			ContentType: "application/json",
 			Encoding:    "json",
 			Preview: json.RawMessage(`{
-				"kind":"routing.report",
 				"model":"openai/gpt-5",
 				"cost":0.42,
 				"trace":[

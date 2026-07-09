@@ -6,7 +6,6 @@ import (
 )
 
 type routingReceiptPreview struct {
-	Kind  string            `json:"kind"`
 	Model string            `json:"model"`
 	Cost  *float64          `json:"cost"`
 	Trace []json.RawMessage `json:"trace"`
@@ -71,36 +70,36 @@ type routingTierDetail struct {
 	Note       string   `json:"note"`
 }
 
-func routingReceiptDecisionsForDetail(turn SpanSummary, detail RunDetailDetail) ([]TurnDecision, []TurnDecisionChip, bool) {
+func routingReceiptDecisionsForDetail(turn SpanSummary, detail RunDetailDetail) ([]TurnDecision, []TurnDecisionChip, string, bool) {
 	for _, artifact := range detail.Artifacts {
 		if artifact.Kind != "routing.report" {
 			continue
 		}
-		decisions, chips, ok := routingReceiptDecisions(turn, detail.SpanSummary, artifact)
+		decisions, chips, model, ok := routingReceiptDecisions(turn, detail.SpanSummary, artifact)
 		if ok {
-			return decisions, chips, true
+			return decisions, chips, model, true
 		}
 	}
-	return nil, nil, false
+	return nil, nil, "", false
 }
 
-func routingReceiptDecisionsForNode(turn SpanSummary, node RunDetailNode) ([]TurnDecision, []TurnDecisionChip, bool) {
+func routingReceiptDecisionsForNode(turn SpanSummary, node RunDetailNode) ([]TurnDecision, []TurnDecisionChip, string, bool) {
 	for _, artifact := range node.Artifacts {
 		if artifact.Kind != "routing.report" {
 			continue
 		}
-		decisions, chips, ok := routingReceiptDecisions(turn, node.SpanSummary, artifact)
+		decisions, chips, model, ok := routingReceiptDecisions(turn, node.SpanSummary, artifact)
 		if ok {
-			return decisions, chips, true
+			return decisions, chips, model, true
 		}
 	}
-	return nil, nil, false
+	return nil, nil, "", false
 }
 
-func routingReceiptDecisions(turn SpanSummary, span SpanSummary, artifact ArtifactSummary) ([]TurnDecision, []TurnDecisionChip, bool) {
+func routingReceiptDecisions(turn SpanSummary, span SpanSummary, artifact ArtifactSummary) ([]TurnDecision, []TurnDecisionChip, string, bool) {
 	var receipt routingReceiptPreview
-	if len(artifact.Preview) == 0 || json.Unmarshal(artifact.Preview, &receipt) != nil || receipt.Kind != "routing.report" || len(receipt.Trace) == 0 {
-		return nil, nil, false
+	if artifact.Kind != "routing.report" || len(artifact.Preview) == 0 || json.Unmarshal(artifact.Preview, &receipt) != nil || receipt.Model == "" || len(receipt.Trace) == 0 {
+		return nil, nil, "", false
 	}
 	decisions := make([]TurnDecision, 0, len(receipt.Trace))
 	var chips []TurnDecisionChip
@@ -112,7 +111,7 @@ func routingReceiptDecisions(turn SpanSummary, span SpanSummary, artifact Artifa
 		decisions = append(decisions, stepDecisions...)
 		chips = appendRoutingDecisionChips(chips, stepChips...)
 	}
-	return decisions, chips, len(decisions) > 0
+	return decisions, chips, receipt.Model, len(decisions) > 0
 }
 
 func routingStepDecisions(turn SpanSummary, span SpanSummary, artifact ArtifactSummary, raw json.RawMessage, index int) ([]TurnDecision, []TurnDecisionChip, bool) {

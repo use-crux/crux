@@ -80,10 +80,12 @@ export interface RoutingReceiptFacts {
 export function isRoutingReportPreview(
   value: unknown,
 ): value is CruxRoutingReportPreview {
+  if (!isRecord(value) || typeof value.model !== "string") return false;
+  if (value.cost !== undefined && typeof value.cost !== "number") return false;
   return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as { kind?: unknown }).kind === "routing.report"
+    Array.isArray(value.trace) &&
+    value.trace.length > 0 &&
+    value.trace.every(isRoutingStepPreview)
   );
 }
 
@@ -91,10 +93,7 @@ export function isRoutingReportPreview(
 export function routingStepViews(
   report: CruxRoutingReportPreview,
 ): RoutingStepView[] {
-  if (report.trace?.length) {
-    return report.trace.flatMap((step) => routingStepView(step));
-  }
-  return legacyRoutingStepViews(report);
+  return report.trace.flatMap((step) => routingStepView(step));
 }
 
 /** Derive compact inspector facts from the same receipt rows used by the tab UI. */
@@ -126,8 +125,8 @@ export function routingFactsFromReport(
       : undefined);
 
   const facts: RoutingReceiptFacts = {
-    chosen: report.model ?? report.chosen ?? report.selectedModel,
-    classifiedAs: router?.classifiedAs ?? report.classifiedAs,
+    chosen: report.model,
+    classifiedAs: router?.classifiedAs,
     hasDefaultRoute: router?.usedDefaultRoute,
     hasMidStreamFailure: fallback?.midStreamFailure,
   };
@@ -200,32 +199,6 @@ function routingStepView(step: CruxRoutingStepPreview): RoutingStepView[] {
   }
 }
 
-function legacyRoutingStepViews(
-  report: CruxRoutingReportPreview,
-): RoutingStepView[] {
-  if (report.routingKind === "router") {
-    return [
-      {
-        kind: "router",
-        classifiedAs: report.classifiedAs,
-        route: report.classifiedAs,
-        usedDefaultRoute: false,
-        forced: false,
-      },
-    ];
-  }
-  if (report.tiers?.length) {
-    return [
-      {
-        kind: "cascade",
-        tiers: tiersFrom(report.tiers),
-        budgetExceeded: false,
-      },
-    ];
-  }
-  return [];
-}
-
 function attemptsFrom(
   attempts: readonly CruxRoutingAttemptPreview[] | undefined,
 ): RoutingAttemptView[] {
@@ -260,4 +233,21 @@ function numberFrom(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value)
     ? value
     : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRoutingStepPreview(
+  value: unknown,
+): value is CruxRoutingStepPreview {
+  if (!isRecord(value)) return false;
+  return (
+    value.kind === "router" ||
+    value.kind === "split" ||
+    value.kind === "retry" ||
+    value.kind === "fallback" ||
+    value.kind === "cascade"
+  );
 }

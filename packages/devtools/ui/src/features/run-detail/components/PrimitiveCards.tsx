@@ -35,6 +35,7 @@ import { RoutingReceiptReport } from "./RoutingReceiptReport";
 import { KindTag } from "./atoms";
 import { primitiveAccentVar } from "../lib/families";
 import { evalCasesOf } from "../lib/archetype";
+import { isRoutingReportPreview } from "../lib/routing-receipt";
 import {
   classifyPrimitive,
   findArtifact,
@@ -51,6 +52,7 @@ import {
 // ─── typed-preview narrowing ────────────────────────────────────────
 
 function reportOfKind<K extends string>(preview: unknown, kind: K): boolean {
+  if (kind === "routing.report") return isRoutingReportPreview(preview);
   return (
     typeof preview === "object" &&
     preview !== null &&

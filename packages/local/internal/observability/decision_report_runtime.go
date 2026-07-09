@@ -4,7 +4,8 @@ import "strings"
 
 func appendRuntimeDecisionEvidence(report *TurnDecisionReport, turn SpanSummary, details []RunDetailDetail, children []RunDetailNode) {
 	for _, detail := range details {
-		if decisions, chips, ok := routingReceiptDecisionsForDetail(turn, detail); ok {
+		if decisions, chips, model, ok := routingReceiptDecisionsForDetail(turn, detail); ok {
+			setRoutingReceiptModel(report, model)
 			for _, decision := range decisions {
 				appendDecisionReportRuntimeDecision(report, decision)
 			}
@@ -16,7 +17,8 @@ func appendRuntimeDecisionEvidence(report *TurnDecisionReport, turn SpanSummary,
 		}
 	}
 	for _, child := range children {
-		if decisions, chips, ok := routingReceiptDecisionsForNode(turn, child); ok {
+		if decisions, chips, model, ok := routingReceiptDecisionsForNode(turn, child); ok {
+			setRoutingReceiptModel(report, model)
 			for _, decision := range decisions {
 				appendDecisionReportRuntimeDecision(report, decision)
 			}
@@ -27,6 +29,13 @@ func appendRuntimeDecisionEvidence(report *TurnDecisionReport, turn SpanSummary,
 			report.Source = appendSourceGroupItem(report.Source, sourceGroupForRuntimeFamily(child.Family), runtimeSourceJoin(child.SpanSummary))
 		}
 		appendRuntimeDecisionEvidence(report, turn, child.Details, child.Children)
+	}
+}
+
+// setRoutingReceiptModel fills a missing generation model from the canonical receipt.
+func setRoutingReceiptModel(report *TurnDecisionReport, model string) {
+	if report.Turn.Model == "" {
+		report.Turn.Model = model
 	}
 }
 

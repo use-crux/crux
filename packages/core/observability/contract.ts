@@ -675,17 +675,9 @@ export type CruxRoutingStepPreview =
     };
 
 export interface CruxRoutingReportPreview {
-  kind?: "routing.report";
-  routingKind?: "router" | "split" | "retry" | "cascade" | "fallback";
-  model?: string;
+  model: string;
   cost?: number;
-  trace?: readonly CruxRoutingStepPreview[];
-  chosen?: string;
-  classifiedAs?: string;
-  fallbackReason?: string;
-  tiers?: readonly CruxRoutingTierPreview[];
-  availableRoutes?: readonly string[];
-  selectedModel?: string;
+  trace: readonly CruxRoutingStepPreview[];
 }
 
 export interface CruxCacheReportPreview {

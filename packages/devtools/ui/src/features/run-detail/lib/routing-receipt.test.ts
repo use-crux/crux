@@ -5,7 +5,6 @@ import { routingFactsFromReport, routingStepViews } from "./routing-receipt";
 describe("routing receipt adapter", () => {
   it("projects canonical receipt trace rows for all routing primitives", () => {
     const report: CruxRoutingReportPreview = {
-      kind: "routing.report",
       model: "openai/gpt-5",
       trace: [
         {
@@ -87,7 +86,6 @@ describe("routing receipt adapter", () => {
 
   it("derives inspector facts from the same canonical receipt", () => {
     const report: CruxRoutingReportPreview = {
-      kind: "routing.report",
       model: "openai/gpt-5",
       trace: [
         {

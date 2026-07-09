@@ -238,7 +238,10 @@ describe('canonical routing and fallback observability', () => {
       (record) => record.type === 'artifact' && record.kind === 'routing.report',
     )
     expect(artifacts).toHaveLength(1)
-    expect(artifacts[0]).toMatchObject({ preview: resolved?.routing })
+    expect(artifacts[0]).toEqual(
+      expect.objectContaining({ preview: resolved?.routing }),
+    )
+    expect(artifacts[0]).not.toHaveProperty('preview.kind')
     expect(resolved?.routing?.trace.map((step) => step.kind)).toEqual([
       'router',
       'fallback',
