@@ -83,7 +83,12 @@ export function isRoutingReportPreview(
   value: unknown,
 ): value is CruxRoutingReportPreview {
   if (!isRecord(value) || typeof value.model !== "string") return false;
-  if (value.cost !== undefined && !isFiniteNumber(value.cost)) return false;
+  if (
+    value.cost !== undefined &&
+    value.cost !== null &&
+    !isFiniteNumber(value.cost)
+  )
+    return false;
   if (value.firstTokenAt !== undefined && !isFiniteNumber(value.firstTokenAt)) return false;
   return (
     Array.isArray(value.trace) &&
@@ -211,7 +216,7 @@ function attemptsFrom(
     model: attempt.model,
     status: attempt.status,
     durationMs: attempt.durationMs,
-    cost: attempt.cost,
+    cost: numberFrom(attempt.cost),
     errorCategory: attempt.errorCategory,
     error: attempt.error,
     delayMs: attempt.delayMs,
@@ -226,7 +231,7 @@ function tiersFrom(
     model: tier.model,
     status: tier.status ?? tier.verdict ?? "unknown",
     durationMs: tier.durationMs,
-    cost: tier.cost,
+    cost: numberFrom(tier.cost),
     judgeCost: tier.judgeCost,
     confidence: tier.confidence,
     budget: tier.budget,

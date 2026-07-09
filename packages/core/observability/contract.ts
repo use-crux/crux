@@ -622,14 +622,15 @@ export interface CruxGuardrailReportPreview {
 }
 
 export interface CruxRoutingTierPreview {
-  tier: number;
+  /** Optional display index; canonical receipts use the tier's array position. */
+  tier?: number;
   model: string;
   status?: "accepted" | "rejected" | "skipped" | "error" | string;
   budget?: number;
   verdict?: "accepted" | "rejected" | "skipped" | "error" | string;
   note?: string;
   confidence?: number;
-  cost?: number;
+  cost?: number | null;
   judgeCost?: number;
   durationMs?: number;
 }
@@ -638,7 +639,7 @@ export interface CruxRoutingAttemptPreview {
   model: string;
   status: "ok" | "error" | string;
   durationMs?: number;
-  cost?: number;
+  cost?: number | null;
   errorCategory?: string;
   error?: string;
   delayMs?: number;
@@ -677,7 +678,8 @@ export type CruxRoutingStepPreview =
 
 export interface CruxRoutingReportPreview {
   model: string;
-  cost?: number;
+  /** Total routed cost, or `null` when JSON-safe transport preserves an unavailable value. */
+  cost?: number | null;
   /** Elapsed milliseconds from stream hand-off to the first emitted token. */
   firstTokenAt?: number;
   trace: readonly CruxRoutingStepPreview[];

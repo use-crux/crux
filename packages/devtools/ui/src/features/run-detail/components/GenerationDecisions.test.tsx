@@ -68,7 +68,64 @@ const generation = {
   ],
 } as unknown as ObservabilityRunDetailNode;
 
+const transportedUnknownCostReceipt = {
+  model: "router-primary",
+  cost: null,
+  firstTokenAt: 0,
+  trace: [
+    {
+      kind: "router",
+      classifiedAs: "resilient",
+      route: "resilient",
+      usedDefaultRoute: false,
+      forced: false,
+    },
+    {
+      kind: "fallback",
+      firstTokenAt: 0,
+      attempts: [
+        {
+          model: "router-primary",
+          status: "ok",
+          durationMs: 13,
+          cost: null,
+        },
+      ],
+    },
+  ],
+} satisfies CruxRoutingReportPreview;
+
+const transportedUnknownCostGeneration = {
+  id: "span_transport_generation",
+  details: [
+    {
+      status: "ok",
+      attributes: {},
+      artifacts: [
+        { kind: "routing.report", preview: transportedUnknownCostReceipt },
+      ],
+    },
+  ],
+} as unknown as ObservabilityRunDetailNode;
+
 describe("GenerationDecisions", () => {
+  it("renders a JSON-safe receipt whose unavailable costs are null", () => {
+    expect(isRoutingReportPreview(transportedUnknownCostReceipt)).toBe(true);
+
+    const html = renderToStaticMarkup(
+      <GovernanceTab node={transportedUnknownCostGeneration} type="routing" />,
+    );
+
+    expect(html).toContain("Routing receipt");
+    expect(html).toContain("Router");
+    expect(html).toContain("Fallback");
+    expect(html).toContain("router-primary");
+    expect(html).toContain("TTFT 0ms");
+    expect(html).not.toContain(
+      "No routing decision folded onto this generation.",
+    );
+  });
+
   it("renders a canonical outer routing report without an inner kind", () => {
     expect(isRoutingReportPreview(receipt)).toBe(true);
 

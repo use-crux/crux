@@ -3,6 +3,49 @@ import type { CruxRoutingReportPreview } from "@use-crux/core/observability";
 import { routingFactsFromReport, routingStepViews } from "./routing-receipt";
 
 describe("routing receipt adapter", () => {
+  it("normalizes JSON-safe null costs before building typed receipt rows", () => {
+    const report = {
+      model: "openai/gpt-5",
+      cost: null,
+      trace: [
+        {
+          kind: "retry",
+          model: "openai/gpt-5",
+          attempts: [
+            {
+              model: "openai/gpt-5",
+              status: "ok",
+              durationMs: 30,
+              cost: null,
+            },
+          ],
+        },
+        {
+          kind: "cascade",
+          acceptedAtTier: 0,
+          budgetExceeded: false,
+          tiers: [
+            {
+              model: "openai/gpt-5",
+              status: "accepted",
+              durationMs: 30,
+              cost: null,
+            },
+          ],
+        },
+      ],
+    } satisfies CruxRoutingReportPreview;
+
+    const [retry, cascade] = routingStepViews(report);
+    expect(retry).toMatchObject({ kind: "retry" });
+    expect(cascade).toMatchObject({ kind: "cascade" });
+    if (retry?.kind !== "retry" || cascade?.kind !== "cascade") {
+      throw new Error("Expected retry and cascade receipt rows");
+    }
+    expect(retry.attempts[0]?.cost).toBeUndefined();
+    expect(cascade.tiers[0]?.cost).toBeUndefined();
+  });
+
   it("projects canonical receipt trace rows for all routing primitives", () => {
     const report: CruxRoutingReportPreview = {
       model: "openai/gpt-5",

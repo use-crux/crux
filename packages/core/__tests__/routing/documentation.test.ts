@@ -28,6 +28,9 @@ describe("routing documentation", () => {
     expect(cascadeGuide).toContain("note");
     expect(cascadeGuide).toContain("budget");
     expect(observabilityReference).toContain("receipt itself has no inner `kind`");
+    expect(observabilityReference).toContain(
+      "unavailable `cost` values are represented as `null`",
+    );
     expect(readme).toContain("firstTokenAt");
     expect(architecture).toContain("firstTokenAt");
   });
