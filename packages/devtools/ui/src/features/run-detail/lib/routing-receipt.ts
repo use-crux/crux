@@ -54,6 +54,7 @@ export type RoutingStepView =
       kind: "fallback";
       id?: string;
       attempts: RoutingAttemptView[];
+      firstTokenAt?: number;
       midStreamFailure: boolean;
     }
   | {
@@ -71,6 +72,7 @@ export interface RoutingReceiptFacts {
   escalated?: number;
   underBudget?: boolean;
   budget?: number;
+  firstTokenAt?: number;
   why?: string;
   hasDefaultRoute?: boolean;
   hasMidStreamFailure?: boolean;
@@ -81,7 +83,8 @@ export function isRoutingReportPreview(
   value: unknown,
 ): value is CruxRoutingReportPreview {
   if (!isRecord(value) || typeof value.model !== "string") return false;
-  if (value.cost !== undefined && typeof value.cost !== "number") return false;
+  if (value.cost !== undefined && !isFiniteNumber(value.cost)) return false;
+  if (value.firstTokenAt !== undefined && !isFiniteNumber(value.firstTokenAt)) return false;
   return (
     Array.isArray(value.trace) &&
     value.trace.length > 0 &&
@@ -129,6 +132,7 @@ export function routingFactsFromReport(
     classifiedAs: router?.classifiedAs,
     hasDefaultRoute: router?.usedDefaultRoute,
     hasMidStreamFailure: fallback?.midStreamFailure,
+    firstTokenAt: report.firstTokenAt ?? fallback?.firstTokenAt,
   };
   if (totalTiers) facts.tiers = totalTiers;
   if (acceptedAt != null) facts.escalated = acceptedAt;
@@ -183,6 +187,7 @@ function routingStepView(step: CruxRoutingStepPreview): RoutingStepView[] {
           kind: "fallback",
           id: step.id,
           attempts: attemptsFrom(step.attempts),
+          firstTokenAt: step.firstTokenAt,
           midStreamFailure: step.midStreamFailure === true,
         },
       ];
@@ -237,6 +242,10 @@ function numberFrom(value: unknown): number | undefined {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function isRoutingStepPreview(

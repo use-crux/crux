@@ -6,6 +6,7 @@ describe("routing receipt adapter", () => {
   it("projects canonical receipt trace rows for all routing primitives", () => {
     const report: CruxRoutingReportPreview = {
       model: "openai/gpt-5",
+      firstTokenAt: 218,
       trace: [
         {
           kind: "router",
@@ -31,6 +32,7 @@ describe("routing receipt adapter", () => {
         },
         {
           kind: "fallback",
+          firstTokenAt: 218,
           midStreamFailure: true,
           attempts: [
             {
@@ -72,6 +74,7 @@ describe("routing receipt adapter", () => {
       { kind: "retry", attempts: [{ status: "error" }, { status: "ok" }] },
       {
         kind: "fallback",
+        firstTokenAt: 218,
         midStreamFailure: true,
         attempts: [{ status: "error" }, { status: "ok" }],
       },
@@ -97,6 +100,7 @@ describe("routing receipt adapter", () => {
         },
         {
           kind: "fallback",
+          firstTokenAt: 218,
           midStreamFailure: true,
           attempts: [{ model: "openai/gpt-5", status: "ok", durationMs: 80 }],
         },
@@ -121,6 +125,7 @@ describe("routing receipt adapter", () => {
       budget: 0.5,
       hasDefaultRoute: true,
       hasMidStreamFailure: true,
+      firstTokenAt: 218,
       why: "accepted at tier 2 of 2; escalated 1.",
     });
   });

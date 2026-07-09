@@ -664,6 +664,7 @@ export type CruxRoutingStepPreview =
       kind: "fallback";
       id?: string;
       attempts?: readonly CruxRoutingAttemptPreview[];
+      firstTokenAt?: number;
       midStreamFailure?: boolean;
     }
   | {
@@ -677,6 +678,8 @@ export type CruxRoutingStepPreview =
 export interface CruxRoutingReportPreview {
   model: string;
   cost?: number;
+  /** Elapsed milliseconds from stream hand-off to the first emitted token. */
+  firstTokenAt?: number;
   trace: readonly CruxRoutingStepPreview[];
 }
 

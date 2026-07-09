@@ -7,9 +7,16 @@ func routingAttemptDecision(turn SpanSummary, span SpanSummary, artifact Artifac
 	if attempt.Status == "ok" {
 		code = succeededCode
 	}
-	decision := routingReceiptDecision(turn, span, artifact, index, phase, kind, subjectKind, routingAttemptOutcome(attemptIndex, attempt), observedReason(code, reason), routingAttemptMetrics(attempt))
+	decision := routingReceiptDecision(turn, span, artifact, index, phase, kind, subjectKind, routingAttemptOutcome(attemptIndex, attempt), observedReason(code, routingAttemptReasonText(reason, attempt)), routingAttemptMetrics(attempt))
 	decision.ID = fmt.Sprintf("decision:%s:routing:%s:%d:%d", turn.SpanID, artifact.ArtifactID, index, attemptIndex)
 	return decision
+}
+
+func routingAttemptReasonText(reason string, attempt routingAttemptDetail) string {
+	if attempt.Error == "" {
+		return reason
+	}
+	return boundedRoutingDecisionText(reason + ": " + attempt.Error)
 }
 
 func routingAttemptOutcome(index int, attempt routingAttemptDetail) string {

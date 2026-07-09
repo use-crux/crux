@@ -575,10 +575,11 @@ adapter execution resolves before any provider call:
 - `cascade()` escalates across quality tiers with latency and cost budgets.
 
 Routed generate results and stream completions expose `result.routing`, a
-canonical receipt `{ model, cost, trace }` whose `model` is the concrete model
-that served the call. `FallbackExhaustedError` and `CascadeExhaustedError`
-also carry `.routing`, and stream failures after token 1 mark the fallback step
-with `midStreamFailure`.
+canonical receipt `{ model, cost, firstTokenAt?, trace }` whose `model` is the
+concrete model that served the call. `firstTokenAt` is the elapsed milliseconds
+to the first emitted stream token. `FallbackExhaustedError` and
+`CascadeExhaustedError` also carry `.routing`, and stream failures after token 1
+mark the fallback step with `midStreamFailure`.
 
 ### Tool Merge Policy
 

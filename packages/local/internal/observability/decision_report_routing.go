@@ -3,12 +3,14 @@ package observability
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 type routingReceiptPreview struct {
-	Model string            `json:"model"`
-	Cost  *float64          `json:"cost"`
-	Trace []json.RawMessage `json:"trace"`
+	Model        string            `json:"model"`
+	Cost         *float64          `json:"cost"`
+	FirstTokenAt *float64          `json:"firstTokenAt"`
+	Trace        []json.RawMessage `json:"trace"`
 }
 
 type routingStepHeader struct {
@@ -39,6 +41,7 @@ type routingRetryStep struct {
 type routingFallbackStep struct {
 	routingStepHeader
 	Attempts         []routingAttemptDetail `json:"attempts"`
+	FirstTokenAt     *float64               `json:"firstTokenAt"`
 	MidStreamFailure bool                   `json:"midStreamFailure"`
 }
 
@@ -108,6 +111,10 @@ func routingReceiptDecisions(turn SpanSummary, span SpanSummary, artifact Artifa
 		if !ok {
 			continue
 		}
+		stepDecisions = withRoutingFirstTokenAt(
+			stepDecisions,
+			routingFirstTokenAt(receipt.FirstTokenAt, raw),
+		)
 		decisions = append(decisions, stepDecisions...)
 		chips = appendRoutingDecisionChips(chips, stepChips...)
 	}
@@ -193,7 +200,7 @@ func cascadeStepDecision(turn SpanSummary, span SpanSummary, artifact ArtifactSu
 		code = "routing.cascade.budget_exceeded"
 	}
 	outcome := fmt.Sprintf("accepted tier %d", step.AcceptedAtTier+1)
-	return routingReceiptDecision(turn, span, artifact, index, "model-selection", "routing.cascade", "route", outcome, observedReason(code, "Cascade tier decision was observed."), cascadeMetrics(step))
+	return routingReceiptDecision(turn, span, artifact, index, "model-selection", "routing.cascade", "route", outcome, observedReason(code, cascadeDecisionText(step)), cascadeMetrics(step))
 }
 
 func routingReceiptDecision(turn SpanSummary, span SpanSummary, artifact ArtifactSummary, index int, phase string, kind string, subjectKind string, outcome string, reason TurnDecisionReason, metrics *TurnDecisionMetrics) TurnDecision {
@@ -267,6 +274,56 @@ func cascadeMetrics(step routingCascadeStep) *TurnDecisionMetrics {
 		if tier.Status == "accepted" && tier.Confidence != nil {
 			metrics.Confidence = *tier.Confidence
 		}
+		if tier.Budget != nil {
+			metrics.Budget = tier.Budget
+		}
 	}
 	return metrics
+}
+
+func withRoutingFirstTokenAt(decisions []TurnDecision, firstTokenAt *float64) []TurnDecision {
+	if firstTokenAt == nil {
+		return decisions
+	}
+	for index := range decisions {
+		if decisions[index].Metrics == nil {
+			decisions[index].Metrics = &TurnDecisionMetrics{}
+		}
+		decisions[index].Metrics.FirstTokenAt = firstTokenAt
+	}
+	return decisions
+}
+
+func routingFirstTokenAt(receipt *float64, raw json.RawMessage) *float64 {
+	if receipt != nil {
+		return receipt
+	}
+	var fallback routingFallbackStep
+	if json.Unmarshal(raw, &fallback) != nil || fallback.Kind != "fallback" {
+		return nil
+	}
+	return fallback.FirstTokenAt
+}
+
+func cascadeDecisionText(step routingCascadeStep) string {
+	notes := make([]string, 0, len(step.Tiers))
+	for _, tier := range step.Tiers {
+		if note := strings.TrimSpace(tier.Note); note != "" {
+			notes = append(notes, note)
+		}
+	}
+	if len(notes) == 0 {
+		return "Cascade tier decision was observed."
+	}
+	return boundedRoutingDecisionText("Cascade tier decision: " + strings.Join(notes, "; "))
+}
+
+func boundedRoutingDecisionText(value string) string {
+	const maxRunes = 240
+	normalized := strings.Join(strings.Fields(value), " ")
+	runes := []rune(normalized)
+	if len(runes) <= maxRunes {
+		return normalized
+	}
+	return string(runes[:maxRunes-3]) + "..."
 }

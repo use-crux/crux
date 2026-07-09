@@ -9,11 +9,12 @@ A routed call produces one append-only `RoutingReceipt`.
 interface RoutingReceipt {
   model: string;
   cost: number | undefined;
+  firstTokenAt?: number;
   trace: RoutingStep[];
 }
 ```
 
-`model` is always the final concrete provider model id. `trace` is ordered from outermost decision to nested decision.
+`model` is always the final concrete provider model id. `trace` is ordered from outermost decision to nested decision. `firstTokenAt` is present for streams and records elapsed milliseconds from routed stream hand-off to the first emitted token.
 
 ```ts
 const result = await generate(prompt, {
@@ -34,4 +35,4 @@ Receipts are exposed on:
 - `CascadeExhaustedError.routing`
 - stream completion errors after mid-stream failure
 
-The `routing.report` observability artifact uses the same receipt shape.
+The outer observability artifact kind is `routing.report`. Its preview is exactly the same receipt object exposed to callers: the receipt itself has no `kind` property. Devtools shows TTFT, bounded attempt error text, and cascade evaluator note/budget from this shared shape.

@@ -2,6 +2,7 @@ package observability
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -107,4 +108,61 @@ func TestProjectRunDetailProjectsOuterRoutingReportReceipt(t *testing.T) {
 		t.Fatalf("fallback decision evidence = %#v, want routing receipt artifact", decision.Evidence)
 	}
 	t.Fatalf("missing fallback success decision for receipt artifact %q", artifactID)
+}
+
+func TestRoutingReceiptProjectsTTFTAttemptErrorsAndCascadeDetails(t *testing.T) {
+	const artifactID = "artifact_extended_routing_receipt"
+	artifact := ArtifactSummary{
+		ArtifactID: artifactID,
+		SpanID:     "span_routing",
+		Kind:       "routing.report",
+		Preview: json.RawMessage(`{
+			"model":"model-c",
+			"firstTokenAt":218,
+			"trace":[
+				{"kind":"fallback","firstTokenAt":218,"attempts":[
+					{"model":"model-a","status":"error","durationMs":10,"errorCategory":"rate_limit","error":"rate limited after the gateway exhausted its retry budget"},
+					{"model":"model-b","status":"ok","durationMs":11}
+				]},
+				{"kind":"cascade","acceptedAtTier":1,"budgetExceeded":true,"tiers":[
+					{"model":"model-b","status":"rejected","durationMs":11,"judgeCost":0.002,"confidence":0.62,"budget":0.05,"note":"quality below the launch threshold"},
+					{"model":"model-c","status":"accepted","durationMs":20}
+				]}
+			]
+		}`),
+	}
+	turn := SpanSummary{SpanID: "span_generation", Name: "generate answer"}
+	span := SpanSummary{SpanID: "span_routing", Primitive: "routing.fallback", DurationMs: 50}
+
+	decisions, _, _, ok := routingReceiptDecisions(turn, span, artifact)
+	if !ok {
+		t.Fatal("routingReceiptDecisions = not ok, want canonical receipt projection")
+	}
+
+	fallback := decisionByID(t, decisions, "decision:span_generation:routing:"+artifactID+":0:0")
+	if fallback.Metrics == nil || fallback.Metrics.FirstTokenAt == nil || *fallback.Metrics.FirstTokenAt != 218 {
+		t.Fatalf("fallback TTFT metrics = %#v, want 218ms", fallback.Metrics)
+	}
+	if !strings.Contains(fallback.Reason.Text, "rate limited after the gateway exhausted its retry budget") {
+		t.Fatalf("fallback reason = %#v, want bounded attempt error", fallback.Reason)
+	}
+
+	cascade := decisionByID(t, decisions, "decision:span_generation:routing:"+artifactID+":1")
+	if cascade.Metrics == nil || cascade.Metrics.Budget == nil || *cascade.Metrics.Budget != 0.05 {
+		t.Fatalf("cascade budget metrics = %#v, want 0.05", cascade.Metrics)
+	}
+	if !strings.Contains(cascade.Reason.Text, "quality below the launch threshold") {
+		t.Fatalf("cascade reason = %#v, want tier note", cascade.Reason)
+	}
+}
+
+func decisionByID(t *testing.T, decisions []TurnDecision, id string) TurnDecision {
+	t.Helper()
+	for _, decision := range decisions {
+		if decision.ID == id {
+			return decision
+		}
+	}
+	t.Fatalf("missing decision %q in %#v", id, decisions)
+	return TurnDecision{}
 }

@@ -24,7 +24,7 @@ fallback([primary, backup], {
 });
 ```
 
-After token 1, Crux does not restart the stream with another model. The stream errors, and the completion error carries the routing receipt with `midStreamFailure: true` on the fallback step.
+After token 1, Crux does not restart the stream with another model. The stream errors, and the completion error carries the routing receipt with `midStreamFailure: true` on the fallback step. The receipt's `firstTokenAt` remains the elapsed milliseconds to that first emitted token for successful completions and post-token failures alike.
 
 ```ts
 try {

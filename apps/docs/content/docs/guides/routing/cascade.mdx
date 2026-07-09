@@ -89,10 +89,12 @@ result.routing?.trace;
 //   acceptedAtTier: 1,
 //   budgetExceeded: false,
 //   tiers: [
-//     { model: 'claude-haiku', status: 'rejected', confidence: 0.62, judgeCost: 0.0028 },
+//     { model: 'claude-haiku', status: 'rejected', confidence: 0.62, judgeCost: 0.0028, budget: 0.05, note: 'quality below threshold' },
 //     { model: 'claude-opus', status: 'accepted' },
 //   ],
 // }]
 ```
+
+Each tier retains its `confidence`, `judgeCost`, configured `budget`, and evaluator `note` when supplied. Run Detail renders these receipt fields alongside the tier outcome so a rejection or budget exit can be inspected without reconstructing evaluator state from spans.
 
 `cascade()` is generate-only. Use `router`, `split`, `retry`, or `fallback` for streaming model selection.

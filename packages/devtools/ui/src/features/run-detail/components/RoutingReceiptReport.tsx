@@ -2,7 +2,7 @@ import type { CruxRoutingReportPreview } from "@use-crux/core/observability";
 import { Chip } from "@/qw/shell/primitives";
 import { EmptyHint } from "./SpanDetailPanelAtoms";
 import { RoutingReceiptSteps } from "./RoutingReceiptSteps";
-import { fmtCost, shortModelId } from "../lib/span-detail-inspection";
+import { fmtCost, fmtDuration, shortModelId } from "../lib/span-detail-inspection";
 import {
   routingFactsFromReport,
   routingStepViews,
@@ -42,6 +42,11 @@ export function RoutingReceiptReport({
             {report.cost != null && (
               <Chip tone="muted" mono>
                 {fmtCost(report.cost)}
+              </Chip>
+            )}
+            {facts.firstTokenAt != null && (
+              <Chip tone="muted" mono>
+                TTFT {fmtDuration(facts.firstTokenAt)}
               </Chip>
             )}
             {facts.hasDefaultRoute && <Chip tone="warn">default route</Chip>}

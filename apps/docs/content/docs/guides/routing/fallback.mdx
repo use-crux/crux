@@ -85,11 +85,13 @@ result.routing?.trace;
 // [{ kind: 'fallback', id: 'launch-day-fallback', attempts: [{ model: 'gpt-5', status: 'ok', durationMs: 412 }] }]
 ```
 
+Failed attempts record their error category and bounded error text in the same receipt. Run Detail uses those fields to explain why it moved to the next model without exposing unbounded provider payloads.
+
 ## Streaming
 
 Fallback can retry stream attempts until the first token reaches the caller. `timeout.firstToken` is fallback-eligible because no token has been delivered yet.
 
-After token 1, Crux does not restart the stream on another model. The stream errors and the completion error carries `routing.trace[*].midStreamFailure = true`.
+After token 1, Crux does not restart the stream on another model. The stream errors and the completion error carries `routing.trace[*].midStreamFailure = true`; `routing.firstTokenAt` remains the elapsed TTFT measurement.
 
 ```ts
 const streamResult = await stream(chatPrompt, {

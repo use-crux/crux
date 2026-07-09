@@ -9,6 +9,7 @@ import { isRoutingReportPreview } from "../lib/routing-receipt";
 const receipt = {
   model: "model-b",
   cost: 0.02,
+  firstTokenAt: 218,
   trace: [
     {
       kind: "router",
@@ -21,15 +22,36 @@ const receipt = {
     {
       kind: "fallback",
       id: "recovery",
+      firstTokenAt: 218,
       attempts: [
         {
           model: "model-a",
           status: "error",
           durationMs: 10,
           errorCategory: "rate_limit",
-          error: "rate limited",
+          error: "rate limited after the gateway exhausted its retry budget",
+          delayMs: 50,
         },
         { model: "model-b", status: "ok", durationMs: 11, cost: 0.02 },
+      ],
+    },
+    {
+      kind: "cascade",
+      id: "quality",
+      acceptedAtTier: 1,
+      budgetExceeded: true,
+      tiers: [
+        {
+          tier: 0,
+          model: "model-b",
+          status: "rejected",
+          durationMs: 11,
+          confidence: 0.62,
+          judgeCost: 0.002,
+          budget: 0.05,
+          note: "quality below the launch threshold",
+        },
+        { tier: 1, model: "model-c", status: "accepted", durationMs: 20 },
       ],
     },
   ],
@@ -58,6 +80,13 @@ describe("GenerationDecisions", () => {
     expect(html).toContain("Router");
     expect(html).toContain("Fallback");
     expect(html).toContain("model-b");
+    expect(html).toContain("TTFT 218ms");
+    expect(html).toContain("rate limited after the gateway exhausted its retry budget");
+    expect(html).toContain("delay 50ms");
+    expect(html).toContain("quality below the launch threshold");
+    expect(html).toContain("rejected 0.62");
+    expect(html).toContain("judge $0.0020");
+    expect(html).toContain("budget $0.050");
     expect(html).not.toContain("No routing decision folded onto this generation.");
   });
 
