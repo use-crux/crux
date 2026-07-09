@@ -71,14 +71,14 @@ func TestDirectClient_reads_quality_cell_evidence(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-direct",
     "variantName": "default",
     "trial": 0,
     "status": "failed",
     "input": {},
     "scores": [],
-    "assertions": { "ran": 1, "notEvaluated": 0, "failures": [{ "level": "evaluation", "index": 0, "matcher": "toBe", "soft": false, "message": "expected ok" }] },
+    "assertions": { "ran": 1, "notEvaluated": 0, "outcomes": [{ "id": "expect:evaluation:0", "level": "evaluation", "phase": "expect", "index": 0, "status": "failed", "matcher": "toBe", "soft": false, "message": "expected ok" }] },
     "durationMs": 1000,
     "traceIds": [],
     "capturedSignals": []
@@ -132,7 +132,7 @@ func TestDirectClient_reads_quality_evaluation_progress(t *testing.T) {
   } } },
   "gates": { "passed": true, "informational": false, "results": [] },
   "passed": true,
-  "cases": []
+  "cells": []
 }`)
 
 	s := store.NewStore()

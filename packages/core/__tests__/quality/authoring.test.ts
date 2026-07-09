@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { prompt } from '../../prompt/prompt'
 import { flow } from '../../flow/scope'
 import { agent } from '../../agent/agent'
-import { evaluate, target, scorers, dataset, cassette } from '../../quality'
+import { evaluate, target, scorers, dataset, cassette, UncapturedSignalError } from '../../quality'
 import { NotImplementedError } from '../../quality/internal/errors'
 
 const supportPrompt = prompt({
@@ -113,6 +113,9 @@ describe('evaluation.manifest — spec 02 §2 shape for inline-case definitions'
       expect: (ctx) => {
         ctx.expect(ctx.output.answer).toBeDefined()
       },
+      afterScores: (ctx) => {
+        ctx.expect(ctx.score.helpful).toBeGreaterThanOrEqual(0.7)
+      },
       scorers: (s) => {
         factoryCalls += 1
         return [s.judge({ name: 'helpful', rubric: 'Helpful?', select: (o) => o.answer }), s.exact()]
@@ -132,13 +135,12 @@ describe('evaluation.manifest — spec 02 §2 shape for inline-case definitions'
       schemaVersion: 1,
       id: 'support.bakeoff',
       explicitId: true,
-      file: '',
-      exportName: '',
       source: 'file',
       description: 'Refund quality bar',
       tags: ['support'],
-      task: { kind: 'prompt', ref: 'support', capabilities: ['modelCalls', 'citations', 'safety', 'decisionReports'] },
+      task: { kind: 'prompt', ref: 'support', capabilities: ['modelCalls', 'citations', 'safety', 'decisionReport'] },
       hasEvaluationExpect: true,
+      hasEvaluationAfterScores: true,
       scorers: [
         { name: 'helpful', costClass: 'model' },
         { name: 'exact', costClass: 'code' },
@@ -149,6 +151,8 @@ describe('evaluation.manifest — spec 02 §2 shape for inline-case definitions'
       replay: { mode: 'replay-strict', cassette: 'support' },
       flags: { only: false, skip: false },
     })
+    expect(manifest.file).toBeUndefined()
+    expect(manifest.exportName).toBeUndefined()
     expect(manifest.variants).toEqual([
       { name: 'cheap', overrideKeys: ['model'] },
       { name: 'candidate', overrideKeys: ['prompt'] },
@@ -240,7 +244,7 @@ describe('target.*', () => {
       'routing',
       'safety',
       'memory',
-      'decisionReports',
+      'decisionReport',
     ])
     expect(Object.isFrozen(t)).toBe(true)
   })
@@ -254,6 +258,17 @@ describe('target.*', () => {
     it('builds custom fn targets via the callable form', () => {
     const t = target({ id: 'harness', run: (input: { q: string }) => input.q })
     expect(t).toMatchObject({ _tag: 'QualityTarget', kind: 'fn', id: 'harness', capabilities: [] })
+  })
+
+  it('wraps retrieval recipes with the explicit retrievalRecipe helper', () => {
+    const recipe = { _tag: 'RetrievalRecipe', id: 'docs' }
+    const t = target.retrievalRecipe(recipe as never)
+    expect(t).toMatchObject({ _tag: 'QualityTarget', kind: 'retriever', id: 'docs' })
+  })
+
+  it('exports UncapturedSignalError as a runtime value', () => {
+    expect(UncapturedSignalError).toBeTypeOf('function')
+    expect(new UncapturedSignalError('toolCalls', ['flow', 'agent'])).toBeInstanceOf(UncapturedSignalError)
   })
 })
 

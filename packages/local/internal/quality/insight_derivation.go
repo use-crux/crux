@@ -31,7 +31,7 @@ func deriveInsights(in qualityInsightInputs) []qualityInsightRecord {
 		failedCaseIDs := []string{}
 		failed := 0
 		errored := 0
-		for _, cell := range record.Cases {
+		for _, cell := range record.Cells {
 			switch cell.Status {
 			case "failed":
 				failed++

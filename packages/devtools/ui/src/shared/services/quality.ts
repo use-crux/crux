@@ -19,6 +19,8 @@ import type {
   QualityFeedbackAnnotationRecord,
   QualityFeedbackMemoryProposalRecord,
   QualityCassetteRecord,
+  QualityJudgeReport,
+  QualityExperimentDiff,
   SpanPrimitive,
 } from '@/types'
 
@@ -44,6 +46,22 @@ export interface RecordFeedbackInput {
   rating: -1 | 1
   comment?: string
   tags: readonly string[]
+}
+
+/**
+ * A human label on one experiment cell (blueprint §4.4). Written to the same
+ * feedback store as trace feedback, tagged `human-label`, so `judge-report`
+ * can compute judge-vs-human agreement.
+ */
+export interface LabelCellInput {
+  experimentId: string
+  caseId: string
+  variant: string
+  trial: number
+  verdict: 'pass' | 'fail'
+  note?: string
+  /** The judge score this label adjudicates, when labeling from a score row. */
+  scoreName?: string
 }
 
 export function buildRunsQuery(opts: QualityRunsOptions | undefined): string {
@@ -167,9 +185,33 @@ export const qualityService = {
       `/api/quality/evaluations/${encodeURIComponent(evaluationId)}/progress${buildEvaluationProgressQuery(limit)}`,
       signal,
     ),
+  /** Judge-vs-human agreement report for one evaluation (blueprint §12.2). */
+  judgeReport: (evaluationId: string, signal?: AbortSignal) =>
+    fetchJsonOr404<QualityJudgeReport>(`/api/quality/judge-report/${encodeURIComponent(evaluationId)}`, signal),
+  /** Core-owned diff of two saved experiment records (blueprint §12.3). */
+  experimentDiff: (a: string, b: string, signal?: AbortSignal) => {
+    const params = new URLSearchParams({ a, b })
+    return fetchJson<QualityExperimentDiff>(`/api/quality/experiments/diff?${params.toString()}`, signal)
+  },
   feedback: (signal?: AbortSignal) => fetchJson<readonly QualityFeedbackRecord[]>('/api/quality/feedback', signal),
   async recordFeedback(input: RecordFeedbackInput): Promise<void> {
     await expectOk(await postJson('/api/quality/feedback', input), 'record feedback')
+  },
+  /** Write a human pass/fail label on one experiment cell (blueprint §12.4). */
+  async labelCell(input: LabelCellInput): Promise<void> {
+    const body = {
+      experimentId: input.experimentId,
+      caseId: input.caseId,
+      rating: input.verdict === 'pass' ? 1 : -1,
+      tags: ['human-label'],
+      comment: input.note,
+      metadata: {
+        variant: input.variant,
+        trial: input.trial,
+        ...(input.scoreName ? { scoreName: input.scoreName } : {}),
+      },
+    }
+    await expectOk(await postJson('/api/quality/feedback', body), 'label cell')
   },
   feedbackAnnotations: (signal?: AbortSignal) =>
     fetchJson<readonly QualityFeedbackAnnotationRecord[]>('/api/quality/feedback/annotations', signal),

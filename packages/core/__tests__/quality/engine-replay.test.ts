@@ -31,14 +31,14 @@ const answerPrompt = prompt({
 function executorSetup(config: FakeLoopRuntimeConfig) {
   const fake = fakeLoopRuntime(config)
   const executor = loopRuntimeAdapter(fake.runtime)
-  return { fake, generate: executor.generate.bind(executor) as never, liveCalls: () => fake.calls.runTextLoop.length }
+  return {
+    fake,
+    generate: executor.generate.bind(executor) as never,
+    liveCalls: () => fake.calls.runTextLoop.length,
+  }
 }
 
-function run(
-  evaluation: Parameters<typeof runEvaluationWithRunner>[0],
-  options: QualityRunnerHarnessOptions,
-  overrides?: RunOverrides<string>,
-) {
+function run(evaluation: Parameters<typeof runEvaluationWithRunner>[0], options: QualityRunnerHarnessOptions, overrides?: RunOverrides<string>) {
   return runEvaluationWithRunner(evaluation, overrides, options)
 }
 
@@ -47,29 +47,36 @@ const repeat = <T>(value: T, times: number): T[] => Array.from({ length: times }
 describe('engine replay — record-new then replay-strict', () => {
   it('records a cassette named after the evaluation id, then replays with zero live calls', async () => {
     const dir = await tempQualityDir()
-    const { generate, liveCalls } = executorSetup({ loops: repeat([{ text: 'recorded answer' }], 4) })
+    const { generate, liveCalls } = executorSetup({
+      loops: repeat([{ text: 'recorded answer' }], 4),
+    })
     const evaluation = evaluate('replay.smoke', {
       task: answerPrompt,
       data: [{ input: { q: 'how do refunds work?' } }],
       replay: 'record-new',
     })
 
-    const recordRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } })
-    expect(recordRun.perCase[0]!.status).toBe('passed')
-    expect(recordRun.replay).toMatchObject({ mode: 'record-new', cassette: 'replay.smoke' })
+    const recordRun = await run(evaluation, {
+      dir,
+      setup: { generate, model: 'fake:m1' },
+    })
+    expect(recordRun.cells[0]!.status).toBe('passed')
+    expect(recordRun.replay).toMatchObject({
+      mode: 'record-new',
+      cassette: 'replay.smoke',
+    })
     expect(liveCalls()).toBe(1)
     const cassetteFile = join(dir, 'cassettes', 'replay.smoke.json')
     expect(existsSync(cassetteFile)).toBe(true)
 
-    const replayRun = await run(
-      evaluation,
-      { dir, setup: { generate, model: 'fake:m1' } },
-      { replayMode: 'replay-strict' },
-    )
+    const replayRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } }, { replayMode: 'replay-strict' })
     expect(liveCalls()).toBe(1) // zero new live calls
-    expect(replayRun.perCase[0]!.status).toBe('passed')
-    expect(replayRun.perCase[0]!.output).toBe('recorded answer')
-    expect(replayRun.replay).toMatchObject({ mode: 'replay-strict', cassette: 'replay.smoke' })
+    expect(replayRun.cells[0]!.status).toBe('passed')
+    expect(replayRun.cells[0]!.output).toBe('recorded answer')
+    expect(replayRun.replay).toMatchObject({
+      mode: 'replay-strict',
+      cassette: 'replay.smoke',
+    })
   })
 
   it('quality.defaults.replay fills when nothing else is declared; --replay live opts out', async () => {
@@ -80,13 +87,21 @@ describe('engine replay — record-new then replay-strict', () => {
       data: [{ input: { q: 'x' } }],
     })
 
-    await run(evaluation, { dir, setup: { generate, model: 'fake:m1' }, defaults: { replay: 'record-new' } })
+    await run(evaluation, {
+      dir,
+      setup: { generate, model: 'fake:m1' },
+      defaults: { replay: 'record-new' },
+    })
     expect(existsSync(join(dir, 'cassettes', 'replay.defaults.json'))).toBe(true)
 
     const liveDir = await tempQualityDir()
     await run(
       evaluation,
-      { dir: liveDir, setup: { generate, model: 'fake:m1' }, defaults: { replay: 'record-new' } },
+      {
+        dir: liveDir,
+        setup: { generate, model: 'fake:m1' },
+        defaults: { replay: 'record-new' },
+      },
       { replayMode: 'live' },
     )
     expect(existsSync(join(liveDir, 'cassettes'))).toBe(false)
@@ -94,21 +109,63 @@ describe('engine replay — record-new then replay-strict', () => {
 
   it('fails a replay-strict miss closed: cell errored, phase replay, key + re-record hint', async () => {
     const dir = await tempQualityDir()
-    const { generate, liveCalls } = executorSetup({ loops: repeat([{ text: 'never' }], 2) })
+    const { generate, liveCalls } = executorSetup({
+      loops: repeat([{ text: 'never' }], 2),
+    })
     const evaluation = evaluate('replay.miss', {
       task: answerPrompt,
       data: [{ input: { q: 'unrecorded' } }],
       replay: 'replay-strict',
     })
 
-    const experiment = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } })
-    const cell = experiment.perCase[0]!
+    const experiment = await run(evaluation, {
+      dir,
+      setup: { generate, model: 'fake:m1' },
+    })
+    const cell = experiment.cells[0]!
     expect(cell.status).toBe('errored')
     expect(cell.error?.phase).toBe('replay')
     expect(cell.error?.message).toMatch(/[0-9a-f]{64}/)
     expect(cell.error?.message).toMatch(/record-new/)
     expect(liveCalls()).toBe(0)
     expect(experiment.passed).toBe(false)
+  })
+
+  it('misses replay-strict when a structured prompt output schema changes', async () => {
+    const dir = await tempQualityDir()
+    const makePrompt = (output: z.ZodType) =>
+      prompt({
+        id: 'replay.structured-schema',
+        input: z.object({ q: z.string() }),
+        output,
+        prompt: ({ input }) => input.q,
+      })
+    const { fake, generate } = executorSetup({
+      structured: ['{"answer":"recorded"}'],
+    })
+
+    await run(
+      evaluate('replay.schema-drift', {
+        task: makePrompt(z.object({ answer: z.string() })),
+        data: [{ input: { q: 'refunds' } }],
+        replay: 'record-new',
+      }),
+      { dir, setup: { generate, model: 'fake:m1' } },
+    )
+    expect(fake.calls.runStructuredAttempt).toHaveLength(1)
+
+    const replay = await run(
+      evaluate('replay.schema-drift', {
+        task: makePrompt(z.object({ summary: z.string() })),
+        data: [{ input: { q: 'refunds' } }],
+        replay: 'replay-strict',
+      }),
+      { dir, setup: { generate, model: 'fake:m1' } },
+    )
+
+    expect(fake.calls.runStructuredAttempt).toHaveLength(1)
+    expect(replay.cells[0]!.status).toBe('errored')
+    expect(replay.cells[0]!.error?.phase).toBe('replay')
   })
 })
 
@@ -123,16 +180,18 @@ describe('engine replay — trials collapse under replay-strict', () => {
       replay: 'record-new',
     })
 
-    const recordRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } })
-    expect(recordRun.perCase).toHaveLength(3) // trials run live under record-new
+    const recordRun = await run(evaluation, {
+      dir,
+      setup: { generate, model: 'fake:m1' },
+    })
+    expect(recordRun.cells).toHaveLength(3) // trials run live under record-new
 
-    const replayRun = await run(
-      evaluation,
-      { dir, setup: { generate, model: 'fake:m1' } },
-      { replayMode: 'replay-strict' },
-    )
-    expect(replayRun.perCase).toHaveLength(1)
-    expect(replayRun.replay).toMatchObject({ mode: 'replay-strict', trialsCollapsed: true })
+    const replayRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } }, { replayMode: 'replay-strict' })
+    expect(replayRun.cells).toHaveLength(1)
+    expect(replayRun.replay).toMatchObject({
+      mode: 'replay-strict',
+      trialsCollapsed: true,
+    })
   })
 })
 
@@ -155,13 +214,9 @@ describe('engine replay — variants share one cassette', () => {
     const files = await readdir(join(dir, 'cassettes'))
     expect(files).toEqual(['replay.variants.json'])
 
-    const replayRun = await run(
-      evaluation,
-      { dir, setup: { generate, model: 'fake:m1' } },
-      { replayMode: 'replay-strict' },
-    )
+    const replayRun = await run(evaluation, { dir, setup: { generate, model: 'fake:m1' } }, { replayMode: 'replay-strict' })
     expect(liveCalls()).toBe(2)
-    const outputs = replayRun.perCase.map((cell) => cell.output).sort()
+    const outputs = replayRun.cells.map((cell) => cell.output).sort()
     expect(outputs).toEqual(['from m1', 'from m2'])
   })
 })
@@ -171,7 +226,10 @@ describe('engine replay — judge scorers replay through the same cassette', () 
     const dir = await tempQualityDir()
     const judgeVerdict = JSON.stringify({ reasoning: 'grounded', score: 0.9 })
     const make = () =>
-      executorSetup({ loops: repeat([{ text: 'the answer' }], 2), structured: [judgeVerdict, judgeVerdict] })
+      executorSetup({
+        loops: repeat([{ text: 'the answer' }], 2),
+        structured: [judgeVerdict, judgeVerdict],
+      })
 
     const evaluation = evaluate('replay.judged', {
       task: answerPrompt,
@@ -181,17 +239,16 @@ describe('engine replay — judge scorers replay through the same cassette', () 
     })
 
     const recorder = make()
-    await run(evaluation, { dir, setup: { generate: recorder.generate, model: 'fake:m1' } })
+    await run(evaluation, {
+      dir,
+      setup: { generate: recorder.generate, model: 'fake:m1' },
+    })
 
     const replayer = make()
-    const replayRun = await run(
-      evaluation,
-      { dir, setup: { generate: replayer.generate, model: 'fake:m1' } },
-      { replayMode: 'replay-strict' },
-    )
+    const replayRun = await run(evaluation, { dir, setup: { generate: replayer.generate, model: 'fake:m1' } }, { replayMode: 'replay-strict' })
     expect(replayer.fake.calls.runTextLoop).toHaveLength(0)
     expect(replayer.fake.calls.runStructuredAttempt).toHaveLength(0)
-    const judged = replayRun.perCase[0]!.scores.find((score) => score.name === 'quality')
+    const judged = replayRun.cells[0]!.scores.find((score) => score.name === 'quality')
     expect(judged).toMatchObject({ score: 0.9 })
   })
 })
@@ -218,7 +275,10 @@ describe('engine replay — named cassette and custom match', () => {
       data: [{ input: { q: 'x' } }],
       replay: 'record-new',
     })
-    await run(evaluation, { dir, setup: { generate: first.generate, model: 'fake:m1' } })
+    await run(evaluation, {
+      dir,
+      setup: { generate: first.generate, model: 'fake:m1' },
+    })
 
     const second = executorSetup({ loops: [[{ text: 'new' }]] })
     await run(evaluation, { dir, setup: { generate: second.generate, model: 'fake:m1' } }, { replayMode: 'refresh' })

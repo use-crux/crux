@@ -9,17 +9,21 @@
  * @module
  */
 
-import type { QualityRunnerEnv, QualityRunnerEvent } from '@use-crux/core/quality/internal/runner'
+import type { ExperimentDiff, QualityRunnerEnv, QualityRunnerEvent } from '@use-crux/core/quality/internal/runner'
 import type { QualitySourceFrameResolver, ReplayMode } from '@use-crux/core/quality'
 import type { CollectedEvaluation, CollectError } from './quality-collect'
 import type { RunnerCore } from './quality-core-bridge'
+import type { QualityInitTarget } from './quality-init'
 
 // ─────────────────────────────────────────────────────────────────
 // Event stream (spec 03 §2 — one stream, no per-kind pipelines)
 // ─────────────────────────────────────────────────────────────────
 
 /** The worker ⇄ CLI event stream. Serialized as NDJSON on stdout. */
-export type QualityRunEvent = QualityRunnerEvent
+export type QualityRunEvent =
+  | QualityRunnerEvent
+  | { type: 'diff:done'; runId?: string; diff: ExperimentDiff }
+  | { type: 'init:targets'; runId?: string; targets: readonly QualityInitTarget[] }
 
 // ─────────────────────────────────────────────────────────────────
 // Options
@@ -33,6 +37,12 @@ export interface ExecuteOptions {
   ids?: readonly string[]
   /** Case id/name filters (glob `*`), forwarded to the engine. */
   cases?: readonly string[]
+  /** Previous experiment id, or `latest`, whose failed cells should be rerun. */
+  failed?: string
+  /** Deterministic case sampling after other filters. */
+  sample?: { size: number; seed: string }
+  /** Stop scheduling new cells after recorded cumulative cost reaches this amount. */
+  maxCostUsd?: number
   /** Variant subset; excluding the baseline variant demotes gates (spec 03 §4). */
   variants?: readonly string[]
   /** Replay mode override (non-live modes land in phase 5). */
@@ -101,6 +111,9 @@ export async function executeEvaluations(options: ExecuteOptions): Promise<Execu
     evaluations: options.collected,
     ...(options.ids !== undefined ? { ids: options.ids } : {}),
     ...(options.cases !== undefined ? { cases: options.cases } : {}),
+    ...(options.failed !== undefined ? { failed: options.failed } : {}),
+    ...(options.sample !== undefined ? { sample: options.sample } : {}),
+    ...(options.maxCostUsd !== undefined ? { maxCostUsd: options.maxCostUsd } : {}),
     ...(options.variants !== undefined ? { variants: options.variants } : {}),
     ...(options.replayMode !== undefined ? { replayMode: options.replayMode } : {}),
     ...(options.reuseOutputs !== undefined ? { reuseOutputs: options.reuseOutputs } : {}),

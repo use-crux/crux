@@ -237,16 +237,57 @@ optional policy/defaults, not a required primitive registry. See the
 [Quality guide](/docs/guides/quality).
 
 ```bash
+crux quality init [definition-id]  # Scaffold an eval for an uncovered definition
+crux quality import-traces --definition <id> # Create JSONL cases from local traces
 crux quality run [id...]            # Run all discovered evaluations, or the listed ids
+crux quality run --failed latest --json # Rerun failed cells from the latest experiment
+crux quality run --sample 10 --seed smoke # Run a deterministic case slice
 crux quality watch [id...]          # Incremental re-run on change (also embedded in `crux dev`)
 crux quality list                   # Discovered evaluations (manifests), no execution
 crux quality show <experimentId>    # Print one persisted experiment record (human or --json)
 crux quality progress <evaluationId> # Recent runs and score series for one evaluation
 crux quality cell-evidence <experimentId> --case <caseId> --variant <name> --trial <n>
+crux quality diff <experimentA> <experimentB> --json
+crux quality mcp                    # Serve Quality tools over MCP stdio
 crux quality promote <experimentId> [--variant <name>] [--pin-id <id>]
 ```
 
 Quality is the supported evaluation CLI namespace.
+
+### `crux quality init`
+
+Scaffold the first eval for a Project Index definition:
+
+```bash
+crux quality init
+crux quality init prompt:support-triage
+crux quality init prompt:support-triage --force
+```
+
+With no argument, `init` lists definitions that appear to lack eval coverage.
+With a single target, it writes `evals/<safe-id>.eval.ts` and seeds it with an
+imported task, `covers: ['<definition-id>']`, a TODO data row, a truthy smoke
+assertion, and `scorers.exact()`. Existing files are left untouched unless
+`--force` is set. The command also creates `.crux/skills/quality/SKILL.md`
+when the project does not already have a local Quality skill note.
+
+### `crux quality import-traces`
+
+Convert retained local traces into JSONL dataset rows:
+
+```bash
+crux quality import-traces --definition prompt:support-triage
+crux quality import-traces --definition support-triage --status ok --since 7d --limit 20
+crux quality import-traces --definition support-triage --with-expected --out evals/datasets/support.jsonl
+```
+
+`--definition` accepts the Project Index prompt id form (`prompt:<id>`) or the
+runtime prompt id form (`<id>`). The command reads local observability run
+details, uses the root input/prompt/messages artifact as `input`, and writes
+`expected` only with `--with-expected`, using the observed output artifact.
+Rows are tagged `trace-import` and include
+`metadata.provenance.{traceId,observedAt,source}`. Runs without usable input
+or, under `--with-expected`, usable output are skipped with a reason.
 
 ### `crux quality run` flags
 
@@ -254,13 +295,18 @@ Quality is the supported evaluation CLI namespace.
 | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `[id...]`               | Evaluation ids (explicit or path-derived). Unknown id → exit 2 with a nearest-match suggestion                                                                    |
 | `--case <pattern>`      | Filter cases by id/name; `*` glob; repeatable. **Demotes gates to informational**                                                                                 |
+| `--failed <ref>`        | Rerun failed or errored cells from an experiment id, or `latest` for the newest matching saved experiment. Demotes gates to informational                         |
+| `--sample <n>`          | Deterministically sample `n` cases after filters. Requires `--seed` so the subset can be reproduced                                                               |
+| `--seed <value>`        | Seed used by `--sample`                                                                                                                                            |
+| `--max-cost <usd>`      | Stop scheduling new cells after cumulative reported cell cost reaches this USD budget                                                                              |
+| `--changed-since <ref>` | Select evaluations affected by files changed since a git ref. If coverage cannot be proven, the command fails open by running the selected/all evaluation set      |
 | `--variant <name>`      | Run a variant subset; repeatable. Demotes gates unless the baseline variant is included                                                                           |
 | `--trials <n>`          | Override trials for this run                                                                                                                                      |
 | `--replay <mode>`       | `live` · `record-new` · `replay-strict` · `refresh` — overrides declaration/config                                                                                |
 | `--rescore`             | Reuse cached outputs, re-run scorers/expects only (token-free judge iteration)                                                                                    |
 | `--experiment <label>`  | Grouping label stored on the record(s)                                                                                                                            |
-| `--json`                | Write the Experiment record(s) (versioned schema) as a JSON array to stdout (bool, consistent with every other quality subcommand)                                |
-| `--json-out <path>`     | Write the same JSON array to a file path instead of stdout                                                                                                        |
+| `--json`                | Suppress human stdout and write one machine-readable run summary object (verdict, record paths, failed cells, evidence commands, cost, duration)                  |
+| `--json-out <path>`     | Write the same run summary object to a file path while keeping human stdout                                                                                       |
 | `--junit <path>`        | Write JUnit XML (one testsuite per evaluation × variant; gate failures as a synthetic `gates` testcase; experimentId/configFingerprint/score means in properties) |
 | `--ci`                  | Force plain, non-animated output and no color, even on a TTY. Pair with explicit `--replay replay-strict` for token-free CI posture                               |
 | `--max-concurrency <n>` | Cap parallel cells across all evaluations                                                                                                                         |
@@ -301,6 +347,24 @@ historical case run rather than a run created during the current evaluation.
 Consumers should treat the edge as provenance and not require same-run
 membership.
 
+Dataset-backed cells keep `metadata.datasetProvenance` with the dataset path
+and content fingerprint. The same compact provenance appears on failed rows in
+`crux quality run --json`, failed-cell output from `crux quality show`, and
+matched rows in `crux quality diff --json`.
+
+### `crux quality mcp`
+
+Serves Quality tools over MCP stdio for local agents:
+
+```bash
+crux quality mcp
+```
+
+The server exposes `quality_list`, `quality_run`, `quality_show`,
+`quality_diff`, `quality_cell_evidence`, `quality_judge_report`, and
+`quality_label`. Tool outputs use the same JSON contracts as the CLI summary,
+experiment record, diff, evidence, judge-report, and feedback commands.
+
 ### `crux quality progress`
 
 Shows the backend-owned progress read model for one evaluation: recent
@@ -327,6 +391,19 @@ baseline comparison, and retained trace hotspots when available.
 ```bash
 crux quality cell-evidence <experimentId> --case simple-refund --variant default --trial 0
 crux quality cell-evidence <experimentId> --case simple-refund --variant default --trial 0 --json
+```
+
+### `crux quality diff`
+
+Prints a schema-versioned JSON diff between two saved experiment records. The
+arguments may be experiment ids under `.crux/quality/experiments/` or record
+paths. The diff includes score deltas, per-case pass/fail changes,
+unmatched cases, fingerprint drift, and both gate verdicts. Drifted
+fingerprints render with `comparable: false` instead of being dropped.
+
+```bash
+crux quality diff 01KTA 01KTB --json
+crux quality diff .crux/quality/experiments/01KTA.json .crux/quality/experiments/01KTB.json --json
 ```
 
 ### `crux quality promote`

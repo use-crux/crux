@@ -43,8 +43,10 @@ export interface InterceptedGeneration {
   readonly messages: readonly Message[] | undefined
   /** Provider-native settings after `mapSettings()`. */
   readonly settings: Record<string, unknown>
-  /** Sorted names + descriptions of the tools offered to the model. */
-  readonly tools: ReadonlyArray<{ name: string; description?: string }> | undefined
+  /** Structured-output schema for this call, when the prompt declares one. */
+  readonly outputSchema: unknown | undefined
+  /** Sorted names + parameter schemas of the tools offered to the model. */
+  readonly tools: ReadonlyArray<{ name: string; parameters?: unknown }> | undefined
 }
 
 /**
@@ -81,18 +83,13 @@ export async function interceptGeneration<T>(call: InterceptedGeneration, execut
 }
 
 /** Project a tool map to its serializable identity surface. @internal */
-export function describeTools(
-  tools: Record<string, unknown> | undefined,
-): ReadonlyArray<{ name: string; description?: string }> | undefined {
+export function describeTools(tools: Record<string, unknown> | undefined): ReadonlyArray<{ name: string; parameters?: unknown }> | undefined {
   if (tools === undefined) return undefined
   return Object.keys(tools)
     .sort()
     .map((name) => {
       const tool = tools[name]
-      const description =
-        tool !== null && typeof tool === 'object' && typeof (tool as { description?: unknown }).description === 'string'
-          ? ((tool as { description: string }).description satisfies string)
-          : undefined
-      return { name, ...(description !== undefined ? { description } : {}) }
+      const parameters = tool !== null && typeof tool === 'object' && 'parameters' in tool ? (tool as { parameters?: unknown }).parameters : undefined
+      return { name, ...(parameters !== undefined ? { parameters } : {}) }
     })
 }

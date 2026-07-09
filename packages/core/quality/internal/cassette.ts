@@ -17,7 +17,8 @@
  * @module
  */
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { readFile, mkdir } from 'node:fs/promises'
+import { readFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { z } from 'zod'
 import { observe } from '../../observability'
@@ -25,6 +26,10 @@ import type { InterceptedGeneration } from '../../adapter/interception'
 import type { NormalizedCall, ReplayMode } from '../replay'
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction } from './redact'
+import { CASSETTE_CACHE_EPOCH, fingerprintSchema } from './cache-identity'
+import { writeFileAtomic } from './fs-atomic'
+import { withFileLock } from './fs-lock'
+import { shouldQuarantineQualityWrite } from './capture-context'
 
 /** Days after which a cassette's recordings are considered stale. */
 const STALE_AFTER_DAYS = 90
@@ -68,18 +73,41 @@ export function buildNormalizedCall(call: InterceptedGeneration): NormalizedCall
     }),
   )
   return {
+    epoch: CASSETTE_CACHE_EPOCH,
     kind: call.kind,
     ...(call.promptId !== undefined ? { targetId: call.promptId } : {}),
     promptHash,
     model: `${call.modelInfo.provider}/${call.modelInfo.modelId}`,
     settings: call.settings,
-    ...(call.tools !== undefined ? { toolSchemaHash: sha256Hex(canonicalJson(call.tools)) } : {}),
+    outputSchemaFingerprint: fingerprintSchema(call.outputSchema),
+    ...(call.tools !== undefined
+      ? {
+          toolSchemas: call.tools
+            .map((tool) => ({
+              name: tool.name,
+              paramsFingerprint: fingerprintSchema(tool.parameters),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name)),
+        }
+      : {}),
   }
 }
 
 /** The default match key: hash of the normalized call. */
 export function normalizedCallKey(call: InterceptedGeneration): string {
   return sha256Hex(canonicalJson(buildNormalizedCall(call)))
+}
+
+function emptyCassetteFile(sdkVersionValue: string): CassetteFile {
+  return {
+    version: 1,
+    metadata: {
+      recordedAt: new Date().toISOString(),
+      sdkVersion: sdkVersionValue,
+      models: [],
+    },
+    entries: {},
+  }
 }
 
 /** A replay-strict miss: the cell fails closed with the key and a re-record hint. */
@@ -184,7 +212,10 @@ async function sdkVersion(): Promise<string> {
   for (const candidate of ['../../package.json', '../../../package.json']) {
     try {
       const url = new URL(candidate, import.meta.url)
-      const parsed = JSON.parse(await readFile(url, 'utf8')) as { name?: unknown; version?: unknown }
+      const parsed = JSON.parse(await readFile(url, 'utf8')) as {
+        name?: unknown
+        version?: unknown
+      }
       if (parsed.name === '@use-crux/core' && typeof parsed.version === 'string') {
         cachedSdkVersion = parsed.version
         return cachedSdkVersion
@@ -238,11 +269,7 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
   const { path, mode } = options
   const redactPaths = options.redactPaths ?? []
 
-  let file: CassetteFile = {
-    version: 1,
-    metadata: { recordedAt: new Date().toISOString(), sdkVersion: await sdkVersion(), models: [] },
-    entries: {},
-  }
+  let file: CassetteFile = emptyCassetteFile(await sdkVersion())
   let staleSince: string | undefined
   try {
     const parsed = JSON.parse(await readFile(path, 'utf8')) as CassetteFile
@@ -261,20 +288,16 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
   let dirty = false
   /** Keys refreshed this run — `refresh` re-records each exercised call once. */
   const refreshed = new Set<string>()
+  /** In-flight live recordings keyed by normalized cassette key. */
+  const pending = new Map<string, Promise<unknown>>()
 
-  const keyFor = (normalized: NormalizedCall): string =>
-    options.match !== undefined ? options.match(normalized) : sha256Hex(canonicalJson(normalized))
+  const keyFor = (normalized: NormalizedCall): string => (options.match !== undefined ? options.match(normalized) : sha256Hex(canonicalJson(normalized)))
 
-  async function executeAndRecord(
-    key: string,
-    normalized: NormalizedCall,
-    kind: CassetteEntry['kind'],
-    execute: () => Promise<unknown>,
-    project: (result: unknown) => unknown,
-  ): Promise<unknown> {
+  async function executeAndRecord(key: string, normalized: NormalizedCall, kind: CassetteEntry['kind'], execute: () => Promise<unknown>, project: (result: unknown) => unknown): Promise<unknown> {
     const result = await execute()
     const payload = project(result)
     if (payload !== undefined) {
+      if (shouldQuarantineQualityWrite()) return result
       const context = observe.captureContext()
       if (file.recorded === undefined && context !== undefined) {
         file.recorded = {
@@ -301,13 +324,24 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
     return result
   }
 
-  /** The shared mode logic both interception forms run through. */
-  function interceptNormalized(
+  function executeAndRecordSingleFlight(
+    key: string,
     normalized: NormalizedCall,
     kind: CassetteEntry['kind'],
     execute: () => Promise<unknown>,
     project: (result: unknown) => unknown,
   ): Promise<unknown> {
+    const existing = pending.get(key)
+    if (existing !== undefined) return existing
+    const recording = executeAndRecord(key, normalized, kind, execute, project).finally(() => {
+      pending.delete(key)
+    })
+    pending.set(key, recording)
+    return recording
+  }
+
+  /** The shared mode logic both interception forms run through. */
+  function interceptNormalized(normalized: NormalizedCall, kind: CassetteEntry['kind'], execute: () => Promise<unknown>, project: (result: unknown) => unknown): Promise<unknown> {
     const key = keyFor(normalized)
     const entry = file.entries[key]
 
@@ -318,7 +352,7 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
         stats.hits++
         return Promise.resolve(reviveResult(entry.result))
       }
-      return executeAndRecord(key, normalized, kind, execute, project)
+      return executeAndRecordSingleFlight(key, normalized, kind, execute, project)
     }
 
     if (entry !== undefined) {
@@ -332,7 +366,7 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
     }
 
     // record-new: miss → live + record.
-    return executeAndRecord(key, normalized, kind, execute, project)
+    return executeAndRecordSingleFlight(key, normalized, kind, execute, project)
   }
 
   return {
@@ -356,11 +390,56 @@ export async function openCassetteSession(options: CassetteSessionOptions): Prom
 
     async flush() {
       if (!dirty) return
-      file.metadata.recordedAt = new Date().toISOString()
-      file.metadata.sdkVersion = await sdkVersion()
       await mkdir(dirname(path), { recursive: true })
-      await writeFile(path, `${JSON.stringify(file, null, 2)}\n`, 'utf8')
+      await withFileLock(path, async () => {
+        file = mergeCassetteFiles(readCassetteFileForMerge(path), file, path, refreshed)
+        file.metadata.recordedAt = new Date().toISOString()
+        file.metadata.sdkVersion = await sdkVersion()
+        await writeFileAtomic(path, `${JSON.stringify(file, null, 2)}\n`)
+      })
       dirty = false
     },
+  }
+}
+
+function readCassetteFileForMerge(path: string): CassetteFile | undefined {
+  try {
+    const raw = readFileSync(path, 'utf8')
+    const parsed = JSON.parse(raw) as CassetteFile
+    return parsed.version === 1 && isRecord(parsed.entries) ? parsed : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function mergeCassetteFiles(
+  disk: CassetteFile | undefined,
+  memory: CassetteFile,
+  path: string,
+  memoryWins: ReadonlySet<string>,
+): CassetteFile {
+  if (disk === undefined) return memory
+  const entries: Record<string, CassetteEntry> = { ...memory.entries }
+  for (const [key, diskEntry] of Object.entries(disk.entries)) {
+    const memoryEntry = entries[key]
+    if (memoryEntry !== undefined && JSON.stringify(memoryEntry) !== JSON.stringify(diskEntry)) {
+      observe.event({
+        name: 'cassette.conflict',
+        attributes: { path, key },
+      })
+    }
+    if (memoryWins.has(key)) continue
+    entries[key] = diskEntry
+  }
+  const recorded = disk.recorded ?? memory.recorded
+  return {
+    version: 1,
+    metadata: {
+      recordedAt: memory.metadata.recordedAt,
+      sdkVersion: memory.metadata.sdkVersion,
+      models: [...new Set([...(disk.metadata?.models ?? []), ...memory.metadata.models])],
+    },
+    ...(recorded !== undefined ? { recorded } : {}),
+    entries,
   }
 }

@@ -1274,6 +1274,7 @@ export interface QualityOverviewRecord {
   runCount: number;
   experimentCount: number;
   baselineCount: number;
+  skippedRecords?: number;
   feedbackCount: number;
   feedbackNeedingReviewCount: number;
   cassetteCount: number;
@@ -1719,6 +1720,7 @@ export interface QualityExperimentsPage {
   _tag: "QualityExperimentsPage";
   experiments: readonly QualityExperimentSummary[];
   total: number;
+  skippedRecords?: number;
   nextCursor?: string;
   statusCounts: QualityExperimentStatusCounts;
   evaluations: readonly string[];
@@ -1895,7 +1897,7 @@ export type QualitySourceFrame =
 export interface QualityAssertionOutcome {
   id: string;
   level: "evaluation" | "case";
-  phase: "expect" | "assert";
+  phase: "expect" | "assert" | "afterScores";
   index: number;
   status: "passed" | "failed" | "not-evaluated" | "uncaptured";
   matcher: string;
@@ -1935,7 +1937,7 @@ export interface QualityExperimentCell {
     ran: number;
     notEvaluated: number;
     failures: readonly QualityAssertionFailure[];
-    outcomes?: readonly QualityAssertionOutcome[];
+    outcomes: readonly QualityAssertionOutcome[];
   };
   error?: QualityCellError;
   durationMs: number;
@@ -1989,28 +1991,138 @@ export interface QualityGateResult {
 
 /** Full spec-02 ExperimentRecord — `GET /api/quality/experiments/{experimentId}` serves it verbatim. */
 export interface QualityExperimentDetail {
-  schemaVersion: number;
-  experimentId: string;
-  evaluationId: string;
-  qualityId: string;
-  experimentLabel?: string;
-  startedAt: string;
-  endedAt: string;
-  configFingerprint: string;
-  taskFingerprint: string;
-  filteredRun: boolean;
-  replay: QualityExperimentReplay;
-  baselineRef?: QualityExperimentBaselineRef;
-  variants: readonly QualityExperimentVariantDecl[];
-  cases: readonly QualityExperimentCell[];
-  aggregates: { perVariant: Readonly<Record<string, QualityVariantAggregate>> };
-  comparison?: QualityExperimentComparison;
+  schemaVersion: number
+  experimentId: string
+  evaluationId: string
+  qualityId: string
+  experimentLabel?: string
+  startedAt: string
+  endedAt: string
+  configFingerprint: string
+  taskFingerprint: string
+  filteredRun: boolean
+  replay: QualityExperimentReplay
+  baselineRef?: QualityExperimentBaselineRef
+  variants: readonly QualityExperimentVariantDecl[]
+  cells: readonly QualityExperimentCell[]
+  aggregates: { perVariant: Readonly<Record<string, QualityVariantAggregate>> }
+  comparison?: QualityExperimentComparison
   gates: {
-    passed: boolean;
-    informational: boolean;
-    results: readonly QualityGateResult[];
-  };
-  passed: boolean;
+    passed: boolean
+    informational: boolean
+    results: readonly QualityGateResult[]
+  }
+  passed: boolean
+  /**
+   * Core-owned per-cell failure artifacts embedded in the record. Each carries
+   * the fix-surface classification and dataset provenance the UI renders as
+   * chips and the failure panel (blueprint §6.2/§12.1).
+   */
+  failures?: readonly QualityFailureArtifact[]
+}
+
+/** Core-owned fix-surface classification for a failing cell. */
+export type QualitySuggestedFixSurface =
+  | 'prompt'
+  | 'context'
+  | 'retriever'
+  | 'tool-schema'
+  | 'handoff'
+  | 'judge'
+  | 'flake'
+  | 'unknown'
+
+/** One machine-readable failure entry embedded in an experiment record. */
+export interface QualityFailureArtifact {
+  caseId: string
+  caseName?: string
+  variant: string
+  trial: number
+  phase: string
+  scores: readonly QualityFailureArtifactScore[]
+  sourceRef?: string
+  covers: readonly string[]
+  traceId?: string
+  spanIds: readonly string[]
+  cassetteId?: string
+  cost?: { usd?: number }
+  durationMs?: number
+  datasetProvenance?: { path: string; contentFingerprint: string }
+  suggestedFixSurfaces: readonly QualitySuggestedFixSurface[]
+}
+
+/** One score entry in a failure artifact, with baseline delta and rationale. */
+export interface QualityFailureArtifactScore {
+  name: string
+  score: number | null
+  baselineScore?: number | null
+  delta?: number
+  rationale?: string
+}
+
+/** Judge-vs-human agreement report for one evaluation (blueprint §4.5). */
+export interface QualityJudgeReport {
+  schemaVersion: 1
+  evaluationId: string
+  scorers: readonly QualityJudgeReportScorer[]
+}
+
+/** Per-scorer judge-vs-human agreement stats. */
+export interface QualityJudgeReportScorer {
+  name: string
+  threshold: number
+  labeled: number
+  confusion: { tp: number; fp: number; fn: number; tn: number }
+  agreement: number
+  precision: number
+  recall: number
+  kappa: number | null
+  disagreements: readonly QualityJudgeReportDisagreement[]
+}
+
+/** One judge-vs-human disagreement, linkable to its cell evidence. */
+export interface QualityJudgeReportDisagreement {
+  experimentId: string
+  caseId: string
+  variant: string
+  trial: number
+  human: string
+  judgeScore: number
+  rationale?: string
+}
+
+/** Machine-readable experiment-to-experiment diff (blueprint §6.3). */
+export interface QualityExperimentDiff {
+  schemaVersion: 1
+  a: { experimentId: string }
+  b: { experimentId: string }
+  comparable: boolean
+  fingerprintDrift: readonly string[]
+  scores: readonly QualityExperimentDiffScore[]
+  cases: readonly QualityExperimentDiffCase[]
+  onlyInA: readonly string[]
+  onlyInB: readonly string[]
+  gatesVerdict: { aPassed: boolean; bPassed: boolean }
+}
+
+/** Aggregate score delta in an experiment diff. */
+export interface QualityExperimentDiffScore {
+  name: string
+  aMean: number
+  bMean: number
+  delta: number
+  sem: number
+  significant: boolean
+}
+
+/** One matched case+variant row in an experiment diff. */
+export interface QualityExperimentDiffCase {
+  caseId: string
+  variant: string
+  aPassed: boolean
+  bPassed: boolean
+  scoreDeltas: Readonly<Record<string, number>>
+  datasetProvenance?: { path: string; contentFingerprint: string }
 }
 
 export type QualityCellEvidenceStatus =
@@ -2023,6 +2135,7 @@ export type QualityCellEvidenceErrorPhase =
   | "execute"
   | "expect"
   | "assert"
+  | "afterScores"
   | "score"
   | "replay"
   | "timeout";

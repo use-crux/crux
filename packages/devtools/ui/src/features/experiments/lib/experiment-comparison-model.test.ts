@@ -20,7 +20,7 @@ const baseExperiment = {
   filteredRun: false,
   replay: { mode: 'replay-strict' },
   variants: [{ name: 'default', overrideKeys: [] }],
-  cases: [],
+  cells: [],
   aggregates: {
     perVariant: {
       default: {

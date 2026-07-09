@@ -159,10 +159,10 @@ describe('evaluate() over retrieval recipes', () => {
 
     const experiment = await run(evaluation)
     expect(experiment.passed).toBe(true)
-    expect(experiment.perCase[0]!.output).toEqual(
+    expect(experiment.cells[0]!.output).toEqual(
       expect.arrayContaining([expect.objectContaining({ sourceId: 'refunds' })]),
     )
-    expect(experiment.perCase[0]!.scores).toEqual(
+    expect(experiment.cells[0]!.scores).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: 'rag.recall@1', score: 1 }),
         expect.objectContaining({ name: 'rag.mrr', score: 1 }),
@@ -170,7 +170,7 @@ describe('evaluate() over retrieval recipes', () => {
     )
   })
 
-  it('can wrap a recipe with target.recipe for custom query mapping', async () => {
+  it('can wrap a recipe with target.retrievalRecipe for custom query mapping', async () => {
     const base = retriever({
       id: 'docs',
       namespace: 'docs',
@@ -183,7 +183,7 @@ describe('evaluate() over retrieval recipes', () => {
     })
 
     const evaluation = evaluate({
-      task: target.recipe(recipe, {
+      task: target.retrievalRecipe(recipe, {
         query: (input: { source: string }) => input.source,
       }),
       data: [
@@ -196,7 +196,7 @@ describe('evaluate() over retrieval recipes', () => {
     })
 
     const experiment = await run(evaluation)
-    expect(experiment.perCase[0]!.scores[0]).toMatchObject({
+    expect(experiment.cells[0]!.scores[0]).toMatchObject({
       name: 'rag.expectedSourceCoverage',
       score: 1,
     })

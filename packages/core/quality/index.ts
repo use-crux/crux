@@ -1,11 +1,15 @@
 /**
- * `@use-crux/core/quality` — the Quality public surface, curated exports only.
+ * `@use-crux/core/quality` — the Quality beta public surface.
  *
- * Five values: `evaluate`, `target`, `scorers`, `dataset`, `cassette`.
- * Everything else is types. The internal engine (normalization, matrix
- * execution, statistics, persistence) lives under `quality/internal/` and is
- * never exported. First-party tooling uses the separate `@internal`
- * `@use-crux/core/quality/internal/runner` facade (no stability guarantees).
+ * Quality is beta: the authoring surface (`evaluate`, `target`, `scorers`,
+ * `dataset`, `cassette`), the experiment/manifest record schemas
+ * (`quality/schemas`), CLI JSON outputs, and exit codes are stable within 0.x
+ * minors. Breaking changes get a changeset `minor` and a migration note.
+ * `quality/internal/runner` remains internal with no guarantees.
+ *
+ * The five authoring values are `evaluate`, `target`, `scorers`, `dataset`,
+ * and `cassette`. `UncapturedSignalError` is exported as a runtime error class
+ * for assertion handling; the rest of this module is types.
  *
  * @module
  */
@@ -16,6 +20,7 @@ export { target } from './target'
 export { scorers } from './scorers'
 export { dataset } from './dataset'
 export { cassette } from './replay'
+export { UncapturedSignalError } from './expect'
 
 // ── Types ─────────────────────────────────────────────────────────
 export type { Evaluation, EvaluationCoverageTargetId, EvaluateOptions, EvaluateApi, EvaluateFunction } from './evaluate'
@@ -31,7 +36,7 @@ export type {
   SignalExpect,
   ArgsMatcher,
   StepAccess,
-  UncapturedSignalError,
+  StepAccessor,
 } from './expect'
 export type {
   TurnDecisionReportContextExpect,
@@ -55,9 +60,17 @@ export type {
   OutputOf,
   ParamsOf,
   CapsOf,
-  ExpectedOf,
 } from './target'
-export type { Scorer, ScorerArgs, Score, ScorerFactory, BoundScorerLib, EmbedFn, JudgeBacked } from './scorers'
+export type {
+  Scorer,
+  ScorerArgs,
+  Score,
+  ScorerFactory,
+  ScorerLibrary,
+  BoundScorerLib,
+  EmbedFn,
+  JudgeBacked,
+} from './scorers'
 export type { RagContextPrecisionOptions, RagMetricOptions } from './internal/rag-metrics'
 export type { Gates, ScoreGate, GateResult } from './gates'
 export type { Dataset } from './dataset'
@@ -71,7 +84,6 @@ export type {
   Comparison,
   ComparisonDelta,
   CellScore,
-  CellAssertionFailure,
   CellAssertionOutcome,
   CellAssertionPhase,
   CellAssertionStatus,

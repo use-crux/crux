@@ -3,6 +3,7 @@
 Crux is a TypeScript context engineering SDK with adapters, devtools, docs, and a native Go local runtime.
 
 ## Code style
+
 - Always strive for concise, simple solutions
 - If a problem can be solved in a simpler way, propose it.
 
@@ -93,6 +94,17 @@ Project Index cache identity is part of the read-model contract. If an indexer o
 - `packages/local/internal/projectindex/cache/identity.go`: bump `ProjectIndexSnapshotCacheEpoch` when the Go-owned `IndexData` snapshot shape, cache loading semantics, or client-visible Project Index metadata changes in a way that an existing `.crux/cache/index/index.json` could mask after restart.
 
 For features that span AST output, semantic enrichment, and the Go snapshot, update all affected identities/epochs. Rebuild with `make build`, restart the local server, and run `crux index reindex` (or the reindex HTTP endpoint) to verify the fresh snapshot. Do not ask users to manually delete `.crux/cache` for normal contract migrations.
+
+## Quality Cache Identity
+
+Quality cache identity is part of the evaluation replay contract. Over-invalidate, never under-invalidate: a stale cache hit is a correctness bug, while an extra model/task run is only slower. If a Quality engine change would alter cassette keys, output-cache keys, baseline comparability, or judge score comparability for unchanged user eval source, update the relevant identity epoch in the same change:
+
+- `packages/core/quality/internal/cache-identity.ts`: bump `CASSETTE_CACHE_EPOCH` when normalized model-call identity changes in a way not already captured by prompt/model/settings, structured-output schema fingerprints, tool parameter-schema fingerprints, or other normalized-call fields.
+- `packages/core/quality/internal/cache-identity.ts`: bump `OUTPUT_CACHE_EPOCH` when cell output-cache key semantics change in a way not already captured by evaluation id, case input fingerprint, variant, trial, task fingerprint, or params fingerprint.
+- `packages/core/quality/internal/cache-identity.ts`: bump `BASELINE_FINGERPRINT_EPOCH` when promoted-baseline comparability changes in a way not already captured by case/dataset/scorer/variant/params/gate fingerprints.
+- `packages/core/quality/internal/cache-identity.ts`: bump `JUDGE_PROMPT_VERSION` when the built-in judge prompt template changes in a way that can affect judge score comparability.
+
+For changes spanning cassette replay, task output reuse, and promoted baselines, update all affected epochs and add focused red tests proving stale artifacts are missed or demoted instead of reused.
 
 ## Indexer Extensions
 

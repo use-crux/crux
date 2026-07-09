@@ -7,7 +7,7 @@
  * codes. The persisted JSON form (the Experiment record, written to
  * `.crux/quality/experiments/`) mirrors these shapes field-for-field — the
  * typed view adds the task's input/output generics and the literal score
- * names. (One naming note: the typed view exposes cells as `perCase`; the
+ * names. (One naming note: the typed view exposes cells as `cells`; the
  * persisted record names the same array `cases`.)
  *
  * @module
@@ -17,6 +17,7 @@ import type { GateResult } from './gates'
 import type { ReplayMode } from './replay'
 import type { QualitySourceFrame } from './source-frame'
 import type { TokenUsage } from '../generation/types'
+import type { FailureArtifact } from './failure-artifact'
 
 /** Resolved variant-name union: the implicit `'default'` when none declared. @internal */
 export type VariantNamesOf<TVariants extends string> = [TVariants] extends [never] ? 'default' : TVariants
@@ -33,40 +34,12 @@ export interface CellScore {
 }
 
 /**
- * Backward-compatible failure projection for one assertion on a cell.
- *
- * `CellAssertionFailure` is kept for existing experiment readers that only
- * care about failed checks. New code should prefer
- * {@link CellAssertionOutcome}, which records passed, failed, uncaptured, and
- * not-evaluated assertions in a single ordered ledger.
- */
-export interface CellAssertionFailure {
-  /** Which expect callback level failed. */
-  level: 'evaluation' | 'case'
-  /** Position within the callback, 0-based. */
-  index: number
-  /** The matcher that failed, e.g. `'toolCalls.toHaveCalledBefore'`. */
-  matcher: string
-  /** Whether this was an `expect.soft` failure (callback continued). */
-  soft: boolean
-  /** Human-readable message including expected/actual previews. */
-  message: string
-  /** Truncated, redacted preview of the expected value. */
-  expectedPreview?: string
-  /** Truncated, redacted preview of the actual value. */
-  actualPreview?: string
-  /** `file:line:col` of the assertion call, via sourcemap. */
-  sourceRef?: string
-}
-
-/**
  * Execution phase that produced an assertion outcome.
  *
- * `expect` outcomes come from the pre-score `ctx.expect` callback. `assert`
- * is reserved for the score-aware post-score assertion phase, so consumers can
- * branch on the phase before that phase is implemented.
+ * `expect` outcomes come from the pre-score `ctx.expect` callback.
+ * `afterScores` outcomes come from the score-aware post-score assertion phase.
  */
-export type CellAssertionPhase = 'expect' | 'assert'
+export type CellAssertionPhase = 'expect' | 'afterScores'
 
 /**
  * Status of one assertion outcome.
@@ -204,30 +177,26 @@ export interface ExperimentCell<TInput = unknown, TOutput = unknown> {
   scores: ReadonlyArray<CellScore>
   /**
    * Lowered assertion results for this cell.
-   *
-   * `failures` is the legacy failed-only view. `outcomes` is the richer
-   * ordered ledger for new records and may be absent on experiments written
-   * before this field existed.
    */
   assertions: {
     /** Assertions that executed in the real callback pass. */
     ran: number
     /** Assertions after a hard failure that never executed. */
     notEvaluated: number
-    /** Failed or uncaptured assertions, kept for compatibility. */
-    failures: ReadonlyArray<CellAssertionFailure>
-    /** Ordered assertion ledger. Absent on records written before schema support. */
-    outcomes?: ReadonlyArray<CellAssertionOutcome>
+    /** Ordered assertion ledger. Includes passed, failed, uncaptured, and not-evaluated assertions. */
+    outcomes: ReadonlyArray<CellAssertionOutcome>
   }
   error?: {
     message: string
-    phase: 'execute' | 'expect' | 'assert' | 'score' | 'replay' | 'timeout'
+    phase: 'execute' | 'expect' | 'afterScores' | 'score' | 'replay' | 'timeout'
     /** Set for replay-strict misses: the missing cassette key. */
     missingCassetteKey?: string
     /** Best-effort `file:line:column` for callback/task crashes. */
     sourceRef?: string
     /** Authored frame for callback/task crashes, when the runner can resolve it. */
     sourceFrame?: QualitySourceFrame
+    /** Machine-readable diagnostics for runtime hardening paths such as timeout quarantine. */
+    diagnostics?: Record<string, unknown>
   }
   durationMs: number
   costUsd?: number
@@ -324,6 +293,19 @@ export interface RunOverrides<TVariants extends string = never> {
   variants?: readonly TVariants[]
   /** Run only these cases (names/ids; glob `*` allowed). */
   cases?: readonly string[]
+  /** Deterministically sample cases after other case filters. */
+  sample?: RunSampleSelection
+  /** Stop scheduling new cells after recorded cumulative cost reaches this amount. */
+  maxCostUsd?: number
+  /**
+   * Run exact case × variant pairs.
+   *
+   * This is intentionally distinct from `cases` plus `variants`, which forms
+   * a cross-product. First-party rerun tooling uses it to rerun the cells that
+   * failed in a previous experiment without accidentally running passing
+   * variants for the same cases.
+   */
+  cells?: readonly RunCellSelection<TVariants>[]
   /** Override the evaluation's trials. */
   trials?: number
   /** Override the replay mode. */
@@ -334,6 +316,26 @@ export interface RunOverrides<TVariants extends string = never> {
   signal?: AbortSignal
   /** Override execution concurrency. */
   concurrency?: number
+}
+
+/**
+ * Exact cell selector for rerun tooling.
+ *
+ * @typeParam TVariants - Declared variant names for the evaluation.
+ */
+export interface RunCellSelection<TVariants extends string = never> {
+  /** Stable case id from the manifest or experiment record. */
+  caseId: string
+  /** Variant to rerun for the case. Omit to match every selected variant. */
+  variantName?: TVariants
+}
+
+/** Deterministic case sampling controls for agent and CI reruns. */
+export interface RunSampleSelection {
+  /** Maximum number of cases to run after filters. */
+  size: number
+  /** Required seed string. The engine hashes this before PRNG use. */
+  seed: string
 }
 
 /**
@@ -348,8 +350,8 @@ export interface RunOverrides<TVariants extends string = never> {
  * ```ts
  * const experiment = await evaluation.run()
  * if (!experiment.passed) {
- *   for (const cell of experiment.perCase.filter((c) => c.status !== 'passed')) {
- *     console.log(cell.caseId, cell.assertions.failures, cell.traceIds)
+ *   for (const cell of experiment.cells.filter((c) => c.status !== 'passed')) {
+ *     console.log(cell.caseId, cell.assertions.outcomes, cell.traceIds)
  *   }
  * }
  * ```
@@ -360,7 +362,7 @@ export interface Experiment<
   TNames extends string = string,
   TVariants extends string = never,
 > {
-  schemaVersion: 1
+  schemaVersion: 2
   /** ULID — sortable by creation time. */
   experimentId: string
   /** Resolved evaluation id (explicit or path-derived). */
@@ -395,8 +397,10 @@ export interface Experiment<
     overrideKeys: readonly string[]
     overrides?: Record<string, unknown>
   }>
-  /** One entry per cell: case × variant × trial. (Persisted as `cases`.) */
-  perCase: ReadonlyArray<ExperimentCell<TInput, TOutput>>
+  /** One entry per cell: case × variant × trial. */
+  cells: ReadonlyArray<ExperimentCell<TInput, TOutput>>
+  /** Agent-readable artifacts for failing and errored cells. */
+  failures?: ReadonlyArray<FailureArtifact>
   aggregates: { perVariant: Record<VariantNamesOf<TVariants>, VariantAggregate<TNames>> }
   /** Present when variants > 1 or a promoted baseline was compared. */
   comparison?: Comparison<TNames>

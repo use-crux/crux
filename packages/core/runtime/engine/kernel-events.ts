@@ -210,6 +210,7 @@ async function fireWaiter(
         namespace: options.waiter.namespace,
         work: options.waiter.work,
         idempotencyKey,
+        now: options.deps.now(),
       },
     )
     const wakeWork =
@@ -226,15 +227,24 @@ async function fireWaiter(
       payload: options.payload,
     })
     return [
-      await options.tx.outbox.put({
-        ...wakeEnvelopeForWork(wakeWork),
-        idempotencyKey,
-      }),
+      await options.tx.outbox.put(
+        {
+          ...wakeEnvelopeForWork(wakeWork),
+          idempotencyKey,
+        },
+        {
+          deliverAt: options.deps.now(),
+        },
+      ),
     ]
   }
 
   const work = await createUnownedWork(options)
-  return [await options.tx.outbox.put(wakeEnvelopeForWork(work))]
+  return [
+    await options.tx.outbox.put(wakeEnvelopeForWork(work), {
+      deliverAt: options.deps.now(),
+    }),
+  ]
 }
 
 async function createUnownedWork(

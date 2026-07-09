@@ -67,12 +67,13 @@ type QualityExperimentStatusCounts struct {
 // GET /api/quality/experiments. Experiments is the current page; Total counts
 // all rows matching the active filters before pagination.
 type QualityExperimentsPage struct {
-	Tag          string                        `json:"_tag"`
-	Experiments  []QualityExperimentSummary    `json:"experiments"`
-	Total        int                           `json:"total"`
-	NextCursor   string                        `json:"nextCursor,omitempty"`
-	StatusCounts QualityExperimentStatusCounts `json:"statusCounts"`
-	Evaluations  []string                      `json:"evaluations"`
+	Tag            string                        `json:"_tag"`
+	Experiments    []QualityExperimentSummary    `json:"experiments"`
+	Total          int                           `json:"total"`
+	SkippedRecords int                           `json:"skippedRecords,omitempty"`
+	NextCursor     string                        `json:"nextCursor,omitempty"`
+	StatusCounts   QualityExperimentStatusCounts `json:"statusCounts"`
+	Evaluations    []string                      `json:"evaluations"`
 }
 
 // QualityEvaluationExperiments is the backend-owned relation read model that
@@ -142,11 +143,15 @@ type QualityExperimentDetail struct {
 	Replay            QualityExperimentReplay        `json:"replay"`
 	BaselineRef       *QualityExperimentBaselineRef  `json:"baselineRef,omitempty"`
 	Variants          []QualityExperimentVariantDecl `json:"variants"`
-	Cases             []QualityExperimentCell        `json:"cases"`
+	Cells             []QualityExperimentCell        `json:"cells"`
 	Aggregates        QualityExperimentAggregates    `json:"aggregates"`
 	Comparison        *QualityExperimentComparison   `json:"comparison,omitempty"`
 	Gates             QualityExperimentGates         `json:"gates"`
 	Passed            bool                           `json:"passed"`
+	// Failures are the core-owned per-cell failure artifacts embedded in the
+	// record (blueprint §6.2). They carry the fix-surface classification and
+	// dataset provenance the visualization layer renders (§12.1/§12.5).
+	Failures []QualityFailureArtifact `json:"failures,omitempty"`
 }
 
 type QualityExperimentReplay struct {
@@ -233,19 +238,7 @@ type QualityCellScore struct {
 type QualityCellAssertions struct {
 	Ran          int                       `json:"ran"`
 	NotEvaluated int                       `json:"notEvaluated"`
-	Failures     []QualityAssertionFailure `json:"failures"`
-	Outcomes     []QualityAssertionOutcome `json:"outcomes,omitempty"`
-}
-
-type QualityAssertionFailure struct {
-	Level           string `json:"level"`
-	Index           int    `json:"index"`
-	Matcher         string `json:"matcher"`
-	Soft            bool   `json:"soft"`
-	Message         string `json:"message"`
-	ExpectedPreview string `json:"expectedPreview,omitempty"`
-	ActualPreview   string `json:"actualPreview,omitempty"`
-	SourceRef       string `json:"sourceRef,omitempty"`
+	Outcomes     []QualityAssertionOutcome `json:"outcomes"`
 }
 
 type QualityAssertionOutcome struct {

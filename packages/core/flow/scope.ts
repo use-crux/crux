@@ -1119,6 +1119,7 @@ export function flow(
               namespace: runtime.namespace,
               work: { kind: 'flow.resume', flowId: snapshot.flowId },
               idempotencyKey,
+              now: runtime.now(),
             })
           : current
       if (!wakeWork) {

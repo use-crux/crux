@@ -64,26 +64,10 @@ struct AssertionMatch {
 
 fn assertion_call_match(text: &str) -> Option<AssertionMatch> {
     let expect = first_call_index(text, "ctx.expect");
-    let assert = first_call_index(text, "ctx.assert");
-    match (expect, assert) {
-        (None, None) => None,
-        (Some(column), None) => Some(AssertionMatch {
-            kind: "expect",
-            column,
-        }),
-        (None, Some(column)) => Some(AssertionMatch {
-            kind: "assert",
-            column,
-        }),
-        (Some(expect), Some(assert)) if expect < assert => Some(AssertionMatch {
-            kind: "expect",
-            column: expect,
-        }),
-        (Some(_), Some(column)) => Some(AssertionMatch {
-            kind: "assert",
-            column,
-        }),
-    }
+    expect.map(|column| AssertionMatch {
+        kind: "expect",
+        column,
+    })
 }
 
 fn first_call_index(text: &str, callee: &str) -> Option<usize> {
@@ -96,7 +80,7 @@ fn callback_level_near(lines: &[&str], line_index: usize) -> &'static str {
     let start = line_index.saturating_sub(19);
     for index in (start..=line_index).rev() {
         let text = lines[index].trim();
-        if text.starts_with("expect:") || text.starts_with("assert:") {
+        if text.starts_with("expect:") || text.starts_with("afterScores:") {
             return "evaluation";
         }
         if text.contains("expect:") && text.contains("input:") {

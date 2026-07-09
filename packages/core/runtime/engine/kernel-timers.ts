@@ -134,6 +134,7 @@ export async function fireTimerRecord(options: {
         namespace: options.timer.namespace,
         work: options.timer.work,
         idempotencyKey: timerKey(options.timer.timerId),
+        now: options.deps.now(),
       })
     : await createTimerMintedWork(options)
 

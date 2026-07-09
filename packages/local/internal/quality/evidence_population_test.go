@@ -39,7 +39,7 @@ func TestCellEvidenceAPIIncludesPassingAssertionChecksAndGateScoreFloors(t *test
     }]
   },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-populated",
     "caseName": "score floor",
     "variantName": "default",
@@ -57,7 +57,7 @@ func TestCellEvidenceAPIIncludesPassingAssertionChecksAndGateScoreFloors(t *test
     "assertions": {
       "ran": 1,
       "notEvaluated": 0,
-      "failures": [],
+      "outcomes": [],
       "outcomes": [{
         "id": "assert-0",
         "level": "evaluation",

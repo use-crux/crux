@@ -34,7 +34,7 @@ import type { RetrievalRecipe, Retriever, RetrieveOptions, RetrieverHit } from '
  * execution captures them and their namespaces always exist.
  *
  * Capability sets are fixed per task kind in v1: prompts capture
- * `modelCalls`/`citations`/`safety`/`decisionReports`; flows add `steps`/
+ * `modelCalls`/`citations`/`safety`/`decisionReport`; flows add `steps`/
  * `toolCalls`/`routing`/`memory`; agents capture all ten; retrievers capture
  * `retrieval`; plain functions capture none (value matchers + always-on
  * namespaces only).
@@ -60,15 +60,15 @@ export type Capability =
   | 'safety' // guardrail + constraint outcomes
   | 'memory' // memory reads/writes
   | 'routing' // route/tier/model selection decisions
-  | 'decisionReports' // TurnDecisionReport rows emitted for the turn
+  | 'decisionReport' // TurnDecisionReport rows emitted for the turn
 
 /** The capability set of a prompt task. */
-export type PromptCapability = 'modelCalls' | 'citations' | 'safety' | 'decisionReports'
+export type PromptCapability = 'modelCalls' | 'citations' | 'safety' | 'decisionReport'
 
 /** The capability set of a flow task. */
-export type FlowCapability = 'modelCalls' | 'steps' | 'toolCalls' | 'routing' | 'safety' | 'memory' | 'decisionReports'
+export type FlowCapability = 'modelCalls' | 'steps' | 'toolCalls' | 'routing' | 'safety' | 'memory' | 'decisionReport'
 
-/** The capability set of an agent task — all nine families. */
+/** The capability set of an agent task — all ten families. */
 export type AgentCapability = Capability
 
 /** The capability set of a retriever task. */
@@ -79,7 +79,7 @@ export const PROMPT_CAPABILITIES: readonly PromptCapability[] = Object.freeze([
   'modelCalls',
   'citations',
   'safety',
-  'decisionReports',
+  'decisionReport',
 ])
 
 /** Runtime capability set for flow tasks. @internal */
@@ -90,7 +90,7 @@ export const FLOW_CAPABILITIES: readonly FlowCapability[] = Object.freeze([
   'routing',
   'safety',
   'memory',
-  'decisionReports',
+  'decisionReport',
 ])
 
 /** Runtime capability set for agent tasks. @internal */
@@ -104,7 +104,7 @@ export const AGENT_CAPABILITIES: readonly AgentCapability[] = Object.freeze([
   'safety',
   'memory',
   'routing',
-  'decisionReports',
+  'decisionReport',
 ])
 
 /** Runtime capability set for retriever tasks. @internal */
@@ -358,7 +358,7 @@ export interface RetrieverTargetOptions<R extends AnyRetriever = AnyRetriever, T
 }
 
 /**
- * Options for `target.recipe()`.
+ * Options for `target.retrievalRecipe()`.
  *
  * @typeParam R      - The wrapped retrieval recipe.
  * @typeParam TInput - The case input shape. Defaults to `{ query: string }`.
@@ -581,14 +581,6 @@ export type CapsOf<T extends TaskLike> = T extends AnyTarget
             ? FlowCapability
             : never
 
-/**
- * The expected-value type associated with a task. `expected` is opaque data
- * delivered to scorers and `expect` callbacks — nothing matches it implicitly
- * — so this defaults to `unknown`; the concrete type flows from your cases or
- * dataset schema at the `evaluate()` call.
- */
-export type ExpectedOf<T extends TaskLike> = unknown
-
 // ─────────────────────────────────────────────────────────────────
 // target constructors (runtime)
 // ─────────────────────────────────────────────────────────────────
@@ -707,13 +699,13 @@ export interface TargetConstructor {
    *
    * @example
    * ```ts
-   * target.recipe(docsRecipe, {
+   * target.retrievalRecipe(docsRecipe, {
    *   query: (input: { question: string }) => input.question,
    *   options: { limit: 8 },
    * })
    * ```
    */
-  recipe<R extends AnyRetrievalRecipe, TInput = { query: string }>(
+  retrievalRecipe<R extends AnyRetrievalRecipe, TInput = { query: string }>(
     r: R,
     opts?: RetrievalRecipeTargetOptions<R, TInput>,
   ): Target<TInput, readonly RetrieverHit[], { options?: RetrieveOptions }, RetrieverCapability>
@@ -770,7 +762,7 @@ function recipeTarget(
   opts?: RetrievalRecipeTargetOptions<AnyRetrievalRecipe, never>,
 ): AnyTarget {
   if (r?._tag !== 'RetrievalRecipe') {
-    throw new TypeError('target.recipe(): expected a Crux retrieval recipe.')
+    throw new TypeError('target.retrievalRecipe(): expected a Crux retrieval recipe.')
   }
   return createTarget('retriever', opts?.id ?? r.id, RETRIEVER_CAPABILITIES, {
     primitive: r,
@@ -803,5 +795,5 @@ export const target: TargetConstructor = Object.assign(customTarget, {
   flow: flowTarget,
   agent: agentTarget,
   retriever: retrieverTarget,
-  recipe: recipeTarget,
+  retrievalRecipe: recipeTarget,
 }) as unknown as TargetConstructor

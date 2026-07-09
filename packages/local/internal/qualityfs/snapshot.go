@@ -174,7 +174,7 @@ func (s *Snapshot) buildJoins() {
 		if experiment.ID != "" {
 			s.ByID.Experiments[experiment.ID] = experiment
 		}
-		for _, testCase := range experiment.Cases {
+		for _, testCase := range experimentCells(experiment) {
 			if testCase.TraceID == "" {
 				continue
 			}

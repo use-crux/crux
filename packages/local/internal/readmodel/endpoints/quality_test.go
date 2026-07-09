@@ -57,6 +57,9 @@ type fakeQuality struct {
 	cellEvidence              api.QualityCellEvidence
 	cellEvidenceFound         bool
 	cellEvidenceQuery         api.QualityCellEvidenceQuery
+	judgeReport               api.QualityJudgeReport
+	judgeReportFound          bool
+	judgeReportEvaluation     string
 }
 
 func (f *fakeQuality) ActivityAPI(context.Context, int) ([]api.QualityActivityEvent, error) {

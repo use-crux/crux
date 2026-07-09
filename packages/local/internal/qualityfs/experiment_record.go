@@ -3,6 +3,7 @@ package qualityfs
 type Experiment struct {
 	Tag            string                       `json:"_tag"`
 	ID             string                       `json:"id"`
+	EvaluationID   string                       `json:"evaluationId,omitempty"`
 	QualityID      string                       `json:"qualityId"`
 	Suite          ExperimentSuite              `json:"suite"`
 	StartedAt      string                       `json:"startedAt"`
@@ -13,7 +14,8 @@ type Experiment struct {
 	VariantConfigs map[string]VariantConfigDiff `json:"variantConfigs,omitempty"`
 	Progress       *ExperimentProgress          `json:"progress,omitempty"`
 	PrimaryScore   string                       `json:"primaryScore,omitempty"`
-	Cases          []ExperimentCase             `json:"cases"`
+	Cells          []ExperimentCase             `json:"cells,omitempty"`
+	Cases          []ExperimentCase             `json:"cases,omitempty"`
 }
 
 type ExperimentSummary struct {
@@ -91,4 +93,11 @@ type Score struct {
 type ScoreSummary struct {
 	Name  string
 	Value *float64
+}
+
+func experimentCells(experiment Experiment) []ExperimentCase {
+	if len(experiment.Cells) > 0 {
+		return experiment.Cells
+	}
+	return experiment.Cases
 }

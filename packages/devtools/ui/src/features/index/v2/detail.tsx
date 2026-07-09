@@ -164,6 +164,7 @@ function indexSectionOrder(def: ViewDef): string[] {
       'relations',
       'health',
     ],
+    evaluation: ['hero', 'config', 'quality', 'relations', 'source', 'health'],
   }
   if (map[k]) return map[k]
   if (k.startsWith('routing.'))

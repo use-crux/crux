@@ -27,9 +27,10 @@ export interface RawCase {
   turns?: readonly Turn[]
   expected?: unknown
   expect?: (ctx: never) => void | Promise<void>
-  assert?: (ctx: never) => void | Promise<void>
+  afterScores?: (ctx: never) => void | Promise<void>
   trials?: number
   tags?: readonly string[]
+  metadata?: Record<string, unknown>
   only?: boolean
   skip?: boolean | string
 }
@@ -53,7 +54,7 @@ export interface EvaluationDefinition {
   readonly cases: readonly RawCase[]
   readonly datasets: readonly RawDataset[]
   readonly expect: ((ctx: never) => void | Promise<void>) | undefined
-  readonly assert: ((ctx: never) => void | Promise<void>) | undefined
+  readonly afterScores: ((ctx: never) => void | Promise<void>) | undefined
   readonly scorers: readonly RawScorer[]
   readonly params: Readonly<Record<string, unknown>> | undefined
   readonly variants: Readonly<Record<string, Readonly<Record<string, unknown>>>>

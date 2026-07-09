@@ -26,6 +26,7 @@ func enrichFileBackedQuality(index store.IndexData, qualityDir string) store.Ind
 	for i := range definitions {
 		defByID[definitions[i].ID] = &definitions[i]
 	}
+	coverageByEvalID := qualityCoverageTargets(index.Relations)
 
 	snapshot, err := qualityfs.Load(qualityDir)
 	if err != nil {
@@ -44,12 +45,12 @@ func enrichFileBackedQuality(index store.IndexData, qualityDir string) store.Ind
 	baselines := snapshot.Baselines
 
 	for _, experiment := range experiments {
-		enrichIndexWithExperiment(defByID, experiment)
+		enrichIndexWithExperiment(defByID, experiment, coverageByEvalID)
 	}
 
 	experimentByID := snapshot.ByID.Experiments
 	for _, baseline := range baselines {
-		enrichIndexWithBaseline(defByID, baseline, experimentByID[baseline.ExperimentID])
+		enrichIndexWithBaseline(defByID, baseline, experimentByID[baseline.ExperimentID], coverageByEvalID)
 	}
 
 	for _, suite := range snapshot.Suites {
@@ -65,6 +66,7 @@ func enrichFileBackedQuality(index store.IndexData, qualityDir string) store.Ind
 	}
 
 	enrichIndexWithFeedback(defByID, snapshot.Feedback, experiments)
+	addProtectedQualityLinks(defByID, coverageByEvalID)
 
 	addAffectedQualitySuggestions(index.Definitions, index.Relations)
 	addQualityDrift(index.Definitions, experiments, baselines)
@@ -74,12 +76,18 @@ func enrichFileBackedQuality(index store.IndexData, qualityDir string) store.Ind
 	return index
 }
 
-func enrichIndexWithExperiment(defByID map[string]*store.ProjectDefinition, experiment qualityExperimentRecord) {
+func enrichIndexWithExperiment(defByID map[string]*store.ProjectDefinition, experiment qualityExperimentRecord, coverageByEvalID map[string][]string) {
 	if experiment.ID == "" {
 		return
 	}
 	if experiment.Suite.ID != "" {
 		addExperimentQuality(defByID, "suite:"+safeQualityIndexID(experiment.Suite.ID), experiment)
+	}
+	for _, defID := range evaluationQualityDefinitionIDs(experiment) {
+		addExperimentQuality(defByID, defID, experiment)
+	}
+	for _, defID := range coveredQualityTargetIDs(experiment, coverageByEvalID) {
+		addExperimentQuality(defByID, defID, experiment)
 	}
 	for _, variant := range experiment.Variants {
 		for _, defID := range qualityTargetDefinitionIDs(variant.TargetID) {
@@ -88,12 +96,18 @@ func enrichIndexWithExperiment(defByID map[string]*store.ProjectDefinition, expe
 	}
 }
 
-func enrichIndexWithBaseline(defByID map[string]*store.ProjectDefinition, baseline qualityBaselineRecord, experiment qualityExperimentRecord) {
+func enrichIndexWithBaseline(defByID map[string]*store.ProjectDefinition, baseline qualityBaselineRecord, experiment qualityExperimentRecord, coverageByEvalID map[string][]string) {
 	if baseline.ID == "" {
 		return
 	}
 	if experiment.Suite.ID != "" {
 		addBaselineQuality(defByID, "suite:"+safeQualityIndexID(experiment.Suite.ID), baseline, experiment, qualityExperimentVariant{})
+	}
+	for _, defID := range evaluationQualityDefinitionIDs(experiment) {
+		addBaselineQuality(defByID, defID, baseline, experiment, qualityExperimentVariant{})
+	}
+	for _, defID := range coveredQualityTargetIDs(experiment, coverageByEvalID) {
+		addBaselineQuality(defByID, defID, baseline, experiment, qualityExperimentVariant{})
 	}
 	for _, variant := range experiment.Variants {
 		if baseline.VariantID == nil || *baseline.VariantID == variant.ID {
@@ -343,7 +357,7 @@ func addAffectedDefinitionQuality(q *store.IndexQuality, affected store.ProjectD
 		q.AffectedSuiteIDs = appendQualityUniqueStrings(q.AffectedSuiteIDs, affected.Quality.SuiteIDs...)
 	}
 	switch affected.Kind {
-	case "eval.prompt", "eval.flow", "eval.rag":
+	case "evaluation", "eval.prompt", "eval.flow", "eval.rag":
 		q.AffectedEvalIDs = appendQualityUniqueString(q.AffectedEvalIDs, definitionLocalID(affected.ID))
 	case "suite":
 		q.AffectedSuiteIDs = appendQualityUniqueString(q.AffectedSuiteIDs, definitionLocalID(affected.ID))
@@ -380,7 +394,7 @@ func addQualityDrift(definitions []store.ProjectDefinition, experiments []qualit
 		}
 		drift := store.IndexQualityDrift{Evals: []store.IndexQualityDriftRow{}, Suites: []store.IndexQualityDriftRow{}}
 		for _, evalID := range q.AffectedEvalIDs {
-			for _, defID := range candidateQualityDefinitionIDs("eval.prompt", evalID) {
+			for _, defID := range qualityEvaluationCandidateIDs(evalID) {
 				if row, ok := driftRowForDefinition(evalID, defByID[defID], latestBaseline[defID], experimentByID); ok {
 					drift.Evals = append(drift.Evals, row)
 					break
@@ -742,6 +756,7 @@ func qualityTargetDefinitionIDs(targetID string) []string {
 	}
 	return []string{
 		safe,
+		"evaluation:" + safe,
 		"prompt:" + safe,
 		"flow:" + safe,
 		"agent:" + safe,

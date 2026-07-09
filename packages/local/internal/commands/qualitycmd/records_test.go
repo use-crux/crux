@@ -39,6 +39,22 @@ func TestQualityRunJSONFlagIsBool(t *testing.T) {
 	}
 }
 
+func TestQualityRunRegistersAgentRerunFlags(t *testing.T) {
+	cmd := NewQualityRunCmd(&cli.Factory{})
+	for _, name := range []string{"failed", "sample", "seed", "max-cost", "changed-since"} {
+		if cmd.Flags().Lookup(name) == nil {
+			t.Fatalf("quality run is missing --%s", name)
+		}
+	}
+}
+
+func TestQualityRunSampleRequiresSeed(t *testing.T) {
+	err := validateQualityRunOpts(&qualityRunOpts{sample: 2})
+	if err == nil || !strings.Contains(err.Error(), "--sample requires --seed") {
+		t.Fatalf("validateQualityRunOpts error = %v", err)
+	}
+}
+
 // recordFixture writes a minimal experiment record file and returns its path.
 func recordFixture(t *testing.T, name, content string) string {
 	t.Helper()

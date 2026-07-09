@@ -10,6 +10,7 @@ import (
 
 	"github.com/use-crux/crux/packages/local/internal/api"
 	"github.com/use-crux/crux/packages/local/internal/cli"
+	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 )
 
 func TestQualityProgressCommandOutputsJSONReadModel(t *testing.T) {
@@ -33,7 +34,7 @@ func TestQualityProgressCommandOutputsJSONReadModel(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": []
+  "cells": []
 }`)
 	writeQualityCommandFixture(t, dir, "baselines", "evals.cli.progress.json", `{
   "schemaVersion": 1,
@@ -82,7 +83,7 @@ func TestQualityCellEvidenceCommandOutputsJSONReadModel(t *testing.T) {
   } } },
   "gates": { "passed": false, "informational": false, "results": [] },
   "passed": false,
-  "cases": [{
+  "cells": [{
     "caseId": "case-cli",
     "variantName": "default",
     "trial": 0,
@@ -93,7 +94,16 @@ func TestQualityCellEvidenceCommandOutputsJSONReadModel(t *testing.T) {
     "assertions": {
       "ran": 1,
       "notEvaluated": 0,
-      "failures": [{ "level": "evaluation", "index": 0, "matcher": "toBe", "soft": false, "message": "expected ok" }]
+      "outcomes": [{
+        "id": "expect:evaluation:0",
+        "level": "evaluation",
+        "phase": "expect",
+        "index": 0,
+        "status": "failed",
+        "matcher": "toBe",
+        "soft": false,
+        "message": "expected ok"
+      }]
     },
     "durationMs": 1000,
     "traceIds": [],
@@ -115,6 +125,100 @@ func TestQualityCellEvidenceCommandOutputsJSONReadModel(t *testing.T) {
 	}
 	if evidence.Baseline.Kind != "unavailable" {
 		t.Fatalf("baseline evidence = %+v", evidence.Baseline)
+	}
+}
+
+func TestQualityLabelCommandWritesHumanLabelFeedback(t *testing.T) {
+	dir := t.TempDir()
+
+	executeQualityCommand(t, "label", "01KTLABELEXP00000000000", "--case", "refund-policy", "--verdict", "pass", "--score", "helpful", "--note", "matches policy", "--dir", dir)
+
+	snapshot, err := qualityfs.Open(dir).Snapshot()
+	if err != nil {
+		t.Fatalf("snapshot: %v", err)
+	}
+	if len(snapshot.Feedback) != 1 {
+		t.Fatalf("feedback count = %d, want 1", len(snapshot.Feedback))
+	}
+	record := snapshot.Feedback[0]
+	if record.ExperimentID == nil || *record.ExperimentID != "01KTLABELEXP00000000000" {
+		t.Fatalf("experiment id = %+v", record.ExperimentID)
+	}
+	if record.CaseID == nil || *record.CaseID != "refund-policy" {
+		t.Fatalf("case id = %+v", record.CaseID)
+	}
+	if record.Rating == nil || *record.Rating != 1 {
+		t.Fatalf("rating = %+v", record.Rating)
+	}
+	if record.Comment == nil || *record.Comment != "matches policy" {
+		t.Fatalf("comment = %+v", record.Comment)
+	}
+	if len(record.Tags) != 1 || record.Tags[0] != "human-label" {
+		t.Fatalf("tags = %+v", record.Tags)
+	}
+	if record.Metadata["variant"] != "default" || record.Metadata["trial"] != float64(0) || record.Metadata["scoreName"] != "helpful" {
+		t.Fatalf("metadata = %+v", record.Metadata)
+	}
+}
+
+func TestQualityJudgeReportCommandOutputsJSON(t *testing.T) {
+	dir := t.TempDir()
+	writeQualityCommandFixture(t, dir, "experiments", "01KTCLIJUDGEREPORT00000.json", `{
+  "schemaVersion": 1,
+  "experimentId": "01KTCLIJUDGEREPORT00000",
+  "evaluationId": "evals.cli.judge",
+  "qualityId": "local",
+  "startedAt": "2026-06-14T12:00:00.000Z",
+  "endedAt": "2026-06-14T12:00:01.000Z",
+  "configFingerprint": "cf",
+  "taskFingerprint": "tf",
+  "filteredRun": false,
+  "replay": { "mode": "live" },
+  "variants": [{ "name": "default", "overrideKeys": [] }],
+  "aggregates": { "perVariant": { "default": {
+    "cells": 1, "passed": 1, "failed": 0, "errored": 0, "skipped": 0, "passRate": 1,
+    "scores": { "helpful": { "mean": 0.9, "sem": 0, "n": 1 } },
+    "latency": { "meanMs": 1000, "p95Ms": 1000 }
+  } } },
+  "gates": { "passed": true, "informational": false, "results": [
+    { "gate": "scores.helpful.min", "threshold": 0.7, "actual": 0.9, "passed": true }
+  ] },
+  "passed": true,
+  "cells": [{
+    "caseId": "case-cli",
+    "variantName": "default",
+    "trial": 0,
+    "status": "passed",
+    "input": {},
+    "output": "good",
+    "scores": [{ "name": "helpful", "score": 0.9, "costClass": "model", "metadata": {
+      "rationale": "helpful",
+      "judge": { "model": "judge-model", "promptVersion": 1, "rubricFingerprint": "abc" }
+    } }],
+    "assertions": { "ran": 0, "notEvaluated": 0, "outcomes": [] },
+    "durationMs": 1000,
+    "traceIds": [],
+    "capturedSignals": []
+  }]
+}`)
+	if _, err := qualityfs.Put(qualityfs.Open(dir), qualityfs.Feedback{
+		ExperimentID: stringPtr("01KTCLIJUDGEREPORT00000"),
+		CaseID:       stringPtr("case-cli"),
+		Rating:       intPtr(1),
+		Tags:         []string{"human-label"},
+		Metadata:     map[string]any{"variant": "default", "trial": 0, "scoreName": "helpful"},
+	}); err != nil {
+		t.Fatalf("put label: %v", err)
+	}
+
+	stdout := executeQualityCommand(t, "judge-report", "evals.cli.judge", "--json", "--dir", dir)
+
+	var report api.QualityJudgeReport
+	if err := json.Unmarshal([]byte(stdout), &report); err != nil {
+		t.Fatalf("decode judge report JSON: %v\n%s", err, stdout)
+	}
+	if report.EvaluationID != "evals.cli.judge" || len(report.Scorers) != 1 || report.Scorers[0].Agreement != 1 {
+		t.Fatalf("judge report = %+v", report)
 	}
 }
 

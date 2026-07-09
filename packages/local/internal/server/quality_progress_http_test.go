@@ -34,7 +34,7 @@ func TestHTTPServerQualityEvaluationProgressEndpoint(t *testing.T) {
   } } },
   "gates": { "passed": true, "informational": false, "results": [] },
   "passed": true,
-  "cases": []
+  "cells": []
 }`)
 	writeQualityProgressFixture(t, dir, "baselines", "evals.progress.http.json", `{
   "schemaVersion": 1,

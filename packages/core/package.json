@@ -36,6 +36,10 @@
       "types": "./quality/index.ts",
       "import": "./quality/index.ts"
     },
+    "./quality/schemas": {
+      "types": "./quality/schemas.ts",
+      "import": "./quality/schemas.ts"
+    },
     "./quality/internal/runner": {
       "types": "./quality/internal/runner.ts",
       "import": "./quality/internal/runner.ts"
@@ -181,6 +185,9 @@
     "*": {
       "quality": [
         "quality/index.ts"
+      ],
+      "quality/schemas": [
+        "quality/schemas.ts"
       ],
       "project-index": [
         "project-index/index.ts"

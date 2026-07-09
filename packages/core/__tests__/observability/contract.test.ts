@@ -249,6 +249,7 @@ describe('Crux observability graph contract', () => {
     )
     expect(CRUX_CANONICAL_EDGE_TYPES).toContain('delegate.invoked')
     expect(CRUX_CANONICAL_EDGE_TYPES).toContain('explains')
+    expect(CRUX_CANONICAL_ARTIFACT_KINDS).not.toContain('quality.snapshot')
     expect(CRUX_CANONICAL_ARTIFACT_KINDS).toEqual(
       expect.arrayContaining([
         'approval.request',
@@ -260,7 +261,6 @@ describe('Crux observability graph contract', () => {
         'retrieval.hits',
         'citation.report',
         'score.report',
-        'quality.snapshot',
         'composition.report',
         'handoff.payload',
         'delegate.report',

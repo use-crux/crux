@@ -54,7 +54,7 @@ func TestReporterColorlessInvariant(t *testing.T) {
 	failing := domain.QualityCell{
 		CaseID: "c2", CaseName: "rejects empty", VariantName: "default", Status: "failed",
 	}
-	failing.Assertions.Failures = []domain.QualityAssertionFailure{{Message: "expected non-empty"}}
+	failing.Assertions.Outcomes = []domain.QualityAssertionOutcome{{Status: "failed", Matcher: "toBe", Message: "expected non-empty"}}
 
 	feed(reporter, 0,
 		&domain.QualityEvent{Type: "collect:done", Evaluations: make([]domain.QualityManifest, 1)},
@@ -92,7 +92,7 @@ func TestReporterColorPresentOnPassAndFailRows(t *testing.T) {
 	reporter := newQualityReporter(&qualityRunOpts{}, io, 4400)
 
 	failing := domain.QualityCell{CaseID: "c2", CaseName: "rejects empty", VariantName: "default", Status: "failed"}
-	failing.Assertions.Failures = []domain.QualityAssertionFailure{{Message: "boom"}}
+	failing.Assertions.Outcomes = []domain.QualityAssertionOutcome{{Status: "failed", Matcher: "toBe", Message: "boom"}}
 
 	reporter.handle(&domain.QualityEvent{Type: "cell:done", EvaluationID: "e", Cell: &failing})
 	reporter.handle(evalDoneEvent("e", variantAgg(3, 0, 0, 0, 1.0)))
@@ -148,13 +148,14 @@ func pinClock(reporter *qualityReporter, d time.Duration) {
 
 func TestReporterBannerSummarizesRun(t *testing.T) {
 	tests := []struct {
-		name      string
-		exitCode  int
-		wantToken string
+		name        string
+		exitCode    int
+		wantToken   string
+		wantSummary string
 	}{
-		{"pass", 0, "PASS"},
-		{"fail", 1, "FAIL"},
-		{"error", 2, "ERROR"},
+		{"pass", 0, "PASS", "alpha passed: 7/10 cells passed."},
+		{"fail", 1, "FAIL", "alpha regressed: 1 case failed vs baseline; failures point at alpha."},
+		{"error", 2, "ERROR", "alpha regressed: 1 case failed vs baseline; failures point at alpha."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -176,6 +177,7 @@ func TestReporterBannerSummarizesRun(t *testing.T) {
 				tt.wantToken,
 				"12 passed", "1 failed", "0 errored", "3 skipped",
 				"2 evaluations", "1 gates failed", "18.4s",
+				tt.wantSummary,
 			} {
 				if !strings.Contains(stdout, want) {
 					t.Errorf("banner missing %q:\n%s", want, stdout)

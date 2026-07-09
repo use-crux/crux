@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
-	"github.com/use-crux/crux/packages/local/internal/qualityfs"
 )
 
 func (s *Service) Insights(ctx context.Context) ([]qualityInsightRecord, error) {
@@ -17,7 +16,7 @@ func (s *Service) Insights(ctx context.Context) ([]qualityInsightRecord, error) 
 			return nil, err
 		}
 	}
-	fs := qualityfs.Open(s.dir)
+	fs := s.fs
 	specExperiments, _, err := fs.ReadExperimentRecords()
 	if err != nil {
 		return nil, err

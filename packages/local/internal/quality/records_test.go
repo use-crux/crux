@@ -147,6 +147,14 @@ func TestServiceRunsWithOptionsFiltersByRunRowRollups(t *testing.T) {
 		t.Fatalf("model filtered runs = %#v, want retrieval run", byModel)
 	}
 
+	paginatedAfterFilter, err := service.RunsWithOptions(ctx, api.QualityRunsOptions{Model: []string{"gpt-4o"}, Limit: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(paginatedAfterFilter) != 1 || paginatedAfterFilter[0].TraceID != "run_filter_generation" {
+		t.Fatalf("filtered pagination = %#v, want matching generation run after filtering", paginatedAfterFilter)
+	}
+
 	withFeedback, err := service.RunsWithOptions(ctx, api.QualityRunsOptions{Has: []string{"feedback"}})
 	if err != nil {
 		t.Fatal(err)

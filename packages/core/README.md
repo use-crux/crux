@@ -100,6 +100,67 @@ Use `contentText()` or `messageText()` whenever existing code needs a string. Te
 
 Unsupported provider content degrades deliberately: the adapter sends the placeholder text, emits a diagnostics warning, and records a `content.degraded` span event. Pass `unsupportedContent: "error"` in generation settings when unsupported content should throw `UnsupportedContentError` before the provider call.
 
+## Quality Evaluations
+
+Quality runs live in `@use-crux/core/quality`. `evaluate()` keeps the task as
+the only inference anchor, `expect` callbacks run before scorers, and
+`afterScores` callbacks run after scorers with typed access to static scorer
+outputs through `ctx.score`.
+
+Quality is beta. The authoring surface, experiment/manifest schemas, CLI JSON
+outputs, and exit codes are stable within 0.x minors; breaking changes get a
+changeset `minor` and a migration note.
+
+```ts
+import { evaluate, scorers } from "@use-crux/core/quality";
+
+export default evaluate({
+  task: classify,
+  data: [{ input: { text: "This is incredible." }, expected: { sentiment: "positive" } }],
+  scorers: [scorers.exact()],
+  expect: (ctx) => {
+    ctx.expect(ctx.output.sentiment).toBeDefined();
+    ctx.recordScore("has-sentiment", 1);
+  },
+  afterScores: (ctx) => {
+    ctx.expect(ctx.score.exact).toBe(1);
+  },
+});
+```
+
+Experiment records are schema-versioned JSON. Current records store executed
+cells under `cells` and assertion details under the ordered
+`assertions.outcomes` ledger. Failing and errored cells also produce embedded
+`failures` artifacts with redacted input/output snapshots, failed outcomes,
+trace/source references, and suggested fix surfaces for agents. Tools can
+validate records and CLI JSON through `@use-crux/core/quality/schemas`, and
+compare saved runs with `crux quality diff <expA> <expB> --json`.
+
+Dataset-backed cells preserve portable row `metadata`. Imported trace rows keep
+`metadata.provenance`, and persisted cells derive `metadata.datasetProvenance`
+with the dataset path and content fingerprint. That same provenance appears on
+failure artifacts, compact run-summary failures, and experiment diff case rows.
+
+When a cell reaches `timeoutMs`, Crux records a timeout result and quarantines
+later task effects such as trace, cassette, and score writes; JavaScript user
+code is not forcibly killed.
+
+Judge scorers pin deterministic generation settings, frame output/reference as
+untrusted prompt data, and stamp score metadata with judge model, prompt
+version, rubric fingerprint, and rationale. The local CLI can record human
+labels with `crux quality label` and compare judge-vs-human agreement with
+`crux quality judge-report --json`.
+
+Agent loops can stay narrow and deterministic. Use
+`crux quality run --failed latest --json` to rerun only the failed cells from
+the newest matching experiment, `--sample <n> --seed <value>` for reproducible
+case slices, `--max-cost <usd>` to stop scheduling new cells after a budget,
+and `--changed-since <git-ref>` to select evals affected by source changes.
+`crux quality mcp` exposes the same list, run, show, diff, evidence,
+judge-report, and label operations over MCP for assistants. Agents should also
+read `/llms.txt` and the scaffolded `.crux/skills/quality/SKILL.md` created by
+`crux quality init`.
+
 ## Adapter Results
 
 Core-step adapters such as `@use-crux/openai`, `@use-crux/anthropic`, and
@@ -580,7 +641,7 @@ The local Go runtime keeps observability history bounded. It marks abandoned run
 
 The local devtools UI reads backend-owned observability rollups instead of recomputing counts in the browser. The runs list can group by root `sessionId`, shows token/cost/graph-count rollups from the list endpoint, and fetches focused-span `token.chunk` text through the lazy span-events endpoint so unfocused spans stay cheap.
 
-Quality evaluations emit an umbrella `eval.run` run around their case matrix. Case cells keep production-shaped `eval.case` runs, join the evaluation trace, and link back with `eval.case_of` edges. Promoted-baseline comparisons emit `comparison.report` artifacts with `comparison.candidate` and, when the baseline has persisted run identity, `comparison.baseline` edges. Cassette replay can link replayed case runs to the recorded run with `replay.of`; consumers treat edges to missing nodes as external references.
+Quality evaluations emit an umbrella `eval.run` run around their case matrix. Case cells keep production-shaped `eval.case` runs, join the evaluation trace, and link back with `eval.case_of` edges. Promoted-baseline comparisons and arbitrary experiment diffs emit `comparison.report` artifacts with `comparison.candidate` and, when the baseline has persisted run identity, `comparison.baseline` edges. Successful promotion emits a `baseline.promotion` artifact linked to the promoted eval run. Cassette replay can link replayed case runs to the recorded run with `replay.of`; consumers treat edges to missing nodes as external references.
 
 Observability delivery is fail-open and bounded. When no subscribers, diagnostics-channel listeners, or transport are active, emitters skip graph-record construction. Active delivery batches records on `observability.delivery.scheduledDelayMs`, chunks requests with the transport's `maxRecordsPerRequest`, retries failed chunks on capped backoff without waiting for another emitted record, and caps queued records with oldest-record drop accounting in `droppedRecords`. The local HTTP ingest endpoint returns `202` with `{ accepted, rejected }` for valid JSON batches, `400` only for malformed JSON, and retryable `503` responses with `Retry-After: 1` for transient storage failures; the TypeScript HTTP transport retries 5xx responses as whole batches instead of bisecting them record-by-record. Synchronous or asynchronous transport failures are recorded in `observabilityDiagnostics().deliveryErrors` without escaping into application code.
 

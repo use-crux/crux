@@ -23,7 +23,11 @@ const qualityDir = () => mkdtemp(join(tmpdir(), 'crux-quality-baselines-'))
  * scores `delta` lower than the baseline on the `quality` scorer, per case.
  */
 function bakeoff(input: { id?: string; delta: number; gates?: object }) {
-  const scoreByCase: Record<string, number> = { easy: 1, medium: 0.8, hard: 0.6 }
+  const scoreByCase: Record<string, number> = {
+    easy: 1,
+    medium: 0.8,
+    hard: 0.6,
+  }
   const task = (caseInput: { name: string }, params: { handicap?: number }) => ({
     score: Math.max(0, (scoreByCase[caseInput.name] ?? 0) - (params.handicap ?? 0)),
   })
@@ -54,7 +58,10 @@ describe('paired-difference comparison (variant baseline)', () => {
     const comparison = experiment.comparison!
     expect(comparison.kind).toBe('variant')
     expect(comparison.baseline).toBe('current')
-    expect(comparison.unmatchedCases).toEqual({ baselineOnly: [], candidateOnly: [] })
+    expect(comparison.unmatchedCases).toEqual({
+      baselineOnly: [],
+      candidateOnly: [],
+    })
 
     const quality = comparison.deltas.find((delta) => delta.scoreName === 'quality')!
     // Paired per case: every case drops exactly 0.1 → meanDelta −0.1, SEM 0.
@@ -96,7 +103,10 @@ describe('paired-difference comparison (variant baseline)', () => {
         gates: { scores: { quality: { minDeltaVsBaseline: -0.02 } } },
       }),
     )
-    expect(experiment.gates.results[0]).toMatchObject({ passed: true, actual: 0 })
+    expect(experiment.gates.results[0]).toMatchObject({
+      passed: true,
+      actual: 0,
+    })
     expect(experiment.passed).toBe(true)
   })
 })
@@ -105,11 +115,13 @@ describe('promotion (Experiment.promote)', () => {
   it('writes the committed BaselineRecord with frozen per-case reference values', async () => {
     const dir = await qualityDir()
     const experiment = await run(bakeoff({ id: 'baselines.promote', delta: 0.1 }), undefined, { dir })
-    const { baselineId, path } = await experiment.promote({ variant: 'current' })
+    const { baselineId, path } = await experiment.promote({
+      variant: 'current',
+    })
 
     const record = JSON.parse(await readFile(path, 'utf8')) as BaselineRecordJson
     expect(record).toMatchObject({
-      schemaVersion: 1,
+      schemaVersion: 2,
       baselineId,
       evaluationId: 'baselines.promote',
       experimentId: experiment.experimentId,
@@ -134,18 +146,17 @@ describe('promotion (Experiment.promote)', () => {
 
   it('refuses to promote a filtered run', async () => {
     const dir = await qualityDir()
-    const experiment = await run(
-      bakeoff({ id: 'baselines.promote-filtered', delta: 0.1 }),
-      { cases: ['easy'] },
-      { dir },
-    )
+    const experiment = await run(bakeoff({ id: 'baselines.promote-filtered', delta: 0.1 }), { cases: ['easy'] }, { dir })
     expect(experiment.filteredRun).toBe(true)
     await expect(experiment.promote({ variant: 'current' })).rejects.toThrowError(/filtered/)
   })
 
   it('promoting a derived-id experiment with a pin id writes under the pinned id', async () => {
     const dir = await qualityDir()
-    const evaluation = evaluate({ task: (input: { q: string }) => input, data: [{ input: { q: 'a' } }] })
+    const evaluation = evaluate({
+      task: (input: { q: string }) => input,
+      data: [{ input: { q: 'a' } }],
+    })
     const experiment = await run(evaluation, undefined, { dir })
     const { path } = await experiment.promote({ id: 'pinned.id' })
     const record = JSON.parse(await readFile(path, 'utf8')) as BaselineRecordJson
@@ -158,7 +169,9 @@ describe('auto-compare against a committed baseline', () => {
     const dir = await qualityDir()
     // 1. Run the healthy version (single variant, no decay) and promote it.
     const healthy = evaluate('auto.compare', {
-      task: (input: { name: string }) => ({ score: input.name === 'hard' ? 0.6 : 1 }),
+      task: (input: { name: string }) => ({
+        score: input.name === 'hard' ? 0.6 : 1,
+      }),
       data: [
         { name: 'easy', input: { name: 'easy' } },
         { name: 'hard', input: { name: 'hard' } },
@@ -180,7 +193,9 @@ describe('auto-compare against a committed baseline', () => {
     // 2. Re-run the SAME definition with a regressed task (same fingerprint
     //    requires the same definition shape — regress through the task body).
     const regressed = evaluate('auto.compare', {
-      task: (input: { name: string }) => ({ score: input.name === 'hard' ? 0.2 : 1 }),
+      task: (input: { name: string }) => ({
+        score: input.name === 'hard' ? 0.2 : 1,
+      }),
       data: [
         { name: 'easy', input: { name: 'easy' } },
         { name: 'hard', input: { name: 'hard' } },
@@ -195,8 +210,13 @@ describe('auto-compare against a committed baseline', () => {
     })
     const second = await run(regressed, undefined, { dir })
 
-    expect(second.baselineRef).toMatchObject({ experimentId: first.experimentId })
-    expect(second.comparison).toMatchObject({ kind: 'promoted', baseline: first.experimentId })
+    expect(second.baselineRef).toMatchObject({
+      experimentId: first.experimentId,
+    })
+    expect(second.comparison).toMatchObject({
+      kind: 'promoted',
+      baseline: first.experimentId,
+    })
     expect(second.comparison!.demoted).toBeUndefined()
     const delta = second.comparison!.deltas.find((entry) => entry.scoreName === 'quality')!
     // Paired: easy 0, hard −0.4 → mean −0.2.
@@ -215,7 +235,9 @@ describe('auto-compare against a committed baseline', () => {
     const dir = await qualityDir()
     const makeEvaluation = (cases: ReadonlyArray<{ name: string; input: { name: string } }>) =>
       evaluate('auto.drift', {
-        task: (input: { name: string }) => ({ score: input.name === 'hard' ? 0.2 : 1 }),
+        task: (input: { name: string }) => ({
+          score: input.name === 'hard' ? 0.2 : 1,
+        }),
         data: cases,
         scorers: [
           ({ output }: { input: unknown; output: unknown; expected: unknown }) => ({
@@ -262,7 +284,9 @@ describe('auto-compare against a committed baseline', () => {
         task: (input: { q: string }) => input,
         data: [{ name: 'one', input: { q: 'a' } }],
       })
-    const first = await run(makeEvaluation('drift.original'), undefined, { dir })
+    const first = await run(makeEvaluation('drift.original'), undefined, {
+      dir,
+    })
     await first.promote()
 
     // The same definition resolving to a DIFFERENT id (file renamed without
@@ -271,11 +295,7 @@ describe('auto-compare against a committed baseline', () => {
       task: (input: { q: string }) => input,
       data: [{ name: 'one', input: { q: 'a' } }],
     })
-    await expect(run(renamed, undefined, { dir, evaluationId: 'drift.renamed' })).rejects.toThrowError(
-      QualityRunnerHarnessError,
-    )
-    await expect(run(renamed, undefined, { dir, evaluationId: 'drift.renamed' })).rejects.toThrowError(
-      /drift\.original/,
-    )
+    await expect(run(renamed, undefined, { dir, evaluationId: 'drift.renamed' })).rejects.toThrowError(QualityRunnerHarnessError)
+    await expect(run(renamed, undefined, { dir, evaluationId: 'drift.renamed' })).rejects.toThrowError(/drift\.original/)
   })
 })

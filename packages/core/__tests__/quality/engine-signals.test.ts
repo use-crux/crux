@@ -244,8 +244,8 @@ describe('trace-backed signals — captured-pass for every namespace', () => {
     })
 
     const experiment = await run(evaluation)
-    const cell = experiment.perCase[0]!
-    expect(cell.assertions.failures).toEqual([])
+    const cell = experiment.cells[0]!
+    expect(cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed' || outcome.status === 'uncaptured')).toEqual([])
     expect(cell.status).toBe('passed')
     expect(cell.capturedSignals.sort()).toEqual(
       ['citations', 'handoffs', 'memory', 'modelCalls', 'retrieval', 'routing', 'safety', 'steps', 'toolCalls'].sort(),
@@ -306,10 +306,11 @@ describe('trace-backed signals — uncaptured assertions fail loudly (never vacu
         },
       })
       const experiment = await run(evaluation)
-      const cell = experiment.perCase[0]!
+      const cell = experiment.cells[0]!
       expect(cell.status).toBe('failed')
-      expect(cell.assertions.failures).toHaveLength(1)
-      const failure = cell.assertions.failures[0]!
+      const failures = cell.assertions.outcomes.filter((outcome) => outcome.status === 'failed' || outcome.status === 'uncaptured')
+      expect(failures).toHaveLength(1)
+      const failure = failures[0]!
       expect(failure.matcher).toBe(`${namespace.name} (uncaptured)`)
       expect(failure.message).toContain(`no ${namespace.name} signal was captured`)
       expect(failure.message).toContain(namespace.name)
@@ -341,7 +342,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
       params: { generate, model: 'fast-model', settings: { temperature: 0 } },
     })
     const experiment = await run(evaluation)
-    expect(experiment.perCase[0]!.output).toEqual({ answer: 'from params' })
+    expect(experiment.cells[0]!.output).toEqual({ answer: 'from params' })
     expect(seen[0]).toMatchObject({ input: { question: 'q1' }, model: 'fast-model', temperature: 0 })
   })
 
@@ -361,7 +362,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
       setup: { generate, models: { cheap: { id: 'resolved-cheap-model' } } },
     })
     // Text-mode prompt: output is result.text.
-    expect(experiment.perCase[0]!.output).toBe('a haiku')
+    expect(experiment.cells[0]!.output).toBe('a haiku')
     // Named model string resolved through setup.models.
     expect(seen[0]!.model).toEqual({ id: 'resolved-cheap-model' })
   })
@@ -401,8 +402,8 @@ describe('task execution — prompt, flow, retriever, agent', () => {
       },
     })
     const experiment = await run(evaluation)
-    expect(experiment.perCase[0]!.status).toBe('passed')
-    expect(experiment.perCase[0]!.capturedSignals).toContain('steps')
+    expect(experiment.cells[0]!.status).toBe('passed')
+    expect(experiment.cells[0]!.capturedSignals).toContain('steps')
   })
 
   it('ctx.step throws a helpful error for unknown steps and schema mismatches', async () => {
@@ -437,7 +438,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
       },
     })
     const experiment = await run(evaluation)
-    expect(experiment.perCase[0]!.status).toBe('passed')
+    expect(experiment.cells[0]!.status).toBe('passed')
   })
 
   it('executes a retriever task via the query mapper and records output hits', async () => {
@@ -455,7 +456,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
       data: [{ input: { question: 'refunds' } }],
     })
     const experiment = await run(evaluation)
-    const output = experiment.perCase[0]!.output as Array<{ sourceId: string }>
+    const output = experiment.cells[0]!.output as Array<{ sourceId: string }>
     expect(output[0]!.sourceId).toBe('docs/refunds')
   })
 
@@ -500,12 +501,12 @@ describe('persistence, redaction, truncation', () => {
     const files = await readdir(join(dir, 'experiments'))
     expect(files).toEqual([`${experiment.experimentId}.json`])
     const record = JSON.parse(await readFile(join(dir, 'experiments', files[0]!), 'utf8')) as Record<string, unknown>
-    expect(record.schemaVersion).toBe(1)
+    expect(record.schemaVersion).toBe(2)
     expect(record.evaluationId).toBe('persist.smoke')
-    expect(record.cases).toHaveLength(1)
-    expect(record.perCase).toBeUndefined()
+    expect(record.cells).toHaveLength(1)
+    expect(record.cases).toBeUndefined()
     expect(record.promote).toBeUndefined()
-    const cell = (record.cases as Array<Record<string, unknown>>)[0]!
+    const cell = (record.cells as Array<Record<string, unknown>>)[0]!
     // Always-on redaction (apiKey) + configured dot-path (email), input AND output.
     expect(cell.input).toEqual({ q: 'hello', apiKey: '[redacted]', email: '[redacted]' })
     expect(cell.output).toEqual({ echoed: 'hello', apiKey: '[redacted]' })
@@ -517,7 +518,7 @@ describe('persistence, redaction, truncation', () => {
       data: [{ input: { q: 'big' } }],
     })
     const experiment = await run(evaluation)
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
     expect((cell.output as string).endsWith('…[truncated]')).toBe(true)
     expect((cell.output as string).length).toBeLessThan(64 * 1024)
     expect(cell.metadata).toEqual({ truncated: true })
@@ -565,8 +566,8 @@ describe('datasets', () => {
       data: [[{ input: { q: 'inline' } }], golden].flat() as never,
     })
     const experiment = await run(evaluation, undefined, { rootDir: dir })
-    expect(experiment.perCase).toHaveLength(3)
-    const datasetCell = experiment.perCase.find((cell) => cell.caseName === 'row two')
+    expect(experiment.cells).toHaveLength(3)
+    const datasetCell = experiment.cells.find((cell) => cell.caseName === 'row two')
     expect(datasetCell).toBeDefined()
     expect(datasetCell!.status).toBe('passed')
   })
@@ -628,10 +629,10 @@ describe('prompt({ tests }) lowering — rung 0', () => {
     const collected = await runner.collect({ promptCandidates: [testedPrompt] })
     const result = await runner.run({ evaluations: collected.evaluations })
     const experiment = result.experiments[0]!
-    const [first, second] = experiment.perCase
+    const [first, second] = experiment.cells
     expect(first!.status).toBe('passed')
     expect(second!.status).toBe('failed')
-    expect(second!.assertions.failures[0]!.message).toContain('output schema')
+    expect(second!.assertions.outcomes.find((outcome) => outcome.status === 'failed')?.message).toContain('output schema')
     expect(second!.expected).toBe('14 dagen')
   })
 

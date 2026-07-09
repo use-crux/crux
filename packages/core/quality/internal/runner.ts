@@ -12,9 +12,12 @@
  */
 
 import { collectQualityEvaluations } from './runner-collect'
+import { compareQualityExperiments } from './runner-compare'
+import { createRunnerFeedback } from './runner-feedback'
 import { promoteQualityExperiment } from './runner-promote'
 import { runQualityEvaluations } from './runner-run'
 import type {
+  QualityCompareInput,
   QualityCollectInput,
   QualityPromoteInput,
   QualityRunInput,
@@ -22,8 +25,12 @@ import type {
   QualityRunnerEnv,
 } from './runner-types'
 
+/** Current first-party local worker <-> core runner protocol version. */
+export const QUALITY_RUNNER_PROTOCOL = 1
+
 export type {
   QualityCollectedEvaluation,
+  QualityCompareInput,
   QualityCollectError,
   QualityCollectInput,
   QualityCollectResult,
@@ -33,12 +40,16 @@ export type {
   QualityPromoteInput,
   QualityPromoteResult,
   QualityPromotedBaseline,
+  QualityFeedbackListFilter,
   QualityRunInput,
   QualityRunner,
+  QualityRunnerFeedback,
   QualityRunnerEnv,
   QualityRunnerEvent,
   QualityRunResult,
 } from './runner-types'
+export type { ExperimentDiff, ExperimentRecord } from '../schema-types'
+export type { FeedbackInput, FeedbackRecord } from './feedback'
 export type { Comparison, Experiment, ExperimentCell, RunOverrides } from '../experiment'
 export type { EvaluationManifest } from '../manifest'
 export type { QualityConfig } from '../config'
@@ -72,5 +83,7 @@ export function createQualityRunner(env: QualityRunnerEnv = {}): QualityRunner {
     collect: (input: QualityCollectInput) => collectQualityEvaluations(input, env.events),
     run: (input: QualityRunInput) => runQualityEvaluations(env, input),
     promote: (input: QualityPromoteInput) => promoteQualityExperiment(env, input),
+    compare: (input: QualityCompareInput) => compareQualityExperiments(input),
+    feedback: createRunnerFeedback(env),
   })
 }

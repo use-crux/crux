@@ -62,6 +62,27 @@ Judges run chain-of-thought by default; the rationale lands in
 retrieved context from the captured retrieval signals (with `input.context` as
 a fallback) and skip honestly (`score: null`) when there is none.
 
+### Can I trust this judge?
+
+Judges are useful regression signals, not ground truth. Crux makes them as
+repeatable and auditable as the provider allows: judge calls pin deterministic
+generation settings, wrap task output/reference/context as untrusted data in
+the prompt, record/replay through the same cassette boundary as task model
+calls, and stamp each judge score with model, prompt version, rubric
+fingerprint, and rationale metadata.
+
+Use human labels to calibrate the signal:
+
+```bash
+crux quality label <experiment-id> --case refund-policy --verdict fail --score helpful --note "misses refund window"
+crux quality judge-report support.refunds --json
+```
+
+`judge-report` joins human labels with judge-backed scores and returns
+agreement, precision, recall, Cohen's kappa, and disagreements you can inspect.
+Treat low agreement as a scorer-design bug: refine the rubric, add examples, or
+replace the judge with a code scorer for that requirement.
+
 `choiceScores` replaces a rubric with classification:
 
 ```ts

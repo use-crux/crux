@@ -160,7 +160,7 @@ func overviewExperimentFixture(id string, evaluationID string, at string, passed
   } } },
   "gates": { "passed": %t, "informational": false, "results": [] },
   "passed": %t,
-  "cases": [{ "caseId": "case-1", "variantName": "default", "trial": 0, "status": %q, "input": {}, "scores": [], "assertions": { "ran": 0, "notEvaluated": 0, "failures": [] }, "durationMs": 1, "traceIds": [], "capturedSignals": [] }]
+  "cells": [{ "caseId": "case-1", "variantName": "default", "trial": 0, "status": %q, "input": {}, "scores": [], "assertions": { "ran": 0, "notEvaluated": 0, "outcomes": [] }, "durationMs": 1, "traceIds": [], "capturedSignals": [] }]
 }`, id, evaluationID, at, at, passedCells, failedCells, passRate, passed, passed, status)
 }
 
@@ -207,8 +207,8 @@ func TestExperimentDetailAPI(t *testing.T) {
 	if !detail.Gates.Informational || len(detail.Gates.Results) != 2 {
 		t.Errorf("gates: %+v", detail.Gates)
 	}
-	if len(detail.Cases) != 2 || detail.Cases[1].Status != "failed" {
-		t.Errorf("cases: %+v", detail.Cases)
+	if len(detail.Cells) != 2 || detail.Cells[1].Status != "failed" {
+		t.Errorf("cases: %+v", detail.Cells)
 	}
 	if _, found, _ := svc.ExperimentDetailAPI(context.Background(), "missing"); found {
 		t.Error("missing experiment must not resolve")

@@ -162,7 +162,7 @@ RAG evaluation lives in the Quality system, not in a separate `ragEval` module:
 import { evaluate, scorers, target } from '@use-crux/core/quality'
 
 await evaluate({
-  task: target.recipe(docsAnswer, {
+  task: target.retrievalRecipe(docsAnswer, {
     query: ({ question }) => question,
   }),
   scorers: [

@@ -30,7 +30,7 @@ import type { ProjectModelDiagnostic } from '@use-crux/core/project-index'
 import type { ReplayMode } from '@use-crux/core/quality'
 import { SourceResolver } from '@use-crux/indexer/source-resolver'
 import { loadEnv } from '../lib/env'
-import { loadObservabilityCore, loadRunnerCore } from '../lib/quality-core-bridge'
+import { loadObservabilityCore, loadRunnerCore, QualityRunnerProtocolMismatchError } from '../lib/quality-core-bridge'
 import { loadQualityProject, resolveQualityRunnerSettings, ensureQualityGitignore } from '../lib/quality-config'
 import {
   collectEvaluationFiles,
@@ -41,12 +41,18 @@ import {
 import { executeEvaluations, type QualityRunEvent } from '../lib/quality-execute'
 import { enableQualityRunnerObservability, flushQualityRunnerObservability } from '../lib/quality-observability'
 import { promoteExperiment } from '../lib/quality-promote'
+import { createQualityRunId } from '../lib/quality-run-id'
+import { getArg, getRepeatedArg, hasFlag, positionalArgs } from '../lib/quality-runner-argv'
+import { discoverQualityInitTargets } from '../lib/quality-init'
+import { selectChangedEvaluations } from '../lib/quality-changed'
 
 // Redirect console.log to stderr so stdout stays clean NDJSON.
 console.log = (...args: unknown[]) => console.error(...args)
 
+const runId = createQualityRunId()
+
 function emit(event: QualityRunEvent): void {
-  process.stdout.write(`${JSON.stringify(event)}\n`)
+  process.stdout.write(`${JSON.stringify({ ...event, runId })}\n`)
 }
 
 async function main(): Promise<number> {
@@ -54,6 +60,11 @@ async function main(): Promise<number> {
   const configPath = getArg(args, '--config')
   const collectOnly = hasFlag(args, '--collect-only')
   const cases = getRepeatedArg(args, '--case')
+  const failed = getArg(args, '--failed')
+  const sampleArg = getArg(args, '--sample')
+  const seedArg = getArg(args, '--seed')
+  const maxCostArg = getArg(args, '--max-cost')
+  const changedSince = getArg(args, '--changed-since')
   const variants = getRepeatedArg(args, '--variant')
   const replayArg = getArg(args, '--replay')
   const rescore = hasFlag(args, '--rescore')
@@ -63,7 +74,23 @@ async function main(): Promise<number> {
   const persist = !hasFlag(args, '--no-persist')
   const promoteId = getArg(args, '--promote')
   const pinId = getArg(args, '--pin-id')
+  const diffA = getArg(args, '--diff-a')
+  const diffB = getArg(args, '--diff-b')
+  const initTargets = hasFlag(args, '--init-targets')
+  const initDefinition = getArg(args, '--definition')
   const ids = positionalArgs(args)
+
+  if (sampleArg !== undefined && seedArg === undefined) {
+    emit({
+      type: 'error',
+      scope: 'execute',
+      message: '--sample requires --seed so sampled runs are reproducible.',
+    })
+    emit({ type: 'run:done', experiments: [], exitCode: 2 })
+    return 2
+  }
+  const sampleSize = sampleArg === undefined ? undefined : Number(sampleArg)
+  const maxCostUsd = maxCostArg === undefined ? undefined : Number(maxCostArg)
 
   const REPLAY_MODES: readonly ReplayMode[] = ['live', 'record-new', 'replay-strict', 'refresh']
   if (replayArg !== undefined && !REPLAY_MODES.includes(replayArg as ReplayMode)) {
@@ -92,9 +119,67 @@ async function main(): Promise<number> {
     observabilityCore = await loadObservabilityCore(project.configDir)
     restoreObservability = enableQualityRunnerObservability(observabilityCore, process.env.CRUX_DEVTOOLS_URL)
   } catch (error) {
-    emit({ type: 'error', scope: 'collect', message: describeError(error) })
-    emit({ type: 'run:done', experiments: [], exitCode: 2 })
+    emit({
+      type: 'error',
+      scope: 'collect',
+      message: describeError(error),
+      ...(qualityRunnerErrorCode(error) ? { code: qualityRunnerErrorCode(error) } : {}),
+    })
+    emit({
+      type: 'run:done',
+      experiments: [],
+      exitCode: 2,
+      ok: false,
+      error: { code: qualityRunnerErrorCode(error) ?? 'runner-crash', message: describeError(error) },
+    })
     return 2
+  }
+
+  if (diffA !== undefined || diffB !== undefined) {
+    try {
+      if (diffA === undefined || diffB === undefined) {
+        emit({
+          type: 'error',
+          scope: 'execute',
+          message: 'quality diff requires both --diff-a and --diff-b.',
+        })
+        emit({ type: 'run:done', experiments: [], exitCode: 2 })
+        return 2
+      }
+      const runner = core.createQualityRunner()
+      const diff = await runner.compare({ a: diffA, b: diffB })
+      emit({ type: 'diff:done', diff })
+      emit({ type: 'run:done', experiments: [], exitCode: 0 })
+      return 0
+    } catch (error) {
+      emit({
+        type: 'error',
+        scope: 'execute',
+        message: describeError(error),
+      })
+      emit({
+        type: 'run:done',
+        experiments: [],
+        exitCode: 2,
+        ok: false,
+        error: { code: 'runner-crash', message: describeError(error) },
+      })
+      return 2
+    } finally {
+      await flushQualityRunnerObservability(observabilityCore)
+      restoreObservability?.()
+    }
+  }
+
+  if (initTargets) {
+    const targets = discoverQualityInitTargets(project)
+    const selected =
+      initDefinition === undefined ? targets : targets.filter((target) => target.definitionId === initDefinition)
+    emit({ type: 'init:targets', targets: selected })
+    emit({ type: 'run:done', experiments: [], exitCode: 0 })
+    await flushQualityRunnerObservability(observabilityCore)
+    restoreObservability?.()
+    return 0
   }
 
   const settings = resolveQualityRunnerSettings(project.quality, project.configDir)
@@ -162,11 +247,32 @@ async function main(): Promise<number> {
   const sourceResolver = new SourceResolver({ projectRoot: project.configDir })
 
   try {
+    let runIds = ids
+    if (changedSince !== undefined) {
+      const changed = selectChangedEvaluations({
+        projectRoot: project.configDir,
+        gitRef: changedSince,
+        collected,
+        ...(ids.length > 0 ? { ids } : {}),
+      })
+      if (changed.failOpenReason !== undefined) {
+        console.error(`warning: ${changed.failOpenReason}`)
+      } else {
+        runIds = [...changed.ids]
+      }
+      if (changed.failOpenReason === undefined && runIds.length === 0) {
+        emit({ type: 'run:done', experiments: [], exitCode: 0 })
+        return 0
+      }
+    }
     const result = await executeEvaluations({
       core,
       collected,
-      ...(ids.length > 0 ? { ids } : {}),
+      ...(runIds.length > 0 ? { ids: runIds } : {}),
       ...(cases.length > 0 ? { cases } : {}),
+      ...(failed !== undefined ? { failed } : {}),
+      ...(sampleSize !== undefined && seedArg !== undefined ? { sample: { size: sampleSize, seed: seedArg } } : {}),
+      ...(maxCostUsd !== undefined ? { maxCostUsd } : {}),
       ...(variants.length > 0 ? { variants } : {}),
       ...(replayMode !== undefined ? { replayMode } : {}),
       ...(rescore ? { reuseOutputs: true } : {}),
@@ -200,57 +306,6 @@ async function main(): Promise<number> {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────
-// argv helpers
-// ─────────────────────────────────────────────────────────────────
-
-const VALUE_FLAGS = new Set([
-  '--config',
-  '--case',
-  '--variant',
-  '--replay',
-  '--trials',
-  '--experiment',
-  '--max-concurrency',
-  '--promote',
-  '--pin-id',
-])
-
-function positionalArgs(args: string[]): string[] {
-  const positionals: string[] = []
-  for (let index = 0; index < args.length; index++) {
-    const arg = args[index]!
-    if (VALUE_FLAGS.has(arg)) {
-      index++
-      continue
-    }
-    if (arg.startsWith('--')) continue
-    positionals.push(arg)
-  }
-  return positionals
-}
-
-function getArg(args: string[], name: string): string | undefined {
-  const idx = args.indexOf(name)
-  if (idx === -1 || idx + 1 >= args.length) return undefined
-  return args[idx + 1]
-}
-
-function getRepeatedArg(args: string[], name: string): string[] {
-  const values: string[] = []
-  for (let index = 0; index < args.length; index++) {
-    if (args[index] === name && index + 1 < args.length) {
-      values.push(args[index + 1]!)
-      index++
-    }
-  }
-  return values
-}
-
-function hasFlag(args: string[], name: string): boolean {
-  return args.includes(name)
-}
-
 function describeError(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -267,6 +322,22 @@ function collectErrorFromProjectModelDiagnostic(diagnostic: ProjectModelDiagnost
 main()
   .then((exitCode) => process.exit(exitCode))
   .catch((error: unknown) => {
-    emit({ type: 'error', scope: 'execute', message: describeError(error) })
+    emit({
+      type: 'error',
+      scope: 'execute',
+      message: describeError(error),
+      ...(qualityRunnerErrorCode(error) ? { code: qualityRunnerErrorCode(error) } : {}),
+    })
+    emit({
+      type: 'run:done',
+      experiments: [],
+      exitCode: 2,
+      ok: false,
+      error: { code: qualityRunnerErrorCode(error) ?? 'runner-crash', message: describeError(error) },
+    })
     process.exit(2)
   })
+
+function qualityRunnerErrorCode(error: unknown): 'protocol-mismatch' | undefined {
+  return error instanceof QualityRunnerProtocolMismatchError ? error.code : undefined
+}

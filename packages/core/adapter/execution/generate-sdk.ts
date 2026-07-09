@@ -263,6 +263,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       prompt: request.prompt,
       messages: request.messages,
       settings: request.settings,
+      outputSchema:
+        kind === "structured" && "schema" in request
+          ? request.schema
+          : undefined,
       tools: describeTools(request.tools),
     };
   }

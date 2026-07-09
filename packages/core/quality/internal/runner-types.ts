@@ -10,15 +10,18 @@
  */
 
 import type { ProjectModelDiagnosticCode } from '../../project-index'
+import type { QualityDefinitionDiagnosticCode } from './errors'
 import type { QualityConfig } from '../config'
 import type { EvaluationManifest } from '../manifest'
 import type { ReplayMode } from '../replay'
 import type { QualitySourceFrameResolver } from '../source-frame'
 import type { Evaluation } from '../evaluate'
 import type { Comparison, Experiment, ExperimentCell, RunOverrides } from '../experiment'
+import type { ExperimentDiff, ExperimentRecord } from '../schema-types'
 import type { EngineSetup } from './engine'
 import type { EvaluationDefinition } from './definition'
 import type { AnyPrompt } from '../../prompt/prompt-types'
+import type { FeedbackInput, FeedbackRecord } from './feedback'
 
 interface QualityEvaluationHandleState {
   readonly evaluation: Evaluation
@@ -35,15 +38,15 @@ export interface QualityEvaluationHandle {
 
 /** Create an opaque facade handle and store engine-only data out of band. @internal */
 export function createQualityEvaluationHandle(state: QualityEvaluationHandleState): QualityEvaluationHandle {
-  const handle = Object.freeze({ _tag: 'CruxQualityEvaluationHandle' as const })
+  const handle = Object.freeze({
+    _tag: 'CruxQualityEvaluationHandle' as const,
+  })
   qualityEvaluationHandles.set(handle, state)
   return handle
 }
 
 /** Resolve engine-only data for a handle created by this facade. @internal */
-export function getQualityEvaluationHandleState(
-  handle: QualityEvaluationHandle,
-): QualityEvaluationHandleState | undefined {
+export function getQualityEvaluationHandleState(handle: QualityEvaluationHandle): QualityEvaluationHandleState | undefined {
   return qualityEvaluationHandles.get(handle)
 }
 
@@ -69,7 +72,7 @@ export interface QualityCollectInput {
 export interface QualityCollectError {
   readonly message: string
   readonly file?: string
-  readonly code?: ProjectModelDiagnosticCode
+  readonly code?: QualityDefinitionDiagnosticCode
   readonly line?: number
 }
 
@@ -97,14 +100,26 @@ export interface QualityCollectResult {
   readonly errors: readonly QualityCollectError[]
 }
 
+/** Tooling-only error codes added by the local runner protocol. */
+export type QualityRunnerProtocolErrorCode = 'protocol-mismatch' | 'runner-crash' | 'worker-crash'
+
+/** Error codes emitted on the Quality runner event stream. */
+export type QualityRunnerErrorCode = QualityDefinitionDiagnosticCode | QualityRunnerProtocolErrorCode
+
+interface QualityRunnerEventBase {
+  /** Stable id for one local worker process run. Added by first-party tooling. */
+  readonly runId?: string
+}
+
 /** Events emitted by the facade while running or promoting evaluations. */
-export type QualityRunnerEvent =
-  | {
-      type: 'collect:done'
-      evaluations: EvaluationManifest[]
-      errors: QualityCollectError[]
-    }
-  | { type: 'eval:start'; evaluationId: string; cells: number }
+export type QualityRunnerEvent = QualityRunnerEventBase &
+  (
+    | {
+        type: 'collect:done'
+        evaluations: EvaluationManifest[]
+        errors: QualityCollectError[]
+      }
+    | { type: 'eval:start'; evaluationId: string; cells: number }
   | {
       type: 'cell:start'
       evaluationId: string
@@ -136,15 +151,22 @@ export type QualityRunnerEvent =
       variantName?: string
       pinHint?: string
     }
-  | { type: 'run:done'; experiments: string[]; exitCode: 0 | 1 | 2 }
-  | {
-      type: 'error'
-      scope: 'collect' | 'execute' | 'promote'
-      message: string
-      code?: ProjectModelDiagnosticCode
-      file?: string
-      line?: number
-    }
+    | {
+        type: 'run:done'
+        experiments: string[]
+        exitCode: 0 | 1 | 2
+        ok?: boolean
+        error?: { code: QualityRunnerProtocolErrorCode; message: string }
+      }
+    | {
+        type: 'error'
+        scope: 'collect' | 'execute' | 'promote'
+        message: string
+        code?: QualityRunnerErrorCode
+        file?: string
+        line?: number
+      }
+  )
 
 /** Receives runner lifecycle events, usually serialized to NDJSON by tooling. */
 export type QualityEventSink = (event: QualityRunnerEvent) => void
@@ -178,6 +200,12 @@ export interface QualityRunInput {
   readonly evaluations: readonly QualityCollectedEvaluation[]
   readonly ids?: readonly string[]
   readonly cases?: readonly string[]
+  readonly sample?: RunOverrides<string>['sample']
+  readonly maxCostUsd?: number
+  /** Exact case × variant pairs; unlike `cases` + `variants`, does not cross-product. */
+  readonly cells?: RunOverrides<string>['cells']
+  /** Previous experiment id, or `latest`, whose failed cells should be rerun. */
+  readonly failed?: string
   readonly variants?: readonly string[]
   readonly replayMode?: ReplayMode
   readonly reuseOutputs?: boolean
@@ -219,7 +247,28 @@ export interface QualityPromoteResult {
   readonly baseline?: QualityPromotedBaseline
 }
 
-/** Narrow first-party runner facade for collect, run, and promote operations. */
+/** Input for {@link QualityRunner.compare}. Strings are experiment record paths. */
+export interface QualityCompareInput {
+  readonly a: string | ExperimentRecord
+  readonly b: string | ExperimentRecord
+}
+
+/** Filters accepted by {@link QualityRunnerFeedback.list}. */
+export interface QualityFeedbackListFilter {
+  readonly experimentId?: string
+  readonly caseId?: string
+  readonly tags?: readonly string[]
+}
+
+/** Feedback operations exposed through the first-party runner facade. */
+export interface QualityRunnerFeedback {
+  /** Add one feedback record to the Quality feedback store. */
+  add(input: FeedbackInput): Promise<FeedbackRecord>
+  /** List feedback records, optionally filtered by experiment, case, and tags. */
+  list(filter?: QualityFeedbackListFilter): Promise<readonly FeedbackRecord[]>
+}
+
+/** Narrow first-party runner facade for Quality tooling operations. */
 export interface QualityRunner {
   /** Discover evaluations from modules and prompt-test candidates. */
   collect(input: QualityCollectInput): Promise<QualityCollectResult>
@@ -227,6 +276,10 @@ export interface QualityRunner {
   run(input: QualityRunInput): Promise<QualityRunResult>
   /** Promote a persisted experiment into a committed baseline record. */
   promote(input: QualityPromoteInput): Promise<QualityPromoteResult>
+  /** Compare two persisted experiment records through core-owned diff policy. */
+  compare(input: QualityCompareInput): Promise<ExperimentDiff>
+  /** Read and write human feedback records for first-party tooling. */
+  feedback: QualityRunnerFeedback
 }
 
 /** Overrides accepted by the underlying engine; exported for migration only. */

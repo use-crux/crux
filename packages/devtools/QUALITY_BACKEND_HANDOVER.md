@@ -47,6 +47,8 @@ POST /api/quality/insights/{insightId}/status
 GET  /api/quality/experiments
 GET  /api/quality/experiments/{experimentId}
 GET  /api/quality/experiments/{experimentId}/cell-evidence?caseId={caseId}&variantName={variantName}&trial={trial}
+GET  /api/quality/experiments/diff?a={experimentId}&b={experimentId}
+GET  /api/quality/judge-report/{evaluationId}
 GET  /api/quality/evaluations/experiment-groups?limit=N
 GET  /api/quality/evaluations/{evaluationId}/experiments?limit=N
 GET  /api/quality/evaluations/{evaluationId}/progress?limit=N

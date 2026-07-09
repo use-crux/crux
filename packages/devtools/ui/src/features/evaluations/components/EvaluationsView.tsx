@@ -25,6 +25,7 @@ import {
   type VerdictState,
 } from '@/qw/shell/qualityKit'
 import { EvalProgressStrip } from './EvalProgressStrip'
+import { JudgeReportPanel } from '@/features/scorers/components/JudgeReportPanel'
 import { navTarget } from '@/app/navigation/navTarget'
 import {
   useQualityEvaluations,
@@ -304,6 +305,16 @@ function EvaluationDetail({ e, sig }: { e: QualityEvaluationManifest; sig?: Eval
             {e.scorers.map((s) => (
               <ScorerChip key={s.name} name={s.name} costClass={s.costClass} />
             ))}
+          </div>
+        </>
+      )}
+
+      {/* judge trust — judge-vs-human agreement for model-graded scorers */}
+      {e.scorers.some((s) => s.costClass && s.costClass !== 'code') && (
+        <>
+          <SectionHead eyebrow="Judge trust" />
+          <div className="mb-5">
+            <JudgeReportPanel evaluationId={e.id} />
           </div>
         </>
       )}

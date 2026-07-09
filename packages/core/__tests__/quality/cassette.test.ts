@@ -1,16 +1,15 @@
 import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import {
-  CassetteMissError,
-  cassettePath,
-  normalizedCallKey,
-  openCassetteSession,
-} from '../../quality/internal/cassette'
+import { CassetteMissError, cassettePath, normalizedCallKey, openCassetteSession } from '../../quality/internal/cassette'
 import type { InterceptedGeneration } from '../../adapter/interception'
 
+const execFileAsync = promisify(execFile)
 const tempDirs: string[] = []
 async function tempCassette(name = 'test'): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), 'crux-cassette-'))
@@ -42,7 +41,13 @@ function loopOutcome(text: string) {
     response: {
       text,
       toolCalls: undefined,
-      usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, inputTokenDetails: {}, outputTokenDetails: {} },
+      usage: {
+        inputTokens: 1,
+        outputTokens: 2,
+        totalTokens: 3,
+        inputTokenDetails: {},
+        outputTokenDetails: {},
+      },
       finishReason: 'stop',
       responseId: 'volatile-response-id',
       actualModelId: 'm1',
@@ -64,19 +69,43 @@ describe('normalizedCallKey', () => {
     expect(a).toMatch(/^[0-9a-f]{64}$/)
   })
 
-    it('changes when prompt content, model, or settings change', () => {
+  it('changes when prompt content, model, or settings change', () => {
     const base = normalizedCallKey(call())
     expect(normalizedCallKey(call({ prompt: 'different question' }))).not.toBe(base)
     expect(normalizedCallKey(call({ modelInfo: { provider: 'fake', modelId: 'm2' } }))).not.toBe(base)
     expect(normalizedCallKey(call({ settings: { temperature: 1 } }))).not.toBe(base)
     expect(normalizedCallKey(call({ kind: 'structured' }))).not.toBe(base)
   })
+
+  it('changes when tool parameter schemas change', () => {
+    const base = normalizedCallKey(
+      call({
+        tools: [{ name: 'lookup', parameters: z.object({ query: z.string() }) }],
+      }),
+    )
+
+    expect(
+      normalizedCallKey(
+        call({
+          tools: [
+            {
+              name: 'lookup',
+              parameters: z.object({ query: z.string(), locale: z.string() }),
+            },
+          ],
+        }),
+      ),
+    ).not.toBe(base)
+  })
 })
 
 describe('cassette session — record-new', () => {
   it('executes misses live, records them, and replays hits without executing', async () => {
     const path = await tempCassette()
-    const recordSession = await openCassetteSession({ path, mode: 'record-new' })
+    const recordSession = await openCassetteSession({
+      path,
+      mode: 'record-new',
+    })
     let liveCalls = 0
     const execute = async () => {
       liveCalls++
@@ -88,7 +117,10 @@ describe('cassette session — record-new', () => {
     expect(liveCalls).toBe(1)
     await recordSession.flush()
 
-    const replaySession = await openCassetteSession({ path, mode: 'record-new' })
+    const replaySession = await openCassetteSession({
+      path,
+      mode: 'record-new',
+    })
     const second = (await replaySession.intercept(call(), execute)) as ReturnType<typeof loopOutcome>
     expect(liveCalls).toBe(1) // served from the cassette
     expect(second.response.text).toBe('live answer')
@@ -97,7 +129,28 @@ describe('cassette session — record-new', () => {
     expect(replaySession.stats).toMatchObject({ hits: 1, misses: 0 })
   })
 
-    it('writes metadata (recordedAt, sdkVersion, models) into the cassette file', async () => {
+  it('single-flights concurrent identical misses to one live recording', async () => {
+    const path = await tempCassette()
+    const session = await openCassetteSession({ path, mode: 'record-new' })
+    let liveCalls = 0
+    const execute = async () => {
+      const callNumber = ++liveCalls
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      return loopOutcome(`live answer ${callNumber}`)
+    }
+
+    const [first, second] = (await Promise.all([session.intercept(call(), execute), session.intercept(call(), execute)])) as [
+      ReturnType<typeof loopOutcome>,
+      ReturnType<typeof loopOutcome>,
+    ]
+
+    expect(liveCalls).toBe(1)
+    expect(first.response.text).toBe('live answer 1')
+    expect(second.response.text).toBe('live answer 1')
+    expect(session.stats.recorded).toBe(1)
+  })
+
+  it('writes metadata (recordedAt, sdkVersion, models) into the cassette file', async () => {
     const path = await tempCassette()
     const session = await openCassetteSession({ path, mode: 'record-new' })
     await session.intercept(call(), async () => loopOutcome('x'))
@@ -113,6 +166,69 @@ describe('cassette session — record-new', () => {
     expect(typeof file.metadata.sdkVersion).toBe('string')
     expect(file.metadata.models).toEqual(['fake/m1'])
     expect(Object.keys(file.entries)).toHaveLength(1)
+  })
+
+  it('merges disjoint recordings when two sessions flush the same cassette file', async () => {
+    const path = await tempCassette()
+    const firstSession = await openCassetteSession({ path, mode: 'record-new' })
+    const secondSession = await openCassetteSession({ path, mode: 'record-new' })
+
+    await firstSession.intercept(call({ prompt: 'first prompt' }), async () => loopOutcome('first answer'))
+    await secondSession.intercept(call({ prompt: 'second prompt' }), async () => loopOutcome('second answer'))
+    await firstSession.flush()
+    await secondSession.flush()
+
+    const file = JSON.parse(await readFile(path, 'utf8')) as {
+      entries: Record<string, { result: { response?: { text?: string } } }>
+    }
+    expect(Object.keys(file.entries)).toHaveLength(2)
+    expect(Object.values(file.entries).map((entry) => entry.result.response?.text).sort()).toEqual(['first answer', 'second answer'])
+  })
+
+  it('merges disjoint recordings flushed by two separate processes', async () => {
+    const path = await tempCassette()
+    const worker = `
+      import { openCassetteSession } from ${JSON.stringify(pathToFileURL(join(process.cwd(), 'quality/internal/cassette.ts')).href)}
+      const path = process.env.CASSETTE_PATH
+      const prompt = process.env.CASSETTE_PROMPT
+      const text = process.env.CASSETTE_TEXT
+      if (!path || !prompt || !text) throw new Error('missing worker env')
+      const session = await openCassetteSession({ path, mode: 'record-new' })
+      await session.intercept({
+        kind: 'loop',
+        promptId: 'support.answer',
+        modelInfo: { provider: 'fake', modelId: 'm1' },
+        system: 'be terse',
+        prompt,
+        messages: undefined,
+        settings: { temperature: 0 },
+        tools: undefined,
+      }, async () => ({
+        status: 'complete',
+        raw: { sdkObject: true },
+        response: { text, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, inputTokenDetails: {}, outputTokenDetails: {} }, finishReason: 'stop' },
+        messages: [{ role: 'assistant', content: text }],
+        steps: 1,
+        meta: {},
+      }))
+      await session.flush()
+    `
+    const tsxLoader = join(process.cwd(), '../../node_modules/.pnpm/tsx@4.22.3/node_modules/tsx/dist/esm/index.mjs')
+
+    await Promise.all([
+      execFileAsync(process.execPath, ['--import', tsxLoader, '--input-type=module', '--eval', worker], {
+        env: { ...process.env, CASSETTE_PATH: path, CASSETTE_PROMPT: 'first process', CASSETTE_TEXT: 'first answer' },
+      }),
+      execFileAsync(process.execPath, ['--import', tsxLoader, '--input-type=module', '--eval', worker], {
+        env: { ...process.env, CASSETTE_PATH: path, CASSETTE_PROMPT: 'second process', CASSETTE_TEXT: 'second answer' },
+      }),
+    ])
+
+    const file = JSON.parse(await readFile(path, 'utf8')) as {
+      entries: Record<string, { result: { response?: { text?: string } } }>
+    }
+    expect(Object.keys(file.entries)).toHaveLength(2)
+    expect(Object.values(file.entries).map((entry) => entry.result.response?.text).sort()).toEqual(['first answer', 'second answer'])
   })
 })
 
@@ -142,21 +258,23 @@ describe('cassette session — replay-strict', () => {
 describe('cassette session — refresh', () => {
   it('re-records exercised entries even when present', async () => {
     const path = await tempCassette()
-    const recordSession = await openCassetteSession({ path, mode: 'record-new' })
+    const recordSession = await openCassetteSession({
+      path,
+      mode: 'record-new',
+    })
     await recordSession.intercept(call(), async () => loopOutcome('stale answer'))
     await recordSession.flush()
 
     const refreshSession = await openCassetteSession({ path, mode: 'refresh' })
-    const result = (await refreshSession.intercept(call(), async () => loopOutcome('fresh answer'))) as ReturnType<
-      typeof loopOutcome
-    >
+    const result = (await refreshSession.intercept(call(), async () => loopOutcome('fresh answer'))) as ReturnType<typeof loopOutcome>
     expect(result.response.text).toBe('fresh answer')
     await refreshSession.flush()
 
-    const replaySession = await openCassetteSession({ path, mode: 'replay-strict' })
-    const replayed = (await replaySession.intercept(call(), async () => loopOutcome('never'))) as ReturnType<
-      typeof loopOutcome
-    >
+    const replaySession = await openCassetteSession({
+      path,
+      mode: 'replay-strict',
+    })
+    const replayed = (await replaySession.intercept(call(), async () => loopOutcome('never'))) as ReturnType<typeof loopOutcome>
     expect(replayed.response.text).toBe('fresh answer')
   })
 })
@@ -170,18 +288,27 @@ describe('cassette session — projection and redaction', () => {
 
     expect(await readFile(path, 'utf8')).not.toContain('sdkObject')
 
-    const replaySession = await openCassetteSession({ path, mode: 'replay-strict' })
+    const replaySession = await openCassetteSession({
+      path,
+      mode: 'replay-strict',
+    })
     const replayed = (await replaySession.intercept(call(), async () => loopOutcome('never'))) as {
       raw: unknown
     }
     expect(replayed.raw).toBeUndefined()
   })
 
-    it('redacts api keys and authorization material at write time, always', async () => {
+  it('redacts api keys and authorization material at write time, always', async () => {
     const path = await tempCassette()
     const session = await openCassetteSession({ path, mode: 'record-new' })
     await session.intercept(
-      call({ settings: { temperature: 0, apiKey: 'sk-super-secret', headers: { authorization: 'Bearer tok' } } }),
+      call({
+        settings: {
+          temperature: 0,
+          apiKey: 'sk-super-secret',
+          headers: { authorization: 'Bearer tok' },
+        },
+      }),
       async () => loopOutcome('x'),
     )
     await session.flush()
@@ -191,7 +318,7 @@ describe('cassette session — projection and redaction', () => {
     expect(text).not.toContain('Bearer tok')
   })
 
-    it('records invalid structured attempts and revives them as ZodError-carrying attempts', async () => {
+  it('records invalid structured attempts and revives them as ZodError-carrying attempts', async () => {
     const path = await tempCassette()
     const schema = z.object({ a: z.string() })
     const parsed = schema.safeParse({ a: 1 })
@@ -205,7 +332,10 @@ describe('cassette session — projection and redaction', () => {
     await session.intercept(call({ kind: 'structured' }), async () => invalidAttempt)
     await session.flush()
 
-    const replaySession = await openCassetteSession({ path, mode: 'replay-strict' })
+    const replaySession = await openCassetteSession({
+      path,
+      mode: 'replay-strict',
+    })
     const replayed = (await replaySession.intercept(call({ kind: 'structured' }), async () => invalidAttempt)) as {
       status: string
       rawText: string
@@ -216,7 +346,7 @@ describe('cassette session — projection and redaction', () => {
     expect(replayed.error.issues.length).toBeGreaterThan(0)
   })
 
-    it('does not record suspended outcomes — they pass through and miss next time', async () => {
+  it('does not record suspended outcomes — they pass through and miss next time', async () => {
     const path = await tempCassette()
     const suspended = {
       status: 'suspended' as const,
@@ -227,7 +357,9 @@ describe('cassette session — projection and redaction', () => {
       steps: 1,
     }
     const session = await openCassetteSession({ path, mode: 'record-new' })
-    const result = (await session.intercept(call(), async () => suspended)) as { status: string }
+    const result = (await session.intercept(call(), async () => suspended)) as {
+      status: string
+    }
     expect(result.status).toBe('suspended')
     await session.flush()
 
@@ -243,13 +375,20 @@ describe('cassette session — staleness', () => {
     const recordedAt = new Date(Date.now() - 120 * 24 * 60 * 60 * 1000).toISOString()
     await writeFile(
       path,
-      JSON.stringify({ version: 1, metadata: { recordedAt, sdkVersion: 'x', models: [] }, entries: {} }),
+      JSON.stringify({
+        version: 1,
+        metadata: { recordedAt, sdkVersion: 'x', models: [] },
+        entries: {},
+      }),
     )
 
     const session = await openCassetteSession({ path, mode: 'replay-strict' })
     expect(session.staleSince).toBe(recordedAt)
 
-    const fresh = await openCassetteSession({ path: await tempCassette('fresh'), mode: 'record-new' })
+    const fresh = await openCassetteSession({
+      path: await tempCassette('fresh'),
+      mode: 'record-new',
+    })
     expect(fresh.staleSince).toBeUndefined()
   })
 })

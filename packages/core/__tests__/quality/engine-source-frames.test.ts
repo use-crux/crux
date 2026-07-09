@@ -16,7 +16,7 @@ describe('Quality runner - source frame snapshots', () => {
     })
 
     const experiment = await run(evaluation)
-    const outcome = experiment.perCase[0]!.assertions.outcomes?.[0]
+    const outcome = experiment.cells[0]!.assertions.outcomes?.[0]
 
     expect(outcome).toMatchObject({
       status: 'passed',
@@ -74,7 +74,7 @@ describe('Quality runner - source frame snapshots', () => {
     })
 
     const experiment = await run(evaluation, undefined, { sourceFrameResolver: resolver })
-    const failed = experiment.perCase[0]!.assertions.outcomes?.[0]
+    const failed = experiment.cells[0]!.assertions.outcomes?.[0]
 
     expect(failed).toMatchObject({
       status: 'failed',
@@ -140,7 +140,7 @@ describe('Quality runner - source frame snapshots', () => {
     })
 
     const experiment = await run(evaluation, undefined, { sourceFrameResolver: resolver })
-    const cell = experiment.perCase[0]!
+    const cell = experiment.cells[0]!
 
     expect(cell.status).toBe('errored')
     expect(cell.assertions.outcomes).toEqual([])

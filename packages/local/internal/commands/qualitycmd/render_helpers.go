@@ -109,6 +109,25 @@ func cellLabel(cell *domain.QualityCell) string {
 	return cell.CaseID
 }
 
+func nonEmptyString(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func failedAssertionOutcomes(outcomes []domain.QualityAssertionOutcome) []domain.QualityAssertionOutcome {
+	failed := make([]domain.QualityAssertionOutcome, 0)
+	for _, outcome := range outcomes {
+		if outcome.Status == "failed" || outcome.Status == "uncaptured" {
+			failed = append(failed, outcome)
+		}
+	}
+	return failed
+}
+
 func hasFailures(state *qualityEvalState) bool {
 	for i := range state.cells {
 		if state.cells[i].Status == "failed" || state.cells[i].Status == "errored" {

@@ -229,9 +229,21 @@ export interface IndexFacts {
   hasDetailSchema?: boolean;
   chainOfThought?: boolean;
   criteriaPreview?: string;
-  // dataset / suite / eval
+  // dataset / suite / evaluation
   caseCount?: number;
   scorerIds?: string[];
+  /** Literal dataset paths passed through `dataset(...)`. */
+  datasetPaths?: string[];
+  /** Literal scorer names declared by an evaluation. */
+  scorerNames?: string[];
+  /** Literal score gate keys plus top-level gate kinds. */
+  gateKeys?: string[];
+  /** Literal variant names declared by an evaluation. */
+  variantNames?: string[];
+  /** Literal replay mode declared by an evaluation. */
+  replayMode?: string;
+  /** Project Index definition ids protected by an evaluation. */
+  covers?: string[];
   // config
   settings?: Record<string, unknown>;
 }
@@ -1180,6 +1192,15 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
     case "suite":
       push("cases", f.caseCount);
       push("scorers", f.scorerIds);
+      break;
+    case "evaluation":
+      push("cases", f.caseCount);
+      push("datasets", f.datasetPaths);
+      push("scorers", f.scorerNames);
+      push("gates", f.gateKeys);
+      push("variants", f.variantNames);
+      push("replay", f.replayMode);
+      push("covers", f.covers);
       break;
     default:
       if (f.targetDefinitionId) push("covers", f.targetDefinitionId);

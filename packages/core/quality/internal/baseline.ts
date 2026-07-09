@@ -9,15 +9,18 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile } from 'node:fs/promises'
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { ExperimentCell } from '../experiment'
 import { sha256Hex } from './json'
+import { CorruptBaselineError } from './errors'
+import { writeFileAtomic } from './fs-atomic'
+import { withFileLock } from './fs-lock'
 
 /** The committed baseline record (spec 02 §3). */
 export interface BaselineRecord {
-  schemaVersion: 1
+  schemaVersion: 2
   /** ULID. */
   baselineId: string
   /** Explicit (pinned) at promote time. */
@@ -45,29 +48,41 @@ export interface BaselineRecord {
  */
 export function baselineRecordPath(dir: string, evaluationId: string): string {
   const safe = /^[a-zA-Z0-9._-]+$/.test(evaluationId)
-  const fileName = safe
-    ? `${evaluationId}.json`
-    : `${evaluationId.replace(/[^a-zA-Z0-9._-]/g, '_')}-${sha256Hex(evaluationId).slice(0, 8)}.json`
+  const fileName = safe ? `${evaluationId}.json` : `${evaluationId.replace(/[^a-zA-Z0-9._-]/g, '_')}-${sha256Hex(evaluationId).slice(0, 8)}.json`
   return join(dir, 'baselines', fileName)
 }
 
-/** Read the committed baseline for an evaluation; absent/unreadable → undefined. @internal */
+/** Read the committed baseline for an evaluation; absent → undefined, corrupt → loud error. @internal */
 export async function readBaselineRecord(dir: string, evaluationId: string): Promise<BaselineRecord | undefined> {
+  const path = baselineRecordPath(dir, evaluationId)
+  let raw: string
   try {
-    const raw = await readFile(baselineRecordPath(dir, evaluationId), 'utf8')
-    const parsed = JSON.parse(raw) as BaselineRecord
-    if (typeof parsed.evaluationId !== 'string' || typeof parsed.configFingerprint !== 'string') return undefined
-    return parsed
-  } catch {
-    return undefined
+    raw = await readFile(path, 'utf8')
+  } catch (error) {
+    if (isNotFoundError(error)) return undefined
+    throw new CorruptBaselineError(path, error instanceof Error ? error.message : String(error))
   }
+  try {
+    const parsed = JSON.parse(raw) as BaselineRecord
+    if (typeof parsed.evaluationId !== 'string' || typeof parsed.configFingerprint !== 'string') {
+      throw new Error('missing required baseline fields')
+    }
+    if (parsed.schemaVersion !== 2) throw new Error(`unsupported schemaVersion ${String(parsed.schemaVersion)}`)
+    return parsed
+  } catch (error) {
+    throw new CorruptBaselineError(path, error instanceof Error ? error.message : String(error))
+  }
+}
+
+function isNotFoundError(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'ENOENT'
 }
 
 /** Write (or overwrite — git history is the audit log) the baseline record. @internal */
 export async function writeBaselineRecord(dir: string, record: BaselineRecord): Promise<string> {
   await mkdir(join(dir, 'baselines'), { recursive: true })
   const path = baselineRecordPath(dir, record.evaluationId)
-  await writeFile(path, `${JSON.stringify(record, null, 2)}\n`, 'utf8')
+  await withFileLock(path, () => writeFileAtomic(path, `${JSON.stringify(record, null, 2)}\n`))
   return path
 }
 
@@ -107,10 +122,7 @@ export async function listBaselineRecords(dir: string): Promise<BaselineRecord[]
  *
  * @internal
  */
-export function buildBaselineReference(
-  cells: readonly ExperimentCell<unknown, unknown>[],
-  variantName: string,
-): Record<string, Record<string, number>> {
+export function buildBaselineReference(cells: readonly ExperimentCell<unknown, unknown>[], variantName: string): Record<string, Record<string, number>> {
   const sums = new Map<string, Map<string, { total: number; count: number }>>()
   for (const cell of cells) {
     if (cell.variantName !== variantName || cell.status === 'skipped') continue
@@ -141,7 +153,11 @@ export function buildBaselineReference(
 /** `git config user.name`, best-effort (promotedBy provenance). @internal */
 export function gitUserName(cwd: string): string | undefined {
   try {
-    const name = execFileSync('git', ['config', 'user.name'], { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    const name = execFileSync('git', ['config', 'user.name'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim()
     return name === '' ? undefined : name
   } catch {
     return undefined

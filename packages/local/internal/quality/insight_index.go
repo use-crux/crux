@@ -36,7 +36,7 @@ func enrichQualityInsightsWithIndex(insights []qualityInsightRecord, index store
 		)
 		defIDs := knownDefinitionIDs(definitionByID, candidates)
 		experimentToDefinitionIDs[record.ExperimentID] = defIDs
-		for _, cell := range record.Cases {
+		for _, cell := range record.Cells {
 			for _, traceID := range cell.TraceIDs {
 				if traceID == "" {
 					continue

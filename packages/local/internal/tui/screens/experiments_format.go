@@ -198,7 +198,7 @@ func (s *Experiments) failingCells() []api.QualityExperimentCell {
 		return nil
 	}
 	out := make([]api.QualityExperimentCell, 0)
-	for _, cell := range s.detail.Cases {
+	for _, cell := range s.detail.Cells {
 		switch cell.Status {
 		case "passed", "skipped":
 			continue
@@ -224,7 +224,11 @@ func (s *Experiments) failingCellLines(width int) []string {
 		if len(cell.TraceIDs) > 0 {
 			trace = shortID(cell.TraceIDs[0], 8)
 		}
-		line := fmt.Sprintf("%s%s %s  %s  %s", bar, kit.StatusDot(cell.Status), cell.CaseID, cell.VariantName, trace)
+		fix := ""
+		if f := failureArtifactForCell(s.detail.Failures, cell.CaseID, cell.VariantName, cell.Trial); f != nil {
+			fix = fixSurfaceLetters(f.SuggestedFixSurfaces)
+		}
+		line := fmt.Sprintf("%s%s %s  %s  %s  %s", bar, kit.StatusDot(cell.Status), cell.CaseID, cell.VariantName, fix, trace)
 		lines = append(lines, padRow(line, width))
 	}
 	return lines
