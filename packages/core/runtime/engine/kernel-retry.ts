@@ -48,6 +48,7 @@ export async function retryWorkInTransaction(
     namespace: input.namespace,
     work: current.work,
     idempotencyKey: operatorRetryKey(input.workId, deps.now()),
+    now: deps.now(),
     from: ['blocked', 'dead-letter'],
   })
   if (!retried) return { retried: false }
@@ -60,7 +61,9 @@ export async function retryWorkInTransaction(
     name: operatorRetryEventName(input.workId),
     payload: { workId: input.workId },
   })
-  await tx.outbox.put(wakeEnvelopeForWork(retried))
+  await tx.outbox.put(wakeEnvelopeForWork(retried), {
+    deliverAt: deps.now(),
+  })
 
   return { retried: true, work: retried }
 }

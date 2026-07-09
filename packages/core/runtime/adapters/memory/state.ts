@@ -128,7 +128,7 @@ export function createMemoryStatePort(
         idempotencyKey: options.idempotencyKey,
         idleScope: existing.idleScope,
         createdAt: new Date(existing.createdAt),
-        updatedAt: new Date(),
+        updatedAt: options.now ? new Date(options.now) : new Date(),
       })
       data.work.set(key, updated)
       return cloneWorkItem(updated)

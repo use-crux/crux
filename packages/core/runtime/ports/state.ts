@@ -140,6 +140,8 @@ export interface SetWorkPendingOptions extends RuntimeStateReadOptions {
   readonly work: RuntimeWork
   /** Stable idempotency key for the fresh delivery intent. */
   readonly idempotencyKey: string
+  /** Timestamp override for deterministic runtimes. Defaults to now. */
+  readonly now?: Date
   /**
    * Current statuses that may be moved back to pending.
    *

@@ -126,7 +126,7 @@ async function reclaimLeasedWork(
 /** Reclaim one leased work row inside a transaction. */
 export async function reclaimLeasedWorkInTransaction(
   tx: RuntimeStoreTransaction,
-  _deps: RuntimeCompositeDeps,
+  deps: RuntimeCompositeDeps,
   input: { readonly work: WorkItem },
 ): Promise<boolean> {
   const current = await tx.state.getWork(input.work.workId, {
@@ -135,7 +135,9 @@ export async function reclaimLeasedWorkInTransaction(
   if (!current || current.status !== 'leased') return false
   const pending = transition(current, { status: 'pending' })
   await tx.state.putWork(pending)
-  await tx.outbox.put(wakeEnvelopeForWork(pending))
+  await tx.outbox.put(wakeEnvelopeForWork(pending), {
+    deliverAt: deps.now(),
+  })
   return true
 }
 
@@ -257,6 +259,7 @@ async function expireWaiterInTransaction(options: {
         namespace: options.waiter.namespace,
         work: options.waiter.work,
         idempotencyKey,
+        now: options.deps.now(),
       })
     : await options.tx.state.createWork({
         workId: options.deps.newWorkId(),
@@ -268,6 +271,8 @@ async function expireWaiterInTransaction(options: {
       })
 
   if (!work) return false
-  await options.tx.outbox.put(wakeEnvelopeForWork(work))
+  await options.tx.outbox.put(wakeEnvelopeForWork(work), {
+    deliverAt: options.deps.now(),
+  })
   return true
 }
