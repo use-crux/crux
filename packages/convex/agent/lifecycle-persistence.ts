@@ -1,4 +1,5 @@
-import type { ResolvedPrompt } from '@use-crux/core'
+import { messageText } from '@use-crux/core'
+import type { MessageContent, ResolvedPrompt } from '@use-crux/core'
 import type { SkillActivationSession } from '@use-crux/core/skill'
 import { observe } from '@use-crux/core/observability'
 import { flushObservability } from '../observability'
@@ -164,7 +165,7 @@ async function captureResolvedMemory(
     added: [
       ...messages.map((message) => ({
         key: message.role,
-        preview: `${message.role}: ${message.content}`.slice(0, 240),
+        preview: memoryPreviewLine(message).slice(0, 240),
       })),
       ...toolEvents.map((event) => ({
         key: event.toolName,
@@ -172,6 +173,10 @@ async function captureResolvedMemory(
       })),
     ],
   }
+}
+
+function memoryPreviewLine(message: { readonly role: string; readonly content: string }): string {
+  return `${message.role}: ${message.content}`
 }
 
 function emitConvexMemoryDiff(
@@ -254,7 +259,7 @@ function lastUserTextFromMessages(
   if (!messages) return undefined
   for (const message of [...messages].reverse()) {
     if (message.role !== 'user') continue
-    const text = messageContentText(message.content)
+    const text = trimmedMessageProjection(message.content)
     if (text) return text
   }
   return undefined
@@ -266,25 +271,15 @@ function lastUserText(resolved: ResolvedPrompt): string | undefined {
   if (!Array.isArray(messages)) return undefined
   for (const message of [...messages].reverse()) {
     if (!isRecord(message) || message.role !== 'user') continue
-    const text = messageContentText(message.content)
+    const text = trimmedMessageProjection(message.content)
     if (text) return text
   }
   return undefined
 }
 
-function messageContentText(content: unknown): string | undefined {
-  if (typeof content === 'string') {
-    const text = content.trim()
-    return text ? text : undefined
-  }
-  if (!Array.isArray(content)) return undefined
-
-  const parts: string[] = []
-  for (const part of content) {
-    if (isRecord(part) && typeof part.text === 'string') parts.push(part.text)
-  }
-
-  const text = parts.join('').trim()
+function trimmedMessageProjection(content: unknown): string | undefined {
+  if (typeof content !== 'string' && !Array.isArray(content)) return undefined
+  const text = messageText({ content: content as MessageContent }).trim()
   return text ? text : undefined
 }
 
@@ -301,16 +296,10 @@ function extractAssistantTextFromMessages(value: unknown): string | undefined {
   const texts: string[] = []
   for (const message of value) {
     if (!isRecord(message) || message.role !== 'assistant') continue
-    if (typeof message.content === 'string') {
-      texts.push(message.content)
-      continue
-    }
-    if (!Array.isArray(message.content)) continue
-    for (const part of message.content) {
-      if (isRecord(part) && typeof part.text === 'string') texts.push(part.text)
-    }
+    const text = trimmedMessageProjection(message.content)
+    if (text) texts.push(text)
   }
-  return texts.length > 0 ? texts.join('') : undefined
+  return texts.length > 0 ? texts.join('\n') : undefined
 }
 
 function collectResultToolCalls(

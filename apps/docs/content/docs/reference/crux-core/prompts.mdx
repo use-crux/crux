@@ -96,10 +96,10 @@ type ToolModelOutput =
   | { type: "execution-denied"; reason?: string }
   | { type: "error-text"; value: string }
   | { type: "error-json"; value: JsonValue }
-  | { type: "content"; value: readonly ToolContentPart[] };
+  | { type: "content"; value: readonly ContentPart[] };
 ```
 
-The shape is provider-neutral and compatible with the AI SDK's model-message format. `@use-crux/ai` passes it through directly. Native adapters use the same metadata: Google maps supported media to function-response parts, Anthropic maps text/images/PDFs to native `tool_result` content blocks, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results.
+The shape is provider-neutral and compatible with the AI SDK's model-message format. Recognizable AI SDK parts normalize to canonical content at the boundary. Native adapters use the same metadata: Google maps supported media to function-response parts, Anthropic maps text/images/PDFs to native `tool_result` content blocks, and OpenAI Chat Completions receives deterministic text references for non-text parts because that API only accepts text tool results.
 
 ## Composition With `use`
 

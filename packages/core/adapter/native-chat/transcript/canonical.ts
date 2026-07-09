@@ -11,7 +11,9 @@
  */
 
 import type { Message } from '../../../generation/messages'
-import type { ToolContentPart, ToolModelOutput } from '../../../types/tool'
+import type { ContentPart } from '../../../types/content'
+import type { ToolModelOutput } from '../../../types/tool'
+import { contentText } from '../../../content'
 import { toolModelOutputFromMetadata } from '../../tool/emission'
 import type { ToolResultEntry } from '../../types'
 import type { NativeAssistantTurn } from '../types'
@@ -20,7 +22,7 @@ import type { ProviderToolCall, ProviderToolResult, ProviderTranscriptUnit, Tool
 /**
  * Extract neutral transcript units from a canonical Crux transcript.
  *
- * System and user messages become `text` units, assistant messages become
+ * System and user messages become `content` units, assistant messages become
  * `assistant` units carrying any tool calls read from metadata, and runs of
  * adjacent `tool` messages collapse into one `tool-results` unit so a single
  * model turn's results stay together.
@@ -52,11 +54,11 @@ export function messagesToTranscriptUnits(messages: readonly Message[]): Provide
       const toolCalls = toolCallsFromMetadata(message.metadata?.toolCalls)
       units.push({
         kind: 'assistant',
-        text: message.content,
+        content: message.content,
         ...(toolCalls.length > 0 ? { toolCalls } : {}),
       })
     } else {
-      units.push({ kind: 'text', role: message.role, text: message.content })
+      units.push({ kind: 'content', role: message.role, content: message.content })
     }
   }
 
@@ -77,13 +79,13 @@ export function messagesToTranscriptUnits(messages: readonly Message[]): Provide
 export function transcriptUnitsToMessages(units: readonly ProviderTranscriptUnit[]): Message[] {
   return units.flatMap((unit): Message[] => {
     switch (unit.kind) {
-      case 'text':
-        return [{ role: unit.role, content: unit.text }]
+      case 'content':
+        return [{ role: unit.role, content: unit.content }]
       case 'assistant':
         return [
           {
             role: 'assistant',
-            content: unit.text,
+            content: unit.content,
             ...(unit.toolCalls && unit.toolCalls.length > 0 ? { metadata: { toolCalls: [...unit.toolCalls] } } : {}),
           },
         ]
@@ -121,7 +123,7 @@ export function appendCanonicalToolRound(
     ...history,
     {
       role: 'assistant',
-      content: assistant.text,
+      content: assistant.content ?? assistant.text,
       ...(toolCalls && toolCalls.length > 0 ? { metadata: { toolCalls } } : {}),
     },
     ...results.map(
@@ -171,7 +173,7 @@ function toolResultFromMessage(message: Message): ProviderToolResult | undefined
   return {
     toolCallId,
     ...(typeof metadata?.toolName === 'string' ? { toolName: metadata.toolName } : {}),
-    text: message.content,
+    text: contentText(message.content),
     ...(modelOutput ? { modelOutput } : {}),
     ...(typeof metadata?.isError === 'boolean' ? { isError: metadata.isError } : {}),
     ...(typeof metadata?.modelOutputError === 'string' ? { modelOutputError: metadata.modelOutputError } : {}),
@@ -196,7 +198,7 @@ function toolCallsFromMetadata(value: unknown): ProviderToolCall[] {
   })
 }
 
-function contentPartsOf(modelOutput: ToolModelOutput | undefined): readonly ToolContentPart[] | undefined {
+function contentPartsOf(modelOutput: ToolModelOutput | undefined): readonly ContentPart[] | undefined {
   return modelOutput?.type === 'content' ? modelOutput.value : undefined
 }
 

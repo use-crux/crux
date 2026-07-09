@@ -17,15 +17,15 @@ import type { ProviderToolResult } from '../../adapter/native-chat/transcript'
 import type { ToolResultEntry } from '../../adapter/types'
 
 describe('messagesToTranscriptUnits', () => {
-  it('maps system and user messages to text units', () => {
+  it('maps system and user messages to content units', () => {
     const units = messagesToTranscriptUnits([
       { role: 'system', content: 'Be terse.' },
       { role: 'user', content: 'Hi' },
     ])
 
     expect(units).toEqual([
-      { kind: 'text', role: 'system', text: 'Be terse.' },
-      { kind: 'text', role: 'user', text: 'Hi' },
+      { kind: 'content', role: 'system', content: 'Be terse.' },
+      { kind: 'content', role: 'user', content: 'Hi' },
     ])
   })
 
@@ -43,7 +43,7 @@ describe('messagesToTranscriptUnits', () => {
     expect(units).toEqual([
       {
         kind: 'assistant',
-        text: 'I will check.',
+        content: 'I will check.',
         toolCalls: [{ id: 'tc_1', name: 'weather', args: { city: 'Paris' } }],
       },
     ])
@@ -52,7 +52,7 @@ describe('messagesToTranscriptUnits', () => {
     it('omits the toolCalls key for assistant messages without tool calls', () => {
     const units = messagesToTranscriptUnits([{ role: 'assistant', content: 'Done.' }])
 
-    expect(units).toEqual([{ kind: 'assistant', text: 'Done.' }])
+    expect(units).toEqual([{ kind: 'assistant', content: 'Done.' }])
   })
 
     it('groups adjacent tool messages into a single tool-results unit', () => {
@@ -84,7 +84,7 @@ describe('messagesToTranscriptUnits', () => {
           },
         ],
       },
-      { kind: 'text', role: 'user', text: 'thanks' },
+      { kind: 'content', role: 'user', content: 'thanks' },
     ])
   })
 
@@ -109,17 +109,17 @@ describe('messagesToTranscriptUnits', () => {
       { role: 'tool', content: 'orphan', metadata: {} },
     ])
 
-    expect(units).toEqual([{ kind: 'text', role: 'user', text: 'hi' }])
+    expect(units).toEqual([{ kind: 'content', role: 'user', content: 'hi' }])
   })
 })
 
 describe('transcriptUnitsToMessages', () => {
   it('reconstructs canonical messages from neutral units', () => {
     const messages = transcriptUnitsToMessages([
-      { kind: 'text', role: 'user', text: 'Hi' },
+      { kind: 'content', role: 'user', content: 'Hi' },
       {
         kind: 'assistant',
-        text: 'On it',
+        content: 'On it',
         toolCalls: [{ id: 'tc_1', name: 'weather', args: { city: 'Paris' } }],
       },
       {

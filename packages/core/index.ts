@@ -538,6 +538,21 @@ export type {
   ToolChoice,
 } from "./generation";
 export { hasToolCall, maxSteps } from "./generation";
+export type { ContentPart, MessageContent } from "./types/content";
+export {
+  UnsupportedContentError,
+  contentText,
+  filePart,
+  hasMediaParts,
+  imagePart,
+  messageText,
+  textPart,
+} from "./content";
+export type {
+  FilePartInput,
+  ImagePartInput,
+  UnsupportedContentErrorOptions,
+} from "./content";
 export type { TokenizerFn } from "./shared/tokenizer";
 
 // Memory
@@ -810,7 +825,6 @@ export type {
   JsonPrimitive,
   JsonValue,
   ProviderOptions,
-  ToolContentPart,
   ToolModelOutput,
   ToModelOutputArgs,
 } from "./types/tool";

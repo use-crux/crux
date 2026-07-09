@@ -31,13 +31,15 @@ export function toParams(
   resolved: ResolvedPrompt,
   options: OpenAICodecOptions,
 ): OpenAI.ChatCompletionCreateParamsNonStreaming {
-  const settings = openAISettings({
+  const generationSettings = {
     ...resolved.settings,
     ...(options.settings ?? {}),
-  })
+  }
+  const settings = openAISettings(generationSettings)
   const callArgs = callArgsFromResolvedPrompt(resolved, {
       model: options.model,
       settings,
+      unsupportedContent: generationSettings.unsupportedContent,
       extra: options.extra,
       messages: options.messages,
       tools: options.tools ? [...options.tools] : undefined,
@@ -45,7 +47,9 @@ export function toParams(
     })
   const request = openAIRequest({
     ...callArgs,
-    providerMessages: openAITranscript.fromMessages(callArgs.messages),
+    providerMessages: openAITranscript.fromMessages(callArgs.messages, {
+      unsupportedContent: callArgs.unsupportedContent,
+    }),
   })
   return asOpenAINonStreamingParams(request)
 }

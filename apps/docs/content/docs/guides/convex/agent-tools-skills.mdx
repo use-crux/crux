@@ -139,15 +139,18 @@ TypeScript infers the `input` object from the prompt and its `use` entries. If `
 Use `crux.prepare` when prompt input or runtime `use[]` entries must be derived from Convex Agent thread context:
 
 ```ts
+import { messageText } from '@use-crux/convex'
+
 export const supportAgent = crux.convexAgent({
   name: 'Support',
   prompt: supportPrompt,
   languageModel,
   crux: {
     prepare: async ({ ctx, target, input, messages }) => {
+      const lastMessage = messages?.recent.at(-1)
       const account = await loadAccount(ctx, {
         userId: String(target.userId ?? ''),
-        lastMessage: String(messages?.recent.at(-1)?.content ?? ''),
+        lastMessage: lastMessage ? messageText(lastMessage) : '',
       })
 
       return {

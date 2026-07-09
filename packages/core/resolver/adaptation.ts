@@ -12,6 +12,8 @@
 import type { AnyMessage } from "../types";
 import type { SelectedPromptAdaptation } from "./prompt-settings";
 import type { SystemBlock } from "./types";
+import { contentText } from "../content";
+import { isMessageContent } from "../content/guards";
 
 /** Apply provider-specific system text around the composed system message. */
 export function applySystemAdaptationText(
@@ -76,13 +78,17 @@ export function foldSystemIntoMessages(
 
   const first = messages[firstSystemIdx]!;
   const firstContent =
-    typeof first.content === "string" ? first.content : String(first.content);
+    isMessageContent(first.content) ? contentText(first.content) : unknownText(first.content);
   const folded = [...messages];
   folded[firstSystemIdx] = {
     ...first,
     content: joinSystemText([system, firstContent]),
   };
   return folded;
+}
+
+function unknownText(value: unknown): string {
+  return String(value)
 }
 
 /** Join system fragments with the resolver's canonical separator, omitting empty fragments. */

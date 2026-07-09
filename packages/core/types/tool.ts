@@ -1,20 +1,10 @@
 import type { z } from 'zod'
+import type { ContentPart } from './content'
 
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | { readonly [key: string]: JsonValue } | readonly JsonValue[]
 export type JsonObject = { readonly [key: string]: JsonValue }
 export type ProviderOptions = Record<string, { readonly [key: string]: JsonValue }>
-
-export type ToolContentPart =
-  | { type: 'text'; text: string; providerOptions?: ProviderOptions }
-  | { type: 'media'; data: string; mediaType: string }
-  | { type: 'file-data'; data: string; mediaType: string; filename?: string; providerOptions?: ProviderOptions }
-  | { type: 'file-url'; url: string; providerOptions?: ProviderOptions }
-  | { type: 'file-id'; fileId: string | Record<string, string>; providerOptions?: ProviderOptions }
-  | { type: 'image-data'; data: string; mediaType: string; providerOptions?: ProviderOptions }
-  | { type: 'image-url'; url: string; providerOptions?: ProviderOptions }
-  | { type: 'image-file-id'; fileId: string | Record<string, string>; providerOptions?: ProviderOptions }
-  | { type: 'custom'; providerOptions?: ProviderOptions }
 
 export type ToolModelOutput =
   | { type: 'text'; value: string; providerOptions?: ProviderOptions }
@@ -22,7 +12,7 @@ export type ToolModelOutput =
   | { type: 'execution-denied'; reason?: string; providerOptions?: ProviderOptions }
   | { type: 'error-text'; value: string; providerOptions?: ProviderOptions }
   | { type: 'error-json'; value: JsonValue; providerOptions?: ProviderOptions }
-  | { type: 'content'; value: readonly ToolContentPart[] }
+  | { type: 'content'; value: readonly ContentPart[] }
 
 export interface ToModelOutputArgs<TInput, TOutput> {
   toolCallId: string

@@ -102,6 +102,7 @@ export async function streamCore<
     system: resolved.system,
     systemBlocks: resolved.systemBlocks,
     messages,
+    unsupportedContent: resolved.settings.unsupportedContent,
     settings: mappedSettings,
     schema: resolved.schema,
     schemaParams,

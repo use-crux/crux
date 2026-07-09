@@ -19,6 +19,7 @@ export type {
   ProviderToolResult,
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
+  TranscriptEncodeOptions,
   ToolResultEncodingHelpers,
 } from './transcript'
 export type {

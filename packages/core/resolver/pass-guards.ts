@@ -9,11 +9,13 @@
  */
 
 import type { AnyMessage } from '../types'
+import { contentText } from '../content'
+import { isMessageContent } from '../content/guards'
 
 /** Throw when a messages callback emitted the classic object-coercion marker. */
 export function assertNoObjectMessageContent(messages: readonly AnyMessage[]): void {
   for (const message of messages) {
-    const content = typeof message.content === 'string' ? message.content : ''
+    const content = isMessageContent(message.content) ? contentText(message.content) : ''
     if (content.includes('[object Object]')) {
       throw new Error(
         `Message content contains "[object Object]" - an object was interpolated into a ` +

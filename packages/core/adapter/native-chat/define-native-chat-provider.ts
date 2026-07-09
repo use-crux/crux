@@ -266,7 +266,9 @@ function requestArgsFor<
 ): NativeChatRequestArgs<TExtra, TProviderMessage> {
   return {
     ...args,
-    providerMessages: providerMessagesFor(profile, args.messages),
+    providerMessages: providerMessagesFor(profile, args.messages, {
+      unsupportedContent: args.unsupportedContent,
+    }),
   };
 }
 
@@ -275,8 +277,9 @@ function providerMessagesFor<TProviderMessage, TRawResponse>(
     readonly transcript: NativeTranscriptCodec<TProviderMessage, TRawResponse>;
   },
   messages: readonly Message[],
+  options: { readonly unsupportedContent?: CallArgs["unsupportedContent"] },
 ): readonly TProviderMessage[] {
-  return profile.transcript.fromMessages(messages);
+  return profile.transcript.fromMessages(messages, options);
 }
 
 function responseFor<

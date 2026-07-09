@@ -410,9 +410,12 @@ Memory contexts resolve their own data from their backing store — you only nee
 Retrievers fit the same pattern. A typical Convex Agent setup is:
 
 ```ts
+import { messageText } from '@use-crux/convex'
+
 const contextHandler = createContextHandler({
   handler: async (ctx, args) => {
-    const message = String(args.inputPrompt.at(-1)?.content ?? '')
+    const lastMessage = args.inputPrompt.at(-1)
+    const message = lastMessage ? messageText(lastMessage) : ''
     return {
       contexts: [
         retriever.asContext({

@@ -22,6 +22,30 @@ export interface TranscriptWrapperExpectation<TProviderMessage> {
   readonly toMessages?: Message[]
 }
 
+/** One provider-specific round-trip fixture for transcript codecs. */
+export interface TranscriptRoundTripFixture<TProviderMessage> {
+  /** Human-readable fixture name included in violation rules. */
+  readonly name: string
+  /** Canonical Crux transcript to encode. */
+  readonly canonicalMessages: readonly Message[]
+  /** Provider-native messages expected from `transcript.fromMessages()`. */
+  readonly providerMessages: readonly TProviderMessage[]
+  /** Provider-native messages to decode. Defaults to `providerMessages`. */
+  readonly providerMessagesToDecode?: readonly unknown[]
+  /** Canonical messages expected from `transcript.toMessages()`. */
+  readonly decodedMessages: readonly Message[]
+}
+
+/** A compact provider-owned suite of transcript round-trip fixtures. */
+export interface TranscriptRoundTripConformanceSuite<TProviderMessage, TRawResponse> {
+  /** Human-readable suite name included in violation rules. */
+  readonly name: string
+  /** Provider transcript codec under test. */
+  readonly transcript: NativeTranscriptCodec<TProviderMessage, TRawResponse>
+  /** Round-trip fixtures to verify through the shared transcript boundaries. */
+  readonly fixtures: readonly TranscriptRoundTripFixture<TProviderMessage>[]
+}
+
 /** A complete provider-owned transcript behavior scenario. */
 export interface TranscriptConformanceScenario<TProviderMessage, TRawResponse> {
   /** Human-readable scenario name included in violation rules. */
@@ -48,6 +72,39 @@ export interface TranscriptConformanceScenario<TProviderMessage, TRawResponse> {
   readonly appendedMessages?: readonly Message[]
   /** Results expected from public compatibility wrappers around the transcript. */
   readonly wrappers?: TranscriptWrapperExpectation<TProviderMessage>
+}
+
+/**
+ * Run shared round-trip laws against a set of provider-specific transcript fixtures.
+ *
+ * This helper is intentionally narrower than {@link transcriptCodecConformance}:
+ * it focuses on `fromMessages()` and `toMessages()` so adapters can share one
+ * multimodal fixture sweep without inventing raw assistant responses for every case.
+ *
+ * @param suite - Provider transcript codec and expected fixture outputs.
+ * @returns Contract violations; an empty array means every fixture conforms.
+ */
+export function transcriptRoundTripConformance<TProviderMessage, TRawResponse>(
+  suite: TranscriptRoundTripConformanceSuite<TProviderMessage, TRawResponse>,
+): ConformanceViolation[] {
+  const violations: ConformanceViolation[] = []
+  for (const fixture of suite.fixtures) {
+    const fail = (rule: string, detail: string) =>
+      violations.push({ rule: `${suite.name}: ${fixture.name}: ${rule}`, detail })
+    assertDeepEqual(
+      suite.transcript.fromMessages(fixture.canonicalMessages),
+      fixture.providerMessages,
+      'fromMessages',
+      fail,
+    )
+    assertDeepEqual(
+      suite.transcript.toMessages(fixture.providerMessagesToDecode ?? fixture.providerMessages),
+      fixture.decodedMessages,
+      'toMessages',
+      fail,
+    )
+  }
+  return violations
 }
 
 /**

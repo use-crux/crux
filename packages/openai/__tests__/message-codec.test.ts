@@ -65,7 +65,7 @@ describe('openai transcript wire encoding', () => {
       role: 'tool',
       content: [
         { type: 'text', text: 'Rendered image' },
-        { type: 'text', text: '[image] https://example.com/chart.png' },
+        { type: 'text', text: '[image https://example.com/chart.png]' },
       ],
       tool_call_id: 'call-1',
     })

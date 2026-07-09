@@ -8,6 +8,8 @@ import type {
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
 } from '@use-crux/core/adapter'
+import { googleContentParts, googleContentText, googlePartsText, messageContentFromGoogleParts } from './content-parts'
+import type { GoogleInboundPart } from './content-parts'
 import { googleFunctionResponseContent, googleFunctionResponseParts, googleToolResponse } from './function-response'
 
 /** Google assistant turn data read from a generate-content response. */
@@ -22,9 +24,13 @@ export type GoogleAssistantTurn = NativeAssistantTurn
  * dialect only translates them to and from Google `Content` values.
  */
 const googleDialect: ProviderTranscriptDialect<Content, GenerateContentResponse> = {
-  encodeText: ({ role, text }) => (role === 'system' ? undefined : { role: 'user', parts: [{ text }] }),
-  encodeAssistant: ({ text, toolCalls }) => encodeAssistant(text, toolCalls ?? []),
-  encodeToolResults: ({ results }) => results.map(encodeToolResult),
+  encodeContent: ({ role, content }, options) =>
+    role === 'system'
+      ? (googleContentText(role, content, options), undefined)
+      : { role: 'user', parts: googleContentParts(role, content, options) },
+  encodeAssistant: ({ content, toolCalls }, options) =>
+    encodeAssistant(googleContentText('assistant', content, options), toolCalls ?? []),
+  encodeToolResults: ({ results }, _helpers, options) => results.map((result) => encodeToolResult(result, options)),
   decodeMessage: decodeMessage,
   readAssistant: readGoogleAssistant,
 }
@@ -54,8 +60,11 @@ export function toMessages(sdkMessages: readonly unknown[]): Message[] {
 export function readGoogleAssistant(response: GenerateContentResponse): GoogleAssistantTurn {
   const parts = (response.candidates?.[0]?.content?.parts ?? []) as readonly GoogleInboundPart[]
   const toolCalls = toolCallsFromParts(parts)
+  const content = messageContentFromGoogleParts(parts)
+  const projectedText = googlePartsText(parts)
   return {
-    text: response.text ?? textFromParts(parts),
+    text: Array.isArray(content) ? projectedText : (response.text ?? projectedText),
+    ...(Array.isArray(content) ? { content } : {}),
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
   }
 }
@@ -77,8 +86,16 @@ function encodeAssistant(text: string, toolCalls: readonly ProviderToolCall[]): 
   }
 }
 
-function encodeToolResult(result: ProviderToolResult): Content {
-  const parts = result.modelOutput?.type === 'content' ? googleFunctionResponseParts(result.modelOutput.value) : []
+function encodeToolResult(result: ProviderToolResult, options: { readonly unsupportedContent?: 'degrade' | 'error' }): Content {
+  const parts =
+    result.modelOutput?.type === 'content'
+      ? googleFunctionResponseParts(result.modelOutput.value, {
+          provider: 'google',
+          role: 'tool',
+          unsupportedContent: options.unsupportedContent,
+          reason: 'unsupported Google function-response content part',
+        })
+      : []
   return {
     role: 'user',
     parts: [
@@ -112,22 +129,15 @@ function decodeMessage(value: unknown): ProviderTranscriptUnit {
     }
   }
 
-  const text = textFromParts(parts)
   if (content.role === 'model') {
     const toolCalls = toolCallsFromParts(parts)
     return {
       kind: 'assistant',
-      text,
+      content: messageContentFromGoogleParts(parts),
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
     }
   }
-  return { kind: 'text', role: 'user', text }
-}
-
-type GoogleInboundPart = {
-  readonly text?: string
-  readonly functionCall?: unknown
-  readonly functionResponse?: unknown
+  return { kind: 'content', role: 'user', content: messageContentFromGoogleParts(parts) }
 }
 
 interface GoogleContentLike {
@@ -145,10 +155,6 @@ interface GoogleFunctionResponse {
   readonly id?: string
   readonly name?: string
   readonly response?: unknown
-}
-
-function textFromParts(parts: readonly GoogleInboundPart[]): string {
-  return parts.flatMap((part) => (typeof part.text === 'string' ? [part.text] : [])).join('')
 }
 
 function toolCallsFromParts(parts: readonly GoogleInboundPart[]): ProviderToolCall[] {

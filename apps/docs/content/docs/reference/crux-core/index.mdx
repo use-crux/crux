@@ -38,6 +38,11 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
     href="/docs/reference/crux-core/tool-middleware"
   />
   <Card
+    title="Multimodal Content"
+    description="ContentPart, builders, text projection, and unsupported-content behavior."
+    href="/docs/reference/crux-core/multimodal"
+  />
+  <Card
     title="Adapter Interface"
     description="defineSingleTurnProviderBundle, defineProviderRuntime, adapter IR, and conformance harnesses."
     href="/docs/reference/adapters"
@@ -155,6 +160,12 @@ import {
   config,
   when,
   match,
+  contentText,
+  filePart,
+  hasMediaParts,
+  imagePart,
+  messageText,
+  textPart,
 } from "@use-crux/core";
 import { tool } from "@use-crux/core/tools";
 import {
@@ -238,9 +249,10 @@ import { withDevtools } from "@use-crux/core/observability";
 import type { ProjectIndexSnapshot } from "@use-crux/core/project-index";
 import { serializeProjectIndex } from "@use-crux/core/project-index/serializers";
 import type {
+  ContentPart,
   CruxIndexerConfig,
   CruxLintConfig,
-  ToolContentPart,
+  MessageContent,
   ToolModelOutput,
   ToModelOutputArgs,
 } from "@use-crux/core";

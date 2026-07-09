@@ -7,6 +7,8 @@ import { inMemoryStorage } from '../../storage'
 import { applyPlugins } from '../../runtime/plugin'
 import { getHooks, resetHooks, setHooks } from '../../runtime/runtime'
 import { orchestrateGenerate, orchestrateStream } from '../../generation/orchestrate'
+import { imagePart, textPart } from '../../content'
+import { resolveQueryText } from '../../cache/query'
 
 function denseEmbedding() {
   return embedding({
@@ -98,6 +100,32 @@ describe('createSemanticCache', () => {
 
     expect(warn).toHaveBeenCalledTimes(1)
     expect(warn.mock.calls[0][0]).toContain('no createSemanticCache() plugin is installed')
+  })
+
+  it('resolves multimodal message queries through the canonical text projection', async () => {
+    const query = await resolveQueryText(
+      { mode: 'readwrite', version: 'v1' },
+      {
+        promptId: 'multimodal',
+        resolved: {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                textPart('cache this chart'),
+                imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+              ],
+            },
+          ],
+        },
+        preparedArgs: {},
+      } as never,
+    )
+
+    expect(query).toContain('user: cache this chart')
+    expect(query).toContain('[image image/png 3B sha256:')
+    expect(query).not.toContain('[object Object]')
+    expect(query).not.toContain('AQID')
   })
 
     it('writes on miss and hydrates a cached structured result on semantic hit', async () => {

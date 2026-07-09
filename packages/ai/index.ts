@@ -103,6 +103,7 @@ import {
   createManualAiSdkGatewayController,
   transportGateway,
 } from "./src/call-handle";
+import { normalizeAiSdkMessages } from "./src/messages";
 export { fromResponse, toParams } from "./src/codec";
 export type { AiSdkCodecOptions } from "./src/codec";
 
@@ -409,7 +410,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       runtimeContext,
       toolMiddleware,
       toolApproval,
-      messages: messages as Message[] | undefined,
+      messages: messages ? normalizeAiSdkMessages(messages) : undefined,
       tokenBudget,
       timeout,
       validationRetry,
@@ -506,7 +507,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       runtimeContext,
       toolMiddleware,
       toolApproval,
-      messages: messages as Message[] | undefined,
+      messages: messages ? normalizeAiSdkMessages(messages) : undefined,
       tokenBudget,
       timeout,
       constraints,
@@ -726,5 +727,6 @@ export type {
 // - Agent compositions (`parallel`, `pipeline`, `consensus`, `swarm`):
 //   construct them from `aiSdkProviderRuntime.create(liveSdkGateway())`
 //   or use `@use-crux/core/agent` — composition is core policy.
-// - `toMessages`/`fromMessages`/`createAIExecutor`: dead surface from the
-//   legacy AI adapter shape (RFC use-crux/crux#28).
+// - Legacy AI adapter codec helpers and `createAIExecutor`: dead surface from
+//   the old adapter shape (RFC use-crux/crux#28). Message normalization
+//   remains an internal adapter boundary, not a root export.

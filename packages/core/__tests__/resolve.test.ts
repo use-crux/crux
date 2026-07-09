@@ -4,6 +4,7 @@ import { compilePrompt, type ResolveCallOptions } from "../resolver/compile";
 import { context } from "../prompt/context";
 import { setTokenizer, defaultTokenizer } from "../shared/tokenizer";
 import type { AnyPromptConfig } from "../prompt/prompt-types";
+import { textPart } from "../content";
 
 afterEach(() => {
   setTokenizer(defaultTokenizer);
@@ -90,6 +91,14 @@ describe("compilePrompt resolution", () => {
         input: { name: 123 },
       }),
     ).rejects.toThrow(/Input validation failed/);
+  });
+
+  it("rejects object-coercion markers inside multimodal message text parts", async () => {
+    await expect(
+      compilePrompt({
+        messages: () => [{ role: "user", content: [textPart("bad [object Object] marker")] }],
+      } as AnyPromptConfig).resolve(),
+    ).rejects.toThrow(/Message content contains "\[object Object\]"/);
   });
 
   it("composes system text from prompt and contexts", async () => {

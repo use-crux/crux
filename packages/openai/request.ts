@@ -65,6 +65,7 @@ export function openAISettings(
     "stopWhen",
     "maxSteps",
     "reasoning",
+    "unsupportedContent",
   ]);
   for (const [key, value] of Object.entries(settings)) {
     if (value !== undefined && !knownKeys.has(key) && !(key in result)) {

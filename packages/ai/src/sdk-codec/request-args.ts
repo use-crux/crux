@@ -26,7 +26,11 @@ export function buildBaseArgs(request: ExecutorRequest<LanguageModel>, options: 
   if (systemArg !== undefined) args.system = systemArg
 
   if (request.messages && request.messages.length > 0) {
-    args.messages = toModelMessages(request.messages)
+    args.messages = toModelMessages(request.messages, {
+      provider: request.modelInfo.provider || 'ai-sdk',
+      unsupportedContent: request.unsupportedContent,
+      diagnostics: request.diagnostics,
+    })
   } else if (request.prompt) {
     args.prompt = request.prompt
   }

@@ -54,6 +54,7 @@ export function googleSettings(settings: GenerationSettings): Record<string, unk
     'frequencyPenalty',
     'presencePenalty',
     'reasoning',
+    'unsupportedContent',
   ])
   for (const [key, value] of Object.entries(settings)) {
     if (value !== undefined && !knownKeys.has(key) && !(key in config)) {

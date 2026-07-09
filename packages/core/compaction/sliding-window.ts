@@ -13,6 +13,7 @@ import type { SlidingWindowConfig, SlidingWindow, SlidingWindowStats } from './t
 import { inMemoryRecordStore } from '../storage'
 import { countTokens } from '../shared/tokenizer'
 import { summarizeMessages } from './summarize'
+import { messageText } from '../content'
 
 /**
  * Create a stateful sliding window compaction manager.
@@ -79,7 +80,7 @@ export function createSlidingWindow(config: SlidingWindowConfig): SlidingWindow 
         ? [{ role: 'system', content: `Previous summary: ${existingSummary}` }, ...evicted]
         : evicted
 
-      const inputTokens = toSummarize.reduce((sum, m) => sum + countTokens(m.content), 0)
+      const inputTokens = toSummarize.reduce((sum, m) => sum + countTokens(messageText(m)), 0)
       const compactStart = Date.now()
 
       const result = await summarizeMessages({

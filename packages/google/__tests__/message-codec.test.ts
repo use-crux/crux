@@ -79,7 +79,7 @@ describe('google transcript wire encoding', () => {
           functionResponse: {
             id: 'call-1',
             name: 'renderImage',
-            response: { output: 'Rendered image\n[image:image/png] data:base64-image' },
+            response: { output: 'Rendered image\n[image image/png 9B sha256:164794222647]' },
             parts: [{ inlineData: { data: 'base64-image', mimeType: 'image/png' } }],
           },
         },

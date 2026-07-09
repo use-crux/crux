@@ -51,13 +51,15 @@ export async function toParams(
   resolved: ResolvedPrompt,
   options: GoogleCodecOptions,
 ): Promise<Parameters<GoogleGenAI['models']['generateContent']>[0]> {
-  const settings = googleSettings({
+  const generationSettings = {
     ...resolved.settings,
     ...(options.settings ?? {}),
-  })
+  }
+  const settings = googleSettings(generationSettings)
   const callArgs = callArgsFromResolvedPrompt(resolved, {
       model: options.model,
       settings,
+      unsupportedContent: generationSettings.unsupportedContent,
       extra: options.extra,
       messages: options.messages,
       tools: options.tools ? [...options.tools] : undefined,
@@ -66,7 +68,9 @@ export async function toParams(
   const request = await googleRequest(
     {
       ...callArgs,
-      providerMessages: googleTranscript.fromMessages(callArgs.messages),
+      providerMessages: googleTranscript.fromMessages(callArgs.messages, {
+        unsupportedContent: callArgs.unsupportedContent,
+      }),
     },
     options.cachedContentLifecycle ?? disabledCachedContentLifecycle(),
   )

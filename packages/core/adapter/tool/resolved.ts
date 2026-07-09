@@ -12,6 +12,7 @@ import type { ResolvedPrompt } from '../../resolver/types'
 import type { Message } from '../../generation/messages'
 import type { SkillActivationSession } from '../../skill/session'
 import type { MemoryCaptureToolCall } from './memory-capture'
+import { messageText } from '../../content'
 
 /**
  * Read the explicit skill activation session set by prompt resolution.
@@ -44,8 +45,8 @@ export async function captureMemoryTurn(
   if (!resolved.memoryBindings || resolved.memoryBindings.length === 0) return
 
   const userMessages = args.messages
-    .filter((message) => message.role === 'user' && typeof message.content === 'string')
-    .map((message) => ({ role: 'user', content: message.content as string }))
+    .filter((message) => message.role === 'user')
+    .map((message) => ({ role: 'user', content: messageText(message) }))
   const assistantMessages = args.assistantText !== undefined ? [{ role: 'assistant', content: args.assistantText }] : []
 
   await Promise.all(

@@ -1,6 +1,8 @@
 import type { FunctionResponsePart } from '@google/genai'
-import type { ToolContentPart, ToolModelOutput } from '@use-crux/core'
-import { renderToolContentPartAsText } from '@use-crux/core/adapter'
+import type { ContentPart, ToolModelOutput } from '@use-crux/core'
+import { contentText } from '@use-crux/core'
+import type { ContentDegradationContext } from '@use-crux/core/adapter'
+import { googleContentParts } from './content-parts'
 
 /**
  * Map a Crux tool model output to a Google `functionResponse.response` object.
@@ -36,7 +38,7 @@ export function googleToolResponse(
       return { error: modelOutput.value }
     case 'content':
       return {
-        output: modelOutput.value.map(renderToolContentPartAsText).join('\n'),
+        output: contentText(modelOutput.value),
       }
   }
 }
@@ -44,31 +46,20 @@ export function googleToolResponse(
 /**
  * Extract Google inline-data parts from rich tool content.
  *
- * Only binary parts (media, image data, file data) become `inlineData`; textual
+ * Only binary parts (image data, file data) become `inlineData`; textual
  * parts are already represented in {@link googleToolResponse}'s `output` string.
  *
  * @param parts - Rich tool content parts.
  * @returns Google `functionResponse.parts`, possibly empty.
  */
-export function googleFunctionResponseParts(parts: readonly ToolContentPart[]): FunctionResponsePart[] {
-  return parts.flatMap((part): FunctionResponsePart[] => {
-    switch (part.type) {
-      case 'media':
-      case 'image-data':
-        return [{ inlineData: { data: part.data, mimeType: part.mediaType } }]
-      case 'file-data':
-        return [
-          {
-            inlineData: {
-              data: part.data,
-              mimeType: part.mediaType,
-              ...(part.filename ? { displayName: part.filename } : {}),
-            },
-          },
-        ]
-      default:
-        return []
-    }
+export function googleFunctionResponseParts(
+  parts: readonly ContentPart[],
+  context: ContentDegradationContext,
+): FunctionResponsePart[] {
+  return googleContentParts('tool', parts, context).flatMap((part): FunctionResponsePart[] => {
+    if (part.inlineData) return [{ inlineData: part.inlineData }]
+    if (part.fileData) return [{ fileData: part.fileData }]
+    return []
   })
 }
 

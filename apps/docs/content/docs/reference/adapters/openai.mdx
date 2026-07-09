@@ -28,6 +28,8 @@ Create an adapter bound to an OpenAI client.
 
 `createOpenAI()` is `openaiProviderRuntime.create`. The package-owned `openAITranscript` owns message conversion plus assistant text/tool-call extraction; response metadata normalization, stream deltas, and settings/schema mapping stay in this package too. Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
 
+OpenAI Chat content support maps image parts to `image_url`, wav/mp3 `file-data` parts to `input_audio`, and supported file data/file ids to OpenAI file parts. PDF URLs and unsupported role/content combinations degrade to deterministic placeholders unless strict unsupported-content mode is enabled. Assistant/user media returned in provider content arrays decodes back into canonical `ContentPart[]`. Chat Completions tool-result messages remain text-only, so non-text tool results become deterministic text references instead of raw base64.
+
 | Field    | Type     | Description                |
 | -------- | -------- | -------------------------- |
 | `client` | `OpenAI` | The OpenAI client instance |

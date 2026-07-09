@@ -30,4 +30,17 @@ describe('renderToolModelOutput', () => {
     expect(renderToolModelOutput({ type: 'json', value: { a: 1 } })).toBe('{"a":1}')
     expect(renderToolModelOutput({ type: 'execution-denied', reason: 'nope' })).toBe('Tool execution denied: nope')
   })
+
+  it('renders rich content outputs through bounded placeholders instead of raw base64', () => {
+    const text = renderToolModelOutput({
+      type: 'content',
+      value: [
+        { type: 'text', text: 'Chart captured.' },
+        { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+      ],
+    })
+
+    expect(text).toBe('Chart captured.\n[image image/png 3B sha256:039058c6f2c0]')
+    expect(text).not.toContain('AQID')
+  })
 })

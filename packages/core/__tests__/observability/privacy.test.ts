@@ -120,26 +120,93 @@ describe('observability privacy capture policy', () => {
           uri: 'memory://payload',
           preview: 'OUTPUT-OFF-PAYLOAD',
         })
+        observe.artifact({
+          kind: 'output',
+          contentType: 'text/plain',
+          encoding: 'reference',
+          sizeBytes: 20,
+          hash: 'sha256:reference',
+          uri: 'memory://reference',
+        })
       },
     )
     await observe.flush()
 
-    const output = transport.records.find(
-      (record) => record.type === 'artifact' && record.kind === 'output',
+    const outputs = transport.records.filter(
+      (record): record is Extract<CruxGraphRecord, { readonly type: 'artifact' }> =>
+        record.type === 'artifact' && record.kind === 'output',
     )
-    expect(output).toMatchObject({
-      type: 'artifact',
-      kind: 'output',
-      contentType: 'text/plain',
-      encoding: 'reference',
-    })
-    expect(output).not.toHaveProperty('preview')
-    expect(output).not.toHaveProperty('sizeBytes')
-    expect(output).not.toHaveProperty('hash')
-    expect(output).not.toHaveProperty('uri')
+    expect(outputs).toHaveLength(2)
+    for (const output of outputs) {
+      expect(output).toMatchObject({
+        type: 'artifact',
+        kind: 'output',
+        contentType: 'text/plain',
+        encoding: 'reference',
+      })
+      expect(output).not.toHaveProperty('preview')
+      expect(output).not.toHaveProperty('sizeBytes')
+      expect(output).not.toHaveProperty('hash')
+      expect(output).not.toHaveProperty('uri')
+    }
     expect(JSON.stringify(transport.records)).not.toContain(
       'OUTPUT-OFF-PAYLOAD',
     )
+  })
+
+  it('sanitizes inline data URLs in content-part previews', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport, { scheduledDelayMs: 0 })
+    updateHooks({
+      observabilityCapture: {
+        capture: 'safe',
+      },
+    })
+
+    await observe.span(
+      {
+        name: 'generate',
+        primitive: 'generation.call',
+      },
+      async () => {
+        observe.artifact({
+          kind: 'output',
+          contentType: 'application/json',
+          encoding: 'json',
+          preview: {
+            content: [
+              { type: 'image-url', url: 'data:image/png;base64,AQID', mediaType: 'image/png' },
+              {
+                type: 'file-url',
+                url: 'data:application/pdf;base64,JVBERi0x',
+                mediaType: 'application/pdf',
+                filename: 'report.pdf',
+              },
+            ],
+          },
+        })
+      },
+    )
+    await observe.flush()
+
+    const output = findArtifact(transport.records, 'output')
+    expect(output).toMatchObject({
+      type: 'artifact',
+      kind: 'output',
+      preview: {
+        content: [
+          { type: 'image-url', url: '[image image/png data:image/png]', mediaType: 'image/png' },
+          {
+            type: 'file-url',
+            url: '[file application/pdf "report.pdf" data:application/pdf]',
+            mediaType: 'application/pdf',
+            filename: 'report.pdf',
+          },
+        ],
+      },
+    })
+    expect(JSON.stringify(output)).not.toContain('AQID')
+    expect(JSON.stringify(output)).not.toContain('JVBERi0x')
   })
 
   it('strips previews for every non-exempt canonical artifact kind when capture is disabled', async () => {
