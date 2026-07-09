@@ -3,7 +3,7 @@ import type OpenAI from 'openai'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
 import { prompt as makePrompt } from '@use-crux/core'
 import { z } from 'zod'
-import { createOpenAI, openaiProviderRuntime } from '../index'
+import { createOpenAI, openaiProviderRuntime } from '../src'
 
 interface OpenAIRuntimeRequest {
   readonly model: unknown

@@ -3,8 +3,8 @@ import {
   observe,
   resetObservabilityRuntime,
 } from '@use-crux/core/observability'
-import { withTelemetry } from '../index'
-import type { TraceSpan } from '../types'
+import { withTelemetry } from '../src'
+import type { TraceSpan } from '../src/types'
 
 describe('OTel record subscriber', () => {
   afterEach(() => {

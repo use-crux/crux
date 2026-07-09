@@ -1,9 +1,9 @@
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import type { ProviderConformanceEmission, ProviderRuntimeConformanceHarness } from '@use-crux/core/adapter'
 import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
-import type { GoogleCacheName } from '../cached-content'
-import type { GoogleCachedContentLifecycle } from '../cached-content'
-import { googleProviderRuntime } from '../native'
+import type { GoogleCacheName } from '../src/cached-content'
+import type { GoogleCachedContentLifecycle } from '../src/cached-content'
+import { googleProviderRuntime } from '../src/native'
 
 interface GoogleConformanceDeps extends Record<string, unknown> {
   readonly cachedContentLifecycle: GoogleCachedContentLifecycle

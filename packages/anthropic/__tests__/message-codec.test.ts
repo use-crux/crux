@@ -3,7 +3,7 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { Message, ToolModelOutput } from '@use-crux/core'
 import { transcriptCodecConformance } from '@use-crux/core/adapter/testing'
 import type { ToolResultEntry } from '@use-crux/core/adapter'
-import { anthropicTranscript, fromMessages, toMessages } from '../message-codec'
+import { anthropicTranscript, fromMessages, toMessages } from '../src/message-codec'
 
 describe('anthropic transcript wire encoding', () => {
   it('serializes canonical assistant tool calls and tool results to Anthropic blocks', () => {

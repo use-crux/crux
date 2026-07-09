@@ -10,8 +10,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import { context, prompt } from '@use-crux/core'
-import { createGoogle } from '../index'
-import type { GoogleCacheName, GoogleCachedContentCachePort } from '../index'
+import { createGoogle } from '../src'
+import type { GoogleCacheName, GoogleCachedContentCachePort } from '../src'
 
 // ─────────────────────────────────────────────────────────────────
 // Fake Google client

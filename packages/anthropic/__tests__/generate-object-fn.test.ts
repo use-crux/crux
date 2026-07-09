@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
-import { createGenerateObjectFn } from '../index'
+import { createGenerateObjectFn } from '../src'
 
 interface AnthropicParseRequest {
   readonly model: string

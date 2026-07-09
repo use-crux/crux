@@ -3,7 +3,7 @@ import type { Content, GenerateContentResponse } from '@google/genai'
 import type { Message } from '@use-crux/core'
 import { transcriptCodecConformance } from '@use-crux/core/adapter/testing'
 import type { ToolResultEntry } from '@use-crux/core/adapter'
-import { fromMessages, googleTranscript, toMessages } from '../message-codec'
+import { fromMessages, googleTranscript, toMessages } from '../src/message-codec'
 
 describe('google transcript wire encoding', () => {
   it('encodes assistant function calls and function responses to Google contents', () => {

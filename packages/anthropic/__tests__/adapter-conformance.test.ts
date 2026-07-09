@@ -2,8 +2,8 @@ import type Anthropic from '@anthropic-ai/sdk'
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
 import type { ProviderConformanceEmission, ProviderRuntimeConformanceHarness } from '@use-crux/core/adapter'
 import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
-import { anthropicProviderRuntime } from '../index'
-import type { AnthropicParsedMessage } from '../response'
+import { anthropicProviderRuntime } from '../src'
+import type { AnthropicParsedMessage } from '../src/response'
 
 interface CapturedAnthropicClient {
   readonly client: Anthropic

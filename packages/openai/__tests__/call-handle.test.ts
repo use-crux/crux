@@ -3,7 +3,7 @@ import type { ChatCompletion } from 'openai/resources/chat/completions'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt, tool } from '@use-crux/core'
-import { createOpenAI } from '../index'
+import { createOpenAI } from '../src'
 
 describe('OpenAI call handle', () => {
   it('prepares params and finishes a plain text response', async () => {

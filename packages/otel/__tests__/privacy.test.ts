@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { observe, resetObservabilityRuntime } from "@use-crux/core/observability";
 import { inMemoryRecordStore, workspace } from "@use-crux/core";
-import { withTelemetry } from "../index";
-import type { TraceSpan } from "../types";
+import { withTelemetry } from "../src";
+import type { TraceSpan } from "../src/types";
 
 describe("workspace OTel privacy", () => {
   afterEach(() => {

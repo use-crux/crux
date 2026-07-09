@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type Anthropic from '@anthropic-ai/sdk'
 import type { Message } from '@use-crux/core'
 import { transcriptRoundTripConformance } from '@use-crux/core/adapter/testing'
-import { anthropicTranscript, fromMessages } from '../message-codec'
+import { anthropicTranscript, fromMessages } from '../src/message-codec'
 
 describe('anthropic multimodal transcript encoding', () => {
   it('serializes canonical user image content to Anthropic content blocks', () => {

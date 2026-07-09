@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GoogleGenAI } from '@google/genai'
 import type { SystemBlock } from '@use-crux/core'
-import { resolveCachedContentLifecycle } from '../cached-content/resolve-lifecycle'
-import type { GoogleCacheName, GoogleCachedContentCachePort, GoogleCachedContentLifecycle } from '../cached-content/types'
+import { resolveCachedContentLifecycle } from '../src/cached-content/resolve-lifecycle'
+import type { GoogleCacheName, GoogleCachedContentCachePort, GoogleCachedContentLifecycle } from '../src/cached-content/types'
 
 function fakeClient() {
   const create = vi.fn().mockResolvedValue({ name: 'cachedContents/sdk' })

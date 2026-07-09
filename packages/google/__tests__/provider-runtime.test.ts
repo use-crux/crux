@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import { prompt as makePrompt } from '@use-crux/core'
 import { z } from 'zod'
-import { createGoogle, googleProviderRuntime } from '../index'
+import { createGoogle, googleProviderRuntime } from '../src'
 
 interface GoogleRuntimeRequest {
   readonly model: unknown

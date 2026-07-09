@@ -1,7 +1,7 @@
 import { describeRecordStoreConformance } from '@use-crux/core/storage/testing/vitest'
 import { workspace } from '@use-crux/core/workspace'
 import { describe, expect, it, vi } from 'vitest'
-import { upstashRedisRecordStore, type RedisRecordClient, type RedisSubscriber } from '../redis-record-store'
+import { upstashRedisRecordStore, type RedisRecordClient, type RedisSubscriber } from '../src/redis-record-store'
 
 describeRecordStoreConformance({
   name: 'upstashRedisRecordStore',

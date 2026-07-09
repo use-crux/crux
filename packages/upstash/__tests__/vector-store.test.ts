@@ -2,7 +2,7 @@ import { StorageError } from '@use-crux/core/storage'
 import { inMemoryRecordStore } from '@use-crux/core/storage'
 import { vectorStoreConformanceSuite } from '@use-crux/core/storage/testing/vitest'
 import { describe, expect, it } from 'vitest'
-import { upstashVectorStore } from '../vector-store'
+import { upstashVectorStore } from '../src/vector-store'
 import { createFakeUpstashVectorIndex } from './fake-upstash-vector'
 
 vectorStoreConformanceSuite({

@@ -2,7 +2,7 @@ import { describe, it, expect, vi } from 'vitest'
 import { prompt as makePrompt } from '@use-crux/core'
 import { agent as makeAgent } from '@use-crux/core/agent'
 import { z } from 'zod'
-import { createGoogle, embedding as makeEmbedding } from '../index'
+import { createGoogle, embedding as makeEmbedding } from '../src'
 
 const simplePrompt = makePrompt({
   id: 'test-prompt',

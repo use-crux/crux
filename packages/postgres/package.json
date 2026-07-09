@@ -12,12 +12,12 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "main": "./runtime.ts",
-  "types": "./runtime.ts",
+  "main": "./src/runtime.ts",
+  "types": "./src/runtime.ts",
   "exports": {
     "./runtime": {
-      "types": "./runtime.ts",
-      "import": "./runtime.ts"
+      "types": "./src/runtime.ts",
+      "import": "./src/runtime.ts"
     }
   },
   "dependencies": {

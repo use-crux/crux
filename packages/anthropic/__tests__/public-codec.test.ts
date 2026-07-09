@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt } from '@use-crux/core'
-import { fromResponse, toParams } from '../index'
-import type { AnthropicParsedMessage } from '../response'
+import { fromResponse, toParams } from '../src'
+import type { AnthropicParsedMessage } from '../src/response'
 
 describe('public Anthropic codecs', () => {
   it('turns a resolved prompt into Anthropic params and normalizes the response', async () => {

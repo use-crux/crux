@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { GoogleGenAI } from '@google/genai'
 import { z } from 'zod'
-import { createGenerateObjectFn } from '../index'
+import { createGenerateObjectFn } from '../src'
 
 interface GoogleGenerateContentRequest {
   readonly model: string

@@ -3,7 +3,7 @@ import type OpenAI from 'openai'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
 import type { Message } from '@use-crux/core'
 import { transcriptRoundTripConformance } from '@use-crux/core/adapter/testing'
-import { fromMessages, openAITranscript } from '../message-codec'
+import { fromMessages, openAITranscript } from '../src/message-codec'
 
 describe('openai multimodal transcript encoding', () => {
   it('serializes canonical user image content to OpenAI chat content parts', () => {

@@ -3,7 +3,7 @@ import type { ChatCompletion } from 'openai/resources/chat/completions'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt, tool } from '@use-crux/core'
-import { createOpenAI } from '../index'
+import { createOpenAI } from '../src'
 
 describe('OpenAI managed/headless/transport equivalence', () => {
   it('matches managed generate for plain text', async () => {

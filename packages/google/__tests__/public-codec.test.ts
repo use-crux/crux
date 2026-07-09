@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt } from '@use-crux/core'
-import { fromResponse, toParams } from '../index'
+import { fromResponse, toParams } from '../src'
 import type { GenerateContentResponse } from '@google/genai'
 
 describe('public Google codecs', () => {

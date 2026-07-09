@@ -1,12 +1,12 @@
 import { expectTypeOf, it } from 'vitest'
-import { createGoogle } from '../index'
+import { createGoogle } from '../src'
 import type {
   CreateGoogleOptions,
   GoogleCachedContentCallOptions,
   GoogleCachedContentLifecycle,
   GoogleCachedContentOption,
   GoogleExtra,
-} from '../index'
+} from '../src'
 
 type GoogleAdapter = ReturnType<typeof createGoogle>
 type GoogleGenerateExtra = NonNullable<Parameters<GoogleAdapter['generate']>[1]['extra']>
