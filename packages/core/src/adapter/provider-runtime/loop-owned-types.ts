@@ -9,6 +9,7 @@ import type { GenerationSettings } from '../../generation/types'
 import type { BoundLoopRuntime } from '../loop-runtime-port'
 import type { ProviderRuntimeExtender } from './extension-types'
 import type { LoopOwnedProviderRuntime } from './runtime-types'
+import type { ProviderMediaHooks } from '../native-chat/media-hooks'
 
 /** Context passed when binding a loop-owned runtime to a concrete client. */
 export interface LoopOwnedRuntimeBindContext {
@@ -30,6 +31,8 @@ export interface LoopOwnedRuntimeContract<TClient, TModel, TRawResponse = unknow
   describeModel?: (model: TModel) => ModelInfo
   /** Map canonical generation settings to SDK-native option names. */
   settings?: (settings: GenerationSettings, model: ModelInfo) => Record<string, unknown>
+  /** Provider-authored media validation consumed privately before SDK I/O. */
+  media?: ProviderMediaHooks
   /** Bind a concrete SDK client to the SDK-owned generation loop. */
   bind(client: TClient, ctx: LoopOwnedRuntimeBindContext): BoundLoopRuntime<TModel, TRawResponse, TRawStream>
 }

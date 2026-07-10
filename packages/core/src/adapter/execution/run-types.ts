@@ -74,6 +74,13 @@ export interface AdapterExecutionGenerateArgs<
   /** Existing conversation history to continue. */
   readonly messages?: Message[];
 
+  /**
+   * SDK-native history for loop-owned adapters with a native message edge.
+   * Execution modules keep canonical `messages` for policy and results; only
+   * the owning runtime may interpret this payload.
+   */
+  readonly nativeMessages?: readonly unknown[];
+
   /** Additional tools merged after prompt/context tools. */
   readonly tools?: Record<string, unknown>;
 

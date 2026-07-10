@@ -25,7 +25,9 @@ export function buildBaseArgs(request: ExecutorRequest<LanguageModel>, options: 
   const systemArg = buildSystemArg(request.systemBlocks, request.system, request.modelInfo)
   if (systemArg !== undefined) args.system = systemArg
 
-  if (request.messages && request.messages.length > 0) {
+  if (request.nativeMessages && request.nativeMessages.length > 0) {
+    args.messages = request.nativeMessages.map(copyNativeMessage)
+  } else if (request.messages && request.messages.length > 0) {
     args.messages = toModelMessages(request.messages, {
       provider: request.modelInfo.provider || 'ai-sdk',
       diagnostics: request.diagnostics,
@@ -50,6 +52,14 @@ export function buildBaseArgs(request: ExecutorRequest<LanguageModel>, options: 
   if (request.extra?.maxRetries !== undefined) args.maxRetries = request.extra.maxRetries
   if (request.abortSignal) args.abortSignal = request.abortSignal
   return args
+}
+
+function copyNativeMessage(message: unknown): unknown {
+  if (!isRecord(message)) return message
+  return {
+    ...message,
+    ...(Array.isArray(message.content) ? { content: [...message.content] } : {}),
+  }
 }
 
 const sdkApprovalHook = `needs${'Approval'}`

@@ -6,6 +6,7 @@ import type { Message } from '../../generation/messages'
 export type ProviderMediaHooks = Readonly<{
   validate?: (
     input: Readonly<{
+      provider?: string
       model: string
       messages: readonly Message[]
     }>,
@@ -18,7 +19,7 @@ export function assertProviderMediaSupported(
     providerId: string
     media?: ProviderMediaHooks
   }>,
-  input: Readonly<{ model: string; messages: readonly Message[] }>,
+  input: Readonly<{ provider?: string; model: string; messages: readonly Message[] }>,
 ): void {
   const issues = profile.media?.validate?.(input)
   if (!isNonEmpty(issues)) return

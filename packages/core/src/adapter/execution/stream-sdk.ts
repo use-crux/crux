@@ -18,6 +18,7 @@ import {
   createBudgetSignal,
 } from "../../generation/timeout";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
+import { assertProviderMediaSupported } from "../native-chat/media-hooks";
 import { withDefaultResolverPorts } from "../../resolver/ports";
 import type {
   ExecutorRequest,
@@ -79,7 +80,10 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   });
   const tools = lifecycle.tools;
   let { messages, promptText } = initialMessageState(resolved, args.messages);
-  messages = (await lifecycle.resume(messages)).messages;
+  let nativeMessages = args.nativeMessages;
+  const resumed = await lifecycle.resume(messages);
+  messages = resumed.messages;
+  if (resumed.replayed > 0) nativeMessages = undefined;
   const safety = createSafety({
     call: {
       constraints: args.constraints,
@@ -100,6 +104,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     messages,
     prompt: promptText,
   });
+  if (guardedInput.messages !== messages) nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
 
@@ -113,6 +118,10 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
           provider: modelInfo.provider,
         })
       : undefined;
+  assertProviderMediaSupported(
+    { providerId: dialect.id, media: dialect.media },
+    { provider: modelInfo.provider, model: modelInfo.modelId, messages: providerMessages ?? [] },
+  );
   const request: ExecutorRequest<TModel> & { schema?: z.ZodType } = {
     model: args.model,
     modelInfo,
@@ -120,6 +129,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     systemBlocks: resolved.systemBlocks,
     prompt: promptText,
     messages: providerMessages,
+    nativeMessages,
     settings: mappedSettings,
     tools,
     toolApproval: (call) =>

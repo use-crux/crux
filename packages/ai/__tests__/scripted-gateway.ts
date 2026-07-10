@@ -119,7 +119,16 @@ export function scriptedGateway(config: ScriptedGatewayConfig = {}): ScriptedGat
       for (const chunk of script.chunks) yield chunk
       if (script.errorAfterChunks) throw script.errorAfterChunks
     }
-    return { kind: `scripted-${kind}-stream`, textStream: textStream() }
+    return {
+      kind: `scripted-${kind}-stream`,
+      textStream: textStream(),
+      toUIMessageStream: () =>
+        new ReadableStream({
+          start(controller) {
+            controller.close()
+          },
+        }),
+    }
   }
 
   const gateway: SdkGateway = {

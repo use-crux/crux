@@ -44,7 +44,6 @@ import type {
   AnyPrompt,
   AnyToolSet,
   Context,
-  ResolvedPrompt,
   MergedInput,
   GenerationSettings,
   Message,
@@ -87,7 +86,7 @@ import type {
 import type { ValidationRetryOptions } from "@use-crux/core";
 import type { SdkGateway } from "./gateway";
 import { liveSdkGateway } from "./gateway";
-import type { AIExtra, AIGenerateOptions, AITransport } from "./options";
+import type { AIExtra, AIGenerateOptions, AIMessageHistory, AITransport } from "./options";
 import type { SdkLoopResultLike } from "./executor";
 import type {
   AIEmbeddingConfig,
@@ -103,7 +102,7 @@ import {
   createManualAiSdkGatewayController,
   transportGateway,
 } from "./call-handle";
-import { normalizeAiSdkMessages } from "./messages";
+import { prepareAiSdkMessages } from "./native-messages";
 export { fromResponse, toParams } from "./codec";
 export type { AiSdkCodecOptions } from "./codec";
 
@@ -318,7 +317,7 @@ type CallOpts = Record<string, unknown> & {
   runtimeContext?: unknown;
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
   toolApproval?: ToolApprovalMap;
-  messages?: ResolvedPrompt["messages"];
+  messages?: AIMessageHistory;
   maxSteps?: number;
   extra?: AIExtra;
   activeTools?: readonly string[];
@@ -400,6 +399,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       ...settings
     } = opts;
 
+    const messagePlan = prepareAiSdkMessages(messages);
     const executorOptions = {
       model,
       input,
@@ -410,7 +410,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       runtimeContext,
       toolMiddleware,
       toolApproval,
-      messages: messages ? normalizeAiSdkMessages(messages) : undefined,
+      messages: messagePlan.messages,
+      nativeMessages: messagePlan.nativeMessages,
       tokenBudget,
       timeout,
       validationRetry,
@@ -497,6 +498,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
     if (transport) throw new CruxTransportStreamUnsupportedError("ai-sdk");
 
+    const messagePlan = prepareAiSdkMessages(messages);
     const executorOptions = {
       model,
       input,
@@ -507,7 +509,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       runtimeContext,
       toolMiddleware,
       toolApproval,
-      messages: messages ? normalizeAiSdkMessages(messages) : undefined,
+      messages: messagePlan.messages,
+      nativeMessages: messagePlan.nativeMessages,
       tokenBudget,
       timeout,
       constraints,

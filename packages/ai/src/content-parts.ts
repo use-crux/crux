@@ -64,16 +64,6 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
       content.push({ type: 'text', text: readString(part, 'text') ?? '', ...providerOptionsFrom(part) })
       continue
     }
-    if (type === 'media') {
-      const data = readString(part, 'data')
-      const mediaType = readString(part, 'mediaType')
-      if (data && mediaType) {
-        content.push({ type: 'file', source: dataAsset(data, mediaType), mediaType, ...providerOptionsFrom(part) })
-      } else {
-        warnMalformedPart(part, 'AI SDK media parts require data and mediaType.')
-      }
-      continue
-    }
     if (type === 'tool-call' || type === 'tool-approval-request' || type === 'tool-approval-response') {
       continue
     }

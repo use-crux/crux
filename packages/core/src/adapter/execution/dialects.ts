@@ -66,6 +66,7 @@ export function sdkLoopDialect<TModel, TRawResponse, TRawStream>(
   const dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream> = {
     kind: 'sdk-loop',
     id: port.id,
+    media: port.media,
     describeModel: (model) => port.describeModel(model),
     mapSettings: (settings, model) => port.mapSettings(settings, model),
     runTextLoop: (request) => port.runTextLoop(request),

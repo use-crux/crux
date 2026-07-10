@@ -195,7 +195,7 @@ export function dropTrailingAssistant(messages: readonly Message[]): Message[] {
  * in the `metadata` field.
  */
 export function normalizeAiSdkMessages(
-  sdkMessages: Array<{
+  sdkMessages: ReadonlyArray<{
     role: string
     content: unknown
     [key: string]: unknown

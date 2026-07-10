@@ -56,6 +56,12 @@ export interface ExecutorRequest<TModel> {
   readonly prompt: string | undefined;
   /** Conversation history in canonical Crux `Message` format. */
   readonly messages: readonly Message[] | undefined;
+  /**
+   * SDK-native conversation history for loop-owned runtimes that support a
+   * native message edge. Core keeps `messages` as the policy/result copy and
+   * never inspects this adapter-private payload.
+   */
+  readonly nativeMessages?: readonly unknown[];
   /** Provider-native settings, already mapped via `mapSettings()`. */
   readonly settings: Record<string, unknown>;
   /**

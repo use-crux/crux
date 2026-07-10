@@ -307,6 +307,7 @@ export function loopRuntimeAdapter<
     signal: AbortSignal | undefined,
     params: CallProfileParams | undefined,
   ): Promise<GenerateResult> {
+    const nativeMessages = (opts as { readonly nativeMessages?: readonly unknown[] }).nativeMessages;
     return (await execution.generate({
       prompt,
       model,
@@ -317,6 +318,7 @@ export function loopRuntimeAdapter<
       toolMiddleware: opts.toolMiddleware,
       toolApproval: opts.toolApproval,
       messages: opts.messages,
+      nativeMessages,
       maxSteps: opts.maxSteps,
       settings: mergeSettings(params, opts.settings),
       tokenBudget: opts.tokenBudget,
@@ -378,6 +380,7 @@ export function loopRuntimeAdapter<
     signal: AbortSignal | undefined,
     params: CallProfileParams | undefined,
   ): Promise<ExecutorStreamHandle<TRawStream>> {
+    const nativeMessages = (opts as { readonly nativeMessages?: readonly unknown[] }).nativeMessages;
     return (await execution.stream({
       prompt,
       model,
@@ -388,6 +391,7 @@ export function loopRuntimeAdapter<
       toolMiddleware: opts.toolMiddleware,
       toolApproval: opts.toolApproval,
       messages: opts.messages,
+      nativeMessages,
       maxSteps: opts.maxSteps,
       settings: mergeSettings(params, opts.settings),
       tokenBudget: opts.tokenBudget,

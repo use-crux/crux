@@ -52,6 +52,7 @@ function portForBoundLoop(
 ): LoopRuntimePort<unknown, unknown, unknown> {
   const port: LoopRuntimePort<unknown, unknown, unknown> = {
     id,
+    media: loop.media,
     describeModel: loop.describeModel ?? ((model) => describeModelFallback(id, model)),
     mapSettings: loop.settings ?? (() => ({})),
     runTextLoop: (request) => bound.runTextLoop(request),

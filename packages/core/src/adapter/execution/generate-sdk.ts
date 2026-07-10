@@ -20,6 +20,7 @@ import {
   type BudgetSignal,
 } from "../../generation/timeout";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
+import { assertProviderMediaSupported } from "../native-chat/media-hooks";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -104,7 +105,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   });
 
   let { messages, promptText } = initialMessageState(resolved, args.messages);
-  messages = (await lifecycle.resume(messages)).messages;
+  let nativeMessages = args.nativeMessages;
+  const resumed = await lifecycle.resume(messages);
+  messages = resumed.messages;
+  if (resumed.replayed > 0) nativeMessages = undefined;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const maxSteps =
@@ -167,6 +171,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
             provider: modelInfo.provider,
           })
         : undefined;
+    assertProviderMediaSupported(
+      { providerId: dialect.id, media: dialect.media },
+      { provider: modelInfo.provider, model: modelInfo.modelId, messages: providerMessages ?? [] },
+    );
     return {
       model: args.model,
       modelInfo,
@@ -174,6 +182,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       systemBlocks: currentSystemBlocks,
       prompt: promptText,
       messages: providerMessages,
+      nativeMessages,
       settings: mappedSettings,
       tools: lifecycle.tools,
       toolApproval: (call) =>
@@ -221,6 +230,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           messages,
           prompt: promptText,
         });
+        if (guardedInput.messages !== messages) nativeMessages = undefined;
         messages = [...guardedInput.messages];
         promptText = guardedInput.prompt;
         const result = resolved.schema
@@ -315,6 +325,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           ...request,
           prompt: undefined,
           messages: regenMessages,
+          nativeMessages: undefined,
           maxSteps: 1,
           observer: undefined,
         };

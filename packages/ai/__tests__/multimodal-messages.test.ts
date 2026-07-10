@@ -66,35 +66,6 @@ describe('AI SDK multimodal messages', () => {
     })
   })
 
-  it('normalizes SDK-shaped message history before building SDK call args', async () => {
-    const scripted = scriptedGateway({ generateText: [{ text: 'ok' }] })
-    const ai = createCruxAi({ gateway: scripted.gateway })
-
-    await ai.generate(textPrompt, {
-      model: model(),
-      input: { message: 'ignored when messages are provided' },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Look.' },
-            { type: 'image', image: 'AQID', mediaType: 'image/png' },
-          ],
-        },
-      ] as never,
-    })
-
-    expect(scripted.calls.generateText[0]!.messages).toEqual([
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Look.' },
-          { type: 'image', image: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
-        ],
-      },
-    ])
-  })
-
   it('preserves multimodal tool-result content when building SDK model messages', () => {
     expect(
       toModelMessages([
