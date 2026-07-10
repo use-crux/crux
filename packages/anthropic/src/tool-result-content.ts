@@ -8,6 +8,7 @@ import {
   type ToolModelOutput,
   type UrlAsset,
 } from '@use-crux/core'
+import { anthropicBlockOptions, anthropicFilename } from './content-block-options'
 
 export type AnthropicToolResultContent =
   | string
@@ -55,13 +56,31 @@ function anthropicContentBlock(part: ContentPart): AnthropicContentBlockParam[] 
 function anthropicImageBlock(part: Extract<ContentPart, { type: 'image' }>): Anthropic.ImageBlockParam {
   const source = part.source
   const mediaType = part.mediaType ?? mediaTypeFromSource(source)
-  if (typeof source === 'string') return { type: 'image', source: { type: 'url', url: source } }
-  if (source instanceof URL) return { type: 'image', source: { type: 'url', url: source.href } }
-  if (source instanceof Uint8Array) return base64ImageBlock(source, mediaType)
-  if (source instanceof ArrayBuffer) return base64ImageBlock(new Uint8Array(source), mediaType)
-  if (isDataAsset(source)) return base64ImageBlock(source.data, mediaType)
-  if (isUrlAsset(source)) return { type: 'image', source: { type: 'url', url: source.url.href } }
-  throw unsupported('input.image.provider-file', 'Hydrate provider-file image assets to a URL or byte source before calling Anthropic.')
+  const options = anthropicBlockOptions(part)
+  if (typeof source === 'string') return { type: 'image', source: { type: 'url', url: source }, ...options }
+  if (source instanceof URL)
+    return {
+      type: 'image',
+      source: { type: 'url', url: source.href },
+      ...options,
+    }
+  if (source instanceof Uint8Array) return { ...base64ImageBlock(source, mediaType), ...options }
+  if (source instanceof ArrayBuffer)
+    return {
+      ...base64ImageBlock(new Uint8Array(source), mediaType),
+      ...options,
+    }
+  if (isDataAsset(source)) return { ...base64ImageBlock(source.data, mediaType), ...options }
+  if (isUrlAsset(source))
+    return {
+      type: 'image',
+      source: { type: 'url', url: source.url.href },
+      ...options,
+    }
+  throw unsupported(
+    'input.image.provider-file',
+    'Hydrate provider-file image assets to a URL or byte source before calling Anthropic.',
+  )
 }
 
 function anthropicDocumentBlock(part: Extract<ContentPart, { type: 'file' }>): Anthropic.DocumentBlockParam {
@@ -70,19 +89,62 @@ function anthropicDocumentBlock(part: Extract<ContentPart, { type: 'file' }>): A
   if (mediaType !== 'application/pdf') {
     throw unsupported('input.file', 'Anthropic rich tool results support PDF files; return text for other file types.')
   }
-  const title = part.filename ? { title: part.filename } : {}
-  if (typeof source === 'string') return { type: 'document', source: { type: 'url', url: source }, ...title }
-  if (source instanceof URL) return { type: 'document', source: { type: 'url', url: source.href }, ...title }
-  if (source instanceof Uint8Array) return { type: 'document', source: base64PdfSource(source), ...title }
-  if (source instanceof ArrayBuffer) return { type: 'document', source: base64PdfSource(new Uint8Array(source)), ...title }
-  if (isDataAsset(source)) return { type: 'document', source: base64PdfSource(source.data), ...title }
-  if (isUrlAsset(source)) return { type: 'document', source: { type: 'url', url: source.url.href }, ...title }
-  throw unsupported('input.file.provider-file', 'Hydrate provider-file assets to a URL or byte source before calling Anthropic.')
+  const title = anthropicFilename(part) ? { title: anthropicFilename(part) } : {}
+  const options = anthropicBlockOptions(part)
+  if (typeof source === 'string')
+    return {
+      type: 'document',
+      source: { type: 'url', url: source },
+      ...title,
+      ...options,
+    }
+  if (source instanceof URL)
+    return {
+      type: 'document',
+      source: { type: 'url', url: source.href },
+      ...title,
+      ...options,
+    }
+  if (source instanceof Uint8Array)
+    return {
+      type: 'document',
+      source: base64PdfSource(source),
+      ...title,
+      ...options,
+    }
+  if (source instanceof ArrayBuffer)
+    return {
+      type: 'document',
+      source: base64PdfSource(new Uint8Array(source)),
+      ...title,
+      ...options,
+    }
+  if (isDataAsset(source))
+    return {
+      type: 'document',
+      source: base64PdfSource(source.data),
+      ...title,
+      ...options,
+    }
+  if (isUrlAsset(source))
+    return {
+      type: 'document',
+      source: { type: 'url', url: source.url.href },
+      ...title,
+      ...options,
+    }
+  throw unsupported(
+    'input.file.provider-file',
+    'Hydrate provider-file assets to a URL or byte source before calling Anthropic.',
+  )
 }
 
 function base64ImageBlock(data: Uint8Array | Blob, mediaType: string | undefined): Anthropic.ImageBlockParam {
   if (!isAnthropicImageMediaType(mediaType)) {
-    throw unsupported('input.image.media_type', 'Image parts require an image mediaType before Anthropic request encoding.')
+    throw unsupported(
+      'input.image.media_type',
+      'Image parts require an image mediaType before Anthropic request encoding.',
+    )
   }
   return { type: 'image', source: base64Source(data, mediaType) }
 }
@@ -95,18 +157,28 @@ function base64Source(data: Uint8Array | Blob, mediaType: AnthropicImageMediaTyp
   if (!(data instanceof Uint8Array)) {
     throw unsupported('input.file.blob', 'Blob sources must be normalized to bytes before Anthropic request encoding.')
   }
-  return { type: 'base64', data: Buffer.from(data).toString('base64'), media_type: mediaType }
+  return {
+    type: 'base64',
+    data: Buffer.from(data).toString('base64'),
+    media_type: mediaType,
+  }
 }
 
 function base64PdfSource(data: Uint8Array | Blob): AnthropicPdfBase64Source {
   if (!(data instanceof Uint8Array)) {
     throw unsupported('input.file.blob', 'Blob sources must be normalized to bytes before Anthropic request encoding.')
   }
-  return { type: 'base64', data: Buffer.from(data).toString('base64'), media_type: 'application/pdf' }
+  return {
+    type: 'base64',
+    data: Buffer.from(data).toString('base64'),
+    media_type: 'application/pdf',
+  }
 }
 
 function isAnthropicImageMediaType(mediaType: string | undefined): mediaType is AnthropicImageMediaType {
-  return mediaType === 'image/png' || mediaType === 'image/jpeg' || mediaType === 'image/gif' || mediaType === 'image/webp'
+  return (
+    mediaType === 'image/png' || mediaType === 'image/jpeg' || mediaType === 'image/gif' || mediaType === 'image/webp'
+  )
 }
 
 function mediaTypeFromSource(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): string | undefined {
@@ -121,8 +193,16 @@ function isUrlAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['so
   return typeof source === 'object' && source !== null && !isBlob(source) && 'type' in source && source.type === 'url'
 }
 
-function isProviderFileAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): source is ProviderFileAsset {
-  return typeof source === 'object' && source !== null && !isBlob(source) && 'type' in source && source.type === 'provider-file'
+function isProviderFileAsset(
+  source: Extract<ContentPart, { type: 'image' | 'file' }>['source'],
+): source is ProviderFileAsset {
+  return (
+    typeof source === 'object' &&
+    source !== null &&
+    !isBlob(source) &&
+    'type' in source &&
+    source.type === 'provider-file'
+  )
 }
 
 function isBlob(source: unknown): source is Blob {

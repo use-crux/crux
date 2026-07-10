@@ -10,19 +10,13 @@ import {
 } from '@use-crux/core'
 
 /** Encode canonical Crux message content into Google `Part[]` values. */
-export function googleContentParts(
-  _role: 'system' | 'user' | 'assistant' | 'tool',
-  content: MessageContent,
-): Part[] {
+export function googleContentParts(_role: 'system' | 'user' | 'assistant' | 'tool', content: MessageContent): Part[] {
   if (typeof content === 'string') return [{ text: content }]
   return content.map(googleContentPart)
 }
 
 /** Project Google content to text. */
-export function googleContentText(
-  _role: 'system' | 'user' | 'assistant' | 'tool',
-  content: MessageContent,
-): string {
+export function googleContentText(_role: 'system' | 'user' | 'assistant' | 'tool', content: MessageContent): string {
   return contentText(content)
 }
 
@@ -61,8 +55,16 @@ export interface GoogleInboundPart {
   readonly fileData?: unknown
 }
 
-function inlineDataToPart(inlineData: { readonly data: string; readonly mimeType: string; readonly displayName?: string }): ContentPart {
-  const source = { type: 'data' as const, data: new Uint8Array(Buffer.from(inlineData.data, 'base64')), mediaType: inlineData.mimeType }
+function inlineDataToPart(inlineData: {
+  readonly data: string
+  readonly mimeType: string
+  readonly displayName?: string
+}): ContentPart {
+  const source = {
+    type: 'data' as const,
+    data: new Uint8Array(Buffer.from(inlineData.data, 'base64')),
+    mediaType: inlineData.mimeType,
+  }
   if (inlineData.mimeType.startsWith('image/')) return { type: 'image', source, mediaType: inlineData.mimeType }
   return {
     type: 'file',
@@ -87,15 +89,54 @@ function googleMediaPart(part: Extract<ContentPart, { type: 'image' | 'file' }>)
   const source = part.source
   const mediaType = part.mediaType ?? mediaTypeFromSource(source)
   if (!mediaType) {
-    throw unsupported(`input.${part.type}.media_type`, 'Google media parts require a mediaType before request encoding.')
+    throw unsupported(
+      `input.${part.type}.media_type`,
+      'Google media parts require a mediaType before request encoding.',
+    )
   }
-  if (typeof source === 'string') return fileDataPart(source, mediaType, part.type === 'file' ? part.filename : undefined)
-  if (source instanceof URL) return fileDataPart(source.href, mediaType, part.type === 'file' ? part.filename : undefined)
-  if (source instanceof Uint8Array) return inlineDataPart(source, mediaType, part.type === 'file' ? part.filename : undefined)
-  if (source instanceof ArrayBuffer) return inlineDataPart(new Uint8Array(source), mediaType, part.type === 'file' ? part.filename : undefined)
-  if (isDataAsset(source)) return inlineDataPart(source.data, mediaType, part.type === 'file' ? part.filename : undefined)
-  if (isUrlAsset(source)) return fileDataPart(source.url.href, mediaType, part.type === 'file' ? part.filename : undefined)
-  throw unsupported(`input.${part.type}.provider-file`, 'Hydrate provider-file assets to a URL or byte source before calling Google.')
+  const displayName = part.type === 'file' ? filename(part) : undefined
+  const options = googlePartOptions(part)
+  if (typeof source === 'string') return { ...fileDataPart(source, mediaType, displayName), ...options }
+  if (source instanceof URL) return { ...fileDataPart(source.href, mediaType, displayName), ...options }
+  if (source instanceof Uint8Array) return { ...inlineDataPart(source, mediaType, displayName), ...options }
+  if (source instanceof ArrayBuffer)
+    return {
+      ...inlineDataPart(new Uint8Array(source), mediaType, displayName),
+      ...options,
+    }
+  if (isDataAsset(source))
+    return {
+      ...inlineDataPart(source.data, mediaType, displayName),
+      ...options,
+    }
+  if (isUrlAsset(source))
+    return {
+      ...fileDataPart(source.url.href, mediaType, displayName),
+      ...options,
+    }
+  if (isProviderFileAsset(source))
+    return {
+      ...fileDataPart(source.fileId, mediaType, displayName),
+      ...options,
+    }
+  throw unsupported(
+    `input.${part.type}.provider-file`,
+    'Hydrate provider-file assets to a URL or byte source before calling Google.',
+  )
+}
+
+function googlePartOptions(part: Extract<ContentPart, { type: 'image' | 'file' }>): Pick<Part, 'mediaResolution'> {
+  const mediaResolution = part.providerOptions?.google?.mediaResolution
+  return isRecord(mediaResolution) ? { mediaResolution } : {}
+}
+
+function filename(part: Extract<ContentPart, { type: 'file' }>): string | undefined {
+  if (part.filename) return part.filename
+  const source = part.source
+  if (typeof source === 'object' && source !== null && 'filename' in source) {
+    return typeof source.filename === 'string' ? source.filename : undefined
+  }
+  return undefined
 }
 
 function inlineDataPart(data: Uint8Array | Blob, mimeType: string, displayName: string | undefined): Part {
@@ -133,8 +174,16 @@ function isUrlAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['so
   return typeof source === 'object' && source !== null && !isBlob(source) && 'type' in source && source.type === 'url'
 }
 
-function isProviderFileAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): source is ProviderFileAsset {
-  return typeof source === 'object' && source !== null && !isBlob(source) && 'type' in source && source.type === 'provider-file'
+function isProviderFileAsset(
+  source: Extract<ContentPart, { type: 'image' | 'file' }>['source'],
+): source is ProviderFileAsset {
+  return (
+    typeof source === 'object' &&
+    source !== null &&
+    !isBlob(source) &&
+    'type' in source &&
+    source.type === 'provider-file'
+  )
 }
 
 function isBlob(source: unknown): source is Blob {
@@ -149,7 +198,11 @@ function unsupported(capability: string, remediation: string): never {
   })
 }
 
-function isGoogleBlob(value: unknown): value is { readonly data: string; readonly mimeType: string; readonly displayName?: string } {
+function isGoogleBlob(value: unknown): value is {
+  readonly data: string
+  readonly mimeType: string
+  readonly displayName?: string
+} {
   return (
     isRecord(value) &&
     typeof value.data === 'string' &&
@@ -158,9 +211,11 @@ function isGoogleBlob(value: unknown): value is { readonly data: string; readonl
   )
 }
 
-function isGoogleFileData(
-  value: unknown,
-): value is { readonly fileUri: string; readonly mimeType: string; readonly displayName?: string } {
+function isGoogleFileData(value: unknown): value is {
+  readonly fileUri: string
+  readonly mimeType: string
+  readonly displayName?: string
+} {
   return (
     isRecord(value) &&
     typeof value.fileUri === 'string' &&

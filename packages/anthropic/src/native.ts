@@ -7,6 +7,7 @@ import type {
 } from '@use-crux/core/adapter'
 import { judgeReranker, type Reranker, type RetrievalModel, type RetrieverHit } from '@use-crux/core/retrieval'
 import { anthropicTranscript } from './message-codec'
+import { anthropicMediaHooks } from './media-preflight'
 import {
   anthropicOutputSchema,
   anthropicRequest,
@@ -63,6 +64,7 @@ const anthropic = defineSingleTurnProviderBundle({
     outputSchema: anthropicOutputSchema,
     sanitizeToolSchema: stripDescriptions,
     transcript: anthropicTranscript,
+    media: anthropicMediaHooks,
   } satisfies SingleTurnProviderBundleSpec<
     Anthropic,
     AnthropicRequest,

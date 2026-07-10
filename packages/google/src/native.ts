@@ -5,6 +5,7 @@ import { judgeReranker, type Reranker, type RetrievalModel, type RetrieverHit } 
 import { disabledCachedContentLifecycle, resolveCachedContentLifecycle } from './cached-content'
 import type { GoogleCachedContentLifecycle, GoogleCachedContentOption } from './cached-content'
 import { googleTranscript } from './message-codec'
+import { googleMediaHooks } from './media-preflight'
 import {
   asGoogleGenerateContentParams,
   asGoogleGenerateContentStreamParams,
@@ -67,6 +68,7 @@ const google = defineSingleTurnProviderBundle({
     settings: googleSettings,
     outputSchema: googleOutputSchema,
     transcript: googleTranscript,
+    media: googleMediaHooks,
   } satisfies SingleTurnProviderBundleSpec<
     GoogleGenAI,
     GoogleRequest,

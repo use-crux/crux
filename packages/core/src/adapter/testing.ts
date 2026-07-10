@@ -19,8 +19,14 @@
 
 export { adapterSpecConformance } from './testing/native'
 export { assertCanonicalResult } from './testing/canonical-result'
+export {
+  assertDirectMediaTranscriptIdentity,
+  directMediaFixture,
+  wrongProviderFileMessages,
+} from './testing/direct-media'
 export { providerRuntimeConformance } from './testing/provider-runtime'
 export { transcriptCodecConformance, transcriptRoundTripConformance } from './testing/transcript'
+export type { DirectMediaFixture, DirectMediaProvider } from './testing/direct-media'
 export type {
   CanonicalFinalStepInfo,
   CanonicalGenerateResultLike,

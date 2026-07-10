@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import { isInvalidMediaSourceError, isUnsupportedCapabilityError, prompt, tool } from '@use-crux/core'
+import { assertDirectMediaTranscriptIdentity, directMediaFixture } from '@use-crux/core/adapter/testing'
 import { z } from 'zod'
 import { createOpenAI } from '../src'
-import type { Message } from '@use-crux/core'
 import { client, completion } from './media-input.fixtures'
 
 const mediaPrompt = prompt({
@@ -12,43 +12,13 @@ const mediaPrompt = prompt({
 
 describe('OpenAI native media input', () => {
   it('lowers mixed URL, data, and provider-file input at the public generate boundary', async () => {
+    const fixture = directMediaFixture('openai')
     const create = vi.fn(async (_request: unknown) => completion('done'))
     const adapter = createOpenAI(client({ create }))
-    const imageUrl = new URL('https://example.com/chart.png?token=secret')
-    const inputMessages = [
-      {
-        role: 'user' as const,
-        content: [
-          { type: 'text' as const, text: 'Compare these.' },
-          {
-            type: 'image' as const,
-            source: imageUrl,
-            mediaType: 'image/png',
-            providerOptions: { openai: { detail: 'high' as const } },
-          },
-          {
-            type: 'file' as const,
-            source: new Uint8Array([1, 2, 3]),
-            mediaType: 'application/pdf',
-            filename: 'quarterly.pdf',
-          },
-          {
-            type: 'file' as const,
-            source: {
-              type: 'provider-file' as const,
-              provider: 'openai',
-              fileId: 'file-safe-id',
-              mediaType: 'application/pdf',
-              filename: 'uploaded.pdf',
-            },
-          },
-        ],
-      },
-    ] satisfies Message[]
 
     const result = await adapter.generate(mediaPrompt, {
       model: 'gpt-4o',
-      messages: inputMessages,
+      messages: [...fixture.messages],
     })
 
     expect(create).toHaveBeenCalledOnce()
@@ -61,21 +31,21 @@ describe('OpenAI native media input', () => {
             { type: 'text', text: 'Compare these.' },
             {
               type: 'image_url',
-              image_url: { url: imageUrl.href, detail: 'high' },
+              image_url: { url: fixture.imageUrl.href, detail: 'high' },
             },
             {
               type: 'file',
               file: {
-                file_data: 'data:application/pdf;base64,AQID',
+                file_data: 'data:application/pdf;base64,BAUG',
                 filename: 'quarterly.pdf',
               },
             },
-            { type: 'file', file: { file_id: 'file-safe-id' } },
+            { type: 'file', file: { file_id: fixture.providerFileId } },
           ],
         },
       ],
     })
-    expect(result.messages[0]).toBe(inputMessages[0])
+    assertDirectMediaTranscriptIdentity(result, fixture.messages)
   })
 
   it('lowers media returned by a tool immediately before the next provider turn', async () => {
