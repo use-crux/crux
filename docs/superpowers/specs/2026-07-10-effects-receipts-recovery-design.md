@@ -24,13 +24,9 @@ import {
 } from '@use-crux/core/effect'
 ```
 
-- `effect()` describes a custom durable or externally visible state transition once
-  and returns a normal callable function.
-- `recover()` recovers one effect receipt.
-- `reconcileEffect()` resolves a provider-confirmed ambiguous outcome.
-- `rollback()` recovers the recoverable effects in an effect scope.
-- `rollbackOnError()` creates a rollback boundary and rolls it back when its callback
-  fails.
+`effect()` defines a custom state transition as a normal callable. `recover()` handles
+one receipt, `rollback()` handles a scope, `rollbackOnError()` creates a failure
+boundary, and `reconcileEffect()` resolves a confirmed ambiguous outcome.
 
 Crux-native mutations, such as Workspace writes, memory writes, and task updates,
 contribute effects automatically. Tools, flow steps, pipelines, agents, and
@@ -47,86 +43,60 @@ receipts and JSON-safe recovery envelopes durable. The Runtime Engine adds durab
 suspension, post-restart recovery, target resolution, leases, retries, and crash-safe
 continuation.
 
-## Goals
-
-- Native mutations participate automatically; custom code is described once while
-  preserving normal call/return ergonomics.
-- Receipts correlate run/span/tool/flow/step/agent/approval/source identity.
-- Individual, failure-triggered, reviewer-driven, and delayed recovery share one API.
-- Input/output compensation and captured pre-state both work.
-- Ordering is deterministic across sequential, nested, retried, grouped, and parallel
-  effects; unavailable/expired/ambiguous/conflicting outcomes remain explicit.
-- Devtools stays domain-native and core remains provider/host/storage agnostic.
-
 ## Non-goals
 
-- ACID transactions across external systems.
-- A guarantee that every real-world action can be undone.
-- Distributed backup, cross-workspace restore, or disaster recovery.
-- Replacing Workspace transactions, Workspace version history, or namespace snapshots.
-- Replacing observability traces with an event-sourced application database.
-- Making arbitrary unmarked JavaScript safely recoverable through inference.
-- Automatically giving agents permission to inspect or trigger recovery.
-- A general authorization or identity system for the entire SDK.
-- Silently retrying an external effect whose outcome is unknown.
-- Rewriting history so that an original effect appears never to have occurred.
+- ACID transactions across systems or a promise that every action is reversible.
+- Backup, disaster recovery, or replacements for Workspace transactions/history,
+  namespace snapshots, observability, authorization, or identity.
+- Inferring safe recovery from unmarked JavaScript or granting agents recovery access.
+- Silently retrying unknown outcomes or rewriting history to erase an effect.
 
 ## Terminology
 
 ### Effect
 
-An intentional operation that changes durable or externally visible domain state.
-Examples include writing a Workspace file, updating a CRM customer, charging a card,
-changing a task status, or sending an email.
-
-Reads, retrieval, model generation, validation, routing, and pure computation are not
-effects. Internal telemetry delivery, cache population, Runtime leases, and other
-implementation bookkeeping are also not domain effects.
+An intentional change to durable or external domain state, such as a Workspace write,
+CRM update, charge, task transition, or email. Reads, model work, validation, routing,
+telemetry, caches, Runtime leases, and other bookkeeping are not domain effects.
 
 ### Native effect
 
-A public mutation implemented by a Crux primitive. It retains its native primitive
-identity, such as `workspace.operation` or `memory.write`, while exposing the shared
-effect contract.
+A public Crux mutation. It keeps its native identity, such as `workspace.operation`,
+while exposing the shared effect contract.
 
 ### Custom effect
 
-Application code defined with `effect()`. It has no more specific Crux primitive and
-therefore uses the generic effect representation.
+Application code defined with `effect()` and represented by the generic primitive.
 
 ### Receipt
 
-An immutable logical record of an effect attempt and its outcome: identity, causal
-context, resource, timing, status, approval correlation, and recovery availability.
-Sensitive input/output/recovery payloads are stored separately from receipt metadata.
+The immutable logical record of an attempt: identity, cause, resource, timing, status,
+approval, and recovery availability. Sensitive payloads are stored separately.
 
 ### Recovery
 
-The operation that mitigates or reverses one effect. Recovery may be an exact restore
-(Workspace snapshot), a version reversal, or a compensating action (refund/cancel).
-It is not guaranteed to restore the entire world to a prior instant.
+An exact restore, version reversal, or compensating action that mitigates one effect;
+it does not promise to restore the whole world to a prior instant.
 
 ### Effect scope
 
-A causal grouping of effects beneath a tool, step, pipeline, flow, agent, composition,
-or explicit scope. Scopes exist for explanation and aggregation.
+A causal group beneath a tool, step, pipeline, flow, agent, composition, or explicit
+scope, used for explanation and aggregation.
 
 ### Rollback boundary
 
-An effect scope that owns a recovery stack and native checkpoints. Flow runs,
-pipeline/agent/composition runs, and `rollbackOnError()` are rollback boundaries.
-Nested observational scopes normally share the nearest rollback boundary.
+A scope owning a recovery stack and native checkpoints. Run-like roots and
+`rollbackOnError()` are boundaries; nested grouping scopes normally share the nearest.
 
 ### Recovery unit
 
-One entry on a rollback boundary's recovery stack. It may cover one custom effect or
-several native effects sharing a recovery anchor, such as a single Workspace snapshot.
+One recovery-stack entry, covering one custom effect or native effects that share an
+anchor such as a Workspace snapshot.
 
 ### Resource
 
-An optional stable description of the domain object or boundary affected by an
-effect, such as `customer:cust_123` or one Workspace namespace. Resource identity
-supports review, conflict detection, policy, coalescing, and safe parallel recovery.
+An optional stable affected-domain identity, such as `customer:cust_123` or a
+Workspace namespace, used for review, policy, conflicts, coalescing, and concurrency.
 
 ## Public exports
 
@@ -141,28 +111,22 @@ import {
   rollback,
   rollbackOnError,
   EffectOutcomeUnknownError,
+  RollbackError,
+  type CapturedRecoverableEffectOptions,
   type EffectDefinition,
   type EffectExecutionResult,
+  type EffectOptions,
   type EffectReceiptRef,
   type EffectScopeRef,
+  type RecoverableEffectOptions,
   type RollbackResult,
 } from '@use-crux/core/effect'
 ```
 
 The stable public values and types are also re-exported from `@use-crux/core`.
 
-`effect.rollback()` and `effect.rollbackOnError()` are rejected. Those functions
-operate on scopes rather than on the definition factory, are less tree-shakeable and
-less consistent with Crux's named-function API style, and blur definition from
-orchestration.
-
-Definition-specific advanced calls preserve the ordinary callable return:
-
-```ts
-updateCustomer.id
-const execution = await updateCustomer.run(input)
-await updateCustomer.recover(execution.receipt)
-```
+`effect.rollback()` and `effect.rollbackOnError()` are rejected because scope
+orchestration does not belong on the definition factory; named exports also tree-shake.
 
 ## `effect()`
 
@@ -251,6 +215,7 @@ interface EffectExecutionContext {
 }
 
 interface EffectReceiptRef {
+  readonly kind: 'effect.receipt'
   readonly id: string
   readonly effectId: string
 }
@@ -271,8 +236,16 @@ interface EffectRecoveryContext<TInput, TOutput> {
   readonly input: TInput
   readonly output: TOutput
   readonly receipt: EffectReceiptRef
+  readonly resource?: EffectResource | readonly EffectResource[]
+  /** Stable for this recovery unit across retries; not the execution key. */
   readonly idempotencyKey: string
   readonly conflict: 'fail' | 'force'
+  readonly signal?: AbortSignal
+}
+
+interface EffectCaptureContext<TInput> {
+  readonly input: TInput
+  readonly receipt: EffectReceiptRef
   readonly signal?: AbortSignal
 }
 
@@ -281,34 +254,48 @@ interface CapturedEffectRecoveryContext<TInput, TOutput, TCaptured>
   readonly captured: TCaptured
 }
 
-type EffectRecovery<TInput, TOutput, TCaptured = never> =
-  | ((context: EffectRecoveryContext<TInput, TOutput>) => Awaitable<void>)
-  | {
-      readonly capture: (context: {
-        readonly input: TInput
-        readonly receipt: EffectReceiptRef
-        readonly signal?: AbortSignal
-      }) => Awaitable<TCaptured>
-      readonly execute: (
-        context: CapturedEffectRecoveryContext<TInput, TOutput, TCaptured>,
-      ) => Awaitable<void>
-    }
-
-interface EffectOptions<TInput, TOutput, TCaptured = never> {
+interface EffectOptions<TInput> {
   /** Recovery/output replay contract version. Defaults to 1. */
   readonly version?: number
   readonly resource?: (
     input: TInput,
   ) => EffectResource | readonly EffectResource[] | undefined
-  readonly recover?: EffectRecovery<TInput, TOutput, TCaptured>
 }
 
+interface RecoverableEffectOptions<TInput, TOutput>
+  extends EffectOptions<TInput> {
+  readonly recover: (
+    context: EffectRecoveryContext<TInput, TOutput>,
+  ) => Awaitable<void>
+}
+
+interface CapturedRecoverableEffectOptions<TInput, TOutput, TCaptured>
+  extends EffectOptions<TInput> {
+  readonly recover: {
+    readonly capture: (
+      context: EffectCaptureContext<TInput>,
+    ) => Awaitable<TCaptured>
+    readonly execute: (
+      context: CapturedEffectRecoveryContext<TInput, TOutput, TCaptured>,
+    ) => Awaitable<void>
+  }
+}
+
+type EffectCallArgs<TInput> = [TInput] extends [void]
+  ? [] | [input: TInput]
+  : [input: TInput]
+
+type EffectExecutor<TInput, TOutput> = (
+  input: TInput,
+  context: EffectExecutionContext,
+) => Awaitable<TOutput>
+
 interface EffectDefinition<TInput, TOutput> {
-  (input: TInput): Promise<TOutput>
+  (...args: EffectCallArgs<TInput>): Promise<TOutput>
   readonly id: string
   readonly version: number
   readonly _tag: 'EffectDefinition'
-  run(input: TInput): Promise<EffectExecutionResult<TOutput>>
+  run(...args: EffectCallArgs<TInput>): Promise<EffectExecutionResult<TOutput>>
 }
 
 interface RecoverableEffectDefinition<TInput, TOutput>
@@ -318,14 +305,34 @@ interface RecoverableEffectDefinition<TInput, TOutput>
     options?: RecoverOptions,
   ): Promise<RecoveryUnitResult>
 }
+
+function effect<TOutput, TCaptured, TInput = void>(
+  id: string,
+  execute: EffectExecutor<TInput, TOutput>,
+  options: CapturedRecoverableEffectOptions<TInput, TOutput, TCaptured>,
+): RecoverableEffectDefinition<TInput, TOutput>
+
+function effect<TOutput, TInput = void>(
+  id: string,
+  execute: EffectExecutor<TInput, TOutput>,
+  options: RecoverableEffectOptions<TInput, TOutput>,
+): RecoverableEffectDefinition<TInput, TOutput>
+
+function effect<TOutput, TInput = void>(
+  id: string,
+  execute: EffectExecutor<TInput, TOutput>,
+  options?: EffectOptions<TInput>,
+): EffectDefinition<TInput, TOutput>
 ```
 
-`effect()` overloads return `RecoverableEffectDefinition` exactly when `recover` is
-authored. `.run()` is the advanced path for callers that need an individual receipt;
-the callable form returns the ordinary output. Standalone `recover(receipt)` is
-canonical for receipt-driven code; the definition method validates the effect id and
-delegates. Inference is preserved when the callable is passed as `tool.execute`, a
-flow callback, or a pipeline `fn`.
+Recoverable overloads precede the base so extracted required recovery retains
+`.recover()`. Capture infers its state; extracted options can use `satisfies
+CapturedRecoverableEffectOptions<...>`. Type tests lock inline/extracted options,
+unannotated async capture, no-input effects, and tool/flow/pipeline compatibility.
+
+`.run()` is the advanced path for an individual receipt; the callable form returns the
+ordinary output. Standalone `recover(receipt)` remains canonical; the definition
+method validates the effect id and delegates.
 
 ### Stable ids
 
@@ -452,6 +459,7 @@ Run-like result types gain an opaque, JSON-safe reference:
 
 ```ts
 interface EffectScopeRef {
+  readonly kind: 'effect.scope'
   readonly id: string
   readonly runId: string
 }
@@ -464,8 +472,10 @@ agentResult.effects
 compositionResult.effects
 ```
 
-The reference contains no input, output, captured state, path, or secret. It can be
-returned through an API and later passed back to a trusted server handler.
+The discriminant lets server handlers validate round-tripped JSON and distinguish a
+scope from a receipt before storage lookup. The reference contains no input, output,
+captured state, path, or secret. It can be returned through an API and later passed
+back to a trusted server handler.
 
 Tools and direct `effect()` calls preserve their existing return value. They do not
 wrap outputs in `{ value, receipt }`. Individual receipt refs are available from
@@ -487,7 +497,7 @@ const customer = await rollbackOnError(async () => {
 If the callback throws, completed recovery units are recovered in causal reverse
 order. A completed rollback rethrows the original error unchanged. A partial, failed,
 cancelled, or impossible rollback throws `RollbackError` with the original error as
-`cause` and the `RollbackResult` attached.
+`cause` and the `RollbackResult` attached as `result`.
 
 By default, `rollbackOnError()` requires every encountered effect to be recoverable.
 An effect without recovery fails before its executor runs:
@@ -507,7 +517,7 @@ await rollbackOnError(
     await updateCustomer(input)
     await sendEmail(input)
   },
-  { require: 'best-effort' },
+  { recovery: 'best-effort' },
 )
 ```
 
@@ -520,7 +530,13 @@ interface RollbackBoundaryController {
 }
 
 interface RollbackOnErrorOptions {
-  readonly require?: 'all' | 'best-effort'
+  readonly recovery?: 'required' | 'best-effort'
+}
+
+class RollbackError extends Error {
+  readonly result?: RollbackResult
+  readonly recoveryError?: unknown
+  readonly cause?: unknown
 }
 
 function rollbackOnError<T>(
@@ -529,7 +545,10 @@ function rollbackOnError<T>(
 ): Promise<T>
 ```
 
-`require` defaults to `'all'`.
+`recovery` defaults to `'required'`. The option describes the boundary's recovery
+guarantee: required mode blocks an effect without available recovery before its
+executor runs; best-effort mode records irreversible or unavailable effects and may
+produce a partial rollback.
 
 ### Programmatic rejection inside the callback
 
@@ -551,6 +570,23 @@ const result = await rollbackOnError(async (scope) => {
 After `scope.rollback()` begins, the boundary is terminal. Starting another effect in
 that boundary throws `EFFECT_SCOPE_TERMINAL`; pure computation may finish so the
 caller can return a rejection result.
+
+`scope.rollback()` returns expected unit outcomes as `RollbackResult`. Before the
+wrapper resolves the callback value, it enforces its mode against that result:
+
+- required mode resolves only after `completed`; otherwise it throws `RollbackError`
+  with the result attached and no `cause` when the callback returned normally;
+- best-effort mode permits the callback to return after any terminal rollback result;
+- if the callback throws after a manual rollback, a completed rollback rethrows that
+  error unchanged, while any incomplete rollback throws `RollbackError` with the
+  callback error as `cause`;
+- a recovery failure before any result rejects `scope.rollback()` and is recorded as
+  `recoveryError`; it still makes the wrapper throw `RollbackError` if the callback
+  catches it and returns, and any later callback error is preserved as `cause`.
+
+The last rule also applies to automatic rollback: a tracked pre-result recovery error
+wins over callback completion. This keeps result semantics consistent without letting
+an ignored or caught recovery failure satisfy a boundary.
 
 ## `rollback()`
 
@@ -914,7 +950,8 @@ silently claim that one partial snapshot covers unrelated paths.
 
 Source-backed/virtual mount mutations are recoverable only when their source provider
 declares compatible recovery semantics. Otherwise they are irreversible within the
-scope and `rollbackOnError({ require: 'all' })` blocks before mutation.
+scope and a `rollbackOnError({ recovery: 'required' })` boundary blocks before
+mutation.
 
 ### Snapshot defaults and opt-out
 
@@ -926,8 +963,8 @@ scope and `rollbackOnError({ require: 'all' })` blocks before mutation.
   and uses file history where applicable.
 - A Workspace may explicitly opt out of automatic scope snapshots for cost-sensitive
   workloads, for example `workspace({ recovery: false })`.
-- `rollbackOnError({ require: 'all' })` fails before a Workspace mutation when the
-  required recovery capability is disabled or unsupported.
+- `rollbackOnError({ recovery: 'required' })` fails before a Workspace mutation when
+  the required recovery capability is disabled or unsupported.
 - Ordinary flow/agent/pipeline scopes permit partial recovery and expose unsupported
   effects honestly unless a higher policy requires full recoverability.
 
@@ -1159,12 +1196,10 @@ type RecoveryAvailability =
   | 'ambiguous'
   | 'recovered'
 
-interface EffectReceipt {
+interface EffectReceipt extends EffectReceiptRef {
   readonly schemaVersion: 1
-  readonly id: string
-  readonly effectId: string
   readonly effectVersion: number
-  readonly kind: 'custom' | 'native'
+  readonly effectKind: 'custom' | 'native'
   readonly nativePrimitive?: string
   readonly scopeId: string
   readonly boundaryId: string
@@ -1629,14 +1664,14 @@ results, and can resume observing a Runtime-backed rollback after reconnect.
 | Effect throws | Known failure is `failed`; possible external commit is `unknown` and requires reconciliation. |
 | Recovery throws | Record failed recovery, continue safe siblings, retry only that unit with stable idempotency. |
 | Effect starts during rollback | Reject with `EFFECT_SCOPE_TERMINAL`; settle in-flight work before planning. |
-| Irreversible child | Ordinary rollback is partial; complete boundary blocks it; best-effort records it. |
+| Irreversible child | Ordinary rollback is partial; required-recovery boundary blocks it; best-effort records it. |
 | Expired state | Return `expired` before handler invocation; retain audit metadata. |
 | Newer mutation | Native provider reports conflict; force needs explicit option/authority. |
 | Duplicate request | Join existing Runtime work or return the recorded result; never compensate twice. |
 | Restart/missing code | Reload records and exact id+version target; otherwise `handler_unavailable`. |
 | Child then outer rollback | Skip recovered child units; an earlier valid outer snapshot may still restore. |
 | Parallel same resource | Provider key serializes recovery; version checks guard the plan. |
-| Unsupported native store | Keep evidence; complete boundary blocks before mutation; ordinary scope says unavailable. |
+| Unsupported native store | Keep evidence; required-recovery boundary blocks before mutation; ordinary scope says unavailable. |
 | Blob/version GC | Live refs pin dependencies until recovery expiry/deletion. |
 | Definition changes | Exact version required; old receipts are migrated, expired, or unavailable. |
 
@@ -1659,13 +1694,18 @@ what still works, and the next action. Candidate stable codes:
 - `EFFECT_ROLLBACK_PARTIAL`
 - `EFFECT_NATIVE_RECOVERY_UNSUPPORTED`
 
+`EFFECT_RECOVERY_REQUIRED` must name the blocked effect and boundary, explain that no
+recovery is available, and show every valid next action: define recovery, move the
+effect outside the boundary, or choose `{ recovery: 'best-effort' }`. The strict
+default is usable only when its first failure teaches the escape hatch.
+
 Project Index/lint findings should distinguish authored risk from runtime failure:
 
 - recoverable effect not exported/addressable for durable Runtime usage;
 - obvious write-capable custom tool not backed by a native or custom effect;
 - conflicting duplicate effect id/version pairs;
 - recovery callback that appears to invoke nested recoveries directly;
-- rollback boundary requiring all recovery while statically containing an explicitly
+- required-recovery boundary statically containing an explicitly
   irreversible effect;
 - Workspace recovery disabled in a flow that exposes later rollback.
 
@@ -1688,40 +1728,32 @@ enters core.
 
 Contract suites cover:
 
-- **Types/core:** inference, callable compatibility, conditional `.recover`, failed
-  preparation, complete/best-effort boundaries, ordering/nesting/retries, terminal
-  scopes, repeated/partial rollback, conflicts, expiry, and ambiguous outcomes.
-- **Workspace:** lazy/shared/disjoint snapshots, write/delete/rename/blob fidelity,
-  uncovered-unit segmentation, nested boundaries, unsupported mounts, transactions,
-  linked restores, retention, and post-run conflicts.
-- **Runtime:** every store/host adapter, restart from each lifecycle state, generated
-  target resolution, leases, duplicate delivery, retry/retention, missing handlers,
-  flow suspend/resume, and both execution and recovery crash windows.
-- **Composition/UI/index:** nested and parallel ordering; canonical graph fixtures;
-  no duplicate native nodes or sensitive payloads; domain cards, preview and resumed
-  progress; Project Index backend parity and required cache-identity updates.
+- **Types/core:** overload/capture inference, no-input and extracted options, callable
+  composition, conditional `.recover`, preparation, boundary modes, ordering, retries,
+  terminal scopes, repeated/partial rollback, pre-result error precedence,
+  discriminated refs, conflicts, expiry, and ambiguity.
+- **Workspace:** shared/disjoint snapshots, mutation/blob fidelity, segmentation,
+  nesting, unsupported mounts, transactions, linked restore, retention, and conflicts.
+- **Runtime:** every adapter and lifecycle restart point, targets, leases, duplicates,
+  retry/retention, missing handlers, suspend/resume, and both crash windows.
+- **Composition/UI/index:** nested/parallel order, graph/privacy fixtures, native cards,
+  preview/resumed progress, Project Index parity, and cache-identity updates.
 
 ## Rollout
 
-This RFC describes one coherent V1 API, but implementation should land as vertical
-slices:
+Implementation lands as compatible vertical slices:
 
-1. **Core custom effects and in-process rollback** — callable definitions, receipts,
-   scopes, `rollbackOnError`, deterministic sequential/nested recovery, observability.
-2. **Workspace native reference implementation** — #131 snapshots, lazy boundary
-   capture, coalescing, conflict-safe restore, domain-first Devtools.
-3. **Flow/Runtime durability** — persisted refs/envelopes, suspend/resume, generated
-   recovery targets, leases/retries/retention, delayed rollback.
-4. **Agent/pipeline/composition result integration** — automatic boundaries and
-   `result.effects` across adapters.
-5. **Additional native providers** — memory, plan/task, blackboard, handoff, then
-   audit-first domains.
-6. **Policy/authorization and richer operator UI** — approval matching, privileged
-   preview/force, optional agent tools.
+1. **Core/in-process:** definitions, receipts, scopes, `rollbackOnError`, ordering, and
+   observability.
+2. **Workspace:** #131 snapshots, lazy capture, coalescing, conflicts, and Devtools.
+3. **Flow/Runtime:** persisted refs/envelopes, suspension, targets, leases, retries,
+   retention, and delayed rollback.
+4. **Compositions:** automatic boundaries and `result.effects` across adapters.
+5. **Native providers:** memory, plan/task, blackboard, handoff, then audit-only domains.
+6. **Policy/UI:** approvals, privileged preview/force, and optional agent tools.
 
-Slices must not publish temporary competing APIs. Early slices may mark durable
-capabilities experimental until Runtime conformance is complete, while preserving the
-V1 authored `effect()` shape.
+No slice publishes a competing API. Durable capabilities may remain experimental
+until Runtime conformance completes, while preserving the V1 `effect()` shape.
 
 ## Acceptance criteria
 
@@ -1729,15 +1761,17 @@ The RFC is complete when the implementation track can demonstrate:
 
 1. One callable `effect()` works directly and unchanged in tools, flows, and pipelines;
    input/output and captured-pre-state recovery both work in-process.
-2. `rollbackOnError()` reverses recoverable effects causally and blocks irreversible
-   ones by default; a reviewer can instead trigger `flow.rollback()`.
+2. `rollbackOnError()` reverses recoverable effects causally, blocks irreversible ones
+   with an actionable diagnostic by default, and cannot silently return after an
+   incomplete required manual rollback; a reviewer can trigger `flow.rollback()`.
 3. A completed or suspended Runtime-backed run can be rejected later and recovered
    from its JSON-safe scope ref after restart, without a user registry.
 4. Workspace calls covered by one anchor share a snapshot; intervening uncovered units
    split segments; exact-tree recovery preserves causal order and detects newer-state
    conflicts.
-5. Nested scopes, shared units, retries, duplicates, partial failures, crash ambiguity,
-   and parallel branches have the specified typed outcomes and ordering.
+5. Discriminated refs reject the wrong API input before lookup; nested scopes, shared
+   units, retries, duplicates, partial failures, crash ambiguity, and parallel branches
+   have the specified typed outcomes and ordering.
 6. Native cards stay native, custom effects are generic, and receipts correlate causal,
    approval, and source identity without exposing sensitive recovery state.
 7. Project Index, observability, Devtools, docs, Workspace, and Runtime/adapter
@@ -1749,15 +1783,14 @@ The RFC is complete when the implementation track can demonstrate:
 - Workspace version history/retention and blob ownership.
 - Existing Workspace transaction semantics.
 - Canonical observability graph/schema and context propagation.
-- Runtime Engine target manifests, durable stores, leases, outbox/wake delivery, and
-  retention.
+- Runtime targets, stores, leases, outbox/wake delivery, and retention.
 - Existing tool approval lifecycle and Devtools command authorization boundaries.
 - Project Index definition discovery and backend parity.
 
 ## Industry grounding
 
-Grounding: Saga/idempotent compensation, immutable event history, OTel causal context,
-copy-on-write/Git-style snapshots, and optimistic concurrency. References:
+Grounding: Sagas, idempotency, immutable history, OTel causality, copy-on-write, and
+optimistic concurrency. References:
 [Temporal Saga patterns](https://go.temporal.io/platform-hub/patterns),
 [AWS event sourcing](https://docs.aws.amazon.com/prescriptive-guidance/latest/cloud-design-patterns/event-sourcing.html),
 and [OpenTelemetry semantic conventions](https://opentelemetry.io/docs/concepts/semantic-conventions/).
