@@ -96,6 +96,7 @@ export function runtimeFlowSnapshot(
     readonly input: unknown
     readonly completedSteps: Record<string, { output: JsonValue; durationMs: number }>
     readonly scheduledEffects?: RuntimeFlowSnapshot['scheduledEffects']
+    readonly continuation?: JsonValue
   },
 ): RuntimeFlowSnapshot {
   return {
@@ -105,6 +106,7 @@ export function runtimeFlowSnapshot(
     namespace: execution.work.namespace,
     status: options.status,
     input: runtimeInputValue(options.input),
+    ...(options.continuation ? { continuation: options.continuation } : {}),
     completedSteps: runtimeCompletedSteps(options.completedSteps),
     fingerprint: execution.fingerprint.observed,
     pendingSuspends: [],

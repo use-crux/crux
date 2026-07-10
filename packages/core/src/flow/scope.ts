@@ -44,8 +44,11 @@ import type {
 import type { RuntimeTaskInput, RuntimeTaskTarget } from '../runtime/api/task'
 import { executeWithRetry } from '../generation/retry'
 import type { JsonObject, JsonValue, RecordStore } from '../storage'
-import type { CapturedObservabilityContext } from '../observability'
-import { observe } from '../observability'
+import {
+  observe,
+  sanitizePropagationCarrier,
+  type OpenObservedSpan,
+} from '../observability'
 
 // Import from decomposed modules
 import type {
@@ -208,12 +211,6 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       throw new Error(`No suspended flow found for flowId: ${flowId}`)
     }
     assertFlowSnapshotResumable(snapshot)
-    if (snapshot.observabilityContext && !observe.captureContext()) {
-      return await observe.withContext(
-        snapshot.observabilityContext as unknown as CapturedObservabilityContext,
-        () => executeFlow(name, fn, options),
-      )
-    }
   }
 
   // Completed step cache (for skip-replay on resume)
@@ -233,29 +230,43 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         : options?.input
   ) as TInput
 
+  const continuation = isRuntimeExecution
+    ? runtimeExecution.snapshot.continuation
+    : snapshot?.continuation
+  if (isResume && !continuation) {
+    throw new Error(`Flow ${flowId} cannot resume without a continuation carrier.`)
+  }
+  const flowRun = continuation
+    ? observe.resumeRun(sanitizePropagationCarrier(continuation), {
+        reason: 'flow.resume',
+        attributes: { flowId },
+      })
+    : observe.openRun({
+        name,
+        rootPrimitive: 'flow.run',
+        traceId: observe.captureContext()?.traceId,
+        attributes: { flowId, parentFlowId: parentFlowId ?? null, goal: options?.goal ?? null },
+      })
+
   // Open the flow span: every child trace started inside the flow
   // (e.g. via @use-crux/convex/server ctx.crux.runAction) captures this spanId as
   // its parentSpanId, so the trace tree shows
   // `flow > runtime-flow:start > <child agent>` instead of orphaning
   // the child under the parent's trace boundary.
-  const flowSpan = observe.openSpan({
-    name,
-    primitive: 'flow.run',
-    attributes: {
-      flowId,
-      parentFlowId: parentFlowId ?? null,
-      goal: options?.goal ?? null,
-      resume: isResume,
-    },
+  let flowSpan!: OpenObservedSpan
+  flowRun.withContext(() => {
+    flowSpan = observe.openSpan({
+      name,
+      primitive: 'flow.run',
+      attributes: {
+        flowId,
+        parentFlowId: parentFlowId ?? null,
+        goal: options?.goal ?? null,
+        resume: isResume,
+      },
+      implicitRun: false,
+    })
   })
-  const resumeObservabilityContext =
-    observe.captureContext() ??
-    ({
-      runId: flowSpan.runId,
-      traceId: flowSpan.traceId,
-      segmentId: flowSpan.segmentId,
-      spanStack: flowSpan.parentSpanId ? [flowSpan.parentSpanId] : [],
-    } as const)
   const spanId = flowSpan.spanId
 
   // Track aggregates across steps
@@ -618,6 +629,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           input: flowInput,
           completedSteps,
           scheduledEffects: runtimeExecution.snapshot.scheduledEffects,
+          continuation: flowRun.captureContinuation(),
         }),
         scheduledEffects: runtimeExecution.scheduledEffects,
       }
@@ -634,13 +646,14 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
         updatedAt: completedAt,
         completedAt,
-        observabilityContext: snapshot.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
+        continuation: flowRun.captureContinuation(),
       }
       assertFlowSnapshotMetadata(completedSnapshot)
       await store.put(`${FLOW_KEY_PREFIX}${flowId}`, completedSnapshot)
     }
 
     flowSpan.end({ attributes: { flowStatus: 'completed', totalSteps: stepCount } })
+    flowRun.end()
     return { status: 'completed', output: result, flowId }
   } catch (error) {
     // Handle suspension — persist state and return suspended result
@@ -665,6 +678,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
               fingerprint: runtimeExecution.fingerprint.observed,
               deliveredSuspends: runtimeExecution.snapshot.deliveredSuspends,
               scheduledEffects: runtimeExecution.snapshot.scheduledEffects,
+              continuation: flowRun.captureContinuation(),
             },
             suspends: [
               {
@@ -694,6 +708,11 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           status: 'suspended',
           attributes: { suspendedAt: error.suspendPoint, totalSteps: stepCount },
         })
+        flowRun.suspend({
+          reason: 'flow.suspend',
+          attributes: { flowId, suspendPoint: error.suspendPoint },
+        })
+        await observe.flush()
         return runtimeExecution.result as FlowResult<T>
       }
 
@@ -713,7 +732,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           completedSteps: completedStepsForSnapshot(completedSteps),
           ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
           traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
-          observabilityContext: resumeObservabilityContext as unknown as JsonObject,
+          continuation: flowRun.captureContinuation(),
           createdAt: snapshot?.createdAt ?? startedAt,
           updatedAt: currentTimeMs(),
           ...(timeoutAt !== undefined ? { timeoutAt } : {}),
@@ -735,6 +754,11 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         status: 'suspended',
         attributes: { suspendedAt: error.suspendPoint, totalSteps: stepCount },
       })
+      flowRun.suspend({
+        reason: 'flow.suspend',
+        attributes: { flowId, suspendPoint: error.suspendPoint },
+      })
+      await observe.flush()
       return { status: 'suspended', flowId, suspendedAt: error.suspendPoint }
     }
 
@@ -749,6 +773,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
             input: flowInput,
             completedSteps,
             scheduledEffects: runtimeExecution.snapshot.scheduledEffects,
+            continuation: flowRun.captureContinuation(),
           }),
           scheduledEffects: runtimeExecution.scheduledEffects,
         }
@@ -757,6 +782,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           status: 'cancelled',
           attributes: { cancelReason: error.reason ?? null, totalSteps: stepCount },
         })
+        flowRun.end({ status: 'cancelled' })
         return runtimeExecution.result as FlowResult<T>
       }
 
@@ -778,7 +804,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           completedSteps: completedStepsForSnapshot(completedSteps),
           ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
           traceContext: flowTraceContext(existing?.sessionId, parentFlowId),
-          observabilityContext: snapshot?.observabilityContext ?? (resumeObservabilityContext as unknown as JsonObject),
+          continuation: flowRun.captureContinuation(),
           createdAt: snapshot?.createdAt ?? startedAt,
           updatedAt: cancelledAt,
           cancelledAt,
@@ -793,6 +819,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         status: 'cancelled',
         attributes: { cancelReason: error.reason ?? null, totalSteps: stepCount },
       })
+      flowRun.end({ status: 'cancelled' })
       return { status: 'cancelled', flowId, cancelReason: error.reason }
     }
 
@@ -815,10 +842,34 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       }
 
       flowSpan.error(error, { flowStatus: 'expired', suspendedAt: error.suspendPoint, totalSteps: stepCount })
+      flowRun.error(error)
       return { status: 'expired', flowId, suspendedAt: error.suspendPoint }
     }
 
+    // Signal validation is a recoverable delivery failure: the persisted flow
+    // remains suspended so callers can replace the bad signal and resume it.
+    if (error instanceof InvalidSignalPayloadError && snapshot) {
+      const flowStore = store ?? getHooks().records
+      if (flowStore) {
+        const retryableSnapshot: FlowSnapshot = {
+          ...snapshot,
+          continuation: flowRun.captureContinuation(),
+          updatedAt: currentTimeMs(),
+        }
+        assertFlowSnapshotMetadata(retryableSnapshot)
+        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, retryableSnapshot)
+      }
+      flowSpan.error(error, { flowStatus: 'suspended', totalSteps: stepCount })
+      flowRun.suspend({
+        reason: 'flow.signal.invalid',
+        attributes: { flowId },
+      })
+      await observe.flush()
+      throw error
+    }
+
     flowSpan.error(error, { totalSteps: stepCount })
+    flowRun.error(error)
     throw error
   }
 }

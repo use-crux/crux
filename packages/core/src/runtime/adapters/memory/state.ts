@@ -300,6 +300,9 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
     namespace: snapshot.namespace,
     status: snapshot.status,
     input: cloneJsonValue(snapshot.input, 'flow snapshot input'),
+    ...(snapshot.continuation
+      ? { continuation: cloneJsonValue(snapshot.continuation, 'flow snapshot continuation') }
+      : {}),
     completedSteps: cloneJsonValue(
       snapshot.completedSteps,
       'flow snapshot completedSteps',

@@ -846,7 +846,7 @@ export const observe = {
       segmentId,
       startedAtMs,
       spanStack: [],
-      correlators: mergeCruxCorrelators(identity.correlators, effectiveCorrelators()),
+      correlators: effectiveCorrelators(),
     }
     let closed = false
     const continuation = createPropagationCarrier({

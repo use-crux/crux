@@ -127,6 +127,13 @@ describe('flow signal consumption', () => {
         },
       },
       traceContext: {},
+      continuation: {
+        traceparent: '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01',
+        crux: {
+          runId: 'run_0123456789abcdef01234567',
+          previousSegmentId: 'seg_0123456789abcdef01234567',
+        },
+      },
       createdAt: now - 20,
       updatedAt: now - 10,
       timeoutAt: expiredTimeout,

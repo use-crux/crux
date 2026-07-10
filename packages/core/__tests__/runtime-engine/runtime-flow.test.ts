@@ -11,9 +11,16 @@ import {
 import { runtimeTargetMap } from '../../src/runtime/api/target-registry'
 import { getExecutionContext } from '../../src/runtime/execution-context'
 import { resetHooks } from '../../src/runtime/runtime'
+import {
+  createInMemoryObservabilityTransport,
+  observe,
+  resetObservabilityRuntime,
+  setObservabilityTransport,
+} from '../../src/observability'
 
 afterEach(() => {
   resetHooks()
+  resetObservabilityRuntime()
 })
 
 describe('runtime-backed flows', () => {
@@ -52,6 +59,13 @@ describe('runtime-backed flows', () => {
     )
     const deferredWorkId = snapshot?.scheduledEffects?.['defer:1']?.workId
     expect(deferredWorkId).toEqual(expect.any(String))
+    expect(snapshot?.continuation).toEqual(
+      expect.objectContaining({
+        traceparent: expect.any(String),
+        crux: expect.objectContaining({ previousSegmentId: expect.any(String) }),
+      }),
+    )
+    expect(() => JSON.stringify(snapshot?.continuation)).not.toThrow()
 
     await reviewFlow.signal(suspended.flowId, 'approval', {})
 
@@ -411,6 +425,8 @@ describe('runtime-backed flows', () => {
       autoStartMaintenance: false,
     })
     const crux = config({ runtime })
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
     const steps: string[] = []
 
     const reviewFlow = flow('review', async (scope) => {
@@ -430,6 +446,16 @@ describe('runtime-backed flows', () => {
     await reviewFlow.signal(suspended.flowId, 'approval', {})
 
     expect(steps).toEqual(['draft', 'publish'])
+    await observe.flush()
+
+    const lifecycle = transport.records.filter((record) => record.type.startsWith('run:'))
+    expect(lifecycle.map((record) => record.type)).toEqual([
+      'run:start',
+      'run:suspend',
+      'run:resume',
+      'run:end',
+    ])
+    expect(lifecycle.filter((record) => record.type === 'run:end')).toHaveLength(1)
 
     crux.dispose()
   })
