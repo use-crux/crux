@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { corpus, indexer, indexingPipeline, transform } from '../../indexing'
+import { corpus, indexer, indexingPipeline, transform } from '../../src/indexing'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
+} from '../../src/observability'
 import {
   retrievalRecipe,
   retrievalStep,
   retrieve,
   retriever,
-} from '../../retrieval'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
-import type { RetrieverHit } from '../../retrieval'
+} from '../../src/retrieval'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import type { RetrieverHit } from '../../src/retrieval'
 
 function hit(id: string, content: string, score = 1): RetrieverHit {
   return {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { parseFrontmatter } from '../../skill/frontmatter'
-import { SkillLoadError } from '../../skill/types'
+import { parseFrontmatter } from '../../src/skill/frontmatter'
+import { SkillLoadError } from '../../src/skill/types'
 
 describe('parseFrontmatter()', () => {
   it('parses valid frontmatter with name and description', () => {

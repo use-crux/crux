@@ -15,8 +15,8 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "vitest", "jsdom"],
     "paths": {
-      "@use-crux/core": ["../core/index.ts"],
-      "@use-crux/core/*": ["../core/*"],
+      "@use-crux/core": ["../core/src/index.ts"],
+      "@use-crux/core/*": ["../core/src/*"],
       "@use-crux/react": ["./src/index.ts"]
     }
   },

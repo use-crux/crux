@@ -6,12 +6,12 @@ import {
   workspace,
 } from "@use-crux/core";
 import { node } from "@use-crux/core/runtime";
-import { createWorkspaceWatchHandle } from "../../workspace/watch/handle";
-import { createWorkspaceChangeEmitter } from "../../workspace/watch/runtime";
+import { createWorkspaceWatchHandle } from "../../src/workspace/watch/handle";
+import { createWorkspaceChangeEmitter } from "../../src/workspace/watch/runtime";
 import type {
   WorkspaceChangeEvent,
   WorkspaceCustomMountSource,
-} from "../../workspace";
+} from "../../src/workspace";
 
 afterEach(() => {
   resetHooks();

@@ -1,7 +1,7 @@
-import { inMemoryRuntimeStore } from '../../runtime/adapters/memory'
-import type { RuntimeTargetId, TaskId, WorkId } from '../../runtime/ports'
-import { createRuntimeKernel } from '../../runtime/engine/kernel'
-import { runRuntimeEngineAdapterTests } from '../../runtime/testing'
+import { inMemoryRuntimeStore } from '../../src/runtime/adapters/memory'
+import type { RuntimeTargetId, TaskId, WorkId } from '../../src/runtime/ports'
+import { createRuntimeKernel } from '../../src/runtime/engine/kernel'
+import { runRuntimeEngineAdapterTests } from '../../src/runtime/testing'
 
 runRuntimeEngineAdapterTests({
   name: 'in-memory RuntimeKernel',

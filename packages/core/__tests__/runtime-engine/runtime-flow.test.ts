@@ -8,9 +8,9 @@ import {
   type RuntimeTargetId,
   type WorkId,
 } from '@use-crux/core/runtime'
-import { runtimeTargetMap } from '../../runtime/api/target-registry'
-import { getExecutionContext } from '../../runtime/execution-context'
-import { resetHooks } from '../../runtime/runtime'
+import { runtimeTargetMap } from '../../src/runtime/api/target-registry'
+import { getExecutionContext } from '../../src/runtime/execution-context'
+import { resetHooks } from '../../src/runtime/runtime'
 
 afterEach(() => {
   resetHooks()

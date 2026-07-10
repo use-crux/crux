@@ -9,7 +9,7 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { prompt, type AnyPrompt } from '../prompt'
+import { prompt, type AnyPrompt } from '../src/prompt'
 import {
   cascade,
   fallback,
@@ -25,7 +25,7 @@ import {
   type RoutingCallOptions,
   type RoutingReceipt,
   type StreamOf,
-} from '../routing'
+} from '../src/routing'
 
 interface RawModel {
   readonly modelId: string

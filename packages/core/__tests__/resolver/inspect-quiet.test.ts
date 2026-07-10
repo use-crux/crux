@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { compilePrompt } from "../../resolver/compile";
-import { context, when } from "../../prompt/context";
-import { contributor } from "../../prompt/contributor";
-import { createResolverFakes, staticTokenizer } from "../../resolver/fakes";
-import type { PromptConfig } from "../../prompt/prompt-types";
-import type { SkillEntry } from "../../prompt/context-types";
+import { compilePrompt } from "../../src/resolver/compile";
+import { context, when } from "../../src/prompt/context";
+import { contributor } from "../../src/prompt/contributor";
+import { createResolverFakes, staticTokenizer } from "../../src/resolver/fakes";
+import type { PromptConfig } from "../../src/prompt/prompt-types";
+import type { SkillEntry } from "../../src/prompt/context-types";
 
 type AnyConfig = PromptConfig<
   z.ZodType,

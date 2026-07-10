@@ -9,7 +9,7 @@ import {
   type CruxAttributes,
   type CruxGraphRecord,
   type CruxMetrics,
-} from '../../observability'
+} from '../../src/observability'
 
 describe('observability invariants', () => {
   afterEach(() => {

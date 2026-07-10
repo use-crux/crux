@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { cascade, fallback, router } from '../../routing'
-import { CascadeExhaustedError, isRoutingStreamError } from '../../routing/errors'
+import { cascade, fallback, router } from '../../src/routing'
+import { CascadeExhaustedError, isRoutingStreamError } from '../../src/routing/errors'
 import type {
   CascadeRoutingStep,
   FallbackRoutingStep,
   RouterRoutingStep,
-} from '../../routing/receipt'
-import { resolveModel } from '../../routing/resolve'
+} from '../../src/routing/receipt'
+import { resolveModel } from '../../src/routing/resolve'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
+} from '../../src/observability'
 
 const extractModelId = (model: string) => model
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { withCrux } from '../../runtime/next'
+import { withCrux } from '../../src/runtime/next'
 
 describe('withCrux', () => {
   it('runs runtime artifact generation before delegating to the user webpack hook', () => {

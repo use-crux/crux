@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { RuntimeTargetId, WorkId } from '@use-crux/core/runtime'
-import { qstash, type QStashPublishRequest } from '../runtime'
+import { qstash, type QStashPublishRequest } from '../src/runtime'
 
 describe('qstash() runtime wake adapter', () => {
   it('publishes wake envelopes to QStash with the endpoint URL and deduplication id', async () => {

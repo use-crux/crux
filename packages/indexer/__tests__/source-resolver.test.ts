@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it } from 'vitest'
-import { SourceResolver } from '../source-resolver'
-import type { SourceResolverFileSystem } from '../source-resolver'
+import { SourceResolver } from '../src/source-resolver'
+import type { SourceResolverFileSystem } from '../src/source-resolver'
 
 const roots: string[] = []
 

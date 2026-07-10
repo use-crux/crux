@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createParseMemo, type SourceReader } from '../indexer/static/extraction/source-io'
+import { createParseMemo, type SourceReader } from '../src/indexer/static/extraction/source-io'
 
 describe('static source memo', () => {
   it('shares one source read across text, parsed AST, and source profile metadata', async () => {

@@ -2,7 +2,7 @@ import type { GoogleGenAI } from "@google/genai";
 import { describe, expect, it } from "vitest";
 import { prompt } from "@use-crux/core";
 import { router } from "@use-crux/core/routing";
-import { createGoogle } from "../native";
+import { createGoogle } from "../src/native";
 
 const routed = router({
   classify: () => "fast" as const,

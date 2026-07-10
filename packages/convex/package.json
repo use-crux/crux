@@ -21,68 +21,68 @@
   "engines": {
     "node": ">=22.0.0"
   },
-  "main": "./index.ts",
-  "types": "./index.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./index.ts",
-      "import": "./index.ts"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     },
     "./swarm": {
-      "types": "./swarm.ts",
-      "import": "./swarm.ts"
+      "types": "./src/swarm.ts",
+      "import": "./src/swarm.ts"
     },
     "./agent": {
-      "types": "./agent.ts",
-      "import": "./agent.ts"
+      "types": "./src/agent.ts",
+      "import": "./src/agent.ts"
     },
     "./context": {
-      "types": "./context.ts",
-      "import": "./context.ts"
+      "types": "./src/context.ts",
+      "import": "./src/context.ts"
     },
     "./memory": {
-      "types": "./memory.ts",
-      "import": "./memory.ts"
+      "types": "./src/memory.ts",
+      "import": "./src/memory.ts"
     },
     "./retrieval": {
-      "types": "./retrieval.ts",
-      "import": "./retrieval.ts"
+      "types": "./src/retrieval.ts",
+      "import": "./src/retrieval.ts"
     },
     "./react": {
-      "types": "./react.ts",
-      "import": "./react.ts"
+      "types": "./src/react.ts",
+      "import": "./src/react.ts"
     },
     "./skill": {
-      "types": "./skill.ts",
-      "import": "./skill.ts"
+      "types": "./src/skill.ts",
+      "import": "./src/skill.ts"
     },
     "./tools": {
-      "types": "./tools.ts",
-      "import": "./tools.ts"
+      "types": "./src/tools.ts",
+      "import": "./src/tools.ts"
     },
     "./runtime": {
-      "types": "./runtime.ts",
-      "import": "./runtime.ts"
+      "types": "./src/runtime.ts",
+      "import": "./src/runtime.ts"
     },
     "./runtime/node": {
-      "types": "./runtime-node.ts",
-      "import": "./runtime-node.ts"
+      "types": "./src/runtime-node.ts",
+      "import": "./src/runtime-node.ts"
     },
     "./workspace": {
-      "types": "./workspace.ts",
-      "import": "./workspace.ts"
+      "types": "./src/workspace.ts",
+      "import": "./src/workspace.ts"
     },
     "./bridge": {
-      "types": "./bridge.ts",
-      "import": "./bridge.ts"
+      "types": "./src/bridge.ts",
+      "import": "./src/bridge.ts"
     },
     "./observability": {
-      "types": "./observability.ts",
-      "import": "./observability.ts"
+      "types": "./src/observability.ts",
+      "import": "./src/observability.ts"
     },
     "./server": {
-      "types": "./server.ts",
-      "import": "./server.ts"
+      "types": "./src/server.ts",
+      "import": "./src/server.ts"
     },
     "./convex.config": {
       "types": "./src/component/convex.config.ts",
@@ -92,8 +92,8 @@
       "types": "./src/component/_generated/component.ts"
     },
     "./skill/node": {
-      "types": "./skill-node.ts",
-      "import": "./skill-node.ts"
+      "types": "./src/skill-node.ts",
+      "import": "./src/skill-node.ts"
     }
   },
   "dependencies": {

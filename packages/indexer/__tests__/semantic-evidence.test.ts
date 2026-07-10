@@ -1,6 +1,6 @@
 import type { ProjectDefinition, ProjectRelation } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
-import { collectProjectedSemanticEvidence, projectSemanticEvidenceBatches } from '../indexer/semantic/evidence/projection'
+import { collectProjectedSemanticEvidence, projectSemanticEvidenceBatches } from '../src/indexer/semantic/evidence/projection'
 
 describe('semantic evidence projector', () => {
   it('projects backend-neutral semantic evidence batches into patch facts', async () => {

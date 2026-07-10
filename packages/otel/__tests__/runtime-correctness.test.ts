@@ -8,10 +8,10 @@ import {
   createCruxTraceId,
   type CruxGraphRecord,
 } from '@use-crux/core/observability'
-import { createCallbackExporter } from '../exporter'
-import { createOtelRecordSubscriber } from '../record-mapper'
-import { createLightweightSpanManager } from '../span-manager'
-import type { TraceSpan } from '../types'
+import { createCallbackExporter } from '../src/exporter'
+import { createOtelRecordSubscriber } from '../src/record-mapper'
+import { createLightweightSpanManager } from '../src/span-manager'
+import type { TraceSpan } from '../src/types'
 
 describe('OTel runtime correctness', () => {
   it('parents a late child span to the run span when the recorded parent has already ended', () => {

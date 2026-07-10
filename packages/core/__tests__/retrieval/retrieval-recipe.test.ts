@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fanout, retriever as makeRetriever, retrievalRecipe, retrievalStep, retrieve, rerank } from '../../retrieval'
-import type { RecipeTrace, RetrievalModel, RetrieverHit } from '../../retrieval'
-import { createIndexedKnowledgeStore } from '../../indexed-knowledge'
-import { inMemoryRecordStore } from '../../storage'
+import { fanout, retriever as makeRetriever, retrievalRecipe, retrievalStep, retrieve, rerank } from '../../src/retrieval'
+import type { RecipeTrace, RetrievalModel, RetrieverHit } from '../../src/retrieval'
+import { createIndexedKnowledgeStore } from '../../src/indexed-knowledge'
+import { inMemoryRecordStore } from '../../src/storage'
 
 function hit(id: string, content: string, score = 1, metadata: Record<string, unknown> = {}): RetrieverHit {
   return {
@@ -265,7 +265,7 @@ describe('retrievalRecipe', () => {
       }),
     }
 
-    const { expandParents, compressToBudget } = await import('../../retrieval')
+    const { expandParents, compressToBudget } = await import('../../src/retrieval')
     const recipe = retrievalRecipe({
       id: 'hit-stage-recipe',
       retriever,

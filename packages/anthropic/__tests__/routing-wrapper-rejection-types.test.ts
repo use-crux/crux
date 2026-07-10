@@ -2,7 +2,7 @@ import type Anthropic from "@anthropic-ai/sdk";
 import { describe, expect, it } from "vitest";
 import { prompt } from "@use-crux/core";
 import { router } from "@use-crux/core/routing";
-import { createAnthropic } from "../native";
+import { createAnthropic } from "../src/native";
 
 const routed = router({
   classify: () => "fast" as const,

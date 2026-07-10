@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SystemBlock } from '@use-crux/core'
-import { planSystemBlocks } from '../cached-content/planner'
+import { planSystemBlocks } from '../src/cached-content/planner'
 
 describe('planSystemBlocks', () => {
   it('treats leading providerCache blocks as the cacheable prefix', () => {

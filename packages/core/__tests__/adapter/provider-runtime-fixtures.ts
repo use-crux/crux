@@ -7,9 +7,9 @@ import {
   defineProviderRuntime,
   type NativeAssistantTurn,
   type NativeResponseMetadata,
-} from "../../adapter";
-import type { Message } from "../../generation/messages";
-import type { GenerationSettings, TokenUsage, TraceMeta } from "../../generation/types";
+} from "../../src/adapter";
+import type { Message } from "../../src/generation/messages";
+import type { GenerationSettings, TokenUsage, TraceMeta } from "../../src/generation/types";
 
 const RUNTIME_USAGE = {
   inputTokens: 10,

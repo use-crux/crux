@@ -7,9 +7,9 @@ import {
   createPrompts,
   match,
   prompt,
-} from "../../prompt";
-import { compilePrompt } from "../../resolver/compile";
-import { createResolverFakes } from "../../resolver/fakes";
+} from "../../src/prompt";
+import { compilePrompt } from "../../src/resolver/compile";
+import { createResolverFakes } from "../../src/resolver/fakes";
 
 describe("resolver memoization integrity", () => {
   it("duplicate context ids throw at prompt definition", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { inMemoryRecordStore } from "../../storage";
-import { workspace } from "../../workspace";
+import { inMemoryRecordStore } from "../../src/storage";
+import { workspace } from "../../src/workspace";
 
 describe("workspace writeable virtual mounts", () => {
   it("delegates write, edit, append, and delete to opt-in custom sources", async () => {

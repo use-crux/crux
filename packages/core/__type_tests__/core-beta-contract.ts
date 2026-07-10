@@ -7,40 +7,40 @@
 
 import { expectTypeOf } from "vitest";
 import { z } from "zod";
-import { contributor } from "../prompt/contributor";
-import { context, match, when } from "../prompt/context";
-import { prompt } from "../prompt/prompt";
-import { hasToolCall, maxSteps } from "../generation";
-import type { Contribution } from "../prompt";
+import { contributor } from "../src/prompt/contributor";
+import { context, match, when } from "../src/prompt/context";
+import { prompt } from "../src/prompt/prompt";
+import { hasToolCall, maxSteps } from "../src/generation";
+import type { Contribution } from "../src/prompt";
 import type {
   ContextTextSegment,
   InspectPart,
   ProviderAdaptations,
   StopCondition,
   ToolChoice,
-} from "../index";
+} from "../src/index";
 import type {
   ProviderAdaptations as GenerationProviderAdaptations,
   StopCondition as GenerationStopCondition,
   ToolChoice as GenerationToolChoice,
-} from "../generation";
+} from "../src/generation";
 
 // @ts-expect-error The `injectable` factory is no longer part of the public prompt surface.
-import { injectable as deletedPromptInjectable } from "../prompt";
+import { injectable as deletedPromptInjectable } from "../src/prompt";
 // @ts-expect-error The `injectable` factory is no longer part of the public root surface.
-import { injectable as deletedRootInjectable } from "../index";
+import { injectable as deletedRootInjectable } from "../src/index";
 // @ts-expect-error `InjectableConfig` is no longer public.
-import type { InjectableConfig as DeletedInjectableConfig } from "../prompt";
+import type { InjectableConfig as DeletedInjectableConfig } from "../src/prompt";
 // @ts-expect-error `isInjectableEntry` is no longer public.
-import { isInjectableEntry as deletedIsInjectableEntry } from "../prompt";
+import { isInjectableEntry as deletedIsInjectableEntry } from "../src/prompt";
 // @ts-expect-error `InjectableEntry` is now a private lowering detail.
-import type { InjectableEntry as DeletedInjectableEntry } from "../prompt";
+import type { InjectableEntry as DeletedInjectableEntry } from "../src/prompt";
 // @ts-expect-error `PromptInjection` is now a private lowering detail.
-import type { PromptInjection as DeletedPromptInjection } from "../prompt";
+import type { PromptInjection as DeletedPromptInjection } from "../src/prompt";
 // @ts-expect-error Use `Contribution`.
-import type { ContributorContribution as DeletedContributorContribution } from "../prompt";
+import type { ContributorContribution as DeletedContributorContribution } from "../src/prompt";
 // @ts-expect-error Use `ProviderAdaptations`.
-import type { AdapterMap as DeletedAdapterMap } from "../generation";
+import type { AdapterMap as DeletedAdapterMap } from "../src/generation";
 
 type Phase8ContributionSurface = Contribution;
 type Phase8AdaptationSurface = ProviderAdaptations & GenerationProviderAdaptations;

@@ -3,7 +3,7 @@ import type { ChatCompletion, ChatCompletionChunk } from 'openai/resources/chat/
 import type { Stream } from 'openai/streaming'
 import type { ProviderConformanceEmission, ProviderRuntimeConformanceHarness } from '@use-crux/core/adapter'
 import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
-import { openaiProviderRuntime } from '../index'
+import { openaiProviderRuntime } from '../src'
 
 interface CapturedOpenAIClient {
   readonly client: OpenAI

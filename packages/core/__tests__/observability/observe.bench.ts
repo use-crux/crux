@@ -4,7 +4,7 @@ import {
   resetObservabilityRuntime,
   subscribeObservability,
   type CruxPrimitiveName,
-} from '../../observability'
+} from '../../src/observability'
 
 const primitive = 'custom.operation' satisfies CruxPrimitiveName
 

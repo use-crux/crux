@@ -1,8 +1,8 @@
 # Observability Schema Versioning
 
 The canonical observability wire contract is owned by
-`packages/core/observability/contract.ts` and validated by
-`packages/core/observability/schema.ts`. The Go local runtime mirrors that
+`packages/core/src/observability/contract.ts` and validated by
+`packages/core/src/observability/schema.ts`. The Go local runtime mirrors that
 contract for storage and read models. Keep these surfaces in the same change
 whenever graph records change.
 

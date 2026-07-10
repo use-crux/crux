@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../storage";
-import { workspace, workspaceToolNames } from "../../workspace";
+import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../src/storage";
+import { workspace, workspaceToolNames } from "../../src/workspace";
 
 describe("workspace filesystem operations", () => {
   it("checks whether a file exists in the selected namespace", async () => {

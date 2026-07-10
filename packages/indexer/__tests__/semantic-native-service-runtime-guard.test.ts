@@ -1,12 +1,12 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createNativeSemanticBackend } from '../indexer/semantic/backends/tsgo/backend'
-import { createSemanticIndexService } from '../indexer/semantic/service/service'
+import { createNativeSemanticBackend } from '../src/indexer/semantic/backends/tsgo/backend'
+import { createSemanticIndexService } from '../src/indexer/semantic/service/service'
 
 const jsTypeScriptParserCalls = vi.hoisted((): string[] => [])
 
-vi.mock('../indexer/ast/parse', () => ({
+vi.mock('../src/indexer/ast/parse', () => ({
   createSourceFile(file: string): never {
     jsTypeScriptParserCalls.push(file)
     throw new Error(`Native semantic indexing must not create a JS TypeScript SourceFile for ${file}`)

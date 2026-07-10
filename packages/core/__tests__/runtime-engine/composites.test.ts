@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { inMemoryRuntimeStore } from '../../runtime/adapters/memory'
-import { runDefaultRuntimeComposite } from '../../runtime/engine/composites'
-import { createRuntimeKernel } from '../../runtime/engine/kernel'
+import { inMemoryRuntimeStore } from '../../src/runtime/adapters/memory'
+import { runDefaultRuntimeComposite } from '../../src/runtime/engine/composites'
+import { createRuntimeKernel } from '../../src/runtime/engine/kernel'
 import type {
   RuntimeCompositeInput,
   RuntimeCompositeKind,
   RuntimeCompositeResult,
-} from '../../runtime/engine/composites'
-import type { RuntimeStoreAdapter } from '../../runtime/store'
-import type { RuntimeTargetId, TaskId, WorkId } from '../../runtime/ports'
+} from '../../src/runtime/engine/composites'
+import type { RuntimeStoreAdapter } from '../../src/runtime/store'
+import type { RuntimeTargetId, TaskId, WorkId } from '../../src/runtime/ports'
 
 describe('runtime composites', () => {
   it('routes task enqueue commits through the named composite contract', async () => {

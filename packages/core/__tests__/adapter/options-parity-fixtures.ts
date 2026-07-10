@@ -2,11 +2,11 @@
  * Shared canonical options fixture for future adapter parity tests.
  */
 
-import { hasToolCall } from '../../generation'
+import { hasToolCall } from '../../src/generation'
 import { z } from 'zod'
-import type { Message } from '../../generation/messages'
-import type { StopCondition, ToolChoice } from '../../generation/tool-control'
-import type { ValidationRetryOptions } from '../../generation/validation-retry'
+import type { Message } from '../../src/generation/messages'
+import type { StopCondition, ToolChoice } from '../../src/generation/tool-control'
+import type { ValidationRetryOptions } from '../../src/generation/validation-retry'
 
 type ToolApprovalPolicy = 'always' | 'never'
 

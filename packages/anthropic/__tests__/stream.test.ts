@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import type { MessageStream } from "@anthropic-ai/sdk/lib/MessageStream";
 import { prompt as makePrompt } from "@use-crux/core";
-import { createAnthropic } from "../index";
+import { createAnthropic } from "../src";
 
 describe("Anthropic stream handling", () => {
   it("falls back to streamed text when finalMessage metadata is unavailable", async () => {

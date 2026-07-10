@@ -11,10 +11,10 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { judge } from '../scoring'
-import { constraint } from '../safety'
-import type { JudgeResult } from '../scoring'
-import type { JudgeConstraintVerdict } from '../safety'
+import { judge } from '../src/scoring'
+import { constraint } from '../src/safety'
+import type { JudgeResult } from '../src/scoring'
+import type { JudgeConstraintVerdict } from '../src/safety'
 
 // ─────────────────────────────────────────────────────────────────
 // Fixtures

@@ -13,22 +13,15 @@
     "noEmit": true,
     "types": ["node", "vitest"],
     "paths": {
-      "@use-crux/core": ["../core/index.ts"],
-      "@use-crux/core/runtime": ["../core/runtime/public.ts"],
-      "@use-crux/core/runtime/next": ["../core/runtime/next.ts"],
-      "@use-crux/core/runtime/testing": ["../core/runtime/testing/index.ts"],
-      "@use-crux/core/*": ["../core/*"]
+      "@use-crux/core": ["../core/src/index.ts"],
+      "@use-crux/core/runtime": ["../core/src/runtime/public.ts"],
+      "@use-crux/core/runtime/next": ["../core/src/runtime/next.ts"],
+      "@use-crux/core/runtime/testing": ["../core/src/runtime/testing/index.ts"],
+      "@use-crux/core/*": ["../core/src/*"]
     }
   },
   "include": [
-    "index.ts",
-    "extensions.ts",
-    "testing.ts",
-    "host/**/*.ts",
-    "contracts/**/*.ts",
-    "indexer/**/*.ts",
-    "source-resolver.ts",
-    "source-resolver/**/*.ts",
+    "src/**/*.ts",
     "__tests__/**/*.ts"
   ]
 }

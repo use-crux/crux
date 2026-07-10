@@ -8,9 +8,9 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { tool } from '../tools/define-tool'
-import { prompt } from '../prompt/prompt'
-import type { AdapterGenerateOptions } from '../adapter/define-adapter'
+import { tool } from '../src/tools/define-tool'
+import { prompt } from '../src/prompt/prompt'
+import type { AdapterGenerateOptions } from '../src/adapter/define-adapter'
 
 const weather = tool({
   name: 'weather',

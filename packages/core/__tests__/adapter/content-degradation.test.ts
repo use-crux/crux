@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { degradeContentPart } from '../../adapter'
+import { degradeContentPart } from '../../src/adapter'
 import {
   CRUX_CONTENT_DEGRADED_EVENT,
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { collectingDiagnostics } from '../../resolver/fakes'
+} from '../../src/observability'
+import { collectingDiagnostics } from '../../src/resolver/fakes'
 
 describe('content degradation', () => {
   afterEach(() => {

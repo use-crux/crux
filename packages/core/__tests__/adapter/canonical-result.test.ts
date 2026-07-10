@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertCanonicalResult,
   type CanonicalResultStepExpectation,
-} from "../../adapter/testing";
+} from "../../src/adapter/testing";
 
 const firstStep: CanonicalResultStepExpectation = {
   text: "hello ",

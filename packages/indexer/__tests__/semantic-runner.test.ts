@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeSemanticAnalyzerResults } from '../indexer/semantic/runner'
+import { mergeSemanticAnalyzerResults } from '../src/indexer/semantic/runner'
 
 describe('mergeSemanticAnalyzerResults', () => {
   it('preserves same-id source refs from different source declarations', () => {

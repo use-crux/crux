@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { FallbackModel } from '../generation/fallback'
-import { fallback } from '../generation/fallback'
+import type { FallbackModel } from '../src/generation/fallback'
+import { fallback } from '../src/generation/fallback'
 
 import {
   TimeoutError,
@@ -8,10 +8,10 @@ import {
   orchestrateStream,
   withBudget,
   wrapStreamIterable,
-} from '../generation'
-import type { OrchestrationSpec, TextDeltaExtractor } from '../generation'
-import { FallbackExhaustedError, type FallbackRoutingStep } from '../routing'
-import { resolveModel } from '../routing/resolve'
+} from '../src/generation'
+import type { OrchestrationSpec, TextDeltaExtractor } from '../src/generation'
+import { FallbackExhaustedError, type FallbackRoutingStep } from '../src/routing'
+import { resolveModel } from '../src/routing/resolve'
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers

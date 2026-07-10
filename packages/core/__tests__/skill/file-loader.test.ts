@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
-import { fileSkill } from '../../skill/file-loader'
-import { SkillLoadError } from '../../skill/types'
+import { fileSkill } from '../../src/skill/file-loader'
+import { SkillLoadError } from '../../src/skill/types'
 
 const TEST_DIR = join(__dirname, '__fixtures__')
 const SKILL_DIR = join(TEST_DIR, 'test-skill')

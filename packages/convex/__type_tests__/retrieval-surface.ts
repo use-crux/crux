@@ -8,7 +8,7 @@ import {
   type KnowledgeBase,
   type RetrievalRecipe,
   type Retriever,
-} from '../retrieval'
+} from '../src/retrieval'
 
 const dense = embedding({
   kind: 'dense',

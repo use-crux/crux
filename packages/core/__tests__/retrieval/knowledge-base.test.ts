@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { embedding } from '../../embedding'
-import { corpus as createCorpus, indexer as createIndexer } from '../../indexing'
-import { knowledgeBase } from '../../retrieval'
-import { inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from '../../storage'
+import { embedding } from '../../src/embedding'
+import { corpus as createCorpus, indexer as createIndexer } from '../../src/indexing'
+import { knowledgeBase } from '../../src/retrieval'
+import { inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from '../../src/storage'
 
 function createTopicEmbedding() {
   return embedding({

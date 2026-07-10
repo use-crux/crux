@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
-import { blackboard as makeBlackboard } from '../../agent/blackboard'
+import { blackboard as makeBlackboard } from '../../src/agent/blackboard'
 
 const testSchema = z.object({
   goal: z.string(),

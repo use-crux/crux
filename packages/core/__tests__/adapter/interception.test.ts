@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../../prompt/prompt'
-import { loopRuntimeAdapter } from '../../adapter'
-import { fakeLoopRuntime } from '../../adapter/testing'
+import { prompt } from '../../src/prompt/prompt'
+import { loopRuntimeAdapter } from '../../src/adapter'
+import { fakeLoopRuntime } from '../../src/adapter/testing'
 import {
   clearGenerationInterceptor,
   setGenerationInterceptor,
   type InterceptedGeneration,
-} from '../../adapter/interception'
+} from '../../src/adapter/interception'
 
 const textPrompt = prompt({
   id: 'intercept.text',

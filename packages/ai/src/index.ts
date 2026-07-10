@@ -85,33 +85,33 @@ import type {
   GenerateTextFn,
 } from "@use-crux/core/compaction";
 import type { ValidationRetryOptions } from "@use-crux/core";
-import type { SdkGateway } from "./src/gateway";
-import { liveSdkGateway } from "./src/gateway";
-import type { AIExtra, AIGenerateOptions, AITransport } from "./src/options";
-import type { SdkLoopResultLike } from "./src/executor";
+import type { SdkGateway } from "./gateway";
+import { liveSdkGateway } from "./gateway";
+import type { AIExtra, AIGenerateOptions, AITransport } from "./options";
+import type { SdkLoopResultLike } from "./executor";
 import type {
   AIEmbeddingConfig,
   AIRerankerConfig,
   AIRetrievalModelConfig,
-} from "./src/extensions";
-import { aiSdkProviderRuntime } from "./src/profile";
-import { extractModelInfo } from "./src/provider-profile";
-import { createAiStreamResult } from "./src/stream-result";
-import { createStructuredGenerateObjectFn } from "./src/structured-generation";
+} from "./extensions";
+import { aiSdkProviderRuntime } from "./profile";
+import { extractModelInfo } from "./provider-profile";
+import { createAiStreamResult } from "./stream-result";
+import { createStructuredGenerateObjectFn } from "./structured-generation";
 import {
   aiSdkHandleFor,
   createManualAiSdkGatewayController,
   transportGateway,
-} from "./src/call-handle";
-import { normalizeAiSdkMessages } from "./src/messages";
-export { fromResponse, toParams } from "./src/codec";
-export type { AiSdkCodecOptions } from "./src/codec";
+} from "./call-handle";
+import { normalizeAiSdkMessages } from "./messages";
+export { fromResponse, toParams } from "./codec";
+export type { AiSdkCodecOptions } from "./codec";
 
 // ─────────────────────────────────────────────────────────────────
 // Options Types
 // ─────────────────────────────────────────────────────────────────
 
-export type { AIExtra, AIGenerateOptions, AITransport, AITransportInfo } from "./src/options";
+export type { AIExtra, AIGenerateOptions, AITransport, AITransportInfo } from "./options";
 
 // ─────────────────────────────────────────────────────────────────
 // Result Types
@@ -693,29 +693,29 @@ export function reranker(config: AIRerankerConfig): Reranker {
 // Gateway exports (test seam)
 // ─────────────────────────────────────────────────────────────────
 
-export { liveSdkGateway } from "./src/gateway";
-export type { SdkGateway } from "./src/gateway";
-export { createAiSdkLoopRuntime } from "./src/executor";
+export { liveSdkGateway } from "./gateway";
+export type { SdkGateway } from "./gateway";
+export { createAiSdkLoopRuntime } from "./executor";
 export type {
   AiSdkLoopRuntime,
   SdkLoopResultLike,
   SdkStreamResultLike,
-} from "./src/executor";
+} from "./executor";
 export type {
   AIEmbeddingConfig,
   AIRerankerConfig,
   AIRetrievalModelConfig,
   AiSdkRuntimeExtensions,
-} from "./src/extensions";
-export { aiSdkProviderRuntime } from "./src/profile";
+} from "./extensions";
+export { aiSdkProviderRuntime } from "./profile";
 export {
   createUIMessageStreamResponse,
   pipeUIMessageStreamToResponse,
-} from "./src/ui-message";
+} from "./ui-message";
 export type {
   CruxPipeUIMessageStreamOptions,
   CruxUIMessageStreamResponseOptions,
-} from "./src/ui-message";
+} from "./ui-message";
 
 // ─────────────────────────────────────────────────────────────────
 // What is intentionally NOT exported from the root

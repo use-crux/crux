@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Content, GenerateContentResponse } from '@google/genai'
 import type { Message } from '@use-crux/core'
 import { transcriptRoundTripConformance } from '@use-crux/core/adapter/testing'
-import { fromMessages, googleTranscript } from '../message-codec'
+import { fromMessages, googleTranscript } from '../src/message-codec'
 
 describe('google multimodal transcript encoding', () => {
   it('serializes canonical user image content to Google parts', () => {

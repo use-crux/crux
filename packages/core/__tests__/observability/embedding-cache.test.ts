@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { createSemanticCache } from '../../cache'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { embedding, embeddingCache } from '../../embedding'
+import { createSemanticCache } from '../../src/cache'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { embedding, embeddingCache } from '../../src/embedding'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { orchestrateGenerate } from '../../generation/orchestrate'
-import { applyPlugins } from '../../runtime/plugin'
-import { getHooks, resetHooks, setHooks } from '../../runtime/runtime'
-import { inMemoryRecordStore, inMemoryStorage } from '../../storage'
+} from '../../src/observability'
+import { orchestrateGenerate } from '../../src/generation/orchestrate'
+import { applyPlugins } from '../../src/runtime/plugin'
+import { getHooks, resetHooks, setHooks } from '../../src/runtime/runtime'
+import { inMemoryRecordStore, inMemoryStorage } from '../../src/storage'
 
 function install(plugin: ReturnType<typeof createSemanticCache>) {
   const applied = applyPlugins([plugin], getHooks())

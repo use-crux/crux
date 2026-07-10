@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { flow } from '../../flow'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
-import { inMemoryRecordStore } from '../../storage'
+import { flow } from '../../src/flow'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
+import { inMemoryRecordStore } from '../../src/storage'
 
 describe('flow retry control-flow safety', () => {
   afterEach(() => {

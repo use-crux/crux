@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type OpenAI from 'openai'
 import { z } from 'zod'
-import { createGenerateObjectFn } from '../index'
+import { createGenerateObjectFn } from '../src'
 
 interface OpenAIParseRequest {
   readonly model: string

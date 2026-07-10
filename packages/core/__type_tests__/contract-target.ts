@@ -11,15 +11,15 @@ import type {
   GenerateResult,
   StreamCompletion,
   StreamResult,
-} from "../adapter";
-import type { TimeoutBudget, TimeoutOptions } from "../generation/timeout";
-import type { StopCondition, ToolChoice } from "../generation/tool-control";
+} from "../src/adapter";
+import type { TimeoutBudget, TimeoutOptions } from "../src/generation/timeout";
+import type { StopCondition, ToolChoice } from "../src/generation/tool-control";
 import type {
   GenerationSettings,
   TokenUsage,
   TraceMeta,
-} from "../generation/types";
-import { TimeoutError } from "../generation/timeout";
+} from "../src/generation/types";
+import { TimeoutError } from "../src/generation/timeout";
 
 type AssertEqual<T, U> =
   (<G>() => G extends T ? 1 : 2) extends <G>() => G extends U ? 1 : 2

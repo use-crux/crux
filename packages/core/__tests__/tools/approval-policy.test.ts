@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { resolveApprovalPolicy } from '../../tools/approval-policy'
-import type { ApprovalDeclaration } from '../../tools/approval-policy'
+import { resolveApprovalPolicy } from '../../src/tools/approval-policy'
+import type { ApprovalDeclaration } from '../../src/tools/approval-policy'
 
 describe('resolveApprovalPolicy', () => {
   it('chooses the closest exact declaration', () => {

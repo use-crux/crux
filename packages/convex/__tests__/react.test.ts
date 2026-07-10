@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createConvexTransport } from '../react'
+import { createConvexTransport } from '../src/react'
 import type { JsonObject } from '@use-crux/core/storage'
 
 const api = {

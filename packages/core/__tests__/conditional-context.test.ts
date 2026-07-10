@@ -1,11 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { z } from 'zod'
-import { context, when, match } from '../prompt/context'
-import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
-import { prompt as makePrompt } from '../prompt/prompt'
-import { setTokenizer, defaultTokenizer } from '../shared/tokenizer'
-import type { AnyPromptConfig } from '../prompt/prompt-types'
-import type { ContextEntry } from '../prompt/context-types'
+import { context, when, match } from '../src/prompt/context'
+import { compilePrompt, type ResolveCallOptions } from '../src/resolver/compile'
+import { prompt as makePrompt } from '../src/prompt/prompt'
+import { setTokenizer, defaultTokenizer } from '../src/shared/tokenizer'
+import type { AnyPromptConfig } from '../src/prompt/prompt-types'
+import type { ContextEntry } from '../src/prompt/context-types'
 
 // Set up tokenizer for tests that need resolve/inspect
 beforeEach(() => {

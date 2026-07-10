@@ -5,7 +5,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { transition, type FlowId, type RuntimeTargetId, type TaskId, type WorkId } from '@use-crux/core/runtime'
 import { flow } from '@use-crux/core/flow'
 import { postgres, type PostgresRuntimeStore } from '@use-crux/postgres/runtime'
-import { runRuntimeOperation } from '../indexer/runtime-ops'
+import { runRuntimeOperation } from '../src/indexer/runtime-ops'
 import {
   closeRuntimeOpsPools,
   dropPostgresSchemas,

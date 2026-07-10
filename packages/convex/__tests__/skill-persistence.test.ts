@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { convexSkillActivationPersistence } from '../skill'
-import { inMemoryRecordStore } from '../memory'
-import { runWithConvexCruxRuntime } from '../runtime'
+import { convexSkillActivationPersistence } from '../src/skill'
+import { inMemoryRecordStore } from '../src/memory'
+import { runWithConvexCruxRuntime } from '../src/runtime'
 
 describe('convexSkillActivationPersistence', () => {
   it('loads and saves skill activation snapshots through the active Crux records', async () => {

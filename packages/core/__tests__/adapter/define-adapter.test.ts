@@ -7,27 +7,27 @@
  */
 
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { adapter as makeAdapter } from "../../adapter/define-adapter";
-import type { AdapterSpec } from "../../adapter/spec";
+import { adapter as makeAdapter } from "../../src/adapter/define-adapter";
+import type { AdapterSpec } from "../../src/adapter/spec";
 import type {
   AdapterResponse,
   CallArgs,
   StreamHandle,
   ToolResultEntry,
-} from "../../adapter/types";
-import type { Message } from "../../generation/messages";
-import type { GenerationSettings, TraceMeta } from "../../generation/types";
-import { TimeoutError } from "../../generation/timeout";
-import { hasToolCall } from "../../generation/tool-control";
-import { prompt as makePrompt } from "../../prompt/prompt";
-import { agent as makeAgent } from "../../agent";
+} from "../../src/adapter/types";
+import type { Message } from "../../src/generation/messages";
+import type { GenerationSettings, TraceMeta } from "../../src/generation/types";
+import { TimeoutError } from "../../src/generation/timeout";
+import { hasToolCall } from "../../src/generation/tool-control";
+import { prompt as makePrompt } from "../../src/prompt/prompt";
+import { agent as makeAgent } from "../../src/agent";
 import { z } from "zod";
-import { ValidationExhaustedError } from "../../generation/validation-retry";
-import { approvalMiddleware, toolMiddleware } from "../../tools/middleware";
+import { ValidationExhaustedError } from "../../src/generation/validation-retry";
+import { approvalMiddleware, toolMiddleware } from "../../src/tools/middleware";
 import {
   appendToolApprovalResponse,
   findToolApprovalRequests,
-} from "../../tools/approvals";
+} from "../../src/tools/approvals";
 
 afterEach(() => {
   vi.useRealTimers();

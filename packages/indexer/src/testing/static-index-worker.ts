@@ -7,8 +7,8 @@ import type { IndexPatchFacts } from '../indexer/patches'
 import { staticIndexRunIdentityFixture } from '../contracts/static-index/fixtures'
 import { rustOxcSyntaxFrontendTestStatus } from './rust-oxc-frontend'
 
-const WORKSPACE_MANIFEST = fileURLToPath(new URL('../../../Cargo.toml', import.meta.url))
-const INDEXER_PACKAGE_ROOT = fileURLToPath(new URL('..', import.meta.url))
+const WORKSPACE_MANIFEST = fileURLToPath(new URL('../../../../Cargo.toml', import.meta.url))
+const INDEXER_PACKAGE_ROOT = fileURLToPath(new URL('../..', import.meta.url))
 
 interface StaticIndexWorkerEnvelope {
   readonly id: number

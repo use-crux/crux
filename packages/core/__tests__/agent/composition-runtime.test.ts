@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { agent as makeAgent } from '../../agent/agent'
-import { createCompositionRuntime } from '../../agent/composition-runtime'
-import type { AgentExecutor } from '../../agent/executor'
-import { prompt as makePrompt } from '../../prompt/prompt'
+import { agent as makeAgent } from '../../src/agent/agent'
+import { createCompositionRuntime } from '../../src/agent/composition-runtime'
+import type { AgentExecutor } from '../../src/agent/executor'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
+} from '../../src/observability'
 
 afterEach(() => {
   resetObservabilityRuntime()
@@ -37,7 +37,7 @@ describe('composition runtime', () => {
     let attempts = 0
     const executor: AgentExecutor = async (_agent, options) => {
       const { getExecutionContext } =
-        await import('../../runtime/execution-context')
+        await import('../../src/runtime/execution-context')
       executorCalls.push({
         input: options.input,
         stepLabel: getExecutionContext()?.stepLabel,

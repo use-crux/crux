@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { router, isRouter } from '../../routing'
+import { router, isRouter } from '../../src/routing'
 
 describe('router()', () => {
   it('creates a RouterModel with correct _tag and config', () => {

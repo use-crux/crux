@@ -6,9 +6,9 @@ import {
   CRUX_CANONICAL_EDGE_TYPES,
   CRUX_PRIMITIVE_FAMILY_BY_NAME,
   CruxGraphRecordBatchSchema,
-} from '../../observability'
+} from '../../src/observability'
 
-const fixturesDir = new URL('../../observability/fixtures/', import.meta.url)
+const fixturesDir = new URL('../../src/observability/fixtures/', import.meta.url)
 const producerRecordTypes = [
   'run:start',
   'run:end',

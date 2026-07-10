@@ -18,7 +18,7 @@
 //!
 //! This is the Rust *static* first-party manifest. It is distinct from the
 //! TypeScript-Go *semantic* direct primitive manifest
-//! (`packages/indexer/indexer/semantic/backends/tsgo/direct-projectors`), which
+//! (`packages/indexer/src/indexer/semantic/backends/tsgo/direct-projectors`), which
 //! is data-driven because that lane projects directly from TypeScript-Go AST
 //! evidence. Both describe first-party shapes; only the semantic one drives
 //! projection from its own declarations.

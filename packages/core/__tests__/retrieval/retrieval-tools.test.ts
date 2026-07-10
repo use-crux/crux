@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { embedding as makeEmbedding } from '../../embedding'
-import { indexer as makeIndexer } from '../../indexing'
-import { prompt } from '../../prompt/prompt'
-import { RETRIEVAL_HITS_KIND, retriever as makeRetriever } from '../../retrieval'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
+import { embedding as makeEmbedding } from '../../src/embedding'
+import { indexer as makeIndexer } from '../../src/indexing'
+import { prompt } from '../../src/prompt/prompt'
+import { RETRIEVAL_HITS_KIND, retriever as makeRetriever } from '../../src/retrieval'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
 
 function createDenseEmbedding() {
   return makeEmbedding({

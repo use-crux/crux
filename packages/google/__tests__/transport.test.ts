@@ -2,7 +2,7 @@ import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt, tool } from '@use-crux/core'
-import { createGoogle } from '../index'
+import { createGoogle } from '../src'
 
 describe('Google transport', () => {
   it('runs generate through user-supplied provider params and responses', async () => {

@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { inMemoryRecordStore } from '../../storage'
-import { plan, getPlan, updatePlan } from '../../plan/plans'
-import { updateHooks, resetHooks } from '../../runtime/runtime'
-import type { CreatePlanInput, JsonObject, PlanUpdate } from '../../plan/types'
+import { inMemoryRecordStore } from '../../src/storage'
+import { plan, getPlan, updatePlan } from '../../src/plan/plans'
+import { updateHooks, resetHooks } from '../../src/runtime/runtime'
+import type { CreatePlanInput, JsonObject, PlanUpdate } from '../../src/plan/types'
 
 /** Create a fresh store and register it in the runtime. */
 function setup() {

@@ -9,7 +9,7 @@
  */
 
 import type { RecordStore, Storage } from '@use-crux/core/storage'
-import type { ComponentApi } from './src/component/_generated/component'
+import type { ComponentApi } from './component/_generated/component'
 import { convexStorage } from './storage'
 import type { ConvexCtxPort, ConvexMemoryStoreConfig } from './store'
 

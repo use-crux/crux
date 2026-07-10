@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { createRuntimeError } from '../../runtime/engine/errors'
+import { createRuntimeError } from '../../src/runtime/engine/errors'
 import {
   classifyRuntimeFailure,
   retryDelayMs,
-} from '../../runtime/engine/retry'
+} from '../../src/runtime/engine/retry'
 
 describe('runtime retry policy', () => {
   it('calculates full-jitter exponential backoff within the documented bounds', () => {

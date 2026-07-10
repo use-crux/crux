@@ -6,7 +6,7 @@ import type {
 import type { WithoutSystemFields } from 'convex/server'
 import type { Doc } from '../_generated/dataModel.js'
 import type { MutationCtx } from '../_generated/server.js'
-import { decodeWaiter, encodeWaiter } from '../../../runtime-engine/codec'
+import { decodeWaiter, encodeWaiter } from '../../runtime-engine/codec'
 import { matchesTopLevel, randomId, requireRuntimeNamespace } from './shared'
 import { unsupported } from './composite-utils'
 

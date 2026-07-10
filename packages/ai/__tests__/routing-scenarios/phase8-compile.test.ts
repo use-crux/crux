@@ -9,7 +9,7 @@
 import type { LanguageModel } from "ai";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import type { CruxAi } from "../../index";
+import type { CruxAi } from "../../src/index";
 import { prompt } from "@use-crux/core";
 import {
   cascade,

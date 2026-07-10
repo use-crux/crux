@@ -2,11 +2,11 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import type { StaticSyntaxFileInput } from "../indexer/static-index/syntax";
+import type { StaticSyntaxFileInput } from "../src/indexer/static-index/syntax";
 import {
   createRustOxcStaticSyntaxFrontend,
   rustOxcPackagedWorkerStatus,
-} from "../testing/rust-oxc-frontend";
+} from "../src/testing/rust-oxc-frontend";
 
 describe("Rust/Oxc syntax frontend batch protocol", () => {
   it("resolves the worker shipped by a local platform package", async () => {

@@ -10,13 +10,13 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { agent } from '../agent/agent'
-import { createPipeline } from '../agent/pipeline'
-import { prompt } from '../prompt/prompt'
-import { handoff } from '../agent/handoff'
-import { delegate } from '../agent/delegate'
-import { flow } from '../flow/scope'
-import type { AgentExecutor } from '../agent/executor'
+import { agent } from '../src/agent/agent'
+import { createPipeline } from '../src/agent/pipeline'
+import { prompt } from '../src/prompt/prompt'
+import { handoff } from '../src/agent/handoff'
+import { delegate } from '../src/agent/delegate'
+import { flow } from '../src/flow/scope'
+import type { AgentExecutor } from '../src/agent/executor'
 
 declare const executor: AgentExecutor
 

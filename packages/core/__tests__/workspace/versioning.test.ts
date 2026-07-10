@@ -6,8 +6,8 @@ import {
   type RecordStore,
   type JsonObject,
   type RecordWriteOptions,
-} from "../../storage";
-import { workspace } from "../../workspace";
+} from "../../src/storage";
+import { workspace } from "../../src/workspace";
 
 describe("workspace versioning & history", () => {
   it("records a newest-first version per content write", async () => {

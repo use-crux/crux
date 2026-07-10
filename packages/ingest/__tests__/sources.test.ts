@@ -12,8 +12,8 @@ import {
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow } from 'docx'
 import ExcelJS from 'exceljs'
 import { afterEach, describe, expect, it } from 'vitest'
-import { fileSource, filesSource, textSource, urlSource, urlsSource } from '..'
-import type { IngestParser } from '..'
+import { fileSource, filesSource, textSource, urlSource, urlsSource } from '../src'
+import type { IngestParser } from '../src'
 
 const tempDirs: string[] = []
 

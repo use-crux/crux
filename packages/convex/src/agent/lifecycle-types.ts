@@ -3,7 +3,7 @@ import type { AnyToolSet, ContextEntry, MergedInput, Prompt, PromptConfig, Resol
 import type { CruxAttributes } from '@use-crux/core/observability'
 import type { RecordStore, Storage } from '@use-crux/core/storage'
 import type { z } from 'zod'
-import type { ComponentApi } from '../src/component/_generated/component'
+import type { ComponentApi } from '../component/_generated/component'
 import type { ConvexRuntimeTarget } from '../runtime'
 import type {
   ConvexGenerateObjectArgs,

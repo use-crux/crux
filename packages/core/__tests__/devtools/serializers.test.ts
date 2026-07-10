@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { context } from '../../prompt/context'
-import { ProjectIndexSnapshotSchema } from '../../project-index'
-import { serializePrompt, serializeContext, serializeIndex, serializeProjectIndex } from '../../project-index/serializers'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { context } from '../../src/prompt/context'
+import { ProjectIndexSnapshotSchema } from '../../src/project-index'
+import { serializePrompt, serializeContext, serializeIndex, serializeProjectIndex } from '../../src/project-index/serializers'
 
 // ─────────────────────────────────────────────────────────────────
 // serializePrompt()

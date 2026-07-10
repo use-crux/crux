@@ -8,21 +8,21 @@
 
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { z } from "zod";
-import { loopRuntimeAdapter } from "../../adapter/define-executor";
-import { fakeLoopRuntime } from "../../adapter/testing";
-import { prompt as makePrompt } from "../../prompt/prompt";
-import { agent as makeAgent } from "../../agent/agent";
-import { fallback } from "../../generation/fallback";
-import { router, type RouteArgs } from "../../routing";
-import { ValidationExhaustedError } from "../../generation/validation-retry";
-import { appendToolApprovalResponse } from "../../tools/approvals";
-import { resetHooks } from "../../runtime/runtime";
-import { boundary, guardrail, SafetyStructuredSyncError } from "../../safety";
-import type { Message } from "../../generation/messages";
+import { loopRuntimeAdapter } from "../../src/adapter/define-executor";
+import { fakeLoopRuntime } from "../../src/adapter/testing";
+import { prompt as makePrompt } from "../../src/prompt/prompt";
+import { agent as makeAgent } from "../../src/agent/agent";
+import { fallback } from "../../src/generation/fallback";
+import { router, type RouteArgs } from "../../src/routing";
+import { ValidationExhaustedError } from "../../src/generation/validation-retry";
+import { appendToolApprovalResponse } from "../../src/tools/approvals";
+import { resetHooks } from "../../src/runtime/runtime";
+import { boundary, guardrail, SafetyStructuredSyncError } from "../../src/safety";
+import type { Message } from "../../src/generation/messages";
 import type {
   StepDirective,
   StructuredRequest,
-} from "../../adapter/executor-types";
+} from "../../src/adapter/executor-types";
 
 afterEach(() => {
   resetHooks();

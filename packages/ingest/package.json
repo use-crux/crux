@@ -21,20 +21,20 @@
     "node": ">=22.0.0"
   },
   "type": "module",
-  "main": "./index.ts",
-  "types": "./index.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./index.ts",
-      "import": "./index.ts"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     },
     "./files": {
-      "types": "./files.ts",
-      "import": "./files.ts"
+      "types": "./src/files.ts",
+      "import": "./src/files.ts"
     },
     "./urls": {
-      "types": "./urls.ts",
-      "import": "./urls.ts"
+      "types": "./src/urls.ts",
+      "import": "./src/urls.ts"
     }
   },
   "dependencies": {

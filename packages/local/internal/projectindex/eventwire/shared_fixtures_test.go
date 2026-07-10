@@ -118,13 +118,13 @@ func readSharedWorkerEventFixture(t *testing.T, name string, out any) {
 
 func sharedWorkerEventFixturePath(t *testing.T, name string) string {
 	t.Helper()
-	return filepath.Join(sharedWorkerEventRepoRoot(t), "packages", "indexer", "contracts", "fixtures", name)
+	return filepath.Join(sharedWorkerEventRepoRoot(t), "packages", "indexer", "src", "contracts", "fixtures", name)
 }
 
 func assertSharedWorkerEventManifestFixture(t *testing.T, name string) {
 	t.Helper()
 	manifest := readSharedWorkerEventContractManifest(t)
-	path := filepath.ToSlash(filepath.Join("packages", "indexer", "contracts", "fixtures", name))
+	path := filepath.ToSlash(filepath.Join("packages", "indexer", "src", "contracts", "fixtures", name))
 	group := sharedWorkerEventManifestGroup(t, manifest, "worker-events")
 	if !containsString(group.Fixtures, path) {
 		t.Fatalf("contract manifest worker-events fixtures = %v, want %s", group.Fixtures, path)
@@ -143,7 +143,7 @@ func assertSharedWorkerEventManifestGoMirror(t *testing.T) {
 
 func readSharedWorkerEventContractManifest(t *testing.T) contractManifest {
 	t.Helper()
-	path := filepath.Join(sharedWorkerEventRepoRoot(t), "packages", "indexer", "contracts", "contract-manifest.json")
+	path := filepath.Join(sharedWorkerEventRepoRoot(t), "packages", "indexer", "src", "contracts", "contract-manifest.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read contract manifest %s: %v", path, err)

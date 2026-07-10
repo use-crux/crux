@@ -1,14 +1,14 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { flow as makeFlow, signalFlow, listFlows } from '../../flow/scope'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
-import { inMemoryRecordStore } from '../../storage'
+import { flow as makeFlow, signalFlow, listFlows } from '../../src/flow/scope'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
+import { inMemoryRecordStore } from '../../src/storage'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import type { RecordStore } from '../../storage'
+} from '../../src/observability'
+import type { RecordStore } from '../../src/storage'
 import { z } from 'zod'
 
 let store: RecordStore
@@ -345,7 +345,7 @@ describe('flow cancel', () => {
     expect(run.status).toBe('suspended')
 
     // Cancel externally
-    const { cancelFlow } = await import('../../flow/scope')
+    const { cancelFlow } = await import('../../src/flow/scope')
     await cancelFlow(run.flowId, 'Admin cancelled')
 
     // Verify store was updated
@@ -655,7 +655,7 @@ describe('suspend/resume instrumentation hooks', () => {
     let resumedSessionId: string | undefined
     let resumedParentFlowId: string | undefined
 
-    const { runWithExecutionContext, getExecutionContext } = await import('../../runtime/execution-context')
+    const { runWithExecutionContext, getExecutionContext } = await import('../../src/runtime/execution-context')
 
     const flowFn = async (flow: { flowId: string; step: any; suspend: any }) => {
       await flow.step('plan', async () => 'planned')

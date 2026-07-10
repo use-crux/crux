@@ -136,13 +136,13 @@ func readSharedStaticSyntaxFixture(t *testing.T, name string, out any) {
 
 func sharedStaticSyntaxFixturePath(t *testing.T, name string) string {
 	t.Helper()
-	return filepath.Join(sharedStaticSyntaxRepoRoot(t), "packages", "indexer", "contracts", "fixtures", name)
+	return filepath.Join(sharedStaticSyntaxRepoRoot(t), "packages", "indexer", "src", "contracts", "fixtures", name)
 }
 
 func assertSharedStaticSyntaxManifestFixture(t *testing.T, name string) {
 	t.Helper()
 	manifest := readSharedStaticSyntaxContractManifest(t)
-	path := filepath.ToSlash(filepath.Join("packages", "indexer", "contracts", "fixtures", name))
+	path := filepath.ToSlash(filepath.Join("packages", "indexer", "src", "contracts", "fixtures", name))
 	group := sharedStaticSyntaxManifestGroup(t, manifest, "static-syntax-records")
 	if !containsString(group.Fixtures, path) {
 		t.Fatalf("contract manifest static-syntax-records fixtures = %v, want %s", group.Fixtures, path)
@@ -161,7 +161,7 @@ func assertSharedStaticSyntaxManifestGoMirror(t *testing.T) {
 
 func readSharedStaticSyntaxContractManifest(t *testing.T) contractManifest {
 	t.Helper()
-	path := filepath.Join(sharedStaticSyntaxRepoRoot(t), "packages", "indexer", "contracts", "contract-manifest.json")
+	path := filepath.Join(sharedStaticSyntaxRepoRoot(t), "packages", "indexer", "src", "contracts", "contract-manifest.json")
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read contract manifest %s: %v", path, err)

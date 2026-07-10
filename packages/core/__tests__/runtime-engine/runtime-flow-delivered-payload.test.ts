@@ -7,8 +7,8 @@ import {
   type FlowId,
   type WorkId,
 } from '@use-crux/core/runtime'
-import { runtimeTargetMap } from '../../runtime/api/target-registry'
-import { resetHooks } from '../../runtime/runtime'
+import { runtimeTargetMap } from '../../src/runtime/api/target-registry'
+import { resetHooks } from '../../src/runtime/runtime'
 
 afterEach(() => {
   resetHooks()

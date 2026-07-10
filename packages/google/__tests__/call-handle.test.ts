@@ -2,7 +2,7 @@ import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt, tool } from '@use-crux/core'
-import { createGoogle } from '../index'
+import { createGoogle } from '../src'
 
 describe('Google call handle', () => {
   it('prepares params and finishes a plain text response', async () => {

@@ -1,22 +1,22 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { context, match, when } from '../../prompt/context'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { blackboard } from '../../agent/blackboard'
-import { contributor } from '../../prompt/contributor'
-import { memory, memoryBlock } from '../../memory'
+import { context, match, when } from '../../src/prompt/context'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { blackboard } from '../../src/agent/blackboard'
+import { contributor } from '../../src/prompt/contributor'
+import { memory, memoryBlock } from '../../src/memory'
 import type {
   CruxContextContributionPreview,
   CruxPromptBudgetPreview,
   CruxPromptInputPreview,
-} from '../../observability/contract'
+} from '../../src/observability/contract'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { boundary, constraint, createSafety, guardrail, GuardrailBlockedError } from '../../safety'
+} from '../../src/observability'
+import { boundary, constraint, createSafety, guardrail, GuardrailBlockedError } from '../../src/safety'
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null

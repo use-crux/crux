@@ -7,7 +7,7 @@ const testDir = dirname(fileURLToPath(import.meta.url))
 
 describe('API freeze guardrails', () => {
   it('keeps the host aggregate barrel explicit instead of wildcarding every host subpath', async () => {
-    const source = await readFile(join(testDir, '..', 'host/index.ts'), 'utf8')
+    const source = await readFile(join(testDir, '..', 'src/host/index.ts'), 'utf8')
 
     expect(source).not.toMatch(/export\s+\*\s+from/)
     expect(namedValueExports(source)).toEqual([

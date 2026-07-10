@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { defaultTokenizer, setTokenizer, countTokens } from '../shared/tokenizer'
+import { defaultTokenizer, setTokenizer, countTokens } from '../src/shared/tokenizer'
 
 // Reset to default after each test to avoid state leakage
 afterEach(() => {

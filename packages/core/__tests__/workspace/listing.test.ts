@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { inMemoryRecordStore } from "../../storage";
-import { workspace } from "../../workspace";
+import { inMemoryRecordStore } from "../../src/storage";
+import { workspace } from "../../src/workspace";
 
 describe("workspace listing", () => {
   it("matches globstar patterns across zero or more path segments", async () => {

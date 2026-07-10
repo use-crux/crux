@@ -1,12 +1,12 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { inMemoryRecordStore } from '../../storage'
-import { plan } from '../../plan/plans'
-import { tasks } from '../../plan/tasks'
-import { task } from '../../plan/task-spec'
-import * as planEntrypoint from '../../plan'
-import * as tasksEntrypoint from '../../tasks'
-import * as rootEntrypoint from '../../index'
-import { updateHooks, resetHooks } from '../../runtime/runtime'
+import { inMemoryRecordStore } from '../../src/storage'
+import { plan } from '../../src/plan/plans'
+import { tasks } from '../../src/plan/tasks'
+import { task } from '../../src/plan/task-spec'
+import * as planEntrypoint from '../../src/plan'
+import * as tasksEntrypoint from '../../src/tasks'
+import * as rootEntrypoint from '../../src/index'
+import { updateHooks, resetHooks } from '../../src/runtime/runtime'
 
 /** Register a fresh in-memory store for each test. */
 function setup() {

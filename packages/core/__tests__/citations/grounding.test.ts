@@ -1,12 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { applyToolMiddleware } from '../../tools/middleware'
-import { grounding, citationSchema } from '../../citations'
-import { prompt } from '../../prompt/prompt'
-import { retriever } from '../../retrieval'
-import type { RetrieverHit } from '../../retrieval'
-import type { SafetyRunContext } from '../../safety'
-import type { Constraint } from '../../safety/constraint'
+import { applyToolMiddleware } from '../../src/tools/middleware'
+import { grounding, citationSchema } from '../../src/citations'
+import { prompt } from '../../src/prompt/prompt'
+import { retriever } from '../../src/retrieval'
+import type { RetrieverHit } from '../../src/retrieval'
+import type { SafetyRunContext } from '../../src/safety'
+import type { Constraint } from '../../src/safety/constraint'
 
 function makeHit(content = 'Hybrid search combines dense and sparse retrieval.'): RetrieverHit {
   return {

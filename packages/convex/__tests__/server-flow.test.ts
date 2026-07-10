@@ -4,7 +4,7 @@ import { resetHooks, updateHooks } from '@use-crux/core'
 import { resetObservabilityRuntime } from '@use-crux/core/observability'
 import { noPayload } from '@use-crux/core/flow'
 import { inMemoryRecordStore } from '@use-crux/core/storage'
-import { flow } from '../server'
+import { flow } from '../src/server'
 
 describe('@use-crux/convex/server flow', () => {
   afterEach(() => {

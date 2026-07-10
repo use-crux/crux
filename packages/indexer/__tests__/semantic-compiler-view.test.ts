@@ -2,15 +2,15 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import ts from 'typescript'
 import { afterEach, describe, expect, expectTypeOf, it } from 'vitest'
-import type { SemanticDefinitionCandidate } from '../indexer/semantic/candidates'
-import type { SemanticCompilerView } from '../indexer/semantic/compiler-view'
-import { createTypeScriptSemanticCompilerView } from '../indexer/semantic/backends/typescript/compiler-view'
+import type { SemanticDefinitionCandidate } from '../src/indexer/semantic/candidates'
+import type { SemanticCompilerView } from '../src/indexer/semantic/compiler-view'
+import { createTypeScriptSemanticCompilerView } from '../src/indexer/semantic/backends/typescript/compiler-view'
 import type {
   SemanticSyntaxKind,
   SemanticSyntaxNode,
   SemanticSyntaxSourceFile,
   SemanticSyntaxView,
-} from '../indexer/semantic/syntax-view'
+} from '../src/indexer/semantic/syntax-view'
 
 const roots: string[] = []
 

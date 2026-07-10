@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { z } from "zod";
-import { compilePrompt, type ResolveCallOptions } from "../resolver/compile";
-import { context } from "../prompt/context";
-import { setTokenizer, defaultTokenizer } from "../shared/tokenizer";
-import type { AnyPromptConfig } from "../prompt/prompt-types";
-import { textPart } from "../content";
+import { compilePrompt, type ResolveCallOptions } from "../src/resolver/compile";
+import { context } from "../src/prompt/context";
+import { setTokenizer, defaultTokenizer } from "../src/shared/tokenizer";
+import type { AnyPromptConfig } from "../src/prompt/prompt-types";
+import { textPart } from "../src/content";
 
 afterEach(() => {
   setTokenizer(defaultTokenizer);

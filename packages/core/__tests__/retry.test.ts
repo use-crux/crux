@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { executeWithRetry } from '../generation/retry'
-import { ConstraintViolationError } from '../safety/constraint/errors'
-import { GuardrailBlockedError } from '../safety/guardrail/errors'
-import { ValidationExhaustedError } from '../generation/validation-retry'
+import { executeWithRetry } from '../src/generation/retry'
+import { ConstraintViolationError } from '../src/safety/constraint/errors'
+import { GuardrailBlockedError } from '../src/safety/guardrail/errors'
+import { ValidationExhaustedError } from '../src/generation/validation-retry'
 
 describe('executeWithRetry', () => {
   it('retries ordinary execution errors and returns the recovered value', async () => {

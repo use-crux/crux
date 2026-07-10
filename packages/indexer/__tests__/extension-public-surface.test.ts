@@ -8,20 +8,20 @@ const testDir = dirname(fileURLToPath(import.meta.url))
 describe('public indexer extension surface', () => {
   it('documents package entry barrels as module surfaces', async () => {
     for (const file of [
-      'index.ts',
-      'extensions.ts',
-      'source-resolver.ts',
-      'testing.ts',
-      'host/index.ts',
-      'host/runtime.ts',
-      'host/semantic.ts',
-      'host/static-compat.ts',
-      'host/static-index.ts',
-      'contracts/parity/index.ts',
-      'contracts/semantic/index.ts',
-      'contracts/static-index/index.ts',
-      'contracts/static-syntax/index.ts',
-      'contracts/worker-events/index.ts',
+      'src/index.ts',
+      'src/extensions.ts',
+      'src/source-resolver.ts',
+      'src/testing.ts',
+      'src/host/index.ts',
+      'src/host/runtime.ts',
+      'src/host/semantic.ts',
+      'src/host/static-compat.ts',
+      'src/host/static-index.ts',
+      'src/contracts/parity/index.ts',
+      'src/contracts/semantic/index.ts',
+      'src/contracts/static-index/index.ts',
+      'src/contracts/static-syntax/index.ts',
+      'src/contracts/worker-events/index.ts',
     ]) {
       const source = await readFile(join(testDir, '..', file), 'utf8')
       expect(source, file).toContain('@module')
@@ -51,7 +51,7 @@ describe('public indexer extension surface', () => {
   })
 
   it('keeps the root package barrel on SDK and record-contract entry points', async () => {
-    const source = await readFile(join(testDir, '..', 'index.ts'), 'utf8')
+    const source = await readFile(join(testDir, '..', 'src/index.ts'), 'utf8')
 
     expect(namedValueExports(source)).toEqual([
       'callPattern',
@@ -132,10 +132,10 @@ describe('public indexer extension surface', () => {
   })
 
   it('keeps Crux-owned host facades split by lane', async () => {
-    const staticIndex = await readFile(join(testDir, '..', 'host/static-index.ts'), 'utf8')
-    const semantic = await readFile(join(testDir, '..', 'host/semantic.ts'), 'utf8')
-    const runtime = await readFile(join(testDir, '..', 'host/runtime.ts'), 'utf8')
-    const staticCompat = await readFile(join(testDir, '..', 'host/static-compat.ts'), 'utf8')
+    const staticIndex = await readFile(join(testDir, '..', 'src/host/static-index.ts'), 'utf8')
+    const semantic = await readFile(join(testDir, '..', 'src/host/semantic.ts'), 'utf8')
+    const runtime = await readFile(join(testDir, '..', 'src/host/runtime.ts'), 'utf8')
+    const staticCompat = await readFile(join(testDir, '..', 'src/host/static-compat.ts'), 'utf8')
 
     expect(namedValueExports(staticIndex)).toEqual([
       'staticDefinitionFiles',
@@ -221,8 +221,8 @@ describe('public indexer extension surface', () => {
   })
 
   it('keeps worker and Static Index protocols under contract barrels', async () => {
-    const workerEvents = await readFile(join(testDir, '..', 'contracts/worker-events/index.ts'), 'utf8')
-    const staticIndex = await readFile(join(testDir, '..', 'contracts/static-index/index.ts'), 'utf8')
+    const workerEvents = await readFile(join(testDir, '..', 'src/contracts/worker-events/index.ts'), 'utf8')
+    const staticIndex = await readFile(join(testDir, '..', 'src/contracts/static-index/index.ts'), 'utf8')
 
     expect(namedValueExports(workerEvents)).toEqual([
       'PROJECT_INDEX_WORKER_PROTOCOL_VERSION',
@@ -273,7 +273,7 @@ describe('public indexer extension surface', () => {
   })
 
   it('keeps the experimental authoring barrel intentionally small', async () => {
-    const source = await readFile(join(testDir, '..', 'extensions.ts'), 'utf8')
+    const source = await readFile(join(testDir, '..', 'src/extensions.ts'), 'utf8')
 
     expect(namedValueExports(source)).toEqual([
       'callPattern',
@@ -344,7 +344,7 @@ describe('public indexer extension surface', () => {
   })
 
   it('keeps the fixture testing barrel source-text oriented', async () => {
-    const source = await readFile(join(testDir, '..', 'testing.ts'), 'utf8')
+    const source = await readFile(join(testDir, '..', 'src/testing.ts'), 'utf8')
 
     expect(publicInterfaces(source)).toEqual(['IndexerExtensionFixture', 'FixtureExtraction'])
     expect(namedFunctionExports(source)).toEqual([
@@ -360,7 +360,7 @@ describe('public indexer extension surface', () => {
   })
 
   it('keeps the source resolver barrel focused on source-map lookup', async () => {
-    const source = await readFile(join(testDir, '..', 'source-resolver.ts'), 'utf8')
+    const source = await readFile(join(testDir, '..', 'src/source-resolver.ts'), 'utf8')
 
     expect(namedValueExports(source)).toEqual([
       'SourceResolver',

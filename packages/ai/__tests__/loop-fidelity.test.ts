@@ -9,7 +9,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
 import { maxSteps, prompt as makePrompt } from "@use-crux/core";
-import { createCruxAi } from "../index";
+import { createCruxAi } from "../src";
 import {
   emissionModel as mockModel,
   capturingEmissionModel,

@@ -4,9 +4,9 @@
 
 import { expectTypeOf } from "vitest";
 import { z } from "zod";
-import { agent, type RoutableModel } from "../agent";
-import { prompt } from "../prompt";
-import { router, type RouteArgs } from "../routing";
+import { agent, type RoutableModel } from "../src/agent";
+import { prompt } from "../src/prompt";
+import { router, type RouteArgs } from "../src/routing";
 
 interface RawModel {
   readonly modelId: string;

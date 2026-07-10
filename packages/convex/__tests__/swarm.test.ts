@@ -8,7 +8,7 @@ import {
   setObservabilityTransport,
 } from '@use-crux/core/observability'
 import { z } from 'zod'
-import { createConvexSwarm, createComponentSwarm } from '../swarm'
+import { createConvexSwarm, createComponentSwarm } from '../src/swarm'
 
 const triagePrompt = makePrompt({ id: 'triage', system: 'Triage agent' })
 const billingPrompt = makePrompt({ id: 'billing', system: 'Billing agent' })

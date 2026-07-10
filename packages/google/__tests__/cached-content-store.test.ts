@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { GoogleCachedContentStore } from '../cached-content/cache-store'
-import type { GoogleCacheName, GoogleCachedContentCachePort } from '../cached-content/types'
+import { GoogleCachedContentStore } from '../src/cached-content/cache-store'
+import type { GoogleCacheName, GoogleCachedContentCachePort } from '../src/cached-content/types'
 
 // ─────────────────────────────────────────────────────────────────
 // In-memory cache port

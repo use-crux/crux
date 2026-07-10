@@ -3,14 +3,14 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import type { Message } from '../../generation/messages'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import type { Message } from '../../src/generation/messages'
 import {
   defineSingleTurnProviderBundle,
   type NativeResponseMetadata,
   type ProviderRuntimeExtender,
   type SingleTurnProviderRuntime,
-} from '../../adapter'
+} from '../../src/adapter'
 
 interface BundleProviderMessage {
   readonly role: Message['role']

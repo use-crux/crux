@@ -5,9 +5,9 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
-import { resolveRegistrySkill } from '../../skill/registry'
-import { clearCache } from '../../skill/cache'
-import { parseFrontmatter } from '../../skill/frontmatter'
+import { resolveRegistrySkill } from '../../src/skill/registry'
+import { clearCache } from '../../src/skill/cache'
+import { parseFrontmatter } from '../../src/skill/frontmatter'
 
 const SKIP = !process.env.TEST_INTEGRATION
 const describeIntegration = SKIP ? describe.skip : describe

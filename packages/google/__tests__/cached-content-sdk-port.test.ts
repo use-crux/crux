@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { GoogleGenAI } from '@google/genai'
-import { googleSdkCachePort } from '../cached-content/sdk-cache-port'
-import type { GoogleCacheName } from '../cached-content/types'
+import { googleSdkCachePort } from '../src/cached-content/sdk-cache-port'
+import type { GoogleCacheName } from '../src/cached-content/types'
 
 function fakeClient(create: ReturnType<typeof vi.fn>, del: ReturnType<typeof vi.fn>): GoogleGenAI {
   return { caches: { create, delete: del } } as unknown as GoogleGenAI

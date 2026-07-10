@@ -12,7 +12,7 @@ import {
   type TaskId,
   type WorkId,
 } from '@use-crux/core/runtime'
-import { postgres, type PostgresRuntimeStore } from '../runtime'
+import { postgres, type PostgresRuntimeStore } from '../src/runtime'
 import {
   createPostgresTestPool,
   startPostgresTestDatabase,

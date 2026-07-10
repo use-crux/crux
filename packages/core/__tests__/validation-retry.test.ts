@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { ValidationExhaustedError, isValidationExhaustedError } from '../generation/validation-retry'
-import type { ValidationRetryOptions } from '../generation/validation-retry'
+import { ValidationExhaustedError, isValidationExhaustedError } from '../src/generation/validation-retry'
+import type { ValidationRetryOptions } from '../src/generation/validation-retry'
 
 describe('ValidationExhaustedError', () => {
   const zodSchema = z.object({ name: z.string(), age: z.number() })

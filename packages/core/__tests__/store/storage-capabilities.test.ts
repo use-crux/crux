@@ -5,7 +5,7 @@ import {
   inMemoryStorage,
   inMemoryVectorStore,
   storage,
-} from '../../storage'
+} from '../../src/storage'
 
 describe('storage capabilities', () => {
   it('keeps document data, vector search, and blobs as explicit capabilities', async () => {

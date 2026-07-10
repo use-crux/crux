@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { openAISettings } from "../request";
+import { openAISettings } from "../src/request";
 
 describe("OpenAI request settings", () => {
   it("maps portable reasoning effort to OpenAI reasoning_effort", () => {

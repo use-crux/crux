@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { HostBoundRuntimeEngineDefinition } from '../../runtime/api/runtime-definition'
+import type { HostBoundRuntimeEngineDefinition } from '../../src/runtime/api/runtime-definition'
 import {
   createRuntimeWithHostContext,
   runWithRuntimeHost,
   setRuntimeHostAsyncLocalStorageResolverForTesting,
-} from '../../runtime/api/host-context'
+} from '../../src/runtime/api/host-context'
 
 describe('runtime host context fallback', () => {
   afterEach(() => {

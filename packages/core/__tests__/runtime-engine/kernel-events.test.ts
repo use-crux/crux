@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { inMemoryRuntimeStore } from '../../runtime/adapters/memory'
+import { inMemoryRuntimeStore } from '../../src/runtime/adapters/memory'
 import type {
   FlowId,
   RuntimeTargetId,
   WaiterId,
   WorkId,
-} from '../../runtime/ports'
-import { createRuntimeKernel } from '../../runtime/engine/kernel'
-import type { WorkItem } from '../../runtime/engine/work'
+} from '../../src/runtime/ports'
+import { createRuntimeKernel } from '../../src/runtime/engine/kernel'
+import type { WorkItem } from '../../src/runtime/engine/work'
 
 describe('RuntimeKernel event and suspension composites', () => {
   it('records a suspension by parking the existing flow work and registering owned waiters', async () => {

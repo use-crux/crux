@@ -1,13 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fallback, type FallbackModel } from '../../generation/fallback'
+import { fallback, type FallbackModel } from '../../src/generation/fallback'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { cascade, fallback as routedFallback, retry, router, split } from '../../routing'
-import { resolveModel } from '../../routing/resolve'
+} from '../../src/observability'
+import { cascade, fallback as routedFallback, retry, router, split } from '../../src/routing'
+import { resolveModel } from '../../src/routing/resolve'
 
 function result(text: string, cost = 0.01) {
   return {

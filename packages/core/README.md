@@ -634,7 +634,7 @@ Custom metric keys must use the `custom.*` namespace; built-in generation and to
 
 Observability IDs are W3C-compatible at the trace/span boundary: `traceId` is 32 lowercase hex characters and `spanId` is 16 lowercase hex characters. Every graph record also carries a per-run monotonic `seq` used by transports and the local read model for deterministic ordering.
 
-The observability wire contract is governed by `packages/core/observability/VERSIONING.md`. TypeScript producer fixtures stay closed over known graph record types, while the Go local runtime preserves unknown record types and extra JSON fields as raw records so newer SDKs can degrade gracefully against older read models.
+The observability wire contract is governed by `packages/core/src/observability/VERSIONING.md`. TypeScript producer fixtures stay closed over known graph record types, while the Go local runtime preserves unknown record types and extra JSON fields as raw records so newer SDKs can degrade gracefully against older read models.
 
 Use `propagateAttributes({ sessionId, userId, metadata }, fn)` to stamp logical correlators onto every record emitted inside `fn`. `sessionId` and `userId` become top-level graph fields, while `metadata` is copied into attributes as capped `meta.*` strings. Devtools `sessionId` config uses the same path as a default correlator for traces emitted while the devtools transport is active.
 

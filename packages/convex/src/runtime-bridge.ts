@@ -33,7 +33,7 @@ import {
 import { convex, type ConvexRuntimeEngineDefinition } from './runtime-engine/definition'
 import { createConvexWorkIdGenerator } from './runtime-engine/helpers'
 import { convexRuntimeStore, type ConvexRuntimeComponent } from './runtime-engine/store'
-import type { ComponentApi } from './src/component/_generated/component'
+import type { ComponentApi } from './component/_generated/component'
 import type { ConvexCtxPort } from './store'
 
 const DEFAULT_TARGET_EXECUTOR = '_crux/targets:executeTarget'

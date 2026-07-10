@@ -17,7 +17,7 @@ import { assertConvexCtxPort, type CruxConvexProfileStorageOptions } from './pro
 import { createConvexRuntimeBridge } from './runtime-bridge'
 import type { ConvexRunScope, ConvexRuntimeBridge, ConvexRuntimeBridgeSetupOptions } from './runtime-bridge'
 import type { ConvexMemoryNamespace, ConvexRuntimeTarget } from './runtime'
-import type { ComponentApi } from './src/component/_generated/component'
+import type { ComponentApi } from './component/_generated/component'
 import type { ConvexCtxPort } from './store'
 
 /** Convex components required by the Crux profile. */

@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { embedding as makeEmbedding } from '../../embedding'
-import { chunker, indexer as makeIndexer, indexingPipeline, transform } from '../../indexing'
-import { expandParents, retrievalRecipe, retrieve, retriever as makeRetriever } from '../../retrieval'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
-import type { JsonObject, RecordPage, RecordStore } from '../../storage'
+import { embedding as makeEmbedding } from '../../src/embedding'
+import { chunker, indexer as makeIndexer, indexingPipeline, transform } from '../../src/indexing'
+import { expandParents, retrievalRecipe, retrieve, retriever as makeRetriever } from '../../src/retrieval'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import type { JsonObject, RecordPage, RecordStore } from '../../src/storage'
 
 describe('indexer', () => {
   it('uses indexingPipeline() document transforms before structured default chunking', async () => {

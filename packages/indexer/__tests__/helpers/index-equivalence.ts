@@ -1,5 +1,5 @@
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
-import { applyIndexPatch, indexPatchFromSnapshot, emptyIndexPatchState } from '../../indexer/patches'
+import { applyIndexPatch, indexPatchFromSnapshot, emptyIndexPatchState } from '../../src/indexer/patches'
 
 /**
  * Applies a full snapshot patch and returns a normalized comparable state.

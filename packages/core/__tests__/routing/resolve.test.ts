@@ -1,16 +1,16 @@
 import { describe, it, expect, vi } from "vitest";
 import { z } from "zod";
-import { router, cascade, retry, split } from "../../routing";
-import { resolveModel } from "../../routing/resolve";
-import type { ResolveTryOptions } from "../../routing/resolve";
-import { fallback } from "../../generation/fallback";
-import type { FallbackModel } from "../../generation/fallback";
-import { ValidationExhaustedError } from "../../generation/validation-retry";
-import { CascadeExhaustedError } from "../../routing/errors";
+import { router, cascade, retry, split } from "../../src/routing";
+import { resolveModel } from "../../src/routing/resolve";
+import type { ResolveTryOptions } from "../../src/routing/resolve";
+import { fallback } from "../../src/generation/fallback";
+import type { FallbackModel } from "../../src/generation/fallback";
+import { ValidationExhaustedError } from "../../src/generation/validation-retry";
+import { CascadeExhaustedError } from "../../src/routing/errors";
 import type {
   CascadeRoutingStep,
   RouterRoutingStep,
-} from "../../routing/receipt";
+} from "../../src/routing/receipt";
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers

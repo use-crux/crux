@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { toStoreValue } from '../../memory/utils'
-import type { RawMemoryDocument } from '../../memory/utils'
+import { toStoreValue } from '../../src/memory/utils'
+import type { RawMemoryDocument } from '../../src/memory/utils'
 
 describe('toStoreValue', () => {
   const now = Date.now()

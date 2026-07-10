@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseSourceResolverWorkerRequest, serializeSourceResolverWorkerResponse } from '../source-resolver/protocol'
+import { parseSourceResolverWorkerRequest, serializeSourceResolverWorkerResponse } from '../src/source-resolver/protocol'
 
 describe('source resolver worker protocol', () => {
   it('parses resolveLocations requests through type guards', () => {

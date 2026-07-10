@@ -1,21 +1,21 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { agent as makeAgent } from '../../agent/agent'
-import { createParallel } from '../../agent/parallel'
-import { createPipeline } from '../../agent/pipeline'
-import { createConsensus } from '../../agent/consensus'
-import { createSwarm } from '../../agent/swarm'
-import { delegate } from '../../agent/delegate'
-import { handoff } from '../../agent/handoff'
-import { flow } from '../../flow/scope'
-import type { AgentExecutor } from '../../agent/executor'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { agent as makeAgent } from '../../src/agent/agent'
+import { createParallel } from '../../src/agent/parallel'
+import { createPipeline } from '../../src/agent/pipeline'
+import { createConsensus } from '../../src/agent/consensus'
+import { createSwarm } from '../../src/agent/swarm'
+import { delegate } from '../../src/agent/delegate'
+import { handoff } from '../../src/agent/handoff'
+import { flow } from '../../src/flow/scope'
+import type { AgentExecutor } from '../../src/agent/executor'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
+} from '../../src/observability'
 import { expectBalancedGraph } from './helpers/expect-balanced-graph'
 
 const researchPrompt = makePrompt({

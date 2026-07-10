@@ -3,7 +3,7 @@
  *
  * Companion to `public-import-surface.test.ts`, scoped to the runtime/config/
  * plugin/hook domain that the structure refactor relocates into
- * `packages/core/runtime/`. Every assertion imports through the **package
+ * `packages/core/src/runtime/`. Every assertion imports through the **package
  * specifier** (`@use-crux/core`), never a relative path, so the suite is immune
  * to internal file moves: when `config.ts`, `runtime.ts`, `plugin.ts`,
  * `middleware.ts`, `configure.ts`, and `execution-context.ts` migrate into the

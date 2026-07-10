@@ -6,10 +6,10 @@ import {
   createGroundingSession,
   renderCitationContext,
   resolveCitations,
-} from '../../citations'
-import type { RetrieverHit } from '../../retrieval'
-import type { BoundaryDef, SafetyRunContext, SubjectOf } from '../../safety'
-import type { Constraint } from '../../safety/constraint'
+} from '../../src/citations'
+import type { RetrieverHit } from '../../src/retrieval'
+import type { BoundaryDef, SafetyRunContext, SubjectOf } from '../../src/safety'
+import type { Constraint } from '../../src/safety/constraint'
 
 function hit(overrides: Partial<RetrieverHit> = {}): RetrieverHit {
   return {

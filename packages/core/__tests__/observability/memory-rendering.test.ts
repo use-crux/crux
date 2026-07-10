@@ -4,8 +4,8 @@ import {
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { memory, memoryBlock } from '../../memory'
+} from '../../src/observability'
+import { memory, memoryBlock } from '../../src/memory'
 
 describe('memory rendering observability', () => {
   afterEach(() => {

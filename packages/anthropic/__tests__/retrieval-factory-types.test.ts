@@ -4,7 +4,7 @@
 
 import { expectTypeOf, it } from 'vitest'
 import type { Reranker, RetrievalModel } from '@use-crux/core/retrieval'
-import { createAnthropic } from '../index'
+import { createAnthropic } from '../src'
 
 type AnthropicAdapter = ReturnType<typeof createAnthropic>
 

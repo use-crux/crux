@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { resetHooks } from '../runtime/runtime'
-import type { CruxHooks } from '../runtime/runtime'
-import { mergeHooks, applyPlugins } from '../runtime/plugin'
-import type { CruxPlugin } from '../runtime/plugin'
+import { resetHooks } from '../src/runtime/runtime'
+import type { CruxHooks } from '../src/runtime/runtime'
+import { mergeHooks, applyPlugins } from '../src/runtime/plugin'
+import type { CruxPlugin } from '../src/runtime/plugin'
 
 describe('CruxPlugin system', () => {
   beforeEach(() => {

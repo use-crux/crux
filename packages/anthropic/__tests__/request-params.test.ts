@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SystemBlock } from "@use-crux/core";
-import { anthropicSystemParam, mapAnthropicSettings } from "../request-params";
+import { anthropicSystemParam, mapAnthropicSettings } from "../src/request-params";
 
 describe("anthropic request params", () => {
   it("breakpoint placed at cacheBoundary", () => {

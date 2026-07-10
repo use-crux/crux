@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { discoverSourceMap, normalizePath } from '../source-resolver/discovery'
-import type { SourceResolverFileSystem } from '../source-resolver/filesystem'
+import { discoverSourceMap, normalizePath } from '../src/source-resolver/discovery'
+import type { SourceResolverFileSystem } from '../src/source-resolver/filesystem'
 
 function memoryFileSystem(files: Readonly<Record<string, string>>): SourceResolverFileSystem {
   return {

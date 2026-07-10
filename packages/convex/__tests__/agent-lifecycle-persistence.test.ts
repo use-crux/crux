@@ -3,9 +3,9 @@ import { prompt } from '@use-crux/core'
 import { resetObservabilityRuntime } from '@use-crux/core/observability'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { createProfileBackedAgentLifecycle } from '../agent/lifecycle'
-import { inMemoryRecordStore, memory, recentMessages } from '../memory'
-import { skill } from '../skill'
+import { createProfileBackedAgentLifecycle } from '../src/agent/lifecycle'
+import { inMemoryRecordStore, memory, recentMessages } from '../src/memory'
+import { skill } from '../src/skill'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
 
 describe('profile-backed Convex Agent persistence lifecycle', () => {

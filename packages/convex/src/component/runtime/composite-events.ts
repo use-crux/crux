@@ -6,7 +6,7 @@ import type {
   RuntimeEvent,
 } from '@use-crux/core/runtime'
 import type { MutationCtx } from '../_generated/server.js'
-import { decodeEvent } from '../../../runtime-engine/codec'
+import { decodeEvent } from '../../runtime-engine/codec'
 import { clean, cleanDoc, unsupported } from './composite-utils'
 import { randomId } from './shared'
 

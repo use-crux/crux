@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt } from '@use-crux/core'
-import { fromResponse, toParams } from '../index'
+import { fromResponse, toParams } from '../src'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
 
 describe('public OpenAI codecs', () => {

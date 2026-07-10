@@ -7,7 +7,7 @@ import {
   CONVEX_RUNTIME_ENTRY,
   convex,
   type ConvexRuntimeEngineDefinition,
-} from '../runtime'
+} from '../src/runtime'
 
 const runtime = convex({ namespace: 'tenant-a' })
 

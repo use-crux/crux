@@ -4,7 +4,7 @@
 
 import { expectTypeOf, it } from 'vitest'
 import type { Reranker, RetrievalModel } from '@use-crux/core/retrieval'
-import { createGoogle } from '../index'
+import { createGoogle } from '../src'
 
 type GoogleAdapter = ReturnType<typeof createGoogle>
 

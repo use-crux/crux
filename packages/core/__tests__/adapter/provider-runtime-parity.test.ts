@@ -9,13 +9,13 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { defineProviderRuntime } from '../../adapter'
-import { fakeLoopRuntime, type FakeLoopRuntime } from '../../adapter/testing'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import type { Message } from '../../generation/messages'
-import { guardrail as makeGuardrail } from '../../safety/guardrail'
-import { boundary } from '../../safety'
-import { appendToolApprovalResponse } from '../../tools/approvals'
+import { defineProviderRuntime } from '../../src/adapter'
+import { fakeLoopRuntime, type FakeLoopRuntime } from '../../src/adapter/testing'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import type { Message } from '../../src/generation/messages'
+import { guardrail as makeGuardrail } from '../../src/safety/guardrail'
+import { boundary } from '../../src/safety'
+import { appendToolApprovalResponse } from '../../src/tools/approvals'
 import {
   createRuntimeClient,
   createSingleTurnTestRuntime,

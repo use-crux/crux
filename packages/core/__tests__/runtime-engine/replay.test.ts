@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { CruxRuntimeError } from '../../runtime/engine/errors'
+import { CruxRuntimeError } from '../../src/runtime/engine/errors'
 import {
   createReplayFingerprint,
   replayDivergedError,
   runtimeSignalEventName,
-} from '../../runtime/engine/replay'
+} from '../../src/runtime/engine/replay'
 
 describe('runtime replay helpers', () => {
   it('checks recorded fingerprint labels as a prefix and then allows new labels', () => {

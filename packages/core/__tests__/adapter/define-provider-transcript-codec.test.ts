@@ -5,10 +5,10 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { contentText } from '../../content'
-import { defineProviderTranscriptCodec } from '../../adapter/native-chat/transcript'
-import type { ProviderTranscriptDialect, ProviderTranscriptUnit } from '../../adapter/native-chat/transcript'
-import type { ToolResultEntry } from '../../adapter/types'
+import { contentText } from '../../src/content'
+import { defineProviderTranscriptCodec } from '../../src/adapter/native-chat/transcript'
+import type { ProviderTranscriptDialect, ProviderTranscriptUnit } from '../../src/adapter/native-chat/transcript'
+import type { ToolResultEntry } from '../../src/adapter/types'
 
 interface WireMessage {
   readonly role: string

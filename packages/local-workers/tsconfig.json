@@ -13,13 +13,13 @@
     "types": ["node"],
     "noEmit": true,
     "paths": {
-      "@use-crux/core": ["../core/index.ts"],
-      "@use-crux/core/runtime": ["../core/runtime/public.ts"],
-      "@use-crux/core/runtime/next": ["../core/runtime/next.ts"],
-      "@use-crux/core/runtime/testing": ["../core/runtime/testing/index.ts"],
-      "@use-crux/core/*": ["../core/*"],
-      "@use-crux/indexer": ["../indexer/index.ts"],
-      "@use-crux/indexer/*": ["../indexer/*"]
+      "@use-crux/core": ["../core/src/index.ts"],
+      "@use-crux/core/runtime": ["../core/src/runtime/public.ts"],
+      "@use-crux/core/runtime/next": ["../core/src/runtime/next.ts"],
+      "@use-crux/core/runtime/testing": ["../core/src/runtime/testing/index.ts"],
+      "@use-crux/core/*": ["../core/src/*"],
+      "@use-crux/indexer": ["../indexer/src/index.ts"],
+      "@use-crux/indexer/*": ["../indexer/src/*"]
     }
   },
   "include": ["bin/**/*.ts", "lib/**/*.ts", "scripts/**/*.ts"],

@@ -7,9 +7,9 @@ import type {
   TaskId,
   WorkId,
 } from '@use-crux/core/runtime'
-import type { ConvexCtxPort } from '../store'
-import { convexRuntimeStore, type ConvexRuntimeComponent } from '../runtime'
-import { encodeCompositeValue } from '../runtime-engine/codec'
+import type { ConvexCtxPort } from '../src/store'
+import { convexRuntimeStore, type ConvexRuntimeComponent } from '../src/runtime'
+import { encodeCompositeValue } from '../src/runtime-engine/codec'
 
 const component = {
   runtime: {

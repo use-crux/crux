@@ -1,17 +1,17 @@
 import { createHash } from "node:crypto";
 import { relative } from "node:path";
-import { canonicalStaticExtractionJson } from "../contracts/parity";
-import { staticDefinitionFiles } from "../indexer/files";
+import { canonicalStaticExtractionJson } from "../src/contracts/parity";
+import { staticDefinitionFiles } from "../src/indexer/files";
 import {
   createStaticExtraction,
   type StaticFileExtraction,
-} from "../indexer/static/extraction/engine";
-import type { StaticSyntaxFrontendFactory } from "../indexer/static-index/syntax";
+} from "../src/indexer/static/extraction/engine";
+import type { StaticSyntaxFrontendFactory } from "../src/indexer/static-index/syntax";
 import type {
   RustFirstPartyStaticGoldenFileFixture,
   RustFirstPartyStaticGoldenSharedFixture,
   RustFirstPartyStaticGoldenTotalsFixture,
-} from "../contracts/fixtures";
+} from "../src/contracts/fixtures";
 
 interface StaticExtractionProjection {
   readonly definitions: StaticFileExtraction["definitions"];

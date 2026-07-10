@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { enableDevtools, resetObservabilityRuntime } from '../observability'
-import { config } from '../runtime/config'
-import type { ExecutionHookArgs } from '../runtime/middleware'
-import type { CruxPlugin } from '../runtime/plugin'
-import { getHooks, resetHooks } from '../runtime/runtime'
-import type { PromptMiddleware, PromptMiddlewareArgs } from '../runtime/types'
+import { enableDevtools, resetObservabilityRuntime } from '../src/observability'
+import { config } from '../src/runtime/config'
+import type { ExecutionHookArgs } from '../src/runtime/middleware'
+import type { CruxPlugin } from '../src/runtime/plugin'
+import { getHooks, resetHooks } from '../src/runtime/runtime'
+import type { PromptMiddleware, PromptMiddlewareArgs } from '../src/runtime/types'
 
 describe('config lifecycle', () => {
   beforeEach(() => {

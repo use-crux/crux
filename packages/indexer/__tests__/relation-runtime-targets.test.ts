@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { ProjectDefinition } from '@use-crux/core/project-index'
-import { resolveRelationModel, type RuntimeUseTargetRules } from '../indexer/relations'
+import { resolveRelationModel, type RuntimeUseTargetRules } from '../src/indexer/relations'
 
 const testDir = dirname(fileURLToPath(import.meta.url))
 
@@ -61,7 +61,7 @@ describe('runtime use target resolution', () => {
   })
 
   it('keeps app-specific ids out of the relation resolver implementation', async () => {
-    const source = await readFile(join(testDir, '..', 'indexer/relations/index.ts'), 'utf8')
+    const source = await readFile(join(testDir, '..', 'src/indexer/relations/index.ts'), 'utf8')
 
     expect(source.toLowerCase()).not.toContain('karyla')
   })

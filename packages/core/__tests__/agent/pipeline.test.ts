@@ -1,9 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { agent as makeAgent } from '../../agent/agent'
-import { createPipeline } from '../../agent/pipeline'
-import { createFakeAgentExecutor } from '../../agent/fakes'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { agent as makeAgent } from '../../src/agent/agent'
+import { createPipeline } from '../../src/agent/pipeline'
+import { createFakeAgentExecutor } from '../../src/agent/fakes'
 
 // ── Test prompts + agents ───────────────────────────────────────
 

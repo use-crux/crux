@@ -7,26 +7,26 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { plan, task, tasks } from '../plan'
-import { task as taskFromTasks, tasks as tasksFromTasks } from '../tasks'
-import { plan as planFromRoot, task as taskFromRoot, tasks as tasksFromRoot } from '..'
-import { TaskListDiscardedError } from '..'
-import type { Plan, PlanHandle, TaskSpec, TasksHandle } from '../plan'
+import { plan, task, tasks } from '../src/plan'
+import { task as taskFromTasks, tasks as tasksFromTasks } from '../src/tasks'
+import { plan as planFromRoot, task as taskFromRoot, tasks as tasksFromRoot } from '../src'
+import { TaskListDiscardedError } from '../src'
+import type { Plan, PlanHandle, TaskSpec, TasksHandle } from '../src/plan'
 
 // @ts-expect-error — `tasklist` was removed from the public beta API.
-import { tasklist } from '../tasks'
+import { tasklist } from '../src/tasks'
 // @ts-expect-error — `planAgent` is available through plan handles, not as a public top-level export.
-import { planAgent } from '../plan'
+import { planAgent } from '../src/plan'
 // @ts-expect-error — task-list agents are available through task handles, not as public top-level exports.
-import { taskListAgent } from '../tasks'
+import { taskListAgent } from '../src/tasks'
 // @ts-expect-error — worker handles are created from `tasks().worker()`.
-import { taskWorker } from '../tasks'
+import { taskWorker } from '../src/tasks'
 // @ts-expect-error — creation tools live at `plan.tool()`.
-import { createPlanTool } from '../plan'
+import { createPlanTool } from '../src/plan'
 // @ts-expect-error — creation tools live at `tasks.tool()`.
-import { createTaskListTool } from '../tasks'
+import { createTaskListTool } from '../src/tasks'
 // @ts-expect-error — list task ledgers with `tasks.list({ plan })`.
-import { getTaskListByPlan } from '../tasks'
+import { getTaskListByPlan } from '../src/tasks'
 
 expectTypeOf(plan).toEqualTypeOf(planFromRoot)
 expectTypeOf(tasks).toEqualTypeOf(tasksFromTasks)
@@ -45,7 +45,7 @@ plan.list({ metadata: { threadId: 'thread-1', nested: { phase: 1 } } })
 plan.list({ metadata: { fn: () => undefined } })
 // @ts-expect-error — plan listing does not expose cursor pagination.
 plan.list({ cursor: 'plan_123' })
-expectTypeOf(TaskListDiscardedError).toEqualTypeOf<typeof import('../plan').TaskListDiscardedError>()
+expectTypeOf(TaskListDiscardedError).toEqualTypeOf<typeof import('../src/plan').TaskListDiscardedError>()
 
 // @ts-expect-error — PlanHandle is a command handle, not a stale Plan snapshot.
 const snapshot: Plan = planHandle

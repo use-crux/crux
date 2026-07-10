@@ -17,7 +17,7 @@ import {
   encodeSnapshot,
   encodeWork,
   encodeWorkForCreate,
-} from '../../../runtime-engine/codec'
+} from '../../runtime-engine/codec'
 import {
   mergeDeliveredSuspend,
   readIdle,

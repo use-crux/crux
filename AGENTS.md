@@ -115,9 +115,9 @@ The lower-level `packages/local/Makefile` owns Go-specific build details. Do not
 
 Project Index cache identity is part of the read-model contract. If an indexer or local-runtime change would produce different Project Index output for unchanged user source files, update the relevant structured identity or cache epoch in the same change:
 
-- `packages/indexer/indexer/cache-identity.ts`: bump `STATIC_PARSE_CACHE_EPOCH` when static AST parser/extractor output changes in a way not already captured by source/config hashes, extension/extractor/rule identity, compiler profile identity, or compiler-owned projection identity.
-- `packages/indexer/indexer/cache-identity.ts`: bump `SEMANTIC_FACTS_CACHE_EPOCH` when semantic enrichment output changes in a way not already captured by source-closure/config hashes, TypeScript version, or `SEMANTIC_COMPILER_OPTIONS_ID`.
-- `packages/indexer/indexer/cache-identity.ts`: update `SEMANTIC_COMPILER_OPTIONS_ID` when TypeScript compiler option meaning changes for semantic enrichment.
+- `packages/indexer/src/indexer/cache-identity.ts`: bump `STATIC_PARSE_CACHE_EPOCH` when static AST parser/extractor output changes in a way not already captured by source/config hashes, extension/extractor/rule identity, compiler profile identity, or compiler-owned projection identity.
+- `packages/indexer/src/indexer/cache-identity.ts`: bump `SEMANTIC_FACTS_CACHE_EPOCH` when semantic enrichment output changes in a way not already captured by source-closure/config hashes, TypeScript version, or `SEMANTIC_COMPILER_OPTIONS_ID`.
+- `packages/indexer/src/indexer/cache-identity.ts`: update `SEMANTIC_COMPILER_OPTIONS_ID` when TypeScript compiler option meaning changes for semantic enrichment.
 - `packages/local/internal/projectindex/cache/identity.go`: bump `ProjectIndexSnapshotCacheEpoch` when the Go-owned `IndexData` snapshot shape, cache loading semantics, or client-visible Project Index metadata changes in a way that an existing `.crux/cache/index/index.json` could mask after restart.
 
 For features that span AST output, semantic enrichment, and the Go snapshot, update all affected identities/epochs. Rebuild with `make build`, restart the local server, and run `crux index reindex` (or the reindex HTTP endpoint) to verify the fresh snapshot. Do not ask users to manually delete `.crux/cache` for normal contract migrations.
@@ -126,10 +126,10 @@ For features that span AST output, semantic enrichment, and the Go snapshot, upd
 
 Quality cache identity is part of the evaluation replay contract. Over-invalidate, never under-invalidate: a stale cache hit is a correctness bug, while an extra model/task run is only slower. If a Quality engine change would alter cassette keys, output-cache keys, baseline comparability, or judge score comparability for unchanged user eval source, update the relevant identity epoch in the same change:
 
-- `packages/core/quality/internal/cache-identity.ts`: bump `CASSETTE_CACHE_EPOCH` when normalized model-call identity changes in a way not already captured by prompt/model/settings, structured-output schema fingerprints, tool parameter-schema fingerprints, or other normalized-call fields.
-- `packages/core/quality/internal/cache-identity.ts`: bump `OUTPUT_CACHE_EPOCH` when cell output-cache key semantics change in a way not already captured by evaluation id, case input fingerprint, variant, trial, task fingerprint, or params fingerprint.
-- `packages/core/quality/internal/cache-identity.ts`: bump `BASELINE_FINGERPRINT_EPOCH` when promoted-baseline comparability changes in a way not already captured by case/dataset/scorer/variant/params/gate fingerprints.
-- `packages/core/quality/internal/cache-identity.ts`: bump `JUDGE_PROMPT_VERSION` when the built-in judge prompt template changes in a way that can affect judge score comparability.
+- `packages/core/src/quality/internal/cache-identity.ts`: bump `CASSETTE_CACHE_EPOCH` when normalized model-call identity changes in a way not already captured by prompt/model/settings, structured-output schema fingerprints, tool parameter-schema fingerprints, or other normalized-call fields.
+- `packages/core/src/quality/internal/cache-identity.ts`: bump `OUTPUT_CACHE_EPOCH` when cell output-cache key semantics change in a way not already captured by evaluation id, case input fingerprint, variant, trial, task fingerprint, or params fingerprint.
+- `packages/core/src/quality/internal/cache-identity.ts`: bump `BASELINE_FINGERPRINT_EPOCH` when promoted-baseline comparability changes in a way not already captured by case/dataset/scorer/variant/params/gate fingerprints.
+- `packages/core/src/quality/internal/cache-identity.ts`: bump `JUDGE_PROMPT_VERSION` when the built-in judge prompt template changes in a way that can affect judge score comparability.
 
 For changes spanning cassette replay, task output reuse, and promoted baselines, update all affected epochs and add focused red tests proving stale artifacts are missed or demoted instead of reused.
 

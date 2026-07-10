@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type { LanguageModel } from 'ai'
 import { UnsupportedContentError, imagePart, prompt, textPart } from '@use-crux/core'
-import { fromResponse, toParams } from '../index'
+import { fromResponse, toParams } from '../src'
 
 describe('public AI SDK codecs', () => {
   it('turns a resolved prompt into AI SDK args and normalizes the response', async () => {

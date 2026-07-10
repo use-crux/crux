@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { scorers } from '../../quality/scorers'
-import type { GenerateFn } from '../../quality/target'
-import { invokeScorer, type ScorerRunContext } from '../../quality/internal/scorer-runtime'
-import { emptyCellSignals, type CellSignals } from '../../quality/internal/signals'
+import { scorers } from '../../src/quality/scorers'
+import type { GenerateFn } from '../../src/quality/target'
+import { invokeScorer, type ScorerRunContext } from '../../src/quality/internal/scorer-runtime'
+import { emptyCellSignals, type CellSignals } from '../../src/quality/internal/signals'
 
 /** Stub adapter generate returning a fixed judge verdict, recording prompts. */
 function judgeStub(object: Record<string, unknown>) {

@@ -1,13 +1,13 @@
 import { expectTypeOf } from "vitest";
 import { z } from "zod";
-import { workspace, retrieverWorkspaceMountSource } from "../workspace";
+import { workspace, retrieverWorkspaceMountSource } from "../src/workspace";
 import type {
   WorkspaceLimits,
   WorkspaceProvenance,
   WorkspaceRetention,
-} from "../index";
-import type { Context } from "../prompt/context-types";
-import type { Retriever } from "../retrieval";
+} from "../src/index";
+import type { Context } from "../src/prompt/context-types";
+import type { Retriever } from "../src/retrieval";
 import type {
   WorkspaceArtifact,
   WorkspaceChangeEvent,
@@ -26,7 +26,7 @@ import type {
   WorkspaceTools,
   WorkspaceWatchHandle,
   WorkspaceWatchOptions,
-} from "../workspace";
+} from "../src/workspace";
 
 const ws = workspace({ id: "research", namespace: "thread:1" });
 

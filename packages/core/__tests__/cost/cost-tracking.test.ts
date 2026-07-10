@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../../prompt/prompt'
-import { applyPlugins } from '../../runtime/plugin'
-import { getHooks, resetHooks, setHooks } from '../../runtime/runtime'
-import { orchestrateGenerate } from '../../generation/orchestrate'
-import { runWithExecutionContext } from '../../runtime/execution-context'
-import { CostLimitError, modelPricing, withCostTracking } from '../../cost'
+import { prompt } from '../../src/prompt/prompt'
+import { applyPlugins } from '../../src/runtime/plugin'
+import { getHooks, resetHooks, setHooks } from '../../src/runtime/runtime'
+import { orchestrateGenerate } from '../../src/generation/orchestrate'
+import { runWithExecutionContext } from '../../src/runtime/execution-context'
+import { CostLimitError, modelPricing, withCostTracking } from '../../src/cost'
 
 function install(plugin: ReturnType<ReturnType<typeof withCostTracking>['asPlugin']>) {
   const applied = applyPlugins([plugin], getHooks())

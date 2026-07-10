@@ -8,7 +8,7 @@
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
 import { noPayload } from '@use-crux/core/flow'
-import { flow } from '../server'
+import { flow } from '../src/server'
 
 const approvalSchema = z.object({
   approved: z.boolean(),

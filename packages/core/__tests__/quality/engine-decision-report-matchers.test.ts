@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { agent } from '../../agent/agent'
-import { observe } from '../../observability'
-import type { TurnDecisionReport } from '../../observability/turn-decision-report'
-import { prompt } from '../../prompt/prompt'
-import { evaluate, target } from '../../quality'
-import type { GenerateFn } from '../../quality/target'
+import { agent } from '../../src/agent/agent'
+import { observe } from '../../src/observability'
+import type { TurnDecisionReport } from '../../src/observability/turn-decision-report'
+import { prompt } from '../../src/prompt/prompt'
+import { evaluate, target } from '../../src/quality'
+import type { GenerateFn } from '../../src/quality/target'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 const supportPrompt = prompt({

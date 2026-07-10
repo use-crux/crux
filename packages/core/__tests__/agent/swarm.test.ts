@@ -1,10 +1,10 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { agent as makeAgent } from '../../agent/agent'
-import { createSwarm } from '../../agent/swarm'
-import { createFakeAgentExecutor } from '../../agent/fakes'
-import type { FakeAgentBehavior } from '../../agent/fakes'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { agent as makeAgent } from '../../src/agent/agent'
+import { createSwarm } from '../../src/agent/swarm'
+import { createFakeAgentExecutor } from '../../src/agent/fakes'
+import type { FakeAgentBehavior } from '../../src/agent/fakes'
 
 // ── Test helpers ──────────────────────────────────────────────────
 

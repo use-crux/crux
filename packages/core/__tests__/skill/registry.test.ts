@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { skill, registry as makeRegistry, clearCache, cacheSize, skillsSh } from '../../skill/index'
-import { resolveRegistrySkill, type Registry } from '../../skill/registry'
-import { SkillLoadError } from '../../skill/types'
+import { skill, registry as makeRegistry, clearCache, cacheSize, skillsSh } from '../../src/skill/index'
+import { resolveRegistrySkill, type Registry } from '../../src/skill/registry'
+import { SkillLoadError } from '../../src/skill/types'
 
 beforeEach(() => {
   clearCache()

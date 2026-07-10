@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inMemoryVectorStore } from '../../storage'
+import { inMemoryVectorStore } from '../../src/storage'
 
 describe('VectorStore.search', () => {
   it('supports dense queries', async () => {

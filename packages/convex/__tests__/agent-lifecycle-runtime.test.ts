@@ -8,10 +8,10 @@ import {
 } from '@use-crux/core/observability'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { createProfileBackedAgentLifecycle } from '../agent/lifecycle'
-import { inMemoryRecordStore, memory, recentMessages } from '../memory'
-import { getConvexCruxRuntime } from '../runtime'
-import { tool } from '../tools'
+import { createProfileBackedAgentLifecycle } from '../src/agent/lifecycle'
+import { inMemoryRecordStore, memory, recentMessages } from '../src/memory'
+import { getConvexCruxRuntime } from '../src/runtime'
+import { tool } from '../src/tools'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
 
 describe('profile-backed Convex Agent runtime lifecycle', () => {

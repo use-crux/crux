@@ -14,8 +14,8 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./ui/src/*"],
-      "@use-crux/core": ["../core/index.ts"],
-      "@use-crux/core/*": ["../core/*"]
+      "@use-crux/core": ["../core/src/index.ts"],
+      "@use-crux/core/*": ["../core/src/*"]
     }
   },
   "include": ["ui/src/**/*.ts", "ui/src/**/*.tsx"],

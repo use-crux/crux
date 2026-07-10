@@ -1,11 +1,11 @@
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { readStaticIndexRuntimeSharedFixture } from "../contracts/fixtures";
+import { readStaticIndexRuntimeSharedFixture } from "../src/contracts/fixtures";
 import {
   createRustOxcStaticSyntaxFrontend,
   rustOxcSyntaxFrontendTestStatus,
-} from "../testing/rust-oxc-frontend";
+} from "../src/testing/rust-oxc-frontend";
 import { generateRustFirstPartyStaticGolden } from "./first-party-static-golden-helper";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");

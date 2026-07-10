@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { evaluate, scorers, target } from '../../quality'
-import { retrievalRecipe, retrieve, retriever, type RetrieverHit } from '../../retrieval'
+import { evaluate, scorers, target } from '../../src/quality'
+import { retrievalRecipe, retrieve, retriever, type RetrieverHit } from '../../src/retrieval'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 function hit(sourceId: string, chunkId: string, score: number): RetrieverHit {

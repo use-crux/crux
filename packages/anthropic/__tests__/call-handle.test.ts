@@ -2,8 +2,8 @@ import type Anthropic from '@anthropic-ai/sdk'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt, tool } from '@use-crux/core'
-import { createAnthropic } from '../index'
-import type { AnthropicParsedMessage } from '../response'
+import { createAnthropic } from '../src'
+import type { AnthropicParsedMessage } from '../src/response'
 
 describe('Anthropic call handle', () => {
   it('prepares params and finishes a plain text response', async () => {

@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { CruxRuntimeError } from '../../runtime/engine/errors'
+import { CruxRuntimeError } from '../../src/runtime/engine/errors'
 import {
   decodeWakeEnvelope,
   encodeWakeEnvelope,
   type WakeEnvelope,
-} from '../../runtime/engine/envelope'
-import type { RuntimeTargetId, WorkId } from '../../runtime/ports/ids'
+} from '../../src/runtime/engine/envelope'
+import type { RuntimeTargetId, WorkId } from '../../src/runtime/ports/ids'
 
 describe('wake envelope encoding', () => {
   it('round-trips the portable wake envelope', () => {

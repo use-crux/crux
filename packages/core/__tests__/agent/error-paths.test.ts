@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
-import { delegate as makeDelegate } from '../../agent/delegate'
-import { handoff as makeHandoff } from '../../agent/handoff'
-import { blackboard as makeBlackboard } from '../../agent/blackboard'
+import { delegate as makeDelegate } from '../../src/agent/delegate'
+import { handoff as makeHandoff } from '../../src/agent/handoff'
+import { blackboard as makeBlackboard } from '../../src/agent/blackboard'
 
 // ── Shared fixtures ────────────────────────────────────────────────
 
@@ -103,7 +103,7 @@ describe('handoff: async transform throwing propagates', () => {
     })
 
     it('propagates transform error through send()', async () => {
-      const { inMemoryRecordStore } = await import('../../storage')
+      const { inMemoryRecordStore } = await import('../../src/storage')
       const store = inMemoryRecordStore()
 
       const h = makeHandoff({
@@ -151,7 +151,7 @@ describe('blackboard: subscriber callback throwing does not prevent store write'
       // The write should have persisted despite the subscriber error
       // Create a new board reading from the same store to verify
       // Since default store is ephemeral per-instance, we test with explicit store
-      const { inMemoryRecordStore } = await import('../../storage')
+      const { inMemoryRecordStore } = await import('../../src/storage')
       const store = inMemoryRecordStore()
 
       const board2 = makeBlackboard({
@@ -205,7 +205,7 @@ describe('blackboard: subscriber callback throwing does not prevent store write'
     })
 
     it('patch persists despite subscriber error', async () => {
-      const { inMemoryRecordStore } = await import('../../storage')
+      const { inMemoryRecordStore } = await import('../../src/storage')
       const store = inMemoryRecordStore()
 
       const board = makeBlackboard({

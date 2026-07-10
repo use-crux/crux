@@ -3,8 +3,8 @@ import {
   inMemoryBlobStore,
   inMemoryRecordStore,
   storage,
-} from "../../storage";
-import { workspace, type WorkspaceCustomMountSource } from "../../workspace";
+} from "../../src/storage";
+import { workspace, type WorkspaceCustomMountSource } from "../../src/workspace";
 import {
   failLiveNamespacePut,
   failStagingNamespacePut,

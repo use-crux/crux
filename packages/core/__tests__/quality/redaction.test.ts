@@ -2,8 +2,8 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { evaluate } from '../../quality'
-import { createFeedbackStore } from '../../quality/internal/feedback'
+import { evaluate } from '../../src/quality'
+import { createFeedbackStore } from '../../src/quality/internal/feedback'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 describe('quality redaction contract', () => {

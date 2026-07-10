@@ -3,8 +3,8 @@
  */
 
 import { z } from "zod";
-import { prompt } from "../index";
-import { convexAgent } from "../agent";
+import { prompt } from "../src/index";
+import { convexAgent } from "../src/agent";
 import { router } from "@use-crux/core/routing";
 
 const supportPrompt = prompt({

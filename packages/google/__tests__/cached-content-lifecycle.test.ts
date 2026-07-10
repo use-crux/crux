@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SystemBlock } from '@use-crux/core'
-import { createBuiltInCachedContentLifecycle } from '../cached-content/built-in-lifecycle'
-import { CACHE_DEFAULTS, resolveCacheConfig } from '../cached-content/config'
-import type { GoogleCacheName, GoogleCachedContentCachePort } from '../cached-content/types'
+import { createBuiltInCachedContentLifecycle } from '../src/cached-content/built-in-lifecycle'
+import { CACHE_DEFAULTS, resolveCacheConfig } from '../src/cached-content/config'
+import type { GoogleCacheName, GoogleCachedContentCachePort } from '../src/cached-content/types'
 
 interface FakePort extends GoogleCachedContentCachePort {
   readonly creates: Array<{ model: string; systemInstruction: string; ttlSeconds: number }>

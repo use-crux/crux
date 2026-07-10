@@ -9,7 +9,7 @@ import {
   createTestRuntime,
   type TestRuntime,
 } from '@use-crux/core/runtime/testing'
-import { resetHooks } from '../../runtime/runtime'
+import { resetHooks } from '../../src/runtime/runtime'
 
 let runtime: TestRuntime | undefined
 

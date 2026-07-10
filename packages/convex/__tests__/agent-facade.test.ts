@@ -1,6 +1,6 @@
 import { Agent as ConvexAgentBase } from '@convex-dev/agent'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Agent } from '../agent'
+import { Agent } from '../src/agent'
 
 describe('Convex Agent facade', () => {
   afterEach(() => {

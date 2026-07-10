@@ -7,7 +7,7 @@ import type { MutationCtx } from '../_generated/server.js'
 import {
   decodeOutbox,
   encodeWakeEnvelope,
-} from '../../../runtime-engine/codec'
+} from '../../runtime-engine/codec'
 import { limitRows, randomId } from './shared'
 import { unsupported } from './composite-utils'
 

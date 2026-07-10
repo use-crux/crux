@@ -11,7 +11,7 @@ import type {
   ExecutorStreamHandle,
 } from '@use-crux/core/adapter'
 import type { Reranker, RetrievalModel } from '@use-crux/core/retrieval'
-import { aiSdkProviderRuntime } from '../index'
+import { aiSdkProviderRuntime } from '../src'
 import type { SdkLoopResultLike, SdkStreamResultLike } from '../src/executor'
 import type { AiSdkRuntimeExtensions } from '../src/extensions'
 import type { SdkGateway } from '../src/gateway'

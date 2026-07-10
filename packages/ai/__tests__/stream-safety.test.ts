@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach } from 'vitest'
 import { z } from 'zod'
 import { prompt as makePrompt, guardrail, resetHooks } from '@use-crux/core'
 import { boundary } from '@use-crux/core/safety'
-import { createCruxAi } from '../index'
+import { createCruxAi } from '../src'
 import { streamingModel } from './mock-model'
 
 afterEach(() => {

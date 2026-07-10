@@ -47,7 +47,7 @@ describe('bundled Rust-only indexing architecture', () => {
   it('does not ship first-party TypeScript static extractors', () => {
     expect(existsSync(path.join(indexerRoot, 'indexer/extractors'))).toBe(false)
 
-    const profile = readRepoFile('packages/indexer/indexer/compiler/profile.ts')
+    const profile = readRepoFile('packages/indexer/src/indexer/compiler/profile.ts')
     expect(profile).not.toContain('cruxCoreExtension')
     expect(profile).not.toContain('../extractors')
   })
@@ -69,7 +69,7 @@ describe('bundled Rust-only indexing architecture', () => {
     expect(existsSync(path.join(indexerRoot, 'indexer/lints/profiles.ts'))).toBe(false)
 
     const staticWorker = readRepoFile(
-      'packages/indexer/indexer/static-index/extension-host/evidence/worker.ts',
+      'packages/indexer/src/indexer/static-index/extension-host/evidence/worker.ts',
     )
     expect(staticWorker).not.toContain('indexLintFindings')
     expect(staticWorker).not.toContain('builtInIndexRuleDescriptors')
@@ -77,7 +77,7 @@ describe('bundled Rust-only indexing architecture', () => {
   })
 
   it('does not expose a public in-process bundled indexing API', () => {
-    const publicRoot = readRepoFile('packages/indexer/index.ts')
+    const publicRoot = readRepoFile('packages/indexer/src/index.ts')
 
     for (const exportName of [
       'indexProject',
@@ -93,13 +93,13 @@ describe('bundled Rust-only indexing architecture', () => {
 
   it('does not keep a bundled TypeScript fallback branch in the extension host', () => {
     const hostManifest = readRepoFile(
-      'packages/indexer/indexer/static-index/extension-host/host-plan/host-manifest.ts',
+      'packages/indexer/src/indexer/static-index/extension-host/host-plan/host-manifest.ts',
     )
     expect(hostManifest).not.toContain('typescript-bundled')
     expect(hostManifest).not.toContain('requiresTypeScriptHostForBundled')
 
     const evidenceHost = readRepoFile(
-      'packages/indexer/indexer/static-index/extension-host/evidence/host.ts',
+      'packages/indexer/src/indexer/static-index/extension-host/evidence/host.ts',
     )
     expect(evidenceHost).not.toContain('typescript-bundled-extractors')
   })
@@ -108,8 +108,8 @@ describe('bundled Rust-only indexing architecture', () => {
     expect(existsSync(path.join(indexerRoot, 'indexer/compiler/index.ts'))).toBe(false)
     expect(existsSync(path.join(indexerRoot, 'indexer/index.ts'))).toBe(false)
 
-    const hostIndex = readRepoFile('packages/indexer/host/index.ts')
-    const hostStatic = readRepoFile('packages/indexer/host/static-index.ts')
+    const hostIndex = readRepoFile('packages/indexer/src/host/index.ts')
+    const hostStatic = readRepoFile('packages/indexer/src/host/static-index.ts')
     const localWorker = readRepoFile('packages/local-workers/bin/project-indexer.ts')
 
     for (const source of [hostIndex, hostStatic, localWorker]) {

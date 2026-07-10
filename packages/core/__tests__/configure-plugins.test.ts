@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { config } from '../runtime/config'
-import type { CruxPlugin } from '../runtime/plugin'
-import { resetHooks } from '../runtime/runtime'
+import { config } from '../src/runtime/config'
+import type { CruxPlugin } from '../src/runtime/plugin'
+import { resetHooks } from '../src/runtime/runtime'
 
 describe('config — plugins', () => {
   beforeEach(() => {

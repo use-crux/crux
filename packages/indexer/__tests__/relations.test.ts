@@ -7,10 +7,10 @@ import {
   relationDiagnosticsFromReport,
   relationIdentity,
   resolveRelationModel,
-} from '../indexer/relations'
-import { staticParseResultFromFacts } from '../indexer/static/read-model'
-import type { IndexRelationPolicy } from '../indexer/relations/types'
-import type { StaticFoundDefinition } from '../indexer/types'
+} from '../src/indexer/relations'
+import { staticParseResultFromFacts } from '../src/indexer/static/read-model'
+import type { IndexRelationPolicy } from '../src/indexer/relations/types'
+import type { StaticFoundDefinition } from '../src/indexer/types'
 
 const basePolicy = {
   presentation: 'both',

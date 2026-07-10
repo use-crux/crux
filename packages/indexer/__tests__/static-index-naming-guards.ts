@@ -44,7 +44,7 @@ export type StaticIndexReplacement<TTerm extends DeprecatedStaticIndexTerm> =
 export type StaticIndexTargetPhase = 2 | 4 | 5 | 6 | 7 | 8
 
 /** Source root scanned by the naming guard. */
-export type StaticIndexGuardRoot = 'packages/indexer/indexer' | 'packages/local/internal' | 'crates'
+export type StaticIndexGuardRoot = 'packages/indexer/src/indexer' | 'packages/local/internal' | 'crates'
 
 /** One deprecated term, its target vocabulary, and the source roots where it may still appear. */
 export interface StaticIndexVocabularyGuard<TTerm extends DeprecatedStaticIndexTerm = DeprecatedStaticIndexTerm> {
@@ -103,36 +103,36 @@ export const staticIndexVocabularyGuards = defineStaticIndexVocabularyGuards([
     term: 'native-static',
     replacements: ['static-index'],
     targetedPhases: [2, 5, 6, 7, 8],
-    roots: ['packages/indexer/indexer', 'packages/local/internal', 'crates'],
+    roots: ['packages/indexer/src/indexer', 'packages/local/internal', 'crates'],
   },
   {
     term: 'nativeStatic',
     replacements: ['staticIndex'],
     targetedPhases: [7, 8],
-    roots: ['packages/indexer/indexer', 'packages/local/internal', 'crates'],
+    roots: ['packages/indexer/src/indexer', 'packages/local/internal', 'crates'],
   },
   {
     term: 'NativeStatic',
     replacements: ['StaticIndex'],
     targetedPhases: [7, 8],
-    roots: ['packages/indexer/indexer', 'packages/local/internal', 'crates'],
+    roots: ['packages/indexer/src/indexer', 'packages/local/internal', 'crates'],
   },
   {
     term: 'native static',
     replacements: ['Static Index'],
     targetedPhases: [5, 6, 7, 8],
-    roots: ['packages/indexer/indexer', 'packages/local/internal', 'crates'],
+    roots: ['packages/indexer/src/indexer', 'packages/local/internal', 'crates'],
   },
   {
     term: 'nativeAst',
     replacements: ['staticIndex', 'staticSyntax', 'oxcSyntax'],
     targetedPhases: [2, 5, 7, 8],
-    roots: ['packages/indexer/indexer', 'packages/local/internal'],
+    roots: ['packages/indexer/src/indexer', 'packages/local/internal'],
     allowedPaths: [
-      'packages/indexer/indexer/project-config-inspect-types.ts',
-      'packages/indexer/indexer/project-config-inspect.ts',
-      'packages/indexer/indexer/static-index/config/index.ts',
-      'packages/indexer/indexer/static-index/config/inspect.ts',
+      'packages/indexer/src/indexer/project-config-inspect-types.ts',
+      'packages/indexer/src/indexer/project-config-inspect.ts',
+      'packages/indexer/src/indexer/static-index/config/index.ts',
+      'packages/indexer/src/indexer/static-index/config/inspect.ts',
       'packages/local/internal/commands/config_inspect.go',
       'packages/local/internal/projectindex/workers/syntax.go',
       'packages/local/internal/projectindex/model/static_index_config.go',
@@ -156,13 +156,13 @@ export const staticIndexVocabularyGuards = defineStaticIndexVocabularyGuards([
     term: 'NATIVE_STATIC',
     replacements: ['STATIC_INDEX'],
     targetedPhases: [7, 8],
-    roots: ['packages/indexer/indexer', 'packages/local/internal', 'crates'],
+    roots: ['packages/indexer/src/indexer', 'packages/local/internal', 'crates'],
   },
   {
     term: 'CRUX_INDEXER_WORKER',
     replacements: ['CRUX_STATIC_INDEX_WORKER'],
     targetedPhases: [8],
-    roots: ['packages/indexer/indexer', 'packages/local/internal'],
+    roots: ['packages/indexer/src/indexer', 'packages/local/internal'],
   },
 ])
 

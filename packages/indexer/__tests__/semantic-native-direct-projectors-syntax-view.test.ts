@@ -4,8 +4,8 @@ import { API, type Project } from '@typescript/native-preview/unstable/sync'
 import type { Node, SourceFile } from '@typescript/native-preview/unstable/ast'
 import { formatSyntaxKind } from '@typescript/native-preview/unstable/ast/utils'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createTsgoNativeSourceLookup } from '../indexer/semantic/backends/tsgo/source-lookup'
-import { createTsgoSemanticSyntaxView } from '../indexer/semantic/backends/tsgo/syntax-view'
+import { createTsgoNativeSourceLookup } from '../src/indexer/semantic/backends/tsgo/source-lookup'
+import { createTsgoSemanticSyntaxView } from '../src/indexer/semantic/backends/tsgo/syntax-view'
 
 const roots: string[] = []
 

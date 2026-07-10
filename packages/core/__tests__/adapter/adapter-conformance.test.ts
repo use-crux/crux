@@ -8,16 +8,16 @@
 
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { adapterSpecConformance } from '../../adapter/testing'
+import { adapterSpecConformance } from '../../src/adapter/testing'
 import type {
   AdapterConformanceHarness,
   AdapterConformanceInspector,
   AdapterConformanceScript,
-} from '../../adapter/testing'
-import type { AdapterSpec } from '../../adapter/spec'
-import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '../../adapter/types'
-import type { GenerationSettings, TokenUsage } from '../../generation/types'
-import type { Message } from '../../generation/messages'
+} from '../../src/adapter/testing'
+import type { AdapterSpec } from '../../src/adapter/spec'
+import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '../../src/adapter/types'
+import type { GenerationSettings, TokenUsage } from '../../src/generation/types'
+import type { Message } from '../../src/generation/messages'
 
 interface FakeNativeClient {
   readonly calls: FakeNativeBody[]

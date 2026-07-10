@@ -13,7 +13,7 @@ import type { PublicHttpAction } from 'convex/server'
 import type { Crux } from '@use-crux/core'
 import { normalizeObservedError } from '@use-crux/core/observability'
 import type { RecordStore, Storage } from '@use-crux/core/storage'
-import type { ComponentApi } from './src/component/_generated/component'
+import type { ComponentApi } from './component/_generated/component'
 import { assertConvexCtxPort, createDefaultConvexStorage } from './profile-store'
 import {
   BridgeCommandErrorSchema,

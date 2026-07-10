@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   createRuntimeConfigTransaction,
   type RuntimeConfigTransactionPorts,
-} from '../runtime/config-transaction'
-import type { CruxHooks, HooksLayerToken } from '../runtime/runtime'
-import { inMemoryRecordStore } from '../storage'
+} from '../src/runtime/config-transaction'
+import type { CruxHooks, HooksLayerToken } from '../src/runtime/runtime'
+import { inMemoryRecordStore } from '../src/storage'
 
 describe('runtime config transaction — inert mode', () => {
   it('keeps CRUX_INDEX mode inert and avoids every side-effect port', () => {

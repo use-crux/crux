@@ -6,9 +6,9 @@
  * and auto-pass across suspend/resume cycles.
  */
 import { describe, it, expect, afterEach } from 'vitest'
-import { flow as makeFlow, signalFlow, type FlowScope } from '../../flow/scope'
-import { updateHooks, resetHooks } from '../../runtime/runtime'
-import { inMemoryRecordStore } from '../../storage'
+import { flow as makeFlow, signalFlow, type FlowScope } from '../../src/flow/scope'
+import { updateHooks, resetHooks } from '../../src/runtime/runtime'
+import { inMemoryRecordStore } from '../../src/storage'
 
 // ── External step functions (simulating separate files) ────────
 

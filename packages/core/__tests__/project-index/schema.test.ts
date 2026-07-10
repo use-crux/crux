@@ -4,7 +4,7 @@ import {
   DependencyFactsSchema,
   ProjectDefinitionKindSchema,
   ProjectDefinitionQualitySchema,
-} from "../../project-index";
+} from "../../src/project-index";
 
 describe("Project Index schemas", () => {
   it("accepts definition kinds exposed by the public union", () => {

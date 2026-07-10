@@ -6,7 +6,7 @@ import {
   checkStaticRulesForProject,
   extractStaticEvidenceBatchForProject,
   loadStaticExtensionHostManifestForProject,
-} from '../host/static-compat'
+} from '../src/host/static-compat'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')

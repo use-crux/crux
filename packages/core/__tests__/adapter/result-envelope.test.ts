@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { adapter as makeAdapter } from "../../adapter/define-adapter";
-import type { AdapterSpec } from "../../adapter/spec";
+import { adapter as makeAdapter } from "../../src/adapter/define-adapter";
+import type { AdapterSpec } from "../../src/adapter/spec";
 import type {
   AdapterResponse,
   CallArgs,
   StreamHandle,
   ToolResultEntry,
-} from "../../adapter/types";
-import type { Message } from "../../generation/messages";
-import type { TokenUsage } from "../../generation/types";
-import { prompt as makePrompt } from "../../prompt/prompt";
+} from "../../src/adapter/types";
+import type { Message } from "../../src/generation/messages";
+import type { TokenUsage } from "../../src/generation/types";
+import { prompt as makePrompt } from "../../src/prompt/prompt";
 
 interface EnvelopeClient {
   readonly responses: EnvelopeRawResponse[];

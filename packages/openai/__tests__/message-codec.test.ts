@@ -4,7 +4,7 @@ import type { ChatCompletion } from 'openai/resources/chat/completions'
 import type { Message } from '@use-crux/core'
 import { transcriptCodecConformance } from '@use-crux/core/adapter/testing'
 import type { ToolResultEntry } from '@use-crux/core/adapter'
-import { fromMessages, openAITranscript, toMessages } from '../message-codec'
+import { fromMessages, openAITranscript, toMessages } from '../src/message-codec'
 
 describe('openai transcript wire encoding', () => {
   it('encodes assistant tool calls and tool results to chat-completion messages', () => {

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { flow } from '../../flow'
-import { resetHooks } from '../../runtime/runtime'
+import { flow } from '../../src/flow'
+import { resetHooks } from '../../src/runtime/runtime'
 
 describe('flow step identity', () => {
   afterEach(() => {

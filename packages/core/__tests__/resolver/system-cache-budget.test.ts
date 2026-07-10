@@ -7,7 +7,7 @@ import {
   staticTokenizer,
   type AnyPromptConfig,
   type SystemBlock,
-} from "../../index";
+} from "../../src/index";
 
 function charTokenizer() {
   return staticTokenizer((text) => text.length);

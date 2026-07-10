@@ -15,7 +15,7 @@ import {
   observe,
   resetObservabilityRuntime,
   subscribeObservability,
-} from '../../observability'
+} from '../../src/observability'
 
 const hex32 = /^[0-9a-f]{32}$/
 const hex16 = /^[0-9a-f]{16}$/

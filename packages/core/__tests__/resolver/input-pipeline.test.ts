@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { compilePrompt } from '../../resolver/compile'
-import { createResolverFakes } from '../../resolver/fakes'
-import { context } from '../../prompt/context'
-import type { AnyPromptConfig } from '../../prompt/prompt-types'
+import { compilePrompt } from '../../src/resolver/compile'
+import { createResolverFakes } from '../../src/resolver/fakes'
+import { context } from '../../src/prompt/context'
+import type { AnyPromptConfig } from '../../src/prompt/prompt-types'
 
 describe('resolver input pipeline', () => {
   it('applies zod defaults before system functions', async () => {

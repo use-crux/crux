@@ -8,9 +8,9 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { context, createContexts } from '../prompt/context'
-import { prompt } from '../prompt/prompt'
-import { createPrompts } from '../prompt/prompts-tree'
+import { context, createContexts } from '../src/prompt/context'
+import { prompt } from '../src/prompt/prompt'
+import { createPrompts } from '../src/prompt/prompts-tree'
 
 const locale = context({
   id: 'locale',

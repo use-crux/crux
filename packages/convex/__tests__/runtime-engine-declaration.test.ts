@@ -4,7 +4,7 @@ import {
   createRuntime,
 } from '@use-crux/core/runtime'
 import { describe, expect, it } from 'vitest'
-import { CONVEX_RUNTIME_ENTRY, convex } from '../runtime'
+import { CONVEX_RUNTIME_ENTRY, convex } from '../src/runtime'
 
 describe('convex() Runtime Engine declaration', () => {
   it('declares a host-bound runtime accepted by core config', () => {

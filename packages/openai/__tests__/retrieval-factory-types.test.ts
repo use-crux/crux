@@ -4,7 +4,7 @@
 
 import { expectTypeOf, it } from 'vitest'
 import type { Reranker, RetrievalModel } from '@use-crux/core/retrieval'
-import { createOpenAI } from '../index'
+import { createOpenAI } from '../src'
 
 type OpenAIAdapter = ReturnType<typeof createOpenAI>
 

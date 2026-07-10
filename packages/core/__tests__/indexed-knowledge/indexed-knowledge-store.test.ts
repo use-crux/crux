@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { createIndexedKnowledgeStore } from '../../indexed-knowledge'
-import { indexedChunkKey } from '../../indexed-knowledge/keys'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
+import { createIndexedKnowledgeStore } from '../../src/indexed-knowledge'
+import { indexedChunkKey } from '../../src/indexed-knowledge/keys'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
 
 describe('indexed knowledge store', () => {
   it('persists generations, searches active chunks, and expands parents through the read model', async () => {

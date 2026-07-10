@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectDefinition } from '@use-crux/core/project-index'
-import { mergeDefinitionsById } from '../indexer/merge'
+import { mergeDefinitionsById } from '../src/indexer/merge'
 
 describe('mergeDefinitionsById', () => {
   it('preserves supporting source refs across richer duplicate definitions', () => {

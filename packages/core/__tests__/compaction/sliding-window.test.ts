@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { createSlidingWindow } from '../../compaction/sliding-window'
-import { inMemoryRecordStore as inMemoryStore } from '../../storage'
-import type { Message } from '../../generation/messages'
-import type { GenerateTextFn } from '../../compaction/types'
+import { createSlidingWindow } from '../../src/compaction/sliding-window'
+import { inMemoryRecordStore as inMemoryStore } from '../../src/storage'
+import type { Message } from '../../src/generation/messages'
+import type { GenerateTextFn } from '../../src/compaction/types'
 
 function msg(role: Message['role'], content: string): Message {
   return { role, content }

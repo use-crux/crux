@@ -13,12 +13,12 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../prompt/prompt'
-import { flow } from '../flow/scope'
-import { agent } from '../agent/agent'
-import type { RetrievalRecipe, Retriever, RetrieverHit } from '../retrieval'
-import { evaluate, scorers, dataset, target } from '../quality'
-import type { CaseOf, EvaluationCoverageTargetId, InputOf, OutputOf } from '../quality'
+import { prompt } from '../src/prompt/prompt'
+import { flow } from '../src/flow/scope'
+import { agent } from '../src/agent/agent'
+import type { RetrievalRecipe, Retriever, RetrieverHit } from '../src/retrieval'
+import { evaluate, scorers, dataset, target } from '../src/quality'
+import type { CaseOf, EvaluationCoverageTargetId, InputOf, OutputOf } from '../src/quality'
 
 // ─────────────────────────────────────────────────────────────────
 // Fixtures

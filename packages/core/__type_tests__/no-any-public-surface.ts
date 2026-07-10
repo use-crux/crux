@@ -8,14 +8,14 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { context, when, match, createContexts } from '../prompt/context'
-import { prompt } from '../prompt/prompt'
-import { evaluate, scorers, UncapturedSignalError } from '../quality'
-import { experimentRecordSchema, toJsonSchema } from '../quality/schemas'
-import type { AnyPrompt, AnyPromptConfig, Prompt } from '../prompt/prompt-types'
-import type { ConditionalContext, Context, ContextEntry, MatchSpec } from '../prompt/context-types'
-import type { MiddlewareResult, PromptMiddleware, PromptMiddlewareArgs } from '../runtime/types'
-import type { ResolvedPrompt } from '../resolver/types'
+import { context, when, match, createContexts } from '../src/prompt/context'
+import { prompt } from '../src/prompt/prompt'
+import { evaluate, scorers, UncapturedSignalError } from '../src/quality'
+import { experimentRecordSchema, toJsonSchema } from '../src/quality/schemas'
+import type { AnyPrompt, AnyPromptConfig, Prompt } from '../src/prompt/prompt-types'
+import type { ConditionalContext, Context, ContextEntry, MatchSpec } from '../src/prompt/context-types'
+import type { MiddlewareResult, PromptMiddleware, PromptMiddlewareArgs } from '../src/runtime/types'
+import type { ResolvedPrompt } from '../src/resolver/types'
 import type {
   AssertContext,
   CaseContext,
@@ -24,8 +24,8 @@ import type {
   ScorerLibrary,
   ScoreMap,
   StepAccessor,
-} from '../quality'
-import type { ExperimentDiff, ExperimentRecord, FailureArtifact } from '../quality/schemas'
+} from '../src/quality'
+import type { ExperimentDiff, ExperimentRecord, FailureArtifact } from '../src/quality/schemas'
 
 // ─────────────────────────────────────────────────────────────────
 // Context inference still flows through createContexts / when / match
@@ -157,8 +157,8 @@ void sampleMiddleware
 
 declare const resolved: ResolvedPrompt
 expectTypeOf(resolved.system).toEqualTypeOf<string | undefined>()
-expectTypeOf(resolved.constraints).toEqualTypeOf<import('../safety/constraint/types').Constraint[] | undefined>()
-expectTypeOf(resolved.guardrails).toEqualTypeOf<import('../safety/guardrail/types').Guardrail[] | undefined>()
+expectTypeOf(resolved.constraints).toEqualTypeOf<import('../src/safety/constraint/types').Constraint[] | undefined>()
+expectTypeOf(resolved.guardrails).toEqualTypeOf<import('../src/safety/guardrail/types').Guardrail[] | undefined>()
 
 // ─────────────────────────────────────────────────────────────────
 // Quality public surface: callbacks and records stay typed, no `any` leak
@@ -187,7 +187,7 @@ const qualityEvaluation = evaluate({
     expectTypeOf(ctx).toMatchTypeOf<AssertContext<{ text: string }, string, string, 'quality_exact', never>>()
     expectTypeOf(ctx.score).toEqualTypeOf<ScoreMap<'quality_exact'>>()
     expectTypeOf(ctx.score.quality_exact).toEqualTypeOf<number>()
-    expectTypeOf(ctx.scores).toEqualTypeOf<readonly import('../quality').CellScore[]>()
+    expectTypeOf(ctx.scores).toEqualTypeOf<readonly import('../src/quality').CellScore[]>()
   },
 })
 
@@ -202,7 +202,7 @@ expectTypeOf(scorers).toMatchTypeOf<ScorerLibrary>()
 expectTypeOf(scorers.exact()).toMatchTypeOf<ReturnType<ScorerLibrary['exact']>>()
 
 declare const stepAccessor: StepAccessor
-expectTypeOf(stepAccessor('draft')).toEqualTypeOf<import('../quality').StepAccess<unknown>>()
+expectTypeOf(stepAccessor('draft')).toEqualTypeOf<import('../src/quality').StepAccess<unknown>>()
 
 expectTypeOf(experimentRecordSchema.parse({})).toEqualTypeOf<ExperimentRecord>()
 expectTypeOf(toJsonSchema('experiment')).toEqualTypeOf<Record<string, unknown>>()

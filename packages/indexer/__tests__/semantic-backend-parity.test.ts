@@ -2,8 +2,8 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { IndexPatchFacts } from '../indexer/patches'
-import { createNativeSemanticBackend, createSemanticIndexService, createTypeScriptSemanticBackend } from '../indexer/semantic/service'
+import type { IndexPatchFacts } from '../src/indexer/patches'
+import { createNativeSemanticBackend, createSemanticIndexService, createTypeScriptSemanticBackend } from '../src/indexer/semantic/service'
 import {
   semanticBackendParityFixtures,
   type SemanticBackendParityFixture,

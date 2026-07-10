@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { locationCacheKey, putLocationCache } from '../source-resolver/cache'
-import type { ResolvedLocation } from '../source-resolver/types'
+import { locationCacheKey, putLocationCache } from '../src/source-resolver/cache'
+import type { ResolvedLocation } from '../src/source-resolver/types'
 
 function resolved(file: string): ResolvedLocation {
   return { file, line: 1, column: 0, resolved: true }

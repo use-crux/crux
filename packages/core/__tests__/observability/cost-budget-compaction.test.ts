@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { createBudgetManager } from '../../compaction/budget'
-import { summarizeMessages } from '../../compaction/summarize'
-import { CostLimitError, modelPricing, withCostTracking } from '../../cost'
-import { prompt } from '../../prompt/prompt'
+import { createBudgetManager } from '../../src/compaction/budget'
+import { summarizeMessages } from '../../src/compaction/summarize'
+import { CostLimitError, modelPricing, withCostTracking } from '../../src/cost'
+import { prompt } from '../../src/prompt/prompt'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { orchestrateGenerate } from '../../generation/orchestrate'
-import { applyPlugins } from '../../runtime/plugin'
-import { getHooks, resetHooks, setHooks } from '../../runtime/runtime'
-import { runWithExecutionContext } from '../../runtime/execution-context'
+} from '../../src/observability'
+import { orchestrateGenerate } from '../../src/generation/orchestrate'
+import { applyPlugins } from '../../src/runtime/plugin'
+import { getHooks, resetHooks, setHooks } from '../../src/runtime/runtime'
+import { runWithExecutionContext } from '../../src/runtime/execution-context'
 
 function install(plugin: ReturnType<ReturnType<typeof withCostTracking>['asPlugin']>) {
   const applied = applyPlugins([plugin], getHooks())

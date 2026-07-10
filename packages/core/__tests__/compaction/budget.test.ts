@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { createBudgetManager } from '../../compaction/budget'
+import { createBudgetManager } from '../../src/compaction/budget'
 
 describe('createBudgetManager', () => {
   it('starts with zero usage', () => {

@@ -2,7 +2,7 @@ import type {
   JsonObject,
   RecordStore,
   RecordWriteOptions,
-} from "../../storage";
+} from "../../src/storage";
 
 export function failLiveNamespacePut(
   records: RecordStore,

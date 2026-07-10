@@ -5,10 +5,10 @@ import {
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { blackboard } from '../../agent/blackboard'
-import { facts, memory, recentMessages, workingState } from '../../memory'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
+} from '../../src/observability'
+import { blackboard } from '../../src/agent/blackboard'
+import { facts, memory, recentMessages, workingState } from '../../src/memory'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
 
 describe('canonical memory observability', () => {
   afterEach(() => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { scorers, type EmbedFn } from '../../quality/scorers'
-import { invokeScorer } from '../../quality/internal/scorer-runtime'
+import { scorers, type EmbedFn } from '../../src/quality/scorers'
+import { invokeScorer } from '../../src/quality/internal/scorer-runtime'
 
 /** Deterministic stub embedder: maps known texts to fixed vectors. */
 const embedStub =

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setTokenizer } from '@use-crux/core'
-import { afterPreparedAgentCall } from '../agent/lifecycle-persistence'
-import { compactConversation, contentText, imagePart, messageText, textPart } from '../index'
+import { afterPreparedAgentCall } from '../src/agent/lifecycle-persistence'
+import { compactConversation, contentText, imagePart, messageText, textPart } from '../src'
 
 afterEach(() => {
   setTokenizer((text) => Math.ceil(text.length / 4))

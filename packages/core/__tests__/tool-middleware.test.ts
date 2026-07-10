@@ -5,8 +5,8 @@ import {
   evaluateApprovalMiddleware,
   notifyToolApprovalResponses,
   toolMiddleware,
-} from '../tools/middleware'
-import { toolApprovalResponse } from '../tools/approvals'
+} from '../src/tools/middleware'
+import { toolApprovalResponse } from '../src/tools/approvals'
 
 describe('toolMiddleware()', () => {
   it('wraps matching tool execution with before/after hooks', async () => {

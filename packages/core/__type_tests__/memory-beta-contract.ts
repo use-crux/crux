@@ -9,7 +9,7 @@ import {
   type MemoryConfig,
   type MemoryEntryRenderStrategy,
   type MemorySemanticRenderStrategy,
-} from "../memory";
+} from "../src/memory";
 
 const block = memoryBlock({ id: "custom", kind: "custom" });
 

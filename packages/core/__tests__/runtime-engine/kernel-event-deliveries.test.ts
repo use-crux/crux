@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { inMemoryRuntimeStore } from '../../runtime/adapters/memory'
-import type { FlowId, RuntimeTargetId, WorkId } from '../../runtime/ports'
-import { createRuntimeKernel } from '../../runtime/engine/kernel'
-import type { WorkItem } from '../../runtime/engine/work'
+import { inMemoryRuntimeStore } from '../../src/runtime/adapters/memory'
+import type { FlowId, RuntimeTargetId, WorkId } from '../../src/runtime/ports'
+import { createRuntimeKernel } from '../../src/runtime/engine/kernel'
+import type { WorkItem } from '../../src/runtime/engine/work'
 
 describe('RuntimeKernel event delivery recording', () => {
   it('records every won waiter delivery when multiple events arrive before replay', async () => {

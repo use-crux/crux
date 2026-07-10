@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import { embedding } from '../../embedding'
-import { corpus, indexer, indexingPipeline, transform } from '../../indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
+import { embedding } from '../../src/embedding'
+import { corpus, indexer, indexingPipeline, transform } from '../../src/indexing'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
 
 describe('corpus', () => {
   function setup() {

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { agent as makeAgent, isAgent } from '../../agent/agent'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { agent as makeAgent, isAgent } from '../../src/agent/agent'
 
 describe('agent', () => {
   const testPrompt = makePrompt({

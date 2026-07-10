@@ -3,13 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../../prompt/prompt'
-import { agent } from '../../agent/agent'
-import { flow } from '../../flow/scope'
-import { observe } from '../../observability'
-import { evaluate, target } from '../../quality'
-import type { GenerateFn } from '../../quality/target'
-import { createQualityRunner } from '../../quality/internal/runner'
+import { prompt } from '../../src/prompt/prompt'
+import { agent } from '../../src/agent/agent'
+import { flow } from '../../src/flow/scope'
+import { observe } from '../../src/observability'
+import { evaluate, target } from '../../src/quality'
+import type { GenerateFn } from '../../src/quality/target'
+import { createQualityRunner } from '../../src/quality/internal/runner'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 const supportPrompt = prompt({
@@ -561,7 +561,7 @@ describe('datasets', () => {
       ].join('\n'),
       'utf8',
     )
-    const { dataset } = await import('../../quality')
+    const { dataset } = await import('../../src/quality')
     const golden = dataset('golden.jsonl', {
       input: z.object({ q: z.string() }),
       expected: z.object({ answer: z.string() }),
@@ -581,7 +581,7 @@ describe('datasets', () => {
     const dir = await mkdtemp(join(tmpdir(), 'crux-quality-ds-'))
     const { writeFile } = await import('node:fs/promises')
     await writeFile(join(dir, 'bad.jsonl'), JSON.stringify({ input: { q: 42 } }), 'utf8')
-    const { dataset } = await import('../../quality')
+    const { dataset } = await import('../../src/quality')
     const bad = dataset('bad.jsonl', { input: z.object({ q: z.string() }) })
     const evaluation = evaluate({
       task: async (input: { q: string }) => input.q,

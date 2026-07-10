@@ -8,8 +8,8 @@ import type {
   RuntimeTargetId,
   WorkId,
 } from '@use-crux/core/runtime'
-import { postgres, type PostgresRuntimeStore } from '../runtime'
-import { ddlStatements, REQUIRED_COLUMNS } from '../runtime/ddl'
+import { postgres, type PostgresRuntimeStore } from '../src/runtime'
+import { ddlStatements, REQUIRED_COLUMNS } from '../src/runtime/ddl'
 import {
   createPostgresTestPool,
   startPostgresTestDatabase,

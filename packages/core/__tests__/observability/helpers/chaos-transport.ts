@@ -1,4 +1,4 @@
-import type { CruxGraphRecord, CruxObservabilityTransport } from '../../../observability'
+import type { CruxGraphRecord, CruxObservabilityTransport } from '../../../src/observability'
 
 export type ChaosTransportMode = 'hang' | 'sync-throw' | 'reject' | 'partial-chunk-fail' | 'slow' | 'flap' | 'http-400'
 

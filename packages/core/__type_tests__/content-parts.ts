@@ -4,7 +4,7 @@ import type {
   Message,
   MessageContent,
   ToolModelOutput,
-} from "../index";
+} from "../src/index";
 
 type AssertEqual<T, U> =
   (<G>() => G extends T ? 1 : 2) extends <G>() => G extends U ? 1 : 2

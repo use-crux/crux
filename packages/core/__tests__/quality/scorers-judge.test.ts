@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { evaluate } from '../../quality'
-import { scorers } from '../../quality/scorers'
-import type { Evaluation } from '../../quality/evaluate'
-import type { RunOverrides } from '../../quality/experiment'
-import type { GenerateFn } from '../../quality/target'
+import { evaluate } from '../../src/quality'
+import { scorers } from '../../src/quality/scorers'
+import type { Evaluation } from '../../src/quality/evaluate'
+import type { RunOverrides } from '../../src/quality/experiment'
+import type { GenerateFn } from '../../src/quality/target'
 import { runEvaluationWithRunner, type QualityRunnerHarnessOptions } from './runner-harness'
 
 function run(

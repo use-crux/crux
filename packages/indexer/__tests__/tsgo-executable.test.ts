@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { resolveTsgoExecutablePath } from '../indexer/semantic/backends/tsgo/executable'
+import { resolveTsgoExecutablePath } from '../src/indexer/semantic/backends/tsgo/executable'
 
 const tempRoots: string[] = []
 

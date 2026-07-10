@@ -1,8 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { flow as makeFlow, signalFlow, cancelFlow, type FlowHandle, type FlowRunOptions } from '../../flow/scope'
-import { updateHooks, resetHooks } from '../../runtime/runtime'
-import { inMemoryRecordStore } from '../../storage'
-import type { RecordStore } from '../../storage'
+import { flow as makeFlow, signalFlow, cancelFlow, type FlowHandle, type FlowRunOptions } from '../../src/flow/scope'
+import { updateHooks, resetHooks } from '../../src/runtime/runtime'
+import { inMemoryRecordStore } from '../../src/storage'
+import type { RecordStore } from '../../src/storage'
 
 let store: RecordStore
 

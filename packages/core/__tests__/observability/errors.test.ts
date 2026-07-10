@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeObservedError } from '../../observability/errors'
+import { normalizeObservedError } from '../../src/observability/errors'
 
 describe('observability error normalization', () => {
   it('preserves Error summaries, stacks, causes, and redacts sensitive raw fields', () => {

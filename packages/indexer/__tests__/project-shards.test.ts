@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { staticFileBatchesForShards } from '../indexer/shards/discovery'
+import { staticFileBatchesForShards } from '../src/indexer/shards/discovery'
 
 describe('project shard source batching', () => {
   it('groups static files by owning workspace shard deterministically', () => {

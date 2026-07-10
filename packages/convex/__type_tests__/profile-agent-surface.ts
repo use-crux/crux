@@ -2,14 +2,14 @@ import type { LanguageModelV3 } from '@ai-sdk/provider'
 import type { RecordStore, Storage } from '@use-crux/core/storage'
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { createCruxConvex, prompt } from '../index'
+import { createCruxConvex, prompt } from '../src'
 import {
   convexAgent,
   type ConvexAgentDriver,
   type ConvexGenerateObjectResult,
   type ConvexThreadStreamObjectResult,
-} from '../agent'
-import { createProfileBackedAgentLifecycle } from '../agent/lifecycle'
+} from '../src/agent'
+import { createProfileBackedAgentLifecycle } from '../src/agent/lifecycle'
 
 const model = {} as LanguageModelV3
 

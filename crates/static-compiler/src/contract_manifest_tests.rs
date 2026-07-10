@@ -22,7 +22,7 @@ struct ContractManifestMirrors {
 #[test]
 fn rust_shared_fixture_tests_are_declared_by_contract_manifest() {
     let manifest: ContractManifest = serde_json::from_str(include_str!(
-        "../../../packages/indexer/contracts/contract-manifest.json"
+        "../../../packages/indexer/src/contracts/contract-manifest.json"
     ))
     .expect("contract manifest should decode");
 
@@ -30,25 +30,25 @@ fn rust_shared_fixture_tests_are_declared_by_contract_manifest() {
         &manifest,
         "static-index",
         &[
-            "packages/indexer/contracts/fixtures/static-index-identity.json",
-            "packages/indexer/contracts/fixtures/static-index-protocol.json",
-            "packages/indexer/contracts/fixtures/static-index-protocol-cases.json",
+            "packages/indexer/src/contracts/fixtures/static-index-identity.json",
+            "packages/indexer/src/contracts/fixtures/static-index-protocol.json",
+            "packages/indexer/src/contracts/fixtures/static-index-protocol-cases.json",
         ],
     );
     assert_manifest_group(
         &manifest,
         "static-syntax-records",
         &[
-            "packages/indexer/contracts/fixtures/static-syntax-records.json",
-            "packages/indexer/contracts/fixtures/static-syntax-record-cases.json",
+            "packages/indexer/src/contracts/fixtures/static-syntax-records.json",
+            "packages/indexer/src/contracts/fixtures/static-syntax-record-cases.json",
         ],
     );
     assert_manifest_group(
         &manifest,
         "worker-events",
         &[
-            "packages/indexer/contracts/fixtures/worker-events.json",
-            "packages/indexer/contracts/fixtures/worker-event-cases.json",
+            "packages/indexer/src/contracts/fixtures/worker-events.json",
+            "packages/indexer/src/contracts/fixtures/worker-event-cases.json",
         ],
     );
 }

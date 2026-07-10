@@ -3,10 +3,10 @@ import { config, resetHooks } from '@use-crux/core'
 import { observe, resetObservabilityRuntime, subscribeObservability } from '@use-crux/core/observability'
 import { SpanStatusCode, trace } from '@opentelemetry/api'
 import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
-import { withTelemetry } from '../index'
-import { createCallbackExporter, createUrlExporter } from '../exporter'
-import { __resetOpenTelemetryFallbackForTesting, createOpenTelemetrySpanManager } from '../otel-span-manager'
-import type { TraceSpan } from '../types'
+import { withTelemetry } from '../src'
+import { createCallbackExporter, createUrlExporter } from '../src/exporter'
+import { __resetOpenTelemetryFallbackForTesting, createOpenTelemetrySpanManager } from '../src/otel-span-manager'
+import type { TraceSpan } from '../src/types'
 
 function makeSpan(overrides?: Partial<TraceSpan>): TraceSpan {
   return {

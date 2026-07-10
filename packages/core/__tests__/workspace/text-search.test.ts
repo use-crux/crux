@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { inMemoryRecordStore } from "../../storage";
-import { workspace } from "../../workspace";
+import { inMemoryRecordStore } from "../../src/storage";
+import { workspace } from "../../src/workspace";
 
 describe("workspace text search", () => {
   it("rejects overly long regex queries before searching", async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { flow } from '../../flow/scope'
-import { observe } from '../../observability'
-import { evaluate } from '../../quality'
+import { flow } from '../../src/flow/scope'
+import { observe } from '../../src/observability'
+import { evaluate } from '../../src/quality'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 describe('Quality runner - trace-backed signal span evidence', () => {
