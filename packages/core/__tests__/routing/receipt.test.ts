@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { cascade, fallback, router } from '../../routing'
-import { CascadeExhaustedError, FallbackExhaustedError } from '../../routing/errors'
-import { resolveModel } from '../../routing/resolve'
+import { cascade, fallback, router } from '../../src/routing'
+import { CascadeExhaustedError, FallbackExhaustedError } from '../../src/routing/errors'
+import { resolveModel } from '../../src/routing/resolve'
 
 const extractModelId = (model: string) => model
 
