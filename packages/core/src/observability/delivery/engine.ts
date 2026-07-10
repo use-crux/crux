@@ -11,9 +11,11 @@ import {
   type ObservabilityFlushResult,
 } from './options'
 import { clearDeliveryRetryTimer, scheduleDeliveryRetry } from './retry'
+import { activeHostLifecycle } from './host-scope'
 import {
   deliveryDiagnosticsSnapshot,
   initialDeliveryState,
+  notifySupersededChange,
   publishDeliveryDiagnostics,
   recordDeliveryError,
   sanitizeTransportError,
@@ -101,19 +103,43 @@ function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => voi
   state.queuedBytes -= bytes
   const records = items.map((item) => item.record)
   const epoch = state.epoch
+  const generation = state.generation
   const transport = state.transport
   let delivery!: Promise<void>
   const release = () => {
-    if (!state.pendingDeliveries.delete(delivery)) return
-    state.pendingRecordCount -= records.length
-    state.pendingBytes -= bytes
+    // `epoch` (not Set membership) decides the bucket: it stays valid even
+    // once this delivery's promise reference has been pruned from
+    // `supersededDeliveries` to keep that set bounded, so the aggregate
+    // counters are still decremented exactly once.
+    if (state.epoch === epoch) {
+      state.pendingDeliveries.delete(delivery)
+      state.pendingRecordCount -= records.length
+      state.pendingBytes -= bytes
+      return
+    }
+    state.supersededDeliveries.delete(delivery)
+    state.supersededRecordCount -= records.length
+    state.supersededBytes -= bytes
+    notifySupersededChange(state)
   }
   delivery = sendBatchInChunks(transport, records, {
     sourceHealth: sourceHealthSnapshot(state),
   })
     .then((result) => {
+      // A full runtime reset happened after this delivery was dispatched.
+      // The state object was reused (not replaced), so without this guard a
+      // late settlement would still mutate the fresh runtime's counters.
+      if (state.generation !== generation) return
       release()
       if (state.epoch !== epoch) {
+        // The transport that produced this receipt has been replaced, but
+        // what it actually decided is still truthful: accepted/rejected
+        // records were genuinely delivered/refused by it. Only records it
+        // left retryable are truly lost to reconfiguration, because they
+        // will not be requeued against a transport they were never sent to.
+        state.accepted += result.accepted.length
+        state.permanentlyRejected += result.permanentlyRejected.length
+        state.reconfiguredDropped += result.retryable.length
         publishDeliveryDiagnostics(state)
         return
       }
@@ -137,6 +163,7 @@ function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => voi
           state.options,
           () => dispatchQueuedRecords(state, scheduleDispatch),
           result.retryAfterMs,
+          (wait) => deferToHostLifecycle(state, wait),
         )
         return
       }
@@ -145,21 +172,42 @@ function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => voi
       if (state.queue.length > 0) scheduleDispatch()
     })
     .catch((error: unknown) => {
+      if (state.generation !== generation) return
       release()
       if (state.epoch !== epoch) {
+        // This stale transport never produced a receipt for these records;
+        // reconfiguration truthfully drops them since they will not be
+        // requeued against a transport they were never sent to.
+        state.reconfiguredDropped += records.length
         publishDeliveryDiagnostics(state)
-      } else {
-        state.retried += records.length
-        requeueFront(state, records)
-        recordDeliveryError(state, 'transport_error', sanitizeTransportError(error), records)
-        scheduleDeliveryRetry(state, state.options, () => dispatchQueuedRecords(state, scheduleDispatch))
+        return
       }
+      state.retried += records.length
+      requeueFront(state, records)
+      recordDeliveryError(state, 'transport_error', sanitizeTransportError(error), records)
+      scheduleDeliveryRetry(
+        state,
+        state.options,
+        () => dispatchQueuedRecords(state, scheduleDispatch),
+        undefined,
+        (wait) => deferToHostLifecycle(state, wait),
+      )
       publishDeliveryDiagnostics(state)
     })
   state.pendingDeliveries.add(delivery)
   state.pendingRecordCount += records.length
   state.pendingBytes += bytes
   trimQueue(state)
+  deferToHostLifecycle(state, delivery)
+}
+
+function deferToHostLifecycle(state: DeliveryState, delivery: Promise<void>): void {
+  try {
+    const hostLifecycle = activeHostLifecycle() ?? state.options.hostLifecycle
+    hostLifecycle?.defer?.(delivery)
+  } catch {
+    // Host defer failures never affect delivery; the promise still settles on its own.
+  }
 }
 
 function requeueFront(state: DeliveryState, records: readonly CruxGraphRecord[]): void {
@@ -189,7 +237,27 @@ function trimQueue(state: DeliveryState): void {
 }
 
 function advanceEpoch(state: DeliveryState): void {
-  state.reconfiguredDropped += state.pendingRecordCount
+  // In-flight deliveries from the superseded epoch are not dropped here and
+  // are not silently forgotten either: they move to `supersededDeliveries`,
+  // tracked apart from the new epoch's `pendingDeliveries` (so they never
+  // block the new transport's own maxPendingDeliveries budget) but still
+  // counted in `remainingRecords` and awaited by drain until each settles on
+  // its own and truthfully accounts itself (see `dispatchQueuedRecords`).
+  //
+  // The retained promise references are bounded by `maxPendingDeliveries` -
+  // the same cap that already bounds one epoch's own concurrent in-flight
+  // sends - so repeated reconfigurations against hung transports cannot grow
+  // this set without bound. Aggregate counters below stay exact regardless;
+  // `release()` decrements them by comparing captured epoch, not Set
+  // membership, so a pruned delivery is still accounted for truthfully once
+  // it settles (see `dispatchQueuedRecords`).
+  for (const delivery of state.pendingDeliveries) {
+    if (state.supersededDeliveries.size < state.options.maxPendingDeliveries) {
+      state.supersededDeliveries.add(delivery)
+    }
+  }
+  state.supersededRecordCount += state.pendingRecordCount
+  state.supersededBytes += state.pendingBytes
   state.pendingDeliveries.clear()
   state.pendingRecordCount = 0
   state.pendingBytes = 0
@@ -199,12 +267,20 @@ function advanceEpoch(state: DeliveryState): void {
 }
 
 function resetState(state: DeliveryState): void {
+  // A full runtime reset (unlike a transport reconfiguration) intentionally
+  // tears everything down, including any still-unsettled superseded sends;
+  // `fresh` below drops their tracking. Only the never-sent queue is counted
+  // here, matching prior reset accounting. Bumping `generation` makes any
+  // stale delivery that later settles a no-op against the fresh runtime
+  // reused in this same `state` object (see `dispatchQueuedRecords`).
   const droppedOnReset = state.queue.length
+  const nextGeneration = state.generation + 1
   advanceEpoch(state)
   const fresh = initialDeliveryState()
   Object.assign(state, fresh, {
     sourceId: state.sourceId,
     epoch: state.epoch,
+    generation: nextGeneration,
     reconfiguredDropped: droppedOnReset,
   })
 }

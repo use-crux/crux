@@ -1247,9 +1247,15 @@ describe('observe runtime', () => {
       scheduledDelayMs: 0,
     })
 
-    await expect(observe.flush()).resolves.toMatchObject({
-      status: 'drained',
+    // The 1 record still in flight to the removed 'hang' transport never
+    // settles, so a truthful flush cannot claim 'drained' while its outcome
+    // is unknown - it needs a bounded deadline instead, and every new-epoch
+    // record still drains through the newly configured transport first.
+    await expect(observe.flush({ timeoutMs: 200 })).resolves.toMatchObject({
+      status: 'deadline',
+      remaining: 1,
     })
+    expect(observabilityDiagnostics().reconfiguredRemainingRecords).toBe(1)
     expect(transport.records).toHaveLength(2047)
     expect(transport.records[0]).toMatchObject({
       type: 'span:event',
@@ -1279,12 +1285,21 @@ describe('observe runtime', () => {
     })
     setObservabilityTransport(undefined)
 
+    // The 2 records still queued (never sent) are truthfully counted as
+    // reconfiguration drops. The 1 record already in flight to the removed
+    // 'hang' transport is not guessed as dropped - its outcome is only
+    // reconciled once/if that send actually settles - but it is not made to
+    // disappear either: flush must not claim 'drained' while it is still
+    // unaccounted for, so a bounded deadline reports it as remaining.
     await expect(observe.flush({ timeoutMs: 1 })).resolves.toMatchObject({
-      status: 'drained',
+      status: 'deadline',
+      remaining: 1,
+      deadlineExceeded: true,
     })
     expect(observabilityDiagnostics()).toMatchObject({
       pendingDeliveries: 0,
-      droppedRecords: 3,
+      droppedRecords: 2,
+      reconfiguredRemainingRecords: 1,
     })
   })
 

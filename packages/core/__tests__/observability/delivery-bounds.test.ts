@@ -85,4 +85,27 @@ describe('observability delivery bounds', () => {
     expect(requestBytes.length).toBeGreaterThan(1)
     expect(requestBytes.every((bytes) => bytes <= 900)).toBe(true)
   })
+
+  it('still enforces overflow bounds when a host lifecycle is configured', async () => {
+    setObservabilityTransport(createInMemoryObservabilityTransport(), {
+      scheduledDelayMs: 60_000,
+      maxQueuedRecords: 10,
+      maxQueuedBytes: 1,
+      hostLifecycle: { deadline: () => Date.now() + 60_000 },
+    })
+
+    const run = observe.openRun({ name: 'host lifecycle overflow', rootPrimitive: 'custom.operation' })
+    run.end()
+
+    await expect(observe.flush()).resolves.toMatchObject({
+      delivered: 0,
+      remaining: 0,
+      rejected: 0,
+      deadlineExceeded: false,
+    })
+    expect(observabilityDiagnostics()).toMatchObject({
+      overflowDroppedRecords: 2,
+      overflowDroppedBytes: expect.any(Number),
+    })
+  })
 })

@@ -1,6 +1,14 @@
+import { remainingHostDeadlineMs } from '../../runtime/api/host-lifecycle'
+import { activeHostLifecycle } from './host-scope'
 import { runTransportHook, type TransportHook } from './hooks'
 import type { ObservabilityFlushOptions, ObservabilityFlushResult } from './options'
-import { recordDeliveryError, remainingRecords, sanitizeTransportError, type DeliveryState } from './state'
+import {
+  recordDeliveryError,
+  remainingRecords,
+  sanitizeTransportError,
+  supersededChangeSignal,
+  type DeliveryState,
+} from './state'
 import { deliveryTimeoutSignal } from './timeout'
 
 const MAX_FLUSH_FAILURES = 3
@@ -15,7 +23,10 @@ export async function drainDeliveryState(
   const startedAccepted = state.accepted
   const startedRejected = state.permanentlyRejected
   const startedErrors = state.deliveryErrorCount
-  const deadline = options.timeoutMs === undefined ? undefined : Date.now() + Math.max(0, options.timeoutMs)
+  const explicitDeadline = options.timeoutMs === undefined ? undefined : Date.now() + Math.max(0, options.timeoutMs)
+  const hostRemainingMs = remainingHostDeadlineMs(activeHostLifecycle() ?? state.options.hostLifecycle)
+  const hostDeadline = hostRemainingMs === undefined ? undefined : Date.now() + hostRemainingMs
+  const deadline = nearestDeadline(explicitDeadline, hostDeadline)
 
   while (remainingRecords(state) > 0 || state.dispatchTimer || state.retryTimer) {
     if (deadline !== undefined && Date.now() >= deadline) {
@@ -45,7 +56,19 @@ export async function drainDeliveryState(
 }
 
 async function waitForPending(state: DeliveryState, deadline: number | undefined): Promise<boolean> {
-  const pending = Promise.all([...state.pendingDeliveries]).then(() => true)
+  // Superseded (reconfigured-out) deliveries are still awaited here so a
+  // drain never reports `drained` while their outcome is unknown; they are
+  // just not gated by the new epoch's `maxPendingDeliveries` budget.
+  const refs: Promise<unknown>[] = [...state.pendingDeliveries, ...state.supersededDeliveries]
+  if (refs.length === 0 && state.supersededRecordCount > 0) {
+    // Every outstanding superseded delivery has had its promise reference
+    // pruned to keep `supersededDeliveries` bounded, so there is nothing
+    // left to await directly. `Promise.all([])` would resolve instantly and
+    // spin the loop above hot until the deadline; wait on the shared
+    // "a superseded delivery settled" signal instead.
+    refs.push(supersededChangeSignal(state))
+  }
+  const pending = Promise.all(refs).then(() => true)
   return raceDeadline(pending, deadline)
 }
 
@@ -66,6 +89,12 @@ async function raceDeadline(pending: Promise<boolean>, deadline: number | undefi
   } finally {
     timeout.cancel()
   }
+}
+
+function nearestDeadline(a: number | undefined, b: number | undefined): number | undefined {
+  if (a === undefined) return b
+  if (b === undefined) return a
+  return Math.min(a, b)
 }
 
 function result(

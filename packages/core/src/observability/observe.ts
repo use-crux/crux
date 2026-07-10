@@ -52,6 +52,8 @@ import type {
   ObservabilityFlushOptions,
   ObservabilityFlushResult,
 } from './delivery/options'
+import { runWithHostLifecycle } from './delivery/host-scope'
+import type { CruxHostLifecycle } from '../runtime/api/host-lifecycle'
 import {
   currentCruxCorrelators,
   currentObservabilityContext,
@@ -123,6 +125,12 @@ export interface ObservabilityDiagnostics {
   readonly overflowDroppedBytes: number
   readonly deadlineDroppedRecords: number
   readonly reconfiguredDroppedRecords: number
+  /** Records still in flight to a transport superseded by reconfiguration; not yet settled. */
+  readonly reconfiguredRemainingRecords: number
+  /** Serialized bytes backing {@link reconfiguredRemainingRecords}. */
+  readonly reconfiguredRemainingBytes: number
+  /** Superseded delivery promises still retained for a drain to await, bounded by `maxPendingDeliveries`. */
+  readonly reconfiguredTrackedDeliveries: number
   readonly subscriberErrors: number
 }
 
@@ -707,6 +715,9 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
     overflowDroppedBytes: deliveryDiagnostics.overflowDroppedBytes,
     deadlineDroppedRecords: deliveryDiagnostics.deadlineDroppedRecords,
     reconfiguredDroppedRecords: deliveryDiagnostics.reconfiguredDroppedRecords,
+    reconfiguredRemainingRecords: deliveryDiagnostics.reconfiguredRemainingRecords,
+    reconfiguredRemainingBytes: deliveryDiagnostics.reconfiguredRemainingBytes,
+    reconfiguredTrackedDeliveries: deliveryDiagnostics.reconfiguredTrackedDeliveries,
     subscriberErrors: observabilitySubscriberErrorCount(),
   }
 }
@@ -1402,6 +1413,19 @@ export const observe = {
       },
       fn,
     )
+  },
+
+  /**
+   * Bind a host lifecycle (defer/deadline) to `fn`'s call tree.
+   *
+   * Scopes delivery's defer/deadline usage to this invocation instead of the
+   * process-wide `setObservabilityTransport(transport, { hostLifecycle })`
+   * option, so concurrent physical invocations never see each other's host
+   * lifecycle. Requires AsyncLocalStorage for async `fn`; falls back to a
+   * synchronous-only scope where it is unavailable.
+   */
+  withHostLifecycle<T>(lifecycle: CruxHostLifecycle, fn: () => T): T {
+    return runWithHostLifecycle(lifecycle, fn)
   },
 
   async flush(

@@ -1,3 +1,4 @@
+import type { CruxHostLifecycle } from '../../runtime/api/host-lifecycle'
 import type { CruxDeliverySourceHealth } from './receipt'
 
 const DEFAULT_MAX_PENDING_DELIVERIES = 8
@@ -30,6 +31,15 @@ export interface ObservabilityDeliveryOptions {
   onDiagnostics?: (snapshot: CruxDeliverySourceHealth) => void
   /** Deterministic random source for tests. Defaults to `Math.random`. */
   random?: () => number
+  /**
+   * Host lifetime capability for the current physical execution segment.
+   *
+   * When provided, every async send/retry task the delivery engine creates
+   * is bound to `hostLifecycle.defer()`, and `flush()`/`shutdown()` bound
+   * their wait against `hostLifecycle.deadline()` in addition to any
+   * explicit `timeoutMs`. Batching timers are never deferred.
+   */
+  hostLifecycle?: CruxHostLifecycle
 }
 
 export interface NormalizedObservabilityDeliveryOptions {
@@ -43,6 +53,7 @@ export interface NormalizedObservabilityDeliveryOptions {
   readonly retryJitterRatio: number
   readonly onDiagnostics?: (snapshot: CruxDeliverySourceHealth) => void
   readonly random: () => number
+  readonly hostLifecycle?: CruxHostLifecycle
 }
 
 export interface ObservabilityFlushOptions {
@@ -77,6 +88,7 @@ export function normalizeDeliveryOptions(
     retryJitterRatio: Math.min(1, nonNegative(options?.retryJitterRatio, DEFAULT_RETRY_JITTER_RATIO)),
     ...(options?.onDiagnostics ? { onDiagnostics: options.onDiagnostics } : {}),
     random: options?.random ?? Math.random,
+    ...(options?.hostLifecycle ? { hostLifecycle: options.hostLifecycle } : {}),
   }
 }
 
