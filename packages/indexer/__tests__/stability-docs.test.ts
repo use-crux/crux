@@ -52,6 +52,75 @@ describe('stable beta docs', () => {
     expect(indexerReference).toContain('config/static-plan inspection')
   })
 
+  it('documents the complete routing Project Index and catalog contract', () => {
+    const indexerReference = readRepoFile('apps/docs/content/docs/reference/indexer.mdx')
+    const projectIndexReference = readRepoFile(
+      'apps/docs/content/docs/reference/crux-core/project-index.mdx',
+    )
+    const indexerContext = readRepoFile('packages/indexer/CONTEXT.md')
+    const coreArchitecture = readRepoFile('packages/core/ARCHITECTURE.md')
+    const published = `${indexerReference}\n${projectIndexReference}`
+
+    for (const kind of [
+      'routing.router',
+      'routing.router.route',
+      'routing.split',
+      'routing.split.route',
+      'routing.retry',
+      'routing.retry.target',
+      'routing.cascade',
+      'routing.cascade.tier',
+      'routing.fallback',
+      'routing.fallback.option',
+    ]) {
+      expect(published).toContain(`\`${kind}\``)
+    }
+
+    for (const relation of [
+      'router.includes_route',
+      'split.includes_route',
+      'retry.uses_target',
+      'cascade.includes_tier',
+      'fallback.includes_option',
+    ]) {
+      expect(published).toContain(`\`${relation}\``)
+    }
+
+    expect(projectIndexReference).toContain(
+      'router `classify` callback or split `seed` callback annotated with `RouteArgs`',
+    )
+    expect(projectIndexReference).toContain('`routingContextType`')
+    expect(projectIndexReference).toContain('`routingContextRequired`')
+    expect(projectIndexReference).toContain(
+      'route call-profile objects can add a JSON-safe child `profile`',
+    )
+    expect(published).toContain('`metadata.indexPresentation`')
+    expect(projectIndexReference).toContain(
+      'Core owns the JSON-safe Project Index contract',
+    )
+    expect(projectIndexReference).toContain(
+      'Go service preserves and serves the merged read model',
+    )
+
+    expect(indexerContext).toContain(
+      '`router`/`split`/`retry`/`cascade`/`fallback` parent and child definitions',
+    )
+    expect(coreArchitecture).toContain('`routingContextType`')
+    expect(coreArchitecture).toContain('`routingContextRequired`')
+    expect(coreArchitecture).toContain('`profile`')
+    expect(coreArchitecture).not.toContain('fallback-loop')
+    for (const file of [
+      'receipt.ts',
+      'observability.ts',
+      'first-token.ts',
+      'resolve-fallback.ts',
+      'resolve-retry.ts',
+      'resolve-split.ts',
+    ]) {
+      expect(coreArchitecture).toContain(file)
+    }
+  })
+
   it('documents the stable-beta lint maturity policy', () => {
     const lintReference = readRepoFile('apps/docs/content/docs/reference/crux-core/lint.mdx')
     const lintGuide = readRepoFile('apps/docs/content/docs/guides/project-health/lint.mdx')
