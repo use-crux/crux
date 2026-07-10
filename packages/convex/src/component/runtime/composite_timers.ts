@@ -7,7 +7,7 @@ import type { Doc } from '../_generated/dataModel.js'
 import type { MutationCtx } from '../_generated/server.js'
 import { decodeTimer, encodeTimer } from '../../runtime-engine/codec'
 import { randomId } from './shared'
-import { unsupported } from './composite-utils'
+import { unsupported } from './composite_utils'
 
 type RuntimeTimerRow = WithoutSystemFields<Doc<'runtimeTimers'>>
 

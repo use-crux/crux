@@ -21,6 +21,8 @@ Add named Runtime Engine composite commits and the optional store-adapter `runCo
 
 Run the shared composite conformance cases against Convex's component-backed `runComposite` path, and encode composite Date payloads with Convex-valid object keys.
 
+Use Convex-compatible filenames for internal Runtime Engine component modules so Convex codegen and deployment can discover them.
+
 Make `config()` lifecycle-safe by installing one hook layer per active config, replacing the previous active config on repeat calls, and keeping independent layers such as imperative devtools intact when a config is disposed.
 
 Hard-rename the global hook-store API from the runtime family to the hooks family: `CruxHooks`, `getHooks()`, `setHooks()`, `updateHooks()`, `resetHooks()`, and `mergeHooks()`. The old hook-store names are removed with no deprecated aliases so Runtime Engine terminology can stay unambiguous.

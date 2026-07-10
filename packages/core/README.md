@@ -813,6 +813,10 @@ stores can omit it and use the default `transact()` wrapper; host-bound adapters
 such as Convex use it to run the same core composite bodies inside one component
 mutation.
 
+The shipped Convex component uses Convex-valid module path segments for its
+Runtime Engine sources, and adapter conformance coverage guards that constraint
+so codegen and deployment can discover every module without consumer rewrites.
+
 Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`,
 `TARGET_DUPLICATE`, `TARGET_NOT_EXPORTED`, `REPLAY_DIVERGED`,

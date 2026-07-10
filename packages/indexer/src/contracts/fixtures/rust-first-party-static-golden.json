@@ -761,8 +761,8 @@
       "dependencies": 1
     },
     {
-      "file": "packages/convex/src/component/runtime/composite-events.ts",
-      "sha256": "8eb4c80347eadc3bbad62d1dfe90b9d745ce88b10a0bfa37ec5db7576e33443e",
+      "file": "packages/convex/src/component/runtime/composite_events.ts",
+      "sha256": "70f671432ab484c6b628746cea3fd58a77e9ddb0fa0677725bb5feb53252d445",
       "bytes": 243,
       "definitions": 0,
       "relations": 0,
@@ -770,8 +770,8 @@
       "dependencies": 3
     },
     {
-      "file": "packages/convex/src/component/runtime/composite-outbox.ts",
-      "sha256": "8eb4c80347eadc3bbad62d1dfe90b9d745ce88b10a0bfa37ec5db7576e33443e",
+      "file": "packages/convex/src/component/runtime/composite_outbox.ts",
+      "sha256": "70f671432ab484c6b628746cea3fd58a77e9ddb0fa0677725bb5feb53252d445",
       "bytes": 243,
       "definitions": 0,
       "relations": 0,
@@ -779,8 +779,8 @@
       "dependencies": 3
     },
     {
-      "file": "packages/convex/src/component/runtime/composite-state.ts",
-      "sha256": "10db0d9bf1f232deda9a48266f7e12c90a625981e99d7b04b0528a79a7d917e9",
+      "file": "packages/convex/src/component/runtime/composite_state.ts",
+      "sha256": "ae1b2b9a89ce57dcd05ac3705e29a718265c3cea08995d737ed2b579f8fa059c",
       "bytes": 250,
       "definitions": 0,
       "relations": 0,
@@ -788,8 +788,8 @@
       "dependencies": 3
     },
     {
-      "file": "packages/convex/src/component/runtime/composite-timers.ts",
-      "sha256": "8eb4c80347eadc3bbad62d1dfe90b9d745ce88b10a0bfa37ec5db7576e33443e",
+      "file": "packages/convex/src/component/runtime/composite_timers.ts",
+      "sha256": "70f671432ab484c6b628746cea3fd58a77e9ddb0fa0677725bb5feb53252d445",
       "bytes": 243,
       "definitions": 0,
       "relations": 0,
@@ -797,8 +797,8 @@
       "dependencies": 3
     },
     {
-      "file": "packages/convex/src/component/runtime/composite-transaction.ts",
-      "sha256": "3ffdf088a2a88b60855f3eba855d9ea236c064ec66598d19d9714ab0e94ad3d6",
+      "file": "packages/convex/src/component/runtime/composite_transaction.ts",
+      "sha256": "93a0c05e2f423a2c4d46133804c09308429426d5a2e1e6d2dbe05f8182842ea1",
       "bytes": 402,
       "definitions": 0,
       "relations": 0,
@@ -806,7 +806,7 @@
       "dependencies": 5
     },
     {
-      "file": "packages/convex/src/component/runtime/composite-utils.ts",
+      "file": "packages/convex/src/component/runtime/composite_utils.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -815,8 +815,8 @@
       "dependencies": 0
     },
     {
-      "file": "packages/convex/src/component/runtime/composite-waiters.ts",
-      "sha256": "8eb4c80347eadc3bbad62d1dfe90b9d745ce88b10a0bfa37ec5db7576e33443e",
+      "file": "packages/convex/src/component/runtime/composite_waiters.ts",
+      "sha256": "70f671432ab484c6b628746cea3fd58a77e9ddb0fa0677725bb5feb53252d445",
       "bytes": 243,
       "definitions": 0,
       "relations": 0,
@@ -825,7 +825,7 @@
     },
     {
       "file": "packages/convex/src/component/runtime/composites.ts",
-      "sha256": "dbad130f3adbfe54fa47fbba51f37679d4786dbf3f0eccd6104dd540d7434461",
+      "sha256": "fb165b2f2a6080f0aff147ec625d14e2cb47b2d1343dcccf72ecb953646782bb",
       "bytes": 247,
       "definitions": 0,
       "relations": 0,

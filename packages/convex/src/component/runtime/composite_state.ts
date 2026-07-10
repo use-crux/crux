@@ -22,8 +22,8 @@ import {
   mergeDeliveredSuspend,
   readIdle,
   updateIdle,
-} from './state-helpers'
-import { clean, statusAllowed, unsupported } from './composite-utils'
+} from './state_helpers'
+import { clean, statusAllowed, unsupported } from './composite_utils'
 
 type RuntimeWorkRow = WithoutSystemFields<Doc<'runtimeWork'>>
 type RuntimeSnapshotRow = WithoutSystemFields<Doc<'runtimeSnapshots'>>
