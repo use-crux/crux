@@ -7,7 +7,7 @@ import type {
 } from '@use-crux/core/runtime'
 import type { MutationCtx } from '../_generated/server.js'
 import { decodeEvent } from '../../runtime-engine/codec'
-import { clean, cleanDoc, unsupported } from './composite-utils'
+import { clean, cleanDoc, unsupported } from './composite_utils'
 import { randomId } from './shared'
 
 export function createCompositeEventPort(ctx: MutationCtx): DurableEventPort {

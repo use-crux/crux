@@ -14,7 +14,7 @@ import {
   encodeCompositeValue,
 } from '../../runtime-engine/codec'
 import { createConvexWorkIdGenerator } from '../../runtime-engine/helpers'
-import { createCompositeTransaction } from './composite-transaction'
+import { createCompositeTransaction } from './composite_transaction'
 
 /** Run one kernel-owned Runtime Engine composite in a single Convex mutation. */
 export const run = mutation({

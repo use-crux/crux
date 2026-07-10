@@ -1,10 +1,10 @@
 import type { RuntimeStoreTransaction } from '@use-crux/core/runtime'
 import type { MutationCtx } from '../_generated/server.js'
-import { createCompositeEventPort } from './composite-events'
-import { createCompositeOutboxPort } from './composite-outbox'
-import { createCompositeStatePort } from './composite-state'
-import { createCompositeTimerPort } from './composite-timers'
-import { createCompositeWaiterPort } from './composite-waiters'
+import { createCompositeEventPort } from './composite_events'
+import { createCompositeOutboxPort } from './composite_outbox'
+import { createCompositeStatePort } from './composite_state'
+import { createCompositeTimerPort } from './composite_timers'
+import { createCompositeWaiterPort } from './composite_waiters'
 
 /** Build the component-local transaction view used by composite bodies. */
 export function createCompositeTransaction(

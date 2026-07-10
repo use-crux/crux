@@ -1,6 +1,7 @@
 import { runStoreAdapterTests } from '@use-crux/core/runtime/testing'
 import { convexTest } from 'convex-test'
 import { makeFunctionReference, type FunctionReference } from 'convex/server'
+import { readdir } from 'node:fs/promises'
 import { expect, it } from 'vitest'
 import schema from '../src/component/schema'
 import {
@@ -11,13 +12,13 @@ import type { ConvexCtxPort } from '../src/store'
 
 const modules = {
   '../src/component/_generated/server.ts': () => import('../src/component/_generated/server'),
-  '../src/component/runtime/composite-events.ts': () => import('../src/component/runtime/composite-events'),
-  '../src/component/runtime/composite-outbox.ts': () => import('../src/component/runtime/composite-outbox'),
-  '../src/component/runtime/composite-state.ts': () => import('../src/component/runtime/composite-state'),
-  '../src/component/runtime/composite-timers.ts': () => import('../src/component/runtime/composite-timers'),
-  '../src/component/runtime/composite-transaction.ts': () => import('../src/component/runtime/composite-transaction'),
-  '../src/component/runtime/composite-utils.ts': () => import('../src/component/runtime/composite-utils'),
-  '../src/component/runtime/composite-waiters.ts': () => import('../src/component/runtime/composite-waiters'),
+  '../src/component/runtime/composite_events.ts': () => import('../src/component/runtime/composite_events'),
+  '../src/component/runtime/composite_outbox.ts': () => import('../src/component/runtime/composite_outbox'),
+  '../src/component/runtime/composite_state.ts': () => import('../src/component/runtime/composite_state'),
+  '../src/component/runtime/composite_timers.ts': () => import('../src/component/runtime/composite_timers'),
+  '../src/component/runtime/composite_transaction.ts': () => import('../src/component/runtime/composite_transaction'),
+  '../src/component/runtime/composite_utils.ts': () => import('../src/component/runtime/composite_utils'),
+  '../src/component/runtime/composite_waiters.ts': () => import('../src/component/runtime/composite_waiters'),
   '../src/component/runtime/composites.ts': () => import('../src/component/runtime/composites'),
   '../src/component/runtime/events.ts': () => import('../src/component/runtime/events'),
   '../src/component/runtime/leases.ts': () => import('../src/component/runtime/leases'),
@@ -26,6 +27,12 @@ const modules = {
   '../src/component/runtime/timers.ts': () => import('../src/component/runtime/timers'),
   '../src/component/runtime/waiters.ts': () => import('../src/component/runtime/waiters'),
 } satisfies Record<string, () => Promise<unknown>>
+
+it('uses Convex-compatible runtime module filenames', async () => {
+  const entries = await readdir(new URL('../src/component/runtime', import.meta.url), { withFileTypes: true })
+  const invalid = entries.filter((entry) => entry.isFile() && !/^[A-Za-z0-9_.]+$/.test(entry.name))
+  expect(invalid.map((entry) => entry.name)).toEqual([])
+})
 
 runStoreAdapterTests({
   name: 'Convex component',

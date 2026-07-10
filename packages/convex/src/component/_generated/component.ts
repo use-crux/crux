@@ -84,6 +84,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           any,
           Name
         >;
+        prune: FunctionReference<
+          "mutation",
+          "internal",
+          { before: number; limit: number; namespace?: string },
+          any,
+          Name
+        >;
         read: FunctionReference<
           "mutation",
           "internal",
@@ -147,7 +154,19 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
         listByWork: FunctionReference<
           "mutation",
           "internal",
-          { limit?: number; namespace?: string; state?: string; workId: string },
+          {
+            limit?: number;
+            namespace?: string;
+            state?: string;
+            workId: string;
+          },
+          any,
+          Name
+        >;
+        prune: FunctionReference<
+          "mutation",
+          "internal",
+          { before: number; limit: number; namespace?: string },
           any,
           Name
         >;
@@ -241,11 +260,32 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           {
             eventId: string;
             namespace: string;
-            payload: unknown;
+            payload: any;
             waiterId: string;
             workId: string;
           },
           null,
+          Name
+        >;
+        pruneIdempotencyKeys: FunctionReference<
+          "mutation",
+          "internal",
+          { before: number; limit: number; namespace?: string },
+          any,
+          Name
+        >;
+        pruneTerminalSnapshots: FunctionReference<
+          "mutation",
+          "internal",
+          { before: number; limit: number; namespace?: string },
+          any,
+          Name
+        >;
+        pruneTerminalWork: FunctionReference<
+          "mutation",
+          "internal",
+          { before: number; limit: number; namespace?: string },
+          any,
           Name
         >;
         putIdempotencyKey: FunctionReference<
@@ -313,6 +353,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           any,
           Name
         >;
+        prune: FunctionReference<
+          "mutation",
+          "internal",
+          { before: number; limit: number; namespace?: string },
+          any,
+          Name
+        >;
         put: FunctionReference<
           "mutation",
           "internal",
@@ -354,6 +401,13 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
           "mutation",
           "internal",
           { workId: string },
+          any,
+          Name
+        >;
+        prune: FunctionReference<
+          "mutation",
+          "internal",
+          { before: number; limit: number; namespace?: string },
           any,
           Name
         >;

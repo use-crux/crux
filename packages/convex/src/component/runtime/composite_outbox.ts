@@ -9,7 +9,7 @@ import {
   encodeWakeEnvelope,
 } from '../../runtime-engine/codec'
 import { limitRows, randomId } from './shared'
-import { unsupported } from './composite-utils'
+import { unsupported } from './composite_utils'
 
 export function createCompositeOutboxPort(ctx: MutationCtx): RuntimeOutboxPort {
   return {
