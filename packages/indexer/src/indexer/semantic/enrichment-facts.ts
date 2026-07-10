@@ -81,7 +81,7 @@ export function semanticDefinitionEnrichments(
     case "rag.retriever":
     case "storage.recordStore":
     case "storage.vectorStore":
-    case "storage.blobStore":
+    case "storage.assetStore":
     case "storage.bundle":
     case "storage.scope":
       return semanticStorageDefinitionEnrichments(candidate, view);
@@ -115,29 +115,29 @@ function semanticSplitDefinitionEnrichments(
   return [
     ...parent,
     ...view.syntax.objectProperties(routes).flatMap((property, index) => {
-    const routeKey = semanticObjectPropertyName(property, view);
-    const expression = objectMemberExpression(property, view);
-    if (!routeKey || !expression) return [];
-    const target = semanticTargetForExpression(expression, view);
-    const ref = semanticRoutingTargetSourceRef(
-      `${candidate.definitionId}:route:${safeId(routeKey)}`,
-      "routes",
-      expression,
-      view,
-    );
-    const definition = semanticRoutingChildPatch(
-      `${candidate.definitionId}:route:${safeId(routeKey)}`,
-      "routing.split.route",
-      routeKey,
-      target,
-      index,
-      semanticRoutingCallProfile(expression, view),
-    );
-    return ref
-      ? [{ definition, sourceRefs: [ref] }]
-      : target
-        ? [{ definition }]
-        : [];
+      const routeKey = semanticObjectPropertyName(property, view);
+      const expression = objectMemberExpression(property, view);
+      if (!routeKey || !expression) return [];
+      const target = semanticTargetForExpression(expression, view);
+      const ref = semanticRoutingTargetSourceRef(
+        `${candidate.definitionId}:route:${safeId(routeKey)}`,
+        "routes",
+        expression,
+        view,
+      );
+      const definition = semanticRoutingChildPatch(
+        `${candidate.definitionId}:route:${safeId(routeKey)}`,
+        "routing.split.route",
+        routeKey,
+        target,
+        index,
+        semanticRoutingCallProfile(expression, view),
+      );
+      return ref
+        ? [{ definition, sourceRefs: [ref] }]
+        : target
+          ? [{ definition }]
+          : [];
     }),
   ];
 }
@@ -825,31 +825,17 @@ function semanticRouterDefinitionEnrichments(
   return [
     ...parent,
     ...view.syntax.objectProperties(routes).flatMap((property, index) => {
-    const routeKey = semanticObjectPropertyName(property, view);
-    const expression = objectMemberExpression(property, view);
-    if (!routeKey || !expression) return [];
-    const target = semanticTargetForExpression(expression, view);
-    const ref = semanticRoutingTargetSourceRef(
-      `${candidate.definitionId}:route:${safeId(routeKey)}`,
-      "routes",
-      expression,
-      view,
-    );
-    return ref
-      ? [
-          {
-            definition: semanticRoutingChildPatch(
-              `${candidate.definitionId}:route:${safeId(routeKey)}`,
-              "routing.router.route",
-              routeKey,
-              target,
-              index,
-              semanticRoutingCallProfile(expression, view),
-            ),
-            sourceRefs: [ref],
-          },
-        ]
-      : target
+      const routeKey = semanticObjectPropertyName(property, view);
+      const expression = objectMemberExpression(property, view);
+      if (!routeKey || !expression) return [];
+      const target = semanticTargetForExpression(expression, view);
+      const ref = semanticRoutingTargetSourceRef(
+        `${candidate.definitionId}:route:${safeId(routeKey)}`,
+        "routes",
+        expression,
+        view,
+      );
+      return ref
         ? [
             {
               definition: semanticRoutingChildPatch(
@@ -860,9 +846,23 @@ function semanticRouterDefinitionEnrichments(
                 index,
                 semanticRoutingCallProfile(expression, view),
               ),
+              sourceRefs: [ref],
             },
           ]
-        : [];
+        : target
+          ? [
+              {
+                definition: semanticRoutingChildPatch(
+                  `${candidate.definitionId}:route:${safeId(routeKey)}`,
+                  "routing.router.route",
+                  routeKey,
+                  target,
+                  index,
+                  semanticRoutingCallProfile(expression, view),
+                ),
+              },
+            ]
+          : [];
     }),
   ];
 }
@@ -1064,9 +1064,9 @@ function semanticRoutingJsonValue(
   const literal = view.syntax.literalValue(value);
   if (literal !== undefined) return literal;
   if (view.syntax.isKind(value, "arrayLiteral")) {
-    const items = view.syntax.arrayElements(value).map((item) =>
-      semanticRoutingJsonValue(item, view),
-    );
+    const items = view.syntax
+      .arrayElements(value)
+      .map((item) => semanticRoutingJsonValue(item, view));
     return items.some((item) => item === undefined) ? undefined : items;
   }
   if (!view.syntax.isKind(value, "objectLiteral")) return undefined;

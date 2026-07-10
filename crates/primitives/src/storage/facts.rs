@@ -1,17 +1,17 @@
 use std::collections::HashSet;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 
 use crate::{
-    context::{PrimitiveContext, call_parts},
-    definition::{NativeDefinitionInput, safe_id, static_index_definition},
+    context::{call_parts, PrimitiveContext},
+    definition::{safe_id, static_index_definition, NativeDefinitionInput},
     manifest::CustomProjectionInput,
     protocol::{LiteralValue, SourceLocation, SourceSnippet, StaticSourceMatch, StaticSyntaxValue},
     record_values::{direct_identifier, has_property, object_value, resolve_static_value},
     routing::output::extracted_facts,
     storage::{
-        capabilities::{StorageFactoryDescriptor, storage_factory_descriptor},
-        dependencies::{StorageReferences, storage_config_references, storage_relation_refs},
+        capabilities::{storage_factory_descriptor, StorageFactoryDescriptor},
+        dependencies::{storage_config_references, storage_relation_refs, StorageReferences},
         metadata::{bundle_metadata, factory_metadata, scope_metadata},
     },
 };
@@ -179,7 +179,7 @@ fn bundle_relation_refs(refs: &StorageReferences) -> Vec<Value> {
 fn has_bundle_fields(config: &StaticSyntaxValue) -> bool {
     has_property(config, "records")
         || has_property(config, "vectors")
-        || has_property(config, "blobs")
+        || has_property(config, "assets")
 }
 
 fn string_value(value: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -> Option<String> {

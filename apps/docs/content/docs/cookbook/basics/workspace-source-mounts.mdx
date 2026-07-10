@@ -40,7 +40,7 @@ const docs = retriever({
 const files = workspace({
   id: "research-files",
   namespace,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
   mounts: [
     { path: "/workspace", access: "readwrite" },
     { path: "/outputs", access: "readwrite" },
@@ -52,7 +52,8 @@ const files = workspace({
         kind: "retriever",
         retriever: docs,
         query: "current task source documents",
-        pathForHit: (hit) => hit.sourcePath ?? `${hit.sourceId}/${hit.chunkId}.md`,
+        pathForHit: (hit) =>
+          hit.sourcePath ?? `${hit.sourceId}/${hit.chunkId}.md`,
         contentForHit: (hit) => hit.parent?.content ?? hit.content,
       },
     },
@@ -154,21 +155,25 @@ MCP resource APIs vary by client. Wrap the client as a custom source and keep
 authorization inside the wrapper.
 
 ```ts
-export function mcpResourceSource(client: McpResourceClient): WorkspaceCustomMountSource {
+export function mcpResourceSource(
+  client: McpResourceClient,
+): WorkspaceCustomMountSource {
   return {
     kind: "custom",
     list: async (_path, options) => ({
-      entries: (await client.listResources({ limit: options?.limit })).map((resource) => ({
-        kind: "file" as const,
-        path: `/sources/mcp/${resource.name}.md`,
-        mount: "/sources",
-        mimeType: "text/markdown",
-        size: resource.size ?? 0,
-        storage: "virtual" as const,
-        metadata: { uri: resource.uri },
-        createdAt: 0,
-        updatedAt: 0,
-      })),
+      entries: (await client.listResources({ limit: options?.limit })).map(
+        (resource) => ({
+          kind: "file" as const,
+          path: `/sources/mcp/${resource.name}.md`,
+          mount: "/sources",
+          mimeType: "text/markdown",
+          size: resource.size ?? 0,
+          storage: "virtual" as const,
+          metadata: { uri: resource.uri },
+          createdAt: 0,
+          updatedAt: 0,
+        }),
+      ),
     }),
     read: async (path) => {
       const uri = pathToMcpUri(path);
@@ -197,7 +202,9 @@ Expose summaries or selected files from a project index as generated markdown.
 Do not expose raw compiler objects or backend-specific AST handles.
 
 ```ts
-export function projectIndexSource(index: ProjectIndexClient): WorkspaceCustomMountSource {
+export function projectIndexSource(
+  index: ProjectIndexClient,
+): WorkspaceCustomMountSource {
   return {
     kind: "custom",
     list: async () => ({
@@ -221,7 +228,8 @@ export function projectIndexSource(index: ProjectIndexClient): WorkspaceCustomMo
             path,
             mimeType: "text/markdown",
             content: renderDefinitionMarkdown(definition),
-            size: new TextEncoder().encode(renderDefinitionMarkdown(definition)).byteLength,
+            size: new TextEncoder().encode(renderDefinitionMarkdown(definition))
+              .byteLength,
           }
         : null;
     },
@@ -241,21 +249,25 @@ part is the boundary:
 - Redact fields before returning `metadata`.
 
 ```ts
-export function connectedDriveSource(drive: DriveClient): WorkspaceCustomMountSource {
+export function connectedDriveSource(
+  drive: DriveClient,
+): WorkspaceCustomMountSource {
   return {
     kind: "custom",
     list: async (_path, options) => ({
-      entries: (await drive.listAuthorizedFiles({ limit: options?.limit })).map((file) => ({
-        kind: "file" as const,
-        path: `/sources/drive/${file.slug}.md`,
-        mount: "/sources",
-        mimeType: "text/markdown",
-        size: file.size,
-        storage: "virtual" as const,
-        metadata: { providerId: file.id, title: file.title },
-        createdAt: 0,
-        updatedAt: 0,
-      })),
+      entries: (await drive.listAuthorizedFiles({ limit: options?.limit })).map(
+        (file) => ({
+          kind: "file" as const,
+          path: `/sources/drive/${file.slug}.md`,
+          mount: "/sources",
+          mimeType: "text/markdown",
+          size: file.size,
+          storage: "virtual" as const,
+          metadata: { providerId: file.id, title: file.title },
+          createdAt: 0,
+          updatedAt: 0,
+        }),
+      ),
     }),
     read: async (path) => {
       const file = await drive.readMarkdown(pathToDriveId(path));

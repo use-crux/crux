@@ -16,7 +16,7 @@ import {
   expandParents,
   compressToBudget,
   grounding,
-} from '@use-crux/core/retrieval'
+} from "@use-crux/core/retrieval";
 import type {
   KnowledgeBase,
   RetrievalRecipe,
@@ -29,7 +29,7 @@ import type {
   RetrieverHit,
   RecipeTrace,
   StepTrace,
-} from '@use-crux/core/retrieval'
+} from "@use-crux/core/retrieval";
 ```
 
 ## Overview
@@ -46,13 +46,13 @@ The Retrieval & RAG beta has four public layers:
 Each layer exposes the layer beneath it.
 
 ```ts
-const docs = knowledgeBase({ id: 'docs', storage, embeddings })
+const docs = knowledgeBase({ id: "docs", storage, embeddings });
 
-docs.inspect()
-docs.retriever()
-docs.recipe({ id: 'docs-answer', steps: [retrieve({ limit: 20 })] })
-docs.grounding({ query: ({ input }) => input.question as string })
-docs.tools({ prefix: 'docs', include: ['search', 'getSource'] })
+docs.inspect();
+docs.retriever();
+docs.recipe({ id: "docs-answer", steps: [retrieve({ limit: 20 })] });
+docs.grounding({ query: ({ input }) => input.question as string });
+docs.tools({ prefix: "docs", include: ["search", "getSource"] });
 ```
 
 ## `knowledgeBase(config)`
@@ -61,16 +61,16 @@ Creates the high-level RAG facade.
 
 ```ts
 const docs = knowledgeBase({
-  id: 'docs',
+  id: "docs",
   storage,
   embeddings: dense,
   sparseEmbeddings: sparse,
   metadataSchema: z.object({
-    section: z.enum(['guide', 'reference']),
+    section: z.enum(["guide", "reference"]),
     public: z.boolean(),
   }),
-  lifecycle: { retention: 'cleanup' },
-})
+  lifecycle: { retention: "cleanup" },
+});
 ```
 
 Core config fields are `id`, optional `source` or `corpus`, storage or explicit stores, dense/sparse embeddings, chunking, metadata schema, lifecycle retention, and indexing cache policy.
@@ -80,10 +80,10 @@ Handles expose `index`, `reindex`, `remove`, `scope`, `retriever`, `recipe`, `gr
 Scoped handles isolate storage keys structurally:
 
 ```ts
-const tenantDocs = docs.scope({ namespace: `tenant:${tenantId}` })
+const tenantDocs = docs.scope({ namespace: `tenant:${tenantId}` });
 
-await tenantDocs.reindex(documents)
-await tenantDocs.remove('old-guide.md')
+await tenantDocs.reindex(documents);
+await tenantDocs.remove("old-guide.md");
 ```
 
 ## `retriever(config)`
@@ -94,19 +94,19 @@ Creates a direct retrieval object.
 
 ```ts
 const docs = retriever({
-  id: 'docs',
-  namespace: 'product-docs',
+  id: "docs",
+  namespace: "product-docs",
   records,
   vectors,
   dense,
   sparse,
   search: {
-    mode: 'hybrid',
+    mode: "hybrid",
     limit: 8,
     threshold: 0.2,
-    filter: { section: 'planning' },
+    filter: { section: "planning" },
   },
-})
+});
 ```
 
 Store-backed retrievers require `id`, `namespace`, record/vector storage, and the embeddings needed by the selected mode. `indexerId` points hydration at a writer id when it differs from the public retriever id.
@@ -115,12 +115,12 @@ Store-backed retrievers require `id`, `namespace`, record/vector storage, and th
 
 ```ts
 const docs = retriever({
-  id: 'internal-search',
-  namespace: 'docs',
+  id: "internal-search",
+  namespace: "docs",
   async retrieve(query, options) {
-    return internalSearch(query, options)
+    return internalSearch(query, options);
   },
-})
+});
 ```
 
 Custom retrievers must return `RetrieverHit[]`: `namespace`, `sourceId`, `chunkId`, `content`, `metadata`, `score`, optional source URL/path, optional parent data, and optional provenance.
@@ -133,14 +133,14 @@ Retrievers and recipes accept a string query or a canonical request object.
 
 ```ts
 await docs.retrieve({
-  query: 'refund policy',
+  query: "refund policy",
   limit: 5,
   threshold: 0.2,
-  filter: { section: 'guide' },
-  mode: 'hybrid',
-  fusion: { strategy: 'rrf', k: 60 },
-  caller: { promptId: 'answer-docs' },
-})
+  filter: { section: "guide" },
+  mode: "hybrid",
+  fusion: { strategy: "rrf", k: 60 },
+  caller: { promptId: "answer-docs" },
+});
 ```
 
 `RetrieveRequest<TFilter>` includes `query`, `limit`, `threshold`, `filter`, `mode`, `fusion`, `trace`, and `caller`.
@@ -163,7 +163,7 @@ Output capture policy applies to retrieval payloads. When `observability.recordO
 `retrieval.hits` artifacts keep stable ids, counts, hashes, and sizes but do not expose raw hit
 previews to subscribers, transports, devtools persistence, or OTel export. OTel retrieval spans export
 safe metadata such as recipe id, source retriever ids, step id, step kind, query counts, hit counts,
-warning counts, and status; they do not export query text, hit content, filters, metadata blobs, or
+warning counts, and status; they do not export query text, hit content, filters, metadata assets, or
 embeddings by default.
 
 ## `retrievalRecipe(config)`
@@ -172,7 +172,7 @@ Creates a named retrieval composition.
 
 ```ts
 const docsAnswer = retrievalRecipe({
-  id: 'docs-answer',
+  id: "docs-answer",
   retriever: docs,
   model,
   concurrency: 4,
@@ -182,7 +182,7 @@ const docsAnswer = retrievalRecipe({
     rerank({ topK: 8 }),
     compressToBudget({ tokens: 3500 }),
   ],
-})
+});
 ```
 
 Recipe config includes `id`, one or more retriever sources, typed `steps`, optional default `model`, optional `concurrency`, and optional federated source failure policy. Handles expose `run`, `retrieve`, `retrieveWithTrace`, `asRetriever`, `asTools`, `asGrounding`, and `inspect`.
@@ -191,14 +191,14 @@ Federated sources can be weighted:
 
 ```ts
 const recipe = retrievalRecipe({
-  id: 'support-and-docs',
+  id: "support-and-docs",
   retriever: [
     { retriever: docs, weight: 1 },
     { retriever: tickets, weight: 0.5 },
   ],
-  onSourceError: 'skip-with-warning',
+  onSourceError: "skip-with-warning",
   steps: [retrieve({ limit: 20 })],
-})
+});
 ```
 
 ## Steps
@@ -218,13 +218,13 @@ Custom steps:
 
 ```ts
 const onlyPublic = retrievalStep({
-  id: 'only-public',
-  kind: 'filter',
-  phase: { in: 'hits', out: 'hits' },
+  id: "only-public",
+  kind: "filter",
+  phase: { in: "hits", out: "hits" },
   run: ({ hits }) => ({
     hits: hits.filter((hit) => hit.metadata.public === true),
   }),
-})
+});
 ```
 
 Step order is checked at construction. Reserved internal ids such as `retrieve` and `fusion` cannot be reused by custom steps.
@@ -235,40 +235,40 @@ Step order is checked at construction. Reserved internal ids such as `retrieve` 
 
 ```ts
 const recipe = retrievalRecipe({
-  id: 'docs-answer',
+  id: "docs-answer",
   retriever: docs,
   model: retrievalModel,
   steps: [retrieve({ limit: 30 }), rerank({ topK: 8 })],
-})
+});
 ```
 
 Use `engine` when an adapter or custom provider can return a `Reranker` directly:
 
 ```ts
 const recipe = retrievalRecipe({
-  id: 'docs-answer',
+  id: "docs-answer",
   retriever: docs,
   steps: [
     retrieve({ limit: 30 }),
     rerank({
-      engine: anthropic.reranker({ model: 'claude-haiku-4-5' }),
+      engine: anthropic.reranker({ model: "claude-haiku-4-5" }),
       topK: 8,
     }),
   ],
-})
+});
 ```
 
 Core exports the provider-neutral contract and judge factory:
 
 ```ts
-import { judgeReranker } from '@use-crux/core/retrieval'
+import { judgeReranker } from "@use-crux/core/retrieval";
 
 const engine = judgeReranker({
   model: retrievalModel,
-  name: 'docs-judge',
+  name: "docs-judge",
   topN: 12,
   document: (hit) => `${hit.sourceId}\n${hit.content}`,
-})
+});
 ```
 
 Adapter packages bind the same capability factories beside `generate()` and `stream()`: `retrievalModel(config)` and `reranker(config)`. `@use-crux/ai` uses native AI SDK reranking models. The direct SDK adapters (`@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google`) use `judgeReranker()` over their own generation model, so those calls spend generation tokens.
@@ -279,25 +279,25 @@ Adapter packages bind the same capability factories beside `generate()` and `str
 
 ```ts
 const tools = docs.asTools({
-  prefix: 'docs',
-  include: ['search', 'getSource'],
-  filters: ['section'],
+  prefix: "docs",
+  include: ["search", "getSource"],
+  filters: ["section"],
   limit: { default: 5, max: 10 },
   threshold: { default: 0.2, min: 0 },
-  getSource: { visibility: 'namespace' },
-})
+  getSource: { visibility: "namespace" },
+});
 
-tools.docsSearch
-tools.docsGetSource
+tools.docsSearch;
+tools.docsGetSource;
 ```
 
 Tool execution returns a structured payload:
 
 ```ts
 type RetrievalToolPayload = {
-  kind: 'crux.retrieval.hits'
-  hits: RetrievalToolHit[]
-}
+  kind: "crux.retrieval.hits";
+  hits: RetrievalToolHit[];
+};
 ```
 
 The model-facing output is lean text. Full provenance stays in programmatic traces and hits.
@@ -308,13 +308,13 @@ The model-facing output is lean text. Full provenance stays in programmatic trac
 
 ```ts
 const groundedDocs = grounding({
-  id: 'docs-grounding',
+  id: "docs-grounding",
   retriever: docsAnswer.asRetriever(),
   query: ({ input }) => input.question as string,
-  inject: 'both',
-  tools: { prefix: 'docs', include: ['search', 'getSource'] },
-  citations: { required: true, quotes: 'required' },
-})
+  inject: "both",
+  tools: { prefix: "docs", include: ["search", "getSource"] },
+  citations: { required: true, quotes: "required" },
+});
 ```
 
 Grounding records injected and tool-discovered hits in a per-generation session. Citation constraints read that session at validation time.
@@ -338,7 +338,7 @@ Recipe runs attach `retrieval.hits` artifacts with score provenance and step/sou
 RAG evaluation is part of `@use-crux/core/quality`.
 
 ```ts
-import { evaluate, scorers, target } from '@use-crux/core/quality'
+import { evaluate, scorers, target } from "@use-crux/core/quality";
 
 export default evaluate({
   task: target.retrievalRecipe(docsAnswer, {
@@ -352,7 +352,7 @@ export default evaluate({
     scorers.rag.citationValidity(),
     scorers.rag.traceShapeSnapshot(),
   ],
-})
+});
 ```
 
 There is no standalone `ragEval` module.

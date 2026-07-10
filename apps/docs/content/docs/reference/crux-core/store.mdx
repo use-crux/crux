@@ -6,31 +6,36 @@ description: JSON record storage methods, capabilities, TTL, filters, and bundle
 `RecordStore` is the JSON record capability from [`@use-crux/core/storage`](/docs/reference/crux-core/storage).
 
 ```ts
-import { inMemoryRecordStore, keySpace } from '@use-crux/core/storage'
-import type { JsonObject, RecordStore } from '@use-crux/core/storage'
+import { inMemoryRecordStore, keySpace } from "@use-crux/core/storage";
+import type { JsonObject, RecordStore } from "@use-crux/core/storage";
 
-const records = inMemoryRecordStore()
-await records.put('plan:abc', { title: 'My Plan', version: 1 })
-const plan = await records.get('plan:abc')
+const records = inMemoryRecordStore();
+await records.put("plan:abc", { title: "My Plan", version: 1 });
+const plan = await records.get("plan:abc");
 ```
 
-Use `RecordStore` for memory records, cache entries, flow snapshots, plans, tasks, blackboards, workspace metadata, and other structured Crux state. Use [`VectorStore`](/docs/guides/storage/vector-store) for similarity search and [`BlobStore`](/docs/guides/storage/blob-storage) for binary or oversized payloads.
+Use `RecordStore` for memory records, cache entries, flow snapshots, plans, tasks, blackboards, workspace metadata, and other structured Crux state. Use [`VectorStore`](/docs/guides/storage/vector-store) for similarity search and [`AssetStore`](/docs/guides/storage/asset-storage) for binary or oversized payloads.
 
 ## Interface
 
 ```ts
 interface RecordStore<T extends JsonObject = JsonObject> {
-  get(key: string): Promise<T | null>
-  getMany?(keys: readonly string[]): Promise<readonly (T | null)[]>
-  put(key: string, value: T, options?: { ttlMs?: number }): Promise<void>
-  putMany?(entries: readonly { key: string; value: T; options?: { ttlMs?: number } }[]): Promise<void>
-  create(key: string, value: T, options?: { ttlMs?: number }): Promise<boolean>
-  delete(key: string): Promise<void>
-  deleteMany?(keys: readonly string[]): Promise<void>
-  list(prefix: string, options?: RecordListOptions): Promise<RecordPage<T>>
-  scan?(prefix: string, options?: Omit<RecordListOptions, 'cursor'>): AsyncIterable<RecordEntry<T>>
-  watch?(prefix: string, callback: (event: RecordEvent<T>) => void): () => void
-  capabilities(): RecordStoreCapabilities
+  get(key: string): Promise<T | null>;
+  getMany?(keys: readonly string[]): Promise<readonly (T | null)[]>;
+  put(key: string, value: T, options?: { ttlMs?: number }): Promise<void>;
+  putMany?(
+    entries: readonly { key: string; value: T; options?: { ttlMs?: number } }[],
+  ): Promise<void>;
+  create(key: string, value: T, options?: { ttlMs?: number }): Promise<boolean>;
+  delete(key: string): Promise<void>;
+  deleteMany?(keys: readonly string[]): Promise<void>;
+  list(prefix: string, options?: RecordListOptions): Promise<RecordPage<T>>;
+  scan?(
+    prefix: string,
+    options?: Omit<RecordListOptions, "cursor">,
+  ): AsyncIterable<RecordEntry<T>>;
+  watch?(prefix: string, callback: (event: RecordEvent<T>) => void): () => void;
+  capabilities(): RecordStoreCapabilities;
 }
 ```
 
@@ -40,11 +45,11 @@ interface RecordStore<T extends JsonObject = JsonObject> {
 
 ```ts
 type RecordStoreCapabilities = {
-  ttl: 'native' | 'lazy' | false
-  filter: 'native' | 'scan' | false
-  watch: boolean
-  batch: boolean
-}
+  ttl: "native" | "lazy" | false;
+  filter: "native" | "scan" | false;
+  watch: boolean;
+  batch: boolean;
+};
 ```
 
 Adapters must report the behavior they actually provide. Passing `{ ttlMs }` to a store with `ttl: false` throws `StorageError` code `ttl_unsupported`.
@@ -54,9 +59,9 @@ Adapters must report the behavior they actually provide. Passing `{ ttlMs }` to 
 Filters are exact top-level scalar equality:
 
 ```ts
-await records.list('docs:', {
-  filter: { namespace: 'public', active: true, deletedAt: null },
-})
+await records.list("docs:", {
+  filter: { namespace: "public", active: true, deletedAt: null },
+});
 ```
 
 Unsupported filter values must throw `StorageError` code `invalid_filter`; adapters should not silently drop unsupported clauses.
@@ -66,13 +71,13 @@ Unsupported filter values must throw `StorageError` code `invalid_filter`; adapt
 `watch(prefix, callback)` emits `put` and `delete` events when a backend supports live notifications:
 
 ```ts
-records.watch?.('plan:', (event) => {
-  if (event.type === 'put') {
-    console.log('Updated:', event.key, event.value)
+records.watch?.("plan:", (event) => {
+  if (event.type === "put") {
+    console.log("Updated:", event.key, event.value);
   } else {
-    console.log('Deleted:', event.key)
+    console.log("Deleted:", event.key);
   }
-})
+});
 ```
 
 ## Keyspace
@@ -80,19 +85,19 @@ records.watch?.('plan:', (event) => {
 `keySpace` centralizes Crux record-key prefixes used by core primitives:
 
 ```ts
-const key = keySpace.plan.key('abc')
-const page = await records.list(keySpace.plan.prefix)
+const key = keySpace.plan.key("abc");
+const page = await records.list(keySpace.plan.prefix);
 ```
 
 ## Implementations
 
-| Store | Package | Use case |
-| --- | --- | --- |
-| `inMemoryRecordStore()` | `@use-crux/core/storage` | Tests and local examples |
-| `convexRecordStore()` | `@use-crux/convex` | Convex-backed records |
-| `upstashRedisRecordStore()` | `@use-crux/upstash` | Upstash Redis-backed records |
+| Store                       | Package                  | Use case                     |
+| --------------------------- | ------------------------ | ---------------------------- |
+| `inMemoryRecordStore()`     | `@use-crux/core/storage` | Tests and local examples     |
+| `convexRecordStore()`       | `@use-crux/convex`       | Convex-backed records        |
+| `upstashRedisRecordStore()` | `@use-crux/upstash`      | Upstash Redis-backed records |
 
-Bundle records with vectors and blobs through `storage({ records, vectors, blobs })` when a primitive needs multiple capabilities.
+Bundle records with vectors and assets through `storage({ records, vectors, assets })` when a primitive needs multiple capabilities.
 
 ## Related
 

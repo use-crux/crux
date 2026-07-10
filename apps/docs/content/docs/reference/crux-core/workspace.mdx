@@ -14,7 +14,7 @@ import {
   workspaceToolNames,
 } from "@use-crux/core/workspace";
 
-import type { BlobStore } from "@use-crux/core/storage";
+import type { AssetStore } from "@use-crux/core/storage";
 ```
 
 ## `workspace()`
@@ -251,7 +251,9 @@ type WorkspaceMountSource =
       retriever: Retriever;
       query?:
         | string
-        | ((input: WorkspaceRetrieverMountQueryInput) => string | Promise<string>);
+        | ((
+            input: WorkspaceRetrieverMountQueryInput,
+          ) => string | Promise<string>);
       limit?: number;
       pathForHit?: (hit: RetrieverHit) => string;
       contentForHit?: (hit: RetrieverHit) => string;
@@ -259,17 +261,40 @@ type WorkspaceMountSource =
     }
   | {
       kind: "custom";
-      list(path: string, options?: WorkspaceMountListOptions): WorkspaceListResult | Promise<WorkspaceListResult>;
-      read(path: string, options?: WorkspaceMountReadOptions): WorkspaceReadResult | null | Promise<WorkspaceReadResult | null>;
-      grep?(query: string, options?: WorkspaceMountGrepOptions): WorkspaceGrepResult | Promise<WorkspaceGrepResult>;
-      exists?(path: string, options?: WorkspaceMountPathOptions): boolean | Promise<boolean>;
-      stat?(path: string, options?: WorkspaceMountPathOptions): WorkspaceFile | null | Promise<WorkspaceFile | null>;
+      list(
+        path: string,
+        options?: WorkspaceMountListOptions,
+      ): WorkspaceListResult | Promise<WorkspaceListResult>;
+      read(
+        path: string,
+        options?: WorkspaceMountReadOptions,
+      ): WorkspaceReadResult | null | Promise<WorkspaceReadResult | null>;
+      grep?(
+        query: string,
+        options?: WorkspaceMountGrepOptions,
+      ): WorkspaceGrepResult | Promise<WorkspaceGrepResult>;
+      exists?(
+        path: string,
+        options?: WorkspaceMountPathOptions,
+      ): boolean | Promise<boolean>;
+      stat?(
+        path: string,
+        options?: WorkspaceMountPathOptions,
+      ): WorkspaceFile | null | Promise<WorkspaceFile | null>;
       write?(
         path: string,
         content: WorkspaceContent,
         options?: WorkspaceMountWriteOptions,
-      ): WorkspaceFile | WorkspaceReadResult | null | void | Promise<WorkspaceFile | WorkspaceReadResult | null | void>;
-      delete?(path: string, options?: WorkspaceMountPathOptions): void | Promise<void>;
+      ):
+        | WorkspaceFile
+        | WorkspaceReadResult
+        | null
+        | void
+        | Promise<WorkspaceFile | WorkspaceReadResult | null | void>;
+      delete?(
+        path: string,
+        options?: WorkspaceMountPathOptions,
+      ): void | Promise<void>;
     };
 ```
 
@@ -341,21 +366,21 @@ const finals = await ws.artifacts({ status: "final" });
 but `artifacts()` and the manifest keep surfacing the pinned revision until you
 `finalize()` again.
 
-Small inline artifacts expose a `workspace-inline://...` reference. Blob-backed
-artifacts expose the blob URI.
+Small inline artifacts expose a `workspace-inline://...` reference. Asset-backed
+artifacts expose the asset URI.
 
-## Blob Stores
+## Asset Stores
 
-Use `BlobStore` for binary and oversized workspace files. Blob-backed text and
+Use `AssetStore` for binary and oversized workspace files. Asset-backed text and
 JSON read back as `text` or `json`; binary files return a URI.
 
 Custom stores implement:
 
 ```ts
-interface BlobStore {
-  put(input: BlobPutInput): Promise<BlobRef>;
-  get(uri: string): Promise<BlobReadResult>;
-  delete?(uri: string): Promise<void>;
+interface AssetStore {
+  put(asset: Asset, options?: AssetPutOptions): Promise<StoredAsset>;
+  get(ref: AssetRef): Promise<StoredAsset>;
+  delete(ref: AssetRef): Promise<void>;
 }
 ```
 
@@ -363,21 +388,21 @@ Use `@use-crux/convex` for Convex storage:
 
 ```ts
 import { storage } from "@use-crux/core/storage";
-import { convexWorkspaceBlobStore } from "@use-crux/convex";
+import { convexAssetStore } from "@use-crux/convex";
 
 const ws = workspace({
   id: "research",
   namespace: threadId,
   storage: storage({
     records,
-    blobs: convexWorkspaceBlobStore({ ctx }),
+    assets: convexAssetStore({ ctx }),
   }),
 });
 ```
 
 See [Storage](/docs/guides/storage) for the difference between `RecordStore`,
-`VectorStore`, and `BlobStore`, and [BlobStore](/docs/guides/storage/blob-storage)
-for custom S3/R2/GCS-style blob stores.
+`VectorStore`, and `AssetStore`, and [AssetStore](/docs/guides/storage/asset-storage)
+for custom S3/R2/GCS-style asset stores.
 
 ## Versioning And History
 
@@ -388,7 +413,7 @@ content as a new version.
 
 Versioning is on by default with unlimited retention. Bound it per file with
 `versioning.maxVersions`, which garbage collects the oldest snapshots and their
-blobs:
+assets:
 
 ```ts
 workspace({
@@ -434,7 +459,7 @@ version number, and operation. The devtools file inspector reconstructs version
 history from those markers.
 
 Project Index workspace metadata includes mounts, generated tool names,
-blob-storage posture, `retention.ttlMs`, and quota limits. Workspace method
+asset-storage posture, `retention.ttlMs`, and quota limits. Workspace method
 calls inside indexed owners are represented through workspace read/write
 relations, and workspace-specific data-access facts preserve exact operations
 such as `grep`, `watch`, `history`, `diff`, `undo`, `artifacts`, `rename`,

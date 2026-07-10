@@ -34,7 +34,7 @@ describe("first-party Phase 5 native fixtures", () => {
         "    { path: '/guide', access: 'read', source: retrieverWorkspaceMountSource(docsRetriever, { query: 'guide' }) },",
         "    { path: '/catalog', access: 'read', source: customLoader() },",
         "  ],",
-        "  storage: blobStore,",
+        "  storage: assetStore,",
         "})",
       ].join("\n");
       const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
@@ -309,7 +309,13 @@ describe("first-party Phase 5 native fixtures", () => {
       const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
         {
           source,
-          callNames: ["knowledgeBase", "rerank", "reranker", "retriever", "retrievalRecipe"],
+          callNames: [
+            "knowledgeBase",
+            "rerank",
+            "reranker",
+            "retriever",
+            "retrievalRecipe",
+          ],
         },
       );
 
@@ -325,9 +331,9 @@ describe("first-party Phase 5 native fixtures", () => {
       const source = [
         "export const records = inMemoryRecordStore()",
         "export const vectors = inMemoryVectorStore()",
-        "export const blobs = inMemoryBlobStore()",
-        "export const appStorage = storage({ records, vectors, blobs })",
-        "export const literalStorage = { records, vectors, blobs }",
+        "export const assets = inMemoryAssetStore()",
+        "export const appStorage = storage({ records, vectors, assets })",
+        "export const literalStorage = { records, vectors, assets }",
         "export const tenantStorage = storage.scope(appStorage, 'tenant-a')",
         "",
         "export const docsRetriever = retriever({",
@@ -341,21 +347,23 @@ describe("first-party Phase 5 native fixtures", () => {
         "  id: 'scratch',",
         "  storage: tenantStorage,",
         "  records,",
-        "  blobs,",
+        "  assets,",
         "})",
       ].join("\n");
-      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback({
-        source,
-        callNames: [
-          "inMemoryRecordStore",
-          "inMemoryVectorStore",
-          "inMemoryBlobStore",
-          "storage",
-          "scope",
-          "retriever",
-          "workspace",
-        ],
-      });
+      const { fallbackOut, nativeOut, record } = await extractNativeAndFallback(
+        {
+          source,
+          callNames: [
+            "inMemoryRecordStore",
+            "inMemoryVectorStore",
+            "inMemoryAssetStore",
+            "storage",
+            "scope",
+            "retriever",
+            "workspace",
+          ],
+        },
+      );
 
       expect(nativeFactCount(record, "storage")).toBe(6);
       expectNativeExtractionParity(nativeOut, fallbackOut);

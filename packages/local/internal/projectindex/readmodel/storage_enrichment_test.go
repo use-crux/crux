@@ -33,7 +33,7 @@ func TestModelIndexEnrichesStorageDefinitionsAndWarnings(t *testing.T) {
 				Name:     "appStorage",
 				Fidelity: "resolved",
 				Status:   "active",
-				Metadata: json.RawMessage(`{"facts":{"kind":"storage.bundle","records":"records","vectors":"vectors"}}`),
+				Metadata: json.RawMessage(`{"facts":{"kind":"storage.bundle","records":"records","vectors":"vectors","capabilities":{"asset":{"multipart":false,"signedUrls":false}}}}`),
 			},
 			{ID: "workspace:docs", Kind: "workspace", Name: "docs", Fidelity: "resolved", Status: "active"},
 			{ID: "rag.retriever:docs", Kind: "rag.retriever", Name: "docs", Fidelity: "resolved", Status: "active"},
@@ -67,16 +67,16 @@ func TestModelIndexEnrichesStorageDefinitionsAndWarnings(t *testing.T) {
 	}
 	warnings, ok := storage["warnings"].([]any)
 	if !ok || len(warnings) != 2 {
-		t.Fatalf("warnings = %+v, want vector filter and missing blob warnings", storage["warnings"])
+		t.Fatalf("warnings = %+v, want vector filter and missing asset warnings", storage["warnings"])
 	}
 	if !hasStorageLint(got.LintFindings, "storage.vector_filter_not_prefiltered", "storage.bundle:appStorage") {
 		t.Fatalf("lint findings = %+v, want vector filter warning on appStorage", got.LintFindings)
 	}
-	if !hasStorageLint(got.LintFindings, "storage.workspace_blob_missing", "workspace:docs") {
-		t.Fatalf("lint findings = %+v, want workspace blob warning", got.LintFindings)
+	if !hasStorageLint(got.LintFindings, "storage.workspace_asset_missing", "workspace:docs") {
+		t.Fatalf("lint findings = %+v, want workspace asset warning", got.LintFindings)
 	}
 	rawStorage, _ := json.Marshal(storage)
-	for _, forbidden := range []string{"recordValue", "vectorContents", "blobBody", "signedUrl"} {
+	for _, forbidden := range []string{"recordValue", "vectorContents", "assetBody", "signedUrl", "signedUrls", "multipart"} {
 		if strings.Contains(string(rawStorage), forbidden) {
 			t.Fatalf("storage metadata leaked %q in %s", forbidden, string(rawStorage))
 		}

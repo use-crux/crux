@@ -10,8 +10,8 @@ import (
 )
 
 func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
-	if ProjectIndexSnapshotCacheEpoch != 30 {
-		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want deferred-work target source ref epoch 30", ProjectIndexSnapshotCacheEpoch)
+	if ProjectIndexSnapshotCacheEpoch != 31 {
+		t.Fatalf("ProjectIndexSnapshotCacheEpoch = %d, want asset migration after deferred-work target source ref epoch 31", ProjectIndexSnapshotCacheEpoch)
 	}
 
 	doc := exportedConstDoc(t, "identity.go", "ProjectIndexSnapshotCacheEpoch")
@@ -28,7 +28,7 @@ func TestProjectIndexSnapshotCacheEpochOwnsGoSnapshotContract(t *testing.T) {
 
 func TestProjectIndexFactStorePathIncludesSnapshotEpoch(t *testing.T) {
 	root := t.TempDir()
-	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-30", "index.db")
+	wantSuffix := filepath.Join(".crux", "cache", "index-v2", "epoch-31", "index.db")
 
 	if got := projectIndexFactStoreDBFile(root); !strings.HasSuffix(got, wantSuffix) {
 		t.Fatalf("projectIndexFactStoreDBFile() = %q, want suffix %q", got, wantSuffix)

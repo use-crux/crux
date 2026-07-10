@@ -240,8 +240,8 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     glyph: "search",
     child: true,
   },
-  "storage.blobStore": {
-    label: "Blob store",
+  "storage.assetStore": {
+    label: "Asset store",
     family: "state",
     glyph: "folder",
     child: true,

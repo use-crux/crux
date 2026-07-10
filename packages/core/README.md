@@ -62,7 +62,13 @@ That is a complete Crux program: typed input, typed output, and your SDK still m
 Crux messages share one canonical content vocabulary across core, adapters, tool results, observability, and Convex mirrors. `Message.content` accepts either the existing string form or a readonly `ContentPart[]`:
 
 ```ts
-import { filePart, imagePart, messageText, prompt, textPart } from "@use-crux/core";
+import {
+  filePart,
+  imagePart,
+  messageText,
+  prompt,
+  textPart,
+} from "@use-crux/core";
 import { generate } from "@use-crux/ai";
 import { z } from "zod";
 
@@ -116,7 +122,12 @@ import { evaluate, scorers } from "@use-crux/core/quality";
 
 export default evaluate({
   task: classify,
-  data: [{ input: { text: "This is incredible." }, expected: { sentiment: "positive" } }],
+  data: [
+    {
+      input: { text: "This is incredible." },
+      expected: { sentiment: "positive" },
+    },
+  ],
   scorers: [scorers.exact()],
   expect: (ctx) => {
     ctx.expect(ctx.output.sentiment).toBeDefined();
@@ -386,7 +397,7 @@ Now the call has memory, retrieval, input screening, structured output, retryabl
 
 Use `workspace()` when an agent needs durable scratch files and generated outputs.
 Workspaces are namespace-scoped, path-addressed file trees backed by a `RecordStore`
-for metadata and small text/JSON, plus an optional `BlobStore` for binary and
+for metadata and small text/JSON, plus an optional `AssetStore` for binary and
 oversized payloads.
 
 ```ts
@@ -466,7 +477,7 @@ const artifact = await ws.transaction(
 Injected workspaces add a bounded manifest plus file tools for list, read, write,
 edit, rename, and grep. Programmatic methods also include `exists`, `stat`,
 `append`, `move`, `copy`, `delete`, `history`, `diff`, `undo`, `artifacts`,
-`finalize`, and `transaction`. Blob-backed text and JSON read back as text/JSON;
+`finalize`, and `transaction`. Asset-backed text and JSON read back as text/JSON;
 binary files return a URI for app-side fetching. Every operation accepts a
 `{ namespace }` override for direct calls and manually created tools.
 
@@ -541,7 +552,7 @@ Workspace operations are visible in devtools, OTel, and Project Index without
 exporting raw paths to OTel. OTel receives `crux.workspace.operation` and
 `crux.workspace.path_hash`; devtools use a stable `hash:<pathHash>` label when
 no local-only raw path is available. Project Index records mounts, generated
-tool names, blob-storage posture, retention TTL, quota limits, and workspace
+tool names, asset-storage posture, retention TTL, quota limits, and workspace
 read/write relations from indexed owners. Workspace-specific Project Index
 data-access facts preserve exact operations such as `grep`, `history`, `diff`,
 `undo`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
@@ -552,7 +563,7 @@ data-access facts preserve exact operations such as `grep`, `history`, `diff`,
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Prompt definitions | Typed `prompt()` objects with input/output schemas, settings, tags, tests, and provider overrides.                                   |
 | Composable context | `context()` blocks and custom `contributor()` entries for brand voice, policies, retrieved docs, formatting rules, and shared tools. |
-| Workspaces         | Durable namespace-scoped files, generated artifacts, blob-backed outputs, and model-safe file tools.                                 |
+| Workspaces         | Durable namespace-scoped files, generated artifacts, asset-backed outputs, and model-safe file tools.                                |
 | Memory             | Recent messages, working state, episodes, facts, procedures, proposals, policies, and pluggable stores.                              |
 | Retrieval          | Indexers, corpora, retrievers, rerankers, grounding, citations, and custom RAG pipelines.                                            |
 | Tools              | Prompt tools, context tools, middleware, approval flows, and audit events.                                                           |

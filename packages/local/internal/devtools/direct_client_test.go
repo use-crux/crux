@@ -90,8 +90,8 @@ func TestDirectClientProjectIndexIncludesStorageReadModel(t *testing.T) {
 	if components["recordStoreId"] != "storage.recordStore:records" {
 		t.Fatalf("components = %+v, want record store id", components)
 	}
-	if !apiStorageWarningsInclude(storage, "storage.workspace_blob_missing") {
-		t.Fatalf("storage = %+v, want workspace missing blob warning", storage)
+	if !apiStorageWarningsInclude(storage, "storage.workspace_asset_missing") {
+		t.Fatalf("storage = %+v, want workspace missing asset warning", storage)
 	}
 }
 

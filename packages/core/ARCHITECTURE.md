@@ -40,9 +40,9 @@ This keeps the SDK readable at call sites: users define nouns once, execute verb
 Workspace records use explicit storage capabilities:
 
 - `RecordStore` stores metadata, paths, MIME type, size, timestamps, previews, and small inline text/JSON.
-- `BlobStore` stores binary and oversized payloads.
+- `AssetStore` stores binary and oversized payloads.
 
-`VectorStore` is separate and only used by retrieval/search features. Core includes in-memory `RecordStore`, `VectorStore`, and `BlobStore` implementations for tests and demos. Durable blob stores belong in adapters or userland implementations; object storage backends such as S3, R2, GCS, local disk, and app-owned file services should implement `BlobStore` instead of overloading records with raw bytes.
+`VectorStore` is separate and only used by retrieval/search features. Core includes in-memory `RecordStore`, `VectorStore`, and `AssetStore` implementations for tests and demos. Durable asset stores belong in adapters or userland implementations; object storage backends such as S3, R2, GCS, local disk, and app-owned file services should implement `AssetStore` instead of overloading records with raw bytes.
 
 Default mounts are `/workspace` and `/outputs`. Optional `/sources` mounts are configured explicitly by the app because source ownership can come from uploads, ingestion, MCP, retrieval, or app storage. Generated deliverables remain normal files under `/outputs`; the artifacts facet is a typed view over those same file records (`status`, artifact `kind`, provenance, and download references), not a second store or keyspace.
 
@@ -52,7 +52,7 @@ Retention and limits are enforced at the workspace write boundary. `retention.tt
 
 Instrumentation emits `workspace.operation` spans, output artifacts, and produced edges for all workspace methods. Devtools can show workspace ids, hashed namespaces, operations, file labels, MIME type, size, artifact status/kind, and download refs from local resource activity. When a raw path is not available from a local-only source, devtools use the stable `hash:<pathHash>` label instead of collapsing files to `/`. OTel receives only privacy-safe attributes such as workspace id, operation, MIME type, size, status, and `crux.workspace.path_hash`; raw paths are dropped from workspace-shaped OTel records.
 
-Project Index workspace facts include mounts, generated tool names, blob-storage posture, retention TTL, and quota limits. Authored workspace method calls inside indexed owners are visible as workspace read/write relations, and V0 workspace-specific data-access facts preserve exact operations such as `grep`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
+Project Index workspace facts include mounts, generated tool names, asset-storage posture, retention TTL, and quota limits. Authored workspace method calls inside indexed owners are visible as workspace read/write relations, and V0 workspace-specific data-access facts preserve exact operations such as `grep`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
 
 ## Package Structure Policy
 
@@ -203,9 +203,9 @@ compatibility shims, while every implementation lives in a domain folder.
 ├── retrieval/
 │   └── index.ts        knowledgeBase(), retriever(), retrievalRecipe() — query-first retrieval, RAG facades, and traceable recipe composition
 ├── storage/
-│   └── index.ts        RecordStore, VectorStore, BlobStore, storage(), and in-memory implementations
+│   └── index.ts        RecordStore, VectorStore, AssetStore, storage(), and in-memory implementations
 ├── workspace/
-│   └── index.ts        workspace(), workspaceToolNames() — durable mounted file tree, prompt injection, file tools, artifacts view, append-only versioning (history/read@version/diff/undo, version-scoped blobs, maxVersions GC), TTL/quota guards, blob-backed payloads, canonical operation spans
+│   └── index.ts        workspace(), workspaceToolNames() — durable mounted file tree, prompt injection, file tools, artifacts view, append-only versioning (history/read@version/diff/undo, version-scoped assets, maxVersions GC), TTL/quota guards, asset-backed payloads, canonical operation spans
 ├── indexing/
 │   └── index.ts        indexer() + corpus() + indexingPipeline() — document transforms, structured/parent-child/semantic chunkers, stage cache, generation-aware promotion, source ledger sync, dry runs, and store writes
 ├── cost/
@@ -1143,10 +1143,10 @@ Crux public storage is split by capability:
 
 1. **`RecordStore`** — JSON records with `get`, `put`, `create`, `delete`, `list`, optional TTL, filters, and optional watches.
 2. **`VectorStore`** — Dense, sparse, and hybrid vector records with `upsert`, `delete`, and `search`.
-3. **`BlobStore`** — Binary and oversized payload storage for workspaces.
-4. **`Storage`** — A convenience bundle: `{ records, vectors?, blobs? }`.
+3. **`AssetStore`** — Binary and oversized payload storage for workspaces.
+4. **`Storage`** — A convenience bundle: `{ records, vectors?, assets? }`.
 
-The in-memory implementations are Map-backed and suitable for testing and single-process development: `inMemoryRecordStore()`, `inMemoryVectorStore()`, `inMemoryBlobStore()`, and `inMemoryStorage()`.
+The in-memory implementations are Map-backed and suitable for testing and single-process development: `inMemoryRecordStore()`, `inMemoryVectorStore()`, `inMemoryAssetStore()`, and `inMemoryStorage()`.
 
 ### Tool Description Override
 

@@ -17,8 +17,8 @@
  * @module
  */
 
-export { convexWorkspaceBlobStore } from './workspace'
-export type { ConvexWorkspaceBlobStoreConfig } from './workspace'
+export { convexAssetStore } from './workspace'
+export type { ConvexAssetStoreConfig } from './workspace'
 export { convexRecordStore, convexStorage, convexVectorStore } from './storage'
 export type { ConvexStorageConfig } from './storage'
 export { flushObservability, withObservabilityFlush } from './observability'

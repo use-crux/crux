@@ -111,11 +111,12 @@ pub(crate) fn fallback_relation_target_id(
             "storage.vectorStore:{}",
             safe_use_entry_id(variable)
         )),
-        "storage.bundle.uses_blob_store"
-        | "rag.retriever.uses_blob_store"
-        | "workspace.uses_blob_store" => {
-            Some(format!("storage.blobStore:{}", safe_use_entry_id(variable)))
-        }
+        "storage.bundle.uses_asset_store"
+        | "rag.retriever.uses_asset_store"
+        | "workspace.uses_asset_store" => Some(format!(
+            "storage.assetStore:{}",
+            safe_use_entry_id(variable)
+        )),
         "storage.scope.wraps_storage" | "rag.retriever.uses_storage" | "workspace.uses_storage" => {
             Some(format!("storage.bundle:{}", safe_use_entry_id(variable)))
         }

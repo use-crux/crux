@@ -207,7 +207,7 @@ export interface DataAccessFact {
     | "block"
     | "storage.recordStore"
     | "storage.vectorStore"
-    | "storage.blobStore"
+    | "storage.assetStore"
     | "storage.bundle"
     | "storage.scope";
   key?: string;
@@ -270,8 +270,8 @@ export interface DependencyFacts {
   recordStores?: string[];
   /** Storage Beta vector-store dependencies referenced by variable or definition id. */
   vectorStores?: string[];
-  /** Storage Beta blob-store dependencies referenced by variable or definition id. */
-  blobStores?: string[];
+  /** Storage Beta asset-store dependencies referenced by variable or definition id. */
+  assetStores?: string[];
   /** Storage Beta bundle dependencies referenced by variable or definition id. */
   storage?: string[];
   /** Scoped Storage Beta wrappers referenced by variable or definition id. */
@@ -332,8 +332,8 @@ export interface ProjectRuntimeJoin {
   recordStoreId?: string;
   /** Runtime join key for a Storage Beta vector-store definition. */
   vectorStoreId?: string;
-  /** Runtime join key for a Storage Beta blob-store definition. */
-  blobStoreId?: string;
+  /** Runtime join key for a Storage Beta asset-store definition. */
+  assetStoreId?: string;
   /** Runtime join key for a Storage Beta bundle definition. */
   storageId?: string;
   /** Runtime join key for a scoped Storage Beta wrapper definition. */
@@ -447,7 +447,7 @@ export type ProjectDefinitionKind =
   | "workspace"
   | "storage.recordStore"
   | "storage.vectorStore"
-  | "storage.blobStore"
+  | "storage.assetStore"
   | "storage.bundle"
   | "storage.scope"
   | "constraint"
@@ -757,15 +757,6 @@ export interface IndexedStorageCapabilities {
     /** Read-after-write visibility expected from the vector backend. */
     consistency?: "strong" | "eventual" | "unknown";
   };
-  /** Blob-store capabilities when the definition is a blob store or bundle. */
-  blob?: {
-    /** Whether multipart uploads are available for large blobs. */
-    multipart?: boolean | "unknown";
-    /** Whether the adapter can mint signed URLs for direct blob access. */
-    signedUrls?: boolean | "unknown";
-    /** Maximum blob size in bytes when known statically. */
-    maxBytes?: number | "unknown";
-  };
 }
 
 /** First-class Storage Beta definition facts emitted by Project Index. */
@@ -773,7 +764,7 @@ export interface StorageFacts {
   kind:
     | "storage.recordStore"
     | "storage.vectorStore"
-    | "storage.blobStore"
+    | "storage.assetStore"
     | "storage.bundle"
     | "storage.scope";
   /** Store or bundle factory name when statically known, for example `inMemoryStorage`. */
@@ -786,8 +777,8 @@ export interface StorageFacts {
   records?: string;
   /** Vector store variable or definition id used by a bundle. */
   vectors?: string;
-  /** Blob store variable or definition id used by a bundle. */
-  blobs?: string;
+  /** Asset store variable or definition id used by a bundle. */
+  assets?: string;
   /** Base storage variable or definition id wrapped by a scope. */
   storage?: string;
   /** Key prefix used by a scoped storage wrapper when statically known. */
@@ -1303,7 +1294,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "workspace",
   "storage.recordStore",
   "storage.vectorStore",
-  "storage.blobStore",
+  "storage.assetStore",
   "storage.bundle",
   "storage.scope",
   "constraint",
@@ -1521,7 +1512,7 @@ export const DataAccessFactSchema = z.object({
       "block",
       "storage.recordStore",
       "storage.vectorStore",
-      "storage.blobStore",
+      "storage.assetStore",
       "storage.bundle",
       "storage.scope",
     ])
@@ -1588,7 +1579,7 @@ export const DependencyFactsSchema = z
     stores: z.array(z.string()).optional(),
     recordStores: z.array(z.string()).optional(),
     vectorStores: z.array(z.string()).optional(),
-    blobStores: z.array(z.string()).optional(),
+    assetStores: z.array(z.string()).optional(),
     storage: z.array(z.string()).optional(),
     storageScopes: z.array(z.string()).optional(),
     blocks: z.array(z.string()).optional(),
@@ -1638,7 +1629,7 @@ export const ProjectRuntimeJoinSchema = z
     memoryStoreId: z.string().optional(),
     recordStoreId: z.string().optional(),
     vectorStoreId: z.string().optional(),
-    blobStoreId: z.string().optional(),
+    assetStoreId: z.string().optional(),
     storageId: z.string().optional(),
     storageScopeId: z.string().optional(),
     ragPipelineId: z.string().optional(),

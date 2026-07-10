@@ -10,7 +10,6 @@
 
 import type { Retriever, RetrieverHit } from "../retrieval/types";
 import type { JsonValue } from "../types/tool";
-import { byteLength } from "./content";
 import { globToRegExp, hasGlob } from "./glob";
 import { isJsonValue } from "./json-value";
 import { normalizePath } from "./path";
@@ -19,6 +18,7 @@ import type {
   WorkspaceRetrieverMountQueryInput,
   WorkspaceRetrieverMountSourceOptions,
 } from "./retriever-source-types";
+import { byteLength } from "./text-utils";
 import type {
   WorkspaceCustomMountSource,
   WorkspaceFile,

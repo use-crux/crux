@@ -4,7 +4,7 @@
 //! primitive, in dispatch precedence order. Projection logic, the entry type,
 //! and the digest live in the parent `manifest` module; this file is the table.
 
-use super::{FirstPartyPrimitive, LocalReferenceForm, Projector, first_party};
+use super::{first_party, FirstPartyPrimitive, LocalReferenceForm, Projector};
 use crate::{
     agent::facts::agent_facts,
     blackboard::facts::blackboard_facts,
@@ -141,11 +141,11 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
             "scope",
             "inMemoryRecordStore",
             "inMemoryVectorStore",
-            "inMemoryBlobStore",
+            "inMemoryAssetStore",
             "inMemoryStorage",
             "convexRecordStore",
             "convexVectorStore",
-            "convexWorkspaceBlobStore",
+            "convexAssetStore",
             "convexStorage",
             "upstashRedisRecordStore",
             "upstashVectorStore",
@@ -154,14 +154,14 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
         &[
             "storage.recordStore",
             "storage.vectorStore",
-            "storage.blobStore",
+            "storage.assetStore",
             "storage.bundle",
             "storage.scope",
         ],
         &[
             "storage.recordStore:",
             "storage.vectorStore:",
-            "storage.blobStore:",
+            "storage.assetStore:",
             "storage.bundle:",
             "storage.scope:",
         ],

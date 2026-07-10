@@ -4,8 +4,8 @@ description: API reference for connecting @use-crux/core observability to the lo
 ---
 
 ```ts
-import { enableDevtools, withDevtools } from '@use-crux/core/observability'
-import type { RuntimeBridgeOptions } from '@use-crux/core/runtime-bridge'
+import { enableDevtools, withDevtools } from "@use-crux/core/observability";
+import type { RuntimeBridgeOptions } from "@use-crux/core/runtime-bridge";
 ```
 
 This page documents the SDK APIs that connect a Crux application to a running `@use-crux/local`
@@ -15,32 +15,32 @@ plugins. CLI commands, web UI workflows, and TUI navigation live in the [@use-cr
 reference](/docs/reference/local) and [Devtools guide](/docs/guides/observability/devtools).
 
 The Project Index devtools surface includes Storage Beta inventory and relations when source indexing
-can see `RecordStore`, `VectorStore`, `BlobStore`, `storage()`, and `storage.scope()` wiring. The UI
-shows capabilities and warnings without exposing record values, vector contents, blob bodies, or signed
-URLs by default.
+can see `RecordStore`, `VectorStore`, `AssetStore`, `storage()`, and `storage.scope()` wiring. The UI
+shows record/vector capabilities and warnings without exposing record values, vector contents, or asset
+bodies by default.
 
 ## `withDevtools(options)`
 
 Creates a `CruxPlugin` that installs the canonical local observability transport.
 
 ```ts
-import { config } from '@use-crux/core'
-import { withDevtools } from '@use-crux/core/observability'
+import { config } from "@use-crux/core";
+import { withDevtools } from "@use-crux/core/observability";
 
 config({
   plugins: [
     withDevtools({
       prompts: [],
-      serverUrl: 'http://localhost:4400',
+      serverUrl: "http://localhost:4400",
     }),
   ],
-})
+});
 ```
 
 ### Signature
 
 ```ts
-function withDevtools(options: DevtoolsOptions): CruxPlugin
+function withDevtools(options: DevtoolsOptions): CruxPlugin;
 ```
 
 ### Parameters
@@ -68,7 +68,7 @@ runtime records sent to a local server or tunnel.
 ### Signature
 
 ```ts
-function enableDevtools(options: EnableDevtoolsOptions): () => void
+function enableDevtools(options: EnableDevtoolsOptions): () => void;
 ```
 
 ### Parameters
@@ -93,7 +93,7 @@ For tunneled serverless runtimes, prefer `observability.serverUrl` plus `observa
 remote worker receives only scoped ingest access.
 
 ```ts
-import { config } from '@use-crux/core'
+import { config } from "@use-crux/core";
 
 config({
   observability: {
@@ -103,7 +103,7 @@ config({
   devtools: {
     bridge: true,
   },
-})
+});
 ```
 
 Neither `withDevtools()` nor `enableDevtools()` starts the server. Start it with `crux dev` from `@use-crux/local`.
@@ -121,7 +121,7 @@ import {
   connectRuntimeBridge,
   executeRuntimeBridgeCommand,
   getRuntimeBridgeManifest,
-} from '@use-crux/core/runtime-bridge'
+} from "@use-crux/core/runtime-bridge";
 ```
 
 The bridge is a local-dev command plane. Long-lived Node runtimes can open a `/ws/runtime` peer; framework integrations such as `@use-crux/convex` use the same contract over HTTP.

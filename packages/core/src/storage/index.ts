@@ -2,18 +2,22 @@
  * Canonical Storage Beta API for Crux.
  *
  * `RecordStore` is for JSON records, `VectorStore` is for dense/sparse/hybrid
- * search, and `BlobStore` is for binary or oversized payloads. Use
+ * search, and `AssetStore` is for optional media persistence. Use
  * {@link storage} to bundle capabilities for Crux primitives.
  *
  * @module
  */
 
-export { StorageError } from './errors'
-export { storage } from './bundle'
-export { inMemoryBlobStore, inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from './memory'
-export { matchesExactFilter } from './filter'
-export { keySpace } from './keyspace'
-export { inMemoryAssetStore } from '../asset'
+export { StorageError } from "./errors";
+export { storage } from "./bundle";
+export {
+  inMemoryRecordStore,
+  inMemoryStorage,
+  inMemoryVectorStore,
+} from "./memory";
+export { matchesExactFilter } from "./filter";
+export { keySpace } from "./keyspace";
+export { inMemoryAssetStore } from "../asset";
 export type {
   Asset,
   AssetInfo,
@@ -24,15 +28,9 @@ export type {
   ProviderFileAsset,
   StoredAsset,
   UrlAsset,
-} from '../asset'
+} from "../asset";
 
 export type {
-  BlobContent,
-  BlobPutInput,
-  BlobReadResult,
-  BlobRef,
-  BlobStore,
-  BlobStoreCapabilities,
   DenseVectorSearchQuery,
   ExactFilter,
   FilterValue,
@@ -56,5 +54,5 @@ export type {
   VectorSearchQuery,
   VectorStore,
   VectorStoreCapabilities,
-} from './types'
-export type { StorageErrorCode, StorageErrorOptions } from './errors'
+} from "./types";
+export type { StorageErrorCode, StorageErrorOptions } from "./errors";

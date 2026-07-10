@@ -960,9 +960,9 @@
     "runtimeJoin": true
   },
   {
-    "type": "rag.retriever.uses_blob_store",
+    "type": "rag.retriever.uses_asset_store",
     "fromKinds": ["rag.retriever"],
-    "toKinds": ["storage.blobStore"],
+    "toKinds": ["storage.assetStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
@@ -1224,9 +1224,9 @@
     "runtimeJoin": true
   },
   {
-    "type": "storage.bundle.uses_blob_store",
+    "type": "storage.bundle.uses_asset_store",
     "fromKinds": ["storage.bundle"],
-    "toKinds": ["storage.blobStore"],
+    "toKinds": ["storage.assetStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
@@ -1328,9 +1328,9 @@
     "runtimeJoin": true
   },
   {
-    "type": "workspace.uses_blob_store",
+    "type": "workspace.uses_asset_store",
     "fromKinds": ["workspace"],
-    "toKinds": ["storage.blobStore"],
+    "toKinds": ["storage.assetStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false

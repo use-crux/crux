@@ -14,7 +14,9 @@ export interface SemanticBackendParityFixture {
       Record<string, readonly string[]>
     >;
     /** Exact profile objects emitted on named routing children. */
-    readonly definitionProfiles?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+    readonly definitionProfiles?: Readonly<
+      Record<string, Readonly<Record<string, unknown>>>
+    >;
     readonly relationTypes?: readonly string[];
     readonly sourceRefRoles?: readonly string[];
     readonly lintRuleIds?: readonly string[];
@@ -202,7 +204,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       files: {
         "src/storage.ts": `
         import {
-          inMemoryBlobStore,
+          inMemoryAssetStore,
           inMemoryRecordStore,
           inMemoryVectorStore,
           storage,
@@ -210,15 +212,15 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
 
         export const recordsAlias = inMemoryRecordStore()
         export const vectors = inMemoryVectorStore()
-        export const blobs = inMemoryBlobStore()
-        const bundleParts = { records: recordsAlias, vectors, blobs }
+        export const assets = inMemoryAssetStore()
+        const bundleParts = { records: recordsAlias, vectors, assets }
         export const appStorage = storage(bundleParts)
-        export const inlineStorage = { records: recordsAlias, vectors, blobs }
+        export const inlineStorage = { records: recordsAlias, vectors, assets }
         export const tenantStorage = storage.scope(appStorage, 'tenant-a')
       `,
         "src/usage.ts": `
         import { retriever, workspace } from '@use-crux/core'
-        import { appStorage, blobs, recordsAlias as docsRecords, tenantStorage, vectors } from './storage'
+        import { appStorage, assets, recordsAlias as docsRecords, tenantStorage, vectors } from './storage'
 
         const retrieverConfig = {
           id: 'docs',
@@ -232,7 +234,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           id: 'scratch',
           storage: appStorage,
           records: docsRecords,
-          blobs,
+          assets,
         }
         export const scratch = workspace(workspaceConfig)
       `,
@@ -241,7 +243,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         definitionIds: [
           "storage.recordStore:recordsAlias",
           "storage.vectorStore:vectors",
-          "storage.blobStore:blobs",
+          "storage.assetStore:assets",
           "storage.bundle:appStorage",
           "storage.bundle:inlineStorage",
           "storage.scope:tenantStorage",
@@ -251,14 +253,14 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         relationTypes: [
           "storage.bundle.uses_record_store",
           "storage.bundle.uses_vector_store",
-          "storage.bundle.uses_blob_store",
+          "storage.bundle.uses_asset_store",
           "storage.scope.wraps_storage",
           "rag.retriever.uses_storage",
           "rag.retriever.uses_record_store",
           "rag.retriever.uses_vector_store",
           "workspace.uses_storage",
           "workspace.uses_record_store",
-          "workspace.uses_blob_store",
+          "workspace.uses_asset_store",
         ],
         sourceRefRoles: ["config"],
       },
@@ -365,10 +367,10 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         sourceRefRoles: ["config"],
       },
     },
-  {
-    name: "routing-context-and-call-profile",
-    externalRoot: true,
-    files: {
+    {
+      name: "routing-context-and-call-profile",
+      externalRoot: true,
+      files: {
         "src/routing.ts": `
         import { prompt } from '@use-crux/core'
         import { router, split, type RouteArgs } from '@use-crux/core/routing'

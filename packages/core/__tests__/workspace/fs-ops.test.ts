@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../src/storage";
+import {
+  inMemoryAssetStore,
+  inMemoryRecordStore,
+  storage,
+} from "../../src/storage";
 import { workspace, workspaceToolNames } from "../../src/workspace";
 
 describe("workspace filesystem operations", () => {
@@ -58,7 +62,7 @@ describe("workspace filesystem operations", () => {
       namespace: "thread:default",
       storage: storage({
         records: inMemoryRecordStore(),
-        blobs: inMemoryBlobStore(),
+        assets: inMemoryAssetStore(),
       }),
     });
 
@@ -91,7 +95,7 @@ describe("workspace filesystem operations", () => {
       namespace: "thread:default",
       storage: storage({
         records: inMemoryRecordStore(),
-        blobs: inMemoryBlobStore(),
+        assets: inMemoryAssetStore(),
       }),
       mounts: [
         { path: "/workspace", access: "readwrite" },
@@ -178,12 +182,12 @@ describe("workspace filesystem operations", () => {
       namespace: "thread:default",
       storage: storage({
         records: inMemoryRecordStore(),
-        blobs: inMemoryBlobStore(),
+        assets: inMemoryAssetStore(),
       }),
       content: { inlineTextBelowBytes: 4 },
     });
 
-    await ws.write("/workspace/source.md", "blob-backed text", {
+    await ws.write("/workspace/source.md", "asset-backed text", {
       metadata: { owner: "agent" },
       mimeType: "text/markdown",
     });
@@ -196,16 +200,16 @@ describe("workspace filesystem operations", () => {
 
     expect(copied).toMatchObject({
       path: "/workspace/copy.md",
-      storage: "blob",
+      storage: "asset",
       metadata: { owner: "agent" },
     });
     await expect(ws.read("/workspace/source.md")).resolves.toMatchObject({
       kind: "text",
-      content: "blob-backed text",
+      content: "asset-backed text",
     });
     await expect(ws.read("/workspace/copy.md")).resolves.toMatchObject({
       kind: "text",
-      content: "blob-backed text",
+      content: "asset-backed text",
     });
   });
 
@@ -215,13 +219,13 @@ describe("workspace filesystem operations", () => {
       namespace: "thread:default",
       storage: storage({
         records: inMemoryRecordStore(),
-        blobs: inMemoryBlobStore(),
+        assets: inMemoryAssetStore(),
       }),
       content: { inlineTextBelowBytes: 4 },
     });
 
     await ws.write("/workspace/a.md", "first needle\nsecond Needle");
-    await ws.write("/workspace/nested/b.md", "needle blob\nneedle again");
+    await ws.write("/workspace/nested/b.md", "needle asset\nneedle again");
     await ws.write("/outputs/report.md", "needle outside");
 
     await expect(
@@ -233,7 +237,7 @@ describe("workspace filesystem operations", () => {
           path: "/workspace/nested/b.md",
           line: 1,
           column: 1,
-          text: "needle blob",
+          text: "needle asset",
         },
       ],
     });

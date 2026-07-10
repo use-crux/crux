@@ -146,7 +146,7 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
           resultKind: "artifact",
           artifactStatus: "final",
           artifactKind: "report",
-          uri: "workspace-inline://research/thread%3A1/outputs/report.md",
+          assetRef: "present",
         }),
       }),
     );
@@ -160,7 +160,7 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
           pathHash: expect.stringMatching(/^fnv1a:/),
           artifactStatus: "final",
           artifactKind: "report",
-          uri: "workspace-inline://research/thread%3A1/outputs/report.md",
+          assetRef: "present",
         }),
         preview: expect.objectContaining({
           resultKind: "artifact",
@@ -179,6 +179,9 @@ describe("canonical workspace, plan-task, skill, and security observability", ()
     expect(
       (artifactRecord?.preview as Record<string, unknown> | undefined)?.path,
     ).toBeUndefined();
+    expect(JSON.stringify(transport.records)).not.toContain(
+      "workspace-inline://research/thread%3A1/outputs/report.md",
+    );
   });
 
   it("records plan and task mutations as plan/task spans", async () => {

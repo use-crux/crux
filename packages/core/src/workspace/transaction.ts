@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { RecordStore } from "../storage";
+import type { AssetStore, RecordStore } from "../storage";
 import { snapshotContent } from "./version-content";
 import { fileKey, listFileRecords } from "./store";
 import { normalizePath } from "./path";
@@ -20,13 +20,12 @@ import { suppressWorkspaceChangeEvents } from "./watch";
 import {
   captureRollbackState,
   currentRecord,
-  deleteCapturedBlobs,
+  deleteCapturedAssets,
   rollbackTouchedPaths,
   type TransactionRollbackState,
 } from "./transaction-rollback";
 import type {
   Workspace,
-  WorkspaceBlobStore,
   WorkspaceContent,
   WorkspaceFileRecord,
   WorkspaceNamespaceOption,
@@ -40,7 +39,7 @@ import type {
 export interface WorkspaceTransactionConfig {
   readonly workspaceId: string;
   readonly store: RecordStore;
-  readonly blobs?: WorkspaceBlobStore;
+  readonly assets?: AssetStore;
   readonly mounts: readonly NormalizedMount[];
   readonly retention?: WorkspaceRetention;
   readonly resolveNamespace: () => Promise<string>;
@@ -54,7 +53,7 @@ export interface WorkspaceTransactionConfig {
   readonly remove: (
     namespace: string,
     path: string,
-    options?: { readonly deleteBlob?: boolean },
+    options?: { readonly deleteAsset?: boolean },
   ) => Promise<void>;
   readonly ops: Pick<
     Workspace,
@@ -99,8 +98,15 @@ export function createWorkspaceTransaction(
         },
         async () => {
           await seedNamespace(config, namespace, stagingNamespace);
-          const result = await run(transactionScope(config, stagingNamespace, touched));
-          await commitTouchedPaths(config, namespace, stagingNamespace, touched);
+          const result = await run(
+            transactionScope(config, stagingNamespace, touched),
+          );
+          await commitTouchedPaths(
+            config,
+            namespace,
+            stagingNamespace,
+            touched,
+          );
           return result;
         },
       );
@@ -174,12 +180,16 @@ async function seedNamespace(
   fromNamespace: string,
   toNamespace: string,
 ): Promise<void> {
-  const records = await listFileRecords(config.store, config.workspaceId, fromNamespace);
+  const records = await listFileRecords(
+    config.store,
+    config.workspaceId,
+    fromNamespace,
+  );
   for (const record of records) {
     await config.write(
       toNamespace,
       record.path,
-      await snapshotContent(record, config.blobs),
+      await snapshotContent(record, config.assets),
       suppressWorkspaceChangeEvents(writeOptionsFromRecord(record)),
       record.producedBy,
     );
@@ -201,7 +211,7 @@ async function commitTouchedPaths(
     for (const path of touched) {
       const staged = await currentRecord(config, stagingNamespace, path);
       if (!staged) {
-        await config.remove(namespace, path, { deleteBlob: false });
+        await config.remove(namespace, path, { deleteAsset: false });
         const state = before.get(path);
         if (state) deletedStates.push(state);
         continue;
@@ -209,7 +219,7 @@ async function commitTouchedPaths(
       await config.write(
         namespace,
         path,
-        await snapshotContent(staged, config.blobs),
+        await snapshotContent(staged, config.assets),
         writeOptionsFromRecord(staged),
         staged.producedBy,
       );
@@ -218,9 +228,9 @@ async function commitTouchedPaths(
     await rollbackTouchedPaths(config, namespace, before);
     throw error;
   }
-  const deletedBlobUris = new Set<string>();
+  const deletedAssetUris = new Set<string>();
   for (const state of deletedStates) {
-    await deleteCapturedBlobs(config, state, deletedBlobUris);
+    await deleteCapturedAssets(config, state, deletedAssetUris);
   }
 }
 
@@ -228,21 +238,29 @@ async function clearNamespace(
   config: WorkspaceTransactionConfig,
   namespace: string,
 ): Promise<void> {
-  const records = await listFileRecords(config.store, config.workspaceId, namespace);
+  const records = await listFileRecords(
+    config.store,
+    config.workspaceId,
+    namespace,
+  );
   for (const record of records) {
-    await config.store.delete(fileKey(config.workspaceId, namespace, normalizePath(record.path)));
+    await config.store.delete(
+      fileKey(config.workspaceId, namespace, normalizePath(record.path)),
+    );
     await purgeVersions(
       config.store,
-      config.blobs,
+      config.assets,
       config.workspaceId,
       namespace,
       normalizePath(record.path),
-      { currentBlobUri: record.uri },
+      { currentAssetUri: record.assetRef?.uri },
     );
   }
 }
 
-function writeOptionsFromRecord(record: WorkspaceFileRecord): WorkspaceWriteOptions {
+function writeOptionsFromRecord(
+  record: WorkspaceFileRecord,
+): WorkspaceWriteOptions {
   return {
     namespace: record.namespace,
     mimeType: record.mimeType,

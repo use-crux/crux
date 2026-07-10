@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { BlobStore, RecordStore } from "../storage";
+import type { AssetStore, RecordStore } from "../storage";
 import { resolveArtifact } from "./artifacts";
 import { mountForPath, normalizePath } from "./path";
 import { recordToReadResult } from "./read-result";
@@ -34,13 +34,13 @@ const MANIFEST_FILE_LIMIT = 100;
 /** Render the markdown manifest for a workspace namespace. */
 export async function renderWorkspaceManifest(args: {
   readonly store: RecordStore;
-  readonly blobs?: BlobStore;
+  readonly assets?: AssetStore;
   readonly workspaceId: string;
   readonly mounts: readonly NormalizedMount[];
   readonly namespace: string;
   readonly options?: WorkspaceContextOptions;
 }): Promise<string> {
-  const { store, blobs, workspaceId, mounts, namespace, options } = args;
+  const { store, assets, workspaceId, mounts, namespace, options } = args;
   const rootListing: WorkspaceListResult = await listEntries({
     store,
     workspaceId,
@@ -133,7 +133,7 @@ export async function renderWorkspaceManifest(args: {
         normalized,
       );
       const result = await recordToReadResult(record, {
-        blobs,
+        assets,
         maxInlineBytes: options?.maxInlineBytes,
       });
       pushIncludedFile(lines, result);
@@ -143,10 +143,7 @@ export async function renderWorkspaceManifest(args: {
   return lines.join("\n");
 }
 
-function pushIncludedFile(
-  lines: string[],
-  result: WorkspaceReadResult,
-): void {
+function pushIncludedFile(lines: string[], result: WorkspaceReadResult): void {
   if (result.kind === "text") {
     lines.push(`### ${result.path}`, result.content);
   } else if (result.kind === "json") {

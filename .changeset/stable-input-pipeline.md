@@ -3,7 +3,10 @@
 "@use-crux/ai": minor
 "@use-crux/anthropic": minor
 "@use-crux/convex": minor
+"@use-crux/devtools": minor
 "@use-crux/google": minor
+"@use-crux/indexer": minor
+"@use-crux/local": minor
 "@use-crux/otel": minor
 "@use-crux/openai": minor
 ---
@@ -71,3 +74,5 @@ Close multimodal adapter edge cases found during review: AI SDK tool and assista
 Harden multimodal follow-up edges: AI SDK malformed media parts now warn before being dropped, encode-path unknown parts use request diagnostics, response tool results preserve structured content arrays, large media text descriptors avoid full payload hashing, capture policy redacts reference-only artifacts in off mode, inline data URLs sanitize consistently, and OTel message-content fallbacks continue past empty structured content.
 
 Introduce the public Asset/AssetStore foundation for multimodal persistence: data, URL, and provider-file assets now share one discriminated union, `inMemoryAssetStore()` provides explicit local persistence, and storage bundles can carry an optional `assets` capability.
+
+Migrate workspace persistence from the removed byte-store surface to `AssetStore`: `Storage` now uses `assets`, workspaces persist oversized/binary content as data assets, Convex exposes `convexAssetStore()`/`ConvexAssetStoreConfig`, Project Index/devtools storage facts use `storage.assetStore` plus `uses_asset_store` relations, local storage warnings use asset vocabulary, and Project Index cache identities are bumped for the new read model.

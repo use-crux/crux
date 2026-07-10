@@ -142,13 +142,11 @@ export type {
 } from "./resolver/contract";
 export {
   workspace,
-  memoryWorkspaceBlobStore,
   workspaceToolNames,
   retrieverWorkspaceMountSource,
 } from "./workspace";
 export {
   inMemoryAssetStore,
-  inMemoryBlobStore,
   inMemoryRecordStore,
   inMemoryStorage,
   inMemoryVectorStore,
@@ -162,9 +160,6 @@ export type {
   WorkspaceArtifactsQuery,
   WorkspaceArtifactStatus,
   WorkspaceAppendOptions,
-  WorkspaceBlobReadResult,
-  WorkspaceBlobRef,
-  WorkspaceBlobStore,
   WorkspaceConfig,
   WorkspaceContent,
   WorkspaceContextOptions,
@@ -222,9 +217,6 @@ export type {
   AssetPutOptions,
   AssetRef,
   AssetStore,
-  BlobReadResult,
-  BlobRef,
-  BlobStore,
   DataAsset,
   ExactFilter,
   JsonObject,
@@ -455,10 +447,7 @@ export {
   isGuardrail,
   GuardrailBlockedError,
 } from "./safety/guardrail";
-export type {
-  Guardrail,
-  GuardrailConfig,
-} from "./safety/guardrail";
+export type { Guardrail, GuardrailConfig } from "./safety/guardrail";
 
 // Constraint
 export { constraint, isConstraint } from "./safety/constraint";

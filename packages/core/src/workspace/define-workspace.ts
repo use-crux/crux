@@ -2,20 +2,16 @@
  * The {@link workspace} factory.
  *
  * Wires a {@link WorkspaceConfig} to a {@link RecordStore} (metadata) and optional
- * {@link BlobStore} (binary/oversized payloads), then exposes the file
+ * {@link AssetStore} (binary/oversized payloads), then exposes the file
  * operations plus context/tool/injection adapters. Every operation is
  * instrumented and namespace-scoped.
  *
  * @module
  */
 
-import { inMemoryBlobStore, inMemoryRecordStore, type JsonObject } from "../storage";
-import {
-  analyzeContent,
-  createFileRecord,
-  findOccurrences,
-  recordToFile,
-} from "./content";
+import { inMemoryRecordStore } from "../storage";
+import { analyzeContent, createFileRecord, recordToFile } from "./content";
+import { findOccurrences } from "./text-utils";
 import {
   mountForPath,
   normalizeMounts,
@@ -24,7 +20,8 @@ import {
 } from "./path";
 import { activeWorkspaceProvenance, instrument } from "./observability";
 import { fileKey, getRecord, getRequiredRecord, listEntries } from "./store";
-import { purgeVersions, recordFileVersion } from "./version-store";
+import { purgeVersions } from "./version-store";
+import { commitVersionedWorkspaceRecord } from "./versioned-record-persistence";
 import { createWorkspaceVersionOps } from "./version-ops";
 import type { WorkspaceVersionOperation } from "./version-types";
 import { createWorkspaceTools } from "./tools";
@@ -67,7 +64,6 @@ import {
   type WorkspaceFile,
   type WorkspaceListOptions,
   type WorkspaceListResult,
-  type WorkspaceBlobStore,
   type WorkspaceMountWriteOptions,
   type WorkspaceNamespaceOption,
   type WorkspaceReadOptions,
@@ -93,8 +89,9 @@ export function workspace<const Config extends WorkspaceConfig>(
 ): Workspace<Config["tools"]> {
   assertNonEmpty(config.id, "workspace(): id must be non-empty.");
 
-  const store = config.records ?? config.storage?.records ?? inMemoryRecordStore();
-  const blobs = config.blobs ?? config.storage?.blobs;
+  const store =
+    config.records ?? config.storage?.records ?? inMemoryRecordStore();
+  const assets = config.assets ?? config.storage?.assets;
   const mounts = normalizeMounts(config.mounts ?? defaultMounts());
   const inlineTextBelowBytes =
     config.content?.inlineTextBelowBytes ?? DEFAULT_INLINE_TEXT_BYTES;
@@ -224,7 +221,7 @@ export function workspace<const Config extends WorkspaceConfig>(
           normalized,
         );
         return recordToReadResult(record, {
-          blobs,
+          assets,
           maxInlineBytes: options?.maxInlineBytes,
           offset: options?.offset,
         });
@@ -284,7 +281,10 @@ export function workspace<const Config extends WorkspaceConfig>(
             }
             return file;
           }
-          const analysis = await analyzeContent(content, options?.mimeType);
+          const analysis = await analyzeContent(content, options?.mimeType, {
+            maxStreamBytes: config.limits?.maxFileBytes,
+            path: normalized,
+          });
           const existing = await getRecord(
             store,
             config.id,
@@ -315,35 +315,21 @@ export function workspace<const Config extends WorkspaceConfig>(
             now,
             version: (existing?.headVersion ?? 0) + 1,
             inlineTextBelowBytes,
-            blobs,
+            assets,
           });
           const setOptions = workspaceSetOptions(store, config.retention);
-          const key = fileKey(config.id, namespace, normalized);
-          await store.put(key, record as unknown as JsonObject, setOptions);
-          try {
-            await recordFileVersion({
-              store,
-              blobs,
-              workspaceId: config.id,
-              namespace,
-              path: normalized,
-              record,
-              operation,
-              versioning: config.versioning,
-              setOptions,
-            });
-          } catch (error) {
-            if (existing) {
-              await store.put(
-                key,
-                existing as unknown as JsonObject,
-                setOptions,
-              );
-            } else {
-              await store.delete(key);
-            }
-            throw error;
-          }
+          await commitVersionedWorkspaceRecord({
+            store,
+            assets,
+            workspaceId: config.id,
+            namespace,
+            path: normalized,
+            record,
+            previous: existing,
+            operation,
+            versioning: config.versioning,
+            setOptions,
+          });
           if (!shouldSuppressWorkspaceChangeEvents(options)) {
             await emitChange({
               type: existing ? "update" : "create",
@@ -440,7 +426,8 @@ export function workspace<const Config extends WorkspaceConfig>(
         const normalized = normalizePath(path);
         const mount = mountForPath(normalized, mounts, "write");
         if (hasWorkspaceMountSource(mount)) {
-          const shouldEmitChange = !shouldSuppressWorkspaceChangeEvents(options);
+          const shouldEmitChange =
+            !shouldSuppressWorkspaceChangeEvents(options);
           const existed = shouldEmitChange
             ? await existsWorkspaceMountSource(mount, normalized)
             : false;
@@ -458,9 +445,9 @@ export function workspace<const Config extends WorkspaceConfig>(
         assertWorkspaceMountIsLocal(mount, "delete");
         const record = await getRecord(store, config.id, namespace, normalized);
         await store.delete(fileKey(config.id, namespace, normalized));
-        await purgeVersions(store, blobs, config.id, namespace, normalized, {
-          deleteBlob: options?.deleteBlob,
-          currentBlobUri: record?.uri,
+        await purgeVersions(store, assets, config.id, namespace, normalized, {
+          deleteAsset: options?.deleteAsset,
+          currentAssetUri: record?.assetRef?.uri,
         });
         if (record && !shouldSuppressWorkspaceChangeEvents(options)) {
           await emitChange({
@@ -498,7 +485,7 @@ export function workspace<const Config extends WorkspaceConfig>(
   const fsOps = createWorkspaceFilesystemOps({
     workspaceId: config.id,
     store,
-    blobs,
+    assets,
     mounts,
     inlineTextBelowBytes,
     limits: config.limits,
@@ -510,7 +497,7 @@ export function workspace<const Config extends WorkspaceConfig>(
   const versionOps = createWorkspaceVersionOps({
     workspaceId: config.id,
     store,
-    blobs,
+    assets,
     mounts,
     resolveNamespace,
     write: (namespace, path, content, options, operation) =>
@@ -534,7 +521,7 @@ export function workspace<const Config extends WorkspaceConfig>(
   const transaction = createWorkspaceTransaction({
     workspaceId: config.id,
     store,
-    blobs,
+    assets,
     mounts,
     retention: config.retention,
     resolveNamespace,
@@ -575,7 +562,7 @@ export function workspace<const Config extends WorkspaceConfig>(
   const contextAdapters = createWorkspaceContextAdapters<Config["tools"]>({
     workspaceId: config.id,
     store,
-    blobs,
+    assets,
     mounts,
     resolveNamespace,
     asTools,
@@ -619,11 +606,6 @@ export function workspace<const Config extends WorkspaceConfig>(
   };
 
   return Object.freeze(ws);
-}
-
-/** An in-memory {@link WorkspaceBlobStore}, useful for tests and ephemeral runs. */
-export function memoryWorkspaceBlobStore(): WorkspaceBlobStore {
-  return inMemoryBlobStore();
 }
 
 function assertNonEmpty(value: string, message: string): void {

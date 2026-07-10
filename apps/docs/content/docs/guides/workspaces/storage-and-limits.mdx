@@ -1,9 +1,9 @@
 ---
 title: Storage and Limits
-description: Choose workspace records and blobs, configure namespaces, TTL, quotas, and inline thresholds.
+description: Choose workspace records and assets, configure namespaces, TTL, quotas, and inline thresholds.
 ---
 
-Workspaces use records for file metadata and small inline content, and blobs for
+Workspaces use records for file metadata and small inline content, and assets for
 binary or oversized content.
 
 ```ts
@@ -14,7 +14,7 @@ const ws = workspace({
   namespace,
   storage: storage({
     records, // metadata plus small inline text/json
-    blobs, // binary and large payloads
+    assets, // binary and large payloads
   }),
   content: {
     inlineTextBelowBytes: 64_000,
@@ -25,41 +25,41 @@ const ws = workspace({
 Rules:
 
 - Small text and JSON can live inline in `RecordStore`.
-- Large text goes to `BlobStore`.
-- Binary always goes to `BlobStore`.
-- Writing binary or oversized content without `blobs` throws clearly.
+- Large text goes to `AssetStore`.
+- Binary always goes to `AssetStore`.
+- Writing binary or oversized content without `assets` throws clearly.
 
-For bundled storage options and custom S3/R2/GCS-style blob stores, see
-[Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage).
+For bundled storage options and custom S3/R2/GCS-style asset stores, see
+[Storage](/docs/guides/storage) and [AssetStore](/docs/guides/storage/asset-storage).
 
-## Blob Stores
+## Asset Stores
 
-Use `BlobStore` for binary and oversized workspace files. Blob-backed text and
+Use `AssetStore` for binary and oversized workspace files. Asset-backed text and
 JSON read back as `text` or `json`; binary files return a URI.
 
 Custom stores implement:
 
 ```ts
-interface BlobStore {
-  put(input: BlobPutInput): Promise<BlobRef>;
-  get(uri: string): Promise<BlobReadResult>;
-  delete?(uri: string): Promise<void>;
+interface AssetStore {
+  put(asset: Asset, options?: AssetPutOptions): Promise<StoredAsset>;
+  get(ref: AssetRef): Promise<StoredAsset>;
+  delete(ref: AssetRef): Promise<void>;
 }
 ```
 
 Convex apps use `convexRecordStore({ component, ctx })` for workspace metadata
-and `convexWorkspaceBlobStore()` for binary or large payloads:
+and `convexAssetStore()` for binary or large payloads:
 
 ```ts
 import { storage } from "@use-crux/core/storage";
-import { convexRecordStore, convexWorkspaceBlobStore } from "@use-crux/convex";
+import { convexRecordStore, convexAssetStore } from "@use-crux/convex";
 
 const ws = workspace({
   id: "research",
   namespace: threadId,
   storage: storage({
     records: convexRecordStore({ component: components.crux, ctx }),
-    blobs: convexWorkspaceBlobStore({ ctx }),
+    assets: convexAssetStore({ ctx }),
   }),
 });
 ```
@@ -111,7 +111,7 @@ Operator controls live on the workspace config:
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
   retention: { ttlMs: 1000 * 60 * 60 * 24 },
   limits: {
     maxFileBytes: 1_000_000,

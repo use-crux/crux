@@ -5,11 +5,11 @@ import "github.com/use-crux/crux/packages/local/internal/store"
 func storageWarnings(def store.ProjectDefinition, summary storageDefinitionSummary, relations storageRelationIndex, byID map[string]store.ProjectDefinition) []storageWarningSummary {
 	var warnings []storageWarningSummary
 	for _, use := range summary.UsedBy {
-		if use.Kind == "workspace" && summary.Components.BlobStoreID == "" && summary.Capabilities["blob"] == nil {
+		if use.Kind == "workspace" && summary.Components.AssetStoreID == "" {
 			warnings = append(warnings, storageWarningSummary{
-				Code:                 "storage.workspace_blob_missing",
+				Code:                 "storage.workspace_asset_missing",
 				Severity:             "warning",
-				Message:              "Workspace is wired to storage without a blob store; large workspace payloads will fail or remain inline-only.",
+				Message:              "Workspace is wired to storage without an asset store; large workspace payloads will fail or remain inline-only.",
 				PrimaryDefinitionID:  use.DefinitionID,
 				RelatedDefinitionIDs: []string{def.ID},
 			})
@@ -87,8 +87,8 @@ func mergeStorageLintFindings(existing []store.IndexLintFinding, warnings []stor
 
 func storageWarningTitle(code string) string {
 	switch code {
-	case "storage.workspace_blob_missing":
-		return "Workspace has no blob store"
+	case "storage.workspace_asset_missing":
+		return "Workspace has no asset store"
 	case "storage.vector_filter_not_prefiltered":
 		return "Vector filters are not pre-filtered"
 	default:

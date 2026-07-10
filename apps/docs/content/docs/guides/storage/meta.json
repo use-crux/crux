@@ -1,10 +1,5 @@
 {
   "title": "Storage",
-  "description": "RecordStore, VectorStore, BlobStore, bundled adapters, and custom storage implementations.",
-  "pages": [
-    "index",
-    "crux-store",
-    "vector-store",
-    "blob-storage"
-  ]
+  "description": "RecordStore, VectorStore, AssetStore, bundled adapters, and custom storage implementations.",
+  "pages": ["index", "crux-store", "vector-store", "asset-storage"]
 }

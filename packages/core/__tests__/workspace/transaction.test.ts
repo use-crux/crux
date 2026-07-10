@@ -1,10 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  inMemoryBlobStore,
+  inMemoryAssetStore,
   inMemoryRecordStore,
   storage,
+  type AssetRef,
+  type AssetStore,
 } from "../../src/storage";
-import { workspace, type WorkspaceCustomMountSource } from "../../src/workspace";
+import {
+  workspace,
+  type WorkspaceCustomMountSource,
+} from "../../src/workspace";
 import {
   failLiveNamespacePut,
   failStagingNamespacePut,
@@ -94,18 +99,19 @@ describe("workspace transactions", () => {
     );
 
     const listed = await records.list("workspace:research:");
-    expect(listed.entries.every((entry) => !entry.key.includes(".__crux_tx_")))
-      .toBe(true);
+    expect(
+      listed.entries.every((entry) => !entry.key.includes(".__crux_tx_")),
+    ).toBe(true);
   });
 
-  it("commits blob-backed files through the transaction", async () => {
-    const blobs = inMemoryBlobStore();
+  it("commits asset-backed files through the transaction", async () => {
+    const assets = inMemoryAssetStore();
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
       storage: storage({
         records: inMemoryRecordStore(),
-        blobs,
+        assets,
       }),
     });
 
@@ -122,13 +128,14 @@ describe("workspace transactions", () => {
       mimeType: "application/octet-stream",
     });
     if (file.kind !== "binary") throw new Error("expected binary file");
-    await expect(blobs.get(file.uri)).resolves.toMatchObject({ size: 3 });
+    await expect(assets.get({ uri: file.uri })).resolves.toMatchObject({
+      size: 3,
+    });
   });
 
-  it("restores blob-backed files when commit fails part-way through", async () => {
+  it("restores asset-backed files when commit fails part-way through", async () => {
     const records = inMemoryRecordStore();
-    const blobs = inMemoryBlobStore();
-    const deleteBlob = vi.spyOn(blobs, "delete");
+    const { assets, deletedRefs } = recordingAssetStore();
     const guarded = failLiveNamespacePut(records, {
       workspaceId: "research",
       namespace: "thread:1",
@@ -137,7 +144,7 @@ describe("workspace transactions", () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      storage: storage({ records: guarded.records, blobs }),
+      storage: storage({ records: guarded.records, assets }),
     });
     await ws.write("/outputs/report.bin", new Uint8Array([1]), {
       mimeType: "application/octet-stream",
@@ -162,24 +169,29 @@ describe("workspace transactions", () => {
       uri: before.uri,
       size: 1,
     });
-    await expect(blobs.get(before.uri)).resolves.toMatchObject({ size: 1 });
-    const deletedUris = deleteBlob.mock.calls.map(([uri]) => uri);
+    await expect(assets.get({ uri: before.uri })).resolves.toMatchObject({
+      size: 1,
+    });
+    const deletedUris = deletedRefs.map((ref) => ref.uri);
     expect(deletedUris).not.toContain(before.uri);
-    const transactionCreatedUris = deletedUris.filter((uri) => uri !== before.uri);
+    const transactionCreatedUris = deletedUris.filter(
+      (uri) => uri !== before.uri,
+    );
     expect(transactionCreatedUris.length).toBeGreaterThan(0);
     for (const uri of new Set(transactionCreatedUris)) {
-      await expect(blobs.head(uri)).resolves.toBeNull();
+      await expect(assets.get({ uri })).rejects.toMatchObject({
+        code: "not_found",
+      });
     }
     await expect(ws.exists("/outputs/data.bin")).resolves.toBe(false);
   });
 
-  it("cleans pre-commit blobs after a successful transaction delete", async () => {
-    const blobs = inMemoryBlobStore();
-    const deleteBlob = vi.spyOn(blobs, "delete");
+  it("cleans pre-commit assets after a successful transaction delete", async () => {
+    const { assets, deletedRefs } = recordingAssetStore();
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      storage: storage({ records: inMemoryRecordStore(), blobs }),
+      storage: storage({ records: inMemoryRecordStore(), assets }),
     });
     await ws.write("/outputs/report.bin", new Uint8Array([1]), {
       mimeType: "application/octet-stream",
@@ -192,8 +204,10 @@ describe("workspace transactions", () => {
     });
 
     await expect(ws.exists("/outputs/report.bin")).resolves.toBe(false);
-    expect(deleteBlob).toHaveBeenCalledWith(before.uri);
-    await expect(blobs.head(before.uri)).resolves.toBeNull();
+    expect(deletedRefs).toContainEqual({ uri: before.uri });
+    await expect(assets.get({ uri: before.uri })).rejects.toMatchObject({
+      code: "not_found",
+    });
   });
 
   it("gives the callback a staged view and commits the final staged content", async () => {
@@ -277,3 +291,22 @@ describe("workspace transactions", () => {
     expect(write).not.toHaveBeenCalled();
   });
 });
+
+function recordingAssetStore(): {
+  readonly assets: AssetStore;
+  readonly deletedRefs: readonly AssetRef[];
+} {
+  const inner = inMemoryAssetStore();
+  const deletedRefs: AssetRef[] = [];
+  return {
+    assets: Object.freeze({
+      put: inner.put,
+      get: inner.get,
+      delete: async (ref) => {
+        deletedRefs.push(ref);
+        await inner.delete(ref);
+      },
+    }),
+    deletedRefs,
+  };
+}

@@ -229,7 +229,7 @@ describe("native semantic direct Crux projectors", () => {
       file,
       `
         import {
-          inMemoryBlobStore,
+          inMemoryAssetStore,
           inMemoryRecordStore,
           inMemoryVectorStore,
           storage,
@@ -237,20 +237,48 @@ describe("native semantic direct Crux projectors", () => {
 
         export const records = inMemoryRecordStore()
         export const vectors = inMemoryVectorStore()
-        export const blobs = inMemoryBlobStore()
-        export const appStorage = storage({ records, vectors, blobs })
+        export const assets = inMemoryAssetStore()
+        export const appStorage = storage({ records, vectors, assets })
         export const tenantStorage = storage.scope(appStorage, 'tenant-a')
       `,
     );
 
-    await expectDirectNativeParity(root, file);
+    const facts = await expectDirectNativeParity(root, file);
+    const storageDefinitions = facts.definitions?.filter((definition) =>
+      definition.kind.startsWith("storage."),
+    );
+
+    expect(storageDefinitions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: "storage.assetStore:assets",
+          metadata: expect.objectContaining({
+            facts: expect.not.objectContaining({
+              capabilities: expect.objectContaining({
+                asset: expect.anything(),
+              }),
+            }),
+          }),
+        }),
+        expect.objectContaining({
+          id: "storage.bundle:appStorage",
+          metadata: expect.objectContaining({
+            facts: expect.not.objectContaining({
+              capabilities: expect.objectContaining({
+                asset: expect.anything(),
+              }),
+            }),
+          }),
+        }),
+      ]),
+    );
   }, 20_000);
 });
 
 async function expectDirectNativeParity(
   root: string,
   file: string,
-): Promise<void> {
+): Promise<IndexPatchFacts> {
   const timingNames: string[] = [];
   const coverageExtractors: string[][] = [];
   const typescriptPatch = await createSemanticIndexService({
@@ -278,6 +306,7 @@ async function expectDirectNativeParity(
   expect(timingNames).toContain("semantic.native.extractor.direct_crux");
   expect(timingNames).not.toContain("semantic.native.analyzer.shared");
   expect(coverageExtractors).toEqual([["crux.direct-crux"]]);
+  return typescriptPatch.facts;
 }
 
 async function writeTsconfig(root: string): Promise<void> {

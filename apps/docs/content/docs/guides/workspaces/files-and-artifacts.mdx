@@ -45,11 +45,11 @@ if (file.kind === "binary") {
 }
 ```
 
-Models see paths, metadata, previews when available, and blob URIs. Apps and
-devtools can fetch full bytes through the configured blob store.
+Models see paths, metadata, previews when available, and asset URIs. Apps and
+devtools can fetch full bytes through the configured asset store.
 
-Blob-backed text and JSON still read back as `text` and `json`; the workspace
-fetches their payload from the blob store. `maxInlineBytes` windows text reads
+Asset-backed text and JSON still read back as `text` and `json`; the workspace
+fetches their payload from the asset store. `maxInlineBytes` windows text reads
 instead of throwing when a caller asks for a smaller preview.
 
 ## Writing And Editing
@@ -105,8 +105,8 @@ await ws.write("/outputs/chart.png", imageBytes, {
 const charts = await ws.artifacts({ status: "final", kind: "chart" });
 ```
 
-Small inline artifacts expose a `workspace-inline://...` reference. Blob-backed
-artifacts expose the blob URI.
+Small inline artifacts expose a `workspace-inline://...` reference. Asset-backed
+artifacts expose the asset URI.
 
 ## Finalize Pins A Version
 

@@ -10,7 +10,7 @@ import (
 type storageComponentSummary struct {
 	RecordStoreID string `json:"recordStoreId,omitempty"`
 	VectorStoreID string `json:"vectorStoreId,omitempty"`
-	BlobStoreID   string `json:"blobStoreId,omitempty"`
+	AssetStoreID  string `json:"assetStoreId,omitempty"`
 	StorageID     string `json:"storageId,omitempty"`
 }
 
@@ -120,8 +120,8 @@ func storageComponents(defID string, relations storageRelationIndex) storageComp
 			components.RecordStoreID = relation.To
 		case "storage.bundle.uses_vector_store":
 			components.VectorStoreID = relation.To
-		case "storage.bundle.uses_blob_store":
-			components.BlobStoreID = relation.To
+		case "storage.bundle.uses_asset_store":
+			components.AssetStoreID = relation.To
 		case "storage.scope.wraps_storage":
 			components.StorageID = relation.To
 		}
@@ -139,12 +139,14 @@ func resolvedStorageCapabilities(defID string, byID map[string]store.ProjectDefi
 		return nil
 	}
 	capabilities := cloneMap(rawMapAny(storageFacts(def)["capabilities"]))
+	delete(capabilities, "asset")
 	for _, relation := range relations.outgoing[defID] {
 		switch relation.Type {
-		case "storage.bundle.uses_record_store", "storage.bundle.uses_vector_store", "storage.bundle.uses_blob_store", "storage.scope.wraps_storage":
+		case "storage.bundle.uses_record_store", "storage.bundle.uses_vector_store", "storage.bundle.uses_asset_store", "storage.scope.wraps_storage":
 			mergeCapabilityMaps(capabilities, resolvedStorageCapabilities(relation.To, byID, relations, seen))
 		}
 	}
+	delete(capabilities, "asset")
 	if len(capabilities) == 0 {
 		return nil
 	}
@@ -199,7 +201,7 @@ func storageUsedBy(defID string, relations storageRelationIndex, byID map[string
 
 func isStorageKind(kind string) bool {
 	switch kind {
-	case "storage.recordStore", "storage.vectorStore", "storage.blobStore", "storage.bundle", "storage.scope":
+	case "storage.recordStore", "storage.vectorStore", "storage.assetStore", "storage.bundle", "storage.scope":
 		return true
 	default:
 		return false
@@ -208,9 +210,9 @@ func isStorageKind(kind string) bool {
 
 func isStorageRelation(relationType string) bool {
 	switch relationType {
-	case "storage.bundle.uses_record_store", "storage.bundle.uses_vector_store", "storage.bundle.uses_blob_store", "storage.scope.wraps_storage",
-		"rag.retriever.uses_storage", "rag.retriever.uses_record_store", "rag.retriever.uses_vector_store", "rag.retriever.uses_blob_store",
-		"workspace.uses_storage", "workspace.uses_record_store", "workspace.uses_vector_store", "workspace.uses_blob_store":
+	case "storage.bundle.uses_record_store", "storage.bundle.uses_vector_store", "storage.bundle.uses_asset_store", "storage.scope.wraps_storage",
+		"rag.retriever.uses_storage", "rag.retriever.uses_record_store", "rag.retriever.uses_vector_store", "rag.retriever.uses_asset_store",
+		"workspace.uses_storage", "workspace.uses_record_store", "workspace.uses_vector_store", "workspace.uses_asset_store":
 		return true
 	default:
 		return false

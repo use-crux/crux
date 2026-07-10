@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../src/storage";
+import {
+  inMemoryAssetStore,
+  inMemoryRecordStore,
+  storage,
+} from "../../src/storage";
 import { workspace } from "../../src/workspace";
 import { observe } from "../../src/observability";
 import { prompt } from "../../src/prompt";
@@ -196,12 +200,12 @@ describe("workspace artifacts facet", () => {
     });
   });
 
-  it("returns download references for blob and inline artifacts", async () => {
-    const blobs = inMemoryBlobStore();
+  it("returns download references for asset and inline artifacts", async () => {
+    const assets = inMemoryAssetStore();
     const ws = workspace({
       id: "research",
       namespace: "thread:default",
-      storage: storage({ records: inMemoryRecordStore(), blobs }),
+      storage: storage({ records: inMemoryRecordStore(), assets }),
     });
 
     await ws.write("/outputs/report.pdf", new Uint8Array([1, 2, 3]), {
@@ -219,8 +223,8 @@ describe("workspace artifacts facet", () => {
     const inline = await ws.finalize("/outputs/summary.md");
 
     expect(binary.uri).toMatch(/^memory:\/\//);
-    await expect(blobs.get(binary.uri ?? "")).resolves.toMatchObject({
-      mimeType: "application/pdf",
+    await expect(assets.get({ uri: binary.uri ?? "" })).resolves.toMatchObject({
+      mediaType: "application/pdf",
       size: 3,
     });
     expect(inline.uri).toBe(

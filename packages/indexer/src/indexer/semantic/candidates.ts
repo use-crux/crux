@@ -98,7 +98,7 @@ export type SemanticDefinitionKind = Extract<
   | "rag.retriever"
   | "storage.recordStore"
   | "storage.vectorStore"
-  | "storage.blobStore"
+  | "storage.assetStore"
   | "storage.bundle"
   | "storage.scope"
 >;

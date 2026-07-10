@@ -11,7 +11,7 @@ system.
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
   mounts: [
     {
       path: "/sources",
@@ -60,7 +60,7 @@ const docs = retriever({
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
   mounts: [
     { path: "/workspace", access: "readwrite" },
     { path: "/outputs", access: "readwrite" },

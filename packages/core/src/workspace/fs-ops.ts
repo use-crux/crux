@@ -8,7 +8,7 @@
  * @module
  */
 
-import type { JsonObject, RecordStore } from "../storage";
+import type { AssetStore, RecordStore } from "../storage";
 import { analyzeContent, createFileRecord, recordToFile } from "./content";
 import {
   createFileRecordFromReadResult,
@@ -20,7 +20,8 @@ import { mountForPath, normalizePath } from "./path";
 import { recordToReadResult } from "./read-result";
 import { fileKey, getRecord, listFileRecords } from "./store";
 import { snapshotContent } from "./version-content";
-import { purgeVersions, recordFileVersion } from "./version-store";
+import { purgeVersions } from "./version-store";
+import { commitVersionedWorkspaceRecord } from "./versioned-record-persistence";
 import { createWorkspaceTextMatcher, grepWorkspaceText } from "./text-search";
 import { grepWorkspaceSourceMounts } from "./source-grep";
 import { writeWorkspaceMountSource } from "./source-write";
@@ -46,7 +47,6 @@ import {
 import type {
   NormalizedMount,
   WorkspaceAppendOptions,
-  WorkspaceBlobStore,
   WorkspaceFile,
   WorkspaceFileRecord,
   WorkspaceGrepMatch,
@@ -66,7 +66,7 @@ import type {
 export interface WorkspaceFilesystemOpsConfig {
   readonly workspaceId: string;
   readonly store: RecordStore;
-  readonly blobs?: WorkspaceBlobStore;
+  readonly assets?: AssetStore;
   readonly mounts: readonly NormalizedMount[];
   readonly inlineTextBelowBytes: number;
   readonly limits?: WorkspaceLimits;
@@ -255,24 +255,20 @@ export function createWorkspaceFilesystemOps(
               now,
               version: (existing?.headVersion ?? 0) + 1,
               inlineTextBelowBytes: config.inlineTextBelowBytes,
-              blobs: config.blobs,
+              assets: config.assets,
             });
             const setOptions = workspaceSetOptions(
               config.store,
               config.retention,
             );
-            await config.store.put(
-              fileKey(config.workspaceId, namespace, normalized),
-              record as unknown as JsonObject,
-              setOptions,
-            );
-            await recordFileVersion({
+            await commitVersionedWorkspaceRecord({
               store: config.store,
-              blobs: config.blobs,
+              assets: config.assets,
               workspaceId: config.workspaceId,
               namespace,
               path: normalized,
               record,
+              previous: existing,
               operation: "append",
               versioning: config.versioning,
               setOptions,
@@ -367,16 +363,6 @@ export function createWorkspaceFilesystemOps(
               toPath,
               toMount.path,
             );
-            if (destination) {
-              await purgeVersions(
-                config.store,
-                config.blobs,
-                config.workspaceId,
-                namespace,
-                toPath,
-                { currentBlobUri: destination.uri },
-              );
-            }
             await setFreshVersionedRecord(
               namespace,
               toPath,
@@ -388,11 +374,11 @@ export function createWorkspaceFilesystemOps(
             );
             await purgeVersions(
               config.store,
-              config.blobs,
+              config.assets,
               config.workspaceId,
               namespace,
               fromPath,
-              { currentBlobUri: source.uri },
+              { currentAssetUri: source.assetRef?.uri },
             );
             if (!shouldSuppressWorkspaceChangeEvents(options)) {
               await config.emitChange?.({
@@ -463,7 +449,7 @@ export function createWorkspaceFilesystemOps(
               const sourceContent =
                 sourceInput.kind === "read"
                   ? readResultToWorkspaceContent(sourceInput.result)
-                  : await snapshotContent(sourceInput.record, config.blobs);
+                  : await snapshotContent(sourceInput.record, config.assets);
               const sourceMimeType =
                 sourceInput.kind === "read"
                   ? sourceInput.result.mimeType
@@ -489,7 +475,9 @@ export function createWorkspaceFilesystemOps(
                   ...(sourceMetadata !== undefined
                     ? { metadata: sourceMetadata }
                     : {}),
-                  ...(sourceStatus !== undefined ? { status: sourceStatus } : {}),
+                  ...(sourceStatus !== undefined
+                    ? { status: sourceStatus }
+                    : {}),
                   ...(sourceKind !== undefined ? { kind: sourceKind } : {}),
                   operation: "copy",
                 },
@@ -525,29 +513,20 @@ export function createWorkspaceFilesystemOps(
               existing: destination,
               limits: config.limits,
             });
-            const copied = sourceInput.kind === "read"
-              ? await freshRecordFromReadResult(
-                  namespace,
-                  sourceInput.result,
-                  toPath,
-                  toMount.path,
-                )
-              : await freshRecordFromSource(
-                  namespace,
-                  sourceInput.record,
-                  toPath,
-                  toMount.path,
-                );
-            if (destination) {
-              await purgeVersions(
-                config.store,
-                config.blobs,
-                config.workspaceId,
-                namespace,
-                toPath,
-                { currentBlobUri: destination.uri },
-              );
-            }
+            const copied =
+              sourceInput.kind === "read"
+                ? await freshRecordFromReadResult(
+                    namespace,
+                    sourceInput.result,
+                    toPath,
+                    toMount.path,
+                  )
+                : await freshRecordFromSource(
+                    namespace,
+                    sourceInput.record,
+                    toPath,
+                    toMount.path,
+                  );
             await setFreshVersionedRecord(
               namespace,
               toPath,
@@ -648,7 +627,7 @@ export function createWorkspaceFilesystemOps(
     record: WorkspaceFileRecord,
   ): Promise<string> {
     const current = await recordToReadResult(record, {
-      blobs: config.blobs,
+      assets: config.assets,
       maxInlineBytes: Number.MAX_SAFE_INTEGER,
     });
     if (current.kind !== "text") {
@@ -663,7 +642,7 @@ export function createWorkspaceFilesystemOps(
     record: WorkspaceFileRecord,
   ): Promise<string | undefined> {
     const current = await recordToReadResult(record, {
-      blobs: config.blobs,
+      assets: config.assets,
       maxInlineBytes: Number.MAX_SAFE_INTEGER,
     });
     return current.kind === "text" ? current.content : undefined;
@@ -679,7 +658,9 @@ export function createWorkspaceFilesystemOps(
         : current?.mimeType !== undefined
           ? { mimeType: current.mimeType }
           : {}),
-      ...(current?.metadata !== undefined ? { metadata: current.metadata } : {}),
+      ...(current?.metadata !== undefined
+        ? { metadata: current.metadata }
+        : {}),
       ...(current?.status !== undefined ? { status: current.status } : {}),
       ...(current?.artifactKind !== undefined
         ? { kind: current.artifactKind }
@@ -707,7 +688,7 @@ export function createWorkspaceFilesystemOps(
     path: WorkspacePath,
     mount: WorkspacePath,
   ): Promise<WorkspaceFileRecord> {
-    const content = await snapshotContent(source, config.blobs);
+    const content = await snapshotContent(source, config.assets);
     const analysis = await analyzeContent(content, source.mimeType);
     return createFileRecord({
       workspaceId: config.workspaceId,
@@ -723,7 +704,7 @@ export function createWorkspaceFilesystemOps(
       now: Date.now(),
       version: 1,
       inlineTextBelowBytes: config.inlineTextBelowBytes,
-      blobs: config.blobs,
+      assets: config.assets,
     });
   }
 
@@ -774,7 +755,7 @@ export function createWorkspaceFilesystemOps(
       mount,
       result,
       inlineTextBelowBytes: config.inlineTextBelowBytes,
-      blobs: config.blobs,
+      assets: config.assets,
     });
   }
 
@@ -784,33 +765,20 @@ export function createWorkspaceFilesystemOps(
     record: WorkspaceFileRecord,
     previous: WorkspaceFileRecord | null,
   ): Promise<void> {
-    const key = fileKey(config.workspaceId, namespace, path);
     const setOptions = workspaceSetOptions(config.store, config.retention);
-    await config.store.put(key, record as unknown as JsonObject, setOptions);
-    try {
-      await recordFileVersion({
-        store: config.store,
-        blobs: config.blobs,
-        workspaceId: config.workspaceId,
-        namespace,
-        path,
-        record,
-        operation: "write",
-        versioning: config.versioning,
-        setOptions,
-      });
-    } catch (error) {
-      if (previous) {
-        await config.store.put(
-          key,
-          previous as unknown as JsonObject,
-          setOptions,
-        );
-      } else {
-        await config.store.delete(key);
-      }
-      throw error;
-    }
+    await commitVersionedWorkspaceRecord({
+      store: config.store,
+      assets: config.assets,
+      workspaceId: config.workspaceId,
+      namespace,
+      path,
+      record,
+      previous,
+      operation: "write",
+      versioning: config.versioning,
+      setOptions,
+      resetHistory: true,
+    });
   }
 }
 

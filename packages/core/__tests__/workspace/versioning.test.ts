@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import {
-  inMemoryBlobStore,
+  inMemoryAssetStore,
   inMemoryRecordStore,
   storage,
+  type AssetRef,
+  type AssetStore,
   type RecordStore,
   type JsonObject,
   type RecordWriteOptions,
@@ -61,13 +63,13 @@ describe("workspace versioning & history", () => {
     ).rejects.toThrow(/version 9 .* was not found/i);
   });
 
-  it("versions blob-backed text without clobbering older revisions", async () => {
+  it("versions asset-backed text without clobbering older revisions", async () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
       storage: storage({
         records: inMemoryRecordStore(),
-        blobs: inMemoryBlobStore(),
+        assets: inMemoryAssetStore(),
       }),
       content: { inlineTextBelowBytes: 4 },
     });
@@ -237,9 +239,153 @@ describe("workspace versioning & history", () => {
       kind: "text",
       content: "v1",
     });
+    await expect(ws.history("/workspace/notes.md")).resolves.toMatchObject([
+      { version: 1 },
+    ]);
     expect(
       (await ws.history("/workspace/notes.md")).map((entry) => entry.version),
     ).toEqual([1]);
+  });
+
+  it("deletes newly written assets when version persistence fails on write", async () => {
+    const records = inMemoryRecordStore();
+    const { assets, putRefs, deletedRefs } = recordingAssetStore();
+    const guardedRecords = failVersionWrites(records);
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({ records: guardedRecords.records, assets }),
+      content: { inlineTextBelowBytes: 0 },
+    });
+
+    await ws.write("/workspace/notes.md", "v1", {
+      mimeType: "text/markdown",
+    });
+    const before = await requiredFileUri(ws.stat("/workspace/notes.md"));
+    guardedRecords.enable();
+
+    await expect(
+      ws.write("/workspace/notes.md", "v2", { mimeType: "text/markdown" }),
+    ).rejects.toThrow(/version write failed/);
+
+    await expect(ws.read("/workspace/notes.md")).resolves.toMatchObject({
+      kind: "text",
+      content: "v1",
+    });
+    await expect(ws.history("/workspace/notes.md")).resolves.toMatchObject([
+      { version: 1 },
+    ]);
+    const newRef = putRefs.at(-1)!;
+    expect(newRef.uri).not.toBe(before);
+    expect(deletedRefs).toContainEqual(newRef);
+    expect(deletedRefs).not.toContainEqual({ uri: before });
+    await expect(assets.get(newRef)).rejects.toMatchObject({
+      code: "not_found",
+    });
+  });
+
+  it("deletes newly written assets when version persistence fails on append", async () => {
+    const records = inMemoryRecordStore();
+    const { assets, putRefs, deletedRefs } = recordingAssetStore();
+    const guardedRecords = failVersionWrites(records);
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({ records: guardedRecords.records, assets }),
+      content: { inlineTextBelowBytes: 0 },
+    });
+
+    await ws.write("/workspace/notes.md", "v1", {
+      mimeType: "text/markdown",
+    });
+    const before = await requiredFileUri(ws.stat("/workspace/notes.md"));
+    guardedRecords.enable();
+
+    await expect(ws.append("/workspace/notes.md", "+v2")).rejects.toThrow(
+      /version write failed/,
+    );
+
+    await expect(ws.read("/workspace/notes.md")).resolves.toMatchObject({
+      kind: "text",
+      content: "v1",
+    });
+    const newRef = putRefs.at(-1)!;
+    expect(newRef.uri).not.toBe(before);
+    expect(deletedRefs).toContainEqual(newRef);
+    expect(deletedRefs).not.toContainEqual({ uri: before });
+    await expect(assets.get(newRef)).rejects.toMatchObject({
+      code: "not_found",
+    });
+  });
+
+  it("deletes newly written assets when version persistence fails on copy", async () => {
+    const records = inMemoryRecordStore();
+    const { assets, putRefs, deletedRefs } = recordingAssetStore();
+    const guardedRecords = failVersionWrites(records);
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({ records: guardedRecords.records, assets }),
+      content: { inlineTextBelowBytes: 0 },
+    });
+
+    await ws.write("/workspace/source.md", "source", {
+      mimeType: "text/markdown",
+    });
+    const before = await requiredFileUri(ws.stat("/workspace/source.md"));
+    guardedRecords.enable();
+
+    await expect(
+      ws.copy("/workspace/source.md", "/workspace/copy.md"),
+    ).rejects.toThrow(/version write failed/);
+
+    await expect(ws.exists("/workspace/copy.md")).resolves.toBe(false);
+    await expect(ws.read("/workspace/source.md")).resolves.toMatchObject({
+      kind: "text",
+      content: "source",
+    });
+    const newRef = putRefs.at(-1)!;
+    expect(newRef.uri).not.toBe(before);
+    expect(deletedRefs).toContainEqual(newRef);
+    expect(deletedRefs).not.toContainEqual({ uri: before });
+    await expect(assets.get(newRef)).rejects.toMatchObject({
+      code: "not_found",
+    });
+  });
+
+  it("deletes newly written assets when version persistence fails on move", async () => {
+    const records = inMemoryRecordStore();
+    const { assets, putRefs, deletedRefs } = recordingAssetStore();
+    const guardedRecords = failVersionWrites(records);
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({ records: guardedRecords.records, assets }),
+      content: { inlineTextBelowBytes: 0 },
+    });
+
+    await ws.write("/workspace/source.md", "source", {
+      mimeType: "text/markdown",
+    });
+    const before = await requiredFileUri(ws.stat("/workspace/source.md"));
+    guardedRecords.enable();
+
+    await expect(
+      ws.move("/workspace/source.md", "/workspace/moved.md"),
+    ).rejects.toThrow(/version write failed/);
+
+    await expect(ws.exists("/workspace/moved.md")).resolves.toBe(false);
+    await expect(ws.read("/workspace/source.md")).resolves.toMatchObject({
+      kind: "text",
+      content: "source",
+    });
+    const newRef = putRefs.at(-1)!;
+    expect(newRef.uri).not.toBe(before);
+    expect(deletedRefs).toContainEqual(newRef);
+    expect(deletedRefs).not.toContainEqual({ uri: before });
+    await expect(assets.get(newRef)).rejects.toMatchObject({
+      code: "not_found",
+    });
   });
 
   it("purges version history when a file is deleted", async () => {
@@ -256,13 +402,12 @@ describe("workspace versioning & history", () => {
     expect(await ws.history("/workspace/notes.md")).toEqual([]);
   });
 
-  it("preserves blob payloads when deleteBlob is false", async () => {
-    const blobs = inMemoryBlobStore();
-    const deleteBlob = vi.spyOn(blobs, "delete");
+  it("preserves asset payloads when deleteAsset is false", async () => {
+    const { assets, deletedRefs } = recordingAssetStore();
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      storage: storage({ records: inMemoryRecordStore(), blobs }),
+      storage: storage({ records: inMemoryRecordStore(), assets }),
     });
 
     await ws.write("/workspace/file.bin", new Uint8Array([1]), {
@@ -277,24 +422,23 @@ describe("workspace versioning & history", () => {
       throw new Error("expected binary reads");
     }
 
-    await ws.delete("/workspace/file.bin", { deleteBlob: false });
+    await ws.delete("/workspace/file.bin", { deleteAsset: false });
 
-    expect(deleteBlob).not.toHaveBeenCalled();
-    await expect(blobs.get(first.uri)).resolves.toMatchObject({
-      mimeType: "application/octet-stream",
+    expect(deletedRefs).toEqual([]);
+    await expect(assets.get({ uri: first.uri })).resolves.toMatchObject({
+      mediaType: "application/octet-stream",
     });
-    await expect(blobs.get(second.uri)).resolves.toMatchObject({
-      mimeType: "application/octet-stream",
+    await expect(assets.get({ uri: second.uri })).resolves.toMatchObject({
+      mediaType: "application/octet-stream",
     });
   });
 
-  it("deletes each blob-backed version once when a file is deleted", async () => {
-    const blobs = inMemoryBlobStore();
-    const deleteBlob = vi.spyOn(blobs, "delete");
+  it("deletes each asset-backed version once when a file is deleted", async () => {
+    const { assets, deletedRefs } = recordingAssetStore();
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
-      storage: storage({ records: inMemoryRecordStore(), blobs }),
+      storage: storage({ records: inMemoryRecordStore(), assets }),
     });
 
     await ws.write("/workspace/file.bin", new Uint8Array([1]), {
@@ -311,7 +455,7 @@ describe("workspace versioning & history", () => {
 
     await ws.delete("/workspace/file.bin");
 
-    expect(deleteBlob.mock.calls.map(([uri]) => uri).sort()).toEqual(
+    expect(deletedRefs.map((ref) => ref.uri).sort()).toEqual(
       [first.uri, second.uri].sort(),
     );
   });
@@ -396,3 +540,62 @@ describe("workspace versioning & history", () => {
     expect(current).toMatchObject({ kind: "text", content: "first" });
   });
 });
+
+function recordingAssetStore(): {
+  readonly assets: AssetStore;
+  readonly putRefs: readonly AssetRef[];
+  readonly deletedRefs: readonly AssetRef[];
+} {
+  const inner = inMemoryAssetStore();
+  const putRefs: AssetRef[] = [];
+  const deletedRefs: AssetRef[] = [];
+  return {
+    assets: Object.freeze({
+      put: async (asset, options) => {
+        const stored = await inner.put(asset, options);
+        putRefs.push(stored.ref);
+        return stored;
+      },
+      get: inner.get,
+      delete: async (ref) => {
+        deletedRefs.push(ref);
+        await inner.delete(ref);
+      },
+    }),
+    putRefs,
+    deletedRefs,
+  };
+}
+
+function failVersionWrites(records: RecordStore): {
+  readonly records: RecordStore;
+  enable(): void;
+} {
+  let enabled = false;
+  return {
+    records: {
+      ...records,
+      async put(
+        key: string,
+        value: JsonObject,
+        options?: RecordWriteOptions,
+      ): Promise<void> {
+        if (enabled && key.includes(":version:")) {
+          throw new Error("version write failed");
+        }
+        await records.put(key, value, options);
+      },
+    },
+    enable() {
+      enabled = true;
+    },
+  };
+}
+
+async function requiredFileUri(
+  filePromise: Promise<{ readonly uri?: string } | null>,
+): Promise<string> {
+  const file = await filePromise;
+  if (!file?.uri) throw new Error("expected asset-backed file uri");
+  return file.uri;
+}
