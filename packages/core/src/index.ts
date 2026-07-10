@@ -273,6 +273,12 @@ export {
   runWithExecutionContext,
 } from "./runtime";
 export type { ExecutionContext } from "./runtime";
+export { remainingHostDeadlineMs } from "./runtime/api/host-lifecycle";
+export type {
+  CruxContextStorage,
+  CruxHostDeadlineOptions,
+  CruxHostLifecycle,
+} from "./runtime/api/host-lifecycle";
 export {
   flow,
   createFlowId,

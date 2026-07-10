@@ -70,6 +70,31 @@ describe('observe runtime without AsyncLocalStorage', () => {
     expect(transport.records.map((record) => record.type)).toEqual(['run:start', 'span:start', 'span:end', 'run:end'])
   })
 
+  it('requires explicit context after an async fallback boundary', async () => {
+    __setAlsForTesting(null)
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const run = observe.openRun({ name: 'explicit async fallback', rootPrimitive: 'custom.operation' })
+    let captured = undefined
+    await run.withContext(async () => {
+      captured = observe.captureContext()
+      await Promise.resolve()
+      expect(observe.captureContext()).toBeUndefined()
+    })
+    expect(captured).toBeDefined()
+
+    observe.withContext(captured, () => {
+      observe.openSpan({ name: 'explicit child', primitive: 'custom.operation' }).end()
+    })
+    run.end()
+    await observe.flush()
+
+    expect(transport.records.filter((record) => record.type === 'span:start')).toContainEqual(
+      expect.objectContaining({ runId: run.runId, name: 'explicit child' }),
+    )
+  })
+
   it('opens one implicit run for standalone spans without recursive fallback', async () => {
     __setAlsForTesting(null)
     const transport = createInMemoryObservabilityTransport()

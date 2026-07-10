@@ -103,6 +103,7 @@ export {
   createRuntimeWithHostContext,
   runWithRuntimeHost,
 } from './api/host-context'
+export { remainingHostDeadlineMs } from './api/host-lifecycle'
 export { runtimeHostOnlyError } from './api/runtime-definition'
 export type {
   CreateRuntimeOptions,
@@ -117,6 +118,11 @@ export type {
   RuntimeHostBindingOptions,
   RuntimeHostContext,
 } from './api/host-context'
+export type {
+  CruxContextStorage,
+  CruxHostDeadlineOptions,
+  CruxHostLifecycle,
+} from './api/host-lifecycle'
 export type {
   HostBoundRuntimeEngineDefinition,
   InProcessRuntimeEngineDefinition,

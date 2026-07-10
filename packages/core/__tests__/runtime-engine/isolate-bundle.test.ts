@@ -12,6 +12,8 @@ describe('runtime isolate bundle compatibility', () => {
     await writeFile(
       entry,
       [
+        "import '@use-crux/core'",
+        "import '@use-crux/core/observability'",
         "import '@use-crux/core/runtime'",
         "import '@use-crux/convex/runtime'",
         importStatement(repoRoot, 'packages/convex/src/component/runtime/events.ts'),
@@ -61,6 +63,7 @@ function coreSubpath(specifier: string): string {
   if (specifier === '@use-crux/core') return 'packages/core/src/index.ts'
   const subpath = specifier.slice('@use-crux/core/'.length)
   if (subpath === 'runtime') return 'packages/core/src/runtime/public.ts'
+  if (subpath === 'observability') return 'packages/core/src/observability/index.ts'
   if (subpath === 'storage') return 'packages/core/src/storage/index.ts'
   return `packages/core/src/${subpath}.ts`
 }

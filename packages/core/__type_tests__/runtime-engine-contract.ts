@@ -10,6 +10,8 @@ import { expectTypeOf } from 'vitest'
 import type {
   EventCursor,
   FlowId,
+  CruxContextStorage,
+  CruxHostLifecycle,
   HostBoundRuntimeEngineDefinition,
   InMemoryRuntimeStore,
   InProcessRuntimeEngineDefinition,
@@ -33,6 +35,7 @@ import {
   createRuntimeKernel,
   flowEventResumeKey,
   inMemoryRuntimeStore,
+  remainingHostDeadlineMs,
   node,
   runtimeRequiredError,
   runWithRuntimeHost,
@@ -186,6 +189,15 @@ runWithRuntimeHost(
   },
   () => hostBoundRuntime,
 )
+
+declare const lifecycleStorage: CruxContextStorage<{ requestId: string }>
+const lifecycle: CruxHostLifecycle<{ requestId: string }> = {
+  context: lifecycleStorage,
+  defer: (task) => void task,
+  deadline: () => 1_000,
+}
+expectTypeOf(lifecycle.context).toEqualTypeOf<CruxContextStorage<{ requestId: string }> | undefined>()
+expectTypeOf(remainingHostDeadlineMs(lifecycle)).toEqualTypeOf<number | undefined>()
 
 const testRuntime = createTestRuntime({
   targets: [documentedDurableTask],
