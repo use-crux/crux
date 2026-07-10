@@ -20,6 +20,7 @@ import type { Message } from "../generation/messages";
 import type { JsonValue } from "../types/tool";
 import type { ResultStepFacts } from "./result-accumulator";
 import type { AdapterResponse } from "./types";
+import type { RoutingReceipt } from "../routing/receipt";
 
 // ─────────────────────────────────────────────────────────────────
 // Request
@@ -362,6 +363,8 @@ export interface ExecutorStreamMeta extends TraceMeta {
 export interface ExecutorStreamHandle<TRawStream> {
   /** The SDK stream result object, untouched. */
   readonly raw: TRawStream;
+  /** Routing receipt attached by core when a stream used routing wrappers. */
+  readonly routing?: RoutingReceipt;
   /** Resolves with final metadata when the stream finishes. */
   completion: () => Promise<ExecutorStreamMeta | undefined>;
 }

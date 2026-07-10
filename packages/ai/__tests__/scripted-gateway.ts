@@ -24,6 +24,8 @@ export interface ScriptedResult {
 /** A scripted stream: chunks plus the finish event fields. */
 export interface ScriptedStream {
   chunks: string[]
+  firstChunkDelayMs?: number
+  errorAfterChunks?: Error
   finish?: ScriptedResult
 }
 
@@ -100,14 +102,22 @@ export function scriptedGateway(config: ScriptedGatewayConfig = {}): ScriptedGat
     const onFinish = args.onFinish as ((event: unknown) => Promise<void>) | undefined
     // Replay asynchronously, like a real stream.
     void (async () => {
+      if (script.firstChunkDelayMs !== undefined) {
+        await delay(script.firstChunkDelayMs)
+      }
       for (const chunk of script.chunks) {
         await onChunk?.({ chunk: { type: 'text-delta', textDelta: chunk } })
       }
+      if (script.errorAfterChunks) return
       const finish = materialize({ text: script.chunks.join(''), ...script.finish }, kind)
       await onFinish?.(finish)
     })()
     async function* textStream() {
+      if (script.firstChunkDelayMs !== undefined) {
+        await delay(script.firstChunkDelayMs)
+      }
       for (const chunk of script.chunks) yield chunk
+      if (script.errorAfterChunks) throw script.errorAfterChunks
     }
     return { kind: `scripted-${kind}-stream`, textStream: textStream() }
   }
@@ -153,6 +163,10 @@ export function scriptedGateway(config: ScriptedGatewayConfig = {}): ScriptedGat
   }
 
   return { gateway, calls }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
 /** Build an AI-SDK-shaped structured-output failure (what `generateObject` throws). */

@@ -335,7 +335,7 @@ describe("generate — structured output + validation retry", () => {
 });
 
 describe("generate — routing", () => {
-  it("falls back to the next model and records fallback meta", async () => {
+  it("falls back to the next model and records a routing receipt", async () => {
     const scripted = scriptedGateway({
       generateText: [
         Object.assign(new Error("rate limited"), { status: 429 }),
@@ -345,23 +345,201 @@ describe("generate — routing", () => {
     const ai = createCruxAi({ gateway: scripted.gateway });
 
     const result = await ai.generate(textPrompt, {
-      model: fallback(model("primary"), model("backup")),
+      model: fallback([model("primary"), model("backup")]),
       input: { message: "go" },
     });
 
     expect(result.text).toBe("from backup");
     expect(scripted.calls.generateText).toHaveLength(2);
-    const meta = (
-      result as unknown as {
-        _meta: { fallback?: { attempts: number; failedModels: string[] } };
-      }
-    )._meta;
-    expect(meta.fallback?.attempts).toBe(2);
-    expect(meta.fallback?.failedModels).toEqual(["primary"]);
+    expect(result.routing).toMatchObject({
+      model: "backup",
+      trace: [
+        {
+          kind: "fallback",
+          attempts: [
+            { model: "primary", status: "error" },
+            { model: "backup", status: "ok" },
+          ],
+        },
+      ],
+    });
+  });
+});
+
+describe("generateTextFn — routing", () => {
+  it("falls back to the next model and preserves the routing receipt", async () => {
+    const scripted = scriptedGateway({
+      generateText: [
+        Object.assign(new Error("rate limited"), { status: 429 }),
+        { text: "from backup" },
+      ],
+    });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+
+    const result = await ai.generateTextFn({
+      model: fallback([model("primary"), model("backup")]),
+      prompt: "go",
+    });
+
+    expect(result.text).toBe("from backup");
+    expect(scripted.calls.generateText).toHaveLength(2);
+    expect(scripted.calls.generateText.map((args) => (args.model as { modelId?: unknown }).modelId)).toEqual([
+      "primary",
+      "backup",
+    ]);
+    expect(result.routing?.trace).toMatchObject([
+      {
+        kind: "fallback",
+        attempts: [
+          { model: "primary", status: "error" },
+          { model: "backup", status: "ok" },
+        ],
+      },
+    ]);
   });
 });
 
 describe("stream — metrics and completion", () => {
+  it("includes routing receipts on stream completion", async () => {
+    const scripted = scriptedGateway({
+      streamText: [
+        {
+          chunks: ["ok"],
+          finish: {
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          },
+        },
+      ],
+    });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+
+    const result = await ai.stream(textPrompt, {
+      model: fallback([model("primary"), model("backup")]),
+      input: { message: "stream" },
+    });
+    let streamed = "";
+    for await (const delta of result.textStream) streamed += delta;
+    const completion = await result.completion;
+
+    expect(streamed).toBe("ok");
+    expect(completion.routing).toMatchObject({
+      model: "primary",
+      trace: [
+        {
+          kind: "fallback",
+          attempts: [{ model: "primary", status: "ok" }],
+        },
+      ],
+    });
+  });
+
+  it("falls back when a stream misses the first-token deadline", async () => {
+    const scripted = scriptedGateway({
+      streamText: [
+        {
+          chunks: ["late"],
+          firstChunkDelayMs: 30,
+          finish: {
+            usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 },
+          },
+        },
+        {
+          chunks: ["back", "up"],
+          finish: {
+            usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3 },
+          },
+        },
+      ],
+    });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+
+    const result = await ai.stream(textPrompt, {
+      model: fallback([model("primary"), model("backup")]),
+      input: { message: "stream" },
+      timeout: { firstToken: 5 },
+    });
+    const chunks: string[] = [];
+    for await (const delta of result.textStream) chunks.push(delta);
+    const completion = await result.completion;
+
+    expect(chunks).toEqual(["back", "up"]);
+    expect(scripted.calls.streamText.map((args) => (args.model as { modelId?: unknown }).modelId)).toEqual([
+      "primary",
+      "backup",
+    ]);
+    expect(completion.routing).toMatchObject({
+      model: "backup",
+      firstTokenAt: expect.any(Number),
+      trace: [
+        {
+          kind: "fallback",
+          attempts: [
+            { model: "primary", status: "error", errorCategory: "timeout" },
+            { model: "backup", status: "ok" },
+          ],
+        },
+      ],
+    });
+  });
+
+  it("does not fall back after the first stream token reaches the caller", async () => {
+    const scripted = scriptedGateway({
+      streamText: [
+        {
+          chunks: ["first"],
+          errorAfterChunks: Object.assign(new Error("stream broke"), {
+            status: 500,
+          }),
+        },
+        {
+          chunks: ["backup"],
+        },
+      ],
+    });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+
+    const result = await ai.stream(textPrompt, {
+      model: fallback([model("primary"), model("backup")]),
+      input: { message: "stream" },
+      timeout: { firstToken: 50 },
+    });
+    const chunks: string[] = [];
+    let streamError: unknown;
+    try {
+      for await (const delta of result.textStream) chunks.push(delta);
+    } catch (error) {
+      streamError = error;
+    }
+
+    expect(chunks).toEqual(["first"]);
+    expect(scripted.calls.streamText).toHaveLength(1);
+    expect(streamError).toMatchObject({
+      message: "stream broke",
+      routing: {
+        model: "primary",
+        firstTokenAt: expect.any(Number),
+        trace: [
+          {
+            kind: "fallback",
+            midStreamFailure: true,
+            attempts: [{ model: "primary", status: "ok" }],
+          },
+        ],
+      },
+    });
+    await expect(result.completion).rejects.toMatchObject({
+      routing: {
+        firstTokenAt: expect.any(Number),
+        trace: [
+          {
+            kind: "fallback",
+            midStreamFailure: true,
+          },
+        ],
+      },
+    });
+  });
+
   it("returns the canonical stream envelope with raw SDK access", async () => {
     const scripted = scriptedGateway({
       streamText: [
@@ -444,7 +622,7 @@ describe("stream — metrics and completion", () => {
 
     await expect(
       ai.stream(textPrompt, {
-        model: tiers as never,
+        model: tiers as unknown as ReturnType<typeof model>,
         input: { message: "go" },
       }),
     ).rejects.toThrow(/cascade\(\) does not support stream\(\)/);

@@ -5,6 +5,24 @@
  */
 
 import type { CascadeTierDetail } from './cascade'
+import type { AttemptDetail, RoutingReceipt } from './receipt'
+
+/** Thrown when every fallback candidate fails. */
+export class FallbackExhaustedError extends Error {
+  readonly _tag = 'FallbackExhaustedError' as const
+
+  constructor(
+    /** Per-attempt execution details. */
+    readonly attempts: readonly AttemptDetail[],
+    /** Canonical routing receipt for the exhausted fallback. */
+    readonly routing: RoutingReceipt,
+    /** Original provider errors from each failed attempt. */
+    readonly errors: readonly Error[],
+  ) {
+    super(`All ${attempts.length} fallback models failed`)
+    this.name = 'FallbackExhaustedError'
+  }
+}
 
 /**
  * Thrown when all cascade tiers reject the result (including the last tier
@@ -18,29 +36,46 @@ export class CascadeExhaustedError extends Error {
     readonly lastResult: unknown,
     /** Per-tier execution details. */
     readonly tierDetails: CascadeTierDetail[],
+    /** Canonical routing receipt for the exhausted cascade. */
+    readonly routing: RoutingReceipt,
   ) {
     super(`All ${tierDetails.length} cascade tiers were rejected`)
     this.name = 'CascadeExhaustedError'
   }
 }
 
-/**
- * Thrown when classify returns a route key that doesn't exist in routes
- * and no `default` route catches it. (Should not happen if types are correct,
- * but serves as a runtime safety net.)
- */
-export class RouterClassifyError extends Error {
-  readonly _tag = 'RouterClassifyError' as const
+/** Tagged error returned when a generate-only primitive is used while streaming. */
+export interface RoutingStreamError extends Error {
+  readonly _tag: 'RoutingStreamError'
+  /** Routing primitive that cannot serve the current streaming call. */
+  readonly primitive: 'cascade'
+}
 
-  constructor(
-    /** The classification label that wasn't found. */
-    readonly classifiedAs: string,
-    /** The valid route keys. */
-    readonly availableRoutes: string[],
-  ) {
-    super(
-      `Router classify returned "${classifiedAs}" but no matching route found. Available: ${availableRoutes.join(', ')}`,
-    )
-    this.name = 'RouterClassifyError'
-  }
+/**
+ * Create the streaming-mode routing error without introducing a class.
+ *
+ * Cascade needs a complete model result before it can evaluate or escalate, so
+ * it is rejected at resolve time even when nested under router or fallback.
+ */
+export function createRoutingStreamError(
+  primitive: RoutingStreamError['primitive'],
+): RoutingStreamError {
+  const error = new Error(
+    `${primitive}() does not support stream(). Use generate() instead — cascade needs full results for tier evaluation.`,
+  ) as RoutingStreamError
+  error.name = 'RoutingStreamError'
+  Object.defineProperties(error, {
+    _tag: { value: 'RoutingStreamError', enumerable: true },
+    primitive: { value: primitive, enumerable: true },
+  })
+  return error
+}
+
+/** Return true when an unknown error is a routing streaming-mode failure. */
+export function isRoutingStreamError(error: unknown): error is RoutingStreamError {
+  return (
+    error instanceof Error &&
+    '_tag' in error &&
+    (error as { _tag: unknown })._tag === 'RoutingStreamError'
+  )
 }

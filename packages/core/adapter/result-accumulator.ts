@@ -13,6 +13,11 @@ import type { Message } from "../generation/messages";
 import type { TokenUsage, TraceMeta } from "../generation/types";
 import type { StreamHandle } from "./types";
 import type { ApprovalRequestInfo } from "./tool/approval";
+import {
+  attachRoutingToError,
+  markRoutingMidStreamFailure,
+  type RoutingReceipt,
+} from "../routing/receipt";
 
 /** Last provider-call step facts exposed next to accumulated result fields. */
 export interface FinalStepInfo {
@@ -54,6 +59,8 @@ export interface GenerateResult<TRaw, TOutput = unknown> {
   readonly finalStep: FinalStepInfo;
   /** Provider-agnostic Crux message history. */
   readonly messages: Message[];
+  /** Routing decisions for calls that used a routing wrapper. */
+  readonly routing?: RoutingReceipt;
   /** Approval requests awaiting a decision, present only when execution suspended. */
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
   /** Raw provider or SDK response object. */
@@ -106,6 +113,8 @@ export interface ResultEnvelopeBase<TRaw, TOutput = unknown> {
   readonly cost?: TraceMeta["cost"];
   /** Approval requests when execution suspended. */
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
+  /** Routing decisions for calls that used a routing wrapper. */
+  readonly routing?: RoutingReceipt;
 }
 
 /** Create a new result accumulator for one managed call. */
@@ -132,6 +141,7 @@ export function createResultAccumulator() {
         steps: steps.length,
         finalStep,
         messages: base.messages,
+        ...(base.routing !== undefined ? { routing: base.routing } : {}),
         ...(base.pendingApprovals
           ? { pendingApprovals: base.pendingApprovals }
           : {}),
@@ -154,6 +164,7 @@ export function createResultAccumulator() {
         steps: steps.length,
         finalStep,
         messages: base.messages,
+        ...(base.routing !== undefined ? { routing: base.routing } : {}),
         ...(base.pendingApprovals
           ? { pendingApprovals: base.pendingApprovals }
           : {}),
@@ -184,8 +195,9 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
       }
       resolveStream?.();
     } catch (error) {
-      rejectStream?.(error);
-      throw error;
+      const routedError = attachStreamRouting(error, handle.routing);
+      rejectStream?.(routedError);
+      throw routedError;
     }
   }
 
@@ -210,6 +222,7 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
       ...(meta?.pendingApprovals
         ? { pendingApprovals: meta.pendingApprovals }
         : {}),
+      ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
     });
   })();
   void completion.catch(() => undefined);
@@ -219,6 +232,18 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
     raw: handle.raw ?? handle.rawStream,
     completion,
   };
+}
+
+function attachStreamRouting(
+  error: unknown,
+  routing: RoutingReceipt | undefined,
+): unknown {
+  if (routing === undefined) return error;
+  const routed = markRoutingMidStreamFailure(routing);
+  if (error instanceof Error) {
+    return attachRoutingToError(error, routed);
+  }
+  return attachRoutingToError(new Error(String(error)), routed);
 }
 
 interface StreamCompletionMeta<TOutput> extends TraceMeta {

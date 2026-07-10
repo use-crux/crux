@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { IndexPatchFacts } from '../indexer/patches'
@@ -10,8 +11,10 @@ import {
 
 const roots: string[] = []
 
-async function fixtureRoot(): Promise<string> {
-  const root = await mkdtemp(join(process.cwd(), '.tmp-semantic-backend-parity-'))
+async function fixtureRoot(externalRoot = false): Promise<string> {
+  const root = await mkdtemp(
+    join(externalRoot ? tmpdir() : process.cwd(), '.tmp-semantic-backend-parity-'),
+  )
   roots.push(root)
   return root
 }
@@ -63,7 +66,7 @@ describe('semantic backend parity', () => {
 async function writeFixture(
   fixture: SemanticBackendParityFixture,
 ): Promise<{ readonly root: string; readonly files: readonly string[] }> {
-  const root = await fixtureRoot()
+  const root = await fixtureRoot(fixture.externalRoot)
   await writeFile(
     join(root, 'tsconfig.json'),
     JSON.stringify({
@@ -93,6 +96,18 @@ function assertFixtureCoverage(fixture: SemanticBackendParityFixture, facts: Ind
   expect(coverage.relationTypes).toEqual(expect.arrayContaining([...(fixture.expect.relationTypes ?? [])]))
   expect(coverage.sourceRefRoles).toEqual(expect.arrayContaining([...(fixture.expect.sourceRefRoles ?? [])]))
   expect(coverage.lintRuleIds).toEqual(expect.arrayContaining([...(fixture.expect.lintRuleIds ?? [])]))
+  for (const [definitionId, expectedFacts] of Object.entries(fixture.expect.definitionFacts ?? {})) {
+    const definition = (facts.definitions ?? []).find((candidate) => candidate.id === definitionId)
+    expect(definition?.metadata?.facts).toMatchObject(expectedFacts)
+  }
+  for (const [definitionId, absentKeys] of Object.entries(fixture.expect.definitionFactKeysAbsent ?? {})) {
+    const definition = (facts.definitions ?? []).find((candidate) => candidate.id === definitionId)
+    for (const key of absentKeys) expect(definition?.metadata?.facts ?? {}).not.toHaveProperty(key)
+  }
+  for (const [definitionId, profile] of Object.entries(fixture.expect.definitionProfiles ?? {})) {
+    const definition = (facts.definitions ?? []).find((candidate) => candidate.id === definitionId)
+    expect(definition?.metadata?.profile).toEqual(profile)
+  }
 }
 
 function semanticFactCoverage(facts: IndexPatchFacts): {

@@ -1,0 +1,38 @@
+---
+title: Routing Receipts
+description: Inspect the concrete model and every routing decision for a call.
+---
+
+A routed call produces one append-only `RoutingReceipt`.
+
+```ts
+interface RoutingReceipt {
+  model: string;
+  cost: number | undefined;
+  firstTokenAt?: number;
+  trace: RoutingStep[];
+}
+```
+
+`model` is always the final concrete provider model id. `trace` is ordered from outermost decision to nested decision. `firstTokenAt` is present for streams and records elapsed milliseconds from routed stream hand-off to the first emitted token.
+
+```ts
+const result = await generate(prompt, {
+  model: productionModel,
+  input,
+  routing,
+});
+
+console.log(result.routing?.model);
+console.log(result.routing?.trace);
+```
+
+Receipts are exposed on:
+
+- `result.routing` for `generate()`
+- `(await streamResult.completion).routing` for `stream()`
+- `FallbackExhaustedError.routing`
+- `CascadeExhaustedError.routing`
+- stream completion errors after mid-stream failure
+
+The outer observability artifact kind is `routing.report`. Its preview is exactly the same receipt object exposed to callers: the receipt itself has no `kind` property. Devtools shows TTFT, bounded attempt error text, and cascade evaluator note/budget from this shared shape.

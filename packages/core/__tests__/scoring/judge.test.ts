@@ -23,7 +23,7 @@ describe('judge', () => {
     expect(judge.id).toBe('test-judge')
   })
 
-    it('score() returns JudgeResult with metricId', async () => {
+  it('score() returns JudgeResult with metricId', async () => {
     const judge = createJudge({
       id: 'relevance',
       criteria: 'Is the output relevant?',
@@ -36,6 +36,24 @@ describe('judge', () => {
     expect(result.score).toBe(4)
     expect(result.reasoning).toBe('Relevant response')
     expect(result.metricId).toBe('relevance')
+  })
+
+    it('score() exposes routed judge cost for cascade report accounting', async () => {
+    const generate: GenerateObjectFn = async () => ({
+      object: { reasoning: 'Costed response', score: 4 },
+      routing: { model: 'judge-model', cost: 0.007, trace: [] },
+    })
+    const judge = createJudge({
+      id: 'costed',
+      criteria: 'Is the output relevant?',
+      scale: { min: 1, max: 5 },
+      generate,
+      model: 'judge-model',
+    })
+
+    const result = await judge.score({ input: 'question', output: 'answer' })
+
+    expect(result.cost).toBe(0.007)
   })
 
     it('clamps score to scale range (above max)', async () => {

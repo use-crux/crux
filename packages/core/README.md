@@ -557,10 +557,29 @@ data-access facts preserve exact operations such as `grep`, `history`, `diff`,
 | Retrieval          | Indexers, corpora, retrievers, rerankers, grounding, citations, and custom RAG pipelines.                                            |
 | Tools              | Prompt tools, context tools, middleware, approval flows, and audit events.                                                           |
 | Safety             | Guardrails for input/output filtering plus constraints for semantic output validation and retry.                                     |
-| Routing and cost   | Model routers, fallback, semantic cache, pricing tables, budgets, and cost spans.                                                    |
+| Routing and cost   | Model routers, deterministic splits, retries, fallback, cascade escalation, semantic cache, pricing tables, budgets, and cost spans. |
 | Evaluation         | Quality suites, prompt tests, judges, variants, cassettes, baselines, and CI-friendly runs.                                          |
 | Agents and flows   | Agents, pipelines, parallel runs, consensus, swarms, blackboards, handoffs, delegates, suspendable flows, plans, and tasks.          |
 | Observability      | Trace records, local devtools, subscribers, diagnostics channel export, source catalog, and OpenTelemetry export.                    |
+
+### Routing
+
+`@use-crux/core/routing` provides five inert model wrappers that managed
+adapter execution resolves before any provider call:
+
+- `router()` classifies `{ input, context }` into a named route.
+- `split()` deterministically assigns weighted canary or experiment buckets.
+- `retry()` retries one child model on retryable failures.
+- `fallback([models])` tries ordered alternatives for outages, timeouts, or
+  invalid responses.
+- `cascade()` escalates across quality tiers with latency and cost budgets.
+
+Routed generate results and stream completions expose `result.routing`, a
+canonical receipt `{ model, cost, firstTokenAt?, trace }` whose `model` is the
+concrete model that served the call. `firstTokenAt` is the elapsed milliseconds
+to the first emitted stream token. `FallbackExhaustedError` and
+`CascadeExhaustedError` also carry `.routing`, and stream failures after token 1
+mark the fallback step with `midStreamFailure`.
 
 ### Tool Merge Policy
 
@@ -774,10 +793,13 @@ const sendReminder = durableTask("send-reminder", {
   },
 });
 
-const onboarding = flow("onboarding", async (scope, input: { userId: string }) => {
-  await scope.after(sendReminder, "2d", { userId: input.userId });
-  await scope.suspend("approval");
-});
+const onboarding = flow(
+  "onboarding",
+  async (scope, input: { userId: string }) => {
+    await scope.after(sendReminder, "2d", { userId: input.userId });
+    await scope.suspend("approval");
+  },
+);
 
 const rt = createTestRuntime({ targets: [onboarding, sendReminder] });
 await onboarding.run({ userId: "user_1" });

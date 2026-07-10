@@ -13,7 +13,10 @@ import type { z } from "zod";
 import type { MiddlewareResult } from "../../runtime/types";
 import { createSafety } from "../../safety/session";
 import { orchestrateStream } from "../../generation/orchestrate";
-import { createBudgetSignal } from "../../generation/timeout";
+import {
+  composeAbortSignals,
+  createBudgetSignal,
+} from "../../generation/timeout";
 import { withDefaultResolverPorts } from "../../resolver/ports";
 import type {
   ExecutorRequest,
@@ -121,7 +124,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     activeTools: args.activeTools,
     maxSteps: args.maxSteps ?? resolved.settings.maxSteps ?? DEFAULT_MAX_STEPS,
     observer: args.observer,
-    abortSignal: stepBudget.signal,
+    abortSignal: composeAbortSignals(args.signal, stepBudget.signal),
     extra: args.extra,
     diagnostics,
     ...(safety.enabled && !resolved.schema
@@ -138,7 +141,8 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     >(
       {
         promptId: prompt.id,
-        promptConfig: prompt.config ?? ({} as NonNullable<typeof prompt.config>),
+        promptConfig:
+          prompt.config ?? ({} as NonNullable<typeof prompt.config>),
         preparedArgs: {
           model: modelInfo.modelId,
           system: resolved.system,
@@ -163,7 +167,8 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
                 text?: string;
                 object?: unknown;
                 meta?: Record<string, unknown>;
-              }) => dialect.replayStream!(cached) as unknown as MiddlewareResult,
+              }) =>
+                dialect.replayStream!(cached) as unknown as MiddlewareResult,
             }
           : {}),
       },

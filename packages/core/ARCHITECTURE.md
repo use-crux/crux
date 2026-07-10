@@ -127,7 +127,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   └── types.ts        Runtime middleware contracts (PromptMiddleware, PromptMiddlewareArgs, MiddlewareResult)
 ├── generation/         Provider-neutral generation lifecycle policy
 │   ├── index.ts        Curated barrel: messages, fallback, retry, validation-retry, JSON repair + @internal orchestration
-│   ├── orchestrate.ts  Shared adapter orchestration (generic OrchestrationSpec<T>) split across observability/result-meta/fallback-loop/timeout/stream-interception concern files
+│   ├── orchestrate.ts  Shared adapter orchestration (generic OrchestrationSpec<T>) split across observability/result-meta/timeout/stream-interception concern files
 │   ├── fallback.ts / retry.ts / validation-retry.ts   fallback policy, retry-with-backoff, validation-feedback retry types
 │   ├── repair-json.ts  repairJsonText() — zero-cost JSON text repair (markdown fences, trailing commas, bracket extraction)
 │   ├── messages.ts     canonical Message type + helpers
@@ -162,11 +162,16 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── devtools.ts     withDevtools() plugin + enableDevtools() — installs the canonical observability transport
 │   └── fixtures/       Shared TS/Go contract fixtures
 ├── routing/
-│   ├── index.ts        Barrel: router(), cascade(), resolveModel(), error types
-│   ├── router.ts       router() — classifier-based model selection with .select()/.with()
+│   ├── index.ts        Barrel: router(), split(), retry(), cascade(), fallback(), resolveModel(), receipt helpers, and error types
+│   ├── router.ts       router() — classifier-based route selection with typed RouteArgs context
+│   ├── split.ts        split() — deterministic weighted canary/experiment routing
+│   ├── retry.ts        retry() — retry one child model before surfacing a qualifying failure
 │   ├── cascade.ts      cascade() — sequential quality escalation with budget enforcement
-│   ├── resolve.ts      resolveModel() — unwraps router/cascade/fallback _tag wrappers
-│   └── errors.ts       CascadeExhaustedError, RouterClassifyError
+│   ├── resolve.ts      resolveModel() — unwraps routing _tag wrappers through the adapter tryModel callback
+│   ├── resolve-fallback.ts / resolve-retry.ts / resolve-split.ts   Specialized attempt loops behind resolveModel()
+│   ├── receipt.ts / observability.ts   Canonical RoutingReceipt construction and routing span/report emission
+│   ├── first-token.ts  Buffered first-token gate for fallback-eligible stream startup
+│   └── errors.ts       FallbackExhaustedError, CascadeExhaustedError, and routing resolution errors
 ├── quality/
 │   ├── index.ts        Curated @use-crux/core/quality surface: evaluate(), target.*, scorers.*, dataset(), cassette() + types
 │   ├── evaluate.ts     evaluate() — typed Evaluation construction (two overloads, explicit Project Index coverage targets, frozen handle with .manifest/.run())
@@ -746,11 +751,11 @@ All global hooks live in the `CruxHooks` object (`runtime/runtime.ts`). Use `set
 
 The plugin system enables composable hook installation. Three key functions:
 
-| Function                             | Purpose                                                                                                               |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
-| `mergeHooks(base, patch)`          | Compose two hook states: fan-out for hooks, layered chaining for middleware, last-write-wins for observability transport |
-| `applyPlugins(plugins, initial)`     | Process plugins in order, each seeing cumulative state. Returns merged hooks + dispose                                  |
-| `withDevtools()` / `withTelemetry()` | Built-in plugins returning `CruxPluginResult`                                                                         |
+| Function                             | Purpose                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `mergeHooks(base, patch)`            | Compose two hook states: fan-out for hooks, layered chaining for middleware, last-write-wins for observability transport |
+| `applyPlugins(plugins, initial)`     | Process plugins in order, each seeing cumulative state. Returns merged hooks + dispose                                   |
+| `withDevtools()` / `withTelemetry()` | Built-in plugins returning `CruxPluginResult`                                                                            |
 
 **Fan-out semantics**: When two plugins install the same hook (e.g., `tool.call start records`), both handlers are called for every event. Neither can suppress the other.
 
@@ -1467,12 +1472,12 @@ The crux Convex component (`@use-crux/convex/convex.config`) provides persistenc
 
 ## Adapter Pattern
 
-All adapters follow the same structure. Cross-cutting concerns (prompt resolution, middleware, safety, validation retry, tool lifecycle, fallback, hooks, and model-output normalization) are handled by the adapter execution session. Provider packages define `defineSingleTurnProviderBundle()` for raw chat SDKs or `defineProviderRuntime({ ownership: 'loop-owned', loop: { bind } })` for SDK-owned loops. Provider-specific code stays in the runtime spec: request assembly, SDK port binding, transcript conversion/assistant extraction, response metadata normalization, stream delta extraction, settings/schema mapping, and unusual provider dependencies. Headless codecs, `prepare()` handles, and `generate({ transport })` are thin views over those same specs: core-step adapters swap only the provider call port, while the AI SDK adapter swaps its package-local `SdkGateway` seam so `@use-crux/core` remains provider-agnostic.
+All adapters follow the same structure. Cross-cutting concerns (prompt resolution, middleware, safety, validation retry, tool lifecycle, routing, hooks, and model-output normalization) are handled by the adapter execution session. Provider packages define `defineSingleTurnProviderBundle()` for raw chat SDKs or `defineProviderRuntime({ ownership: 'loop-owned', loop: { bind } })` for SDK-owned loops. Provider-specific code stays in the runtime spec: request assembly, SDK port binding, transcript conversion/assistant extraction, response metadata normalization, stream delta extraction, settings/schema mapping, and unusual provider dependencies. Headless codecs, `prepare()` handles, and `generate({ transport })` are thin views over those same specs: core-step adapters swap only the provider call port, while the AI SDK adapter swaps its package-local `SdkGateway` seam so `@use-crux/core` remains provider-agnostic.
 
 ```
 Receive: (prompt, options)
   ↓
-Fallback check: isFallback(model) → executeFallbackLoop() from orchestrate.ts
+Resolve route: resolveModel(model) unwraps router/split/retry/fallback/cascade wrappers
   ↓
 Extract model info (provider, modelId)
   ↓
@@ -1497,7 +1502,7 @@ Adapter execution handles:
   └── Stamp metadata, memory capture, and observability
   ↓
 Return GenerateResult:
-  { text, object?, usage?, cost?, steps, finalStep, messages, pendingApprovals?, raw, _meta }
+  { text, object?, usage?, cost?, steps, finalStep, messages, routing?, pendingApprovals?, raw, _meta }
 ```
 
 ### Adapter Generic Conventions
@@ -1514,10 +1519,9 @@ Each adapter's `generate()` / `stream()` is parameterised as:
 
 Adapter packages share a small set of orchestration helpers that retain their own generic signatures across the adapter boundary:
 
-- `resolveModel<M, R>(model, input, tryModel, extractModelId)` — dispatches router/cascade/raw to a per-adapter `tryModel`. Generic `M` is the adapter's model type, `R` is the result. Router dispatch emits `routing.router`; cascade dispatch emits a parent `routing.cascade` plus child tier spans so the selected route, rejected tiers, budget skips, and provider errors are graph-native. Optional `id` on router/cascade config is emitted as `routingId` so runtime spans can join to index definitions. Cascade metadata and `routing.report` previews include the full configured tier ladder, with attempted accepted/rejected tiers plus skipped/not-reached tiers carrying model ids and optional evaluator note/confidence/budget.
-- `executeFallbackLoop<M, R>(fb, tryModel, extractModelId)` — runs fallback with attempt-level instrumentation; same generic signature. Each attempted model emits `fallback.attempt`, optional fallback `id` is emitted as `routingId`, and transitions between failed and next attempts are connected with `fallback.attempt` edges.
+- `resolveModel<M, R>(model, input, tryModel, extractModelId)` — dispatches raw models and all routing wrappers to a per-adapter `tryModel`. Generic `M` is the adapter's model type, `R` is the result. Router and split dispatch emit `routing.router` / `routing.split`; retry emits `routing.retry` around repeated child attempts; fallback emits `routing.fallback` with per-attempt spans; cascade emits a parent `routing.cascade` plus child tier spans so selected routes, rejected tiers, budget skips, provider errors, and fallbacks are graph-native. Optional stable `id` fields are emitted as `routingId` so runtime spans can join to index definitions.
 
-The indexer treats model-routing definitions as authored architecture, separate from execution observability. It indexes `routing.router` with `routing.router.route` children, `routing.cascade` with ordered `routing.cascade.tier` children, and `routing.fallback` with ordered `routing.fallback.option` children. Static and TypeScript-semantic relations connect those child nodes to index-visible agents, prompts, nested routers, cascades, and fallbacks when the target can be resolved across local bindings, imports, aliases, or barrels. Higher-level primitives can also link to routing policies with edges such as `agent.uses_routing`, `flow.step.uses_routing`, and `composition.uses_routing`. Index lint rules warn on missing stable routing ids, routers without `default`, unresolved routing targets, and non-terminal cascade tiers that accept by default and make later tiers unreachable.
+The indexer treats model-routing definitions as authored architecture, separate from execution observability. It indexes `routing.router` with `routing.router.route` children, `routing.split` with weighted `routing.split.route` children, `routing.retry` with a `routing.retry.target` child, `routing.cascade` with ordered `routing.cascade.tier` children, and `routing.fallback` with ordered `routing.fallback.option` children. Static and TypeScript-semantic relations connect those child nodes to index-visible agents, prompts, nested routers, splits, retries, cascades, and fallbacks when the target can be resolved across local bindings, imports, aliases, barrels, or call-profile objects such as `{ model }`. Semantic evidence from router `classify` and split `seed` `RouteArgs` annotations populates parent `routingContextType` and `routingContextRequired` facts; literal router/split route settings other than `model` populate the child `profile` fact. Child definitions remain first-class while `metadata.indexPresentation` tells web/TUI catalog clients how to fold them under their parent. Higher-level primitives can also link to routing policies with edges such as `agent.uses_routing`, `flow.step.uses_routing`, and `composition.uses_routing`. Index lint rules warn on missing stable routing ids, routers without `default`, unresolved routing targets, and non-terminal cascade tiers that accept by default and make later tiers unreachable.
 
 - `orchestrateGenerate<TArgs extends Record<string, unknown>, TResult>(spec, doGenerate)` and `orchestrateStream<TArgs, TResult>(...)` — wrap adapter-specific `doGenerate` / `doStream` callbacks. `TArgs` is the prepared SDK args object; `TResult` is the SDK result. The shared `MiddlewareResult` interface (`text?`, `object?`, `_meta?`, `[key: string]: unknown`) is the structural contract for middleware-visible result shapes.
 
@@ -1529,13 +1533,13 @@ This keeps adapters type-honest across router/fallback dispatch without resortin
 
 Five functions extracted from adapter duplication, exported as `@internal`. `OrchestrationSpec<TPreparedArgs>` is generic over the prepared args type, enabling typed `generate`/`stream` signatures per adapter:
 
-| Function                | Purpose                                                                                                                              |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `orchestrateGenerate()` | Middleware wrapping, timing, `onGenerate`/`onError` hooks                                                                            |
-| `orchestrateStream()`   | Middleware wrapping, `onError` hook                                                                                                  |
-| `executeFallbackLoop()` | Model fallback with per-attempt timing, error classification, `FallbackAttemptDetail[]` metadata, canonical `fallback.attempt` spans |
-| `wrapStreamIterable()`  | Async iterator interception for progress reporting (OpenAI, Google, Anthropic)                                                       |
-| `withBudget()`          | Structured timeout budget race with `TimeoutError` and optional `AbortSignal`                                                        |
+| Function                | Purpose                                                                                                                                |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `orchestrateGenerate()` | Middleware wrapping, timing, `onGenerate`/`onError` hooks                                                                              |
+| `orchestrateStream()`   | Middleware wrapping, `onError` hook                                                                                                    |
+| `resolveModel()`        | Model routing resolution for router, split, retry, fallback, cascade, and raw models with routing receipts and canonical routing spans |
+| `wrapStreamIterable()`  | Async iterator interception for progress reporting (OpenAI, Google, Anthropic)                                                         |
+| `withBudget()`          | Structured timeout budget race with `TimeoutError` and optional `AbortSignal`                                                          |
 
 ### Pre-built Generate Functions
 
@@ -1647,7 +1651,7 @@ Prompt/context and safety primitives also write the graph contract directly. `pr
 
 Memory primitives write the graph contract from the shared block hook path. `recentMessages`, `workingState`, `episodes`, `facts`, `procedures`, proposal lifecycle operations, `blackboard()`, and custom blocks that use the standard context helpers emit `memory.read` / `memory.write` spans, `memory.snapshot` artifacts, recalled-result `memory.recall` artifacts, write-summary `memory.diff` artifacts, and semantic memory edges. Empty reads keep the `memory.read` span and omit `memory.recall` so clients do not render empty recalled-block cards. The raw namespace is never emitted; traces receive `namespaceHash`.
 
-Retrieval and data-loading primitives write the same graph contract. `retrieval.query`, `retrieval.recipe`, `retrieval.step`, `indexing.pipeline`, `ingest.parse`, and `corpus.sync` spans are emitted at the public API boundaries so standalone calls create implicit runs and calls during prompt/corpus work nest under the active span stack. Detailed payloads stay in canonical artifacts: `retrieval.hits`, `embedding.report`, `indexing.report`, `ingest.report`, `corpus.report`, `cache.report`, `routing.report`, `compaction.report`, `score.report`, `citation.report`, `composition.report`, `handoff.payload`, `delegate.report`, `memory.snapshot`, and `security.report`. Retrieval hits, memory snapshots/recalls/diffs, stream timelines, and raw error artifacts are output-direction payloads for capture policy, so disabling outputs prevents their preview text from reaching devtools, subscribers, transports, or OTel. Routing reports preserve router/cascade/fallback decisions for Run Detail cards; cascade reports include the full ordered ladder, skipped configured tiers, and per-tier evaluator note/confidence/budget when supplied. Production OTel export keeps metadata-only defaults unless the telemetry plugin explicitly opts into GenAI message content with `captureMessageContent`.
+Retrieval and data-loading primitives write the same graph contract. `retrieval.query`, `retrieval.recipe`, `retrieval.step`, `indexing.pipeline`, `ingest.parse`, and `corpus.sync` spans are emitted at the public API boundaries so standalone calls create implicit runs and calls during prompt/corpus work nest under the active span stack. Detailed payloads stay in canonical artifacts: `retrieval.hits`, `embedding.report`, `indexing.report`, `ingest.report`, `corpus.report`, `cache.report`, `routing.report`, `compaction.report`, `score.report`, `citation.report`, `composition.report`, `handoff.payload`, `delegate.report`, `memory.snapshot`, and `security.report`. Retrieval hits, memory snapshots/recalls/diffs, stream timelines, and raw error artifacts are output-direction payloads for capture policy, so disabling outputs prevents their preview text from reaching devtools, subscribers, transports, or OTel. A `routing.report` envelope carries the exact caller-visible receipt `{ model, cost, firstTokenAt?, trace }`; `firstTokenAt` is elapsed stream TTFT milliseconds and the receipt itself never carries an inner artifact `kind`. Routing reports preserve router/cascade/fallback decisions for Run Detail cards; cascade reports include the full ordered ladder, skipped configured tiers, and per-tier evaluator note/confidence/budget when supplied. Production OTel export keeps metadata-only defaults unless the telemetry plugin explicitly opts into GenAI message content with `captureMessageContent`.
 
 Tool primitives write the graph from the shared adapter loop. This keeps user-defined tools, context-injected tools, skill tools, swarm transfer tools, and approved resume executions on one contract: `tool.request` for model intent, `tool.call` for execution, `tool.args` / `tool.result` artifacts for inspectable payloads, and `tool.approval` for gates. Devtools, subscribers, diagnostics-channel listeners, and `@use-crux/otel` all consume those canonical graph records directly.
 

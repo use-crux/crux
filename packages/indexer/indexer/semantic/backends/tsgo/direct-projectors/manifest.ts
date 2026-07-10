@@ -106,6 +106,10 @@ export interface NativeDirectPrimitiveSpec {
   readonly sourceRefs: readonly NativeDirectSourceRefSpec[]
   readonly emitDefinition: 'always' | 'withMetadata'
   readonly dependencies: readonly NativeDirectDependencySpec[]
+  /** Callback property whose `RouteArgs` context must be projected on the parent. */
+  readonly routingContext?: {
+    readonly callbackProperty: 'classify' | 'seed'
+  }
 }
 
 export interface NativeDirectSourceRefSpec {

@@ -238,13 +238,15 @@ type TurnEvidenceRef struct {
 
 // TurnDecisionMetrics carries compact metrics associated with one row.
 type TurnDecisionMetrics struct {
-	Tokens        float64 `json:"tokens,omitempty"`
-	StaticTokens  float64 `json:"staticTokens,omitempty"`
-	DynamicTokens float64 `json:"dynamicTokens,omitempty"`
-	Priority      float64 `json:"priority,omitempty"`
-	SizeBytes     float64 `json:"sizeBytes,omitempty"`
-	DurationMs    float64 `json:"durationMs,omitempty"`
-	CostUSD       float64 `json:"costUsd,omitempty"`
-	Score         float64 `json:"score,omitempty"`
-	Confidence    float64 `json:"confidence,omitempty"`
+	Tokens        float64  `json:"tokens,omitempty"`
+	StaticTokens  float64  `json:"staticTokens,omitempty"`
+	DynamicTokens float64  `json:"dynamicTokens,omitempty"`
+	Priority      float64  `json:"priority,omitempty"`
+	SizeBytes     float64  `json:"sizeBytes,omitempty"`
+	DurationMs    float64  `json:"durationMs,omitempty"`
+	FirstTokenAt  *float64 `json:"firstTokenAt,omitempty"`
+	CostUSD       float64  `json:"costUsd,omitempty"`
+	Budget        *float64 `json:"budget,omitempty"`
+	Score         float64  `json:"score,omitempty"`
+	Confidence    float64  `json:"confidence,omitempty"`
 }

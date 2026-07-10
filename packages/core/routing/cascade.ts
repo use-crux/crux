@@ -5,20 +5,49 @@
  * @module
  */
 
+import type {
+  BoundOf,
+  ComposedCtx,
+  InOf,
+  PromptInputOf,
+  PromptOutputOf,
+  RoutingPhantom,
+} from './types'
+import type { AnyPrompt } from '../prompt'
+
 // ─────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────
 
+/** Cost-bearing score result accepted by cascade evaluator `report()`. */
+export interface CascadeReportResult {
+  /** Normalized judge or scorer value used by the evaluator. */
+  readonly score: number
+  /** Optional cost reported by the judge call. */
+  readonly cost?: number
+  /** Optional routing receipt from a routed judge call. */
+  readonly routing?: { readonly cost: number | undefined }
+}
+
 /** Evaluation context passed to each tier's evaluate function. */
-export interface CascadeTierContext {
+export interface CascadeTierContext<TResult = unknown, TIn = unknown> {
+  /** The prompt output or adapter result that this tier produced. */
+  readonly result: TResult
+  /** Prompt input from the current generation call. */
+  readonly input: TIn
   /** The model ID that produced this result. */
-  model: string
+  readonly model: string
   /** Cost of this tier's generation (undefined if provider doesn't report it). */
-  cost: number | undefined
+  readonly cost: number | undefined
   /** 0-based index of this tier. */
-  tierIndex: number
+  readonly tierIndex: number
   /** Cumulative cost across all tiers so far (including this one). */
-  totalCost: number
+  readonly totalCost: number
+  /**
+   * Await a judge/scorer result and fold its reported cost into cascade
+   * accounting before the evaluator returns.
+   */
+  report: <S extends CascadeReportResult>(score: S | Promise<S>) => Promise<S>
 }
 
 /** Structured evaluation result for a cascade tier. */
@@ -34,10 +63,15 @@ export interface CascadeTierEvaluation {
 
 export type CascadeTierEvaluationResult = boolean | CascadeTierEvaluation
 
+/** Error-like result categories that may escalate a tier instead of throwing. */
+export type CascadeEscalationCategory = 'invalid_response'
+
 /** A single tier in a cascade. */
-export interface CascadeTier<M> {
+export interface CascadeTier<M, TResult = unknown, TIn = unknown> {
   /** The model (or model wrapper like fallback) for this tier. */
   model: M
+  /** Error categories that should reject this tier and continue the cascade. */
+  escalateOn?: readonly CascadeEscalationCategory[]
   /** Optional threshold/budget label to include in observability reports. */
   budget?: number
   /** Optional static note to include in observability reports. */
@@ -47,8 +81,7 @@ export interface CascadeTier<M> {
    * structured result to include confidence/note/budget in observability.
    */
   evaluate?: (
-    result: unknown,
-    context: CascadeTierContext,
+    args: CascadeTierContext<TResult, TIn>,
   ) => CascadeTierEvaluationResult | Promise<CascadeTierEvaluationResult>
 }
 
@@ -61,19 +94,32 @@ export interface CascadeBudget {
 }
 
 /** Configuration for a cascade. */
-export interface CascadeConfig<M> {
+export interface CascadeConfig<M, TResult = unknown, TIn = unknown> {
   /** Stable id used to join authored index definitions with routing spans. */
   id?: string
   /** Human-readable description for index and devtools surfaces. */
   description?: string
+  /** Optional prompt that binds this cascade to one generation surface. */
+  prompt?: AnyPrompt
   /** Tiers to try in order. At least one required. */
-  tiers: [CascadeTier<M>, ...CascadeTier<M>[]]
+  tiers: readonly [CascadeTier<M, TResult, TIn>, ...CascadeTier<M, TResult, TIn>[]]
   /** Optional budget constraints. */
   budget?: CascadeBudget
 }
 
 /** A cascade model wrapper — recognized by adapters via `isCascade()`. */
-export interface CascadeModel<M = unknown> {
+export interface CascadeModel<
+  M = unknown,
+  TBound = BoundOf<M>,
+  TIn = InOf<M>,
+>
+  extends RoutingPhantom<
+    TIn,
+    ComposedCtx<object, M>,
+    false,
+    TBound,
+    never
+  > {
   readonly _tag: 'crux.cascade'
   readonly config: CascadeConfig<M>
 }
@@ -83,19 +129,11 @@ export interface CascadeTierDetail {
   model: string
   durationMs: number
   cost: number | undefined
+  judgeCost?: number
   status: 'accepted' | 'rejected' | 'skipped'
   note?: string
   confidence?: number
   budget?: number
-}
-
-/** Metadata attached to `_meta.cascade` on cascade results. */
-export interface CascadeMeta {
-  tiersAttempted: number
-  totalTiers: number
-  acceptedAtTier: number
-  budgetExceeded: boolean
-  tiers: CascadeTierDetail[]
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -112,8 +150,8 @@ export interface CascadeMeta {
  *
  * const smartCascade = cascade({
  *   tiers: [
- *     { model: haiku, evaluate: (r) => r.object.quality > 0.8 },
- *     { model: sonnet, evaluate: (r) => r.object.quality > 0.6 },
+ *     { model: haiku, evaluate: ({ result }) => result.quality > 0.8 },
+ *     { model: sonnet, evaluate: ({ result }) => result.quality > 0.6 },
  *     { model: opus },
  *   ],
  *   budget: { maxCost: 0.05, maxLatencyMs: 5000 },
@@ -122,10 +160,39 @@ export interface CascadeMeta {
  * generate(prompt, { model: smartCascade, input })
  * ```
  */
-export function cascade<M>(config: CascadeConfig<M>): CascadeModel<M> {
+export function cascade<
+  P extends AnyPrompt,
+  const Ms extends readonly [unknown, ...unknown[]],
+>(config: {
+  readonly id?: string
+  readonly description?: string
+  readonly prompt: P
+  readonly tiers: readonly [
+    CascadeTier<Ms[number], PromptOutputOf<P>, PromptInputOf<P>>,
+    ...CascadeTier<Ms[number], PromptOutputOf<P>, PromptInputOf<P>>[],
+  ]
+  readonly budget?: CascadeBudget
+}): CascadeModel<Ms[number], P, PromptInputOf<P> | InOf<Ms[number]>>
+export function cascade<const Ms extends readonly [unknown, ...unknown[]]>(config: {
+  readonly id?: string
+  readonly description?: string
+  readonly tiers: readonly [
+    CascadeTier<Ms[number], unknown, unknown>,
+    ...CascadeTier<Ms[number], unknown, unknown>[],
+  ]
+  readonly budget?: CascadeBudget
+}): CascadeModel<Ms[number], BoundOf<Ms[number]>, InOf<Ms[number]>>
+export function cascade(config: {
+  readonly id?: string
+  readonly description?: string
+  readonly prompt?: AnyPrompt
+  readonly tiers: readonly [unknown, ...unknown[]]
+  readonly budget?: CascadeBudget
+}): unknown {
   return Object.freeze({
     _tag: 'crux.cascade' as const,
-    config,
+    config: config as CascadeConfig<unknown>,
+    __phantom: undefined as unknown as CascadeModel<unknown, unknown, unknown>['__phantom'],
   })
 }
 

@@ -423,7 +423,9 @@ describe("static extraction engine", () => {
 
       const rustExtracted = await rustExtraction.extractFile(file);
 
-      expect(rustExtracted.definitions.map((definition) => definition.id)).toContain("prompt:writer");
+      expect(
+        rustExtracted.definitions.map((definition) => definition.id),
+      ).toContain("prompt:writer");
       expect(rustExtracted.relations).toEqual([]);
       expect(rustExtracted.diagnostics).toEqual([]);
     },
@@ -462,13 +464,13 @@ describe("static extraction engine", () => {
       const source = routingFixtureSource();
 
       const rustRecord = await createRustOxcStaticSyntaxFrontend({
-        callNames: ["router", "cascade", "fallback"],
+        callNames: ["router", "split", "retry", "cascade", "fallback"],
       }).parseFile({
         root,
         file,
         source,
       });
-      expect(rustRecord.nativeFacts ?? []).toHaveLength(3);
+      expect(rustRecord.nativeFacts ?? []).toHaveLength(5);
       expect(rustRecord.nativeFacts?.map((item) => item.replaces)).toEqual(
         rustRecord.nativeFacts?.map(() => [
           { extension: "@use-crux/indexer/crux-core", extractor: "routing" },
@@ -485,13 +487,48 @@ describe("static extraction engine", () => {
       });
       const nativeOut = await nativeExtraction.extractFile(file);
 
-      expect(nativeOut.definitions.map((definition) => definition.kind)).toEqual(
-        expect.arrayContaining(["routing.router", "routing.cascade", "routing.fallback"]),
+      expect(
+        nativeOut.definitions.map((definition) => definition.kind),
+      ).toEqual(
+        expect.arrayContaining([
+          "routing.router",
+          "routing.cascade",
+          "routing.fallback",
+          "routing.retry",
+          "routing.retry.target",
+          "routing.split",
+          "routing.split.route",
+        ]),
       );
       expect(nativeOut.relations.map((relation) => relation.type)).toEqual(
-        expect.arrayContaining(["router.includes_route", "cascade.includes_tier", "fallback.includes_option"]),
+        expect.arrayContaining([
+          "router.includes_route",
+          "cascade.includes_tier",
+          "fallback.includes_option",
+          "retry.uses_target",
+          "split.includes_route",
+        ]),
       );
-      expect(nativeOut.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      const routerRouteFacts = nativeOut.definitions.find(
+        (definition) => definition.id === "routing.router:quality-router:route:draft",
+      )?.metadata?.facts;
+      expect(
+        routerRouteFacts?.kind === "routing.router.route"
+          ? routerRouteFacts.profile
+          : undefined,
+      ).toEqual({ temperature: 0.2, maxTokens: 1200 });
+      const splitRouteFacts = nativeOut.definitions.find(
+        (definition) => definition.id === "routing.split:canary-split:route:stable",
+      )?.metadata?.facts;
+      expect(
+        splitRouteFacts?.kind === "routing.split.route"
+          ? splitRouteFacts.profile
+          : undefined,
+      ).toEqual({ weight: 95, temperature: 0.1 });
+      expect(
+        nativeOut.diagnostics.map((diagnostic) => diagnostic.code),
+      ).toEqual([
+        "relation.unresolved_reference",
         "relation.unresolved_reference",
         "relation.unresolved_reference",
         "relation.unresolved_reference",
@@ -506,7 +543,7 @@ describe("static extraction engine", () => {
       const root = "/fixture";
       const file = "/fixture/src/routing.ts";
       const source = routingFixtureSource();
-      const callNames = ["router", "cascade", "fallback"];
+      const callNames = ["router", "split", "retry", "cascade", "fallback"];
       const prunedRecord = await createRustOxcStaticSyntaxFrontend({
         callNames,
         pruneNativeFactCallNames: callNames,
@@ -515,7 +552,7 @@ describe("static extraction engine", () => {
         callNames,
       }).parseFile({ root, file, source });
 
-      expect(prunedRecord.nativeFacts ?? []).toHaveLength(3);
+      expect(prunedRecord.nativeFacts ?? []).toHaveLength(5);
       expect(prunedRecord.matches).toHaveLength(fullRecord.matches.length);
       for (const match of prunedRecord.matches) {
         if (match.kind !== "call") continue;
@@ -773,23 +810,30 @@ function nativePromptFactsForTest(
 
 function routingFixtureSource(): string {
   return [
-    "import { cascade, fallback, router } from '@use-crux/core/routing'",
+    "import { cascade, fallback, retry, router, split } from '@use-crux/core/routing'",
     "",
     'const classify = () => "draft"',
+    'const seed = () => "session-1"',
     "const evaluate = () => ({ accept: true })",
     "const writerAgent = {}",
     "const backupPrompt = {}",
     "",
-    'export const resilientWriter = fallback(writerAgent, backupPrompt, { id: "resilient-writer" })',
+    'export const retriedWriter = retry(writerAgent, { id: "retried-writer", attempts: 2 })',
+    'export const resilientWriter = fallback([retriedWriter, backupPrompt], { id: "resilient-writer" })',
+    "export const canarySplit = split({",
+    '  id: "canary-split",',
+    "  seed,",
+    "  routes: { stable: { model: writerAgent, weight: 95, temperature: 0.1 }, canary: { model: backupPrompt, weight: 5 } },",
+    "})",
     "export const qualityCascade = cascade({",
     '  id: "quality-cascade",',
     "  budget: { max: 100 },",
-    '  tiers: [{ model: writerAgent, budget: 25, note: "fast", evaluate }],',
+    '  tiers: [{ model: canarySplit, budget: 25, note: "fast", evaluate }],',
     "})",
     "export const qualityRouter = router({",
     '  id: "quality-router",',
     "  classify,",
-    "  routes: { draft: qualityCascade, default: resilientWriter },",
+    "  routes: { draft: { model: qualityCascade, temperature: 0.2, maxTokens: 1200 }, default: resilientWriter },",
     "})",
   ].join("\n");
 }

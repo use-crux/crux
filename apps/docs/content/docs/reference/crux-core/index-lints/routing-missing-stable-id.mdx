@@ -4,7 +4,7 @@ title: routing.missing_stable_id
 
 ## What it checks
 
-Crux emits this finding when a `router()`, `cascade()`, or `fallback()` definition is authored without a stable `id`.
+Crux emits this finding when a `router()`, `split()`, `retry()`, `cascade()`, or `fallback()` definition is authored without a stable `id`.
 
 ## Why it matters
 
@@ -16,13 +16,22 @@ Add an `id` to the routing primitive options.
 
 ```ts
 export const modelRouter = router({
-  id: 'model-router',
+  id: "model-router",
   classify,
   routes: {
     cheap,
     default: strong,
   },
-})
+});
+```
+
+For `retry()`, put the id in the second argument:
+
+```ts
+export const retriedModel = retry(primaryModel, {
+  id: "primary-retry",
+  attempts: 2,
+});
 ```
 
 ## When to suppress
@@ -31,7 +40,7 @@ Suppress only for short-lived experiments or inline routing choices where you do
 
 ```ts
 // crux-lint-disable-next-line routing.missing_stable_id -- temporary local experiment
-const model = router({ classify, routes })
+const model = router({ classify, routes });
 ```
 
 ## Rule metadata

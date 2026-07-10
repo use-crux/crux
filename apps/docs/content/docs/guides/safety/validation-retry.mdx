@@ -7,10 +7,10 @@ When using structured output (Zod schemas), models sometimes return invalid JSON
 
 ```ts
 const result = await adapter.generate(prompt, {
-  model: 'claude-sonnet-4-20250514',
-  input: { query: 'Extract user info from this text' },
+  model: "claude-sonnet-4-20250514",
+  input: { query: "Extract user info from this text" },
   validationRetry: { maxRetries: 3 },
-})
+});
 ```
 
 If the model returns `{"name": "Alice", "age": "thirty"}` but the schema expects `age: z.number()`, Crux injects the Zod error as a corrective message and the model retries with `{"name": "Alice", "age": 30}`.
@@ -31,7 +31,7 @@ Validation retry follows a 3-tier approach, from cheapest to most expensive:
 
 `repairJsonText()` fixes common LLM output issues without making another API call:
 
-- Strips markdown code fences (`` ```json ... ``` ``)
+- Strips markdown code fences (` ```json ... ``` `)
 - Removes preamble/postamble text around JSON
 - Fixes trailing commas (`{"a": 1,}` becomes `{"a": 1}`)
 - Extracts JSON from surrounding text by bracket matching
@@ -50,11 +50,11 @@ Validation retries share the `maxSteps` budget with tool-call iterations. This p
 
 ```ts
 await adapter.generate(prompt, {
-  maxSteps: 5,           // total budget: tools + validation retries
+  maxSteps: 5, // total budget: tools + validation retries
   validationRetry: {
-    maxRetries: 3,       // up to 3 of those 5 steps can be validation retries
+    maxRetries: 3, // up to 3 of those 5 steps can be validation retries
   },
-})
+});
 ```
 
 If `maxSteps` is exhausted before `maxRetries`, the retry stops early.
@@ -70,13 +70,13 @@ When you need to inspect or redact corrective feedback itself, attach a
 guardrail to `boundary.validation.feedback()`:
 
 ```ts
-import { boundary, guardrail } from '@use-crux/core/safety'
+import { boundary, guardrail } from "@use-crux/core/safety";
 
 const redactFeedback = guardrail({
-  id: 'validation-feedback-pii',
+  id: "validation-feedback-pii",
   on: boundary.validation.feedback(),
-  run: guardrail.pii({ strategy: 'mask' }),
-})
+  run: guardrail.pii({ strategy: "mask" }),
+});
 ```
 
 ## Error handling
@@ -84,38 +84,43 @@ const redactFeedback = guardrail({
 When all retries are exhausted, `ValidationExhaustedError` is thrown with context for debugging:
 
 ```ts
-import { ValidationExhaustedError } from '@use-crux/core'
+import { ValidationExhaustedError } from "@use-crux/core";
 
 try {
-  await adapter.generate(prompt, opts)
+  await adapter.generate(prompt, opts);
 } catch (err) {
   if (err instanceof ValidationExhaustedError) {
-    err.lastRawOutput  // the model's last invalid output
-    err.zodErrors       // ZodError with validation details
-    err.attempts        // how many retries were attempted
-    err.maxAttempts     // configured maxRetries
-    err.promptId        // which prompt failed
+    err.lastRawOutput; // the model's last invalid output
+    err.zodErrors; // ZodError with validation details
+    err.attempts; // how many retries were attempted
+    err.maxAttempts; // configured maxRetries
+    err.promptId; // which prompt failed
   }
 }
 ```
 
 ## Fallback composition
 
-`ValidationExhaustedError` automatically triggers model fallback when using `fallback()`:
+Use `fallback()` when another model should be tried after a qualifying provider
+failure or a successful-but-unusable result:
 
 ```ts
-import { fallback } from '@use-crux/core'
+import { fallback } from "@use-crux/core";
 
-const model = fallback(weakModel, strongModel)
+const model = fallback([weakModel, strongModel], {
+  on: ["rate_limit", "timeout", "server_error"],
+  when: (result) => isUnusableExtraction(result),
+});
 
 await adapter.generate(prompt, {
   model,
   validationRetry: { maxRetries: 2 },
-})
-// If weakModel exhausts retries → automatically tries strongModel
+});
 ```
 
-This works because `classifyError()` recognizes `ValidationExhaustedError` as the `'validation_exhausted'` category.
+Validation retry still owns schema repair for each model attempt. The `when`
+predicate is for domain-specific invalid responses that parsed successfully but
+should be retried on the next fallback candidate.
 
 ## Multi-agent composition
 
@@ -127,25 +132,25 @@ await pipeline({
   context: { userId },
   validationRetry: { maxRetries: 3 },
   steps: [
-    { name: 'extract', agent: extractorAgent },
-    { name: 'classify', agent: classifierAgent },
+    { name: "extract", agent: extractorAgent },
+    { name: "classify", agent: classifierAgent },
   ],
-})
+});
 
 // Parallel — all agents get validation retry
 await parallel({
   context: { document },
   agents: { entities: entityAgent, sentiment: sentimentAgent },
   validationRetry: { maxRetries: 2 },
-})
+});
 
 // Swarm — each agent turn gets validation retry
 await swarm({
   agents: { router: routerAgent, writer: writerAgent },
-  startAgent: 'router',
+  startAgent: "router",
   input: query,
   validationRetry: { maxRetries: 3 },
-})
+});
 ```
 
 ### Flows
@@ -153,18 +158,21 @@ await swarm({
 In flows, you call `generate()` directly inside `flow.step()` — pass `validationRetry` to your generate call:
 
 ```ts
-const extractData = flow('extract data', async (flow, input: { goal: string }) => {
-  const data = await flow.step('extract', async () => {
-    return adapter.generate(extractPrompt, {
-      model: 'claude-sonnet-4-20250514',
-      input: { goal: input.goal, text: document },
-      validationRetry: { maxRetries: 3 },
-    })
-  })
-  return data
-})
+const extractData = flow(
+  "extract data",
+  async (flow, input: { goal: string }) => {
+    const data = await flow.step("extract", async () => {
+      return adapter.generate(extractPrompt, {
+        model: "claude-sonnet-4-20250514",
+        input: { goal: input.goal, text: document },
+        validationRetry: { maxRetries: 3 },
+      });
+    });
+    return data;
+  },
+);
 
-const result = await extractData.run({ goal: 'Extract data' })
+const result = await extractData.run({ goal: "Extract data" });
 ```
 
 Flow steps also support `step.retry` for transient failures (network errors, rate limits). Both layers compose naturally — `step.retry` wraps the entire step, `validationRetry` operates inside `generate()`.
@@ -188,6 +196,7 @@ validationRetry: {
 ```
 
 Retry events are also emitted to:
+
 - **Devtools** — visible in the trace timeline as retry attempt/exhaustion events
 - **OpenTelemetry** — spans with `crux.validation.*` attributes via `@use-crux/otel`
 
@@ -195,12 +204,12 @@ Retry events are also emitted to:
 
 `repairJsonText()` is exported for standalone use in your own pipelines:
 
-```ts
-import { repairJsonText } from '@use-crux/core'
+````ts
+import { repairJsonText } from "@use-crux/core";
 
-const fixed = repairJsonText('```json\n{"name": "Alice"}\n```')
+const fixed = repairJsonText('```json\n{"name": "Alice"}\n```');
 // returns: '{"name": "Alice"}'
 
-const broken = repairJsonText('not json at all')
+const broken = repairJsonText("not json at all");
 // returns: null
-```
+````

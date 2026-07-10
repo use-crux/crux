@@ -186,7 +186,7 @@ func TestProjectRunDetailAddsRuntimeDecisionEvidenceToTurnDecisionReport(t *test
 				CreatedAt:   started.Add(5 * time.Millisecond).Format(time.RFC3339Nano),
 				ContentType: "application/json",
 				Encoding:    "json",
-				Preview:     json.RawMessage(`{"kind":"routing.report","routingKind":"router","chosen":"openai/gpt-5-mini"}`),
+				Preview:     json.RawMessage(`{"model":"openai/gpt-5-mini","trace":[{"kind":"router","classifiedAs":"fast","route":"fast","usedDefaultRoute":false,"forced":false}]}`),
 			},
 			{
 				ArtifactID:  "artifact_security",
@@ -212,12 +212,111 @@ func TestProjectRunDetailAddsRuntimeDecisionEvidenceToTurnDecisionReport(t *test
 	}
 	report := generation.DecisionReport
 
-	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:span_router", "routing.router.selected", "observed")
+	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:artifact_routing:0", "routing.router.selected", "observed")
 	assertDecisionReason(t, report.Decisions, "decision:span_generation:guardrail:span_guardrail", "guardrail.passed", "observed")
 	assertDecisionReason(t, report.Decisions, "decision:span_generation:security:span_security", "security.warned", "observed")
-	if !hasDecisionTab(report.Decisions, "decision:span_generation:routing:span_router", "Routing") {
+	if !hasDecisionTab(report.Decisions, "decision:span_generation:routing:artifact_routing:0", "Routing") {
 		t.Fatalf("routing decision missing Routing tab target: %#v", report.Decisions)
 	}
+}
+
+func TestProjectRunDetailProjectsRoutingReceiptTraceIntoTurnDecisionReport(t *testing.T) {
+	started := time.Date(2026, 6, 30, 10, 0, 0, 0, time.UTC)
+	runID := "run_routing_receipt"
+	traceID := "trace_routing_receipt"
+	graph := Graph{
+		Run: RunSummary{
+			RunID:         runID,
+			TraceID:       traceID,
+			Name:          "routed receipt",
+			RootPrimitive: "routing.fallback",
+			Status:        "ok",
+			StartedAt:     started.Format(time.RFC3339Nano),
+			EndedAt:       started.Add(time.Second).Format(time.RFC3339Nano),
+			DurationMs:    1000,
+		},
+		Spans: []SpanSummary{
+			{
+				RunID:      runID,
+				TraceID:    traceID,
+				SpanID:     "span_route",
+				Family:     "routing",
+				Primitive:  "routing.fallback",
+				Name:       "fallback.resolve",
+				Status:     "ok",
+				StartedAt:  started.Format(time.RFC3339Nano),
+				EndedAt:    started.Add(100 * time.Millisecond).Format(time.RFC3339Nano),
+				DurationMs: 100,
+			},
+			{
+				RunID:        runID,
+				TraceID:      traceID,
+				SpanID:       "span_generation",
+				ParentSpanID: "span_route",
+				Family:       "generation",
+				Primitive:    "generation.stream",
+				Name:         "stream answer",
+				Status:       "ok",
+				StartedAt:    started.Add(120 * time.Millisecond).Format(time.RFC3339Nano),
+				EndedAt:      started.Add(time.Second).Format(time.RFC3339Nano),
+				DurationMs:   880,
+				Model:        "openai/gpt-5",
+				Provider:     "openai",
+			},
+		},
+		Artifacts: []ArtifactSummary{{
+			ArtifactID:  "artifact_routing_receipt",
+			RunID:       runID,
+			TraceID:     traceID,
+			SpanID:      "span_route",
+			Kind:        "routing.report",
+			CreatedAt:   started.Add(90 * time.Millisecond).Format(time.RFC3339Nano),
+			ContentType: "application/json",
+			Encoding:    "json",
+			Preview: json.RawMessage(`{
+				"model":"openai/gpt-5",
+				"cost":0.42,
+				"trace":[
+					{"kind":"router","id":"intent","classifiedAs":"unknown","route":"default","usedDefaultRoute":true,"forced":false},
+					{"kind":"split","id":"canary","route":"beta","seed":"tenant-42"},
+					{"kind":"retry","id":"fast-retry","model":"fast-model","attempts":[
+						{"model":"fast-model","status":"error","durationMs":25,"errorCategory":"timeout","error":"timed out","delayMs":50},
+						{"model":"fast-model","status":"ok","durationMs":30,"cost":0.03}
+					]},
+					{"kind":"fallback","id":"recovery","midStreamFailure":true,"attempts":[
+						{"model":"fast-model","status":"error","durationMs":35,"errorCategory":"provider_error"},
+						{"model":"openai/gpt-5","status":"ok","durationMs":80,"cost":0.2}
+					]},
+					{"kind":"cascade","id":"quality","acceptedAtTier":1,"budgetExceeded":true,"tiers":[
+						{"model":"cheap","status":"rejected","durationMs":20,"cost":0.01,"confidence":0.62},
+						{"model":"openai/gpt-5","status":"accepted","durationMs":60,"cost":0.2,"judgeCost":0.04,"confidence":0.93}
+					]}
+				]
+			}`),
+		}},
+	}
+
+	detail := ProjectRunDetail(graph, ProjectionOptions{Now: started.Add(2 * time.Second)})
+	generation := findRunDetailNode(&detail.Root, "span_generation")
+	if generation == nil || generation.DecisionReport == nil {
+		t.Fatalf("generation = %#v, want decision report", generation)
+	}
+	report := generation.DecisionReport
+
+	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:0", "routing.router.default_route", "observed")
+	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:1", "routing.split.selected", "observed")
+	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:2:0", "routing.retry.attempt_failed", "observed")
+	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:2:1", "routing.retry.attempt_succeeded", "observed")
+	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:3:0", "routing.fallback.attempt_failed", "observed")
+	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:3:1", "routing.fallback.attempt_succeeded", "observed")
+	assertDecisionReason(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:4", "routing.cascade.budget_exceeded", "observed")
+	assertDecisionOutcome(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:1", "beta")
+	assertDecisionOutcome(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:2:0", "attempt 1 error: timeout")
+	assertDecisionOutcome(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:3:1", "attempt 2 ok: openai/gpt-5")
+	assertDecisionOutcome(t, report.Decisions, "decision:span_generation:routing:artifact_routing_receipt:4", "accepted tier 2")
+	assertReportChip(t, report, "routing.default_route", "warn")
+	assertReportChip(t, report, "routing.mid_stream_failure", "warn")
+	assertReportChip(t, report, "routing.budget_exceeded", "warn")
 }
 
 func decisionReportContextArtifact(runID, traceID, artifactID, spanID string, created time.Time, sourceID, text, state string, included bool, cacheStatus string) ArtifactSummary {
@@ -296,4 +395,30 @@ func hasDecisionTab(decisions []TurnDecision, id string, tab string) bool {
 		}
 	}
 	return false
+}
+
+func assertDecisionOutcome(t *testing.T, decisions []TurnDecision, id string, outcome string) {
+	t.Helper()
+	for _, decision := range decisions {
+		if decision.ID == id {
+			if decision.Outcome != outcome {
+				t.Fatalf("decision %q outcome = %q, want %q", id, decision.Outcome, outcome)
+			}
+			return
+		}
+	}
+	t.Fatalf("decision %q missing from %#v", id, decisions)
+}
+
+func assertReportChip(t *testing.T, report *TurnDecisionReport, id string, tone string) {
+	t.Helper()
+	for _, chip := range report.Chips {
+		if chip.ID == id {
+			if chip.Tone != tone {
+				t.Fatalf("chip %q tone = %q, want %q", id, chip.Tone, tone)
+			}
+			return
+		}
+	}
+	t.Fatalf("chip %q missing from %#v", id, report.Chips)
 }

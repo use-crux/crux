@@ -1,10 +1,21 @@
-import type { ProjectSourceRef, ProjectSourceRefRole } from '@use-crux/core/project-index'
-import type { SemanticDefinitionCandidate, SemanticDefinitionKind, SemanticSourceRefCandidate } from './candidates'
+import type {
+  ProjectSourceRef,
+  ProjectSourceRefRole,
+} from "@use-crux/core/project-index";
+import type {
+  SemanticDefinitionCandidate,
+  SemanticDefinitionKind,
+  SemanticSourceRefCandidate,
+} from "./candidates";
 import {
   semanticIsResolvableSourceExpression,
   semanticPropertyInitializer,
-} from './syntax-readers'
-import type { SemanticSyntaxNode, SemanticSyntaxSourceFile, SemanticSyntaxView } from './syntax-view'
+} from "./syntax-readers";
+import type {
+  SemanticSyntaxNode,
+  SemanticSyntaxSourceFile,
+  SemanticSyntaxView,
+} from "./syntax-view";
 
 /**
  * Selects direct source-reference properties from an authored definition.
@@ -21,9 +32,16 @@ export function semanticSourceRefCandidates<
   syntax: SemanticSyntaxView<TNode, TSourceFile>,
 ): SemanticSourceRefCandidate<TNode, TCall, TNode>[] {
   return sourceRefPropertySpecs(candidate.kind).flatMap((spec) => {
-    const expression = semanticPropertyInitializer(candidate.object, spec.property, syntax)
-    return expression && semanticIsResolvableSourceExpression(expression, syntax) ? [{ ...candidate, ...spec, expression }] : []
-  })
+    const expression = semanticPropertyInitializer(
+      candidate.object,
+      spec.property,
+      syntax,
+    );
+    return expression &&
+      semanticIsResolvableSourceExpression(expression, syntax)
+      ? [{ ...candidate, ...spec, expression }]
+      : [];
+  });
 }
 
 /**
@@ -31,54 +49,62 @@ export function semanticSourceRefCandidates<
  */
 function sourceRefPropertySpecs(
   kind: SemanticDefinitionKind,
-): Array<{ property: string; role: ProjectSourceRefRole; metadata?: ProjectSourceRef['metadata'] }> {
+): Array<{
+  property: string;
+  role: ProjectSourceRefRole;
+  metadata?: ProjectSourceRef["metadata"];
+}> {
   switch (kind) {
-    case 'prompt':
+    case "prompt":
       return [
-        { property: 'system', role: 'system', metadata: { fragment: true } },
-        { property: 'prompt', role: 'prompt' },
-        { property: 'use', role: 'config' },
-        { property: 'tools', role: 'config' },
-      ]
-    case 'context':
+        { property: "system", role: "system", metadata: { fragment: true } },
+        { property: "prompt", role: "prompt" },
+        { property: "use", role: "config" },
+        { property: "tools", role: "config" },
+      ];
+    case "context":
       return [
-        { property: 'system', role: 'system', metadata: { fragment: true } },
-        { property: 'resolve', role: 'resolver' },
-        { property: 'render', role: 'callback' },
-        { property: 'handler', role: 'handler' },
-        { property: 'when', role: 'policy' },
-        { property: 'use', role: 'config' },
-        { property: 'tools', role: 'config' },
-      ]
-    case 'injectable':
+        { property: "system", role: "system", metadata: { fragment: true } },
+        { property: "resolve", role: "resolver" },
+        { property: "render", role: "callback" },
+        { property: "handler", role: "handler" },
+        { property: "when", role: "policy" },
+        { property: "use", role: "config" },
+        { property: "tools", role: "config" },
+      ];
+    case "injectable":
       return [
-        { property: 'inject', role: 'callback' },
-        { property: 'when', role: 'policy' },
-        { property: 'use', role: 'config' },
-        { property: 'tools', role: 'config' },
-      ]
-    case 'tool':
+        { property: "inject", role: "callback" },
+        { property: "when", role: "policy" },
+        { property: "use", role: "config" },
+        { property: "tools", role: "config" },
+      ];
+    case "tool":
       return [
-        { property: 'execute', role: 'execute' },
-        { property: 'run', role: 'callback' },
-        { property: 'handler', role: 'handler' },
-      ]
-    case 'agent':
+        { property: "execute", role: "execute" },
+        { property: "run", role: "callback" },
+        { property: "handler", role: "handler" },
+      ];
+    case "agent":
       return [
-        { property: 'prompt', role: 'config' },
-        { property: 'tools', role: 'config' },
-        { property: 'contextHandler', role: 'callback' },
-        { property: 'usageHandler', role: 'callback' },
-        { property: 'prepare', role: 'callback' },
-      ]
-    case 'routing.router':
-      return [{ property: 'classify', role: 'callback' }]
-    case 'routing.fallback':
+        { property: "prompt", role: "config" },
+        { property: "tools", role: "config" },
+        { property: "contextHandler", role: "callback" },
+        { property: "usageHandler", role: "callback" },
+        { property: "prepare", role: "callback" },
+      ];
+    case "routing.router":
+      return [{ property: "classify", role: "callback" }];
+    case "routing.split":
+      return [{ property: "seed", role: "callback" }];
+    case "routing.fallback":
       return [
-        { property: 'shouldFallback', role: 'policy' },
-        { property: 'onAttemptError', role: 'callback' },
-      ]
+        { property: "when", role: "policy" },
+        { property: "onFallback", role: "callback" },
+        { property: "shouldFallback", role: "policy" },
+        { property: "onAttemptError", role: "callback" },
+      ];
     default:
-      return []
+      return [];
   }
 }

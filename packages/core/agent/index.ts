@@ -18,7 +18,7 @@ export { delegate } from './delegate'
 export type { Delegate, DelegateConfig, DelegateResult } from './delegate'
 
 export { agent, isAgent } from './agent'
-export type { Agent, AnyAgent, AgentConfig, AgentLike, HandoffTarget, InferAgentInput, InferAgentOutput } from './agent'
+export type { Agent, AnyAgent, AgentConfig, AgentLike, HandoffTarget, InferAgentInput, InferAgentOutput, RoutableModel } from './agent'
 
 export { createParallel } from './parallel'
 export type { ParallelOptions, ParallelResult, SettledResult } from './parallel'

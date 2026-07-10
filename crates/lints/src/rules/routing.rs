@@ -8,14 +8,22 @@ use crate::helpers::metadata_str;
 pub(crate) fn is_routing_root(definition: &StaticIndexDefinition) -> bool {
     matches!(
         definition.kind.as_str(),
-        "routing.router" | "routing.cascade" | "routing.fallback"
+        "routing.router"
+            | "routing.split"
+            | "routing.retry"
+            | "routing.cascade"
+            | "routing.fallback"
     )
 }
 
 pub(crate) fn is_routing_child(definition: &StaticIndexDefinition) -> bool {
     matches!(
         definition.kind.as_str(),
-        "routing.router.route" | "routing.cascade.tier" | "routing.fallback.option"
+        "routing.router.route"
+            | "routing.split.route"
+            | "routing.retry.target"
+            | "routing.cascade.tier"
+            | "routing.fallback.option"
     )
 }
 

@@ -50,6 +50,70 @@ pub(crate) fn routing_runtime_join(
                 json!(["routingId", "classifiedAs"]),
             );
         }
+        "routing.split" => {
+            let routing_id = metadata_string(metadata, "routingId")
+                .unwrap_or_else(|| strip_definition_prefix(id, "routing.split:").to_string());
+            span_attributes.insert("routingId".to_string(), Value::String(routing_id.clone()));
+            runtime_join.insert(
+                "primitive".to_string(),
+                Value::String("routing.split".to_string()),
+            );
+            runtime_join.insert("spanName".to_string(), Value::String(name.to_string()));
+            runtime_join.insert("routingId".to_string(), Value::String(routing_id));
+            runtime_join.insert("correlationAttributes".to_string(), json!(["routingId"]));
+        }
+        "routing.split.route" => {
+            let routing_id = metadata_string(metadata, "routingId").unwrap_or_else(|| {
+                metadata_string(metadata, "splitDefinitionId")
+                    .map(|value| strip_definition_prefix(&value, "routing.split:").to_string())
+                    .unwrap_or_default()
+            });
+            let route_key =
+                metadata_string(metadata, "routeKey").unwrap_or_else(|| name.to_string());
+            span_attributes.insert("routingId".to_string(), Value::String(routing_id.clone()));
+            span_attributes.insert("route".to_string(), Value::String(route_key.clone()));
+            runtime_join.insert(
+                "primitive".to_string(),
+                Value::String("routing.split".to_string()),
+            );
+            runtime_join.insert("spanName".to_string(), Value::String(name.to_string()));
+            runtime_join.insert("routingId".to_string(), Value::String(routing_id));
+            runtime_join.insert("routeKey".to_string(), Value::String(route_key));
+            if let Some(parent) = metadata_string(metadata, "splitDefinitionId") {
+                runtime_join.insert("parentDefinitionId".to_string(), Value::String(parent));
+            }
+            runtime_join.insert(
+                "correlationAttributes".to_string(),
+                json!(["routingId", "route"]),
+            );
+        }
+        "routing.retry" => {
+            let routing_id = metadata_string(metadata, "routingId")
+                .unwrap_or_else(|| strip_definition_prefix(id, "routing.retry:").to_string());
+            span_attributes.insert("routingId".to_string(), Value::String(routing_id.clone()));
+            runtime_join.insert(
+                "primitive".to_string(),
+                Value::String("routing.retry".to_string()),
+            );
+            runtime_join.insert("spanName".to_string(), Value::String(name.to_string()));
+            runtime_join.insert("routingId".to_string(), Value::String(routing_id));
+            runtime_join.insert("correlationAttributes".to_string(), json!(["routingId"]));
+        }
+        "routing.retry.target" => {
+            runtime_join.insert(
+                "primitive".to_string(),
+                Value::String("routing.retry".to_string()),
+            );
+            runtime_join.insert("spanName".to_string(), Value::String(name.to_string()));
+            if let Some(routing_id) = metadata_string(metadata, "routingId") {
+                span_attributes.insert("routingId".to_string(), Value::String(routing_id.clone()));
+                runtime_join.insert("routingId".to_string(), Value::String(routing_id));
+            }
+            if let Some(parent) = metadata_string(metadata, "retryDefinitionId") {
+                runtime_join.insert("parentDefinitionId".to_string(), Value::String(parent));
+            }
+            runtime_join.insert("correlationAttributes".to_string(), json!(["routingId"]));
+        }
         "routing.cascade" => {
             let routing_id = metadata_string(metadata, "routingId")
                 .unwrap_or_else(|| strip_definition_prefix(id, "routing.cascade:").to_string());
@@ -100,7 +164,7 @@ pub(crate) fn routing_runtime_join(
             span_attributes.insert("routingId".to_string(), Value::String(routing_id.clone()));
             runtime_join.insert(
                 "primitive".to_string(),
-                Value::String("fallback.attempt".to_string()),
+                Value::String("routing.fallback".to_string()),
             );
             runtime_join.insert("spanName".to_string(), Value::String(name.to_string()));
             runtime_join.insert("routingId".to_string(), Value::String(routing_id));
@@ -109,7 +173,7 @@ pub(crate) fn routing_runtime_join(
         "routing.fallback.option" => {
             runtime_join.insert(
                 "primitive".to_string(),
-                Value::String("fallback.attempt".to_string()),
+                Value::String("routing.fallback".to_string()),
             );
             runtime_join.insert("spanName".to_string(), Value::String(name.to_string()));
             if let Some(routing_id) = metadata_string(metadata, "routingId") {

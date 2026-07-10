@@ -12,7 +12,7 @@
  * - {@link ./timeout | timeout} — structured timeout budget helpers;
  * - {@link ./result-meta | result-meta} — `_meta` reading and usage attributes;
  * - {@link ./orchestrate-observability | orchestrate-observability} — span/artifact wiring;
- * - {@link ./fallback-loop | fallback-loop} — the generic model fallback loop;
+ * - {@link ../routing/resolve | routing/resolve} — recursive model-wrapper resolution;
  * - {@link ./stream-interception | stream-interception} — raw SDK stream iteration hooks.
  *
  * @module

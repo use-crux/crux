@@ -32,6 +32,11 @@ import type {
 } from "@use-crux/core";
 import type { AnyRouterModel, CascadeModel } from "@use-crux/core/routing";
 import type {
+  RetryModel,
+  RoutingCallOptions,
+  SplitModel,
+} from "@use-crux/core/routing";
+import type {
   Constraint,
   Guardrail,
   SafetyTuneOptions,
@@ -97,13 +102,10 @@ type AIPromptForOptions<
 interface AIGenerateBaseOptions<
   TCallTools extends ToolSet | undefined,
   TRuntimeContext,
+  TModel,
 > {
-  /** The AI SDK language model to use. Supports `fallback()`, `router()`, and `cascade()` wrappers. */
-  model:
-    | LanguageModel
-    | FallbackModel<LanguageModel>
-    | AnyRouterModel<LanguageModel>
-    | CascadeModel<LanguageModel>;
+  /** The AI SDK language model to use. Supports Crux routing wrappers. */
+  model: TModel;
   /** Additional tools to merge at call time (highest precedence). */
   tools?: TCallTools;
   /** Tool middleware applied after prompt tools and call-site tools are merged. */
@@ -162,10 +164,18 @@ export type AIGenerateOptions<
   TCallTools extends ToolSet | undefined = ToolSet | undefined,
   TPrompt extends AIPromptForOptions<TOwnInput, TContexts> | undefined = undefined,
   TRuntimeContext = unknown,
+  TModel =
+    | LanguageModel
+    | FallbackModel<LanguageModel>
+    | AnyRouterModel<LanguageModel>
+    | CascadeModel<LanguageModel>
+    | SplitModel<Record<string, { model: LanguageModel; weight: number }>>
+    | RetryModel<LanguageModel>,
 > = {
-} & Omit<AIGenerateBaseOptions<TCallTools, TRuntimeContext>, "toolsContext"> &
+} & Omit<AIGenerateBaseOptions<TCallTools, TRuntimeContext, TModel>, "toolsContext"> &
   ToolsContextOption<KnownToolsFor<TPrompt, TCallTools>> &
   GenerationSettings &
+  RoutingCallOptions<TModel> &
   ([keyof MergedInput<TOwnInput, TContexts>] extends [never]
     ? { input?: undefined }
     : { input: MergedInput<TOwnInput, TContexts> });

@@ -15,7 +15,7 @@
 import type { LanguageModel } from 'ai'
 import type { StructuredAttempt, StructuredRequest } from '@use-crux/core/adapter'
 import type { GenerateObjectFn } from '@use-crux/core/compaction'
-import { isCascade, isRouter, resolveModel } from '@use-crux/core/routing'
+import { resolveModel } from '@use-crux/core/routing'
 import type { SdkGateway } from './gateway'
 import type { SdkLoopResultLike } from './sdk-codec'
 import { createAiSdkCodec } from './sdk-codec'
@@ -35,6 +35,10 @@ interface GenerateObjectOptions<T> {
 
 interface StructuredObjectResult<T> {
   readonly object: T
+}
+
+interface StructuredFallbackTryOptions {
+  readonly signal?: AbortSignal
 }
 
 /**
@@ -69,29 +73,32 @@ export async function attemptStructuredGeneration(
  */
 export function createStructuredGenerateObjectFn(gateway: StructuredGateway): GenerateObjectFn {
   return async <T>(options: GenerateObjectOptions<T>): Promise<StructuredObjectResult<T>> => {
-    const run = async (model: LanguageModel): Promise<StructuredObjectResult<T>> => {
-      const attempt = await attemptStructuredGeneration(gateway, requestFromGenerateObjectOptions(model, options))
+    const run = async (
+      model: LanguageModel,
+      attemptOptions: StructuredFallbackTryOptions = {},
+    ): Promise<StructuredObjectResult<T>> => {
+      const attempt = await attemptStructuredGeneration(
+        gateway,
+        requestFromGenerateObjectOptions(model, options, attemptOptions),
+      )
       if (attempt.status === 'invalid') throw attempt.error
       return { object: attempt.object as T }
     }
 
-    if (isRouter(options.model) || isCascade(options.model)) {
-      const resolved = await resolveModel<LanguageModel, StructuredObjectResult<T>>(
-        options.model as unknown as LanguageModel,
-        { prompt: options.prompt },
-        run,
-        modelLabel,
-      )
-      return { object: resolved.object }
-    }
-
-    return run(options.model as LanguageModel)
+    return resolveModel<LanguageModel, StructuredObjectResult<T>>(
+      options.model as LanguageModel,
+      { prompt: options.prompt },
+      run,
+      modelLabel,
+      { mode: 'generate', preserveRawResult: true },
+    )
   }
 }
 
 function requestFromGenerateObjectOptions<T>(
   model: LanguageModel,
   options: GenerateObjectOptions<T>,
+  attemptOptions: StructuredFallbackTryOptions = {},
 ): StructuredRequest<LanguageModel> {
   return {
     model,
@@ -105,7 +112,7 @@ function requestFromGenerateObjectOptions<T>(
     activeTools: undefined,
     maxSteps: 1,
     observer: undefined,
-    abortSignal: undefined,
+    abortSignal: attemptOptions.signal,
     extra: undefined,
     schema: options.schema,
   }

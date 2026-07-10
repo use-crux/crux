@@ -73,8 +73,10 @@ export const CRUX_PRIMITIVE_NAMES = [
   "constraint.retry",
   "guardrail.run",
   "routing.router",
+  "routing.split",
+  "routing.retry",
   "routing.cascade",
-  "fallback.attempt",
+  "routing.fallback",
   "cache.lookup",
   "compaction.run",
   "eval.run",
@@ -201,8 +203,10 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   "constraint.retry": "constraint",
   "guardrail.run": "guardrail",
   "routing.router": "routing",
+  "routing.split": "routing",
+  "routing.retry": "routing",
   "routing.cascade": "routing",
-  "fallback.attempt": "routing",
+  "routing.fallback": "routing",
   "cache.lookup": "cache",
   "compaction.run": "compaction",
   "eval.run": "eval",
@@ -618,25 +622,67 @@ export interface CruxGuardrailReportPreview {
 }
 
 export interface CruxRoutingTierPreview {
-  tier: number;
+  /** Optional display index; canonical receipts use the tier's array position. */
+  tier?: number;
   model: string;
+  status?: "accepted" | "rejected" | "skipped" | "error" | string;
   budget?: number;
   verdict?: "accepted" | "rejected" | "skipped" | "error" | string;
   note?: string;
   confidence?: number;
-  cost?: number;
+  cost?: number | null;
+  judgeCost?: number;
   durationMs?: number;
 }
 
+export interface CruxRoutingAttemptPreview {
+  model: string;
+  status: "ok" | "error" | string;
+  durationMs?: number;
+  cost?: number | null;
+  errorCategory?: string;
+  error?: string;
+  delayMs?: number;
+}
+
+export type CruxRoutingStepPreview =
+  | {
+      kind: "router";
+      id?: string;
+      classifiedAs?: string;
+      route?: string;
+      usedDefaultRoute?: boolean;
+      forced?: boolean;
+    }
+  | { kind: "split"; id?: string; route?: string; seed?: string }
+  | {
+      kind: "retry";
+      id?: string;
+      model?: string;
+      attempts?: readonly CruxRoutingAttemptPreview[];
+    }
+  | {
+      kind: "fallback";
+      id?: string;
+      attempts?: readonly CruxRoutingAttemptPreview[];
+      firstTokenAt?: number;
+      midStreamFailure?: boolean;
+    }
+  | {
+      kind: "cascade";
+      id?: string;
+      tiers?: readonly CruxRoutingTierPreview[];
+      acceptedAtTier?: number;
+      budgetExceeded?: boolean;
+    };
+
 export interface CruxRoutingReportPreview {
-  kind: "routing.report";
-  routingKind: "router" | "cascade" | "fallback";
-  chosen?: string;
-  classifiedAs?: string;
-  fallbackReason?: string;
-  tiers?: readonly CruxRoutingTierPreview[];
-  availableRoutes?: readonly string[];
-  selectedModel?: string;
+  model: string;
+  /** Total routed cost, or `null` when JSON-safe transport preserves an unavailable value. */
+  cost?: number | null;
+  /** Elapsed milliseconds from stream hand-off to the first emitted token. */
+  firstTokenAt?: number;
+  trace: readonly CruxRoutingStepPreview[];
 }
 
 export interface CruxCacheReportPreview {

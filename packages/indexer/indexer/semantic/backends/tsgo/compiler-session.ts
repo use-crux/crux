@@ -116,7 +116,9 @@ export function createTsgoSemanticCompilerHost(input: TsgoSemanticCompilerHostIn
     try {
       snapshot = api.updateSnapshot(openProjectParams(projectConfig.tsconfigFiles))
       const project = projectForInput(snapshot.getProjects(), projectConfig.tsconfigFiles, analyzeInput.files)
-      const direct = project ? nativeDirectEvidenceForFiles(project, candidateFiles) : undefined
+      const sourceLookup = project ? createTsgoNativeSourceLookup(project) : undefined
+      const view = sourceLookup ? createTsgoCompilerView(input.identity, project!, sourceLookup) : undefined
+      const direct = project && view ? nativeDirectEvidenceForFiles(project, candidateFiles, view) : undefined
       if (!direct) return undefined
       return {
         facts: direct.facts,

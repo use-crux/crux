@@ -8,7 +8,7 @@
       "seq": 1,
       "traceId": "33333333333333333333333333333333",
       "name": "taxonomy drift",
-      "rootPrimitive": "fallback.attempt",
+      "rootPrimitive": "routing.fallback",
       "startedAt": "2026-07-03T12:01:00.000Z",
       "status": "running"
     },
@@ -21,7 +21,7 @@
       "traceId": "33333333333333333333333333333333",
       "spanId": "3333333333333333",
       "family": "routing",
-      "primitive": "fallback.attempt",
+      "primitive": "routing.fallback",
       "name": "fallback attempt",
       "startedAt": "2026-07-03T12:01:00.010Z",
       "status": "running"

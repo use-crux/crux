@@ -185,6 +185,9 @@ const fakeSyntaxView: SemanticSyntaxView<FakeNode, FakeSourceFile> = {
   variableStatementDeclarations() {
     return []
   },
+  parameterTypeReference() {
+    return undefined
+  },
   importModuleSpecifier() {
     return undefined
   },

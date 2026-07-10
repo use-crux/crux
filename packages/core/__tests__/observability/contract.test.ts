@@ -132,6 +132,18 @@ describe('Crux observability graph contract', () => {
         'security.report',
       ]),
     )
+    const routingReport = parsed.records.find(
+      (record) => record.type === 'artifact' && record.kind === 'routing.report',
+    )
+    expect(routingReport).toMatchObject({
+      type: 'artifact',
+      kind: 'routing.report',
+      preview: {
+        model: expect.any(String),
+        trace: expect.any(Array),
+      },
+    })
+    expect(routingReport).not.toHaveProperty('preview.kind')
   })
 
   it('keeps generation span fields inspectable without opening artifact payloads', () => {

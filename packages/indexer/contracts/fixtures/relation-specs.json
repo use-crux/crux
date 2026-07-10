@@ -23,6 +23,22 @@
       "presentation": "both",
       "partial": true,
       "runtimeJoin": true
+    },
+    {
+      "type": "split.route.uses_prompt",
+      "fromKinds": ["routing.split.route"],
+      "toKinds": ["prompt"],
+      "presentation": "both",
+      "partial": true,
+      "runtimeJoin": true
+    },
+    {
+      "type": "retry.target.uses_prompt",
+      "fromKinds": ["routing.retry.target"],
+      "toKinds": ["prompt"],
+      "presentation": "both",
+      "partial": true,
+      "runtimeJoin": true
     }
   ]
 }

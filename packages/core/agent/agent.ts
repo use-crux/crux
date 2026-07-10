@@ -15,14 +15,25 @@ import type { z } from 'zod'
 import type { AnyModel, AnyToolSet } from '../types'
 import type { Prompt } from '../prompt/prompt-types'
 import type { Context } from '../prompt/context-types'
+import type { AnyRoutable } from '../routing/types'
 
 // ── Types ───────────────────────────────────────────────────────────
+
+/**
+ * Model reference accepted by `agent({ model })`.
+ *
+ * `TModel` is the adapter-native model type (for example an AI SDK language
+ * model or a native provider model id). Routing wrappers are inert core values
+ * that loop-owned adapters resolve before the provider sees a concrete model.
+ */
+export type RoutableModel<TModel = AnyModel> = TModel | AnyRoutable
 
 /** Configuration for `agent()`. */
 export interface AgentConfig<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
   TContexts extends readonly Context<z.ZodType>[],
+  TModel = AnyModel,
 > {
   /** Unique identifier for this agent. */
   id: string
@@ -31,7 +42,7 @@ export interface AgentConfig<
   /** The prompt this agent executes. */
   prompt: Prompt<TOwnInput, TOutput, TContexts>
   /** Default model override. Takes precedence over composition-level model. */
-  model?: AnyModel
+  model?: RoutableModel<TModel>
   /** Default tools available to this agent. */
   tools?: AnyToolSet
   /**
@@ -82,6 +93,7 @@ export interface Agent<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
   TContexts extends readonly Context<z.ZodType>[],
+  TModel = AnyModel,
 > {
   /** Discriminant tag for runtime type checking. */
   readonly _tag: 'Agent'
@@ -92,7 +104,7 @@ export interface Agent<
   /** The prompt this agent executes. */
   readonly prompt: Prompt<TOwnInput, TOutput, TContexts>
   /** Default model override. */
-  readonly model: AnyModel | undefined
+  readonly model: RoutableModel<TModel> | undefined
   /** Default tools. */
   readonly tools: AnyToolSet | undefined
   /** Agent IDs this agent can hand off to in a swarm. */
@@ -107,7 +119,7 @@ export interface Agent<
  * Uses `z.ZodType` as upper bounds — the widest Zod schema types — so
  * any `Agent<TInput, TOutput, TContexts>` is assignable to `AnyAgent`.
  */
-export type AnyAgent = Agent<z.ZodType, z.ZodType | undefined, readonly Context<z.ZodType>[]>
+export type AnyAgent = Agent<z.ZodType, z.ZodType | undefined, readonly Context<z.ZodType>[], AnyModel>
 
 /**
  * Extract the inferred input type from an agent's prompt schema.
@@ -151,8 +163,7 @@ export type InferAgentOutput<T> =
  * (`(input: { foo: string }) => …`) still satisfy `AgentLike`, while the
  * composition utilities infer the real shape from the call-site generic.
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- bivariant escape; plain functions vary by call-site generic
-export type AgentLike<TInput = any, TOutput = unknown> = AnyAgent | ((input: TInput) => Promise<TOutput>)
+export type AgentLike<TInput = never, TOutput = unknown> = AnyAgent | ((input: TInput) => Promise<TOutput>)
 
 /**
  * Extract the input type from an `AgentLike` — agent (via its prompt schema)
@@ -226,7 +237,8 @@ export function agent<
   TOwnInput extends z.ZodType,
   TOutput extends z.ZodType | undefined,
   TContexts extends readonly Context<z.ZodType>[],
->(config: AgentConfig<TOwnInput, TOutput, TContexts>): Agent<TOwnInput, TOutput, TContexts> {
+  TModel = AnyModel,
+>(config: AgentConfig<TOwnInput, TOutput, TContexts, TModel>): Agent<TOwnInput, TOutput, TContexts, TModel> {
   return Object.freeze({
     _tag: 'Agent' as const,
     id: config.id,

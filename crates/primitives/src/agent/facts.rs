@@ -98,6 +98,8 @@ pub(crate) fn agent_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>)
             "type": "agent.uses_routing",
             "typeByTargetKind": {
                 "routing.router": "agent.uses_routing",
+                "routing.split": "agent.uses_routing",
+                "routing.retry": "agent.uses_routing",
                 "routing.cascade": "agent.uses_routing",
                 "routing.fallback": "agent.uses_routing",
             },

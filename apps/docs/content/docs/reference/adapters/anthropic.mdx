@@ -68,7 +68,7 @@ result.finalStep;
 | Field                       | Type                                           | Description                                                                         |
 | --------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `prompt`                    | `Prompt`                                       | The prompt to execute                                                               |
-| `options.model`             | `string \| FallbackModel<string>`              | Model name or [`fallback()`](/docs/guides/routing/fallback) wrapper                 |
+| `options.model`             | `string`                                       | Model name                                                                          |
 | `options.input`             | `object`                                       | Input values                                                                        |
 | `options.tools`             | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
 | `options.toolMiddleware`    | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |
@@ -102,7 +102,7 @@ Stream a prompt execution.
 | Field                       | Type                                           | Description                                                                         |
 | --------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------- |
 | `prompt`                    | `Prompt`                                       | The prompt to execute                                                               |
-| `options.model`             | `string \| FallbackModel<string>`              | Model name or [`fallback()`](/docs/guides/routing/fallback) wrapper                 |
+| `options.model`             | `string`                                       | Model name                                                                          |
 | `options.input`             | `object`                                       | Input values                                                                        |
 | `options.tools`             | `Record<string, unknown>?`                     | Additional Crux tools to merge at call time                                         |
 | `options.toolMiddleware`    | `ToolMiddleware \| readonly ToolMiddleware[]?` | Tool execution hooks, including Crux resumable approvals through `result.messages`. |

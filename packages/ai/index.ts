@@ -61,16 +61,25 @@ import type { Reranker, RetrievalModel } from "@use-crux/core/retrieval";
 import type {
   ApprovalRequestInfo,
   CallHandle,
+  ExecutorGenerateOptions,
   ExecutorModelArg,
+  ExecutorStreamOptions,
   GenerateResult,
   StreamResult,
 } from "@use-crux/core/adapter";
 import {
   CruxTransportStreamUnsupportedError,
 } from "@use-crux/core/adapter";
-import type { ToolApprovalMap, ToolMiddleware, FallbackModel } from "@use-crux/core";
-import { isRouter, isCascade, resolveModel } from "@use-crux/core/routing";
-import type { AnyRouterModel, CascadeModel } from "@use-crux/core/routing";
+import type { ToolApprovalMap, ToolMiddleware } from "@use-crux/core";
+import { resolveModel } from "@use-crux/core/routing";
+import type {
+  AnyRouterModel,
+  BoundOk,
+  CascadeModel,
+  InputOk,
+  PromptInputOf,
+  StreamOf,
+} from "@use-crux/core/routing";
 import type {
   GenerateObjectFn,
   GenerateTextFn,
@@ -226,14 +235,19 @@ export interface CruxAi {
     TPromptTools extends AnyToolSet | undefined = undefined,
     TCallTools extends ToolSet | undefined = undefined,
     TRuntimeContext = unknown,
+    TModel = CallOpts["model"],
   >(
-    prompt: Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+    prompt: PromptForModel<
+      AiPromptInstance<TOwnInput, TOutput, TContexts, TPromptTools>,
+      TModel
+    >,
     opts: AIGenerateOptions<
       TOwnInput,
       TContexts,
       TCallTools,
       Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
-      TRuntimeContext
+      TRuntimeContext,
+      TModel
     >,
   ): Promise<GenerateReturn<TOutput>>;
   /** See the package-level {@link stream}. */
@@ -244,14 +258,19 @@ export interface CruxAi {
     TPromptTools extends AnyToolSet | undefined = undefined,
     TCallTools extends ToolSet | undefined = undefined,
     TRuntimeContext = unknown,
+    TModel = CallOpts["model"],
   >(
-    prompt: Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+    prompt: StreamPromptForModel<
+      AiPromptInstance<TOwnInput, TOutput, TContexts, TPromptTools>,
+      TModel
+    >,
     opts: AIGenerateOptions<
       TOwnInput,
       TContexts,
       TCallTools,
       Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
-      TRuntimeContext
+      TRuntimeContext,
+      TModel
     >,
   ): Promise<StreamReturn<TOutput>>;
   /** Prepare a sans-I/O AI SDK call handle for one `generateText()` or `generateObject()` request. */
@@ -262,14 +281,19 @@ export interface CruxAi {
     TPromptTools extends AnyToolSet | undefined = undefined,
     TCallTools extends ToolSet | undefined = undefined,
     TRuntimeContext = unknown,
+    TModel = CallOpts["model"],
   >(
-    prompt: Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
+    prompt: PromptForModel<
+      AiPromptInstance<TOwnInput, TOutput, TContexts, TPromptTools>,
+      TModel
+    >,
     opts: AIGenerateOptions<
       TOwnInput,
       TContexts,
       TCallTools,
       Prompt<TOwnInput, TOutput, TContexts, TPromptTools>,
-      TRuntimeContext
+      TRuntimeContext,
+      TModel
     >,
   ): Promise<CallHandle<Record<string, unknown>, SdkLoopResultLike, GenerateReturn<TOutput>>>;
   /** See the package-level {@link generateTextFn}. */
@@ -287,6 +311,8 @@ export interface CruxAi {
 /** Internal: the loosely-typed view of call opts used by the implementation. */
 type CallOpts = Record<string, unknown> & {
   model: ExecutorModelArg<LanguageModel>;
+  routing?: unknown;
+  route?: string;
   tools?: ToolSet;
   toolsContext?: Readonly<Record<string, unknown>>;
   runtimeContext?: unknown;
@@ -306,6 +332,22 @@ type CallOpts = Record<string, unknown> & {
   input?: Record<string, unknown>;
   transport?: AITransport;
 };
+
+type AiPromptInstance<
+  TOwnInput extends z.ZodType,
+  TOutput extends z.ZodType | undefined,
+  TContexts extends readonly Context<z.ZodType>[],
+  TPromptTools extends AnyToolSet | undefined,
+> = Prompt<TOwnInput, TOutput, TContexts, TPromptTools>;
+
+type PromptForModel<P extends AnyPrompt, M> = P &
+  BoundOk<M, P> &
+  InputOk<M, PromptInputOf<P>>;
+
+type StreamPromptForModel<P extends AnyPrompt, M> = PromptForModel<P, M> &
+  (StreamOf<M> extends true
+    ? unknown
+    : ["model contains a cascade; cascades are generate-only"]);
 
 /**
  * Build a `@use-crux/ai` instance bound to a specific {@link SdkGateway}.
@@ -346,6 +388,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       activeTools,
       tokenBudget,
       timeout,
+      routing,
+      route,
       validationRetry,
       constraints,
       constraintMaxRetries,
@@ -356,9 +400,11 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       ...settings
     } = opts;
 
-    const result = await activeExecutor.generate(prompt, {
+    const executorOptions = {
       model,
       input,
+      routing,
+      route,
       tools: tools as Record<string, unknown> | undefined,
       toolsContext,
       runtimeContext,
@@ -378,7 +424,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       maxSteps,
       settings: settings as GenerationSettings,
       extra,
-    });
+    } as ExecutorGenerateOptions<LanguageModel>;
+
+    const result = await activeExecutor.generate(prompt, executorOptions);
 
     return result as GenerateResult<SdkLoopResultLike | undefined>;
   }
@@ -435,6 +483,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       activeTools,
       tokenBudget,
       timeout,
+      routing,
+      route,
       validationRetry: _validationRetry,
       constraints,
       constraintMaxRetries,
@@ -447,9 +497,11 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
     if (transport) throw new CruxTransportStreamUnsupportedError("ai-sdk");
 
-    const handle = await executor.stream(prompt, {
+    const executorOptions = {
       model,
       input,
+      routing,
+      route,
       tools: tools as Record<string, unknown> | undefined,
       toolsContext,
       runtimeContext,
@@ -466,7 +518,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       maxSteps,
       settings: settings as GenerationSettings,
       extra,
-    });
+    } as ExecutorStreamOptions<LanguageModel>;
+
+    const handle = await executor.stream(prompt, executorOptions);
 
     return createAiStreamResult(handle) as unknown as Record<string, unknown>;
   }
@@ -479,27 +533,25 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     createStructuredGenerateObjectFn(gateway);
 
   const generateTextFnImpl: GenerateTextFn = async (options) => {
-    const run = async (model: LanguageModel) => {
+    const run = async (model: LanguageModel, attemptOptions: { readonly signal?: AbortSignal } = {}) => {
       const result = await gateway.generateText({
         model,
         system: options.system,
         prompt: options.prompt,
+        ...(attemptOptions.signal ? { abortSignal: attemptOptions.signal } : {}),
       } as Parameters<SdkGateway["generateText"]>[0]);
       return { text: result.text };
     };
-    if (isRouter(options.model) || isCascade(options.model)) {
-      const resolved = await resolveModel<LanguageModel, { text: string }>(
-        options.model as unknown as LanguageModel,
-        { prompt: options.prompt },
-        run,
-        (model) => {
-          const info = extractModelInfo(model);
-          return info.modelId || info.provider;
-        },
-      );
-      return { text: resolved.text };
-    }
-    return run(options.model as LanguageModel);
+    return resolveModel<LanguageModel, { text: string }>(
+      options.model as LanguageModel,
+      { prompt: options.prompt },
+      run,
+      (model) => {
+        const info = extractModelInfo(model);
+        return info.modelId || info.provider;
+      },
+      { mode: "generate", preserveRawResult: true },
+    );
   };
 
   return {

@@ -68,7 +68,11 @@ export interface TurnDecisionMetrics {
   priority?: number;
   sizeBytes?: number;
   durationMs?: number;
+  /** Elapsed milliseconds from stream hand-off to the first emitted token. */
+  firstTokenAt?: number;
   costUsd?: number;
+  /** Configured routing budget recorded with a cascade decision. */
+  budget?: number;
   score?: number;
   confidence?: number;
 }
