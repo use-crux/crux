@@ -78,4 +78,3 @@ export function isRetry(model: unknown): model is RetryModel {
     (model as { _tag: unknown })._tag === "crux.retry"
   );
 }
-

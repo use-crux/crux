@@ -90,4 +90,3 @@ export function isSplit(model: unknown): model is SplitModel {
     (model as { _tag: unknown })._tag === "crux.split"
   );
 }
-
