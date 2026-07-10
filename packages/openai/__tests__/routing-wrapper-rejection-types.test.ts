@@ -2,7 +2,7 @@ import type OpenAI from "openai";
 import { describe, expect, it } from "vitest";
 import { prompt } from "@use-crux/core";
 import { router } from "@use-crux/core/routing";
-import { createOpenAI } from "../native";
+import { createOpenAI } from "../src/native";
 
 const routed = router({
   classify: () => "fast" as const,
