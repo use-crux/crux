@@ -4,6 +4,7 @@
  * @module
  */
 
+import type { AssetPutOptions, AssetStore } from '../asset'
 import type { BlobStore, RecordStore, Storage, VectorStore } from './types'
 
 /** Factory for normalizing storage bundles and scoped wrappers. */
@@ -17,7 +18,12 @@ export interface StorageFactory {
   (config: Storage): Storage
 
   /**
-   * Prefix storage keys for tenant, user, session, or workspace isolation.
+   * Prefix storage keys for tenant, user, session, or workspace namespaces.
+   *
+   * This is deterministic key namespacing, not an authorization boundary.
+   * Asset refs remain opaque bearer references owned by the underlying
+   * `AssetStore`; scoped asset views prefix only `AssetPutOptions.key` and pass
+   * `get()`/`delete()` refs through unchanged.
    *
    * @param base - Storage bundle to scope.
    * @param prefix - Prefix applied to keys and blob identifiers.
@@ -40,6 +46,7 @@ function scope(base: Storage, prefix: string): Storage {
   return storage({
     records: scopeRecords(base.records, normalizedPrefix),
     ...(base.vectors ? { vectors: scopeVectors(base.vectors, normalizedPrefix) } : {}),
+    ...(base.assets ? { assets: scopeAssets(base.assets, normalizedPrefix) } : {}),
     ...(base.blobs ? { blobs: scopeBlobs(base.blobs, normalizedPrefix) } : {}),
   })
 }
@@ -128,6 +135,25 @@ function scopeBlobs(blobs: BlobStore, prefix: string): BlobStore {
     delete: (uri) => blobs.delete(uri),
     createReadUrl: blobs.createReadUrl ? (uri, options) => blobs.createReadUrl!(uri, options) : undefined,
     capabilities: () => blobs.capabilities(),
+  }
+}
+
+function scopeAssets(assets: AssetStore, prefix: string): AssetStore {
+  return Object.freeze({
+    put: (asset, options) => assets.put(asset, scopeAssetPutOptions(prefix, options)),
+    get: (ref) => assets.get(ref),
+    delete: (ref) => assets.delete(ref),
+  })
+}
+
+function scopeAssetPutOptions(
+  prefix: string,
+  options: AssetPutOptions | undefined,
+): AssetPutOptions | undefined {
+  if (!options) return undefined
+  return {
+    ...options,
+    ...(options.key ? { key: prefixKey(prefix, options.key) } : {}),
   }
 }
 

@@ -147,6 +147,7 @@ export {
   retrieverWorkspaceMountSource,
 } from "./workspace";
 export {
+  inMemoryAssetStore,
   inMemoryBlobStore,
   inMemoryRecordStore,
   inMemoryStorage,
@@ -216,11 +217,18 @@ export type {
   WorkspaceRetrieverMountSourceOptions,
 } from "./workspace";
 export type {
+  Asset,
+  AssetInfo,
+  AssetPutOptions,
+  AssetRef,
+  AssetStore,
   BlobReadResult,
   BlobRef,
   BlobStore,
+  DataAsset,
   ExactFilter,
   JsonObject,
+  ProviderFileAsset,
   RecordEntry,
   RecordListOptions,
   RecordPage,
@@ -228,8 +236,10 @@ export type {
   RecordStoreCapabilities,
   RecordWrite,
   RecordWriteOptions,
+  StoredAsset,
   Storage,
   StorageErrorCode,
+  UrlAsset,
   VectorHit,
   VectorRecord,
   VectorSearchQuery,

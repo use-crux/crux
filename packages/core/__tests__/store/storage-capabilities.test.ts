@@ -45,6 +45,7 @@ describe('storage capabilities', () => {
 
     expect(bundle.records._tag).toBe('RecordStore')
     expect(bundle.vectors?._tag).toBe('VectorStore')
+    expect(bundle.assets).toBeDefined()
     expect(bundle.blobs?._tag).toBe('BlobStore')
   })
 })

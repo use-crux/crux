@@ -8,11 +8,13 @@
  */
 
 import { storage } from './bundle'
+import { inMemoryAssetStore } from '../asset'
 import { inMemoryBlobStore } from './memory-blob'
 import { inMemoryRecordStore } from './memory-record'
 import { inMemoryVectorStore } from './memory-vector'
 import type { Storage } from './types'
 
+export { inMemoryAssetStore } from '../asset'
 export { inMemoryBlobStore } from './memory-blob'
 export { inMemoryRecordStore } from './memory-record'
 export { inMemoryVectorStore } from './memory-vector'
@@ -22,6 +24,7 @@ export function inMemoryStorage(): Storage {
   return storage({
     records: inMemoryRecordStore(),
     vectors: inMemoryVectorStore(),
+    assets: inMemoryAssetStore(),
     blobs: inMemoryBlobStore(),
   })
 }

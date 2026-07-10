@@ -7,6 +7,8 @@
  * @module
  */
 
+import type { AssetStore } from '../asset/types'
+
 /** JSON primitive values accepted by record stores and metadata filters. */
 export type JsonPrimitive = string | number | boolean | null
 
@@ -233,5 +235,6 @@ export interface BlobStore {
 export interface Storage {
   readonly records: RecordStore
   readonly vectors?: VectorStore
+  readonly assets?: AssetStore
   readonly blobs?: BlobStore
 }

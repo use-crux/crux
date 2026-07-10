@@ -13,6 +13,18 @@ export { storage } from './bundle'
 export { inMemoryBlobStore, inMemoryRecordStore, inMemoryStorage, inMemoryVectorStore } from './memory'
 export { matchesExactFilter } from './filter'
 export { keySpace } from './keyspace'
+export { inMemoryAssetStore } from '../asset'
+export type {
+  Asset,
+  AssetInfo,
+  AssetPutOptions,
+  AssetRef,
+  AssetStore,
+  DataAsset,
+  ProviderFileAsset,
+  StoredAsset,
+  UrlAsset,
+} from '../asset'
 
 export type {
   BlobContent,
