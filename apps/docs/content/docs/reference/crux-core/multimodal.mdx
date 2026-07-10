@@ -25,11 +25,11 @@ type MessageContent = string | readonly ContentPart[];
 
 `ContentPart` is a closed visible-content union:
 
-| Part | Required fields | Notes |
-| --- | --- | --- |
-| `text` | `text` | Plain visible text. |
-| `image` | `source` | Optional `mediaType`; source accepts `MediaSource`. |
-| `file` | `source` | Optional `mediaType` and `filename`; source accepts `MediaSource`. |
+| Part    | Required fields | Notes                                                              |
+| ------- | --------------- | ------------------------------------------------------------------ |
+| `text`  | `text`          | Plain visible text.                                                |
+| `image` | `source`        | Optional `mediaType`; source accepts `MediaSource`.                |
+| `file`  | `source`        | Optional `mediaType` and `filename`; source accepts `MediaSource`. |
 
 Every part may carry `providerOptions`. Protocol/control state such as tool calls and approvals belongs in `Message.metadata`, not in `ContentPart`.
 
@@ -83,7 +83,11 @@ Project a canonical message by reading `message.content`.
 const projected = messageText(message);
 ```
 
-Use this anywhere a widened `Message.content` must become a string: guardrails, compaction, memory capture, cache query text, logs, or custom provider fallbacks.
+Use this where a widened `Message.content` must become semantic text: guardrails,
+compaction, memory capture, cache query text, or custom provider fallbacks. It is
+not a logging redactor: URL and filename descriptors can retain sensitive
+locators. Crux observability applies its stricter media sanitizer before records
+are emitted.
 
 ### `hasMediaParts(content)`
 

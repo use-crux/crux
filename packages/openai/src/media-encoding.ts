@@ -46,6 +46,12 @@ function imageUrl(part: Extract<ContentPart, { type: 'image' }>): string {
 
 function encodeOpenAIFilePart(part: Extract<ContentPart, { type: 'file' }>): OpenAIContentPart {
   const source = part.source
+  if (isProviderFile(source)) {
+    if (source.provider !== 'openai') {
+      throw unsupported('input.file.provider-file', 'Use an OpenAI provider-file asset with the OpenAI adapter.')
+    }
+    return { type: 'file', file: { file_id: source.fileId } }
+  }
   const mediaType = part.mediaType ?? (isAssetWithMediaType(source) ? source.mediaType : undefined)
   if (mediaType) {
     const audioFormat = openAIAudioFormat(mediaType)
@@ -55,12 +61,6 @@ function encodeOpenAIFilePart(part: Extract<ContentPart, { type: 'file' }>): Ope
         input_audio: { data: sourceBase64(source), format: audioFormat },
       }
     }
-  }
-  if (isProviderFile(source)) {
-    if (source.provider !== 'openai') {
-      throw unsupported('input.file.provider-file', 'Use an OpenAI provider-file asset with the OpenAI adapter.')
-    }
-    return { type: 'file', file: { file_id: source.fileId } }
   }
   if (typeof source === 'string' || source instanceof URL || isUrlAsset(source)) {
     throw unsupported(
@@ -100,12 +100,8 @@ function openAIImageOptions(
 function sourceBase64(source: Extract<ContentPart, { type: 'file' }>['source']): string {
   if (source instanceof Uint8Array) return base64(source)
   if (source instanceof ArrayBuffer) return base64(new Uint8Array(source))
-  if (typeof source === 'string') return source
-  if (source instanceof URL) return source.href
   if (isDataAsset(source)) return dataSourceBase64(source.data)
-  if (isUrlAsset(source)) return source.url.href
-  if (isProviderFile(source)) return source.fileId
-  return ''
+  throw unsupported('input.file.data', 'Provide file audio as bytes or a data asset.')
 }
 
 function dataSourceBase64(data: Uint8Array | Blob): string {

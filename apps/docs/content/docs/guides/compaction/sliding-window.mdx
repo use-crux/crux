@@ -59,7 +59,7 @@ On every `push()`:
 1. The new message gets appended to the in-memory window
 2. If `window.length > windowSize`, the oldest messages above the threshold are _evicted_
 3. Evicted messages get passed to `summarizeMessages()` along with the existing running summary
-4. The merged summary is saved back to the store under `compact:{id}:summary`
+4. The merged summary and recent-message window commit together under `compact:{id}:state`
 
 The next `getMessages()` call returns:
 

@@ -154,7 +154,7 @@ describe("createSlidingWindow", () => {
     await window.push(msg("assistant", "Hi"));
 
     // Verify data is in the store
-    const entry = await store.get("compact:default:messages");
+    const entry = await store.get("compact:default:state");
     expect(entry).not.toBeNull();
     expect(entry!.messages).toEqual([
       { role: "user", content: "Hello" },
@@ -174,7 +174,7 @@ describe("createSlidingWindow", () => {
 
     await window.push(msg("user", "Hello"));
 
-    const entry = await store.get("compact:my-window:messages");
+    const entry = await store.get("compact:my-window:state");
     expect(entry).not.toBeNull();
   });
 
@@ -199,7 +199,7 @@ describe("createSlidingWindow", () => {
       ],
     });
 
-    const record = await records.get("compact:default:messages");
+    const record = await records.get("compact:default:state");
     expect(JSON.stringify(record)).toContain("asset-ref");
     expect(JSON.stringify(record)).not.toContain("1,2,3");
 

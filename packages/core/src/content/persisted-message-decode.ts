@@ -102,9 +102,18 @@ async function decodeMediaSource(
     }
   }
   if (source.type === "url") {
+    let url: URL;
+    try {
+      url = new URL(source.url);
+    } catch {
+      throw createInvalidMediaSourceError({
+        path,
+        reason: "Persisted URL media source is invalid.",
+      });
+    }
     return {
       type: "url",
-      url: new URL(source.url),
+      url,
       ...(source.mediaType ? { mediaType: source.mediaType } : {}),
       ...copyInfo(source.info),
     };

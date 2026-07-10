@@ -10,6 +10,7 @@
  */
 
 import type { TraceMeta } from "../../generation/types";
+import type { Message } from "../../generation/messages";
 import {
   findTriggeredStopCondition,
   normalizeStopConditions,
@@ -140,6 +141,8 @@ export async function generateCore<
 
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
+  const prepareProviderMessages = (canonical: readonly Message[]) =>
+    normalizeInvocationMessages(canonical, { provider: modelInfo.provider });
   messages = (await lifecycle.resume(messages)).messages;
 
   const generated = await orchestrateGenerate(
@@ -171,9 +174,7 @@ export async function generateCore<
 
       for (let step = 0; step < maxSteps; step++) {
         steps++;
-        const providerMessages = await normalizeInvocationMessages(messages, {
-          provider: modelInfo.provider,
-        });
+        const providerMessages = await prepareProviderMessages(messages);
         const callArgs: CallArgs<TExtra> = {
           model: modelInfo.modelId,
           system: currentSystem,
@@ -299,13 +300,14 @@ export async function generateCore<
             replaceLastStep({ ...lastExtracted!, text: "" });
             messages = dialect.appendToolRound(messages, lastExtracted!, []);
             messages = [...messages, ...corrective];
+            const providerMessages = await prepareProviderMessages(messages);
             const regen = await withBudget(
               (signal) =>
                 dialect.call(
                   dialect.client,
                   {
                     ...lastCallArgs!,
-                    messages,
+                    messages: providerMessages,
                   },
                   { signal: composeAbortSignals(args.signal, signal) },
                 ),

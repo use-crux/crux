@@ -18,11 +18,10 @@ import { inMemoryRecordStore } from "../storage";
 import { inMemoryAssetStore } from "../asset";
 import { countTokens } from "../shared/tokenizer";
 import { summarizeMessages } from "./summarize";
-import { messageText } from "../content";
 import {
-  loadPersistedMessagesRecord,
-  savePersistedMessagesRecord,
-} from "../content/persisted-message";
+  loadSlidingWindowState,
+  saveSlidingWindowState,
+} from "./sliding-window-storage";
 
 /**
  * Create a stateful sliding window compaction manager.
@@ -48,64 +47,33 @@ export function createSlidingWindow(
     records: inMemoryRecordStore(),
     assets: inMemoryAssetStore(),
   };
-  const records = storage.records;
-
-  const summaryKey = `compact:${id}:summary`;
-  const messagesKey = `compact:${id}:messages`;
+  const stateKey = `compact:${id}:state`;
 
   // In-memory stats tracking
   let totalMessages = 0;
   let evictions = 0;
   let summaryTokens = 0;
 
-  async function loadMessages(): Promise<Message[]> {
-    return [
-      ...(await loadPersistedMessagesRecord({ storage, key: messagesKey })),
-    ];
-  }
-
-  async function saveMessages(messages: Message[]): Promise<void> {
-    await savePersistedMessagesRecord({ storage, key: messagesKey, messages });
-  }
-
-  async function loadSummary(): Promise<string> {
-    const entry = await records.get(summaryKey);
-    return (entry?.content as string) ?? "";
-  }
-
-  async function saveSummary(summary: string): Promise<void> {
-    summaryTokens = countTokens(summary);
-    await records.put(summaryKey, {
-      content: summary,
-      metadata: { type: "sliding-window-summary", windowId: id },
-    });
-  }
-
   async function push(message: Message): Promise<void> {
-    const messages = await loadMessages();
+    const current = await loadSlidingWindowState(storage, stateKey);
+    const messages = [...current.messages];
     messages.push(message);
-    totalMessages++;
+    let nextSummary = current.summary;
+    let evictedCount = 0;
 
     if (messages.length > windowSize) {
       // Evict oldest messages beyond the window
       const evictCount = messages.length - windowSize;
       const evicted = messages.splice(0, evictCount);
-      evictions += evictCount;
+      evictedCount = evictCount;
 
       // Merge evicted messages into the running summary
-      const existingSummary = await loadSummary();
-      const toSummarize: Message[] = existingSummary
+      const toSummarize: Message[] = current.summary
         ? [
-            { role: "system", content: `Previous summary: ${existingSummary}` },
+            { role: "system", content: `Previous summary: ${current.summary}` },
             ...evicted,
           ]
         : evicted;
-
-      const inputTokens = toSummarize.reduce(
-        (sum, m) => sum + countTokens(messageText(m)),
-        0,
-      );
-      const compactStart = Date.now();
 
       const result = await summarizeMessages({
         messages: toSummarize,
@@ -115,19 +83,23 @@ export function createSlidingWindow(
         focus: ["decisions", "key_facts", "user_preferences"],
       });
 
-      await saveSummary(result.summary);
-
-      const outputTokens = countTokens(result.summary);
+      nextSummary = result.summary;
     }
 
-    await saveMessages(messages);
+    await saveSlidingWindowState(storage, stateKey, {
+      summary: nextSummary,
+      messages,
+    });
+    totalMessages += 1;
+    evictions += evictedCount;
+    summaryTokens = countTokens(nextSummary);
   }
 
   async function getMessages(): Promise<Message[]> {
-    const [summary, messages] = await Promise.all([
-      loadSummary(),
-      loadMessages(),
-    ]);
+    const { summary, messages } = await loadSlidingWindowState(
+      storage,
+      stateKey,
+    );
 
     if (summary) {
       return [
@@ -139,7 +111,7 @@ export function createSlidingWindow(
       ];
     }
 
-    return messages;
+    return [...messages];
   }
 
   function getStats(): SlidingWindowStats {

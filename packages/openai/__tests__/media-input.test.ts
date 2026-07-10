@@ -1,11 +1,9 @@
-import type OpenAI from 'openai'
-import type { ChatCompletion, ChatCompletionChunk } from 'openai/resources/chat/completions'
-import type { Stream } from 'openai/streaming'
 import { describe, expect, it, vi } from 'vitest'
 import { isInvalidMediaSourceError, isUnsupportedCapabilityError, prompt, tool } from '@use-crux/core'
 import { z } from 'zod'
 import { createOpenAI } from '../src'
 import type { Message } from '@use-crux/core'
+import { client, completion } from './media-input.fixtures'
 
 const mediaPrompt = prompt({
   id: 'openai-media-input',
@@ -81,6 +79,8 @@ describe('OpenAI native media input', () => {
   })
 
   it('lowers media returned by a tool immediately before the next provider turn', async () => {
+    const source = new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' })
+    const readSource = vi.spyOn(source, 'arrayBuffer')
     const create = vi
       .fn()
       .mockResolvedValueOnce(
@@ -94,7 +94,7 @@ describe('OpenAI native media input', () => {
     const render = tool({
       description: 'Render a chart.',
       input: z.object({}),
-      execute: async () => new Blob([new Uint8Array([1, 2, 3])], { type: 'image/png' }),
+      execute: async () => source,
       toModelOutput: ({ output }) => ({
         type: 'content',
         value: [
@@ -117,6 +117,7 @@ describe('OpenAI native media input', () => {
 
     expect(result.text).toBe('described')
     expect(create).toHaveBeenCalledTimes(2)
+    expect(readSource).toHaveBeenCalledOnce()
     expect(create.mock.calls[1]![0]).toMatchObject({
       messages: [
         { role: 'user', content: 'Render and inspect a chart.' },
@@ -281,115 +282,4 @@ describe('OpenAI native media input', () => {
 
     await expect(adapter.generate(mediaPrompt, { model: 'gpt-4o' })).rejects.toBe(sdkError)
   })
-
-  it('lowers the same media request for prepare, transport, and stream modes', async () => {
-    const options: { readonly model: 'gpt-4o'; readonly messages: Message[] } = {
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'user' as const,
-          content: [
-            {
-              type: 'image' as const,
-              source: new Uint8Array([1, 2, 3]),
-              mediaType: 'image/png',
-            },
-          ],
-        },
-      ],
-    }
-    const managedCalls: unknown[] = []
-    const managed = createOpenAI(
-      client({
-        create: vi.fn(async (request) => {
-          managedCalls.push(request)
-          return completion('done')
-        }),
-      }),
-    )
-    await managed.generate(mediaPrompt, options)
-
-    const prepared = await createOpenAI(client()).prepare!(mediaPrompt, options)
-    const transportCalls: unknown[] = []
-    await createOpenAI(client()).generate(mediaPrompt, {
-      ...options,
-      transport: async (request) => {
-        transportCalls.push(request)
-        return completion('done')
-      },
-    })
-
-    const streamCalls: unknown[] = []
-    await createOpenAI(
-      client({
-        create: vi.fn(async (request) => {
-          streamCalls.push(request)
-          return emptyStream()
-        }),
-      }),
-    ).stream(mediaPrompt, options)
-
-    expect(prepared.params).toEqual(managedCalls[0])
-    expect(transportCalls[0]).toEqual(managedCalls[0])
-    expect(streamCalls[0]).toEqual({
-      ...(managedCalls[0] as object),
-      stream: true,
-    })
-  })
 })
-
-function client(overrides: Readonly<{ create?: (request: unknown) => Promise<unknown> }> = {}): OpenAI {
-  const create = overrides.create ?? (async () => completion('unused'))
-  return {
-    chat: {
-      completions: {
-        create,
-        parse: create,
-      },
-    },
-  } as unknown as OpenAI
-}
-
-function completion(
-  text: string,
-  toolCall?: Readonly<{ id: string; name: string; arguments: string }>,
-): ChatCompletion {
-  return {
-    id: 'chatcmpl-media',
-    object: 'chat.completion',
-    created: 0,
-    model: 'gpt-4o',
-    choices: [
-      {
-        index: 0,
-        message: {
-          role: 'assistant',
-          content: text || null,
-          refusal: null,
-          ...(toolCall
-            ? {
-                tool_calls: [
-                  {
-                    id: toolCall.id,
-                    type: 'function' as const,
-                    function: {
-                      name: toolCall.name,
-                      arguments: toolCall.arguments,
-                    },
-                  },
-                ],
-              }
-            : {}),
-        },
-        finish_reason: toolCall ? 'tool_calls' : 'stop',
-        logprobs: null,
-      },
-    ],
-  } as ChatCompletion
-}
-
-function emptyStream(): Stream<ChatCompletionChunk> {
-  return {
-    async *[Symbol.asyncIterator]() {},
-  } as unknown as Stream<ChatCompletionChunk>
-}

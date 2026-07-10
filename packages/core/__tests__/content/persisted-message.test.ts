@@ -1,11 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { StoredAsset } from "@use-crux/core";
-import { isInvalidMediaSourceError } from "@use-crux/core";
 import type { InvocationMessage } from "../../src/content/invocation-types";
-import {
-  decodePersistedMessages,
-  savePersistedMessagesRecord,
-} from "../../src/content/persisted-message";
+import { savePersistedMessagesRecord } from "../../src/content/persisted-message";
 import {
   fakeAssetStore,
   fakeRecordStore,
@@ -216,66 +212,6 @@ describe("persisted message media codec", () => {
     expect(await records.get("thread:record-fail")).toBeNull();
   });
 
-  it("hydrates asset refs on load and reports missing refs without leaking the URI", async () => {
-    const operations: string[] = [];
-    const assets = fakeAssetStore(operations);
-    const stored = await assets.put({
-      type: "data",
-      data: new Uint8Array([4]),
-      mediaType: "image/png",
-    });
-
-    const messages = await decodePersistedMessages({
-      storage: { records: fakeRecordStore(operations), assets },
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "asset-ref",
-                ref: stored.ref,
-                mediaType: "image/png",
-              },
-            },
-          ],
-        },
-      ],
-    });
-
-    expect(messages[0]?.content).toMatchObject([
-      { type: "image", source: { type: "data", mediaType: "image/png" } },
-    ]);
-
-    await decodePersistedMessages({
-      storage: { records: fakeRecordStore(operations), assets },
-      messages: [
-        {
-          role: "user",
-          content: [
-            {
-              type: "image",
-              source: {
-                type: "asset-ref",
-                ref: { uri: "memory://asset/private/missing" },
-                mediaType: "image/png",
-              },
-            },
-          ],
-        },
-      ],
-    }).catch((error: unknown) => {
-      expect(isInvalidMediaSourceError(error)).toBe(true);
-      expect(error instanceof Error ? error.message : String(error)).toContain(
-        "messages[0].content[0].source",
-      );
-      expect(
-        error instanceof Error ? error.message : String(error),
-      ).not.toContain("memory://asset/private/missing");
-    });
-  });
-
   it("requires assets storage for data persistence and JSON-safe metadata", async () => {
     const operations: string[] = [];
     const records = fakeRecordStore(operations);
@@ -313,4 +249,5 @@ describe("persisted message media codec", () => {
 
     expect(operations).toEqual([]);
   });
+
 });

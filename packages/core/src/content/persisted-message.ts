@@ -37,7 +37,7 @@ export interface SavePersistedMessagesRecordInput {
   readonly messages: readonly InvocationMessage[];
 }
 
-interface EncodeState {
+export interface EncodeState {
   readonly storage: Storage;
   readonly dedupe: Map<string, StoredAsset>;
   readonly writtenRefs: AssetRef[];
@@ -277,7 +277,7 @@ function storedRef(value: unknown): AssetRef | undefined {
     : undefined;
 }
 
-async function rollbackAssets(
+export async function rollbackAssets(
   assets: AssetStore | undefined,
   refs: readonly AssetRef[],
 ): Promise<void> {

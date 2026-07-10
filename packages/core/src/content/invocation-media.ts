@@ -16,8 +16,8 @@ import {
 import {
   looksLikeRawBase64,
   normalizeOptionalMediaType,
-  parseDataUrl,
 } from "./media-data-url";
+import { normalizeInvocationDataUrl } from "./invocation-data-url";
 
 export interface NormalizeInvocationMediaSourceInput {
   readonly kind: "image" | "file";
@@ -74,12 +74,18 @@ export async function normalizeInvocationMediaSource(
   );
 }
 
-function normalizeAssetSource(
+async function normalizeAssetSource(
   input: NormalizeInvocationMediaSourceInput,
   asset: Asset,
   explicitMediaType: string | undefined,
-): Asset {
-  const projected = projectAsset(asset, input.path);
+): Promise<Asset> {
+  let projected = projectAsset(asset, input.path);
+  if (projected.type === "data" && isBlob(projected.data)) {
+    projected = {
+      ...projected,
+      data: new Uint8Array(await projected.data.arrayBuffer()),
+    };
+  }
   const assetMediaType = mediaTypeOf(projected);
   if (
     explicitMediaType &&
@@ -90,6 +96,30 @@ function normalizeAssetSource(
       input.path,
       "Explicit mediaType conflicts with the Asset mediaType.",
     );
+  }
+  if (projected.type === "url" && projected.url.protocol === "data:") {
+    const decoded = normalizeInvocationDataUrl(
+      input,
+      projected.url.href,
+      explicitMediaType ?? assetMediaType,
+    );
+    if (decoded.type !== "data") return decoded;
+    const {
+      type: _type,
+      url: _url,
+      mediaType: _mediaType,
+      size: _size,
+      sha256: _sha256,
+      filename: sourceFilename,
+      ...sourceInfo
+    } = projected;
+    return assertKind(input, {
+      ...sourceInfo,
+      ...decoded,
+      ...(input.filename ?? sourceFilename
+        ? { filename: input.filename ?? sourceFilename }
+        : {}),
+    });
   }
   if (
     projected.type === "provider-file" &&
@@ -139,7 +169,7 @@ function normalizeUrl(
   explicitMediaType: string | undefined,
 ): Asset {
   if (url.protocol === "data:")
-    return normalizeDataUrl(input, url.href, explicitMediaType);
+    return normalizeInvocationDataUrl(input, url.href, explicitMediaType);
   if (url.protocol !== "https:") {
     throw invalid(
       input.path,
@@ -153,45 +183,6 @@ function normalizeUrl(
         type: "url",
         url: new URL(url.href),
         ...(explicitMediaType ? { mediaType: explicitMediaType } : {}),
-      },
-      input.filename,
-    ),
-  );
-}
-
-function normalizeDataUrl(
-  input: NormalizeInvocationMediaSourceInput,
-  value: string,
-  explicitMediaType: string | undefined,
-): Asset {
-  const parsed = parseDataUrl(value, input.path);
-  const mediaType =
-    explicitMediaType ?? parsed.mediaType ?? sniffImageMediaType(parsed.data);
-  if (!mediaType) {
-    throw invalid(
-      input.path,
-      `${label(input.kind)} data URLs require a mediaType.`,
-    );
-  }
-  if (
-    parsed.mediaType &&
-    explicitMediaType &&
-    parsed.mediaType !== explicitMediaType
-  ) {
-    throw invalid(
-      input.path,
-      "Explicit mediaType conflicts with the data URL media type.",
-    );
-  }
-  return assertKind(
-    input,
-    withFilename(
-      {
-        type: "data",
-        data: parsed.data,
-        mediaType,
-        size: parsed.data.byteLength,
-        sha256: sha256Hex(parsed.data),
       },
       input.filename,
     ),

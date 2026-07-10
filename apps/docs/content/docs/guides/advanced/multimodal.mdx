@@ -46,7 +46,8 @@ Parts are ordinary invocation values. Model calls validate and normalize media b
 
 ## Project to text
 
-Use `messageText(message)` or `contentText(content)` for every string-only boundary:
+Use `messageText(message)` or `contentText(content)` when a text-only model or
+context subsystem needs a semantic projection:
 
 ```ts
 import { contentText, textPart } from "@use-crux/core";
@@ -57,19 +58,19 @@ const text = contentText([
 ]);
 ```
 
-Text parts pass through verbatim. Images and files become bounded placeholders such as `[image image/png 210KB sha256:ab12...]` or `[file application/pdf "brief.pdf" https://example.com/brief.pdf]`. Raw base64 is never written into projections. Crux uses the same projection internally for guardrails, compaction, memory capture, semantic cache query text, resolver system messages, artifact previews, and telemetry.
+Text parts pass through verbatim. Images and files become bounded placeholders such as `[image image/png 210KB sha256:ab12...]` or `[file application/pdf "brief.pdf" https://example.com/brief.pdf]`. Raw base64 is never written into projections. This semantic projection can still contain filenames and complete HTTPS URLs, so do not use it as a logging or secret-redaction boundary. Ordinary Crux observability applies a stricter private descriptor that removes media payloads, filenames, complete URLs, provider file IDs, and asset refs before emission.
 
 ## Adapter behavior
 
 All first-party generation adapters accept the same canonical content. Provider support differs at the wire boundary:
 
-| Capability | AI SDK | Anthropic | OpenAI Chat | Google |
-| --- | --- | --- | --- | --- |
-| Image input, data or URL | yes | yes | yes | yes |
-| PDF input | yes | yes, document blocks | file data yes | yes |
-| Audio input | model-dependent | model-dependent | wav/mp3 file data | yes |
-| Assistant media decode | yes | yes | yes | yes |
-| System role media | unsupported | unsupported | unsupported | unsupported |
+| Capability               | AI SDK          | Anthropic            | OpenAI Chat       | Google      |
+| ------------------------ | --------------- | -------------------- | ----------------- | ----------- |
+| Image input, data or URL | yes             | yes                  | yes               | yes         |
+| PDF input                | yes             | yes, document blocks | file data yes     | yes         |
+| Audio input              | model-dependent | model-dependent      | wav/mp3 file data | yes         |
+| Assistant media decode   | yes             | yes                  | yes               | yes         |
+| System role media        | unsupported     | unsupported          | unsupported       | unsupported |
 
 Malformed media throws `InvalidMediaSourceError`. Valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError` before provider I/O.
 
