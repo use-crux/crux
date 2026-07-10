@@ -547,26 +547,20 @@ export type {
   ToolChoice,
 } from "./generation";
 export { hasToolCall, maxSteps } from "./generation";
-export type { ContentPart, MessageContent } from "./types/content";
+export type { ContentPart, MediaSource, MessageContent } from "./types/content";
 export {
   createInvalidMediaSourceError,
   createUnsupportedCapabilityError,
-  UnsupportedContentError,
   contentText,
-  filePart,
   hasMediaParts,
-  imagePart,
   isInvalidMediaSourceError,
   isUnsupportedCapabilityError,
   messageText,
   textPart,
 } from "./content";
 export type {
-  FilePartInput,
-  ImagePartInput,
   InvalidMediaSourceError,
   UnsupportedCapabilityError,
-  UnsupportedContentErrorOptions,
   UnsupportedCapabilityIssue,
 } from "./content";
 export type { TokenizerFn } from "./shared/tokenizer";

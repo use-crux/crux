@@ -206,7 +206,7 @@ createSlidingWindow({
   windowSize: 3,
   generate,
   model: {},
-  records,
+  storage: { records },
 })
 
 createSlidingWindow({

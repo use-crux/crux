@@ -1,7 +1,6 @@
 import type { FunctionResponsePart } from '@google/genai'
 import type { ContentPart, ToolModelOutput } from '@use-crux/core'
 import { contentText } from '@use-crux/core'
-import type { ContentDegradationContext } from '@use-crux/core/adapter'
 import { googleContentParts } from './content-parts'
 
 /**
@@ -54,9 +53,8 @@ export function googleToolResponse(
  */
 export function googleFunctionResponseParts(
   parts: readonly ContentPart[],
-  context: ContentDegradationContext,
 ): FunctionResponsePart[] {
-  return googleContentParts('tool', parts, context).flatMap((part): FunctionResponsePart[] => {
+  return googleContentParts('tool', parts).flatMap((part): FunctionResponsePart[] => {
     if (part.inlineData) return [{ inlineData: part.inlineData }]
     if (part.fileData) return [{ fileData: part.fileData }]
     return []

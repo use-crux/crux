@@ -157,7 +157,7 @@ const renderChart = tool({
     type: "content",
     value: [
       { type: "text", text: output.caption },
-      { type: "image-data", mediaType: "image/png", data: output.base64Png },
+      { type: "image", source: output.pngBytes, mediaType: "image/png" },
     ],
   }),
 });

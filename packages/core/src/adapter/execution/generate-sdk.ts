@@ -19,6 +19,7 @@ import {
   createBudgetSignal,
   type BudgetSignal,
 } from "../../generation/timeout";
+import { normalizeInvocationMessages } from "../../content/invocation-message";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -157,29 +158,36 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     },
   };
 
-  const buildRequest = (
+  const buildRequest = async (
     signal: AbortSignal | undefined,
-  ): ExecutorRequest<TModel> => ({
-    model: args.model,
-    modelInfo,
-    system: currentSystem,
-    systemBlocks: currentSystemBlocks,
-    prompt: promptText,
-    messages,
-    settings: mappedSettings,
-    unsupportedContent: resolved.settings.unsupportedContent,
-    tools: lifecycle.tools,
-    toolApproval: (call) =>
-      lifecycle.requiresApproval(
-        { id: call.toolCallId, name: call.toolName, args: call.input },
-        call.messages ?? messages,
-      ),
-    activeTools: args.activeTools,
-    maxSteps,
-    observer: loopObserver,
-    abortSignal: composeAbortSignals(args.signal, signal),
-    extra: args.extra,
-  });
+  ): Promise<ExecutorRequest<TModel>> => {
+    const providerMessages =
+      messages.length > 0
+        ? await normalizeInvocationMessages(messages, {
+            provider: modelInfo.provider,
+          })
+        : undefined;
+    return {
+      model: args.model,
+      modelInfo,
+      system: currentSystem,
+      systemBlocks: currentSystemBlocks,
+      prompt: promptText,
+      messages: providerMessages,
+      settings: mappedSettings,
+      tools: lifecycle.tools,
+      toolApproval: (call) =>
+        lifecycle.requiresApproval(
+          { id: call.toolCallId, name: call.toolName, args: call.input },
+          call.messages ?? messages,
+        ),
+      activeTools: args.activeTools,
+      maxSteps,
+      observer: loopObserver,
+      abortSignal: composeAbortSignals(args.signal, signal),
+      extra: args.extra,
+    };
+  };
 
   const generated = await orchestrateGenerate<
     Record<string, unknown>,
@@ -219,7 +227,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           ? await generateSdkStructured({
               dialect,
               args,
-              request: buildRequest(undefined),
+              request: await buildRequest(undefined),
               schema: resolved.schema,
               safety,
               retryId,
@@ -232,7 +240,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
                 budget: "step",
                 limitMs: args.timeout?.stepMs,
               });
-              return generateLoop(buildRequest(stepBudget.signal));
+              return generateLoop(await buildRequest(stepBudget.signal));
             })();
         result._meta = safety.stamp(result._meta);
         return result;

@@ -1,19 +1,16 @@
 ---
 title: Multimodal Content
-description: ContentPart, MessageContent, builders, text projection helpers, and unsupported-content behavior.
+description: ContentPart, MessageContent, media sources, text projection helpers, and media errors.
 ---
 
 ```ts
 import {
-  UnsupportedContentError,
   contentText,
-  filePart,
   hasMediaParts,
-  imagePart,
   messageText,
   textPart,
 } from "@use-crux/core";
-import type { ContentPart, MessageContent } from "@use-crux/core";
+import type { ContentPart, MediaSource, MessageContent } from "@use-crux/core";
 ```
 
 ## Types
@@ -24,22 +21,19 @@ import type { ContentPart, MessageContent } from "@use-crux/core";
 type MessageContent = string | readonly ContentPart[];
 ```
 
-`ContentPart` is a closed JSON-serializable union:
+`MediaSource` is an `Asset`, HTTPS/data URL string, `URL`, `Uint8Array`, `ArrayBuffer`, or `Blob`. `AssetRef` is not model input; hydrate it with `assetStore.get(ref)` first.
+
+`ContentPart` is a closed visible-content union:
 
 | Part | Required fields | Notes |
 | --- | --- | --- |
 | `text` | `text` | Plain visible text. |
-| `image-data` | `data`, `mediaType` | Base64 bytes. |
-| `image-url` | `url` | Optional `mediaType`. |
-| `image-file-id` | `fileId` | Provider file reference, string or provider record. |
-| `file-data` | `data`, `mediaType` | Base64 bytes, optional `filename`. |
-| `file-url` | `url` | Optional `mediaType` and `filename`. |
-| `file-id` | `fileId` | Provider file reference, string or provider record. |
-| `custom` | none | Provider-specific escape through `providerOptions`. |
+| `image` | `source` | Optional `mediaType`; source accepts `MediaSource`. |
+| `file` | `source` | Optional `mediaType` and `filename`; source accepts `MediaSource`. |
 
 Every part may carry `providerOptions`. Protocol/control state such as tool calls and approvals belongs in `Message.metadata`, not in `ContentPart`.
 
-## Builders
+## Parts
 
 ### `textPart(text)`
 
@@ -49,34 +43,22 @@ Create a `text` part.
 const part = textPart("Summarize this image.");
 ```
 
-### `imagePart(input)`
-
-Create `image-data` from bytes/base64 or `image-url` from a URL.
-
 ```ts
-imagePart({ data: pngBytes, mediaType: "image/png" });
-imagePart({ url: new URL("https://example.com/chart.png") });
-```
+const image: ContentPart = {
+  type: "image",
+  source: pngBytes,
+  mediaType: "image/png",
+};
 
-### `filePart(input)`
-
-Create `file-data` from bytes/base64 or `file-url` from a URL.
-
-```ts
-filePart({
-  data: pdfBytes,
+const file: ContentPart = {
+  type: "file",
+  source: "https://example.com/report.pdf",
   mediaType: "application/pdf",
   filename: "report.pdf",
-});
-
-filePart({
-  url: "https://example.com/report.pdf",
-  mediaType: "application/pdf",
-  filename: "report.pdf",
-});
+};
 ```
 
-The builders accept `string`, `Uint8Array`, or `ArrayBuffer` for `data`, and `string` or `URL` for URLs. The returned parts contain only JSON-safe strings.
+Model calls normalize and validate media before provider I/O. They do not persist media.
 
 ## Text Projection
 
@@ -87,7 +69,7 @@ Project a `MessageContent` value into bounded text.
 ```ts
 const projected = contentText([
   textPart("Inspect this."),
-  imagePart({ data: pngBytes, mediaType: "image/png" }),
+  { type: "image", source: pngBytes, mediaType: "image/png" },
 ]);
 ```
 
@@ -107,20 +89,10 @@ Use this anywhere a widened `Message.content` must become a string: guardrails, 
 
 Return `true` when a content array contains any non-text part.
 
-## Unsupported Content
+## Media Errors
 
-Adapters degrade unsupported parts by default: they send a deterministic placeholder, emit a diagnostics warning, and record a `content.degraded` span event. Use strict mode when degradation is not acceptable:
-
-```ts
-await adapter.generate(prompt, {
-  model,
-  input,
-  unsupportedContent: "error",
-});
-```
-
-Strict mode throws `UnsupportedContentError` before the provider call. The error exposes `partType`, optional `mediaType`, `role`, and `provider`.
+Malformed media throws `InvalidMediaSourceError`. Valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError` before provider I/O.
 
 ## Convex Mirror
 
-`@use-crux/convex` re-exports `ContentPart`, `MessageContent`, `textPart`, `imagePart`, `filePart`, `contentText`, `messageText`, `hasMediaParts`, and `UnsupportedContentError` from its root. They are identical core re-exports for Convex code that imports through the runtime profile.
+`@use-crux/convex` re-exports `ContentPart`, `MessageContent`, `textPart`, `contentText`, `messageText`, and `hasMediaParts` from its root.

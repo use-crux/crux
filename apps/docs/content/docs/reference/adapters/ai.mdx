@@ -40,7 +40,7 @@ For Anthropic AI SDK models, Crux converts resolved `systemBlocks` into AI SDK s
 
 ### Multimodal content
 
-`@use-crux/ai` accepts canonical `ContentPart[]` message content and encodes it to AI SDK text, image, and file parts. AI SDK-shaped message arrays from `convertToModelMessages()` normalize back to canonical parts when no fields would be dropped; legacy v6 `media` parts decode as `file-data`. SDK control parts such as tool calls and approval responses move into `Message.metadata`, while genuinely unknown part shapes pass through with a diagnostics warning.
+`@use-crux/ai` accepts canonical `ContentPart[]` message content and encodes it to AI SDK text, image, and file parts. AI SDK-shaped message arrays from `convertToModelMessages()` normalize back to canonical parts when no fields would be dropped; legacy v6 `media` parts decode as canonical `file` parts with data sources. SDK control parts such as tool calls and approval responses move into `Message.metadata`, while genuinely unknown part shapes pass through with a diagnostics warning.
 
 **Cross-adapter parity:** switching a prompt between `@use-crux/ai` and a native adapter (`@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) changes nothing observable except model behavior itself — same default tool-loop budget (`maxSteps: 10`), same corrective-retry messages, same approval suspend/resume protocol, same canonical `tool.call` / `tool.args` / raw and model-facing `tool.result` telemetry, same routing and audit metadata. This is enforced by a cross-dialect parity suite in `@use-crux/core`. Note this differs from the raw AI SDK's own `generateText` default (`stopWhen: stepCountIs(1)`): Crux adapters loop tools by default; pass `maxSteps: 1` for single-step behavior.
 

@@ -65,7 +65,7 @@ describe('google transcript wire encoding', () => {
             type: 'content',
             value: [
               { type: 'text', text: 'Rendered image' },
-              { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
+              { type: 'image', source: { type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' }, mediaType: 'image/png' },
             ],
           },
         },
@@ -79,8 +79,8 @@ describe('google transcript wire encoding', () => {
           functionResponse: {
             id: 'call-1',
             name: 'renderImage',
-            response: { output: 'Rendered image\n[image image/png 9B sha256:164794222647]' },
-            parts: [{ inlineData: { data: 'base64-image', mimeType: 'image/png' } }],
+            response: { output: 'Rendered image\n[image image/png 1B sha256:4bf5122f3445]' },
+            parts: [{ inlineData: { data: 'AQ==', mimeType: 'image/png' } }],
           },
         },
       ],

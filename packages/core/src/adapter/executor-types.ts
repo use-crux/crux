@@ -13,7 +13,7 @@
 
 import type { z } from "zod";
 import type { ModelInfo } from "../types";
-import type { GenerationSettings, TraceMeta } from "../generation/types";
+import type { TraceMeta } from "../generation/types";
 import type { SystemBlock } from "../resolver/types";
 import type { DiagnosticsPort } from "../resolver/ports";
 import type { Message } from "../generation/messages";
@@ -58,8 +58,6 @@ export interface ExecutorRequest<TModel> {
   readonly messages: readonly Message[] | undefined;
   /** Provider-native settings, already mapped via `mapSettings()`. */
   readonly settings: Record<string, unknown>;
-  /** Canonical unsupported-content policy kept out of provider-native settings. */
-  readonly unsupportedContent?: NonNullable<GenerationSettings["unsupportedContent"]>;
   /**
    * Merged + instrumented tool map. Values keep whatever shape the caller
    * provided (AI SDK `tool()` objects pass through untouched); the factory

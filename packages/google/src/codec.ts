@@ -59,7 +59,6 @@ export async function toParams(
   const callArgs = callArgsFromResolvedPrompt(resolved, {
       model: options.model,
       settings,
-      unsupportedContent: generationSettings.unsupportedContent,
       extra: options.extra,
       messages: options.messages,
       tools: options.tools ? [...options.tools] : undefined,
@@ -68,9 +67,7 @@ export async function toParams(
   const request = await googleRequest(
     {
       ...callArgs,
-      providerMessages: googleTranscript.fromMessages(callArgs.messages, {
-        unsupportedContent: callArgs.unsupportedContent,
-      }),
+      providerMessages: googleTranscript.fromMessages(callArgs.messages),
     },
     options.cachedContentLifecycle ?? disabledCachedContentLifecycle(),
   )

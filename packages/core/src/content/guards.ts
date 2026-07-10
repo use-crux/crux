@@ -12,20 +12,10 @@ export function isContentPart(value: unknown): value is ContentPart {
   switch (value.type) {
     case 'text':
       return typeof value.text === 'string'
-    case 'image-data':
-      return typeof value.data === 'string' && typeof value.mediaType === 'string'
-    case 'image-url':
-      return typeof value.url === 'string' && optionalString(value.mediaType)
-    case 'image-file-id':
-      return typeof value.fileId === 'string' || isStringRecord(value.fileId)
-    case 'file-data':
-      return typeof value.data === 'string' && typeof value.mediaType === 'string' && optionalString(value.filename)
-    case 'file-url':
-      return typeof value.url === 'string' && optionalString(value.mediaType) && optionalString(value.filename)
-    case 'file-id':
-      return typeof value.fileId === 'string' || isStringRecord(value.fileId)
-    case 'custom':
-      return true
+    case 'image':
+      return isMediaSource(value.source) && optionalString(value.mediaType)
+    case 'file':
+      return isMediaSource(value.source) && optionalString(value.mediaType) && optionalString(value.filename)
     default:
       return false
   }
@@ -35,8 +25,28 @@ function optionalString(value: unknown): boolean {
   return value === undefined || typeof value === 'string'
 }
 
-function isStringRecord(value: unknown): value is Record<string, string> {
-  return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string')
+function isMediaSource(value: unknown): boolean {
+  if (typeof value === 'string') return true
+  if (value instanceof URL || value instanceof Uint8Array || value instanceof ArrayBuffer) return true
+  if (typeof Blob !== 'undefined' && value instanceof Blob) return true
+  return isAsset(value)
+}
+
+function isAsset(value: unknown): boolean {
+  if (!isRecord(value) || typeof value.type !== 'string') return false
+  switch (value.type) {
+    case 'data':
+      return (value.data instanceof Uint8Array || (typeof Blob !== 'undefined' && value.data instanceof Blob))
+        && typeof value.mediaType === 'string'
+    case 'url':
+      return value.url instanceof URL && optionalString(value.mediaType)
+    case 'provider-file':
+      return typeof value.provider === 'string'
+        && typeof value.fileId === 'string'
+        && optionalString(value.mediaType)
+    default:
+      return false
+  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

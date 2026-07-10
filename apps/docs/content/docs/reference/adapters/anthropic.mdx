@@ -30,7 +30,7 @@ Create an adapter bound to an Anthropic client.
 
 `createAnthropic()` is `anthropicProviderRuntime.create`. The package-owned `anthropicTranscript` owns `tool_use` / `tool_result` conversion plus assistant text/tool-call extraction. Anthropic-specific request params, cache-control system blocks, and response metadata normalization stay owned by `@use-crux/anthropic`; Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability. Provider prompt caching uses Crux's `cacheBoundary` marker: the adapter places one Anthropic `cache_control` breakpoint at the end of the stable cached prefix.
 
-Anthropic content support is part-aware beneath the public codec surface: user image data/URLs encode as image blocks, PDF data/URLs encode as document blocks, assistant image/document blocks decode back into canonical message content, and unsupported parts such as audio degrade to deterministic placeholders unless strict unsupported-content mode is enabled.
+Anthropic content support is part-aware beneath the public codec surface: user image data/URLs encode as image blocks, PDF data/URLs encode as document blocks, assistant image/document blocks decode back into canonical message content, and unsupported parts such as audio fail before the provider call.
 
 | Field    | Type        | Description                   |
 | -------- | ----------- | ----------------------------- |

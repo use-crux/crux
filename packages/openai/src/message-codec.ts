@@ -27,10 +27,10 @@ export type OpenAIAssistantTurn = NativeAssistantTurn
 const openAIDialect: ProviderTranscriptDialect<OpenAI.ChatCompletionMessageParam, ChatCompletion> = {
   encodeContent: ({ role, content }, options) =>
     role === 'system'
-      ? { role, content: openAIMessageContent(role, content, options) }
-      : { role, content: openAIMessageContent(role, content, options) },
+      ? { role, content: openAIMessageContent(role, content) }
+      : { role, content: openAIMessageContent(role, content) },
   encodeAssistant: ({ content, toolCalls }, options) =>
-    encodeAssistant(openAIMessageContent('assistant', content, options), toolCalls ?? []),
+    encodeAssistant(openAIMessageContent('assistant', content), toolCalls ?? []),
   encodeToolResults: ({ results }, helpers, options) => results.map((result) => encodeToolResult(result, helpers, options)),
   decodeMessage: decodeMessage,
   readAssistant: readOpenAIAssistant,
@@ -92,19 +92,12 @@ function encodeAssistant(
 function encodeToolResult(
   result: ProviderToolResult,
   helpers: ToolResultEncodingHelpers,
-  options: { readonly unsupportedContent?: 'degrade' | 'error' },
+  _options: Readonly<Record<never, never>>,
 ): OpenAI.ChatCompletionToolMessageParam {
   const parts = helpers.contentParts(result)
   return {
     role: 'tool',
-    content: parts
-      ? openAIToolResultContent(parts, {
-          provider: 'openai',
-          role: 'tool',
-          unsupportedContent: options.unsupportedContent,
-          reason: 'unsupported OpenAI tool-result content part',
-        })
-      : helpers.plainText(result),
+    content: parts ? openAIToolResultContent(parts) : helpers.plainText(result),
     tool_call_id: result.toolCallId,
   }
 }

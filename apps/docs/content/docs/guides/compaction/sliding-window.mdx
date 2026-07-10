@@ -18,36 +18,38 @@ Long-running chat loops eventually exceed the context window. Dropping oldest me
 ## When should I NOT use it?
 
 - You only need the last N messages and don't care about older ones — keep it simple, no summarizer needed
-- You need **structured data** out of older messages — use [extract key facts](/docs/guides/compaction/extraction) instead, possibly *before* sliding-window evicts them
+- You need **structured data** out of older messages — use [extract key facts](/docs/guides/compaction/extraction) instead, possibly _before_ sliding-window evicts them
 - You're processing a **bounded batch** of messages — use [summarize messages](/docs/guides/compaction/summarization) one-shot
 
 ## Quick start
 
 ```ts title="sliding-window.ts"
-import { generateTextFn } from '@use-crux/ai'
-import { createSlidingWindow } from '@use-crux/core/compaction'
+import { generateTextFn } from "@use-crux/ai";
+import { createSlidingWindow } from "@use-crux/core/compaction";
 
 const window = createSlidingWindow({
-  id: 'chat-1',                 // store key — same id reuses the running summary
-  windowSize: 20,               // keep last 20 messages verbatim
+  id: "chat-1", // store key — same id reuses the running summary
+  windowSize: 20, // keep last 20 messages verbatim
   generate: generateTextFn,
-  model: cheapModel,            // a fast/cheap model is fine for summarization
-  summaryBudget: 1000,          // max tokens for the running summary
-  records: myRecords,           // optional persistent records
-})
+  model: cheapModel, // a fast/cheap model is fine for summarization
+  summaryBudget: 1000, // max tokens for the running summary
+  storage: myStorage, // optional records + media assets
+});
 
-await window.push({ role: 'user', content: 'Hello!' })
-await window.push({ role: 'assistant', content: 'Hi there!' })
+await window.push({ role: "user", content: "Hello!" });
+await window.push({ role: "assistant", content: "Hi there!" });
 
 // On every turn, get the compacted message array (summary + recent messages)
-const messages = await window.getMessages()
+const messages = await window.getMessages();
 
-window.getStats()
+window.getStats();
 // { totalMessages: 25, windowedMessages: 20, summaryTokens: 450, evictions: 1 }
 ```
 
 <Callout type="idea">
-Use a cheap, fast model for `generate` here — summaries don't need your best model. `gpt-4o-mini`, `claude-haiku`, or `gemini-flash` keeps compaction fast and inexpensive.
+  Use a cheap, fast model for `generate` here — summaries don't need your best
+  model. `gpt-4o-mini`, `claude-haiku`, or `gemini-flash` keeps compaction fast
+  and inexpensive.
 </Callout>
 
 ## How eviction works
@@ -55,7 +57,7 @@ Use a cheap, fast model for `generate` here — summaries don't need your best m
 On every `push()`:
 
 1. The new message gets appended to the in-memory window
-2. If `window.length > windowSize`, the oldest messages above the threshold are *evicted*
+2. If `window.length > windowSize`, the oldest messages above the threshold are _evicted_
 3. Evicted messages get passed to `summarizeMessages()` along with the existing running summary
 4. The merged summary is saved back to the store under `compact:{id}:summary`
 
@@ -72,20 +74,22 @@ The summary message uses role `system` by default. Configure with the `summaryRo
 
 ## Persistence
 
-Without records, the running summary is lost on process restart. For a chat app, pass a `RecordStore`:
+Without storage, the running summary is lost on process restart. For a chat app,
+pass one `Storage` bundle. Its asset store keeps media usable across reloads:
 
 ```ts
-import { convexRecordStore } from '@use-crux/convex'
+import { convexAssetStore, convexRecordStore } from "@use-crux/convex";
 
-const records = convexRecordStore({ component: components.crux, ctx })
+const records = convexRecordStore({ component: components.crux, ctx });
+const assets = convexAssetStore({ ctx });
 
 const window = createSlidingWindow({
-  id: `chat-${threadId}`,    // per-thread isolation
-  records,
+  id: `chat-${threadId}`, // per-thread isolation
+  storage: { records, assets },
   windowSize: 20,
   generate: generateTextFn,
   model: cheapModel,
-})
+});
 ```
 
 The `id` becomes the record key prefix — different threads must use different ids.
@@ -95,23 +99,36 @@ The `id` becomes the record key prefix — different threads must use different 
 ```ts
 const window = createSlidingWindow({
   // ...
-  onCompactStart: ({ evictedCount, totalTokens }) => log.info('compacting'),
-  onCompactEnd: ({ summaryTokens, ratio }) => metrics.gauge('summary.ratio', ratio),
-})
+  onCompactStart: ({ evictedCount, totalTokens }) => log.info("compacting"),
+  onCompactEnd: ({ summaryTokens, ratio }) =>
+    metrics.gauge("summary.ratio", ratio),
+});
 ```
 
 `onCompactEnd` fires whenever a summarization round completes. It carries `tokensBefore`, `tokensAfter`, and `ratio` — useful for telemetry on how aggressive compaction is being.
 
 ## Cost considerations
 
-Sliding window calls the LLM *only when the window overflows*. With `windowSize: 20`, summarization runs roughly every Nth turn (depending on message length). Each summarization call replaces the previous summary — there's no log-O(N) overhead.
+Sliding window calls the LLM _only when the window overflows_. With `windowSize: 20`, summarization runs roughly every Nth turn (depending on message length). Each summarization call replaces the previous summary — there's no log-O(N) overhead.
 
 For a typical chat with 5–10 sentence turns, expect summarization to fire every 15–25 turns. The cost stays bounded by `summaryBudget`.
 
 ## Where to next
 
 <Cards>
-  <Card title="Compaction overview" description="All four primitives at a glance." href="/docs/guides/compaction" />
-  <Card title="Budget manager" description="Decide when to compact based on token pressure." href="/docs/guides/compaction/budget" />
-  <Card title="Extract key facts" description="Pull structured data before sliding-window evicts it." href="/docs/guides/compaction/extraction" />
+  <Card
+    title="Compaction overview"
+    description="All four primitives at a glance."
+    href="/docs/guides/compaction"
+  />
+  <Card
+    title="Budget manager"
+    description="Decide when to compact based on token pressure."
+    href="/docs/guides/compaction/budget"
+  />
+  <Card
+    title="Extract key facts"
+    description="Pull structured data before sliding-window evicts it."
+    href="/docs/guides/compaction/extraction"
+  />
 </Cards>

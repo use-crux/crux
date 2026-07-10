@@ -60,7 +60,7 @@ import { tool } from "@use-crux/convex/tools";
 
 The package root is curated. It exports Convex APIs plus common prompt authoring helpers (`prompt`, `context`, `createPrompts`, `createContexts`, and sanitization helpers), but it does not blanket re-export every `@use-crux/core` API. If a Convex mirror exists, prefer it; if no mirror exists yet, import the SDK-agnostic primitive from `@use-crux/core`.
 
-The root also re-exports the core multimodal content surface unchanged: `ContentPart`, `MessageContent`, `textPart`, `imagePart`, `filePart`, `contentText`, `messageText`, `hasMediaParts`, and `UnsupportedContentError`. Use these identical re-exports in Convex code when message construction or projection lives inside Convex actions.
+The root also re-exports the core multimodal content surface unchanged: `ContentPart`, `MessageContent`, `textPart`, `contentText`, `messageText`, and `hasMediaParts`. Use these identical re-exports in Convex code when message construction or projection lives inside Convex actions.
 
 ## Runtime Engine Host
 

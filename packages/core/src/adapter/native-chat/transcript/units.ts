@@ -66,10 +66,7 @@ export interface ProviderToolResult {
 }
 
 /** Options that affect provider transcript encoding without changing provider wire params. */
-export interface TranscriptEncodeOptions {
-  /** How codecs handle canonical content parts the selected provider cannot represent. */
-  readonly unsupportedContent?: 'degrade' | 'error'
-}
+export type TranscriptEncodeOptions = Readonly<Record<never, never>>
 
 /**
  * The neutral unit of a transcript: the smallest piece a dialect encodes.

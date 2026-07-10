@@ -16,7 +16,7 @@ import { createLightweightSpanManager } from '../src/span-manager'
 import type { TraceSpan } from '../src/types'
 import { resetHooks, updateHooks } from '../../core/src/runtime/runtime'
 import { messageContentAttributesForArtifact } from '../src/message-content'
-import { imagePart, textPart } from '@use-crux/core'
+import { textPart } from '@use-crux/core'
 
 describe('GenAI semconv projection', () => {
   afterEach(() => {
@@ -221,7 +221,7 @@ describe('GenAI semconv projection', () => {
               role: 'user',
               content: [
                 textPart('inspect this chart'),
-                imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+                { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
               ],
             },
           ],

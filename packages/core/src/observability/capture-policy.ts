@@ -201,19 +201,15 @@ function sanitizePreviewForCapture(
   if (seen.has(value)) return '[Circular]'
   seen.add(value)
 
-  if (isContentPart(value) && 'data' in value && shouldReplaceData(level, value.data)) {
+  if (
+    isContentPart(value)
+    && (value.type === 'image' || value.type === 'file')
+    && shouldReplaceMediaSource(level, value.source)
+  ) {
     seen.delete(value)
     return {
       ...value,
-      data: contentText([value]),
-    }
-  }
-
-  if (isContentPart(value) && 'url' in value && shouldReplaceDataUrl(level, value.url)) {
-    seen.delete(value)
-    return {
-      ...value,
-      url: contentText([value]),
+      source: contentText([value]),
     }
   }
 
@@ -236,6 +232,20 @@ function shouldReplaceDataUrl(
   url: string,
 ): boolean {
   return isBase64DataUrl(url) && shouldReplaceData(level, url)
+}
+
+function shouldReplaceMediaSource(
+  level: Extract<CruxObservabilityCaptureLevel, 'full' | 'safe'>,
+  source: unknown,
+): boolean {
+  if (typeof source === 'string') return shouldReplaceDataUrl(level, source)
+  if (source instanceof Uint8Array) return level === 'safe' || source.byteLength > FULL_CAPTURE_DATA_INLINE_THRESHOLD
+  if (source instanceof ArrayBuffer) return level === 'safe' || source.byteLength > FULL_CAPTURE_DATA_INLINE_THRESHOLD
+  if (typeof Blob !== 'undefined' && source instanceof Blob) return level === 'safe' || source.size > FULL_CAPTURE_DATA_INLINE_THRESHOLD
+  if (isRecord(source) && source.type === 'data' && 'data' in source) {
+    return shouldReplaceMediaSource(level, source.data)
+  }
+  return false
 }
 
 function isBase64DataUrl(value: string): boolean {

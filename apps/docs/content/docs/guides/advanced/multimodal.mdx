@@ -7,10 +7,10 @@ Crux uses one canonical content vocabulary for multimodal chat: `Message.content
 
 ## Author parts
 
-Use builders when you have bytes or URLs at the edge:
+Use direct `source` values when you have bytes, URLs, Blobs, or Assets at the edge:
 
 ```ts
-import { filePart, imagePart, prompt, textPart } from "@use-crux/core";
+import { prompt, textPart } from "@use-crux/core";
 import { generate } from "@use-crux/ai";
 
 const inspect = prompt({
@@ -21,12 +21,13 @@ const inspect = prompt({
       role: "user",
       content: [
         textPart(input.question),
-        imagePart({ data: screenshotBytes, mediaType: "image/png" }),
-        filePart({
-          url: "https://example.com/brief.pdf",
+        { type: "image", source: screenshotBytes, mediaType: "image/png" },
+        {
+          type: "file",
+          source: "https://example.com/brief.pdf",
           mediaType: "application/pdf",
           filename: "brief.pdf",
-        }),
+        },
       ],
     },
   ],
@@ -41,18 +42,18 @@ result.text;
 result.messages;
 ```
 
-Parts are plain JSON after construction. Binary data is base64, URLs are strings, and provider-specific per-part escapes live in `providerOptions`. Literal part objects are valid when you already have normalized data.
+Parts are ordinary invocation values. Model calls validate and normalize media before provider I/O, but they do not persist it. Provider-specific per-part escapes live in `providerOptions`.
 
 ## Project to text
 
 Use `messageText(message)` or `contentText(content)` for every string-only boundary:
 
 ```ts
-import { contentText, imagePart, textPart } from "@use-crux/core";
+import { contentText, textPart } from "@use-crux/core";
 
 const text = contentText([
   textPart("Review this image."),
-  imagePart({ data: pngBytes, mediaType: "image/png" }),
+  { type: "image", source: pngBytes, mediaType: "image/png" },
 ]);
 ```
 
@@ -65,22 +66,12 @@ All first-party generation adapters accept the same canonical content. Provider 
 | Capability | AI SDK | Anthropic | OpenAI Chat | Google |
 | --- | --- | --- | --- | --- |
 | Image input, data or URL | yes | yes | yes | yes |
-| PDF input | yes | yes, document blocks | file data yes; URL degrades | yes |
-| Audio input | model-dependent | degrades | wav/mp3 file data | yes |
+| PDF input | yes | yes, document blocks | file data yes | yes |
+| Audio input | model-dependent | model-dependent | wav/mp3 file data | yes |
 | Assistant media decode | yes | yes | yes | yes |
-| System role media | degrades everywhere | degrades everywhere | degrades everywhere | degrades everywhere |
+| System role media | unsupported | unsupported | unsupported | unsupported |
 
-Unsupported content degrades deliberately by default: Crux sends the text placeholder, emits a diagnostics warning, and records a `content.degraded` span event. Set `unsupportedContent: "error"` when a provider mismatch should fail before the wire call:
-
-```ts
-await generate(inspect, {
-  model,
-  input,
-  unsupportedContent: "error",
-});
-```
-
-The thrown `UnsupportedContentError` includes the part type, optional media type, role, and provider.
+Malformed media throws `InvalidMediaSourceError`. Valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError` before provider I/O.
 
 ## Control is metadata
 

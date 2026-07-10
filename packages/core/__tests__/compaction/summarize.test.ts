@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { summarizeMessages, formatTranscript } from '../../src/compaction/summarize'
 import type { Message } from '../../src/generation/messages'
 import type { GenerateTextFn } from '../../src/compaction/types'
-import { imagePart, textPart } from '../../src/content'
+import { textPart } from '../../src/content'
 
 const sampleMessages: Message[] = [
   { role: 'user', content: 'What is the capital of France?' },
@@ -38,7 +38,7 @@ describe('formatTranscript', () => {
     const result = formatTranscript([
       {
         role: 'user',
-        content: [textPart('Summarize this chart'), imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' })],
+        content: [textPart('Summarize this chart'), { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }],
       },
     ])
 

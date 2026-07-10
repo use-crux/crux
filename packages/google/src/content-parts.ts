@@ -1,55 +1,29 @@
 import type { Part } from '@google/genai'
-import type { ContentPart, MessageContent } from '@use-crux/core'
-import { contentText } from '@use-crux/core'
-import { degradeContentPart, degradeContentToText } from '@use-crux/core/adapter'
-import type { ContentDegradationContext } from '@use-crux/core/adapter'
+import {
+  contentText,
+  createUnsupportedCapabilityError,
+  type ContentPart,
+  type DataAsset,
+  type MessageContent,
+  type ProviderFileAsset,
+  type UrlAsset,
+} from '@use-crux/core'
 
-type GooglePartEncoder<K extends ContentPart['type']> = (
-  part: Extract<ContentPart, { type: K }>,
-  context: ContentDegradationContext,
-) => Part[]
-
-/**
- * Encode canonical Crux message content into Google `Part[]` values.
- *
- * Google uses one generic part shape for text, inline bytes, URI-backed files,
- * function calls, and function responses. This table only emits the content
- * subset and degrades unsupported shapes through the shared placeholder path.
- */
+/** Encode canonical Crux message content into Google `Part[]` values. */
 export function googleContentParts(
-  role: 'system' | 'user' | 'assistant' | 'tool',
+  _role: 'system' | 'user' | 'assistant' | 'tool',
   content: MessageContent,
-  options: Pick<ContentDegradationContext, 'unsupportedContent'>,
 ): Part[] {
   if (typeof content === 'string') return [{ text: content }]
-  return content.flatMap((part) =>
-    encodeGooglePart(part, {
-      provider: 'google',
-      role,
-      unsupportedContent: options.unsupportedContent,
-      reason: 'unsupported Google content part',
-    }),
-  )
+  return content.map(googleContentPart)
 }
 
-/**
- * Project Google content to text while preserving strict-mode checks.
- *
- * System instructions are not represented as regular Google transcript
- * contents in this adapter, but they still need to report or reject media
- * consistently with every other provider.
- */
+/** Project Google content to text. */
 export function googleContentText(
-  role: 'system' | 'user' | 'assistant' | 'tool',
+  _role: 'system' | 'user' | 'assistant' | 'tool',
   content: MessageContent,
-  options: Pick<ContentDegradationContext, 'unsupportedContent'>,
 ): string {
-  return degradeContentToText(content, {
-    provider: 'google',
-    role,
-    unsupportedContent: options.unsupportedContent,
-    reason: 'Google system/tool text projection does not support native media parts',
-  })
+  return contentText(content)
 }
 
 /** Decode Google `Part[]` values into canonical Crux content. */
@@ -60,8 +34,8 @@ export function messageContentFromGoogleParts(parts: readonly GoogleInboundPart[
     if (isGoogleFileData(part.fileData)) {
       return [
         {
-          type: 'file-url',
-          url: part.fileData.fileUri,
+          type: 'file',
+          source: part.fileData.fileUri,
           mediaType: part.fileData.mimeType,
           ...(typeof part.fileData.displayName === 'string' ? { filename: part.fileData.displayName } : {}),
         },
@@ -87,80 +61,92 @@ export interface GoogleInboundPart {
   readonly fileData?: unknown
 }
 
-const googlePartTable = {
-  text: (part, _context) => [{ text: part.text }],
-  'image-data': (part, _context) => [{ inlineData: { data: part.data, mimeType: part.mediaType } }],
-  'image-url': (part, context) =>
-    part.mediaType
-      ? [{ fileData: { fileUri: part.url, mimeType: part.mediaType } }]
-      : [degradedTextPart(part, context, 'Google fileData requires a mediaType for URI-backed image parts')],
-  'image-file-id': (part, context) => [
-    degradedTextPart(part, context, 'Google messages do not support Crux image file ids'),
-  ],
-  'file-data': (part, _context) => [
-    {
-      inlineData: {
-        data: part.data,
-        mimeType: part.mediaType,
-        ...(part.filename ? { displayName: part.filename } : {}),
-      },
-    },
-  ],
-  'file-url': (part, context) =>
-    part.mediaType
-      ? [
-          {
-            fileData: {
-              fileUri: part.url,
-              mimeType: part.mediaType,
-              ...(part.filename ? { displayName: part.filename } : {}),
-            },
-          },
-        ]
-      : [degradedTextPart(part, context, 'Google fileData requires a mediaType for URI-backed file parts')],
-  'file-id': (part, context) => [
-    degradedTextPart(part, context, 'Google messages do not support Crux file ids'),
-  ],
-  custom: (part, context) => [degradedTextPart(part, context, 'Google messages do not support custom content parts')],
-} satisfies { readonly [K in ContentPart['type']]: GooglePartEncoder<K> }
-
-function encodeGooglePart(part: ContentPart, context: ContentDegradationContext): Part[] {
-  switch (part.type) {
-    case 'text':
-      return googlePartTable.text(part, context)
-    case 'image-data':
-      return googlePartTable['image-data'](part, context)
-    case 'image-url':
-      return googlePartTable['image-url'](part, context)
-    case 'image-file-id':
-      return googlePartTable['image-file-id'](part, context)
-    case 'file-data':
-      return googlePartTable['file-data'](part, context)
-    case 'file-url':
-      return googlePartTable['file-url'](part, context)
-    case 'file-id':
-      return googlePartTable['file-id'](part, context)
-    case 'custom':
-      return googlePartTable.custom(part, context)
-  }
-}
-
-function degradedTextPart(part: ContentPart, context: ContentDegradationContext, reason: string): Part {
-  return {
-    text: degradeContentPart(part, { ...context, reason }).text,
-  }
-}
-
 function inlineDataToPart(inlineData: { readonly data: string; readonly mimeType: string; readonly displayName?: string }): ContentPart {
-  if (inlineData.mimeType.startsWith('image/')) {
-    return { type: 'image-data', data: inlineData.data, mediaType: inlineData.mimeType }
-  }
+  const source = { type: 'data' as const, data: new Uint8Array(Buffer.from(inlineData.data, 'base64')), mediaType: inlineData.mimeType }
+  if (inlineData.mimeType.startsWith('image/')) return { type: 'image', source, mediaType: inlineData.mimeType }
   return {
-    type: 'file-data',
-    data: inlineData.data,
+    type: 'file',
+    source,
     mediaType: inlineData.mimeType,
     ...(typeof inlineData.displayName === 'string' ? { filename: inlineData.displayName } : {}),
   }
+}
+
+function googleContentPart(part: ContentPart): Part {
+  switch (part.type) {
+    case 'text':
+      return { text: part.text }
+    case 'image':
+      return googleMediaPart(part)
+    case 'file':
+      return googleMediaPart(part)
+  }
+}
+
+function googleMediaPart(part: Extract<ContentPart, { type: 'image' | 'file' }>): Part {
+  const source = part.source
+  const mediaType = part.mediaType ?? mediaTypeFromSource(source)
+  if (!mediaType) {
+    throw unsupported(`input.${part.type}.media_type`, 'Google media parts require a mediaType before request encoding.')
+  }
+  if (typeof source === 'string') return fileDataPart(source, mediaType, part.type === 'file' ? part.filename : undefined)
+  if (source instanceof URL) return fileDataPart(source.href, mediaType, part.type === 'file' ? part.filename : undefined)
+  if (source instanceof Uint8Array) return inlineDataPart(source, mediaType, part.type === 'file' ? part.filename : undefined)
+  if (source instanceof ArrayBuffer) return inlineDataPart(new Uint8Array(source), mediaType, part.type === 'file' ? part.filename : undefined)
+  if (isDataAsset(source)) return inlineDataPart(source.data, mediaType, part.type === 'file' ? part.filename : undefined)
+  if (isUrlAsset(source)) return fileDataPart(source.url.href, mediaType, part.type === 'file' ? part.filename : undefined)
+  throw unsupported(`input.${part.type}.provider-file`, 'Hydrate provider-file assets to a URL or byte source before calling Google.')
+}
+
+function inlineDataPart(data: Uint8Array | Blob, mimeType: string, displayName: string | undefined): Part {
+  if (!(data instanceof Uint8Array)) {
+    throw unsupported('input.file.blob', 'Blob sources must be normalized to bytes before Google request encoding.')
+  }
+  return {
+    inlineData: {
+      data: Buffer.from(data).toString('base64'),
+      mimeType,
+      ...(displayName ? { displayName } : {}),
+    },
+  }
+}
+
+function fileDataPart(fileUri: string, mimeType: string, displayName: string | undefined): Part {
+  return {
+    fileData: {
+      fileUri,
+      mimeType,
+      ...(displayName ? { displayName } : {}),
+    },
+  }
+}
+
+function mediaTypeFromSource(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): string | undefined {
+  return isDataAsset(source) || isUrlAsset(source) || isProviderFileAsset(source) ? source.mediaType : undefined
+}
+
+function isDataAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): source is DataAsset {
+  return typeof source === 'object' && source !== null && !isBlob(source) && 'type' in source && source.type === 'data'
+}
+
+function isUrlAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): source is UrlAsset {
+  return typeof source === 'object' && source !== null && !isBlob(source) && 'type' in source && source.type === 'url'
+}
+
+function isProviderFileAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): source is ProviderFileAsset {
+  return typeof source === 'object' && source !== null && !isBlob(source) && 'type' in source && source.type === 'provider-file'
+}
+
+function isBlob(source: unknown): source is Blob {
+  return typeof Blob !== 'undefined' && source instanceof Blob
+}
+
+function unsupported(capability: string, remediation: string): never {
+  throw createUnsupportedCapabilityError({
+    adapter: 'google',
+    model: '<custom>',
+    issues: [{ capability, remediation }],
+  })
 }
 
 function isGoogleBlob(value: unknown): value is { readonly data: string; readonly mimeType: string; readonly displayName?: string } {

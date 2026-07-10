@@ -15,7 +15,7 @@ import { appendToolApprovalResponse } from '../../../src/tools/approvals'
 import { createSkillActivationSession } from '../../../src/skill'
 import { LOAD_SKILL_TOOL_NAME } from '../../../src/skill/tools'
 import { updateHooks, resetHooks } from '../../../src/runtime/runtime'
-import { imagePart, textPart } from '../../../src/content'
+import { textPart } from '../../../src/content'
 import type { AdapterResponse } from '../../../src/adapter/types'
 import type { Message } from '../../../src/generation/messages'
 import type { ResolvedPrompt } from '../../../src/resolver/types'
@@ -850,7 +850,7 @@ describe('createToolLifecycle — captureTurn', () => {
           role: 'user',
           content: [
             textPart('please remember this chart'),
-            imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+            { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
           ],
         },
       ],

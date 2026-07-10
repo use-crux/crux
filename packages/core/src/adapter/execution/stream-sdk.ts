@@ -17,6 +17,7 @@ import {
   composeAbortSignals,
   createBudgetSignal,
 } from "../../generation/timeout";
+import { normalizeInvocationMessages } from "../../content/invocation-message";
 import { withDefaultResolverPorts } from "../../resolver/ports";
 import type {
   ExecutorRequest,
@@ -106,15 +107,20 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     budget: "step",
     limitMs: args.timeout?.stepMs,
   });
+  const providerMessages =
+    messages.length > 0
+      ? await normalizeInvocationMessages(messages, {
+          provider: modelInfo.provider,
+        })
+      : undefined;
   const request: ExecutorRequest<TModel> & { schema?: z.ZodType } = {
     model: args.model,
     modelInfo,
     system: resolved.system,
     systemBlocks: resolved.systemBlocks,
     prompt: promptText,
-    messages,
+    messages: providerMessages,
     settings: mappedSettings,
-    unsupportedContent: resolved.settings.unsupportedContent,
     tools,
     toolApproval: (call) =>
       lifecycle.requiresApproval(

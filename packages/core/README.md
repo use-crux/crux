@@ -63,8 +63,6 @@ Crux messages share one canonical content vocabulary across core, adapters, tool
 
 ```ts
 import {
-  filePart,
-  imagePart,
   messageText,
   prompt,
   textPart,
@@ -80,12 +78,13 @@ const inspectDashboard = prompt({
       role: "user",
       content: [
         textPart(input.note),
-        imagePart({ data: dashboardPng, mediaType: "image/png" }),
-        filePart({
-          url: "https://example.com/q2.pdf",
+        { type: "image", source: dashboardPng, mediaType: "image/png" },
+        {
+          type: "file",
+          source: "https://example.com/q2.pdf",
           mediaType: "application/pdf",
           filename: "q2.pdf",
-        }),
+        },
       ],
     },
   ],
@@ -100,11 +99,11 @@ result.text; // string envelope, unchanged
 result.messages; // assistant media round-trips here as ContentPart[]
 ```
 
-The part kinds are `text`, `image-data`, `image-url`, `image-file-id`, `file-data`, `file-url`, `file-id`, and `custom`. Bytes are JSON-safe base64 strings; `imagePart()` and `filePart()` also accept `Uint8Array`, `ArrayBuffer`, and `URL` values and normalize them immediately.
+The part kinds are `text`, `image`, and `file`. Media parts put their bytes, URL, `Asset`, or `Blob` directly on `source`; model calls normalize and validate that media before provider I/O, and normal generation does not persist it.
 
 Use `contentText()` or `messageText()` whenever existing code needs a string. Text parts pass through verbatim, while images/files become bounded placeholders such as `[image image/png 210KB sha256:ab12...]`; raw base64 is never inlined into guardrails, compaction, memory, cache keys, or telemetry. `hasMediaParts()` is available for branching without parsing the projection.
 
-Unsupported provider content degrades deliberately: the adapter sends the placeholder text, emits a diagnostics warning, and records a `content.degraded` span event. Pass `unsupportedContent: "error"` in generation settings when unsupported content should throw `UnsupportedContentError` before the provider call.
+Malformed media throws `InvalidMediaSourceError`. Valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError` before the provider call.
 
 ## Quality Evaluations
 

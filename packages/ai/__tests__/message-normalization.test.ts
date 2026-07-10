@@ -30,14 +30,14 @@ describe('AI SDK message normalization', () => {
         content: [
           { type: 'text', text: 'Compare these.' },
           {
-            type: 'image-data',
-            data: 'AQID',
+            type: 'image',
+            source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
             mediaType: 'image/png',
             providerOptions: { openai: { detail: 'low' } },
           },
           {
-            type: 'file-url',
-            url: 'https://example.com/report.pdf',
+            type: 'file',
+            source: new URL('https://example.com/report.pdf'),
             mediaType: 'application/pdf',
             filename: 'report.pdf',
           },
@@ -81,7 +81,7 @@ describe('AI SDK message normalization', () => {
     ])
   })
 
-  it('normalizes legacy AI SDK v6 media parts to file-data', () => {
+  it('normalizes AI SDK media parts to file content', () => {
     expect(
       normalizeAiSdkMessages([
         {
@@ -92,7 +92,13 @@ describe('AI SDK message normalization', () => {
     ).toEqual([
       {
         role: 'user',
-        content: [{ type: 'file-data', data: 'SGVsbG8=', mediaType: 'audio/mpeg' }],
+        content: [
+          {
+            type: 'file',
+            source: { type: 'data', data: new Uint8Array(Buffer.from('SGVsbG8=', 'base64')), mediaType: 'audio/mpeg' },
+            mediaType: 'audio/mpeg',
+          },
+        ],
       },
     ])
   })

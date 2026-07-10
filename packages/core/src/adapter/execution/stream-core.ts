@@ -13,6 +13,7 @@ import type { MiddlewareResult } from "../../runtime/types";
 import { createSafety } from "../../safety/session";
 import { orchestrateStream } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
+import { normalizeInvocationMessages } from "../../content/invocation-message";
 import type { CallArgs, StreamHandle } from "../types";
 import { createToolLifecycle } from "../tool/session";
 import type { AdapterExecutionStreamArgs, CoreStepDialect } from "./types";
@@ -96,13 +97,15 @@ export async function streamCore<
   if (resolved.schema && dialect.wrapOutputSchema) {
     schemaParams = dialect.wrapOutputSchema(resolved.schema);
   }
+  const providerMessages = await normalizeInvocationMessages(messages, {
+    provider: modelInfo.provider,
+  });
 
   const callArgs: CallArgs<TExtra> = {
     model: modelInfo.modelId,
     system: resolved.system,
     systemBlocks: resolved.systemBlocks,
-    messages,
-    unsupportedContent: resolved.settings.unsupportedContent,
+    messages: providerMessages,
     settings: mappedSettings,
     schema: resolved.schema,
     schemaParams,

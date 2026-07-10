@@ -1,7 +1,7 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { ContentPart, Message, MessageContent } from '@use-crux/core'
 import { contentText } from '@use-crux/core'
-import { defineProviderTranscriptCodec, degradeContentToText } from '@use-crux/core/adapter'
+import { defineProviderTranscriptCodec } from '@use-crux/core/adapter'
 import type {
   NativeAssistantTurn,
   ProviderToolCall,
@@ -9,7 +9,6 @@ import type {
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
   ToolResultEncodingHelpers,
-  TranscriptEncodeOptions,
 } from '@use-crux/core/adapter'
 import { anthropicContentBlocks, anthropicToolResultContent } from './tool-result-content'
 import {
@@ -37,9 +36,9 @@ export type AnthropicAssistantTurn = NativeAssistantTurn
  * helpers; this dialect only translates them to and from Anthropic blocks.
  */
 const anthropicDialect: ProviderTranscriptDialect<Anthropic.MessageParam, Pick<Anthropic.Message, 'content'>> = {
-  encodeContent: ({ role, content }, options) => encodeContent(role, content, options),
-  encodeAssistant: ({ content, toolCalls }, options) => encodeAssistant(content, toolCalls ?? [], options),
-  encodeToolResults: ({ results }, helpers, options) => results.map((result) => encodeToolResult(result, helpers, options)),
+  encodeContent: ({ role, content }) => encodeContent(role, content),
+  encodeAssistant: ({ content, toolCalls }) => encodeAssistant(content, toolCalls ?? []),
+  encodeToolResults: ({ results }, helpers) => results.map((result) => encodeToolResult(result, helpers)),
   decodeMessage: decodeMessage,
   readAssistant: readAssistantTurn,
 }
@@ -71,17 +70,8 @@ export function toMessages(sdkMessages: readonly unknown[]): Message[] {
 function encodeContent(
   role: 'system' | 'user',
   content: MessageContent,
-  options: TranscriptEncodeOptions,
 ): Anthropic.MessageParam | undefined {
   if (role === 'system') {
-    if (Array.isArray(content)) {
-      degradeContentToText(content, {
-        provider: 'anthropic',
-        role,
-        unsupportedContent: options.unsupportedContent,
-        reason: 'Anthropic system-role content is encoded outside request messages and is text-only',
-      })
-    }
     return undefined
   }
 
@@ -89,31 +79,20 @@ function encodeContent(
     role,
     content: typeof content === 'string'
       ? content
-      : anthropicContentBlocks(content, {
-          provider: 'anthropic',
-          role,
-          unsupportedContent: options.unsupportedContent,
-          reason: 'unsupported Anthropic message content part',
-        }),
+      : anthropicContentBlocks(content),
   }
 }
 
 function encodeAssistant(
   content: MessageContent,
   toolCalls: readonly ProviderToolCall[],
-  options: TranscriptEncodeOptions,
 ): Anthropic.MessageParam {
   if (toolCalls.length === 0) {
     return {
       role: 'assistant',
       content: typeof content === 'string'
         ? content
-        : anthropicContentBlocks(content, {
-            provider: 'anthropic',
-            role: 'assistant',
-            unsupportedContent: options.unsupportedContent,
-            reason: 'unsupported Anthropic assistant content part',
-          }),
+        : anthropicContentBlocks(content),
     }
   }
 
@@ -122,12 +101,7 @@ function encodeAssistant(
     ? content
       ? ([{ type: 'text', text: content }] satisfies Anthropic.TextBlockParam[])
       : []
-    : anthropicContentBlocks(content, {
-        provider: 'anthropic',
-        role: 'assistant',
-        unsupportedContent: options.unsupportedContent,
-        reason: 'unsupported Anthropic assistant content part',
-      })
+    : anthropicContentBlocks(content)
   blocks.push(...contentBlocks)
   for (const toolCall of toolCalls) {
     blocks.push({
@@ -143,7 +117,6 @@ function encodeAssistant(
 function encodeToolResult(
   result: ProviderToolResult,
   helpers: ToolResultEncodingHelpers,
-  options: TranscriptEncodeOptions,
 ): Anthropic.MessageParam {
   return {
     role: 'user',
@@ -151,9 +124,7 @@ function encodeToolResult(
       {
         type: 'tool_result',
         tool_use_id: result.toolCallId,
-        content: anthropicToolResultContent(result.modelOutput, helpers.plainText(result), {
-          unsupportedContent: options.unsupportedContent,
-        }),
+        content: anthropicToolResultContent(result.modelOutput, helpers.plainText(result)),
         ...(helpers.errorFlag(result) ? { is_error: true } : {}),
       },
     ],

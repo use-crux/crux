@@ -18,6 +18,7 @@ import type {
 import type { Message } from "../../src/generation/messages";
 import type { GenerationSettings, TraceMeta } from "../../src/generation/types";
 import { TimeoutError } from "../../src/generation/timeout";
+import { isInvalidMediaSourceError } from "../../src/content";
 import { hasToolCall } from "../../src/generation/tool-control";
 import { prompt as makePrompt } from "../../src/prompt/prompt";
 import { agent as makeAgent } from "../../src/agent";
@@ -213,6 +214,83 @@ describe("adapter", () => {
       expect(callSpy).toHaveBeenCalledOnce();
       expect(result.text).toBe("hello");
       expect(result.raw).toEqual({ id: "raw_123", content: "hello" });
+    });
+
+    it("normalizes direct media message sources before provider calls", async () => {
+      const callSpy = vi.fn().mockResolvedValue({
+        raw: { id: "raw", content: "ok" },
+        extracted: createMockResponse("ok"),
+      });
+      const spec = createMockSpec({ call: callSpy });
+      const adapter = makeAdapter(spec)(mockClient);
+      const prompt = createTestPrompt();
+
+      await adapter.generate(prompt, {
+        model: "test-model",
+        input: { instruction: "Describe media" },
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Describe this." },
+              {
+                type: "image",
+                source: new Uint8Array([1, 2, 3]),
+                mediaType: "image/png",
+              },
+            ],
+          },
+        ],
+      });
+
+      const callArgs = callSpy.mock.calls[0]?.[1] as CallArgs;
+      expect(callArgs.messages[0]?.content).toMatchObject([
+        { type: "text", text: "Describe this." },
+        {
+          type: "image",
+          source: {
+            type: "data",
+            mediaType: "image/png",
+            size: 3,
+          },
+        },
+      ]);
+    });
+
+    it("rejects malformed media sources before provider calls", async () => {
+      const callSpy = vi.fn().mockResolvedValue({
+        raw: { id: "raw", content: "ok" },
+        extracted: createMockResponse("ok"),
+      });
+      const spec = createMockSpec({ call: callSpy });
+      const adapter = makeAdapter(spec)(mockClient);
+      const prompt = createTestPrompt();
+
+      await adapter
+        .generate(prompt, {
+          model: "test-model",
+          input: { instruction: "Describe media" },
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: "AQIDBAUGBwg=",
+                  mediaType: "image/png",
+                },
+              ],
+            },
+          ],
+        })
+        .catch((error: unknown) => {
+          expect(isInvalidMediaSourceError(error)).toBe(true);
+          expect(error instanceof Error ? error.message : "").toContain(
+            "messages[0].content[0].source",
+          );
+        });
+
+      expect(callSpy).not.toHaveBeenCalled();
     });
 
     it("rejects with TimeoutError when a provider step exceeds stepMs", async () => {

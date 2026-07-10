@@ -115,12 +115,12 @@ describe('anthropic transcript wire encoding', () => {
         type: 'content',
         value: [
           { type: 'text', text: 'Rendered report' },
-          { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
-          { type: 'image-url', url: 'https://example.com/image.png' },
-          { type: 'file-data', data: 'base64-pdf', mediaType: 'application/pdf' },
+          { type: 'image', source: { type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' }, mediaType: 'image/png' },
+          { type: 'image', source: 'https://example.com/image.png' },
+          { type: 'file', source: { type: 'data', data: new Uint8Array([2]), mediaType: 'application/pdf' }, mediaType: 'application/pdf' },
           {
-            type: 'file-data',
-            data: 'base64-file-pdf',
+            type: 'file',
+            source: { type: 'data', data: new Uint8Array([3]), mediaType: 'application/pdf' },
             mediaType: 'application/pdf',
             filename: 'report.pdf',
           },
@@ -141,7 +141,7 @@ describe('anthropic transcript wire encoding', () => {
                 type: 'image',
                 source: {
                   type: 'base64',
-                  data: 'base64-image',
+                  data: 'AQ==',
                   media_type: 'image/png',
                 },
               },
@@ -153,7 +153,7 @@ describe('anthropic transcript wire encoding', () => {
                 type: 'document',
                 source: {
                   type: 'base64',
-                  data: 'base64-pdf',
+                  data: 'Ag==',
                   media_type: 'application/pdf',
                 },
               },
@@ -161,7 +161,7 @@ describe('anthropic transcript wire encoding', () => {
                 type: 'document',
                 source: {
                   type: 'base64',
-                  data: 'base64-file-pdf',
+                  data: 'Aw==',
                   media_type: 'application/pdf',
                 },
                 title: 'report.pdf',
@@ -173,40 +173,16 @@ describe('anthropic transcript wire encoding', () => {
     ])
   })
 
-  it('falls back to deterministic text for unsupported rich tool content', () => {
-    const messages = fromMessages([
+  it('rejects unsupported rich tool content before Anthropic request encoding', () => {
+    expect(() => fromMessages([
       toolMessage('toolu_file', 'readFile', {
         type: 'content',
         value: [
-          { type: 'file-data', data: 'base64-audio', mediaType: 'audio/mpeg' },
-          { type: 'file-url', url: 'https://example.com/file.csv' },
-          {
-            type: 'custom',
-            providerOptions: { anthropic: { id: 'custom-1' } },
-          },
+          { type: 'file', source: { type: 'data', data: new Uint8Array([4]), mediaType: 'audio/mpeg' }, mediaType: 'audio/mpeg' },
+          { type: 'file', source: 'https://example.com/file.csv' },
         ],
       }),
-    ])
-
-    expect(messages).toEqual([
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'tool_result',
-            tool_use_id: 'toolu_file',
-            content: [
-              { type: 'text', text: '[file audio/mpeg 9B sha256:7dc2623c5c71]' },
-              { type: 'text', text: '[file https://example.com/file.csv]' },
-              {
-                type: 'text',
-                text: '[custom]',
-              },
-            ],
-          },
-        ],
-      },
-    ])
+    ])).toThrow('No provider request was made.')
   })
 })
 
@@ -260,9 +236,9 @@ describe('anthropic transcript wire decoding', () => {
       type: 'content',
       value: [
         { type: 'text', text: 'Rendered report' },
-        { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
-        { type: 'image-url', url: 'https://example.com/image.png' },
-        { type: 'file-data', data: 'base64-file-pdf', mediaType: 'application/pdf', filename: 'report.pdf' },
+        { type: 'image', source: { type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' }, mediaType: 'image/png' },
+        { type: 'image', source: 'https://example.com/image.png' },
+        { type: 'file', source: { type: 'data', data: new Uint8Array([3]), mediaType: 'application/pdf' }, mediaType: 'application/pdf', filename: 'report.pdf' },
       ],
     })
 
@@ -281,9 +257,9 @@ describe('anthropic transcript wire decoding', () => {
             type: 'content',
             value: [
               { type: 'text', text: 'Rendered report' },
-              { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
-              { type: 'image-url', url: 'https://example.com/image.png' },
-              { type: 'file-data', data: 'base64-file-pdf', mediaType: 'application/pdf', filename: 'report.pdf' },
+              { type: 'image', source: { type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' }, mediaType: 'image/png' },
+              { type: 'image', source: 'https://example.com/image.png' },
+              { type: 'file', source: { type: 'data', data: new Uint8Array([3]), mediaType: 'application/pdf' }, mediaType: 'application/pdf', filename: 'report.pdf' },
             ],
           },
         },

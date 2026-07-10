@@ -24,13 +24,13 @@ export type GoogleAssistantTurn = NativeAssistantTurn
  * dialect only translates them to and from Google `Content` values.
  */
 const googleDialect: ProviderTranscriptDialect<Content, GenerateContentResponse> = {
-  encodeContent: ({ role, content }, options) =>
+  encodeContent: ({ role, content }) =>
     role === 'system'
-      ? (googleContentText(role, content, options), undefined)
-      : { role: 'user', parts: googleContentParts(role, content, options) },
-  encodeAssistant: ({ content, toolCalls }, options) =>
-    encodeAssistant(googleContentText('assistant', content, options), toolCalls ?? []),
-  encodeToolResults: ({ results }, _helpers, options) => results.map((result) => encodeToolResult(result, options)),
+      ? (googleContentText(role, content), undefined)
+      : { role: 'user', parts: googleContentParts(role, content) },
+  encodeAssistant: ({ content, toolCalls }) =>
+    encodeAssistant(googleContentText('assistant', content), toolCalls ?? []),
+  encodeToolResults: ({ results }) => results.map((result) => encodeToolResult(result)),
   decodeMessage: decodeMessage,
   readAssistant: readGoogleAssistant,
 }
@@ -86,15 +86,10 @@ function encodeAssistant(text: string, toolCalls: readonly ProviderToolCall[]): 
   }
 }
 
-function encodeToolResult(result: ProviderToolResult, options: { readonly unsupportedContent?: 'degrade' | 'error' }): Content {
+function encodeToolResult(result: ProviderToolResult): Content {
   const parts =
     result.modelOutput?.type === 'content'
-      ? googleFunctionResponseParts(result.modelOutput.value, {
-          provider: 'google',
-          role: 'tool',
-          unsupportedContent: options.unsupportedContent,
-          reason: 'unsupported Google function-response content part',
-        })
+      ? googleFunctionResponseParts(result.modelOutput.value)
       : []
   return {
     role: 'user',

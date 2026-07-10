@@ -20,6 +20,7 @@ import { ValidationExhaustedError } from "../../generation/validation-retry";
 import { createSafety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
+import { normalizeInvocationMessages } from "../../content/invocation-message";
 import type { AdapterResponse, CallArgs } from "../types";
 import {
   createResultAccumulator,
@@ -150,7 +151,6 @@ export async function generateCore<
         system: currentSystem,
         systemBlocks: currentSystemBlocks,
         messages,
-        unsupportedContent: resolved.settings.unsupportedContent,
         settings: mappedSettings,
         schema: resolved.schema,
         schemaParams,
@@ -171,12 +171,14 @@ export async function generateCore<
 
       for (let step = 0; step < maxSteps; step++) {
         steps++;
+        const providerMessages = await normalizeInvocationMessages(messages, {
+          provider: modelInfo.provider,
+        });
         const callArgs: CallArgs<TExtra> = {
           model: modelInfo.modelId,
           system: currentSystem,
           systemBlocks: currentSystemBlocks,
-          messages,
-          unsupportedContent: resolved.settings.unsupportedContent,
+          messages: providerMessages,
           settings: mappedSettings,
           schema: resolved.schema,
           schemaParams,

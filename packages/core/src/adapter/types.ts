@@ -10,7 +10,6 @@
 import type { z } from "zod";
 import type {
   TraceMeta,
-  GenerationSettings,
   TokenUsage,
 } from "../generation/types";
 import type { RoutingReceipt } from "../routing/receipt";
@@ -51,8 +50,6 @@ export interface CallArgs<
    */
   systemBlocks: readonly SystemBlock[] | undefined;
   messages: Message[];
-  /** Canonical unsupported-content policy kept out of provider-native settings. */
-  unsupportedContent?: NonNullable<GenerationSettings["unsupportedContent"]>;
   settings: Record<string, unknown>;
   schema: z.ZodType | undefined;
   schemaParams: Record<string, unknown> | undefined;

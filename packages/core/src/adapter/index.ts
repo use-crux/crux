@@ -41,11 +41,6 @@ export { adapter } from "./define-adapter";
 export { createResultAccumulator } from "./result-accumulator";
 export { CruxIncompleteCallError, CruxStaleHandleError } from "./call-handle";
 export { CruxTransportStreamUnsupportedError } from "./transport";
-export { degradeContentPart, degradeContentToText } from "./content-degradation";
-export type {
-  ContentDegradationContext,
-  DegradedContentPart,
-} from "./content-degradation";
 export type {
   CruxAdapter,
   AdapterGenerateOptions,

@@ -4,7 +4,9 @@ import type { ContentPart } from './content'
 export type JsonPrimitive = string | number | boolean | null
 export type JsonValue = JsonPrimitive | { readonly [key: string]: JsonValue } | readonly JsonValue[]
 export type JsonObject = { readonly [key: string]: JsonValue }
-export type ProviderOptions = Record<string, { readonly [key: string]: JsonValue }>
+export type ProviderOptions = Readonly<
+  Record<string, Readonly<Record<string, JsonValue>>>
+>
 
 export type ToolModelOutput =
   | { type: 'text'; value: string; providerOptions?: ProviderOptions }

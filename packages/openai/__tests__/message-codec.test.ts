@@ -42,8 +42,8 @@ describe('openai transcript wire encoding', () => {
     ])
   })
 
-  it('maps content tool outputs to OpenAI text content parts', () => {
-    const messages = fromMessages([
+  it('rejects media tool outputs before OpenAI tool-message encoding', () => {
+    expect(() => fromMessages([
       {
         role: 'tool',
         content: 'fallback',
@@ -54,21 +54,12 @@ describe('openai transcript wire encoding', () => {
             type: 'content',
             value: [
               { type: 'text', text: 'Rendered image' },
-              { type: 'image-url', url: 'https://example.com/chart.png' },
+              { type: 'image', source: 'https://example.com/chart.png' },
             ],
           },
         },
       },
-    ])
-
-    expect(messages[0]).toEqual({
-      role: 'tool',
-      content: [
-        { type: 'text', text: 'Rendered image' },
-        { type: 'text', text: '[image https://example.com/chart.png]' },
-      ],
-      tool_call_id: 'call-1',
-    })
+    ])).toThrow('No provider request was made.')
   })
 })
 

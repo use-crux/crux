@@ -225,7 +225,7 @@ async function normalizeBlob(
     withFilename(
       {
         type: "data",
-        data: new Blob([bytes], { type: mediaType }),
+        data: bytes,
         mediaType,
         size: blob.size,
         sha256: sha256Hex(bytes),

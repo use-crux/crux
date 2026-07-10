@@ -58,10 +58,7 @@ export interface NativeProviderPort<TRequest, TRawResponse, TRawStream extends A
  */
 export interface NativeTranscriptCodec<TProviderMessage = unknown, TRawResponse = unknown> {
   /** Convert canonical Crux messages into provider-native chat messages. */
-  fromMessages(
-    messages: readonly Message[],
-    options?: { readonly unsupportedContent?: NonNullable<GenerationSettings['unsupportedContent']> },
-  ): readonly TProviderMessage[]
+  fromMessages(messages: readonly Message[]): readonly TProviderMessage[]
   /** Convert provider-native chat messages back into canonical Crux messages. */
   toMessages(messages: readonly unknown[]): Message[]
   /** Read assistant text and tool-call intent from a provider-native response. */

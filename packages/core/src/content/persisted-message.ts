@@ -24,6 +24,10 @@ export {
   decodePersistedMessages,
   type DecodePersistedMessagesInput,
 } from "./persisted-message-decode";
+export {
+  loadPersistedMessagesRecord,
+  type LoadPersistedMessagesRecordInput,
+} from "./persisted-message-record";
 
 export type { PersistedContentPart, PersistedMediaSource, PersistedMessage };
 

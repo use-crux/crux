@@ -56,8 +56,8 @@ describe('AI SDK multimodal messages', () => {
       content: [
         { type: 'text', text: 'see attached' },
         {
-          type: 'file-data',
-          data: 'JVBERi0x',
+          type: 'file',
+          source: { type: 'data', data: new Uint8Array(Buffer.from('JVBERi0x', 'base64')), mediaType: 'application/pdf' },
           mediaType: 'application/pdf',
           filename: 'report.pdf',
           providerOptions: { openai: { fileId: 'file_123' } },
@@ -89,7 +89,7 @@ describe('AI SDK multimodal messages', () => {
         role: 'user',
         content: [
           { type: 'text', text: 'Look.' },
-          { type: 'image', image: 'AQID', mediaType: 'image/png' },
+          { type: 'image', image: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
         ],
       },
     ])
@@ -102,7 +102,7 @@ describe('AI SDK multimodal messages', () => {
           role: 'tool',
           content: [
             { type: 'text', text: 'Screenshot captured.' },
-            { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+            { type: 'image', source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' } },
           ],
           metadata: { toolCallId: 'call_1', toolName: 'screenshot' },
         },
@@ -119,7 +119,7 @@ describe('AI SDK multimodal messages', () => {
               type: 'content',
               value: [
                 { type: 'text', text: 'Screenshot captured.' },
-                { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+                { type: 'image', source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' } },
               ],
             },
           },
@@ -135,7 +135,12 @@ describe('AI SDK multimodal messages', () => {
           role: 'assistant',
           content: [
             { type: 'text', text: 'I inspected the image.' },
-            { type: 'file-data', data: 'JVBERi0x', mediaType: 'application/pdf', filename: 'report.pdf' },
+            {
+              type: 'file',
+              source: { type: 'data', data: new Uint8Array(Buffer.from('JVBERi0x', 'base64')), mediaType: 'application/pdf' },
+              mediaType: 'application/pdf',
+              filename: 'report.pdf',
+            },
           ],
           metadata: {
             toolCalls: [{ id: 'call_1', name: 'summarize', args: { id: 'report' } }],
@@ -147,7 +152,12 @@ describe('AI SDK multimodal messages', () => {
         role: 'assistant',
         content: [
           { type: 'text', text: 'I inspected the image.' },
-          { type: 'file', data: 'JVBERi0x', mediaType: 'application/pdf', filename: 'report.pdf' },
+          {
+            type: 'file',
+            data: new Uint8Array(Buffer.from('JVBERi0x', 'base64')),
+            mediaType: 'application/pdf',
+            filename: 'report.pdf',
+          },
           { type: 'tool-call', toolCallId: 'call_1', toolName: 'summarize', input: { id: 'report' } },
         ],
       },
@@ -201,7 +211,7 @@ describe('AI SDK multimodal messages', () => {
                 type: 'content',
                 value: [
                   { type: 'text', text: 'Screenshot captured.' },
-                  { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+                  { type: 'image', source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' } },
                 ],
               },
             },
@@ -213,7 +223,7 @@ describe('AI SDK multimodal messages', () => {
         role: 'tool',
         content: [
           { type: 'text', text: 'Screenshot captured.' },
-          { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+          { type: 'image', source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' } },
         ],
         metadata: { toolCallId: 'call_1', toolName: 'screenshot' },
       },

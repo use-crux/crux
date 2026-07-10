@@ -7,10 +7,10 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { Message, CompactionResult } from '../generation/messages'
-import type { RoutingReceipt } from '../routing/receipt'
-import type { RecordStore } from '../storage'
+import type { z } from "zod";
+import type { Message, CompactionResult } from "../generation/messages";
+import type { RoutingReceipt } from "../routing/receipt";
+import type { Storage } from "../storage";
 
 // ── Generate Function Abstractions ──────────────────────────────────
 
@@ -19,7 +19,7 @@ export type GenerateTextFn = (options: {
   model: unknown;
   system?: string;
   prompt: string;
-}) => Promise<{ text: string; routing?: RoutingReceipt }>
+}) => Promise<{ text: string; routing?: RoutingReceipt }>;
 
 /**
  * Framework-agnostic structured output function.
@@ -32,113 +32,113 @@ export type GenerateTextFn = (options: {
  * `createGenerateObjectFnFromGenerate()`.
  */
 export type GenerateObjectFn = <T>(options: {
-  model: unknown
-  system?: string
-  prompt: string
-  schema: z.ZodType<T>
+  model: unknown;
+  system?: string;
+  prompt: string;
+  schema: z.ZodType<T>;
   /** Provider temperature forwarded when the caller needs deterministic generation. */
-  temperature?: number
+  temperature?: number;
   /** Provider nucleus-sampling setting forwarded when the caller needs deterministic generation. */
-  topP?: number
-}) => Promise<{ object: T; routing?: RoutingReceipt }>
+  topP?: number;
+}) => Promise<{ object: T; routing?: RoutingReceipt }>;
 
 // ── summarizeMessages ───────────────────────────────────────────────
 
 export interface SummarizeConfig {
   /** Messages to summarize. */
-  messages: Message[]
+  messages: Message[];
   /** Text generation function (any SDK adapter). */
-  generate: GenerateTextFn
+  generate: GenerateTextFn;
   /** Model to use for summarization. */
-  model: unknown
+  model: unknown;
   /** Max tokens for the summary output. Default: 500. */
-  maxTokens?: number
+  maxTokens?: number;
   /** Aspects to prioritize in the summary (e.g. 'decisions', 'tool_results'). */
-  focus?: string[]
+  focus?: string[];
 }
 
 // Re-export CompactionResult — it's the return type of summarizeMessages
-export type { CompactionResult }
+export type { CompactionResult };
 
 // ── createSlidingWindow ─────────────────────────────────────────────
 
 export interface SlidingWindowConfig {
   /** Number of recent messages to keep verbatim. */
-  windowSize: number
+  windowSize: number;
   /** Text generation function for summarization. */
-  generate: GenerateTextFn
+  generate: GenerateTextFn;
   /** Model to use for summarization. */
-  model: unknown
+  model: unknown;
   /** Max tokens for the running summary. Default: 1000. */
-  summaryBudget?: number
-  /** Record store for persistence. Defaults to `inMemoryRecordStore()`. */
-  records?: RecordStore
+  summaryBudget?: number;
+  /** Storage used for durable messages and their media assets. */
+  storage?: Storage;
   /** Namespace key for this window instance. Default: 'default'. */
-  id?: string
+  id?: string;
 }
 
 export interface SlidingWindow {
   /** Append a message. Triggers compaction when window overflows. */
-  push(message: Message): Promise<void>
+  push(message: Message): Promise<void>;
   /** Get compacted messages: [summary_system_msg, ...recent]. */
-  getMessages(): Promise<Message[]>
+  getMessages(): Promise<Message[]>;
   /** Current compaction statistics. */
-  getStats(): SlidingWindowStats
+  getStats(): SlidingWindowStats;
 }
 
 export interface SlidingWindowStats {
   /** Total messages received (including evicted). */
-  totalMessages: number
+  totalMessages: number;
   /** Messages currently in the window. */
-  windowedMessages: number
+  windowedMessages: number;
   /** Token count of the running summary. */
-  summaryTokens: number
+  summaryTokens: number;
   /** Total number of messages evicted and summarized. */
-  evictions: number
+  evictions: number;
 }
 
 // ── createBudgetManager ─────────────────────────────────────────────
 
 export interface BudgetConfig {
   /** Hard token limit. */
-  limit: number
+  limit: number;
   /** Pressure threshold for 'warning' level (0–1). Default: 0.8. */
-  warningThreshold?: number
+  warningThreshold?: number;
   /** Pressure threshold for 'critical' level (0–1). Default: 0.95. */
-  criticalThreshold?: number
+  criticalThreshold?: number;
 }
 
 export interface BudgetManager {
   /** Report token usage for a source. Replaces any previous value for that source. */
-  report(source: string, tokens: number): void
+  report(source: string, tokens: number): void;
   /** Check current budget state. */
-  check(): BudgetState
+  check(): BudgetState;
   /** Reset all reported sources. */
-  reset(): void
+  reset(): void;
 }
 
 export interface BudgetState {
   /** Total tokens used across all sources. */
-  used: number
+  used: number;
   /** Tokens remaining before limit. */
-  available: number
+  available: number;
   /** Usage pressure (0–1). */
-  pressure: number
+  pressure: number;
   /** Pressure level classification. */
-  level: 'normal' | 'warning' | 'critical'
+  level: "normal" | "warning" | "critical";
   /** Per-source token breakdown. */
-  breakdown: Record<string, number>
+  breakdown: Record<string, number>;
 }
 
 // ── extractKeyFacts ─────────────────────────────────────────────────
 
 export interface ExtractConfig<T extends z.ZodType> {
   /** Messages to extract facts from. */
-  messages: Message[]
+  messages: Message[];
   /** Structured output generation function (any SDK adapter). */
-  generate: GenerateObjectFn
+  generate: GenerateObjectFn;
   /** Model to use for extraction. */
-  model: unknown
+  model: unknown;
   /** Zod schema defining the expected output structure. */
-  schema: T
+  schema: T;
 }
