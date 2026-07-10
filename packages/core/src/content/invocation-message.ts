@@ -7,14 +7,64 @@ export async function normalizeInvocationMessages(
   options: Readonly<{ provider?: string }> = {},
 ): Promise<Message[]> {
   return Promise.all(
-    messages.map(async (message, messageIndex) => ({
-      ...message,
-      content: await normalizeInvocationContent(
+    messages.map(async (message, messageIndex) => {
+      const path = `messages[${messageIndex}].content`;
+      const content = await normalizeInvocationContent(
         message.content,
-        `messages[${messageIndex}].content`,
+        path,
         options,
-      ),
-    })),
+      );
+      return {
+        ...message,
+        content,
+        ...(message.metadata
+          ? {
+              metadata: await normalizeToolMedia(
+                message.metadata,
+                message.content,
+                content,
+                `messages[${messageIndex}].metadata.modelOutput.value`,
+                options,
+              ),
+            }
+          : {}),
+      };
+    }),
+  );
+}
+
+async function normalizeToolMedia(
+  metadata: Record<string, unknown>,
+  originalContent: Message["content"],
+  normalizedContent: Message["content"],
+  path: string,
+  options: Readonly<{ provider?: string }>,
+): Promise<Record<string, unknown>> {
+  const modelOutput = metadata.modelOutput;
+  if (!isContentModelOutput(modelOutput)) return metadata;
+  const value =
+    modelOutput.value === originalContent
+      ? normalizedContent
+      : await normalizeInvocationContent(modelOutput.value, path, options);
+  return {
+    ...metadata,
+    modelOutput: {
+      ...modelOutput,
+      value,
+    },
+  };
+}
+
+function isContentModelOutput(
+  value: unknown,
+): value is Readonly<{ type: "content"; value: Message["content"] }> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "content" &&
+    "value" in value &&
+    Array.isArray(value.value)
   );
 }
 

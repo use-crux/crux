@@ -11,6 +11,7 @@ import type {
 } from '@use-crux/core/adapter'
 import { judgeReranker, type Reranker, type RetrievalModel, type RetrieverHit } from '@use-crux/core/retrieval'
 import { openAITranscript } from './message-codec'
+import { openAIMediaHooks } from './media-preflight'
 import {
   asOpenAINonStreamingParams,
   asOpenAIStreamingParams,
@@ -52,6 +53,7 @@ const openAI = defineSingleTurnProviderBundle({
     settings: openAISettings,
     outputSchema: openAIOutputSchema,
     transcript: openAITranscript,
+    media: openAIMediaHooks,
   } satisfies SingleTurnProviderBundleSpec<
     OpenAI,
     OpenAIChatRequest,

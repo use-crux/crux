@@ -58,7 +58,11 @@ export function messagesToTranscriptUnits(messages: readonly Message[]): Provide
         ...(toolCalls.length > 0 ? { toolCalls } : {}),
       })
     } else {
-      units.push({ kind: 'content', role: message.role, content: message.content })
+      units.push({
+        kind: 'content',
+        role: message.role,
+        content: message.content,
+      })
     }
   }
 
@@ -129,7 +133,7 @@ export function appendCanonicalToolRound(
     ...results.map(
       (result): Message => ({
         role: 'tool',
-        content: result.content,
+        content: result.modelOutput?.type === 'content' ? result.modelOutput.value : result.content,
         metadata: {
           toolCallId: result.toolCallId,
           toolName: result.name,

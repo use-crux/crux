@@ -10,7 +10,7 @@ import type {
   ProviderTranscriptUnit,
   ToolResultEncodingHelpers,
 } from '@use-crux/core/adapter'
-import { messageContentFromOpenAIContent, openAIContentText, openAIMessageContent, openAIToolResultContent } from './content-parts'
+import { messageContentFromOpenAIContent, openAIContentText, openAIMessageContent } from './content-parts'
 
 /** OpenAI assistant turn data read from a chat-completion response. */
 export type OpenAIAssistantTurn = NativeAssistantTurn
@@ -31,7 +31,8 @@ const openAIDialect: ProviderTranscriptDialect<OpenAI.ChatCompletionMessageParam
       : { role, content: openAIMessageContent(role, content) },
   encodeAssistant: ({ content, toolCalls }, options) =>
     encodeAssistant(openAIMessageContent('assistant', content), toolCalls ?? []),
-  encodeToolResults: ({ results }, helpers, options) => results.map((result) => encodeToolResult(result, helpers, options)),
+  encodeToolResults: ({ results }, helpers, options) =>
+    results.flatMap((result) => encodeToolResult(result, helpers, options)),
   decodeMessage: decodeMessage,
   readAssistant: readOpenAIAssistant,
 }
@@ -42,7 +43,7 @@ export const openAITranscript = defineProviderTranscriptCodec(openAIDialect)
 /**
  * Convert canonical Crux messages into OpenAI chat-completion messages.
  *
- * Compatibility wrapper around the compiled {@link openAITranscript} codec.
+ * Uses the compiled {@link openAITranscript} codec shared by runtime calls.
  */
 export function fromMessages(messages: readonly Message[]): OpenAI.ChatCompletionMessageParam[] {
   return [...openAITranscript.fromMessages(messages)]
@@ -51,7 +52,7 @@ export function fromMessages(messages: readonly Message[]): OpenAI.ChatCompletio
 /**
  * Convert OpenAI chat messages back into canonical Crux messages.
  *
- * Compatibility wrapper around {@link openAITranscript}.
+ * Uses the same {@link openAITranscript} decoder as runtime responses.
  */
 export function toMessages(sdkMessages: readonly unknown[]): Message[] {
   return openAITranscript.toMessages(sdkMessages)
@@ -93,13 +94,22 @@ function encodeToolResult(
   result: ProviderToolResult,
   helpers: ToolResultEncodingHelpers,
   _options: Readonly<Record<never, never>>,
-): OpenAI.ChatCompletionToolMessageParam {
+): OpenAI.ChatCompletionMessageParam[] {
   const parts = helpers.contentParts(result)
-  return {
+  const toolMessage: OpenAI.ChatCompletionToolMessageParam = {
     role: 'tool',
-    content: parts ? openAIToolResultContent(parts) : helpers.plainText(result),
+    content: helpers.plainText(result),
     tool_call_id: result.toolCallId,
   }
+  const media = parts?.filter((part) => part.type !== 'text') ?? []
+  if (media.length === 0) return [toolMessage]
+  return [
+    toolMessage,
+    {
+      role: 'user',
+      content: openAIMessageContent('user', media),
+    },
+  ]
 }
 
 interface OpenAIMessageLike {

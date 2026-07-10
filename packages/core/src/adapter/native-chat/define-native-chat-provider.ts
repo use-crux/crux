@@ -11,6 +11,7 @@ import { adapter } from "../define-adapter";
 import type { AdapterSpec } from "../spec";
 import type { AdapterResponse, CallArgs, StreamHandle } from "../types";
 import { appendNativeToolRound } from "./tool-round";
+import { assertProviderMediaSupported } from "./media-hooks";
 import type {
   NativeCallMode,
   NativeChatRequestArgs,
@@ -260,10 +261,14 @@ function requestArgsFor<
       TDeps,
       TProviderMessage
     >,
-    "transcript"
+    "media" | "providerId" | "transcript"
   >,
   args: CallArgs<TExtra>,
 ): NativeChatRequestArgs<TExtra, TProviderMessage> {
+  assertProviderMediaSupported(profile, {
+    model: args.model,
+    messages: args.messages,
+  });
   return {
     ...args,
     providerMessages: providerMessagesFor(profile, args.messages),

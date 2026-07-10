@@ -42,24 +42,41 @@ describe('openai transcript wire encoding', () => {
     ])
   })
 
-  it('rejects media tool outputs before OpenAI tool-message encoding', () => {
-    expect(() => fromMessages([
+  it('encodes media tool outputs as a correlated tool result plus native user media', () => {
+    expect(
+      fromMessages([
+        {
+          role: 'tool',
+          content: 'fallback',
+          metadata: {
+            toolCallId: 'call-1',
+            toolName: 'renderImage',
+            modelOutput: {
+              type: 'content',
+              value: [
+                { type: 'text', text: 'Rendered image' },
+                { type: 'image', source: 'https://example.com/chart.png' },
+              ],
+            },
+          },
+        },
+      ]),
+    ).toEqual([
       {
         role: 'tool',
         content: 'fallback',
-        metadata: {
-          toolCallId: 'call-1',
-          toolName: 'renderImage',
-          modelOutput: {
-            type: 'content',
-            value: [
-              { type: 'text', text: 'Rendered image' },
-              { type: 'image', source: 'https://example.com/chart.png' },
-            ],
-          },
-        },
+        tool_call_id: 'call-1',
       },
-    ])).toThrow('No provider request was made.')
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image_url',
+            image_url: { url: 'https://example.com/chart.png' },
+          },
+        ],
+      },
+    ])
   })
 })
 

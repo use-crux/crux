@@ -15,6 +15,7 @@ import type { MessageContent } from '../../types/content'
 import type { CruxAdapter } from '../define-adapter'
 import type { AdapterSpec } from '../spec'
 import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
+import type { ProviderMediaHooks } from './media-hooks'
 
 /** Native call surface selected from canonical Crux call arguments. */
 export type NativeCallMode = 'text' | 'structured'
@@ -178,6 +179,9 @@ export interface NativeChatProfile<
 
   /** Provider-owned transcript codec. */
   readonly transcript: NativeTranscriptCodec<TProviderMessage, TRawResponse>
+
+  /** Private media validation hooks consumed before any provider call. */
+  readonly media?: ProviderMediaHooks
 
   /** Optional provider-specific tool-round transcript append. */
   appendToolRound?(
