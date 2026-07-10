@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type { ResolvedProjectModel } from '@use-crux/core/project-index'
-import type { IndexPatch } from '../indexer/patches'
+import type { IndexPatch } from '../src/indexer/patches'
 import {
   indexPatchFromWorkerEvents,
   projectIndexArtifactToWorkerEvents,
   indexPatchToWorkerEvents,
   projectIndexArtifactToWorkerEvent,
-} from '../contracts/worker-events'
+} from '../src/contracts/worker-events'
 import {
   workerEventFixtureOptions,
   workerEventFixturePatch,
-} from '../contracts/worker-events/fixtures'
-import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
+} from '../src/contracts/worker-events/fixtures'
+import { readStaticIndexRuntimeSharedFixture } from '../src/contracts/fixtures'
 
 describe('project index worker protocol', () => {
   it('streams contract fixture facts in ordered batches and reconstructs the same patch', () => {

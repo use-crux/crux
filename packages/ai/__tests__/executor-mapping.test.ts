@@ -16,8 +16,8 @@ import { assertCanonicalResult } from "@use-crux/core/adapter/testing";
 import type { StreamResult } from "@use-crux/core/adapter";
 import type { SystemBlock } from "@use-crux/core";
 import type { LanguageModel, StopCondition, ToolSet } from "ai";
-import { createCruxAi } from "../index";
-import { createUIMessageStreamResponse } from "../index";
+import { createCruxAi } from "../src";
+import { createUIMessageStreamResponse } from "../src";
 import { scriptedGateway, objectGenerationError } from "./scripted-gateway";
 import {
   buildSystemArg,

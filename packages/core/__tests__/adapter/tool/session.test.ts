@@ -9,17 +9,17 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
-import { createToolLifecycle } from '../../../adapter/tool/session'
-import { toolMiddleware, approvalMiddleware } from '../../../tools/middleware'
-import { appendToolApprovalResponse } from '../../../tools/approvals'
-import { createSkillActivationSession } from '../../../skill'
-import { LOAD_SKILL_TOOL_NAME } from '../../../skill/tools'
-import { updateHooks, resetHooks } from '../../../runtime/runtime'
-import { imagePart, textPart } from '../../../content'
-import type { AdapterResponse } from '../../../adapter/types'
-import type { Message } from '../../../generation/messages'
-import type { ResolvedPrompt } from '../../../resolver/types'
-import type { ApprovalDeclaration } from '../../../tools/approval-policy'
+import { createToolLifecycle } from '../../../src/adapter/tool/session'
+import { toolMiddleware, approvalMiddleware } from '../../../src/tools/middleware'
+import { appendToolApprovalResponse } from '../../../src/tools/approvals'
+import { createSkillActivationSession } from '../../../src/skill'
+import { LOAD_SKILL_TOOL_NAME } from '../../../src/skill/tools'
+import { updateHooks, resetHooks } from '../../../src/runtime/runtime'
+import { imagePart, textPart } from '../../../src/content'
+import type { AdapterResponse } from '../../../src/adapter/types'
+import type { Message } from '../../../src/generation/messages'
+import type { ResolvedPrompt } from '../../../src/resolver/types'
+import type { ApprovalDeclaration } from '../../../src/tools/approval-policy'
 
 function resolvedWith(partial: Partial<ResolvedPrompt>): ResolvedPrompt {
   return { settings: {}, ...partial } as ResolvedPrompt

@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { config, flow, noPayload } from '@use-crux/core'
 import { node } from '@use-crux/core/runtime'
-import { getExecutionContext } from '../../runtime/execution-context'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
-import { inMemoryRecordStore } from '../../storage'
+import { getExecutionContext } from '../../src/runtime/execution-context'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
+import { inMemoryRecordStore } from '../../src/storage'
 
 afterEach(() => {
   resetHooks()

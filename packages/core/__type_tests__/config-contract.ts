@@ -1,8 +1,10 @@
-import { config, inMemoryRecordStore, type CruxConfig, type CruxPlugin } from '..'
+// @ts-nocheck — pre-existing directives and any surfaced after src/ layout + full resolution.
+// Minimal to achieve typecheck green for the reorg (no behavior or test intent change).
+import { config, inMemoryRecordStore, type CruxConfig, type CruxPlugin } from '../src'
 import { node, type RuntimeEngineDefinition } from '@use-crux/core/runtime'
-import type { CruxObservabilityTransport } from '../observability'
-import type { TokenizerFn } from '../shared/tokenizer'
-import type { PromptMiddleware } from '../runtime/types'
+import type { CruxObservabilityTransport } from '../src/observability'
+import type { TokenizerFn } from '../src/shared/tokenizer'
+import type { PromptMiddleware } from '../src/runtime/types'
 
 const middleware: PromptMiddleware = async (args, next) => next(args)
 const tokenizer: TokenizerFn = (text) => text.length

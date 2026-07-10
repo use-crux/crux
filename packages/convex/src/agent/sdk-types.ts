@@ -2,7 +2,7 @@ import { Agent as ConvexAgent } from '@convex-dev/agent'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
 import type { ResolvedPrompt } from '@use-crux/core'
 import type { RecordStore, Storage } from '@use-crux/core/storage'
-import type { ComponentApi } from '../src/component/_generated/component'
+import type { ComponentApi } from '../component/_generated/component'
 import type { ConvexRuntimeTarget } from '../runtime'
 import type {
   ConvexGenerateObjectArgs,

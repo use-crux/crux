@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { embedding as makeEmbedding } from '../../embedding'
-import { indexer as makeIndexer } from '../../indexing'
-import { retriever as makeRetriever } from '../../retrieval'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
-import type { JsonObject, VectorHit } from '../../storage'
+import { embedding as makeEmbedding } from '../../src/embedding'
+import { indexer as makeIndexer } from '../../src/indexing'
+import { retriever as makeRetriever } from '../../src/retrieval'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
+import type { JsonObject, VectorHit } from '../../src/storage'
 
 function createDenseEmbedding() {
   return makeEmbedding({
@@ -225,7 +225,7 @@ describe('retriever', () => {
   })
 
     it('injects context by default when context query is configured', async () => {
-    const { prompt } = await import('../../prompt/prompt')
+    const { prompt } = await import('../../src/prompt/prompt')
     const retriever = makeRetriever({
       id: 'docs',
       namespace: 'docs',

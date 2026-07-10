@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from 'vitest'
 import { z } from 'zod'
-import { delegate as cruxDelegate } from '../../agent/delegate'
-import { handoff as makeHandoff } from '../../agent/handoff'
-import { updateHooks, resetHooks } from '../../runtime/runtime'
+import { delegate as cruxDelegate } from '../../src/agent/delegate'
+import { handoff as makeHandoff } from '../../src/agent/handoff'
+import { updateHooks, resetHooks } from '../../src/runtime/runtime'
 
 const inputSchema = z.object({
   synthesis: z.string(),

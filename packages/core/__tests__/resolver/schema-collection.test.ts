@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { context, match, when } from '../../prompt/context'
-import { contributor } from '../../prompt/contributor'
-import { compilePrompt } from '../../resolver/compile'
-import type { SkillEntry } from '../../prompt/context-types'
-import type { AnyPromptConfig } from '../../prompt/prompt-types'
+import { context, match, when } from '../../src/prompt/context'
+import { contributor } from '../../src/prompt/contributor'
+import { compilePrompt } from '../../src/resolver/compile'
+import type { SkillEntry } from '../../src/prompt/context-types'
+import type { AnyPromptConfig } from '../../src/prompt/prompt-types'
 
 function fakeSkill(id: string): SkillEntry {
   return {

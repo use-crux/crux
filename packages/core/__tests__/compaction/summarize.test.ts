@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { summarizeMessages, formatTranscript } from '../../compaction/summarize'
-import type { Message } from '../../generation/messages'
-import type { GenerateTextFn } from '../../compaction/types'
-import { imagePart, textPart } from '../../content'
+import { summarizeMessages, formatTranscript } from '../../src/compaction/summarize'
+import type { Message } from '../../src/generation/messages'
+import type { GenerateTextFn } from '../../src/compaction/types'
+import { imagePart, textPart } from '../../src/content'
 
 const sampleMessages: Message[] = [
   { role: 'user', content: 'What is the capital of France?' },

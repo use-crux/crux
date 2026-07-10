@@ -6,11 +6,11 @@
  */
 
 import { z } from 'zod'
-import { agent } from '../agent/agent'
-import { flow } from '../flow/scope'
-import { prompt } from '../prompt/prompt'
-import type { Retriever } from '../retrieval'
-import { evaluate } from '../quality'
+import { agent } from '../src/agent/agent'
+import { flow } from '../src/flow/scope'
+import { prompt } from '../src/prompt/prompt'
+import type { Retriever } from '../src/retrieval'
+import { evaluate } from '../src/quality'
 
 const supportPrompt = prompt({
   id: 'support',

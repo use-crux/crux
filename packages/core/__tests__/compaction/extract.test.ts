@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { extractKeyFacts } from '../../compaction/extract'
-import type { Message } from '../../generation/messages'
-import type { GenerateObjectFn } from '../../compaction/types'
+import { extractKeyFacts } from '../../src/compaction/extract'
+import type { Message } from '../../src/generation/messages'
+import type { GenerateObjectFn } from '../../src/compaction/types'
 
 const sampleMessages: Message[] = [
   {

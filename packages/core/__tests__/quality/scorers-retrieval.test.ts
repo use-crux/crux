@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { scorers } from '../../quality/scorers'
+import { scorers } from '../../src/quality/scorers'
 
 /** Ranked hits as a retriever task would output them. */
 const hits = (...sourceIds: string[]) => sourceIds.map((sourceId, index) => ({ sourceId, rank: index + 1 }))

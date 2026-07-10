@@ -1,12 +1,12 @@
 import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { SEMANTIC_FACTS_CACHE_EPOCH } from '../indexer/cache-identity'
-import type { IndexPatch, IndexPatchFacts } from '../indexer/patches'
-import { semanticIndexFactsCached } from '../indexer/semantic-cache'
-import type { SemanticBackendIdentity, SemanticCompilerRuntimeIdentity } from '../indexer/semantic/service'
-import type { SemanticSourceProfile } from '../indexer/semantic/source-profile'
-import { indexPatchFromWorkerEvents, indexPatchToWorkerEvents } from '../contracts/worker-events'
+import { SEMANTIC_FACTS_CACHE_EPOCH } from '../src/indexer/cache-identity'
+import type { IndexPatch, IndexPatchFacts } from '../src/indexer/patches'
+import { semanticIndexFactsCached } from '../src/indexer/semantic-cache'
+import type { SemanticBackendIdentity, SemanticCompilerRuntimeIdentity } from '../src/indexer/semantic/service'
+import type { SemanticSourceProfile } from '../src/indexer/semantic/source-profile'
+import { indexPatchFromWorkerEvents, indexPatchToWorkerEvents } from '../src/contracts/worker-events'
 
 const roots: string[] = []
 

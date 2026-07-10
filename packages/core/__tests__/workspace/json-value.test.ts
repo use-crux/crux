@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isJsonValue } from "../../workspace/json-value";
+import { isJsonValue } from "../../src/workspace/json-value";
 
 describe("workspace JSON value guard", () => {
   it("accepts JSON primitives, arrays, and plain objects", () => {

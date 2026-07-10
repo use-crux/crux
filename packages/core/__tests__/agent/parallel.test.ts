@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { agent as makeAgent } from '../../agent/agent'
-import { createParallel } from '../../agent/parallel'
-import { createFakeAgentExecutor } from '../../agent/fakes'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { agent as makeAgent } from '../../src/agent/agent'
+import { createParallel } from '../../src/agent/parallel'
+import { createFakeAgentExecutor } from '../../src/agent/fakes'
 // One concurrency-timing test below needs a real delaying executor the shared
 // fake doesn't model — it keeps a bespoke inline executor (see SCRATCHPAD).
-import type { AgentExecutor } from '../../agent/executor'
+import type { AgentExecutor } from '../../src/agent/executor'
 
 const promptA = makePrompt({
   id: 'prompt-a',

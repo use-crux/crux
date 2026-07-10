@@ -9,7 +9,7 @@ import {
   teeObservabilityTransport,
   type CruxGraphRecord,
   type CruxObservabilityTransport,
-} from '../../observability'
+} from '../../src/observability'
 import { chaosTransport } from './helpers/chaos-transport'
 
 describe('observability delivery retry and configuration restore', () => {

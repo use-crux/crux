@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { createGenerateObjectFnFromGenerate } from '../../compaction'
+import { createGenerateObjectFnFromGenerate } from '../../src/compaction'
 
 interface ResolvablePrompt {
   readonly _tag: 'Prompt'

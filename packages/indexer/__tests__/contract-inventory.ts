@@ -1,7 +1,7 @@
 /**
  * Test-facing inventory adapter for the Static Index runtime contract manifest.
  *
- * The canonical path inventory lives in `packages/indexer/contracts`.
+ * The canonical path inventory lives in `packages/indexer/src/contracts`.
  * Architecture tests keep using this compatibility shape while Phase 2 moves
  * drift checks to the contract spine itself.
  *
@@ -15,7 +15,7 @@ import {
   type StaticIndexRuntimeContractManifestGroupId,
   type StaticIndexRuntimeContractMirrorStatus as ManifestMirrorStatus,
   type StaticIndexRuntimeContractRuntime,
-} from '../contracts/contract-manifest'
+} from '../src/contracts/contract-manifest'
 
 /** Contract groups that have to stay visible through the Static Index runtime split. */
 export const staticIndexRuntimeContractIds = staticIndexRuntimeContractManifestGroups

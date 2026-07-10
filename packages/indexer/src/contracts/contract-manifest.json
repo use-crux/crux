@@ -8,7 +8,7 @@
     {
       "version": "projectIndexWorkerEvents",
       "runtime": "typescript",
-      "path": "packages/indexer/indexer/worker-protocol/types.ts",
+      "path": "packages/indexer/src/indexer/worker-protocol/types.ts",
       "pattern": "PROJECT_INDEX_WORKER_PROTOCOL_VERSION\\s*=\\s*(\\d+)"
     },
     {
@@ -26,7 +26,7 @@
     {
       "version": "staticIndexCompiler",
       "runtime": "typescript",
-      "path": "packages/indexer/indexer/static-index/protocol/identity.ts",
+      "path": "packages/indexer/src/indexer/static-index/protocol/identity.ts",
       "pattern": "STATIC_INDEX_COMPILER_PROTOCOL_VERSION\\s*=\\s*(\\d+)"
     },
     {
@@ -49,16 +49,16 @@
       "description": "Versioned NDJSON event stream for Project Index patch facts, source profiles, and artifacts.",
       "mirrorStatus": "checked-mirror",
       "canonical": [
-        "packages/indexer/contracts/worker-events/schema.ts",
-        "packages/indexer/contracts/worker-events/fixtures.ts",
-        "packages/indexer/indexer/worker-protocol/types.ts",
-        "packages/indexer/indexer/worker-protocol/patch-events.ts",
-        "packages/indexer/indexer/worker-protocol/artifact-events.ts",
-        "packages/indexer/indexer/worker-protocol/source-profile-events.ts"
+        "packages/indexer/src/contracts/worker-events/schema.ts",
+        "packages/indexer/src/contracts/worker-events/fixtures.ts",
+        "packages/indexer/src/indexer/worker-protocol/types.ts",
+        "packages/indexer/src/indexer/worker-protocol/patch-events.ts",
+        "packages/indexer/src/indexer/worker-protocol/artifact-events.ts",
+        "packages/indexer/src/indexer/worker-protocol/source-profile-events.ts"
       ],
       "fixtures": [
-        "packages/indexer/contracts/fixtures/worker-events.json",
-        "packages/indexer/contracts/fixtures/worker-event-cases.json"
+        "packages/indexer/src/contracts/fixtures/worker-events.json",
+        "packages/indexer/src/contracts/fixtures/worker-event-cases.json"
       ],
       "mirrors": {
         "go": [
@@ -86,14 +86,14 @@
       "description": "Parser evidence records emitted before source-only Project Index projection.",
       "mirrorStatus": "checked-mirror",
       "canonical": [
-        "packages/indexer/contracts/static-syntax/schema.ts",
-        "packages/indexer/indexer/static-index/syntax/record/types.ts",
-        "packages/indexer/indexer/static-index/syntax/record/value-types.ts",
-        "packages/indexer/indexer/static-index/syntax/record/schema.ts"
+        "packages/indexer/src/contracts/static-syntax/schema.ts",
+        "packages/indexer/src/indexer/static-index/syntax/record/types.ts",
+        "packages/indexer/src/indexer/static-index/syntax/record/value-types.ts",
+        "packages/indexer/src/indexer/static-index/syntax/record/schema.ts"
       ],
       "fixtures": [
-        "packages/indexer/contracts/fixtures/static-syntax-records.json",
-        "packages/indexer/contracts/fixtures/static-syntax-record-cases.json"
+        "packages/indexer/src/contracts/fixtures/static-syntax-records.json",
+        "packages/indexer/src/contracts/fixtures/static-syntax-record-cases.json"
       ],
       "mirrors": {
         "go": [
@@ -120,17 +120,17 @@
       "description": "Static Index prepare, analyze, finalize, and compile protocol for source-only Project Index compilation.",
       "mirrorStatus": "checked-mirror",
       "canonical": [
-        "packages/indexer/contracts/static-index/schema.ts",
-        "packages/indexer/contracts/static-index/fixtures.ts",
-        "packages/indexer/indexer/static-index/protocol/index.ts",
-        "packages/indexer/indexer/static-index/protocol/request.ts",
-        "packages/indexer/indexer/static-index/protocol/response.ts",
-        "packages/indexer/indexer/static-index/protocol/identity.ts"
+        "packages/indexer/src/contracts/static-index/schema.ts",
+        "packages/indexer/src/contracts/static-index/fixtures.ts",
+        "packages/indexer/src/indexer/static-index/protocol/index.ts",
+        "packages/indexer/src/indexer/static-index/protocol/request.ts",
+        "packages/indexer/src/indexer/static-index/protocol/response.ts",
+        "packages/indexer/src/indexer/static-index/protocol/identity.ts"
       ],
       "fixtures": [
-        "packages/indexer/contracts/fixtures/static-index-protocol.json",
-        "packages/indexer/contracts/fixtures/static-index-protocol-cases.json",
-        "packages/indexer/contracts/fixtures/static-index-identity.json"
+        "packages/indexer/src/contracts/fixtures/static-index-protocol.json",
+        "packages/indexer/src/contracts/fixtures/static-index-protocol-cases.json",
+        "packages/indexer/src/contracts/fixtures/static-index-identity.json"
       ],
       "mirrors": {
         "go": [
@@ -154,12 +154,12 @@
       "description": "Backend-neutral semantic facts streamed before shared Project Index projection.",
       "mirrorStatus": "typescript-only",
       "canonical": [
-        "packages/indexer/contracts/semantic/schema.ts",
-        "packages/indexer/indexer/semantic/evidence/projection.ts",
-        "packages/indexer/indexer/semantic/service/types.ts",
-        "packages/indexer/indexer/semantic/backends/tsgo/types.ts"
+        "packages/indexer/src/contracts/semantic/schema.ts",
+        "packages/indexer/src/indexer/semantic/evidence/projection.ts",
+        "packages/indexer/src/indexer/semantic/service/types.ts",
+        "packages/indexer/src/indexer/semantic/backends/tsgo/types.ts"
       ],
-      "fixtures": ["packages/indexer/contracts/fixtures/semantic-evidence.json"],
+      "fixtures": ["packages/indexer/src/contracts/fixtures/semantic-evidence.json"],
       "mirrors": {
         "go": [],
         "rust": []

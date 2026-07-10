@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { cascade, isCascade } from '../../routing'
+import { cascade, isCascade } from '../../src/routing'
 
 describe('cascade()', () => {
   it('creates a CascadeModel with correct _tag and config', () => {

@@ -51,16 +51,16 @@ function workspacePackagePlugin(repoRoot: string): Plugin {
         path: resolve(repoRoot, coreSubpath(args.path)),
       }))
       buildApi.onResolve({ filter: /^@use-crux\/convex\/runtime$/ }, () => ({
-        path: resolve(repoRoot, 'packages/convex/runtime.ts'),
+        path: resolve(repoRoot, 'packages/convex/src/runtime.ts'),
       }))
     },
   }
 }
 
 function coreSubpath(specifier: string): string {
-  if (specifier === '@use-crux/core') return 'packages/core/index.ts'
+  if (specifier === '@use-crux/core') return 'packages/core/src/index.ts'
   const subpath = specifier.slice('@use-crux/core/'.length)
-  if (subpath === 'runtime') return 'packages/core/runtime/public.ts'
-  if (subpath === 'storage') return 'packages/core/storage/index.ts'
-  return `packages/core/${subpath}.ts`
+  if (subpath === 'runtime') return 'packages/core/src/runtime/public.ts'
+  if (subpath === 'storage') return 'packages/core/src/storage/index.ts'
+  return `packages/core/src/${subpath}.ts`
 }

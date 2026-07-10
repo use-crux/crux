@@ -7,8 +7,8 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '@use-crux/core/observability'
-import { Agent, createTool as createCruxTool, wrapConvexTool } from '../agent'
-import type { CruxConvexContext } from '../server'
+import { Agent, createTool as createCruxTool, wrapConvexTool } from '../src/agent'
+import type { CruxConvexContext } from '../src/server'
 
 describe('agent tool observability', () => {
   afterEach(() => {

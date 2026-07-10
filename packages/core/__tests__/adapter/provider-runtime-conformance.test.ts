@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { providerRuntimeConformance, type ProviderRuntimeConformanceHarness } from '../../adapter/testing'
+import { providerRuntimeConformance, type ProviderRuntimeConformanceHarness } from '../../src/adapter/testing'
 import {
   createRuntimeClient,
   createSingleTurnTestRuntime,

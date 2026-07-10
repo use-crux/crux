@@ -17,7 +17,7 @@ import type {
   CruxSpanEventRecord,
   CruxSpanRecord,
   CruxSpanStartRecord,
-} from '../observability'
+} from '../src/observability'
 import {
   CruxArtifactRecordSchema,
   CruxEdgeRecordSchema,
@@ -28,7 +28,7 @@ import {
   CruxSpanEventRecordSchema,
   CruxSpanRecordSchema,
   CruxSpanStartRecordSchema,
-} from '../observability'
+} from '../src/observability'
 
 type AssertEqual<T, U> = (<G>() => G extends T ? 1 : 2) extends <G>() => G extends U ? 1 : 2
   ? (<G>() => G extends U ? 1 : 2) extends <G>() => G extends T ? 1 : 2

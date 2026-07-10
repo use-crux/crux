@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { semanticDefinitionCandidates } from '../indexer/semantic/discovery'
+import { semanticDefinitionCandidates } from '../src/indexer/semantic/discovery'
 import type {
   SemanticSyntaxKind,
   SemanticSyntaxNode,
   SemanticSyntaxSourceFile,
   SemanticSyntaxView,
-} from '../indexer/semantic/syntax-view'
+} from '../src/indexer/semantic/syntax-view'
 
 type FakeSyntaxKind = SemanticSyntaxKind | 'fake'
 

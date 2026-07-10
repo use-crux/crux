@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { inMemoryRecordStore } from "../../storage";
-import { workspace } from "../../workspace";
+import { inMemoryRecordStore } from "../../src/storage";
+import { workspace } from "../../src/workspace";
 
 describe("workspace virtual mount copy", () => {
   it("copies readable source-backed text files into local writable mounts", async () => {

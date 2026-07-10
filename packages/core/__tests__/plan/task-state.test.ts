@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { taskListKey } from '../../plan/helpers'
-import { getTaskList, tasks } from '../../plan/tasks'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
-import type { JsonObject, RecordListOptions, RecordPage, RecordStore, RecordWriteOptions } from '../../storage'
-import { inMemoryRecordStore } from '../../storage'
+import { taskListKey } from '../../src/plan/helpers'
+import { getTaskList, tasks } from '../../src/plan/tasks'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
+import type { JsonObject, RecordListOptions, RecordPage, RecordStore, RecordWriteOptions } from '../../src/storage'
+import { inMemoryRecordStore } from '../../src/storage'
 
 /** Create fresh records and register them in the runtime. */
 function setup() {

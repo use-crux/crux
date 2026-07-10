@@ -29,7 +29,7 @@ describe('Static Index runtime contract inventory', () => {
 
     expect(entry?.filesByOwner.typescript).toContainEqual(
       expect.objectContaining({
-        path: 'packages/indexer/contracts/fixtures/static-index-identity.json',
+        path: 'packages/indexer/src/contracts/fixtures/static-index-identity.json',
         kind: 'identity',
       }),
     )

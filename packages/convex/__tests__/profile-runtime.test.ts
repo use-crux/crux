@@ -2,12 +2,12 @@ import { Agent as ConvexAgentBase } from '@convex-dev/agent'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import { createCruxConvex, prompt, type ConvexCtxPort } from '../index'
-import { convexAgent } from '../agent'
-import { inMemoryRecordStore, memory, memoryBlock, recentMessages } from '../memory'
-import { convexRuntimeRecords, getConvexCruxRuntime, runWithConvexCruxRuntime } from '../runtime'
-import { context } from '../context'
-import { tool } from '../tools'
+import { createCruxConvex, prompt, type ConvexCtxPort } from '../src'
+import { convexAgent } from '../src/agent'
+import { inMemoryRecordStore, memory, memoryBlock, recentMessages } from '../src/memory'
+import { convexRuntimeRecords, getConvexCruxRuntime, runWithConvexCruxRuntime } from '../src/runtime'
+import { context } from '../src/context'
+import { tool } from '../src/tools'
 import {
   createInMemoryObservabilityTransport,
   observe,

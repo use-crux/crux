@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { readFile } from 'node:fs/promises'
-import fixture from '../../observability/fixtures/generation-run.json'
-import goldenNodeRun from '../../observability/fixtures/golden-node-run.json'
+import fixture from '../../src/observability/fixtures/generation-run.json'
+import goldenNodeRun from '../../src/observability/fixtures/golden-node-run.json'
 import {
   CRUX_CANONICAL_ARTIFACT_KINDS,
   CRUX_CANONICAL_EDGE_TYPES,
@@ -12,16 +12,16 @@ import {
   CruxGraphRecordBatchSchema,
   CruxGraphRecordSchema,
   CruxSpanStartRecordSchema,
-} from '../../observability'
+} from '../../src/observability'
 
 describe('Crux observability graph contract', () => {
   it('keeps presentation read-model exports out of the wire contract module', async () => {
     const contractSource = await readFile(
-      new URL('../../observability/contract.ts', import.meta.url),
+      new URL('../../src/observability/contract.ts', import.meta.url),
       'utf8',
     )
     const presentationSource = await readFile(
-      new URL('../../observability/presentation.ts', import.meta.url),
+      new URL('../../src/observability/presentation.ts', import.meta.url),
       'utf8',
     )
 

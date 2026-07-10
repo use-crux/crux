@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { inMemoryRuntimeStore } from '../../runtime/adapters/memory'
+import { inMemoryRuntimeStore } from '../../src/runtime/adapters/memory'
 import type {
   FlowId,
   RuntimeTargetId,
@@ -7,12 +7,12 @@ import type {
   TimerId,
   WaiterId,
   WorkId,
-} from '../../runtime/ports'
+} from '../../src/runtime/ports'
 import {
   createRuntimeKernel,
   wakeEnvelopeForWork,
-} from '../../runtime/engine/kernel'
-import { transition, type WorkItem } from '../../runtime/engine/work'
+} from '../../src/runtime/engine/kernel'
+import { transition, type WorkItem } from '../../src/runtime/engine/work'
 
 describe('RuntimeKernel maintenance and cancellation composites', () => {
   it('reclaims expired leased work without counting it as a failed attempt', async () => {

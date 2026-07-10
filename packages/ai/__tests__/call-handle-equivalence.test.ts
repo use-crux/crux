@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { prompt } from '@use-crux/core'
-import { createCruxAi } from '../index'
+import { createCruxAi } from '../src'
 import type { SdkGateway } from '../src/gateway'
 import type { SdkLoopResultLike } from '../src/sdk-codec'
 import { emissionModel } from './mock-model'

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createAgentSkillKit, createSkillActivationSession, skill } from '../../skill'
-import type { SkillActivationSnapshot } from '../../skill'
+import { createAgentSkillKit, createSkillActivationSession, skill } from '../../src/skill'
+import type { SkillActivationSnapshot } from '../../src/skill'
 
 describe('createAgentSkillKit', () => {
   it('loads and saves snapshots through the session persistence port', async () => {

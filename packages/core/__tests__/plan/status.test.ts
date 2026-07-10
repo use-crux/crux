@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { emptyCounts, applyCounts, deriveStatus, rebuildCounts, type StatusCounts } from '../../plan/status'
+import { emptyCounts, applyCounts, deriveStatus, rebuildCounts, type StatusCounts } from '../../src/plan/status'
 
 // ─────────────────────────────────────────────────────────────────
 // emptyCounts

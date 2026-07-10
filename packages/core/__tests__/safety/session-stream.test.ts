@@ -5,11 +5,11 @@
  */
 
 import { afterEach, describe, it, expect } from 'vitest'
-import { boundary, createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../safety'
-import type { SafetyCallOptions } from '../../safety'
-import { guardrail } from '../../safety/guardrail'
-import { constraint } from '../../safety/constraint'
-import { resetHooks } from '../../runtime/runtime'
+import { boundary, createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../src/safety'
+import type { SafetyCallOptions } from '../../src/safety'
+import { guardrail } from '../../src/safety/guardrail'
+import { constraint } from '../../src/safety/constraint'
+import { resetHooks } from '../../src/runtime/runtime'
 
 afterEach(() => {
   resetHooks()

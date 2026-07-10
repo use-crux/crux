@@ -1,12 +1,12 @@
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { context } from '../prompt/context'
-import { citationSchema, grounding } from '../citations'
-import { prompt } from '../prompt/prompt'
-import { embedding, embeddingCache, normalizeText } from '../embedding'
-import { retriever, retrievalRecipe, retrievalStep, retrieve } from '../retrieval'
-import { inMemoryRecordStore } from '../storage'
-import type { RetrievalToolDef, RetrieverTools } from '../retrieval'
+import { context } from '../src/prompt/context'
+import { citationSchema, grounding } from '../src/citations'
+import { prompt } from '../src/prompt/prompt'
+import { embedding, embeddingCache, normalizeText } from '../src/embedding'
+import { retriever, retrievalRecipe, retrievalStep, retrieve } from '../src/retrieval'
+import { inMemoryRecordStore } from '../src/storage'
+import type { RetrievalToolDef, RetrieverTools } from '../src/retrieval'
 
 const localeContext = context({
   id: 'locale',

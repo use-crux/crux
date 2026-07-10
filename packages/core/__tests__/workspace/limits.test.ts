@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { inMemoryRecordStore } from "../../storage";
-import { workspace } from "../../workspace";
+import { inMemoryRecordStore } from "../../src/storage";
+import { workspace } from "../../src/workspace";
 
 describe("workspace() operator limits", () => {
   it("passes retention TTL to stores that support it and omits it for stores that do not", async () => {

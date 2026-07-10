@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
-const indexerDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'indexer')
+const indexerDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'indexer')
 const tsgoBackendDir = join(indexerDir, 'semantic', 'backends', 'tsgo')
 
 interface ForbiddenImport {

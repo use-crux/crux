@@ -14,7 +14,7 @@ import {
   type DotPath,
   type PathValue,
   type SafetyTuneOptions,
-} from '../safety'
+} from '../src/safety'
 
 interface CustomerSummary {
   customer: {

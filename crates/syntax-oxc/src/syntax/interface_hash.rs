@@ -1,6 +1,6 @@
 //! Exported-source surface hashing for incremental invalidation.
 //!
-//! This mirrors `packages/indexer/indexer/source-interface-hash.ts`: function
+//! This mirrors `packages/indexer/src/indexer/source-interface-hash.ts`: function
 //! bodies are reduced to signatures, while exported variable initializers and
 //! declarations remain conservative source-surface evidence.
 

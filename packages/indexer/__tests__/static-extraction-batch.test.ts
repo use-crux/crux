@@ -1,25 +1,25 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import type { ProjectDefinitionKind } from "@use-crux/core/project-index";
-import { facts, type IndexerExtension } from "../indexer/extensions";
-import { cacheKeyInputFromSyntaxRecord } from "../indexer/static/extraction/cache-key";
+import { facts, type IndexerExtension } from "../src/indexer/extensions";
+import { cacheKeyInputFromSyntaxRecord } from "../src/indexer/static/extraction/cache-key";
 import {
   createStaticExtraction,
   type SourceReader,
-} from "../indexer/static/extraction/engine";
-import { createParseMemo } from "../indexer/static/extraction/source-io";
+} from "../src/indexer/static/extraction/engine";
+import { createParseMemo } from "../src/indexer/static/extraction/source-io";
 import {
   createProvidedStaticSyntaxFrontend,
   createStaticRecordProjectionCache,
   createTypeScriptStaticSyntaxFrontend,
-} from "../indexer/static-index/syntax";
-import { createProvidedStaticSyntaxRecordCache } from "../indexer/static-index/syntax/record/provided-record-cache";
+} from "../src/indexer/static-index/syntax";
+import { createProvidedStaticSyntaxRecordCache } from "../src/indexer/static-index/syntax/record/provided-record-cache";
 import type {
   ProvidedStaticSyntaxRecordProvider,
   StaticSyntaxFileInput,
   StaticSyntaxFileRecord,
   StaticSyntaxFrontend,
-} from "../indexer/static-index/syntax";
+} from "../src/indexer/static-index/syntax";
 
 describe("static extraction batch frontend", () => {
   it("uses a frontend batch parser for cache-disabled multi-file extraction", async () => {

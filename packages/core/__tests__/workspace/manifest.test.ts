@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { prompt } from '../../prompt/prompt'
-import { inMemoryRecordStore } from '../../storage'
-import { workspace } from '../../workspace'
+import { prompt } from '../../src/prompt/prompt'
+import { inMemoryRecordStore } from '../../src/storage'
+import { workspace } from '../../src/workspace'
 
 describe('workspace manifest', () => {
   it('bounds listed files without exposing file contents', async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { sourceInterfaceHash } from '../indexer/source-interface-hash'
+import { sourceInterfaceHash } from '../src/indexer/source-interface-hash'
 
 describe('source interface hash', () => {
   it('treats constructor bodies as implementation details while preserving constructor signatures', () => {

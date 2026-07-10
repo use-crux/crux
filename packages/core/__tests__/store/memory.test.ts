@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { inMemoryBlobStore, inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
+import { inMemoryBlobStore, inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
 import {
   describeBlobStoreConformance,
   describeRecordStoreConformance,
   vectorStoreConformanceSuite,
-} from '../../storage/testing/vitest'
-import type { RecordEvent } from '../../storage'
+} from '../../src/storage/testing/vitest'
+import type { RecordEvent } from '../../src/storage'
 
 describeRecordStoreConformance({
   name: 'inMemoryRecordStore',

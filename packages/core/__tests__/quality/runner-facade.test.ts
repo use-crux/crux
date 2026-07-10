@@ -2,9 +2,9 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { observe } from '../../observability'
-import { evaluate } from '../../quality'
-import { createQualityRunner, type QualityRunnerEvent } from '../../quality/internal/runner'
+import { observe } from '../../src/observability'
+import { evaluate } from '../../src/quality'
+import { createQualityRunner, type QualityRunnerEvent } from '../../src/quality/internal/runner'
 
 const upperTask = async (input: { q: string }) => ({
   answer: input.q.toUpperCase(),

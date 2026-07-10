@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { SEMANTIC_FACTS_CACHE_EPOCH, STATIC_PARSE_CACHE_EPOCH } from '../indexer/cache-identity'
+import { SEMANTIC_FACTS_CACHE_EPOCH, STATIC_PARSE_CACHE_EPOCH } from '../src/indexer/cache-identity'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 

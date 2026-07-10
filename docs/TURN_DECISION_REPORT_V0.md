@@ -194,9 +194,9 @@ for the local API response.
 
 Preferred TypeScript placement:
 
-- new file: `packages/core/observability/turn-decision-report.ts`
-- export from: `packages/core/observability/index.ts`
-- optionally re-export from `packages/core/observability/contract.ts` only if the current package
+- new file: `packages/core/src/observability/turn-decision-report.ts`
+- export from: `packages/core/src/observability/index.ts`
+- optionally re-export from `packages/core/src/observability/contract.ts` only if the current package
   export pattern requires it
 
 Preferred Go placement:
@@ -887,8 +887,8 @@ The UI should show the human text, but tests and future matchers should assert t
 | `cache.report` | core cache primitives, Run Detail inspection | `TurnCacheDecision` | Report-level cache behavior belongs under efficiency. |
 | Request tools from `RunDetailRequest.Tools` | `request_composition.go` | `TurnToolDecision` outcome `eligible` | Origin can be request, context-injection, or unknown. |
 | `tool.request`, `tool.args`, `tool.result`, tool spans | observability contract/core tool execution | `TurnToolDecision` outcomes `called`, `result`, `errored` | Source join may be weak unless tool definition is indexed. |
-| `routing.report` router | `packages/core/routing/resolve.ts` | `TurnRoutingDecision` outcome `router-selected` | Has chosen route/model, available routes, default/override events. |
-| `routing.report` cascade | `packages/core/routing/resolve.ts` | `TurnRoutingDecision` tier decisions | Has verdict, note, confidence, budget/cost/duration. |
+| `routing.report` router | `packages/core/src/routing/resolve.ts` | `TurnRoutingDecision` outcome `router-selected` | Has chosen route/model, available routes, default/override events. |
+| `routing.report` cascade | `packages/core/src/routing/resolve.ts` | `TurnRoutingDecision` tier decisions | Has verdict, note, confidence, budget/cost/duration. |
 | `fallback.attempt` spans | `packages/core/orchestrate.ts` | `TurnFallbackDecision` | Has attempt, model, status, errorCategory, willAttemptFallback. |
 | fallback edges | `packages/core/orchestrate.ts` | fallback evidence refs/related decisions | Shows relation from failed attempt to next attempt. |
 | `guardrail.report` | guardrail pipeline | `TurnGuardrailDecision` | Preserve action/reason without over-flattening. |
@@ -898,7 +898,7 @@ The UI should show the human text, but tests and future matchers should assert t
 | `retrieval.hits` | retrieval primitives | `TurnRetrievalDecision` | V0 should not assume hits were included in prompt unless linked via contribution/request evidence. |
 | `memory.recall`, `memory.diff`, `memory.snapshot` | memory primitives | `TurnMemoryDecision` | Distinguish recall/write/update where artifact kind allows it. |
 | Project Runtime Joins | Project Index / local read model | `source` | Best source for exact runtime-to-definition links. |
-| Project Definition source refs | `packages/core/project-index/index.ts` | `source.sourceRefs` | Include role/snippet when present. |
+| Project Definition source refs | `packages/core/src/project-index/index.ts` | `source.sourceRefs` | Include role/snippet when present. |
 | Project Definition quality metadata | Project Index Read Model enrichment | `quality` | Good for definition-level coverage. |
 | QualityFS experiment/baseline/assertion records | `packages/local/internal/qualityfs` | `quality` | Good for direct trace coverage when trace IDs/case IDs match. |
 
@@ -995,9 +995,9 @@ Output:
 
 Files likely touched:
 
-- `packages/core/observability/turn-decision-report.ts`
-- `packages/core/observability/index.ts`
-- `packages/core/observability/contract.ts` if exports remain centralized
+- `packages/core/src/observability/turn-decision-report.ts`
+- `packages/core/src/observability/index.ts`
+- `packages/core/src/observability/contract.ts` if exports remain centralized
 - type tests or compile tests under the existing package test pattern
 
 Implementation notes:
@@ -1114,7 +1114,7 @@ This is post-V0 unless the first product slice needs it.
 
 Potential files:
 
-- `packages/core/quality/*`
+- `packages/core/src/quality/*`
 - `packages/local/internal/quality/*`
 - docs for new matchers
 
@@ -1377,4 +1377,3 @@ The crucial first milestone is not "explain everything." It is:
 > For one generation turn, Crux can show what the model saw, which harness decisions shaped it, and
 > the evidence/source/quality links that support those claims, while clearly labeling what was not
 > recorded.
-

@@ -1,5 +1,5 @@
 import { expectTypeOf } from 'vitest'
-import { registry, skill, skillsSh, type Registry, type Skill } from '../skill'
+import { registry, skill, skillsSh, type Registry, type Skill } from '../src/skill'
 
 const acme = registry({
   name: 'acme',

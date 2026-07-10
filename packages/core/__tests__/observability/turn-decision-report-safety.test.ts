@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { SafetyDecision } from '../../safety'
-import { safetyDecisionToTurnDecision } from '../../observability/turn-decision-report'
+import type { SafetyDecision } from '../../src/safety'
+import { safetyDecisionToTurnDecision } from '../../src/observability/turn-decision-report'
 
 describe('Safety decisions in TurnDecisionReport', () => {
   it('projects guardrail decisions into canonical turn decision rows', () => {

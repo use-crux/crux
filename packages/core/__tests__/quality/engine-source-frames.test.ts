@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { evaluate } from '../../quality'
-import type { QualitySourceFrameRequest, QualitySourceFrameResolver } from '../../quality/source-frame'
+import { evaluate } from '../../src/quality'
+import type { QualitySourceFrameRequest, QualitySourceFrameResolver } from '../../src/quality/source-frame'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 const upperTask = async (input: { q: string }) => ({ answer: input.q.toUpperCase() })

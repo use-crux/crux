@@ -9,7 +9,7 @@ import type {
   ReferenceBuilder,
   SourceRefBuilder,
   SourceView,
-} from "../extensions";
+} from "../src/extensions";
 type Expect<T extends true> = T;
 type Equal<A, B> =
   (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2

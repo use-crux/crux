@@ -8,12 +8,12 @@
  */
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { boundary, createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../safety'
-import type { SafetyOutput } from '../../safety'
-import { guardrail } from '../../safety/guardrail'
-import { constraint } from '../../safety/constraint'
-import { updateHooks, resetHooks } from '../../runtime/runtime'
-import type { Message } from '../../generation/messages'
+import { boundary, createSafety, GuardrailBlockedError, ConstraintViolationError } from '../../src/safety'
+import type { SafetyOutput } from '../../src/safety'
+import { guardrail } from '../../src/safety/guardrail'
+import { constraint } from '../../src/safety/constraint'
+import { updateHooks, resetHooks } from '../../src/runtime/runtime'
+import type { Message } from '../../src/generation/messages'
 
 afterEach(() => {
   resetHooks()

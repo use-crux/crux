@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { flow, InvalidSignalPayloadError, noPayload, signalFlow, type FlowSnapshot } from '../../flow'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
-import { inMemoryRecordStore, type JsonValue } from '../../storage'
+import { flow, InvalidSignalPayloadError, noPayload, signalFlow, type FlowSnapshot } from '../../src/flow'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
+import { inMemoryRecordStore, type JsonValue } from '../../src/storage'
 
 describe('flow signal consumption', () => {
   afterEach(() => {

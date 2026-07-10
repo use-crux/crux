@@ -2,12 +2,12 @@ import { mkdtemp, readFile, rm, writeFile, mkdir } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join, dirname } from 'node:path'
-import { pathToFileURL } from 'node:url'
+import { pathToFileURL, fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { CassetteMissError, cassettePath, normalizedCallKey, openCassetteSession } from '../../quality/internal/cassette'
-import type { InterceptedGeneration } from '../../adapter/interception'
+import { CassetteMissError, cassettePath, normalizedCallKey, openCassetteSession } from '../../src/quality/internal/cassette'
+import type { InterceptedGeneration } from '../../src/adapter/interception'
 
 const execFileAsync = promisify(execFile)
 const tempDirs: string[] = []
@@ -187,8 +187,10 @@ describe('cassette session — record-new', () => {
 
   it('merges disjoint recordings flushed by two separate processes', async () => {
     const path = await tempCassette()
+    // Compute cassette module location from this test file (works regardless of process.cwd() in pnpm/vitest runs)
+    const cassetteModuleFile = join(dirname(fileURLToPath(import.meta.url)), '../../src/quality/internal/cassette.ts')
     const worker = `
-      import { openCassetteSession } from ${JSON.stringify(pathToFileURL(join(process.cwd(), 'quality/internal/cassette.ts')).href)}
+      import { openCassetteSession } from ${JSON.stringify(pathToFileURL(cassetteModuleFile).href)}
       const path = process.env.CASSETTE_PATH
       const prompt = process.env.CASSETTE_PROMPT
       const text = process.env.CASSETTE_TEXT

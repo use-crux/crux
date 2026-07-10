@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { compilePrompt } from '../../resolver/compile'
-import { createResolverFakes } from '../../resolver/fakes'
-import { context } from '../../prompt'
-import { retriever, type RetrieverHit } from '../../retrieval'
+import { compilePrompt } from '../../src/resolver/compile'
+import { createResolverFakes } from '../../src/resolver/fakes'
+import { context } from '../../src/prompt'
+import { retriever, type RetrieverHit } from '../../src/retrieval'
 
 describe('resolver freshness record layer', () => {
   it('reports live and memo freshness facts on inspect parts and contribution artifacts', async () => {

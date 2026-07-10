@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
-import { builtInIndexRuleDescriptors } from '../indexer/lints/rules'
-import { indexRelationPolicies } from '../indexer/relations'
+import { readStaticIndexRuntimeSharedFixture } from '../src/contracts/fixtures'
+import { builtInIndexRuleDescriptors } from '../src/indexer/lints/rules'
+import { indexRelationPolicies } from '../src/indexer/relations'
 
 describe('first-party shared static index fixtures', () => {
   it('validates shared static syntax, relation, and rule fixture files', () => {

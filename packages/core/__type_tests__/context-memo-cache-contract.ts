@@ -3,7 +3,7 @@
  */
 
 import { z } from 'zod'
-import { context, prompt } from '../prompt'
+import { context, prompt } from '../src/prompt'
 
 context({
   id: 'memoized',

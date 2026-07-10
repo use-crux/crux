@@ -10,9 +10,9 @@ import {
   type CruxArtifactRecord,
   type CruxEdgeRecord,
   type CruxRunStartRecord,
-} from '../../observability'
-import { evaluate } from '../../quality'
-import { createQualityRunner } from '../../quality/internal/runner'
+} from '../../src/observability'
+import { evaluate } from '../../src/quality'
+import { createQualityRunner } from '../../src/quality/internal/runner'
 
 const upperTask = async (input: { q: string }) => ({
   answer: input.q.toUpperCase(),

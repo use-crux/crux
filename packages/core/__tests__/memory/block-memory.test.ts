@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { adapter as makeAdapter } from '../../adapter/define-adapter'
-import type { AdapterResponse } from '../../adapter/types'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { defaultTokenizer, setTokenizer } from '../../shared/tokenizer'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../../storage'
+import { adapter as makeAdapter } from '../../src/adapter/define-adapter'
+import type { AdapterResponse } from '../../src/adapter/types'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { defaultTokenizer, setTokenizer } from '../../src/shared/tokenizer'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
 import {
   episodes,
   facts,
@@ -13,7 +13,7 @@ import {
   procedures,
   recentMessages,
   workingState,
-} from '../../memory'
+} from '../../src/memory'
 
 const mockEmbed = async (text: string) => {
   const values = Array.from(text.slice(0, 8)).map((char) => char.charCodeAt(0) / 255)

@@ -49,14 +49,14 @@ The market split is consistent: workflow engines own execution, while agent fram
 
 Core files:
 
-- `packages/core/plan/types.ts`
-- `packages/core/plan/plans.ts`
-- `packages/core/plan/tasks.ts`
-- `packages/core/plan/status.ts`
-- `packages/core/plan/helpers.ts`
-- `packages/core/plan/agent.ts`
-- `packages/core/plan/index.ts`
-- `packages/core/tasks/index.ts`
+- `packages/core/src/plan/types.ts`
+- `packages/core/src/plan/plans.ts`
+- `packages/core/src/plan/tasks.ts`
+- `packages/core/src/plan/status.ts`
+- `packages/core/src/plan/helpers.ts`
+- `packages/core/src/plan/agent.ts`
+- `packages/core/src/plan/index.ts`
+- `packages/core/src/tasks/index.ts`
 
 Public shape:
 

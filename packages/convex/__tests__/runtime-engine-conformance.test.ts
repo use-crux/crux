@@ -6,8 +6,8 @@ import schema from '../src/component/schema'
 import {
   convexRuntimeStore,
   type ConvexRuntimeComponent,
-} from '../runtime'
-import type { ConvexCtxPort } from '../store'
+} from '../src/runtime'
+import type { ConvexCtxPort } from '../src/store'
 
 const modules = {
   '../src/component/_generated/server.ts': () => import('../src/component/_generated/server'),

@@ -8,8 +8,8 @@ import {
 } from '@use-crux/core/observability'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { convexAgent } from '../agent'
-import { inMemoryRecordStore } from '../memory'
+import { convexAgent } from '../src/agent'
+import { inMemoryRecordStore } from '../src/memory'
 import { FakeConvexAgentDriver } from './fixtures/fakeAgentDriver'
 
 describe('profile-backed Convex Agent observability config', () => {

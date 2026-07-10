@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { config } from '../runtime/config'
-import { blackboard } from '../agent/blackboard'
+import { config } from '../src/runtime/config'
+import { blackboard } from '../src/agent/blackboard'
 import {
   BridgeCommandRequestSchema,
   connectRuntimeBridge,
@@ -11,10 +11,10 @@ import {
   RuntimeBridgeConfigSchema,
   RuntimeBridgeMessageSchema,
   RuntimePeerHelloSchema,
-} from '../runtime-bridge'
-import { clearInspectableResources } from '../runtime-bridge/resources'
-import { memory, recentMessages } from '../memory'
-import { inMemoryRecordStore } from '../storage'
+} from '../src/runtime-bridge'
+import { clearInspectableResources } from '../src/runtime-bridge/resources'
+import { memory, recentMessages } from '../src/memory'
+import { inMemoryRecordStore } from '../src/storage'
 
 class FakeWebSocket {
   static instances: FakeWebSocket[] = []

@@ -1,5 +1,5 @@
 import React, { type ReactNode } from 'react'
-import { createConvexTransport } from '../../../convex/react'
+import { createConvexTransport } from '../../../convex/src/react'
 import { CruxProvider } from '../../src/provider'
 import type { JsonObject } from '@use-crux/core/storage'
 

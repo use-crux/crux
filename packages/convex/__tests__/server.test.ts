@@ -7,8 +7,8 @@ import {
 } from '@use-crux/core/observability'
 import { inMemoryRecordStore } from '@use-crux/core/storage'
 import { resetHooks, updateHooks } from '@use-crux/core'
-import { action, flow, query } from '../server'
-import { DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS } from '../observability'
+import { action, flow, query } from '../src/server'
+import { DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS } from '../src/observability'
 
 describe('@use-crux/convex/server', () => {
   afterEach(() => {

@@ -11,23 +11,23 @@
 
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
-import { adapter as makeAdapter } from '../../adapter/define-adapter'
-import { loopRuntimeAdapter } from '../../adapter/define-executor'
-import { fakeLoopRuntime } from '../../adapter/testing'
-import type { AdapterSpec } from '../../adapter/spec'
-import type { AdapterResponse } from '../../adapter/types'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { guardrail as makeGuardrail, GuardrailBlockedError } from '../../safety/guardrail'
-import { constraint as makeConstraint } from '../../safety/constraint'
-import { boundary } from '../../safety'
-import { ConstraintViolationError } from '../../safety/constraint/errors'
-import { toolMiddleware } from '../../tools/middleware'
-import { appendToolApprovalResponse } from '../../tools/approvals'
-import { skill } from '../../skill'
-import { LOAD_SKILL_TOOL_NAME } from '../../skill/tools'
-import { ValidationExhaustedError } from '../../generation/validation-retry'
-import { updateHooks, resetHooks } from '../../runtime/runtime'
-import type { Message } from '../../generation/messages'
+import { adapter as makeAdapter } from '../../src/adapter/define-adapter'
+import { loopRuntimeAdapter } from '../../src/adapter/define-executor'
+import { fakeLoopRuntime } from '../../src/adapter/testing'
+import type { AdapterSpec } from '../../src/adapter/spec'
+import type { AdapterResponse } from '../../src/adapter/types'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { guardrail as makeGuardrail, GuardrailBlockedError } from '../../src/safety/guardrail'
+import { constraint as makeConstraint } from '../../src/safety/constraint'
+import { boundary } from '../../src/safety'
+import { ConstraintViolationError } from '../../src/safety/constraint/errors'
+import { toolMiddleware } from '../../src/tools/middleware'
+import { appendToolApprovalResponse } from '../../src/tools/approvals'
+import { skill } from '../../src/skill'
+import { LOAD_SKILL_TOOL_NAME } from '../../src/skill/tools'
+import { ValidationExhaustedError } from '../../src/generation/validation-retry'
+import { updateHooks, resetHooks } from '../../src/runtime/runtime'
+import type { Message } from '../../src/generation/messages'
 import {
   createInMemoryObservabilityTransport,
   observe,
@@ -35,7 +35,7 @@ import {
   setObservabilityTransport,
   subscribeObservability,
   type CruxGraphRecord,
-} from '../../observability'
+} from '../../src/observability'
 
 afterEach(() => {
   resetHooks()

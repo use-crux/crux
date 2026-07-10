@@ -12,16 +12,16 @@
 
 import { afterEach, describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { agent as makeAgent } from '../../agent/agent'
-import { createParallel } from '../../agent/parallel'
-import { createPipeline } from '../../agent/pipeline'
-import { createConsensus } from '../../agent/consensus'
-import { createSwarm } from '../../agent/swarm'
-import { createFakeAgentExecutor } from '../../agent/fakes'
-import { createFakeAgentExecutor as fromAgentBarrel } from '../../agent'
-import { createFakeAgentExecutor as fromPackageRoot } from '../../index'
-import { resetHooks } from '../../runtime/runtime'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { agent as makeAgent } from '../../src/agent/agent'
+import { createParallel } from '../../src/agent/parallel'
+import { createPipeline } from '../../src/agent/pipeline'
+import { createConsensus } from '../../src/agent/consensus'
+import { createSwarm } from '../../src/agent/swarm'
+import { createFakeAgentExecutor } from '../../src/agent/fakes'
+import { createFakeAgentExecutor as fromAgentBarrel } from '../../src/agent'
+import { createFakeAgentExecutor as fromPackageRoot } from '../../src/index'
+import { resetHooks } from '../../src/runtime/runtime'
 
 afterEach(() => {
   resetHooks()

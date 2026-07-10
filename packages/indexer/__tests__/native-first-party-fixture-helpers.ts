@@ -2,10 +2,10 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
-import { createStaticExtraction, type SourceReader } from '../indexer/static/extraction/engine'
-import type { StaticFileExtraction } from '../indexer/static/extraction/engine'
-import { createProvidedStaticSyntaxFrontend } from '../indexer/static-index/syntax'
-import { createRustOxcStaticSyntaxFrontend, rustOxcSyntaxFrontendTestStatus } from '../testing/rust-oxc-frontend'
+import { createStaticExtraction, type SourceReader } from '../src/indexer/static/extraction/engine'
+import type { StaticFileExtraction } from '../src/indexer/static/extraction/engine'
+import { createProvidedStaticSyntaxFrontend } from '../src/indexer/static-index/syntax'
+import { createRustOxcStaticSyntaxFrontend, rustOxcSyntaxFrontendTestStatus } from '../src/testing/rust-oxc-frontend'
 
 const rustOxcStatus = rustOxcSyntaxFrontendTestStatus()
 

@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { config } from '@use-crux/core'
 import type { RecordStore } from '@use-crux/core/storage'
 import { inMemoryRecordStore } from '@use-crux/core/storage'
-import { createCruxConvex } from '../index'
-import { setup } from '../bridge'
+import { createCruxConvex } from '../src'
+import { setup } from '../src/bridge'
 
 interface CapturedRoute {
   path: string

@@ -1,10 +1,10 @@
 import { config, resetHooks } from '@use-crux/core'
 import { createRuntimeWithHostContext } from '@use-crux/core/runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { convexRuntimeRecords, getConvexCruxRuntime, type ConvexCtxPort } from '../index'
-import { inMemoryRecordStore, memory, memoryBlock } from '../memory'
-import { convex } from '../runtime'
-import { createConvexRuntimeBridge } from '../runtime-bridge'
+import { convexRuntimeRecords, getConvexCruxRuntime, type ConvexCtxPort } from '../src'
+import { inMemoryRecordStore, memory, memoryBlock } from '../src/memory'
+import { convex } from '../src/runtime'
+import { createConvexRuntimeBridge } from '../src/runtime-bridge'
 
 interface TenantCtx extends ConvexCtxPort {
   tenantId: string

@@ -5,7 +5,7 @@
 import type { LanguageModel } from "ai";
 import { z } from "zod";
 import { prompt, tool, type Prompt } from "@use-crux/core";
-import { generate } from "../index";
+import { generate } from "../src";
 
 declare const model: LanguageModel;
 declare const textPrompt: Prompt<

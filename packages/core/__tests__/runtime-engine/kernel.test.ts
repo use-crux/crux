@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { inMemoryRuntimeStore } from '../../runtime/adapters/memory'
-import type { RuntimeTargetId, TaskId, WorkId } from '../../runtime/ports'
+import { inMemoryRuntimeStore } from '../../src/runtime/adapters/memory'
+import type { RuntimeTargetId, TaskId, WorkId } from '../../src/runtime/ports'
 import {
   createRuntimeKernel,
   wakeEnvelopeForWork,
-} from '../../runtime/engine/kernel'
+} from '../../src/runtime/engine/kernel'
 import {
   createOutboxDispatcher,
   dispatchBatch,
-} from '../../runtime/engine/outbox'
+} from '../../src/runtime/engine/outbox'
 
 describe('RuntimeKernel', () => {
   it('runs task work once through outbox delivery and duplicate wake handling', async () => {

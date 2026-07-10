@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { config, flow } from '@use-crux/core'
 import { createRuntime, node } from '@use-crux/core/runtime'
-import { inMemoryRuntimeStore } from '../../runtime/adapters/memory'
-import { createRuntimeKernel } from '../../runtime/engine/kernel'
-import type { WorkItem } from '../../runtime/engine/work'
-import { runtimeTargetMap } from '../../runtime/api/target-registry'
+import { inMemoryRuntimeStore } from '../../src/runtime/adapters/memory'
+import { createRuntimeKernel } from '../../src/runtime/engine/kernel'
+import type { WorkItem } from '../../src/runtime/engine/work'
+import { runtimeTargetMap } from '../../src/runtime/api/target-registry'
 import type {
   FlowId,
   RuntimeTargetId,
   WorkId,
-} from '../../runtime/ports'
-import { resetHooks } from '../../runtime/runtime'
+} from '../../src/runtime/ports'
+import { resetHooks } from '../../src/runtime/runtime'
 
 describe('RuntimeKernel retention maintenance', () => {
   afterEach(() => {

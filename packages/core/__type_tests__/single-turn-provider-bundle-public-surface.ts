@@ -9,7 +9,7 @@ import {
   type NativeProviderPort,
   type SingleTurnProviderBundleSpec,
 } from '@use-crux/core/adapter'
-import type { Message } from '../generation/messages'
+import type { Message } from '../src/generation/messages'
 
 interface BundleRequest {
   readonly model: string

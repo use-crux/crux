@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../../prompt/prompt'
-import { flow } from '../../flow/scope'
-import { agent } from '../../agent/agent'
-import { evaluate, target, scorers, dataset, cassette, UncapturedSignalError } from '../../quality'
-import { NotImplementedError } from '../../quality/internal/errors'
+import { prompt } from '../../src/prompt/prompt'
+import { flow } from '../../src/flow/scope'
+import { agent } from '../../src/agent/agent'
+import { evaluate, target, scorers, dataset, cassette, UncapturedSignalError } from '../../src/quality'
+import { NotImplementedError } from '../../src/quality/internal/errors'
 
 const supportPrompt = prompt({
   id: 'support',

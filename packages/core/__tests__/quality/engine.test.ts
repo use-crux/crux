@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { observe } from '../../observability'
-import { evaluate } from '../../quality'
+import { observe } from '../../src/observability'
+import { evaluate } from '../../src/quality'
 import { QualityRunnerHarnessError, runEvaluationWithRunner as run } from './runner-harness'
 
 const upperTask = async (input: { q: string }) => ({
@@ -500,7 +500,7 @@ describe('Quality runner — phase boundaries', () => {
   })
 
   it('multi-turn cases error with a clear message', async () => {
-    const flowTask = (await import('../../flow/scope')).flow('turny', async (_scope, _input: { topic: string }) => ({
+    const flowTask = (await import('../../src/flow/scope')).flow('turny', async (_scope, _input: { topic: string }) => ({
       ok: true,
     }))
     const evaluation = evaluate({
@@ -565,7 +565,7 @@ describe('Quality runner — declared gates', () => {
 
 describe('Quality runner — definition errors', () => {
   it('a prompt task without a generate fn is a definition error', async () => {
-    const { prompt } = await import('../../prompt/prompt')
+    const { prompt } = await import('../../src/prompt/prompt')
     const { z } = await import('zod')
     const supportPrompt = prompt({
       id: 'support',

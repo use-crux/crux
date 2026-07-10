@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { semanticBackendSelectionFromConfig, semanticBackendSelectionFromEnv } from '../indexer/semantic/service'
+import { semanticBackendSelectionFromConfig, semanticBackendSelectionFromEnv } from '../src/indexer/semantic/service'
 
 describe('semantic backend selection', () => {
   it('selects the native backend from env selection', () => {

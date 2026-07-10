@@ -14,6 +14,6 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["node", "vitest"]
   },
-  "include": ["**/*.ts", "**/*.tsx", "__type_tests__/**/*.ts", "__type_tests__/**/*.tsx"],
+  "include": ["src/**/*.ts", "src/**/*.tsx", "__type_tests__/**/*.ts", "__type_tests__/**/*.tsx"],
   "exclude": ["node_modules", ".turbo", "__tests__"]
 }

@@ -8,13 +8,13 @@ import {
   resetObservabilityRuntime,
 } from '@use-crux/core/observability'
 import { SEMCONV_VERSION } from '../src/semconv'
-import generationRun from '../../core/observability/fixtures/generation-run.json'
+import generationRun from '../../core/src/observability/fixtures/generation-run.json'
 import { withTelemetry } from '../src'
 import { createCallbackExporter } from '../src/exporter'
 import { createOtelRecordSubscriber } from '../src/record-mapper'
 import { createLightweightSpanManager } from '../src/span-manager'
 import type { TraceSpan } from '../src/types'
-import { resetHooks, updateHooks } from '../../core/runtime/runtime'
+import { resetHooks, updateHooks } from '../../core/src/runtime/runtime'
 import { messageContentAttributesForArtifact } from '../src/message-content'
 import { imagePart, textPart } from '@use-crux/core'
 

@@ -10,9 +10,9 @@ import {
 import { makeFunctionReference } from 'convex/server'
 import { v } from 'convex/values'
 import { describe, expect, it, vi } from 'vitest'
-import { createConvexRuntimeHandlers, type ConvexRuntimeComponent } from '../runtime'
-import { createConvexRuntimeTargetExecutor } from '../runtime-node'
-import { flow } from '../server'
+import { createConvexRuntimeHandlers, type ConvexRuntimeComponent } from '../src/runtime'
+import { createConvexRuntimeTargetExecutor } from '../src/runtime-node'
+import { flow } from '../src/server'
 
 const component = {
   runtime: {

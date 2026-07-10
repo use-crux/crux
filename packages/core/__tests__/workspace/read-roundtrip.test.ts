@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../storage";
-import { workspace } from "../../workspace";
+import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../src/storage";
+import { workspace } from "../../src/workspace";
 
 describe("workspace read round-trips", () => {
   it("reads blob-backed text as text content", async () => {

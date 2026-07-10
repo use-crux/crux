@@ -3,8 +3,8 @@ import {
   createStaticExtraction,
   type SourceReader,
   type StaticExtractionTimingName,
-} from "../indexer/static/extraction/engine";
-import { createTypeScriptStaticSyntaxFrontend } from "../indexer/static-index/syntax";
+} from "../src/indexer/static/extraction/engine";
+import { createTypeScriptStaticSyntaxFrontend } from "../src/indexer/static-index/syntax";
 
 describe("static extraction instrumentation", () => {
   it("emits phase timings for extraction and syntax-record parsing", async () => {

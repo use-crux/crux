@@ -23,9 +23,9 @@ import { OXC_STATIC_SYNTAX_FRONTEND_IDENTITY } from "../indexer/static-index/syn
 const DEFAULT_CONSTRUCTOR_NAMES = ["Agent"] as const;
 const MIN_RUSTC_VERSION = [1, 93, 0] as const;
 const WORKSPACE_MANIFEST = fileURLToPath(
-  new URL("../../../Cargo.toml", import.meta.url),
+  new URL("../../../../Cargo.toml", import.meta.url),
 );
-const INDEXER_PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
+const INDEXER_PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
 const requireFromTesting = createRequire(import.meta.url);
 const LOCAL_PLATFORM_PACKAGES = {
   linux: {

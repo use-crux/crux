@@ -419,34 +419,34 @@ where
 fn fixture_text(name: &str) -> &'static str {
     match name {
         "static-index-protocol.json" => {
-            include_str!("../../../packages/indexer/contracts/fixtures/static-index-protocol.json")
+            include_str!("../../../packages/indexer/src/contracts/fixtures/static-index-protocol.json")
         }
         "static-index-protocol-cases.json" => include_str!(
-            "../../../packages/indexer/contracts/fixtures/static-index-protocol-cases.json"
+            "../../../packages/indexer/src/contracts/fixtures/static-index-protocol-cases.json"
         ),
         "static-index-identity.json" => {
-            include_str!("../../../packages/indexer/contracts/fixtures/static-index-identity.json")
+            include_str!("../../../packages/indexer/src/contracts/fixtures/static-index-identity.json")
         }
         "static-syntax-records.json" => {
-            include_str!("../../../packages/indexer/contracts/fixtures/static-syntax-records.json")
+            include_str!("../../../packages/indexer/src/contracts/fixtures/static-syntax-records.json")
         }
         "static-syntax-record-cases.json" => include_str!(
-            "../../../packages/indexer/contracts/fixtures/static-syntax-record-cases.json"
+            "../../../packages/indexer/src/contracts/fixtures/static-syntax-record-cases.json"
         ),
         "worker-events.json" => {
-            include_str!("../../../packages/indexer/contracts/fixtures/worker-events.json")
+            include_str!("../../../packages/indexer/src/contracts/fixtures/worker-events.json")
         }
         "worker-event-cases.json" => {
-            include_str!("../../../packages/indexer/contracts/fixtures/worker-event-cases.json")
+            include_str!("../../../packages/indexer/src/contracts/fixtures/worker-event-cases.json")
         }
         "relation-specs.json" => {
-            include_str!("../../../packages/indexer/contracts/fixtures/relation-specs.json")
+            include_str!("../../../packages/indexer/src/contracts/fixtures/relation-specs.json")
         }
         "rule-descriptors.json" => {
-            include_str!("../../../packages/indexer/contracts/fixtures/rule-descriptors.json")
+            include_str!("../../../packages/indexer/src/contracts/fixtures/rule-descriptors.json")
         }
         "primitive-coverage-identities.json" => include_str!(
-            "../../../packages/indexer/contracts/fixtures/primitive-coverage-identities.json"
+            "../../../packages/indexer/src/contracts/fixtures/primitive-coverage-identities.json"
         ),
         _ => panic!("unknown shared fixture {name}"),
     }

@@ -19,7 +19,7 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { context, when, prompt } from '../prompt'
+import { context, when, prompt } from '../src/prompt'
 import type {
   AnyPrompt,
   ConditionalContext,
@@ -28,7 +28,7 @@ import type {
   MergedInput,
   Prompt,
   Simplify,
-} from '../prompt'
+} from '../src/prompt'
 
 const localeCtx = context({
   id: 'locale',

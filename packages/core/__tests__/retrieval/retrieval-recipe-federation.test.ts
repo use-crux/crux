@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { retriever as makeRetriever, retrievalRecipe, retrieve } from '../../retrieval'
-import type { RecipeTrace, RetrieverHit } from '../../retrieval'
+import { retriever as makeRetriever, retrievalRecipe, retrieve } from '../../src/retrieval'
+import type { RecipeTrace, RetrieverHit } from '../../src/retrieval'
 
 function sourceHit(
   namespace: string,

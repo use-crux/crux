@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../storage";
-import { workspace } from "../../workspace";
-import { observe } from "../../observability";
-import { prompt } from "../../prompt";
+import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../src/storage";
+import { workspace } from "../../src/workspace";
+import { observe } from "../../src/observability";
+import { prompt } from "../../src/prompt";
 
 describe("workspace artifacts facet", () => {
   it("writes artifact status and kind metadata visible through stat and read", async () => {

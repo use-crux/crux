@@ -9,16 +9,16 @@
 
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { constraint as makeConstraint, isConstraint } from '../safety/constraint/define'
-import { validateConstraintRunResult } from '../safety/constraint'
-import { evaluateConstraint } from '../safety/constraint/evaluate'
-import { ConstraintViolationError } from '../safety/constraint/errors'
-import { boundary, SafetyResultError } from '../safety'
-import { judge } from '../scoring'
-import { citationSchema } from '../citations'
-import type { RetrieverHit } from '../retrieval'
-import type { BoundaryDef, SafetyRunContext, SubjectOf } from '../safety'
-import type { Constraint, ConstraintContext } from '../safety/constraint/types'
+import { constraint as makeConstraint, isConstraint } from '../src/safety/constraint/define'
+import { validateConstraintRunResult } from '../src/safety/constraint'
+import { evaluateConstraint } from '../src/safety/constraint/evaluate'
+import { ConstraintViolationError } from '../src/safety/constraint/errors'
+import { boundary, SafetyResultError } from '../src/safety'
+import { judge } from '../src/scoring'
+import { citationSchema } from '../src/citations'
+import type { RetrieverHit } from '../src/retrieval'
+import type { BoundaryDef, SafetyRunContext, SubjectOf } from '../src/safety'
+import type { Constraint, ConstraintContext } from '../src/safety/constraint/types'
 
 const makeCtx = (overrides?: Partial<ConstraintContext>): ConstraintContext => ({
   promptId: 'test-prompt',

@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { compilePrompt } from "../../resolver/compile";
-import { context } from "../../prompt/context";
-import type { AnyPromptConfig } from "../../prompt/prompt-types";
-import { imagePart, textPart } from "../../content";
+import { compilePrompt } from "../../src/resolver/compile";
+import { context } from "../../src/prompt/context";
+import type { AnyPromptConfig } from "../../src/prompt/prompt-types";
+import { imagePart, textPart } from "../../src/content";
 
 describe("resolver provider adaptation contract", () => {
   it("messages mode never re-emits system after adaptation", async () => {

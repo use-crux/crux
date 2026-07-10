@@ -7,10 +7,10 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '@use-crux/core/observability'
-import { Agent, convexTools } from '../agent'
-import { tool as convexRuntimeTool } from '../tools'
-import { inMemoryRecordStore } from '../memory'
-import { runWithConvexCruxRuntime } from '../runtime'
+import { Agent, convexTools } from '../src/agent'
+import { tool as convexRuntimeTool } from '../src/tools'
+import { inMemoryRecordStore } from '../src/memory'
+import { runWithConvexCruxRuntime } from '../src/runtime'
 
 describe('agent tool conversion', () => {
   afterEach(() => {

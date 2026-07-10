@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { cancelFlow, flow, listFlows, noPayload } from '../../flow'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
-import { inMemoryRecordStore } from '../../storage'
+import { cancelFlow, flow, listFlows, noPayload } from '../../src/flow'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
+import { inMemoryRecordStore } from '../../src/storage'
 
 describe('flow handle surface', () => {
   afterEach(() => {

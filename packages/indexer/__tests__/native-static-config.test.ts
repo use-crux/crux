@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { staticIndexSyntaxSelectionFromConfig } from '../indexer/static-index/config'
+import { staticIndexSyntaxSelectionFromConfig } from '../src/indexer/static-index/config'
 
 describe('Static Index syntax config selection', () => {
   it('keeps Static Index syntax disabled by default and separate from semantic native', () => {

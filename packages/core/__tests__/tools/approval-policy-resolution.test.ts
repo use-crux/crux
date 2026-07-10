@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { compilePrompt } from '../../resolver/compile'
-import { context } from '../../prompt/context'
+import { compilePrompt } from '../../src/resolver/compile'
+import { context } from '../../src/prompt/context'
 
 const execute = async () => 'ok'
 

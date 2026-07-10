@@ -3,8 +3,8 @@
  */
 
 import { expectTypeOf } from 'vitest'
-import { rerank, judgeReranker } from '../retrieval'
-import type { Reranker, RetrievalModel, RetrievalStep, RetrieverHit } from '../retrieval'
+import { rerank, judgeReranker } from '../src/retrieval'
+import type { Reranker, RetrievalModel, RetrievalStep, RetrieverHit } from '../src/retrieval'
 
 declare const model: RetrievalModel
 declare const hits: readonly RetrieverHit[]

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { PromptMiddleware } from '../runtime/types'
+import type { PromptMiddleware } from '../src/runtime/types'
 import {
   getHooks,
   pushHooksLayer,
@@ -8,7 +8,7 @@ import {
   setHooks,
   updateHooks,
   type CruxHooks,
-} from '../runtime/runtime'
+} from '../src/runtime/runtime'
 
 describe('CruxHooks', () => {
   beforeEach(() => {

@@ -20,17 +20,17 @@ import {
   type IndexRuleManifest,
   type SourceRefBuilder,
   type IndexDependency,
-} from '../extensions'
+} from '../src/extensions'
 import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
 
 // @ts-expect-error Registry construction is compiler-internal, not part of the public extension authoring barrel.
-import { createExtensionRegistry } from '../extensions'
+import { createExtensionRegistry } from '../src/extensions'
 // @ts-expect-error Static parser adapters are compiler-internal, not public extension authoring helpers.
-import { createStaticExtensionRegistry } from '../extensions'
+import { createStaticExtensionRegistry } from '../src/extensions'
 // @ts-expect-error Relation resolution is a compiler phase, not a public extractor authoring helper.
-import { resolveStaticRelationReferences } from '../extensions'
+import { resolveStaticRelationReferences } from '../src/extensions'
 // @ts-expect-error Internal reader names are not part of the public authoring barrel.
-import type { StaticArgumentReader, StaticObjectReader } from '../extensions'
+import type { StaticArgumentReader, StaticObjectReader } from '../src/extensions'
 
 type Expect<T extends true> = T
 type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false

@@ -9,7 +9,7 @@ import {
   setObservabilityTransport,
   type CruxAttributes,
   type CruxMetrics,
-} from '../../observability'
+} from '../../src/observability'
 
 interface GeneratedObservabilityCase {
   readonly name: string

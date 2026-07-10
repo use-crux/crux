@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../../prompt/prompt'
-import { flow } from '../../flow/scope'
-import { evaluate, target } from '../../quality'
-import type { GenerateFn } from '../../quality/target'
+import { prompt } from '../../src/prompt/prompt'
+import { flow } from '../../src/flow/scope'
+import { evaluate, target } from '../../src/quality'
+import type { GenerateFn } from '../../src/quality/target'
 import { QualityRunnerHarnessError, runEvaluationWithRunner as run } from './runner-harness'
 
 /** A params-honoring fn task: echoes the params it received per execution. */

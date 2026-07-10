@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createProvidedStaticSyntaxFrontend, createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
+import { createProvidedStaticSyntaxFrontend, createTypeScriptStaticSyntaxFrontend } from '../src/indexer/static-index/syntax'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')

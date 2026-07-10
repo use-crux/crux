@@ -1,8 +1,8 @@
 import type { ProjectDefinitionKind } from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
-import { createIndexerExtensionRuntime, facts, type IndexerExtension } from '../indexer/extensions'
-import { createStaticRecordEvidenceReader } from '../indexer/static-index/extension-host/evidence/record-reader'
-import { createTypeScriptStaticSyntaxFrontend } from '../indexer/static-index/syntax'
+import { createIndexerExtensionRuntime, facts, type IndexerExtension } from '../src/indexer/extensions'
+import { createStaticRecordEvidenceReader } from '../src/indexer/static-index/extension-host/evidence/record-reader'
+import { createTypeScriptStaticSyntaxFrontend } from '../src/indexer/static-index/syntax'
 
 describe('indexer extension evidence contract', () => {
   it('publishes deterministic static interests from explicit manifests and extractor patterns', () => {

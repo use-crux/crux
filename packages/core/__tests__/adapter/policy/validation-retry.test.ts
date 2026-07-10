@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { validateStructuredOutput, formatValidationFeedback } from '../../../adapter/policy/validation-retry'
+import { validateStructuredOutput, formatValidationFeedback } from '../../../src/adapter/policy/validation-retry'
 
 const schema = z.object({ title: z.string(), count: z.number() })
 

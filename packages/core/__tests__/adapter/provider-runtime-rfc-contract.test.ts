@@ -4,11 +4,11 @@
 
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { defineProviderRuntime } from '../../adapter'
-import type { ExecutorRequest, StructuredRequest } from '../../adapter'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import type { Message } from '../../generation/messages'
-import type { GenerationSettings } from '../../generation/types'
+import { defineProviderRuntime } from '../../src/adapter'
+import type { ExecutorRequest, StructuredRequest } from '../../src/adapter'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import type { Message } from '../../src/generation/messages'
+import type { GenerationSettings } from '../../src/generation/types'
 
 interface RuntimeProviderMessage {
   readonly role: Message['role']

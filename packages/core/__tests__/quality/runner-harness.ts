@@ -5,8 +5,8 @@ import type {
   QualitySourceFrameResolver,
   ReplayMode,
   RunOverrides,
-} from '../../quality'
-import { createQualityRunner, type QualityRunnerEnv, type QualityRunnerEvent } from '../../quality/internal/runner'
+} from '../../src/quality'
+import { createQualityRunner, type QualityRunnerEnv, type QualityRunnerEvent } from '../../src/quality/internal/runner'
 
 interface CellEvents {
   onCellStart?: (cell: { caseId: string; caseName?: string; variantName: string; trial: number }) => void

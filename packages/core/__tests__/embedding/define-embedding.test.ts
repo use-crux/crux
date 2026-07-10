@@ -4,9 +4,9 @@ import {
   embeddingCache,
   normalizeText,
   type SparseVector,
-} from '../../embedding'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
-import { inMemoryRecordStore } from '../../storage'
+} from '../../src/embedding'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
+import { inMemoryRecordStore } from '../../src/storage'
 
 describe('embedding', () => {
   it('creates a dense embedding with single and batch helpers', async () => {

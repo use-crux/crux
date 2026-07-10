@@ -11,11 +11,11 @@
  */
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { boundary, createSafety, GuardrailBlockedError } from '../../safety'
-import { guardrail } from '../../safety/guardrail'
-import { resetHooks } from '../../runtime/runtime'
-import type { Message } from '../../generation/messages'
-import { imagePart, messageText, textPart } from '../../content'
+import { boundary, createSafety, GuardrailBlockedError } from '../../src/safety'
+import { guardrail } from '../../src/safety/guardrail'
+import { resetHooks } from '../../src/runtime/runtime'
+import type { Message } from '../../src/generation/messages'
+import { imagePart, messageText, textPart } from '../../src/content'
 
 afterEach(() => {
   resetHooks()

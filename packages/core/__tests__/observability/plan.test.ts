@@ -4,10 +4,10 @@ import {
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { plan, updatePlan } from '../../plan/plans'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
-import { inMemoryRecordStore } from '../../storage'
+} from '../../src/observability'
+import { plan, updatePlan } from '../../src/plan/plans'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
+import { inMemoryRecordStore } from '../../src/storage'
 
 describe('canonical plan observability', () => {
   afterEach(() => {

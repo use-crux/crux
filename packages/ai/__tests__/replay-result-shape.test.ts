@@ -16,7 +16,7 @@ import { z } from 'zod'
 import { prompt as makePrompt } from '@use-crux/core'
 import { clearGenerationInterceptor, setGenerationInterceptor } from '@use-crux/core/adapter'
 import type { LanguageModel } from 'ai'
-import { createCruxAi } from '../index'
+import { createCruxAi } from '../src'
 import { scriptedGateway } from './scripted-gateway'
 
 function model(id = 'gpt-4o', provider = 'openai'): LanguageModel {

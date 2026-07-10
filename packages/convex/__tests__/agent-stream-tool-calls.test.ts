@@ -6,7 +6,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '@use-crux/core/observability'
-import { Agent } from '../agent'
+import { Agent } from '../src/agent'
 
 describe('agent stream tool calls', () => {
   afterEach(() => {

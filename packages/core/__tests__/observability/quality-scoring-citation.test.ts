@@ -3,15 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { resolveCitations, type RetrieverHit } from '../../citations'
+import { resolveCitations, type RetrieverHit } from '../../src/citations'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { createFeedbackStore } from '../../quality/internal/feedback'
-import { judge as createJudge } from '../../scoring'
+} from '../../src/observability'
+import { createFeedbackStore } from '../../src/quality/internal/feedback'
+import { judge as createJudge } from '../../src/scoring'
 
 describe('canonical quality, scoring, and citation observability', () => {
   const tempDirs: string[] = []

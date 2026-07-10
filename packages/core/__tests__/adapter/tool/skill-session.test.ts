@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { createToolLifecycle } from '../../../adapter/tool/session'
-import { LOAD_SKILL_TOOL_NAME } from '../../../skill/tools'
-import { createSkillActivationSession, skill } from '../../../skill'
-import type { ResolvedPrompt } from '../../../resolver/types'
+import { createToolLifecycle } from '../../../src/adapter/tool/session'
+import { LOAD_SKILL_TOOL_NAME } from '../../../src/skill/tools'
+import { createSkillActivationSession, skill } from '../../../src/skill'
+import type { ResolvedPrompt } from '../../../src/resolver/types'
 
 function resolvedWith(partial: Partial<ResolvedPrompt>): ResolvedPrompt {
   return { settings: {}, ...partial } as ResolvedPrompt

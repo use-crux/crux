@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { TimeoutError, withBudget } from '../../generation/timeout'
+import { TimeoutError, withBudget } from '../../src/generation/timeout'
 
 afterEach(() => {
   vi.useRealTimers()

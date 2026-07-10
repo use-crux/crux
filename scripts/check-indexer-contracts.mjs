@@ -5,7 +5,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const manifestPath = 'packages/indexer/contracts/contract-manifest.json'
+const manifestPath = 'packages/indexer/src/contracts/contract-manifest.json'
 const baselinePath = 'packages/indexer/docs/static-index-runtime-architecture-baseline.md'
 const expectedGroupIds = ['worker-events', 'static-syntax-records', 'static-index', 'semantic-evidence']
 const mirrorStatuses = new Set(['generated', 'checked-mirror', 'typescript-only'])

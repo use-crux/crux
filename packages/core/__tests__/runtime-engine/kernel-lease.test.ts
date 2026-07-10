@@ -1,17 +1,17 @@
 import { describe, expect, it, vi } from 'vitest'
-import { inMemoryRuntimeStore } from '../../runtime/adapters/memory'
+import { inMemoryRuntimeStore } from '../../src/runtime/adapters/memory'
 import {
   createRuntimeKernel,
   wakeEnvelopeForWork,
-} from '../../runtime/engine/kernel'
-import { startLeaseExtensionHeartbeat } from '../../runtime/engine/kernel-leases'
+} from '../../src/runtime/engine/kernel'
+import { startLeaseExtensionHeartbeat } from '../../src/runtime/engine/kernel-leases'
 import type {
   Lease,
   LeaseToken,
   RuntimeTargetId,
   TaskId,
   WorkId,
-} from '../../runtime/ports'
+} from '../../src/runtime/ports'
 
 describe('RuntimeKernel lease fencing', () => {
   it('rejects a stale final commit after maintenance reclaims the lease', async () => {

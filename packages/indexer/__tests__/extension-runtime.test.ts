@@ -11,9 +11,9 @@ import {
   validateIndexerExtensionManifest,
   type IndexerExtension,
   type StaticExtractionInput,
-} from '../indexer/extensions'
-import { internalStaticCallContext, internalTypeScriptContext } from '../indexer/static-index/compatibility/syntax-record-bridge/native-context'
-import { createExtractContext } from '../indexer/extensions/runtime/engine'
+} from '../src/indexer/extensions'
+import { internalStaticCallContext, internalTypeScriptContext } from '../src/indexer/static-index/compatibility/syntax-record-bridge/native-context'
+import { createExtractContext } from '../src/indexer/extensions/runtime/engine'
 
 describe('indexer extension runtime', () => {
   it('exposes deterministic manifest identity for unordered extension manifests', () => {

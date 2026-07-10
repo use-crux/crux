@@ -3,8 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { dataset, evaluate, scorers } from '../../quality'
-import type { GenerateFn } from '../../quality/target'
+import { dataset, evaluate, scorers } from '../../src/quality'
+import type { GenerateFn } from '../../src/quality/target'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 const qualityDir = () => mkdtemp(join(tmpdir(), 'crux-quality-baselines-'))

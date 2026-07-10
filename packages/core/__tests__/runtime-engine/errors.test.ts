@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { CruxRuntimeError, RUNTIME_ERROR_CODES, createRuntimeError } from '../../runtime/engine/errors'
-import { runtimeHostOnlyError } from '../../runtime/api/runtime-definition'
-import { runtimeRequiredError } from '../../runtime/api/runtime-required'
+import { CruxRuntimeError, RUNTIME_ERROR_CODES, createRuntimeError } from '../../src/runtime/engine/errors'
+import { runtimeHostOnlyError } from '../../src/runtime/api/runtime-definition'
+import { runtimeRequiredError } from '../../src/runtime/api/runtime-required'
 
 describe('CruxRuntimeError', () => {
   it('renders every public error code with the six diagnostic contract elements', () => {

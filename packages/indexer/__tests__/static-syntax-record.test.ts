@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest'
 import {
   createTypeScriptStaticSyntaxFrontend,
   type StaticSyntaxFileRecord,
-} from '../indexer/static-index/syntax'
-import { readStaticIndexRuntimeSharedFixture } from '../contracts/fixtures'
+} from '../src/indexer/static-index/syntax'
+import { readStaticIndexRuntimeSharedFixture } from '../src/contracts/fixtures'
 
 describe('static syntax records', () => {
   it('emits a JSON-safe record for an exported imported factory call', async () => {

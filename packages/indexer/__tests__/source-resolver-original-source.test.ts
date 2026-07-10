@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { parseTraceMap } from '../source-resolver/trace-map'
-import { loadOriginalSource, resolveOriginalPath } from '../source-resolver/original-source'
-import type { SourceResolverFileSystem } from '../source-resolver/filesystem'
+import { parseTraceMap } from '../src/source-resolver/trace-map'
+import { loadOriginalSource, resolveOriginalPath } from '../src/source-resolver/original-source'
+import type { SourceResolverFileSystem } from '../src/source-resolver/filesystem'
 
 function memoryFileSystem(files: Readonly<Record<string, string>>): SourceResolverFileSystem {
   return {

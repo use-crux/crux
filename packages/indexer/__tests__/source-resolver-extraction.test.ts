@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractFunctionBody } from '../source-resolver/extraction'
+import { extractFunctionBody } from '../src/source-resolver/extraction'
 
 describe('source resolver function extraction', () => {
   it('extracts a function declaration body through its closing brace', () => {

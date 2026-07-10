@@ -1,22 +1,22 @@
 import { describe, expect, expectTypeOf, it } from 'vitest'
-import type { StaticSyntaxFileRecord } from '../contracts/static-syntax/schema'
-import { indexPatchFromWorkerEvents, indexPatchToWorkerEvents } from '../contracts/worker-events/schema'
-import { workerEventFixtureOptions, workerEventFixturePatch } from '../contracts/worker-events/fixtures'
+import type { StaticSyntaxFileRecord } from '../src/contracts/static-syntax/schema'
+import { indexPatchFromWorkerEvents, indexPatchToWorkerEvents } from '../src/contracts/worker-events/schema'
+import { workerEventFixtureOptions, workerEventFixturePatch } from '../src/contracts/worker-events/fixtures'
 import {
   StaticIndexCompilerRequestSchema,
   StaticIndexCompilerResponseSchema,
   parseStaticIndexCompilerRequest,
-} from '../contracts/static-index/schema'
+} from '../src/contracts/static-index/schema'
 import {
   staticIndexCompilerRequestFixtures,
   staticIndexCompilerResponseFixtures,
-} from '../contracts/static-index/fixtures'
-import { readStaticIndexRuntimeSharedFixture, staticIndexRuntimeContractFixtureGroups } from '../contracts/fixtures'
+} from '../src/contracts/static-index/fixtures'
+import { readStaticIndexRuntimeSharedFixture, staticIndexRuntimeContractFixtureGroups } from '../src/contracts/fixtures'
 import {
   staticIndexRuntimeContractManifest,
   staticIndexRuntimeContractManifestGroups,
-} from '../contracts/contract-manifest'
-import { projectSemanticEvidenceBatches, semanticEvidenceBatchKinds } from '../contracts/semantic/schema'
+} from '../src/contracts/contract-manifest'
+import { projectSemanticEvidenceBatches, semanticEvidenceBatchKinds } from '../src/contracts/semantic/schema'
 
 describe('Static Index runtime contract spine', () => {
   it('round-trips worker event fixtures through the contract path', () => {

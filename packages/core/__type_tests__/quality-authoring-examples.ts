@@ -12,14 +12,14 @@
  */
 
 import { z } from 'zod'
-import { prompt } from '../prompt/prompt'
-import { context } from '../prompt/context'
-import { config } from '../runtime/config'
-import { agent } from '../agent/agent'
-import { flow } from '../flow/scope'
-import { retriever } from '../retrieval'
-import { evaluate, target, scorers, dataset, cassette, UncapturedSignalError } from '../quality'
-import type { CaseOf, Scorer, ScorerLibrary, StepAccessor } from '../quality'
+import { prompt } from '../src/prompt/prompt'
+import { context } from '../src/prompt/context'
+import { config } from '../src/runtime/config'
+import { agent } from '../src/agent/agent'
+import { flow } from '../src/flow/scope'
+import { retriever } from '../src/retrieval'
+import { evaluate, target, scorers, dataset, cassette, UncapturedSignalError } from '../src/quality'
+import type { CaseOf, Scorer, ScorerLibrary, StepAccessor } from '../src/quality'
 
 const supportPrompt = prompt({
   id: 'support',

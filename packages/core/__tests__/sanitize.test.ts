@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { z } from 'zod'
-import { escapeXml, truncate, safe, raw, limit, wrap, userContent } from '../shared/sanitize'
-import { detectSuspiciousPatterns } from '../shared/sanitize'
-import { prompt as makePrompt } from '../prompt/prompt'
-import { context } from '../prompt/context'
-import { configure } from '../runtime/configure'
-import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
-import type { AnyPromptConfig, PromptConfig } from '../prompt/prompt-types'
+import { escapeXml, truncate, safe, raw, limit, wrap, userContent } from '../src/shared/sanitize'
+import { detectSuspiciousPatterns } from '../src/shared/sanitize'
+import { prompt as makePrompt } from '../src/prompt/prompt'
+import { context } from '../src/prompt/context'
+import { configure } from '../src/runtime/configure'
+import { compilePrompt, type ResolveCallOptions } from '../src/resolver/compile'
+import type { AnyPromptConfig, PromptConfig } from '../src/prompt/prompt-types'
 
 async function resolveCompiled(config: AnyPromptConfig, opts: ResolveCallOptions = {}) {
   return (await compilePrompt(config).resolve(opts)).args

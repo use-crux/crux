@@ -5,9 +5,9 @@ import {
 } from '@use-crux/core/storage/testing/vitest'
 import { workspace } from '@use-crux/core/workspace'
 import { describe, expect, it } from 'vitest'
-import { convexRecordStore, convexVectorStore, convexWorkspaceBlobStore } from '../index'
-import { createInMemoryConvexStoreDocumentComponent } from '../store-document-component'
-import type { StoreDocDenseSearchQuery, StoreDocRecord } from '../store-doc'
+import { convexRecordStore, convexVectorStore, convexWorkspaceBlobStore } from '../src'
+import { createInMemoryConvexStoreDocumentComponent } from '../src/store-document-component'
+import type { StoreDocDenseSearchQuery, StoreDocRecord } from '../src/store-doc'
 
 describeRecordStoreConformance({
   name: 'convexRecordStore',

@@ -6,17 +6,17 @@ import {
   callPattern,
   facts,
   type IndexerExtension,
-} from "../indexer/extensions/public-contract";
-import { loadIndexerExtensionReferences } from "../indexer/extensions/loading";
-import { staticIndexExtractorCoverage } from "../indexer/static-index/extension-host/host-plan";
-import { createIndexerExtensionRuntime } from "../indexer/extensions/runtime";
-import { createStaticRecordEvidenceReader } from "../indexer/static-index/extension-host/evidence";
-import { createStaticExtensionRegistry } from "../indexer/static-index/compatibility/syntax-record-bridge";
-import { collectProjectedSemanticEvidence } from "../indexer/semantic/evidence";
-import { createNativeSemanticBackend } from "../indexer/semantic/backends/tsgo";
-import { nativeDirectPrimitiveManifest } from "../indexer/semantic/backends/tsgo/direct-projectors";
-import { createSemanticIndexService } from "../indexer/semantic/service";
-import { createTypeScriptSemanticBackend } from "../indexer/semantic/backends/typescript";
+} from "../src/indexer/extensions/public-contract";
+import { loadIndexerExtensionReferences } from "../src/indexer/extensions/loading";
+import { staticIndexExtractorCoverage } from "../src/indexer/static-index/extension-host/host-plan";
+import { createIndexerExtensionRuntime } from "../src/indexer/extensions/runtime";
+import { createStaticRecordEvidenceReader } from "../src/indexer/static-index/extension-host/evidence";
+import { createStaticExtensionRegistry } from "../src/indexer/static-index/compatibility/syntax-record-bridge";
+import { collectProjectedSemanticEvidence } from "../src/indexer/semantic/evidence";
+import { createNativeSemanticBackend } from "../src/indexer/semantic/backends/tsgo";
+import { nativeDirectPrimitiveManifest } from "../src/indexer/semantic/backends/tsgo/direct-projectors";
+import { createSemanticIndexService } from "../src/indexer/semantic/service";
+import { createTypeScriptSemanticBackend } from "../src/indexer/semantic/backends/typescript";
 import {
   collectStaticIndexVocabularyObservations,
   staticIndexVocabularyGuards,
@@ -30,7 +30,7 @@ import {
 const indexerDir = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
-  "indexer",
+  "src",
 );
 const indexerPackageDir = join(indexerDir, "..");
 const repoRoot = join(
@@ -96,12 +96,12 @@ describe("indexer architecture boundaries", () => {
       "static-evidence.ts",
       "static-record-runtime.ts",
     ]) {
-      expect(existsSync(join(indexerDir, "extensions", file)), file).toBe(
+      expect(existsSync(join(indexerDir, "indexer/extensions", file)), file).toBe(
         false,
       );
     }
 
-    expect(redundantContextualNames(join(indexerDir, "extensions"))).toEqual(
+    expect(redundantContextualNames(join(indexerDir, "indexer/extensions"))).toEqual(
       [],
     );
   });
@@ -130,46 +130,46 @@ describe("indexer architecture boundaries", () => {
       "typescript-compiler-view.ts",
       "typescript-fact-input.ts",
     ]) {
-      expect(existsSync(join(indexerDir, "semantic", file)), file).toBe(false);
+      expect(existsSync(join(indexerDir, "indexer/semantic", file)), file).toBe(false);
     }
     for (const file of [
-      "semantic/backends/typescript/index.ts",
-      "semantic/backends/tsgo/index.ts",
-      "semantic/backends/tsgo/direct-projectors/index.ts",
-      "semantic/backends/tsgo/direct-projectors/manifest.ts",
+      "indexer/semantic/backends/typescript/index.ts",
+      "indexer/semantic/backends/tsgo/index.ts",
+      "indexer/semantic/backends/tsgo/direct-projectors/index.ts",
+      "indexer/semantic/backends/tsgo/direct-projectors/manifest.ts",
     ]) {
       expect(existsSync(join(indexerDir, file)), file).toBe(true);
     }
 
     for (const file of [
-      "semantic/native",
-      "semantic/typescript",
-      "semantic/backends/tsgo/direct-projectors/tsgo-native-direct-manifest.ts",
+      "indexer/semantic/native",
+      "indexer/semantic/typescript",
+      "indexer/semantic/backends/tsgo/direct-projectors/tsgo-native-direct-manifest.ts",
     ]) {
       expect(existsSync(join(indexerDir, file)), file).toBe(false);
     }
-    expect(redundantContextualNames(join(indexerDir, "semantic"))).toEqual([]);
+    expect(redundantContextualNames(join(indexerDir, "indexer/semantic"))).toEqual([]);
   });
 
   it("homes TypeScript Static Index internals under static-index responsibility folders", () => {
     for (const file of [
-      "static-index/index.ts",
-      "static-index/config/index.ts",
-      "static-index/config/inspect.ts",
-      "static-index/plan/index.ts",
-      "static-index/plan/files.ts",
-      "static-index/protocol/index.ts",
-      "static-index/protocol/request.ts",
-      "static-index/protocol/response.ts",
-      "static-index/protocol/identity.ts",
-      "static-index/protocol/telemetry.ts",
-      "static-index/syntax/index.ts",
-      "static-index/syntax/frontends/oxc.ts",
-      "static-index/syntax/record/index.ts",
-      "static-index/extension-host/index.ts",
-      "static-index/extension-host/host-plan/index.ts",
-      "static-index/extension-host/evidence/index.ts",
-      "static-index/compatibility/syntax-record-bridge/index.ts",
+      "indexer/static-index/index.ts",
+      "indexer/static-index/config/index.ts",
+      "indexer/static-index/config/inspect.ts",
+      "indexer/static-index/plan/index.ts",
+      "indexer/static-index/plan/files.ts",
+      "indexer/static-index/protocol/index.ts",
+      "indexer/static-index/protocol/request.ts",
+      "indexer/static-index/protocol/response.ts",
+      "indexer/static-index/protocol/identity.ts",
+      "indexer/static-index/protocol/telemetry.ts",
+      "indexer/static-index/syntax/index.ts",
+      "indexer/static-index/syntax/frontends/oxc.ts",
+      "indexer/static-index/syntax/record/index.ts",
+      "indexer/static-index/extension-host/index.ts",
+      "indexer/static-index/extension-host/host-plan/index.ts",
+      "indexer/static-index/extension-host/evidence/index.ts",
+      "indexer/static-index/compatibility/syntax-record-bridge/index.ts",
     ]) {
       expect(existsSync(join(indexerDir, file)), file).toBe(true);
     }
@@ -206,8 +206,8 @@ describe("indexer architecture boundaries", () => {
 
   it("does not construct the TypeScript syntax frontend implicitly outside testing", () => {
     for (const file of [
-      "static/extraction/engine.ts",
-      "static-index/syntax/record/file.ts",
+      "indexer/static/extraction/engine.ts",
+      "indexer/static-index/syntax/record/file.ts",
     ]) {
       const source = readFileSync(join(indexerDir, file), "utf8");
 

@@ -1,5 +1,5 @@
 import { expect } from 'vitest'
-import type { CruxGraphNodeRef, CruxGraphRecord } from '../../../observability'
+import type { CruxGraphNodeRef, CruxGraphRecord } from '../../../src/observability'
 
 const terminalRunStatuses = new Set(['ok', 'error', 'blocked', 'cancelled', 'suspended'])
 const terminalSpanStatuses = new Set(['ok', 'error', 'blocked', 'cancelled', 'suspended', 'skipped'])

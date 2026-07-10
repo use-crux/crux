@@ -25,268 +25,268 @@
   },
   "private": true,
   "type": "module",
-  "main": "./index.ts",
-  "types": "./index.ts",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
     ".": {
-      "types": "./index.ts",
-      "import": "./index.ts"
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
     },
     "./quality": {
-      "types": "./quality/index.ts",
-      "import": "./quality/index.ts"
+      "types": "./src/quality/index.ts",
+      "import": "./src/quality/index.ts"
     },
     "./quality/schemas": {
-      "types": "./quality/schemas.ts",
-      "import": "./quality/schemas.ts"
+      "types": "./src/quality/schemas.ts",
+      "import": "./src/quality/schemas.ts"
     },
     "./quality/internal/runner": {
-      "types": "./quality/internal/runner.ts",
-      "import": "./quality/internal/runner.ts"
+      "types": "./src/quality/internal/runner.ts",
+      "import": "./src/quality/internal/runner.ts"
     },
     "./project-index": {
-      "types": "./project-index/index.ts",
-      "import": "./project-index/index.ts"
+      "types": "./src/project-index/index.ts",
+      "import": "./src/project-index/index.ts"
     },
     "./project-index/serializers": {
-      "types": "./project-index/serializers.ts",
-      "import": "./project-index/serializers.ts"
+      "types": "./src/project-index/serializers.ts",
+      "import": "./src/project-index/serializers.ts"
     },
     "./lint": {
-      "types": "./lint/index.ts",
-      "import": "./lint/index.ts"
+      "types": "./src/lint/index.ts",
+      "import": "./src/lint/index.ts"
     },
     "./runtime-bridge": {
-      "types": "./runtime-bridge/index.ts",
-      "import": "./runtime-bridge/index.ts"
+      "types": "./src/runtime-bridge/index.ts",
+      "import": "./src/runtime-bridge/index.ts"
     },
     "./runtime": {
-      "types": "./runtime/public.ts",
-      "import": "./runtime/public.ts"
+      "types": "./src/runtime/public.ts",
+      "import": "./src/runtime/public.ts"
     },
     "./runtime/testing": {
-      "types": "./runtime/testing/index.ts",
-      "import": "./runtime/testing/index.ts"
+      "types": "./src/runtime/testing/index.ts",
+      "import": "./src/runtime/testing/index.ts"
     },
     "./runtime/next": {
-      "types": "./runtime/next.ts",
-      "import": "./runtime/next.ts"
+      "types": "./src/runtime/next.ts",
+      "import": "./src/runtime/next.ts"
     },
     "./observability": {
-      "types": "./observability/index.ts",
-      "import": "./observability/index.ts"
+      "types": "./src/observability/index.ts",
+      "import": "./src/observability/index.ts"
     },
     "./embedding": {
-      "types": "./embedding/index.ts",
-      "import": "./embedding/index.ts"
+      "types": "./src/embedding/index.ts",
+      "import": "./src/embedding/index.ts"
     },
     "./retrieval": {
-      "types": "./retrieval/index.ts",
-      "import": "./retrieval/index.ts"
+      "types": "./src/retrieval/index.ts",
+      "import": "./src/retrieval/index.ts"
     },
     "./citations": {
-      "types": "./citations/index.ts",
-      "import": "./citations/index.ts"
+      "types": "./src/citations/index.ts",
+      "import": "./src/citations/index.ts"
     },
     "./indexing": {
-      "types": "./indexing/index.ts",
-      "import": "./indexing/index.ts"
+      "types": "./src/indexing/index.ts",
+      "import": "./src/indexing/index.ts"
     },
     "./cache": {
-      "types": "./cache/index.ts",
-      "import": "./cache/index.ts"
+      "types": "./src/cache/index.ts",
+      "import": "./src/cache/index.ts"
     },
     "./cost": {
-      "types": "./cost/index.ts",
-      "import": "./cost/index.ts"
+      "types": "./src/cost/index.ts",
+      "import": "./src/cost/index.ts"
     },
     "./flow": {
-      "types": "./flow/index.ts",
-      "import": "./flow/index.ts"
+      "types": "./src/flow/index.ts",
+      "import": "./src/flow/index.ts"
     },
     "./memory": {
-      "types": "./memory/index.ts",
-      "import": "./memory/index.ts"
+      "types": "./src/memory/index.ts",
+      "import": "./src/memory/index.ts"
     },
     "./compaction": {
-      "types": "./compaction/index.ts",
-      "import": "./compaction/index.ts"
+      "types": "./src/compaction/index.ts",
+      "import": "./src/compaction/index.ts"
     },
     "./scoring": {
-      "types": "./scoring/index.ts",
-      "import": "./scoring/index.ts"
+      "types": "./src/scoring/index.ts",
+      "import": "./src/scoring/index.ts"
     },
     "./agent": {
-      "types": "./agent/index.ts",
-      "import": "./agent/index.ts"
+      "types": "./src/agent/index.ts",
+      "import": "./src/agent/index.ts"
     },
     "./storage": {
-      "types": "./storage/index.ts",
-      "import": "./storage/index.ts"
+      "types": "./src/storage/index.ts",
+      "import": "./src/storage/index.ts"
     },
     "./storage/testing/vitest": {
-      "types": "./storage/testing/vitest.ts",
-      "import": "./storage/testing/vitest.ts"
+      "types": "./src/storage/testing/vitest.ts",
+      "import": "./src/storage/testing/vitest.ts"
     },
     "./plan": {
-      "types": "./plan/index.ts",
-      "import": "./plan/index.ts"
+      "types": "./src/plan/index.ts",
+      "import": "./src/plan/index.ts"
     },
     "./tasks": {
-      "types": "./tasks/index.ts",
-      "import": "./tasks/index.ts"
+      "types": "./src/tasks/index.ts",
+      "import": "./src/tasks/index.ts"
     },
     "./adapter": {
-      "types": "./adapter/index.ts",
-      "import": "./adapter/index.ts"
+      "types": "./src/adapter/index.ts",
+      "import": "./src/adapter/index.ts"
     },
     "./adapter/testing": {
-      "types": "./adapter/testing.ts",
-      "import": "./adapter/testing.ts"
+      "types": "./src/adapter/testing.ts",
+      "import": "./src/adapter/testing.ts"
     },
     "./adapter/testing/vitest": {
-      "types": "./adapter/testing/vitest.ts",
-      "import": "./adapter/testing/vitest.ts"
+      "types": "./src/adapter/testing/vitest.ts",
+      "import": "./src/adapter/testing/vitest.ts"
     },
     "./adapter/tool": {
-      "types": "./adapter/tool/index.ts",
-      "import": "./adapter/tool/index.ts"
+      "types": "./src/adapter/tool/index.ts",
+      "import": "./src/adapter/tool/index.ts"
     },
     "./skill": {
-      "types": "./skill/index.ts",
-      "import": "./skill/index.ts"
+      "types": "./src/skill/index.ts",
+      "import": "./src/skill/index.ts"
     },
     "./routing": {
-      "types": "./routing/index.ts",
-      "import": "./routing/index.ts"
+      "types": "./src/routing/index.ts",
+      "import": "./src/routing/index.ts"
     },
     "./tool-middleware": {
-      "types": "./tool-middleware.ts",
-      "import": "./tool-middleware.ts"
+      "types": "./src/tool-middleware.ts",
+      "import": "./src/tool-middleware.ts"
     },
     "./tools": {
-      "types": "./tools.ts",
-      "import": "./tools.ts"
+      "types": "./src/tools.ts",
+      "import": "./src/tools.ts"
     },
     "./workspace": {
-      "types": "./workspace/index.ts",
-      "import": "./workspace/index.ts"
+      "types": "./src/workspace/index.ts",
+      "import": "./src/workspace/index.ts"
     },
     "./safety": {
-      "types": "./safety/index.ts",
-      "import": "./safety/index.ts"
+      "types": "./src/safety/index.ts",
+      "import": "./src/safety/index.ts"
     },
     "./skill/node": {
-      "types": "./skill/node.ts",
-      "import": "./skill/node.ts"
+      "types": "./src/skill/node.ts",
+      "import": "./src/skill/node.ts"
     }
   },
   "typesVersions": {
     "*": {
       "quality": [
-        "quality/index.ts"
+        "src/quality/index.ts"
       ],
       "quality/schemas": [
-        "quality/schemas.ts"
+        "src/quality/schemas.ts"
       ],
       "project-index": [
-        "project-index/index.ts"
+        "src/project-index/index.ts"
       ],
       "project-index/serializers": [
-        "project-index/serializers.ts"
+        "src/project-index/serializers.ts"
       ],
       "lint": [
-        "lint/index.ts"
+        "src/lint/index.ts"
       ],
       "runtime-bridge": [
-        "runtime-bridge/index.ts"
+        "src/runtime-bridge/index.ts"
       ],
       "runtime": [
-        "runtime/public.ts"
+        "src/runtime/public.ts"
       ],
       "runtime/testing": [
-        "runtime/testing/index.ts"
+        "src/runtime/testing/index.ts"
       ],
       "runtime/next": [
-        "runtime/next.ts"
+        "src/runtime/next.ts"
       ],
       "observability": [
-        "observability/index.ts"
+        "src/observability/index.ts"
       ],
       "embedding": [
-        "embedding/index.ts"
+        "src/embedding/index.ts"
       ],
       "retrieval": [
-        "retrieval/index.ts"
+        "src/retrieval/index.ts"
       ],
       "indexing": [
-        "indexing/index.ts"
+        "src/indexing/index.ts"
       ],
       "cache": [
-        "cache/index.ts"
+        "src/cache/index.ts"
       ],
       "cost": [
-        "cost/index.ts"
+        "src/cost/index.ts"
       ],
       "flow": [
-        "flow/index.ts"
+        "src/flow/index.ts"
       ],
       "memory": [
-        "memory/index.ts"
+        "src/memory/index.ts"
       ],
       "compaction": [
-        "compaction/index.ts"
+        "src/compaction/index.ts"
       ],
       "scoring": [
-        "scoring/index.ts"
+        "src/scoring/index.ts"
       ],
       "agent": [
-        "agent/index.ts"
+        "src/agent/index.ts"
       ],
       "storage": [
-        "storage/index.ts"
+        "src/storage/index.ts"
       ],
       "storage/testing/vitest": [
-        "storage/testing/vitest.ts"
+        "src/storage/testing/vitest.ts"
       ],
       "plan": [
-        "plan/index.ts"
+        "src/plan/index.ts"
       ],
       "tasks": [
-        "tasks/index.ts"
+        "src/tasks/index.ts"
       ],
       "adapter": [
-        "adapter/index.ts"
+        "src/adapter/index.ts"
       ],
       "adapter/testing": [
-        "adapter/testing.ts"
+        "src/adapter/testing.ts"
       ],
       "adapter/testing/vitest": [
-        "adapter/testing/vitest.ts"
+        "src/adapter/testing/vitest.ts"
       ],
       "adapter/tool": [
-        "adapter/tool/index.ts"
+        "src/adapter/tool/index.ts"
       ],
       "skill": [
-        "skill/index.ts"
+        "src/skill/index.ts"
       ],
       "routing": [
-        "routing/index.ts"
+        "src/routing/index.ts"
       ],
       "tool-middleware": [
-        "tool-middleware.ts"
+        "src/tool-middleware.ts"
       ],
       "tools": [
-        "tools.ts"
+        "src/tools.ts"
       ],
       "workspace": [
-        "workspace/index.ts"
+        "src/workspace/index.ts"
       ],
       "safety": [
-        "safety/index.ts"
+        "src/safety/index.ts"
       ],
       "skill/node": [
-        "skill/node.ts"
+        "src/skill/node.ts"
       ]
     }
   },

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { GenerateObjectFn } from '../../compaction'
-import { judge } from '../../scoring'
-import { invokeScorer, SCORER_IDENTITY } from '../../quality/internal/scorer-runtime'
-import { scorers } from '../../quality/scorers'
-import type { GenerateFn } from '../../quality/target'
+import type { GenerateObjectFn } from '../../src/compaction'
+import { judge } from '../../src/scoring'
+import { invokeScorer, SCORER_IDENTITY } from '../../src/quality/internal/scorer-runtime'
+import { scorers } from '../../src/quality/scorers'
+import type { GenerateFn } from '../../src/quality/target'
 
 describe('scorers.judge determinism and provenance', () => {
   it('pins deterministic generation settings for judge calls', async () => {

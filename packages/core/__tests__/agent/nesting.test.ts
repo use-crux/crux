@@ -1,18 +1,18 @@
 import { describe, it, expect } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { agent as makeAgent } from '../../agent/agent'
-import { createParallel } from '../../agent/parallel'
-import { createPipeline } from '../../agent/pipeline'
-import { createConsensus } from '../../agent/consensus'
-import { createSwarm } from '../../agent/swarm'
-import { createFakeAgentExecutor } from '../../agent/fakes'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { agent as makeAgent } from '../../src/agent/agent'
+import { createParallel } from '../../src/agent/parallel'
+import { createPipeline } from '../../src/agent/pipeline'
+import { createConsensus } from '../../src/agent/consensus'
+import { createSwarm } from '../../src/agent/swarm'
+import { createFakeAgentExecutor } from '../../src/agent/fakes'
 // One test runs a real nested pipeline inside the executor body — a genuinely
 // one-off shape the shared fake can't model (see SCRATCHPAD); it keeps a
 // bespoke inline executor and reads the ambient context directly.
-import type { AgentExecutor } from '../../agent/executor'
-import { getExecutionContext } from '../../runtime/execution-context'
-import type { ExecutionContext } from '../../runtime/execution-context'
+import type { AgentExecutor } from '../../src/agent/executor'
+import { getExecutionContext } from '../../src/runtime/execution-context'
+import type { ExecutionContext } from '../../src/runtime/execution-context'
 
 // ── Test helpers ──────────────────────────────────────────────────
 

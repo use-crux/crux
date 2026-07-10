@@ -5,8 +5,8 @@ import {
   observabilityDiagnostics,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { __setAlsForTesting } from '../../observability/observe'
+} from '../../src/observability'
+import { __setAlsForTesting } from '../../src/observability/observe'
 
 describe('observe runtime without AsyncLocalStorage', () => {
   afterEach(() => {

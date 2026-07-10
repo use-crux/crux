@@ -6,7 +6,7 @@ import {
   semanticRelationIndexFacts,
   semanticSchemaIndexFacts,
   semanticSourceRefIndexFacts,
-} from '../indexer/semantic'
+} from '../src/indexer/semantic'
 
 const roots: string[] = []
 

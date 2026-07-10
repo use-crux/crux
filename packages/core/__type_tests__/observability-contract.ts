@@ -7,7 +7,7 @@ import type {
   CruxObservabilitySubscriber,
   CruxRunId,
   CruxSpanId,
-} from '../observability'
+} from '../src/observability'
 import {
   CRUX_OBSERVABILITY_CHANNEL,
   CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -17,7 +17,7 @@ import {
   observe,
   propagateAttributes,
   subscribeObservability,
-} from '../observability'
+} from '../src/observability'
 
 const runId: CruxRunId = createCruxRunId()
 const spanId: CruxSpanId = createCruxSpanId()

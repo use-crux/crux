@@ -4,9 +4,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { dataset, evaluate } from '../../quality'
-import { compareExperiments } from '../../quality/internal/compare'
-import { experimentDiffSchema, experimentRecordSchema, failureArtifactSchema, toJsonSchema } from '../../quality/schemas'
+import { dataset, evaluate } from '../../src/quality'
+import { compareExperiments } from '../../src/quality/internal/compare'
+import { experimentDiffSchema, experimentRecordSchema, failureArtifactSchema, toJsonSchema } from '../../src/quality/schemas'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 const qualityDir = () => mkdtemp(join(tmpdir(), 'crux-quality-schemas-'))

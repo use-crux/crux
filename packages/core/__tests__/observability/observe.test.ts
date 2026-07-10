@@ -17,7 +17,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
   subscribeObservability,
-} from '../../observability'
+} from '../../src/observability'
 import { chaosTransport } from './helpers/chaos-transport'
 import { expectBalancedGraph } from './helpers/expect-balanced-graph'
 

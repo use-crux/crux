@@ -6,7 +6,7 @@
  */
 
 import { expectTypeOf } from 'vitest'
-import { storage, StorageError } from '../storage'
+import { storage, StorageError } from '../src/storage'
 import type {
   BlobStore,
   ExactFilter,
@@ -17,7 +17,7 @@ import type {
   StorageErrorCode,
   VectorRecord,
   VectorSearchQuery,
-} from '../storage'
+} from '../src/storage'
 
 interface DocumentRecord extends JsonObject {
   readonly title: string

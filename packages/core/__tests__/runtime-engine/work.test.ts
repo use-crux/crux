@@ -4,13 +4,13 @@ import {
   type WorkItem,
   type WorkStatus,
   type WorkTransition,
-} from '../../runtime/engine/work'
+} from '../../src/runtime/engine/work'
 import type {
   LeaseToken,
   RuntimeTargetId,
   TaskId,
   WorkId,
-} from '../../runtime/ports/ids'
+} from '../../src/runtime/ports/ids'
 
 describe('runtime work state machine', () => {
   it('leases pending work without mutating the original item', () => {

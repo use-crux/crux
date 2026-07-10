@@ -7,13 +7,13 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { judge as createJudge } from '../../scoring'
-import { boundary, constraint } from '../../safety'
-import type { BoundaryDef, Constraint, SafetyRunContext, SubjectOf } from '../../safety'
-import { ConstraintViolationError } from '../../safety/constraint'
-import { createSafety, type SafetyOutput } from '../../safety/session'
-import type { GenerateObjectFn } from '../../compaction/types'
-import type { Message } from '../../generation/messages'
+import { judge as createJudge } from '../../src/scoring'
+import { boundary, constraint } from '../../src/safety'
+import type { BoundaryDef, Constraint, SafetyRunContext, SubjectOf } from '../../src/safety'
+import { ConstraintViolationError } from '../../src/safety/constraint'
+import { createSafety, type SafetyOutput } from '../../src/safety/session'
+import type { GenerateObjectFn } from '../../src/compaction/types'
+import type { Message } from '../../src/generation/messages'
 
 function generateWith(score: number, reasoning = 'Test explanation'): GenerateObjectFn {
   return (async () => ({ object: { reasoning, score } })) as unknown as GenerateObjectFn

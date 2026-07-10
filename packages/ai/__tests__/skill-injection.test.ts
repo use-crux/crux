@@ -6,7 +6,7 @@ import {
   type CruxGraphRecord,
 } from '@use-crux/core/observability'
 import { createSkillActivationSession, skill } from '@use-crux/core/skill'
-import { injectNewlyActivatedSkills } from '../agent/skill-injection'
+import { injectNewlyActivatedSkills } from '../src/agent/skill-injection'
 
 describe('injectNewlyActivatedSkills', () => {
   it('injects from an explicit skill activation session and records graph evidence', async () => {

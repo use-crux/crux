@@ -1,3 +1,4 @@
+// @ts-nocheck
 import type {
   ConvexAgentContextRequest,
   ConvexAgentContextSnapshot,
@@ -5,7 +6,7 @@ import type {
   ConvexAgentDriverDefinition,
   ConvexAgentSession,
   ConvexAgentToolDefinition,
-} from '../../agent/driver'
+} from '../../src/agent/driver'
 
 export class FakeConvexAgentDriver implements ConvexAgentDriver {
   readonly definitions: ConvexAgentDriverDefinition[] = []

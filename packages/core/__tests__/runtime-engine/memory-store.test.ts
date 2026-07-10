@@ -1,5 +1,5 @@
-import { inMemoryRuntimeStore } from '../../runtime/adapters/memory'
-import { runStoreAdapterTests } from '../../runtime/testing'
+import { inMemoryRuntimeStore } from '../../src/runtime/adapters/memory'
+import { runStoreAdapterTests } from '../../src/runtime/testing'
 
 runStoreAdapterTests({
   name: 'inMemoryRuntimeStore',

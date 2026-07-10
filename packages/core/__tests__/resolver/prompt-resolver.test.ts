@@ -10,22 +10,22 @@
  */
 import { describe, it, expect } from "vitest";
 import { z } from "zod";
-import { compilePrompt, type ResolveCallOptions } from "../../resolver/compile";
-import { context, contextWithFamily, when, match } from "../../prompt/context";
-import { contributor } from "../../prompt/contributor";
-import { handoff } from "../../agent/handoff";
-import { memory, memoryBlock } from "../../memory";
+import { compilePrompt, type ResolveCallOptions } from "../../src/resolver/compile";
+import { context, contextWithFamily, when, match } from "../../src/prompt/context";
+import { contributor } from "../../src/prompt/contributor";
+import { handoff } from "../../src/agent/handoff";
+import { memory, memoryBlock } from "../../src/memory";
 import {
   createResolverFakes,
   fixedClock,
   inMemoryContextCache,
   staticPolicy,
   staticTokenizer,
-} from "../../resolver/fakes";
-import type { ResolverPorts } from "../../resolver/ports";
-import type { InspectResult, ResolvedPrompt } from "../../resolver/types";
-import type { PromptConfig } from "../../prompt/prompt-types";
-import type { SkillEntry } from "../../prompt/context-types";
+} from "../../src/resolver/fakes";
+import type { ResolverPorts } from "../../src/resolver/ports";
+import type { InspectResult, ResolvedPrompt } from "../../src/resolver/types";
+import type { PromptConfig } from "../../src/prompt/prompt-types";
+import type { SkillEntry } from "../../src/prompt/context-types";
 
 type AnyConfig = PromptConfig<
   z.ZodType,

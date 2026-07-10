@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { checkStaticRulesForProject } from '../host/static-compat'
+import { checkStaticRulesForProject } from '../src/host/static-compat'
 
 describe('static extension host native lint finalization', () => {
   it('returns raw extension rule facts when native finalization owns linting', async () => {

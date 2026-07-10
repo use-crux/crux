@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createSemanticIndexService, createTypeScriptSemanticBackend } from '../indexer/semantic/service'
+import { createSemanticIndexService, createTypeScriptSemanticBackend } from '../src/indexer/semantic/service'
 
 const roots: string[] = []
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseTraceMap, resolveOriginalPosition } from '../source-resolver/trace-map'
+import { parseTraceMap, resolveOriginalPosition } from '../src/source-resolver/trace-map'
 
 describe('source resolver trace map lookup', () => {
   it('resolves generated positions to original source positions', () => {

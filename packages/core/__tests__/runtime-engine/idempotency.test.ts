@@ -4,7 +4,7 @@ import type {
   TimerId,
   WaiterId,
   WorkId,
-} from '../../runtime/ports'
+} from '../../src/runtime/ports'
 import {
   flowEventResumeKey,
   flowManualResumeKey,
@@ -12,7 +12,7 @@ import {
   taskRunKey,
   timerKey,
   waiterTimeoutKey,
-} from '../../runtime/engine/idempotency'
+} from '../../src/runtime/engine/idempotency'
 
 describe('runtime idempotency key builders', () => {
   it('formats every runtime delivery key from stable identifiers', () => {

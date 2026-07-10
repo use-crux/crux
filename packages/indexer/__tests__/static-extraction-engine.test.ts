@@ -12,27 +12,27 @@ import {
   facts,
   type ExtractedFacts,
   type IndexerExtension,
-} from "../indexer/extensions";
+} from "../src/indexer/extensions";
 import {
   createStaticExtraction,
   type SourceReader,
   type StaticFileExtraction,
-} from "../indexer/static/extraction/engine";
+} from "../src/indexer/static/extraction/engine";
 import {
   createProvidedStaticSyntaxFrontend,
   createTypeScriptStaticSyntaxFrontend,
   type StaticSourceMatch,
   type StaticSyntaxFileRecord,
-} from "../indexer/static-index/syntax";
+} from "../src/indexer/static-index/syntax";
 import {
   createRustOxcStaticSyntaxFrontend,
   rustOxcSyntaxFrontendTestStatus,
-} from "../testing/rust-oxc-frontend";
+} from "../src/testing/rust-oxc-frontend";
 import {
   assertDeterministicExtraction,
   defineIndexerExtensionFixture,
   extractFixtureSource,
-} from "../testing";
+} from "../src/testing";
 
 const rustOxcStatus = rustOxcSyntaxFrontendTestStatus();
 

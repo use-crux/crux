@@ -8,7 +8,7 @@
  */
 
 import { v } from 'convex/values'
-import { STORE_DOC_COMPONENT_SPEC } from '../../store-doc/manifest'
+import { STORE_DOC_COMPONENT_SPEC } from '../store-doc/manifest'
 import { mutation, query } from './_generated/server.js'
 
 /**

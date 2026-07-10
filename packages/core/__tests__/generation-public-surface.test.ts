@@ -4,7 +4,7 @@
  *
  * Companion to `public-import-surface.test.ts` and `runtime-public-surface.test.ts`,
  * scoped to the provider-neutral generation domain that the structure refactor
- * relocates into `packages/core/generation/`. Every assertion imports through the
+ * relocates into `packages/core/src/generation/`. Every assertion imports through the
  * **package specifier** (`@use-crux/core`), never a relative path, so the suite
  * is immune to internal file moves: when `orchestrate.ts`, `fallback.ts`,
  * `retry.ts`, `validation-retry.ts`, `repair-json.ts`, and `messages.ts` migrate

@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createFeedbackStore } from '../../quality/internal/feedback'
+import { createFeedbackStore } from '../../src/quality/internal/feedback'
 
 describe('quality internal feedback store', () => {
   const tempDirs: string[] = []

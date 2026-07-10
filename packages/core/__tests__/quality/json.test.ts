@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canonicalJson } from '../../quality/internal/json'
+import { canonicalJson } from '../../src/quality/internal/json'
 
 describe('quality canonicalJson', () => {
   it('serializes Date values with a stable explicit tag', () => {

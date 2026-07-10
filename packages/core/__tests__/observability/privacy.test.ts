@@ -8,8 +8,8 @@ import {
   setObservabilityTransport,
   subscribeObservability,
   type CruxGraphRecord,
-} from '../../observability'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
+} from '../../src/observability'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
 
 const exemptArtifactKinds = new Set([
   'error.stack',

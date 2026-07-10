@@ -141,21 +141,17 @@ async function buildTypeScriptPackages() {
 
   for (const pkg of tsPackages) {
     const packageOut = packageBuildOutput(pkg)
-    // Mixed-state tolerance during src/ layout migration (Phases 1–7).
-    // Some packages may still emit at their historical root location until their
-    // files + package.json are updated in later phases. We prefer the declared
-    // sourceRoot but fall back to the package dir root for the index.js presence
-    // check. (This is temporary; once uniform, simplify back to strict check.)
-    // Note: packages without a top-level "." export (e.g. postgres "./runtime")
-    // may legitimately lack an index.js at the prefix root — the check here is
-    // best-effort and the real contract is exercised by later rewrite + pack.
-    if (!existsSync(join(packageOut, 'index.js'))) {
+    // After src/ unification, every pkg emits under its sourceRoot prefix (packageOut).
+    // We assert the prefix dir exists (tsc processed the package's mapped sources).
+    // Do not hard-require "index.js" at the prefix root: some pkgs (postgres) legitimately
+    // have only subpath entries (main: "./src/runtime.ts" → no top-level index.js).
+    // Fallback to historical root dir is kept for safety during any transition.
+    // The authoritative contract is the per-export rewrite + what ends up in dist/.
+    if (!existsSync(packageOut)) {
       const fallbackOut = join(buildRoot, pkg.dir)
-      if (existsSync(join(fallbackOut, 'index.js'))) {
-        // emitted at historical root; acceptable in mixed migration window
-        continue
+      if (!existsSync(fallbackOut)) {
+        throw new Error(`TypeScript build did not produce output under ${relative(repoRoot, packageOut)} (or fallback)`)
       }
-      throw new Error(`TypeScript build did not produce ${relative(repoRoot, join(packageOut, 'index.js'))} (or fallback)`)
     }
   }
 }
@@ -290,8 +286,23 @@ function transformTypeScriptManifest(sourceManifest, pkg) {
   manifest.version = packageVersion(sourceManifest.name)
   manifest.private = undefined
   manifest.type = sourceManifest.type ?? 'module'
-  manifest.main = './dist/index.js'
-  manifest.types = './dist/index.d.ts'
+  // Derive root main/types from the dev manifest when present (supports pkgs without "."
+  // entry like postgres whose main is "./src/runtime.ts"). rewriteExportPath performs
+  // the sourceRoot strip + .ts→.js/.d.ts already used for exports.
+  if (sourceManifest.main) {
+    manifest.main = rewriteExportPath(sourceManifest.main, pkg, 'import')
+  } else {
+    manifest.main = './dist/index.js'
+  }
+  if (sourceManifest.types) {
+    manifest.types = rewriteExportPath(sourceManifest.types, pkg, 'types')
+  } else if (sourceManifest.main) {
+    // derive sibling .d.ts target from main if types not separately declared
+    const typesGuess = sourceManifest.main.replace(/\.ts$/, '.d.ts').replace(/\.tsx$/, '.d.ts')
+    manifest.types = rewriteExportPath(typesGuess, pkg, 'types')
+  } else {
+    manifest.types = './dist/index.d.ts'
+  }
   manifest.exports = transformExports(sourceManifest.exports, pkg)
   manifest.files = ['dist', 'README.md', 'LICENSE']
   manifest.publishConfig = { ...(sourceManifest.publishConfig ?? {}), access: 'public' }

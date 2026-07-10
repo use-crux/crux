@@ -2,11 +2,11 @@
 import { describe, it, expect, vi } from 'vitest'
 import React from 'react'
 import { renderHook, act } from '@testing-library/react'
-import { createStreamTransport } from '../../stream/client'
+import { createStreamTransport } from '../../src/stream/client'
 import { CruxProvider, usePlan, useTasks } from '@use-crux/react'
 import type { Task } from '@use-crux/core/plan'
 import type { JsonObject } from '@use-crux/core/storage'
-import type { CruxDataPart } from '../../stream/types'
+import type { CruxDataPart } from '../../src/stream/types'
 
 function createWrapper(transport: ReturnType<typeof createStreamTransport>) {
   return function Wrapper({ children }: { children: React.ReactNode }) {

@@ -1,4 +1,4 @@
-import type { QualityConfig } from '../quality'
+import type { QualityConfig } from '../src/quality'
 
 const launchQualityConfig = {
   include: ['evals/**/*.eval.ts', '**/*.eval.ts'],

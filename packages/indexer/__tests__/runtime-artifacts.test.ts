@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ProjectDefinition } from '@use-crux/core/project-index'
 import { afterEach, describe, expect, it } from 'vitest'
-import { diffRuntimeArtifactDrift, generateRuntimeArtifacts } from '../indexer/runtime-artifacts'
+import { diffRuntimeArtifactDrift, generateRuntimeArtifacts } from '../src/indexer/runtime-artifacts'
 
 const roots: string[] = []
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), '..')

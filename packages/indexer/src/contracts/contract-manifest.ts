@@ -98,7 +98,7 @@ export interface StaticIndexRuntimeContractManifest {
   readonly protocolVersions: StaticIndexRuntimeContractProtocolVersions
   /** Version extraction checks for TypeScript, Go, and Rust mirrors. */
   readonly protocolVersionChecks: readonly StaticIndexRuntimeProtocolVersionCheck[]
-  /** Contract groups owned by `packages/indexer/contracts`. */
+  /** Contract groups owned by `packages/indexer/src/contracts`. */
   readonly groups: readonly StaticIndexRuntimeContractManifestGroup[]
 }
 

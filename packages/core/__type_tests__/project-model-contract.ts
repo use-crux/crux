@@ -8,7 +8,7 @@ import {
   isProjectModelDiagnosticCode,
   isProjectModelProvenance,
   isProjectModelResolutionMode,
-} from '../project-index'
+} from '../src/project-index'
 import type {
   ProjectModelDefinitionId,
   ProjectModelDiagnosticCode,
@@ -18,7 +18,7 @@ import type {
   ProjectModelResolutionMode,
   ProjectModelRelationId,
   ResolvedProjectModel,
-} from '../project-index'
+} from '../src/project-index'
 
 function describeProvenance(provenance: ProjectModelProvenance): string {
   switch (provenance.kind) {

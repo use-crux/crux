@@ -3,7 +3,7 @@
  * published `@use-crux/core` barrel.
  *
  * Companion to `public-root-imports.ts`, scoped to the types the structure
- * refactor relocates into `packages/core/runtime/` (`CruxConfig`, `CruxPlugin`,
+ * refactor relocates into `packages/core/src/runtime/` (`CruxConfig`, `CruxPlugin`,
  * `CruxHooks`, `CruxPluginResult`, `PromptMiddleware`). Imports come
  * exclusively from `@use-crux/core`, so the file must keep type-checking with
  * zero edits once the implementation moves into the `runtime/` domain.

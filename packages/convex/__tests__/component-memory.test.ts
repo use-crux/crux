@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { insert as memoryInsert, list as memoryList } from '../src/component/memory'
-import { STORE_DOC_COMPONENT_SPEC, type StoreDocRecord } from '../store-doc'
+import { STORE_DOC_COMPONENT_SPEC, type StoreDocRecord } from '../src/store-doc'
 
 interface TestMemoryListArgs {
   prefix?: string

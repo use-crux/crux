@@ -7,11 +7,11 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import type { Citation } from '../citations'
-import type { DenseEmbedding } from '../embedding'
-import type { Corpus, CorpusSyncResult, CruxDocument, IndexResult } from '../indexing'
-import { inMemoryRecordStore, inMemoryVectorStore } from '../storage'
-import * as retrieval from '../retrieval'
+import type { Citation } from '../src/citations'
+import type { DenseEmbedding } from '../src/embedding'
+import type { Corpus, CorpusSyncResult, CruxDocument, IndexResult } from '../src/indexing'
+import { inMemoryRecordStore, inMemoryVectorStore } from '../src/storage'
+import * as retrieval from '../src/retrieval'
 import {
   compressToBudget,
   expandParents,
@@ -22,7 +22,7 @@ import {
   retrievalStep,
   retrieve,
   rewriteQuery,
-} from '../retrieval'
+} from '../src/retrieval'
 import type {
   Grounding,
   KnowledgeBase,
@@ -39,7 +39,7 @@ import type {
   Retriever,
   RetrieverHit,
   RetrieverTools,
-} from '../retrieval'
+} from '../src/retrieval'
 
 declare const corpus: Corpus
 declare const embeddings: DenseEmbedding

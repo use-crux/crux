@@ -4,7 +4,7 @@ import {
   type QualityCollectedEvaluation,
   type QualityEvaluationHandle,
   type QualityRunner,
-} from '../quality/internal/runner'
+} from '../src/quality/internal/runner'
 
 expectTypeOf(createQualityRunner()).toEqualTypeOf<QualityRunner>()
 expectTypeOf<QualityCollectedEvaluation['handle']>().toMatchTypeOf<QualityEvaluationHandle>()
@@ -13,7 +13,7 @@ expectTypeOf<QualityCollectedEvaluation['handle']>().toMatchTypeOf<QualityEvalua
 type _DefinitionLeak = QualityCollectedEvaluation['handle']['definition']
 
 // @ts-expect-error The runner facade no longer exports the low-level engine entry.
-import { runEvaluation } from '../quality/internal/runner'
+import { runEvaluation } from '../src/quality/internal/runner'
 
 // @ts-expect-error Baseline path helpers are behind runner.promote().
-import { baselineRecordPath } from '../quality/internal/runner'
+import { baselineRecordPath } from '../src/quality/internal/runner'

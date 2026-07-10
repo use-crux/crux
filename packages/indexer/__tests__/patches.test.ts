@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyIndexPatch, emptyIndexPatchState, enforceIndexPatchBudget } from '../indexer/patches'
+import { applyIndexPatch, emptyIndexPatchState, enforceIndexPatchBudget } from '../src/indexer/patches'
 
 describe('index patch merge', () => {
   it('lets fresh AST facts replace cached definition fields', () => {

@@ -15,7 +15,7 @@ import {
   observe,
   type CapturedObservabilityContext,
 } from '@use-crux/core/observability'
-import type { ComponentApi } from './src/component/_generated/component'
+import type { ComponentApi } from './component/_generated/component'
 import { flushObservability } from './observability'
 import {
   observeConvexSwarmAgent,

@@ -6,15 +6,15 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import type { Message } from '../../generation/messages'
+import type { Message } from '../../src/generation/messages'
 import {
   appendCanonicalToolRound,
   createToolResultEncodingHelpers,
   messagesToTranscriptUnits,
   transcriptUnitsToMessages,
-} from '../../adapter/native-chat/transcript'
-import type { ProviderToolResult } from '../../adapter/native-chat/transcript'
-import type { ToolResultEntry } from '../../adapter/types'
+} from '../../src/adapter/native-chat/transcript'
+import type { ProviderToolResult } from '../../src/adapter/native-chat/transcript'
+import type { ToolResultEntry } from '../../src/adapter/types'
 
 describe('messagesToTranscriptUnits', () => {
   it('maps system and user messages to content units', () => {

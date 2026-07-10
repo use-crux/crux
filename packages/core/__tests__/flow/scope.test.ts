@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { flow as makeFlow, createFlowId, signalFlow, type FlowScope } from '../../flow/scope'
-import { updateHooks, resetHooks } from '../../runtime/runtime'
-import { getExecutionContext, runWithExecutionContext, withSession } from '../../runtime/execution-context'
-import { inMemoryRecordStore } from '../../storage'
+import { flow as makeFlow, createFlowId, signalFlow, type FlowScope } from '../../src/flow/scope'
+import { updateHooks, resetHooks } from '../../src/runtime/runtime'
+import { getExecutionContext, runWithExecutionContext, withSession } from '../../src/runtime/execution-context'
+import { inMemoryRecordStore } from '../../src/storage'
 
 describe('createFlowId', () => {
   it('returns a unique string starting with flow-', () => {

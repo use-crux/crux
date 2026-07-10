@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { orchestrateGenerate, orchestrateStream, type OrchestrationSpec } from '../../generation'
-import type { AnyPromptConfig } from '../../prompt/prompt-types'
+import { orchestrateGenerate, orchestrateStream, type OrchestrationSpec } from '../../src/generation'
+import type { AnyPromptConfig } from '../../src/prompt/prompt-types'
 import {
   createInMemoryObservabilityTransport,
   createCruxArtifactId,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
+} from '../../src/observability'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
 import { expectBalancedGraph } from './helpers/expect-balanced-graph'
-import { imagePart, textPart } from '../../content'
+import { imagePart, textPart } from '../../src/content'
 
 describe('generation observability', () => {
   afterEach(() => {

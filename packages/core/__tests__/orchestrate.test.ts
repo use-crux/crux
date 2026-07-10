@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import type { FallbackModel } from '../generation/fallback'
-import { fallback } from '../generation/fallback'
+import type { FallbackModel } from '../src/generation/fallback'
+import { fallback } from '../src/generation/fallback'
 
 import {
   TimeoutError,
@@ -9,8 +9,8 @@ import {
   orchestrateStream,
   withBudget,
   wrapStreamIterable,
-} from '../generation'
-import type { OrchestrationSpec, TextDeltaExtractor } from '../generation'
+} from '../src/generation'
+import type { OrchestrationSpec, TextDeltaExtractor } from '../src/generation'
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers

@@ -24,7 +24,7 @@ import {
   match,
   contributor,
   isContributorEntry,
-} from '../../prompt'
+} from '../../src/prompt'
 
 describe('prompt domain barrel (../prompt)', () => {
   it('exposes the documented authoring entry points', () => {

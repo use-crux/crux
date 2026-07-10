@@ -1,14 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { prompt as makePrompt } from '../../prompt/prompt'
-import { createSemanticCache, semanticCachePolicies } from '../../cache'
-import { embedding } from '../../embedding'
-import { inMemoryStorage } from '../../storage'
-import { applyPlugins } from '../../runtime/plugin'
-import { getHooks, resetHooks, setHooks } from '../../runtime/runtime'
-import { orchestrateGenerate, orchestrateStream } from '../../generation/orchestrate'
-import { imagePart, textPart } from '../../content'
-import { resolveQueryText } from '../../cache/query'
+import { prompt as makePrompt } from '../../src/prompt/prompt'
+import { createSemanticCache, semanticCachePolicies } from '../../src/cache'
+import { embedding } from '../../src/embedding'
+import { inMemoryStorage } from '../../src/storage'
+import { applyPlugins } from '../../src/runtime/plugin'
+import { getHooks, resetHooks, setHooks } from '../../src/runtime/runtime'
+import { orchestrateGenerate, orchestrateStream } from '../../src/generation/orchestrate'
+import { imagePart, textPart } from '../../src/content'
+import { resolveQueryText } from '../../src/cache/query'
 
 function denseEmbedding() {
   return embedding({

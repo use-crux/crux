@@ -8,15 +8,15 @@
 
 import { expectTypeOf } from 'vitest'
 import { z } from 'zod'
-import { prompt } from '../prompt/prompt'
-import { context } from '../prompt/context'
-import { agent } from '../agent/agent'
-import type { AnyAgent } from '../agent/agent'
-import { createParallel } from '../agent/parallel'
-import { createConsensus } from '../agent/consensus'
-import { createSwarm } from '../agent/swarm'
-import { blackboard } from '../agent/blackboard'
-import type { AgentExecutor } from '../agent/executor'
+import { prompt } from '../src/prompt/prompt'
+import { context } from '../src/prompt/context'
+import { agent } from '../src/agent/agent'
+import type { AnyAgent } from '../src/agent/agent'
+import { createParallel } from '../src/agent/parallel'
+import { createConsensus } from '../src/agent/consensus'
+import { createSwarm } from '../src/agent/swarm'
+import { blackboard } from '../src/agent/blackboard'
+import type { AgentExecutor } from '../src/agent/executor'
 
 declare const executor: AgentExecutor
 

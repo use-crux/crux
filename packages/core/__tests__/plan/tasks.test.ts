@@ -1,11 +1,11 @@
 import { describe, it, expect, afterEach } from 'vitest'
 import { z } from 'zod'
-import { inMemoryRecordStore } from '../../storage'
-import { plan } from '../../plan/plans'
-import { task } from '../../plan/task-spec'
-import { getTaskList, tasks } from '../../plan/tasks'
-import type { JsonObject, JsonValue, TasksHandle } from '../../plan/types'
-import { updateHooks, resetHooks } from '../../runtime/runtime'
+import { inMemoryRecordStore } from '../../src/storage'
+import { plan } from '../../src/plan/plans'
+import { task } from '../../src/plan/task-spec'
+import { getTaskList, tasks } from '../../src/plan/tasks'
+import type { JsonObject, JsonValue, TasksHandle } from '../../src/plan/types'
+import { updateHooks, resetHooks } from '../../src/runtime/runtime'
 
 /** Create a fresh store and register it in the runtime. */
 function setup() {

@@ -1,14 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { CruxObservabilityTransport } from '../observability'
-import type { CruxPlugin } from '../runtime/plugin'
-import type { CruxHooks, HooksLayerToken } from '../runtime/runtime'
-import { node } from '../runtime/public'
-import { inMemoryRecordStore } from '../storage'
+import type { CruxObservabilityTransport } from '../src/observability'
+import type { CruxPlugin } from '../src/runtime/plugin'
+import type { CruxHooks, HooksLayerToken } from '../src/runtime/runtime'
+import { node } from '../src/runtime/public'
+import { inMemoryRecordStore } from '../src/storage'
 import {
   createRuntimeConfigTransaction,
   planRuntimeConfig,
   type RuntimeConfigTransactionPorts,
-} from '../runtime/config-transaction'
+} from '../src/runtime/config-transaction'
 
 describe('runtime config transaction', () => {
   it('plans default config without owning observability or plugins', () => {

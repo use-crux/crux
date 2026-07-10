@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { retriever } from "../../retrieval";
-import { inMemoryRecordStore } from "../../storage";
-import { retrieverWorkspaceMountSource, workspace } from "../../workspace";
+import { retriever } from "../../src/retrieval";
+import { inMemoryRecordStore } from "../../src/storage";
+import { retrieverWorkspaceMountSource, workspace } from "../../src/workspace";
 
 describe("workspace retriever mounts", () => {
   it("lists and reads retriever hits as virtual files", async () => {

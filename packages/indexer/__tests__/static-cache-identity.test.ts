@@ -3,15 +3,15 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ProjectDefinitionKind } from "@use-crux/core/project-index";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readStaticIndexRuntimeSharedFixture } from "../contracts/fixtures";
-import { facts, type IndexerExtension } from "../indexer/extensions";
+import { readStaticIndexRuntimeSharedFixture } from "../src/contracts/fixtures";
+import { facts, type IndexerExtension } from "../src/indexer/extensions";
 import {
   SEMANTIC_FACTS_CACHE_EPOCH,
   STATIC_PARSE_CACHE_EPOCH,
-} from "../indexer/cache-identity";
-import { staticParseCacheManifestStatus } from "../indexer/static/extraction/cache";
-import { createStaticExtraction } from "../indexer/static/extraction/engine";
-import { createTypeScriptStaticSyntaxFrontend } from "../indexer/static-index/syntax";
+} from "../src/indexer/cache-identity";
+import { staticParseCacheManifestStatus } from "../src/indexer/static/extraction/cache";
+import { createStaticExtraction } from "../src/indexer/static/extraction/engine";
+import { createTypeScriptStaticSyntaxFrontend } from "../src/indexer/static-index/syntax";
 
 const roots: string[] = [];
 const testWorkspaceRoot = join(dirname(fileURLToPath(import.meta.url)), "..");

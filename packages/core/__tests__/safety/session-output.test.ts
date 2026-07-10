@@ -6,13 +6,13 @@
  */
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { boundary, createSafety, ConstraintViolationError, GuardrailBlockedError, createSafetyPlugin } from '../../safety'
-import type { SafetyCallOptions, SafetyOutput } from '../../safety'
-import { guardrail } from '../../safety/guardrail'
-import { constraint } from '../../safety/constraint'
-import { updateHooks, resetHooks, getHooks } from '../../runtime/runtime'
-import { applyPlugins } from '../../runtime/plugin'
-import type { Message } from '../../generation/messages'
+import { boundary, createSafety, ConstraintViolationError, GuardrailBlockedError, createSafetyPlugin } from '../../src/safety'
+import type { SafetyCallOptions, SafetyOutput } from '../../src/safety'
+import { guardrail } from '../../src/safety/guardrail'
+import { constraint } from '../../src/safety/constraint'
+import { updateHooks, resetHooks, getHooks } from '../../src/runtime/runtime'
+import { applyPlugins } from '../../src/runtime/plugin'
+import type { Message } from '../../src/generation/messages'
 
 afterEach(() => {
   resetHooks()

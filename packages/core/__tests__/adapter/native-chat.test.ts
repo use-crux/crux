@@ -6,17 +6,17 @@
 
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { adapterSpecConformance } from '../../adapter/testing'
+import { adapterSpecConformance } from '../../src/adapter/testing'
 import type {
   AdapterConformanceHarness,
   AdapterConformanceInspector,
   AdapterConformanceScript,
-} from '../../adapter/testing'
-import { defineNativeChatProvider } from '../../adapter/native-chat'
-import type { NativeAssistantTurn, NativeProviderPort, NativeResponseMetadata } from '../../adapter/native-chat'
-import type { CallArgs } from '../../adapter/types'
-import type { Message } from '../../generation/messages'
-import type { TokenUsage } from '../../generation/types'
+} from '../../src/adapter/testing'
+import { defineNativeChatProvider } from '../../src/adapter/native-chat'
+import type { NativeAssistantTurn, NativeProviderPort, NativeResponseMetadata } from '../../src/adapter/native-chat'
+import type { CallArgs } from '../../src/adapter/types'
+import type { Message } from '../../src/generation/messages'
+import type { TokenUsage } from '../../src/generation/types'
 
 interface NativeTestProviderMessage {
   readonly role: Message['role']

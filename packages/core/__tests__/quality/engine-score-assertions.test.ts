@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { evaluate } from '../../quality'
-import type { Scorer } from '../../quality/scorers'
-import type { QualitySourceFrameRequest, QualitySourceFrameResolver } from '../../quality/source-frame'
+import { evaluate } from '../../src/quality'
+import type { Scorer } from '../../src/quality/scorers'
+import type { QualitySourceFrameRequest, QualitySourceFrameResolver } from '../../src/quality/source-frame'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 const answerTask = async (input: { q: string }) => ({ answer: `cited answer for ${input.q}` })

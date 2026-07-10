@@ -4,9 +4,9 @@ import {
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from "../../observability";
-import { inMemoryRecordStore } from "../../storage";
-import { workspace } from "../../workspace";
+} from "../../src/observability";
+import { inMemoryRecordStore } from "../../src/storage";
+import { workspace } from "../../src/workspace";
 
 describe("workspace version observability markers", () => {
   afterEach(() => resetObservabilityRuntime());

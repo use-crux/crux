@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest'
  * or the public types, re-measure and update BASELINE_INSTANTIATIONS (and the
  * implementation kit's SCRATCHPAD) in the same commit.
  */
-const BASELINE_INSTANTIATIONS = 337_533
+const BASELINE_INSTANTIATIONS = 379_399
 
 const here = dirname(fileURLToPath(import.meta.url))
 const packageRoot = resolve(here, '..', '..')

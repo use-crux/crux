@@ -13,8 +13,8 @@ import {
   planRuntimeConfig,
   type RuntimeConfigPlan,
   type RuntimeConfigTransactionPorts,
-} from '../runtime/config-transaction'
-import type { CruxHooks, HooksLayerToken } from '../runtime/runtime'
+} from '../src/runtime/config-transaction'
+import type { CruxHooks, HooksLayerToken } from '../src/runtime/runtime'
 
 const plan = planRuntimeConfig({
   env: { CRUX_INDEX: '0' },

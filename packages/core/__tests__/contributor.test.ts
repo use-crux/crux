@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { context } from '../prompt/context'
-import { contributor } from '../prompt/contributor'
-import { prompt } from '../prompt/prompt'
-import { constraint } from '../safety/constraint'
-import { boundary } from '../safety'
+import { context } from '../src/prompt/context'
+import { contributor } from '../src/prompt/contributor'
+import { prompt } from '../src/prompt/prompt'
+import { constraint } from '../src/safety/constraint'
+import { boundary } from '../src/safety'
 
 describe('contributor()', () => {
   it('lets prompt use entries inject context, tools, constraints, and metadata', async () => {

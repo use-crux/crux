@@ -1,14 +1,14 @@
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { IndexPatchFacts } from '../indexer/patches'
-import { semanticSourceProfileFileFromSource } from '../indexer/semantic/source-profile'
+import type { IndexPatchFacts } from '../src/indexer/patches'
+import { semanticSourceProfileFileFromSource } from '../src/indexer/semantic/source-profile'
 import {
   createSemanticIndexService,
   type SemanticAnalyzeInput,
   type SemanticBackend,
   type SemanticBackendSessionInput,
-} from '../indexer/semantic/service'
+} from '../src/indexer/semantic/service'
 const roots: string[] = []
 
 async function fixtureRoot(): Promise<string> {

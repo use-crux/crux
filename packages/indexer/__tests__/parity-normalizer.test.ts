@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   canonicalIndexPatchFactsJson,
   parityFieldCoverage,
-} from '../contracts/parity'
-import type { IndexPatchFacts } from '../indexer/patches'
+} from '../src/contracts/parity'
+import type { IndexPatchFacts } from '../src/indexer/patches'
 
 describe('Project Index parity normalizer', () => {
   it('normalizes complete IndexPatchFacts for fail-closed parity checks', () => {

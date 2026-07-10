@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { convexWorkspaceBlobStore } from '../workspace'
+import { convexWorkspaceBlobStore } from '../src/workspace'
 
 describe('convexWorkspaceBlobStore', () => {
   it('stores and reads blobs through ctx.storage', async () => {

@@ -12,22 +12,22 @@
  */
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { z } from 'zod'
-import { compilePrompt, type ResolveCallOptions } from '../resolver/compile'
-import { context, contextWithFamily, when, match } from '../prompt/context'
-import { contributor } from '../prompt/contributor'
+import { compilePrompt, type ResolveCallOptions } from '../src/resolver/compile'
+import { context, contextWithFamily, when, match } from '../src/prompt/context'
+import { contributor } from '../src/prompt/contributor'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../observability'
-import { updateHooks, resetHooks } from '../runtime/runtime'
-import { setTokenizer, defaultTokenizer } from '../shared/tokenizer'
-import type { Constraint } from '../safety/constraint/types'
-import type { Guardrail } from '../safety/guardrail/types'
-import type { AnyToolSet } from '../types'
-import type { MemoryEntry, BlackboardEntry, SkillEntry, ContextEntry } from '../prompt/context-types'
-import type { PromptConfig } from '../prompt/prompt-types'
+} from '../src/observability'
+import { updateHooks, resetHooks } from '../src/runtime/runtime'
+import { setTokenizer, defaultTokenizer } from '../src/shared/tokenizer'
+import type { Constraint } from '../src/safety/constraint/types'
+import type { Guardrail } from '../src/safety/guardrail/types'
+import type { AnyToolSet } from '../src/types'
+import type { MemoryEntry, BlackboardEntry, SkillEntry, ContextEntry } from '../src/prompt/context-types'
+import type { PromptConfig } from '../src/prompt/prompt-types'
 
 afterEach(() => {
   setTokenizer(defaultTokenizer)

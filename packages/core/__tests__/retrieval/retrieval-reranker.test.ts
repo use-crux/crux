@@ -7,7 +7,7 @@ import {
   retriever as makeRetriever,
   type RetrievalModel,
   type RetrieverHit,
-} from '../../retrieval'
+} from '../../src/retrieval'
 
 function hit(id: string, content: string, score = 1): RetrieverHit {
   return {

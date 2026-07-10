@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest'
-import { getHooks, updateHooks, resetHooks } from '../runtime/runtime'
+import { getHooks, updateHooks, resetHooks } from '../src/runtime/runtime'
 
 // Clean up all global state after each test
 afterEach(() => {

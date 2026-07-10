@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { ExperimentRecord } from '../../quality/schemas'
-import { compareExperiments } from '../../quality/internal/compare'
+import type { ExperimentRecord } from '../../src/quality/schemas'
+import { compareExperiments } from '../../src/quality/internal/compare'
 
 function cell(input: {
   caseId: string

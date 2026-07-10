@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { resetObservabilityRuntime, setObservabilityTransport } from '../../observability/observe'
-import { evaluate, scorers } from '../../quality'
+import { resetObservabilityRuntime, setObservabilityTransport } from '../../src/observability/observe'
+import { evaluate, scorers } from '../../src/quality'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 const upperTask = async (input: { q: string }) => input.q.toUpperCase()

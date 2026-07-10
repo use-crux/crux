@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type { LanguageModel } from 'ai'
 import { prompt } from '@use-crux/core'
-import { createCruxAi } from '../index'
+import { createCruxAi } from '../src'
 import { fromResponseMessages, toModelMessages } from '../src/messages'
 import { scriptedGateway } from './scripted-gateway'
 

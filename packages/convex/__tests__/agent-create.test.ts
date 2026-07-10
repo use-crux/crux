@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { Agent, createAgent } from '../agent'
+import { Agent, createAgent } from '../src/agent'
 
 describe('createAgent', () => {
   it('creates a Crux-aware Convex Agent from a Crux prompt definition', async () => {

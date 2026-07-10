@@ -3,11 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { loopRuntimeAdapter } from '../../adapter'
+import { loopRuntimeAdapter } from '../../src/adapter'
 import {
   fakeLoopRuntime,
   type FakeLoopRuntimeConfig,
-} from '../../adapter/testing'
+} from '../../src/adapter/testing'
 import {
   createInMemoryObservabilityTransport,
   observe,
@@ -16,10 +16,10 @@ import {
   type CruxEdgeRecord,
   type CruxRunEndRecord,
   type CruxRunStartRecord,
-} from '../../observability'
-import { prompt } from '../../prompt/prompt'
-import { evaluate } from '../../quality'
-import type { RunOverrides } from '../../quality/experiment'
+} from '../../src/observability'
+import { prompt } from '../../src/prompt/prompt'
+import { evaluate } from '../../src/quality'
+import type { RunOverrides } from '../../src/quality/experiment'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 const tempDirs: string[] = []

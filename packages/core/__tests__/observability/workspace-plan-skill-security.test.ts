@@ -1,26 +1,26 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { prompt } from "../../prompt/prompt";
+import { prompt } from "../../src/prompt/prompt";
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from "../../observability";
-import { plan, updatePlan } from "../../plan/plans";
-import { tasks } from "../../plan/tasks";
-import { configure } from "../../runtime/configure";
-import { resetHooks, updateHooks } from "../../runtime/runtime";
-import { fileSkill } from "../../skill/file-loader";
+} from "../../src/observability";
+import { plan, updatePlan } from "../../src/plan/plans";
+import { tasks } from "../../src/plan/tasks";
+import { configure } from "../../src/runtime/configure";
+import { resetHooks, updateHooks } from "../../src/runtime/runtime";
+import { fileSkill } from "../../src/skill/file-loader";
 import {
   clearCache,
   registry as skillRegistry,
   resolveRegistrySkill,
   skill,
-} from "../../skill";
-import { inMemoryRecordStore } from "../../storage";
-import { workspace } from "../../workspace";
+} from "../../src/skill";
+import { inMemoryRecordStore } from "../../src/storage";
+import { workspace } from "../../src/workspace";
 
 const fixtureRoot = join(__dirname, "__observability-fixtures__");
 

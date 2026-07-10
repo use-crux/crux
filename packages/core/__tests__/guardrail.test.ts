@@ -8,10 +8,10 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { guardrail as makeGuardrail, isGuardrail, validateGuardrailRunResult } from '../safety/guardrail'
-import { boundary } from '../safety'
-import { SafetyResultError } from '../safety'
-import { evaluateGuardrail } from '../safety/guardrail/evaluate'
+import { guardrail as makeGuardrail, isGuardrail, validateGuardrailRunResult } from '../src/safety/guardrail'
+import { boundary } from '../src/safety'
+import { SafetyResultError } from '../src/safety'
+import { evaluateGuardrail } from '../src/safety/guardrail/evaluate'
 
 describe('guardrail', () => {
   it('creates a frozen guardrail object with correct shape', () => {
@@ -102,7 +102,7 @@ describe('guardrail', () => {
 
 describe('stable beta boundary authoring', () => {
   it('exports frozen boundary helpers for the accepted safety targets', async () => {
-    const safety = (await import('../safety')) as typeof import('../safety') & {
+    const safety = (await import('../src/safety')) as typeof import('../src/safety') & {
       readonly boundary?: {
         readonly input: {
           readonly text: () => unknown
@@ -181,7 +181,7 @@ describe('stable beta boundary authoring', () => {
   })
 
   it('accepts id/on/run authoring and preserves multi-boundary bindings', async () => {
-    const safety = (await import('../safety')) as typeof import('../safety') & {
+    const safety = (await import('../src/safety')) as typeof import('../src/safety') & {
       readonly boundary?: {
         readonly input: { readonly text: () => unknown }
         readonly output: { readonly text: () => unknown }
@@ -323,7 +323,7 @@ describe('isGuardrail', () => {
 describe('context-level guardrails', () => {
   it('context() stores guardrails on frozen object', async () => {
     // Dynamic import to avoid circular issues in test
-    const { context } = await import('../prompt/context')
+    const { context } = await import('../src/prompt/context')
 
     const guard = makeGuardrail({
       id: 'ctx-guard',
@@ -342,7 +342,7 @@ describe('context-level guardrails', () => {
   })
 
   it('context() defaults to empty guardrails array', async () => {
-    const { context } = await import('../prompt/context')
+    const { context } = await import('../src/prompt/context')
 
     const ctx = context({
       system: 'No guards',

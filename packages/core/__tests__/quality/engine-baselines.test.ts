@@ -2,7 +2,7 @@ import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { evaluate } from '../../quality'
+import { evaluate } from '../../src/quality'
 import { QualityRunnerHarnessError, runEvaluationWithRunner as run } from './runner-harness'
 
 interface BaselineRecordJson {

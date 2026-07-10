@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluate } from '../../quality'
+import { evaluate } from '../../src/quality'
 import { runEvaluationWithRunner as run } from './runner-harness'
 
 const upperTask = async (input: { q: string }) => ({ answer: input.q.toUpperCase() })

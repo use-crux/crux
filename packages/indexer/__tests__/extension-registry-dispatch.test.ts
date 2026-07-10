@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createExtensionRegistry, extractorsForCall } from '../indexer/extensions/runtime/registry'
-import type { IndexerExtension } from '../indexer/extensions'
+import { createExtensionRegistry, extractorsForCall } from '../src/indexer/extensions/runtime/registry'
+import type { IndexerExtension } from '../src/indexer/extensions'
 
 describe('extension registry dispatch', () => {
   it('dispatches call extractors by local and import-qualified names in registry order', () => {

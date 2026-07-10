@@ -1,18 +1,18 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { adapter as makeAdapter } from '../../adapter/define-adapter'
-import type { AdapterResponse } from '../../adapter/types'
-import { prompt } from '../../prompt/prompt'
-import type { Message } from '../../generation/messages'
+import { adapter as makeAdapter } from '../../src/adapter/define-adapter'
+import type { AdapterResponse } from '../../src/adapter/types'
+import { prompt } from '../../src/prompt/prompt'
+import type { Message } from '../../src/generation/messages'
 import {
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
   setObservabilityTransport,
-} from '../../observability'
-import { resetHooks, updateHooks } from '../../runtime/runtime'
-import { appendToolApprovalResponse } from '../../tools/approvals'
-import type { ToolModelOutput } from '../../types/tool'
+} from '../../src/observability'
+import { resetHooks, updateHooks } from '../../src/runtime/runtime'
+import { appendToolApprovalResponse } from '../../src/tools/approvals'
+import type { ToolModelOutput } from '../../src/types/tool'
 
 interface MockClient {
   apiKey: string

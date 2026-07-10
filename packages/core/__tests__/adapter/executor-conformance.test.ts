@@ -6,8 +6,8 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { fakeLoopRuntime, loopRuntimePortConformance } from '../../adapter/testing'
-import type { LoopRuntimeConformanceHarness } from '../../adapter/testing'
+import { fakeLoopRuntime, loopRuntimePortConformance } from '../../src/adapter/testing'
+import type { LoopRuntimeConformanceHarness } from '../../src/adapter/testing'
 
 describe('loopRuntimePortConformance', () => {
   it('fakeLoopRuntime conforms to the LoopRuntimePort contract', async () => {

@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
-import { planIndexFiles } from '../indexer/incremental'
+import { planIndexFiles } from '../src/indexer/incremental'
 
 const root = '/project'
 

@@ -16,7 +16,7 @@ use crate::manifest::{
 };
 
 const COVERAGE_FIXTURE: &str =
-    include_str!("../../../packages/indexer/contracts/fixtures/primitive-coverage-identities.json");
+    include_str!("../../../packages/indexer/src/contracts/fixtures/primitive-coverage-identities.json");
 
 #[derive(Deserialize)]
 struct CoverageFixture {

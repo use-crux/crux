@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
-import { loadStaticExtensionHostManifestForProject } from '../host/static-compat'
+import { loadStaticExtensionHostManifestForProject } from '../src/host/static-compat'
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..')
 const packageRoot = join(repoRoot, 'packages', 'indexer')
