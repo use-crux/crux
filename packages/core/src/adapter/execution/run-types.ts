@@ -9,25 +9,25 @@
  * @module
  */
 
-import type { ModelInfo } from '../../types'
-import type { AnyPrompt } from '../../prompt/prompt-types'
-import type { GenerationSettings, TraceMeta } from '../../generation/types'
-import type { TokenUsage } from '../../generation/types'
-import type { TimeoutOptions } from '../../generation/timeout'
-import type { Message } from '../../generation/messages'
-import type { ValidationRetryOptions } from '../../generation/validation-retry'
-import type { Constraint } from '../../safety/constraint/types'
-import type { Guardrail } from '../../safety/guardrail/types'
-import type { SafetyTuneOptions } from '../../safety/tune'
-import type { ToolMiddleware } from '../../tools/types'
-import type { ToolApprovalMap } from '../../tools/approval-policy'
-import type { StreamHandle } from '../types'
-import type { ExecutorStreamHandle, StepObserver } from '../executor-types'
-import type { ApprovalRequestInfo } from '../tool/approval'
-import type { FinalStepInfo } from '../result-accumulator'
-import type { CallHandle } from '../call-handle'
+import type { ModelInfo } from "../../types";
+import type { AnyPrompt } from "../../prompt/prompt-types";
+import type { GenerationSettings, TraceMeta } from "../../generation/types";
+import type { TokenUsage } from "../../generation/types";
+import type { TimeoutOptions } from "../../generation/timeout";
+import type { Message } from "../../generation/messages";
+import type { ValidationRetryOptions } from "../../generation/validation-retry";
+import type { Constraint } from "../../safety/constraint/types";
+import type { Guardrail } from "../../safety/guardrail/types";
+import type { SafetyTuneOptions } from "../../safety/tune";
+import type { ToolMiddleware } from "../../tools/types";
+import type { ToolApprovalMap } from "../../tools/approval-policy";
+import type { StreamHandle } from "../types";
+import type { ExecutorStreamHandle, StepObserver } from "../executor-types";
+import type { ApprovalRequestInfo } from "../tool/approval";
+import type { FinalStepInfo } from "../result-accumulator";
+import type { CallHandle } from "../call-handle";
 
-export type ExecutionResolveOpts = Parameters<AnyPrompt['resolve']>[0]
+export type ExecutionResolveOpts = Parameters<AnyPrompt["resolve"]>[0];
 
 /**
  * Arguments for one non-streaming execution attempt.
@@ -45,73 +45,76 @@ export interface AdapterExecutionGenerateArgs<
   TExtra extends Record<string, unknown> = Record<string, unknown>,
 > {
   /** Prompt definition to resolve for this run. */
-  readonly prompt: AnyPrompt
+  readonly prompt: AnyPrompt;
 
   /** Model string or SDK-native model reference supplied by the caller. */
-  readonly model: TModel
+  readonly model: TModel;
 
   /** Precomputed model identity; primarily used by `core-step` adapters. */
-  readonly modelInfo?: ModelInfo
+  readonly modelInfo?: ModelInfo;
 
   /** Prompt input passed to `prompt.resolve()` and tracing middleware. */
-  readonly input?: Record<string, unknown>
+  readonly input?: Record<string, unknown>;
 
   /** Provider override for prompt adaptation; defaults to the dialect id. */
-  readonly provider?: string
+  readonly provider?: string;
 
   /** Token budget exposed to prompt resolution. */
-  readonly tokenBudget?: number
+  readonly tokenBudget?: number;
 
   /** Maximum loop iterations before generation stops. Defaults to 10. */
-  readonly maxSteps?: number
+  readonly maxSteps?: number;
 
   /** Call-site generation settings merged by the prompt before mapping. */
-  readonly settings?: GenerationSettings
+  readonly settings?: GenerationSettings;
 
   /** Provider-specific options forwarded to dialect calls. */
-  readonly extra?: TExtra
+  readonly extra?: TExtra;
 
   /** Existing conversation history to continue. */
-  readonly messages?: Message[]
+  readonly messages?: Message[];
 
   /** Additional tools merged after prompt/context tools. */
-  readonly tools?: Record<string, unknown>
+  readonly tools?: Record<string, unknown>;
 
   /** Per-tool context values keyed by tools that declare `contextSchema`. */
-  readonly toolsContext?: Readonly<Record<string, unknown>>
+  readonly toolsContext?: Readonly<Record<string, unknown>>;
 
   /** Shared context threaded through tool execution, middleware, approvals, and step hooks. */
-  readonly runtimeContext?: unknown
+  readonly runtimeContext?: unknown;
 
   /** Tool middleware applied to the merged tool set. */
-  readonly toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[]
+  readonly toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
 
   /** Call-site approval policy with final-word precedence over prompt/context declarations. */
-  readonly toolApproval?: ToolApprovalMap
+  readonly toolApproval?: ToolApprovalMap;
 
   /** Corrective retry policy for structured-output validation failures. */
-  readonly validationRetry?: ValidationRetryOptions
+  readonly validationRetry?: ValidationRetryOptions;
 
   /** Per-call semantic constraints composed by the Safety registry. */
-  readonly constraints?: Constraint[]
+  readonly constraints?: Constraint[];
 
   /** Shared retry cap for semantic constraint corrections. */
-  readonly constraintMaxRetries?: number
+  readonly constraintMaxRetries?: number;
 
   /** Per-call guardrails composed by the Safety registry. */
-  readonly guardrails?: Guardrail[]
+  readonly guardrails?: Guardrail[];
 
   /** Per-call safety posture overrides keyed by policy id. */
-  readonly safety?: SafetyTuneOptions
+  readonly safety?: SafetyTuneOptions;
 
   /** Structured timeout budgets for managed execution. */
-  readonly timeout?: TimeoutOptions
+  readonly timeout?: TimeoutOptions;
+
+  /** Outer routing deadline signal for the whole caller-visible operation. */
+  readonly signal?: AbortSignal;
 
   /** Optional observer for SDK-loop step events. */
-  readonly observer?: StepObserver
+  readonly observer?: StepObserver;
 
   /** Optional active-tool allowlist forwarded to SDK-loop executors. */
-  readonly activeTools?: readonly string[]
+  readonly activeTools?: readonly string[];
 }
 
 /**
@@ -136,34 +139,34 @@ export interface AdapterExecutionStreamArgs<
  */
 export interface AdapterExecutionGenerateResult<TRawResponse> {
   /** Underlying provider/SDK response, when the run completed. */
-  readonly raw: TRawResponse | undefined
+  readonly raw: TRawResponse | undefined;
 
   /** Final assistant text after validation and safety processing. */
-  readonly text: string
+  readonly text: string;
 
   /** Parsed structured output, present when the prompt has an output schema. */
-  readonly object?: unknown
+  readonly object?: unknown;
 
   /** Trace metadata stamped with safety and provider information. */
-  _meta: TraceMeta
+  _meta: TraceMeta;
 
   /** Usage accumulated across all provider-call steps, when fully metered. */
-  readonly usage?: TokenUsage
+  readonly usage?: TokenUsage;
 
   /** Provider-reported cost promoted from `_meta`, when present. */
-  readonly cost?: TraceMeta['cost']
+  readonly cost?: TraceMeta["cost"];
 
   /** Number of model attempts or loop steps consumed by the run. */
-  readonly steps: number
+  readonly steps: number;
 
   /** Facts from the final provider-call step. */
-  readonly finalStep: FinalStepInfo
+  readonly finalStep: FinalStepInfo;
 
   /** Provider-agnostic Crux message history for resume or memory capture. */
-  readonly messages: Message[]
+  readonly messages: Message[];
 
   /** Tool approval requests when execution suspended instead of completing. */
-  readonly pendingApprovals?: readonly ApprovalRequestInfo[]
+  readonly pendingApprovals?: readonly ApprovalRequestInfo[];
 }
 
 /**
@@ -173,7 +176,9 @@ export interface AdapterExecutionGenerateResult<TRawResponse> {
  * SDK-loop adapters expose the executor stream contract, including completion
  * metadata produced by that SDK.
  */
-export type AdapterExecutionStreamResult<TRawStream> = StreamHandle<TRawStream> | ExecutorStreamHandle<TRawStream>
+export type AdapterExecutionStreamResult<TRawStream> =
+  | StreamHandle<TRawStream>
+  | ExecutorStreamHandle<TRawStream>;
 
 /**
  * Shared execution facade used by `adapter()` and `loopRuntimeAdapter()`.
@@ -190,11 +195,23 @@ export interface AdapterExecution<
   TParams = unknown,
 > {
   /** Run a prompt to completion, including tools, validation retry, and safety. */
-  generate(args: AdapterExecutionGenerateArgs<TModel, TExtra>): Promise<AdapterExecutionGenerateResult<TRawResponse>>
+  generate(
+    args: AdapterExecutionGenerateArgs<TModel, TExtra>,
+  ): Promise<AdapterExecutionGenerateResult<TRawResponse>>;
 
   /** Start a streaming prompt run and wrap completion for safety/memory capture. */
-  stream(args: AdapterExecutionStreamArgs<TModel, TExtra>): Promise<AdapterExecutionStreamResult<TRawStream>>
+  stream(
+    args: AdapterExecutionStreamArgs<TModel, TExtra>,
+  ): Promise<AdapterExecutionStreamResult<TRawStream>>;
 
   /** Prepare a sans-I/O call handle when the dialect exposes public codecs. */
-  prepare?(args: AdapterExecutionGenerateArgs<TModel, TExtra>): Promise<CallHandle<TParams, TRawResponse, AdapterExecutionGenerateResult<TRawResponse>>>
+  prepare?(
+    args: AdapterExecutionGenerateArgs<TModel, TExtra>,
+  ): Promise<
+    CallHandle<
+      TParams,
+      TRawResponse,
+      AdapterExecutionGenerateResult<TRawResponse>
+    >
+  >;
 }

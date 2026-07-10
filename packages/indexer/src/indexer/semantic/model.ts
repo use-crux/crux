@@ -5,7 +5,7 @@ export {
   isEvalKind,
   isRoutingTargetKind,
   routingTargetRelationType,
-} from './model/relation-types'
+} from "./model/relation-types";
 export {
   arrayProperty,
   arrayPropertyExpressions,
@@ -14,19 +14,20 @@ export {
   propertyExpressions,
   semanticArrayExpression,
   semanticArrayProperty,
+  semanticFallbackModelExpressions,
   semanticFallbackOptions,
   semanticObjectExpression,
   semanticObjectProperty,
   semanticObjectPropertyName,
   semanticStringLiteralProperty,
   toExpression,
-} from './model/object-readers'
+} from "./model/object-readers";
 export {
   semanticIsFunctionLike,
   semanticRelation,
   semanticTargetForExpression,
   semanticToolMapTargets,
-} from './model/target-resolution'
+} from "./model/target-resolution";
 export {
   callExpressionName,
   isResolvableSourceExpression,
@@ -46,4 +47,4 @@ export {
   symbolNameForDeclaration,
   unwrapExpression,
   variableNameForNode,
-} from './model/source-refs'
+} from "./model/source-refs";

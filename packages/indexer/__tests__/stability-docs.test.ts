@@ -21,7 +21,7 @@ describe('stable beta docs', () => {
 
     expect(docs).toContain(STATIC_PARSE_CACHE_EPOCH)
     expect(docs).toContain(SEMANTIC_FACTS_CACHE_EPOCH)
-    expect(docs).toContain('epoch-26')
+    expect(docs).toContain('epoch-28')
     expect(docs).not.toMatch(/static-parse-v(39|45|51|52)\b/)
     expect(docs).not.toMatch(/semantic-facts-v(15|17|20)\b/)
     expect(docs).not.toContain('packages/local/internal/devtools/index_cache_identity.go')
@@ -50,6 +50,75 @@ describe('stable beta docs', () => {
     expect(configReference).toContain('`nativeAst` controls the first static AST/source pass')
     expect(indexerReference).toMatch(/This flag does not select the native\s+semantic backend/)
     expect(indexerReference).toContain('config/static-plan inspection')
+  })
+
+  it('documents the complete routing Project Index and catalog contract', () => {
+    const indexerReference = readRepoFile('apps/docs/content/docs/reference/indexer.mdx')
+    const projectIndexReference = readRepoFile(
+      'apps/docs/content/docs/reference/crux-core/project-index.mdx',
+    )
+    const indexerContext = readRepoFile('packages/indexer/CONTEXT.md')
+    const coreArchitecture = readRepoFile('packages/core/ARCHITECTURE.md')
+    const published = `${indexerReference}\n${projectIndexReference}`
+
+    for (const kind of [
+      'routing.router',
+      'routing.router.route',
+      'routing.split',
+      'routing.split.route',
+      'routing.retry',
+      'routing.retry.target',
+      'routing.cascade',
+      'routing.cascade.tier',
+      'routing.fallback',
+      'routing.fallback.option',
+    ]) {
+      expect(published).toContain(`\`${kind}\``)
+    }
+
+    for (const relation of [
+      'router.includes_route',
+      'split.includes_route',
+      'retry.uses_target',
+      'cascade.includes_tier',
+      'fallback.includes_option',
+    ]) {
+      expect(published).toContain(`\`${relation}\``)
+    }
+
+    expect(projectIndexReference).toContain(
+      'router `classify` callback or split `seed` callback annotated with `RouteArgs`',
+    )
+    expect(projectIndexReference).toContain('`routingContextType`')
+    expect(projectIndexReference).toContain('`routingContextRequired`')
+    expect(projectIndexReference).toContain(
+      'route call-profile objects can add a JSON-safe child `profile`',
+    )
+    expect(published).toContain('`metadata.indexPresentation`')
+    expect(projectIndexReference).toContain(
+      'Core owns the JSON-safe Project Index contract',
+    )
+    expect(projectIndexReference).toContain(
+      'Go service preserves and serves the merged read model',
+    )
+
+    expect(indexerContext).toContain(
+      '`router`/`split`/`retry`/`cascade`/`fallback` parent and child definitions',
+    )
+    expect(coreArchitecture).toContain('`routingContextType`')
+    expect(coreArchitecture).toContain('`routingContextRequired`')
+    expect(coreArchitecture).toContain('`profile`')
+    expect(coreArchitecture).not.toContain('fallback-loop')
+    for (const file of [
+      'receipt.ts',
+      'observability.ts',
+      'first-token.ts',
+      'resolve-fallback.ts',
+      'resolve-retry.ts',
+      'resolve-split.ts',
+    ]) {
+      expect(coreArchitecture).toContain(file)
+    }
   })
 
   it('documents the stable-beta lint maturity policy', () => {

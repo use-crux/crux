@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { LanguageModel } from 'ai'
 import { z } from 'zod'
 import type { StructuredAttempt, StructuredRequest } from '@use-crux/core/adapter'
-import { cascade, router } from '@use-crux/core/routing'
+import { cascade, fallback, router } from '@use-crux/core/routing'
 import type { SdkLoopResultLike } from '../src/executor'
 import { attemptStructuredGeneration, createStructuredGenerateObjectFn } from '../src/structured-generation'
 import { objectGenerationError, scriptedGateway } from './scripted-gateway'
@@ -174,7 +174,8 @@ describe('createStructuredGenerateObjectFn', () => {
     })
     const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
     const routedModel = router({
-      classify: (input) => (input.prompt === 'choose' ? 'fast' : 'default'),
+      classify: ({ input }: import('@use-crux/core/routing').RouteArgs<object, { prompt: string }>) =>
+        input.prompt === 'choose' ? 'fast' : 'default',
       routes: {
         fast: model('fast'),
         default: model('default'),
@@ -203,8 +204,37 @@ describe('createStructuredGenerateObjectFn', () => {
       schema,
     })
 
-    expect(routed).toEqual({ object: { accepted: false } })
-    expect(cascaded).toEqual({ object: { accepted: true } })
+    expect(routed).toMatchObject({ object: { accepted: false } })
+    expect(cascaded).toMatchObject({ object: { accepted: true } })
     expect(scripted.calls.generateObject.map((args) => modelIdFromArg(args.model))).toEqual(['fast', 'cheap', 'strong'])
+  })
+
+  it('falls back to the next model and preserves fallback meta', async () => {
+    const schema = z.object({ accepted: z.boolean() })
+    const scripted = scriptedGateway({
+      generateObject: [
+        Object.assign(new Error('rate limited'), { status: 429 }),
+        { object: { accepted: true } },
+      ],
+    })
+    const generateObject = createStructuredGenerateObjectFn(scripted.gateway)
+
+    const result = await generateObject({
+      model: fallback([model('primary'), model('backup')]),
+      prompt: 'json please',
+      schema,
+    })
+
+    expect(result.object).toEqual({ accepted: true })
+    expect(scripted.calls.generateObject.map((args) => modelIdFromArg(args.model))).toEqual(['primary', 'backup'])
+    expect(result.routing?.trace).toMatchObject([
+      {
+        kind: 'fallback',
+        attempts: [
+          { model: 'primary', status: 'error' },
+          { model: 'backup', status: 'ok' },
+        ],
+      },
+    ])
   })
 })

@@ -149,11 +149,16 @@ async function emitSignalSpans(): Promise<void> {
       contentType: 'application/json',
       encoding: 'json',
       preview: {
-        kind: 'routing.report',
-        routingKind: 'router',
-        chosen: 'support',
-        classifiedAs: 'billing-question',
-        selectedModel: 'stub-model',
+        model: 'stub-model',
+        trace: [
+          {
+            kind: 'router',
+            classifiedAs: 'billing-question',
+            route: 'support',
+            usedDefaultRoute: false,
+            forced: false,
+          },
+        ],
       },
     })
   })

@@ -181,7 +181,7 @@ export function judge<TDetail = unknown>(config: JudgeConfig<TDetail>): JudgeIns
     })
 
     try {
-      const { object } = await span.withContext(() =>
+      const generated = await span.withContext(() =>
         (generate as GenerateObjectFn)({
           model,
           system: systemPrompt,
@@ -191,14 +191,17 @@ export function judge<TDetail = unknown>(config: JudgeConfig<TDetail>): JudgeIns
           ...(options?.topP !== undefined ? { topP: options.topP } : {}),
         }),
       )
+      const { object } = generated
 
       const rawScore = object.score
       const clampedScore = Math.max(config.scale.min, Math.min(config.scale.max, rawScore))
+      const cost = generated.routing?.cost
       const hasDetail = config.detailSchema !== undefined && 'detail' in object
       const result = {
         score: clampedScore,
         reasoning: object.reasoning,
         metricId: config.id,
+        ...(typeof cost === 'number' && Number.isFinite(cost) ? { cost } : {}),
         ...(hasDetail ? { detail: object.detail as TDetail } : {}),
       } satisfies JudgeResult<TDetail>
 

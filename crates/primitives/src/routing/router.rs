@@ -4,7 +4,7 @@ use crate::{
     context::{CallParts, PrimitiveContext, source_ref_for_property},
     definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
     record_values::{
-        direct_string_property, has_property, object_map_identifier_entries, object_value,
+        direct_string_property, has_property, object_map_model_profile_entries, object_value,
         property_value,
     },
     routing::output::{extracted_facts, routing_target_relation_refs},
@@ -13,7 +13,7 @@ use crate::{
 pub(crate) fn router_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -> Option<Value> {
     let config = object_value(parts.object_arg?)?;
     let routes =
-        object_map_identifier_entries(property_value(config, "routes"), &context.initializers);
+        object_map_model_profile_entries(property_value(config, "routes"), &context.initializers);
     if routes.is_empty() {
         return None;
     }
@@ -26,14 +26,15 @@ pub(crate) fn router_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
     let route_children = routes
         .iter()
         .enumerate()
-        .map(|(index, (route_key, target_variable))| {
+        .map(|(index, route)| {
             route_child(
                 context,
                 parts,
                 &id,
                 &routing_id,
-                route_key,
-                target_variable,
+                &route.key,
+                &route.target,
+                route.profile.as_ref(),
                 index,
             )
         })
@@ -45,7 +46,7 @@ pub(crate) fn router_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
     };
     let route_keys = routes
         .iter()
-        .map(|(key, _)| key.clone())
+        .map(|route| route.key.clone())
         .collect::<Vec<_>>();
     let child_ids = route_children
         .iter()
@@ -69,7 +70,7 @@ pub(crate) fn router_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>
     metadata.insert("routeCount".to_string(), json!(routes.len()));
     metadata.insert(
         "hasDefaultRoute".to_string(),
-        Value::Bool(routes.iter().any(|(key, _)| key == "default")),
+        Value::Bool(routes.iter().any(|route| route.key == "default")),
     );
     metadata.insert(
         "hasClassify".to_string(),
@@ -122,6 +123,7 @@ fn route_child(
     routing_id: &str,
     route_key: &str,
     target_variable: &str,
+    profile: Option<&Value>,
     index: usize,
 ) -> (String, Value, String) {
     let definition_id = format!("{router_id}:route:{}", safe_id(route_key));
@@ -145,17 +147,32 @@ fn route_child(
         "targetVariable".to_string(),
         Value::String(target_variable.to_string()),
     );
-    metadata.insert(
-        "facts".to_string(),
-        json!({
-            "kind": "routing.router.route",
-            "parentDefinitionId": router_id,
-            "routingId": routing_id,
-            "routeKey": route_key,
-            "isDefault": route_key == "default",
-            "targetVariable": target_variable,
-        }),
+    if let Some(profile) = profile {
+        metadata.insert("profile".to_string(), profile.clone());
+    }
+    let mut facts = Map::new();
+    facts.insert(
+        "kind".to_string(),
+        Value::String("routing.router.route".to_string()),
     );
+    facts.insert(
+        "parentDefinitionId".to_string(),
+        Value::String(router_id.to_string()),
+    );
+    facts.insert(
+        "routingId".to_string(),
+        Value::String(routing_id.to_string()),
+    );
+    facts.insert("routeKey".to_string(), Value::String(route_key.to_string()));
+    facts.insert("isDefault".to_string(), Value::Bool(route_key == "default"));
+    facts.insert(
+        "targetVariable".to_string(),
+        Value::String(target_variable.to_string()),
+    );
+    if let Some(profile) = profile {
+        facts.insert("profile".to_string(), profile.clone());
+    }
+    metadata.insert("facts".to_string(), Value::Object(facts));
     metadata.insert(
         "intelligence".to_string(),
         json!({"confidence": "static", "control": {"mode": "routing", "ordering": "conditional"}}),

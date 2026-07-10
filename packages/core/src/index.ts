@@ -403,8 +403,6 @@ export {
 export type {
   FallbackModel,
   FallbackOptions,
-  FallbackMeta,
-  FallbackAttemptDetail,
   ErrorCategory,
 } from "./generation";
 
@@ -762,7 +760,6 @@ export type {
 /** @internal */ export {
   orchestrateGenerate,
   orchestrateStream,
-  executeFallbackLoop,
   wrapStreamIterable,
   TimeoutError,
   normalizeBudgetMs,

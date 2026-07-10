@@ -125,6 +125,8 @@ fn composition_uses_ref(to_variable: String) -> Value {
             "prompt": "composition.uses_prompt",
             "tool": "composition.uses_tool",
             "routing.router": "composition.uses_routing",
+            "routing.split": "composition.uses_routing",
+            "routing.retry": "composition.uses_routing",
             "routing.cascade": "composition.uses_routing",
             "routing.fallback": "composition.uses_routing",
         },

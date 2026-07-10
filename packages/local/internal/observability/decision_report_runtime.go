@@ -4,17 +4,38 @@ import "strings"
 
 func appendRuntimeDecisionEvidence(report *TurnDecisionReport, turn SpanSummary, details []RunDetailDetail, children []RunDetailNode) {
 	for _, detail := range details {
-		if decision, ok := runtimeDecisionForSpan(turn, detail.SpanSummary); ok {
+		if decisions, chips, model, ok := routingReceiptDecisionsForDetail(turn, detail); ok {
+			setRoutingReceiptModel(report, model)
+			for _, decision := range decisions {
+				appendDecisionReportRuntimeDecision(report, decision)
+			}
+			report.Chips = appendRoutingDecisionChips(report.Chips, chips...)
+			report.Source = appendSourceGroupItem(report.Source, sourceGroupForRuntimeFamily(detail.Family), runtimeSourceJoin(detail.SpanSummary))
+		} else if decision, ok := runtimeDecisionForSpan(turn, detail.SpanSummary); ok {
 			appendDecisionReportRuntimeDecision(report, decision)
 			report.Source = appendSourceGroupItem(report.Source, sourceGroupForRuntimeFamily(detail.Family), runtimeSourceJoin(detail.SpanSummary))
 		}
 	}
 	for _, child := range children {
-		if decision, ok := runtimeDecisionForSpan(turn, child.SpanSummary); ok {
+		if decisions, chips, model, ok := routingReceiptDecisionsForNode(turn, child); ok {
+			setRoutingReceiptModel(report, model)
+			for _, decision := range decisions {
+				appendDecisionReportRuntimeDecision(report, decision)
+			}
+			report.Chips = appendRoutingDecisionChips(report.Chips, chips...)
+			report.Source = appendSourceGroupItem(report.Source, sourceGroupForRuntimeFamily(child.Family), runtimeSourceJoin(child.SpanSummary))
+		} else if decision, ok := runtimeDecisionForSpan(turn, child.SpanSummary); ok {
 			appendDecisionReportRuntimeDecision(report, decision)
 			report.Source = appendSourceGroupItem(report.Source, sourceGroupForRuntimeFamily(child.Family), runtimeSourceJoin(child.SpanSummary))
 		}
 		appendRuntimeDecisionEvidence(report, turn, child.Details, child.Children)
+	}
+}
+
+// setRoutingReceiptModel fills a missing generation model from the canonical receipt.
+func setRoutingReceiptModel(report *TurnDecisionReport, model string) {
+	if report.Turn.Model == "" {
+		report.Turn.Model = model
 	}
 }
 

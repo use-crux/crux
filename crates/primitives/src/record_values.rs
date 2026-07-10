@@ -79,6 +79,22 @@ pub(crate) fn direct_identifier(value: &StaticSyntaxValue) -> Option<String> {
     }
 }
 
+pub(crate) fn model_reference(
+    value: &StaticSyntaxValue,
+    initializers: &HashMap<&str, &StaticInitializerRecord>,
+) -> Option<String> {
+    if let Some(model) = property_value(value, "model") {
+        return model_reference(model, initializers);
+    }
+    reference_name(Some(value)).or_else(|| {
+        reference_name(Some(resolve_static_value(
+            value,
+            initializers,
+            &mut HashSet::new(),
+        )))
+    })
+}
+
 pub(crate) fn object_map_identifier_entries(
     value: Option<&StaticSyntaxValue>,
     initializers: &HashMap<&str, &StaticInitializerRecord>,
@@ -95,6 +111,55 @@ pub(crate) fn object_map_identifier_entries(
             direct_identifier(&property.value).map(|value| (property.name.clone(), value))
         })
         .collect()
+}
+
+/// One statically resolved route target with its literal call-profile settings.
+pub(crate) struct ModelProfileEntry {
+    pub(crate) key: String,
+    pub(crate) target: String,
+    pub(crate) profile: Option<Value>,
+}
+
+/// Reads model targets and JSON-safe literal call-profile parameters from a route map.
+pub(crate) fn object_map_model_profile_entries(
+    value: Option<&StaticSyntaxValue>,
+    initializers: &HashMap<&str, &StaticInitializerRecord>,
+) -> Vec<ModelProfileEntry> {
+    let resolved =
+        value.map(|value| resolve_static_value(value, initializers, &mut HashSet::new()));
+    let Some(StaticSyntaxValue::Object { properties, .. }) = resolved else {
+        return Vec::new();
+    };
+    properties
+        .iter()
+        .filter(|property| property.spread != Some(true))
+        .filter_map(|property| {
+            model_reference(&property.value, initializers).map(|target| ModelProfileEntry {
+                key: property.name.clone(),
+                target,
+                profile: call_profile_params(&property.value, initializers),
+            })
+        })
+        .collect()
+}
+
+/// Returns literal route parameters other than the selected `model`.
+pub(crate) fn call_profile_params(
+    value: &StaticSyntaxValue,
+    initializers: &HashMap<&str, &StaticInitializerRecord>,
+) -> Option<Value> {
+    let resolved = resolve_static_value(value, initializers, &mut HashSet::new());
+    let StaticSyntaxValue::Object { properties, .. } = resolved else {
+        return None;
+    };
+    let params = properties
+        .iter()
+        .filter(|property| property.spread != Some(true) && property.name != "model")
+        .filter_map(|property| {
+            json_value(&property.value, initializers).map(|value| (property.name.clone(), value))
+        })
+        .collect::<Map<_, _>>();
+    (!params.is_empty()).then_some(Value::Object(params))
 }
 
 pub(crate) fn object_array_value<'a>(
@@ -116,6 +181,9 @@ pub(crate) fn object_array_value<'a>(
 }
 
 pub(crate) fn fallback_options(args: &[StaticSyntaxValue]) -> Vec<&StaticSyntaxValue> {
+    if let Some(StaticSyntaxValue::Array { elements }) = args.first() {
+        return elements.iter().collect();
+    }
     args.iter()
         .enumerate()
         .filter_map(|(index, value)| {
@@ -227,6 +295,8 @@ fn is_fallback_options_argument(value: &StaticSyntaxValue, index: usize, arg_cou
             "timeout",
             "timeoutMs",
             "on",
+            "when",
+            "onFallback",
             "shouldFallback",
             "onAttemptError",
         ]

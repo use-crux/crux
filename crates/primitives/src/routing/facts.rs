@@ -5,12 +5,14 @@ use crate::{
     manifest::CustomProjectionInput,
     routing::cascade::cascade_facts,
     routing::fallback::fallback_facts,
+    routing::retry::retry_facts,
     routing::router::router_facts,
+    routing::split::split_facts,
 };
 
 /// Projects the facts for one supported first-party routing match.
 ///
-/// Routing dispatches over `router`/`cascade`/`fallback` and resolves only
+/// Routing dispatches over `router`/`split`/`retry`/`cascade`/`fallback` and resolves only
 /// same-file evidence, so it owns its match handling behind the manifest's
 /// custom-handler entry. The manifest stamps the `routing` extractor identity.
 pub(crate) fn routing_native_facts(input: &CustomProjectionInput<'_>) -> Option<Value> {
@@ -22,6 +24,8 @@ pub(crate) fn routing_native_facts(input: &CustomProjectionInput<'_>) -> Option<
         PrimitiveContext::new(input.file, input.imports, input.local_initializers, &parts);
     match parts.callee_name {
         "router" => router_facts(&context, &parts),
+        "split" => split_facts(&context, &parts),
+        "retry" => retry_facts(&context, &parts),
         "cascade" => cascade_facts(&context, &parts),
         "fallback" => fallback_facts(&context, &parts),
         _ => None,

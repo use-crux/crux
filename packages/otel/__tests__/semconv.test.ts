@@ -82,6 +82,42 @@ describe('GenAI semconv projection', () => {
     )
   })
 
+  it('exports every routing primitive with a stable OTel span name', () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+
+    for (const primitive of [
+      'routing.router',
+      'routing.split',
+      'routing.retry',
+      'routing.cascade',
+      'routing.fallback',
+    ] as const) {
+      observe
+        .openSpan({ name: `${primitive} resolution`, primitive })
+        .end()
+    }
+    installed.dispose?.()
+
+    expect(
+      spans
+        .filter((span) =>
+          String(span.attributes['crux.primitive.name']).startsWith('routing.'),
+        )
+        .map((span) => span.name),
+    ).toEqual([
+      'crux.routing.router',
+      'crux.routing.split',
+      'crux.routing.retry',
+      'crux.routing.cascade',
+      'crux.routing.fallback',
+    ])
+  })
+
   it('exports generation message content only when explicitly enabled', async () => {
     const defaultSpans: TraceSpan[] = []
     const defaultInstall = withTelemetry({

@@ -6,8 +6,8 @@ description: Run multiple agents concurrently and get typed results as a named r
 `parallel()` runs a named map of agents concurrently and returns all results as a typed record. Use it when agents are independent — reviewing content, analyzing from different angles, or gathering data from multiple sources.
 
 ```ts title="parallel-review.ts"
-import { parallel } from '@use-crux/ai'
-import { agent } from '@use-crux/core/agent'
+import { parallel } from "@use-crux/ai";
+import { agent } from "@use-crux/core/agent";
 
 const result = await parallel({
   agents: {
@@ -17,12 +17,12 @@ const result = await parallel({
   },
   context: { content: articleDraft },
   model: claude35,
-})
+});
 
-result.results.factCheck.output  // typed from factCheckerAgent's output schema
-result.results.style.output      // typed from styleReviewerAgent's output schema
-result.results.seo.output        // typed from seoAnalyzerAgent's output schema
-result.durationMs                // total wall-clock time (= slowest agent)
+result.results.factCheck.output; // typed from factCheckerAgent's output schema
+result.results.style.output; // typed from styleReviewerAgent's output schema
+result.results.seo.output; // typed from seoAnalyzerAgent's output schema
+result.durationMs; // total wall-clock time (= slowest agent)
 ```
 
 ## How it works
@@ -43,15 +43,15 @@ const { results, durationMs } = await parallel({
   agents: { factCheck: factCheckerAgent, style: styleReviewerAgent },
   context: { content: draft },
   model,
-})
+});
 
-const approved = results.factCheck.output.score > 0.8
-  && results.style.output.score > 0.7
+const approved =
+  results.factCheck.output.score > 0.8 && results.style.output.score > 0.7;
 
 const feedback = [
   ...results.factCheck.output.issues,
   ...results.style.output.suggestions,
-]
+];
 ```
 
 ## Error handling
@@ -65,20 +65,21 @@ const result = await parallel({
   agents: { a: agentA, b: agentB },
   context: { content: draft },
   model,
-  onError: 'continue',
-})
+  onError: "continue",
+});
 
 // result.results contains successful agents' results
 // result.settled contains discriminated results for all agents:
-if (result.settled.a.status === 'success') {
+if (result.settled.a.status === "success") {
   // result.settled.a.value is AgentResult
 }
-if (result.settled.b.status === 'error') {
+if (result.settled.b.status === "error") {
   // result.settled.b.error is Error
 }
 ```
 
 In `continue` mode, `result.settled` contains a discriminated union for each agent:
+
 - `{ status: 'success', value: AgentResult }` — agent succeeded
 - `{ status: 'error', error: Error }` — agent failed
 
@@ -87,13 +88,13 @@ In `continue` mode, `result.settled` contains a discriminated union for each age
 Per-agent model fallbacks work naturally. Each agent's `model` can be wrapped with `fallback()`:
 
 ```ts
-import { fallback } from '@use-crux/core'
+import { fallback } from "@use-crux/core";
 
 const reviewer = agent({
-  id: 'reviewer',
+  id: "reviewer",
   prompt: reviewPrompt,
-  model: fallback(claude35, gpt4),  // try Claude first, fall back to GPT-4
-})
+  model: fallback([claude35, gpt4]), // try Claude first, fall back to GPT-4
+});
 ```
 
 The composition's `onError` only triggers after all model fallbacks are exhausted.
@@ -111,8 +112,24 @@ comp  ← parallel  3/3 ok  1.8s
 ```
 
 <Cards>
-  <Card title="Agent" description="Bundle prompt + model + tools into a reusable agent." href="/docs/guides/agents/agent" />
-  <Card title="Pipeline" description="Chain agents sequentially." href="/docs/guides/compositions/pipeline" />
-  <Card title="Consensus" description="Multiple agents vote on a decision." href="/docs/guides/compositions/consensus" />
-  <Card title="Swarm" description="Dynamic peer-to-peer routing via LLM-decided handoffs." href="/docs/guides/compositions/swarm" />
+  <Card
+    title="Agent"
+    description="Bundle prompt + model + tools into a reusable agent."
+    href="/docs/guides/agents/agent"
+  />
+  <Card
+    title="Pipeline"
+    description="Chain agents sequentially."
+    href="/docs/guides/compositions/pipeline"
+  />
+  <Card
+    title="Consensus"
+    description="Multiple agents vote on a decision."
+    href="/docs/guides/compositions/consensus"
+  />
+  <Card
+    title="Swarm"
+    description="Dynamic peer-to-peer routing via LLM-decided handoffs."
+    href="/docs/guides/compositions/swarm"
+  />
 </Cards>

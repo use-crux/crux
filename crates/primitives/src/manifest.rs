@@ -51,7 +51,7 @@ pub const FIRST_PARTY_PRIMITIVE_MANIFEST_NAME: &str = "crux-first-party-primitiv
 ///
 /// Bump this whenever the declared first-party projection contract changes and
 /// update the Static Index primitive-manifest cache identity in the same change.
-pub const FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION: &str = "6";
+pub const FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION: &str = "7";
 
 const CRUX_CORE_EXTENSION: &str = "@use-crux/indexer/crux-core";
 

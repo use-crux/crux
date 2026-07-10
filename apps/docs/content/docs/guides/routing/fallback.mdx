@@ -1,196 +1,104 @@
 ---
 title: Fallback
-description: Automatically try backup models when the primary model fails.
+description: Try backup models when an attempt fails or produces unusable output.
 ---
 
-`fallback()` wraps multiple models into a single model reference. It tries each model in order until one succeeds.
-
-Use fallback when a provider is down, rate-limited, timing out, or returning another retryable error. Fallback is not a quality gate: if the first model succeeds with a weak answer, fallback is done. Use [`cascade()`](/docs/guides/routing/cascade) for quality escalation.
+`fallback()` wraps at least two models or routing wrappers and tries them in order.
 
 ```ts
-import { fallback } from '@use-crux/core/routing'
-import { generate } from '@use-crux/ai'
-import { openai } from '@ai-sdk/openai'
-import { anthropic } from '@ai-sdk/anthropic'
+import { fallback } from "@use-crux/core/routing";
 
-const model = fallback(
-  openai('gpt-4o'),
-  anthropic('claude-sonnet-4-20250514'),
+export const resilientModel = fallback(
+  [gpt5, sonnet, { model: gemini, maxTokens: 2000 }],
   {
-    id: 'primary-with-backup',
-    timeout: 10_000,
+    id: "launch-day-fallback",
+    on: ["rate_limit", "timeout", "server_error", "connection_error"],
+    timeout: { attempt: 10_000, firstToken: 3_000 },
+    onFallback: async ({ from, to, attempt, error }) => {
+      await alertOps({ from, to, attempt, error });
+    },
   },
-)
-
-const result = await generate(myPrompt, {
-  model,
-  input: { query: 'Explain quantum computing' },
-})
+);
 ```
 
-If OpenAI returns a rate limit or server error, Crux automatically retries with Claude. No call-site try/catch is needed for the normal fallback path.
+Use fallback for provider outages, rate limits, slow starts, validation exhaustion, or response-aware rejection.
 
-## When Do You Need This?
+## Error Categories
 
-- **Production resilience**: your app should keep working during provider outages.
-- **Rate limit handling**: high-volume apps can hit provider limits.
-- **Provider diversity**: backup models can come from a different provider.
-- **Validation recovery**: a stronger model may succeed after structured-output validation retries are exhausted.
+| Category           | Typical source                                               |
+| ------------------ | ------------------------------------------------------------ |
+| `rate_limit`       | HTTP 429                                                     |
+| `timeout`          | attempt, first-token, or total deadline expiry               |
+| `server_error`     | HTTP 500-599                                                 |
+| `connection_error` | DNS, network, connection failures                            |
+| `auth_error`       | HTTP 401/403                                                 |
+| `invalid_response` | structured validation exhaustion or `when(result)` rejection |
 
-If you only use one model provider and are comfortable with errors propagating, you do not need `fallback()`.
-
-## Error Classification
-
-Not all errors trigger fallback. Crux classifies errors into categories:
-
-| Category | Triggers | Examples |
-|---|---|---|
-| `rate_limit` | HTTP 429 | Provider rate limit exceeded |
-| `timeout` | `TimeoutError`, `ETIMEDOUT`, `AbortError` | Model took too long to respond |
-| `server_error` | HTTP 500-599 | Provider internal error, bad gateway |
-| `connection_error` | `ECONNREFUSED`, `ENOTFOUND`, fetch failures | DNS failure, provider unreachable |
-| `auth_error` | HTTP 401, 403 | Invalid API key, insufficient permissions |
-| `validation_exhausted` | `ValidationExhaustedError` | All [validation retries](/docs/guides/safety/constraints) exhausted |
-
-Validation errors, content policy violations, and unknown errors do not trigger fallback by default. They are thrown immediately because retrying with a different model usually does not help.
-
-## Filter Error Categories
-
-By default, classified retryable errors trigger fallback. Use `on` to restrict the categories.
+Use `on` to restrict which failures move to the next model.
 
 ```ts
-const model = fallback(primary, backup, {
-  on: ['rate_limit', 'timeout'],
-})
+fallback([primary, backup], { on: ["rate_limit", "timeout"] });
 ```
 
-Server errors and connection errors would be thrown immediately in this configuration.
+## Response-Aware Fallback
 
-## Custom Error Predicates
-
-For edge cases beyond the built-in categories, provide a `shouldFallback` predicate. It takes priority over `on`.
+Use `when(result)` when a successful provider response is unusable for your app.
 
 ```ts
-const model = fallback(gpt4o, claudeSonnet, {
-  shouldFallback: (error) => {
-    if (error.code === 'content_filter') return true
-    if (error.status === 429) return true
-    return false
+const model = fallback([fast, careful], {
+  id: "answer-quality-fallback",
+  when: (result) => {
+    const confidence =
+      typeof result === "object" && result && "confidence" in result
+        ? result.confidence
+        : 0;
+    return Number(confidence) < 0.7;
   },
-})
+});
 ```
 
-## Inspecting Results
+Predicate and callback errors are logged as `routing.hook_error` events and do not control recovery.
 
-When fallback occurs, the result includes metadata:
+## Exhaustion
 
-```ts
-const result = await generate(myPrompt, {
-  model: fallback(gpt4o, claudeSonnet),
-  input,
-})
-
-if (result._meta.fallback) {
-  console.log(`Took ${result._meta.fallback.attempts} attempts`)
-  console.log(`Failed models: ${result._meta.fallback.failedModels.join(', ')}`)
-}
-```
-
-The `_meta.fallback` object contains:
-
-| Field | Type | Description |
-|---|---|---|
-| `attempts` | `number` | Total attempts including the successful one |
-| `failedModels` | `string[]` | Model IDs that failed |
-| `details` | `FallbackAttemptDetail[]` | Per-attempt breakdown |
-
-Each detail entry has `model`, `durationMs`, `status`, `error`, `errorCategory`, and `cost` when available.
-
-When the first model succeeds, `_meta.fallback` is `undefined`.
-
-## All Models Fail
-
-When every model in the fallback chain fails, Crux throws an `AggregateError` containing all individual errors.
+When every option fails, Crux throws `FallbackExhaustedError`.
 
 ```ts
+import { FallbackExhaustedError } from "@use-crux/core/routing";
+
 try {
-  await generate(myPrompt, {
-    model: fallback(modelA, modelB, modelC),
-    input,
-  })
+  await generate(prompt, { model: resilientModel, input });
 } catch (error) {
-  if (error instanceof AggregateError) {
-    console.log(error.message)
-    error.errors.forEach((cause, index) => {
-      console.log(`Model ${index + 1}: ${cause.message}`)
-    })
+  if (error instanceof FallbackExhaustedError) {
+    console.log(error.attempts);
+    console.log(error.routing);
   }
 }
 ```
 
-## Observability Callbacks
+## Receipts
 
-Use `onAttemptError` to log or alert when a model fails.
+Every fallback resolution includes a receipt step, even when the first option succeeds.
 
 ```ts
-const model = fallback(gpt4o, claudeSonnet, {
-  id: 'resilient-model',
-  onAttemptError: (error, attempt, model) => {
-    logger.warn('Fallback attempt failed', {
-      attempt,
-      model: model.modelId,
-      error: error.message,
-    })
-  },
-})
+result.routing?.trace;
+// [{ kind: 'fallback', id: 'launch-day-fallback', attempts: [{ model: 'gpt-5', status: 'ok', durationMs: 412 }] }]
 ```
 
-`id` is optional for execution, but recommended when the fallback policy is part of your authored architecture. The index records it as `routing.fallback` with ordered `routing.fallback.option` children, and runtime `fallback.attempt` spans include the same `routingId`.
+Failed attempts record their error category and bounded error text in the same receipt. Run Detail uses those fields to explain why it moved to the next model without exposing unbounded provider payloads.
 
 ## Streaming
 
-`fallback()` works with `stream()` too. Fallback only triggers on start or connection failures. Once chunks start flowing, the stream is committed to that model.
+Fallback can retry stream attempts until the first token reaches the caller. `timeout.firstToken` is fallback-eligible because no token has been delivered yet.
+
+After token 1, Crux does not restart the stream on another model. The stream errors and the completion error carries `routing.trace[*].midStreamFailure = true`; `routing.firstTokenAt` remains the elapsed TTFT measurement.
 
 ```ts
-import { stream } from '@use-crux/ai'
-
-const result = await stream(myPrompt, {
-  model: fallback(gpt4o, claudeSonnet),
+const streamResult = await stream(chatPrompt, {
+  model: fallback([primary, backup], { timeout: { firstToken: 2_000 } }),
   input,
-})
+});
+
+const completion = await streamResult.completion;
+console.log(completion.routing?.model);
 ```
-
-If the first model fails to connect, Crux retries with the backup. If the first model starts streaming and then errors mid-stream, the error propagates.
-
-## Per-Attempt Timeout
-
-Set `timeout` to abort slow models before trying the next one.
-
-```ts
-const model = fallback(gpt4o, claudeSonnet, {
-  timeout: 10_000,
-})
-```
-
-Timed-out attempts are classified as `timeout` errors. This works with both `generate()` and `stream()`.
-
-## Interaction With Flows
-
-`fallback()` composes naturally with `flow()`. Fallback is model-level; flow retries are step-level. They stack.
-
-```ts
-const pipeline = flow('pipeline', async (flow) => {
-  await flow.step('analyze', { retry: 2 }, () =>
-    generate(analyzePrompt, {
-      model: fallback(gpt4o, claudeSonnet),
-      input,
-    }),
-  )
-})
-
-await pipeline.run()
-```
-
-## API Reference
-
-See [`fallback()`](/docs/reference/crux-core#fallback), [`isFallback()`](/docs/reference/crux-core#isfallback), and [`classifyError()`](/docs/reference/crux-core#classifyerror).

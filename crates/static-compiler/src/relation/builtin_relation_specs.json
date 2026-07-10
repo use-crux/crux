@@ -1,95 +1,67 @@
 [
   {
     "type": "agent.can_handoff_to",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "agent"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["agent"],
     "presentation": "edge",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.queries_retriever",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "rag.retriever"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["rag.retriever"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.reads_blackboard",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.reads_memory",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.reads_workspace",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["workspace"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.runs_eval",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "evaluation"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["evaluation"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.uses_prompt",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "prompt"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["prompt"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.uses_routing",
-    "fromKinds": [
-      "agent"
-    ],
+    "fromKinds": ["agent"],
     "toKinds": [
       "routing.router",
+      "routing.split",
+      "routing.retry",
       "routing.cascade",
       "routing.fallback"
     ],
@@ -99,153 +71,119 @@
   },
   {
     "type": "agent.uses_scorer",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "scorer"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["scorer"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.uses_tool",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "tool"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["tool"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.writes_blackboard",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.writes_memory",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "agent.writes_workspace",
-    "fromKinds": [
-      "agent"
-    ],
-    "toKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["agent"],
+    "toKinds": ["workspace"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "blackboard.uses_schema",
-    "fromKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["blackboard"],
     "presentation": "detail",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "blackboard.uses_store",
-    "fromKinds": [
-      "blackboard"
-    ],
-    "toKinds": [
-      "memory.store"
-    ],
+    "fromKinds": ["blackboard"],
+    "toKinds": ["memory.store"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "cascade.includes_tier",
-    "fromKinds": [
-      "routing.cascade"
-    ],
-    "toKinds": [
-      "routing.cascade.tier"
-    ],
+    "fromKinds": ["routing.cascade"],
+    "toKinds": ["routing.cascade.tier"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "cascade.tier.uses_agent",
-    "fromKinds": [
-      "routing.cascade.tier"
-    ],
-    "toKinds": [
-      "agent"
-    ],
+    "fromKinds": ["routing.cascade.tier"],
+    "toKinds": ["agent"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "cascade.tier.uses_cascade",
-    "fromKinds": [
-      "routing.cascade.tier"
-    ],
-    "toKinds": [
-      "routing.cascade"
-    ],
+    "fromKinds": ["routing.cascade.tier"],
+    "toKinds": ["routing.cascade"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "cascade.tier.uses_fallback",
-    "fromKinds": [
-      "routing.cascade.tier"
-    ],
-    "toKinds": [
-      "routing.fallback"
-    ],
+    "fromKinds": ["routing.cascade.tier"],
+    "toKinds": ["routing.fallback"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "cascade.tier.uses_prompt",
-    "fromKinds": [
-      "routing.cascade.tier"
-    ],
-    "toKinds": [
-      "prompt"
-    ],
+    "fromKinds": ["routing.cascade.tier"],
+    "toKinds": ["prompt"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "cascade.tier.uses_router",
-    "fromKinds": [
-      "routing.cascade.tier"
-    ],
-    "toKinds": [
-      "routing.router"
-    ],
+    "fromKinds": ["routing.cascade.tier"],
+    "toKinds": ["routing.router"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "cascade.tier.uses_split",
+    "fromKinds": ["routing.cascade.tier"],
+    "toKinds": ["routing.split"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "cascade.tier.uses_retry",
+    "fromKinds": ["routing.cascade.tier"],
+    "toKinds": ["routing.retry"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
@@ -258,9 +196,7 @@
       "composition.swarm",
       "composition.consensus"
     ],
-    "toKinds": [
-      "agent"
-    ],
+    "toKinds": ["agent"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
@@ -273,9 +209,7 @@
       "composition.swarm",
       "composition.consensus"
     ],
-    "toKinds": [
-      "flow"
-    ],
+    "toKinds": ["flow"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
@@ -288,9 +222,7 @@
       "composition.swarm",
       "composition.consensus"
     ],
-    "toKinds": [
-      "prompt"
-    ],
+    "toKinds": ["prompt"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
@@ -305,6 +237,8 @@
     ],
     "toKinds": [
       "routing.router",
+      "routing.split",
+      "routing.retry",
       "routing.cascade",
       "routing.fallback"
     ],
@@ -320,55 +254,38 @@
       "composition.swarm",
       "composition.consensus"
     ],
-    "toKinds": [
-      "tool"
-    ],
+    "toKinds": ["tool"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "consensus.includes_agent",
-    "fromKinds": [
-      "composition.consensus"
-    ],
-    "toKinds": [
-      "agent"
-    ],
+    "fromKinds": ["composition.consensus"],
+    "toKinds": ["agent"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "consensus.uses_judge",
-    "fromKinds": [
-      "composition.consensus"
-    ],
-    "toKinds": [
-      "agent",
-      "scorer"
-    ],
+    "fromKinds": ["composition.consensus"],
+    "toKinds": ["agent", "scorer"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "consensus.uses_scorer",
-    "fromKinds": [
-      "composition.consensus"
-    ],
-    "toKinds": [
-      "scorer"
-    ],
+    "fromKinds": ["composition.consensus"],
+    "toKinds": ["scorer"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "constraint.applies_to",
-    "fromKinds": [
-      "constraint"
-    ],
+    "fromKinds": ["constraint"],
     "toKinds": [
       "agent",
       "flow",
@@ -386,380 +303,274 @@
   },
   {
     "type": "context.queries_retriever",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "rag.retriever"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["rag.retriever"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.reads_blackboard",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.reads_memory",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.reads_workspace",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["workspace"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.runs_eval",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "evaluation"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["evaluation"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.uses_blackboard",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.uses_context",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "context"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["context"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.uses_injectable",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "injectable"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["injectable"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.uses_memory",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.uses_scorer",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "scorer"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["scorer"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.uses_tool",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "tool"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["tool"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.writes_blackboard",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.writes_memory",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "context.writes_workspace",
-    "fromKinds": [
-      "context"
-    ],
-    "toKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["context"],
+    "toKinds": ["workspace"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "eval.covers_definition",
-    "fromKinds": [
-      "evaluation"
-    ],
+    "fromKinds": ["evaluation"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "fallback.includes_option",
-    "fromKinds": [
-      "routing.fallback"
-    ],
-    "toKinds": [
-      "routing.fallback.option"
-    ],
+    "fromKinds": ["routing.fallback"],
+    "toKinds": ["routing.fallback.option"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "fallback.option.uses_agent",
-    "fromKinds": [
-      "routing.fallback.option"
-    ],
-    "toKinds": [
-      "agent"
-    ],
+    "fromKinds": ["routing.fallback.option"],
+    "toKinds": ["agent"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "fallback.option.uses_cascade",
-    "fromKinds": [
-      "routing.fallback.option"
-    ],
-    "toKinds": [
-      "routing.cascade"
-    ],
+    "fromKinds": ["routing.fallback.option"],
+    "toKinds": ["routing.cascade"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "fallback.option.uses_fallback",
-    "fromKinds": [
-      "routing.fallback.option"
-    ],
-    "toKinds": [
-      "routing.fallback"
-    ],
+    "fromKinds": ["routing.fallback.option"],
+    "toKinds": ["routing.fallback"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "fallback.option.uses_prompt",
-    "fromKinds": [
-      "routing.fallback.option"
-    ],
-    "toKinds": [
-      "prompt"
-    ],
+    "fromKinds": ["routing.fallback.option"],
+    "toKinds": ["prompt"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "fallback.option.uses_router",
-    "fromKinds": [
-      "routing.fallback.option"
-    ],
-    "toKinds": [
-      "routing.router"
-    ],
+    "fromKinds": ["routing.fallback.option"],
+    "toKinds": ["routing.router"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "fallback.option.uses_split",
+    "fromKinds": ["routing.fallback.option"],
+    "toKinds": ["routing.split"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "fallback.option.uses_retry",
+    "fromKinds": ["routing.fallback.option"],
+    "toKinds": ["routing.retry"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.includes_step",
-    "fromKinds": [
-      "flow"
-    ],
-    "toKinds": [
-      "flow.step"
-    ],
+    "fromKinds": ["flow"],
+    "toKinds": ["flow.step"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.queries_retriever",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "rag.retriever"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["rag.retriever"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.reads_blackboard",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.reads_memory",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.reads_workspace",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["workspace"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.runs_eval",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "evaluation"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["evaluation"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.uses_agent",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "agent"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["agent"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.uses_blackboard",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.uses_memory",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.uses_prompt",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "prompt"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["prompt"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.uses_routing",
-    "fromKinds": [
-      "flow.step"
-    ],
+    "fromKinds": ["flow.step"],
     "toKinds": [
       "routing.router",
+      "routing.split",
+      "routing.retry",
       "routing.cascade",
       "routing.fallback"
     ],
@@ -769,78 +580,54 @@
   },
   {
     "type": "flow.step.uses_scorer",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "scorer"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["scorer"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.uses_tool",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "tool"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["tool"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.waits_for_signal",
-    "fromKinds": [
-      "flow.step"
-    ],
+    "fromKinds": ["flow.step"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.writes_blackboard",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.writes_memory",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "flow.step.writes_workspace",
-    "fromKinds": [
-      "flow.step"
-    ],
-    "toKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["flow.step"],
+    "toKinds": ["workspace"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "guardrail.applies_to",
-    "fromKinds": [
-      "guardrail"
-    ],
+    "fromKinds": ["guardrail"],
     "toKinds": [
       "agent",
       "flow",
@@ -858,95 +645,67 @@
   },
   {
     "type": "injectable.uses_context",
-    "fromKinds": [
-      "injectable"
-    ],
-    "toKinds": [
-      "context"
-    ],
+    "fromKinds": ["injectable"],
+    "toKinds": ["context"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "injectable.uses_tool",
-    "fromKinds": [
-      "injectable"
-    ],
-    "toKinds": [
-      "tool"
-    ],
+    "fromKinds": ["injectable"],
+    "toKinds": ["tool"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "memory.includes_block",
-    "fromKinds": [
-      "memory"
-    ],
-    "toKinds": [
-      "memory.block"
-    ],
+    "fromKinds": ["memory"],
+    "toKinds": ["memory.block"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "memory.uses_store",
-    "fromKinds": [
-      "memory"
-    ],
-    "toKinds": [
-      "memory.store"
-    ],
+    "fromKinds": ["memory"],
+    "toKinds": ["memory.store"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "parallel.branch.uses_agent",
-    "fromKinds": [
-      "composition.parallel.branch"
-    ],
-    "toKinds": [
-      "agent"
-    ],
+    "fromKinds": ["composition.parallel.branch"],
+    "toKinds": ["agent"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "parallel.branch.uses_flow",
-    "fromKinds": [
-      "composition.parallel.branch"
-    ],
-    "toKinds": [
-      "flow"
-    ],
+    "fromKinds": ["composition.parallel.branch"],
+    "toKinds": ["flow"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "parallel.branch.uses_prompt",
-    "fromKinds": [
-      "composition.parallel.branch"
-    ],
-    "toKinds": [
-      "prompt"
-    ],
+    "fromKinds": ["composition.parallel.branch"],
+    "toKinds": ["prompt"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "parallel.branch.uses_routing",
-    "fromKinds": [
-      "composition.parallel.branch"
-    ],
+    "fromKinds": ["composition.parallel.branch"],
     "toKinds": [
       "routing.router",
+      "routing.split",
+      "routing.retry",
       "routing.cascade",
       "routing.fallback"
     ],
@@ -956,83 +715,59 @@
   },
   {
     "type": "parallel.branch.uses_tool",
-    "fromKinds": [
-      "composition.parallel.branch"
-    ],
-    "toKinds": [
-      "tool"
-    ],
+    "fromKinds": ["composition.parallel.branch"],
+    "toKinds": ["tool"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "parallel.includes_branch",
-    "fromKinds": [
-      "composition.parallel"
-    ],
-    "toKinds": [
-      "composition.parallel.branch"
-    ],
+    "fromKinds": ["composition.parallel"],
+    "toKinds": ["composition.parallel.branch"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "pipeline.includes_stage",
-    "fromKinds": [
-      "composition.pipeline"
-    ],
-    "toKinds": [
-      "composition.pipeline.stage"
-    ],
+    "fromKinds": ["composition.pipeline"],
+    "toKinds": ["composition.pipeline.stage"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "pipeline.stage.uses_agent",
-    "fromKinds": [
-      "composition.pipeline.stage"
-    ],
-    "toKinds": [
-      "agent"
-    ],
+    "fromKinds": ["composition.pipeline.stage"],
+    "toKinds": ["agent"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "pipeline.stage.uses_flow",
-    "fromKinds": [
-      "composition.pipeline.stage"
-    ],
-    "toKinds": [
-      "flow"
-    ],
+    "fromKinds": ["composition.pipeline.stage"],
+    "toKinds": ["flow"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "pipeline.stage.uses_prompt",
-    "fromKinds": [
-      "composition.pipeline.stage"
-    ],
-    "toKinds": [
-      "prompt"
-    ],
+    "fromKinds": ["composition.pipeline.stage"],
+    "toKinds": ["prompt"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "pipeline.stage.uses_routing",
-    "fromKinds": [
-      "composition.pipeline.stage"
-    ],
+    "fromKinds": ["composition.pipeline.stage"],
     "toKinds": [
       "routing.router",
+      "routing.split",
+      "routing.retry",
       "routing.cascade",
       "routing.fallback"
     ],
@@ -1042,684 +777,599 @@
   },
   {
     "type": "pipeline.stage.uses_tool",
-    "fromKinds": [
-      "composition.pipeline.stage"
-    ],
-    "toKinds": [
-      "tool"
-    ],
+    "fromKinds": ["composition.pipeline.stage"],
+    "toKinds": ["tool"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.queries_retriever",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "rag.retriever"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["rag.retriever"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.reads_blackboard",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.reads_memory",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.reads_workspace",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["workspace"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.runs_eval",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "evaluation"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["evaluation"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.uses_blackboard",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.uses_context",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "context"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["context"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.uses_injectable",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "injectable"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["injectable"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.uses_memory",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.uses_scorer",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "scorer"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["scorer"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.uses_tool",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "tool"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["tool"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.writes_blackboard",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.writes_memory",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "prompt.writes_workspace",
-    "fromKinds": [
-      "prompt"
-    ],
-    "toKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["prompt"],
+    "toKinds": ["workspace"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "rag.recipe.includes_step",
-    "fromKinds": [
-      "rag.recipe"
-    ],
-    "toKinds": [
-      "rag.recipe.step"
-    ],
+    "fromKinds": ["rag.recipe"],
+    "toKinds": ["rag.recipe.step"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "rag.recipe.step.uses_retriever",
-    "fromKinds": [
-      "rag.recipe.step"
-    ],
-    "toKinds": [
-      "rag.retriever"
-    ],
+    "fromKinds": ["rag.recipe.step"],
+    "toKinds": ["rag.retriever"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "rag.recipe.step.uses_scorer",
-    "fromKinds": [
-      "rag.recipe.step"
-    ],
-    "toKinds": [
-      "scorer"
-    ],
+    "fromKinds": ["rag.recipe.step"],
+    "toKinds": ["scorer"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "rag.recipe.uses_retriever",
-    "fromKinds": [
-      "rag.recipe"
-    ],
-    "toKinds": [
-      "rag.retriever"
-    ],
+    "fromKinds": ["rag.recipe"],
+    "toKinds": ["rag.retriever"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "rag.pipeline.includes_stage",
-    "fromKinds": [
-      "rag.pipeline"
-    ],
-    "toKinds": [
-      "rag.pipeline.stage"
-    ],
+    "fromKinds": ["rag.pipeline"],
+    "toKinds": ["rag.pipeline.stage"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "rag.pipeline.stage.uses_retriever",
-    "fromKinds": [
-      "rag.pipeline.stage"
-    ],
-    "toKinds": [
-      "rag.retriever"
-    ],
+    "fromKinds": ["rag.pipeline.stage"],
+    "toKinds": ["rag.retriever"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "rag.pipeline.stage.uses_scorer",
-    "fromKinds": [
-      "rag.pipeline.stage"
-    ],
-    "toKinds": [
-      "scorer"
-    ],
+    "fromKinds": ["rag.pipeline.stage"],
+    "toKinds": ["scorer"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "rag.pipeline.uses_retriever",
-    "fromKinds": [
-      "rag.pipeline"
-    ],
-    "toKinds": [
-      "rag.retriever"
-    ],
+    "fromKinds": ["rag.pipeline"],
+    "toKinds": ["rag.retriever"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "rag.retriever.uses_blob_store",
-    "fromKinds": [
-      "rag.retriever"
-    ],
-    "toKinds": [
-      "storage.blobStore"
-    ],
+    "fromKinds": ["rag.retriever"],
+    "toKinds": ["storage.blobStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "rag.retriever.uses_record_store",
-    "fromKinds": [
-      "rag.retriever"
-    ],
-    "toKinds": [
-      "storage.recordStore"
-    ],
+    "fromKinds": ["rag.retriever"],
+    "toKinds": ["storage.recordStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "rag.retriever.uses_storage",
-    "fromKinds": [
-      "rag.retriever"
-    ],
-    "toKinds": [
-      "storage.bundle",
-      "storage.scope"
-    ],
+    "fromKinds": ["rag.retriever"],
+    "toKinds": ["storage.bundle", "storage.scope"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "rag.retriever.uses_vector_store",
-    "fromKinds": [
-      "rag.retriever"
-    ],
-    "toKinds": [
-      "storage.vectorStore"
-    ],
+    "fromKinds": ["rag.retriever"],
+    "toKinds": ["storage.vectorStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "router.includes_route",
-    "fromKinds": [
-      "routing.router"
-    ],
-    "toKinds": [
-      "routing.router.route"
-    ],
+    "fromKinds": ["routing.router"],
+    "toKinds": ["routing.router.route"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "router.route.uses_agent",
-    "fromKinds": [
-      "routing.router.route"
-    ],
-    "toKinds": [
-      "agent"
-    ],
+    "fromKinds": ["routing.router.route"],
+    "toKinds": ["agent"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "router.route.uses_cascade",
-    "fromKinds": [
-      "routing.router.route"
-    ],
-    "toKinds": [
-      "routing.cascade"
-    ],
+    "fromKinds": ["routing.router.route"],
+    "toKinds": ["routing.cascade"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "router.route.uses_fallback",
-    "fromKinds": [
-      "routing.router.route"
-    ],
-    "toKinds": [
-      "routing.fallback"
-    ],
+    "fromKinds": ["routing.router.route"],
+    "toKinds": ["routing.fallback"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "router.route.uses_prompt",
-    "fromKinds": [
-      "routing.router.route"
-    ],
-    "toKinds": [
-      "prompt"
-    ],
+    "fromKinds": ["routing.router.route"],
+    "toKinds": ["prompt"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "router.route.uses_router",
-    "fromKinds": [
-      "routing.router.route"
-    ],
-    "toKinds": [
-      "routing.router"
-    ],
+    "fromKinds": ["routing.router.route"],
+    "toKinds": ["routing.router"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "router.route.uses_split",
+    "fromKinds": ["routing.router.route"],
+    "toKinds": ["routing.split"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "router.route.uses_retry",
+    "fromKinds": ["routing.router.route"],
+    "toKinds": ["routing.retry"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "split.includes_route",
+    "fromKinds": ["routing.split"],
+    "toKinds": ["routing.split.route"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "split.route.uses_prompt",
+    "fromKinds": ["routing.split.route"],
+    "toKinds": ["prompt"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "split.route.uses_agent",
+    "fromKinds": ["routing.split.route"],
+    "toKinds": ["agent"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "split.route.uses_router",
+    "fromKinds": ["routing.split.route"],
+    "toKinds": ["routing.router"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "split.route.uses_split",
+    "fromKinds": ["routing.split.route"],
+    "toKinds": ["routing.split"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "split.route.uses_retry",
+    "fromKinds": ["routing.split.route"],
+    "toKinds": ["routing.retry"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "split.route.uses_cascade",
+    "fromKinds": ["routing.split.route"],
+    "toKinds": ["routing.cascade"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "split.route.uses_fallback",
+    "fromKinds": ["routing.split.route"],
+    "toKinds": ["routing.fallback"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "retry.uses_target",
+    "fromKinds": ["routing.retry"],
+    "toKinds": ["routing.retry.target"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "retry.target.uses_prompt",
+    "fromKinds": ["routing.retry.target"],
+    "toKinds": ["prompt"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "retry.target.uses_agent",
+    "fromKinds": ["routing.retry.target"],
+    "toKinds": ["agent"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "retry.target.uses_router",
+    "fromKinds": ["routing.retry.target"],
+    "toKinds": ["routing.router"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "retry.target.uses_split",
+    "fromKinds": ["routing.retry.target"],
+    "toKinds": ["routing.split"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "retry.target.uses_retry",
+    "fromKinds": ["routing.retry.target"],
+    "toKinds": ["routing.retry"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "retry.target.uses_cascade",
+    "fromKinds": ["routing.retry.target"],
+    "toKinds": ["routing.cascade"],
+    "presentation": "both",
+    "fidelity": "partial",
+    "runtimeJoin": true
+  },
+  {
+    "type": "retry.target.uses_fallback",
+    "fromKinds": ["routing.retry.target"],
+    "toKinds": ["routing.fallback"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "skill.uses_registry",
-    "fromKinds": [
-      "skill"
-    ],
-    "toKinds": [
-      "registry"
-    ],
+    "fromKinds": ["skill"],
+    "toKinds": ["registry"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "swarm.coordinated_by",
-    "fromKinds": [
-      "composition.swarm"
-    ],
-    "toKinds": [
-      "agent"
-    ],
+    "fromKinds": ["composition.swarm"],
+    "toKinds": ["agent"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "swarm.includes_agent",
-    "fromKinds": [
-      "composition.swarm"
-    ],
-    "toKinds": [
-      "agent"
-    ],
+    "fromKinds": ["composition.swarm"],
+    "toKinds": ["agent"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "swarm.uses_blackboard",
-    "fromKinds": [
-      "composition.swarm"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["composition.swarm"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "swarm.uses_memory",
-    "fromKinds": [
-      "composition.swarm"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["composition.swarm"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "storage.bundle.uses_blob_store",
-    "fromKinds": [
-      "storage.bundle"
-    ],
-    "toKinds": [
-      "storage.blobStore"
-    ],
+    "fromKinds": ["storage.bundle"],
+    "toKinds": ["storage.blobStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "storage.bundle.uses_record_store",
-    "fromKinds": [
-      "storage.bundle"
-    ],
-    "toKinds": [
-      "storage.recordStore"
-    ],
+    "fromKinds": ["storage.bundle"],
+    "toKinds": ["storage.recordStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "storage.bundle.uses_vector_store",
-    "fromKinds": [
-      "storage.bundle"
-    ],
-    "toKinds": [
-      "storage.vectorStore"
-    ],
+    "fromKinds": ["storage.bundle"],
+    "toKinds": ["storage.vectorStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "storage.scope.wraps_storage",
-    "fromKinds": [
-      "storage.scope"
-    ],
-    "toKinds": [
-      "storage.bundle",
-      "storage.scope"
-    ],
+    "fromKinds": ["storage.scope"],
+    "toKinds": ["storage.bundle", "storage.scope"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "tool.queries_retriever",
-    "fromKinds": [
-      "tool"
-    ],
-    "toKinds": [
-      "rag.retriever"
-    ],
+    "fromKinds": ["tool"],
+    "toKinds": ["rag.retriever"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "tool.reads_blackboard",
-    "fromKinds": [
-      "tool"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["tool"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "tool.reads_memory",
-    "fromKinds": [
-      "tool"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["tool"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "tool.reads_workspace",
-    "fromKinds": [
-      "tool"
-    ],
-    "toKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["tool"],
+    "toKinds": ["workspace"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "tool.runs_eval",
-    "fromKinds": [
-      "tool"
-    ],
-    "toKinds": [
-      "evaluation"
-    ],
+    "fromKinds": ["tool"],
+    "toKinds": ["evaluation"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "tool.uses_scorer",
-    "fromKinds": [
-      "tool"
-    ],
-    "toKinds": [
-      "scorer"
-    ],
+    "fromKinds": ["tool"],
+    "toKinds": ["scorer"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "tool.writes_blackboard",
-    "fromKinds": [
-      "tool"
-    ],
-    "toKinds": [
-      "blackboard"
-    ],
+    "fromKinds": ["tool"],
+    "toKinds": ["blackboard"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "tool.writes_memory",
-    "fromKinds": [
-      "tool"
-    ],
-    "toKinds": [
-      "memory"
-    ],
+    "fromKinds": ["tool"],
+    "toKinds": ["memory"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "tool.writes_workspace",
-    "fromKinds": [
-      "tool"
-    ],
-    "toKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["tool"],
+    "toKinds": ["workspace"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "workspace.uses_blob_store",
-    "fromKinds": [
-      "workspace"
-    ],
-    "toKinds": [
-      "storage.blobStore"
-    ],
+    "fromKinds": ["workspace"],
+    "toKinds": ["storage.blobStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "workspace.uses_record_store",
-    "fromKinds": [
-      "workspace"
-    ],
-    "toKinds": [
-      "storage.recordStore"
-    ],
+    "fromKinds": ["workspace"],
+    "toKinds": ["storage.recordStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "workspace.uses_storage",
-    "fromKinds": [
-      "workspace"
-    ],
-    "toKinds": [
-      "storage.bundle",
-      "storage.scope"
-    ],
+    "fromKinds": ["workspace"],
+    "toKinds": ["storage.bundle", "storage.scope"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "workspace.uses_vector_store",
-    "fromKinds": [
-      "workspace"
-    ],
-    "toKinds": [
-      "storage.vectorStore"
-    ],
+    "fromKinds": ["workspace"],
+    "toKinds": ["storage.vectorStore"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": false
   },
   {
     "type": "workspace.exposes_tool",
-    "fromKinds": [
-      "workspace"
-    ],
-    "toKinds": [
-      "tool"
-    ],
+    "fromKinds": ["workspace"],
+    "toKinds": ["tool"],
     "presentation": "both",
     "fidelity": "partial",
     "runtimeJoin": true
   },
   {
     "type": "workspace.mounts_path",
-    "fromKinds": [
-      "workspace"
-    ],
+    "fromKinds": ["workspace"],
     "presentation": "detail",
     "fidelity": "partial",
     "runtimeJoin": true

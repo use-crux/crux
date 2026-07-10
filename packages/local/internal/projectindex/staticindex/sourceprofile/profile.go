@@ -42,7 +42,9 @@ var semanticCallNames = []string{
 	"retrieve",
 	"retriever",
 	"rewriteQuery",
+	"retry",
 	"router",
+	"split",
 	"swarm",
 	"tool",
 	"context",
@@ -55,7 +57,9 @@ var nativeDirectCallNames = []string{
 	"agent",
 	"cascade",
 	"fallback",
+	"retry",
 	"router",
+	"split",
 	"tool",
 	"context",
 	"prompt",
@@ -63,7 +67,7 @@ var nativeDirectCallNames = []string{
 
 var (
 	cruxCallPattern      = regexp.MustCompile(`\b([A-Za-z_$][A-Za-z0-9_$]*)\s*\(`)
-	coreImportPattern    = regexp.MustCompile(`from\s+['"]@use-crux/core['"]`)
+	coreImportPattern    = regexp.MustCompile(`from\s+['"]@use-crux/core(?:/[^'"]*)?['"]`)
 	semanticCallNameSet  = stringSet(semanticCallNames)
 	nativeDirectCallName = stringSet(nativeDirectCallNames)
 )

@@ -153,6 +153,24 @@ Export definitions from discovered modules for full source visibility. Use `crux
 
 Static relation extraction currently covers common design-time links such as prompt-to-context, agent-to-prompt, agent-to-tool, skill-to-registry, agent handoffs, flow-to-step, statically visible agent/tool/flow-step memory access, RAG pipeline-to-retriever, memory-to-memory-block, and composition-to-agent/flow. Workspaces carry source, namespace, mounts, tool exposure, and blob-storage hints when those values are literal. Source file entries include produced definition ids plus dependency/dependent file edges when known, and `sourceGraph` records whether those source rows are complete enough for source-closure planning. The Go service owns these definitions and relations so web devtools and the TUI render the same graph.
 
+### Routing definitions and catalog facts
+
+The Project Index represents each authored routing policy as a parent plus first-class children:
+
+| Parent             | Child                      | Containment relation       |
+| ------------------ | -------------------------- | -------------------------- |
+| `routing.router`   | `routing.router.route`     | `router.includes_route`    |
+| `routing.split`    | `routing.split.route`      | `split.includes_route`     |
+| `routing.retry`    | `routing.retry.target`     | `retry.uses_target`        |
+| `routing.cascade`  | `routing.cascade.tier`     | `cascade.includes_tier`    |
+| `routing.fallback` | `routing.fallback.option`  | `fallback.includes_option` |
+
+Children remain searchable, lintable, directly inspectable graph definitions. Their `metadata.indexPresentation` hint tells catalog clients when to fold them under the parent and supplies role/order data; it does not remove them from `definitions` or `relations`. Target relations such as `router.route.uses_prompt`, `split.route.uses_prompt`, `retry.target.uses_prompt`, `cascade.tier.uses_fallback`, and `fallback.option.uses_agent` connect those children to index-visible prompts, agents, and nested routing policies.
+
+Semantic evidence for a router `classify` callback or split `seed` callback annotated with `RouteArgs` can add parent facts `routingContextType` and `routingContextRequired`. Context-free callbacks omit them, and the static syntax pass does not invent annotation-derived types. Router and split route call-profile objects can add a JSON-safe child `profile` containing literal settings such as `temperature`, `maxTokens`, or `weight`; `model` remains a target relation rather than a profile setting, and raw-model routes omit `profile`.
+
+Core owns the JSON-safe Project Index contract. The Indexer emits definitions, relations, facts, source evidence, and `metadata.indexPresentation` hints into that contract. The Go service preserves and serves the merged read model, while web devtools and the TUI render it without reparsing source or reconstructing routing structure client-side.
+
 Definitions can include supporting source references in `sourceRefs`. `source` remains the primary authored call site, while `sourceRefs` point at separate schema declarations, callback functions, handlers, prompt builders, system prompt constants, validators, policies, config bindings, helper functions, reusable text fragments, and nested schema fragments that Crux can prove from source. The resolver supports same-file identifiers and direct project imports for tool schemas, nested schema identifiers, agent/prompt/context callbacks, prompt `use` context targets, local context-array constants, prompt/context system constants, direct identifiers and conservative object-property paths injected into static system template strings, safety/scorer callbacks, tool callbacks, Convex Agent config/callback bindings, flow-step callbacks, Convex Agent tool-map contributors, and simple callback-factory arguments. For example, `createTool({ parameters: writerSchema, execute: runWriter })` can expose both `metadata.inputSchema` and refs for `writerSchema`, nested schemas such as `SearchStepSchema`, `runWriter`, and one statically visible helper called by `runWriter`; `prompt({ system: PLANNER_SYSTEM })` can expose the `PLANNER_SYSTEM` declaration; a context system template that injects `formatting.SUPPORTED_ELEMENTS` can expose that property declaration with `metadata.injected: true` and `metadata.fragment: true`; `new Agent(..., { tools, contextHandler, usageHandler })`, direct `convexAgent({...})`, and profile-created `crux.convexAgent({...})` can expose `prompt`, `tools`, `contextHandler`, `usageHandler`, and `prepare` bindings, tool-map spreads/properties, factory arguments passed into handler or prepare builders, and one helper level.
 
 ```ts

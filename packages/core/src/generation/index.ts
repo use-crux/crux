@@ -26,8 +26,6 @@ export {
 export type {
   FallbackModel,
   FallbackOptions,
-  FallbackMeta,
-  FallbackAttemptDetail,
   ErrorCategory,
 } from "./fallback";
 
@@ -68,10 +66,13 @@ export type {
   TraceMeta,
 } from "./types";
 export {
+  Deadline,
   TimeoutError,
+  composeAbortSignals,
   normalizeBudgetMs,
   toolBudgetMs,
   createBudgetSignal,
+  withAbortSignal,
   withBudget,
 } from "./timeout";
 export type {
@@ -84,7 +85,6 @@ export type {
 
 // Generate/stream orchestration (composed by adapter packages)
 export { orchestrateGenerate, orchestrateStream } from "./orchestrate";
-export { executeFallbackLoop } from "./fallback-loop";
 export { wrapStreamIterable } from "./stream-interception";
 export type {
   OrchestrationSpec,

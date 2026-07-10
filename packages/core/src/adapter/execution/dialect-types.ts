@@ -9,16 +9,21 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { GenerationSettings } from '../../generation/types'
-import type { Message } from '../../generation/messages'
-import type { LoopRuntimePort } from '../loop-runtime-port'
-import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from '../types'
+import type { z } from "zod";
+import type { GenerationSettings } from "../../generation/types";
+import type { Message } from "../../generation/messages";
+import type { LoopRuntimePort } from "../loop-runtime-port";
+import type {
+  AdapterResponse,
+  CallArgs,
+  StreamHandle,
+  ToolResultEntry,
+} from "../types";
 
 /** Per-call context passed to provider wire hooks. */
 export interface CoreStepCallContext {
   /** Cooperative abort signal for the current provider step. */
-  readonly signal: AbortSignal | undefined
+  readonly signal: AbortSignal | undefined;
 }
 
 /**
@@ -32,7 +37,7 @@ export type AppendToolRound = (
   messages: Message[],
   assistantResponse: AdapterResponse,
   toolResults: ToolResultEntry[],
-) => Message[]
+) => Message[];
 
 /**
  * Normalized dialect for `AdapterSpec` implementations.
@@ -55,41 +60,47 @@ export interface CoreStepDialect<
   TParams = unknown,
 > {
   /** Discriminant for the Crux-driven step loop. */
-  readonly kind: 'core-step'
+  readonly kind: "core-step";
 
   /** Provider identifier used for adaptation, tracing, and defaults. */
-  readonly id: string
+  readonly id: string;
 
   /** Client bound by the public adapter factory. */
-  readonly client: TClient
+  readonly client: TClient;
 
   /** Convert canonical generation settings to provider-native parameters. */
-  mapSettings(settings: GenerationSettings): Record<string, unknown>
+  mapSettings(settings: GenerationSettings): Record<string, unknown>;
 
   /** Execute exactly one provider call and return its normalized extraction. */
   call(
     client: TClient,
     args: CallArgs<TExtra>,
     context?: CoreStepCallContext,
-  ): Promise<{ raw: TRawResponse; extracted: AdapterResponse }>
+  ): Promise<{ raw: TRawResponse; extracted: AdapterResponse }>;
 
   /** Start one provider stream using fully prepared Crux call arguments. */
-  stream(client: TClient, args: CallArgs<TExtra>): Promise<StreamHandle<TRawStream>>
+  stream(
+    client: TClient,
+    args: CallArgs<TExtra>,
+    context?: CoreStepCallContext,
+  ): Promise<StreamHandle<TRawStream>>;
 
   /** Translate canonical call args into provider-native params for public codecs and handles. */
-  toParams?: (args: CallArgs<TExtra>) => TParams | Promise<TParams>
+  toParams?: (args: CallArgs<TExtra>) => TParams | Promise<TParams>;
 
   /** Normalize a provider-native response supplied to a call handle. */
-  fromResponse?: (response: TRawResponse) => AdapterResponse
+  fromResponse?: (response: TRawResponse) => AdapterResponse;
 
   /** Format the assistant response and tool results for the next provider call. */
-  appendToolRound: AppendToolRound
+  appendToolRound: AppendToolRound;
 
   /** Optionally adapt tool JSON Schema before it reaches the provider. */
-  sanitizeToolSchema?: (schema: Record<string, unknown>) => Record<string, unknown>
+  sanitizeToolSchema?: (
+    schema: Record<string, unknown>,
+  ) => Record<string, unknown>;
 
   /** Optionally wrap a Zod output schema into provider-native structured output params. */
-  wrapOutputSchema?: (schema: z.ZodType) => Record<string, unknown>
+  wrapOutputSchema?: (schema: z.ZodType) => Record<string, unknown>;
 }
 
 /**
@@ -105,10 +116,13 @@ export interface CoreStepDialect<
  * @typeParam TRawResponse - SDK result returned from non-streaming calls.
  * @typeParam TRawStream - SDK stream result returned from streaming calls.
  */
-export interface SdkLoopDialect<TModel, TRawResponse, TRawStream>
-  extends LoopRuntimePort<TModel, TRawResponse, TRawStream> {
+export interface SdkLoopDialect<
+  TModel,
+  TRawResponse,
+  TRawStream,
+> extends LoopRuntimePort<TModel, TRawResponse, TRawStream> {
   /** Discriminant for the SDK-owned loop. */
-  readonly kind: 'sdk-loop'
+  readonly kind: "sdk-loop";
 }
 
 /**
@@ -126,4 +140,4 @@ export type AdapterExecutionDialect<
   TParams = unknown,
 > =
   | CoreStepDialect<TClient, TRawResponse, TRawStream, TExtra, TParams>
-  | SdkLoopDialect<TModel, TRawResponse, TRawStream>
+  | SdkLoopDialect<TModel, TRawResponse, TRawStream>;

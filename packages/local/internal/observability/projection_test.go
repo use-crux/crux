@@ -320,7 +320,7 @@ func TestProjectRunDetailFoldsRoutingDecisionOntoSelectedGeneration(t *testing.T
 			CreatedAt:   started.Add(5 * time.Millisecond).Format(time.RFC3339Nano),
 			ContentType: "application/json",
 			Encoding:    "json",
-			Preview:     json.RawMessage(`{"kind":"routing.report","routingKind":"router","chosen":"openai/gpt-5-mini"}`),
+			Preview:     json.RawMessage(`{"model":"openai/gpt-5-mini","trace":[{"kind":"router","classifiedAs":"fast","route":"fast","usedDefaultRoute":false,"forced":false}]}`),
 		}},
 	}
 
@@ -424,7 +424,7 @@ func TestProjectRunDetailFoldsNestedAgentRoutingDecisionOntoSelectedGeneration(t
 			CreatedAt:   started.Add(210 * time.Millisecond).Format(time.RFC3339Nano),
 			ContentType: "application/json",
 			Encoding:    "json",
-			Preview:     json.RawMessage(`{"kind":"routing.report","routingKind":"router","chosen":"anthropic/claude-4-haiku"}`),
+			Preview:     json.RawMessage(`{"model":"anthropic/claude-4-haiku","trace":[{"kind":"router","classifiedAs":"tool-flow","route":"tool-flow","usedDefaultRoute":false,"forced":false}]}`),
 		}},
 	}
 

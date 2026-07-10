@@ -496,21 +496,25 @@
       "contentType": "application/json",
       "encoding": "json",
       "preview": {
-        "kind": "routing.report",
-        "routingKind": "cascade",
-        "chosen": "gpt-4o",
-        "tiers": [
+        "model": "gpt-4o",
+        "cost": null,
+        "trace": [
           {
-            "tier": 0,
-            "model": "gpt-4o-mini",
-            "verdict": "rejected",
-            "durationMs": 120
-          },
-          {
-            "tier": 1,
-            "model": "gpt-4o",
-            "verdict": "accepted",
-            "durationMs": 240
+            "kind": "cascade",
+            "acceptedAtTier": 1,
+            "budgetExceeded": false,
+            "tiers": [
+              {
+                "model": "gpt-4o-mini",
+                "status": "rejected",
+                "durationMs": 120
+              },
+              {
+                "model": "gpt-4o",
+                "status": "accepted",
+                "durationMs": 240
+              }
+            ]
           }
         ]
       },

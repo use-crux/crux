@@ -9,12 +9,17 @@
 
 import type { z } from 'zod'
 import type { Message, CompactionResult } from '../generation/messages'
+import type { RoutingReceipt } from '../routing/receipt'
 import type { RecordStore } from '../storage'
 
 // ── Generate Function Abstractions ──────────────────────────────────
 
 /** Framework-agnostic text generation function. Wraps any SDK's generateText. */
-export type GenerateTextFn = (options: { model: unknown; system?: string; prompt: string }) => Promise<{ text: string }>
+export type GenerateTextFn = (options: {
+  model: unknown;
+  system?: string;
+  prompt: string;
+}) => Promise<{ text: string; routing?: RoutingReceipt }>
 
 /**
  * Framework-agnostic structured output function.
@@ -35,7 +40,7 @@ export type GenerateObjectFn = <T>(options: {
   temperature?: number
   /** Provider nucleus-sampling setting forwarded when the caller needs deterministic generation. */
   topP?: number
-}) => Promise<{ object: T }>
+}) => Promise<{ object: T; routing?: RoutingReceipt }>
 
 // ── summarizeMessages ───────────────────────────────────────────────
 

@@ -69,8 +69,10 @@ mod routing {
     pub(crate) mod facts;
     pub(crate) mod fallback;
     pub(crate) mod output;
+    pub(crate) mod retry;
     pub(crate) mod router;
     pub(crate) mod source_refs;
+    pub(crate) mod split;
 }
 mod runtime {
     pub(crate) mod flow;

@@ -23,6 +23,7 @@ import type {
   CruxMetrics,
   CruxRetrievalHitsPreview,
   CruxRoutingReportPreview,
+  CruxRoutingStepPreview,
   CruxSpanStatus,
 } from '../../observability/contract'
 import {
@@ -585,23 +586,26 @@ export function extractCellSignals(records: readonly CruxGraphRecord[]): CellSig
       case 'routing.cascade': {
         captured.add('routing')
         const preview = artifactPreview(span.spanId, 'routing.report') as CruxRoutingReportPreview | undefined
+        const routerStep = preview?.trace.find(
+          (step): step is Extract<CruxRoutingStepPreview, { kind: 'router' }> => step.kind === 'router',
+        )
         routing.push({
           spanId: span.spanId,
-          ...(stringOrUndefined(preview?.chosen ?? span.attributes.chosen) !== undefined
+          ...(stringOrUndefined(routerStep?.route ?? span.attributes.chosen) !== undefined
             ? {
-                chosen: stringOrUndefined(preview?.chosen ?? span.attributes.chosen),
+                chosen: stringOrUndefined(routerStep?.route ?? span.attributes.chosen),
               }
             : {}),
-          ...(stringOrUndefined(preview?.classifiedAs ?? span.attributes.classifiedAs) !== undefined
+          ...(stringOrUndefined(routerStep?.classifiedAs ?? span.attributes.classifiedAs) !== undefined
             ? {
-                classifiedAs: stringOrUndefined(preview?.classifiedAs ?? span.attributes.classifiedAs),
+                classifiedAs: stringOrUndefined(routerStep?.classifiedAs ?? span.attributes.classifiedAs),
               }
             : {}),
-          ...(stringOrUndefined(preview?.selectedModel ?? span.attributes.selectedModel ?? span.attributes.model) !==
+          ...(stringOrUndefined(preview?.model ?? span.attributes.selectedModel ?? span.attributes.model) !==
           undefined
             ? {
                 selectedModel: stringOrUndefined(
-                  preview?.selectedModel ?? span.attributes.selectedModel ?? span.attributes.model,
+                  preview?.model ?? span.attributes.selectedModel ?? span.attributes.model,
                 ),
               }
             : {}),

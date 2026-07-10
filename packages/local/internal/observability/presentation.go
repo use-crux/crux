@@ -328,7 +328,7 @@ func presentationDisplay(span SpanSummary, spansByID map[string]SpanSummary) str
 		return "detail"
 	}
 	switch span.Primitive {
-	case "context.resolve", "context.predicate", "context.cache", "prompt.resolve", "prompt.budget", "routing.router", "routing.cascade", "cache.lookup", "cost.record":
+	case "context.resolve", "context.predicate", "context.cache", "prompt.resolve", "prompt.budget", "routing.router", "routing.split", "routing.retry", "routing.fallback", "routing.cascade", "cache.lookup", "cost.record":
 		return "detail"
 	}
 	switch span.Family {

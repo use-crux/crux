@@ -1,8 +1,20 @@
 export interface SemanticBackendParityFixture {
   readonly name: string;
+  /** Run outside the workspace so package imports intentionally stay unresolved. */
+  readonly externalRoot?: boolean;
   readonly files: Readonly<Record<string, string>>;
   readonly expect: {
     readonly definitionIds?: readonly string[];
+    /** Required facts emitted on named Project Index definitions. */
+    readonly definitionFacts?: Readonly<
+      Record<string, Readonly<Record<string, unknown>>>
+    >;
+    /** Facts that must stay absent from named Project Index definitions. */
+    readonly definitionFactKeysAbsent?: Readonly<
+      Record<string, readonly string[]>
+    >;
+    /** Exact profile objects emitted on named routing children. */
+    readonly definitionProfiles?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
     readonly relationTypes?: readonly string[];
     readonly sourceRefRoles?: readonly string[];
     readonly lintRuleIds?: readonly string[];
@@ -351,6 +363,157 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         ],
         relationTypes: ["prompt.uses_tool", "router.route.uses_agent"],
         sourceRefRoles: ["config"],
+      },
+    },
+  {
+    name: "routing-context-and-call-profile",
+    externalRoot: true,
+    files: {
+        "src/routing.ts": `
+        import { prompt } from '@use-crux/core'
+        import { router, split, type RouteArgs } from '@use-crux/core/routing'
+
+        export const writer = prompt({ id: 'routing-context-writer' })
+        declare const dynamicProfileTag: string
+
+        function classifyTenant({ context }: RouteArgs<{ tenantId: string; tier: 'free' | 'pro' }>) {
+          return context.tier === 'pro' ? 'pro' : 'default'
+        }
+
+        function seedTenant({ context }: RouteArgs<{ tenantId: string; tier: 'free' | 'pro' }>) {
+          return context.tenantId
+        }
+
+        export const tenantRouter = router({
+          id: 'tenant-router',
+          classify: classifyTenant,
+          routes: {
+            pro: {
+              model: writer,
+              temperature: 0.2,
+              maxTokens: 1200,
+              providerOptions: { cache: true, tag: dynamicProfileTag },
+            },
+            default: writer,
+          },
+        })
+
+        export const tenantSplit = split({
+          id: 'tenant-split',
+          seed: seedTenant,
+          routes: {
+            stable: { model: writer, weight: 100, temperature: 0.1 },
+          },
+        })
+
+        export const contextFreeRouter = router({
+          id: 'context-free-router',
+          classify: () => 'default',
+          routes: { default: writer },
+        })
+      `,
+      },
+      expect: {
+        definitionIds: [
+          "routing.router:tenant-router",
+          "routing.router:tenant-router:route:pro",
+          "routing.split:tenant-split",
+          "routing.split:tenant-split:route:stable",
+          "routing.router:context-free-router",
+        ],
+        definitionFacts: {
+          "routing.router:tenant-router": {
+            routingContextType: '{ tenantId: string; tier: "free" | "pro"; }',
+            routingContextRequired: true,
+          },
+          "routing.split:tenant-split": {
+            routingContextType: '{ tenantId: string; tier: "free" | "pro"; }',
+            routingContextRequired: true,
+          },
+          "routing.router:tenant-router:route:pro": {
+            profile: { temperature: 0.2, maxTokens: 1200 },
+          },
+          "routing.split:tenant-split:route:stable": {
+            profile: { weight: 100, temperature: 0.1 },
+          },
+        },
+        definitionFactKeysAbsent: {
+          "routing.router:context-free-router": [
+            "routingContextType",
+            "routingContextRequired",
+          ],
+          "routing.router:context-free-router:route:default": ["profile"],
+        },
+        definitionProfiles: {
+          "routing.router:tenant-router:route:pro": {
+            temperature: 0.2,
+            maxTokens: 1200,
+          },
+          "routing.split:tenant-split:route:stable": {
+            weight: 100,
+            temperature: 0.1,
+          },
+        },
+        relationTypes: ["router.route.uses_prompt", "split.route.uses_prompt"],
+        sourceRefRoles: ["callback", "config"],
+      },
+    },
+    {
+      name: "routing-split-retry-array-fallback",
+      files: {
+        "src/routing.ts": `
+        import { prompt } from '@use-crux/core'
+        import { cascade, fallback, retry, router, split } from '@use-crux/core/routing'
+
+        function seedSession() {
+          return 'session-1'
+        }
+        function classifyRoute() {
+          return 'draft'
+        }
+
+        export const writerPrompt = prompt({ id: 'writer-route-target' })
+        export const backupPrompt = prompt({ id: 'backup-route-target' })
+        export const retriedWriter = retry(writerPrompt, { id: 'retried-writer', attempts: 2 })
+        export const resilientWriter = fallback([retriedWriter, backupPrompt], { id: 'resilient-writer' })
+        export const canarySplit = split({
+          id: 'canary-split',
+          seed: seedSession,
+          routes: {
+            stable: { model: writerPrompt, weight: 95 },
+            canary: { model: backupPrompt, weight: 5 },
+          },
+        })
+        export const qualityCascade = cascade({
+          id: 'quality-routing',
+          tiers: [{ model: canarySplit }, { model: resilientWriter }],
+        })
+        export const qualityRouter = router({
+          id: 'quality-router',
+          classify: classifyRoute,
+          routes: {
+            draft: { model: qualityCascade, maxTokens: 1200 },
+            default: resilientWriter,
+          },
+        })
+      `,
+      },
+      expect: {
+        definitionIds: [
+          "routing.retry:retried-writer:target:1",
+          "routing.split:canary-split:route:stable",
+          "routing.split:canary-split:route:canary",
+          "routing.fallback:resilient-writer:option:1",
+          "routing.router:quality-router:route:draft",
+        ],
+        relationTypes: [
+          "retry.target.uses_prompt",
+          "split.route.uses_prompt",
+          "fallback.option.uses_retry",
+          "cascade.tier.uses_split",
+          "router.route.uses_cascade",
+        ],
+        sourceRefRoles: ["callback", "config"],
       },
     },
     {

@@ -8,10 +8,15 @@
  * @module
  */
 
-import type { z } from 'zod'
-import type { GenerationSettings } from '../generation/types'
-import type { Message } from '../generation/messages'
-import type { AdapterResponse, CallArgs, StreamHandle, ToolResultEntry } from './types'
+import type { z } from "zod";
+import type { GenerationSettings } from "../generation/types";
+import type { Message } from "../generation/messages";
+import type {
+  AdapterResponse,
+  CallArgs,
+  StreamHandle,
+  ToolResultEntry,
+} from "./types";
 
 // ─────────────────────────────────────────────────────────────────
 // AdapterSpec Interface
@@ -38,36 +43,44 @@ export interface AdapterSpec<
   TParams = unknown,
 > {
   /** Provider identifier for adaptation matching (e.g., 'anthropic', 'openai'). */
-  readonly providerId: string
+  readonly providerId: string;
 
   /** Execute a non-streaming API call. Returns canonical + raw SDK response. */
   call(
     client: TClient,
     args: CallArgs<TExtra>,
     context?: { readonly signal: AbortSignal | undefined },
-  ): Promise<{ raw: TRawResponse; extracted: AdapterResponse }>
+  ): Promise<{ raw: TRawResponse; extracted: AdapterResponse }>;
 
   /** Execute a streaming API call. Returns a stream handle. */
-  stream(client: TClient, args: CallArgs<TExtra>): Promise<StreamHandle<TRawStream>>
+  stream(
+    client: TClient,
+    args: CallArgs<TExtra>,
+    context?: { readonly signal: AbortSignal | undefined },
+  ): Promise<StreamHandle<TRawStream>>;
 
   /** Translate canonical call args into provider-native params for public codecs and handles. */
-  toParams?(args: CallArgs<TExtra>): TParams | Promise<TParams>
+  toParams?(args: CallArgs<TExtra>): TParams | Promise<TParams>;
 
   /** Normalize a provider-native response supplied to a call handle. */
-  fromResponse?(response: TRawResponse): AdapterResponse
+  fromResponse?(response: TRawResponse): AdapterResponse;
 
   /**
    * Format assistant response + tool results for the next tool loop turn.
    * Each provider represents tool results differently.
    */
-  appendToolRound(messages: Message[], assistantResponse: AdapterResponse, toolResults: ToolResultEntry[]): Message[]
+  appendToolRound(
+    messages: Message[],
+    assistantResponse: AdapterResponse,
+    toolResults: ToolResultEntry[],
+  ): Message[];
 
   /** Map canonical GenerationSettings to provider-native field names. */
-  mapSettings(settings: GenerationSettings): Record<string, unknown>
+  mapSettings(settings: GenerationSettings): Record<string, unknown>;
 
   /** Post-process z.toJSONSchema() output for this provider (optional). */
-  sanitizeToolSchema?(schema: Record<string, unknown>): Record<string, unknown>
+  sanitizeToolSchema?(schema: Record<string, unknown>): Record<string, unknown>;
 
   /** Convert structured output schema to provider-native params (optional). */
-  wrapOutputSchema?(schema: z.ZodType): Record<string, unknown>
+  wrapOutputSchema?(schema: z.ZodType): Record<string, unknown>;
 }

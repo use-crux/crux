@@ -1,0 +1,31 @@
+---
+title: Retry
+description: Retry one model before another routing primitive handles failure.
+---
+
+`retry()` repeats the same model with a bounded attempt count. Use it for transient provider errors before fallback moves sideways.
+
+```ts
+import { fallback, retry } from "@use-crux/core/routing";
+
+const resilient = fallback([
+  retry(gpt5, {
+    id: "gpt5-retry",
+    attempts: 2,
+    backoff: "exponential",
+    on: ["rate_limit", "timeout"],
+  }),
+  sonnet,
+]);
+```
+
+`retry()` composes with every other routing primitive and preserves the child model's routing context requirements.
+
+Retry receipts include every attempt:
+
+```ts
+result.routing?.trace;
+// [{ kind: 'retry', id: 'gpt5-retry', model: 'gpt-5', attempts: [{ status: 'error' }, { status: 'ok' }] }]
+```
+
+Use `timeout.totalMs` on the `generate()` or `stream()` call when a whole routed call needs one hard wall across retry and fallback attempts.
