@@ -1,0 +1,546 @@
+{
+  "schemaVersion": 2,
+  "cases": [
+    {
+      "name": "one-segment-success",
+      "records": [
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_success_start",
+          "type": "run:start",
+          "runId": "run_success",
+          "segmentId": "seg_success_a",
+          "segmentSeq": 1,
+          "traceId": "11111111111111111111111111111111",
+          "name": "success",
+          "rootPrimitive": "agent.run",
+          "startedAt": "2026-05-16T18:00:00.000Z",
+          "status": "running"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_success_end",
+          "type": "run:end",
+          "runId": "run_success",
+          "segmentId": "seg_success_a",
+          "segmentSeq": 2,
+          "traceId": "11111111111111111111111111111111",
+          "endedAt": "2026-05-16T18:00:01.000Z",
+          "durationMs": 1000,
+          "status": "ok"
+        }
+      ],
+      "expected": [
+        {
+          "recordId": "rec_success_start",
+          "schemaVersion": 2,
+          "segmentId": "seg_success_a",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_success_end",
+          "schemaVersion": 2,
+          "segmentId": "seg_success_a",
+          "segmentSeq": 2
+        }
+      ]
+    },
+    {
+      "name": "one-segment-error",
+      "records": [
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_error_start",
+          "type": "run:start",
+          "runId": "run_error",
+          "segmentId": "seg_error_a",
+          "segmentSeq": 1,
+          "traceId": "22222222222222222222222222222222",
+          "name": "error",
+          "rootPrimitive": "agent.run",
+          "startedAt": "2026-05-16T18:01:00.000Z",
+          "status": "running"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_error_end",
+          "type": "run:end",
+          "runId": "run_error",
+          "segmentId": "seg_error_a",
+          "segmentSeq": 2,
+          "traceId": "22222222222222222222222222222222",
+          "endedAt": "2026-05-16T18:01:00.500Z",
+          "durationMs": 500,
+          "status": "error",
+          "error": {
+            "message": "failed"
+          }
+        }
+      ],
+      "expected": [
+        {
+          "recordId": "rec_error_start",
+          "schemaVersion": 2,
+          "segmentId": "seg_error_a",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_error_end",
+          "schemaVersion": 2,
+          "segmentId": "seg_error_a",
+          "segmentSeq": 2
+        }
+      ]
+    },
+    {
+      "name": "one-segment-cancelled",
+      "records": [
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_cancel_start",
+          "type": "run:start",
+          "runId": "run_cancel",
+          "segmentId": "seg_cancel_a",
+          "segmentSeq": 1,
+          "traceId": "33333333333333333333333333333333",
+          "name": "cancelled",
+          "rootPrimitive": "agent.run",
+          "startedAt": "2026-05-16T18:02:00.000Z",
+          "status": "running"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_cancel_end",
+          "type": "run:end",
+          "runId": "run_cancel",
+          "segmentId": "seg_cancel_a",
+          "segmentSeq": 2,
+          "traceId": "33333333333333333333333333333333",
+          "endedAt": "2026-05-16T18:02:00.250Z",
+          "durationMs": 250,
+          "status": "cancelled"
+        }
+      ],
+      "expected": [
+        {
+          "recordId": "rec_cancel_start",
+          "schemaVersion": 2,
+          "segmentId": "seg_cancel_a",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_cancel_end",
+          "schemaVersion": 2,
+          "segmentId": "seg_cancel_a",
+          "segmentSeq": 2
+        }
+      ]
+    },
+    {
+      "name": "suspend-resume-fresh-process",
+      "records": [
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_resume_start",
+          "type": "run:start",
+          "runId": "run_resume",
+          "segmentId": "seg_resume_a",
+          "segmentSeq": 1,
+          "traceId": "44444444444444444444444444444444",
+          "name": "resume",
+          "rootPrimitive": "flow.run",
+          "startedAt": "2026-05-16T18:03:00.000Z",
+          "status": "running"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_resume_suspend",
+          "type": "run:suspend",
+          "runId": "run_resume",
+          "segmentId": "seg_resume_a",
+          "segmentSeq": 2,
+          "traceId": "44444444444444444444444444444444",
+          "suspendedAt": "2026-05-16T18:03:01.000Z",
+          "reason": "await-signal"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_resume_resume",
+          "type": "run:resume",
+          "runId": "run_resume",
+          "segmentId": "seg_resume_b",
+          "segmentSeq": 1,
+          "traceId": "44444444444444444444444444444444",
+          "resumedAt": "2026-05-16T18:04:00.000Z",
+          "reason": "signal",
+          "previousSegmentId": "seg_resume_a"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_resume_end",
+          "type": "run:end",
+          "runId": "run_resume",
+          "segmentId": "seg_resume_b",
+          "segmentSeq": 2,
+          "traceId": "44444444444444444444444444444444",
+          "endedAt": "2026-05-16T18:04:01.000Z",
+          "durationMs": 2000,
+          "status": "ok"
+        }
+      ],
+      "expected": [
+        {
+          "recordId": "rec_resume_start",
+          "schemaVersion": 2,
+          "segmentId": "seg_resume_a",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_resume_suspend",
+          "schemaVersion": 2,
+          "segmentId": "seg_resume_a",
+          "segmentSeq": 2
+        },
+        {
+          "recordId": "rec_resume_resume",
+          "schemaVersion": 2,
+          "segmentId": "seg_resume_b",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_resume_end",
+          "schemaVersion": 2,
+          "segmentId": "seg_resume_b",
+          "segmentSeq": 2
+        }
+      ]
+    },
+    {
+      "name": "concurrent-segments",
+      "records": [
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_concurrent_resume_a",
+          "type": "run:resume",
+          "runId": "run_concurrent",
+          "segmentId": "seg_concurrent_a",
+          "segmentSeq": 1,
+          "traceId": "55555555555555555555555555555555",
+          "resumedAt": "2026-05-16T18:05:00.000Z",
+          "reason": "parallel-a"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_concurrent_resume_b",
+          "type": "run:resume",
+          "runId": "run_concurrent",
+          "segmentId": "seg_concurrent_b",
+          "segmentSeq": 1,
+          "traceId": "55555555555555555555555555555555",
+          "resumedAt": "2026-05-16T18:05:00.000Z",
+          "reason": "parallel-b"
+        }
+      ],
+      "expected": [
+        {
+          "recordId": "rec_concurrent_resume_a",
+          "schemaVersion": 2,
+          "segmentId": "seg_concurrent_a",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_concurrent_resume_b",
+          "schemaVersion": 2,
+          "segmentId": "seg_concurrent_b",
+          "segmentSeq": 1
+        }
+      ]
+    },
+    {
+      "name": "child-before-parent-and-terminal-before-start",
+      "records": [
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_out_span",
+          "type": "span",
+          "runId": "run_out_of_order",
+          "segmentId": "seg_out_a",
+          "segmentSeq": 2,
+          "traceId": "66666666666666666666666666666666",
+          "spanId": "0000000000000001",
+          "parentSpanId": "0000000000000002",
+          "family": "tool",
+          "primitive": "tool.call",
+          "name": "child",
+          "startedAt": "2026-05-16T18:06:00.010Z",
+          "endedAt": "2026-05-16T18:06:00.020Z",
+          "durationMs": 10,
+          "status": "ok"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_out_end",
+          "type": "run:end",
+          "runId": "run_out_of_order",
+          "segmentId": "seg_out_a",
+          "segmentSeq": 3,
+          "traceId": "66666666666666666666666666666666",
+          "endedAt": "2026-05-16T18:06:01.000Z",
+          "status": "ok"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_out_start",
+          "type": "run:start",
+          "runId": "run_out_of_order",
+          "segmentId": "seg_out_a",
+          "segmentSeq": 1,
+          "traceId": "66666666666666666666666666666666",
+          "name": "out of order",
+          "rootPrimitive": "agent.run",
+          "startedAt": "2026-05-16T18:06:00.000Z",
+          "status": "running"
+        }
+      ],
+      "expected": [
+        {
+          "recordId": "rec_out_span",
+          "schemaVersion": 2,
+          "segmentId": "seg_out_a",
+          "segmentSeq": 2
+        },
+        {
+          "recordId": "rec_out_end",
+          "schemaVersion": 2,
+          "segmentId": "seg_out_a",
+          "segmentSeq": 3
+        },
+        {
+          "recordId": "rec_out_start",
+          "schemaVersion": 2,
+          "segmentId": "seg_out_a",
+          "segmentSeq": 1
+        }
+      ]
+    },
+    {
+      "name": "duplicate-identical-and-conflicting-record-id",
+      "records": [
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_dup",
+          "type": "run:start",
+          "runId": "run_dup",
+          "segmentId": "seg_dup_a",
+          "segmentSeq": 1,
+          "traceId": "77777777777777777777777777777777",
+          "name": "duplicate",
+          "rootPrimitive": "agent.run",
+          "startedAt": "2026-05-16T18:07:00.000Z",
+          "status": "running"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_dup",
+          "type": "run:start",
+          "runId": "run_dup",
+          "segmentId": "seg_dup_a",
+          "segmentSeq": 1,
+          "traceId": "77777777777777777777777777777777",
+          "name": "duplicate",
+          "rootPrimitive": "agent.run",
+          "startedAt": "2026-05-16T18:07:00.000Z",
+          "status": "running"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_dup",
+          "type": "run:start",
+          "runId": "run_dup",
+          "segmentId": "seg_dup_a",
+          "segmentSeq": 1,
+          "traceId": "77777777777777777777777777777777",
+          "name": "conflict",
+          "rootPrimitive": "agent.run",
+          "startedAt": "2026-05-16T18:07:00.000Z",
+          "status": "running"
+        }
+      ],
+      "expected": [
+        {
+          "recordId": "rec_dup",
+          "schemaVersion": 2,
+          "segmentId": "seg_dup_a",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_dup",
+          "schemaVersion": 2,
+          "segmentId": "seg_dup_a",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_dup",
+          "schemaVersion": 2,
+          "segmentId": "seg_dup_a",
+          "segmentSeq": 1
+        }
+      ]
+    },
+    {
+      "name": "pre-v2-local-store-migration-reset",
+      "records": [
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_reset_start",
+          "type": "run:start",
+          "runId": "run_reset_v2",
+          "segmentId": "seg_reset_a",
+          "segmentSeq": 1,
+          "traceId": "88888888888888888888888888888888",
+          "name": "after reset",
+          "rootPrimitive": "agent.run",
+          "startedAt": "2026-05-16T18:08:00.000Z",
+          "status": "running"
+        }
+      ],
+      "expected": [
+        {
+          "recordId": "rec_reset_start",
+          "schemaVersion": 2,
+          "segmentId": "seg_reset_a",
+          "segmentSeq": 1
+        }
+      ]
+    },
+    {
+      "name": "missing-parent-segment-gap",
+      "records": [
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_gap_span",
+          "type": "span",
+          "runId": "run_gap",
+          "segmentId": "seg_gap_b",
+          "segmentSeq": 3,
+          "traceId": "99999999999999999999999999999999",
+          "spanId": "0000000000000003",
+          "parentSpanId": "0000000000000004",
+          "family": "tool",
+          "primitive": "tool.call",
+          "name": "gap",
+          "startedAt": "2026-05-16T18:10:00.010Z",
+          "endedAt": "2026-05-16T18:10:00.020Z",
+          "durationMs": 10,
+          "status": "ok"
+        }
+      ],
+      "expected": [
+        {
+          "recordId": "rec_gap_span",
+          "schemaVersion": 2,
+          "segmentId": "seg_gap_b",
+          "segmentSeq": 3
+        }
+      ]
+    },
+    {
+      "name": "crash-incomplete-distinct-from-suspend-and-terminal",
+      "records": [
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_incomplete_start",
+          "type": "run:start",
+          "runId": "run_incomplete",
+          "segmentId": "seg_incomplete_a",
+          "segmentSeq": 1,
+          "traceId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "name": "incomplete",
+          "rootPrimitive": "agent.run",
+          "startedAt": "2026-05-16T18:11:00.000Z",
+          "status": "running"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_suspended_start",
+          "type": "run:start",
+          "runId": "run_suspended",
+          "segmentId": "seg_suspended_a",
+          "segmentSeq": 1,
+          "traceId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "name": "suspended",
+          "rootPrimitive": "flow.run",
+          "startedAt": "2026-05-16T18:12:00.000Z",
+          "status": "running"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_suspended_suspend",
+          "type": "run:suspend",
+          "runId": "run_suspended",
+          "segmentId": "seg_suspended_a",
+          "segmentSeq": 2,
+          "traceId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "suspendedAt": "2026-05-16T18:12:01.000Z",
+          "reason": "await-signal"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_terminal_start",
+          "type": "run:start",
+          "runId": "run_terminal",
+          "segmentId": "seg_terminal_a",
+          "segmentSeq": 1,
+          "traceId": "cccccccccccccccccccccccccccccccc",
+          "name": "terminal",
+          "rootPrimitive": "agent.run",
+          "startedAt": "2026-05-16T18:13:00.000Z",
+          "status": "running"
+        },
+        {
+          "schemaVersion": 2,
+          "recordId": "rec_terminal_end",
+          "type": "run:end",
+          "runId": "run_terminal",
+          "segmentId": "seg_terminal_a",
+          "segmentSeq": 2,
+          "traceId": "cccccccccccccccccccccccccccccccc",
+          "endedAt": "2026-05-16T18:13:01.000Z",
+          "status": "ok"
+        }
+      ],
+      "expected": [
+        {
+          "recordId": "rec_incomplete_start",
+          "schemaVersion": 2,
+          "segmentId": "seg_incomplete_a",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_suspended_start",
+          "schemaVersion": 2,
+          "segmentId": "seg_suspended_a",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_suspended_suspend",
+          "schemaVersion": 2,
+          "segmentId": "seg_suspended_a",
+          "segmentSeq": 2
+        },
+        {
+          "recordId": "rec_terminal_start",
+          "schemaVersion": 2,
+          "segmentId": "seg_terminal_a",
+          "segmentSeq": 1
+        },
+        {
+          "recordId": "rec_terminal_end",
+          "schemaVersion": 2,
+          "segmentId": "seg_terminal_a",
+          "segmentSeq": 2
+        }
+      ]
+    }
+  ]
+}

@@ -1,9 +1,10 @@
-import type { CruxRunId, CruxSpanId, CruxTraceId } from './contract'
+import type { CruxRunId, CruxSegmentId, CruxSpanId, CruxTraceId } from './contract'
 import { mergeCruxCorrelators, type CruxCorrelators } from './correlators'
 
 export interface ObservabilityContext {
   runId: CruxRunId
   traceId: CruxTraceId
+  segmentId: CruxSegmentId
   startedAtMs?: number
   spanStack: readonly CruxSpanId[]
   correlators?: CruxCorrelators

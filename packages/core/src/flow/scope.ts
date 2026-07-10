@@ -253,6 +253,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     ({
       runId: flowSpan.runId,
       traceId: flowSpan.traceId,
+      segmentId: flowSpan.segmentId,
       spanStack: flowSpan.parentSpanId ? [flowSpan.parentSpanId] : [],
     } as const)
   const spanId = flowSpan.spanId

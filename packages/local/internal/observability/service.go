@@ -41,6 +41,7 @@ type Service struct {
 	queryTO       time.Duration
 	mutationTO    time.Duration
 	maintenanceTO time.Duration
+	mutationMu    sync.Mutex
 
 	retentionSettings  retentionSettings
 	lifecycleRunDetail func(context.Context, string) (RunDetail, error)
@@ -498,7 +499,8 @@ type StoredRecord struct {
 	RecordID    string     `json:"recordId"`
 	RunID       string     `json:"runId"`
 	TraceID     string     `json:"traceId"`
-	Seq         int        `json:"seq"`
+	SegmentID   string     `json:"segmentId"`
+	SegmentSeq  int        `json:"segmentSeq"`
 	Type        RecordType `json:"type"`
 	PayloadJSON string     `json:"payloadJson"`
 	ReceivedAt  string     `json:"receivedAt"`
@@ -573,7 +575,8 @@ type RunEndRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	EndedAt       string          `json:"endedAt"`
 	DurationMs    float64         `json:"durationMs,omitempty"`
@@ -588,7 +591,8 @@ type SpanEndRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	EndedAt       string          `json:"endedAt"`
@@ -604,7 +608,8 @@ type SpanEventRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	EventID       string          `json:"eventId"`

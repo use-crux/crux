@@ -11,6 +11,9 @@ func (s *Service) Ingest(ctx context.Context, batch Batch) (err error) {
 	ctx, cancel := s.mutationContext(ctx)
 	defer cancel()
 
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
+
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin observability ingest transaction: %w", err)

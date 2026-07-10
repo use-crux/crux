@@ -245,7 +245,7 @@ export const experimentRecordSchema: z.ZodType<ExperimentRecord> = z
     endedAt: z.string(),
     configFingerprint: z.string(),
     taskFingerprint: z.string(),
-    observability: z.object({ runId: z.string(), traceId: z.string() }).optional(),
+    observability: z.object({ runId: z.string(), traceId: z.string(), segmentId: z.string() }).optional(),
     filteredRun: z.boolean(),
     replay: z
       .object({

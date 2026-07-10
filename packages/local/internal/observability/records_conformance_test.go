@@ -103,10 +103,7 @@ func TestComparisonFixtureToleratesExternalRunEdgeRefs(t *testing.T) {
 
 func TestSharedTaxonomyFixtureMatchesGoTaxonomy(t *testing.T) {
 	var taxonomy taxonomyFixture
-	raw, err := os.ReadFile("../../../core/observability/fixtures/taxonomy.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	raw := readCoreObservabilityFixture(t, "taxonomy.json")
 	if err := json.Unmarshal(raw, &taxonomy); err != nil {
 		t.Fatal(err)
 	}
@@ -122,6 +119,64 @@ func TestSharedTaxonomyFixtureMatchesGoTaxonomy(t *testing.T) {
 	}
 }
 
+func TestSharedV2ContractFixturesValidateSegmentView(t *testing.T) {
+	var corpus v2ContractCorpus
+	raw := readCoreObservabilityFixture(t, "v2-contract-cases.json")
+	if err := json.Unmarshal(raw, &corpus); err != nil {
+		t.Fatal(err)
+	}
+	wantNames := []string{
+		"one-segment-success",
+		"one-segment-error",
+		"one-segment-cancelled",
+		"suspend-resume-fresh-process",
+		"concurrent-segments",
+		"child-before-parent-and-terminal-before-start",
+		"duplicate-identical-and-conflicting-record-id",
+		"pre-v2-local-store-migration-reset",
+		"missing-parent-segment-gap",
+		"crash-incomplete-distinct-from-suspend-and-terminal",
+	}
+	gotNames := make([]string, 0, len(corpus.Cases))
+	for _, testCase := range corpus.Cases {
+		gotNames = append(gotNames, testCase.Name)
+	}
+	if !reflect.DeepEqual(gotNames, wantNames) {
+		t.Fatalf("case names = %#v, want %#v", gotNames, wantNames)
+	}
+
+	for _, testCase := range corpus.Cases {
+		if len(testCase.Records) != len(testCase.Expected) {
+			t.Fatalf("%s records = %d, expected = %d", testCase.Name, len(testCase.Records), len(testCase.Expected))
+		}
+		phase3BaseEnvelopeOnly := testCase.Name == "suspend-resume-fresh-process" ||
+			testCase.Name == "concurrent-segments" ||
+			testCase.Name == "crash-incomplete-distinct-from-suspend-and-terminal"
+		for i, record := range testCase.Records {
+			var err error
+			if phase3BaseEnvelopeOnly {
+				// Phase 3 owns lifecycle record behavior; Phase 1 only proves the
+				// future examples carry the v2 base envelope.
+				err = ValidateRecordBase(record)
+			} else {
+				err = ValidateRecord(record)
+			}
+			if err != nil {
+				t.Fatalf("%s record %s failed validation: %v", testCase.Name, record.RecordID, err)
+			}
+			got := v2ContractExpected{
+				RecordID:      record.RecordID,
+				SchemaVersion: record.SchemaVersion,
+				SegmentID:     record.SegmentID,
+				SegmentSeq:    record.SegmentSeq,
+			}
+			if !reflect.DeepEqual(got, testCase.Expected[i]) {
+				t.Fatalf("%s normalized[%d] = %#v, want %#v", testCase.Name, i, got, testCase.Expected[i])
+			}
+		}
+	}
+}
+
 type conformanceFixture struct {
 	Name  string
 	Batch Batch
@@ -133,15 +188,32 @@ type taxonomyFixture struct {
 	EdgeTypes         []string          `json:"edgeTypes"`
 }
 
+type v2ContractCorpus struct {
+	Cases []v2ContractCase `json:"cases"`
+}
+
+type v2ContractCase struct {
+	Name     string               `json:"name"`
+	Records  []Record             `json:"records"`
+	Expected []v2ContractExpected `json:"expected"`
+}
+
+type v2ContractExpected struct {
+	RecordID      string `json:"recordId"`
+	SchemaVersion int    `json:"schemaVersion"`
+	SegmentID     string `json:"segmentId"`
+	SegmentSeq    int    `json:"segmentSeq"`
+}
+
 func loadConformanceFixtures(t *testing.T) []conformanceFixture {
 	t.Helper()
-	files, err := filepath.Glob("../../../core/observability/fixtures/*.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	files := globCoreObservabilityFixtures(t, "*.json")
 	fixtures := make([]conformanceFixture, 0, len(files))
 	for _, file := range files {
 		if filepath.Base(file) == "taxonomy.json" {
+			continue
+		}
+		if filepath.Base(file) == "v2-contract-cases.json" {
 			continue
 		}
 		raw, err := os.ReadFile(file)

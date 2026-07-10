@@ -1,8 +1,8 @@
-import type { CruxGraphRecord, CruxRunId } from './contract'
+import type { CruxGraphRecord, CruxSegmentId } from './contract'
 
 export type UnsequencedCruxGraphRecord = CruxGraphRecord extends infer Record
   ? Record extends CruxGraphRecord
-    ? Omit<Record, 'seq'>
+    ? Omit<Record, 'segmentSeq'>
     : never
   : never
 
@@ -11,23 +11,23 @@ export interface CruxRecordSequencer {
   reset(): void
 }
 
-const maxRunCounters = 10_000
+const maxSegmentCounters = 10_000
 
 /**
- * Create a per-run record sequencer for canonical graph emission.
+ * Create a segment-local record sequencer for ordinary one-segment graph emission.
  *
- * Sequence numbers are assigned immediately before validation and fan-out so
- * every public `observe.*` path shares the same ordering contract.
+ * Sequence numbers are assigned immediately before validation and fan-out.
+ * They are positive and monotonic only within one execution segment.
  */
 export function createRecordSequencer(): CruxRecordSequencer {
-  const counters = new Map<CruxRunId, number>()
+  const counters = new Map<CruxSegmentId, number>()
 
   return {
     assign(record) {
-      const seq = nextSeq(counters, record.runId)
-      const sequenced = { ...record, seq } as CruxGraphRecord
+      const segmentSeq = nextSegmentSeq(counters, record.segmentId)
+      const sequenced = { ...record, segmentSeq } as CruxGraphRecord
       if (record.type === 'run:end') {
-        counters.delete(record.runId)
+        counters.delete(record.segmentId)
       }
       return sequenced
     },
@@ -37,17 +37,17 @@ export function createRecordSequencer(): CruxRecordSequencer {
   }
 }
 
-function nextSeq(counters: Map<CruxRunId, number>, runId: CruxRunId): number {
-  const current = counters.get(runId) ?? 0
-  counters.delete(runId)
+function nextSegmentSeq(counters: Map<CruxSegmentId, number>, segmentId: CruxSegmentId): number {
+  const current = counters.get(segmentId) ?? 0
+  counters.delete(segmentId)
   const next = current + 1
-  counters.set(runId, next)
+  counters.set(segmentId, next)
   evictOldestCounter(counters)
   return next
 }
 
-function evictOldestCounter(counters: Map<CruxRunId, number>): void {
-  if (counters.size <= maxRunCounters) return
-  const oldestRunId = counters.keys().next().value
-  if (oldestRunId) counters.delete(oldestRunId)
+function evictOldestCounter(counters: Map<CruxSegmentId, number>): void {
+  if (counters.size <= maxSegmentCounters) return
+  const oldestSegmentId = counters.keys().next().value
+  if (oldestSegmentId) counters.delete(oldestSegmentId)
 }

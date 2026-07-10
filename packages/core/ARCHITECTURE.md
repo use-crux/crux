@@ -1634,9 +1634,10 @@ and queues the same record for the async transport when a transport is configure
 subscriber failures are counted in `observabilityDiagnostics().subscriberErrors` and never interrupt
 user code, sibling subscribers, or transport delivery. The diagnostics channel is a Node tee for
 external observers and degrades to no-op when `node:diagnostics_channel` is unavailable.
-Trace and span IDs use W3C lowercase hex formats, and `emit()` assigns each record a per-run
-monotonic `seq` before validation/fan-out so storage and clients can order records without relying
-on wall-clock timestamps.
+Trace and span IDs use W3C lowercase hex formats. Ordinary one-segment writers stamp every record
+with a stable `segmentId` and positive `segmentSeq` before validation/fan-out; `segmentSeq` is
+monotonic only within that execution segment, so storage and clients must not treat it as a
+distributed per-run order.
 Correlators are carried by the same observability context: `propagateAttributes()` merges
 `sessionId`, `userId`, and flat metadata into active and future run/span scopes. `emit()` stamps
 the scalar correlators onto every record and projects metadata into capped `meta.*` attributes.

@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 type RecordType string
 
@@ -30,7 +30,8 @@ type Record struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	Payload       json.RawMessage `json:"-"`
 }
@@ -51,7 +52,8 @@ type RunStartRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SessionID     string          `json:"sessionId,omitempty"`
 	UserID        string          `json:"userId,omitempty"`
@@ -67,7 +69,8 @@ type SpanStartRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	ParentSpanID  *string         `json:"parentSpanId,omitempty"`
@@ -94,7 +97,8 @@ type SpanRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	ParentSpanID  *string         `json:"parentSpanId,omitempty"`
@@ -125,7 +129,8 @@ type ArtifactRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	ArtifactID    string          `json:"artifactId"`
 	SpanID        string          `json:"spanId,omitempty"`
@@ -145,7 +150,8 @@ type EdgeRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	EdgeID        string          `json:"edgeId"`
 	EdgeType      string          `json:"edgeType"`
@@ -291,13 +297,9 @@ var canonicalArtifactKinds = map[string]struct{}{
 }
 
 func ValidateRecord(record Record) error {
-	if record.SchemaVersion != SchemaVersion {
-		return fmt.Errorf("record %s schemaVersion %d is not supported", record.RecordID, record.SchemaVersion)
+	if err := ValidateRecordBase(record); err != nil {
+		return err
 	}
-	if record.RecordID == "" || record.RunID == "" {
-		return fmt.Errorf("record is missing required identity")
-	}
-
 	switch record.Type {
 	case RecordRunStart:
 		var run RunStartRecord
@@ -347,6 +349,22 @@ func ValidateRecord(record Record) error {
 		return nil
 	default:
 		return nil
+	}
+	return nil
+}
+
+func ValidateRecordBase(record Record) error {
+	if record.SchemaVersion != SchemaVersion {
+		return fmt.Errorf("record %s schemaVersion %d is not supported", record.RecordID, record.SchemaVersion)
+	}
+	if record.RecordID == "" || record.RunID == "" {
+		return fmt.Errorf("record is missing required identity")
+	}
+	if record.SegmentID == "" || record.SegmentSeq <= 0 {
+		return fmt.Errorf("record %s is missing v2 segment identity", record.RecordID)
+	}
+	if record.Type == RecordRunStart && record.SegmentSeq != 1 {
+		return fmt.Errorf("run:start record %s must use segmentSeq 1", record.RecordID)
 	}
 	return nil
 }

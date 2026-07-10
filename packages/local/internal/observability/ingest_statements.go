@@ -33,6 +33,10 @@ func (s *ingestStatements) exec(ctx context.Context, query string, args ...any) 
 	return stmt.ExecContext(ctx, args...)
 }
 
+func (s *ingestStatements) queryRow(ctx context.Context, query string, args ...any) *sql.Row {
+	return s.tx.QueryRowContext(ctx, query, args...)
+}
+
 func (s *ingestStatements) close() error {
 	for _, stmt := range s.cache {
 		if err := stmt.Close(); err != nil {

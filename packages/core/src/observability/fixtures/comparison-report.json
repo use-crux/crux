@@ -1,23 +1,23 @@
 {
   "records": [
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_dddddddddddddddd_1",
       "type": "run:start",
       "runId": "run_dddddddddddddddddddddddd",
-      "seq": 1,
       "traceId": "44444444444444444444444444444444",
       "name": "quality comparison",
       "rootPrimitive": "eval.run",
       "startedAt": "2026-07-03T12:02:00.000Z",
-      "status": "running"
+      "status": "running",
+      "segmentId": "seg_dddddddddddddddddddddddd",
+      "segmentSeq": 1
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_dddddddddddddddd_2",
       "type": "artifact",
       "runId": "run_dddddddddddddddddddddddd",
-      "seq": 2,
       "traceId": "44444444444444444444444444444444",
       "artifactId": "artifact_comparison_report",
       "kind": "comparison.report",
@@ -41,14 +41,15 @@
           "baselineOnly": [],
           "candidateOnly": []
         }
-      }
+      },
+      "segmentId": "seg_dddddddddddddddddddddddd",
+      "segmentSeq": 2
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_dddddddddddddddd_3",
       "type": "edge",
       "runId": "run_dddddddddddddddddddddddd",
-      "seq": 3,
       "traceId": "44444444444444444444444444444444",
       "edgeId": "edge_dddddddddddddddd",
       "edgeType": "comparison.candidate",
@@ -60,14 +61,15 @@
         "kind": "run",
         "id": "run_dddddddddddddddddddddddd"
       },
-      "createdAt": "2026-07-03T12:02:00.020Z"
+      "createdAt": "2026-07-03T12:02:00.020Z",
+      "segmentId": "seg_dddddddddddddddddddddddd",
+      "segmentSeq": 3
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_dddddddddddddddd_4",
       "type": "edge",
       "runId": "run_dddddddddddddddddddddddd",
-      "seq": 4,
       "traceId": "44444444444444444444444444444444",
       "edgeId": "edge_eeeeeeeeeeeeeeee",
       "edgeType": "comparison.baseline",
@@ -79,17 +81,20 @@
         "kind": "run",
         "id": "run_eeeeeeeeeeeeeeeeeeeeeeee"
       },
-      "createdAt": "2026-07-03T12:02:00.030Z"
+      "createdAt": "2026-07-03T12:02:00.030Z",
+      "segmentId": "seg_dddddddddddddddddddddddd",
+      "segmentSeq": 4
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_dddddddddddddddd_5",
       "type": "run:end",
       "runId": "run_dddddddddddddddddddddddd",
-      "seq": 5,
       "traceId": "44444444444444444444444444444444",
       "endedAt": "2026-07-03T12:02:00.040Z",
-      "status": "ok"
+      "status": "ok",
+      "segmentId": "seg_dddddddddddddddddddddddd",
+      "segmentSeq": 5
     }
   ]
 }

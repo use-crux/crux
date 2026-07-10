@@ -3,6 +3,7 @@ import type {
   CruxEdgeId,
   CruxRecordId,
   CruxRunId,
+  CruxSegmentId,
   CruxSpanEventId,
   CruxSpanId,
   CruxTraceId,
@@ -41,11 +42,17 @@ export function createCruxRunId(): CruxRunId {
   return `run_${randomNonZeroHex(12)}` as CruxRunId
 }
 
+/** Create an execution-segment identifier with the stable Crux segment prefix. */
+export function createCruxSegmentId(): CruxSegmentId {
+  return `seg_${randomNonZeroHex(12)}` as CruxSegmentId
+}
+
 /**
  * Create a record identifier with a random component plus process-local order.
  *
  * The monotonic suffix helps make record IDs easy to scan during debugging; it
- * is not used as the graph ordering contract. Use `seq` for per-run ordering.
+ * is not used as the graph ordering contract. Use `(segmentId, segmentSeq)`
+ * for durable segment-local ordering.
  */
 export function createCruxRecordId(): CruxRecordId {
   recordCounter += 1

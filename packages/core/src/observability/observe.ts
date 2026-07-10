@@ -11,6 +11,7 @@ import {
   type CruxPrimitiveName,
   type CruxRunId,
   type CruxRunStatus,
+  type CruxSegmentId,
   type CruxSpanStatus,
   type CruxSpanId,
   type CruxTraceId,
@@ -21,6 +22,7 @@ import {
   createCruxEdgeId,
   createCruxRecordId,
   createCruxRunId,
+  createCruxSegmentId,
   createCruxSpanEventId,
   createCruxSpanId,
   createCruxTraceId,
@@ -107,6 +109,8 @@ export interface ObservabilityDiagnostics {
 export interface OpenObservedSpan {
   readonly runId: CruxRunId
   readonly traceId: CruxTraceId
+  /** Segment that owns records emitted by this open span. */
+  readonly segmentId: CruxSegmentId
   readonly spanId: CruxSpanId
   readonly parentSpanId: CruxSpanId | null
   /**
@@ -137,6 +141,8 @@ export interface OpenObservedSpan {
 export interface OpenObservedRun {
   readonly runId: CruxRunId
   readonly traceId: CruxTraceId
+  /** Segment that owns records emitted by this open run. */
+  readonly segmentId: CruxSegmentId
   captureContext(): CapturedObservabilityContext
   withContext<T>(fn: () => T | Promise<T>): T | Promise<T>
   end(options?: EndObservedRunOptions): void
@@ -418,6 +424,7 @@ function emitObservedErrorEvidence(
         recordId: createCruxRecordId(),
         type: 'span:event',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         eventId: createCruxSpanEventId(),
@@ -435,6 +442,7 @@ function emitObservedErrorEvidence(
           recordId: createCruxRecordId(),
           type: 'artifact',
           runId: context.runId,
+          segmentId: context.segmentId,
           traceId: context.traceId,
           spanId,
           artifactId: createCruxArtifactId(),
@@ -455,6 +463,7 @@ function emitObservedErrorEvidence(
         recordId: createCruxRecordId(),
         type: 'artifact',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         artifactId: createCruxArtifactId(),
@@ -490,6 +499,7 @@ function captureContextValue(
 ): CapturedObservabilityContext {
   return {
     runId: context.runId,
+    segmentId: context.segmentId,
     traceId: context.traceId,
     ...(context.startedAtMs !== undefined
       ? { startedAtMs: context.startedAtMs }
@@ -661,10 +671,12 @@ export const observe = {
   openRun(options: ObserveRunOptions): OpenObservedRun {
     const runId = createCruxRunId()
     const traceId = options.traceId ?? createCruxTraceId()
+    const segmentId = createCruxSegmentId()
     const startedAtMs = Date.now()
     const context: ObservabilityContext = {
       runId,
       traceId,
+      segmentId,
       startedAtMs,
       spanStack: [],
       correlators: effectiveCorrelators(),
@@ -677,6 +689,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'run:start',
         runId,
+        segmentId,
         traceId,
         name: options.name,
         rootPrimitive: options.rootPrimitive,
@@ -699,6 +712,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'run:end',
           runId,
+          segmentId,
           traceId,
           endedAt: now(),
           durationMs: durationSince(startedAtMs),
@@ -723,6 +737,7 @@ export const observe = {
     return {
       runId,
       traceId,
+      segmentId,
       captureContext(): CapturedObservabilityContext {
         return captureContextValue(context, [])
       },
@@ -753,6 +768,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'run:end',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         endedAt: now(),
         ...(context.startedAtMs !== undefined
@@ -780,10 +796,12 @@ export const observe = {
   ): Promise<T> {
     const runId = createCruxRunId()
     const traceId = options.traceId ?? createCruxTraceId()
+    const segmentId = createCruxSegmentId()
     const startedAtMs = Date.now()
     const context: ObservabilityContext = {
       runId,
       traceId,
+      segmentId,
       startedAtMs,
       spanStack: [],
       correlators: effectiveCorrelators(),
@@ -795,6 +813,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'run:start',
         runId,
+        segmentId,
         traceId,
         name: options.name,
         rootPrimitive: options.rootPrimitive,
@@ -814,6 +833,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'run:end',
           runId,
+          segmentId,
           traceId,
           endedAt: now(),
           durationMs: durationSince(startedAtMs),
@@ -830,6 +850,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'run:end',
           runId,
+          segmentId,
           traceId,
           endedAt: now(),
           durationMs: durationSince(startedAtMs),
@@ -877,6 +898,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'span:start',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         parentSpanId,
@@ -898,6 +920,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'span:end',
           runId: context.runId,
+          segmentId: context.segmentId,
           traceId: context.traceId,
           spanId,
           endedAt: now(),
@@ -915,6 +938,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'span:end',
           runId: context.runId,
+          segmentId: context.segmentId,
           traceId: context.traceId,
           spanId,
           endedAt: now(),
@@ -939,10 +963,12 @@ export const observe = {
       if (options.implicitRun === false) {
         const runId = createCruxRunId()
         const traceId = createCruxTraceId()
+        const segmentId = createCruxSegmentId()
         const spanId = createCruxSpanId()
         return {
           runId,
           traceId,
+          segmentId,
           spanId,
           parentSpanId: null,
           withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
@@ -958,6 +984,7 @@ export const observe = {
       const implicitContext: ObservabilityContext = {
         runId: createCruxRunId(),
         traceId: createCruxTraceId(),
+        segmentId: createCruxSegmentId(),
         startedAtMs: implicitRunStartedAtMs,
         spanStack: [],
         correlators: effectiveCorrelators(),
@@ -969,6 +996,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'run:start',
           runId: implicitContext.runId,
+          segmentId: implicitContext.segmentId,
           traceId: implicitContext.traceId,
           name: options.name,
           rootPrimitive: options.primitive,
@@ -996,6 +1024,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'span:start',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         parentSpanId,
@@ -1041,6 +1070,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'span:end',
           runId: spanContext.runId,
+          segmentId: spanContext.segmentId,
           traceId: spanContext.traceId,
           spanId,
           endedAt: now(),
@@ -1069,6 +1099,7 @@ export const observe = {
             recordId: createCruxRecordId(),
             type: 'run:end',
             runId: spanContext.runId,
+            segmentId: spanContext.segmentId,
             traceId: spanContext.traceId,
             endedAt: now(),
             durationMs: durationSince(implicitRunStartedAtMs),
@@ -1093,6 +1124,7 @@ export const observe = {
     return {
       runId: spanContext.runId,
       traceId: spanContext.traceId,
+      segmentId: spanContext.segmentId,
       spanId,
       parentSpanId,
       withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
@@ -1129,6 +1161,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'span:event',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         eventId: createCruxSpanEventId(),
@@ -1156,6 +1189,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'artifact',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         artifactId,
         ...(spanId ? { spanId } : {}),
@@ -1189,6 +1223,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'edge',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         edgeId: createCruxEdgeId(),
         edgeType: options.edgeType,
@@ -1217,6 +1252,7 @@ export const observe = {
       {
         runId: context.runId,
         traceId: context.traceId,
+        segmentId: context.segmentId,
         startedAtMs: context.startedAtMs,
         correlators: context.correlators,
         spanStack: [...context.spanStack],
@@ -1236,9 +1272,13 @@ export const observe = {
 
 function rememberEndedRun(runId: CruxRunId, status: EndedRunStatus): boolean {
   const previousStatus = endedRunStatuses.get(runId)
-  const resumedFromSuspension =
-    previousStatus === 'suspended' && status !== 'suspended'
-  if (previousStatus && !resumedFromSuspension) return false
+  if (previousStatus) {
+    if (previousStatus === 'suspended' && status !== 'suspended') {
+      endedRunStatuses.set(runId, status)
+      return true
+    }
+    return false
+  }
 
   endedRunStatuses.set(runId, status)
   if (endedRunStatuses.size <= maxEndedRunIds) return true

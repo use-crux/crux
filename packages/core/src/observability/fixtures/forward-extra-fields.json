@@ -1,11 +1,10 @@
 {
   "records": [
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_aaaaaaaaaaaaaaaa_extra",
       "type": "run:start",
       "runId": "run_aaaaaaaaaaaaaaaaaaaaaaaa",
-      "seq": 1,
       "traceId": "11111111111111111111111111111111",
       "name": "forward extra fields",
       "rootPrimitive": "run",
@@ -13,7 +12,9 @@
       "status": "running",
       "futureField": {
         "kept": true
-      }
+      },
+      "segmentId": "seg_aaaaaaaaaaaaaaaaaaaaaaaa",
+      "segmentSeq": 1
     }
   ]
 }

@@ -3,6 +3,7 @@ import { channel } from 'node:diagnostics_channel'
 import {
   CRUX_OBSERVABILITY_CHANNEL,
   CRUX_OBSERVABILITY_SCHEMA_VERSION,
+  type CapturedObservabilityContext,
   type CruxObservabilityChannelMessage,
   type CruxGraphRecord,
   configureObservability,
@@ -58,6 +59,9 @@ describe('observe runtime', () => {
       name: 'support reply',
       status: 'running',
     })
+    expect(spanStart.segmentId).toBe(runStart.segmentId)
+    expect(spanEnd.segmentId).toBe(runStart.segmentId)
+    expect(runEnd.segmentId).toBe(runStart.segmentId)
     expect(spanStart).toMatchObject({
       type: 'span:start',
       runId: runStart.runId,
@@ -478,6 +482,7 @@ describe('observe runtime', () => {
       primitive: 'routing.cascade',
       implicitRun: false,
     })
+    expect(openSpan.segmentId).toMatch(/^seg_/)
     const openResult = await openSpan.withContext(async () => 'cascaded')
     openSpan.end()
     await observe.flush()
@@ -495,7 +500,9 @@ describe('observe runtime', () => {
       name: 'serverless swarm',
       rootPrimitive: 'composition.swarm',
     })
+    expect(run.segmentId).toMatch(/^seg_/)
     const captured = run.captureContext()
+    expect(captured.segmentId).toBe(run.segmentId)
     await run.withContext(async () => {
       await observe.span(
         { name: 'first turn', primitive: 'composition.swarm' },
@@ -521,6 +528,10 @@ describe('observe runtime', () => {
       'run:end',
     ])
     const [runStart, firstStart, , secondStart, , runEnd] = transport.records
+    expect(run.segmentId).toBe(runStart.segmentId)
+    expect(firstStart.segmentId).toBe(run.segmentId)
+    expect(secondStart.segmentId).toBe(run.segmentId)
+    expect(runEnd.segmentId).toBe(run.segmentId)
     expect(firstStart).toMatchObject({
       type: 'span:start',
       runId: runStart.runId,
@@ -536,6 +547,42 @@ describe('observe runtime', () => {
       runId: runStart.runId,
       status: 'ok',
     })
+  })
+
+  it('does not synthesize segment ids for incomplete captured contexts', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const run = observe.openRun({
+      name: 'incomplete context',
+      rootPrimitive: 'custom.operation',
+    })
+    const { segmentId: _removedSegmentId, ...incompleteContext } =
+      run.captureContext()
+
+    await observe.withContext(
+      incompleteContext as unknown as CapturedObservabilityContext,
+      async () => {
+        const span = observe.openSpan({
+          name: 'missing segment',
+          primitive: 'custom.operation',
+        })
+        span.end()
+      },
+    )
+    observe.endRun(
+      incompleteContext as unknown as CapturedObservabilityContext,
+    )
+    await observe.flush()
+
+    expect(transport.records).toEqual([
+      expect.objectContaining({
+        type: 'run:start',
+        runId: run.runId,
+        segmentId: run.segmentId,
+      }),
+    ])
+    expect(observabilityDiagnostics().invalidRecords).toBeGreaterThan(0)
   })
 
   it('emits captured run ends once with captured duration', async () => {
@@ -1451,7 +1498,8 @@ describe('observe runtime', () => {
     const firstRecord = {
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: 'rec_5xx_first',
-      seq: 1,
+      segmentId: 'seg_5xx_retry',
+      segmentSeq: 1,
       type: 'run:start',
       runId: 'run_5xx_retry',
       traceId: 'trace_5xx_retry',
@@ -1463,7 +1511,8 @@ describe('observe runtime', () => {
     const secondRecord = {
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: 'rec_5xx_second',
-      seq: 2,
+      segmentId: 'seg_5xx_retry',
+      segmentSeq: 2,
       type: 'run:end',
       runId: 'run_5xx_retry',
       traceId: 'trace_5xx_retry',
@@ -1607,7 +1656,8 @@ describe('observe runtime', () => {
     const malformedButAlreadyAcceptedRecord = {
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: 'rec_invalid_local_parse',
-      seq: 1,
+      segmentId: 'seg_invalid_local_parse',
+      segmentSeq: 1,
       type: 'run:start',
       runId: 'run_invalid_local_parse',
       traceId: 'trace-not-w3c',

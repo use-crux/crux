@@ -29,6 +29,7 @@ describe('@use-crux/core/quality/schemas', () => {
 
     const record = experimentRecordSchema.parse(rawRecord)
     expect(record.schemaVersion).toBe(2)
+    expect(record.observability).toEqual(experiment.observability)
     expect(record.failures).toHaveLength(1)
 
     const failure = failureArtifactSchema.parse(record.failures[0])
@@ -47,6 +48,15 @@ describe('@use-crux/core/quality/schemas', () => {
     expect(failure.suggestedFixSurfaces).toContain('prompt')
 
     expect(() => experimentRecordSchema.parse({ ...record, cells: 'not cells' })).toThrow()
+    expect(() =>
+      experimentRecordSchema.parse({
+        ...record,
+        observability: {
+          runId: record.observability!.runId,
+          traceId: record.observability!.traceId,
+        },
+      }),
+    ).toThrow()
     expect(toJsonSchema('experiment')).toMatchObject({ type: 'object' })
   })
 

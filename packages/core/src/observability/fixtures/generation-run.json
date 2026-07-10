@@ -1,7 +1,7 @@
 {
   "records": [
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_b7862451676111a8_1",
       "type": "run:start",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -16,10 +16,11 @@
         "environment": "test",
         "meta.ticketId": "ticket_123"
       },
-      "seq": 1
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 1
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_c89e3f639b60b2b2_2",
       "type": "span:start",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -38,10 +39,11 @@
         "mode": "object",
         "temperature": 0.2
       },
-      "seq": 2
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 2
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_4d7b79403627c9b6_3",
       "type": "artifact",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -62,10 +64,11 @@
           }
         ]
       },
-      "seq": 3
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 3
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_ccf410890aa9bfaa_4",
       "type": "edge",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -81,10 +84,11 @@
         "id": "artifact_8ae65ffeda275825"
       },
       "createdAt": "2026-05-16T18:00:00.016Z",
-      "seq": 4
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 4
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_9160416e1794b6ff_5",
       "type": "artifact",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -110,10 +114,11 @@
         "cacheStatus": "disabled",
         "text": "Refunds are available within 14 days."
       },
-      "seq": 5
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 5
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_4eec8269d07131c0_6",
       "type": "edge",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -132,10 +137,11 @@
       "attributes": {
         "source": "context:refund-policy"
       },
-      "seq": 6
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 6
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_15b7848b79914e00_7",
       "type": "artifact",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -163,10 +169,11 @@
           }
         ]
       },
-      "seq": 7
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 7
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_080e127174af34dd_8",
       "type": "edge",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -182,10 +189,11 @@
         "id": "artifact_f357626b26538e36"
       },
       "createdAt": "2026-05-16T18:00:00.023Z",
-      "seq": 8
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 8
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_55e9a5123cb9077d_9",
       "type": "span:event",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -199,10 +207,11 @@
         "outputTokens": 18,
         "totalTokens": 60
       },
-      "seq": 9
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 9
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_4fa4397ded2ee80c_a",
       "type": "artifact",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -218,10 +227,11 @@
       "preview": {
         "answer": "Monthly plans are refundable within 14 days."
       },
-      "seq": 10
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 10
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_9c797405918fd24c_b",
       "type": "edge",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -237,10 +247,11 @@
         "id": "artifact_92678937d69b54b5"
       },
       "createdAt": "2026-05-16T18:00:00.501Z",
-      "seq": 11
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 11
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_30087e99fc7dcf3b_c",
       "type": "span:end",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -258,10 +269,11 @@
       "attributes": {
         "finishReason": "stop"
       },
-      "seq": 12
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 12
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_164c0d7c7e272dd7_d",
       "type": "run:end",
       "runId": "run_d202cd4d27c2073026a950af",
@@ -275,7 +287,8 @@
         "totalTokens": 60,
         "costUsd": 0.00042
       },
-      "seq": 13
+      "segmentId": "seg_d202cd4d27c2073026a950af",
+      "segmentSeq": 13
     }
   ]
 }

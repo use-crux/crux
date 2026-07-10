@@ -632,7 +632,7 @@ Custom metric keys must use the `custom.*` namespace; built-in generation and to
 
 `observe.span()` derives the span family from its canonical `primitive`, so callers only pass `name`, `primitive`, optional `attributes`, and lifecycle settings. `subscribeObservability()` can subscribe to the whole graph stream or to a narrowed list of record types, with the callback type narrowed to those discriminants.
 
-Observability IDs are W3C-compatible at the trace/span boundary: `traceId` is 32 lowercase hex characters and `spanId` is 16 lowercase hex characters. Every graph record also carries a per-run monotonic `seq` used by transports and the local read model for deterministic ordering.
+Observability IDs are W3C-compatible at the trace/span boundary: `traceId` is 32 lowercase hex characters and `spanId` is 16 lowercase hex characters. Every graph record also carries `segmentId` plus a positive `segmentSeq`; the sequence is monotonic only within that execution segment, so consumers must not treat it as a distributed per-run order.
 
 The observability wire contract is governed by `packages/core/src/observability/VERSIONING.md`. TypeScript producer fixtures stay closed over known graph record types, while the Go local runtime preserves unknown record types and extra JSON fields as raw records so newer SDKs can degrade gracefully against older read models.
 

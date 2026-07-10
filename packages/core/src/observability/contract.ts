@@ -1,4 +1,4 @@
-export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 1;
+export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 2;
 
 export const CRUX_CONTENT_DEGRADED_EVENT = "content.degraded" as const;
 
@@ -246,6 +246,7 @@ export type CruxSpanEventId = Brand<string, "CruxSpanEventId">;
 export type CruxEdgeId = Brand<string, "CruxEdgeId">;
 export type CruxArtifactId = Brand<string, "CruxArtifactId">;
 export type CruxRecordId = Brand<string, "CruxRecordId">;
+export type CruxSegmentId = Brand<string, "CruxSegmentId">;
 
 export type CruxRunStatus =
   | "running"
@@ -910,15 +911,19 @@ export interface CruxErrorSummary {
   statusCode?: number;
 }
 
+/**
+ * Base identity carried by every v2 observability graph record.
+ * `segmentSeq` is monotonic only within `segmentId`; consumers must not treat
+ * it as a distributed per-run order.
+ */
 interface CruxRecordBase {
   schemaVersion: typeof CRUX_OBSERVABILITY_SCHEMA_VERSION;
   recordId: CruxRecordId;
   runId: CruxRunId;
-  /** Per-run monotonic record sequence used for deterministic graph ordering. */
-  seq: number;
-  /** Logical session correlator stamped onto every record when configured. */
+  segmentId: CruxSegmentId;
+  /** Positive monotonic sequence scoped only to segmentId. */
+  segmentSeq: number;
   sessionId?: string;
-  /** End-user or actor correlator stamped onto every record when configured. */
   userId?: string;
   traceId?: CruxTraceId;
 }

@@ -2,15 +2,11 @@ package observability
 
 import (
 	"encoding/json"
-	"os"
 	"testing"
 )
 
 func TestSharedGenerationFixtureDecodes(t *testing.T) {
-	raw, err := os.ReadFile("../../../core/observability/fixtures/generation-run.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	raw := readCoreObservabilityFixture(t, "generation-run.json")
 
 	var batch Batch
 	if err := json.Unmarshal(raw, &batch); err != nil {
@@ -76,10 +72,7 @@ func TestSharedGenerationFixtureDecodes(t *testing.T) {
 }
 
 func TestValidateRecordRejectsInvalidSemantics(t *testing.T) {
-	raw, err := os.ReadFile("../../../core/observability/fixtures/generation-run.json")
-	if err != nil {
-		t.Fatal(err)
-	}
+	raw := readCoreObservabilityFixture(t, "generation-run.json")
 
 	var batch Batch
 	if err := json.Unmarshal(raw, &batch); err != nil {

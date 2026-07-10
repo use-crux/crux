@@ -1,37 +1,38 @@
 {
   "records": [
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_cccccccccccccccc_1",
       "type": "run:start",
       "runId": "run_cccccccccccccccccccccccc",
-      "seq": 1,
       "traceId": "33333333333333333333333333333333",
       "name": "taxonomy drift",
       "rootPrimitive": "routing.fallback",
       "startedAt": "2026-07-03T12:01:00.000Z",
-      "status": "running"
+      "status": "running",
+      "segmentId": "seg_cccccccccccccccccccccccc",
+      "segmentSeq": 1
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_cccccccccccccccc_2",
       "type": "span:start",
       "runId": "run_cccccccccccccccccccccccc",
-      "seq": 2,
       "traceId": "33333333333333333333333333333333",
       "spanId": "3333333333333333",
       "family": "routing",
       "primitive": "routing.fallback",
       "name": "fallback attempt",
       "startedAt": "2026-07-03T12:01:00.010Z",
-      "status": "running"
+      "status": "running",
+      "segmentId": "seg_cccccccccccccccccccccccc",
+      "segmentSeq": 2
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_cccccccccccccccc_3",
       "type": "span",
       "runId": "run_cccccccccccccccccccccccc",
-      "seq": 3,
       "traceId": "33333333333333333333333333333333",
       "spanId": "4444444444444444",
       "family": "compaction",
@@ -39,14 +40,15 @@
       "name": "compact context",
       "startedAt": "2026-07-03T12:01:00.020Z",
       "endedAt": "2026-07-03T12:01:00.030Z",
-      "status": "ok"
+      "status": "ok",
+      "segmentId": "seg_cccccccccccccccccccccccc",
+      "segmentSeq": 3
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_cccccccccccccccc_4",
       "type": "span",
       "runId": "run_cccccccccccccccccccccccc",
-      "seq": 4,
       "traceId": "33333333333333333333333333333333",
       "spanId": "5555555555555555",
       "family": "eval",
@@ -54,54 +56,60 @@
       "name": "evaluate output",
       "startedAt": "2026-07-03T12:01:00.040Z",
       "endedAt": "2026-07-03T12:01:00.050Z",
-      "status": "ok"
+      "status": "ok",
+      "segmentId": "seg_cccccccccccccccccccccccc",
+      "segmentSeq": 4
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_cccccccccccccccc_5",
       "type": "artifact",
       "runId": "run_cccccccccccccccccccccccc",
-      "seq": 5,
       "traceId": "33333333333333333333333333333333",
       "artifactId": "artifact_memory_recall",
       "kind": "memory.recall",
       "createdAt": "2026-07-03T12:01:00.060Z",
       "contentType": "application/json",
-      "encoding": "reference"
+      "encoding": "reference",
+      "segmentId": "seg_cccccccccccccccccccccccc",
+      "segmentSeq": 5
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_cccccccccccccccc_6",
       "type": "artifact",
       "runId": "run_cccccccccccccccccccccccc",
-      "seq": 6,
       "traceId": "33333333333333333333333333333333",
       "artifactId": "artifact_memory_diff",
       "kind": "memory.diff",
       "createdAt": "2026-07-03T12:01:00.070Z",
       "contentType": "application/json",
-      "encoding": "reference"
+      "encoding": "reference",
+      "segmentId": "seg_cccccccccccccccccccccccc",
+      "segmentSeq": 6
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_cccccccccccccccc_7",
       "type": "span:end",
       "runId": "run_cccccccccccccccccccccccc",
-      "seq": 7,
       "traceId": "33333333333333333333333333333333",
       "spanId": "3333333333333333",
       "endedAt": "2026-07-03T12:01:00.080Z",
-      "status": "ok"
+      "status": "ok",
+      "segmentId": "seg_cccccccccccccccccccccccc",
+      "segmentSeq": 7
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "recordId": "rec_cccccccccccccccc_8",
       "type": "run:end",
       "runId": "run_cccccccccccccccccccccccc",
-      "seq": 8,
       "traceId": "33333333333333333333333333333333",
       "endedAt": "2026-07-03T12:01:00.090Z",
-      "status": "ok"
+      "status": "ok",
+      "segmentId": "seg_cccccccccccccccccccccccc",
+      "segmentSeq": 8
     }
   ]
 }

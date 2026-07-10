@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -16,8 +17,8 @@ func TestServiceLifecycleReconcilesStaleRunOnceAndPersistsStatus(t *testing.T) {
 	started := time.Now().Add(-2 * time.Minute).UTC()
 
 	batch := mustBatch(t,
-		`{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_lifecycle_persisted","traceId":"trace_lifecycle_persisted","name":"chat","rootPrimitive":"agent.run","startedAt":"`+started.Format(time.RFC3339Nano)+`","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"rec_agent","type":"span:start","runId":"run_lifecycle_persisted","traceId":"trace_lifecycle_persisted","spanId":"span_chat","family":"agent","primitive":"agent.run","name":"chat","startedAt":"`+started.Format(time.RFC3339Nano)+`","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_run_start","type":"run:start","runId":"run_lifecycle_persisted","segmentId":"seg_lifecycle_persisted_a","segmentSeq":1,"traceId":"trace_lifecycle_persisted","name":"chat","rootPrimitive":"agent.run","startedAt":"`+started.Format(time.RFC3339Nano)+`","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_agent","type":"span:start","runId":"run_lifecycle_persisted","segmentId":"seg_lifecycle_persisted_a","segmentSeq":2,"traceId":"trace_lifecycle_persisted","spanId":"span_chat","family":"agent","primitive":"agent.run","name":"chat","startedAt":"`+started.Format(time.RFC3339Nano)+`","status":"running"}`,
 	)
 	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)
@@ -70,7 +71,7 @@ func TestServiceLifecycleKeepsActiveStreamingRunLive(t *testing.T) {
 	if err := service.Ingest(ctx, mustBatch(t,
 		lifecycleRecordJSON("rec_live_run_start", "run_live_stream", "", started),
 		lifecycleRecordJSON("rec_live_span_start", "run_live_stream", "span_live_stream", started.Add(time.Millisecond)),
-		fmt.Sprintf(`{"schemaVersion":1,"recordId":"rec_live_chunk","type":"span:event","runId":"run_live_stream","traceId":"trace_live_stream","spanId":"span_live_stream","eventId":"event_live_chunk","name":"token.chunk","timestamp":%q,"attributes":{"chunkIndex":0,"charCount":5,"text":"hello","firstDeltaAt":%q,"lastDeltaAt":%q}}`,
+		fmt.Sprintf(`{"schemaVersion":2,"recordId":"rec_live_chunk","type":"span:event","runId":"run_live_stream","segmentId":"seg_live_stream_a","segmentSeq":3,"traceId":"trace_live_stream","spanId":"span_live_stream","eventId":"event_live_chunk","name":"token.chunk","timestamp":%q,"attributes":{"chunkIndex":0,"charCount":5,"text":"hello","firstDeltaAt":%q,"lastDeltaAt":%q}}`,
 			chunkedAt.Format(time.RFC3339Nano), chunkedAt.Format(time.RFC3339Nano), chunkedAt.Format(time.RFC3339Nano)),
 	)); err != nil {
 		t.Fatal(err)
@@ -159,10 +160,11 @@ func assertStoredLifecycleStatus(t *testing.T, service *Service, runID string, w
 }
 
 func lifecycleRecordJSON(recordID string, runID string, spanID string, started time.Time) string {
+	segmentID := "seg_" + strings.TrimPrefix(runID, "run_") + "_a"
 	if spanID == "" {
-		return fmt.Sprintf(`{"schemaVersion":1,"recordId":%q,"type":"run:start","runId":%q,"traceId":"trace_live_stream","name":"stream","rootPrimitive":"generation.stream","startedAt":%q,"status":"running"}`,
-			recordID, runID, started.Format(time.RFC3339Nano))
+		return fmt.Sprintf(`{"schemaVersion":2,"recordId":%q,"type":"run:start","runId":%q,"segmentId":%q,"segmentSeq":1,"traceId":"trace_live_stream","name":"stream","rootPrimitive":"generation.stream","startedAt":%q,"status":"running"}`,
+			recordID, runID, segmentID, started.Format(time.RFC3339Nano))
 	}
-	return fmt.Sprintf(`{"schemaVersion":1,"recordId":%q,"type":"span:start","runId":%q,"traceId":"trace_live_stream","spanId":%q,"family":"generation","primitive":"generation.stream","name":"stream","startedAt":%q,"status":"running"}`,
-		recordID, runID, spanID, started.Format(time.RFC3339Nano))
+	return fmt.Sprintf(`{"schemaVersion":2,"recordId":%q,"type":"span:start","runId":%q,"segmentId":%q,"segmentSeq":2,"traceId":"trace_live_stream","spanId":%q,"family":"generation","primitive":"generation.stream","name":"stream","startedAt":%q,"status":"running"}`,
+		recordID, runID, segmentID, spanID, started.Format(time.RFC3339Nano))
 }

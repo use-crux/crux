@@ -16,7 +16,7 @@ Built-in edge types and artifact kinds are closed canonical lists. User-defined 
 
 `createCruxTraceId()` returns a W3C trace ID: 32 lowercase hexadecimal characters, never all zeroes. `createCruxSpanId()` returns a W3C span ID: 16 lowercase hexadecimal characters, never all zeroes.
 
-Run, record, event, edge, and artifact IDs keep Crux prefixes with crypto-random hex suffixes. Every graph record includes `seq`, a per-run monotonic number assigned at emit time and used by local storage/read paths for deterministic raw-record ordering.
+Run, segment, record, event, edge, and artifact IDs keep Crux prefixes with crypto-random hex suffixes. Every graph record includes `segmentId` plus a positive `segmentSeq`; the sequence is monotonic only inside that execution segment.
 
 ## Generation Metrics
 
