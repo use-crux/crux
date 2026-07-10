@@ -1,0 +1,294 @@
+import { createInvalidMediaSourceError } from "./media-errors";
+import type { Asset } from "../asset";
+import { sha256Hex } from "./sha256";
+import type { InvocationMediaSource } from "./invocation-types";
+import { sniffImageMediaType } from "./media-sniff";
+import {
+  blobFilename,
+  isAsset,
+  isAssetRefShape,
+  isBlob,
+  mediaTypeOf,
+  projectAsset,
+  withFilename,
+  withMediaType,
+} from "./invocation-asset-projection";
+import {
+  looksLikeRawBase64,
+  normalizeOptionalMediaType,
+  parseDataUrl,
+} from "./media-data-url";
+
+export interface NormalizeInvocationMediaSourceInput {
+  readonly kind: "image" | "file";
+  readonly source: InvocationMediaSource;
+  readonly path: string;
+  readonly mediaType?: string;
+  readonly filename?: string;
+  readonly provider?: string;
+}
+
+/** Normalize a private invocation media source into a usable `Asset`. */
+export async function normalizeInvocationMediaSource(
+  input: NormalizeInvocationMediaSourceInput,
+): Promise<Asset> {
+  const explicitMediaType = normalizeOptionalMediaType(
+    input.mediaType,
+    input.path,
+  );
+  if (isAsset(input.source)) {
+    return normalizeAssetSource(input, input.source, explicitMediaType);
+  }
+  if (isAssetRefShape(input.source)) {
+    throw invalid(
+      input.path,
+      "AssetRef is persistence plumbing, not model input. Hydrate it with assetStore.get(ref) first.",
+    );
+  }
+  if (typeof input.source === "string") {
+    return normalizeStringSource(input, input.source, explicitMediaType);
+  }
+  if (input.source instanceof URL) {
+    return normalizeUrl(input, input.source, explicitMediaType);
+  }
+  if (input.source instanceof Uint8Array) {
+    return normalizeBytes(
+      input,
+      new Uint8Array(input.source),
+      explicitMediaType,
+    );
+  }
+  if (input.source instanceof ArrayBuffer) {
+    return normalizeBytes(
+      input,
+      new Uint8Array(input.source.slice(0)),
+      explicitMediaType,
+    );
+  }
+  if (isBlob(input.source)) {
+    return normalizeBlob(input, input.source, explicitMediaType);
+  }
+  throw invalid(
+    input.path,
+    "Media source must be an Asset, HTTPS/data URL, Uint8Array, ArrayBuffer, or Blob.",
+  );
+}
+
+function normalizeAssetSource(
+  input: NormalizeInvocationMediaSourceInput,
+  asset: Asset,
+  explicitMediaType: string | undefined,
+): Asset {
+  const projected = projectAsset(asset, input.path);
+  const assetMediaType = mediaTypeOf(projected);
+  if (
+    explicitMediaType &&
+    assetMediaType &&
+    explicitMediaType !== assetMediaType
+  ) {
+    throw invalid(
+      input.path,
+      "Explicit mediaType conflicts with the Asset mediaType.",
+    );
+  }
+  if (
+    projected.type === "provider-file" &&
+    input.provider &&
+    projected.provider !== input.provider
+  ) {
+    throw invalid(
+      input.path,
+      `Provider-file assets must belong to ${input.provider}.`,
+    );
+  }
+  return assertKind(
+    input,
+    withFilename(
+      withMediaType(projected, explicitMediaType ?? assetMediaType),
+      input.filename,
+    ),
+  );
+}
+
+function normalizeStringSource(
+  input: NormalizeInvocationMediaSourceInput,
+  source: string,
+  explicitMediaType: string | undefined,
+): Asset {
+  if (looksLikeRawBase64(source)) {
+    throw invalid(
+      input.path,
+      "Raw base64 strings are not media sources. Use a data URL or Uint8Array.",
+    );
+  }
+  let url: URL;
+  try {
+    url = new URL(source);
+  } catch {
+    throw invalid(
+      input.path,
+      "String media sources must be HTTPS URLs or data URLs.",
+    );
+  }
+  return normalizeUrl(input, url, explicitMediaType);
+}
+
+function normalizeUrl(
+  input: NormalizeInvocationMediaSourceInput,
+  url: URL,
+  explicitMediaType: string | undefined,
+): Asset {
+  if (url.protocol === "data:")
+    return normalizeDataUrl(input, url.href, explicitMediaType);
+  if (url.protocol !== "https:") {
+    throw invalid(
+      input.path,
+      "URL media sources must use HTTPS or data protocol.",
+    );
+  }
+  return assertKind(
+    input,
+    withFilename(
+      {
+        type: "url",
+        url: new URL(url.href),
+        ...(explicitMediaType ? { mediaType: explicitMediaType } : {}),
+      },
+      input.filename,
+    ),
+  );
+}
+
+function normalizeDataUrl(
+  input: NormalizeInvocationMediaSourceInput,
+  value: string,
+  explicitMediaType: string | undefined,
+): Asset {
+  const parsed = parseDataUrl(value, input.path);
+  const mediaType =
+    explicitMediaType ?? parsed.mediaType ?? sniffImageMediaType(parsed.data);
+  if (!mediaType) {
+    throw invalid(
+      input.path,
+      `${label(input.kind)} data URLs require a mediaType.`,
+    );
+  }
+  if (
+    parsed.mediaType &&
+    explicitMediaType &&
+    parsed.mediaType !== explicitMediaType
+  ) {
+    throw invalid(
+      input.path,
+      "Explicit mediaType conflicts with the data URL media type.",
+    );
+  }
+  return assertKind(
+    input,
+    withFilename(
+      {
+        type: "data",
+        data: parsed.data,
+        mediaType,
+        size: parsed.data.byteLength,
+        sha256: sha256Hex(parsed.data),
+      },
+      input.filename,
+    ),
+  );
+}
+
+async function normalizeBlob(
+  input: NormalizeInvocationMediaSourceInput,
+  blob: Blob,
+  explicitMediaType: string | undefined,
+): Promise<Asset> {
+  const blobMediaType = normalizeOptionalMediaType(
+    blob.type || undefined,
+    input.path,
+  );
+  if (
+    explicitMediaType &&
+    blobMediaType &&
+    explicitMediaType !== blobMediaType
+  ) {
+    throw invalid(
+      input.path,
+      "Explicit mediaType conflicts with the Blob type.",
+    );
+  }
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  const mediaType =
+    explicitMediaType ?? blobMediaType ?? sniffForKind(input, bytes);
+  return assertKind(
+    input,
+    withFilename(
+      {
+        type: "data",
+        data: new Blob([bytes], { type: mediaType }),
+        mediaType,
+        size: blob.size,
+        sha256: sha256Hex(bytes),
+      },
+      input.filename ?? blobFilename(blob),
+    ),
+  );
+}
+
+function normalizeBytes(
+  input: NormalizeInvocationMediaSourceInput,
+  bytes: Uint8Array,
+  explicitMediaType: string | undefined,
+): Asset {
+  const mediaType = explicitMediaType ?? sniffForKind(input, bytes);
+  return assertKind(
+    input,
+    withFilename(
+      {
+        type: "data",
+        data: bytes,
+        mediaType,
+        size: bytes.byteLength,
+        sha256: sha256Hex(bytes),
+      },
+      input.filename,
+    ),
+  );
+}
+
+function sniffForKind(
+  input: NormalizeInvocationMediaSourceInput,
+  bytes: Uint8Array,
+): string {
+  const mediaType =
+    input.kind === "image" ? sniffImageMediaType(bytes) : undefined;
+  if (!mediaType) {
+    throw invalid(
+      input.path,
+      `${label(input.kind)} byte sources require an explicit mediaType.`,
+    );
+  }
+  return mediaType;
+}
+
+function assertKind(
+  input: NormalizeInvocationMediaSourceInput,
+  asset: Asset,
+): Asset {
+  const mediaType = mediaTypeOf(asset);
+  if (input.kind === "image" && mediaType && !mediaType.startsWith("image/")) {
+    throw invalid(
+      input.path,
+      `Image sources require an image mediaType, received ${mediaType}.`,
+    );
+  }
+  return projectAsset(asset, input.path);
+}
+
+function label(kind: "image" | "file"): string {
+  return kind === "image" ? "Image" : "File";
+}
+
+function invalid(path: string, reason: string): never {
+  throw createInvalidMediaSourceError({ path, reason });
+}
