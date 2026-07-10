@@ -4,6 +4,7 @@
 "@use-crux/devtools": patch
 "@use-crux/indexer": minor
 "@use-crux/local": minor
+"@use-crux/otel": patch
 ---
 
 Stabilize model routing around `router()`, `split()`, `retry()`, `fallback()`, and `cascade()` wrappers with routing receipts, generate/stream support boundaries, and updated adapter docs.
@@ -17,3 +18,5 @@ Surface canonical routing receipts in local devtools run detail and Project Inde
 Project Index now shows required `RouteArgs` context types and literal route call-profile parameters. Run Detail renders receipt TTFT, bounded attempt errors, and cascade tier note/budget from the same canonical `routing.report` preview.
 
 Run Detail now accepts the canonical JSON-safe receipt when unavailable routing costs are serialized as `null`, including nested retry, fallback, and cascade cost fields.
+
+OpenTelemetry span naming now covers all five canonical `routing.*` primitives and no longer treats the `fallback.attempt` edge/name as a primitive.
