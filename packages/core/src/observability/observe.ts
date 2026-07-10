@@ -43,10 +43,14 @@ import {
 } from './subscribers'
 import type { CruxObservabilityTransport } from './transport'
 import { validateRecordForEmission } from './validate-record'
-import { createDeliveryEngine } from './delivery/engine'
+import {
+  createDeliveryEngine,
+  type DeliveryDiagnostic,
+} from './delivery/engine'
 import type {
   ObservabilityDeliveryOptions,
   ObservabilityFlushOptions,
+  ObservabilityFlushResult,
 } from './delivery/options'
 import {
   currentCruxCorrelators,
@@ -75,7 +79,9 @@ export type { CapturedObservabilityContext } from './context'
 export type {
   ObservabilityDeliveryOptions,
   ObservabilityFlushOptions,
+  ObservabilityFlushResult,
 } from './delivery/options'
+export type { DeliveryDiagnostic } from './delivery/engine'
 
 export interface ConfigureObservabilityOptions {
   transport?: CruxObservabilityTransport
@@ -91,6 +97,8 @@ export interface ConfigureObservabilityOptions {
 
 export interface ObservabilityDiagnostics {
   readonly pendingDeliveries: number
+  readonly queuedRecords: number
+  readonly queuedBytes: number
   readonly droppedRecords: number
   /**
    * Total delivery failures observed since the diagnostics were last reset.
@@ -102,7 +110,14 @@ export interface ObservabilityDiagnostics {
   readonly invalidRecords: number
   readonly redactedRecords: number
   readonly contextlessRecords: number
-  readonly deliveryErrors: readonly unknown[]
+  readonly deliveryErrors: readonly DeliveryDiagnostic[]
+  readonly acceptedRecords: number
+  readonly retriedRecords: number
+  readonly permanentlyRejectedRecords: number
+  readonly overflowDroppedRecords: number
+  readonly overflowDroppedBytes: number
+  readonly deadlineDroppedRecords: number
+  readonly reconfiguredDroppedRecords: number
   readonly subscriberErrors: number
 }
 
@@ -657,12 +672,22 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
   const deliveryDiagnostics = deliveryEngine.diagnostics()
   return {
     pendingDeliveries: deliveryDiagnostics.pendingDeliveries,
+    queuedRecords: deliveryDiagnostics.queuedRecords,
+    queuedBytes: deliveryDiagnostics.queuedBytes,
     droppedRecords: deliveryDiagnostics.droppedRecords,
     deliveryErrorCount: deliveryDiagnostics.deliveryErrorCount,
     invalidRecords,
     redactedRecords,
     contextlessRecords,
     deliveryErrors: deliveryDiagnostics.deliveryErrors,
+    acceptedRecords: deliveryDiagnostics.acceptedRecords,
+    retriedRecords: deliveryDiagnostics.retriedRecords,
+    permanentlyRejectedRecords:
+      deliveryDiagnostics.permanentlyRejectedRecords,
+    overflowDroppedRecords: deliveryDiagnostics.overflowDroppedRecords,
+    overflowDroppedBytes: deliveryDiagnostics.overflowDroppedBytes,
+    deadlineDroppedRecords: deliveryDiagnostics.deadlineDroppedRecords,
+    reconfiguredDroppedRecords: deliveryDiagnostics.reconfiguredDroppedRecords,
     subscriberErrors: observabilitySubscriberErrorCount(),
   }
 }
@@ -1261,11 +1286,15 @@ export const observe = {
     )
   },
 
-  async flush(options: ObservabilityFlushOptions = {}): Promise<boolean> {
+  async flush(
+    options: ObservabilityFlushOptions = {},
+  ): Promise<ObservabilityFlushResult> {
     return await deliveryEngine.flush(options)
   },
 
-  async shutdown(options: ObservabilityFlushOptions = {}): Promise<boolean> {
+  async shutdown(
+    options: ObservabilityFlushOptions = {},
+  ): Promise<ObservabilityFlushResult> {
     return await deliveryEngine.shutdown(options)
   },
 }

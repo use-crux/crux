@@ -6,7 +6,7 @@
  * handler returns, so actions should await a bounded flush in a finally block.
  */
 
-import { observe } from '@use-crux/core/observability'
+import { observe, type ObservabilityFlushResult } from '@use-crux/core/observability'
 
 export interface ConvexObservabilityFlushOptions {
   /**
@@ -20,7 +20,9 @@ export type ConvexActionHandler<Ctx, Args, Result> = (ctx: Ctx, args: Args) => R
 
 export const DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS = 20_000
 
-export async function flushObservability(options: ConvexObservabilityFlushOptions = {}): Promise<boolean> {
+export async function flushObservability(
+  options: ConvexObservabilityFlushOptions = {},
+): Promise<ObservabilityFlushResult> {
   return observe.flush({ timeoutMs: options.timeoutMs ?? DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS })
 }
 

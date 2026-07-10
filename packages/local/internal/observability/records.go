@@ -22,7 +22,26 @@ const (
 )
 
 type Batch struct {
-	Records []Record `json:"records"`
+	SchemaVersion int           `json:"schemaVersion,omitempty"`
+	Records       []Record      `json:"records"`
+	SourceHealth  *SourceHealth `json:"sourceHealth,omitempty"`
+}
+
+// SourceHealth is a bounded cumulative delivery snapshot sent out of band
+// from canonical graph records.
+type SourceHealth struct {
+	SourceID            string             `json:"sourceId"`
+	Accepted            int64              `json:"accepted"`
+	Retried             int64              `json:"retried"`
+	PermanentlyRejected int64              `json:"permanentlyRejected"`
+	OverflowDropped     int64              `json:"overflowDropped"`
+	DeadlineDropped     int64              `json:"deadlineDropped"`
+	LastError           *SourceHealthError `json:"lastError,omitempty"`
+}
+
+type SourceHealthError struct {
+	Code    string `json:"code"`
+	Message string `json:"message,omitempty"`
 }
 
 type Record struct {

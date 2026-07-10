@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  acceptedDeliveryReceipt,
   configureObservability,
   currentObservabilityTransport,
   observe,
@@ -27,6 +28,7 @@ describe('observability delivery retry and configuration restore', () => {
       scheduledDelayMs: 0,
       retryDelayMs: 10,
       maxRetryDelayMs: 10,
+      random: () => 0.5,
     })
 
     observe.openRun({ name: 'flapping collector', rootPrimitive: 'custom.operation' })
@@ -54,6 +56,7 @@ describe('observability delivery retry and configuration restore', () => {
     setObservabilityTransport({
       send(records) {
         delivered.push(...records)
+        return acceptedDeliveryReceipt(records)
       },
     })
 
@@ -68,8 +71,8 @@ describe('observability delivery retry and configuration restore', () => {
   })
 
   it('does not resurrect a disposed transport after interleaved restores', () => {
-    const devtoolsTransport: CruxObservabilityTransport = { send: vi.fn() }
-    const captureTransport: CruxObservabilityTransport = { send: vi.fn() }
+    const devtoolsTransport: CruxObservabilityTransport = { send: acceptedDeliveryReceipt }
+    const captureTransport: CruxObservabilityTransport = { send: acceptedDeliveryReceipt }
 
     const restoreDevtools = configureObservability({ transport: devtoolsTransport })
     const restoreCapture = configureObservability({
@@ -94,6 +97,7 @@ describe('observability delivery retry and configuration restore', () => {
     const receiving: CruxObservabilityTransport = {
       send(records) {
         delivered.push(...records)
+        return acceptedDeliveryReceipt(records)
       },
     }
 
@@ -113,7 +117,8 @@ describe('observability delivery retry and configuration restore', () => {
     const calls: string[] = []
     const first: CruxObservabilityTransport = {
       maxRecordsPerRequest: 8,
-      send: vi.fn(),
+      maxRequestBytes: 2_000,
+      send: acceptedDeliveryReceipt,
       async flush() {
         calls.push('first:flush')
       },
@@ -123,7 +128,8 @@ describe('observability delivery retry and configuration restore', () => {
     }
     const second: CruxObservabilityTransport = {
       maxRecordsPerRequest: 3,
-      send: vi.fn(),
+      maxRequestBytes: 900,
+      send: acceptedDeliveryReceipt,
       async flush() {
         calls.push('second:flush')
       },
@@ -134,6 +140,7 @@ describe('observability delivery retry and configuration restore', () => {
     const tee = teeObservabilityTransport(first, second)
 
     expect(tee.maxRecordsPerRequest).toBe(3)
+    expect(tee.maxRequestBytes).toBe(900)
     await expect(tee.flush?.()).resolves.toBeUndefined()
     await expect(tee.shutdown?.()).resolves.toBeUndefined()
     expect(calls).toEqual(['first:flush', 'second:flush', 'first:shutdown', 'second:shutdown'])
@@ -149,6 +156,7 @@ describe('observability delivery retry and configuration restore', () => {
           sendCount += 1
           if (sendCount === 1) throw new Error('temporary pressure failure')
           delivered.push(...records)
+          return acceptedDeliveryReceipt(records)
         },
       },
       {
@@ -169,7 +177,9 @@ describe('observability delivery retry and configuration restore', () => {
     run.end()
 
     await vi.advanceTimersByTimeAsync(1)
-    await observe.flush()
+    const flushed = observe.flush()
+    await vi.runAllTimersAsync()
+    await flushed
 
     expect(delivered.map((record) => record.type)).toEqual(['run:start', 'span:start', 'span:end', 'run:end'])
     expect(observabilityDiagnostics()).toMatchObject({
@@ -203,7 +213,9 @@ describe('observability delivery retry and configuration restore', () => {
     run.end()
 
     await vi.advanceTimersByTimeAsync(1)
-    await observe.flush()
+    const flushed = observe.flush()
+    await vi.runAllTimersAsync()
+    await flushed
 
     expect(chaos.batches.map((batch) => batch.map((record) => record.type))).toEqual([
       ['run:start', 'artifact'],

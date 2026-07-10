@@ -3,11 +3,29 @@ package observability
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
 
-func (s *Service) Ingest(ctx context.Context, batch Batch) (err error) {
+func (s *Service) Ingest(ctx context.Context, batch Batch) error {
+	err := s.ingest(ctx, batch)
+	var conflict *recordIDConflictError
+	if err == nil || !errors.As(err, &conflict) {
+		return err
+	}
+	for _, record := range batch.Records {
+		if record.RecordID == conflict.recordID {
+			if healthErr := s.recordIngestConflictHealth(context.Background(), record); healthErr != nil {
+				return fmt.Errorf("%w; %v", err, healthErr)
+			}
+			break
+		}
+	}
+	return err
+}
+
+func (s *Service) ingest(ctx context.Context, batch Batch) (err error) {
 	ctx, cancel := s.mutationContext(ctx)
 	defer cancel()
 

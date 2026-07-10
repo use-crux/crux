@@ -429,6 +429,21 @@ func TestServiceTreatsRecordIDsAsImmutable(t *testing.T) {
 	if err := service.Ingest(ctx, conflict); err == nil {
 		t.Fatal("conflicting recordId ingest succeeded, want immutable identity error")
 	}
+	var healthCount int
+	var healthMessage string
+	if err := service.db.QueryRowContext(ctx, `
+		SELECT occurrence_count, message
+		FROM ingest_health
+		WHERE code = 'record_id_conflict' AND record_id = 'rec_immutable_usage'
+	`).Scan(&healthCount, &healthMessage); err != nil {
+		t.Fatalf("load durable conflict health: %v", err)
+	}
+	if healthCount != 1 || healthMessage != "record ID reused with different canonical content" {
+		t.Fatalf("conflict health = %d/%q, want bounded sanitized diagnostic", healthCount, healthMessage)
+	}
+	if strings.Contains(healthMessage, "inputTokens") || strings.Contains(healthMessage, "0.99") {
+		t.Fatalf("conflict health leaked record content: %q", healthMessage)
+	}
 	graph, err := service.Graph(ctx, "run_immutable")
 	if err != nil {
 		t.Fatal(err)
@@ -445,6 +460,41 @@ func TestServiceTreatsRecordIDsAsImmutable(t *testing.T) {
 	}
 	if run.RecordCount != 2 || run.inputTokens != 3 || run.outputTokens != 4 {
 		t.Fatalf("after conflict = %#v, want first record projections retained", run)
+	}
+}
+
+func TestServicePersistsBoundedSanitizedSourceHealth(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	health := SourceHealth{
+		SourceID:            "source_storage_health",
+		Accepted:            4,
+		Retried:             2,
+		PermanentlyRejected: 1,
+		OverflowDropped:     3,
+		DeadlineDropped:     1,
+		LastError: &SourceHealthError{
+			Code:    "delivery retry/unsafe",
+			Message: "https://collector.example/private Bearer secret-token\nnext",
+		},
+	}
+	if err := service.RecordSourceHealth(ctx, health); err != nil {
+		t.Fatal(err)
+	}
+	var accepted, retried, rejected, overflow, deadline int
+	var code, message string
+	if err := service.db.QueryRowContext(ctx, `
+		SELECT accepted, retried, permanently_rejected, overflow_dropped,
+			deadline_dropped, last_error_code, last_error_message
+		FROM observability_source_health WHERE source_id = 'source_storage_health'
+	`).Scan(&accepted, &retried, &rejected, &overflow, &deadline, &code, &message); err != nil {
+		t.Fatal(err)
+	}
+	if accepted != 4 || retried != 2 || rejected != 1 || overflow != 3 || deadline != 1 {
+		t.Fatalf("source counters = %d/%d/%d/%d/%d", accepted, retried, rejected, overflow, deadline)
+	}
+	if code != "delivery_retry_unsafe" || message != "[url] Bearer [redacted] next" {
+		t.Fatalf("source diagnostic = %q/%q, want sanitized values", code, message)
 	}
 }
 

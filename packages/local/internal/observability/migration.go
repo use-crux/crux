@@ -192,6 +192,28 @@ func observabilitySchemaStatements() []string {
 			last_segment_seq INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_run_segments_run ON run_segments(run_id, segment_id)`,
+		`CREATE TABLE IF NOT EXISTS ingest_health (
+			code TEXT NOT NULL,
+			record_id TEXT NOT NULL,
+			run_id TEXT,
+			occurrence_count INTEGER NOT NULL DEFAULT 1,
+			message TEXT NOT NULL,
+			first_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			last_seen_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (code, record_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_ingest_health_run ON ingest_health(run_id, last_seen_at DESC)`,
+		`CREATE TABLE IF NOT EXISTS observability_source_health (
+			source_id TEXT PRIMARY KEY,
+			accepted INTEGER NOT NULL DEFAULT 0,
+			retried INTEGER NOT NULL DEFAULT 0,
+			permanently_rejected INTEGER NOT NULL DEFAULT 0,
+			overflow_dropped INTEGER NOT NULL DEFAULT 0,
+			deadline_dropped INTEGER NOT NULL DEFAULT 0,
+			last_error_code TEXT,
+			last_error_message TEXT,
+			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
 	}
 }
 
@@ -328,6 +350,8 @@ func dropObservabilityTables(ctx context.Context, runner sqliteRunner) error {
 		"spans",
 		"runs",
 		"run_segments",
+		"ingest_health",
+		"observability_source_health",
 	} {
 		if _, err := runner.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
 			return fmt.Errorf("reset pre-v2 observability table %s: %w", table, err)

@@ -6,7 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -21,38 +20,54 @@ func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Serv
 			return
 		}
 
+		r.Body = http.MaxBytesReader(w, r.Body, maxObservabilityRequestBytes)
 		var batch observability.Batch
 		if err := json.NewDecoder(r.Body).Decode(&batch); err != nil {
-			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			status := http.StatusBadRequest
+			var maxBytesError *http.MaxBytesError
+			if errors.As(err, &maxBytesError) {
+				status = http.StatusRequestEntityTooLarge
+			}
+			http.Error(w, http.StatusText(status), status)
 			return
 		}
-		accepted, rejected := validateObservabilityBatch(batch)
-		if len(accepted.Records) > 0 {
-			if err := service.Ingest(r.Context(), accepted); err != nil {
-				slog.Warn("observability ingest failed", "error", err)
-				if isTransientObservabilityIngestError(err) {
-					w.Header().Set("Retry-After", "1")
-					http.Error(w, err.Error(), http.StatusServiceUnavailable)
-					return
-				}
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
+		if batch.SchemaVersion != observability.SchemaVersion {
+			writeUnsupportedObservabilitySchema(w, batch)
+			return
+		}
+		if batch.SourceHealth != nil {
+			if err := service.RecordSourceHealth(r.Context(), *batch.SourceHealth); err != nil {
+				slog.Warn("observability source health rejected", "error", err)
 			}
 		}
-		if qualityEvents != nil {
+		dispositions := service.IngestWithDispositions(r.Context(), batch)
+		accepted := 0
+		retryable := false
+		for _, disposition := range dispositions {
+			if disposition.Outcome == "accepted" {
+				accepted++
+			}
+			if disposition.Retryable {
+				retryable = true
+			}
+		}
+		if retryable {
+			w.Header().Set("Retry-After", "1")
+		}
+		if qualityEvents != nil && accepted > 0 {
 			qualityEvents.Publish(api.QualityEvent{
 				Tag:       "QualityEvent",
 				Timestamp: time.Now().UnixMilli(),
 				Kind:      "refresh",
 				Action:    "observability ingested",
 				Severity:  "info",
-				RefID:     observabilityRefreshRefID(accepted),
+				RefID:     observabilityRefreshRefID(batch),
 			})
 		}
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
-		if err := json.NewEncoder(w).Encode(observabilityIngestResponse{Accepted: len(accepted.Records), Rejected: rejected}); err != nil {
+		if err := json.NewEncoder(w).Encode(observabilityIngestResponse{Dispositions: dispositions}); err != nil {
 			slog.Error("JSON encode error", "error", err)
 		}
 	})
@@ -138,40 +153,22 @@ func parseObservabilitySpanEventListOptions(r *http.Request) observability.SpanE
 }
 
 type observabilityIngestResponse struct {
-	Accepted int                           `json:"accepted"`
-	Rejected []observabilityRejectedRecord `json:"rejected"`
+	Dispositions []observability.IngestDisposition `json:"dispositions"`
 }
 
-type observabilityRejectedRecord struct {
-	RecordID string `json:"recordId"`
-	Error    string `json:"error"`
-}
+const maxObservabilityRequestBytes = 1024 * 1024
 
-func validateObservabilityBatch(batch observability.Batch) (observability.Batch, []observabilityRejectedRecord) {
-	accepted := observability.Batch{Records: make([]observability.Record, 0, len(batch.Records))}
-	rejected := make([]observabilityRejectedRecord, 0)
-	for _, record := range batch.Records {
-		if err := observability.ValidateRecord(record); err != nil {
-			rejected = append(rejected, observabilityRejectedRecord{
-				RecordID: record.RecordID,
-				Error:    err.Error(),
-			})
-			continue
-		}
-		accepted.Records = append(accepted.Records, record)
+func writeUnsupportedObservabilitySchema(w http.ResponseWriter, batch observability.Batch) {
+	dispositions := make([]observability.IngestDisposition, 0, len(batch.Records))
+	for index, record := range batch.Records {
+		dispositions = append(dispositions, observability.IngestDisposition{
+			Index: index, RecordID: record.RecordID, Outcome: "rejected",
+			Code: "unsupported_schema_version", Message: "unsupported observability batch schema version", Retryable: false,
+		})
 	}
-	return accepted, rejected
-}
-
-func isTransientObservabilityIngestError(err error) bool {
-	if err == nil {
-		return false
-	}
-	message := strings.ToLower(err.Error())
-	return strings.Contains(message, "sqlite_busy") ||
-		strings.Contains(message, "database is locked") ||
-		strings.Contains(message, "database is busy") ||
-		strings.Contains(message, "database is closed")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusUnprocessableEntity)
+	_ = json.NewEncoder(w).Encode(observabilityIngestResponse{Dispositions: dispositions})
 }
 
 func observabilityRefreshRefID(batch observability.Batch) string {

@@ -8,6 +8,14 @@ import (
 	"strings"
 )
 
+type recordIDConflictError struct {
+	recordID string
+}
+
+func (e *recordIDConflictError) Error() string {
+	return fmt.Sprintf("record_id_conflict: record %s already exists with different canonical content", e.recordID)
+}
+
 func deleteRunRows(ctx context.Context, tx *sql.Tx, runIDs []string) error {
 	placeholders := strings.TrimRight(strings.Repeat("?,", len(runIDs)), ",")
 	args := make([]any, len(runIDs))
@@ -15,6 +23,7 @@ func deleteRunRows(ctx context.Context, tx *sql.Tx, runIDs []string) error {
 		args[i] = runID
 	}
 	tables := []string{
+		"ingest_health",
 		"run_segments",
 		"records",
 		"span_events",
@@ -73,7 +82,7 @@ func upsertStoredRecord(ctx context.Context, statements *ingestStatements, recor
 			return false, fmt.Errorf("canonicalize existing record payload %q: %w", record.RecordID, err)
 		}
 		if string(existingCanonical) != string(canonicalPayload) {
-			return false, fmt.Errorf("record_id_conflict: record %s already exists with different canonical content", record.RecordID)
+			return false, &recordIDConflictError{recordID: record.RecordID}
 		}
 		return false, nil
 	}
@@ -122,7 +131,7 @@ func classifySQLiteConstraintError(err error, record Record) error {
 		return fmt.Errorf("segment_sequence_conflict: segment %s sequence %d already identifies a different record", record.SegmentID, record.SegmentSeq)
 	}
 	if strings.Contains(message, "records.record_id") {
-		return fmt.Errorf("record_id_conflict: record %s already exists with different canonical content", record.RecordID)
+		return &recordIDConflictError{recordID: record.RecordID}
 	}
 	if strings.Contains(message, "run_segments.segment_id") {
 		return fmt.Errorf("segment_ownership_conflict: segment %s already belongs to another run", record.SegmentID)

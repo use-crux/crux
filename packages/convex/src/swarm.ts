@@ -161,6 +161,7 @@ function captureBaseObservabilityContext():
   return {
     runId: captured.runId,
     traceId: captured.traceId,
+    segmentId: captured.segmentId,
     spanStack: [],
   }
 }

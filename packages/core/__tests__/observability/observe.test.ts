@@ -3,6 +3,7 @@ import { channel } from 'node:diagnostics_channel'
 import {
   CRUX_OBSERVABILITY_CHANNEL,
   CRUX_OBSERVABILITY_SCHEMA_VERSION,
+  acceptedDeliveryReceipt,
   type CapturedObservabilityContext,
   type CruxObservabilityChannelMessage,
   type CruxGraphRecord,
@@ -950,6 +951,7 @@ describe('observe runtime', () => {
       async send(records) {
         await new Promise((resolve) => setTimeout(resolve, 10))
         delivered.push(...records.map((record) => record.type))
+        return acceptedDeliveryReceipt(records)
       },
     })
 
@@ -959,7 +961,7 @@ describe('observe runtime', () => {
     )
 
     expect(delivered).toEqual([])
-    await expect(observe.flush()).resolves.toBe(true)
+    await expect(observe.flush()).resolves.toMatchObject({ status: 'drained' })
     expect(delivered).toEqual(['run:start', 'run:end'])
   })
 
@@ -971,6 +973,7 @@ describe('observe runtime', () => {
     setObservabilityTransport({
       send(records) {
         delivered.push(...records.map((record) => record.type))
+        return acceptedDeliveryReceipt(records)
       },
       flush,
     })
@@ -980,7 +983,7 @@ describe('observe runtime', () => {
       async () => 'ok',
     )
 
-    await expect(observe.flush()).resolves.toBe(true)
+    await expect(observe.flush()).resolves.toMatchObject({ status: 'drained' })
     expect(flush).toHaveBeenCalledTimes(1)
     expect(delivered).toEqual(['run:start', 'run:end', 'flush'])
   })
@@ -988,7 +991,7 @@ describe('observe runtime', () => {
   it('starts the first delivery after the batching window', async () => {
     vi.useFakeTimers()
     try {
-      const send = vi.fn()
+      const send = vi.fn(acceptedDeliveryReceipt)
       setObservabilityTransport({ send })
 
       observe.openRun({ name: 'live run', rootPrimitive: 'custom.operation' })
@@ -1018,6 +1021,7 @@ describe('observe runtime', () => {
               resolveFirstSend = resolve
             })
           }
+          return acceptedDeliveryReceipt(records)
         },
       },
       { scheduledDelayMs: 0 },
@@ -1047,6 +1051,7 @@ describe('observe runtime', () => {
     setObservabilityTransport({
       send(records) {
         sentBatches.push(records.map((record) => record.type))
+        return acceptedDeliveryReceipt(records)
       },
     })
 
@@ -1061,7 +1066,7 @@ describe('observe runtime', () => {
       })
       span.end()
     })
-    await expect(observe.flush()).resolves.toBe(true)
+    await expect(observe.flush()).resolves.toMatchObject({ status: 'drained' })
 
     expect(sentBatches.flat()).toEqual(['run:start', 'span:start', 'span:end'])
   })
@@ -1078,6 +1083,7 @@ describe('observe runtime', () => {
           await new Promise((resolve) => setTimeout(resolve, 1))
           delivered.push(...records.map((record) => record.type))
           activeSends -= 1
+          return acceptedDeliveryReceipt(records)
         },
       },
       { maxPendingDeliveries: 3, scheduledDelayMs: 0 },
@@ -1118,7 +1124,10 @@ describe('observe runtime', () => {
       async () => 'ok',
     )
 
-    await expect(observe.flush({ timeoutMs: 1 })).resolves.toBe(false)
+    await expect(observe.flush({ timeoutMs: 1 })).resolves.toMatchObject({
+      status: 'deadline',
+      deadlineExceeded: true,
+    })
     expect(observabilityDiagnostics().pendingDeliveries).toBeGreaterThan(0)
   })
 
@@ -1133,6 +1142,7 @@ describe('observe runtime', () => {
             throw new Error('temporary ingest outage')
           }
           delivered.push(...records.map((record) => record.type))
+          return acceptedDeliveryReceipt(records)
         },
       },
       { maxPendingDeliveries: 1 },
@@ -1143,7 +1153,7 @@ describe('observe runtime', () => {
       async () => 'ok',
     )
 
-    await expect(observe.flush()).resolves.toBe(true)
+    await expect(observe.flush()).resolves.toMatchObject({ status: 'drained' })
     expect(delivered).toEqual(['run:start', 'run:end'])
     expect(observabilityDiagnostics().deliveryErrors).toHaveLength(1)
   })
@@ -1153,6 +1163,8 @@ describe('observe runtime', () => {
     setObservabilityTransport(chaos.transport, {
       maxPendingDeliveries: 1,
       scheduledDelayMs: 0,
+      retryDelayMs: 0,
+      maxRetryDelayMs: 0,
     })
 
     await expect(
@@ -1168,11 +1180,14 @@ describe('observe runtime', () => {
     )
 
     chaos.setMode('slow')
+    const sendsBeforeFlush = chaos.sendCount
     const flushed = observe.flush()
-    await Promise.resolve()
+    while (chaos.sendCount === sendsBeforeFlush) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
     chaos.resolveSlowDeliveries()
 
-    await expect(flushed).resolves.toBe(true)
+    await expect(flushed).resolves.toMatchObject({ status: 'drained' })
     expect(chaos.batches.at(-1)?.map((record) => record.type)).toEqual([
       'run:start',
       'run:end',
@@ -1184,10 +1199,11 @@ describe('observe runtime', () => {
     try {
       let resolveSend!: () => void
       setObservabilityTransport({
-        async send() {
+        async send(records) {
           await new Promise<void>((resolve) => {
             resolveSend = resolve
           })
+          return acceptedDeliveryReceipt(records)
         },
       })
 
@@ -1199,7 +1215,7 @@ describe('observe runtime', () => {
       await Promise.resolve()
       resolveSend()
 
-      await expect(flushed).resolves.toBe(true)
+      await expect(flushed).resolves.toMatchObject({ status: 'drained' })
       expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()
@@ -1243,7 +1259,9 @@ describe('observe runtime', () => {
       scheduledDelayMs: 0,
     })
 
-    await expect(observe.flush({ timeoutMs: 1 })).resolves.toBe(false)
+    await expect(observe.flush()).resolves.toMatchObject({
+      status: 'drained',
+    })
     expect(transport.records).toHaveLength(2047)
     expect(transport.records[0]).toMatchObject({
       type: 'span:event',
@@ -1273,10 +1291,12 @@ describe('observe runtime', () => {
     })
     setObservabilityTransport(undefined)
 
-    await expect(observe.flush({ timeoutMs: 1 })).resolves.toBe(false)
+    await expect(observe.flush({ timeoutMs: 1 })).resolves.toMatchObject({
+      status: 'drained',
+    })
     expect(observabilityDiagnostics()).toMatchObject({
-      pendingDeliveries: 1,
-      droppedRecords: 2,
+      pendingDeliveries: 0,
+      droppedRecords: 3,
     })
   })
 
@@ -1339,13 +1359,11 @@ describe('observe runtime', () => {
   }, 60_000)
 
   it('posts canonical batches through the HTTP transport', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(
-      async () => new Response('{}', { status: 202 }),
-    )
+    const fetchImpl = vi.fn<typeof fetch>(acceptedHttpResponse)
     const transport = createHttpObservabilityTransport({
       serverUrl: 'ws://localhost:4400/',
       fetch: fetchImpl,
-      headers: { Authorization: 'Bearer test' },
+      headers: { 'X-Crux-Route': 'test' },
       timeoutMs: 100,
     })
     setObservabilityTransport(transport)
@@ -1365,7 +1383,7 @@ describe('observe runtime', () => {
       headers: {
         'Content-Type': 'application/json',
         'Bypass-Tunnel-Reminder': 'true',
-        Authorization: 'Bearer test',
+        'X-Crux-Route': 'test',
       },
     })
     expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))).toMatchObject({
@@ -1374,9 +1392,7 @@ describe('observe runtime', () => {
   })
 
   it('preserves tokenized tunnel query params on HTTP transport endpoints', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(
-      async () => new Response('{}', { status: 202 }),
-    )
+    const fetchImpl = vi.fn<typeof fetch>(acceptedHttpResponse)
     const transport = createHttpObservabilityTransport({
       serverUrl: 'https://example.ngrok.app?t=session-token',
       fetch: fetchImpl,
@@ -1397,9 +1413,7 @@ describe('observe runtime', () => {
   })
 
   it('sends bearer auth from an HTTP transport token option', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(
-      async () => new Response('{}', { status: 202 }),
-    )
+    const fetchImpl = vi.fn<typeof fetch>(acceptedHttpResponse)
     const transport = createHttpObservabilityTransport({
       serverUrl: 'https://example.ngrok.app',
       token: 'project-ingest-token',
@@ -1424,9 +1438,7 @@ describe('observe runtime', () => {
     const previous = process.env.CRUX_DEVTOOLS_TOKEN
     process.env.CRUX_DEVTOOLS_TOKEN = 'env-ingest-token'
     try {
-      const fetchImpl = vi.fn<typeof fetch>(
-        async () => new Response('{}', { status: 202 }),
-      )
+      const fetchImpl = vi.fn<typeof fetch>(acceptedHttpResponse)
       const transport = createHttpObservabilityTransport({
         serverUrl: 'https://example.ngrok.app',
         fetch: fetchImpl,
@@ -1455,15 +1467,11 @@ describe('observe runtime', () => {
 
   it('retries transient HTTP ingest failures before dropping observability batches', async () => {
     const fetchImpl = vi
-      .fn<typeof fetch>()
-      .mockResolvedValue(new Response('{}', { status: 202 }))
+      .fn<typeof fetch>(acceptedHttpResponse)
       .mockResolvedValueOnce(new Response('{}', { status: 503 }))
-      .mockResolvedValueOnce(new Response('{}', { status: 202 }))
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
       fetch: fetchImpl,
-      retryAttempts: 1,
-      retryDelayMs: 1,
     })
     setObservabilityTransport(transport)
 
@@ -1471,10 +1479,18 @@ describe('observe runtime', () => {
       { name: 'retry run', rootPrimitive: 'custom.operation' },
       async () => 'ok',
     )
-    await expect(observe.flush()).resolves.toBe(true)
+    await expect(observe.flush()).resolves.toMatchObject({ status: 'drained' })
 
     expect(fetchImpl).toHaveBeenCalledTimes(2)
-    expect(observabilityDeliveryErrors()).toHaveLength(0)
+    expect(observabilityDeliveryErrors()).toEqual([
+      expect.objectContaining({ code: 'delivery_retry' }),
+    ])
+    expect(JSON.parse(String(fetchImpl.mock.calls[1]?.[1]?.body))).toMatchObject({
+      sourceHealth: {
+        retried: 2,
+        lastError: { code: 'delivery_retry' },
+      },
+    })
     const deliveredRecordTypes = fetchImpl.mock.calls
       .slice(1)
       .flatMap((call) =>
@@ -1493,7 +1509,6 @@ describe('observe runtime', () => {
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
       fetch: fetchImpl,
-      retryAttempts: 0,
     })
     const firstRecord = {
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -1523,22 +1538,25 @@ describe('observe runtime', () => {
 
     await expect(
       transport.send([firstRecord, secondRecord]),
-    ).rejects.toMatchObject({ status: 503 })
+    ).resolves.toMatchObject({
+      dispositions: [
+        expect.objectContaining({ index: 0, retryable: true }),
+        expect.objectContaining({ index: 1, retryable: true }),
+      ],
+    })
 
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      schemaVersion: 2,
       records: [firstRecord, secondRecord],
     })
   })
 
   it('keeps terminal lifecycle records deliverable when late previews contain JSON-hostile values', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(
-      async () => new Response('{}', { status: 202 }),
-    )
+    const fetchImpl = vi.fn<typeof fetch>(acceptedHttpResponse)
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
       fetch: fetchImpl,
-      retryAttempts: 0,
     })
     setObservabilityTransport(transport)
 
@@ -1563,7 +1581,7 @@ describe('observe runtime', () => {
         )
       },
     )
-    await expect(observe.flush()).resolves.toBe(true)
+    await expect(observe.flush()).resolves.toMatchObject({ status: 'drained' })
 
     const deliveredRecords = fetchImpl.mock.calls.flatMap(
       (call) => JSON.parse(String(call[1]?.body)).records,
@@ -1584,27 +1602,28 @@ describe('observe runtime', () => {
     expect(observabilityDeliveryErrors()).toHaveLength(0)
   })
 
-  it('isolates rejected HTTP records so one bad detail cannot strand terminal records', async () => {
+  it('uses indexed HTTP dispositions so one bad detail cannot strand terminal records', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async (_url, init) => {
       const records = JSON.parse(String(init?.body)).records as Array<{
         type: string
         name?: string
       }>
-      if (
-        records.length > 1 &&
-        records.some((record) => record.type === 'artifact')
-      ) {
-        return new Response('bad artifact', { status: 400 })
-      }
-      if (records.length === 1 && records[0].type === 'artifact') {
-        return new Response('bad artifact', { status: 400 })
-      }
-      return new Response('{}', { status: 202 })
+      return new Response(
+        JSON.stringify({
+          dispositions: records.map((record, index) => ({
+            index,
+            recordId: (record as { recordId: string }).recordId,
+            outcome: record.type === 'artifact' ? 'rejected' : 'accepted',
+            code: record.type === 'artifact' ? 'invalid_record' : 'accepted',
+            retryable: false,
+          })),
+        }),
+        { status: 202 },
+      )
     })
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
       fetch: fetchImpl,
-      retryAttempts: 0,
       maxRecordsPerRequest: 100,
     })
     setObservabilityTransport(transport)
@@ -1625,33 +1644,27 @@ describe('observe runtime', () => {
         )
       },
     )
-    await expect(observe.flush()).resolves.toBe(true)
+    await expect(observe.flush()).resolves.toMatchObject({ status: 'drained' })
 
     const deliveredRecords = fetchImpl.mock.calls
       .map(
         (call) =>
           JSON.parse(String(call[1]?.body)).records as Array<{ type: string }>,
       )
-      .filter(
-        (records) =>
-          records.length === 1 ||
-          records.every((record) => record.type !== 'artifact'),
-      )
       .flat()
     expect(deliveredRecords.map((record) => record.type)).toContain('span:end')
     expect(deliveredRecords.map((record) => record.type)).toContain('run:end')
-    expect(observabilityDiagnostics().droppedRecords).toBe(1)
-    expect(observabilityDeliveryErrors()).toHaveLength(0)
+    expect(observabilityDiagnostics()).toMatchObject({
+      permanentlyRejectedRecords: 1,
+      droppedRecords: 1,
+    })
   })
 
   it('does not locally Zod-parse HTTP batches before posting them', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(
-      async () => new Response('{}', { status: 202 }),
-    )
+    const fetchImpl = vi.fn<typeof fetch>(acceptedHttpResponse)
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
       fetch: fetchImpl,
-      retryAttempts: 0,
     })
     const malformedButAlreadyAcceptedRecord = {
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
@@ -1669,22 +1682,22 @@ describe('observe runtime', () => {
 
     await expect(
       transport.send([malformedButAlreadyAcceptedRecord]),
-    ).resolves.toBeUndefined()
+    ).resolves.toMatchObject({
+      dispositions: [expect.objectContaining({ outcome: 'accepted' })],
+    })
 
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(JSON.parse(String(fetchImpl.mock.calls[0]?.[1]?.body))).toEqual({
+      schemaVersion: 2,
       records: [malformedButAlreadyAcceptedRecord],
     })
   })
 
   it('chunks large HTTP deliveries in the engine without treating the record list as a preview array', async () => {
-    const fetchImpl = vi.fn<typeof fetch>(
-      async () => new Response('{}', { status: 202 }),
-    )
+    const fetchImpl = vi.fn<typeof fetch>(acceptedHttpResponse)
     const transport = createHttpObservabilityTransport({
       serverUrl: 'http://localhost:4400',
       fetch: fetchImpl,
-      retryAttempts: 0,
       maxRecordsPerRequest: 50,
     })
     setObservabilityTransport(transport)
@@ -1724,7 +1737,7 @@ describe('observe runtime', () => {
       { name: 'before shutdown', rootPrimitive: 'custom.operation' },
       async () => 'ok',
     )
-    await expect(observe.shutdown()).resolves.toBe(true)
+    await expect(observe.shutdown()).resolves.toMatchObject({ status: 'drained' })
     await observe.run(
       { name: 'after shutdown', rootPrimitive: 'custom.operation' },
       async () => 'ok',
@@ -1738,3 +1751,14 @@ describe('observe runtime', () => {
     ])
   })
 })
+
+async function acceptedHttpResponse(
+  _input: URL | RequestInfo,
+  init?: RequestInit,
+): Promise<Response> {
+  const records = JSON.parse(String(init?.body)).records as CruxGraphRecord[]
+  return new Response(
+    JSON.stringify({ accepted: records.length, rejected: [] }),
+    { status: 202 },
+  )
+}

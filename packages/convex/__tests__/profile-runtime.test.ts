@@ -9,6 +9,7 @@ import { convexRuntimeRecords, getConvexCruxRuntime, runWithConvexCruxRuntime } 
 import { context } from '../src/context'
 import { tool } from '../src/tools'
 import {
+  acceptedDeliveryReceipt,
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
@@ -680,6 +681,7 @@ describe('Convex profile runtime', () => {
       async send(records) {
         await Promise.resolve()
         delivered.push(...records)
+        return acceptedDeliveryReceipt(records)
       },
     })
     const basePrompt = prompt({

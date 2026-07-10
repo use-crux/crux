@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -31,9 +30,9 @@ func TestObservabilityIngestRouteReportsPartialBatchValidation(t *testing.T) {
 	t.Cleanup(func() { _ = service.Close() })
 	mux := http.NewServeMux()
 	registerObservabilityRoutes(mux, service, nil)
-	body := []byte(`{"records":[
-		{"schemaVersion":1,"recordId":"rec_ok","type":"run:start","runId":"run_partial_route","traceId":"trace_partial_route","name":"partial","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"rec_bad","type":"span:start","runId":"run_partial_route","traceId":"trace_partial_route","spanId":"span_bad","family":"tool","primitive":"generation.call","name":"bad","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}
+	body := []byte(`{"schemaVersion":2,"records":[
+		{"schemaVersion":2,"recordId":"rec_ok","type":"run:start","runId":"run_partial_route","segmentId":"seg_partial_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"partial","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"rec_bad","type":"span:start","runId":"run_partial_route","segmentId":"seg_partial_route","segmentSeq":2,"traceId":"11111111111111111111111111111111","spanId":"2222222222222222","family":"tool","primitive":"generation.call","name":"bad","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}
 	]}`)
 
 	response := performObservabilityIngestRequest(mux, body)
@@ -42,16 +41,20 @@ func TestObservabilityIngestRouteReportsPartialBatchValidation(t *testing.T) {
 		t.Fatalf("status = %d, want 202; body = %s", response.Code, response.Body.String())
 	}
 	var payload struct {
-		Accepted int `json:"accepted"`
-		Rejected []struct {
-			RecordID string `json:"recordId"`
-			Error    string `json:"error"`
-		} `json:"rejected"`
+		Dispositions []struct {
+			Index     int    `json:"index"`
+			RecordID  string `json:"recordId"`
+			Outcome   string `json:"outcome"`
+			Code      string `json:"code"`
+			Retryable bool   `json:"retryable"`
+		} `json:"dispositions"`
 	}
 	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
 		t.Fatal(err)
 	}
-	if payload.Accepted != 1 || len(payload.Rejected) != 1 || payload.Rejected[0].RecordID != "rec_bad" {
+	if len(payload.Dispositions) != 2 ||
+		payload.Dispositions[0].Index != 0 || payload.Dispositions[0].RecordID != "rec_ok" || payload.Dispositions[0].Outcome != "accepted" ||
+		payload.Dispositions[1].Index != 1 || payload.Dispositions[1].RecordID != "rec_bad" || payload.Dispositions[1].Outcome != "rejected" || payload.Dispositions[1].Retryable {
 		t.Fatalf("payload = %#v", payload)
 	}
 	if _, err := service.Run(ctx, "run_partial_route"); err != nil {
@@ -75,6 +78,48 @@ func TestObservabilityIngestRouteRejectsMalformedJSON(t *testing.T) {
 	}
 }
 
+func TestObservabilityIngestRouteBoundsRequestBytes(t *testing.T) {
+	service, err := observability.OpenService(context.Background(), ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = service.Close() })
+	mux := http.NewServeMux()
+	registerObservabilityRoutes(mux, service, nil)
+	body := bytes.Repeat([]byte(" "), maxObservabilityRequestBytes+1)
+
+	response := performObservabilityIngestRequest(mux, body)
+
+	if response.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413", response.Code)
+	}
+}
+
+func TestObservabilityIngestRouteRejectsUnsupportedBatchSchemaPerRecord(t *testing.T) {
+	service, err := observability.OpenService(context.Background(), ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = service.Close() })
+	mux := http.NewServeMux()
+	registerObservabilityRoutes(mux, service, nil)
+	body := []byte(`{"schemaVersion":3,"records":[{"recordId":"rec_future"}]}`)
+
+	response := performObservabilityIngestRequest(mux, body)
+
+	if response.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("status = %d, want 422; body = %s", response.Code, response.Body.String())
+	}
+	var payload observabilityIngestResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Dispositions) != 1 || payload.Dispositions[0].Index != 0 || payload.Dispositions[0].RecordID != "rec_future" ||
+		payload.Dispositions[0].Code != "unsupported_schema_version" || payload.Dispositions[0].Retryable {
+		t.Fatalf("payload = %#v", payload)
+	}
+}
+
 func TestObservabilityIngestRouteReportsTransientFailuresAsRetryable(t *testing.T) {
 	ctx := context.Background()
 	service, err := observability.OpenService(ctx, ":memory:")
@@ -86,42 +131,53 @@ func TestObservabilityIngestRouteReportsTransientFailuresAsRetryable(t *testing.
 	}
 	mux := http.NewServeMux()
 	registerObservabilityRoutes(mux, service, nil)
-	body := []byte(`{"records":[
-		{"schemaVersion":1,"recordId":"rec_retry","type":"run:start","runId":"run_retry_route","traceId":"trace_retry_route","name":"retry","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
+	body := []byte(`{"schemaVersion":2,"records":[
+		{"schemaVersion":2,"recordId":"rec_retry","type":"run:start","runId":"run_retry_route","segmentId":"seg_retry_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"retry","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
 	]}`)
 
 	response := performObservabilityIngestRequest(mux, body)
 
-	if response.Code != http.StatusServiceUnavailable {
-		t.Fatalf("status = %d, want 503; body = %s", response.Code, response.Body.String())
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body = %s", response.Code, response.Body.String())
 	}
 	if got := response.Header().Get("Retry-After"); got != "1" {
 		t.Fatalf("Retry-After = %q, want 1", got)
 	}
+	var payload observabilityIngestResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Dispositions) != 1 || payload.Dispositions[0].Outcome != "rejected" || !payload.Dispositions[0].Retryable {
+		t.Fatalf("payload = %#v, want one retryable disposition", payload)
+	}
 }
 
-func TestObservabilityTransientClassifierOnlyRetriesBusyLockedOrClosed(t *testing.T) {
-	retryable := []error{
-		errors.New("sqlite_busy: database is busy"),
-		errors.New("database is locked"),
-		errors.New("database is busy"),
-		errors.New("database is closed"),
+func TestObservabilityIngestRouteIndexesDuplicateIDs(t *testing.T) {
+	ctx := context.Background()
+	service, err := observability.OpenService(ctx, ":memory:")
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, err := range retryable {
-		if !isTransientObservabilityIngestError(err) {
-			t.Fatalf("%q should be retryable", err.Error())
-		}
-	}
+	t.Cleanup(func() { _ = service.Close() })
+	mux := http.NewServeMux()
+	registerObservabilityRoutes(mux, service, nil)
+	body := []byte(`{"schemaVersion":2,"sourceHealth":{"sourceId":"source_route","accepted":4,"retried":2,"permanentlyRejected":1,"overflowDropped":3,"deadlineDropped":0,"lastError":{"code":"delivery_retry","message":"https://collector.example/private Bearer secret-token"}},"records":[
+		{"schemaVersion":2,"recordId":"rec_duplicate_route","type":"run:start","runId":"run_duplicate_route","segmentId":"seg_duplicate_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"first","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"rec_duplicate_route","type":"run:start","runId":"run_duplicate_route","segmentId":"seg_duplicate_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"conflict","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}
+	]}`)
 
-	permanent := []error{
-		errors.New("begin observability ingest transaction: disk I/O error"),
-		errors.New("commit observability ingest transaction: constraint failed"),
-		errors.New("validation failed"),
+	response := performObservabilityIngestRequest(mux, body)
+
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body = %s", response.Code, response.Body.String())
 	}
-	for _, err := range permanent {
-		if isTransientObservabilityIngestError(err) {
-			t.Fatalf("%q should not be retryable", err.Error())
-		}
+	var payload observabilityIngestResponse
+	if err := json.NewDecoder(response.Body).Decode(&payload); err != nil {
+		t.Fatal(err)
+	}
+	if len(payload.Dispositions) != 2 || payload.Dispositions[0].Index != 0 || payload.Dispositions[0].Outcome != "accepted" ||
+		payload.Dispositions[1].Index != 1 || payload.Dispositions[1].Code != "record_id_conflict" || payload.Dispositions[1].Retryable {
+		t.Fatalf("payload = %#v", payload)
 	}
 }
 
@@ -133,10 +189,10 @@ func TestObservabilitySpanEventsRouteReadsLazyTokenChunks(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = service.Close() })
 	if err := service.Ingest(ctx, observability.Batch{Records: []observability.Record{
-		mustObservabilityRecord(t, `{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run_span_events_route","traceId":"trace_span_events_route","name":"tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`),
-		mustObservabilityRecord(t, `{"schemaVersion":1,"recordId":"rec_span_start","type":"span:start","runId":"run_span_events_route","traceId":"trace_span_events_route","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`),
-		mustObservabilityRecord(t, `{"schemaVersion":1,"recordId":"rec_token_1","type":"span:event","runId":"run_span_events_route","traceId":"trace_span_events_route","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":2,"text":"Hi","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`),
-		mustObservabilityRecord(t, `{"schemaVersion":1,"recordId":"rec_token_2","type":"span:event","runId":"run_span_events_route","traceId":"trace_span_events_route","spanId":"span_generate","eventId":"event_token_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}`),
+		mustObservabilityRecord(t, `{"schemaVersion":2,"recordId":"rec_run_start","type":"run:start","runId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":1,"traceId":"11111111111111111111111111111111","name":"tokens","rootPrimitive":"generation.stream","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`),
+		mustObservabilityRecord(t, `{"schemaVersion":2,"recordId":"rec_span_start","type":"span:start","runId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":2,"traceId":"11111111111111111111111111111111","spanId":"span_generate","family":"generation","primitive":"generation.stream","name":"stream","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`),
+		mustObservabilityRecord(t, `{"schemaVersion":2,"recordId":"rec_token_1","type":"span:event","runId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":3,"traceId":"11111111111111111111111111111111","spanId":"span_generate","eventId":"event_token_1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.100Z","attributes":{"chunkIndex":0,"charCount":2,"text":"Hi","firstDeltaAt":"2026-05-16T18:00:00.090Z","lastDeltaAt":"2026-05-16T18:00:00.100Z"}}`),
+		mustObservabilityRecord(t, `{"schemaVersion":2,"recordId":"rec_token_2","type":"span:event","runId":"run_span_events_route","segmentId":"seg_span_events_route","segmentSeq":4,"traceId":"11111111111111111111111111111111","spanId":"span_generate","eventId":"event_token_2","name":"token.chunk","timestamp":"2026-05-16T18:00:00.200Z","attributes":{"chunkIndex":1,"charCount":1,"text":"!","firstDeltaAt":"2026-05-16T18:00:00.190Z","lastDeltaAt":"2026-05-16T18:00:00.200Z"}}`),
 	}}); err != nil {
 		t.Fatal(err)
 	}

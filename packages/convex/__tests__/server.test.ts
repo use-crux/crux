@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  acceptedDeliveryReceipt,
   createInMemoryObservabilityTransport,
   observe,
   resetObservabilityRuntime,
@@ -156,13 +157,14 @@ describe('@use-crux/convex/server', () => {
     let resolveSend!: () => void
     let sends = 0
     setObservabilityTransport({
-      async send() {
+      async send(records) {
         sends += 1
         if (sends === 1) {
           await new Promise<void>((resolve) => {
             resolveSend = resolve
           })
         }
+        return acceptedDeliveryReceipt(records)
       },
     })
     const run = action({

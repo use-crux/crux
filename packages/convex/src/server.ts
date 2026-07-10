@@ -12,6 +12,7 @@ import {
   type CruxAttributes,
   type CruxPrimitiveName,
   type ObserveSpanOptions,
+  type ObservabilityFlushResult,
 } from '@use-crux/core/observability'
 import {
   createFlowId,
@@ -62,7 +63,7 @@ export interface CruxConvexContext {
     context: CapturedObservabilityContext | undefined,
     fn: () => T | Promise<T>,
   ): T | Promise<T>
-  flush(options?: { timeoutMs?: number }): Promise<boolean>
+  flush(options?: { timeoutMs?: number }): Promise<ObservabilityFlushResult>
   span<T>(options: ObserveSpanOptions, fn: () => T | Promise<T>): Promise<T>
   runAction<TResult = unknown>(
     label: string,
