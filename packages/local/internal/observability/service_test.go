@@ -676,8 +676,8 @@ func TestServiceRunDetailMarksMissingEndsAsStalePresentation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if detail.Run.Status != "stale" || detail.Root.Status != "stale" {
-		t.Fatalf("presentation statuses = %q/%q, want stale/stale", detail.Run.Status, detail.Root.Status)
+	if detail.Run.Status != "incomplete" || detail.Root.Status != "incomplete" {
+		t.Fatalf("presentation statuses = %q/%q, want incomplete/incomplete", detail.Run.Status, detail.Root.Status)
 	}
 	if detail.Run.DurationMs <= 0 || detail.Root.DurationMs <= 0 {
 		t.Fatalf("presentation durations = %f/%f, want elapsed stale durations", detail.Run.DurationMs, detail.Root.DurationMs)
@@ -821,7 +821,7 @@ func TestServiceShowsSuspendedRunThenContinuesSameRun(t *testing.T) {
 		`{"schemaVersion":2,"recordId":"rec_step_start","type":"span:start","runId":"run_suspend","segmentId":"seg_suspend_a","segmentSeq":3,"traceId":"trace_suspend","spanId":"span_step_1","parentSpanId":"span_flow_1","family":"flow","primitive":"flow.step","name":"draft","startedAt":"2026-05-16T18:00:00.002Z","status":"running","attributes":{"flowId":"flow-1","stepId":"draft-1"}}`,
 		`{"schemaVersion":2,"recordId":"rec_step_end","type":"span:end","runId":"run_suspend","segmentId":"seg_suspend_a","segmentSeq":4,"traceId":"trace_suspend","spanId":"span_step_1","endedAt":"2026-05-16T18:00:00.020Z","durationMs":18,"status":"ok"}`,
 		`{"schemaVersion":2,"recordId":"rec_flow_suspend","type":"span:end","runId":"run_suspend","segmentId":"seg_suspend_a","segmentSeq":5,"traceId":"trace_suspend","spanId":"span_flow_1","endedAt":"2026-05-16T18:00:00.030Z","durationMs":29,"status":"suspended","attributes":{"suspendedAt":"approval","totalSteps":1}}`,
-		`{"schemaVersion":2,"recordId":"rec_run_suspend","type":"run:end","runId":"run_suspend","segmentId":"seg_suspend_a","segmentSeq":6,"traceId":"trace_suspend","endedAt":"2026-05-16T18:00:00.031Z","durationMs":31,"status":"suspended"}`,
+		`{"schemaVersion":2,"recordId":"rec_run_suspend","type":"run:suspend","runId":"run_suspend","segmentId":"seg_suspend_a","segmentSeq":6,"traceId":"trace_suspend","suspendedAt":"2026-05-16T18:00:00.031Z","reason":"approval"}`,
 	)
 	if err := service.Ingest(ctx, suspendedBatch); err != nil {
 		t.Fatal(err)
@@ -843,11 +843,12 @@ func TestServiceShowsSuspendedRunThenContinuesSameRun(t *testing.T) {
 	}
 
 	resumeBatch := mustBatch(t,
-		`{"schemaVersion":2,"recordId":"rec_flow_resume_start","type":"span:start","runId":"run_suspend","segmentId":"seg_suspend_a","segmentSeq":7,"traceId":"trace_suspend","spanId":"span_flow_2","family":"flow","primitive":"flow.run","name":"review-flow","startedAt":"2026-05-16T18:00:01.000Z","status":"running","attributes":{"flowId":"flow-1","resume":true}}`,
-		`{"schemaVersion":2,"recordId":"rec_publish_start","type":"span:start","runId":"run_suspend","segmentId":"seg_suspend_a","segmentSeq":8,"traceId":"trace_suspend","spanId":"span_step_2","parentSpanId":"span_flow_2","family":"flow","primitive":"flow.step","name":"publish","startedAt":"2026-05-16T18:00:01.001Z","status":"running","attributes":{"flowId":"flow-1","stepId":"publish-2"}}`,
-		`{"schemaVersion":2,"recordId":"rec_publish_end","type":"span:end","runId":"run_suspend","segmentId":"seg_suspend_a","segmentSeq":9,"traceId":"trace_suspend","spanId":"span_step_2","endedAt":"2026-05-16T18:00:01.020Z","durationMs":19,"status":"ok"}`,
-		`{"schemaVersion":2,"recordId":"rec_flow_resume_end","type":"span:end","runId":"run_suspend","segmentId":"seg_suspend_a","segmentSeq":10,"traceId":"trace_suspend","spanId":"span_flow_2","endedAt":"2026-05-16T18:00:01.030Z","durationMs":30,"status":"ok","attributes":{"flowStatus":"completed","totalSteps":1}}`,
-		`{"schemaVersion":2,"recordId":"rec_run_complete","type":"run:end","runId":"run_suspend","segmentId":"seg_suspend_a","segmentSeq":11,"traceId":"trace_suspend","endedAt":"2026-05-16T18:00:01.031Z","durationMs":1031,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"rec_run_resume","type":"run:resume","runId":"run_suspend","segmentId":"seg_suspend_b","segmentSeq":1,"traceId":"trace_suspend","resumedAt":"2026-05-16T18:00:01.000Z","reason":"approval-granted","previousSegmentId":"seg_suspend_a"}`,
+		`{"schemaVersion":2,"recordId":"rec_flow_resume_start","type":"span:start","runId":"run_suspend","segmentId":"seg_suspend_b","segmentSeq":2,"traceId":"trace_suspend","spanId":"span_flow_2","family":"flow","primitive":"flow.run","name":"review-flow","startedAt":"2026-05-16T18:00:01.000Z","status":"running","attributes":{"flowId":"flow-1","resume":true}}`,
+		`{"schemaVersion":2,"recordId":"rec_publish_start","type":"span:start","runId":"run_suspend","segmentId":"seg_suspend_b","segmentSeq":3,"traceId":"trace_suspend","spanId":"span_step_2","parentSpanId":"span_flow_2","family":"flow","primitive":"flow.step","name":"publish","startedAt":"2026-05-16T18:00:01.001Z","status":"running","attributes":{"flowId":"flow-1","stepId":"publish-2"}}`,
+		`{"schemaVersion":2,"recordId":"rec_publish_end","type":"span:end","runId":"run_suspend","segmentId":"seg_suspend_b","segmentSeq":4,"traceId":"trace_suspend","spanId":"span_step_2","endedAt":"2026-05-16T18:00:01.020Z","durationMs":19,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"rec_flow_resume_end","type":"span:end","runId":"run_suspend","segmentId":"seg_suspend_b","segmentSeq":5,"traceId":"trace_suspend","spanId":"span_flow_2","endedAt":"2026-05-16T18:00:01.030Z","durationMs":30,"status":"ok","attributes":{"flowStatus":"completed","totalSteps":1}}`,
+		`{"schemaVersion":2,"recordId":"rec_run_complete","type":"run:end","runId":"run_suspend","segmentId":"seg_suspend_b","segmentSeq":6,"traceId":"trace_suspend","endedAt":"2026-05-16T18:00:01.031Z","durationMs":1031,"status":"ok"}`,
 	)
 	if err := service.Ingest(ctx, resumeBatch); err != nil {
 		t.Fatal(err)
@@ -1514,7 +1515,7 @@ func TestServiceRunDetailRendersFlowSuspensionAsTimelineMarker(t *testing.T) {
 		`{"schemaVersion":2,"recordId":"rec_generate","type":"span","runId":"run_flow_suspend_marker","segmentId":"seg_flow_suspend_marker_a","segmentSeq":4,"traceId":"trace_flow_suspend_marker","spanId":"span_generate_plan","parentSpanId":"span_step_plan","family":"generation","primitive":"generation.call","name":"generate writer-propose-plan","startedAt":"2026-05-16T18:00:00.020Z","endedAt":"2026-05-16T18:00:00.920Z","durationMs":900,"status":"ok"}`,
 		`{"schemaVersion":2,"recordId":"rec_suspend","type":"span","runId":"run_flow_suspend_marker","segmentId":"seg_flow_suspend_marker_a","segmentSeq":5,"traceId":"trace_flow_suspend_marker","spanId":"span_suspend_plan","parentSpanId":"span_step_plan","family":"flow","primitive":"flow.suspension","name":"plan-approval","startedAt":"2026-05-16T18:00:01.011Z","endedAt":"2026-05-16T18:00:01.011Z","durationMs":0,"status":"suspended","attributes":{"causedByStepId":"plan","resumeTarget":"writer.resume"}}`,
 		`{"schemaVersion":2,"recordId":"rec_edge","type":"edge","runId":"run_flow_suspend_marker","segmentId":"seg_flow_suspend_marker_a","segmentSeq":6,"traceId":"trace_flow_suspend_marker","edgeId":"edge_suspend_caused","edgeType":"caused","from":{"kind":"span","id":"span_step_plan"},"to":{"kind":"span","id":"span_suspend_plan"},"createdAt":"2026-05-16T18:00:01.011Z"}`,
-		`{"schemaVersion":2,"recordId":"rec_run_end","type":"run:end","runId":"run_flow_suspend_marker","segmentId":"seg_flow_suspend_marker_a","segmentSeq":7,"traceId":"trace_flow_suspend_marker","endedAt":"2026-05-16T18:00:02.000Z","durationMs":2000,"status":"suspended"}`,
+		`{"schemaVersion":2,"recordId":"rec_run_suspend","type":"run:suspend","runId":"run_flow_suspend_marker","segmentId":"seg_flow_suspend_marker_a","segmentSeq":7,"traceId":"trace_flow_suspend_marker","suspendedAt":"2026-05-16T18:00:02.000Z","reason":"plan-approval"}`,
 	)
 	if err := service.Ingest(ctx, batch); err != nil {
 		t.Fatal(err)

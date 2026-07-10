@@ -52,6 +52,14 @@ func runDiagnostics(run RunSummary) []RunDetailDiagnostic {
 }
 
 func runDiagnosticsAt(run RunSummary, now time.Time) []RunDetailDiagnostic {
+	if run.TraceAliasConflict {
+		return []RunDetailDiagnostic{{
+			Code:         "trace-alias-conflict",
+			Severity:     "warn",
+			Message:      "more than one run shares this trace alias; alias lookup selects the newest run",
+			SuggestedFix: "Use the stable run id when selecting a specific logical run.",
+		}}
+	}
 	if presentationReconciledFrom(run.Attributes) == "descendant.operation.deadline" {
 		return []RunDetailDiagnostic{{
 			Code:         "descendant-operation-deadline-exceeded",
@@ -60,7 +68,7 @@ func runDiagnosticsAt(run RunSummary, now time.Time) []RunDetailDiagnostic {
 			SuggestedFix: "Flush or acknowledge terminal records from descendant operations before the Crux operation deadline expires.",
 		}}
 	}
-	if (run.Status == "running" || run.Status == "stale") && run.EndedAt == "" && isStaleTimestampAt(staleTimestampAnchor(run.lastActivityAt, run.StartedAt), now) {
+	if (run.Status == "running" || run.Status == "incomplete") && run.EndedAt == "" && isStaleTimestampAt(staleTimestampAnchor(run.lastActivityAt, run.StartedAt), now) {
 		return []RunDetailDiagnostic{{
 			Code:         "stale-boundary",
 			Severity:     "warn",

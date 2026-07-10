@@ -288,7 +288,9 @@ func (s *Service) ResolveRunIDs(ctx context.Context, ids []string) (map[string]s
 			resolved[runID] = runID
 		}
 		if _, ok := requestedSet[traceID]; ok {
-			resolved[traceID] = runID
+			if _, alreadyResolved := resolved[traceID]; !alreadyResolved {
+				resolved[traceID] = runID
+			}
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -327,6 +329,9 @@ func uniqueMapValues(values map[string]string) []string {
 func (s *Service) enrichRunSummary(ctx context.Context, run *RunSummary) error {
 	if run == nil || run.RunID == "" {
 		return nil
+	}
+	if err := s.enrichRunSegmentSummaries(ctx, []string{run.RunID}, map[string]*RunSummary{run.RunID: run}); err != nil {
+		return fmt.Errorf("enrich observability run %q segments: %w", run.RunID, err)
 	}
 	spanCtx, spanCancel := s.queryContext(ctx)
 	spanMetrics, model, provider, promptID, err := s.runSpanSummaryRollup(spanCtx, run.RunID)
@@ -376,6 +381,12 @@ func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary, inc
 	}
 
 	if err := s.enrichRunSummaryCounts(ctx, runIDs, byRunID); err != nil {
+		if !includeExpensiveRollups && isRunListDeadlineError(err) {
+			return nil
+		}
+		return err
+	}
+	if err := s.enrichRunSegmentSummaries(ctx, runIDs, byRunID); err != nil {
 		if !includeExpensiveRollups && isRunListDeadlineError(err) {
 			return nil
 		}
@@ -984,15 +995,36 @@ func (s *Service) listEdges(ctx context.Context, runID string) ([]EdgeSummary, e
 
 func (s *Service) listRecords(ctx context.Context, runID string) ([]StoredRecord, error) {
 	rows, err := s.db.QueryContext(ctx, `
-		SELECT record_id, run_id, ifnull(trace_id, ''), segment_id, segment_seq, type, payload_json, received_at
-		FROM records
-		WHERE run_id = ?
+		WITH RECURSIVE segment_order(segment_id, depth, path) AS (
+			SELECT segment_id, 0, '|' || segment_id || '|'
+			FROM run_segments
+			WHERE run_id = ? AND (previous_segment_id IS NULL OR previous_segment_id = '')
+			UNION ALL
+			SELECT child.segment_id, parent.depth + 1, parent.path || child.segment_id || '|'
+			FROM run_segments child
+			JOIN segment_order parent ON child.previous_segment_id = parent.segment_id
+			WHERE child.run_id = ? AND instr(parent.path, '|' || child.segment_id || '|') = 0
+		)
+		SELECT r.record_id, r.run_id, ifnull(r.trace_id, ''), r.segment_id, r.segment_seq, r.type, r.payload_json, r.received_at
+		FROM records r
+		LEFT JOIN segment_order ordering ON ordering.segment_id = r.segment_id
+		WHERE r.run_id = ?
 		ORDER BY
-			segment_id,
-			segment_seq,
-			received_at,
-			record_id
-	`, runID)
+			CASE WHEN EXISTS(SELECT 1 FROM records start WHERE start.segment_id = r.segment_id AND start.type = 'run:start') THEN 0 ELSE 1 END,
+			coalesce(ordering.depth, 2147483647),
+			r.segment_id,
+			r.segment_seq,
+			coalesce(
+				json_extract(r.payload_json, '$.startedAt'),
+				json_extract(r.payload_json, '$.resumedAt'),
+				json_extract(r.payload_json, '$.suspendedAt'),
+				json_extract(r.payload_json, '$.endedAt'),
+				json_extract(r.payload_json, '$.timestamp'),
+				json_extract(r.payload_json, '$.createdAt'),
+				r.received_at
+			),
+			r.record_id
+	`, runID, runID, runID)
 	if err != nil {
 		return nil, err
 	}

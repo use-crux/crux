@@ -68,6 +68,11 @@ import {
   currentQualityObservabilityCaptureSession,
   shouldQuarantineQualityObservabilityWrite,
 } from './quality-capture-hooks'
+import {
+  continuationIdentity,
+  createPropagationCarrier,
+  type CruxPropagationCarrier,
+} from './continuation'
 
 export {
   subscribeObservability,
@@ -159,12 +164,26 @@ export interface OpenObservedRun {
   /** Segment that owns records emitted by this open run. */
   readonly segmentId: CruxSegmentId
   captureContext(): CapturedObservabilityContext
+  /** Capture serializable correlation without changing lifecycle state. */
+  captureContinuation(): CruxPropagationCarrier
   withContext<T>(fn: () => T | Promise<T>): T | Promise<T>
+  /** Close this physical segment without terminalizing its logical run. */
+  suspend(options: SuspendObservedRunOptions): CruxPropagationCarrier
   end(options?: EndObservedRunOptions): void
   error(
     error: unknown,
     options?: Omit<EndObservedRunOptions, 'status' | 'error'>,
   ): void
+}
+
+export interface SuspendObservedRunOptions {
+  reason: string
+  attributes?: CruxAttributes
+}
+
+export interface ResumeObservedRunOptions {
+  reason: string
+  attributes?: CruxAttributes
 }
 
 export interface ObserveRunOptions {
@@ -181,7 +200,7 @@ export interface ObserveRunOptions {
 }
 
 export interface EndObservedRunOptions {
-  status?: Exclude<CruxRunStatus, 'running'>
+  status?: Exclude<CruxRunStatus, 'running' | 'suspended'>
   metrics?: CruxMetrics
   error?: unknown
   attributes?: CruxAttributes
@@ -706,7 +725,13 @@ export const observe = {
       spanStack: [],
       correlators: effectiveCorrelators(),
     }
-    let ended = false
+    let closed = false
+    const continuation = createPropagationCarrier({
+      runId,
+      traceId,
+      previousSegmentId: segmentId,
+      correlators: context.correlators,
+    })
 
     emitObserved(
       () => ({
@@ -726,8 +751,8 @@ export const observe = {
     )
 
     const finish = (finishOptions: EndObservedRunOptions = {}): void => {
-      if (ended) return
-      ended = true
+      if (closed) return
+      closed = true
       const status =
         finishOptions.status ?? (finishOptions.error ? 'error' : 'ok')
       if (!rememberEndedRun(runId, status)) return
@@ -766,8 +791,31 @@ export const observe = {
       captureContext(): CapturedObservabilityContext {
         return captureContextValue(context, [])
       },
+      captureContinuation(): CruxPropagationCarrier {
+        return continuation
+      },
       withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
         return withContext(context, fn)
+      },
+      suspend(options: SuspendObservedRunOptions): CruxPropagationCarrier {
+        if (!options.reason) throw new TypeError('A suspension reason is required')
+        if (closed) return continuation
+        closed = true
+        emitObserved(
+          () => ({
+            schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+            recordId: createCruxRecordId(),
+            type: 'run:suspend',
+            runId,
+            segmentId,
+            traceId,
+            suspendedAt: now(),
+            reason: options.reason,
+            ...(options.attributes ? { attributes: options.attributes } : {}),
+          }),
+          context.correlators ?? null,
+        )
+        return continuation
       },
       end(options?: EndObservedRunOptions): void {
         finish(options)
@@ -781,38 +829,109 @@ export const observe = {
     }
   },
 
-  endRun(
-    context: CapturedObservabilityContext,
-    options: EndObservedRunOptions = {},
-  ): void {
-    const status = options.status ?? (options.error ? 'error' : 'ok')
-    if (!rememberEndedRun(context.runId, status)) return
+  resumeRun(
+    carrier: CruxPropagationCarrier,
+    options: ResumeObservedRunOptions,
+  ): OpenObservedRun {
+    if (!options.reason) throw new TypeError('A resume reason is required')
+    const identity = continuationIdentity(carrier)
+    if (endedRunStatuses.has(identity.runId)) {
+      throw new Error('Cannot resume a terminal observed run')
+    }
+    const segmentId = createCruxSegmentId()
+    const startedAtMs = Date.now()
+    const context: ObservabilityContext = {
+      runId: identity.runId,
+      traceId: identity.traceId,
+      segmentId,
+      startedAtMs,
+      spanStack: [],
+      correlators: mergeCruxCorrelators(identity.correlators, effectiveCorrelators()),
+    }
+    let closed = false
+    const continuation = createPropagationCarrier({
+      runId: identity.runId,
+      traceId: identity.traceId,
+      previousSegmentId: segmentId,
+      correlators: context.correlators,
+    })
+
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'run:end',
-        runId: context.runId,
-        segmentId: context.segmentId,
-        traceId: context.traceId,
-        endedAt: now(),
-        ...(context.startedAtMs !== undefined
-          ? { durationMs: durationSince(context.startedAtMs) }
-          : {}),
-        status,
-        ...(options.metrics ? { metrics: options.metrics } : {}),
-        ...(options.error !== undefined
-          ? {
-              error: observedErrorSummary(
-                options.error,
-                errorContext(options.attributes),
-              ),
-            }
+        type: 'run:resume',
+        runId: identity.runId,
+        segmentId,
+        traceId: identity.traceId,
+        resumedAt: now(),
+        reason: options.reason,
+        ...(identity.previousSegmentId
+          ? { previousSegmentId: identity.previousSegmentId }
           : {}),
         ...(options.attributes ? { attributes: options.attributes } : {}),
       }),
       context.correlators ?? null,
     )
+
+    const finish = (finishOptions: EndObservedRunOptions = {}): void => {
+      if (closed) return
+      closed = true
+      const status = finishOptions.status ?? (finishOptions.error ? 'error' : 'ok')
+      if (!rememberEndedRun(identity.runId, status)) return
+      emitObserved(
+        () => ({
+          schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+          recordId: createCruxRecordId(),
+          type: 'run:end',
+          runId: identity.runId,
+          segmentId,
+          traceId: identity.traceId,
+          endedAt: now(),
+          durationMs: durationSince(startedAtMs),
+          status,
+          ...(finishOptions.metrics ? { metrics: finishOptions.metrics } : {}),
+          ...(finishOptions.error !== undefined
+            ? { error: observedErrorSummary(finishOptions.error, errorContext(finishOptions.attributes)) }
+            : {}),
+          ...(finishOptions.attributes ? { attributes: finishOptions.attributes } : {}),
+        }),
+        context.correlators ?? null,
+      )
+    }
+
+    return {
+      runId: identity.runId,
+      traceId: identity.traceId,
+      segmentId,
+      captureContext: () => captureContextValue(context, []),
+      captureContinuation: () => continuation,
+      withContext: <T>(fn: () => T | Promise<T>) => withContext(context, fn),
+      suspend(suspendOptions: SuspendObservedRunOptions): CruxPropagationCarrier {
+        if (!suspendOptions.reason) throw new TypeError('A suspension reason is required')
+        if (closed) return continuation
+        closed = true
+        emitObserved(
+          () => ({
+            schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+            recordId: createCruxRecordId(),
+            type: 'run:suspend',
+            runId: identity.runId,
+            segmentId,
+            traceId: identity.traceId,
+            suspendedAt: now(),
+            reason: suspendOptions.reason,
+            ...(suspendOptions.attributes ? { attributes: suspendOptions.attributes } : {}),
+          }),
+          context.correlators ?? null,
+        )
+        return continuation
+      },
+      end: finish,
+      error(error, finishOptions): void {
+        finish({ ...finishOptions, status: 'error', error })
+      },
+    }
   },
 
   async run<T>(
@@ -1115,8 +1234,7 @@ export const observe = {
         spanContext.correlators ?? null,
       )
       if (openedImplicitRun) {
-        const runStatus: Exclude<CruxRunStatus, 'running'> =
-          status === 'skipped' ? 'ok' : status
+        const runStatus: EndedRunStatus = status === 'skipped' ? 'ok' : status
         if (!rememberEndedRun(spanContext.runId, runStatus)) return
         emitObserved(
           () => ({
@@ -1301,13 +1419,7 @@ export const observe = {
 
 function rememberEndedRun(runId: CruxRunId, status: EndedRunStatus): boolean {
   const previousStatus = endedRunStatuses.get(runId)
-  if (previousStatus) {
-    if (previousStatus === 'suspended' && status !== 'suspended') {
-      endedRunStatuses.set(runId, status)
-      return true
-    }
-    return false
-  }
+  if (previousStatus) return false
 
   endedRunStatuses.set(runId, status)
   if (endedRunStatuses.size <= maxEndedRunIds) return true

@@ -140,32 +140,52 @@ func classifySQLiteConstraintError(err error, record Record) error {
 }
 
 func upsertRunSegment(ctx context.Context, statements *ingestStatements, record Record) error {
-	status, startedAt, endedAt := segmentProjectionFields(record)
+	fields := segmentProjectionFields(record)
 	_, err := statements.exec(ctx, `
 		INSERT INTO run_segments (
 			segment_id, run_id,
-			status, started_at, ended_at, first_segment_seq, last_segment_seq
+			status, started_at, resumed_at, suspended_at, ended_at, reason, previous_segment_id,
+			first_segment_seq, last_segment_seq
 		)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(segment_id) DO UPDATE SET
 			status = CASE
 				WHEN run_segments.status IN ('ok', 'error', 'blocked', 'cancelled') THEN run_segments.status
+				WHEN run_segments.status = 'suspended' AND excluded.status = 'running' THEN run_segments.status
 				WHEN excluded.status IN ('ok', 'error', 'blocked', 'cancelled', 'suspended') THEN excluded.status
 				ELSE coalesce(excluded.status, run_segments.status)
 			END,
 			started_at = coalesce(run_segments.started_at, excluded.started_at),
+			resumed_at = coalesce(run_segments.resumed_at, excluded.resumed_at),
+			suspended_at = coalesce(run_segments.suspended_at, excluded.suspended_at),
 			ended_at = CASE
 				WHEN run_segments.status IN ('ok', 'error', 'blocked', 'cancelled') THEN run_segments.ended_at
-				WHEN run_segments.status = 'suspended'
-					AND excluded.status IN ('ok', 'error', 'blocked', 'cancelled') THEN excluded.ended_at
 				ELSE coalesce(run_segments.ended_at, excluded.ended_at)
 			END,
+			reason = coalesce(run_segments.reason, excluded.reason),
+			previous_segment_id = coalesce(run_segments.previous_segment_id, excluded.previous_segment_id),
 			first_segment_seq = CASE
 				WHEN run_segments.first_segment_seq = 0 OR excluded.first_segment_seq < run_segments.first_segment_seq THEN excluded.first_segment_seq
 				ELSE run_segments.first_segment_seq
 			END,
-			last_segment_seq = max(run_segments.last_segment_seq, excluded.last_segment_seq)
-	`, record.SegmentID, record.RunID, nullIfEmpty(status), nullIfEmpty(startedAt), nullIfEmpty(endedAt), record.SegmentSeq, record.SegmentSeq)
+			last_segment_seq = max(run_segments.last_segment_seq, excluded.last_segment_seq),
+			gap_count = max(0, max(run_segments.last_segment_seq, excluded.last_segment_seq) -
+				min(run_segments.first_segment_seq, excluded.first_segment_seq) + 1 -
+				(SELECT count(*) FROM records WHERE segment_id = excluded.segment_id)),
+			conflict_count = max(0,
+				(SELECT count(*) FROM records WHERE segment_id = excluded.segment_id AND type = 'run:end') - 1)
+	`, record.SegmentID, record.RunID, nullIfEmpty(fields.status), nullIfEmpty(fields.startedAt),
+		nullIfEmpty(fields.resumedAt), nullIfEmpty(fields.suspendedAt), nullIfEmpty(fields.endedAt),
+		nullIfEmpty(fields.reason), nullIfEmpty(fields.previousSegmentID), record.SegmentSeq, record.SegmentSeq)
+	if err != nil {
+		return err
+	}
+	_, err = statements.exec(ctx, `
+		UPDATE run_segments
+		SET gap_count = max(0, last_segment_seq - (SELECT count(*) FROM records WHERE segment_id = ?)),
+			conflict_count = max(0, (SELECT count(*) FROM records WHERE segment_id = ? AND type = 'run:end') - 1)
+		WHERE segment_id = ?
+	`, record.SegmentID, record.SegmentID, record.SegmentID)
 	return err
 }
 
@@ -188,18 +208,26 @@ func canonicalJSON(raw []byte) ([]byte, error) {
 	return json.Marshal(value)
 }
 
-func segmentProjectionFields(record Record) (status, startedAt, endedAt string) {
+type segmentProjection struct {
+	status, startedAt, resumedAt, suspendedAt, endedAt, reason, previousSegmentID string
+}
+
+func segmentProjectionFields(record Record) segmentProjection {
 	var fields map[string]any
 	if err := json.Unmarshal(record.Payload, &fields); err != nil {
-		return "", "", ""
+		return segmentProjection{}
 	}
 	switch record.Type {
 	case RecordRunStart:
-		return "running", stringMapField(fields, "startedAt"), ""
+		return segmentProjection{status: "running", startedAt: stringMapField(fields, "startedAt")}
+	case RecordRunSuspend:
+		return segmentProjection{status: "suspended", suspendedAt: stringMapField(fields, "suspendedAt"), endedAt: stringMapField(fields, "suspendedAt"), reason: stringMapField(fields, "reason")}
+	case RecordRunResume:
+		return segmentProjection{status: "running", startedAt: stringMapField(fields, "resumedAt"), resumedAt: stringMapField(fields, "resumedAt"), reason: stringMapField(fields, "reason"), previousSegmentID: stringMapField(fields, "previousSegmentId")}
 	case RecordRunEnd:
-		return stringMapField(fields, "status"), "", stringMapField(fields, "endedAt")
+		return segmentProjection{status: stringMapField(fields, "status"), endedAt: stringMapField(fields, "endedAt")}
 	default:
-		return "", "", ""
+		return segmentProjection{}
 	}
 }
 
@@ -208,7 +236,7 @@ func stringMapField(fields map[string]any, key string) string {
 	return value
 }
 
-func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *ingestStatements, record Record) error {
+func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *ingestStatements, record Record) (err error) {
 	storedInserted, err := upsertStoredRecord(ctx, statements, record)
 	if err != nil {
 		return err
@@ -216,6 +244,11 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 	if !storedInserted {
 		return nil
 	}
+	defer func() {
+		if err == nil {
+			err = reconcileRunSegmentLifecycle(ctx, statements, record.RunID)
+		}
+	}()
 	switch record.Type {
 	case RecordRunStart:
 		var run RunStartRecord
@@ -226,6 +259,24 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 			return err
 		}
 		return updateRunRollups(ctx, statements, rollupDeltaForRunStart(run, storedInserted))
+	case RecordRunSuspend:
+		var run RunSuspendRecord
+		if err := json.Unmarshal(record.Payload, &run); err != nil {
+			return fmt.Errorf("decode run suspend record: %w", err)
+		}
+		if err := upsertRunBoundary(ctx, statements, run.RunID, run.TraceID, run.Attributes); err != nil {
+			return err
+		}
+		return updateRunRollups(ctx, statements, runRollupDelta{runID: run.RunID, recordCount: 1, lastActivityAt: run.SuspendedAt})
+	case RecordRunResume:
+		var run RunResumeRecord
+		if err := json.Unmarshal(record.Payload, &run); err != nil {
+			return fmt.Errorf("decode run resume record: %w", err)
+		}
+		if err := upsertRunBoundary(ctx, statements, run.RunID, run.TraceID, run.Attributes); err != nil {
+			return err
+		}
+		return updateRunRollups(ctx, statements, runRollupDelta{runID: run.RunID, recordCount: 1, lastActivityAt: run.ResumedAt})
 	case RecordRunEnd:
 		var run RunEndRecord
 		if err := json.Unmarshal(record.Payload, &run); err != nil {

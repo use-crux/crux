@@ -26,7 +26,7 @@ export function createRecordSequencer(): CruxRecordSequencer {
     assign(record) {
       const segmentSeq = nextSegmentSeq(counters, record.segmentId)
       const sequenced = { ...record, segmentSeq } as CruxGraphRecord
-      if (record.type === 'run:end') {
+      if (record.type === 'run:suspend' || record.type === 'run:end') {
         counters.delete(record.segmentId)
       }
       return sequenced

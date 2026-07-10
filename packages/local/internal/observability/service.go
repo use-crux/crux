@@ -112,31 +112,36 @@ func (b *EventBus) Publish(event Event) {
 }
 
 type RunSummary struct {
-	RunID          string          `json:"runId"`
-	TraceID        string          `json:"traceId"`
-	SessionID      string          `json:"sessionId,omitempty"`
-	UserID         string          `json:"userId,omitempty"`
-	Name           string          `json:"name"`
-	RootPrimitive  string          `json:"rootPrimitive"`
-	Status         string          `json:"status"`
-	StartedAt      string          `json:"startedAt"`
-	EndedAt        string          `json:"endedAt"`
-	DurationMs     float64         `json:"durationMs"`
-	Model          string          `json:"model"`
-	Provider       string          `json:"provider"`
-	PromptID       string          `json:"promptId"`
-	RecordCount    int             `json:"recordCount"`
-	SpanCount      int             `json:"spanCount"`
-	EventCount     int             `json:"eventCount"`
-	ArtifactCount  int             `json:"artifactCount"`
-	EdgeCount      int             `json:"edgeCount"`
-	inputTokens    int             `json:"-"`
-	outputTokens   int             `json:"-"`
-	costUSD        float64         `json:"-"`
-	lastActivityAt string          `json:"-"`
-	Attributes     json.RawMessage `json:"attributes,omitempty"`
-	Metrics        json.RawMessage `json:"metrics,omitempty"`
-	Error          json.RawMessage `json:"error,omitempty"`
+	RunID              string          `json:"runId"`
+	TraceID            string          `json:"traceId"`
+	SessionID          string          `json:"sessionId,omitempty"`
+	UserID             string          `json:"userId,omitempty"`
+	Name               string          `json:"name"`
+	RootPrimitive      string          `json:"rootPrimitive"`
+	Status             string          `json:"status"`
+	StartedAt          string          `json:"startedAt"`
+	EndedAt            string          `json:"endedAt"`
+	DurationMs         float64         `json:"durationMs"`
+	Model              string          `json:"model"`
+	Provider           string          `json:"provider"`
+	PromptID           string          `json:"promptId"`
+	RecordCount        int             `json:"recordCount"`
+	SpanCount          int             `json:"spanCount"`
+	EventCount         int             `json:"eventCount"`
+	ArtifactCount      int             `json:"artifactCount"`
+	EdgeCount          int             `json:"edgeCount"`
+	SegmentCount       int             `json:"segmentCount"`
+	ActiveSegmentID    string          `json:"activeSegmentId,omitempty"`
+	OrderingConfidence string          `json:"orderingConfidence"`
+	GapCount           int             `json:"gapCount"`
+	TraceAliasConflict bool            `json:"traceAliasConflict,omitempty"`
+	inputTokens        int             `json:"-"`
+	outputTokens       int             `json:"-"`
+	costUSD            float64         `json:"-"`
+	lastActivityAt     string          `json:"-"`
+	Attributes         json.RawMessage `json:"attributes,omitempty"`
+	Metrics            json.RawMessage `json:"metrics,omitempty"`
+	Error              json.RawMessage `json:"error,omitempty"`
 }
 
 type RunListOptions struct {
@@ -869,8 +874,8 @@ func (s *Service) lifecycleCandidateRuns(ctx context.Context) ([]lifecycleRunSum
 
 func (s *Service) persistLifecycleReconciliation(ctx context.Context, reconciliation lifecycleReconciliation) (bool, error) {
 	status := "reconciled-terminal"
-	if reconciliation.Status == "stale" {
-		status = "reconciled-stale"
+	if reconciliation.Status == "incomplete" {
+		status = "reconciled-incomplete"
 	}
 	checkedAt := time.Now().UTC().Format(time.RFC3339Nano)
 	result, err := s.db.ExecContext(ctx, `

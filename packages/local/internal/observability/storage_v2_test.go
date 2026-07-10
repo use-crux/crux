@@ -604,8 +604,8 @@ func TestServiceKeepsFirstProjectedTerminalStatus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if run.Status != "ok" || run.EndedAt != "2026-05-16T18:00:01.000Z" {
-		t.Fatalf("run projection = %#v, want first terminal stable", run)
+	if run.Status != "conflicted" || run.EndedAt != "2026-05-16T18:00:01.000Z" {
+		t.Fatalf("run projection = %#v, want conflicted status and first terminal timestamp", run)
 	}
 	var segmentStatus, segmentEndedAt string
 	if err := service.db.QueryRowContext(ctx, `

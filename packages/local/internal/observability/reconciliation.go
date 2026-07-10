@@ -575,7 +575,7 @@ func stalePresentationRun(run RunSummary, protectedByDeadline bool) RunSummary {
 
 func stalePresentationRunAt(run RunSummary, protectedByDeadline bool, now time.Time) RunSummary {
 	if !protectedByDeadline && run.Status == "running" && run.EndedAt == "" && isStaleTimestampAt(staleTimestampAnchor(run.lastActivityAt, run.StartedAt), now) {
-		run.Status = "stale"
+		run.Status = "incomplete"
 		run.DurationMs = durationSinceTimestampAt(run.StartedAt, now)
 	}
 	return run

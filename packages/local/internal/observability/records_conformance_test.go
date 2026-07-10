@@ -149,19 +149,8 @@ func TestSharedV2ContractFixturesValidateSegmentView(t *testing.T) {
 		if len(testCase.Records) != len(testCase.Expected) {
 			t.Fatalf("%s records = %d, expected = %d", testCase.Name, len(testCase.Records), len(testCase.Expected))
 		}
-		phase3BaseEnvelopeOnly := testCase.Name == "suspend-resume-fresh-process" ||
-			testCase.Name == "concurrent-segments" ||
-			testCase.Name == "crash-incomplete-distinct-from-suspend-and-terminal"
 		for i, record := range testCase.Records {
-			var err error
-			if phase3BaseEnvelopeOnly {
-				// Phase 3 owns lifecycle record behavior; Phase 1 only proves the
-				// future examples carry the v2 base envelope.
-				err = ValidateRecordBase(record)
-			} else {
-				err = ValidateRecord(record)
-			}
-			if err != nil {
+			if err := ValidateRecord(record); err != nil {
 				t.Fatalf("%s record %s failed validation: %v", testCase.Name, record.RecordID, err)
 			}
 			got := v2ContractExpected{

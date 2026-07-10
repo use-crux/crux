@@ -1,7 +1,6 @@
 import { readdir, readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { z } from 'zod'
 import {
   CRUX_CANONICAL_ARTIFACT_KINDS,
   CRUX_CANONICAL_EDGE_TYPES,
@@ -12,18 +11,10 @@ import {
 } from '../../src/observability'
 
 const fixturesDir = new URL('../../src/observability/fixtures/', import.meta.url)
-const FutureLifecycleBaseEnvelopeSchema = z.object({
-  schemaVersion: z.literal(CRUX_OBSERVABILITY_SCHEMA_VERSION),
-  recordId: z.string().min(1),
-  runId: z.string().min(1),
-  segmentId: z.string().min(1),
-  segmentSeq: z.number().int().positive(),
-  sessionId: z.string().optional(),
-  userId: z.string().optional(),
-  traceId: z.string().optional(),
-})
 const producerRecordTypes = [
   'run:start',
+  'run:suspend',
+  'run:resume',
   'run:end',
   'span:start',
   'span:end',
@@ -53,6 +44,16 @@ describe('observability conformance fixture corpus', () => {
       ).toBe(true)
       if (parsed.success) {
         for (const record of parsed.data.records) coveredTypes.add(record.type)
+      }
+    }
+
+    const lifecycleCorpus = JSON.parse(
+      await readFile(new URL('v2-contract-cases.json', fixturesDir), 'utf8'),
+    ) as V2ContractCorpus
+    for (const testCase of lifecycleCorpus.cases) {
+      for (const record of testCase.records) {
+        const parsed = CruxGraphRecordSchema.parse(record)
+        coveredTypes.add(parsed.type)
       }
     }
 
@@ -113,20 +114,9 @@ describe('observability conformance fixture corpus', () => {
       'crash-incomplete-distinct-from-suspend-and-terminal',
     ])
 
-    const phase3BaseEnvelopeOnly = new Set([
-      'suspend-resume-fresh-process',
-      'concurrent-segments',
-      'crash-incomplete-distinct-from-suspend-and-terminal',
-    ])
-
     for (const testCase of corpus.cases) {
       const normalized = testCase.records.map((record) => {
-        // Phase 3 owns lifecycle record behavior; Phase 1 only proves that
-        // future records carry the v2 base envelope without widening the
-        // current graph-record union.
-        const decoded = phase3BaseEnvelopeOnly.has(testCase.name)
-          ? FutureLifecycleBaseEnvelopeSchema.parse(record)
-          : CruxGraphRecordSchema.parse(record)
+        const decoded = CruxGraphRecordSchema.parse(record)
         return {
           recordId: decoded.recordId,
           schemaVersion: decoded.schemaVersion,
@@ -145,9 +135,8 @@ describe('observability conformance fixture corpus', () => {
         ),
       )
     expect(futureLifecycleRecords.length).toBeGreaterThan(0)
-    for (const record of futureLifecycleRecords) {
-      expect(CruxGraphRecordSchema.safeParse(record).success).toBe(false)
-    }
+    for (const record of futureLifecycleRecords)
+      expect(CruxGraphRecordSchema.safeParse(record).success).toBe(true)
   })
 })
 
@@ -181,6 +170,7 @@ interface V2ContractCase {
   readonly records: readonly {
     readonly recordId: string
     readonly type?: string
+    readonly [key: string]: unknown
   }[]
   readonly expected: readonly {
     readonly recordId: string

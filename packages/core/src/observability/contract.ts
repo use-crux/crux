@@ -938,6 +938,23 @@ export interface CruxRunStartRecord extends CruxRecordBase {
   source?: CruxSourceLocation;
 }
 
+/** Non-terminal boundary that closes one physical execution segment. */
+export interface CruxRunSuspendRecord extends CruxRecordBase {
+  type: "run:suspend";
+  suspendedAt: string;
+  reason: string;
+  attributes?: CruxAttributes;
+}
+
+/** First record emitted by a fresh segment continuing an existing logical run. */
+export interface CruxRunResumeRecord extends CruxRecordBase {
+  type: "run:resume";
+  resumedAt: string;
+  reason: string;
+  previousSegmentId?: CruxSegmentId;
+  attributes?: CruxAttributes;
+}
+
 export interface CruxRunEndRecord extends CruxRecordBase {
   type: "run:end";
   endedAt: string;
@@ -947,6 +964,13 @@ export interface CruxRunEndRecord extends CruxRecordBase {
   error?: CruxErrorSummary;
   attributes?: CruxAttributes;
 }
+
+/** Canonical logical-run boundaries across one or more execution segments. */
+export type CruxRunLifecycleRecord =
+  | CruxRunStartRecord
+  | CruxRunSuspendRecord
+  | CruxRunResumeRecord
+  | CruxRunEndRecord
 
 export interface CruxSpanStartRecord extends CruxRecordBase {
   type: "span:start";
@@ -1040,6 +1064,8 @@ export interface CruxArtifactRecord extends CruxRecordBase {
 
 export type CruxGraphRecord =
   | CruxRunStartRecord
+  | CruxRunSuspendRecord
+  | CruxRunResumeRecord
   | CruxRunEndRecord
   | CruxSpanStartRecord
   | CruxSpanEndRecord

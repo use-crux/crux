@@ -28,8 +28,8 @@ func TestServiceLifecycleReconcilesStaleRunOnceAndPersistsStatus(t *testing.T) {
 	if err := service.PublishLifecycleReconciliations(ctx); err != nil {
 		t.Fatal(err)
 	}
-	assertLifecycleEvent(t, events, "run_lifecycle_persisted", "stale")
-	assertStoredLifecycleStatus(t, service, "run_lifecycle_persisted", "reconciled-stale")
+	assertLifecycleEvent(t, events, "run_lifecycle_persisted", "incomplete")
+	assertStoredLifecycleStatus(t, service, "run_lifecycle_persisted", "reconciled-incomplete")
 
 	candidates, err := service.lifecycleCandidateRuns(ctx)
 	if err != nil {
@@ -111,7 +111,7 @@ func TestServiceLifecycleSkipsRunDetailForAlreadyReconciledRuns(t *testing.T) {
 	for i := 0; i < 50; i++ {
 		if _, err := service.db.ExecContext(ctx, `
 			INSERT INTO runs (run_id, trace_id, name, root_primitive, status, started_at, last_activity_at, lifecycle_status)
-			VALUES (?, ?, 'stale', 'agent.run', 'running', ?, ?, 'reconciled-stale')
+			VALUES (?, ?, 'incomplete', 'agent.run', 'running', ?, ?, 'reconciled-incomplete')
 		`, fmt.Sprintf("run_reconciled_%02d", i), fmt.Sprintf("trace_reconciled_%02d", i), started, started); err != nil {
 			t.Fatal(err)
 		}

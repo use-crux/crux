@@ -6,6 +6,7 @@ import type {
   CruxObservabilityChannelMessage,
   CruxObservabilitySubscriber,
   CruxRunId,
+  CruxPropagationCarrier,
   CruxSpanId,
 } from '../src/observability'
 import {
@@ -94,6 +95,14 @@ span.end({
 
 const inferredFamilySpan = observe.openSpan({ name: 'type-test', primitive: 'custom.operation' })
 inferredFamilySpan.end()
+
+const lifecycleOwner = observe.openRun({ name: 'type-test', rootPrimitive: 'flow.run' })
+const continuation: CruxPropagationCarrier = lifecycleOwner.captureContinuation()
+const suspendedContinuation: CruxPropagationCarrier = lifecycleOwner.suspend({ reason: 'await-signal' })
+const resumedOwner = observe.resumeRun(continuation, { reason: 'signal' })
+resumedOwner.end()
+void suspendedContinuation
+
 
 observe.openSpan({
   name: 'typed-generation',

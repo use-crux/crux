@@ -11,14 +11,16 @@ const SchemaVersion = 2
 type RecordType string
 
 const (
-	RecordRunStart  RecordType = "run:start"
-	RecordRunEnd    RecordType = "run:end"
-	RecordSpanStart RecordType = "span:start"
-	RecordSpanEnd   RecordType = "span:end"
-	RecordSpan      RecordType = "span"
-	RecordSpanEvent RecordType = "span:event"
-	RecordEdge      RecordType = "edge"
-	RecordArtifact  RecordType = "artifact"
+	RecordRunStart   RecordType = "run:start"
+	RecordRunSuspend RecordType = "run:suspend"
+	RecordRunResume  RecordType = "run:resume"
+	RecordRunEnd     RecordType = "run:end"
+	RecordSpanStart  RecordType = "span:start"
+	RecordSpanEnd    RecordType = "span:end"
+	RecordSpan       RecordType = "span"
+	RecordSpanEvent  RecordType = "span:event"
+	RecordEdge       RecordType = "edge"
+	RecordArtifact   RecordType = "artifact"
 )
 
 type Batch struct {
@@ -81,6 +83,33 @@ type RunStartRecord struct {
 	StartedAt     string          `json:"startedAt"`
 	Status        string          `json:"status"`
 	Attributes    json.RawMessage `json:"attributes,omitempty"`
+}
+
+type RunSuspendRecord struct {
+	SchemaVersion int             `json:"schemaVersion"`
+	RecordID      string          `json:"recordId"`
+	Type          RecordType      `json:"type"`
+	RunID         string          `json:"runId"`
+	SegmentID     string          `json:"segmentId"`
+	SegmentSeq    int             `json:"segmentSeq"`
+	TraceID       string          `json:"traceId,omitempty"`
+	SuspendedAt   string          `json:"suspendedAt"`
+	Reason        string          `json:"reason"`
+	Attributes    json.RawMessage `json:"attributes,omitempty"`
+}
+
+type RunResumeRecord struct {
+	SchemaVersion     int             `json:"schemaVersion"`
+	RecordID          string          `json:"recordId"`
+	Type              RecordType      `json:"type"`
+	RunID             string          `json:"runId"`
+	SegmentID         string          `json:"segmentId"`
+	SegmentSeq        int             `json:"segmentSeq"`
+	TraceID           string          `json:"traceId,omitempty"`
+	ResumedAt         string          `json:"resumedAt"`
+	Reason            string          `json:"reason"`
+	PreviousSegmentID string          `json:"previousSegmentId,omitempty"`
+	Attributes        json.RawMessage `json:"attributes,omitempty"`
 }
 
 type SpanStartRecord struct {
@@ -364,6 +393,22 @@ func ValidateRecord(record Record) error {
 		} else if span.Family != want {
 			return fmt.Errorf("span %s family %q does not match primitive %q", span.SpanID, span.Family, span.Primitive)
 		}
+	case RecordRunSuspend:
+		var suspended RunSuspendRecord
+		if err := json.Unmarshal(record.Payload, &suspended); err != nil {
+			return err
+		}
+		if suspended.SuspendedAt == "" || suspended.Reason == "" {
+			return fmt.Errorf("run:suspend record %s requires suspendedAt and reason", record.RecordID)
+		}
+	case RecordRunResume:
+		var resumed RunResumeRecord
+		if err := json.Unmarshal(record.Payload, &resumed); err != nil {
+			return err
+		}
+		if resumed.ResumedAt == "" || resumed.Reason == "" {
+			return fmt.Errorf("run:resume record %s requires resumedAt and reason", record.RecordID)
+		}
 	case RecordRunEnd, RecordSpanEnd, RecordSpanEvent:
 		return nil
 	default:
@@ -382,15 +427,15 @@ func ValidateRecordBase(record Record) error {
 	if record.SegmentID == "" || record.SegmentSeq <= 0 {
 		return fmt.Errorf("record %s is missing v2 segment identity", record.RecordID)
 	}
-	if record.Type == RecordRunStart && record.SegmentSeq != 1 {
-		return fmt.Errorf("run:start record %s must use segmentSeq 1", record.RecordID)
+	if (record.Type == RecordRunStart || record.Type == RecordRunResume) && record.SegmentSeq != 1 {
+		return fmt.Errorf("%s record %s must use segmentSeq 1", record.Type, record.RecordID)
 	}
 	return nil
 }
 
 func isKnownRecordType(recordType RecordType) bool {
 	switch recordType {
-	case RecordRunStart, RecordRunEnd, RecordSpanStart, RecordSpanEnd, RecordSpan, RecordSpanEvent, RecordEdge, RecordArtifact:
+	case RecordRunStart, RecordRunSuspend, RecordRunResume, RecordRunEnd, RecordSpanStart, RecordSpanEnd, RecordSpan, RecordSpanEvent, RecordEdge, RecordArtifact:
 		return true
 	default:
 		return false

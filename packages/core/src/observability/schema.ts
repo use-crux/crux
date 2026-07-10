@@ -126,6 +126,24 @@ export const CruxRunStartRecordSchema = CruxRecordBaseSchema.extend({
   source: CruxSourceLocationSchema.optional(),
 })
 
+export const CruxRunSuspendRecordSchema = CruxRecordBaseSchema.extend({
+  type: z.literal('run:suspend'),
+  suspendedAt: isoTimestamp,
+  reason: nonEmptyString,
+  attributes: CruxAttributesSchema.optional(),
+})
+
+export const CruxRunResumeRecordSchema = CruxRecordBaseSchema.extend({
+  type: z.literal('run:resume'),
+  resumedAt: isoTimestamp,
+  reason: nonEmptyString,
+  previousSegmentId: CruxSegmentIdSchema.optional(),
+  attributes: CruxAttributesSchema.optional(),
+}).refine((record) => record.segmentSeq === 1, {
+  message: 'run:resume must be the first record in its segment',
+  path: ['segmentSeq'],
+})
+
 export const CruxRunEndRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal('run:end'),
   endedAt: isoTimestamp,
@@ -235,6 +253,8 @@ export const CruxArtifactRecordSchema = CruxRecordBaseSchema.extend({
 
 export const CruxGraphRecordSchema = z.discriminatedUnion('type', [
   CruxRunStartRecordSchema,
+  CruxRunSuspendRecordSchema,
+  CruxRunResumeRecordSchema,
   CruxRunEndRecordSchema,
   CruxSpanStartRecordSchema,
   CruxSpanEndRecordSchema,

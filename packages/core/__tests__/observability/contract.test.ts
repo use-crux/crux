@@ -11,6 +11,8 @@ import {
   CRUX_PRIMITIVE_NAMES,
   CruxGraphRecordBatchSchema,
   CruxGraphRecordSchema,
+  CruxRunResumeRecordSchema,
+  CruxRunSuspendRecordSchema,
   CruxSpanStartRecordSchema,
 } from '../../src/observability'
 
@@ -330,6 +332,41 @@ describe('Crux observability graph contract', () => {
         status: 'suspended',
       }).success,
     ).toBe(true)
+  })
+
+  it('validates explicit run suspension and fresh-segment resumption', () => {
+    const suspended = {
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: 'rec_suspend',
+      type: 'run:suspend',
+      runId: 'run_lifecycle',
+      segmentId: 'seg_lifecycle_a',
+      segmentSeq: 2,
+      traceId: '11111111111111111111111111111111',
+      suspendedAt: '2026-05-16T18:00:01.000Z',
+      reason: 'await-signal',
+      attributes: { boundary: 'approval' },
+    }
+    const resumed = {
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: 'rec_resume',
+      type: 'run:resume',
+      runId: 'run_lifecycle',
+      segmentId: 'seg_lifecycle_b',
+      segmentSeq: 1,
+      traceId: '11111111111111111111111111111111',
+      resumedAt: '2026-05-16T18:01:00.000Z',
+      reason: 'signal',
+      previousSegmentId: 'seg_lifecycle_a',
+    }
+
+    expect(CruxRunSuspendRecordSchema.parse(suspended)).toEqual(suspended)
+    expect(CruxRunResumeRecordSchema.parse(resumed)).toEqual(resumed)
+    expect(CruxGraphRecordSchema.safeParse(suspended).success).toBe(true)
+    expect(CruxGraphRecordSchema.safeParse(resumed).success).toBe(true)
+    expect(
+      CruxRunResumeRecordSchema.safeParse({ ...resumed, segmentSeq: 2 }).success,
+    ).toBe(false)
   })
 
   it('keeps primitive names mapped to their canonical families', () => {

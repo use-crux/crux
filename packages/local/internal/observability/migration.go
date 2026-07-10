@@ -187,9 +187,15 @@ func observabilitySchemaStatements() []string {
 			run_id TEXT NOT NULL,
 			status TEXT,
 			started_at TEXT,
+			resumed_at TEXT,
+			suspended_at TEXT,
 			ended_at TEXT,
+			reason TEXT,
+			previous_segment_id TEXT,
 			first_segment_seq INTEGER NOT NULL DEFAULT 0,
-			last_segment_seq INTEGER NOT NULL DEFAULT 0
+			last_segment_seq INTEGER NOT NULL DEFAULT 0,
+			gap_count INTEGER NOT NULL DEFAULT 0,
+			conflict_count INTEGER NOT NULL DEFAULT 0
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_run_segments_run ON run_segments(run_id, segment_id)`,
 		`CREATE TABLE IF NOT EXISTS ingest_health (
@@ -229,6 +235,18 @@ func createObservabilitySchema(ctx context.Context, runner sqliteRunner) error {
 	}
 	if err := ensureColumn(ctx, runner, "runs", "user_id", `ALTER TABLE runs ADD COLUMN user_id TEXT`); err != nil {
 		return err
+	}
+	for _, column := range []struct{ name, ddl string }{
+		{name: "resumed_at", ddl: `ALTER TABLE run_segments ADD COLUMN resumed_at TEXT`},
+		{name: "suspended_at", ddl: `ALTER TABLE run_segments ADD COLUMN suspended_at TEXT`},
+		{name: "reason", ddl: `ALTER TABLE run_segments ADD COLUMN reason TEXT`},
+		{name: "previous_segment_id", ddl: `ALTER TABLE run_segments ADD COLUMN previous_segment_id TEXT`},
+		{name: "gap_count", ddl: `ALTER TABLE run_segments ADD COLUMN gap_count INTEGER NOT NULL DEFAULT 0`},
+		{name: "conflict_count", ddl: `ALTER TABLE run_segments ADD COLUMN conflict_count INTEGER NOT NULL DEFAULT 0`},
+	} {
+		if err := ensureColumn(ctx, runner, "run_segments", column.name, column.ddl); err != nil {
+			return err
+		}
 	}
 	for _, column := range []struct {
 		name string
@@ -311,7 +329,7 @@ func needsPreV2ObservabilityReset(ctx context.Context, runner sqliteRunner) (boo
 	if !segmentExists {
 		return true, nil
 	}
-	if !hasExactColumns(segmentColumns, []string{
+	phase1SegmentColumns := []string{
 		"segment_id",
 		"run_id",
 		"status",
@@ -319,7 +337,10 @@ func needsPreV2ObservabilityReset(ctx context.Context, runner sqliteRunner) (boo
 		"ended_at",
 		"first_segment_seq",
 		"last_segment_seq",
-	}) {
+	}
+	phase3SegmentColumns := append(append([]string{}, phase1SegmentColumns...),
+		"resumed_at", "suspended_at", "reason", "previous_segment_id", "gap_count", "conflict_count")
+	if !hasExactColumns(segmentColumns, phase1SegmentColumns) && !hasExactColumns(segmentColumns, phase3SegmentColumns) {
 		return true, nil
 	}
 	complete, err = tablePrimaryKeyColumns(ctx, runner, "run_segments", []string{"segment_id"})

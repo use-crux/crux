@@ -12,7 +12,10 @@ import type {
   CruxEdgeRecord,
   CruxMetrics,
   CruxRunEndRecord,
+  CruxRunLifecycleRecord,
+  CruxRunResumeRecord,
   CruxRunStartRecord,
+  CruxRunSuspendRecord,
   CruxSpanEndRecord,
   CruxSpanEventRecord,
   CruxSpanRecord,
@@ -23,7 +26,9 @@ import {
   CruxEdgeRecordSchema,
   CruxMetricsSchema,
   CruxRunEndRecordSchema,
+  CruxRunResumeRecordSchema,
   CruxRunStartRecordSchema,
+  CruxRunSuspendRecordSchema,
   CruxSpanEndRecordSchema,
   CruxSpanEventRecordSchema,
   CruxSpanRecordSchema,
@@ -41,6 +46,12 @@ type ExpectFalse<T extends false> = T
 
 type _RunStartRecord = Expect<AssertEqual<CruxRunStartRecord, z.infer<typeof CruxRunStartRecordSchema>>>
 type _RunEndRecord = Expect<AssertEqual<CruxRunEndRecord, z.infer<typeof CruxRunEndRecordSchema>>>
+type _RunSuspendRecord = Expect<AssertEqual<CruxRunSuspendRecord, z.infer<typeof CruxRunSuspendRecordSchema>>>
+type _RunResumeRecord = Expect<AssertEqual<CruxRunResumeRecord, z.infer<typeof CruxRunResumeRecordSchema>>>
+type _RunLifecycleRecord = Expect<AssertEqual<CruxRunLifecycleRecord, Extract<
+  import('../src/observability').CruxGraphRecord,
+  { type: 'run:start' | 'run:suspend' | 'run:resume' | 'run:end' }
+>>>
 type _SpanStartRecord = Expect<AssertEqual<CruxSpanStartRecord, z.infer<typeof CruxSpanStartRecordSchema>>>
 type _SpanEndRecord = Expect<AssertEqual<CruxSpanEndRecord, z.infer<typeof CruxSpanEndRecordSchema>>>
 type _SpanRecord = Expect<AssertEqual<CruxSpanRecord, z.infer<typeof CruxSpanRecordSchema>>>

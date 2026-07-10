@@ -45,6 +45,16 @@ export interface CruxRunSummaryView {
   eventCount: number
   artifactCount: number
   edgeCount: number
+  /** Number of physical execution segments observed for this logical run. */
+  segmentCount: number
+  /** The only live segment, omitted when none or more than one is live. */
+  activeSegmentId?: string
+  /** Whether the server could establish one causal display order. */
+  orderingConfidence: 'causal' | 'partial'
+  /** Missing segment-local sequence values and unresolved parent references. */
+  gapCount: number
+  /** True when a trace alias identifies more than one logical run. */
+  traceAliasConflict?: boolean
   attributes?: CruxAttributes | null
   metrics?: CruxParsedMetrics | null
   error?: CruxErrorSummary | string | null

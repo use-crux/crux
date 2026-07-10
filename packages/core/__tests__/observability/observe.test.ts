@@ -517,7 +517,7 @@ describe('observe runtime', () => {
         async () => undefined,
       )
     })
-    observe.endRun(captured)
+    run.end()
     await observe.flush()
 
     expect(transport.records.map((record) => record.type)).toEqual([
@@ -571,9 +571,6 @@ describe('observe runtime', () => {
         span.end()
       },
     )
-    observe.endRun(
-      incompleteContext as unknown as CapturedObservabilityContext,
-    )
     await observe.flush()
 
     expect(transport.records).toEqual([
@@ -600,10 +597,8 @@ describe('observe runtime', () => {
       const captured = run.captureContext()
 
       vi.advanceTimersByTime(42)
-      observe.endRun(captured)
-      observe.endRun(captured, {
-        status: 'error',
-        error: new Error('late duplicate'),
+      run.end()
+      run.error(new Error('late duplicate'), {
       })
       await observe.flush()
 
@@ -622,7 +617,7 @@ describe('observe runtime', () => {
     }
   })
 
-  it('deduplicates captured and owner run end calls across both orders', async () => {
+  it('deduplicates repeated owner terminal calls', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -630,20 +625,15 @@ describe('observe runtime', () => {
       name: 'owner first',
       rootPrimitive: 'custom.operation',
     })
-    const firstCaptured = first.captureContext()
     first.end()
-    observe.endRun(firstCaptured, {
-      status: 'error',
-      error: new Error('duplicate'),
-    })
+    first.error(new Error('duplicate'))
 
     const second = observe.openRun({
       name: 'captured first',
       rootPrimitive: 'custom.operation',
     })
-    const secondCaptured = second.captureContext()
-    observe.endRun(secondCaptured)
-    second.end({ status: 'error', error: new Error('duplicate') })
+    second.end()
+    second.error(new Error('duplicate'))
 
     await observe.flush()
 
@@ -658,7 +648,7 @@ describe('observe runtime', () => {
     ])
   })
 
-  it('allows a suspended captured run to emit one resumed terminal end', async () => {
+  it('suspends an owner before a fresh segment emits the terminal end', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -666,21 +656,19 @@ describe('observe runtime', () => {
       name: 'resumable flow',
       rootPrimitive: 'flow.run',
     })
-    const captured = run.captureContext()
-    observe.endRun(captured, { status: 'suspended' })
-    observe.endRun(captured, { status: 'ok' })
-    observe.endRun(captured, {
-      status: 'error',
-      error: new Error('duplicate terminal end'),
-    })
+    const continuation = run.suspend({ reason: 'await-signal' })
+    const resumed = observe.resumeRun(continuation, { reason: 'signal' })
+    resumed.end()
+    resumed.error(new Error('duplicate terminal end'))
     await observe.flush()
 
-    const runEnds = transport.records.filter(
-      (record) => record.type === 'run:end',
-    )
-    expect(runEnds).toHaveLength(2)
-    expect(runEnds.map((record) => record.status)).toEqual(['suspended', 'ok'])
-    expect(runEnds.every((record) => record.runId === run.runId)).toBe(true)
+    expect(transport.records.map((record) => record.type)).toEqual([
+      'run:start',
+      'run:suspend',
+      'run:resume',
+      'run:end',
+    ])
+    expect(resumed.runId).toBe(run.runId)
   })
 
   it('merges open span attributes with setAttributes and explicit end attributes', async () => {
