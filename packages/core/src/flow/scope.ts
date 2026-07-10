@@ -236,6 +236,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   if (isResume && !continuation) {
     throw new Error(`Flow ${flowId} cannot resume without a continuation carrier.`)
   }
+  const ambientContext = observe.captureContext()
   const flowRun = continuation
     ? observe.resumeRun(sanitizePropagationCarrier(continuation), {
         reason: 'flow.resume',
@@ -244,9 +245,22 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
     : observe.openRun({
         name,
         rootPrimitive: 'flow.run',
-        traceId: observe.captureContext()?.traceId,
+        traceId: ambientContext?.traceId,
         attributes: { flowId, parentFlowId: parentFlowId ?? null, goal: options?.goal ?? null },
       })
+
+  // A nested flow owns a distinct durable run, but remains causally linked to
+  // the ambient operation that triggered it.
+  if (!continuation && ambientContext) {
+    observe.edge({
+      edgeType: 'triggered',
+      from: ambientContext.currentSpanId
+        ? { kind: 'span', id: ambientContext.currentSpanId }
+        : { kind: 'run', id: ambientContext.runId },
+      to: { kind: 'run', id: flowRun.runId },
+      attributes: { flowId, parentFlowId: parentFlowId ?? null },
+    })
+  }
 
   // Open the flow span: every child trace started inside the flow
   // (e.g. via @use-crux/convex/server ctx.crux.runAction) captures this spanId as
@@ -864,6 +878,28 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         reason: 'flow.signal.invalid',
         attributes: { flowId },
       })
+      await observe.flush()
+      throw error
+    }
+
+    // A failed resume attempt remains retryable while the persisted snapshot
+    // is suspended. Close only this physical segment, not the logical run.
+    if (snapshot) {
+      const flowStore = store ?? getHooks().records
+      if (flowStore) {
+        const deliveredSignalsSnapshot = deliveredSignalsForSnapshot(deliveredSignals)
+        const retryableSnapshot: FlowSnapshot = {
+          ...snapshot,
+          completedSteps: completedStepsForSnapshot(completedSteps),
+          ...(deliveredSignalsSnapshot ? { deliveredSignals: deliveredSignalsSnapshot } : {}),
+          continuation: flowRun.captureContinuation(),
+          updatedAt: currentTimeMs(),
+        }
+        assertFlowSnapshotMetadata(retryableSnapshot)
+        await flowStore.put(`${FLOW_KEY_PREFIX}${flowId}`, retryableSnapshot)
+      }
+      flowSpan.error(error, { totalSteps: stepCount })
+      flowRun.suspend({ reason: 'flow.error', attributes: { flowId } })
       await observe.flush()
       throw error
     }

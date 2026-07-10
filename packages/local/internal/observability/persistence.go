@@ -177,15 +177,20 @@ func upsertRunSegment(ctx context.Context, statements *ingestStatements, record 
 	`, record.SegmentID, record.RunID, nullIfEmpty(fields.status), nullIfEmpty(fields.startedAt),
 		nullIfEmpty(fields.resumedAt), nullIfEmpty(fields.suspendedAt), nullIfEmpty(fields.endedAt),
 		nullIfEmpty(fields.reason), nullIfEmpty(fields.previousSegmentID), record.SegmentSeq, record.SegmentSeq)
-	if err != nil {
-		return err
-	}
-	_, err = statements.exec(ctx, `
+	return err
+}
+
+// reconcileSegmentCounts recomputes a segment's gap_count/conflict_count from
+// its stored records. Call once per distinct affected segment at the end of a
+// batch rather than after every record insert, since each call scans every
+// record belonging to the segment.
+func reconcileSegmentCounts(ctx context.Context, statements *ingestStatements, segmentID string) error {
+	_, err := statements.exec(ctx, `
 		UPDATE run_segments
 		SET gap_count = max(0, last_segment_seq - (SELECT count(*) FROM records WHERE segment_id = ?)),
 			conflict_count = max(0, (SELECT count(*) FROM records WHERE segment_id = ? AND type = 'run:end') - 1)
 		WHERE segment_id = ?
-	`, record.SegmentID, record.SegmentID, record.SegmentID)
+	`, segmentID, segmentID, segmentID)
 	return err
 }
 
@@ -244,11 +249,7 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 	if !storedInserted {
 		return nil
 	}
-	defer func() {
-		if err == nil {
-			err = reconcileRunSegmentLifecycle(ctx, statements, record.RunID)
-		}
-	}()
+	statements.markAffected(record.RunID, record.SegmentID)
 	switch record.Type {
 	case RecordRunStart:
 		var run RunStartRecord

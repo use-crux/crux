@@ -11,12 +11,27 @@ import {
   CRUX_PRIMITIVE_NAMES,
   CruxGraphRecordBatchSchema,
   CruxGraphRecordSchema,
+  CruxRunStartRecordSchema,
   CruxRunResumeRecordSchema,
   CruxRunSuspendRecordSchema,
   CruxSpanStartRecordSchema,
 } from '../../src/observability'
+import { validateRecordForEmission } from '../../src/observability/validate-record'
 
 describe('Crux observability graph contract', () => {
+  it('requires run:start to be the first record in a segment in both validators', () => {
+    const invalidStart = { ...fixture.records[0], segmentSeq: 2 }
+    expect(CruxRunStartRecordSchema.safeParse(invalidStart).success).toBe(false)
+
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      expect(validateRecordForEmission(invalidStart).ok).toBe(false)
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  })
+
   it('keeps presentation read-model exports out of the wire contract module', async () => {
     const contractSource = await readFile(
       new URL('../../src/observability/contract.ts', import.meta.url),

@@ -13,7 +13,8 @@ import { createFlowId, getExecutionContext } from '@use-crux/core'
 import type { AnyAgent } from '@use-crux/core/agent'
 import {
   observe,
-  type CapturedObservabilityContext,
+  type CruxPropagationCarrier,
+  type OpenObservedRun,
 } from '@use-crux/core/observability'
 import type { ComponentApi } from './component/_generated/component'
 import { flushObservability } from './observability'
@@ -54,8 +55,8 @@ export interface ConvexSwarmState {
   flowId: string
   /** Session ID for grouping related runs. */
   sessionId?: string
-  /** Canonical observability context to restore after Convex scheduler hops. */
-  observability?: CapturedObservabilityContext
+  /** Continuation carrier used to resume the owned run after scheduler hops. */
+  observability?: CruxPropagationCarrier
   /** Maximum handoffs allowed. */
   maxHandoffs: number
   /** History mode. */
@@ -151,19 +152,6 @@ export const swarmRunFields = {
 
 function generateSwarmRunId(): string {
   return `swarm-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-}
-
-function captureBaseObservabilityContext():
-  | CapturedObservabilityContext
-  | undefined {
-  const captured = observe.captureContext()
-  if (!captured) return undefined
-  return {
-    runId: captured.runId,
-    traceId: captured.traceId,
-    segmentId: captured.segmentId,
-    spanStack: [],
-  }
 }
 
 /** Build transfer-only input for next agent. */
@@ -280,7 +268,6 @@ export function createConvexSwarm(
         status: 'running',
         flowId: traceCtx?.flowId ?? createFlowId(),
         sessionId: options.sessionId ?? traceCtx?.sessionId,
-        observability: captureBaseObservabilityContext(),
         maxHandoffs: options.maxHandoffs ?? 10,
         history: options.history ?? 'transfer-only',
         createdAt: Date.now(),
@@ -546,13 +533,14 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
     async start(ctx: SwarmActionCtx, options: ComponentSwarmStartOptions) {
       try {
         const existingContext = observe.captureContext()
-        const openedRun = existingContext
-          ? undefined
-          : observe.openRun({
-              name: `swarm ${options.startAgent}`,
-              rootPrimitive: 'composition.swarm',
-              attributes: { 'swarm.start_agent': options.startAgent },
-            })
+        // A swarm always owns a durable run. Ambient context supplies trace
+        // identity, but cannot replace the resumable lifecycle owner.
+        const openedRun = observe.openRun({
+          name: `swarm ${options.startAgent}`,
+          rootPrimitive: 'composition.swarm',
+          traceId: existingContext?.traceId,
+          attributes: { 'swarm.start_agent': options.startAgent },
+        })
 
         const execute = async () => {
           return await observe.span(
@@ -564,11 +552,6 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
             async () => {
               const state = inner.createInitialState(options)
               const agentIds = Object.keys(options.agents)
-
-              // Keep the base run context for scheduled resumes instead of
-              // the short-lived turn span, so resumed turns remain siblings.
-              state.observability =
-                openedRun?.captureContext() ?? captureBaseObservabilityContext()
 
               observeConvexSwarmStart({
                 compositionId: state.swarmRunId,
@@ -599,23 +582,20 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
                 Date.now() - agentStart,
               )
 
-              // Persist updated state
-              await ctx.runMutation(
-                component.swarm.saveState,
-                toSaveArgs(turn.state),
-              )
-
-              // If completed (no handoff), emit composition:end
               if (!turn.handedOff) {
                 observeConvexSwarmEnd(
                   state.swarmRunId,
                   turn.state,
                   Date.now() - agentStart,
                 )
-                openedRun?.end({
+                openedRun.end({
                   status: turn.state.status === 'error' ? 'error' : 'ok',
                 })
+              } else {
+                turn.state.observability = openedRun.suspend({ reason: 'swarm.handoff' })
               }
+
+              await ctx.runMutation(component.swarm.saveState, toSaveArgs(turn.state))
 
               // Schedule next turn if handoff occurred
               if (turn.handedOff) {
@@ -630,9 +610,9 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
         }
 
         try {
-          return await (openedRun ? openedRun.withContext(execute) : execute())
+          return await openedRun.withContext(execute)
         } catch (error) {
-          openedRun?.error(error)
+          openedRun.error(error)
           throw error
         }
       } finally {
@@ -653,16 +633,18 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
       },
     ) {
       let state: ConvexSwarmState | null = null
+      let run: OpenObservedRun | undefined
       try {
         state = await ctx.runQuery(component.swarm.getState, {
           swarmRunId,
         })
         if (!state || state.status !== 'running') return null
         const activeState = state
+        run = activeState.observability
+          ? observe.resumeRun(activeState.observability, { reason: 'swarm.resume' })
+          : undefined
 
-        return await observe.withContext(
-          activeState.observability,
-          async () => {
+        const execute = async () => {
             const agentStart = Date.now()
             const turn = await observe.span(
               {
@@ -692,24 +674,18 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
                 : undefined,
             )
 
-            await ctx.runMutation(
-              component.swarm.saveState,
-              toSaveArgs(turn.state),
-            )
-
-            // If completed or errored, emit composition:end
             if (!turn.handedOff) {
               observeConvexSwarmEnd(
                 swarmRunId,
                 turn.state,
                 Date.now() - agentStart,
               )
-              if (activeState.observability) {
-                observe.endRun(activeState.observability, {
-                  status: turn.state.status === 'error' ? 'error' : 'ok',
-                })
-              }
+              run?.end({ status: turn.state.status === 'error' ? 'error' : 'ok' })
+            } else if (run) {
+              turn.state.observability = run.suspend({ reason: 'swarm.handoff' })
             }
+
+            await ctx.runMutation(component.swarm.saveState, toSaveArgs(turn.state))
 
             if (turn.handedOff) {
               await ctx.scheduler.runAfter(0, options.resumeAction, {
@@ -718,12 +694,11 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
             }
 
             return turn.state
-          },
-        )
-      } catch (error) {
-        if (state?.observability) {
-          observe.endRun(state.observability, { status: 'error', error })
         }
+
+        return await (run ? run.withContext(execute) : execute())
+      } catch (error) {
+        run?.error(error)
         throw error
       } finally {
         await flushObservability()

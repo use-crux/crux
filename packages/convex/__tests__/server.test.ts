@@ -615,7 +615,7 @@ describe('@use-crux/convex/server', () => {
     )
   })
 
-  it('marks suspended Convex flows and schedules resume with the original run context', async () => {
+  it('ends the action boundary while resuming the durable flow run across the scheduler hop', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
     updateHooks({ records: inMemoryRecordStore() })
@@ -643,41 +643,43 @@ describe('@use-crux/convex/server', () => {
     expect(suspended).toMatchObject({ status: 'suspended', suspendedAt: 'approval' })
     if (suspended.status !== 'suspended') return
 
-    const runStart = transport.records.find((record) => record.type === 'run:start')
-    const runId = runStart?.type === 'run:start' ? runStart.runId : undefined
-    expect(runId).toBeDefined()
+    const boundaryStart = transport.records.find(
+      (record) => record.type === 'run:start' && record.rootPrimitive === 'runtime.convex.action',
+    )
+    const flowStart = transport.records.find(
+      (record) => record.type === 'run:start' && record.rootPrimitive === 'flow.run',
+    )
+    const boundaryRunId = boundaryStart?.type === 'run:start' ? boundaryStart.runId : undefined
+    const flowRunId = flowStart?.type === 'run:start' ? flowStart.runId : undefined
+    expect(boundaryRunId).toBeDefined()
+    expect(flowRunId).toBeDefined()
+    expect(boundaryRunId).not.toBe(flowRunId)
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'span:end',
-        runId,
+        runId: flowRunId,
         status: 'suspended',
       }),
+    )
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'run:suspend', runId: flowRunId, reason: 'flow.suspend' }),
     )
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'run:end',
-        runId,
-        status: 'suspended',
+        runId: boundaryRunId,
+        status: 'ok',
       }),
     )
+    expect(transport.records).not.toContainEqual(expect.objectContaining({ type: 'run:suspend', runId: boundaryRunId }))
 
     await reviewFlow.signal({ scheduler } as any, reviewFlow.action, suspended.flowId, 'approval', {})
 
     expect(scheduler.runAfter).toHaveBeenCalledWith(
       0,
       reviewFlow.action,
-      expect.objectContaining({
-        resume: suspended.flowId,
-        __crux: expect.objectContaining({
-          observability: expect.objectContaining({
-            runId,
-            traceId: expect.any(String),
-          }),
-        }),
-      }),
+      expect.objectContaining({ resume: suspended.flowId }),
     )
-    const scheduledCrux = scheduled[0]?.args.__crux as { observability?: { runId?: string } } | undefined
-    expect(scheduledCrux?.observability?.runId).toBe(runId)
 
     const recordCountBeforeResume = transport.records.length
     await expect(reviewFlow.action.handler({ scheduler }, scheduled[0]!.args as any)).resolves.toMatchObject({
@@ -688,21 +690,16 @@ describe('@use-crux/convex/server', () => {
     await observe.flush()
 
     const resumeRecords = transport.records.slice(recordCountBeforeResume)
-    expect(resumeRecords).not.toContainEqual(expect.objectContaining({ type: 'run:start' }))
+    expect(resumeRecords).not.toContainEqual(expect.objectContaining({ type: 'run:start', runId: flowRunId }))
+    expect(resumeRecords).toContainEqual(expect.objectContaining({ type: 'run:resume', runId: flowRunId }))
     expect(resumeRecords).toContainEqual(
       expect.objectContaining({
         type: 'span:start',
-        runId,
+        runId: flowRunId,
         name: 'review-flow',
         primitive: 'flow.run',
       }),
     )
-    expect(resumeRecords).toContainEqual(
-      expect.objectContaining({
-        type: 'run:end',
-        runId,
-        status: 'ok',
-      }),
-    )
+    expect(resumeRecords).toContainEqual(expect.objectContaining({ type: 'run:end', runId: flowRunId, status: 'ok' }))
   })
 })

@@ -124,6 +124,9 @@ export const CruxRunStartRecordSchema = CruxRecordBaseSchema.extend({
   status: z.literal('running'),
   attributes: CruxAttributesSchema.optional(),
   source: CruxSourceLocationSchema.optional(),
+}).refine((record) => record.segmentSeq === 1, {
+  message: 'run:start must be the first record in its segment',
+  path: ['segmentSeq'],
 })
 
 export const CruxRunSuspendRecordSchema = CruxRecordBaseSchema.extend({

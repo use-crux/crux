@@ -16,7 +16,6 @@ import {
 } from '@use-crux/core/observability'
 import {
   createFlowId,
-  getFlowSnapshot,
   signalFlow,
   type FlowResult,
   type FlowScope,
@@ -585,7 +584,10 @@ async function runWithBoundary<T>(
       timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS,
     })
     const result = await run.withContext(fn)
-    run.end({ status: runStatusFromResult(result) ?? 'ok' })
+    const status = runStatusFromResult(result)
+    // This owner represents the physical Convex action invocation. A durable
+    // child Flow owns and suspends its own logical run.
+    run.end({ status: status === 'error' ? 'error' : 'ok' })
     return result
   } catch (error) {
     run.error(error)
@@ -807,18 +809,11 @@ export function flow<
       flowInput: TArgs,
       options: { flowId: string },
     ) => Promise<FlowResult<TResult>>
-    const resumeRunContext = resume ? observe.captureContext() : undefined
     const result = await withConvexFlowRuntimeContext(flowId, ctx, async () =>
       resume
         ? await runtimeFlowHandle.resume(resume)
         : await runFlow(input as TArgs, { flowId }),
     )
-    if (resume) {
-      const status = runStatusFromResult(result)
-      if (status && status !== 'suspended' && resumeRunContext) {
-        observe.endRun(resumeRunContext, { status })
-      }
-    }
     await flushConvexObservability(definition.observabilityFlushTimeoutMs)
     return result
   }
@@ -849,17 +844,12 @@ export function flow<
       } else {
         await signalFlow(flowId, signalName, (payload[0] ?? {}) as JsonValue)
       }
-      const snapshot = await getFlowSnapshot(flowId)
-      const resumeObservability = snapshot?.observabilityContext as
-        | CapturedObservabilityContext
-        | undefined
       if (ctx.crux?.scheduler) {
         await ctx.crux.scheduler.runAfter(
           `resume ${definition.name}`,
           0,
           actionRef,
           { resume: flowId },
-          { observability: resumeObservability },
         )
         return
       }
@@ -871,7 +861,7 @@ export function flow<
       await ctx.scheduler.runAfter(
         0,
         actionRef,
-        packCruxArgs({ resume: flowId }, resumeObservability),
+        packCruxArgs({ resume: flowId }),
       )
     },
   }

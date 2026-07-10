@@ -61,9 +61,9 @@ func reconcileRunSegmentLifecycle(ctx context.Context, statements *ingestStateme
 	if err := statements.queryRow(ctx, `
 		SELECT EXISTS(
 			SELECT 1
-			FROM records terminal
-			JOIN records resumed ON resumed.run_id = terminal.run_id AND resumed.type = 'run:resume'
-			WHERE terminal.run_id = ? AND terminal.type = 'run:end' AND terminal.segment_id != resumed.segment_id
+			FROM run_segments terminal
+			JOIN run_segments resumed ON resumed.previous_segment_id = terminal.segment_id
+			WHERE terminal.run_id = ? AND terminal.status IN ('ok', 'error', 'blocked', 'cancelled')
 		)
 	`, runID).Scan(&terminalResumeConflict); err != nil {
 		return err

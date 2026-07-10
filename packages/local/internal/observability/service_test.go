@@ -690,6 +690,50 @@ func TestServiceRunDetailMarksMissingEndsAsStalePresentation(t *testing.T) {
 	}
 }
 
+func TestServiceRunDetailDoesNotWarnOrSuppressDiagnosticsForSharedTrace(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	started := time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)
+
+	batch := mustBatch(t,
+		`{"schemaVersion":2,"recordId":"rec_shared_trace_parent_start","type":"run:start","runId":"run_shared_trace_parent","segmentId":"seg_shared_trace_parent_a","segmentSeq":1,"traceId":"trace_shared","name":"parent flow","rootPrimitive":"flow.run","startedAt":"`+started+`","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_shared_trace_parent_span","type":"span:start","runId":"run_shared_trace_parent","segmentId":"seg_shared_trace_parent_a","segmentSeq":2,"traceId":"trace_shared","spanId":"span_shared_trace_parent","family":"agent","primitive":"agent.run","name":"still running","startedAt":"`+started+`","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_shared_trace_child_start","type":"run:start","runId":"run_shared_trace_child","segmentId":"seg_shared_trace_child_a","segmentSeq":1,"traceId":"trace_shared","name":"nested child flow","rootPrimitive":"flow.run","startedAt":"`+started+`","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_shared_trace_child_end","type":"run:end","runId":"run_shared_trace_child","segmentId":"seg_shared_trace_child_a","segmentSeq":2,"traceId":"trace_shared","endedAt":"`+started+`","status":"ok"}`,
+	)
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	detail, err := service.RunDetail(ctx, "run_shared_trace_parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var staleBoundary, traceAliasConflict *RunDetailDiagnostic
+	for index := range detail.Diagnostics {
+		switch detail.Diagnostics[index].Code {
+		case "stale-boundary":
+			staleBoundary = &detail.Diagnostics[index]
+		case "trace-alias-conflict":
+			traceAliasConflict = &detail.Diagnostics[index]
+		}
+	}
+	if staleBoundary == nil {
+		t.Fatalf("diagnostics = %#v, want stale-boundary to survive a legitimate shared trace", detail.Diagnostics)
+	}
+	if traceAliasConflict != nil {
+		t.Fatalf("diagnostics = %#v, want no trace-alias-conflict warning for a normal shared trace", detail.Diagnostics)
+	}
+
+	run, err := service.Run(ctx, "run_shared_trace_parent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !run.TraceAliasConflict {
+		t.Fatalf("run = %#v, want deterministic trace-alias ambiguity metadata preserved", run)
+	}
+}
+
 func TestServiceRunDetailReconcilesExpiredOperationDeadlineThroughAncestors(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
@@ -2104,6 +2148,53 @@ func TestServiceReconcilesOutOfOrderLifecycleRecords(t *testing.T) {
 	}
 	if graph.Spans[0].StartedAt == "" || graph.Spans[0].EndedAt == "" {
 		t.Fatalf("span lifecycle timestamps not reconciled: %#v", graph.Spans[0])
+	}
+}
+
+func TestServiceReconcilesEveryAffectedRunAndSegmentInOneBatch(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+
+	var records []string
+	for _, run := range []struct{ runID, traceID, segmentA, segmentB string }{
+		{"run_batch_reconcile_1", "trace_batch_reconcile_1", "seg_batch_reconcile_1_a", "seg_batch_reconcile_1_b"},
+		{"run_batch_reconcile_2", "trace_batch_reconcile_2", "seg_batch_reconcile_2_a", "seg_batch_reconcile_2_b"},
+		{"run_batch_reconcile_3", "trace_batch_reconcile_3", "seg_batch_reconcile_3_a", "seg_batch_reconcile_3_b"},
+	} {
+		records = append(records,
+			fmt.Sprintf(`{"schemaVersion":2,"recordId":"rec_%[1]s_start","type":"run:start","runId":%[1]q,"traceId":%[2]q,"segmentId":%[3]q,"segmentSeq":1,"name":"batch reconcile","rootPrimitive":"flow.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`, run.runID, run.traceID, run.segmentA),
+			fmt.Sprintf(`{"schemaVersion":2,"recordId":"rec_%[1]s_suspend","type":"run:suspend","runId":%[1]q,"traceId":%[2]q,"segmentId":%[3]q,"segmentSeq":2,"suspendedAt":"2026-05-16T18:00:01.000Z","reason":"gate"}`, run.runID, run.traceID, run.segmentA),
+			fmt.Sprintf(`{"schemaVersion":2,"recordId":"rec_%[1]s_resume","type":"run:resume","runId":%[1]q,"traceId":%[2]q,"segmentId":%[4]q,"segmentSeq":1,"resumedAt":"2026-05-16T18:00:02.000Z","reason":"gate","previousSegmentId":%[3]q}`, run.runID, run.traceID, run.segmentA, run.segmentB),
+			fmt.Sprintf(`{"schemaVersion":2,"recordId":"rec_%[1]s_end","type":"run:end","runId":%[1]q,"traceId":%[2]q,"segmentId":%[3]q,"segmentSeq":2,"endedAt":"2026-05-16T18:00:03.000Z","status":"ok"}`, run.runID, run.traceID, run.segmentB),
+		)
+	}
+	// A fourth run in the same batch has a genuine gap (missing previous
+	// segment), which must still be detected once per-run/segment
+	// reconciliation runs at the end of the transaction.
+	records = append(records,
+		`{"schemaVersion":2,"recordId":"rec_batch_reconcile_gap_resume","type":"run:resume","runId":"run_batch_reconcile_gap","traceId":"trace_batch_reconcile_gap","segmentId":"seg_batch_reconcile_gap_b","segmentSeq":1,"resumedAt":"2026-05-16T18:00:00.000Z","reason":"replay","previousSegmentId":"seg_batch_reconcile_gap_a"}`,
+	)
+
+	if err := service.Ingest(ctx, mustBatch(t, records...)); err != nil {
+		t.Fatal(err)
+	}
+
+	for _, runID := range []string{"run_batch_reconcile_1", "run_batch_reconcile_2", "run_batch_reconcile_3"} {
+		run, err := service.Run(ctx, runID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if run.Status != "ok" || run.SegmentCount != 2 {
+			t.Fatalf("run %q projection = %#v, want status ok across 2 segments", runID, run)
+		}
+	}
+
+	gapRun, err := service.Run(ctx, "run_batch_reconcile_gap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gapRun.GapCount != 1 || gapRun.OrderingConfidence != "partial" {
+		t.Fatalf("gap run projection = %#v, want one gap and partial ordering", gapRun)
 	}
 }
 

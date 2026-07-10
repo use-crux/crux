@@ -80,6 +80,9 @@ func (s *Service) ingest(ctx context.Context, batch Batch) (err error) {
 			return err
 		}
 	}
+	if err := statements.reconcileAffected(ctx); err != nil {
+		return fmt.Errorf("reconcile observability run/segment lifecycle: %w", err)
+	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit observability ingest transaction: %w", err)

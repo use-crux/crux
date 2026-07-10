@@ -103,6 +103,28 @@ func TestServiceConflictsWhenTerminalRunIsResumedInAnotherSegment(t *testing.T) 
 	}
 }
 
+func TestServiceCompletedThreeSegmentMultiSuspendRunIsNotConflicted(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	if err := service.Ingest(ctx, mustBatch(t,
+		`{"schemaVersion":2,"recordId":"rec_multi_suspend_start","type":"run:start","runId":"run_multi_suspend","traceId":"37373737373737373737373737373737","segmentId":"seg_multi_suspend_a","segmentSeq":1,"name":"multi","rootPrimitive":"flow.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_multi_suspend_a_suspend","type":"run:suspend","runId":"run_multi_suspend","traceId":"37373737373737373737373737373737","segmentId":"seg_multi_suspend_a","segmentSeq":2,"suspendedAt":"2026-05-16T18:00:01.000Z","reason":"plan-approval"}`,
+		`{"schemaVersion":2,"recordId":"rec_multi_suspend_b_resume","type":"run:resume","runId":"run_multi_suspend","traceId":"37373737373737373737373737373737","segmentId":"seg_multi_suspend_b","segmentSeq":1,"resumedAt":"2026-05-16T18:00:02.000Z","reason":"plan-approval","previousSegmentId":"seg_multi_suspend_a"}`,
+		`{"schemaVersion":2,"recordId":"rec_multi_suspend_b_suspend","type":"run:suspend","runId":"run_multi_suspend","traceId":"37373737373737373737373737373737","segmentId":"seg_multi_suspend_b","segmentSeq":2,"suspendedAt":"2026-05-16T18:00:03.000Z","reason":"content-review"}`,
+		`{"schemaVersion":2,"recordId":"rec_multi_suspend_c_resume","type":"run:resume","runId":"run_multi_suspend","traceId":"37373737373737373737373737373737","segmentId":"seg_multi_suspend_c","segmentSeq":1,"resumedAt":"2026-05-16T18:00:04.000Z","reason":"content-review","previousSegmentId":"seg_multi_suspend_b"}`,
+		`{"schemaVersion":2,"recordId":"rec_multi_suspend_c_end","type":"run:end","runId":"run_multi_suspend","traceId":"37373737373737373737373737373737","segmentId":"seg_multi_suspend_c","segmentSeq":2,"endedAt":"2026-05-16T18:00:05.000Z","status":"ok"}`,
+	)); err != nil {
+		t.Fatal(err)
+	}
+	run, err := service.Run(ctx, "run_multi_suspend")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != "ok" || run.SegmentCount != 3 {
+		t.Fatalf("multi-suspend completed projection = %#v, want status ok across 3 segments", run)
+	}
+}
+
 func TestProjectRunDetailDistinguishesIncompleteSuspendedAndTerminal(t *testing.T) {
 	started := time.Date(2026, 5, 16, 18, 0, 0, 0, time.UTC)
 	for _, test := range []struct {

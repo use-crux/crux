@@ -380,6 +380,64 @@ describe('flow cancel', () => {
   })
 })
 
+describe('flow resume failure recovery', () => {
+  it('retries in the same process after a transient resume error', async () => {
+    setupStore()
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    let shouldFail = true
+    const retryFlow = makeFlow('retry-test', async (flow) => {
+      await flow.step('plan', async () => ({ planId: 'abc' }))
+      await flow.suspend('approval')
+      if (shouldFail) {
+        shouldFail = false
+        throw new Error('transient failure')
+      }
+      return flow.step('execute', async () => 'done')
+    })
+
+    const suspended = await retryFlow.run()
+    expect(suspended.status).toBe('suspended')
+    await signalFlow(suspended.flowId, 'approval')
+    await expect(retryFlow.resume(suspended.flowId)).rejects.toThrow('transient failure')
+
+    const snapshotAfterError = await store.get(`crux:flow:${suspended.flowId}`)
+    expect(snapshotAfterError?.status).toBe('suspended')
+    await expect(retryFlow.resume(suspended.flowId)).resolves.toMatchObject({ status: 'completed', output: 'done' })
+
+    await observe.flush()
+    expect(transport.records.filter((record) => record.type === 'run:end')).toEqual([
+      expect.objectContaining({ status: 'ok' }),
+    ])
+  })
+
+  it('cancels in the same process after a resume error', async () => {
+    setupStore()
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const cancelAfterErrorFlow = makeFlow('cancel-after-error', async (flow) => {
+      await flow.step('plan', async () => ({ planId: 'abc' }))
+      await flow.suspend('approval')
+      throw new Error('boom')
+    })
+
+    const suspended = await cancelAfterErrorFlow.run()
+    await signalFlow(suspended.flowId, 'approval')
+    await expect(cancelAfterErrorFlow.resume(suspended.flowId)).rejects.toThrow('boom')
+
+    const { cancelFlow } = await import('../../src/flow/scope')
+    await cancelFlow(suspended.flowId, 'Admin cancelled after error')
+    expect((await store.get(`crux:flow:${suspended.flowId}`))?.status).toBe('cancelled')
+
+    await observe.flush()
+    expect(transport.records.filter((record) => record.type === 'run:end')).toEqual([
+      expect.objectContaining({ status: 'cancelled' }),
+    ])
+  })
+})
+
 describe('flow timeout/expiration', () => {
   it('returns expired status when resuming after timeout', async () => {
     setupStore()

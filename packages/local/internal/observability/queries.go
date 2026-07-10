@@ -382,18 +382,21 @@ func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary, inc
 
 	if err := s.enrichRunSummaryCounts(ctx, runIDs, byRunID); err != nil {
 		if !includeExpensiveRollups && isRunListDeadlineError(err) {
+			defaultPartialOrderingConfidence(byRunID)
 			return nil
 		}
 		return err
 	}
 	if err := s.enrichRunSegmentSummaries(ctx, runIDs, byRunID); err != nil {
 		if !includeExpensiveRollups && isRunListDeadlineError(err) {
+			defaultPartialOrderingConfidence(byRunID)
 			return nil
 		}
 		return err
 	}
 	if err := s.enrichRunSummaryIdentities(ctx, runIDs, byRunID); err != nil {
 		if !includeExpensiveRollups && isRunListDeadlineError(err) {
+			defaultPartialOrderingConfidence(byRunID)
 			return nil
 		}
 		return err
@@ -421,6 +424,14 @@ func (s *Service) enrichRunSummaries(ctx context.Context, runs []RunSummary, inc
 		runs[i].Metrics = metricsRawOrNil(metrics)
 	}
 	return nil
+}
+
+func defaultPartialOrderingConfidence(byRunID map[string]*RunSummary) {
+	for _, run := range byRunID {
+		if run.OrderingConfidence == "" {
+			run.OrderingConfidence = "partial"
+		}
+	}
 }
 
 func (s *Service) enrichRunSummaryIdentities(ctx context.Context, runIDs []string, byRunID map[string]*RunSummary) error {
