@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 546,
-    "definitions": 329,
-    "relations": 185,
-    "diagnostics": 4,
-    "dependencies": 1014,
-    "canonicalBytes": 2416740
+    "files": 551,
+    "definitions": 382,
+    "relations": 223,
+    "diagnostics": 32,
+    "dependencies": 1028,
+    "canonicalBytes": 2527297
   },
   "files": [
     {
@@ -563,6 +563,15 @@
       "dependencies": 1
     },
     {
+      "file": "packages/convex/__type_tests__/routing-wrapper-rejection.ts",
+      "sha256": "879dd1b7067dd23ea54ddda12e76f022726f065d8f5d0b72bb7a74b0dab38077",
+      "bytes": 6432,
+      "definitions": 3,
+      "relations": 2,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
       "file": "packages/convex/__type_tests__/runtime-engine-declaration.ts",
       "sha256": "bbfbba0bdce9ce96ae91f75dbb2cb302895a34f6bffea425d4047c54b1a4f7c4",
       "bytes": 103,
@@ -1103,6 +1112,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/__type_tests__/agent-routing-model.ts",
+      "sha256": "0dba9319a813b271962bbbbbdb2cb71c13a5a6d3b5131d54ef7b3685a641f5eb",
+      "bytes": 11823,
+      "definitions": 6,
+      "relations": 4,
+      "diagnostics": 3,
+      "dependencies": 3
+    },
+    {
       "file": "packages/core/__type_tests__/composition-inference-pass2.ts",
       "sha256": "263e69c796e027ce443198bda54d6732c23563a74497582627e7c06152b35e5a",
       "bytes": 39446,
@@ -1292,6 +1310,15 @@
       "dependencies": 1
     },
     {
+      "file": "packages/core/__type_tests__/routing.test-d.ts",
+      "sha256": "8a7eb0728d5790879e26b3712781e0fea91ee2a91cbf64519e66ce7fd7749ab9",
+      "bytes": 91488,
+      "definitions": 44,
+      "relations": 32,
+      "diagnostics": 25,
+      "dependencies": 2
+    },
+    {
       "file": "packages/core/__type_tests__/runtime-engine-contract.ts",
       "sha256": "f8be09c05c83b7c01da8d26a9d189a09f323f7d04398148071afb4d8ee190661",
       "bytes": 2070,
@@ -1410,8 +1437,8 @@
     },
     {
       "file": "packages/core/adapter/define-executor.ts",
-      "sha256": "a12665e36ac46ef6aec80f7c774c9b9bb41b930ca006235eeb5128c5bc06912a",
-      "bytes": 350,
+      "sha256": "2af5eb7950f7070d177ac948835728a7f607ae6b894e9cb402d57431d4712b89",
+      "bytes": 358,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
@@ -1544,15 +1571,6 @@
       "dependencies": 4
     },
     {
-      "file": "packages/core/agent/composition-runtime/execution.ts",
-      "sha256": "7c308c12059a4fcf6a2152dd14a94096289d6e4f1c4eed327f2bc7689651bc9a",
-      "bytes": 246,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 4
-    },
-    {
       "file": "packages/core/agent/consensus.ts",
       "sha256": "b5356cd356adb5864ffc9c258f195ad6f878d1660adba505be5cd05dd65bd153",
       "bytes": 157,
@@ -1632,6 +1650,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 3
+    },
+    {
+      "file": "packages/core/agent/routing-context.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/core/agent/swarm.ts",
@@ -2480,15 +2507,6 @@
       "dependencies": 0
     },
     {
-      "file": "packages/core/routing/router.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 0
-    },
-    {
       "file": "packages/core/runtime/api/task.ts",
       "sha256": "d412e0f8372c84c5c0295b5bacb04113010cfea2b484fd84bf01c396d22fa86d",
       "bytes": 121,
@@ -2985,21 +3003,30 @@
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/GenerationDecisions.tsx",
-      "sha256": "29ddd95177b00bbedaf050ca524a58bae7d17912843c9e39d0ec87750a0c1dd9",
-      "bytes": 325,
-      "definitions": 0,
-      "relations": 0,
-      "diagnostics": 0,
-      "dependencies": 3
-    },
-    {
-      "file": "packages/devtools/ui/src/features/run-detail/components/PrimitiveCards.tsx",
-      "sha256": "0dfd1de576ad79359beb89e37ea9ed1cfc75e4d35a010ae9a52450dd15e7e8a7",
-      "bytes": 457,
+      "sha256": "4715534db3c83431be30aa1b4e336d91f44c930f4335692e6ac4ff0907612044",
+      "bytes": 492,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 5
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/PrimitiveCards.tsx",
+      "sha256": "d11f9fe3f8e5fccb0c8605f19c36fccade17f9308754e45d2b547e80e0a9ec4a",
+      "bytes": 624,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 7
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/components/RoutingReceiptReport.tsx",
+      "sha256": "cc760b56ea1a422726d5354a43dfe8ef725d2bb9695dbb96f1ad2b01e4f72022",
+      "bytes": 407,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/components/SessionCanvas.tsx",
@@ -3030,6 +3057,15 @@
     },
     {
       "file": "packages/devtools/ui/src/features/run-detail/hooks/useTraceFeedback.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/devtools/ui/src/features/run-detail/lib/routing-receipt.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -3714,12 +3750,12 @@
     },
     {
       "file": "packages/indexer/indexer/semantic/backends/tsgo/direct-projectors/routing.ts",
-      "sha256": "aeba28d919ba18082b31a5a8c6a0b46964cc57597902ffeb2767445ff2f8ea8d",
-      "bytes": 475,
+      "sha256": "66e55779db955e2ba5e767cc106b4a300b79c1bc2f6430b2b91db59db67f4e71",
+      "bytes": 537,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 6
+      "dependencies": 7
     },
     {
       "file": "packages/indexer/indexer/semantic/backends/tsgo/direct-projectors/storage-shapes.ts",
@@ -3786,12 +3822,12 @@
     },
     {
       "file": "packages/indexer/indexer/semantic/enrichment-facts.ts",
-      "sha256": "08a4a363e29d0e945df1f2b7410fc342d0677a7564f0dc47200801b65de8e6e6",
-      "bytes": 416,
+      "sha256": "461e4331b8f78ed55bd88bbb2a6827086b2607537b024403f1b4a73e12040408",
+      "bytes": 478,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 6
+      "dependencies": 7
     },
     {
       "file": "packages/indexer/indexer/semantic/evidence/facts.ts",
@@ -3864,6 +3900,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 6
+    },
+    {
+      "file": "packages/indexer/indexer/semantic/routing-context.ts",
+      "sha256": "755da53f3b36daed4edc0d7969d63fa449256f96796e48a41ff3c08853019896",
+      "bytes": 119,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/indexer/indexer/semantic/runner.ts",
