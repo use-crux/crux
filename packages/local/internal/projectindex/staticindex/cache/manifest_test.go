@@ -29,6 +29,7 @@ func readStaticIndexCacheIdentityFixture(t testing.TB, out *sharedStaticIndexCac
 		"..",
 		"..",
 		"indexer",
+		"src",
 		"contracts",
 		"fixtures",
 		"static-index-cache-identity.json",
