@@ -547,6 +547,26 @@ export type {
   ToolChoice,
 } from "./generation";
 export { hasToolCall, maxSteps } from "./generation";
+export {
+  createGeneratedImageResult,
+  isNoImageGeneratedError,
+  lowerImagePrompt,
+  validateGenerateImageOptions,
+} from "./generation";
+export type {
+  GenerateImage,
+  GenerateImageCommonOptions,
+  GenerateImageOptions,
+  GeneratedImage,
+  GeneratedImageUsage,
+  GeneratedImageResultMetadata,
+  ImagePrompt,
+  ImagePromptContent,
+  ImagePromptLoweringContext,
+  LoweredImagePrompt,
+  NativeGeneratedImage,
+  NoImageGeneratedError,
+} from "./generation";
 export type { ContentPart, MediaSource, MessageContent } from "./types/content";
 export {
   createInvalidMediaSourceError,

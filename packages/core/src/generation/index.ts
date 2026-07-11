@@ -66,6 +66,30 @@ export type {
   TraceMeta,
 } from "./types";
 export {
+  createGeneratedImageResult,
+  isNoImageGeneratedError,
+  validateGenerateImageOptions,
+} from "./image-result";
+export { lowerImagePrompt } from "./image-prompt";
+export type {
+  GenerateImage,
+  GenerateImageCommonOptions,
+  GenerateImageOptions,
+  GeneratedImage,
+  GeneratedImageUsage,
+  ImagePrompt,
+  ImagePromptContent,
+  NativeGeneratedImage,
+} from "./image-contracts";
+export type {
+  GeneratedImageResultMetadata,
+  NoImageGeneratedError,
+} from "./image-result";
+export type {
+  ImagePromptLoweringContext,
+  LoweredImagePrompt,
+} from "./image-prompt";
+export {
   Deadline,
   TimeoutError,
   composeAbortSignals,
