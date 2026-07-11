@@ -1,5 +1,6 @@
 import { observe } from '@use-crux/core/observability'
 import { stringValue } from './lifecycle-utils'
+import { redactedMessagesPreview } from './message-preview'
 import { numericValue } from './sdk-observability-values'
 
 /** Emit a messages artifact for Convex Agent call args or fetched thread context. */
@@ -21,14 +22,14 @@ export function emitConvexAgentMessagesArtifact(
       threadId: stringValue(threadOpts?.threadId),
       userId: stringValue(threadOpts?.userId),
       promptMessageId: stringValue(callArgs?.promptMessageId),
-      prompt: callArgs?.prompt,
+      prompt: redactedMessagesPreview(callArgs?.prompt),
       system: callArgs?.system,
-      messages: callArgs?.messages,
-      allMessages: context?.allMessages,
-      inputMessages: context?.inputMessages,
-      inputPrompt: context?.inputPrompt,
-      recent: context?.recent,
-      existingResponses: context?.existingResponses,
+      messages: redactedMessagesPreview(callArgs?.messages),
+      allMessages: redactedMessagesPreview(context?.allMessages),
+      inputMessages: redactedMessagesPreview(context?.inputMessages),
+      inputPrompt: redactedMessagesPreview(context?.inputPrompt),
+      recent: redactedMessagesPreview(context?.recent),
+      existingResponses: redactedMessagesPreview(context?.existingResponses),
       search: context?.search,
     },
     attributes: {
