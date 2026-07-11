@@ -37,6 +37,7 @@ The artifact lives under `docs/business-plan/` and consists of real static HTML 
 - Pages work when opened through a simple local HTTP server.
 - Core reading and navigation work without JavaScript.
 - External market claims link to dated sources.
+- Market claims are re-verified against fresh primary sources during implementation; repository-derived product claims are checked against the current vision, roadmap, and code.
 - The site is separate from the public Next.js documentation application.
 - The content is responsive, keyboard-accessible, printable, and usable at 375 px through wide desktop layouts.
 
@@ -225,7 +226,7 @@ Avoid gradients associated with generic AI branding, excessive glass effects, de
 - Semantic HTML landmarks and sequential heading hierarchy.
 - A skip link and visible keyboard focus states.
 - Current-page navigation uses `aria-current="page"`.
-- Mobile navigation remains operable by keyboard and screen reader.
+- Mobile navigation uses a native `<details>` disclosure as its no-JavaScript baseline and remains operable by keyboard and screen reader; JavaScript may enhance but must not replace that behavior.
 - JavaScript is optional and limited to progressive enhancements such as theme selection and small-screen navigation.
 - No client-side rendering of primary content.
 - No data collection or network requests beyond user-initiated external source links.
@@ -255,4 +256,3 @@ Implementation is complete when:
 - A financial model presented as a forecast.
 - Implementation of the Specialist product itself.
 - Changes to current Crux runtime or package APIs.
-
