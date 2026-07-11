@@ -95,7 +95,7 @@ const transcript = await transcribe({
 console.log(transcript.text, transcript.segments);
 ```
 
-Transcription returns validated seconds-based segments. Anthropic intentionally omits this operation; Google provides its tested composed transcript route.
+Transcription exposes validated seconds-based segments when the provider supplies measured timing. Anthropic intentionally omits this operation; Google's composed transcript route returns text with empty timing arrays and rejects timestamp requests rather than inventing timing.
 
 ## Ingest and retrieve media
 

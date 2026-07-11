@@ -66,6 +66,37 @@ describe('AI SDK multimodal messages', () => {
     })
   })
 
+  it('decodes native audio and video files from every AI SDK data shape', () => {
+    const audioBytes = new Uint8Array([1, 2, 3])
+    const videoBlob = new Blob([new Uint8Array([4, 5])], { type: 'video/webm' })
+    const messages = fromResponseMessages([
+      {
+        role: 'assistant',
+        content: [
+          { type: 'file', data: 'AQID', mediaType: 'audio/mpeg' },
+          { type: 'file', data: audioBytes, mediaType: 'audio/wav' },
+          { type: 'file', data: new URL('https://example.com/clip.mp4'), mediaType: 'video/mp4' },
+          { type: 'file', data: videoBlob, mediaType: 'video/webm' },
+        ],
+      },
+    ])
+
+    expect(messages[0]?.content).toEqual([
+      {
+        type: 'audio',
+        source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'audio/mpeg' },
+        mediaType: 'audio/mpeg',
+      },
+      { type: 'audio', source: audioBytes, mediaType: 'audio/wav' },
+      {
+        type: 'video',
+        source: new URL('https://example.com/clip.mp4'),
+        mediaType: 'video/mp4',
+      },
+      { type: 'video', source: videoBlob, mediaType: 'video/webm' },
+    ])
+  })
+
   it('preserves multimodal tool-result content when building SDK model messages', () => {
     expect(
       toModelMessages([

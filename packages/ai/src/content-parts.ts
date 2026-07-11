@@ -5,6 +5,7 @@ import {
   type DiagnosticsPort,
   type Message,
   type MessageContent,
+  type MediaSource,
   type ProviderOptions,
 } from '@use-crux/core'
 import { isRecord, readString } from './object-utils'
@@ -71,15 +72,14 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
     if (type === 'image') {
       const image = part.image
       const mediaType = readString(part, 'mediaType')
-      if (image instanceof URL) {
+      const source = nativeMediaSource(image, mediaType)
+      if (source !== undefined) {
         content.push({
           type: 'image',
-          source: image,
+          source,
           ...(mediaType ? { mediaType } : {}),
           ...providerOptionsFrom(part),
         })
-      } else if (typeof image === 'string' && mediaType) {
-        content.push({ type: 'image', source: dataAsset(image, mediaType), mediaType, ...providerOptionsFrom(part) })
       } else {
         warnMalformedPart(part, 'AI SDK image parts require image and mediaType.')
       }
@@ -89,22 +89,9 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
       const data = part.data
       const mediaType = readString(part, 'mediaType')
       const filename = readString(part, 'filename')
-      if (data instanceof URL) {
-        content.push({
-          type: 'file',
-          source: data,
-          ...(mediaType ? { mediaType } : {}),
-          ...(filename ? { filename } : {}),
-          ...providerOptionsFrom(part),
-        })
-      } else if (typeof data === 'string' && mediaType) {
-        content.push({
-          type: 'file',
-          source: dataAsset(data, mediaType),
-          mediaType,
-          ...(filename ? { filename } : {}),
-          ...providerOptionsFrom(part),
-        })
+      const source = nativeMediaSource(data, mediaType)
+      if (source !== undefined) {
+        content.push(decodedFilePart(source, mediaType, filename, part))
       } else {
         warnMalformedPart(part, 'AI SDK file parts require data and mediaType.')
       }
@@ -217,7 +204,9 @@ function canonicalPartFrom(part: Record<string, unknown>): ContentPart | undefin
       const text = readString(part, 'text')
       return text === undefined ? undefined : { type, text, ...providerOptionsFrom(part) }
     }
-    case 'image': {
+    case 'image':
+    case 'audio':
+    case 'video': {
       const source = part.source
       return isMediaSource(source)
         ? {
@@ -232,15 +221,7 @@ function canonicalPartFrom(part: Record<string, unknown>): ContentPart | undefin
       const source = part.source
       const mediaType = readString(part, 'mediaType')
       const filename = readString(part, 'filename')
-      return isMediaSource(source)
-        ? {
-            type,
-            source,
-            ...(mediaType ? { mediaType } : {}),
-            ...(filename ? { filename } : {}),
-            ...providerOptionsFrom(part),
-          }
-        : undefined
+      return isMediaSource(source) ? decodedFilePart(source, mediaType, filename, part) : undefined
     }
     default:
       return undefined
@@ -265,6 +246,32 @@ function dataAsset(data: string, mediaType: string): Extract<ContentPart, { type
     type: 'data',
     data: new Uint8Array(Buffer.from(data, 'base64')),
     mediaType,
+  }
+}
+
+function nativeMediaSource(value: unknown, mediaType: string | undefined): MediaSource | undefined {
+  if (value instanceof URL || value instanceof Uint8Array) return value
+  if (typeof Blob !== 'undefined' && value instanceof Blob) return value
+  return typeof value === 'string' && mediaType ? dataAsset(value, mediaType) : undefined
+}
+
+function decodedFilePart(
+  source: MediaSource,
+  mediaType: string | undefined,
+  filename: string | undefined,
+  native: Record<string, unknown>,
+): ContentPart {
+  const shared = {
+    source,
+    ...(mediaType ? { mediaType } : {}),
+    ...providerOptionsFrom(native),
+  }
+  if (mediaType?.startsWith('audio/')) return { type: 'audio', ...shared }
+  if (mediaType?.startsWith('video/')) return { type: 'video', ...shared }
+  return {
+    type: 'file',
+    ...shared,
+    ...(filename ? { filename } : {}),
   }
 }
 
