@@ -11,6 +11,8 @@ import type { SdkGateway } from "./gateway";
 import { extractModelInfo } from "./provider-profile";
 import { mapAiSdkSettings } from "./sdk-codec";
 import { aiSdkMediaHooks } from "./media-preflight";
+import { createAiSdkImageOperation } from "./image-generation";
+import { createAiSdkTranscriptionOperation } from "./transcription";
 
 /**
  * Public provider runtime for the Vercel AI SDK.
@@ -34,5 +36,7 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
       return { runTextLoop, runStructuredAttempt, runStream, replayStream };
     },
   },
+  image: createAiSdkImageOperation,
+  transcription: createAiSdkTranscriptionOperation,
   extend: ({ client }) => createAiSdkRuntimeExtensions(client),
 });

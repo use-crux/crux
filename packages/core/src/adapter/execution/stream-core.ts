@@ -21,7 +21,8 @@ import { initialCoreMessages } from "./messages";
 import { createCachedStreamHandle } from "./metadata";
 import { buildResolveOpts } from "./shared";
 import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
-import { emitInputTokenEstimate } from './media-token-budget'
+import { emitInputTokenEstimate } from "./media-token-budget";
+import { responseContent } from "../assistant-output";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -135,7 +136,7 @@ export async function streamCore<
         model: modelInfo.modelId,
         media: dialect.media,
         tokenBudget: args.tokenBudget,
-      })
+      });
       return withBudget(
         (signal) =>
           dialect.stream(dialect.client, callArgs, {
@@ -145,7 +146,7 @@ export async function streamCore<
           budget: "step",
           limitMs: args.timeout?.stepMs,
         },
-      )
+      );
     },
   );
 
@@ -189,12 +190,37 @@ export async function streamCore<
     completion: async () => {
       const meta = await handle.completion();
       const stamped = meta ? safety.stamp(meta) : meta;
+      const text = stamped?.text ?? streamedAssistantText;
+      const content = responseContent({
+        content: stamped?.content,
+        text,
+        toolCalls: stamped?.toolCalls?.flatMap((call) =>
+          typeof call.id === "string"
+            ? [{ id: call.id, name: call.name, args: call.args }]
+            : [],
+        ),
+      });
+      const completionMessages = stamped?.messages ?? [
+        ...messages,
+        {
+          role: "assistant" as const,
+          content,
+          ...(stamped?.toolCalls
+            ? { metadata: { toolCalls: stamped.toolCalls } }
+            : {}),
+        },
+      ];
       await lifecycle.captureTurn({
         messages,
         assistantText: streamedAssistantText || undefined,
         toolCalls: stamped?.toolCalls,
       });
-      return stamped;
+      return {
+        ...stamped,
+        text,
+        content,
+        messages: completionMessages,
+      };
     },
   };
 }

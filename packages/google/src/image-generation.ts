@@ -1,17 +1,29 @@
-import type { GenerateImagesConfig, GenerateImagesResponse, GoogleGenAI } from '@google/genai'
+import type {
+  GenerateImagesConfig,
+  GenerateImagesResponse,
+  GoogleGenAI,
+} from "@google/genai";
 import {
   createGeneratedImageResult,
   createUnsupportedCapabilityError,
   lowerImagePrompt,
   validateGenerateImageOptions,
   type GenerateImage,
+  type GenerateImageOptions,
+  type ImagePrompt,
   type UnsupportedCapabilityIssue,
-} from '@use-crux/core'
-import { bindCompletedOperation, defineCompletedOperation } from '@use-crux/core/adapter'
+} from "@use-crux/core";
+import {
+  bindCompletedOperation,
+  defineCompletedOperation,
+} from "@use-crux/core/adapter";
 
 /** Google-only Imagen controls forwarded to `models.generateImages()`. */
-export type GoogleImageExtra = Omit<GenerateImagesConfig, 'numberOfImages' | 'aspectRatio' | 'seed'> &
-  Record<string, unknown>
+export type GoogleImageExtra = Omit<
+  GenerateImagesConfig,
+  "numberOfImages" | "aspectRatio" | "seed"
+> &
+  Record<string, unknown>;
 
 /**
  * Flat Google image operation attached to a bound adapter.
@@ -22,10 +34,24 @@ export type GoogleImageExtra = Omit<GenerateImagesConfig, 'numberOfImages' | 'as
  * await assetStore.put(result.image) // optional, explicit persistence
  * ```
  */
-export type GoogleGenerateImage = GenerateImage<string, GoogleImageExtra, GenerateImagesResponse>
+export type GoogleGenerateImage = GenerateImage<
+  string,
+  GoogleImageExtra,
+  GenerateImagesResponse
+>;
+type GoogleImageInput = GenerateImageOptions<
+  string,
+  GoogleImageExtra,
+  ImagePrompt
+>;
 
 const GOOGLE_IMAGE_OPERATION_SUPPORT = Object.freeze({
-  unsupportedModelPrefixes: Object.freeze(['gemini-', 'text-', 'embedding-', 'imagen-3.0-capability-']),
+  unsupportedModelPrefixes: Object.freeze([
+    "gemini-",
+    "text-",
+    "embedding-",
+    "imagen-3.0-capability-",
+  ]),
   common: Object.freeze({
     n: true,
     aspectRatio: true,
@@ -33,28 +59,43 @@ const GOOGLE_IMAGE_OPERATION_SUPPORT = Object.freeze({
     size: false,
   }),
   edits: false,
-})
+});
 
 /** Create one native Google image operation sharing the bound SDK client. */
-export function createGoogleGenerateImage(client: GoogleGenAI): GoogleGenerateImage {
+export function createGoogleGenerateImage(
+  client: GoogleGenAI,
+): GoogleGenerateImage {
+  return bindCompletedOperation({
+    definition: createGoogleImageOperation(client),
+    provider: "google",
+    operation: "generateImage",
+  });
+}
+
+/** Define Google image mechanics for first-class provider-runtime compilation. */
+export function createGoogleImageOperation(client: GoogleGenAI) {
   const definition = defineCompletedOperation({
-    async normalize(options: Parameters<GoogleGenerateImage>[0]) {
-      validateGenerateImageOptions(options)
+    async normalize(input: GoogleImageInput, context) {
+      const options = { ...input, model: context.model };
+      validateGenerateImageOptions(options);
       const prompt = await lowerImagePrompt(options, {
-        adapter: 'google',
+        adapter: "google",
         model: options.model,
-      })
-      const issues = googleImageIssues(options, prompt)
+      });
+      const issues = googleImageIssues(options, prompt);
       if (issues.length > 0) {
         throw createUnsupportedCapabilityError({
-          adapter: 'google',
+          adapter: "google",
           model: options.model,
-          issues: issues as [UnsupportedCapabilityIssue, ...UnsupportedCapabilityIssue[]],
-        })
+          issues: issues as [
+            UnsupportedCapabilityIssue,
+            ...UnsupportedCapabilityIssue[],
+          ],
+        });
       }
-      return { options, prompt }
+      return { options, prompt };
     },
-    support: () => 'supported' as const,
+    support: () => "supported" as const,
     invoke: ({ options, prompt }, { signal }) =>
       client.models.generateImages({
         model: options.model,
@@ -63,23 +104,28 @@ export function createGoogleGenerateImage(client: GoogleGenAI): GoogleGenerateIm
           ...options.extra,
           abortSignal: signal,
           ...(options.n === undefined ? {} : { numberOfImages: options.n }),
-          ...(options.aspectRatio === undefined ? {} : { aspectRatio: options.aspectRatio }),
+          ...(options.aspectRatio === undefined
+            ? {}
+            : { aspectRatio: options.aspectRatio }),
           ...(options.seed === undefined ? {} : { seed: options.seed }),
         },
       }),
     validate(raw) {
-      const generated = raw.generatedImages ?? []
+      const generated = raw.generatedImages ?? [];
       const images = generated.flatMap((item) =>
         item.image?.imageBytes && item.image.mimeType
           ? [{ data: item.image.imageBytes, mediaType: item.image.mimeType }]
           : [],
-      )
+      );
       const warnings = generated.flatMap((item) =>
-        item.raiFilteredReason ? [`Image blocked: ${item.raiFilteredReason}`] : [],
-      )
-      const headers = raw.sdkHttpResponse?.headers
-      const requestId = headers?.['x-request-id'] ?? headers?.['x-goog-request-id']
-      const status = raw.sdkHttpResponse?.responseInternal?.status
+        item.raiFilteredReason
+          ? [`Image blocked: ${item.raiFilteredReason}`]
+          : [],
+      );
+      const headers = raw.sdkHttpResponse?.headers;
+      const requestId =
+        headers?.["x-request-id"] ?? headers?.["x-goog-request-id"];
+      const status = raw.sdkHttpResponse?.responseInternal?.status;
       const safety = generated.flatMap((item) =>
         item.safetyAttributes
           ? [
@@ -89,46 +135,50 @@ export function createGoogleGenerateImage(client: GoogleGenAI): GoogleGenerateIm
               },
             ]
           : [],
-      )
+      );
       return createGeneratedImageResult(images, {
         raw,
         warnings,
-        execution: { kind: 'native', calls: 1 },
+        execution: { kind: "native", calls: 1 },
         providerMetadata: {
           ...(requestId === undefined ? {} : { requestId }),
           ...(status === undefined ? {} : { status }),
           ...(safety.length === 0 ? {} : { safety }),
         },
-      })
+      });
     },
-    report: (result) => ({ kind: 'image', count: result.images.length }),
+    report: (result) => ({ kind: "image", count: result.images.length }),
     conformance: [],
-  })
-  return bindCompletedOperation({
-    definition,
-    provider: 'google',
-    operation: 'generateImage',
-  })
+  });
+  return definition;
 }
 
 function googleImageIssues(
-  options: Parameters<GoogleGenerateImage>[0],
+  options: GoogleImageInput,
   prompt: Awaited<ReturnType<typeof lowerImagePrompt>>,
 ): UnsupportedCapabilityIssue[] {
-  const issues: UnsupportedCapabilityIssue[] = []
-  if (GOOGLE_IMAGE_OPERATION_SUPPORT.unsupportedModelPrefixes.some((prefix) => options.model.startsWith(prefix))) {
-    issues.push(issue('image.model'))
+  const issues: UnsupportedCapabilityIssue[] = [];
+  if (
+    GOOGLE_IMAGE_OPERATION_SUPPORT.unsupportedModelPrefixes.some((prefix) =>
+      options.model.startsWith(prefix),
+    )
+  ) {
+    issues.push(issue("image.model"));
   }
-  if (!GOOGLE_IMAGE_OPERATION_SUPPORT.common.size && options.size !== undefined) issues.push(issue('image.size'))
-  prompt.images.forEach((_asset, index) => issues.push(issue('image.edit.reference', `prompt.images[${index}]`)))
-  if (prompt.mask) issues.push(issue('image.edit.mask', 'prompt.mask'))
-  return issues
+  if (!GOOGLE_IMAGE_OPERATION_SUPPORT.common.size && options.size !== undefined)
+    issues.push(issue("image.size"));
+  prompt.images.forEach((_asset, index) =>
+    issues.push(issue("image.edit.reference", `prompt.images[${index}]`)),
+  );
+  if (prompt.mask) issues.push(issue("image.edit.mask", "prompt.mask"));
+  return issues;
 }
 
 function issue(capability: string, path?: string): UnsupportedCapabilityIssue {
   return {
     capability,
     ...(path === undefined ? {} : { path }),
-    remediation: 'Use a native Imagen generation model and Google-supported generation controls.',
-  }
+    remediation:
+      "Use a native Imagen generation model and Google-supported generation controls.",
+  };
 }

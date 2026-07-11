@@ -1,7 +1,7 @@
-import type OpenAI from 'openai'
-import type { ChatCompletion } from 'openai/resources/chat/completions'
-import type { Message } from '@use-crux/core'
-import { defineProviderTranscriptCodec } from '@use-crux/core/adapter'
+import type OpenAI from "openai";
+import type { ChatCompletion } from "openai/resources/chat/completions";
+import type { AssistantContentPart, Message } from "@use-crux/core";
+import { defineProviderTranscriptCodec } from "@use-crux/core/adapter";
 import type {
   NativeAssistantTurn,
   ProviderToolCall,
@@ -9,11 +9,15 @@ import type {
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
   ToolResultEncodingHelpers,
-} from '@use-crux/core/adapter'
-import { messageContentFromOpenAIContent, openAIContentText, openAIMessageContent } from './content-parts'
+} from "@use-crux/core/adapter";
+import {
+  messageContentFromOpenAIContent,
+  openAIContentText,
+  openAIMessageContent,
+} from "./content-parts";
 
 /** OpenAI assistant turn data read from a chat-completion response. */
-export type OpenAIAssistantTurn = NativeAssistantTurn
+export type OpenAIAssistantTurn = NativeAssistantTurn;
 
 /**
  * OpenAI wire dialect for the canonical transcript IR.
@@ -24,29 +28,37 @@ export type OpenAIAssistantTurn = NativeAssistantTurn
  * and tool-result helpers; this dialect only handles the chat-completion wire
  * format, including JSON argument and rich-content rendering.
  */
-const openAIDialect: ProviderTranscriptDialect<OpenAI.ChatCompletionMessageParam, ChatCompletion> = {
+const openAIDialect: ProviderTranscriptDialect<
+  OpenAI.ChatCompletionMessageParam,
+  ChatCompletion
+> = {
   encodeContent: ({ role, content }, options) =>
-    role === 'system'
+    role === "system"
       ? { role, content: openAIMessageContent(role, content) }
       : { role, content: openAIMessageContent(role, content) },
   encodeAssistant: ({ content, toolCalls }, options) =>
-    encodeAssistant(openAIMessageContent('assistant', content), toolCalls ?? []),
+    encodeAssistant(
+      openAIMessageContent("assistant", content),
+      toolCalls ?? [],
+    ),
   encodeToolResults: ({ results }, helpers, options) =>
     results.flatMap((result) => encodeToolResult(result, helpers, options)),
   decodeMessage: decodeMessage,
   readAssistant: readOpenAIAssistant,
-}
+};
 
 /** OpenAI provider transcript codec used by request builders and response normalization. */
-export const openAITranscript = defineProviderTranscriptCodec(openAIDialect)
+export const openAITranscript = defineProviderTranscriptCodec(openAIDialect);
 
 /**
  * Convert canonical Crux messages into OpenAI chat-completion messages.
  *
  * Uses the compiled {@link openAITranscript} codec shared by runtime calls.
  */
-export function fromMessages(messages: readonly Message[]): OpenAI.ChatCompletionMessageParam[] {
-  return [...openAITranscript.fromMessages(messages)]
+export function fromMessages(
+  messages: readonly Message[],
+): OpenAI.ChatCompletionMessageParam[] {
+  return [...openAITranscript.fromMessages(messages)];
 }
 
 /**
@@ -55,39 +67,77 @@ export function fromMessages(messages: readonly Message[]): OpenAI.ChatCompletio
  * Uses the same {@link openAITranscript} decoder as runtime responses.
  */
 export function toMessages(sdkMessages: readonly unknown[]): Message[] {
-  return openAITranscript.toMessages(sdkMessages)
+  return openAITranscript.toMessages(sdkMessages);
 }
 
 /** Read assistant transcript text and tool-call intent from an OpenAI response. */
-export function readOpenAIAssistant(result: ChatCompletion): OpenAIAssistantTurn {
-  const choiceMessage = result.choices?.[0]?.message as OpenAI.ChatCompletionMessage | undefined
-  const toolCalls = toolCallsFromProvider(choiceMessage?.tool_calls)
-  const content = messageContentFromOpenAIContent(choiceMessage?.content)
+export function readOpenAIAssistant(
+  result: ChatCompletion,
+): OpenAIAssistantTurn {
+  const choiceMessage = result.choices?.[0]?.message as
+    | OpenAI.ChatCompletionMessage
+    | undefined;
+  const toolCalls = toolCallsFromProvider(choiceMessage?.tool_calls);
+  const content = assistantContent(choiceMessage, toolCalls);
   return {
     text: openAIContentText(choiceMessage?.content),
-    ...(Array.isArray(content) ? { content } : {}),
+    content,
     toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+  };
+}
+
+function assistantContent(
+  message: OpenAI.ChatCompletionMessage | undefined,
+  toolCalls: readonly ProviderToolCall[],
+): readonly AssistantContentPart[] {
+  const decoded = messageContentFromOpenAIContent(message?.content);
+  const parts: AssistantContentPart[] =
+    typeof decoded === "string"
+      ? decoded === ""
+        ? []
+        : [{ type: "text", text: decoded }]
+      : [...decoded];
+  const audio = (
+    message as { readonly audio?: { readonly data?: unknown } } | undefined
+  )?.audio;
+  if (typeof audio?.data === "string") {
+    parts.push({
+      type: "audio",
+      source: new Uint8Array(Buffer.from(audio.data, "base64")),
+    });
   }
+  parts.push(
+    ...toolCalls.map(
+      (call): AssistantContentPart => ({
+        type: "tool-call",
+        toolCallId: call.id,
+        toolName: call.name,
+        input: call.args,
+      }),
+    ),
+  );
+  return parts;
 }
 
 function encodeAssistant(
   content: string | readonly OpenAI.ChatCompletionContentPart[],
   toolCalls: readonly ProviderToolCall[],
 ): OpenAI.ChatCompletionMessageParam {
-  const text = typeof content === 'string' ? content : openAIContentText(content)
-  if (toolCalls.length === 0) return { role: 'assistant', content: text }
+  const text =
+    typeof content === "string" ? content : openAIContentText(content);
+  if (toolCalls.length === 0) return { role: "assistant", content: text };
   return {
-    role: 'assistant',
+    role: "assistant",
     content: text || null,
     tool_calls: toolCalls.map((toolCall) => ({
       id: toolCall.id,
-      type: 'function',
+      type: "function",
       function: {
         name: toolCall.name,
         arguments: encodeArguments(toolCall.args),
       },
     })),
-  }
+  };
 }
 
 function encodeToolResult(
@@ -95,100 +145,118 @@ function encodeToolResult(
   helpers: ToolResultEncodingHelpers,
   _options: Readonly<Record<never, never>>,
 ): OpenAI.ChatCompletionMessageParam[] {
-  const parts = helpers.contentParts(result)
+  const parts = helpers.contentParts(result);
   const toolMessage: OpenAI.ChatCompletionToolMessageParam = {
-    role: 'tool',
+    role: "tool",
     content: helpers.plainText(result),
     tool_call_id: result.toolCallId,
-  }
-  const media = parts?.filter((part) => part.type !== 'text') ?? []
-  if (media.length === 0) return [toolMessage]
+  };
+  const media = parts?.filter((part) => part.type !== "text") ?? [];
+  if (media.length === 0) return [toolMessage];
   return [
     toolMessage,
     {
-      role: 'user',
-      content: openAIMessageContent('user', media),
+      role: "user",
+      content: openAIMessageContent("user", media),
     },
-  ]
+  ];
 }
 
 interface OpenAIMessageLike {
-  readonly role: string
-  readonly content: unknown
-  readonly tool_call_id?: unknown
-  readonly name?: unknown
-  readonly tool_calls?: unknown
-  readonly [key: string]: unknown
+  readonly role: string;
+  readonly content: unknown;
+  readonly tool_call_id?: unknown;
+  readonly name?: unknown;
+  readonly tool_calls?: unknown;
+  readonly [key: string]: unknown;
 }
 
 function decodeMessage(value: unknown): ProviderTranscriptUnit {
-  const message = isOpenAIMessageLike(value) ? value : { role: 'user', content: value }
-  const role = normalizeRole(message.role)
-  const content = messageContentFromOpenAIContent(message.content)
-  const text = openAIContentText(message.content)
+  const message = isOpenAIMessageLike(value)
+    ? value
+    : { role: "user", content: value };
+  const role = normalizeRole(message.role);
+  const content = messageContentFromOpenAIContent(message.content);
+  const text = openAIContentText(message.content);
 
-  if (role === 'tool') {
+  if (role === "tool") {
     return {
-      kind: 'tool-results',
+      kind: "tool-results",
       results: [
         {
-          toolCallId: typeof message.tool_call_id === 'string' ? message.tool_call_id : '',
-          ...(typeof message.name === 'string' ? { toolName: message.name } : {}),
+          toolCallId:
+            typeof message.tool_call_id === "string"
+              ? message.tool_call_id
+              : "",
+          ...(typeof message.name === "string"
+            ? { toolName: message.name }
+            : {}),
           text,
         },
       ],
-    }
+    };
   }
 
-  if (role === 'assistant') {
-    const toolCalls = toolCallsFromProvider(message.tool_calls)
+  if (role === "assistant") {
+    const toolCalls = toolCallsFromProvider(message.tool_calls);
     return {
-      kind: 'assistant',
+      kind: "assistant",
       content,
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
-    }
+    };
   }
 
-  return { kind: 'content', role, content }
+  return { kind: "content", role, content };
 }
 
 function toolCallsFromProvider(value: unknown): ProviderToolCall[] {
-  if (!Array.isArray(value)) return []
+  if (!Array.isArray(value)) return [];
   return value.flatMap((item): ProviderToolCall[] => {
-    if (!isRecord(item) || typeof item.id !== 'string') return []
-    if (item.type !== 'function' || !isRecord(item.function)) return []
-    if (typeof item.function.name !== 'string') return []
+    if (!isRecord(item) || typeof item.id !== "string") return [];
+    if (item.type !== "function" || !isRecord(item.function)) return [];
+    if (typeof item.function.name !== "string") return [];
     return [
       {
         id: item.id,
         name: item.function.name,
-        args: typeof item.function.arguments === 'string' ? safeParseJson(item.function.arguments) : undefined,
+        args:
+          typeof item.function.arguments === "string"
+            ? safeParseJson(item.function.arguments)
+            : undefined,
       },
-    ]
-  })
+    ];
+  });
 }
 
 function encodeArguments(value: unknown): string {
-  return typeof value === 'string' ? value : JSON.stringify(value ?? {})
+  return typeof value === "string" ? value : JSON.stringify(value ?? {});
 }
 
-function normalizeRole(role: string): 'system' | 'user' | 'assistant' | 'tool' {
-  if (role === 'system' || role === 'user' || role === 'assistant' || role === 'tool') return role
-  return 'user'
+function normalizeRole(role: string): "system" | "user" | "assistant" | "tool" {
+  if (
+    role === "system" ||
+    role === "user" ||
+    role === "assistant" ||
+    role === "tool"
+  )
+    return role;
+  return "user";
 }
 
 function safeParseJson(str: string): unknown {
   try {
-    return JSON.parse(str)
+    return JSON.parse(str);
   } catch {
-    return str
+    return str;
   }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function isOpenAIMessageLike(value: unknown): value is OpenAIMessageLike {
-  return isRecord(value) && typeof value.role === 'string' && 'content' in value
+  return (
+    isRecord(value) && typeof value.role === "string" && "content" in value
+  );
 }

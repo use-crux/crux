@@ -11,7 +11,10 @@ import { adapter } from "../define-adapter";
 import type { AdapterSpec } from "../spec";
 import type { AdapterResponse, CallArgs, StreamHandle } from "../types";
 import { appendNativeToolRound } from "./tool-round";
-import { assertProviderMediaSupported, attachProviderMediaHooks } from "./media-hooks";
+import {
+  assertProviderMediaSupported,
+  attachProviderMediaHooks,
+} from "./media-hooks";
 import type {
   NativeCallMode,
   NativeChatRequestArgs,
@@ -91,7 +94,13 @@ export function defineNativeChatProvider<
     ...depsArg: NativeProviderDepsArg<TDeps>
   ): AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TRequest> {
     const deps = resolveDeps(depsArg);
-    const spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TRequest> = {
+    const spec: AdapterSpec<
+      TClient,
+      TRawResponse,
+      TRawStream,
+      TExtra,
+      TRequest
+    > = {
       providerId: profile.providerId,
 
       async call(client, args) {
@@ -112,11 +121,14 @@ export function defineNativeChatProvider<
         });
         const streamRequest = profile.stream.request?.(request) ?? request;
         const rawStream = await bind(client).stream(streamRequest);
+        const chunks: unknown[] = [];
+        const trackedStream = trackStream(rawStream, chunks);
         return {
           raw: rawStream,
-          rawStream,
+          rawStream: trackedStream,
           extractTextDelta: profile.stream.textDelta,
-          completion: async () => profile.stream.completion?.(rawStream),
+          completion: async () =>
+            profile.stream.completion?.(rawStream, chunks),
         };
       },
       toParams(args) {
@@ -168,7 +180,9 @@ export function defineNativeChatProvider<
           const args = helperCallArgs<TExtra>({
             model,
             system: options.system,
-            ...(options.prompt !== undefined ? { prompt: options.prompt } : { messages: options.messages }),
+            ...(options.prompt !== undefined
+              ? { prompt: options.prompt }
+              : { messages: options.messages }),
             maxOutputTokens: options.maxOutputTokens,
             schema: undefined,
             schemaParams: undefined,
@@ -218,6 +232,20 @@ export function defineNativeChatProvider<
   return Object.freeze({ profile, specFor, createFor, helpers });
 }
 
+function trackStream<TStream extends AsyncIterable<unknown>>(
+  stream: TStream,
+  chunks: unknown[],
+): TStream {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+        yield chunk;
+      }
+    },
+  } as unknown as TStream;
+}
+
 function callModeFor<TExtra extends Record<string, unknown>>(
   args: CallArgs<TExtra>,
 ): NativeCallMode {
@@ -241,7 +269,10 @@ function helperCallArgs<TExtra extends Record<string, unknown>>(
     system: args.system,
     systemBlocks: undefined,
     messages,
-    settings: args.maxOutputTokens === undefined ? {} : { maxTokens: args.maxOutputTokens },
+    settings:
+      args.maxOutputTokens === undefined
+        ? {}
+        : { maxTokens: args.maxOutputTokens },
     schema: args.schema,
     schemaParams: args.schemaParams,
     tools: undefined,
@@ -311,17 +342,19 @@ function responseFor<
   raw: TRawResponse,
 ): AdapterResponse {
   const assistant = profile.transcript.readAssistant(raw);
+  const text = profile.response.text?.(raw, assistant) ?? assistant.text;
+  const content =
+    text !== assistant.text
+      ? [{ type: "text" as const, text }]
+      : assistant.content === undefined
+        ? undefined
+        : typeof assistant.content === "string"
+          ? [{ type: "text" as const, text: assistant.content }]
+          : assistant.content;
   return {
     ...profile.response.meta(raw),
-    ...(assistant.content !== undefined
-      ? {
-          content:
-            typeof assistant.content === "string"
-              ? [{ type: "text" as const, text: assistant.content }]
-              : assistant.content,
-        }
-      : {}),
-    text: profile.response.text?.(raw, assistant) ?? assistant.text,
+    ...(content !== undefined ? { content } : {}),
+    text,
     toolCalls: assistant.toolCalls,
   };
 }

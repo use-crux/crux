@@ -7,64 +7,65 @@
  * @module
  */
 
-import type { EmbeddingModel, LanguageModel, RerankingModel } from 'ai'
-import type { z } from 'zod'
-import { embedding as coreEmbedding, type DenseEmbedding } from '@use-crux/core/embedding'
-import type { Reranker, RetrievalModel, RetrieverHit } from '@use-crux/core/retrieval'
-import type { SdkGateway } from './gateway'
-import { createAiSdkGenerateImage, type AIGenerateImage } from './image-generation'
-import { createAiSdkTranscribe, type AITranscribe } from './transcription'
+import type { EmbeddingModel, LanguageModel, RerankingModel } from "ai";
+import type { z } from "zod";
+import {
+  embedding as coreEmbedding,
+  type DenseEmbedding,
+} from "@use-crux/core/embedding";
+import type {
+  Reranker,
+  RetrievalModel,
+  RetrieverHit,
+} from "@use-crux/core/retrieval";
+import type { SdkGateway } from "./gateway";
 
 export interface AIRetrievalModelConfig {
-  model: LanguageModel
-  maxRetries?: number
+  model: LanguageModel;
+  maxRetries?: number;
 }
 
 export interface AIRerankerConfig {
-  name: string
-  model: RerankingModel
-  topN?: number
-  maxRetries?: number
-  document?: (hit: RetrieverHit) => string
+  name: string;
+  model: RerankingModel;
+  topN?: number;
+  maxRetries?: number;
+  document?: (hit: RetrieverHit) => string;
 }
 
 export interface AIEmbeddingConfig {
-  name: string
-  model: EmbeddingModel
-  dimensions: number
-  maxInputTokens: number
+  name: string;
+  model: EmbeddingModel;
+  dimensions: number;
+  maxInputTokens: number;
   batch?: {
-    maxSize?: number
-    concurrency?: number
-  }
-  maxRetries?: number
-  maxParallelCalls?: number
-  headers?: Record<string, string>
-  providerOptions?: Record<string, unknown>
+    maxSize?: number;
+    concurrency?: number;
+  };
+  maxRetries?: number;
+  maxParallelCalls?: number;
+  headers?: Record<string, string>;
+  providerOptions?: Record<string, unknown>;
 }
 
 /** Extensions attached to a bound `aiSdkProviderRuntime`. */
 export interface AiSdkRuntimeExtensions {
-  /** Run one stateless AI SDK image operation. */
-  generateImage: AIGenerateImage
-  /** Run one stateless AI SDK transcription operation. */
-  transcribe: AITranscribe
   /** Create a dense Crux embedding backed by AI SDK `embedMany()`. */
-  embedding(config: AIEmbeddingConfig): DenseEmbedding
+  embedding(config: AIEmbeddingConfig): DenseEmbedding;
   /** Create a bound retrieval model backed by AI SDK generation helpers. */
-  retrievalModel(config: AIRetrievalModelConfig): RetrievalModel
+  retrievalModel(config: AIRetrievalModelConfig): RetrievalModel;
   /** Create a Crux retriever reranker backed by AI SDK `rerank()`. */
-  reranker(config: AIRerankerConfig): Reranker
+  reranker(config: AIRerankerConfig): Reranker;
 }
 
 /** Bind AI SDK non-generation capabilities to a scripted or live gateway. */
-export function createAiSdkRuntimeExtensions(gateway: SdkGateway): AiSdkRuntimeExtensions {
+export function createAiSdkRuntimeExtensions(
+  gateway: SdkGateway,
+): AiSdkRuntimeExtensions {
   return Object.freeze({
-    generateImage: createAiSdkGenerateImage(gateway),
-    transcribe: createAiSdkTranscribe(gateway),
     embedding(config: AIEmbeddingConfig) {
       return coreEmbedding({
-        kind: 'dense',
+        kind: "dense",
         name: config.name,
         dimensions: config.dimensions,
         maxInputTokens: config.maxInputTokens,
@@ -79,8 +80,10 @@ export function createAiSdkRuntimeExtensions(gateway: SdkGateway): AiSdkRuntimeE
             maxRetries: config.maxRetries,
             maxParallelCalls: config.maxParallelCalls ?? 1,
             headers: config.headers,
-            providerOptions: config.providerOptions as Parameters<SdkGateway['embedMany']>[0]['providerOptions'],
-          })
+            providerOptions: config.providerOptions as Parameters<
+              SdkGateway["embedMany"]
+            >[0]["providerOptions"],
+          });
 
           return {
             embeddings: result.embeddings.map((embedding) => [...embedding]),
@@ -88,9 +91,9 @@ export function createAiSdkRuntimeExtensions(gateway: SdkGateway): AiSdkRuntimeE
               inputTokens: result.usage.tokens,
               totalTokens: result.usage.tokens,
             },
-          }
+          };
         },
-      })
+      });
     },
     retrievalModel(config: AIRetrievalModelConfig) {
       const model: RetrievalModel = {
@@ -100,44 +103,50 @@ export function createAiSdkRuntimeExtensions(gateway: SdkGateway): AiSdkRuntimeE
             system: args.system,
             prompt: args.prompt,
             maxRetries: config.maxRetries,
-          } as Parameters<SdkGateway['generateText']>[0])
-          return { text: result.text }
+          } as Parameters<SdkGateway["generateText"]>[0]);
+          return { text: result.text };
         },
-        generateObject: async <T>(args: { system?: string; prompt: string; schema: z.ZodType<T> }) => {
+        generateObject: async <T>(args: {
+          system?: string;
+          prompt: string;
+          schema: z.ZodType<T>;
+        }) => {
           const result = await gateway.generateObject({
             model: config.model,
             system: args.system,
             prompt: args.prompt,
             schema: args.schema,
             maxRetries: config.maxRetries,
-          } as Parameters<SdkGateway['generateObject']>[0])
-          return { object: result.object as T }
+          } as Parameters<SdkGateway["generateObject"]>[0]);
+          return { object: result.object as T };
         },
-      }
-      return model
+      };
+      return model;
     },
     reranker(config: AIRerankerConfig) {
       const engine: Reranker = {
         name: config.name,
         async rerank(args: { query: string; hits: readonly RetrieverHit[] }) {
-          const { query, hits } = args
-          if (hits.length === 0) return []
+          const { query, hits } = args;
+          if (hits.length === 0) return [];
 
           const result = await gateway.rerank({
             model: config.model,
             query,
-            documents: hits.map((hit) => (config.document ? config.document(hit) : hit.content)),
+            documents: hits.map((hit) =>
+              config.document ? config.document(hit) : hit.content,
+            ),
             topN: config.topN,
             maxRetries: config.maxRetries,
-          })
+          });
 
           return result.ranking.flatMap((ranking) => {
-            const hit = hits[ranking.originalIndex]
-            return hit ? [{ ...hit, score: ranking.score }] : []
-          })
+            const hit = hits[ranking.originalIndex];
+            return hit ? [{ ...hit, score: ranking.score }] : [];
+          });
         },
-      }
-      return engine
+      };
+      return engine;
     },
-  })
+  });
 }

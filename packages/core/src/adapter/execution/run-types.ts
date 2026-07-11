@@ -173,7 +173,7 @@ export interface AdapterExecutionGenerateResult<TRawResponse> {
   readonly finalStep: FinalStepInfo;
 
   /** Provider-agnostic Crux message history for resume or memory capture. */
-  readonly messages: Message[];
+  readonly messages: readonly Message[];
   /** Non-fatal warnings accumulated in execution order. */
   readonly warnings: readonly unknown[];
   /** Provider-owned metadata from the terminal step, when supplied. */

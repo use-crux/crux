@@ -81,7 +81,7 @@ export interface GenerateResult<TRaw, TOutput = unknown> {
   /** Facts from the final provider-call step. */
   readonly finalStep: FinalStepInfo;
   /** Provider-agnostic Crux message history. */
-  readonly messages: Message[];
+  readonly messages: readonly Message[];
   /** Non-fatal warnings accumulated in execution order. */
   readonly warnings: readonly unknown[];
   /** Provider-owned metadata from the terminal step, when supplied. */
@@ -135,7 +135,7 @@ export interface ResultEnvelopeBase<TRaw, TOutput = unknown> {
   /** Raw provider/SDK response for the terminal call. */
   readonly raw: TRaw;
   /** Provider-agnostic Crux message history. */
-  readonly messages: Message[];
+  readonly messages: readonly Message[];
   /** Trace metadata retained for observability plumbing. */
   readonly _meta: TraceMeta;
   /** Parsed structured output, when present. */
@@ -163,9 +163,11 @@ export function createResultAccumulator() {
       base: ResultEnvelopeBase<TRaw, TOutput>,
     ): GenerateResult<TRaw, TOutput> {
       const usage = sumUsageWhenComplete(steps);
-      const publicSteps = steps.map(finalStepInfo);
+      const publicSteps = Object.freeze(steps.map(finalStepInfo));
       const finalStep = publicSteps.at(-1) ?? emptyStepInfo();
-      const content = publicSteps.flatMap((step) => step.content);
+      const content = Object.freeze(
+        publicSteps.flatMap((step) => step.content),
+      );
       return {
         content,
         text: textFromAssistantContent(content),
@@ -174,8 +176,8 @@ export function createResultAccumulator() {
         ...(base.cost !== undefined ? { cost: base.cost } : {}),
         steps: publicSteps,
         finalStep,
-        messages: base.messages,
-        warnings: publicSteps.flatMap((step) => step.warnings),
+        messages: Object.freeze([...base.messages]),
+        warnings: Object.freeze(publicSteps.flatMap((step) => step.warnings)),
         ...(finalStep.providerMetadata !== undefined
           ? { providerMetadata: finalStep.providerMetadata }
           : {}),
@@ -193,9 +195,11 @@ export function createResultAccumulator() {
       base: Omit<ResultEnvelopeBase<never, TOutput>, "raw" | "_meta">,
     ): StreamCompletion<TOutput> {
       const usage = sumUsageWhenComplete(steps);
-      const publicSteps = steps.map(finalStepInfo);
+      const publicSteps = Object.freeze(steps.map(finalStepInfo));
       const finalStep = publicSteps.at(-1) ?? emptyStepInfo();
-      const content = publicSteps.flatMap((step) => step.content);
+      const content = Object.freeze(
+        publicSteps.flatMap((step) => step.content),
+      );
       return {
         content,
         text: textFromAssistantContent(content),
@@ -204,8 +208,8 @@ export function createResultAccumulator() {
         ...(base.cost !== undefined ? { cost: base.cost } : {}),
         steps: publicSteps,
         finalStep,
-        messages: base.messages,
-        warnings: publicSteps.flatMap((step) => step.warnings),
+        messages: Object.freeze([...base.messages]),
+        warnings: Object.freeze(publicSteps.flatMap((step) => step.warnings)),
         ...(finalStep.providerMetadata !== undefined
           ? { providerMetadata: finalStep.providerMetadata }
           : {}),
@@ -221,27 +225,27 @@ export function createResultAccumulator() {
 function finalStepInfo(step: ResultStepFacts | undefined): FinalStepInfo {
   if (!step) return emptyStepInfo();
 
-  return {
-    content: step.content,
+  return Object.freeze({
+    content: Object.freeze([...step.content]),
     text: textFromAssistantContent(step.content),
     ...(step.usage !== undefined ? { usage: step.usage } : {}),
     finishReason: step.finishReason,
     responseId: step.responseId,
     modelId: step.modelId,
-    warnings: step.warnings ?? [],
+    warnings: Object.freeze([...(step.warnings ?? [])]),
     ...(step.providerMetadata !== undefined
       ? { providerMetadata: step.providerMetadata }
       : {}),
-  };
+  });
 }
 
 function emptyStepInfo(): FinalStepInfo {
-  return {
-    content: [],
+  return Object.freeze({
+    content: Object.freeze([]),
     text: "",
     finishReason: undefined,
     responseId: undefined,
     modelId: undefined,
-    warnings: [],
-  };
+    warnings: Object.freeze([]),
+  });
 }
