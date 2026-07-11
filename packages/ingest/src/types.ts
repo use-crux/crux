@@ -1,4 +1,4 @@
-import type { Asset, AudioSource, Message, TranscriptionResult } from '@use-crux/core'
+import type { Asset, AssetRef, AudioSource, Message, TranscriptionResult } from '@use-crux/core'
 
 export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
 
@@ -6,6 +6,14 @@ export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | '
 export type IngestSourceLocation =
   | { readonly type: 'page'; readonly pageNumber: number }
   | { readonly type: 'time'; readonly unit: 'seconds'; readonly start: number; readonly end: number }
+
+/** Safe origin facts retained without bytes, provider ids, or delivery credentials. */
+export interface IngestSourceFacts {
+  readonly url?: string
+  readonly path?: string
+  readonly assetRef?: AssetRef
+  readonly mediaType?: string
+}
 
 export type IngestWarningCode =
   | 'unsupported_embedded_object'
@@ -89,6 +97,7 @@ export type IngestPart = IngestTextPart | IngestPagePart | IngestTablePart | Ing
 export interface IngestDocument {
   namespace: string
   sourceId: string
+  readonly source?: IngestSourceFacts
   title?: string
   parts: IngestPart[]
   content: string
@@ -140,6 +149,7 @@ export interface ParseInput {
   text?: string
   format: IngestFormat
   sourceId: string
+  source?: IngestSourceFacts
   namespace: string
   title?: string
   metadata?: Record<string, unknown>

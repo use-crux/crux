@@ -12,6 +12,7 @@ import type { CruxChunk, CruxParentChunk } from '../indexing/types'
 import type { ExactFilter, JsonObject, SparseVector } from '../storage'
 import type { RetrieverHit } from '../retrieval/types'
 import { indexedParentKey } from './keys'
+import { projectSourceFacts } from '../indexing/source-facts'
 
 const indexedRecordTypes = {
   chunk: 'chunk',
@@ -29,6 +30,7 @@ type IndexedBaseRecord<TType extends IndexedRecordType> = {
   readonly ordinal: number
   readonly content: string
   readonly metadata: Record<string, unknown>
+  readonly source?: CruxChunk['source']
   readonly provenance?: CruxChunk['provenance']
   readonly createdAt: number
   readonly updatedAt: number
@@ -66,6 +68,7 @@ export function createIndexedChunkRecord(input: {
   readonly sparse?: SparseVector
   readonly now: number
 }): IndexedChunkRecord {
+  const source = projectSourceFacts(input.chunk.source)
   const parent =
     input.chunk.parent?.parentId !== undefined
       ? {
@@ -86,6 +89,7 @@ export function createIndexedChunkRecord(input: {
     ordinal: input.chunk.ordinal,
     content: input.chunk.content,
     metadata: input.chunk.metadata,
+    ...(source ? { source } : {}),
     ...(parent ? { parent } : {}),
     ...(input.chunk.provenance ? { provenance: input.chunk.provenance } : {}),
     ...(input.dense ? { embedding: input.dense } : {}),
@@ -101,6 +105,7 @@ export function createIndexedParentRecord(input: {
   readonly parent: CruxParentChunk
   readonly now: number
 }): IndexedParentStoredRecord {
+  const source = projectSourceFacts(input.parent.source)
   return {
     _cruxRecordType: indexedRecordTypes.parent,
     namespace: input.parent.namespace,
@@ -111,6 +116,7 @@ export function createIndexedParentRecord(input: {
     ordinal: input.parent.ordinal,
     content: input.parent.content,
     metadata: input.parent.metadata,
+    ...(source ? { source } : {}),
     ...(input.parent.provenance ? { provenance: input.parent.provenance } : {}),
     createdAt: input.now,
     updatedAt: input.now,
@@ -198,9 +204,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function scalarMetadata(metadata: Record<string, unknown>): ExactFilter {
   return Object.fromEntries(
-    Object.entries(metadata).filter(([, value]) => isExactFilterValue(value)),
+    Object.entries(metadata).filter(([key, value]) => !SOURCE_METADATA_KEYS.has(key) && isExactFilterValue(value)),
   ) as ExactFilter
 }
+
+const SOURCE_METADATA_KEYS = new Set(['source', 'sourceId', 'sourceUrl', 'sourcePath', 'assetRef', 'location', 'mediaType'])
 
 function isExactFilterValue(value: unknown): value is ExactFilter[string] {
   return (

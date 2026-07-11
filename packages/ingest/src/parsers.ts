@@ -34,6 +34,7 @@ export async function parseDocument(input: {
   format: IngestFormat
   title?: string
   metadata?: Record<string, unknown>
+  source?: IngestDocument['source']
   contentType?: string
   options?: ParserOptions
 }): Promise<IngestDocument> {
@@ -58,6 +59,7 @@ export async function parseDocument(input: {
           ...(text !== undefined ? { text } : {}),
           format: input.format,
           sourceId: input.sourceId,
+          source: input.source,
           namespace: input.namespace,
           title: input.title,
           metadata: input.metadata,
@@ -72,6 +74,7 @@ export async function parseDocument(input: {
       const document = normalizeDocument({
         namespace: input.namespace,
         sourceId: input.sourceId,
+        source: input.source,
         title: parsed.title ?? input.title,
         parts: parsed.parts,
         metadata: {

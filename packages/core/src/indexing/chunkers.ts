@@ -16,6 +16,7 @@ import {
   provenanceForPart,
   sourceSpanForContent,
 } from './provenance'
+import { sourceFactsWithLocations } from './source-facts'
 import { embeddingBoundaries, normalizeBoundaries, sentenceSegments, splitDocument } from './text-split'
 import type {
   ChunkerContext,
@@ -102,6 +103,7 @@ function createPartChunk(
   ordinal: number,
   provenance?: ChunkProvenance,
 ): CruxChunk {
+  const source = sourceFactsWithLocations(document.source, provenance?.sourceLocations ?? [])
   return {
     namespace: document.namespace,
     sourceId: document.sourceId,
@@ -114,6 +116,7 @@ function createPartChunk(
     ordinal,
     content,
     metadata: document.metadata ?? {},
+    ...(source ? { source } : {}),
     ...(document.title ? { parent: { title: document.title } } : {}),
     ...(provenance ? { provenance } : {}),
   }
@@ -160,6 +163,7 @@ export function chunkDocumentParentChild(
     const provenance = mergeProvenance(
       currentParentChunks.map((chunk) => chunk.provenance).filter(Boolean) as ChunkProvenance[],
     )
+    const source = sourceFactsWithLocations(document.source, provenance?.sourceLocations ?? [])
     parents.push({
       namespace: document.namespace,
       sourceId: document.sourceId,
@@ -167,6 +171,7 @@ export function chunkDocumentParentChild(
       ordinal: parentOrdinal,
       content: currentParentContent,
       metadata: document.metadata ?? {},
+      ...(source ? { source } : {}),
       ...(provenance ? { provenance } : {}),
     })
     const rawChildren = splitDocument(currentParentContent, {
@@ -186,6 +191,7 @@ export function chunkDocumentParentChild(
         ordinal: children.length,
         content,
         metadata: document.metadata ?? {},
+        ...(source ? { source } : {}),
         parent: {
           parentId,
           ...(document.title ? { title: document.title } : {}),
@@ -241,6 +247,7 @@ export async function chunkDocumentSemantic(
         semanticReason: boundary.reason ?? options.strategy,
         ...(boundary.confidence !== undefined ? { semanticConfidence: boundary.confidence } : {}),
       },
+      ...(document.source ? { source: document.source } : {}),
       ...(document.title ? { parent: { title: document.title } } : {}),
       provenance: {
         sourceSpans: [{ start: boundary.start, end: boundary.end }],

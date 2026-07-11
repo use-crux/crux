@@ -4,6 +4,36 @@ import { indexedChunkKey } from '../../src/indexed-knowledge/keys'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
 
 describe('indexed knowledge store', () => {
+  it('persists only validated allowlisted source facts outside vector metadata', async () => {
+    const data = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    const records = createIndexedKnowledgeStore({ indexerId: 'docs', namespace: 'kb', records: data, vectors })
+
+    await records.persistGeneration({
+      chunks: [{
+        namespace: 'kb', sourceId: 'visual', chunkId: 'page-2', ordinal: 0, content: 'diagram',
+        metadata: { topic: 'architecture', sourceUrl: 'https://evil.example/signed?token=secret' },
+        source: {
+          url: 'https://example.com/manual.pdf', path: '/docs/manual.pdf', assetRef: { uri: 'asset://manual' },
+          mediaType: 'application/pdf', location: { type: 'page', pageNumber: 2 },
+        },
+      }],
+      parents: [], dense: [[1, 0]], replaceSources: true,
+    })
+
+    const stored = await data.get(indexedChunkKey('docs', 'kb', 'visual', 'page-2'))
+    expect(stored?.source).toEqual({
+      url: 'https://example.com/manual.pdf', path: '/docs/manual.pdf', assetRef: { uri: 'asset://manual' },
+      mediaType: 'application/pdf', location: { type: 'page', pageNumber: 2 },
+    })
+    const vector = await vectors.search({ mode: 'dense', dense: [1, 0], limit: 1 })
+    expect(vector[0]?.metadata).toEqual({
+      _cruxRecordType: 'chunk', namespace: 'kb', sourceId: 'visual', chunkId: 'page-2',
+      generationId: expect.any(String), active: true, topic: 'architecture',
+    })
+    expect(JSON.stringify(vector[0]?.metadata)).not.toMatch(/asset:\/\/|manual\.pdf|pageNumber/)
+  })
+
   it('persists generations, searches active chunks, and expands parents through the read model', async () => {
     const data = inMemoryRecordStore()
     const vectors = inMemoryVectorStore()

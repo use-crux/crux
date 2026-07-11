@@ -62,6 +62,10 @@ async function loadUrlResult(url: string, options: UrlSourceOptions) {
         sourceUrl,
         contentType,
       },
+      source: {
+        url: sourceUrl,
+        ...(safeMediaType(contentType) ? { mediaType: safeMediaType(contentType) } : {}),
+      },
       options,
     })
 
@@ -80,6 +84,11 @@ async function loadUrlResult(url: string, options: UrlSourceOptions) {
       metadata: { sourceUrl },
     })
   }
+}
+
+function safeMediaType(value: string): string | undefined {
+  const mediaType = value.split(';', 1)[0]?.trim().toLowerCase()
+  return mediaType?.includes('/') ? mediaType : undefined
 }
 
 function safeSourceUrl(value: string): string {

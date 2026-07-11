@@ -36,6 +36,7 @@ export function sourceLoader(load: () => AsyncIterable<IngestLoadResult>): Sourc
 export function normalizeDocument(document: {
   namespace: string
   sourceId: string
+  source?: IngestDocument['source']
   title?: string
   parts?: IngestPart[]
   content?: string
@@ -65,6 +66,7 @@ export function normalizeDocument(document: {
   return {
     namespace: document.namespace,
     sourceId: document.sourceId,
+    ...(document.source ? { source: document.source } : {}),
     ...(document.title ? { title: document.title } : {}),
     parts,
     content: document.content ?? deriveContent(parts),

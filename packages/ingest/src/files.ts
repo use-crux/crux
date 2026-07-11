@@ -3,7 +3,7 @@ import { basename, extname, matchesGlob, resolve } from 'node:path'
 import type { Asset } from '@use-crux/core'
 import { errorFromUnknown, failed, narrowIngestErrorCode, ok, sourceLoader } from './document'
 import { parseDocument } from './parsers'
-import type { IngestFormat, ParserOptions, SourceLoader } from './types'
+import type { IngestFormat, IngestSourceFacts, ParserOptions, SourceLoader } from './types'
 import { inferMediaFormat } from './media-format'
 
 export interface FileSourceOptions extends ParserOptions {
@@ -74,7 +74,11 @@ async function loadFileResult(input: string | Asset, options: FileSourceOptions)
     const extension = title ? extname(title) : ''
     const contentType = absolutePath ? undefined : asset?.mediaType
     const format = resolveFileFormat(extension, contentType, bytes)
-    const sourceFacts = absolutePath ? { sourcePath: absolutePath } : assetSourceFacts(asset!)
+    const sourceFacts = absolutePath ? { sourcePath: absolutePath } : assetSourceMetadata(asset!)
+    const mediaType = mediaTypeFor(format, contentType, title)
+    const source = absolutePath
+      ? { path: absolutePath, ...(mediaType ? { mediaType } : {}) }
+      : assetSource(asset!, mediaType)
     const document = await parseDocument({
       namespace: options.namespace,
       sourceId,
@@ -83,6 +87,7 @@ async function loadFileResult(input: string | Asset, options: FileSourceOptions)
       ...(title ? { title } : {}),
       ...(asset ? { asset } : {}),
       metadata: sourceFacts,
+      source,
       ...(contentType ? { contentType } : {}),
       options,
     })
@@ -99,7 +104,7 @@ async function loadFileResult(input: string | Asset, options: FileSourceOptions)
           ? String((error as { parser: unknown }).parser)
           : undefined,
       ),
-      metadata: absolutePath ? { sourcePath: absolutePath } : assetSourceFacts(input as Asset),
+      metadata: absolutePath ? { sourcePath: absolutePath } : assetSourceMetadata(input as Asset),
     })
   }
 }
@@ -184,12 +189,44 @@ async function assetBytes(asset: Asset): Promise<Uint8Array> {
   return asset.data instanceof Uint8Array ? asset.data.slice() : new Uint8Array(await asset.data.arrayBuffer())
 }
 
-function assetSourceFacts(asset: Asset): Record<string, unknown> {
+function assetSourceMetadata(asset: Asset): Record<string, unknown> {
   return {
     ...(asset.type === 'url' ? { sourceUrl: safeUrl(asset.url) } : {}),
     ...('ref' in asset ? { assetRef: asset.ref } : {}),
     ...(asset.mediaType ? { mediaType: asset.mediaType } : {}),
   }
+}
+
+function assetSource(asset: Asset, detectedMediaType: string | undefined): IngestSourceFacts {
+  const mediaType = asset.mediaType ?? detectedMediaType
+  const assetRef = 'ref' in asset && isAssetRef(asset.ref) ? asset.ref : undefined
+  return {
+    ...(asset.type === 'url' ? { url: safeUrl(asset.url) } : {}),
+    ...(assetRef ? { assetRef } : {}),
+    ...(mediaType ? { mediaType } : {}),
+  }
+}
+
+function isAssetRef(value: unknown): value is import('@use-crux/core').AssetRef {
+  return Boolean(value && typeof value === 'object' && 'uri' in value && typeof value.uri === 'string' && value.uri)
+}
+
+function mediaTypeFor(format: IngestFormat, contentType: string | undefined, title: string | undefined): string | undefined {
+  const explicit = contentType?.split(';', 1)[0]?.trim().toLowerCase()
+  if (explicit?.includes('/')) return explicit
+  const extension = extname(title ?? '').toLowerCase()
+  const media = {
+    '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.flac': 'audio/flac',
+    '.ogg': 'audio/ogg', '.webm': 'audio/webm', '.png': 'image/png', '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp',
+  }[extension]
+  if (media) return media
+  return {
+    txt: 'text/plain', md: 'text/markdown', html: 'text/html', pdf: 'application/pdf',
+    image: undefined, audio: undefined, csv: 'text/csv', json: 'application/json',
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', unknown: undefined,
+  }[format]
 }
 
 function safeUrl(url: URL): string {

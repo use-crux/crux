@@ -724,6 +724,7 @@ export type {
   CorpusSyncResult,
   CruxDocument,
   CruxChunk,
+  CruxSourceFacts,
   ChunkingOptions,
   Chunker,
   ChunkTransform,

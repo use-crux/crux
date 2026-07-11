@@ -57,6 +57,7 @@ describe('@use-crux/ingest structured sources', () => {
       { content: 'Hello', sourceLocation: { type: 'time', unit: 'seconds', start: 0, end: 0.5 } },
       { content: 'world', sourceLocation: { type: 'time', unit: 'seconds', start: 0.5, end: 1 } },
     ])
+    expect(document.source).toEqual({ path, mediaType: 'audio/wav' })
     expect(document.metadata).toMatchObject({ format: 'audio', parser: 'audio', language: 'en', durationInSeconds: 1 })
     expect(document.warnings).toEqual([{ code: 'parser_warning', message: 'native warning' }])
     expect(JSON.stringify(document)).not.toMatch(/raw-secret|provider-secret|82,73,70,70/)
@@ -78,6 +79,7 @@ describe('@use-crux/ingest structured sources', () => {
     }).documents())
 
     expect(document.parts).toMatchObject([{ id: 'audio:text:1', content: 'Full transcript' }])
+    expect(document.source).toEqual({ assetRef: { uri: 'asset://meeting' }, mediaType: 'audio/mpeg' })
     expect(document.metadata?.assetRef).toEqual({ uri: 'asset://meeting' })
     expect(JSON.stringify(document)).not.toContain('73,68,51')
   })
@@ -92,6 +94,7 @@ describe('@use-crux/ingest structured sources', () => {
     }).documents())
 
     expect(document.sourceId).toBe('https://example.com/meeting.wav')
+    expect(document.source).toEqual({ url: 'https://example.com/meeting.wav', mediaType: 'audio/wav' })
     expect(document.metadata?.sourceUrl).toBe('https://example.com/meeting.wav')
     expect(JSON.stringify(document)).not.toContain('secret')
   })

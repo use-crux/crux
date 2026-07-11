@@ -8,6 +8,7 @@ export type {
   IngestParser,
   IngestPart,
   IngestSourceLocation,
+  IngestSourceFacts,
   IngestSheetPart,
   IngestTablePart,
   IngestTextPart,
