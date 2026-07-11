@@ -53,7 +53,7 @@ const files = workspace({
         retriever: docs,
         query: "current task source documents",
         pathForHit: (hit) =>
-          hit.sourcePath ?? `${hit.sourceId}/${hit.chunkId}.md`,
+          hit.source.path ?? `${hit.source.id}/${hit.chunkId}.md`,
         contentForHit: (hit) => hit.parent?.content ?? hit.content,
       },
     },

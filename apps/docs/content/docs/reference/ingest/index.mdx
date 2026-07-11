@@ -111,7 +111,7 @@ type IngestPart =
       role?: 'heading' | 'paragraph' | 'list' | 'code'
       headingPath?: string[]
     }
-  | { kind: 'page'; id: string; pageNumber: number; content: string; ocr?: boolean }
+  | { kind: 'page'; id: string; pageNumber: number; content: string; sourceLocation?: { type: 'page'; pageNumber: number } }
   | { kind: 'table'; id: string; rows: string[][]; columns?: string[]; content: string }
   | { kind: 'sheet'; id: string; sheetName: string; tables: IngestPart[]; content: string }
   | { kind: 'json'; id: string; path: string; valueType: string; content: string }
@@ -119,6 +119,7 @@ type IngestPart =
 interface IngestDocument {
   namespace: string
   sourceId: string
+  source?: { url?: string; path?: string; assetRef?: AssetRef; mediaType?: string }
   parts: IngestPart[]
   content: string
   title?: string

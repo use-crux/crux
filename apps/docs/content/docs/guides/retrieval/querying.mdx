@@ -180,13 +180,12 @@ const docs = retriever({
 
     return results.map((result) => ({
       namespace: 'product-docs',
-      sourceId: result.documentId,
+      source: { id: result.documentId, url: result.url },
       chunkId: result.sectionId,
       content: result.text,
       metadata: result.metadata,
       score: result.score,
       provenance: { rawScore: result.score },
-      sourceUrl: result.url,
     }))
   },
 })

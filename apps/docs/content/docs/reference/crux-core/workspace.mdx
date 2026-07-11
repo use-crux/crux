@@ -326,7 +326,7 @@ Adapter helper:
 ```ts
 source: retrieverWorkspaceMountSource(docs, {
   query: "current task source documents",
-  pathForHit: (hit) => `${hit.sourceId}/${hit.chunkId}.md`,
+  pathForHit: (hit) => `${hit.source.id}/${hit.chunkId}.md`,
 });
 ```
 

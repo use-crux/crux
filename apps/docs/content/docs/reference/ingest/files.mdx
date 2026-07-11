@@ -17,7 +17,9 @@ import type { FileSourceOptions, FilesSourceOptions, FilesDirectoryInput, FilesG
 | `.txt`             | Plain text | Loaded verbatim                                                |
 | `.md`, `.markdown` | Markdown   | Extracts headings, paragraphs, code/list text, and GFM tables  |
 | `.html`, `.htm`    | HTML       | Extracts title, text blocks, headings, lists, code, and tables |
-| `.pdf`             | PDF        | Extracts page parts; image-only pages can use an OCR hook      |
+| `.pdf`             | PDF        | Extracts page parts; visual pages can use `media.generate`     |
+| image formats      | Image      | Derives text through `media.generate`                          |
+| audio formats      | Audio      | Derives text and time segments through `media.transcribe`      |
 | `.csv`             | CSV        | Extracts a table part                                          |
 | `.json`            | JSON       | Extracts JSON path parts                                       |
 | `.docx`            | DOCX       | Extracts text and tables through Mammoth                       |
@@ -36,7 +38,7 @@ fileSource('./docs/intro.md', {
   namespace: 'product-docs',
   sourceId?: string,         // defaults to absolute path
   parsers?: IngestParser[],   // source-local parser overrides
-  ocr?: OcrHook,              // optional PDF OCR hook
+  media?: IngestMediaOperations,
 })
 ```
 
@@ -47,7 +49,7 @@ Returns a `SourceLoader` that yields exactly one `IngestDocument`.
 | `namespace` | `string`          | Required, non-empty. Used as the indexer namespace prefix.                     |
 | `sourceId`  | `string?`         | Optional. Defaults to the file's absolute path.                                |
 | `parsers`   | `IngestParser[]?` | Optional parser overrides. Custom parsers beat built-ins for matching formats. |
-| `ocr`       | `OcrHook?`        | Optional hook for PDF pages without extractable text.                          |
+| `media`     | `IngestMediaOperations?` | Bound generation/transcription operations for visual or audio sources. |
 
 ### Document metadata
 
@@ -57,10 +59,10 @@ Each loaded file produces:
 {
   namespace: '...',
   sourceId: '/abs/path/to/file.md',
+  source: { path: '/abs/path/to/file.md', mediaType: 'text/markdown' },
   content: '...',
   title: 'file.md',                  // basename
   metadata: {
-    sourcePath: '/abs/path/to/file.md',
     format: 'md',
     parser: 'markdown',
   },

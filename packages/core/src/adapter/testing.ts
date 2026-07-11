@@ -31,6 +31,7 @@ export {
   imageGenerationSupportProjection,
 } from './testing/image-generation'
 export { TRANSCRIPTION_CONFORMANCE, transcriptionConformanceRow } from './testing/transcription'
+export { MEDIA_ADAPTER_MATRIX, mediaAdapterMatrixMarkdown } from './testing/media-matrix'
 export { providerRuntimeConformance } from './testing/provider-runtime'
 export { transcriptCodecConformance, transcriptRoundTripConformance } from './testing/transcript'
 export type {

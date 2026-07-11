@@ -123,7 +123,7 @@ const docs = retriever({
 });
 ```
 
-Custom retrievers must return `RetrieverHit[]`: `namespace`, `sourceId`, `chunkId`, `content`, `metadata`, `score`, optional source URL/path, optional parent data, and optional provenance.
+Custom retrievers return `RetrieverHit[]`: `namespace`, structured `source: { id, url?, path?, assetRef?, mediaType?, location? }`, `chunkId`, `content`, `metadata`, `score`, optional parent data, and optional provenance.
 
 `hit.score` is always the current ranking score. Raw, fused, per-source, rerank, and compression details live in `hit.provenance`.
 
@@ -267,7 +267,7 @@ const engine = judgeReranker({
   model: retrievalModel,
   name: "docs-judge",
   topN: 12,
-  document: (hit) => `${hit.sourceId}\n${hit.content}`,
+  document: (hit) => `${hit.source.id}\n${hit.content}`,
 });
 ```
 
