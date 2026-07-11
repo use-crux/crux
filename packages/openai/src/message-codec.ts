@@ -4,6 +4,7 @@ import type { AssistantContentPart, Message } from "@use-crux/core";
 import { defineProviderTranscriptCodec } from "@use-crux/core/adapter";
 import type {
   NativeAssistantTurn,
+  NativeAssistantReadContext,
   ProviderToolCall,
   ProviderToolResult,
   ProviderTranscriptDialect,
@@ -73,12 +74,13 @@ export function toMessages(sdkMessages: readonly unknown[]): Message[] {
 /** Read assistant transcript text and tool-call intent from an OpenAI response. */
 export function readOpenAIAssistant(
   result: ChatCompletion,
+  context?: NativeAssistantReadContext,
 ): OpenAIAssistantTurn {
   const choiceMessage = result.choices?.[0]?.message as
     | OpenAI.ChatCompletionMessage
     | undefined;
   const toolCalls = toolCallsFromProvider(choiceMessage?.tool_calls);
-  const content = assistantContent(choiceMessage, toolCalls);
+  const content = assistantContent(choiceMessage, toolCalls, requestedAudioMediaType(context));
   return {
     text: openAIContentText(choiceMessage?.content),
     content,
@@ -89,6 +91,7 @@ export function readOpenAIAssistant(
 function assistantContent(
   message: OpenAI.ChatCompletionMessage | undefined,
   toolCalls: readonly ProviderToolCall[],
+  audioMediaType: "audio/wav" | "audio/mpeg" | undefined,
 ): readonly AssistantContentPart[] {
   const decoded = messageContentFromOpenAIContent(message?.content);
   const parts: AssistantContentPart[] =
@@ -104,6 +107,7 @@ function assistantContent(
     parts.push({
       type: "audio",
       source: new Uint8Array(Buffer.from(audio.data, "base64")),
+      ...(audioMediaType ? { mediaType: audioMediaType } : {}),
     });
   }
   parts.push(
@@ -117,6 +121,18 @@ function assistantContent(
     ),
   );
   return parts;
+}
+
+function requestedAudioMediaType(
+  context: NativeAssistantReadContext | undefined,
+): "audio/wav" | "audio/mpeg" | undefined {
+  const request = context?.request;
+  if (!isRecord(request) || !isRecord(request.audio)) return undefined;
+  return request.audio.format === "wav"
+    ? "audio/wav"
+    : request.audio.format === "mp3"
+      ? "audio/mpeg"
+      : undefined;
 }
 
 function encodeAssistant(

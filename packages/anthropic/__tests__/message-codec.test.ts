@@ -10,6 +10,51 @@ import {
 } from "../src/message-codec";
 
 describe("anthropic transcript wire encoding", () => {
+  it("replays signed thinking and assistant media without silently dropping native blocks", () => {
+    const canonical: Message[] = [
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "private chain",
+            providerOptions: { anthropic: { signature: "sig_123" } },
+          },
+          { type: "text", text: "Visible answer" },
+          {
+            type: "image",
+            source: new Uint8Array([1, 2, 3]),
+            mediaType: "image/png",
+          },
+        ],
+      },
+    ];
+
+    expect(fromMessages(canonical)).toEqual([
+      {
+        role: "assistant",
+        content: [
+          { type: "thinking", thinking: "private chain", signature: "sig_123" },
+          { type: "text", text: "Visible answer" },
+          {
+            type: "image",
+            source: { type: "base64", data: "AQID", media_type: "image/png" },
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("fails before provider I/O when reasoning cannot be faithfully replayed", () => {
+    expect(() =>
+      fromMessages([
+        {
+          role: "assistant",
+          content: [{ type: "reasoning", text: "missing signature" }],
+        },
+      ]),
+    ).toThrow("No provider request was made.");
+  });
   it("serializes canonical assistant tool calls and tool results to Anthropic blocks", () => {
     const messages = fromMessages([
       { role: "user", content: "Weather in Paris?" },

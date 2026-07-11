@@ -13,7 +13,7 @@
 
 import type { AssistantContentPart, ContentPart, MessageContent } from '../../../types/content'
 import type { ToolModelOutput } from '../../../types/tool'
-import type { NativeAssistantTurn } from '../types'
+import type { NativeAssistantReadContext, NativeAssistantTurn } from '../types'
 
 /**
  * One value, a readonly list of values, or nothing.
@@ -120,6 +120,8 @@ export interface ToolResultEncodingHelpers {
  * @typeParam TRawResponse - Provider-native non-streaming response shape.
  */
 export interface ProviderTranscriptDialect<TProviderMessage, TRawResponse> {
+  /** Preserve signed/provider-native reasoning for continuation replay. */
+  readonly preserveAssistantReasoning?: boolean
   /** Encode a `system`/`user` content turn into provider messages. */
   encodeContent(
     unit: Extract<ProviderTranscriptUnit, { kind: 'content' }>,
@@ -139,5 +141,8 @@ export interface ProviderTranscriptDialect<TProviderMessage, TRawResponse> {
   /** Decode one provider message back into canonical transcript units. */
   decodeMessage(value: unknown): OneOrMany<ProviderTranscriptUnit>
   /** Read assistant text and tool-call intent from a raw provider response. */
-  readAssistant(raw: TRawResponse): NativeAssistantTurn
+  readAssistant(
+    raw: TRawResponse,
+    context?: NativeAssistantReadContext,
+  ): NativeAssistantTurn
 }

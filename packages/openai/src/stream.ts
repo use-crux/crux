@@ -5,6 +5,7 @@ import type {
 import type { StreamCompletionMetadata } from "@use-crux/core/adapter";
 import { openAITranscript } from "./message-codec";
 import { openAIResponseMeta } from "./response";
+import type { OpenAIChatRequest } from "./types";
 
 /** Extract a text delta from an OpenAI chat-completion stream chunk. */
 export function openAITextDelta(chunk: unknown): string | undefined {
@@ -21,6 +22,7 @@ export type OpenAIChatStreamChunk = ChatCompletionChunk;
 /** Reconstruct exact completion facts from consumed OpenAI chat chunks. */
 export async function openAIStreamCompletion(
   chunks: readonly unknown[],
+  request?: OpenAIChatRequest,
 ): Promise<StreamCompletionMetadata | undefined> {
   const values = chunks.filter(isChunk);
   const last = values.at(-1);
@@ -59,7 +61,7 @@ export async function openAIStreamCompletion(
     ],
     ...(last.usage ? { usage: last.usage } : {}),
   } as unknown as ChatCompletion;
-  const assistant = openAITranscript.readAssistant(result);
+  const assistant = openAITranscript.readAssistant(result, { request });
   const content =
     typeof assistant.content === "string"
       ? [{ type: "text" as const, text: assistant.content }]

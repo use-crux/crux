@@ -49,7 +49,7 @@ export function messageContentFromOpenAIContent(content: unknown): MessageConten
           return mediaType
             ? [
                 {
-                  type: 'file',
+                  type: 'audio',
                   source: dataAsset(part.input_audio.data, mediaType),
                   mediaType,
                 },

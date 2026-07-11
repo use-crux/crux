@@ -16,6 +16,7 @@ export function openAIRequest(
   ];
 
   return {
+    ...args.extra,
     model: args.model,
     messages,
     ...args.settings,

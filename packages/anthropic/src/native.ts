@@ -57,24 +57,20 @@ const anthropic = defineSingleTurnProviderBundle({
         return typeof delta.text === "string" ? delta.text : undefined;
       },
       completion: async (stream) => {
-        try {
-          const finalMsg = await stream.finalMessage();
-          const assistant = anthropicTranscript.readAssistant(finalMsg);
-          const content =
-            typeof assistant.content === "string"
-              ? [{ type: "text" as const, text: assistant.content }]
-              : assistant.content;
-          return {
-            ...anthropicResponseMeta(finalMsg),
-            text: anthropicResponseText(finalMsg, assistant),
-            ...(content !== undefined ? { content } : {}),
-            ...(assistant.toolCalls !== undefined
-              ? { toolCalls: [...assistant.toolCalls] }
-              : {}),
-          };
-        } catch {
-          return undefined;
-        }
+        const finalMsg = await stream.finalMessage();
+        const assistant = anthropicTranscript.readAssistant(finalMsg);
+        const content =
+          typeof assistant.content === "string"
+            ? [{ type: "text" as const, text: assistant.content }]
+            : assistant.content;
+        return {
+          ...anthropicResponseMeta(finalMsg),
+          text: anthropicResponseText(finalMsg, assistant),
+          ...(content !== undefined ? { content } : {}),
+          ...(assistant.toolCalls !== undefined
+            ? { toolCalls: [...assistant.toolCalls] }
+            : {}),
+        };
       },
     },
     settings: mapAnthropicSettings,

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { ChatCompletion } from 'openai/resources/chat/completions'
-import { fromMessages, openAITranscript } from '../src/message-codec'
+import type { ContentPart } from '@use-crux/core'
+import { fromMessages, openAITranscript, toMessages } from '../src/message-codec'
 
 describe('openai multimodal transcript encoding', () => {
   it('serializes final image content parts to OpenAI chat content', () => {
@@ -59,6 +60,65 @@ describe('openai multimodal transcript encoding', () => {
         },
       ]),
     ).toThrow('No provider request was made.')
+  })
+
+  it('decodes native input audio as canonical audio', () => {
+    expect(
+      toMessages([
+        {
+          role: 'user',
+          content: [{ type: 'input_audio', input_audio: { data: 'AQID', format: 'mp3' } }],
+        },
+      ]),
+    ).toEqual([
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'audio',
+            source: expect.objectContaining({ type: 'data', mediaType: 'audio/mpeg' }),
+            mediaType: 'audio/mpeg',
+          },
+        ],
+      },
+    ])
+  })
+
+  it('makes generated audio immediately reusable with the requested format', () => {
+    const turn = openAITranscript.readAssistant(
+      {
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: 'Listen',
+              audio: { data: 'AQID' },
+            },
+          },
+        ],
+      } as unknown as ChatCompletion,
+      { request: { audio: { format: 'mp3', voice: 'alloy' } } },
+    )
+
+    expect(turn.content).toContainEqual(
+      expect.objectContaining({ type: 'audio', mediaType: 'audio/mpeg' }),
+    )
+    expect(
+      fromMessages([
+        {
+          role: 'user',
+          content: (turn.content ?? []) as readonly ContentPart[],
+        },
+      ]),
+    ).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Listen' },
+          { type: 'input_audio', input_audio: { data: 'AQID', format: 'mp3' } },
+        ],
+      },
+    ])
   })
 
   it('reads assistant image content into final content parts', () => {

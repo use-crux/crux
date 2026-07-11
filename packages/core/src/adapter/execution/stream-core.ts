@@ -23,6 +23,8 @@ import { buildResolveOpts } from "./shared";
 import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
 import { emitInputTokenEstimate } from "./media-token-budget";
 import { responseContent } from "../assistant-output";
+import type { AssistantContentPart } from "../../types/content";
+import type { Message } from "../../generation/messages";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -190,8 +192,10 @@ export async function streamCore<
     completion: async () => {
       const meta = await handle.completion();
       const stamped = meta ? safety.stamp(meta) : meta;
-      const text = stamped?.text ?? streamedAssistantText;
-      const content = responseContent({
+      const text = safety.enabled
+        ? streamedAssistantText
+        : stamped?.text ?? streamedAssistantText;
+      const providerContent = responseContent({
         content: stamped?.content,
         text,
         toolCalls: stamped?.toolCalls?.flatMap((call) =>
@@ -200,16 +204,19 @@ export async function streamCore<
             : [],
         ),
       });
-      const completionMessages = stamped?.messages ?? [
-        ...messages,
-        {
-          role: "assistant" as const,
-          content,
-          ...(stamped?.toolCalls
-            ? { metadata: { toolCalls: stamped.toolCalls } }
-            : {}),
-        },
-      ];
+      const content = safety.enabled
+        ? replaceTextContent(providerContent, text)
+        : providerContent;
+      const assistantMessage: Message = {
+        role: "assistant",
+        content,
+        ...(stamped?.toolCalls
+          ? { metadata: { toolCalls: stamped.toolCalls } }
+          : {}),
+      };
+      const completionMessages = stamped?.messages
+        ? replaceFinalAssistant(stamped.messages, assistantMessage)
+        : [...messages, assistantMessage];
       await lifecycle.captureTurn({
         messages,
         assistantText: streamedAssistantText || undefined,
@@ -223,4 +230,41 @@ export async function streamCore<
       };
     },
   };
+}
+
+/** Replace provider-buffered text while retaining ordered non-text output. */
+function replaceTextContent(
+  content: readonly AssistantContentPart[],
+  text: string,
+): readonly AssistantContentPart[] {
+  const result: AssistantContentPart[] = [];
+  let inserted = false;
+  for (const part of content) {
+    if (part.type !== "text") {
+      result.push(part);
+      continue;
+    }
+    if (!inserted) {
+      if (text) result.push({ ...part, text });
+      inserted = true;
+    }
+  }
+  if (!inserted && text) result.unshift({ type: "text", text });
+  return result;
+}
+
+/** Stamp authoritative assistant output into a provider-completed transcript. */
+function replaceFinalAssistant(
+  messages: readonly Message[],
+  assistant: Message,
+): readonly Message[] {
+  const result = [...messages];
+  for (let index = result.length - 1; index >= 0; index -= 1) {
+    if (result[index]?.role === "assistant") {
+      result[index] = assistant;
+      return result;
+    }
+  }
+  result.push(assistant);
+  return result;
 }

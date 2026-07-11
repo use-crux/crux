@@ -34,6 +34,12 @@ export interface NativeAssistantTurn extends Pick<
   readonly content?: string | readonly AssistantContentPart[];
 }
 
+/** Provider request context available while decoding one assistant turn. */
+export interface NativeAssistantReadContext {
+  /** Provider-native request that produced the response, when runtime-owned. */
+  readonly request?: unknown;
+}
+
 /** Response metadata that is independent from assistant transcript content. */
 export type NativeResponseMetadata = Omit<
   AdapterResponse,
@@ -81,7 +87,10 @@ export interface NativeTranscriptCodec<
   /** Convert provider-native chat messages back into canonical Crux messages. */
   toMessages(messages: readonly unknown[]): Message[];
   /** Read assistant text and tool-call intent from a provider-native response. */
-  readAssistant(raw: TRawResponse): NativeAssistantTurn;
+  readAssistant(
+    raw: TRawResponse,
+    context?: NativeAssistantReadContext,
+  ): NativeAssistantTurn;
   /**
    * Optional provider-specific canonical tool-round append.
    *
@@ -194,6 +203,7 @@ export interface NativeChatProfile<
     completion?(
       stream: TRawStream,
       chunks: readonly unknown[],
+      request: TRequest,
     ): Promise<StreamCompletionMetadata | undefined>;
   };
 

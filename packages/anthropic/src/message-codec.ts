@@ -5,16 +5,19 @@ import type {
   Message,
   MessageContent,
 } from "@use-crux/core";
-import { contentText } from "@use-crux/core";
 import { defineProviderTranscriptCodec } from "@use-crux/core/adapter";
 import type {
-  NativeAssistantTurn,
   ProviderToolCall,
   ProviderToolResult,
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
   ToolResultEncodingHelpers,
 } from "@use-crux/core/adapter";
+import {
+  encodeAnthropicAssistant,
+  readAnthropicAssistantTurn,
+} from "./assistant-turn-codec";
+export type { AnthropicAssistantTurn } from "./assistant-turn-codec";
 import {
   anthropicContentBlocks,
   anthropicToolResultContent,
@@ -33,8 +36,6 @@ import {
  * loops — assistant text and ordered tool calls. Usage, finish reasons, and
  * model ids stay in the adapter response normalizer.
  */
-export type AnthropicAssistantTurn = NativeAssistantTurn;
-
 /**
  * Anthropic wire dialect for the canonical transcript IR.
  *
@@ -47,13 +48,14 @@ const anthropicDialect: ProviderTranscriptDialect<
   Anthropic.MessageParam,
   Pick<Anthropic.Message, "content">
 > = {
+  preserveAssistantReasoning: true,
   encodeContent: ({ role, content }) => encodeContent(role, content),
   encodeAssistant: ({ content, toolCalls }) =>
-    encodeAssistant(content, toolCalls ?? []),
+    encodeAnthropicAssistant(content, toolCalls ?? []),
   encodeToolResults: ({ results }, helpers) =>
     results.map((result) => encodeToolResult(result, helpers)),
   decodeMessage: decodeMessage,
-  readAssistant: readAssistantTurn,
+  readAssistant: readAnthropicAssistantTurn,
 };
 
 /** Anthropic provider transcript codec used by request builders and response normalization. */
@@ -98,41 +100,6 @@ function encodeContent(
   };
 }
 
-function encodeAssistant(
-  content: MessageContent | readonly AssistantContentPart[],
-  toolCalls: readonly ProviderToolCall[],
-): Anthropic.MessageParam {
-  if (toolCalls.length === 0) {
-    return {
-      role: "assistant",
-      content:
-        typeof content === "string"
-          ? content
-          : anthropicContentBlocks(content as readonly ContentPart[]),
-    };
-  }
-
-  const blocks: Anthropic.ContentBlockParam[] = [];
-  const contentBlocks =
-    typeof content === "string"
-      ? content
-        ? ([
-            { type: "text", text: content },
-          ] satisfies Anthropic.TextBlockParam[])
-        : []
-      : anthropicContentBlocks(content as readonly ContentPart[]);
-  blocks.push(...contentBlocks);
-  for (const toolCall of toolCalls) {
-    blocks.push({
-      type: "tool_use",
-      id: toolCall.id,
-      name: toolCall.name,
-      input: toolInput(toolCall.args),
-    });
-  }
-  return { role: "assistant", content: blocks };
-}
-
 function encodeToolResult(
   result: ProviderToolResult,
   helpers: ToolResultEncodingHelpers,
@@ -164,13 +131,19 @@ function decodeMessage(value: unknown): readonly ProviderTranscriptUnit[] {
       : [{ kind: "content", role: "user", content: value.content }];
   }
 
-  const contentParts: ContentPart[] = [];
+  const contentParts: AssistantContentPart[] = [];
   const toolCalls: ProviderToolCall[] = [];
   const toolResults: ProviderToolResult[] = [];
 
   for (const block of value.content) {
     if (block.type === "text") {
       contentParts.push({ type: "text", text: block.text });
+    } else if (block.type === "thinking") {
+      contentParts.push({
+        type: "reasoning",
+        text: block.thinking,
+        providerOptions: { anthropic: { signature: block.signature } },
+      });
     } else if (block.type === "image") {
       const part = anthropicImageBlockToPart(block.source);
       if (part) contentParts.push(part);
@@ -190,18 +163,22 @@ function decodeMessage(value: unknown): readonly ProviderTranscriptUnit[] {
     }
   }
 
-  const content = messageContentFromAnthropicParts(contentParts);
   if (value.role === "assistant") {
     return [
       {
         kind: "assistant",
-        content,
+        content: mergeAdjacentText(contentParts),
         ...(toolCalls.length > 0 ? { toolCalls } : {}),
       },
     ];
   }
 
   const units: ProviderTranscriptUnit[] = [];
+  const content = messageContentFromAnthropicParts(
+    contentParts.filter((part): part is ContentPart =>
+      part.type !== "reasoning" && part.type !== "tool-call",
+    ),
+  );
   if (contentParts.length > 0)
     units.push({ kind: "content", role: "user", content });
   if (toolResults.length > 0)
@@ -211,52 +188,22 @@ function decodeMessage(value: unknown): readonly ProviderTranscriptUnit[] {
     : [{ kind: "content", role: "user", content: "" }];
 }
 
-function readAssistantTurn(
-  message: Pick<Anthropic.Message, "content">,
-): AnthropicAssistantTurn {
-  const content = (message as { readonly content?: unknown }).content;
-  if (typeof content === "string")
-    return { text: content, toolCalls: undefined };
-  if (!Array.isArray(content)) return { text: "", toolCalls: undefined };
-
-  const contentParts: AssistantContentPart[] = [];
-  const toolCalls: ProviderToolCall[] = [];
-
-  for (const block of content) {
-    if (block.type === "thinking" && typeof block.thinking === "string") {
-      contentParts.push({ type: "reasoning", text: block.thinking });
-    } else if (block.type === "text") {
-      contentParts.push({ type: "text", text: block.text });
-    } else if (block.type === "image") {
-      const part = anthropicImageBlockToPart(block.source);
-      if (part) contentParts.push(part);
-    } else if (block.type === "document") {
-      const part = anthropicDocumentBlockToPart(block);
-      if (part) contentParts.push(part);
-    } else if (block.type === "tool_use") {
-      const call = { id: block.id, name: block.name, args: block.input };
-      toolCalls.push(call);
-      contentParts.push({
-        type: "tool-call",
-        toolCallId: call.id,
-        toolName: call.name,
-        input: call.args,
-      });
+function mergeAdjacentText(
+  parts: readonly AssistantContentPart[],
+): readonly AssistantContentPart[] {
+  const merged: AssistantContentPart[] = [];
+  for (const part of parts) {
+    const previous = merged.at(-1);
+    if (part.type === "text" && previous?.type === "text") {
+      merged[merged.length - 1] = {
+        ...previous,
+        text: previous.text + part.text,
+      };
+    } else {
+      merged.push(part);
     }
   }
-
-  const contentValue = contentParts;
-  return {
-    text: contentValue
-      .flatMap((part) => (part.type === "text" ? [part.text] : []))
-      .join(""),
-    content: contentValue,
-    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-  };
-}
-
-function toolInput(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : { value };
+  return merged;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

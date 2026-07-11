@@ -40,6 +40,7 @@ import type {
  */
 export function messagesToTranscriptUnits(
   messages: readonly Message[],
+  options: { readonly preserveAssistantReasoning?: boolean } = {},
 ): ProviderTranscriptUnit[] {
   const units: ProviderTranscriptUnit[] = [];
   let pendingResults: ProviderToolResult[] | undefined;
@@ -64,6 +65,7 @@ export function messagesToTranscriptUnits(
       const assistant = assistantTranscript(
         message.content,
         message.metadata?.toolCalls,
+        options.preserveAssistantReasoning,
       );
       units.push({
         kind: "assistant",

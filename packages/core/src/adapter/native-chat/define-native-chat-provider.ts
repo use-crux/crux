@@ -110,7 +110,7 @@ export function defineNativeChatProvider<
           deps,
         });
         const raw = await bind(client).call(request, mode);
-        return { raw, extracted: responseFor(profile, raw) };
+        return { raw, extracted: responseFor(profile, raw, request) };
       },
 
       async stream(client, args): Promise<StreamHandle<TRawStream>> {
@@ -128,7 +128,7 @@ export function defineNativeChatProvider<
           rawStream: trackedStream,
           extractTextDelta: profile.stream.textDelta,
           completion: async () =>
-            profile.stream.completion?.(rawStream, chunks),
+            profile.stream.completion?.(rawStream, chunks, streamRequest),
         };
       },
       toParams(args) {
@@ -340,8 +340,9 @@ function responseFor<
     "providerId" | "response" | "transcript"
   >,
   raw: TRawResponse,
+  request?: TRequest,
 ): AdapterResponse {
-  const assistant = profile.transcript.readAssistant(raw);
+  const assistant = profile.transcript.readAssistant(raw, { request });
   const text = profile.response.text?.(raw, assistant) ?? assistant.text;
   const content =
     text !== assistant.text

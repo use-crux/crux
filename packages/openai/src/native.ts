@@ -56,7 +56,8 @@ const openAI = defineSingleTurnProviderBundle({
     stream: {
       request: openAIStreamRequest,
       textDelta: openAITextDelta,
-      completion: (_stream, chunks) => openAIStreamCompletion(chunks),
+      completion: (_stream, chunks, request) =>
+        openAIStreamCompletion(chunks, request),
     },
     settings: openAISettings,
     outputSchema: openAIOutputSchema,

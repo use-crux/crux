@@ -1,19 +1,20 @@
-import type { AssistantContentPart, ContentPart } from "../../../types/content";
+import type { AssistantContentPart } from "../../../types/content";
 import type { ProviderToolCall } from "./units";
 
 /** Lower canonical assistant content to provider-neutral transcript fields. */
 export function assistantTranscript(
   content: string | readonly AssistantContentPart[],
   metadataToolCalls: unknown,
+  preserveReasoning = false,
 ): {
-  readonly content: string | readonly ContentPart[];
+  readonly content: string | readonly AssistantContentPart[];
   readonly toolCalls: readonly ProviderToolCall[];
 } {
   if (typeof content === "string") {
     return { content, toolCalls: toolCallsFromMetadata(metadataToolCalls) };
   }
 
-  const contentParts: ContentPart[] = [];
+  const contentParts: AssistantContentPart[] = [];
   const toolCalls: ProviderToolCall[] = [];
   const seen = new Set<string>();
   for (const part of content) {
@@ -28,8 +29,9 @@ export function assistantTranscript(
       }
       continue;
     }
-    if (part.type === "reasoning") continue;
-    contentParts.push(part);
+    if (part.type !== "reasoning" || preserveReasoning) {
+      contentParts.push(part);
+    }
   }
   for (const call of toolCallsFromMetadata(metadataToolCalls)) {
     if (seen.has(call.id)) continue;

@@ -69,7 +69,11 @@ describe("public Anthropic codecs", () => {
     } as unknown as AnthropicParsedMessage);
 
     expect(facts.content).toEqual([
-      { type: "reasoning", text: "checking privately" },
+      {
+        type: "reasoning",
+        text: "checking privately",
+        providerOptions: { anthropic: { signature: "sig" } },
+      },
       { type: "text", text: "I will inspect it." },
       {
         type: "tool-call",

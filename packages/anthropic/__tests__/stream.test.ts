@@ -28,13 +28,14 @@ describe("Anthropic stream handling", () => {
     });
   });
 
-  it("falls back to streamed text when finalMessage metadata is unavailable", async () => {
+  it("propagates finalMessage errors by identity after streamed text", async () => {
     const requests: unknown[] = [];
+    const finalMessageError = new Error("stream closed before final message");
     const client = {
       messages: {
         stream: (request: unknown) => {
           requests.push(request);
-          return failingCompletionStream();
+          return failingCompletionStream(finalMessageError);
         },
       },
     } as unknown as Anthropic;
@@ -52,18 +53,7 @@ describe("Anthropic stream handling", () => {
       chunks.push(chunk);
     }
 
-    const completion = await handle.completion;
-    expect(completion).toMatchObject({
-      text: "partial",
-      steps: [expect.objectContaining({ text: "partial" })],
-      finalStep: {
-        text: "partial",
-        finishReason: undefined,
-        responseId: undefined,
-        modelId: undefined,
-      },
-    });
-    expect(completion.finalStep).not.toHaveProperty("usage");
+    await expect(handle.completion).rejects.toBe(finalMessageError);
     expect(chunks.join("")).toBe("partial");
     expect(requests).toHaveLength(1);
   });
@@ -94,7 +84,7 @@ function completedStream(): MessageStream {
   } as unknown as MessageStream;
 }
 
-function failingCompletionStream(): MessageStream {
+function failingCompletionStream(error: Error): MessageStream {
   return {
     async *[Symbol.asyncIterator]() {
       yield {
@@ -103,7 +93,7 @@ function failingCompletionStream(): MessageStream {
       };
     },
     finalMessage: async () => {
-      throw new Error("stream closed before final message");
+      throw error;
     },
   } as unknown as MessageStream;
 }
