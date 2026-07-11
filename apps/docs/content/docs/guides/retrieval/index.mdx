@@ -69,7 +69,7 @@ const inspection = docs.inspect()
 const direct = docs.retriever({ limit: 6 })
 const recipe = docs.recipe({
   id: 'docs-answer',
-  steps: [retrieve({ limit: 20 }), rerank({ topK: 8, model })],
+  steps: [retrieve({ limit: 20 }), rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 })],
 })
 const tools = docs.tools({ prefix: 'docs', include: ['search', 'getSource'] })
 ```
@@ -116,7 +116,7 @@ const docsAnswer = retrievalRecipe({
   steps: [
     fanout({ maxQueries: 4 }),
     retrieve({ limit: 30 }),
-    rerank({ topK: 8 }),
+    rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 }),
     compressToBudget({ tokens: 3500 }),
   ],
 })
@@ -135,7 +135,7 @@ const answer = retrievalRecipe({
     { retriever: supportTickets, weight: 0.5 },
   ],
   onSourceError: 'skip-with-warning',
-  steps: [retrieve({ limit: 20 }), rerank({ topK: 8, model })],
+  steps: [retrieve({ limit: 20 }), rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 })],
 })
 ```
 

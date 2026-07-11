@@ -15,7 +15,9 @@ const engine = {
 } satisfies Reranker
 
 expectTypeOf(engine.rerank({ query: 'refunds', hits })).resolves.toEqualTypeOf<RetrieverHit[]>()
-expectTypeOf(judgeReranker({ model })).toEqualTypeOf<Reranker>()
+// `name` is a required, authored reranker identity.
+expectTypeOf(judgeReranker({ model, name: 'judge' })).toEqualTypeOf<Reranker>()
 expectTypeOf(judgeReranker({ model, name: 'judge', topN: 5, document: (hit) => hit.content })).toEqualTypeOf<Reranker>()
+// `rerank()` requires an explicit named engine — no anonymous default-model path.
 expectTypeOf(rerank({ engine, topK: 4 })).toEqualTypeOf<RetrievalStep<'hits', 'hits'>>()
-expectTypeOf(rerank({ topK: 4, model })).toEqualTypeOf<RetrievalStep<'hits', 'hits'>>()
+expectTypeOf(rerank({ engine, id: 'primary', topK: 4 })).toEqualTypeOf<RetrievalStep<'hits', 'hits'>>()

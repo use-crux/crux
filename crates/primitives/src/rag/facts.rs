@@ -17,7 +17,7 @@ pub(crate) fn rag_facts(context: &PrimitiveContext<'_>, parts: &CallParts<'_>) -
         "knowledgeBase" if parts.callee_direct != Some(false) => {
             knowledge_base_facts(context, parts)
         }
-        "reranker" => reranker_facts(context, parts),
+        "reranker" | "judgeReranker" => reranker_facts(context, parts),
         "retriever" => retriever_facts(context, parts),
         "retrievalRecipe" if parts.callee_direct != Some(false) => recipe_facts(context, parts),
         _ => None,

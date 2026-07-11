@@ -1,8 +1,14 @@
-import { describe, it, expect, beforeAll, afterAll } from 'vitest'
+import { afterEach, describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdirSync, writeFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { fileSkill } from '../../src/skill/file-loader'
 import { SkillLoadError } from '../../src/skill/types'
+import {
+  createInMemoryObservabilityTransport,
+  observe,
+  resetObservabilityRuntime,
+  setObservabilityTransport,
+} from '../../src/observability'
 
 const TEST_DIR = join(__dirname, '__fixtures__')
 const SKILL_DIR = join(TEST_DIR, 'test-skill')
@@ -45,6 +51,26 @@ afterAll(() => {
 })
 
 describe('fileSkill()', () => {
+  afterEach(() => {
+    resetObservabilityRuntime()
+  })
+
+  it('emits skill.load with no definitionRefs — its sourceId is not the registry-shaped canonical id', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    fileSkill(SKILL_FILE)
+    await observe.flush()
+
+    const spans = transport.records.filter(
+      (record) => record.type === 'span:start' && record.primitive === 'skill.load',
+    ) as Array<{ definitionRefs?: unknown }>
+    expect(spans.length).toBeGreaterThan(0)
+    for (const span of spans) {
+      expect(span.definitionRefs).toBeUndefined()
+    }
+  })
+
   it('loads a SKILL.md file with correct metadata', () => {
     const s = fileSkill(SKILL_FILE)
 

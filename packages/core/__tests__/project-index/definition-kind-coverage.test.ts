@@ -68,7 +68,6 @@ describe("DEFINITION_KIND_COVERAGE", () => {
       "routing.cascade",
       "routing.fallback",
       "rag.recipe",
-      "rag.pipeline",
       "rag.reranker",
       "rag.retriever",
       "skill",
@@ -78,7 +77,7 @@ describe("DEFINITION_KIND_COVERAGE", () => {
       "guardrail",
       "blackboard",
     ];
-    expect(categoryA).toHaveLength(25);
+    expect(categoryA).toHaveLength(24);
     for (const kind of categoryA) {
       const descriptor = DEFINITION_KIND_COVERAGE[kind];
       expect(descriptor.primary, kind).toBe("directly-observed");
@@ -134,11 +133,21 @@ describe("DEFINITION_KIND_COVERAGE", () => {
       "registry",
       "storage.bundle",
       "storage.scope",
+      "rag.pipeline",
     ];
+    expect(categoryE).toHaveLength(4);
     for (const kind of categoryE) {
       const descriptor = DEFINITION_KIND_COVERAGE[kind];
       expect(descriptor.primary, kind).toBe("static-only");
       expect((descriptor.runtimePrimitiveNames ?? []).length, kind).toBe(0);
     }
+  });
+
+  it("regression: rag.pipeline is not directly-observed (no first-party emitter or compiled-definition builder exists)", () => {
+    // Refuted category-A claim — see the manifest's `rag.pipeline` comment.
+    // `rag.pipeline.stage` keeps its own mechanical structural-child
+    // classification independently of this.
+    expect(DEFINITION_KIND_COVERAGE["rag.pipeline"].primary).toBe("static-only");
+    expect(DEFINITION_KIND_COVERAGE["rag.pipeline.stage"].primary).toBe("structural-child");
   });
 });

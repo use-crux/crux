@@ -16,6 +16,7 @@ const firstPartySemanticCallNames = [
   "fromRegistry",
   "guardrail",
   "injectable",
+  "judgeReranker",
   "llmJudge",
   "match",
   "memory",

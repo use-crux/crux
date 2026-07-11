@@ -116,6 +116,40 @@ func TestDefinitionActivityDuplicateRecordDoesNotDoubleCount(t *testing.T) {
 	}
 }
 
+// TestDefinitionActivityPreservesMultipleRolesForSameDefinition proves a
+// definition referenced under two distinct roles within the same run retains
+// two independent rows — keyed by (run, definition, role) — each with its own
+// occurrence_count, instead of collapsing into one row via min(role).
+func TestDefinitionActivityPreservesMultipleRolesForSameDefinition(t *testing.T) {
+	service := newTestService(t)
+	mustIngest(t,
+		service,
+		runStartWithRefsJSON("r-start", "run1", "seg1", 1, "2026-01-01T00:00:00.000Z",
+			definitionRefJSON("prompt:shared", "prompt", "resolved-prompt")),
+		spanWithRefsJSON("r-span1", "run1", "seg1", 2, "sp1", "2026-01-01T00:00:01.000Z",
+			definitionRefJSON("prompt:shared", "prompt", "invoked-tool")),
+		spanWithRefsJSON("r-span2", "run1", "seg1", 3, "sp2", "2026-01-01T00:00:02.000Z",
+			definitionRefJSON("prompt:shared", "prompt", "invoked-tool")),
+	)
+
+	got := definitionActivity(t, service, "run1")
+	want := []DefinitionActivity{
+		{DefinitionID: "prompt:shared", DefinitionKind: "prompt", Role: "invoked-tool", FirstSeenAt: "2026-01-01T00:00:01.000Z", LastSeenAt: "2026-01-01T00:00:02.000Z", OccurrenceCount: 2},
+		{DefinitionID: "prompt:shared", DefinitionKind: "prompt", Role: "resolved-prompt", FirstSeenAt: "2026-01-01T00:00:00.000Z", LastSeenAt: "2026-01-01T00:00:00.000Z", OccurrenceCount: 1},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("multi-role definition activity mismatch:\n got %+v\nwant %+v", got, want)
+	}
+
+	filtered, err := service.RunsPage(context.Background(), RunListOptions{DefinitionID: "prompt:shared"})
+	if err != nil {
+		t.Fatalf("filtered runs: %v", err)
+	}
+	if len(filtered.Rows) != 1 || filtered.Rows[0].RunID != "run1" {
+		t.Fatalf("expected exactly one run for prompt:shared despite two role rows, got %+v", filtered.Rows)
+	}
+}
+
 // TestDefinitionActivityFilteredRunsQuery proves the filtered-by-definition Runs
 // query returns the same {Revision, Rows, NextCursor} envelope and the correct
 // rows for a definition touched by 0, 1, and N runs.

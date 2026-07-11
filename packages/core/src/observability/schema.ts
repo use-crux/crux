@@ -110,6 +110,15 @@ export const DefinitionRefRoleSchema = z.enum([
   'invoked-retriever',
   'invoked-composition',
   'invoked-blackboard',
+  'invoked-routing',
+  'loaded-skill',
+  'invoked-guardrail',
+  'invoked-constraint',
+  'invoked-task',
+  'invoked-workspace',
+  'invoked-memory',
+  'invoked-recipe',
+  'invoked-reranker',
 ]) satisfies z.ZodType<DefinitionRefRole>
 
 export const SanitizedSourceRefSchema = z.object({

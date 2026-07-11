@@ -17,6 +17,8 @@ import type {
   RuntimeTargetContext,
   RuntimeTargetOutcome,
 } from '../engine/kernel'
+import { observe } from '../../observability'
+import { taskDefinitionRef } from '../../observability/definition-ref'
 import { registerRuntimeTarget } from './target-registry'
 
 const RUNTIME_TASK_TARGET: unique symbol = Symbol('crux.runtime.task')
@@ -102,11 +104,35 @@ export function durableTask<const TName extends string, TInput extends JsonValue
           },
         }
       }
-      await options.run(context.work.work.input as TInput, {
-        runtime: context,
-        lease: context.lease,
+      const work = context.work.work
+      // `durableTask()` requires `name`, so this ref is always canonical.
+      // `openSpan` opens an implicit run when no ambient context exists (a
+      // fresh serverless/edge invocation delivering a wake), so this is safe
+      // without any host-specific wiring.
+      const span = observe.openSpan({
+        name: 'task.operation',
+        primitive: 'task.operation',
+        definitionRefs: [taskDefinitionRef(name)],
+        attributes: {
+          taskName: name,
+          taskId: work.taskId,
+          workId: context.work.workId,
+          attempt: context.work.attempt,
+        },
       })
-      return { status: 'completed' }
+      try {
+        await span.withContext(() =>
+          options.run(work.input as TInput, {
+            runtime: context,
+            lease: context.lease,
+          }),
+        )
+        span.end({ attributes: { status: 'success' } })
+        return { status: 'completed' }
+      } catch (error) {
+        span.error(error, { status: 'error' })
+        throw error
+      }
     },
   }) as RuntimeTaskTarget<TInput>
   registerRuntimeTarget(name, () => target)

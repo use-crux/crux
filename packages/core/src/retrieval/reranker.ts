@@ -24,17 +24,22 @@ export interface Reranker {
 export interface JudgeRerankerConfig {
   /** Bound retrieval model used as the LLM judge. */
   model: RetrievalModel
-  /** Stable reranker name. Defaults to `judge`. */
-  name?: string
+  /**
+   * Stable, authored reranker name. Required: it is the canonical
+   * `rag.reranker:<safeId(name)>` identity the Project Index and runtime
+   * evidence join on, so an anonymous default would collide across every
+   * unnamed judge reranker.
+   */
+  name: string
   /** Maximum ranked items requested from the judge. Omitted hits are appended. */
   topN?: number
   /** Project a hit into the document text shown to the judge. Defaults to `hit.content`. */
   document?: (hit: RetrieverHit) => string
 }
 
-/** Create the shared LLM-judge reranker used when a recipe has no explicit engine. */
+/** Create the shared LLM-judge reranker for an explicit recipe `rerank({ engine })`. */
 export function judgeReranker(config: JudgeRerankerConfig): Reranker {
-  const name = config.name ?? 'judge'
+  const name = config.name
   return Object.freeze({
     name,
     async rerank(args: { query: string; hits: readonly RetrieverHit[] }): Promise<RetrieverHit[]> {

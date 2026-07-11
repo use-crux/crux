@@ -16,6 +16,7 @@ import {
   compressToBudget,
   expandParents,
   fanout,
+  judgeReranker,
   knowledgeBase,
   rerank,
   retrievalRecipe,
@@ -156,7 +157,8 @@ expectTypeOf(customHitStep).toEqualTypeOf<RetrievalStep<'hits', 'hits'>>()
 
 expectTypeOf(rewriteQuery()).toEqualTypeOf<RetrievalStep<'queries', 'queries'>>()
 expectTypeOf(fanout({ maxQueries: 4 })).toEqualTypeOf<RetrievalStep<'queries', 'queries'>>()
-expectTypeOf(rerank({ topK: 8, model })).toEqualTypeOf<RetrievalStep<'hits', 'hits'>>()
+const betaRerankEngine = judgeReranker({ model, name: 'beta-judge' })
+expectTypeOf(rerank({ engine: betaRerankEngine, topK: 8 })).toEqualTypeOf<RetrievalStep<'hits', 'hits'>>()
 expectTypeOf(expandParents()).toEqualTypeOf<RetrievalStep<'hits', 'hits'>>()
 expectTypeOf(compressToBudget({ tokens: 3_500, model })).toEqualTypeOf<RetrievalStep<'hits', 'hits'>>()
 
@@ -164,7 +166,7 @@ const recipe = retrievalRecipe({
   id: 'docs-hybrid-cited-answer',
   retriever: configuredRetriever,
   model,
-  steps: [rewriteQuery(), fanout({ maxQueries: 4 }), retrieve({ limit: 20 }), rerank({ topK: 8 }), customHitStep],
+  steps: [rewriteQuery(), fanout({ maxQueries: 4 }), retrieve({ limit: 20 }), rerank({ engine: betaRerankEngine, topK: 8 }), customHitStep],
 })
 
 expectTypeOf(recipe).toEqualTypeOf<RetrievalRecipe>()

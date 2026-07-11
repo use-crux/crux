@@ -12,11 +12,12 @@ import { createIndexedKnowledgeStore } from '../../../indexed-knowledge'
 import { mapConcurrent } from '../../../shared/concurrency'
 import type { RecordStore } from '../../../storage'
 import type { RetrievalModel } from '../../model'
-import { judgeReranker, type Reranker } from '../../reranker'
+import type { Reranker } from '../../reranker'
 import type { RetrieverHit } from '../../types'
 import {
   markBuiltInRetrievalStep,
   retrievalStep,
+  setRerankerDefinitionId,
   setRetrieveStepConfig,
   type PlannedQuery,
   type RetrievalStep,
@@ -86,32 +87,36 @@ export function retrieve(config: { id?: string; limit?: number } = {}): Retrieva
   return step
 }
 
-/** Create a rerank step backed by an explicit engine or the recipe model. */
+/**
+ * Create a rerank step backed by an explicit, named reranker engine.
+ *
+ * The `engine` is required: its `name` is the authored `rag.reranker` identity
+ * the Project Index and runtime evidence join on. There is no anonymous
+ * default-model path — build a named engine with `judgeReranker({ name, model })`
+ * or an adapter `reranker()` and pass it here, so the reranker is both
+ * indexable and truthfully attributable at runtime.
+ */
 export function rerank(
-  config: { id?: string; topK?: number; model?: RetrievalModel; engine?: Reranker } = {},
+  config: { engine: Reranker; id?: string; topK?: number },
 ): RetrievalStep<'hits', 'hits'> {
-  return markBuiltInRetrievalStep(
+  const step = markBuiltInRetrievalStep(
     retrievalStep({
       id: config.id ?? 'rerank',
       kind: 'rerank',
       phase: { in: 'hits', out: 'hits' },
-      model: config.model,
-      needsModel: !config.engine,
+      needsModel: false,
       async run(input, context) {
-        const engine =
-          config.engine ??
-          judgeReranker({
-            model: requireStepModel(config.id ?? 'rerank', context.model),
-          })
-        const reranked = await engine.rerank({
+        const reranked = await config.engine.rerank({
           query: context.originalQuery,
           hits: input.hits,
         })
-        const hits = config.engine ? reranked.map(withRerankProvenance) : reranked
+        const hits = reranked.map(withRerankProvenance)
         return { hits: hits.slice(0, config.topK ?? hits.length) }
       },
     }),
   )
+  setRerankerDefinitionId(step, config.engine.name)
+  return step
 }
 
 /** Create a parent-record hydration step. */

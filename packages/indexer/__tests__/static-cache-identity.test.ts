@@ -41,7 +41,7 @@ describe("static cache identity", () => {
   });
 
   it("takes the pre-launch semantic facts cache migration epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v22");
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v23");
   });
 
   it("projects static host manifest facets into extraction identity", () => {

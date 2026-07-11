@@ -14,6 +14,7 @@ import { SkillLoadError } from './types'
 import { getCached, setCached, DEFAULT_CACHE_TTL } from './cache'
 import { getHooks } from '../runtime/runtime'
 import { observe } from '../observability'
+import { skillDefinitionRef } from '../observability/definition-ref'
 import { SKILLS_SH_BASE, fetchFromCustomRegistry, fetchFromSkillsSh, type FetchedRegistrySkill } from './registry-fetch'
 import { emitRegistrySkillArtifact } from './registry-observability'
 
@@ -177,6 +178,9 @@ export async function resolveRegistrySkill(
   const span = observe.openSpan({
     name: 'skill.registry.load',
     primitive: 'skill.load',
+    // `identifier` is the composite `<registryName>:<path>` the indexer keys
+    // `skill:<safeId(identifier)>` on, so this ref is canonical.
+    definitionRefs: [skillDefinitionRef(identifier)],
     attributes: {
       loader: 'registry',
       identifier,

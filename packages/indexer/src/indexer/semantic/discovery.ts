@@ -354,7 +354,8 @@ function semanticDefinitionCandidateForCall<
         object,
       };
     }
-    case "reranker": {
+    case "reranker":
+    case "judgeReranker": {
       const name =
         semanticStringLiteralProperty(object, "id", syntax) ??
         semanticStringLiteralProperty(object, "name", syntax) ??

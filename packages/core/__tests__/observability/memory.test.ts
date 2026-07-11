@@ -6,6 +6,7 @@ import {
   resetObservabilityRuntime,
   setObservabilityTransport,
 } from '../../src/observability'
+import type { DefinitionRef } from '../../src/observability'
 import { blackboard } from '../../src/agent/blackboard'
 import { facts, memory, recentMessages, workingState } from '../../src/memory'
 import { inMemoryRecordStore, inMemoryVectorStore } from '../../src/storage'
@@ -28,7 +29,12 @@ describe('canonical memory observability', () => {
     await state.get({ records: store, namespace: 'thread:1', memoryId: 'planner' })
     await observe.flush()
 
-    const spanStarts = transport.records.filter((record) => record.type === 'span:start')
+    const spanStarts = transport.records.filter((record) => record.type === 'span:start') as Array<{
+      primitive?: string
+      name?: string
+      attributes?: Record<string, unknown>
+      definitionRefs?: DefinitionRef[]
+    }>
     expect(spanStarts.map((record) => record.primitive)).toEqual(['memory.write', 'memory.read'])
     expect(spanStarts).toContainEqual(
       expect.objectContaining({
@@ -44,6 +50,12 @@ describe('canonical memory observability', () => {
         attributes: expect.objectContaining({ memoryId: 'planner', blockId: 'state', blockKind: 'working' }),
       }),
     )
+    // The configured `memoryId` ('planner') emits the canonical ref on both spans.
+    for (const span of spanStarts) {
+      expect(span.definitionRefs, span.name).toEqual([
+        { id: 'memory:planner', kind: 'memory', role: 'invoked-memory' },
+      ])
+    }
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
@@ -58,6 +70,30 @@ describe('canonical memory observability', () => {
     )
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.write' }))
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'memory.read' }))
+  })
+
+  it('omits the definitionRef when a block is used with no memoryId at all', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const store = inMemoryRecordStore()
+    const state = workingState({
+      id: 'state',
+      schema: z.object({ step: z.number(), goal: z.string() }),
+    })
+
+    // No `memoryId` in the runtime options — no `memory()` wrapper in the mix.
+    await state.set({ step: 1, goal: 'draft' }, { records: store, namespace: 'thread:1' })
+    await state.get({ records: store, namespace: 'thread:1' })
+    await observe.flush()
+
+    const spanStarts = transport.records.filter((record) => record.type === 'span:start') as Array<{
+      primitive?: string
+      definitionRefs?: DefinitionRef[]
+    }>
+    expect(spanStarts.map((record) => record.primitive)).toEqual(['memory.write', 'memory.read'])
+    for (const span of spanStarts) {
+      expect(span.definitionRefs).toBeUndefined()
+    }
   })
 
     it('records working-state writes with before and after diff artifacts', async () => {

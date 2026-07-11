@@ -9,6 +9,7 @@ import type {
 import { validateConstraintRunResult } from './types'
 import { ConstraintViolationError } from './errors'
 import { observe } from '../../observability'
+import { constraintDefinitionRef } from '../../observability/definition-ref'
 import type { BoundaryDef } from '../boundary'
 import type { SafetyRunContext } from '../decision'
 
@@ -56,6 +57,8 @@ export async function observeConstraintCheck(
     {
       name: c.id,
       primitive: 'constraint.check',
+      // `constraint()` requires `id`, so this ref is always canonical.
+      definitionRefs: [constraintDefinitionRef(c.id)],
       attributes: {
         constraintName: c.id,
         category: c.category,
@@ -315,10 +318,17 @@ async function runConstraintsInternal(
       failures.filter((f) => !f.result.pass).map((f) => (f.result.pass ? '' : f.result.feedback)),
     )
 
+    // A combined retry is driven by every failed constraint; carry one
+    // canonical ref per distinct constraint definition (ids are required).
+    const retryRefs = Array.from(
+      new Map(failures.map((f) => [f.constraint.id, f.constraint.id])).values(),
+      (id) => constraintDefinitionRef(id),
+    )
     currentOutput = await observe.span(
       {
         name: 'constraint retry',
         primitive: 'constraint.retry',
+        definitionRefs: retryRefs,
         attributes: {
           failedCount: failures.length,
           nextAttempt: totalRetries,

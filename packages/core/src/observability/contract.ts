@@ -832,8 +832,15 @@ export interface SanitizedSourceRef {
 
 /**
  * Closed set of roles a project definition can play as runtime evidence
- * attached to a run or span record. Extend deliberately alongside the schema;
- * unknown roles are rejected on the wire.
+ * attached to a run or span record. Extend deliberately alongside the schema
+ * ({@link import('./schema').DefinitionRefRoleSchema}) and the directly-observed
+ * role map in `./definition-ref`; unknown roles are rejected on the wire.
+ *
+ * Each role names the relationship the definition had with the record's
+ * execution — a `resolved-*` definition was assembled/materialized, while an
+ * `invoked-*`/`loaded-*` definition was executed. There is one role per
+ * definition family (composition's four kinds and routing's five kinds each
+ * share a single family role), never one per concrete `ProjectDefinitionKind`.
  */
 export type DefinitionRefRole =
   | "resolved-prompt"
@@ -843,7 +850,16 @@ export type DefinitionRefRole =
   | "invoked-flow"
   | "invoked-retriever"
   | "invoked-composition"
-  | "invoked-blackboard";
+  | "invoked-blackboard"
+  | "invoked-routing"
+  | "loaded-skill"
+  | "invoked-guardrail"
+  | "invoked-constraint"
+  | "invoked-task"
+  | "invoked-workspace"
+  | "invoked-memory"
+  | "invoked-recipe"
+  | "invoked-reranker";
 
 /**
  * Evidence linking a runtime record back to the Project Index definition it

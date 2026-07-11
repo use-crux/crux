@@ -83,8 +83,8 @@ export interface CoverageDescriptor {
  * real schema strings — never invented shorthand names. See the module doc
  * above and `01-coverage-contract.md` §1.1/§1.2 for the full rationale.
  */
-export const DEFINITION_KIND_COVERAGE: Record<ProjectDefinitionKind, CoverageDescriptor> = {
-  // Category A — directly observed execution owner (25 kinds).
+export const DEFINITION_KIND_COVERAGE = {
+  // Category A — directly observed execution owner (24 kinds).
   prompt: { primary: "directly-observed", runtimePrimitiveNames: ["prompt.resolve", "prompt.budget"] },
   context: {
     primary: "directly-observed",
@@ -104,7 +104,6 @@ export const DEFINITION_KIND_COVERAGE: Record<ProjectDefinitionKind, CoverageDes
   "routing.cascade": { primary: "directly-observed", runtimePrimitiveNames: ["routing.cascade"] },
   "routing.fallback": { primary: "directly-observed", runtimePrimitiveNames: ["routing.fallback"] },
   "rag.recipe": { primary: "directly-observed", runtimePrimitiveNames: ["retrieval.recipe"] },
-  "rag.pipeline": { primary: "directly-observed", runtimePrimitiveNames: ["retrieval.pipeline"] },
   "rag.reranker": { primary: "directly-observed", runtimePrimitiveNames: ["retrieval.step"] },
   "rag.retriever": {
     primary: "directly-observed",
@@ -171,12 +170,40 @@ export const DEFINITION_KIND_COVERAGE: Record<ProjectDefinitionKind, CoverageDes
   "eval.rag": { primary: "quality-owned" },
   "eval.quality": { primary: "quality-owned" },
 
-  // Category E — genuinely static-only (3 kinds). Declarative/config; never
+  // Category E — genuinely static-only (4 kinds). Declarative/config; never
   // the target or subject of any runtime primitive.
   registry: { primary: "static-only" },
   "storage.bundle": { primary: "static-only" },
   "storage.scope": { primary: "static-only" },
+  // Refuted category-A claim: no first-party emitter, compiled-definition
+  // builder (JS-TypeScript semantic or native Rust/Oxc), or public pipeline
+  // execution API exists for `rag.pipeline` anywhere in the repo — only dead
+  // runtime-join-metadata switch cases in `definition-builder.ts`/`join.rs`
+  // that no producer ever reaches. `retrieval.pipeline` stays a reserved
+  // `CRUX_PRIMITIVE_NAMES` entry for a future real pipeline subsystem, but
+  // nothing emits it today. `rag.pipeline.stage` keeps its mechanical
+  // `structural-child` classification independent of this.
+  "rag.pipeline": { primary: "static-only" },
 
   // Category F — fallback sentinel (1, not a real category).
   unknown: { primary: "fallback" },
-};
+} as const satisfies Record<ProjectDefinitionKind, CoverageDescriptor>;
+
+/**
+ * The set of `ProjectDefinitionKind`s whose `primary` coverage treatment is
+ * `directly-observed` — the kinds that are themselves the subject of a runtime
+ * span and therefore must carry a canonical `DefinitionRef` as runtime
+ * evidence. Derived structurally from {@link DEFINITION_KIND_COVERAGE}, so
+ * adding a directly-observed kind to the manifest automatically widens this
+ * union and forces the `DefinitionRef` role/builder map in
+ * `../observability/definition-ref` to cover it (a compile error otherwise).
+ *
+ * Kinds whose runtime evidence is only a `secondary: ["direct-runtime"]`
+ * treatment (e.g. `scorer`) are intentionally excluded: they correlate through
+ * the Quality↔observability join, not the `DefinitionRef` join.
+ */
+export type DirectlyObservedKind = {
+  [K in keyof typeof DEFINITION_KIND_COVERAGE]: (typeof DEFINITION_KIND_COVERAGE)[K]["primary"] extends "directly-observed"
+    ? K
+    : never;
+}[keyof typeof DEFINITION_KIND_COVERAGE];

@@ -14,6 +14,7 @@ import {
   type ErrorCategory,
 } from "../generation/fallback";
 import { observe } from "../observability";
+import { routingDefinitionRef } from "../observability/definition-ref";
 import {
   emitRoutingReceiptReport,
   routingSpanAttributes,
@@ -89,6 +90,9 @@ export async function resolveRetry<M, R>({
       name: "retry.attempt",
       primitive: "routing.retry",
       implicitRun: false,
+      // Each attempt is a `routing.retry` span for the same wrapper definition;
+      // only carry the ref when the wrapper was given an authored `id`.
+      ...(options.id ? { definitionRefs: [routingDefinitionRef("retry", options.id)] } : {}),
       attributes: {
         ...routingSpanAttributes("retry", deadline),
         attemptIndex,

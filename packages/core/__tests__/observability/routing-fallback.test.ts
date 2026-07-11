@@ -8,6 +8,7 @@ import {
 } from '../../src/observability'
 import { cascade, fallback as routedFallback, retry, router, split } from '../../src/routing'
 import { resolveModel } from '../../src/routing/resolve'
+import type { DefinitionRef } from '../../src/observability'
 
 function result(text: string, cost = 0.01) {
   return {
@@ -300,6 +301,85 @@ describe('canonical routing and fallback observability', () => {
           }),
         }),
       )
+    }
+
+    // Every wrapper above is anonymous (no authored `id`); the indexer falls
+    // back to the local variable name, which the runtime cannot observe, so
+    // the outer resolve span for each kind must omit definitionRefs entirely.
+    const resolveSpanNames = new Set([
+      'router.resolve',
+      'split.resolve',
+      'retry.attempt',
+      'fallback.resolve',
+      'cascade.resolve',
+    ])
+    const resolveSpans = transport.records.filter(
+      (record): record is { type: 'span:start'; name?: string; definitionRefs?: DefinitionRef[] } =>
+        record.type === 'span:start' &&
+        typeof (record as { name?: string }).name === 'string' &&
+        resolveSpanNames.has((record as { name: string }).name),
+    )
+    expect(resolveSpans.length).toBeGreaterThanOrEqual(5)
+    for (const span of resolveSpans) {
+      expect(span.definitionRefs, span.name).toBeUndefined()
+    }
+  })
+
+  it('emits routing.<kind>:<safeId(id)> on the outer resolve span when the wrapper has an authored id', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const tryModel = vi.fn(async (model: string) => result(`from ${model}`))
+
+    await observe.run({ name: 'routing ids', rootPrimitive: 'routing.router' }, async () => {
+      await resolveModel(
+        router({
+          id: 'primary-router',
+          classify: () => 'default' as const,
+          routes: { default: 'router-model' },
+        }),
+        {},
+        tryModel,
+        extractModelId,
+      )
+      await resolveModel(
+        split({
+          id: 'ab-split',
+          seed: () => 'session-1',
+          routes: { a: { model: 'split-model', weight: 1 } },
+        }),
+        {},
+        tryModel,
+        extractModelId,
+      )
+      await resolveModel(retry('retry-model', { id: 'network-retry', attempts: 1 }), {}, tryModel, extractModelId)
+      await resolveModel(
+        routedFallback(['fallback-model', 'fallback-backup'], { id: 'model-fallback' }),
+        {},
+        tryModel,
+        extractModelId,
+      )
+      await resolveModel(
+        cascade({ id: 'quality-cascade', tiers: [{ model: 'cascade-model' }] }),
+        {},
+        tryModel,
+        extractModelId,
+      )
+    })
+    await observe.flush()
+
+    for (const [name, canonicalKind, id] of [
+      ['router.resolve', 'routing.router', 'primary-router'],
+      ['split.resolve', 'routing.split', 'ab-split'],
+      ['retry.attempt', 'routing.retry', 'network-retry'],
+      ['fallback.resolve', 'routing.fallback', 'model-fallback'],
+      ['cascade.resolve', 'routing.cascade', 'quality-cascade'],
+    ] as const) {
+      const span = transport.records.find(
+        (record) => record.type === 'span:start' && (record as { name?: string }).name === name,
+      ) as { definitionRefs?: DefinitionRef[] } | undefined
+      expect(span?.definitionRefs, name).toEqual([
+        { id: `${canonicalKind}:${id}`, kind: canonicalKind, role: 'invoked-routing' },
+      ])
     }
   })
 

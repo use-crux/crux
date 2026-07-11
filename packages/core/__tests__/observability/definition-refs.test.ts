@@ -77,6 +77,15 @@ describe('DefinitionRef wire contract', () => {
       'invoked-retriever',
       'invoked-composition',
       'invoked-blackboard',
+      'invoked-routing',
+      'loaded-skill',
+      'invoked-guardrail',
+      'invoked-constraint',
+      'invoked-task',
+      'invoked-workspace',
+      'invoked-memory',
+      'invoked-recipe',
+      'invoked-reranker',
     ])
   })
 

@@ -179,7 +179,7 @@ const docsAnswer = retrievalRecipe({
   steps: [
     fanout({ maxQueries: 4 }),
     retrieve({ limit: 30 }),
-    rerank({ topK: 8 }),
+    rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 }),
     compressToBudget({ tokens: 3500 }),
   ],
 })
@@ -210,7 +210,7 @@ Built-ins:
 | `rewriteQuery()`     | queries -> queries | yes            |
 | `fanout()`           | queries -> queries | yes            |
 | `retrieve()`         | queries -> hits    | no             |
-| `rerank()`           | hits -> hits       | yes            |
+| `rerank()`           | hits -> hits       | no (requires a named `engine`) |
 | `expandParents()`    | hits -> hits       | no             |
 | `compressToBudget()` | hits -> hits       | yes            |
 
@@ -231,18 +231,21 @@ Step order is checked at construction. Reserved internal ids such as `retrieve` 
 
 ## Reranking
 
-`rerank()` is the single recipe step for reordering hits. Without an engine, it uses the recipe or step `RetrievalModel` through the shared `judgeReranker()` implementation.
+`rerank()` is the single recipe step for reordering hits. It requires an explicit `engine` — a named `Reranker`. The engine's `name` is the canonical `rag.reranker:<name>` identity the Project Index and runtime evidence join on, so there is no anonymous default: build a judge engine with `judgeReranker({ name, model })` or an adapter `reranker()` and pass it in.
 
 ```ts
 const recipe = retrievalRecipe({
   id: 'docs-answer',
   retriever: docs,
   model: retrievalModel,
-  steps: [retrieve({ limit: 30 }), rerank({ topK: 8 })],
+  steps: [
+    retrieve({ limit: 30 }),
+    rerank({ engine: judgeReranker({ name: 'docs-judge', model: retrievalModel }), topK: 8 }),
+  ],
 })
 ```
 
-Use `engine` when an adapter or custom provider can return a `Reranker` directly:
+Use an adapter or custom provider `engine` when it can return a `Reranker` directly:
 
 ```ts
 const recipe = retrievalRecipe({
@@ -251,7 +254,7 @@ const recipe = retrievalRecipe({
   steps: [
     retrieve({ limit: 30 }),
     rerank({
-      engine: anthropic.reranker({ model: 'claude-haiku-4-5' }),
+      engine: anthropic.reranker({ name: 'anthropic-reranker', model: 'claude-haiku-4-5' }),
       topK: 8,
     }),
   ],

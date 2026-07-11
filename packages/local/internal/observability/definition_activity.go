@@ -66,26 +66,37 @@ func recordDefinitionRefs(record Record) ([]DefinitionRef, string) {
 	return envelope.DefinitionRefs, envelope.StartedAt
 }
 
+// definitionRefKey identifies one distinct (definition, role) pair within a
+// record so occurrence_count counts records per role, not repeated refs
+// within one record, while still projecting every role a definition is
+// legitimately referenced under.
+type definitionRefKey struct {
+	id   string
+	role string
+}
+
 // projectDefinitionActivity folds a newly-stored record's DefinitionRefs into
 // run_definition_activity inside the caller's ingest transaction. It is called
 // only for genuinely-new records (the storedInserted gate in ingestRecord), so
 // duplicate records inherit idempotency from the ingest-dedup path and never
-// double-count. Refs are deduped by id per record so occurrence_count counts
-// records, not repeated refs within one record.
+// double-count. Refs are deduped by (id, role) per record: a definition
+// referenced twice under the same role in one record still counts once, but
+// distinct roles for the same definition each project their own row.
 func projectDefinitionActivity(ctx context.Context, statements *ingestStatements, record Record) error {
 	refs, startedAt := recordDefinitionRefs(record)
 	if len(refs) == 0 {
 		return nil
 	}
-	seen := make(map[string]struct{}, len(refs))
+	seen := make(map[definitionRefKey]struct{}, len(refs))
 	for _, ref := range refs {
 		if ref.ID == "" {
 			continue
 		}
-		if _, dup := seen[ref.ID]; dup {
+		key := definitionRefKey{id: ref.ID, role: ref.Role}
+		if _, dup := seen[key]; dup {
 			continue
 		}
-		seen[ref.ID] = struct{}{}
+		seen[key] = struct{}{}
 		if err := upsertDefinitionActivity(ctx, statements, record.RunID, startedAt, ref); err != nil {
 			return err
 		}
@@ -93,10 +104,13 @@ func projectDefinitionActivity(ctx context.Context, statements *ingestStatements
 	return nil
 }
 
-// upsertDefinitionActivity writes or accumulates one (run, definition) row.
-// Every mutated column is a commutative/associative aggregate (min/max on the
-// text columns, sum on occurrence_count) so the resulting row is independent of
-// the order records are applied — the invariant replay relies on.
+// upsertDefinitionActivity writes or accumulates one (run, definition, role)
+// row. Every mutated column is a commutative/associative aggregate (min/max on
+// the text columns, sum on occurrence_count) so the resulting row is
+// independent of the order records are applied — the invariant replay relies
+// on. Role is part of the key, not an aggregated column: a definition
+// referenced under two distinct roles within a run retains two independent
+// rows instead of collapsing into one.
 func upsertDefinitionActivity(ctx context.Context, statements *ingestStatements, runID, startedAt string, ref DefinitionRef) error {
 	if runID == "" {
 		return nil
@@ -106,23 +120,24 @@ func upsertDefinitionActivity(ctx context.Context, statements *ingestStatements,
 			run_id, definition_id, definition_kind, role, first_seen_at, last_seen_at, occurrence_count
 		)
 		VALUES (?, ?, ?, ?, ?, ?, 1)
-		ON CONFLICT(run_id, definition_id) DO UPDATE SET
+		ON CONFLICT(run_id, definition_id, role) DO UPDATE SET
 			definition_kind = min(run_definition_activity.definition_kind, excluded.definition_kind),
-			role = min(run_definition_activity.role, excluded.role),
 			first_seen_at = min(run_definition_activity.first_seen_at, excluded.first_seen_at),
 			last_seen_at = max(run_definition_activity.last_seen_at, excluded.last_seen_at),
 			occurrence_count = run_definition_activity.occurrence_count + excluded.occurrence_count
 	`, runID, ref.ID, ref.Kind, ref.Role, startedAt, startedAt)
 	if err != nil {
-		return fmt.Errorf("project run definition activity for %q/%q: %w", runID, ref.ID, err)
+		return fmt.Errorf("project run definition activity for %q/%q/%q: %w", runID, ref.ID, ref.Role, err)
 	}
 	return nil
 }
 
-// RunDefinitionActivity returns the definitions a single run touched, ordered by
-// definition id. Rows are returned exactly as stored (no Project Index
-// resolution); read-time resolution against the current snapshot — including
-// reporting a since-deleted definition as unresolved — is a consumer concern.
+// RunDefinitionActivity returns the definitions a single run touched, ordered
+// by definition id then role so a definition referenced under multiple roles
+// is returned deterministically across replay. Rows are returned exactly as
+// stored (no Project Index resolution); read-time resolution against the
+// current snapshot — including reporting a since-deleted definition as
+// unresolved — is a consumer concern.
 func (s *Service) RunDefinitionActivity(ctx context.Context, runID string) ([]DefinitionActivity, error) {
 	ctx, cancel := s.queryContext(ctx)
 	defer cancel()
@@ -135,7 +150,7 @@ func (s *Service) RunDefinitionActivity(ctx context.Context, runID string) ([]De
 		SELECT definition_id, definition_kind, role, first_seen_at, last_seen_at, occurrence_count
 		FROM run_definition_activity
 		WHERE run_id = ?
-		ORDER BY definition_id
+		ORDER BY definition_id, role
 	`, canonicalRunID)
 	if err != nil {
 		return nil, fmt.Errorf("query run definition activity for %q: %w", runID, err)

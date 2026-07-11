@@ -174,6 +174,7 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
         &[
             "knowledgeBase",
             "reranker",
+            "judgeReranker",
             "retriever",
             "retrievalRecipe",
             "retrievalStep",

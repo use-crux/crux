@@ -6,6 +6,18 @@ import { inMemoryStorage } from '../storage'
 import type { DenseEmbedding } from '../embedding'
 import { getHooks } from '../runtime/runtime'
 import { observe } from '../observability'
+import { memoryDefinitionRef } from '../observability/definition-ref'
+
+/**
+ * Structured `invoked-memory` ref for a memory span, or `{}` when the memory is
+ * anonymous. The canonical id uses the authored definition key (`config.id`);
+ * the `standalone` fallback has no authored identity, so it omits the ref
+ * rather than guess. The existing `sourceDefinitionId` correlation attribute
+ * remains available alongside the canonical ref.
+ */
+function memoryDefinitionRefs(memoryId: string | undefined): { definitionRefs?: [ReturnType<typeof memoryDefinitionRef>] } {
+  return memoryId ? { definitionRefs: [memoryDefinitionRef(memoryId)] } : {}
+}
 import { contentText } from '../content'
 import { isMessageContent } from '../content/guards'
 import { registerInspectableResource } from '../runtime-bridge/resources'
@@ -353,6 +365,7 @@ function emitMemoryObservation(
   const span = observe.openSpan({
     name: `${block.id}.${operation}`,
     primitive,
+    ...memoryDefinitionRefs(ctx.memoryId),
     attributes: {
       memoryId,
       operation,
@@ -644,6 +657,7 @@ function emitMemoryRenderObservation(
   const span = observe.openSpan({
     name: `${memoryId}.render`,
     primitive: 'memory.read',
+    ...memoryDefinitionRefs(ctx.memoryId),
     attributes,
   })
 

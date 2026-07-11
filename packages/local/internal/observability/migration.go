@@ -241,11 +241,14 @@ func observabilitySchemaStatements() []string {
 		`CREATE INDEX IF NOT EXISTS idx_run_revision_log_run ON observability_run_revision_log(run_id)`,
 		// run_definition_activity is a DERIVED projection of the runtime↔Project
 		// Index join: for each run, which authored definitions its records
-		// referenced (via DefinitionRef), in what role, how often, and when it
-		// was first/last seen. It is rebuildable at any time by replaying the
-		// immutable `records` rows (see RebuildDefinitionActivity), so it holds
-		// NO revision, fingerprint, or identity column of its own — it is
-		// addressed only through the run_id it derives from, reuses
+		// referenced (via DefinitionRef), in what role(s), how often, and when it
+		// was first/last seen. A definition legitimately shows up under more than
+		// one role within a run (e.g. resolved as a prompt and separately invoked
+		// as a tool), so the key is (run_id, definition_id, role) — one row per
+		// distinct role, never collapsed. It is rebuildable at any time by
+		// replaying the immutable `records` rows (see RebuildDefinitionActivity),
+		// so it holds NO revision, fingerprint, or identity column of its own —
+		// it is addressed only through the run_id it derives from, reuses
 		// observability_revision for change tracking (a definition's activity
 		// only changes as a side effect of ingesting a record that already bumps
 		// its run's revision), and follows the parent run's retention/deletion
@@ -260,7 +263,7 @@ func observabilitySchemaStatements() []string {
 			first_seen_at TEXT NOT NULL,
 			last_seen_at TEXT NOT NULL,
 			occurrence_count INTEGER NOT NULL DEFAULT 0,
-			PRIMARY KEY (run_id, definition_id)
+			PRIMARY KEY (run_id, definition_id, role)
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_run_definition_activity_definition ON run_definition_activity(definition_id)`,
 	}
