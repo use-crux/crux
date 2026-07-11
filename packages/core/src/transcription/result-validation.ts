@@ -16,7 +16,7 @@ export function validateTranscriptionResult<TRaw, TMetadata = unknown, TWarning 
   result: NativeTranscriptionResult<TMetadata, TWarning>,
   raw: TRaw,
 ): TranscriptionResult<TRaw, TMetadata, TWarning> {
-  const text = result.text.trim()
+  const text = typeof result.text === 'string' ? result.text.trim() : ''
   if (!text) throw createNoTranscriptError(raw)
   const segments = validateSegments(result.segments ?? [])
   if (result.language !== undefined && !result.language.trim()) throw new TypeError('Transcription language must be non-empty')

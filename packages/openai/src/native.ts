@@ -24,6 +24,7 @@ import { openAIResponseMeta, openAIResponseText } from './response'
 import { openAITextDelta } from './stream'
 import type { OpenAIChatRequest, OpenAIExtra } from './types'
 import { createOpenAIGenerateImage } from './image-generation'
+import { createOpenAITranscribe } from './transcription'
 
 /** Configuration for `openai.retrievalModel()`. */
 export interface OpenAIRetrievalModelConfig {
@@ -102,6 +103,7 @@ export const openAIHelpers = openAI.helpers()
 
 function createOpenAIRuntimeExtensions(client: OpenAI): {
   generateImage: ReturnType<typeof createOpenAIGenerateImage>
+  transcribe: ReturnType<typeof createOpenAITranscribe>
   retrievalModel(config: OpenAIRetrievalModelConfig): RetrievalModel
   reranker(config: OpenAIRerankerConfig): Reranker
 } {
@@ -119,6 +121,7 @@ function createOpenAIRuntimeExtensions(client: OpenAI): {
   }
   return {
     generateImage: createOpenAIGenerateImage(client),
+    transcribe: createOpenAITranscribe(client),
     retrievalModel,
     reranker(config) {
       return judgeReranker({
