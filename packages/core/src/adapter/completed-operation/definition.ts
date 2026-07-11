@@ -13,6 +13,16 @@ export interface CompletedOperationInvokeContext<
 > extends CompletedOperationContext<TModel> {
   /** Signal combining caller cancellation, the total deadline, and the step deadline. */
   readonly signal: AbortSignal;
+  /**
+   * Start and count one actual provider or composed child call.
+   *
+   * Preparatory CPU work and downloads stay outside this boundary. The call is
+   * counted before `start` runs, including when the native operation rejects.
+   */
+  readonly call: <T>(
+    operation: string,
+    start: () => Promise<T>,
+  ) => Promise<T>;
 }
 
 /** One portable conformance example shipped with a provider operation. */
@@ -82,7 +92,8 @@ export interface CompletedOperationDefinition<
  * const image = defineCompletedOperation({
  *   normalize: (input) => normalizeImageInput(input),
  *   support: (_input, { model }) => imageSupport(model),
- *   invoke: (input, { model, signal }) => client.images.generate({ ...input, model, signal }),
+ *   invoke: (input, { model, signal, call }) =>
+ *     call('image.generate', () => client.images.generate({ ...input, model, signal })),
  *   validate: (raw) => decodeImageResult(raw),
  *   report: (result) => ({ kind: 'image', count: result.images.length }),
  *   conformance: [],

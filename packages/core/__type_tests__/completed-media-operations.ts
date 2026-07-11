@@ -1,3 +1,5 @@
+import { fallback } from '../src'
+import { cascade, retry, router, split } from '../src/routing'
 import type {
   Asset,
   AssetStore,
@@ -59,6 +61,36 @@ const imageCache = {
 void imageCache
 
 void generateSpeech({ model: 'speech-model', text: 'Hello world', voice: 'alloy' })
+
+const resilientImage = fallback([
+  retry('image-model', { attempts: 2 }),
+  'image-model',
+])
+void generateImage({ model: resilientImage, prompt: 'A quiet canal' })
+void generateImage({
+  model: router({
+    classify: () => 'fast' as const,
+    routes: { fast: 'image-model', default: 'image-model' },
+  }),
+  prompt: 'A quiet canal',
+})
+void generateImage({
+  model: split({
+    seed: () => 'stable',
+    routes: { only: { model: 'image-model', weight: 1 } },
+  }),
+  prompt: 'A quiet canal',
+})
+
+// @ts-expect-error completed operations reject incompatible raw model leaves
+void generateImage({ model: 42, prompt: 'A quiet canal' })
+// @ts-expect-error every routed leaf must belong to the adapter model type
+void generateImage({ model: fallback(['image-model', 42]), prompt: 'A quiet canal' })
+// @ts-expect-error deferred result evaluation belongs to generate/stream, not completed operations
+void generateImage({
+  model: cascade({ tiers: [{ model: 'image-model' }] }),
+  prompt: 'A quiet canal',
+})
 
 const badVoice = {
   model: 'speech-model',

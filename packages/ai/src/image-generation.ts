@@ -96,8 +96,8 @@ export function createAiSdkImageOperation(gateway: SdkGateway) {
       return { options, prompt: await toNativePrompt(prompt) };
     },
     support: () => "unknown" as const,
-    invoke: ({ options, prompt }, { signal }) =>
-      gateway.generateImage({
+    invoke: ({ options, prompt }, { signal, call }) =>
+      call("image.generate", () => gateway.generateImage({
         model: options.model,
         prompt,
         ...(options.n === undefined ? {} : { n: options.n }),
@@ -108,7 +108,7 @@ export function createAiSdkImageOperation(gateway: SdkGateway) {
         ...(options.seed === undefined ? {} : { seed: options.seed }),
         ...options.extra,
         abortSignal: signal,
-      }),
+      })),
     validate(raw) {
       return createGeneratedImageResult(
         raw.images.map((image) => ({

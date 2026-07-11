@@ -112,8 +112,8 @@ export function createAiSdkTranscriptionOperation(gateway: SdkGateway) {
       return { options, audio };
     },
     support: () => "unknown" as const,
-    async invoke({ options, audio }, { signal }) {
-      return gateway.transcribe({
+    async invoke({ options, audio }, { signal, call }) {
+      return call("audio.transcribe", async () => gateway.transcribe({
         model: options.model,
         audio: audio.type === "url" ? audio.url : await dataBytes(audio.data),
         ...(audio.type === "url" ? { download: secureDownload } : {}),
@@ -127,7 +127,7 @@ export function createAiSdkTranscriptionOperation(gateway: SdkGateway) {
         ...(options.extra?.headers === undefined
           ? {}
           : { headers: options.extra.headers }),
-      });
+      }));
     },
     validate(raw) {
       return validateTranscriptionResult(

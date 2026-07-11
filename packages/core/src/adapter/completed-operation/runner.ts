@@ -13,7 +13,7 @@ import type {
   CompletedOperationDefinition,
   CompletedOperationContext,
 } from "./definition";
-import type { AnyRoutable, RoutingCallOptions } from "../../routing/types";
+import type { CompletedOperationModelGuard, RoutingCallOptions } from "../../routing/types";
 import {
   completedModelLeaves,
   resolveCompletedModel,
@@ -35,7 +35,7 @@ export type RunCompletedMediaOperationOptions<
   TNative,
   TResult extends CompletedOperationResult,
   TReport,
-  TSelectedModel extends TModel | AnyRoutable = TModel,
+  TSelectedModel = TModel,
 > = Readonly<{
   readonly definition: CompletedOperationDefinition<
     TModel,
@@ -58,6 +58,7 @@ export type RunCompletedMediaOperationOptions<
   /** Internal descriptor sink. Reports must contain safe facts only. */
   readonly onReport?: (report: unknown) => void;
 }> &
+  CompletedOperationModelGuard<TModel, TSelectedModel> &
   RoutingCallOptions<TSelectedModel>;
 
 /**
@@ -88,7 +89,7 @@ export async function runCompletedMediaOperation<
   TNative,
   TResult extends CompletedOperationResult,
   TReport = unknown,
-  TSelectedModel extends TModel | AnyRoutable = TModel,
+  TSelectedModel = TModel,
 >(
   options: RunCompletedMediaOperationOptions<
     TModel,
@@ -135,6 +136,12 @@ export async function runCompletedMediaOperation<
           const native = await options.definition.invoke(normalized, {
             ...context,
             signal: attemptSignal,
+            call: async (operation, start) => {
+              if (!operation.trim())
+                throw new TypeError("Completed child operation must have a name.");
+              state.calls += 1;
+              return start();
+            },
           });
           return options.definition.validate(native, normalized, context);
         },
@@ -197,7 +204,7 @@ async function preflightCandidates<
   TNative,
   TResult extends CompletedOperationResult,
   TReport,
-  TSelectedModel extends TModel | AnyRoutable,
+  TSelectedModel,
 >(
   options: RunCompletedMediaOperationOptions<
     TModel,

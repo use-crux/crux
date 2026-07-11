@@ -227,7 +227,8 @@ function bundleOperation(kind: "image" | "transcription" | "speech") {
   return defineCompletedOperation({
     normalize: (input: Readonly<{ model: string }>) => input,
     support: () => "supported" as const,
-    invoke: async () => ({ kind }),
+    invoke: async (_input, context) =>
+      context.call("media.test", async () => ({ kind })),
     validate: (raw) => ({
       warnings: [],
       execution: { kind: "native" as const, calls: 1 },

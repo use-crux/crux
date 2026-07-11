@@ -3,7 +3,7 @@ import type {
   CompletedOperationResult,
   OperationTimeout,
 } from "../completed-operation/contracts";
-import type { AnyRoutable, RoutingCallOptions } from "../routing/types";
+import type { CompletedOperationModelGuard, RoutingCallOptions } from "../routing/types";
 
 /** Audio accepted by flat transcription operations without storage access. */
 export type AudioSource = MediaSource;
@@ -78,8 +78,11 @@ export type Transcribe<
   TRaw = unknown,
   TMetadata = unknown,
   TWarning = unknown,
-> = <TSelectedModel extends TModel | AnyRoutable = TModel>(
+> = ((
+  options: TranscribeOptions<TModel, TExtra>,
+) => Promise<TranscriptionResult<TRaw, TMetadata, TWarning>>) & (<TSelectedModel>(
   options: Omit<TranscribeOptions<TModel, TExtra>, "model"> &
     Readonly<{ model: TSelectedModel }> &
+    CompletedOperationModelGuard<TModel, TSelectedModel> &
     RoutingCallOptions<TSelectedModel>,
-) => Promise<TranscriptionResult<TRaw, TMetadata, TWarning>>;
+) => Promise<TranscriptionResult<TRaw, TMetadata, TWarning>>);

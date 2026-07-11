@@ -18,8 +18,12 @@ function routedOperation(
     support: () => "supported" as const,
     invoke: async (
       _input,
-      context: Readonly<{ model: string; signal: AbortSignal }>,
-    ) => invoke(context.model),
+      context: Readonly<{
+        model: string;
+        signal: AbortSignal;
+        call: <T>(operation: string, start: () => Promise<T>) => Promise<T>;
+      }>,
+    ) => context.call("media.test", () => invoke(context.model)),
     validate: (raw) => ({
       value: raw.value,
       warnings: [],
@@ -44,10 +48,10 @@ describe("completed operation routing", () => {
         return { value: input.value };
       },
       support: () => "supported" as const,
-      invoke: async (_input, context) => {
+      invoke: async (_input, context) => context.call("media.test", async () => {
         invokedModels.push(context.model);
         return { value: context.model };
-      },
+      }),
       validate: (raw) => ({
         value: raw.value,
         warnings: [],
@@ -173,15 +177,15 @@ describe("completed operation routing", () => {
     const definition = defineCompletedOperation({
       normalize: (input: Readonly<{ value: string }>) => input,
       support: () => "supported" as const,
-      invoke: async (
-        _input,
-        context: Readonly<{ model: string; signal: AbortSignal }>,
-      ) => {
-        if (!failed) {
-          failed = true;
-          throw Object.assign(new Error("retry me"), { status: 503 });
-        }
-        return { model: context.model };
+      invoke: async (_input, context) => {
+        await context.call("upload", async () => ({ id: "file-1" }));
+        return context.call("generate", async () => {
+          if (!failed) {
+            failed = true;
+            throw Object.assign(new Error("retry me"), { status: 503 });
+          }
+          return { model: context.model };
+        });
       },
       validate: (raw) => ({
         value: raw.model,
@@ -211,7 +215,7 @@ describe("completed operation routing", () => {
 
     expect(result.execution).toEqual({
       kind: "composed",
-      calls: 3,
+      calls: 4,
       operations: ["upload", "generate"],
     });
     expect(reports).toEqual([{ kind: "file", count: 1 }]);
@@ -222,13 +226,13 @@ describe("completed operation routing", () => {
     const definition = defineCompletedOperation({
       normalize: (input: Readonly<{ value: string }>) => input,
       support: () => "supported" as const,
-      invoke: async () => {
+      invoke: async (_input, context) => context.call("media.test", async () => {
         if (!attempted) {
           attempted = true;
           throw Object.assign(new Error("retry me"), { status: 503 });
         }
         return { value: "ok" };
-      },
+      }),
       validate: (raw) => ({
         value: raw.value,
         warnings: [],
@@ -247,6 +251,44 @@ describe("completed operation routing", () => {
       input: { value: "hello" },
     });
 
-    expect(result.execution).toEqual({ kind: "native", calls: 3 });
+    expect(result.execution).toEqual({ kind: "native", calls: 2 });
+  });
+
+  it("applies fallback attempt budgets and keeps fallback hooks non-invasive", async () => {
+    const transitions: string[] = [];
+    const definition = routedOperation(async (model) => {
+      if (model === "slow") return new Promise(() => {});
+      return { value: model };
+    });
+    const result = await runCompletedMediaOperation({
+      definition,
+      provider: "test",
+      operation: "media.test",
+      model: fallback(["slow", "ok"], {
+        timeout: { attempt: 5 },
+        onFallback: ({ from, to }) => {
+          transitions.push(`${from}->${to}`);
+          throw new Error("observer failed");
+        },
+      }),
+      input: { value: "hello" },
+    });
+    expect(result.value).toBe("ok");
+    expect(result.execution.calls).toBe(2);
+    expect(transitions).toEqual(["slow->ok"]);
+
+    await expect(
+      runCompletedMediaOperation({
+        definition,
+        provider: "test",
+        operation: "media.test",
+        model: fallback(["ok", "unused"], {
+          when: () => {
+            throw new Error("predicate observer failed");
+          },
+        }),
+        input: { value: "hello" },
+      }),
+    ).resolves.toMatchObject({ value: "ok" });
   });
 });

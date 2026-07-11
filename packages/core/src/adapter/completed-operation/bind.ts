@@ -7,7 +7,10 @@ import {
   runCompletedMediaOperation,
   type RunCompletedMediaOperationOptions,
 } from "./runner";
-import type { AnyRoutable, RoutingCallOptions } from "../../routing/types";
+import type {
+  CompletedOperationModelGuard,
+  RoutingCallOptions,
+} from "../../routing/types";
 
 /** Minimum call shape shared by all bounded provider media operations. */
 export interface CompletedOperationCall<TModel> {
@@ -16,18 +19,16 @@ export interface CompletedOperationCall<TModel> {
   readonly timeout?: OperationTimeout;
 }
 
-/** Model value accepted by a completed operation, including inert routing trees. */
-export type CompletedOperationModel<TModel> = TModel | AnyRoutable;
-
 /** Public call signature compiled from one provider-authored definition. */
 export type BoundCompletedOperation<
   TModel,
   TInput extends CompletedOperationCall<TModel>,
   TResult extends CompletedOperationResult,
 > = ((input: TInput) => Promise<TResult>) &
-  (<TSelectedModel extends CompletedOperationModel<TInput["model"]>>(
+  (<TSelectedModel>(
     input: Omit<TInput, "model" | "routing" | "route"> &
       Readonly<{ model: TSelectedModel }> &
+      CompletedOperationModelGuard<TInput["model"], TSelectedModel> &
       RoutingCallOptions<TSelectedModel>,
   ) => Promise<TResult>);
 
@@ -87,9 +88,10 @@ export function bindCompletedOperation<
     TReport
   >,
 ): BoundCompletedOperation<TModel, TInput, TResult> {
-  const run = <TSelectedModel extends CompletedOperationModel<TInput["model"]>>(
+  const run = <TSelectedModel>(
     input: Omit<TInput, "model" | "routing" | "route"> &
       Readonly<{ model: TSelectedModel }> &
+      CompletedOperationModelGuard<TInput["model"], TSelectedModel> &
       RoutingCallOptions<TSelectedModel>,
   ) => {
     const call = input as unknown as TInput & {

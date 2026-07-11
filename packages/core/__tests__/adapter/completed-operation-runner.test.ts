@@ -38,11 +38,11 @@ function operation(
     },
     async invoke(input, context) {
       events.push("invoke");
-      return (
+      return context.call("media.test", async () => (
         options.invoke?.(context.model, context.signal) ?? {
           value: `${context.model}:${input.value}`,
         }
-      );
+      ));
     },
     validate(raw): Result {
       events.push("validate");
@@ -77,10 +77,10 @@ describe("completed operation runner", () => {
         events.push("support");
         return "supported" as const;
       },
-      invoke: async (input) => {
+      invoke: async (input, context) => context.call("media.test", async () => {
         events.push("invoke");
         return { value: input.value };
-      },
+      }),
       validate: (raw) => ({
         value: raw.value,
         warnings: [],
@@ -237,7 +237,7 @@ describe("completed operation runner", () => {
     const unsafeReport = defineCompletedOperation({
       normalize: (input: Readonly<{ value: string }>) => input,
       support: () => "supported" as const,
-      invoke: async () => ({ value: "ok" }),
+      invoke: async (_input, context) => context.call("media.test", async () => ({ value: "ok" })),
       validate: (raw) => ({
         value: raw.value,
         warnings: [],

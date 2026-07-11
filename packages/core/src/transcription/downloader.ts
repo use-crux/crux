@@ -83,6 +83,7 @@ export function createSecureAudioDownloader(
     url: URL,
     requestOptions: SecureAudioDownloadRequest = {},
   ): Promise<DataAsset> {
+    throwIfAborted(requestOptions.signal);
     const controller = new AbortController();
     let timedOut = false;
     const abort = () => controller.abort(requestOptions.signal?.reason);
@@ -100,9 +101,14 @@ export function createSecureAudioDownloader(
         validateSecureAudioUrl(current);
         let addresses: readonly string[];
         try {
-          addresses = await resolver(current.hostname);
-        } catch {
-          throw materialization("blocked-address");
+          addresses = await raceAbort(
+            resolver(current.hostname),
+            controller.signal,
+          );
+        } catch (error) {
+          if (controller.signal.aborted)
+            throw controller.signal.reason ?? error;
+          throw networkError(error);
         }
         if (addresses.length === 0) throw materialization("blocked-address");
         for (const address of addresses) assertPublicAudioAddress(address);
@@ -124,7 +130,7 @@ export function createSecureAudioDownloader(
               requestOptions.signal?.reason ?? controller.signal.reason ?? error
             );
           }
-          throw materialization("blocked-address");
+          throw networkError(error);
         }
         if (isAudioRedirect(response.status)) {
           if (redirects >= maxRedirects) throw materialization("redirect");
@@ -140,7 +146,7 @@ export function createSecureAudioDownloader(
           continue;
         }
         if (response.status < 200 || response.status >= 300)
-          throw materialization("mime-mismatch");
+          throw httpError(response.status);
         return await readAudioResponse(response, maxBytes, controller);
       }
     } finally {
@@ -148,6 +154,52 @@ export function createSecureAudioDownloader(
       requestOptions.signal?.removeEventListener("abort", abort);
     }
   };
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted)
+    throw signal.reason ?? new DOMException("aborted", "AbortError");
+}
+
+async function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  throwIfAborted(signal);
+  return await new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(signal.reason);
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener("abort", onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener("abort", onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+function httpError(status: number): Error & { readonly status: number } {
+  return Object.freeze(
+    Object.assign(
+      new Error(`Audio download failed with HTTP status ${status}.`),
+      { name: "AudioDownloadHttpError", status },
+    ),
+  );
+}
+
+function networkError(error: unknown): Error & { readonly code?: string } {
+  const code =
+    typeof error === "object" && error !== null && "code" in error &&
+    typeof error.code === "string"
+      ? error.code
+      : undefined;
+  return Object.freeze(
+    Object.assign(new Error("Audio download network operation failed."), {
+      name: "AudioDownloadNetworkError",
+      ...(code === undefined ? {} : { code }),
+    }),
+  );
 }
 
 /** Default shared secure downloader. */

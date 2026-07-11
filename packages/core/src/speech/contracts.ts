@@ -3,7 +3,7 @@ import type {
   CompletedOperationResult,
   OperationTimeout,
 } from "../completed-operation/contracts";
-import type { AnyRoutable, RoutingCallOptions } from "../routing/types";
+import type { CompletedOperationModelGuard, RoutingCallOptions } from "../routing/types";
 
 /** Portable controls accepted by a flat speech-generation operation. */
 export type GenerateSpeechOptions<
@@ -49,8 +49,11 @@ export type GenerateSpeech<
   TRaw = unknown,
   TMetadata = unknown,
   TWarning = unknown,
-> = <TSelectedModel extends TModel | AnyRoutable = TModel>(
+> = ((
+  options: GenerateSpeechOptions<TModel, TVoice, TExtra>,
+) => Promise<GenerateSpeechResult<TRaw, TMetadata, TWarning>>) & (<TSelectedModel>(
   options: Omit<GenerateSpeechOptions<TModel, TVoice, TExtra>, "model"> &
     Readonly<{ model: TSelectedModel }> &
+    CompletedOperationModelGuard<TModel, TSelectedModel> &
     RoutingCallOptions<TSelectedModel>,
-) => Promise<GenerateSpeechResult<TRaw, TMetadata, TWarning>>;
+) => Promise<GenerateSpeechResult<TRaw, TMetadata, TWarning>>);

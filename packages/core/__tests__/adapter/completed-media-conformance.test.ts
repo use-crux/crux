@@ -22,7 +22,8 @@ function fakeOperation(kind: "image" | "transcription") {
   return defineCompletedOperation({
     normalize: (input: Readonly<{ model: string }>) => input,
     support: () => "supported" as const,
-    invoke: async () => ({ kind }),
+    invoke: async (_input, context) =>
+      context.call("media.test", async () => ({ kind })),
     validate: (raw) => ({
       warnings: [],
       execution: { kind: "native" as const, calls: 1 },
@@ -96,7 +97,8 @@ function fakeCompletedRuntime() {
           return input;
         },
         support: () => "supported" as const,
-        invoke: async () => ({ id: "speech-1" }),
+        invoke: async (_input, context) =>
+          context.call("audio.speech", async () => ({ id: "speech-1" })),
         validate: (raw) =>
           createGenerateSpeechResult(audio, {
             warnings: [],

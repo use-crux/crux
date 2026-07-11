@@ -3,8 +3,8 @@ export type {
   BoundCompletedOperation,
   BindCompletedOperationOptions,
   CompletedOperationCall,
-  CompletedOperationModel,
 } from "./bind";
+export type { CompletedOperationModel } from "../../routing/types";
 export { defineCompletedOperation } from "./definition";
 export type {
   CompletedOperationConformanceCase,

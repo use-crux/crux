@@ -22,6 +22,14 @@ describe("Google transcription", () => {
     expect(generateContent.mock.calls[0]?.[0]).toMatchObject({
       model: "gemini-2.5-flash",
     });
+    const request = generateContent.mock.calls[0]?.[0] as {
+      contents: Array<{ parts: Array<{ text?: string }> }>;
+      config: { responseJsonSchema: { properties: Record<string, unknown> } };
+    };
+    expect(request.contents[0]?.parts[0]?.text).not.toMatch(/timing|segment/i);
+    expect(request.config.responseJsonSchema.properties).not.toHaveProperty(
+      "segments",
+    );
   });
 
   it("uses one composed native call with audio and a fixed structured transcript route", async () => {
@@ -61,9 +69,7 @@ describe("Google transcription", () => {
         responseJsonSchema: { required: ["text"] },
       },
     });
-    expect(result.segments).toEqual([
-      { text: "Hello", startSecond: 0, endSecond: 1 },
-    ]);
+    expect(result.segments).toEqual([]);
     expect(result.words).toEqual([]);
     expect(result.warnings).toEqual([expect.stringContaining("composed")]);
     expect(result.execution).toEqual({
@@ -75,23 +81,26 @@ describe("Google transcription", () => {
     expectTypeOf(google.transcribe).toBeFunction();
   });
 
-  it("keeps valid text but drops absent or invalid timing with warnings", async () => {
+  it("rejects every timestamp request before composed provider I/O", async () => {
     const generateContent = vi.fn(async () =>
       response({
         text: "Hello",
         segments: [{ text: "Hello", start: 2, end: 1 }],
       }),
     );
-    const result = await createGoogle(client(generateContent), {
+    const google = createGoogle(client(generateContent), {
       cachedContent: false,
-    }).transcribe({
-      model: "custom-audio-model",
-      audio: wav,
-      timestamps: "segment",
     });
-    expect(result.text).toBe("Hello");
-    expect(result.segments).toEqual([]);
-    expect(result.warnings).toHaveLength(2);
+    for (const timestamps of ["segment", "word", "segment-and-word"] as const) {
+      await expect(
+        google.transcribe({
+          model: "custom-audio-model",
+          audio: wav,
+          timestamps,
+        }),
+      ).rejects.toMatchObject({ code: "unsupported_capability" });
+    }
+    expect(generateContent).not.toHaveBeenCalled();
   });
 
   it("does not warn for unrequested timing and rejects unsupported requested detail before I/O", async () => {
@@ -109,7 +118,7 @@ describe("Google transcription", () => {
       google.transcribe({
         model: "gemini-2.5-flash",
         audio: wav,
-        timestamps: "word",
+        timestamps: "segment",
       }),
     ).rejects.toMatchObject({
       code: "unsupported_capability",

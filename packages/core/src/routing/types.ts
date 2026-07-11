@@ -64,6 +64,62 @@ export type AnyRoutable = RoutingPhantom<
   string
 >;
 
+/**
+ * Recursive routing tree accepted by bounded media operations.
+ *
+ * Every reachable leaf must belong to `TModel`. Cascades are deliberately
+ * absent because their deferred result evaluation is a generation concern.
+ */
+export type CompletedOperationModel<TModel, TSelected = TModel> =
+  TSelected extends unknown
+    ? [CompletedOperationLeaves<TSelected>] extends [TModel]
+      ? TSelected
+      : never
+    : never;
+
+/** @internal Constraint helper that preserves call-site generic inference. */
+export type CompletedOperationModelGuard<TModel, TSelected> =
+  [CompletedOperationLeaves<TSelected>] extends [TModel] ? unknown : never;
+
+type CompletedOperationLeaves<T> = T extends Readonly<{
+  _tag: "crux.cascade";
+}>
+  ? CompletedOperationDeferredResult
+  : T extends Readonly<{ _tag: "crux.retry"; model: infer M }>
+    ? CompletedOperationLeaves<M>
+    : T extends Readonly<{
+          _tag: "crux.fallback";
+          models: readonly (infer M)[];
+        }>
+      ? CompletedOperationLeaves<M>
+      : T extends Readonly<{
+            _tag: "crux.router";
+            config: Readonly<{ routes: infer R }>;
+          }>
+        ? CompletedOperationLeaves<RouteModels<R>>
+        : T extends Readonly<{
+              _tag: "crux.split";
+              config: Readonly<{ routes: infer R }>;
+            }>
+          ? CompletedOperationLeaves<SplitModels<R>>
+          : T;
+
+type RouteModels<T> = T extends Readonly<Record<string, infer R>>
+  ? R extends Readonly<{ model: infer M }>
+    ? M
+    : R
+  : CompletedOperationDeferredResult;
+
+type SplitModels<T> = T extends Readonly<
+  Record<string, Readonly<{ model: infer M }>>
+>
+  ? M
+  : CompletedOperationDeferredResult;
+
+interface CompletedOperationDeferredResult {
+  readonly __completedOperation: "deferred-result-unsupported";
+}
+
 /** Per-route generation parameters wrapped around a model. */
 export type CallProfile<M = unknown> = {
   /** The model or routing wrapper selected by this route. */

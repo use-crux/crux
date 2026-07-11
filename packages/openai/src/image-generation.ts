@@ -89,8 +89,8 @@ export function createOpenAIImageOperation(client: OpenAI) {
       return { options, prompt };
     },
     support: () => "supported" as const,
-    async invoke({ options, prompt }, { signal }) {
-      return prompt.images.length > 0 || prompt.mask
+    async invoke({ options, prompt }, { signal, call }) {
+      return call("image.generate", async () => prompt.images.length > 0 || prompt.mask
         ? client.images.edit(
             {
               ...options.extra,
@@ -122,7 +122,7 @@ export function createOpenAIImageOperation(client: OpenAI) {
               stream: false,
             },
             { signal },
-          );
+          ));
     },
     validate(raw, { options }) {
       const mediaType = outputMediaType(

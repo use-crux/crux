@@ -1,5 +1,4 @@
 import type { GenerateContentResponse } from "@google/genai";
-import type { TranscriptInterval } from "@use-crux/core";
 
 /** Safe facts retained from Google's composed generation response. */
 export interface GoogleTranscriptionMetadata {
@@ -17,19 +16,6 @@ export const GOOGLE_TRANSCRIPT_SCHEMA = {
   properties: {
     text: { type: "string" },
     language: { type: "string" },
-    segments: {
-      type: "array",
-      items: {
-        type: "object",
-        properties: {
-          text: { type: "string" },
-          start: { type: "number" },
-          end: { type: "number" },
-        },
-        required: ["text", "start", "end"],
-        additionalProperties: false,
-      },
-    },
   },
   required: ["text"],
   additionalProperties: false,
@@ -50,41 +36,6 @@ export function parseGoogleTranscript(
       "Google transcription returned invalid structured JSON.",
     );
   }
-}
-
-/** Validate and normalize measured Google transcript segments. */
-export function normalizeGoogleTranscriptTiming(value: unknown): {
-  valid: boolean;
-  segments: readonly TranscriptInterval[];
-} {
-  if (!Array.isArray(value) || value.length === 0)
-    return { valid: false, segments: [] };
-  let previousEnd = 0;
-  const segments: TranscriptInterval[] = [];
-  for (const item of value) {
-    if (!item || typeof item !== "object")
-      return { valid: false, segments: [] };
-    const record = item as Record<string, unknown>;
-    if (
-      typeof record.text !== "string" ||
-      !record.text.trim() ||
-      typeof record.start !== "number" ||
-      !Number.isFinite(record.start) ||
-      record.start < previousEnd ||
-      typeof record.end !== "number" ||
-      !Number.isFinite(record.end) ||
-      record.end < record.start
-    ) {
-      return { valid: false, segments: [] };
-    }
-    segments.push({
-      text: record.text.trim(),
-      startSecond: record.start,
-      endSecond: record.end,
-    });
-    previousEnd = record.end;
-  }
-  return { valid: true, segments };
 }
 
 /** Project only safe, stable response metadata into the public result. */

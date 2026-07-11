@@ -1,13 +1,13 @@
 import {
   classifyError,
   isFallback,
-  shouldAttemptFallback,
 } from "../../generation/fallback";
 import { withAbortSignal, withBudget } from "../../generation/timeout";
 import { isCascade } from "../../routing/cascade";
 import { isRetry, type RetryOptions } from "../../routing/retry";
 import { isRouter } from "../../routing/router";
 import { isSplit } from "../../routing/split";
+import { resolveCompletedFallback } from "./completed-fallback";
 
 export interface CompletedRoutingOptions {
   readonly input: unknown;
@@ -55,39 +55,12 @@ export async function resolveCompletedModel<TResult>(
   }
 
   if (isFallback(model)) {
-    const causes: unknown[] = [];
-    for (let index = 0; index < model.models.length; index++) {
-      const candidate = model.models[index];
-      try {
-        const result = await resolveCompletedModel(
-          candidate,
-          options,
-          state,
-          invoke,
-        );
-        if (model.options.when && (await model.options.when(result))) {
-          causes.push(
-            Object.assign(new Error("fallback when(result) matched"), {
-              name: "InvalidResponseError",
-            }),
-          );
-          continue;
-        }
-        return result;
-      } catch (error) {
-        causes.push(error);
-        const finalCandidate = index === model.models.length - 1;
-        if (finalCandidate) break;
-        if (
-          !(error instanceof Error) ||
-          !shouldAttemptFallback(error, model.options)
-        )
-          throw error;
-      }
-    }
-    throw new AggregateError(
-      causes,
-      "All completed-operation fallback candidates failed.",
+    return resolveCompletedFallback(
+      model,
+      options,
+      state,
+      invoke,
+      resolveCompletedModel,
     );
   }
 
@@ -132,7 +105,6 @@ export async function resolveCompletedModel<TResult>(
         stepSignal === undefined
           ? options.signal
           : AbortSignal.any([options.signal, stepSignal]);
-      state.calls += 1;
       state.selectedModel = model;
       return withAbortSignal(() => invoke(model, signal), signal);
     },

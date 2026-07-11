@@ -8,7 +8,7 @@ import type { ContextEntry } from "../prompt/context-types";
 import type { Prompt } from "../prompt/prompt-types";
 import type { MergedInput } from "../prompt/type-utils";
 import type { AnyToolSet } from "../types";
-import type { AnyRoutable, RoutingCallOptions } from "../routing/types";
+import type { CompletedOperationModelGuard, RoutingCallOptions } from "../routing/types";
 
 /** A direct text prompt, composed Crux prompt, or native image-edit prompt. */
 export type ImagePrompt = string | AnyImageCruxPrompt | ImagePromptContent;
@@ -105,13 +105,16 @@ export type GenerateImage<
   TRaw = unknown,
   TProviderMetadata = unknown,
   TWarning = unknown,
-> = <
+> = ((
+  options: GenerateImageOptions<TModel, TExtra, ImagePrompt>,
+) => Promise<GenerateImageResult<TRaw, TProviderMetadata, TWarning>>) & (<
   TPrompt extends ImagePrompt,
-  TSelectedModel extends TModel | AnyRoutable = TModel,
+  TSelectedModel = TModel,
 >(
   options: GenerateImageOptions<TSelectedModel, TExtra, TPrompt> &
+    CompletedOperationModelGuard<TModel, TSelectedModel> &
     RoutingCallOptions<TSelectedModel>,
-) => Promise<GenerateImageResult<TRaw, TProviderMetadata, TWarning>>;
+) => Promise<GenerateImageResult<TRaw, TProviderMetadata, TWarning>>);
 
 /** Native generated image before provider-neutral result validation. */
 export type NativeGeneratedImage =

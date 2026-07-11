@@ -96,8 +96,8 @@ export function createGoogleImageOperation(client: GoogleGenAI) {
       return { options, prompt };
     },
     support: () => "supported" as const,
-    invoke: ({ options, prompt }, { signal }) =>
-      client.models.generateImages({
+    invoke: ({ options, prompt }, { signal, call }) =>
+      call("image.generate", () => client.models.generateImages({
         model: options.model,
         prompt: prompt.text,
         config: {
@@ -109,7 +109,7 @@ export function createGoogleImageOperation(client: GoogleGenAI) {
             : { aspectRatio: options.aspectRatio }),
           ...(options.seed === undefined ? {} : { seed: options.seed }),
         },
-      }),
+      })),
     validate(raw) {
       const generated = raw.generatedImages ?? [];
       const images = generated.flatMap((item) =>

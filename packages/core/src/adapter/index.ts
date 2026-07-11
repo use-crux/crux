@@ -65,6 +65,7 @@ export type {
 // Native single-turn provider contracts
 export type {
   NativeAssistantTurn,
+  NativeAssistantReadContext,
   NativeChatHelpers,
   NativeChatRequestArgs,
   NativeProviderPort,

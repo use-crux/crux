@@ -88,13 +88,13 @@ export function createOpenAITranscriptionOperation(client: OpenAI) {
       return { options, audio };
     },
     support: () => "supported" as const,
-    async invoke({ options, audio }, { signal }) {
+    async invoke({ options, audio }, { signal, call }) {
       const materialized =
         audio.type === "url"
           ? await downloadAudio(audio.url, { signal })
           : audio;
       const responseFormat = responseFormatFor(options);
-      return client.audio.transcriptions.create(
+      return call("audio.transcribe", async () => client.audio.transcriptions.create(
         {
           ...options.extra,
           file: await uploadable(materialized),
@@ -110,7 +110,7 @@ export function createOpenAITranscriptionOperation(client: OpenAI) {
           stream: false,
         } as TranscriptionCreateParamsNonStreaming,
         { signal },
-      ) as Promise<TranscriptionCreateResponse>;
+      ) as Promise<TranscriptionCreateResponse>);
     },
     validate(raw, { options }) {
       const segments =

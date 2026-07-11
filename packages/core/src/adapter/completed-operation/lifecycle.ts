@@ -13,10 +13,9 @@ import type {
 export function finalizeCompletedResult<
   TResult extends CompletedOperationResult,
 >(result: TResult, attemptedCalls: number): TResult {
-  const failedAttemptCalls = Math.max(0, attemptedCalls - 1);
   const execution = validateOperationExecution({
     ...result.execution,
-    calls: result.execution.calls + failedAttemptCalls,
+    calls: attemptedCalls,
   });
   return Object.freeze({
     ...result,

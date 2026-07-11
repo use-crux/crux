@@ -7,6 +7,34 @@ const wav = new Uint8Array([
 ]);
 
 describe("secure audio downloader", () => {
+  it("preserves a pre-aborted caller reason without starting DNS or a timer", async () => {
+    const resolver = vi.fn(async () => ["93.184.216.34"]);
+    const fetch = vi.fn();
+    const controller = new AbortController();
+    const reason = new Error("caller stopped");
+    controller.abort(reason);
+    const download = createSecureAudioDownloader({ resolver, fetch });
+
+    await expect(
+      download(new URL("https://example.com/audio.wav"), {
+        signal: controller.signal,
+      }),
+    ).rejects.toBe(reason);
+    expect(resolver).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("bounds a stalled resolver with the download deadline", async () => {
+    const download = createSecureAudioDownloader({
+      timeoutMs: 5,
+      resolver: async () => new Promise(() => {}),
+      fetch: vi.fn(),
+    });
+    await expect(
+      download(new URL("https://example.com/audio.wav")),
+    ).rejects.toMatchObject({ reason: "time-limit" });
+  });
+
   it("pins a validated public resolution and returns validated bytes", async () => {
     const fetch = vi.fn(async (_url, init) => ({
       status: 200,
@@ -122,5 +150,52 @@ describe("secure audio downloader", () => {
     expect(calls[0]?.headers.get("authorization")).toBe("Bearer secret");
     expect(calls[1]?.headers.get("authorization")).toBeNull();
     expect(calls[1]?.headers.get("cookie")).toBeNull();
+  });
+
+  it.each([401, 429, 500])(
+    "reports HTTP %s honestly instead of calling it a MIME failure",
+    async (status) => {
+      const download = createSecureAudioDownloader({
+        resolver: async () => ["93.184.216.34"],
+        fetch: async () => ({ status, headers: new Headers(), body: null }),
+      });
+      await expect(
+        download(new URL("https://example.com/audio.wav")),
+      ).rejects.toMatchObject({ name: "AudioDownloadHttpError", status });
+    },
+  );
+
+  it("reports resolver and request failures as safe operational errors", async () => {
+    const dns = createSecureAudioDownloader({
+      resolver: async () => {
+        throw Object.assign(new Error("host SECRET failed"), {
+          code: "ENOTFOUND",
+        });
+      },
+    });
+    const network = createSecureAudioDownloader({
+      resolver: async () => ["93.184.216.34"],
+      fetch: async () => {
+        throw Object.assign(new Error("request SECRET failed"), {
+          code: "ECONNRESET",
+        });
+      },
+    });
+    const dnsError = await dns(new URL("https://example.com/a.wav")).catch(
+      (error) => error,
+    );
+    const networkError = await network(
+      new URL("https://example.com/a.wav"),
+    ).catch((error) => error);
+    expect(dnsError).toMatchObject({
+      name: "AudioDownloadNetworkError",
+      code: "ENOTFOUND",
+    });
+    expect(networkError).toMatchObject({
+      name: "AudioDownloadNetworkError",
+      code: "ECONNRESET",
+    });
+    expect(String(dnsError)).not.toContain("SECRET");
+    expect(String(networkError)).not.toContain("SECRET");
   });
 });
