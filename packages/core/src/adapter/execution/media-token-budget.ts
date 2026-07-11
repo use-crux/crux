@@ -22,6 +22,7 @@ export function emitInputTokenEstimate(input: Readonly<{
       estimatedInputTokens: estimate.totalTokens,
       estimatedMediaTokens: estimate.mediaTokens,
       estimateUsedFallback: estimate.usedFallback,
+      mediaEstimateReason: estimate.reason,
       ...(input.tokenBudget !== undefined
         ? {
             tokenBudget: input.tokenBudget,

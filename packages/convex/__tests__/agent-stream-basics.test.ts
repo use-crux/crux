@@ -287,7 +287,9 @@ describe('agent stream basics', () => {
         record.preview.phase === 'call-args',
     )
     const preview = JSON.stringify(artifact?.preview)
-    expect(preview).toContain('[image image/png url]')
+    expect(preview).toContain('"kind":"image"')
+    expect(preview).toContain('"mediaType":"image/png"')
+    expect(preview).toContain('"sourceCategory":"url"')
     expect(preview).not.toContain('https://files.example')
     expect(preview).not.toContain('storage_existing_1')
     expect(preview).not.toContain('token=secret')

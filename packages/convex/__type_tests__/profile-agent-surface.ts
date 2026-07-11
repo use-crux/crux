@@ -86,6 +86,12 @@ const metadataAgent = crux.convexAgent({
   prompt: metadataPrompt,
   model,
 })
+type MetadataGenerateArgs = Parameters<typeof metadataAgent.generateText>[2]
+// @ts-expect-error - Convex Agent exposes no media estimator option or resolver.
+type MissingMediaEstimator = MetadataGenerateArgs['mediaEstimator']
+// @ts-expect-error - capability discovery is intentionally absent.
+metadataAgent.capabilities()
+void (undefined as unknown as MissingMediaEstimator)
 
 const generatedObjectResult = metadataAgent.generateObject(
   {},

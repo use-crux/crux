@@ -10,6 +10,7 @@ export type MessageTokenEstimate = Readonly<{
   textTokens: number
   mediaTokens: number
   usedFallback: boolean
+  reason: 'deterministic-fallback' | 'provider-rule' | 'text-only'
 }>
 
 type EstimateContext = Readonly<{
@@ -23,11 +24,13 @@ export function estimateMessageTokens(messages: readonly Message[], context: Est
   const textTokens = countTokens(textOnlyTranscript(messages))
   let mediaTokens = 0
   let usedFallback = false
+  let mediaParts = 0
 
   for (const message of messages) {
     if (!Array.isArray(message.content)) continue
     for (const part of message.content) {
       if (part.type === 'text') continue
+      mediaParts += 1
       const media = knownMediaFacts(part)
       const input = Object.freeze({
         ...(context.provider ? { provider: context.provider } : {}),
@@ -47,6 +50,7 @@ export function estimateMessageTokens(messages: readonly Message[], context: Est
     textTokens,
     mediaTokens,
     usedFallback,
+    reason: mediaParts === 0 ? 'text-only' : usedFallback ? 'deterministic-fallback' : 'provider-rule',
   })
 }
 

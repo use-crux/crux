@@ -54,6 +54,7 @@ import {
   withSkillActivationInput,
 } from "./shared";
 import { generateSdkStructured } from "./generate-sdk-structured";
+import { emitInputTokenEstimate } from './media-token-budget'
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -175,6 +176,13 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
       { providerId: dialect.id, media: dialect.media },
       { provider: modelInfo.provider, model: modelInfo.modelId, messages: providerMessages ?? [] },
     );
+    emitInputTokenEstimate({
+      messages: providerMessages ?? [],
+      provider: modelInfo.provider,
+      model: modelInfo.modelId,
+      media: dialect.media,
+      tokenBudget: args.tokenBudget,
+    })
     return {
       model: args.model,
       modelInfo,

@@ -34,6 +34,7 @@ import {
   inspectForDevtools,
   withSkillActivationInput,
 } from "./shared";
+import { emitInputTokenEstimate } from './media-token-budget'
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -188,7 +189,16 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             }
           : {}),
       },
-      async () => dialect.runStream(request),
+      async () => {
+        emitInputTokenEstimate({
+          messages: providerMessages ?? [],
+          provider: modelInfo.provider,
+          model: modelInfo.modelId,
+          media: dialect.media,
+          tokenBudget: args.tokenBudget,
+        })
+        return dialect.runStream(request)
+      },
     );
   } catch (error) {
     stepBudget.dispose();

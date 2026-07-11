@@ -19,7 +19,57 @@ export const aiSdkMediaHooks = Object.freeze({
     messages,
   }: Readonly<{ provider?: string; model: string; messages: readonly Message[] }>) =>
     validateAiSdkMedia(provider, model, messages),
+  estimateTokens: estimateAiSdkMediaTokens,
 })
+
+type MediaTokenInput = Readonly<{
+  provider?: string
+  model: string
+  media: Readonly<{
+    kind: 'image' | 'file'
+    mediaType?: string
+    width?: number
+    height?: number
+    durationInSeconds?: number
+  }>
+}>
+
+/** Estimate from stable AI SDK provider/model identity and known scalar facts only. */
+export function estimateAiSdkMediaTokens(input: MediaTokenInput): number | undefined {
+  const identity = stableIdentity(input.provider, input.model)
+  // https://docs.anthropic.com/en/docs/build-with-claude/vision (verified 2026-07-11)
+  if (identity.provider === 'anthropic' && input.media.kind === 'image') {
+    const { width, height } = input.media
+    if (!/^claude-(?:3|(?:haiku|sonnet|opus)-4)/.test(identity.model) || !positive(width) || !positive(height)) {
+      return undefined
+    }
+    const pixels = width * height
+    return Number.isSafeInteger(pixels) ? Math.ceil(pixels / 750) : undefined
+  }
+  // https://ai.google.dev/gemini-api/docs/audio (verified 2026-07-11)
+  if (identity.provider === 'google' && input.media.mediaType?.startsWith('audio/')) {
+    const duration = input.media.durationInSeconds
+    if (!/^gemini-/.test(identity.model) || duration === undefined || !Number.isFinite(duration) || duration < 0) {
+      return undefined
+    }
+    const estimate = Math.ceil(duration * 32)
+    return Number.isSafeInteger(estimate) ? estimate : undefined
+  }
+  return undefined
+}
+
+function stableIdentity(provider: string | undefined, model: string): Readonly<{ provider: string; model: string }> {
+  if (provider?.startsWith('anthropic')) return { provider: 'anthropic', model }
+  if (provider?.startsWith('google')) return { provider: 'google', model }
+  for (const known of ['anthropic', 'google'] as const) {
+    if (model.startsWith(`${known}/`)) return { provider: known, model: model.slice(known.length + 1) }
+  }
+  return { provider: provider ?? '', model }
+}
+
+function positive(value: number | undefined): value is number {
+  return value !== undefined && Number.isSafeInteger(value) && value > 0
+}
 
 function validateAiSdkMedia(
   provider: string | undefined,
