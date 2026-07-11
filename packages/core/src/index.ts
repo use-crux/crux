@@ -241,6 +241,32 @@ export { createPrompts } from "./prompt";
 export type { PromptTree, PromptTreeResult } from "./prompt";
 export { tool } from "./tools/define-tool";
 export type { NamedToolDef, ToolConfig } from "./tools/types";
+export {
+  createNoTranscriptError,
+  createSecureAudioDownloader,
+  assertAudioMediaType,
+  detectAudioMediaType,
+  downloadAudio,
+  isNoTranscriptError,
+  normalizeAudioSource,
+  validateAudioBytes,
+  validateTranscriptionResult,
+} from './transcription'
+export type {
+  AudioSource,
+  AudioPinnedDispatcher,
+  NativeTranscriptionResult,
+  NoTranscriptError,
+  SecureAudioDownloadRequest,
+  SecureAudioDownloaderOptions,
+  SecureAudioFetch,
+  SecureAudioFetchResponse,
+  Transcribe,
+  TranscribeCommonOptions,
+  TranscribeOptions,
+  TranscriptionResult,
+  TranscriptionSegment,
+} from './transcription'
 
 // Request-scoped deferred work
 export { defer, CruxDeferError, DEFER_ERROR_CODES } from "./defer";

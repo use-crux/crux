@@ -140,6 +140,10 @@
       "types": "./src/scoring/index.ts",
       "import": "./src/scoring/index.ts"
     },
+    "./transcription": {
+      "types": "./src/transcription/index.ts",
+      "import": "./src/transcription/index.ts"
+    },
     "./agent": {
       "types": "./src/agent/index.ts",
       "import": "./src/agent/index.ts"
@@ -281,6 +285,9 @@
       ],
       "scoring": [
         "src/scoring/index.ts"
+      ],
+      "transcription": [
+        "src/transcription/index.ts"
       ],
       "agent": [
         "src/agent/index.ts"
