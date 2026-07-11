@@ -11,17 +11,20 @@
 
 import type { Message } from "../generation/messages";
 import type { TokenUsage, TraceMeta } from "../generation/types";
-import type { StreamHandle } from "./types";
+import type { AssistantContentPart } from "../types/content";
+import { textFromAssistantContent } from "./assistant-output";
 import type { ApprovalRequestInfo } from "./tool/approval";
-import {
-  attachRoutingToError,
-  markRoutingMidStreamFailure,
-  type RoutingReceipt,
-} from "../routing/receipt";
+import type { RoutingReceipt } from "../routing/receipt";
+import { sumUsageWhenComplete } from "./result-usage";
+
+export { createStreamResult } from "./result-stream";
+export { sumUsageWhenComplete } from "./result-usage";
 
 /** Last provider-call step facts exposed next to accumulated result fields. */
 export interface FinalStepInfo {
-  /** Assistant-visible text produced by the final provider-call step. */
+  /** Exact ordered assistant output produced by this provider-call step. */
+  readonly content: readonly AssistantContentPart[];
+  /** Text-only projection of {@link content}. */
   readonly text: string;
   /**
    * Usage reported by the final provider-call step.
@@ -36,11 +39,31 @@ export interface FinalStepInfo {
   readonly responseId: string | undefined;
   /** Actual provider model id for the final step, when reported. */
   readonly modelId: string | undefined;
+  /** Non-fatal warnings reported for this step. */
+  readonly warnings: readonly unknown[];
+  /** Provider-owned metadata reported for this step. */
+  readonly providerMetadata?: unknown;
 }
 
 /** Canonical managed `generate()` result shared by provider adapters. */
 export interface GenerateResult<TRaw, TOutput = unknown> {
-  /** Assistant-visible text accumulated across provider-call steps. */
+  /**
+   * Exact ordered assistant output across all provider-call steps.
+   *
+   * This is the authoritative result. Use `text` only when a text projection
+   * is sufficient; media, reasoning, and tool calls remain present here.
+   *
+   * @example
+   * ```ts
+   * const result = await runtime.generate(prompt, { model: 'model-id' })
+   * for (const part of result.content) {
+   *   if (part.type === 'image') renderImage(part.source)
+   * }
+   * console.log(result.text) // text parts only
+   * ```
+   */
+  readonly content: readonly AssistantContentPart[];
+  /** Text-only projection of {@link content}. */
   readonly text: string;
   /** Parsed structured output, when the prompt declares an output schema. */
   readonly object?: TOutput;
@@ -53,12 +76,16 @@ export interface GenerateResult<TRaw, TOutput = unknown> {
   readonly usage?: TokenUsage;
   /** Provider-reported cost shape, promoted from `_meta` for public access. */
   readonly cost?: TraceMeta["cost"];
-  /** Number of provider-call steps represented in this envelope. */
-  readonly steps: number;
+  /** Ordered provider-call facts represented in this envelope. */
+  readonly steps: readonly FinalStepInfo[];
   /** Facts from the final provider-call step. */
   readonly finalStep: FinalStepInfo;
   /** Provider-agnostic Crux message history. */
   readonly messages: Message[];
+  /** Non-fatal warnings accumulated in execution order. */
+  readonly warnings: readonly unknown[];
+  /** Provider-owned metadata from the terminal step, when supplied. */
+  readonly providerMetadata?: unknown;
   /** Routing decisions for calls that used a routing wrapper. */
   readonly routing?: RoutingReceipt;
   /** Approval requests awaiting a decision, present only when execution suspended. */
@@ -87,8 +114,8 @@ export interface StreamResult<TRawStream, TOutput = unknown> {
 
 /** One provider-call step that participates in envelope accumulation. */
 export interface ResultStepFacts {
-  /** Assistant-visible text for this step. */
-  readonly text: string;
+  /** Exact ordered assistant output for this step. */
+  readonly content: readonly AssistantContentPart[];
   /** Usage reported by this step, if any. */
   readonly usage?: TokenUsage;
   /** Provider finish reason, if any. */
@@ -97,6 +124,10 @@ export interface ResultStepFacts {
   readonly responseId: string | undefined;
   /** Actual provider model id, if any. */
   readonly modelId: string | undefined;
+  /** Non-fatal warnings reported for this step. */
+  readonly warnings?: readonly unknown[];
+  /** Provider-owned metadata reported for this step. */
+  readonly providerMetadata?: unknown;
 }
 
 /** Fields supplied by the execution runtime when finalizing an envelope. */
@@ -132,15 +163,22 @@ export function createResultAccumulator() {
       base: ResultEnvelopeBase<TRaw, TOutput>,
     ): GenerateResult<TRaw, TOutput> {
       const usage = sumUsageWhenComplete(steps);
-      const finalStep = finalStepInfo(steps.at(-1));
+      const publicSteps = steps.map(finalStepInfo);
+      const finalStep = publicSteps.at(-1) ?? emptyStepInfo();
+      const content = publicSteps.flatMap((step) => step.content);
       return {
-        text: steps.map((step) => step.text).join(""),
+        content,
+        text: textFromAssistantContent(content),
         ...(base.object !== undefined ? { object: base.object } : {}),
         ...(usage !== undefined ? { usage } : {}),
         ...(base.cost !== undefined ? { cost: base.cost } : {}),
-        steps: steps.length,
+        steps: publicSteps,
         finalStep,
         messages: base.messages,
+        warnings: publicSteps.flatMap((step) => step.warnings),
+        ...(finalStep.providerMetadata !== undefined
+          ? { providerMetadata: finalStep.providerMetadata }
+          : {}),
         ...(base.routing !== undefined ? { routing: base.routing } : {}),
         ...(base.pendingApprovals
           ? { pendingApprovals: base.pendingApprovals }
@@ -155,15 +193,22 @@ export function createResultAccumulator() {
       base: Omit<ResultEnvelopeBase<never, TOutput>, "raw" | "_meta">,
     ): StreamCompletion<TOutput> {
       const usage = sumUsageWhenComplete(steps);
-      const finalStep = finalStepInfo(steps.at(-1));
+      const publicSteps = steps.map(finalStepInfo);
+      const finalStep = publicSteps.at(-1) ?? emptyStepInfo();
+      const content = publicSteps.flatMap((step) => step.content);
       return {
-        text: steps.map((step) => step.text).join(""),
+        content,
+        text: textFromAssistantContent(content),
         ...(base.object !== undefined ? { object: base.object } : {}),
         ...(usage !== undefined ? { usage } : {}),
         ...(base.cost !== undefined ? { cost: base.cost } : {}),
-        steps: steps.length,
+        steps: publicSteps,
         finalStep,
         messages: base.messages,
+        warnings: publicSteps.flatMap((step) => step.warnings),
+        ...(finalStep.providerMetadata !== undefined
+          ? { providerMetadata: finalStep.providerMetadata }
+          : {}),
         ...(base.routing !== undefined ? { routing: base.routing } : {}),
         ...(base.pendingApprovals
           ? { pendingApprovals: base.pendingApprovals }
@@ -173,149 +218,30 @@ export function createResultAccumulator() {
   };
 }
 
-/** Build the public stream envelope from the internal provider stream handle. */
-export function createStreamResult<TRawStream, TOutput = unknown>(
-  handle: StreamHandle<TRawStream>,
-): StreamResult<TRawStream, TOutput> {
-  let streamedText = "";
-  let resolveStream: (() => void) | undefined;
-  let rejectStream: ((error: unknown) => void) | undefined;
-  const streamFinished = new Promise<void>((resolve, reject) => {
-    resolveStream = resolve;
-    rejectStream = reject;
-  });
-
-  async function* textStream(): AsyncIterable<string> {
-    try {
-      for await (const chunk of handle.rawStream as AsyncIterable<unknown>) {
-        const delta = handle.extractTextDelta(chunk);
-        if (delta === undefined || delta === "") continue;
-        streamedText += delta;
-        yield delta;
-      }
-      resolveStream?.();
-    } catch (error) {
-      const routedError = attachStreamRouting(error, handle.routing);
-      rejectStream?.(routedError);
-      throw routedError;
-    }
-  }
-
-  const completion = (async (): Promise<StreamCompletion<TOutput>> => {
-    await streamFinished;
-    const meta = (await handle.completion()) as
-      | StreamCompletionMeta<TOutput>
-      | undefined;
-    const text = typeof meta?.text === "string" ? meta.text : streamedText;
-    const accumulator = createResultAccumulator();
-    accumulator.addStep({
-      text,
-      ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),
-      finishReason: meta?.finishReason,
-      responseId: meta?.responseId,
-      modelId: meta?.actualModelId,
-    });
-    return accumulator.finalizeCompletion({
-      messages: meta?.messages ?? [],
-      ...(meta?.object !== undefined ? { object: meta.object } : {}),
-      ...(meta?.cost !== undefined ? { cost: meta.cost } : {}),
-      ...(meta?.pendingApprovals
-        ? { pendingApprovals: meta.pendingApprovals }
-        : {}),
-      ...(handle.routing !== undefined ? { routing: handle.routing } : {}),
-    });
-  })();
-  void completion.catch(() => undefined);
-
-  return {
-    textStream: textStream(),
-    raw: handle.raw ?? handle.rawStream,
-    completion,
-  };
-}
-
-function attachStreamRouting(
-  error: unknown,
-  routing: RoutingReceipt | undefined,
-): unknown {
-  if (routing === undefined) return error;
-  const routed = markRoutingMidStreamFailure(routing);
-  if (error instanceof Error) {
-    return attachRoutingToError(error, routed);
-  }
-  return attachRoutingToError(new Error(String(error)), routed);
-}
-
-interface StreamCompletionMeta<TOutput> extends TraceMeta {
-  readonly text?: string;
-  readonly object?: TOutput;
-  readonly messages?: Message[];
-  readonly pendingApprovals?: readonly ApprovalRequestInfo[];
-}
-
-/** Sum usage only when every recorded step is metered. */
-export function sumUsageWhenComplete(
-  steps: readonly ResultStepFacts[],
-): TokenUsage | undefined {
-  if (steps.length === 0 || steps.some((step) => step.usage === undefined))
-    return undefined;
-
-  let inputTokens = 0;
-  let outputTokens = 0;
-  let totalTokens = 0;
-  let cacheReadTokens: number | undefined;
-  let cacheWriteTokens: number | undefined;
-  let reasoningTokens: number | undefined;
-
-  for (const step of steps) {
-    const usage = step.usage;
-    if (!usage) return undefined;
-    inputTokens += usage.inputTokens;
-    outputTokens += usage.outputTokens;
-    totalTokens += usage.totalTokens;
-    if (usage.inputTokenDetails.cacheReadTokens !== undefined) {
-      cacheReadTokens =
-        (cacheReadTokens ?? 0) + usage.inputTokenDetails.cacheReadTokens;
-    }
-    if (usage.inputTokenDetails.cacheWriteTokens !== undefined) {
-      cacheWriteTokens =
-        (cacheWriteTokens ?? 0) + usage.inputTokenDetails.cacheWriteTokens;
-    }
-    if (usage.outputTokenDetails.reasoningTokens !== undefined) {
-      reasoningTokens =
-        (reasoningTokens ?? 0) + usage.outputTokenDetails.reasoningTokens;
-    }
-  }
-
-  return {
-    inputTokens,
-    outputTokens,
-    totalTokens,
-    inputTokenDetails: {
-      ...(cacheReadTokens !== undefined ? { cacheReadTokens } : {}),
-      ...(cacheWriteTokens !== undefined ? { cacheWriteTokens } : {}),
-    },
-    outputTokenDetails: {
-      ...(reasoningTokens !== undefined ? { reasoningTokens } : {}),
-    },
-  };
-}
-
 function finalStepInfo(step: ResultStepFacts | undefined): FinalStepInfo {
-  if (!step) {
-    return {
-      text: "",
-      finishReason: undefined,
-      responseId: undefined,
-      modelId: undefined,
-    };
-  }
+  if (!step) return emptyStepInfo();
 
   return {
-    text: step.text,
+    content: step.content,
+    text: textFromAssistantContent(step.content),
     ...(step.usage !== undefined ? { usage: step.usage } : {}),
     finishReason: step.finishReason,
     responseId: step.responseId,
     modelId: step.modelId,
+    warnings: step.warnings ?? [],
+    ...(step.providerMetadata !== undefined
+      ? { providerMetadata: step.providerMetadata }
+      : {}),
+  };
+}
+
+function emptyStepInfo(): FinalStepInfo {
+  return {
+    content: [],
+    text: "",
+    finishReason: undefined,
+    responseId: undefined,
+    modelId: undefined,
+    warnings: [],
   };
 }

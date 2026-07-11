@@ -11,7 +11,7 @@ import type { z } from 'zod'
 import type { GenerateObjectFn, GenerateTextFn } from '../../compaction'
 import type { Message } from '../../generation/messages'
 import type { GenerationSettings, TraceMeta } from '../../generation/types'
-import type { MessageContent } from '../../types/content'
+import type { AssistantContentPart } from '../../types/content'
 import type { CruxAdapter } from '../define-adapter'
 import type { AdapterSpec } from '../spec'
 import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
@@ -23,11 +23,11 @@ export type NativeCallMode = 'text' | 'structured'
 /** Assistant transcript data that participates in Crux tool-loop semantics. */
 export interface NativeAssistantTurn extends Pick<AdapterResponse, 'text' | 'toolCalls'> {
   /** Canonical assistant content when the provider response included media; `text` remains the envelope projection. */
-  readonly content?: MessageContent
+  readonly content?: string | readonly AssistantContentPart[]
 }
 
 /** Response metadata that is independent from assistant transcript content. */
-export type NativeResponseMetadata = Omit<AdapterResponse, 'text' | 'toolCalls'>
+export type NativeResponseMetadata = Omit<AdapterResponse, 'text' | 'content' | 'toolCalls'>
 
 /**
  * Bound SDK port for one native chat provider.

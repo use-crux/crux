@@ -16,6 +16,7 @@ import type {
   TraceMeta,
 } from "../../generation/types";
 import type { Message } from "../../generation/messages";
+import type { FinalStepInfo } from "../result-accumulator";
 import type { ProviderOwnership } from "../provider-runtime";
 import type { StepObserver } from "../executor-types";
 import type { AdapterConformanceInspector } from "./native-types";
@@ -165,8 +166,8 @@ export interface ProviderRuntimeConformanceGenerateResult {
   readonly object?: unknown;
   /** Normalized generation metadata. */
   readonly _meta: TraceMeta;
-  /** Budget-consuming steps used by the run. */
-  readonly steps: number;
+  /** Ordered budget-consuming step facts. */
+  readonly steps: readonly FinalStepInfo[];
   /** Canonical transcript returned by the runtime. */
   readonly messages: readonly Message[];
   /** Approval requests when a tool call suspended before execution. */

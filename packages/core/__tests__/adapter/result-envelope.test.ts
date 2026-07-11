@@ -87,7 +87,7 @@ describe("adapter result envelope", () => {
         inputTokenDetails: { cacheReadTokens: 1, cacheWriteTokens: 2 },
         outputTokenDetails: { reasoningTokens: 3 },
       },
-      steps: 2,
+      steps: expect.arrayContaining([expect.objectContaining({ text: "looking up " }), expect.objectContaining({ text: "done" })]),
       finalStep: {
         text: "done",
         usage: finalUsage,
@@ -164,7 +164,7 @@ describe("adapter result envelope", () => {
     await expect(result.completion).resolves.toMatchObject({
       text: "hello",
       usage: finalUsage,
-      steps: 1,
+      steps: [expect.objectContaining({ text: "hello" })],
       finalStep: {
         text: "hello",
         usage: finalUsage,

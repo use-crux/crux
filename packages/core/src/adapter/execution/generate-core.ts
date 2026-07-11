@@ -24,6 +24,7 @@ import { composeAbortSignals, withBudget } from "../../generation/timeout";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
 import { emitInputTokenEstimate } from './media-token-budget'
 import type { AdapterResponse, CallArgs } from "../types";
+import { responseContent } from "../assistant-output";
 import {
   createResultAccumulator,
   type ResultStepFacts,
@@ -409,10 +410,14 @@ export async function generateCore<
 
 function stepFactsFromResponse(response: AdapterResponse): ResultStepFacts {
   return {
-    text: response.text,
+    content: responseContent(response),
     ...(response.usage !== undefined ? { usage: response.usage } : {}),
     finishReason: response.finishReason,
     responseId: response.responseId,
     modelId: response.actualModelId,
+    ...(response.warnings !== undefined ? { warnings: response.warnings } : {}),
+    ...(response.providerMetadata !== undefined
+      ? { providerMetadata: response.providerMetadata }
+      : {}),
   };
 }

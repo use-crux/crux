@@ -32,7 +32,7 @@ describe("Anthropic stream handling", () => {
     const completion = await handle.completion;
     expect(completion).toMatchObject({
       text: "partial",
-      steps: 1,
+      steps: [expect.objectContaining({ text: "partial" })],
       finalStep: {
         text: "partial",
         finishReason: undefined,

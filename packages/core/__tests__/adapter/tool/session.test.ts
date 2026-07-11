@@ -301,7 +301,13 @@ describe('createToolLifecycle — executeRound', () => {
     expect(round.results).toHaveLength(1)
     expect(round.results[0]).toMatchObject({ toolCallId: 'tc1', name: 'search', content: 'answer to x' })
     // Canonical tool round appended: assistant message with tool calls, then one tool message.
-    expect(round.messages.at(-2)).toMatchObject({ role: 'assistant', content: 'searching' })
+    expect(round.messages.at(-2)).toMatchObject({
+      role: 'assistant',
+      content: [
+        { type: 'text', text: 'searching' },
+        { type: 'tool-call', toolCallId: 'tc1', toolName: 'search', input: { q: 'x' } },
+      ],
+    })
     expect(round.messages.at(-1)).toMatchObject({
       role: 'tool',
       content: 'answer to x',
@@ -627,7 +633,10 @@ describe('createToolLifecycle — resume', () => {
       metadata: { toolCallId: 'tc9', toolName: 'dangerous' },
     })
     // The synthetic assistant round carries the replayed call with zero usage semantics.
-    expect(outcome.messages.at(-2)).toMatchObject({ role: 'assistant', content: '' })
+    expect(outcome.messages.at(-2)).toMatchObject({
+      role: 'assistant',
+      content: [{ type: 'tool-call', toolCallId: 'tc9', toolName: 'dangerous', input: { target: 'db' } }],
+    })
     expect(lifecycle.transcript).toContainEqual({ t: 'resume', replayed: 1 })
     expect(lifecycle.transcript).toContainEqual({
       t: 'gate',

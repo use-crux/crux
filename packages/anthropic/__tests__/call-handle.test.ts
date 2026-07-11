@@ -31,7 +31,7 @@ describe('Anthropic call handle', () => {
     const result = await call.finish(anthropicMessage({ text: 'hello' }, 1))
 
     expect(result.text).toBe('hello')
-    expect(result.steps).toBe(1)
+    expect(result.steps).toHaveLength(1)
     expect(result.finalStep).toMatchObject({
       text: 'hello',
       finishReason: 'end_turn',
@@ -76,7 +76,7 @@ describe('Anthropic call handle', () => {
 
     const result = await first.next.finish(anthropicMessage({ text: 'done' }, 2))
     expect(result.text).toBe('done')
-    expect(result.steps).toBe(2)
+    expect(result.steps).toHaveLength(2)
     expect(result.messages.some((message) => message.role === 'tool')).toBe(true)
   })
 })

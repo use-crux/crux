@@ -27,6 +27,7 @@ export type {
   AdapterResponse,
   CallArgs,
   StreamHandle,
+  StreamCompletionMetadata,
   ToolResultEntry,
   StatusDelta,
 } from "./types";

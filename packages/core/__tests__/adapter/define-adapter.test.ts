@@ -423,7 +423,7 @@ describe("adapter", () => {
         input: { instruction: "Say hello" },
       });
 
-      expect(result.steps).toBe(1);
+      expect(result.steps).toHaveLength(1);
     });
 
     it("passes model to call args", async () => {
@@ -539,7 +539,7 @@ describe("adapter", () => {
       expect(callSpy).toHaveBeenCalledTimes(2);
       expect(appendSpy).toHaveBeenCalledOnce();
       expect(result.text).toBe("The weather in Paris is sunny.");
-      expect(result.steps).toBe(2);
+      expect(result.steps).toHaveLength(2);
     });
 
     it("applies prompt and call-site tool middleware before executing native adapter tools", async () => {
@@ -700,7 +700,7 @@ describe("adapter", () => {
       });
 
       expect(callSpy).toHaveBeenCalledTimes(3);
-      expect(result.steps).toBe(3);
+      expect(result.steps).toHaveLength(3);
     });
 
     it("stops after a matching tool call stop condition completes its round", async () => {
@@ -738,7 +738,7 @@ describe("adapter", () => {
 
       expect(callSpy).toHaveBeenCalledTimes(1);
       expect(executeTool).toHaveBeenCalledOnce();
-      expect(result.steps).toBe(1);
+      expect(result.steps).toHaveLength(1);
       expect(result._meta.stoppedBy).toEqual({
         kind: "hasToolCall",
         tool: "my_tool",

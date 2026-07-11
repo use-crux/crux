@@ -40,7 +40,7 @@ describe('Anthropic transport', () => {
     })
 
     expect(result.text).toBe('done')
-    expect(result.steps).toBe(2)
+    expect(result.steps).toHaveLength(2)
     expect(calls).toHaveLength(2)
     expect(calls[0]).toMatchObject({ stepIndex: 0, modelId: 'claude-transport' })
     expect(JSON.stringify(calls[0]!.params)).toContain('"echo"')

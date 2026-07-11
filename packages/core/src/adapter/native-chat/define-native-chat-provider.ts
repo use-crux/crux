@@ -313,6 +313,14 @@ function responseFor<
   const assistant = profile.transcript.readAssistant(raw);
   return {
     ...profile.response.meta(raw),
+    ...(assistant.content !== undefined
+      ? {
+          content:
+            typeof assistant.content === "string"
+              ? [{ type: "text" as const, text: assistant.content }]
+              : assistant.content,
+        }
+      : {}),
     text: profile.response.text?.(raw, assistant) ?? assistant.text,
     toolCalls: assistant.toolCalls,
   };

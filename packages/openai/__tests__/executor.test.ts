@@ -190,7 +190,7 @@ describe("OpenAI adapter via adapter", () => {
       expect.objectContaining({ toolCallId: "call-1" }),
     );
     expect(result.text).toBe("final answer");
-    expect(result.steps).toBe(2);
+    expect(result.steps).toHaveLength(2);
   });
 
   it("has all composition methods", () => {

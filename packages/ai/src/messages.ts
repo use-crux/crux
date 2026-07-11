@@ -14,7 +14,11 @@
 
 import type { ContentPart, Message, MessageContent } from '@use-crux/core'
 import type { AiSdkContentPartOptions } from './content-parts'
-import { decodeContentFromAiSdkParts, encodeContentForAiSdk } from './content-parts'
+import {
+  decodeContentFromAiSdkParts,
+  encodeContentForAiSdk,
+} from './content-parts'
+import { decodeAssistantContentFromAiSdkParts } from './assistant-content'
 import { isRecord, readString } from './object-utils'
 
 interface CanonicalToolCall {
@@ -68,7 +72,14 @@ export function toModelMessages(
               ? [{ type: 'text', text: encodedContent }]
               : []
             : [...encodedContent]
+        const encodedToolCallIds = new Set(
+          parts
+            .filter((part) => part.type === 'tool-call')
+            .map((part) => readString(part, 'toolCallId'))
+            .filter((id): id is string => id !== undefined),
+        )
         for (const toolCall of toolCalls) {
+          if (encodedToolCallIds.has(toolCall.id)) continue
           parts.push({
             type: 'tool-call',
             toolCallId: toolCall.id,
@@ -140,7 +151,7 @@ export function fromResponseMessages(responseMessages: readonly unknown[]): Mess
 
     if (message.role === 'assistant') {
       const toolCallParts = message.content.filter((p) => p.type === 'tool-call')
-      const content = decodeContentFromAiSdkParts(message.content as Record<string, unknown>[])
+      const content = decodeAssistantContentFromAiSdkParts(message.content as Record<string, unknown>[])
       result.push({
         role: 'assistant',
         content,

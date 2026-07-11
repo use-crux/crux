@@ -154,7 +154,7 @@ function projectResult(result: unknown): unknown {
       status: 'complete',
       response: toSerializable(result.response),
       messages: toSerializable(result.messages) ?? [],
-      steps: typeof result.steps === 'number' ? result.steps : 1,
+      steps: Array.isArray(result.steps) ? result.steps.length : 1,
       meta: toSerializable(result.meta) ?? {},
     }
   }

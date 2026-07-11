@@ -346,7 +346,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
             const previous = resultStepFacts[resultStepFacts.length - 1]!;
             resultStepFacts[resultStepFacts.length - 1] = {
               ...previous,
-              text: "",
+              content: [],
             };
           }
           finalText = regen.response.text;
@@ -367,7 +367,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         const previous = resultStepFacts[resultStepFacts.length - 1]!;
         resultStepFacts[resultStepFacts.length - 1] = {
           ...previous,
-          text: finalText,
+          content: [{ type: "text", text: finalText }],
         };
       }
     }

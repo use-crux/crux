@@ -11,6 +11,7 @@
 import type { ApprovalRequestInfo } from "../../adapter/tool/approval";
 import type { Message } from "../../generation/messages";
 import type { TraceMeta } from "../../generation/types";
+import type { AssistantContentPart } from "../../types/content";
 
 /** Nested token usage shape required by the canonical result envelope. */
 export interface CanonicalTokenUsage {
@@ -28,11 +29,14 @@ export interface CanonicalTokenUsage {
 
 /** Last-step view carried alongside accumulated top-level result fields. */
 export interface CanonicalFinalStepInfo {
+  readonly content: readonly AssistantContentPart[];
   readonly text: string;
   readonly usage?: CanonicalTokenUsage;
   readonly finishReason: string | undefined;
   readonly responseId: string | undefined;
   readonly modelId: string | undefined;
+  readonly warnings: readonly unknown[];
+  readonly providerMetadata?: unknown;
 }
 
 /** Structural subset of the future public `GenerateResult` contract. */
@@ -41,12 +45,15 @@ export interface CanonicalGenerateResultLike<
   TOutput = unknown,
 > {
   readonly text: string;
+  readonly content: readonly AssistantContentPart[];
   readonly object?: TOutput;
   readonly usage?: CanonicalTokenUsage;
   readonly cost?: unknown;
-  readonly steps: number;
+  readonly steps: readonly CanonicalFinalStepInfo[];
   readonly finalStep: CanonicalFinalStepInfo;
   readonly messages: readonly Message[];
+  readonly warnings: readonly unknown[];
+  readonly providerMetadata?: unknown;
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];
   readonly raw: TRaw;
   readonly _meta: TraceMeta;
@@ -87,16 +94,18 @@ export function assertCanonicalResult(
   const envelope = asRecord(result, "result");
 
   assertString(requireField(envelope, "text", "result"), "result.text");
+  assertArray(requireField(envelope, "content", "result"), "result.content");
   const usage =
     hasOwn(envelope, "usage") && envelope.usage !== undefined
       ? assertTokenUsage(envelope.usage, "result.usage")
       : undefined;
-  assertNumber(requireField(envelope, "steps", "result"), "result.steps");
+  assertArray(requireField(envelope, "steps", "result"), "result.steps");
   assertFinalStep(
     requireField(envelope, "finalStep", "result"),
     "result.finalStep",
   );
   assertArray(requireField(envelope, "messages", "result"), "result.messages");
+  assertArray(requireField(envelope, "warnings", "result"), "result.warnings");
   requireField(envelope, "raw", "result");
   asRecord(requireField(envelope, "_meta", "result"), "result._meta");
 
@@ -123,7 +132,8 @@ function assertAccumulation(
       "result.text",
       `the accumulated step text ${JSON.stringify(expectedText)}`,
     );
-  if (envelope.steps !== steps.length)
+  const actualSteps = envelope.steps as readonly unknown[];
+  if (actualSteps.length !== steps.length)
     fail("result.steps", `the number of expected steps (${steps.length})`);
 
   assertOptionalUsageEquals(usage, sumUsage(steps), "result.usage");
@@ -167,6 +177,7 @@ function assertAccumulation(
 
 function assertFinalStep(value: unknown, path: string): void {
   const finalStep = asRecord(value, path);
+  assertArray(requireField(finalStep, "content", path), `${path}.content`);
   assertString(requireField(finalStep, "text", path), `${path}.text`);
   if (hasOwn(finalStep, "usage") && finalStep.usage !== undefined) {
     assertTokenUsage(finalStep.usage, `${path}.usage`);
@@ -175,6 +186,7 @@ function assertFinalStep(value: unknown, path: string): void {
     requireField(finalStep, "finishReason", path),
     `${path}.finishReason`,
   );
+  assertArray(requireField(finalStep, "warnings", path), `${path}.warnings`);
   assertStringOrUndefined(
     requireField(finalStep, "responseId", path),
     `${path}.responseId`,

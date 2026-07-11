@@ -660,14 +660,25 @@ describe("UI-message helpers", () => {
       },
       completion: Promise.resolve({
         text: "",
-        steps: 1,
-        finalStep: {
+        content: [],
+        steps: [{
+          content: [],
           text: "",
           finishReason: undefined,
           responseId: undefined,
           modelId: undefined,
+          warnings: [],
+        }],
+        finalStep: {
+          content: [],
+          text: "",
+          finishReason: undefined,
+          responseId: undefined,
+          modelId: undefined,
+          warnings: [],
         },
         messages: [],
+        warnings: [],
       }),
     } satisfies StreamResult<{
       toUIMessageStream(): ReadableStream;
