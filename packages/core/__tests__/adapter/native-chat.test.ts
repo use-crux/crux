@@ -223,6 +223,16 @@ describe('native-chat compiler', () => {
       system: 'System',
       messages: [{ role: 'user', text: 'Write text' }],
     })
+    await generateText({
+      model: 'ignored-by-bound-helper',
+      messages: [{ role: 'user', content: [{ type: 'image', source: new Uint8Array([1]), mediaType: 'image/png' }] }],
+      maxOutputTokens: 1000,
+    })
+    expect(textClient.calls[1]).toMatchObject({
+      mode: 'text',
+      settings: { maxTokens: 1000 },
+      messages: [{ role: 'user', text: [{ type: 'image' }] }],
+    })
 
     const objectClient: NativeTestClient = {
       script: { structuredTexts: ['{"ok":true}'] },

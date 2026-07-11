@@ -14,6 +14,7 @@ export { createGenerateObjectFnFromGenerate } from './generate-object'
 // Types
 export type {
   GenerateTextFn,
+  CompactionMediaConfig,
   GenerateObjectFn,
   SummarizeConfig,
   SlidingWindowConfig,

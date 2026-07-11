@@ -125,7 +125,7 @@ export { convexAgent } from './agent'
 
 import type { z } from 'zod'
 import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@use-crux/core'
-import type { GenerateTextFn } from '@use-crux/core/compaction'
+import type { CompactionMediaConfig, GenerateTextFn } from '@use-crux/core/compaction'
 import { summarizeMessages } from '@use-crux/core/compaction'
 import { countTokens, messageText as coreMessageText } from '@use-crux/core'
 import { observeConversationCompaction } from './compaction-observability'
@@ -151,6 +151,8 @@ export interface CompactConversationArgs {
   model: unknown
   /** Max tokens for the summary. Default: 1000. */
   summaryBudget?: number
+  /** Optional media-description overrides. */
+  media?: CompactionMediaConfig
 }
 
 /**
@@ -165,7 +167,7 @@ export interface CompactConversationArgs {
  * @returns Merged summary and token metrics
  */
 export async function compactConversation(args: CompactConversationArgs): Promise<CompactionResult> {
-  const { evictedMessages, existingSummary, generate, model, summaryBudget = 1000 } = args
+  const { evictedMessages, existingSummary, generate, model, summaryBudget = 1000, media } = args
 
   if (evictedMessages.length === 0 && !existingSummary) {
     return { summary: '', tokensBefore: 0, tokensAfter: 0, ratio: 1 }
@@ -196,6 +198,7 @@ export async function compactConversation(args: CompactConversationArgs): Promis
         model,
         maxTokens: summaryBudget,
         focus: ['decisions', 'key_facts', 'user_preferences'],
+        media,
       }),
   })
 }

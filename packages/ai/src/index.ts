@@ -545,14 +545,15 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       const result = await gateway.generateText({
         model,
         system: options.system,
-        prompt: options.prompt,
+        ...(options.prompt !== undefined ? { prompt: options.prompt } : { messages: options.messages }),
+        ...(options.maxOutputTokens !== undefined ? { maxOutputTokens: options.maxOutputTokens } : {}),
         ...(attemptOptions.signal ? { abortSignal: attemptOptions.signal } : {}),
       } as Parameters<SdkGateway["generateText"]>[0]);
       return { text: result.text };
     };
     return resolveModel<LanguageModel, { text: string }>(
       options.model as LanguageModel,
-      { prompt: options.prompt },
+      { prompt: options.prompt ?? '[messages]' },
       run,
       (model) => {
         const info = extractModelInfo(model);

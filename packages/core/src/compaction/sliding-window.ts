@@ -81,6 +81,7 @@ export function createSlidingWindow(
         model,
         maxTokens: summaryBudget,
         focus: ["decisions", "key_facts", "user_preferences"],
+        media: config.media,
       });
 
       nextSummary = result.summary;

@@ -26,7 +26,9 @@ import type {
 interface HelperCallArgs<TExtra extends Record<string, unknown>> {
   readonly model: string;
   readonly system: string | undefined;
-  readonly prompt: string;
+  readonly prompt?: string;
+  readonly messages?: readonly Message[];
+  readonly maxOutputTokens?: number;
   readonly schema: z.ZodType | undefined;
   readonly schemaParams: Record<string, unknown> | undefined;
   readonly extra: TExtra;
@@ -166,7 +168,8 @@ export function defineNativeChatProvider<
           const args = helperCallArgs<TExtra>({
             model,
             system: options.system,
-            prompt: options.prompt,
+            ...(options.prompt !== undefined ? { prompt: options.prompt } : { messages: options.messages }),
+            maxOutputTokens: options.maxOutputTokens,
             schema: undefined,
             schemaParams: undefined,
             extra: {} as TExtra,
@@ -230,13 +233,15 @@ function resolveDeps<TDeps extends Record<string, unknown>>(
 function helperCallArgs<TExtra extends Record<string, unknown>>(
   args: HelperCallArgs<TExtra>,
 ): CallArgs<TExtra> {
-  const messages: Message[] = [{ role: "user", content: args.prompt }];
+  const messages: Message[] = args.messages
+    ? args.messages.map((message) => ({ ...message }))
+    : [{ role: "user", content: args.prompt ?? "" }];
   return {
     model: args.model,
     system: args.system,
     systemBlocks: undefined,
     messages,
-    settings: {},
+    settings: args.maxOutputTokens === undefined ? {} : { maxTokens: args.maxOutputTokens },
     schema: args.schema,
     schemaParams: args.schemaParams,
     tools: undefined,

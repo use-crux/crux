@@ -50,6 +50,31 @@ describe('formatTranscript', () => {
 })
 
 describe('summarizeMessages', () => {
+  it('describes media through the configured generator before summarizing an ephemeral copy', async () => {
+    const original = {
+      role: 'user' as const,
+      content: [
+        { type: 'text' as const, text: 'What is shown?' },
+        { type: 'image' as const, source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
+      ],
+    }
+    const calls: Parameters<GenerateTextFn>[0][] = []
+    const generate: GenerateTextFn = async (options) => {
+      calls.push(options)
+      return { text: calls.length === 1 ? 'A rising revenue chart.' : 'Chart discussed.' }
+    }
+
+    const result = await summarizeMessages({ messages: [original], generate, model: 'summary-model' })
+
+    expect(result.summary).toBe('Chart discussed.')
+    expect(calls).toHaveLength(2)
+    expect(calls[0]).toMatchObject({ model: 'summary-model', maxOutputTokens: 1000 })
+    expect('messages' in calls[0]!).toBe(true)
+    expect(calls[1]).toMatchObject({ model: 'summary-model' })
+    expect((calls[1] as { prompt: string }).prompt).toContain('A rising revenue chart.')
+    expect(original.content[1]).toMatchObject({ type: 'image', source: new Uint8Array([1, 2, 3]) })
+  })
+
   it('returns summary from generate function', async () => {
     const result = await summarizeMessages({
       messages: sampleMessages,

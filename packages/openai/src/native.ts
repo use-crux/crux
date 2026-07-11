@@ -109,7 +109,11 @@ function createOpenAIRuntimeExtensions(client: OpenAI): {
     const generateText = openAIHelpers.createGenerateTextFn(client, config.model)
     const generateObject = openAIHelpers.createGenerateObjectFn(client, config.model)
     return {
-      generateText: (args) => generateText({ ...args, model: config.model }),
+      generateText: (args) => generateText(
+        args.messages
+          ? { model: config.model, system: args.system, maxOutputTokens: args.maxOutputTokens, messages: args.messages }
+          : { model: config.model, system: args.system, maxOutputTokens: args.maxOutputTokens, prompt: args.prompt ?? '' },
+      ),
       generateObject: (args) => generateObject({ ...args, model: config.model }),
     }
   }

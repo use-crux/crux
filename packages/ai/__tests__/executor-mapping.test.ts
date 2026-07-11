@@ -367,6 +367,20 @@ describe("generate — routing", () => {
 });
 
 describe("generateTextFn — routing", () => {
+  it("forwards canonical media messages through one native generation call", async () => {
+    const scripted = scriptedGateway({ generateText: [{ text: "described" }] });
+    const ai = createCruxAi({ gateway: scripted.gateway });
+
+    await ai.generateTextFn({
+      model: model("vision"),
+      messages: [{ role: "user", content: [{ type: "image", source: new Uint8Array([1]), mediaType: "image/png" }] }],
+      maxOutputTokens: 1000,
+    });
+
+    expect(scripted.calls.generateText).toHaveLength(1);
+    expect(scripted.calls.generateText[0]).toMatchObject({ maxOutputTokens: 1000, messages: [{ role: "user" }] });
+  });
+
   it("falls back to the next model and preserves the routing receipt", async () => {
     const scripted = scriptedGateway({
       generateText: [

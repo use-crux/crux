@@ -14,12 +14,31 @@ import type { Storage } from "../storage";
 
 // ── Generate Function Abstractions ──────────────────────────────────
 
+/** Common controls accepted by a framework-agnostic text generation call. */
+interface GenerateTextCommonOptions {
+  readonly model: unknown;
+  readonly system?: string;
+  readonly maxOutputTokens?: number;
+}
+
 /** Framework-agnostic text generation function. Wraps any SDK's generateText. */
-export type GenerateTextFn = (options: {
-  model: unknown;
-  system?: string;
-  prompt: string;
-}) => Promise<{ text: string; routing?: RoutingReceipt }>;
+export type GenerateTextFn = (
+  options: GenerateTextCommonOptions &
+    (
+      | { readonly prompt: string; readonly messages?: never }
+      | { readonly messages: readonly Message[]; readonly prompt?: never }
+    ),
+) => Promise<{ text: string; routing?: RoutingReceipt }>;
+
+/** Optional generation controls used to turn media parts into bounded text. */
+export interface CompactionMediaConfig {
+  /** Generator used for media descriptions. Defaults to the summary generator. */
+  readonly generate?: GenerateTextFn;
+  /** Model used for media descriptions. Defaults to the summary model. */
+  readonly model?: unknown;
+  /** Maximum characters retained from each media description. Default: 4000. */
+  readonly maxCharsPerPart?: number;
+}
 
 /**
  * Framework-agnostic structured output function.
@@ -46,7 +65,7 @@ export type GenerateObjectFn = <T>(options: {
 
 export interface SummarizeConfig {
   /** Messages to summarize. */
-  messages: Message[];
+  messages: readonly Message[];
   /** Text generation function (any SDK adapter). */
   generate: GenerateTextFn;
   /** Model to use for summarization. */
@@ -55,6 +74,8 @@ export interface SummarizeConfig {
   maxTokens?: number;
   /** Aspects to prioritize in the summary (e.g. 'decisions', 'tool_results'). */
   focus?: string[];
+  /** Optional media-description overrides. */
+  media?: CompactionMediaConfig;
 }
 
 // Re-export CompactionResult — it's the return type of summarizeMessages
@@ -71,6 +92,8 @@ export interface SlidingWindowConfig {
   model: unknown;
   /** Max tokens for the running summary. Default: 1000. */
   summaryBudget?: number;
+  /** Optional media-description overrides. */
+  media?: CompactionMediaConfig;
   /** Storage used for durable messages and their media assets. */
   storage?: Storage;
   /** Namespace key for this window instance. Default: 'default'. */

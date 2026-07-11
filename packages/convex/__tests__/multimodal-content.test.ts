@@ -33,14 +33,14 @@ describe('@use-crux/convex multimodal content helpers', () => {
       ],
       existingSummary: '',
       generate: async (args) => {
-        prompt = args.prompt
+        prompt = args.prompt ?? ''
         return { text: 'summary' }
       },
       model: 'summary-model',
     })
 
     expect(prompt).toContain('summarize this chart')
-    expect(prompt).toContain('[image image/png 3B sha256:')
+    expect(prompt).toContain('[image description] summary')
     expect(prompt).not.toContain('[object Object]')
     expect(prompt).not.toContain('AQID')
   })

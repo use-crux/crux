@@ -124,7 +124,11 @@ function createGoogleRuntimeExtensions(client: GoogleGenAI): {
     const generateText = googleHelpers.createGenerateTextFn(client, config.model)
     const generateObject = googleHelpers.createGenerateObjectFn(client, config.model)
     return {
-      generateText: (args) => generateText({ ...args, model: config.model }),
+      generateText: (args) => generateText(
+        args.messages
+          ? { model: config.model, system: args.system, maxOutputTokens: args.maxOutputTokens, messages: args.messages }
+          : { model: config.model, system: args.system, maxOutputTokens: args.maxOutputTokens, prompt: args.prompt ?? '' },
+      ),
       generateObject: (args) => generateObject({ ...args, model: config.model }),
     }
   }
