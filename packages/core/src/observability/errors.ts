@@ -1,4 +1,5 @@
 import type { CruxAttributes, CruxErrorSummary } from './contract'
+import { sanitizeMediaPreview } from './media-preview'
 
 const DEFAULT_MAX_DEPTH = 6
 const DEFAULT_MAX_KEYS = 80
@@ -78,7 +79,7 @@ export function observedErrorSummary(error: unknown, context: ObservedErrorConte
 }
 
 export function toSafeJsonValue(value: unknown): unknown {
-  return toSafeJsonValueInternal(value, defaultSafeJsonOptions, 0, new WeakSet<object>())
+  return toSafeJsonValueInternal(sanitizeMediaPreview(value), defaultSafeJsonOptions, 0, new WeakSet<object>())
 }
 
 function errorSummaryFromRecord(error: unknown, context: ObservedErrorContext): CruxErrorSummary {
@@ -276,7 +277,7 @@ function redactedOrSafeValue(
   seen: WeakSet<object> = new WeakSet<object>(),
 ): unknown {
   if (SENSITIVE_KEY_PATTERN.test(key)) return REDACTED_VALUE
-  return toSafeJsonValueInternal(value, options, depth + 1, seen)
+  return toSafeJsonValueInternal(sanitizeMediaPreview(value), options, depth + 1, seen)
 }
 
 function errorMessage(error: unknown): string {

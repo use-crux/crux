@@ -7,11 +7,19 @@ import {
   type CruxGraphRecord,
 } from '../../src/observability'
 import { resetHooks, updateHooks } from '../../src/runtime/runtime'
+import { sanitizeMediaPreview } from '../../src/observability/media-preview'
 
 describe('observability media privacy', () => {
   afterEach(() => {
     resetObservabilityRuntime()
     resetHooks()
+  })
+
+  it('keeps graph record discriminants while sanitizing media', () => {
+    expect(sanitizeMediaPreview({ type: 'artifact', preview: { content: [] } })).toMatchObject({
+      type: 'artifact',
+      preview: { content: [] },
+    })
   })
 
   it.each([undefined, 'full', 'safe'] as const)(
@@ -23,6 +31,8 @@ describe('observability media privacy', () => {
       const namedBlob = Object.assign(new Blob([new Uint8Array([7, 8, 9])], { type: 'image/png' }), {
         name: 'SECRET_BLOB_FILENAME.png',
       })
+      const cyclic: Record<string, unknown> = { payload: 'U0VDUkVUX0JBU0U2NF9QQVlMT0FEX1BBWUxPQUQ=' }
+      cyclic.self = cyclic
 
       await observe.span({ name: 'generate', primitive: 'generation.call' }, async () => {
         observe.artifact({
@@ -62,6 +72,17 @@ describe('observability media privacy', () => {
                 mediaType: 'application/pdf',
                 filename: 'SECRET_REF_FILENAME.pdf',
               },
+              {
+                generated: {
+                  type: 'image',
+                  source: { type: 'data', data: new Uint8Array([9, 8, 7]), mediaType: 'image/png' },
+                  width: 640,
+                  height: 480,
+                  filename: 'SECRET_GENERATED_FILENAME.png',
+                },
+                cyclic,
+                signed: 'https://example.com/private?SECRET_SIGNED_QUERY=yes',
+              },
             ],
           },
         })
@@ -83,12 +104,34 @@ describe('observability media privacy', () => {
         'SECRET_BLOB_FILENAME',
         'SECRET_ASSET_REF',
         'SECRET_REF_FILENAME',
+        'SECRET_BASE64_PAYLOAD',
+        'SECRET_GENERATED_FILENAME',
+        'SECRET_SIGNED_QUERY',
       ])
         expect(serialized).not.toContain(sentinel)
       const content = (output?.preview as { content: readonly Record<string, unknown>[] }).content
-      expect(content).toHaveLength(7)
-      expect(content.every((part) => typeof part.source === 'string')).toBe(true)
-      expect(content.every((part) => !('filename' in part))).toBe(true)
+      expect(content).toHaveLength(8)
+      expect(content.slice(0, 7)).toEqual([
+        expect.objectContaining({ kind: 'image', mediaType: 'image/png', sourceCategory: 'url' }),
+        expect.objectContaining({ kind: 'image', mediaType: 'image/png', sourceCategory: 'url' }),
+        expect.objectContaining({ kind: 'file', sourceCategory: 'provider-file' }),
+        expect.objectContaining({ kind: 'image', mediaType: 'image/png', sourceCategory: 'data-url' }),
+        expect.objectContaining({ kind: 'image', mediaType: 'image/png', sizeBytes: 3, digestPrefix: expect.any(String) }),
+        expect.objectContaining({ kind: 'image', mediaType: 'image/png', sizeBytes: 3, sourceCategory: 'blob' }),
+        expect.objectContaining({ kind: 'file', mediaType: 'application/pdf', sourceCategory: 'asset-ref' }),
+      ])
+      expect(content[7]).toMatchObject({
+        generated: {
+          kind: 'image',
+          mediaType: 'image/png',
+          sizeBytes: 3,
+          width: 640,
+          height: 480,
+          sourceCategory: 'data',
+        },
+        cyclic: { payload: '[redacted media]', self: '[Circular]' },
+        signed: '[url]',
+      })
     },
   )
 })

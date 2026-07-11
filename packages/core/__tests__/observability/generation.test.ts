@@ -144,7 +144,13 @@ describe('generation observability', () => {
             role: 'user',
             content: [
               { type: 'text', text: 'inspect this chart' },
-              { type: 'image', source: expect.stringContaining('[image image/png 3B sha256:') },
+              {
+                kind: 'image',
+                mediaType: 'image/png',
+                sizeBytes: 3,
+                digestPrefix: expect.any(String),
+                sourceCategory: 'bytes',
+              },
             ],
           },
         ],

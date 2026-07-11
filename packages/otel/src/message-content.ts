@@ -8,7 +8,6 @@
  */
 
 import type { CruxGraphRecord } from '@use-crux/core/observability'
-import { contentText, type ContentPart, type MessageContent } from '@use-crux/core'
 import type { OtelAttributes } from './attribute-mapper'
 import {
   GEN_AI_INPUT_MESSAGES,
@@ -117,54 +116,40 @@ function textFromRecord(record: Record<string, unknown>): string | undefined {
   for (const key of ['content', 'text', 'answer', 'value', 'output']) {
     const value = record[key]
     if (typeof value === 'string' && value.length > 0) return value
-    if (isMessageContent(value)) {
-      const text = contentText(value)
+    if (Array.isArray(value)) {
+      const text = safeContentText(value)
       if (text.length > 0) return text
     }
   }
   return undefined
 }
 
-function isMessageContent(value: unknown): value is MessageContent {
-  return typeof value === 'string' || (Array.isArray(value) && value.every(isContentPart))
+function safeContentText(value: readonly unknown[]): string {
+  return value.flatMap((part) => safePartText(part)).join('\n')
 }
 
-function isContentPart(value: unknown): value is ContentPart {
-  if (!isRecord(value) || typeof value.type !== 'string') return false
-  switch (value.type) {
-    case 'text':
-      return typeof value.text === 'string'
-    case 'image':
-      return isMediaSource(value.source) && optionalString(value.mediaType)
-    case 'file':
-      return isMediaSource(value.source) && optionalString(value.mediaType) && optionalString(value.filename)
-    default:
-      return false
-  }
+function safePartText(value: unknown): readonly string[] {
+  if (!isRecord(value)) return []
+  if (value.type === 'text' && typeof value.text === 'string') return [value.text]
+  if (!isSafeMediaDescriptor(value)) return []
+  const facts = [
+    value.kind,
+    typeof value.mediaType === 'string' ? value.mediaType : undefined,
+    typeof value.sizeBytes === 'number' ? `${value.sizeBytes}B` : undefined,
+    typeof value.digestPrefix === 'string' ? `sha256:${value.digestPrefix}` : undefined,
+  ].filter((item): item is string => item !== undefined)
+  return [`[${facts.join(' ')}]`]
 }
 
-function optionalString(value: unknown): boolean {
-  return value === undefined || typeof value === 'string'
-}
-
-function isMediaSource(value: unknown): boolean {
-  if (typeof value === 'string') return true
-  if (value instanceof URL || value instanceof Uint8Array || value instanceof ArrayBuffer) return true
-  if (typeof Blob !== 'undefined' && value instanceof Blob) return true
-  if (!isRecord(value) || typeof value.type !== 'string') return false
-  switch (value.type) {
-    case 'data':
-      return (value.data instanceof Uint8Array || (typeof Blob !== 'undefined' && value.data instanceof Blob))
-        && typeof value.mediaType === 'string'
-    case 'url':
-      return value.url instanceof URL && optionalString(value.mediaType)
-    case 'provider-file':
-      return typeof value.provider === 'string'
-        && typeof value.fileId === 'string'
-        && optionalString(value.mediaType)
-    default:
-      return false
-  }
+function isSafeMediaDescriptor(value: Record<string, unknown>): boolean {
+  return (
+    (value.kind === 'image' || value.kind === 'file') &&
+    typeof value.sourceCategory === 'string' &&
+    !('source' in value) &&
+    !('data' in value) &&
+    !('url' in value) &&
+    !('fileId' in value)
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

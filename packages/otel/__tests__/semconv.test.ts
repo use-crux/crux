@@ -221,7 +221,13 @@ describe('GenAI semconv projection', () => {
               role: 'user',
               content: [
                 textPart('inspect this chart'),
-                { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
+                {
+                  kind: 'image',
+                  mediaType: 'image/png',
+                  sizeBytes: 3,
+                  digestPrefix: '039058c6f2c0',
+                  sourceCategory: 'bytes',
+                },
               ],
             },
           ],
@@ -243,6 +249,41 @@ describe('GenAI semconv projection', () => {
       },
     ])
     expect(JSON.stringify(inputMessages)).not.toContain('AQID')
+  })
+
+  it('receives only sanitized media descriptors from the graph stream', async () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      captureMessageContent: true,
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+    const span = observe.openSpan({ name: 'safe media', primitive: 'generation.call' })
+    await span.withContext(async () => {
+      observe.artifact({
+        kind: 'messages',
+        contentType: 'application/json',
+        encoding: 'json',
+        preview: {
+          messages: [{
+            role: 'user',
+            content: [
+              textPart('inspect'),
+              { type: 'image', source: 'data:image/png;base64,SECRET_MEDIA_BYTES', mediaType: 'image/png' },
+            ],
+          }],
+        },
+      })
+    })
+    span.end()
+    installed.dispose?.()
+
+    const serialized = JSON.stringify(spans)
+    expect(serialized).not.toContain('SECRET_MEDIA_BYTES')
+    expect(serialized).not.toContain('data:image')
+    const generation = spans.find((candidate) => candidate.attributes['crux.primitive.name'] === 'generation.call')
+    expect(String(generation?.attributes['gen_ai.input.messages'])).toContain('inspect\\n[image image/png]')
   })
 
   it('continues to fallback text fields when structured content projects empty', () => {
