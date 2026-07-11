@@ -22,14 +22,49 @@ export interface ErrorStepper {
   onNext: () => void
 }
 
+/**
+ * Segment/ordering/alias uncertainty surfaced truthfully (binding spec 04
+ * §5), but only rendered by the caller when non-trivial — normal
+ * single-segment runs never see this badge (spec's "stay visually calm").
+ */
+export interface RunReliabilityDetail {
+  segmentCount?: number
+  activeSegmentId?: string
+  orderingConfidence?: string
+  gapCount?: number
+  traceAliasConflict?: boolean
+}
+
 export interface RunContextStripProps {
   status: string
   items: readonly StatItem[]
   diagnosticsCount: number
   errorStepper?: ErrorStepper
+  reliability?: RunReliabilityDetail
 }
 
-export function RunContextStrip({ status, items, diagnosticsCount, errorStepper }: RunContextStripProps) {
+function reliabilityMessage(reliability: RunReliabilityDetail): string | undefined {
+  const parts: string[] = []
+  if ((reliability.segmentCount ?? 1) > 1) {
+    parts.push(
+      `${reliability.segmentCount} execution segments` +
+        (reliability.activeSegmentId ? ` · active: ${reliability.activeSegmentId}` : ' · none currently live'),
+    )
+  }
+  if ((reliability.gapCount ?? 0) > 0) {
+    parts.push(`${reliability.gapCount} sequence gap${reliability.gapCount === 1 ? '' : 's'} or missing parent reference${reliability.gapCount === 1 ? '' : 's'}`)
+  }
+  if (reliability.orderingConfidence === 'partial') {
+    parts.push('display order is partial, not fully causal')
+  }
+  if (reliability.traceAliasConflict) {
+    parts.push('this trace alias also identifies another logical run')
+  }
+  return parts.length > 0 ? parts.join(' · ') : undefined
+}
+
+export function RunContextStrip({ status, items, diagnosticsCount, errorStepper, reliability }: RunContextStripProps) {
+  const reliabilityMsg = reliability ? reliabilityMessage(reliability) : undefined
   const isRunning = status === 'running'
   return (
     <div
@@ -39,6 +74,25 @@ export function RunContextStrip({ status, items, diagnosticsCount, errorStepper 
       <div className="flex items-center gap-3.5 px-6 py-2.5">
         <StatusPill status={status} />
         <StatStrip items={items} size={11.5} gap={14} />
+        {reliabilityMsg && (
+          <div
+            className="flex items-center gap-1.5 rounded-[6px] px-2.5 py-1"
+            style={{ background: reliability?.traceAliasConflict ? 'var(--qw-danger-soft)' : 'var(--qw-crux-soft)' }}
+            title={reliabilityMsg}
+          >
+            <Icon
+              name="layers"
+              size={12}
+              color={reliability?.traceAliasConflict ? 'var(--qw-danger)' : 'var(--qw-crux)'}
+            />
+            <span
+              className="max-w-[420px] truncate text-[11px] font-medium"
+              style={{ color: reliability?.traceAliasConflict ? 'var(--qw-danger)' : 'var(--qw-crux)' }}
+            >
+              {reliabilityMsg}
+            </span>
+          </div>
+        )}
         <div className="flex-1" />
         {errorStepper && errorStepper.total > 0 && (
           <div

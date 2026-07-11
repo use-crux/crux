@@ -30,9 +30,18 @@ func deleteRunRows(ctx context.Context, tx *sql.Tx, runIDs []string) error {
 		"artifacts",
 		"edges",
 		"spans",
-		"observability_run_revision_log",
 		"runs",
 	}
+	// observability_run_revision_log is deliberately NOT purged here: it is
+	// the only durable record that a run was deleted. A reconnecting client
+	// presenting a revision from before the deletion must see the run as
+	// changed (binding spec 04 §4) so it fully invalidates instead of
+	// keeping a phantom row forever. Callers bump a fresh tombstone revision
+	// for these run IDs (via bumpRunRevisions) in the same transaction,
+	// before calling this function — see DeleteRuns and runRetention. The
+	// log has no foreign key on run_id, so rows referencing a now-deleted
+	// run are harmless history and still age out under the normal bounded
+	// retain-N-revisions prune in bumpRunRevisions/pruneRevisionLog.
 	for _, table := range tables {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table+" WHERE run_id IN ("+placeholders+")", args...); err != nil {
 			return fmt.Errorf("delete observability %s rows: %w", table, err)

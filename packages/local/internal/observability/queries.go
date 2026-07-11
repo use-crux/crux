@@ -388,6 +388,14 @@ func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error
 			_ = tx.Rollback()
 		}
 	}()
+	// Bump a fresh tombstone revision for each deleted run BEFORE removing
+	// its rows: this is the only durable signal a reconnecting client (or
+	// one that missed the WS push) has that the run is gone, not merely
+	// unchanged. See the comment on deleteRunRows/observability_run_revision_log.
+	revisions, err := bumpRunRevisions(ctx, tx, deleted, s.revisionLogRetentionOrDefault())
+	if err != nil {
+		return nil, fmt.Errorf("advance observability revision for deleted runs: %w", err)
+	}
 	if err := deleteRunRows(ctx, tx, deleted); err != nil {
 		return nil, err
 	}
@@ -396,7 +404,7 @@ func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error
 	}
 	committed = true
 
-	payload, _ := json.Marshal(map[string]any{"runIds": deleted})
+	payload, _ := json.Marshal(map[string]any{"runIds": deleted, "revision": maxRevision(revisions)})
 	s.events.Publish(Event{
 		Tag:      "ObservabilityEvent",
 		Kind:     "observability.records",
@@ -406,6 +414,16 @@ func (s *Service) DeleteRuns(ctx context.Context, ids []string) ([]string, error
 		Payload:  payload,
 	})
 	return deleted, nil
+}
+
+func maxRevision(revisions map[string]int64) int64 {
+	var highest int64
+	for _, revision := range revisions {
+		if revision > highest {
+			highest = revision
+		}
+	}
+	return highest
 }
 
 // ResolveRunIDs resolves run ids or trace ids to canonical run ids without

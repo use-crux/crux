@@ -1,6 +1,9 @@
 import type {
   ObservabilityResourceActivity,
   ObservabilityRunDetail,
+  ObservabilityRunsDelta,
+  ObservabilityRunsPage,
+  ObservabilityRunsPageOptions,
   ObservabilityRunSummary,
   ObservabilitySpanEventSummary,
 } from '@/types'
@@ -22,6 +25,21 @@ export const observabilityService = {
 
   getRun(runId: string, signal?: AbortSignal): Promise<ObservabilityRunDetail | null> {
     return fetchJsonOr404<ObservabilityRunDetail>(`/api/observability/runs/${encodeURIComponent(runId)}`, signal)
+  },
+
+  /**
+   * The one joined, revisioned Runs read model (binding spec 04 §3). Filters
+   * execute server-side, in SQL, before pagination — the Runs UI's canonical
+   * row source, replacing the old client-side Quality-terminal +
+   * observability-running merge.
+   */
+  listRunsPage(options: ObservabilityRunsPageOptions = {}, signal?: AbortSignal): Promise<ObservabilityRunsPage> {
+    return fetchJson<ObservabilityRunsPage>(`/api/observability/runs/page${runsPageQuery(options)}`, signal)
+  },
+
+  /** Bounded reconnect catch-up: runs changed strictly after `sinceRevision`. */
+  listRunsDelta(sinceRevision: number, signal?: AbortSignal): Promise<ObservabilityRunsDelta> {
+    return fetchJson<ObservabilityRunsDelta>(`/api/observability/runs/delta?since=${sinceRevision}`, signal)
   },
 
   /**
@@ -48,6 +66,18 @@ export const observabilityService = {
       signal,
     )
   },
+}
+
+function runsPageQuery(options: ObservabilityRunsPageOptions): string {
+  const params = new URLSearchParams()
+  if (options.status && options.status.length > 0) params.set('status', options.status.join(','))
+  if (options.sessionId) params.set('sessionId', options.sessionId)
+  if (options.since) params.set('since', options.since)
+  if (options.until) params.set('until', options.until)
+  if (options.cursor) params.set('cursor', options.cursor)
+  if (options.limit != null) params.set('limit', String(options.limit))
+  const query = params.toString()
+  return query ? `?${query}` : ''
 }
 
 function spanEventsQuery(options: ObservabilitySpanEventsOptions): string {

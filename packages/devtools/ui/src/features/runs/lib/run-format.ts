@@ -48,6 +48,7 @@ const STATUS_TONE: Record<string, ChipTone> = {
   suspended: 'crux', // durable flow paused on signal/event/timer/child
   skipped: 'muted',
   incomplete: 'muted', // telemetry gap (start without end) — shown honestly, not as a warning
+  conflicted: 'danger', // immutable identity or incompatible terminal evidence — needs attention
   stale: 'warn', // live run stopped emitting records
 }
 
@@ -58,6 +59,32 @@ export function statusTone(status: string): ChipTone {
 /** A run is "live" (warrants the pulsing indicator) only while running. */
 export function isLiveStatus(status: string): boolean {
   return status === 'running'
+}
+
+const DELIVERY_HEALTH_TONE: Record<string, ChipTone> = {
+  healthy: 'ok',
+  degraded: 'warn',
+  unknown: 'muted', // deliberately distinct from "healthy" — no persisted correlation, not a clean bill of health
+}
+
+export function deliveryHealthTone(status: string | undefined): ChipTone {
+  if (!status) return 'muted'
+  return DELIVERY_HEALTH_TONE[status] ?? 'muted'
+}
+
+/**
+ * A run only warrants the reliability badge cluster (segments/order/health)
+ * when something is non-trivial — normal single-segment runs stay visually
+ * calm (binding spec 04 §5).
+ */
+export function hasReliabilityDetail(run: RunRow): boolean {
+  return (
+    (run.segmentCount ?? 1) > 1 ||
+    (run.gapCount ?? 0) > 0 ||
+    Boolean(run.traceAliasConflict) ||
+    run.orderingConfidence === 'partial' ||
+    run.deliveryHealth === 'degraded'
+  )
 }
 
 export function formatLatency(ms: number | undefined): string {

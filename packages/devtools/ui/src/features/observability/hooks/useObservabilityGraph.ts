@@ -1,7 +1,11 @@
 /**
  * Observability hooks backed by TanStack Query.
  *
- *   - useObservabilityRuns           → /api/observability/runs (list)
+ *   - useObservabilityRuns           → /api/observability/runs (legacy bare-array list,
+ *                                       kept for the global-search feature)
+ *   - useObservabilityRunsPage       → /api/observability/runs/page (the one joined,
+ *                                       revisioned Runs list — this is what the Runs
+ *                                       feature consumes; see runs/hooks/useRuns.ts)
  *   - useObservabilityGraph(runId)   → /api/observability/runs/{runId}
  *   - useObservabilityResourceActivity(family) → /api/observability/resources/{family}
  *
@@ -16,7 +20,7 @@
  * push path stays sub-second even when the polling interval hasn't fired.
  */
 
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { qk } from '@/shared/query/queryClient'
 import type {
@@ -24,13 +28,16 @@ import type {
   ObservabilityResourceActivity,
   ObservabilityRunDetail,
   ObservabilityRunDetailNode,
+  ObservabilityRunsPage,
+  ObservabilityRunsPageOptions,
   ObservabilityRunSummary,
   ObservabilitySpanEventSummary,
 } from '@/types'
 import type { SpanNode } from '@/features/observability/lib/span-tree'
 import { orderRunDetailChildren } from '@/features/observability/lib/run-detail-order'
 import { observabilityService } from '../services/observability'
-import { observabilityEventIds } from '@/app/runtime/observabilityEvents'
+import { observabilityEventIds, observabilityEventRevision } from '@/app/runtime/observabilityEvents'
+import { catchUpActionFromDelta, decideOnObservabilityRevisionEvent } from '@/shared/lib/runs-revision'
 
 interface ObservabilityGraphState {
   runDetail: ObservabilityRunDetail | null
@@ -203,6 +210,78 @@ export function useObservabilityRuns(): {
 
   return {
     runs: q.data ?? [],
+    loading: q.isPending || q.isFetching,
+    error: q.error ?? null,
+  }
+}
+
+export interface UseObservabilityRunsPageResult {
+  page: ObservabilityRunsPage | undefined
+  loading: boolean
+  error: Error | null
+}
+
+/**
+ * The one joined, revisioned Runs list (binding spec 04 §3-4). Filters run
+ * server-side; pagination and row presence are server-owned, so this is the
+ * single canonical row source for the Runs feature — it must not be merged
+ * client-side with a second, independently-filtered list.
+ *
+ * Push updates are revision-aware: a WS `ObservabilityEvent` carrying a
+ * revision no newer than the last one this hook applied is ignored (avoids
+ * refetch storms on redundant notifications). A newer revision triggers the
+ * bounded `/runs/delta` catch-up; an `expired` delta (the client fell behind
+ * the server's retained change log) forces a full invalidate/refetch instead
+ * of trusting a partial delta.
+ */
+export function useObservabilityRunsPage(options: ObservabilityRunsPageOptions = {}): UseObservabilityRunsPageResult {
+  const stableOptions = useMemo(
+    () => ({
+      status: options.status && options.status.length > 0 ? [...options.status].sort() : undefined,
+      sessionId: options.sessionId || undefined,
+      since: options.since,
+      until: options.until,
+      cursor: options.cursor,
+      limit: options.limit,
+    }),
+    [options.status, options.sessionId, options.since, options.until, options.cursor, options.limit],
+  )
+  const key = qk.observability.runsPage(stableOptions)
+  const client = useQueryClient()
+  const lastAppliedRevisionRef = useRef(0)
+
+  const q = useQuery<ObservabilityRunsPage, Error>({
+    queryKey: key,
+    queryFn: ({ signal }) => observabilityService.listRunsPage(stableOptions, signal),
+    refetchInterval: (query) => {
+      const data = query.state.data
+      return data && data.rows.some((r) => !isTerminalStatus(r.status)) ? 1000 : 5000
+    },
+  })
+
+  useEffect(() => {
+    if (q.data) lastAppliedRevisionRef.current = Math.max(lastAppliedRevisionRef.current, q.data.revision)
+  }, [q.data])
+
+  useEffect(() => {
+    function onEvt(event: Event) {
+      const eventRevision = observabilityEventRevision((event as CustomEvent<unknown>).detail)
+      const decision = decideOnObservabilityRevisionEvent(lastAppliedRevisionRef.current, eventRevision)
+      if (decision === 'ignore') return
+      void observabilityService.listRunsDelta(lastAppliedRevisionRef.current).then((delta) => {
+        if (catchUpActionFromDelta(delta) === 'invalidate') {
+          void client.invalidateQueries({ queryKey: key })
+        }
+        lastAppliedRevisionRef.current = Math.max(lastAppliedRevisionRef.current, delta.revision)
+      })
+    }
+    window.addEventListener('crux:observability-event', onEvt)
+    return () => window.removeEventListener('crux:observability-event', onEvt)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client, JSON.stringify(key)])
+
+  return {
+    page: q.data,
     loading: q.isPending || q.isFetching,
     error: q.error ?? null,
   }

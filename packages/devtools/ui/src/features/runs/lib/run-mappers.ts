@@ -1,17 +1,19 @@
-import type { ObservabilityRunSummary, QualityRunRecord } from '@/types'
-import type { QualityRunsOptions } from '@/shared/hooks/useQualityApi'
+import type { ObservabilityRunsPageOptions, ObservabilityRunSummary, QualityRunRecord } from '@/types'
 import type { RunKind, RunRow, RunsFilters } from '../types'
 
-export function qualityOptionsFromFilters(filters: RunsFilters): QualityRunsOptions {
+/**
+ * Map UI filters onto the one canonical Runs list request (binding spec 04
+ * §3): status/session/time-range filters execute server-side, in SQL,
+ * before pagination. `target`/`model`/`search`/`has` stay client-side
+ * post-filters over that one bounded page — see `useRuns.ts` — because the
+ * server doesn't index on them yet; that's refinement filtering of one
+ * list, not the client-side dual-source row merge this replaces.
+ */
+export function runsPageOptionsFromFilters(filters: RunsFilters): ObservabilityRunsPageOptions {
+  const since = sinceFromLast(filters.last)
   return {
     status: filters.status && filters.status.length > 0 ? filters.status : undefined,
-    target: filters.target && filters.target.length > 0 ? filters.target : undefined,
-    model: filters.model && filters.model.length > 0 ? filters.model : undefined,
-    has: filters.has ? [filters.has] : undefined,
-    since: sinceFromLast(filters.last),
-    search: filters.search?.trim() || undefined,
-    sort: 'time',
-    order: 'desc',
+    since: since != null ? new Date(since).toISOString() : undefined,
   }
 }
 
@@ -32,7 +34,13 @@ export function canonicalPrimitiveKind(primitive: string): RunKind {
   return 'trace'
 }
 
-export function rowFromObservabilityRun(r: ObservabilityRunSummary): RunRow {
+/**
+ * The one canonical row mapper for the Runs list/detail (binding spec 04
+ * §3). `ObservabilityRunSummary` (the joined `/runs/page` row) is the sole
+ * source of row identity, presence, and graph rollups — this must not be
+ * merged client-side with a second, independently-sourced row.
+ */
+export function rowFromRunSummary(r: ObservabilityRunSummary): RunRow {
   const metrics = r.metrics ?? {}
   const attributes = r.attributes ?? {}
   const errVal = r.error
@@ -63,70 +71,48 @@ export function rowFromObservabilityRun(r: ObservabilityRunSummary): RunRow {
     edgeCount: r.edgeCount,
     childCount: r.spanCount,
     errorMessage,
+    revision: r.revision,
+    segmentCount: r.segmentCount,
+    activeSegmentId: r.activeSegmentId,
+    orderingConfidence: r.orderingConfidence,
+    gapCount: r.gapCount,
+    traceAliasConflict: r.traceAliasConflict,
+    deliveryHealth: r.deliveryHealth?.status,
   }
 }
 
 /**
- * Merge server-owned observability rollups onto a row sourced from Quality.
- *
- * Completed runs can arrive from the Quality read model first, while session
- * correlators and graph/count rollups belong to the observability list
- * endpoint. Keeping the merge here lets the runs table use one row shape
- * without duplicating backend ownership rules in React components.
+ * Decorate an already-canonical row with Quality's annotation-only metadata
+ * (feedback, score, experiments, cassette linkage, diagnostics). Quality
+ * never adds, removes, reorders, or supplies row identity here — it only
+ * fills in fields the observability read model doesn't own (spec 04 §5:
+ * "Quality annotations use the same row/detail identity and revision rather
+ * than a second list becoming authoritative").
  */
-export function enrichRunRowFromObservability(row: RunRow, r: ObservabilityRunSummary | undefined): RunRow {
-  if (!r) return row
-  const observability = rowFromObservabilityRun(r)
+export function annotateRunRowWithQuality(row: RunRow, quality: QualityRunRecord | undefined): RunRow {
+  if (!quality) return row
   return {
     ...row,
-    sessionId: observability.sessionId ?? row.sessionId,
-    model: row.model ?? observability.model,
-    provider: row.provider ?? observability.provider,
-    durationMs: row.durationMs ?? observability.durationMs,
-    tokenCount: observability.tokenCount ?? row.tokenCount,
-    cost: observability.cost ?? row.cost,
-    recordCount: observability.recordCount,
-    spanCount: observability.spanCount,
-    eventCount: observability.eventCount,
-    artifactCount: observability.artifactCount,
-    edgeCount: observability.edgeCount,
-    childCount: observability.childCount ?? row.childCount,
+    score: quality.score ?? row.score,
+    feedbackCount: quality.feedbackCount ?? quality.feedbackIds?.length ?? row.feedbackCount,
+    toolCallCount: quality.toolCallCount ?? row.toolCallCount,
+    cassetteStatus: quality.cassetteStatus ?? row.cassetteStatus,
+    diagnosticsCount: quality.diagnosticsCount ?? row.diagnosticsCount,
+    diagnosticsMaxSeverity: quality.diagnosticsMaxSeverity ?? row.diagnosticsMaxSeverity,
   }
 }
 
-export function rowFromQualityRun(r: QualityRunRecord): RunRow {
-  const errVal = r.error
-  const errorMessage =
-    typeof errVal === 'string'
-      ? errVal
-      : errVal &&
-          typeof errVal === 'object' &&
-          'message' in (errVal as Record<string, unknown>) &&
-          typeof (errVal as { message?: unknown }).message === 'string'
-        ? (errVal as { message: string }).message
-        : undefined
-  return {
-    kind: canonicalPrimitiveKind(r.rootPrimitive ?? r.kind ?? r.primitive ?? 'trace'),
-    id: `run:${r.traceId}`,
-    traceId: r.traceId,
-    target: r.targetId ?? r.promptId ?? r.flowId ?? r.traceId,
-    sessionId: r.sessionId,
-    model: r.model || undefined,
-    provider: r.provider || undefined,
-    status: r.status,
-    startedAt: r.startedAt,
-    durationMs: r.durationMs,
-    tokenCount: r.tokenCount,
-    cost: r.cost,
-    score: r.score,
-    feedbackCount: r.feedbackCount ?? r.feedbackIds?.length ?? 0,
-    toolCallCount: r.toolCallCount,
-    childCount: r.childCount ?? r.spanCount ?? r.traceCount,
-    cassetteStatus: r.cassetteStatus,
-    diagnosticsCount: r.diagnosticsCount,
-    diagnosticsMaxSeverity: r.diagnosticsMaxSeverity,
-    errorMessage,
-  }
+/**
+ * Quality's run record keys its trace-scoped metadata by `traceId`, which
+ * for an observability-sourced run is set to the run's `RunID` (see
+ * `qualityRunFromObservabilitySummary` in
+ * packages/local/internal/quality/observability.go) — so joining on the
+ * canonical row's `traceId` (== runId) is the correct, unambiguous key.
+ */
+export function qualityAnnotationsByRunId(
+  qualityRuns: readonly QualityRunRecord[],
+): ReadonlyMap<string, QualityRunRecord> {
+  return new Map(qualityRuns.map((run) => [run.traceId, run]))
 }
 
 export function sinceFromLast(last: RunsFilters['last'] | undefined): number | undefined {
