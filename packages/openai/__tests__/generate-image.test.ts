@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type OpenAI from 'openai'
+import { imageGenerationConformanceRow } from '@use-crux/core/adapter/testing'
 import { createOpenAI } from '../src'
 
 function clientWith(response: unknown) {
@@ -14,6 +15,7 @@ function clientWith(response: unknown) {
 
 describe('OpenAI image generation', () => {
   it('performs exactly one native image generation and preserves the raw result', async () => {
+    expect(imageGenerationConformanceRow('openai').support).toBe('native')
     const raw = {
       created: 1,
       output_format: 'webp',

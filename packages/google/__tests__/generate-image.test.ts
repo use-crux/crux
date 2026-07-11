@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { GoogleGenAI } from '@google/genai'
+import { imageGenerationConformanceRow } from '@use-crux/core/adapter/testing'
 import { createGoogle } from '../src'
 
 function clientWith(response: unknown) {
@@ -12,6 +13,7 @@ function clientWith(response: unknown) {
 
 describe('Google image generation', () => {
   it('uses one native generateImages call and preserves ordered image bytes', async () => {
+    expect(imageGenerationConformanceRow('google').support).toBe('native')
     const raw = {
       generatedImages: [
         { image: { imageBytes: 'AQI=', mimeType: 'image/png' }, enhancedPrompt: 'Enhanced' },

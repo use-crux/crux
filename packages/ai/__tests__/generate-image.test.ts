@@ -1,5 +1,6 @@
 import { describe, expect, expectTypeOf, it, vi } from 'vitest'
 import type { ImageModel } from 'ai'
+import { imageGenerationConformanceRow } from '@use-crux/core/adapter/testing'
 import { createCruxAi, generateImage, type SdkGateway } from '../src'
 
 function imageGateway(raw: unknown): { gateway: SdkGateway; image: ReturnType<typeof vi.fn>; text: ReturnType<typeof vi.fn>; stream: ReturnType<typeof vi.fn> } {
@@ -25,6 +26,7 @@ function imageGateway(raw: unknown): { gateway: SdkGateway; image: ReturnType<ty
 
 describe('AI SDK image generation', () => {
   it('performs one generateImage operation without entering the language loop', async () => {
+    expect(imageGenerationConformanceRow('ai-sdk').support).toBe('native')
     const file = { base64: 'AQI=', uint8Array: new Uint8Array([1, 2]), mediaType: 'image/png' }
     const raw = {
       image: file,

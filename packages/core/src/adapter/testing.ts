@@ -25,6 +25,11 @@ export {
   mediaConformanceFixture,
   wrongProviderFileMessages,
 } from './testing/direct-media'
+export {
+  IMAGE_GENERATION_CONFORMANCE,
+  imageGenerationConformanceRow,
+  imageGenerationSupportProjection,
+} from './testing/image-generation'
 export { providerRuntimeConformance } from './testing/provider-runtime'
 export { transcriptCodecConformance, transcriptRoundTripConformance } from './testing/transcript'
 export type {
@@ -33,6 +38,10 @@ export type {
   MediaConformanceAdapter,
   MediaConformanceFixture,
 } from './testing/direct-media'
+export type {
+  ImageGenerationConformanceRow,
+  ImageGenerationFixtureAdapter,
+} from './testing/image-generation'
 export type {
   CanonicalFinalStepInfo,
   CanonicalGenerateResultLike,

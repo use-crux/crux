@@ -55,6 +55,18 @@ All first-party generation adapters accept canonical `Message.content` values as
 
 `GenerateResult.text` and `StreamResult.textStream` remain string-shaped. Assistant-returned media is available in `result.messages`.
 
+Image generation is a separate flat operation, projected from the same internal five-adapter conformance fixture used by adapter tests:
+
+| Adapter | `generateImage` binding |
+| --- | --- |
+| ai-sdk | native |
+| anthropic | absent |
+| convex | exact AI SDK re-export |
+| google | native |
+| openai | native |
+
+Generated images are immediately usable data assets. Persistence stays explicit: call `assetStore.put(result.image)` later when durable storage is needed.
+
 ## Which contract do I implement?
 
 | Your SDK…                                                                                 | Ownership     | Mechanics | Example                                                       |
