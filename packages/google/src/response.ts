@@ -1,5 +1,5 @@
 import type { GenerateContentResponse } from '@google/genai'
-import type { AdapterResponse } from '@use-crux/core/adapter'
+import type { AdapterResponse, CruxFinishReason } from '@use-crux/core/adapter'
 import type { NativeAssistantTurn, NativeResponseMetadata } from '@use-crux/core/adapter'
 import { googleTranscript } from './message-codec'
 
@@ -16,18 +16,52 @@ export function googleResponse(response: GenerateContentResponse): AdapterRespon
 /** Read response metadata that is not owned by Google transcript conversion. */
 export function googleResponseMeta(response: GenerateContentResponse): NativeResponseMetadata {
   const candidate = response.candidates?.[0]
-  const usage = googleUsage(response)
+  const usage = googleUsage(response.usageMetadata)
 
   return {
     usage,
-    finishReason: candidate?.finishReason?.toLowerCase(),
+    finishReason: mapGoogleFinishReason(candidate?.finishReason, response.promptFeedback?.blockReason),
     responseId: undefined,
     actualModelId: response.modelVersion,
   }
 }
 
-function googleUsage(response: GenerateContentResponse): AdapterResponse['usage'] {
-  const metadata = response.usageMetadata
+/**
+ * Normalize a Google `finishReason` (and any prompt-side safety block) into the
+ * provider-neutral finish reason. A `promptFeedback.blockReason` reports the
+ * prompt itself was blocked before generation, which is a content-filter
+ * outcome regardless of `finishReason`.
+ */
+export function mapGoogleFinishReason(
+  finishReason: string | undefined,
+  blockReason?: string | undefined,
+): CruxFinishReason | undefined {
+  if (typeof blockReason === 'string' && blockReason.length > 0) return 'content-filter'
+  switch (finishReason) {
+    case undefined:
+      return undefined
+    case 'STOP':
+      return 'stop'
+    case 'MAX_TOKENS':
+      return 'length'
+    case 'SAFETY':
+    case 'RECITATION':
+    case 'BLOCKLIST':
+    case 'PROHIBITED_CONTENT':
+    case 'SPII':
+      return 'content-filter'
+    case 'FUNCTION_CALL':
+    case 'TOOL_CALL':
+      return 'tool-calls'
+    case 'MALFORMED_FUNCTION_CALL':
+      return 'error'
+    default:
+      return 'unknown'
+  }
+}
+
+/** Normalize Google usage metadata (shared by non-streaming and streaming completion) into canonical token usage. */
+export function googleUsage(metadata: GenerateContentResponse['usageMetadata']): AdapterResponse['usage'] {
   if (!metadata) return undefined
 
   const inputTokens = metadata.promptTokenCount

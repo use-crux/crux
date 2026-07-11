@@ -1,10 +1,28 @@
 import { describe, expect, it } from "vitest";
 import type OpenAI from "openai";
 import { prompt as makePrompt } from "@use-crux/core";
-import { CruxAdapterError, isCruxAdapterError } from "@use-crux/core/adapter";
+import { classifyProviderHttpError, CruxAdapterError, isCruxAdapterError } from "@use-crux/core/adapter";
+import { describeNormalizedOutcomeConformance, standardHttpErrorCases } from "@use-crux/core/adapter/testing";
 import { createOpenAI } from "../src";
+import { mapOpenAIFinishReason } from "../src/response";
 
 const textPrompt = makePrompt({ id: "openai-normalized", prompt: "Hi" });
+
+describeNormalizedOutcomeConformance({
+  name: "openai",
+  mapFinishReason: (raw: string) => mapOpenAIFinishReason(raw),
+  finishReasonCases: [
+    { label: "stop", raw: "stop", expected: "stop" },
+    { label: "length", raw: "length", expected: "length" },
+    { label: "tool_calls", raw: "tool_calls", expected: "tool-calls" },
+    { label: "content_filter", raw: "content_filter", expected: "content-filter" },
+  ],
+  unrecognizedFinishReason: "future_reason",
+  modelSideBlocking: true,
+  mapError: (error) => classifyProviderHttpError(error, "openai"),
+  errorCases: standardHttpErrorCases(),
+  unrecognizedError: new Error("mystery"),
+});
 
 describe("OpenAI normalized finish reasons (generate)", () => {
   const cases: Array<[string, string]> = [

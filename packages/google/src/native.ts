@@ -1,6 +1,6 @@
 import type { Content, GenerateContentResponse, GoogleGenAI } from '@google/genai'
-import { defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
-import type { NativeProviderPort, SingleTurnProviderBundleSpec } from '@use-crux/core/adapter'
+import { classifyProviderHttpError, defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
+import type { CruxProviderError, NativeProviderPort, SingleTurnProviderBundleSpec } from '@use-crux/core/adapter'
 import { judgeReranker, type Reranker, type RetrievalModel, type RetrieverHit } from '@use-crux/core/retrieval'
 import { disabledCachedContentLifecycle, resolveCachedContentLifecycle } from './cached-content'
 import type { GoogleCachedContentLifecycle, GoogleCachedContentOption } from './cached-content'
@@ -13,7 +13,7 @@ import {
   googleSettings,
 } from './request'
 import { googleResponseMeta, googleResponseText } from './response'
-import { googleTextDelta } from './stream'
+import { createGoogleStreamCapture, GoogleChatStream, googleTextDelta } from './stream'
 import type { GoogleExtra, GoogleRequest } from './types'
 
 /** Configuration for `google.retrievalModel()`. */
@@ -63,7 +63,11 @@ const google = defineSingleTurnProviderBundle({
       meta: googleResponseMeta,
       text: googleResponseText,
     },
-    stream: { textDelta: googleTextDelta },
+    stream: {
+      textDelta: googleTextDelta,
+      completion: async (stream) => stream.finalMeta(),
+    },
+    mapError: mapGoogleError,
     settings: googleSettings,
     outputSchema: googleOutputSchema,
     transcript: googleTranscript,
@@ -71,7 +75,7 @@ const google = defineSingleTurnProviderBundle({
     GoogleGenAI,
     GoogleRequest,
     GenerateContentResponse,
-    AsyncIterable<GenerateContentResponse>,
+    GoogleChatStream,
     GoogleExtra,
     GoogleNativeDeps,
     Content
@@ -97,13 +101,28 @@ const google = defineSingleTurnProviderBundle({
 export const googleProviderRuntime = google.runtime
 
 /** Bind a Google GenAI SDK client to the narrow native chat provider port. */
-function bindGoogle(
-  client: GoogleGenAI,
-): NativeProviderPort<GoogleRequest, GenerateContentResponse, AsyncIterable<GenerateContentResponse>> {
+function bindGoogle(client: GoogleGenAI): NativeProviderPort<GoogleRequest, GenerateContentResponse, GoogleChatStream> {
   return {
-    call: (request) => client.models.generateContent(asGoogleGenerateContentParams(request)),
-    stream: (request) => client.models.generateContentStream(asGoogleGenerateContentStreamParams(request)),
+    call: (request, _mode, options) =>
+      client.models.generateContent(asGoogleGenerateContentParams(withAbortSignal(request, options?.signal))),
+    stream: async (request, options) =>
+      createGoogleStreamCapture(
+        await client.models.generateContentStream(
+          asGoogleGenerateContentStreamParams(withAbortSignal(request, options?.signal)),
+        ),
+      ),
   }
+}
+
+/** Fold the caller's abort signal into Google's request config without mutating the caller's request. */
+function withAbortSignal(request: GoogleRequest, signal: AbortSignal | undefined): GoogleRequest {
+  if (signal === undefined) return request
+  return { ...request, config: { ...request.config, abortSignal: signal } }
+}
+
+/** Classify a Google GenAI SDK error into the normalized provider-error taxonomy. */
+function mapGoogleError(error: unknown): CruxProviderError | undefined {
+  return classifyProviderHttpError(error, 'google')
 }
 
 /** Create a Google GenAI adapter bound to a client instance. */

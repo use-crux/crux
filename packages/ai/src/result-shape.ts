@@ -12,6 +12,7 @@
 
 import type { AdapterResponse } from '@use-crux/core/adapter'
 import { normalizeUsage, type SdkUsageLike } from './meta'
+import { mapAiSdkFinishReason } from './normalized-outcome'
 
 /** Structural shape of an AI SDK result that can be projected for core. */
 export interface SdkResponseLike {
@@ -32,7 +33,7 @@ export function extractResponse(result: SdkResponseLike): AdapterResponse {
         ? result.toolCalls.map((tc) => ({ id: tc.toolCallId, name: tc.toolName, args: tc.input ?? tc.args }))
         : undefined,
     usage: normalizeUsage(result.totalUsage ?? result.usage),
-    finishReason: result.finishReason,
+    finishReason: mapAiSdkFinishReason(result.finishReason),
     responseId: result.response?.id,
     actualModelId: result.response?.modelId,
   }

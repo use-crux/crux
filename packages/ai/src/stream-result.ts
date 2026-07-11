@@ -14,10 +14,12 @@ import type {
   StreamResult,
 } from "@use-crux/core/adapter";
 import { createResultAccumulator } from "@use-crux/core/adapter";
+import { normalizeAdapterCallError } from "@use-crux/core/adapter";
 import {
   attachRoutingToError,
   markRoutingMidStreamFailure,
 } from "@use-crux/core/routing";
+import { mapAiSdkError, mapAiSdkFinishReason } from "./normalized-outcome";
 
 interface AiTextStreamLike {
   readonly textStream?: AsyncIterable<string>;
@@ -44,11 +46,15 @@ export function createAiStreamResult<TRawStream>(
     textStream,
     raw: handle.raw,
     completion: (async () => {
-      if (handle.routing !== undefined) {
-        await streamFinished;
+      try {
+        if (handle.routing !== undefined) {
+          await streamFinished;
+        }
+        const meta = await handle.completion();
+        return completionFromMeta(meta, handle.routing);
+      } catch (error) {
+        throw normalizeStreamError(error, handle.routing);
       }
-      const meta = await handle.completion();
-      return completionFromMeta(meta, handle.routing);
     })(),
   };
 }
@@ -74,22 +80,30 @@ async function* trackTextStream(
     }
     options.resolveStream();
   } catch (error) {
-    const routedError = attachStreamRouting(error, options.routing);
-    options.rejectStream(routedError);
-    throw routedError;
+    const normalized = normalizeStreamError(error, options.routing);
+    options.rejectStream(normalized);
+    throw normalized;
   }
 }
 
-function attachStreamRouting(
+/**
+ * Normalize a raw AI SDK stream failure into a {@link CruxAdapterError} and
+ * re-attach routing metadata so a mid-stream error surfaces the shared
+ * provider-error taxonomy instead of a raw SDK/provider exception.
+ *
+ * Applied both to text-stream iteration errors and to completion failures, so
+ * a failed stream never leaks an un-normalized error to either consumer.
+ */
+function normalizeStreamError(
   error: unknown,
   routing: ExecutorStreamHandle<unknown>["routing"],
-): unknown {
-  if (routing === undefined) return error;
-  const routed = markRoutingMidStreamFailure(routing);
-  if (error instanceof Error) {
-    return attachRoutingToError(error, routed);
-  }
-  return attachRoutingToError(new Error(String(error)), routed);
+): Error {
+  const normalized = normalizeAdapterCallError(error, {
+    providerId: "ai-sdk",
+    mapError: mapAiSdkError,
+  });
+  if (routing === undefined) return normalized;
+  return attachRoutingToError(normalized, markRoutingMidStreamFailure(routing));
 }
 
 function completionFromMeta(
@@ -101,7 +115,7 @@ function completionFromMeta(
   accumulator.addStep({
     text,
     ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),
-    finishReason: meta?.finishReason,
+    finishReason: mapAiSdkFinishReason(meta?.finishReason),
     responseId: meta?.responseId,
     modelId: meta?.actualModelId,
   });

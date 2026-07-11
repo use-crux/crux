@@ -1,10 +1,28 @@
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { prompt as makePrompt } from "@use-crux/core";
-import { CruxAdapterError, isCruxAdapterError } from "@use-crux/core/adapter";
+import { classifyProviderHttpError, CruxAdapterError, isCruxAdapterError } from "@use-crux/core/adapter";
+import { describeNormalizedOutcomeConformance, standardHttpErrorCases } from "@use-crux/core/adapter/testing";
 import { createAnthropic } from "../src";
+import { mapAnthropicStopReason } from "../src/response";
 
 const textPrompt = makePrompt({ id: "anthropic-normalized", prompt: "Hi" });
+
+describeNormalizedOutcomeConformance({
+  name: "anthropic",
+  mapFinishReason: (raw: string) => mapAnthropicStopReason(raw),
+  finishReasonCases: [
+    { label: "end_turn", raw: "end_turn", expected: "stop" },
+    { label: "max_tokens", raw: "max_tokens", expected: "length" },
+    { label: "tool_use", raw: "tool_use", expected: "tool-calls" },
+    { label: "refusal", raw: "refusal", expected: "refusal" },
+  ],
+  unrecognizedFinishReason: "pause_turn",
+  modelSideBlocking: true,
+  mapError: (error) => classifyProviderHttpError(error, "anthropic"),
+  errorCases: standardHttpErrorCases(),
+  unrecognizedError: new Error("mystery"),
+});
 
 describe("Anthropic normalized finish reasons", () => {
   const cases: Array<[string, string]> = [
