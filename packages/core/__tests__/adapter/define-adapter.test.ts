@@ -17,7 +17,7 @@ import type {
 } from "../../src/adapter/types";
 import type { Message } from "../../src/generation/messages";
 import type { GenerationSettings, TraceMeta } from "../../src/generation/types";
-import { TimeoutError } from "../../src/generation/timeout";
+import { CruxAdapterError } from "../../src/adapter/normalized-outcome";
 import { hasToolCall } from "../../src/generation/tool-control";
 import { prompt as makePrompt } from "../../src/prompt/prompt";
 import { agent as makeAgent } from "../../src/agent";
@@ -215,7 +215,7 @@ describe("adapter", () => {
       expect(result.raw).toEqual({ id: "raw_123", content: "hello" });
     });
 
-    it("rejects with TimeoutError when a provider step exceeds stepMs", async () => {
+    it("rejects with a normalized timeout when a provider step exceeds stepMs", async () => {
       vi.useFakeTimers();
       const spec = createMockSpec({
         call: async () => new Promise<never>(() => {}),
@@ -229,16 +229,22 @@ describe("adapter", () => {
         timeout: { stepMs: 50 },
       });
       const assertion = expect(result).rejects.toMatchObject({
-        budget: "step",
-        limitMs: 50,
+        name: "CruxAdapterError",
+        providerError: {
+          kind: "timeout",
+          code: "crux.timeout.step",
+          retryable: true,
+        },
+        cause: {
+          budget: "step",
+          limitMs: 50,
+        },
       });
-      const instanceAssertion =
-        expect(result).rejects.toBeInstanceOf(TimeoutError);
 
       await vi.advanceTimersByTimeAsync(50);
 
       await assertion;
-      await instanceAssertion;
+      await expect(result).rejects.toBeInstanceOf(CruxAdapterError);
     });
 
     it("uses totalMs as a ceiling across provider and tool work", async () => {

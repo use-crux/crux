@@ -1,5 +1,6 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { AdapterResponse } from '@use-crux/core/adapter'
+import type { TraceMeta } from '@use-crux/core'
+import type { AdapterResponse, CruxFinishReason } from '@use-crux/core/adapter'
 import type { NativeAssistantTurn, NativeResponseMetadata } from '@use-crux/core/adapter'
 import { anthropicTranscript } from './message-codec'
 
@@ -50,9 +51,55 @@ export function anthropicResponseMeta(result: AnthropicParsedMessage): NativeRes
             },
           }
         : undefined,
-    finishReason: result.stop_reason ?? undefined,
+    finishReason: mapAnthropicStopReason(result.stop_reason),
     responseId: result.id,
     actualModelId: result.model,
+  }
+}
+
+/**
+ * Normalize an Anthropic `stop_reason` into the provider-neutral finish reason.
+ *
+ * `end_turn`/`stop_sequence` are normal completions, `max_tokens` is a length
+ * cap, `tool_use` is a completed tool-call turn, and `refusal` is a model-side
+ * refusal. Anything unmapped (e.g. `pause_turn`) becomes `unknown`; an absent
+ * reason stays `undefined`.
+ */
+export function mapAnthropicStopReason(
+  stopReason: string | null | undefined,
+): CruxFinishReason | undefined {
+  switch (stopReason) {
+    case null:
+    case undefined:
+      return undefined
+    case 'end_turn':
+    case 'stop_sequence':
+      return 'stop'
+    case 'max_tokens':
+      return 'length'
+    case 'tool_use':
+      return 'tool-calls'
+    case 'refusal':
+      return 'refusal'
+    default:
+      return 'unknown'
+  }
+}
+
+/**
+ * Build stream-completion metadata for an Anthropic final message.
+ *
+ * Extends the response metadata with the completed tool calls read from the
+ * final message so the shared stream path captures the same tool-call shape a
+ * non-streaming `generate()` would have produced — no partial fragments.
+ */
+export function anthropicStreamCompletionMeta(result: AnthropicParsedMessage): TraceMeta {
+  const assistant = anthropicTranscript.readAssistant(result)
+  return {
+    ...anthropicResponseMeta(result),
+    ...(assistant.toolCalls
+      ? { toolCalls: assistant.toolCalls.map((call) => ({ id: call.id, name: call.name, args: call.args })) }
+      : {}),
   }
 }
 

@@ -91,24 +91,28 @@ export function defineNativeChatProvider<
     const spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TRequest> = {
       providerId: profile.providerId,
 
-      async call(client, args) {
+      async call(client, args, context) {
         const mode = callModeFor(args);
         const request = await profile.request(requestArgsFor(profile, args), {
           mode,
           deps,
         });
-        const raw = await bind(client).call(request, mode);
+        const raw = await bind(client).call(request, mode, {
+          signal: context?.signal,
+        });
         return { raw, extracted: responseFor(profile, raw) };
       },
 
-      async stream(client, args): Promise<StreamHandle<TRawStream>> {
+      async stream(client, args, context): Promise<StreamHandle<TRawStream>> {
         const mode = callModeFor(args);
         const request = await profile.request(requestArgsFor(profile, args), {
           mode,
           deps,
         });
         const streamRequest = profile.stream.request?.(request) ?? request;
-        const rawStream = await bind(client).stream(streamRequest);
+        const rawStream = await bind(client).stream(streamRequest, {
+          signal: context?.signal,
+        });
         return {
           raw: rawStream,
           rawStream,
@@ -138,6 +142,7 @@ export function defineNativeChatProvider<
     if (profile.sanitizeToolSchema)
       spec.sanitizeToolSchema = profile.sanitizeToolSchema;
     if (profile.outputSchema) spec.wrapOutputSchema = profile.outputSchema;
+    if (profile.mapError) spec.mapError = profile.mapError;
     return spec;
   }
 

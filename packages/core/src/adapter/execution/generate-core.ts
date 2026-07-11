@@ -20,6 +20,7 @@ import { ValidationExhaustedError } from "../../generation/validation-retry";
 import { createSafety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
+import { normalizeAdapterCallError } from "../normalized-outcome";
 import type { AdapterResponse, CallArgs } from "../types";
 import {
   createResultAccumulator,
@@ -141,6 +142,26 @@ export async function generateCore<
   let currentSystemBlocks = resolved.systemBlocks;
   messages = (await lifecycle.resume(messages)).messages;
 
+  /**
+   * Run exactly one provider call under the step budget, normalizing any thrown
+   * SDK/timeout/abort error into a {@link CruxAdapterError} so a failure surfaces
+   * as a classified outcome instead of a raw provider exception.
+   */
+  const callProvider = (callArgs: CallArgs<TExtra>) =>
+    withBudget(
+      (signal) =>
+        dialect.call(dialect.client, callArgs, {
+          signal: composeAbortSignals(args.signal, signal),
+        }),
+      { budget: "step", limitMs: args.timeout?.stepMs },
+    ).catch((error: unknown) => {
+      throw normalizeAdapterCallError(error, {
+        providerId: dialect.id,
+        signal: args.signal,
+        mapError: dialect.mapError,
+      });
+    });
+
   const generated = await orchestrateGenerate(
     {
       promptId: prompt.id,
@@ -168,6 +189,7 @@ export async function generateCore<
     async () => {
       messages = [...(await safety.guardInput({ messages })).messages];
       let lastCallArgs: CallArgs<TExtra> | undefined;
+      let suspendedApproval = false;
 
       for (let step = 0; step < maxSteps; step++) {
         steps++;
@@ -185,16 +207,7 @@ export async function generateCore<
         };
         lastCallArgs = callArgs;
 
-        const { raw, extracted } = await withBudget(
-          (signal) =>
-            dialect.call(dialect.client, callArgs, {
-              signal: composeAbortSignals(args.signal, signal),
-            }),
-          {
-            budget: "step",
-            limitMs: args.timeout?.stepMs,
-          },
-        );
+        const { raw, extracted } = await callProvider(callArgs);
         lastRaw = raw;
         lastExtracted = extracted;
 
@@ -253,10 +266,10 @@ export async function generateCore<
         const round = await lifecycle.executeRound(extracted, messages);
         messages = round.messages;
         if (round.kind === "suspended") {
-          lastExtracted = {
-            ...extracted,
-            finishReason: "tool_approval_required",
-          };
+          // Suspension is tracked separately; the provider-normalized finish
+          // reason on the tool-call turn (e.g. "tool-calls") stays truthful.
+          suspendedApproval = true;
+          lastExtracted = extracted;
           pendingApprovals = [round.request];
           rememberStep(lastExtracted);
           break;
@@ -281,8 +294,7 @@ export async function generateCore<
       }
 
       if (lastExtracted) {
-        const suspended =
-          lastExtracted.finishReason === "tool_approval_required";
+        const suspended = suspendedApproval;
         let parsed: unknown;
         if (resolved.schema && !suspended) {
           try {
@@ -297,18 +309,7 @@ export async function generateCore<
             replaceLastStep({ ...lastExtracted!, text: "" });
             messages = dialect.appendToolRound(messages, lastExtracted!, []);
             messages = [...messages, ...corrective];
-            const regen = await withBudget(
-              (signal) =>
-                dialect.call(
-                  dialect.client,
-                  {
-                    ...lastCallArgs!,
-                    messages,
-                  },
-                  { signal: composeAbortSignals(args.signal, signal) },
-                ),
-              { budget: "step", limitMs: args.timeout?.stepMs },
-            );
+            const regen = await callProvider({ ...lastCallArgs!, messages });
             lastRaw = regen.raw;
             lastExtracted = regen.extracted;
             steps++;
@@ -346,7 +347,9 @@ export async function generateCore<
 
       const meta: TraceMeta = safety.stamp({
         usage: lastExtracted?.usage,
-        finishReason: lastExtracted?.finishReason,
+        finishReason: suspendedApproval
+          ? "tool_approval_required"
+          : lastExtracted?.finishReason,
         stoppedBy,
         toolCalls: lastExtracted?.toolCalls?.map((tc) => ({
           id: tc.id,
@@ -357,10 +360,9 @@ export async function generateCore<
         actualModelId: lastExtracted?.actualModelId,
       });
 
-      const resultMessages =
-        lastExtracted?.finishReason === "tool_approval_required"
-          ? messages
-          : appendAssistantResultMessage(messages, lastExtracted);
+      const resultMessages = suspendedApproval
+        ? messages
+        : appendAssistantResultMessage(messages, lastExtracted);
 
       const accumulator = createResultAccumulator();
       for (const facts of stepFacts) accumulator.addStep(facts);

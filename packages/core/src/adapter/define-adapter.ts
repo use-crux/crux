@@ -155,6 +155,7 @@ export function adapter<
         guardrails: opts.guardrails,
         safety: opts.safety,
         timeout: opts.timeout,
+        signal: opts.signal,
       })) as AdapterGenerateResult<TRawResponse>;
     }
 
@@ -194,6 +195,7 @@ export function adapter<
         guardrails: opts.guardrails,
         safety: opts.safety,
         timeout: opts.timeout,
+        signal: opts.signal,
       });
       assertStreamHandle<TRawStream>(handle);
       return createStreamResult(handle);
@@ -236,6 +238,7 @@ export function adapter<
         constraintMaxRetries: opts.constraintMaxRetries,
         guardrails: opts.guardrails,
         timeout: opts.timeout,
+        signal: opts.signal,
       });
     }
 

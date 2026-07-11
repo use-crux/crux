@@ -370,17 +370,14 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     );
     return finalizeSdkResultEnvelope<TRawResponse>({
       raw: undefined,
-      response: {
-        ...outcome.assistantResponse,
+      // The suspension marker lives on `_meta.finishReason` (the documented
+      // public signal), not on the normalized `AdapterResponse.finishReason`.
+      response: outcome.assistantResponse,
+      text: outcome.assistantResponse.text,
+      _meta: {
+        ...buildTraceMeta({ response: outcome.assistantResponse }),
         finishReason: "tool_approval_required",
       },
-      text: outcome.assistantResponse.text,
-      _meta: buildTraceMeta({
-        response: {
-          ...outcome.assistantResponse,
-          finishReason: "tool_approval_required",
-        },
-      }),
       messages: sealed.messages,
       pendingApprovals: sealed.requests,
       stepFacts,

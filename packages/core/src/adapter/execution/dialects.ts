@@ -38,6 +38,7 @@ export function coreStepDialect<
     id: spec.providerId,
     client,
     mapSettings: spec.mapSettings,
+    mapError: spec.mapError,
     call: spec.call,
     stream: spec.stream,
     toParams: spec.toParams,

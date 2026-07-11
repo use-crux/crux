@@ -1,7 +1,13 @@
 import type Anthropic from '@anthropic-ai/sdk'
 import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
-import { defineSingleTurnProviderBundle } from '@use-crux/core/adapter'
+import {
+  classifyProviderHttpError,
+  CruxAdapterError,
+  cruxProviderError,
+  defineSingleTurnProviderBundle,
+} from '@use-crux/core/adapter'
 import type {
+  CruxProviderError,
   NativeProviderPort,
   SingleTurnProviderBundleSpec,
 } from '@use-crux/core/adapter'
@@ -15,7 +21,7 @@ import {
   mapAnthropicSettings,
   stripDescriptions,
 } from './request-params'
-import { anthropicResponseMeta, anthropicResponseText } from './response'
+import { anthropicResponseMeta, anthropicResponseText, anthropicStreamCompletionMeta } from './response'
 import type { AnthropicParsedMessage } from './response'
 import type { AnthropicExtra, AnthropicRequest } from './types'
 
@@ -51,14 +57,28 @@ const anthropic = defineSingleTurnProviderBundle({
         return typeof delta.text === 'string' ? delta.text : undefined
       },
       completion: async (stream) => {
+        let finalMsg
         try {
-          const finalMsg = await stream.finalMessage()
-          return anthropicResponseMeta(finalMsg)
-        } catch {
-          return undefined
+          finalMsg = await stream.finalMessage()
+        } catch (error) {
+          // A finalMessage() rejection means the stream errored/aborted/failed
+          // validation — surface it as a normalized error instead of silently
+          // discarding it as "no completion metadata".
+          const mapped = mapAnthropicError(error)
+          throw new CruxAdapterError(
+            cruxProviderError({
+              kind: mapped?.kind ?? 'provider-error',
+              code: 'anthropic.stream_completion_failed',
+              retryable: mapped?.retryable ?? true,
+              message: error instanceof Error ? error.message : error,
+            }),
+            { cause: error },
+          )
         }
+        return anthropicStreamCompletionMeta(finalMsg)
       },
     },
+    mapError: mapAnthropicError,
     settings: mapAnthropicSettings,
     outputSchema: anthropicOutputSchema,
     sanitizeToolSchema: stripDescriptions,
@@ -89,13 +109,18 @@ function bindAnthropic(
   client: Anthropic,
 ): NativeProviderPort<AnthropicRequest, AnthropicParsedMessage, MessageStream> {
   return {
-    call: (request, mode) =>
+    call: (request, mode, options) =>
       mode === 'structured'
-        ? client.messages.parse(asAnthropicNonStreamingParams(request))
-        : client.messages.create(asAnthropicNonStreamingParams(request)),
-    stream: async (request) =>
-      client.messages.stream(asAnthropicStreamingParams(request)),
+        ? client.messages.parse(asAnthropicNonStreamingParams(request), { signal: options?.signal })
+        : client.messages.create(asAnthropicNonStreamingParams(request), { signal: options?.signal }),
+    stream: async (request, options) =>
+      client.messages.stream(asAnthropicStreamingParams(request), { signal: options?.signal }),
   }
+}
+
+/** Classify an Anthropic SDK error into the normalized provider-error taxonomy. */
+function mapAnthropicError(error: unknown): CruxProviderError | undefined {
+  return classifyProviderHttpError(error, 'anthropic')
 }
 
 /** Create an Anthropic adapter bound to a client instance. */

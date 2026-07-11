@@ -13,6 +13,7 @@ import type { MiddlewareResult } from "../../runtime/types";
 import { createSafety } from "../../safety/session";
 import { orchestrateStream } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
+import { normalizeAdapterCallError } from "../normalized-outcome";
 import type { CallArgs, StreamHandle } from "../types";
 import { createToolLifecycle } from "../tool/session";
 import type { AdapterExecutionStreamArgs, CoreStepDialect } from "./types";
@@ -134,7 +135,13 @@ export async function streamCore<
           budget: "step",
           limitMs: args.timeout?.stepMs,
         },
-      ),
+      ).catch((error: unknown) => {
+        throw normalizeAdapterCallError(error, {
+          providerId: modelInfo.provider,
+          signal: args.signal,
+          mapError: dialect.mapError,
+        });
+      }),
   );
 
   const safetyStream = safety.enabled ? safety.openStream() : undefined;

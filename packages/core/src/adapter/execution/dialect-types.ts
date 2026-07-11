@@ -19,6 +19,7 @@ import type {
   StreamHandle,
   ToolResultEntry,
 } from "../types";
+import type { CruxProviderError } from "../normalized-outcome";
 
 /** Per-call context passed to provider wire hooks. */
 export interface CoreStepCallContext {
@@ -70,6 +71,9 @@ export interface CoreStepDialect<
 
   /** Convert canonical generation settings to provider-native parameters. */
   mapSettings(settings: GenerationSettings): Record<string, unknown>;
+
+  /** Provider-specific classifier for thrown SDK errors, when supplied. */
+  mapError?: (error: unknown) => CruxProviderError | undefined;
 
   /** Execute exactly one provider call and return its normalized extraction. */
   call(

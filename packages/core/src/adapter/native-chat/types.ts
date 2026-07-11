@@ -13,6 +13,7 @@ import type { Message } from '../../generation/messages'
 import type { GenerationSettings, TraceMeta } from '../../generation/types'
 import type { MessageContent } from '../../types/content'
 import type { CruxAdapter } from '../define-adapter'
+import type { CruxProviderError } from '../normalized-outcome'
 import type { AdapterSpec } from '../spec'
 import type { AdapterResponse, CallArgs, ToolResultEntry } from '../types'
 
@@ -39,10 +40,16 @@ export type NativeResponseMetadata = Omit<AdapterResponse, 'text' | 'toolCalls'>
  * @typeParam TRawStream - Provider-native async stream.
  */
 export interface NativeProviderPort<TRequest, TRawResponse, TRawStream extends AsyncIterable<unknown>> {
-  /** Execute a non-streaming provider call. */
-  call(request: TRequest, mode: NativeCallMode): Promise<TRawResponse>
-  /** Start a provider-native stream. */
-  stream(request: TRequest): Promise<TRawStream>
+  /** Execute a non-streaming provider call, threading the caller's abort signal. */
+  call(request: TRequest, mode: NativeCallMode, options?: NativeProviderCallOptions): Promise<TRawResponse>
+  /** Start a provider-native stream, threading the caller's abort signal. */
+  stream(request: TRequest, options?: NativeProviderCallOptions): Promise<TRawStream>
+}
+
+/** Per-call options forwarded from Crux's execution layer to the provider SDK. */
+export interface NativeProviderCallOptions {
+  /** Cooperative abort signal composed from the caller signal and Crux budgets. */
+  readonly signal?: AbortSignal
 }
 
 /**
@@ -172,6 +179,15 @@ export interface NativeChatProfile<
 
   /** Map canonical generation settings to provider-native field names. */
   settings(settings: GenerationSettings): Record<string, unknown>
+
+  /**
+   * Classify a thrown provider SDK error into the normalized taxonomy.
+   *
+   * Returning `undefined` defers to core's generic timeout/abort/provider-error
+   * classification. Implement this to recognize provider-native rate-limit,
+   * invalid-request, refusal, safety, and server errors.
+   */
+  mapError?(error: unknown): CruxProviderError | undefined
 
   /** Convert a Zod output schema to provider-native structured-output params. */
   outputSchema?(schema: z.ZodType): Record<string, unknown>
