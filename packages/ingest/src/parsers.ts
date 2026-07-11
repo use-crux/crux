@@ -10,6 +10,7 @@ import { deriveContent } from './document'
 import { normalizeDocument } from './document'
 import { openIngestParseObservation } from './observability'
 import { parsePdf } from './pdf'
+import { imageParser } from './visual-image'
 import type {
   IngestDocument,
   IngestError,
@@ -28,6 +29,7 @@ export async function parseDocument(input: {
   namespace: string
   sourceId: string
   bytes: Uint8Array
+  asset?: import('@use-crux/core').Asset
   format: IngestFormat
   title?: string
   metadata?: Record<string, unknown>
@@ -51,6 +53,7 @@ export async function parseDocument(input: {
       const parsed = await parser.parse(
         {
           bytes: input.bytes,
+          ...(input.asset ? { asset: input.asset } : {}),
           ...(text !== undefined ? { text } : {}),
           format: input.format,
           sourceId: input.sourceId,
@@ -59,7 +62,7 @@ export async function parseDocument(input: {
           metadata: input.metadata,
         },
         {
-          ocr: input.options?.ocr,
+          media: input.options?.media,
           warn: (warning) => warnings.push(warning),
         },
       )
@@ -196,7 +199,7 @@ export const pdfParser: IngestParser = {
   name: 'pdf',
   formats: ['pdf'],
   async parse(input, ctx) {
-    return parsePdf(input.bytes, ctx)
+    return parsePdf(input, ctx)
   },
 }
 
@@ -300,6 +303,7 @@ export const builtInParsers: IngestParser[] = [
   markdownParser,
   htmlParser,
   pdfParser,
+  imageParser,
   csvParser,
   jsonParser,
   docxParser,

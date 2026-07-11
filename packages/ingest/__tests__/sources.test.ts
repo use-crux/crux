@@ -11,9 +11,22 @@ import {
 } from '@use-crux/core/observability'
 import { Document, HeadingLevel, Packer, Paragraph, Table, TableCell, TableRow } from 'docx'
 import ExcelJS from 'exceljs'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { fileSource, filesSource, textSource, urlSource, urlsSource } from '../src'
-import type { IngestParser } from '../src'
+import type { Asset } from '@use-crux/core'
+import type { IngestMediaOperations, IngestParser, ParserOptions } from '../src'
+
+const removedOcrOptions = {
+  // @ts-expect-error pre-v1 OCR hooks were removed in favor of media operations.
+  ocr: {},
+} satisfies ParserOptions
+void removedOcrOptions
+
+if (false) {
+  const asset = {} as Asset
+  // @ts-expect-error Asset sources require an explicit sourceId.
+  fileSource(asset, { namespace: 'kb' })
+}
 
 const tempDirs: string[] = []
 
@@ -26,6 +39,73 @@ afterEach(async () => {
 })
 
 describe('@use-crux/ingest structured sources', () => {
+  it('derives ordinary text from image files through one bound media operation', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'chart.png')
+    await writeFile(path, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]))
+    const generate = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['generate']>>[0]) => ({ text: 'Revenue rose from 10 to 20.' }))
+
+    const media = { generate } satisfies IngestMediaOperations
+    const docs = await collect(fileSource(path, {
+      namespace: 'kb',
+      media,
+    }).documents())
+
+    expect(generate).toHaveBeenCalledTimes(1)
+    expect(generate.mock.calls[0]?.[0].messages[0]).toMatchObject({
+      role: 'user',
+      content: [{ type: 'text' }, { type: 'image', mediaType: 'image/png' }],
+    })
+    expect(docs[0].parts).toEqual([{ id: 'image:text:1', kind: 'text', role: 'paragraph', content: 'Revenue rose from 10 to 20.' }])
+  })
+
+  it('accepts explicitly identified Assets without retaining their bytes', async () => {
+    const generate = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['generate']>>[0]) => ({ text: 'A small chart.' }))
+    const asset = {
+      type: 'data' as const,
+      data: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+      mediaType: 'image/png',
+      filename: 'chart.png',
+    }
+    const [document] = await collect(fileSource(asset, {
+      namespace: 'kb', sourceId: 'asset:chart', media: { generate },
+    }).documents())
+
+    expect(document.sourceId).toBe('asset:chart')
+    expect(document.metadata).toMatchObject({ mediaType: 'image/png', format: 'image', parser: 'image' })
+    expect(JSON.stringify(document)).not.toContain('137,80,78,71')
+  })
+
+  it('detects URL images by response MIME and fails precisely without media.generate', async () => {
+    const source = urlSource('https://example.com/chart', {
+      namespace: 'kb',
+      fetch: async () => new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
+        headers: { 'content-type': 'image/png' },
+      }),
+    })
+
+    await expect(collect(source.documents())).rejects.toThrow(/chart.*image\/png.*media\.generate/i)
+  })
+
+  it('uses media generation only for PDF pages without meaningful native text', async () => {
+    const dir = await makeTempDir()
+    const textPath = join(dir, 'text.pdf')
+    const visualPath = join(dir, 'visual.pdf')
+    await writeFile(textPath, makePdf('Native text'))
+    await writeFile(visualPath, makePdf(''))
+    const generate = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['generate']>>[0]) => ({ text: 'Diagram page.' }))
+
+    await collect(fileSource(textPath, { namespace: 'kb', media: { generate } }).documents())
+    const visual = await collect(fileSource(visualPath, { namespace: 'kb', media: { generate } }).documents())
+
+    expect(generate).toHaveBeenCalledTimes(1)
+    expect(generate.mock.calls[0]?.[0].messages[0].content).toMatchObject([
+      { type: 'text', text: expect.stringContaining('page 1') },
+      { type: 'file', mediaType: 'application/pdf' },
+    ])
+    expect(visual[0].content).toContain('Diagram page.')
+  })
+
   it('textSource load yields result objects and documents yields plain documents', async () => {
     const source = textSource({
       namespace: 'kb',
@@ -388,7 +468,7 @@ async function makeTempDir(): Promise<string> {
 }
 
 function makePdf(text: string): Buffer {
-  const stream = `BT\n/F1 24 Tf\n72 100 Td\n(${escapePdfText(text)}) Tj\nET`
+  const stream = text ? `BT\n/F1 24 Tf\n72 100 Td\n(${escapePdfText(text)}) Tj\nET` : 'q\nQ'
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',

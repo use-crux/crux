@@ -1,6 +1,7 @@
 import { errorFromUnknown, failed, narrowIngestErrorCode, ok, sourceLoader } from './document'
 import { parseDocument } from './parsers'
 import type { IngestFormat, ParserOptions, SourceLoader } from './types'
+import { inferMediaFormat } from './media-format'
 
 export interface UrlSourceOptions extends ParserOptions {
   namespace: string
@@ -82,6 +83,8 @@ async function loadUrlResult(url: string, options: UrlSourceOptions) {
 
 function inferFormat(contentType: string, url: string, bytes: Uint8Array): IngestFormat {
   const lowerUrl = url.toLowerCase()
+  const media = inferMediaFormat({ extension: lowerUrl, contentType, bytes })
+  if (media === 'image') return media
   if (
     contentType.includes('application/pdf') ||
     lowerUrl.endsWith('.pdf') ||

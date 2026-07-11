@@ -1,4 +1,6 @@
-export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
+import type { Asset, AudioSource, Message, TranscriptionResult } from '@use-crux/core'
+
+export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
 
 export type IngestWarningCode =
   | 'unsupported_embedded_object'
@@ -106,15 +108,16 @@ export interface SourceLoader {
   documents(): AsyncIterable<IngestDocument>
 }
 
-export interface OcrHook {
-  name: string
-  extract(input: {
-    bytes: Uint8Array
-    mimeType?: string
-    sourceId: string
-    pageNumber?: number
-    metadata?: Record<string, unknown>
-  }): Promise<{ text: string; confidence?: number; metadata?: Record<string, unknown> }>
+/** Application-owned model operations used to derive ordinary ingest text. */
+export interface IngestMediaOperations {
+  /** Bound language generation operation; the application closes over its model. */
+  readonly generate?: (input: Readonly<{
+    messages: readonly Message[]
+    system?: string
+    maxOutputTokens?: number
+  }>) => Promise<{ readonly text: string }>
+  /** Bound transcription operation used by audio ingestion. */
+  readonly transcribe?: (input: Readonly<{ audio: AudioSource; abortSignal?: AbortSignal }>) => Promise<TranscriptionResult>
 }
 
 export interface IngestParser {
@@ -125,6 +128,7 @@ export interface IngestParser {
 
 export interface ParseInput {
   bytes: Uint8Array
+  asset?: Asset
   text?: string
   format: IngestFormat
   sourceId: string
@@ -134,7 +138,7 @@ export interface ParseInput {
 }
 
 export interface ParseContext {
-  ocr?: OcrHook
+  media?: IngestMediaOperations
   warn(warning: IngestWarning): void
 }
 
@@ -146,6 +150,6 @@ export interface ParseResult {
 }
 
 export interface ParserOptions {
-  parsers?: IngestParser[]
-  ocr?: OcrHook
+  readonly parsers?: readonly IngestParser[]
+  readonly media?: Readonly<IngestMediaOperations>
 }

@@ -149,6 +149,15 @@ export function errorFromUnknown(error: unknown, code: IngestError['code'], pars
     }
   }
 
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return {
+      code,
+      message: error.message,
+      ...('stack' in error && typeof error.stack === 'string' ? { stack: error.stack } : {}),
+      ...(parser ? { parser } : {}),
+    }
+  }
+
   return {
     code,
     message: String(error),

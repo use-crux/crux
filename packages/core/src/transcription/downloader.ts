@@ -237,7 +237,7 @@ async function pinnedHttpsFetch(
       port: url.port || 443,
       path: `${url.pathname}${url.search}`,
       method: 'GET',
-      headers: Object.fromEntries(init.headers.entries()),
+      headers: headersRecord(init.headers),
       lookup: (_hostname, _options, callback) => callback(null, pinned.address!, isIP(pinned.address!) as 4 | 6),
       signal: init.signal,
     }, (response) => {
@@ -251,4 +251,10 @@ async function pinnedHttpsFetch(
     req.on('error', reject)
     req.end()
   })
+}
+
+function headersRecord(headers: Headers): Record<string, string> {
+  const result: Record<string, string> = {}
+  headers.forEach((value, name) => { result[name] = value })
+  return result
 }

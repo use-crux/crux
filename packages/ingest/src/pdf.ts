@@ -1,6 +1,8 @@
-import type { IngestPart, ParseContext, ParseResult } from './types'
+import type { Asset } from '@use-crux/core'
+import type { IngestPart, ParseContext, ParseInput, ParseResult } from './types'
 
-export async function parsePdf(bytes: Uint8Array, ctx: Pick<ParseContext, 'warn' | 'ocr'>): Promise<ParseResult> {
+export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn' | 'media'>): Promise<ParseResult> {
+  const bytes = input.bytes
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs')
   const data = toPlainUint8Array(bytes)
   const loadingTask = pdfjs.getDocument({
@@ -36,29 +38,33 @@ export async function parsePdf(bytes: Uint8Array, ctx: Pick<ParseContext, 'warn'
         continue
       }
 
-      if (ctx.ocr) {
-        const ocr = await ctx.ocr.extract({ bytes, sourceId: 'pdf', pageNumber, mimeType: 'application/pdf' })
-        if (ocr.text.trim()) {
+      if (ctx.media?.generate) {
+        const asset: Asset = input.asset ?? {
+          type: 'data', data: bytes.slice(), mediaType: 'application/pdf', ...(input.title ? { filename: input.title } : {}),
+        }
+        const generated = await ctx.media.generate({
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: `Extract faithful plain text and visible factual content from page ${pageNumber} of this PDF for document indexing. Return only content from that one page.` },
+              { type: 'file', source: asset, mediaType: 'application/pdf', ...(input.title ? { filename: input.title } : {}) },
+            ],
+          }],
+          maxOutputTokens: 2000,
+        })
+        if (generated.text.trim()) {
           parts.push({
-            id: `pdf:page:${pageNumber}:ocr`,
+            id: `pdf:page:${pageNumber}:visual`,
             kind: 'page',
             pageNumber,
-            content: ocr.text,
-            metadata: {
-              ocr: ctx.ocr.name,
-              ...(ocr.confidence !== undefined ? { confidence: ocr.confidence } : {}),
-              ...(ocr.metadata ?? {}),
-            },
+            content: generated.text.trim(),
           })
           continue
         }
+        throw new Error(`PDF source "${input.sourceId}" page ${pageNumber} returned empty text from media.generate.`)
       }
 
-      ctx.warn({
-        code: 'image_ocr_unavailable',
-        message: `PDF page ${pageNumber} did not contain extractable text.`,
-        partId: `pdf:page:${pageNumber}`,
-      })
+      throw new Error(`PDF source "${input.sourceId}" page ${pageNumber} has no meaningful text and requires ParserOptions.media.generate.`)
     }
 
     const metadata = await document.getMetadata().catch(() => undefined)
@@ -95,9 +101,5 @@ function readMetadataTitle(info: unknown): unknown {
 }
 
 function toPlainUint8Array(bytes: Uint8Array): Uint8Array {
-  if (bytes.constructor === Uint8Array) {
-    return bytes
-  }
-
-  return new Uint8Array(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength))
+  return new Uint8Array(bytes)
 }
