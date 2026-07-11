@@ -73,7 +73,15 @@ export interface GeneratedImage<TRaw = unknown, TProviderMetadata = unknown, TRe
   readonly raw: TRaw
 }
 
-/** Flat image-generation function. Prompt input is inferred from a typed Crux prompt. */
+/**
+ * Flat image-generation function. Prompt input is inferred from a typed Crux prompt.
+ *
+ * @example
+ * ```ts
+ * const result = await adapter.generateImage({ model: 'image-1', prompt: 'A quiet canal' })
+ * await assetStore.put(result.image) // optional, explicit persistence
+ * ```
+ */
 export type GenerateImage<
   TModel = string,
   TExtra extends Record<string, unknown> = Record<string, never>,
