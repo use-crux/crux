@@ -21,17 +21,15 @@ export interface LoweredImagePrompt {
  * Unsupported language-only behavior is aggregated before provider or storage I/O.
  */
 export async function lowerImagePrompt<TPrompt extends ImagePrompt>(
-  options: Readonly<{ prompt: TPrompt; input?: unknown; tokenBudget?: number }>,
+  options: Readonly<{ prompt: TPrompt; input?: unknown }>,
   context: ImagePromptLoweringContext,
 ): Promise<LoweredImagePrompt> {
-  validateTokenBudget(options.tokenBudget)
   if (typeof options.prompt === 'string') return { text: options.prompt, images: [] }
   if (!isCruxPrompt(options.prompt)) return lowerContent(options.prompt)
 
   const resolved = await options.prompt.resolve({
     provider: context.adapter,
     modelId: context.model,
-    tokenBudget: options.tokenBudget,
     ...(options.input === undefined ? {} : { input: options.input }),
   } as never)
   const issues = resolvedIssues(resolved)
@@ -42,7 +40,7 @@ export async function lowerImagePrompt<TPrompt extends ImagePrompt>(
     })
   }
   return {
-    text: [resolved.system, resolved.prompt].filter((part): part is string => Boolean(part)).join('\n\n'),
+    text: [resolved.system, resolved.prompt].filter((part): part is string => Boolean(part)).join('\n'),
     images: [],
   }
 }
@@ -77,10 +75,4 @@ function resolvedIssues(resolved: ResolvedPrompt): UnsupportedCapabilityIssue[] 
 
 function issue(capability: string): UnsupportedCapabilityIssue {
   return { capability, remediation: 'Remove this language-generation behavior from the image prompt.' }
-}
-
-function validateTokenBudget(value: number | undefined): void {
-  if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
-    throw new RangeError('Image prompt tokenBudget must be a positive safe integer.')
-  }
 }

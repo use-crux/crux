@@ -11,12 +11,16 @@ const MAX_DESCRIPTOR_HASH_BYTES = 256 * 1024;
 
 export {
   createInvalidMediaSourceError,
+  createMediaMaterializationError,
   createUnsupportedCapabilityError,
   isInvalidMediaSourceError,
+  isMediaMaterializationError,
   isUnsupportedCapabilityError,
 } from "./media-errors";
 export type {
   InvalidMediaSourceError,
+  MediaMaterializationError,
+  MediaMaterializationReason,
   UnsupportedCapabilityError,
   UnsupportedCapabilityIssue,
 } from "./media-errors";

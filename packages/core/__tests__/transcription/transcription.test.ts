@@ -18,13 +18,26 @@ describe('core transcription', () => {
   })
 
   it('validates ordered seconds segments and maps semantic emptiness to a tagged error', () => {
-    expect(validateTranscriptionResult({ text: 'hello', segments: [{ text: 'hello', start: 0, end: 1.25 }] }, null)).toEqual({
+    expect(validateTranscriptionResult({
       text: 'hello',
-      segments: [{ text: 'hello', start: 0, end: 1.25 }],
+      segments: [{ text: 'hello', startSecond: 0, endSecond: 1.25 }],
+      warnings: [],
+      execution: { kind: 'native', calls: 1 },
+    }, null)).toEqual({
+      text: 'hello',
+      segments: [{ text: 'hello', startSecond: 0, endSecond: 1.25 }],
+      words: [],
+      warnings: [],
+      execution: { kind: 'native', calls: 1 },
       raw: null,
     })
     try {
-      validateTranscriptionResult({ text: '   ', segments: [] }, { provider: 'empty' })
+      validateTranscriptionResult({
+        text: '   ',
+        segments: [],
+        warnings: [],
+        execution: { kind: 'native', calls: 1 },
+      }, { provider: 'empty' })
       throw new Error('expected failure')
     } catch (error) {
       expect(isNoTranscriptError(error)).toBe(true)

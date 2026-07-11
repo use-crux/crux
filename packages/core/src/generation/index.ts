@@ -75,14 +75,13 @@ export type {
   GenerateImage,
   GenerateImageCommonOptions,
   GenerateImageOptions,
-  GeneratedImage,
-  GeneratedImageUsage,
+  GenerateImageResult,
   ImagePrompt,
   ImagePromptContent,
   NativeGeneratedImage,
 } from "./image-contracts";
 export type {
-  GeneratedImageResultMetadata,
+  GenerateImageResultFields,
   NoImageGeneratedError,
 } from "./image-result";
 export type {
@@ -99,6 +98,11 @@ export {
   withAbortSignal,
   withBudget,
 } from "./timeout";
+export type {
+  CompletedOperationResult,
+  OperationExecution,
+  OperationTimeout,
+} from "../completed-operation/contracts";
 export type {
   TimeoutBudget,
   TimeoutOptions,

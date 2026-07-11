@@ -1,48 +1,67 @@
-import type { Asset } from '../asset/types'
+import type { MediaSource } from '../types/content'
+import type { CompletedOperationResult, OperationTimeout } from '../completed-operation/contracts'
 
 /** Audio accepted by flat transcription operations without storage access. */
-export type AudioSource = Asset | string | URL | Uint8Array | ArrayBuffer | Blob
+export type AudioSource = MediaSource
 
-/** One ordered transcript interval measured in seconds. */
-export interface TranscriptionSegment {
+/** One measured transcript interval in seconds. Unknown timing stays absent. */
+export interface TranscriptInterval {
   readonly text: string
-  readonly start: number
-  readonly end: number
+  readonly startSecond: number
+  readonly endSecond: number
+  readonly speaker?: string
 }
 
 /** Portable controls shared by transcription adapters. */
 export interface TranscribeCommonOptions {
   readonly audio: AudioSource
+  /** Source-language hint. Detected language is returned separately. */
   readonly language?: string
+  /** Transcribe in-place or translate into one explicit target language. */
+  readonly task?: 'transcribe' | Readonly<{ type: 'translate'; targetLanguage: string }>
+  /** Requested measured detail. Unsupported detail fails before provider I/O. */
+  readonly timestamps?: 'none' | 'segment' | 'word' | 'segment-and-word'
+  readonly diarization?: boolean
   readonly prompt?: string
   readonly abortSignal?: AbortSignal
+  readonly timeout?: OperationTimeout
 }
 
 /** Options accepted by a flat provider transcription function. */
-export type TranscribeOptions<TModel = string, TExtra extends Record<string, unknown> = Record<string, never>> =
-  TranscribeCommonOptions & {
-    readonly model: TModel
-    /** Provider-native controls with no portable Crux equivalent. */
-    readonly extra?: TExtra
-  }
+export type TranscribeOptions<TModel = string, TExtra = never> = TranscribeCommonOptions & Readonly<{
+  model: TModel
+  /** Provider-native controls with no portable Crux equivalent. */
+  extra?: TExtra
+}>
 
-/** Provider-neutral result of exactly one transcription operation. */
-export interface TranscriptionResult<TRaw = unknown, TMetadata = unknown, TWarning = string> {
-  readonly text: string
-  readonly segments: readonly TranscriptionSegment[]
-  readonly language?: string
-  readonly durationInSeconds?: number
-  readonly warnings?: readonly TWarning[]
-  readonly metadata?: TMetadata
-  /** Unmodified native operation result. */
-  readonly raw: TRaw
-}
+/**
+ * Provider-neutral result of one transcription operation.
+ *
+ * Segment and word arrays always exist. Providers must leave unavailable
+ * timing or speaker facts empty rather than estimating them.
+ */
+export type TranscriptionResult<TRaw = unknown, TMetadata = unknown, TWarning = unknown> =
+  CompletedOperationResult<TRaw, TMetadata, TWarning> & Readonly<{
+    text: string
+    segments: readonly TranscriptInterval[]
+    words: readonly TranscriptInterval[]
+    language?: string
+    durationInSeconds?: number
+  }>
 
-/** Flat stateless transcription function. */
+/**
+ * Flat stateless transcription function. Provider errors propagate unchanged.
+ *
+ * @example
+ * ```ts
+ * const result = await transcribe({ model: 'audio-model', audio: recording })
+ * console.log(result.text)
+ * ```
+ */
 export type Transcribe<
   TModel = string,
-  TExtra extends Record<string, unknown> = Record<string, never>,
+  TExtra = never,
   TRaw = unknown,
   TMetadata = unknown,
-  TWarning = string,
+  TWarning = unknown,
 > = (options: TranscribeOptions<TModel, TExtra>) => Promise<TranscriptionResult<TRaw, TMetadata, TWarning>>

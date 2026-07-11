@@ -7,7 +7,7 @@ import {
   prompt,
   validateGenerateImageOptions,
   type GenerateImage,
-  type GeneratedImage,
+  type GenerateImageResult,
 } from '../src'
 
 describe('image generation contract', () => {
@@ -25,7 +25,7 @@ describe('image generation contract', () => {
     )
 
     expect(direct).toMatchObject({ text: 'A quiet canal', images: [] })
-    expect(resolved.text).toBe('Create a restrained editorial illustration.\n\nSubject: A quiet canal')
+    expect(resolved.text).toBe('Create a restrained editorial illustration.\nSubject: A quiet canal')
 
     const generate = null as unknown as GenerateImage
     expectTypeOf(generate).toBeCallableWith({ model: 'image-1', prompt: caption, input: { subject: 'canal' } })
@@ -63,15 +63,27 @@ describe('image generation contract', () => {
         { data: new Uint8Array([1, 2]), mediaType: 'image/png' },
         { data: 'AwQ=', mediaType: 'image/webp' },
       ],
-      { raw: { id: 'raw' }, usage: { images: 2 } },
+      { raw: { id: 'raw' }, warnings: [], execution: { kind: 'native', calls: 1 } },
     )
 
     expect(result.image).toBe(result.images[0])
     expect(result.images.map((image) => [...image.data as Uint8Array])).toEqual([[1, 2], [3, 4]])
-    expectTypeOf(result).toMatchTypeOf<GeneratedImage>()
+    expectTypeOf(result).toMatchTypeOf<GenerateImageResult>()
     expectTypeOf(result).not.toHaveProperty('persist')
     expect(Object.hasOwn(result, 'persist')).toBe(false)
     expect(Object.hasOwn(result, 'capabilities')).toBe(false)
+  })
+
+  it('preserves a provider-native generated URL without downloading it', () => {
+    const image = { type: 'url' as const, url: new URL('https://cdn.example/image.png'), mediaType: 'image/png' }
+    const result = createGeneratedImageResult([image], {
+      raw: { id: 'raw' },
+      warnings: [],
+      execution: { kind: 'native', calls: 1 },
+    })
+
+    expect(result.image).toBe(image)
+    expect(result.images).toEqual([image])
   })
 
   it('rejects malformed portable controls', () => {
@@ -81,7 +93,7 @@ describe('image generation contract', () => {
       { size: '1024' },
       { aspectRatio: '16:0' },
       { seed: -1 },
-      { tokenBudget: 0 },
+      { timeout: { stepMs: 0 } },
     ]) {
       expect(() => validateGenerateImageOptions(options)).toThrow()
     }
@@ -90,7 +102,7 @@ describe('image generation contract', () => {
   it('tags malformed or empty native successes as no-image errors with a cause', () => {
     for (const images of [[], [{ data: '', mediaType: 'image/png' }], [{ data: '***', mediaType: 'image/png' }]]) {
       try {
-        createGeneratedImageResult(images, { raw: { ok: true } })
+        createGeneratedImageResult(images, { raw: { ok: true }, warnings: [], execution: { kind: 'native', calls: 1 } })
         throw new Error('expected validation to fail')
       } catch (error) {
         expect(isNoImageGeneratedError(error)).toBe(true)

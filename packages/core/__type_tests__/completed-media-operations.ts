@@ -1,0 +1,117 @@
+import type {
+  Asset,
+  AssetStore,
+  CompletedOperationResult,
+  GenerateImage,
+  GenerateImageOptions,
+  GenerateImageResult,
+  GenerateSpeech,
+  GenerateSpeechOptions,
+  GenerateSpeechResult,
+  TranscriptInterval,
+  TranscribeOptions,
+  TranscriptionResult,
+} from '../src'
+
+declare const image: Asset
+declare const store: AssetStore
+declare const generateImage: GenerateImage<'image-model'>
+declare const generateSpeech: GenerateSpeech<'speech-model', 'alloy' | 'nova'>
+
+void generateImage({ model: 'image-model', prompt: 'A quiet canal', size: '1024x1024' })
+void generateImage({
+  model: 'image-model',
+  prompt: { text: 'Edit this', images: [image], mask: image },
+  aspectRatio: '16:9',
+  timeout: { totalMs: 30_000, stepMs: 10_000 },
+})
+
+const invalidMask = {
+  model: 'image-model',
+  // @ts-expect-error a mask requires at least one reference image
+  prompt: { text: 'Edit this', mask: image },
+} satisfies GenerateImageOptions<'image-model'>
+void invalidMask
+
+const conflictingDimensions = {
+  model: 'image-model',
+  prompt: 'A quiet canal',
+  size: '1024x1024',
+  // @ts-expect-error size and aspectRatio are mutually exclusive
+  aspectRatio: '1:1',
+} satisfies GenerateImageOptions<'image-model'>
+void conflictingDimensions
+
+const imageStore = {
+  model: 'image-model',
+  prompt: 'A quiet canal',
+  // @ts-expect-error completed operations never accept persistence
+  store,
+} satisfies GenerateImageOptions<'image-model'>
+void imageStore
+
+const imageCache = {
+  model: 'image-model',
+  prompt: 'A quiet canal',
+  // @ts-expect-error completed operations have no response-cache option
+  cache: true,
+} satisfies GenerateImageOptions<'image-model'>
+void imageCache
+
+void generateSpeech({ model: 'speech-model', text: 'Hello world', voice: 'alloy' })
+
+const badVoice = {
+  model: 'speech-model',
+  text: 'Hello world',
+  // @ts-expect-error adapters preserve their concrete voice type
+  voice: 'echo',
+} satisfies GenerateSpeechOptions<'speech-model', 'alloy' | 'nova'>
+void badVoice
+
+const interval = {
+  text: 'hello',
+  startSecond: 0,
+  endSecond: 0.5,
+  speaker: 'speaker-1',
+} satisfies TranscriptInterval
+void interval
+
+const transcription = {
+  model: 'audio-model',
+  audio: new Uint8Array([1]),
+  task: { type: 'translate', targetLanguage: 'en' },
+  timestamps: 'segment-and-word',
+  diarization: true,
+  timeout: { totalMs: 60_000, stepMs: 30_000 },
+} satisfies TranscribeOptions<'audio-model'>
+void transcription
+
+declare const tail: CompletedOperationResult
+declare const imageResult: GenerateImageResult
+declare const transcriptionResult: TranscriptionResult
+declare const speechResult: GenerateSpeechResult
+
+void tail.warnings
+void tail.execution
+void tail.raw
+void imageResult.image
+void transcriptionResult.words
+void speechResult.audio
+
+// @ts-expect-error obsolete specialized results do not expose metadata
+void transcriptionResult.metadata
+// @ts-expect-error obsolete specialized results do not expose response
+void imageResult.response
+// @ts-expect-error specialized results do not invent portable usage
+void imageResult.usage
+// @ts-expect-error warnings are always present
+const missingWarnings: GenerateSpeechResult = { audio: {} as never, execution: { kind: 'native', calls: 1 }, raw: null }
+void missingWarnings
+
+const obsoletePromptBudget = {
+  model: 'image-model',
+  prompt: 'A quiet canal',
+  // @ts-expect-error image operations have only total/step timeout budgets
+  tokenBudget: 100,
+} satisfies GenerateImageOptions<'image-model'>
+void obsoletePromptBudget

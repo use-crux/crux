@@ -159,6 +159,88 @@ export function isInvalidMediaSourceError(
   );
 }
 
+/** Exact reason a bounded media materializer rejected a download. */
+export type MediaMaterializationReason =
+  | "blocked-address"
+  | "redirect"
+  | "byte-limit"
+  | "time-limit"
+  | "mime-mismatch";
+
+/**
+ * Tagged error for a rejected media materialization attempt.
+ *
+ * Materializers throw this instead of a raw fetch error so callers can branch
+ * on `reason` without depending on error-message text. It never carries the
+ * requested URL, downloaded bytes, filename, provider id, or `AssetRef` URI.
+ */
+export type MediaMaterializationError = Error & {
+  readonly name: "MediaMaterializationError";
+  readonly code: "media_materialization_failed";
+  readonly reason: MediaMaterializationReason;
+};
+
+/**
+ * Create a tagged error for a bounded media materializer rejection.
+ *
+ * @example
+ * ```ts
+ * throw createMediaMaterializationError({ reason: 'byte-limit' })
+ * ```
+ */
+export function createMediaMaterializationError(
+  options: Readonly<{ reason: MediaMaterializationReason }>,
+): MediaMaterializationError {
+  return Object.freeze(
+    Object.assign(new Error(mediaMaterializationMessage(options.reason)), {
+      name: "MediaMaterializationError" as const,
+      code: "media_materialization_failed" as const,
+      reason: options.reason,
+    }),
+  );
+}
+
+/** Narrow unknown thrown values to the structural media-materialization tag. */
+export function isMediaMaterializationError(
+  value: unknown,
+): value is MediaMaterializationError {
+  return (
+    isRecord(value) &&
+    value.name === "MediaMaterializationError" &&
+    value.code === "media_materialization_failed" &&
+    isMediaMaterializationReason(value.reason)
+  );
+}
+
+function isMediaMaterializationReason(
+  value: unknown,
+): value is MediaMaterializationReason {
+  return (
+    value === "blocked-address" ||
+    value === "redirect" ||
+    value === "byte-limit" ||
+    value === "time-limit" ||
+    value === "mime-mismatch"
+  );
+}
+
+function mediaMaterializationMessage(
+  reason: MediaMaterializationReason,
+): string {
+  switch (reason) {
+    case "blocked-address":
+      return "Media download target resolved to a blocked network address.";
+    case "redirect":
+      return "Media download redirect was rejected.";
+    case "byte-limit":
+      return "Media download exceeded the byte limit.";
+    case "time-limit":
+      return "Media download exceeded the time limit.";
+    case "mime-mismatch":
+      return "Media download content did not match the expected media type.";
+  }
+}
+
 function unsupportedCapabilityMessage(
   adapter: string,
   model: string,

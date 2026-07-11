@@ -13,11 +13,12 @@ export type {
   TranscribeCommonOptions,
   TranscribeOptions,
   TranscriptionResult,
-  TranscriptionSegment,
+  TranscriptInterval,
 } from './contracts'
 export { createNoTranscriptError, isNoTranscriptError } from './errors'
 export type { NoTranscriptError } from './errors'
 export { normalizeAudioSource } from './source'
 export { assertAudioMediaType, detectAudioMediaType, validateAudioBytes } from './audio-validation'
 export { validateTranscriptionResult } from './result-validation'
+export { validateTranscribeOptions } from './result-validation'
 export type { NativeTranscriptionResult } from './result-validation'

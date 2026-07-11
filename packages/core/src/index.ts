@@ -247,6 +247,7 @@ export {
   detectAudioMediaType,
   isNoTranscriptError,
   normalizeAudioSource,
+  validateTranscribeOptions,
   validateAudioBytes,
   validateTranscriptionResult,
 } from './transcription'
@@ -258,8 +259,17 @@ export type {
   TranscribeCommonOptions,
   TranscribeOptions,
   TranscriptionResult,
-  TranscriptionSegment,
+  TranscriptInterval,
 } from './transcription'
+export {
+  createGenerateSpeechResult,
+  validateGenerateSpeechOptions,
+} from './speech'
+export type {
+  GenerateSpeech,
+  GenerateSpeechOptions,
+  GenerateSpeechResult,
+} from './speech'
 
 // Request-scoped deferred work
 export { defer, CruxDeferError, DEFER_ERROR_CODES } from "./defer";
@@ -576,9 +586,8 @@ export type {
   GenerateImage,
   GenerateImageCommonOptions,
   GenerateImageOptions,
-  GeneratedImage,
-  GeneratedImageUsage,
-  GeneratedImageResultMetadata,
+  GenerateImageResult,
+  GenerateImageResultFields,
   ImagePrompt,
   ImagePromptContent,
   ImagePromptLoweringContext,
@@ -586,6 +595,11 @@ export type {
   NativeGeneratedImage,
   NoImageGeneratedError,
 } from "./generation";
+export type {
+  CompletedOperationResult,
+  OperationExecution,
+  OperationTimeout,
+} from "./completed-operation";
 export type {
   AssistantContentPart,
   ContentPart,
@@ -596,16 +610,20 @@ export type {
 } from "./types/content";
 export {
   createInvalidMediaSourceError,
+  createMediaMaterializationError,
   createUnsupportedCapabilityError,
   contentText,
   hasMediaParts,
   isInvalidMediaSourceError,
+  isMediaMaterializationError,
   isUnsupportedCapabilityError,
   messageText,
   textPart,
 } from "./content";
 export type {
   InvalidMediaSourceError,
+  MediaMaterializationError,
+  MediaMaterializationReason,
   UnsupportedCapabilityError,
   UnsupportedCapabilityIssue,
 } from "./content";
