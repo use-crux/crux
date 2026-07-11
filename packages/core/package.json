@@ -44,6 +44,22 @@
       "types": "./src/quality/internal/runner.ts",
       "import": "./src/quality/internal/runner.ts"
     },
+    "./internal/async-scope": {
+      "types": "./src/async-scope/index.ts",
+      "import": "./src/async-scope/index.ts"
+    },
+    "./internal/defer-host": {
+      "types": "./src/defer/host.ts",
+      "import": "./src/defer/host.ts"
+    },
+    "./internal/defer-lifecycle": {
+      "types": "./src/defer/lifecycle.ts",
+      "import": "./src/defer/lifecycle.ts"
+    },
+    "./defer/node": {
+      "types": "./src/defer/node.ts",
+      "import": "./src/defer/node.ts"
+    },
     "./project-index": {
       "types": "./src/project-index/index.ts",
       "import": "./src/project-index/index.ts"
@@ -188,6 +204,18 @@
       ],
       "quality/schemas": [
         "src/quality/schemas.ts"
+      ],
+      "internal/async-scope": [
+        "src/async-scope/index.ts"
+      ],
+      "internal/defer-host": [
+        "src/defer/host.ts"
+      ],
+      "internal/defer-lifecycle": [
+        "src/defer/lifecycle.ts"
+      ],
+      "defer/node": [
+        "src/defer/node.ts"
       ],
       "project-index": [
         "src/project-index/index.ts"

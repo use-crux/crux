@@ -1,5 +1,7 @@
 import type { CruxRunId, CruxSpanId, CruxTraceId } from './contract'
 import { mergeCruxCorrelators, type CruxCorrelators } from './correlators'
+import { createAsyncScopeFacet } from '../async-scope'
+import { asyncScopeStorageAvailable, setAsyncScopeResolverForTesting } from '../async-scope/internal/carrier'
 
 export interface ObservabilityContext {
   runId: CruxRunId
@@ -13,20 +15,13 @@ export interface CapturedObservabilityContext extends ObservabilityContext {
   currentSpanId?: CruxSpanId
 }
 
-type AsyncLocalStorageLike<T> = {
-  run<R>(store: T, fn: () => R): R
-  getStore(): T | undefined
-}
-
 interface ObservabilityContextFrame {
   readonly context?: ObservabilityContext
   readonly correlators?: CruxCorrelators
 }
 
-let als: AsyncLocalStorageLike<ObservabilityContextFrame> | null = null
-let alsInitialized = false
-let synchronousFallbackFrame: ObservabilityContextFrame | undefined
 let warnedAboutMissingAls = false
+const observabilityScope = createAsyncScopeFacet<ObservabilityContextFrame>('core.observability')
 
 /**
  * Force AsyncLocalStorage availability for observability runtime tests.
@@ -37,15 +32,8 @@ let warnedAboutMissingAls = false
  * @internal
  */
 export function __setAlsForTesting(mode: 'auto' | null): void {
-  synchronousFallbackFrame = undefined
   warnedAboutMissingAls = false
-  if (mode === 'auto') {
-    als = null
-    alsInitialized = false
-    return
-  }
-  als = null
-  alsInitialized = true
+  setAsyncScopeResolverForTesting(mode === 'auto' ? undefined : () => undefined)
 }
 
 /** Return the active observability context, including synchronous no-ALS fallback state. */
@@ -89,41 +77,17 @@ export function withCruxCorrelators<R>(correlators: CruxCorrelators, fn: () => R
 }
 
 function withFrame<R>(frame: ObservabilityContextFrame, fn: () => R): R {
-  const storage = getAls()
-  if (storage) return storage.run(frame, fn)
-  const previousFrame = synchronousFallbackFrame
-  synchronousFallbackFrame = frame
-  try {
-    return fn()
-  } finally {
-    synchronousFallbackFrame = previousFrame
-  }
+  warnIfAsyncPropagationIsUnavailable()
+  return observabilityScope.run(frame, fn)
 }
 
 function currentFrame(): ObservabilityContextFrame | undefined {
-  return getAls()?.getStore() ?? synchronousFallbackFrame
+  warnIfAsyncPropagationIsUnavailable()
+  return observabilityScope.current()
 }
 
-function getAls(): AsyncLocalStorageLike<ObservabilityContextFrame> | null {
-  if (!alsInitialized) {
-    alsInitialized = true
-    try {
-      // `process.getBuiltinModule` works in BOTH module systems (Node >= 20.16);
-      // bare `require` only exists in CJS. Keep `require` as the CJS fallback.
-      const getBuiltinModule = (
-        globalThis as { process?: { getBuiltinModule?: (id: string) => unknown } }
-      ).process?.getBuiltinModule
-      const hooks = (getBuiltinModule?.('node:async_hooks') ??
-        // eslint-disable-next-line @typescript-eslint/no-require-imports
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        require('node:async_hooks')) as typeof import('node:async_hooks')
-      als = new hooks.AsyncLocalStorage<ObservabilityContextFrame>()
-    } catch {
-      als = null
-    }
-  }
-  if (!als) warnAboutMissingAlsOnce()
-  return als
+function warnIfAsyncPropagationIsUnavailable(): void {
+  if (!asyncScopeStorageAvailable()) warnAboutMissingAlsOnce()
 }
 
 function warnAboutMissingAlsOnce(): void {

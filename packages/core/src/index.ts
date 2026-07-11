@@ -240,6 +240,15 @@ export type { PromptTree, PromptTreeResult } from "./prompt";
 export { tool } from "./tools/define-tool";
 export type { NamedToolDef, ToolConfig } from "./tools/types";
 
+// Request-scoped deferred work
+export { defer, CruxDeferError, DEFER_ERROR_CODES } from "./defer";
+export type {
+  Awaitable,
+  CruxDeferErrorCode,
+  DeferredCallback,
+  DeferErrorInput,
+} from "./defer";
+
 // Configuration + runtime domain (runtime/config/plugin/hook surface)
 export { config } from "./runtime";
 export type {

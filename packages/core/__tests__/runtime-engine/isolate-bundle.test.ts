@@ -13,6 +13,9 @@ describe('runtime isolate bundle compatibility', () => {
       entry,
       [
         "import '@use-crux/core/runtime'",
+        "import '@use-crux/core/internal/async-scope'",
+        "import '@use-crux/core/internal/defer-host'",
+        "import '@use-crux/core/internal/defer-lifecycle'",
         "import '@use-crux/convex/runtime'",
         importStatement(repoRoot, 'packages/convex/src/component/runtime/events.ts'),
         importStatement(repoRoot, 'packages/convex/src/component/runtime/leases.ts'),
@@ -62,5 +65,8 @@ function coreSubpath(specifier: string): string {
   const subpath = specifier.slice('@use-crux/core/'.length)
   if (subpath === 'runtime') return 'packages/core/src/runtime/public.ts'
   if (subpath === 'storage') return 'packages/core/src/storage/index.ts'
+  if (subpath === 'internal/async-scope') return 'packages/core/src/async-scope/index.ts'
+  if (subpath === 'internal/defer-host') return 'packages/core/src/defer/host.ts'
+  if (subpath === 'internal/defer-lifecycle') return 'packages/core/src/defer/lifecycle.ts'
   return `packages/core/src/${subpath}.ts`
 }
