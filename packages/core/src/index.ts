@@ -243,10 +243,8 @@ export { tool } from "./tools/define-tool";
 export type { NamedToolDef, ToolConfig } from "./tools/types";
 export {
   createNoTranscriptError,
-  createSecureAudioDownloader,
   assertAudioMediaType,
   detectAudioMediaType,
-  downloadAudio,
   isNoTranscriptError,
   normalizeAudioSource,
   validateAudioBytes,
@@ -254,13 +252,8 @@ export {
 } from './transcription'
 export type {
   AudioSource,
-  AudioPinnedDispatcher,
   NativeTranscriptionResult,
   NoTranscriptError,
-  SecureAudioDownloadRequest,
-  SecureAudioDownloaderOptions,
-  SecureAudioFetch,
-  SecureAudioFetchResponse,
   Transcribe,
   TranscribeCommonOptions,
   TranscribeOptions,

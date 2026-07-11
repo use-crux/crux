@@ -1,13 +1,13 @@
 import type { GenerateContentConfig, GenerateContentResponse, GoogleGenAI, Part } from '@google/genai'
 import {
   createUnsupportedCapabilityError,
-  downloadAudio,
   normalizeAudioSource,
   validateTranscriptionResult,
   type Asset,
   type Transcribe,
   type TranscriptionSegment,
 } from '@use-crux/core'
+import { downloadAudio } from '@use-crux/core/transcription/node'
 
 /** Google generation controls allowed on the composed transcription route. */
 export type GoogleTranscriptionExtra = Omit<

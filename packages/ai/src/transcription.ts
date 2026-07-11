@@ -1,11 +1,11 @@
 import type { Experimental_TranscriptionResult as AiSdkTranscriptionResult, TranscriptionModel } from 'ai'
 import {
   createUnsupportedCapabilityError,
-  downloadAudio,
   normalizeAudioSource,
   validateTranscriptionResult,
   type Transcribe,
 } from '@use-crux/core'
+import { downloadAudio } from '@use-crux/core/transcription/node'
 import type { SdkGateway } from './gateway'
 
 type NativeArgs = Parameters<SdkGateway['transcribe']>[0]

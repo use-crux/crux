@@ -1,4 +1,12 @@
-/** Provider-neutral flat transcription contracts and secure audio utilities. @module */
+/**
+ * Provider-neutral flat transcription contracts, normalization, and validation.
+ *
+ * This universal entrypoint does not import Node.js built-ins. Node applications
+ * and adapters can import the bounded HTTPS downloader from
+ * `@use-crux/core/transcription/node`.
+ *
+ * @module
+ */
 export type {
   AudioSource,
   Transcribe,
@@ -13,11 +21,3 @@ export { normalizeAudioSource } from './source'
 export { assertAudioMediaType, detectAudioMediaType, validateAudioBytes } from './audio-validation'
 export { validateTranscriptionResult } from './result-validation'
 export type { NativeTranscriptionResult } from './result-validation'
-export { createSecureAudioDownloader, downloadAudio } from './downloader'
-export type {
-  AudioPinnedDispatcher,
-  SecureAudioDownloadRequest,
-  SecureAudioDownloaderOptions,
-  SecureAudioFetch,
-  SecureAudioFetchResponse,
-} from './downloader'

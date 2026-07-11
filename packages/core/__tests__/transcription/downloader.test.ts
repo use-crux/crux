@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createSecureAudioDownloader } from '../../src/transcription'
+import { createSecureAudioDownloader } from '../../src/transcription/node'
 
 const wav = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45])
 

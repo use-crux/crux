@@ -144,6 +144,10 @@
       "types": "./src/transcription/index.ts",
       "import": "./src/transcription/index.ts"
     },
+    "./transcription/node": {
+      "types": "./src/transcription/node.ts",
+      "import": "./src/transcription/node.ts"
+    },
     "./agent": {
       "types": "./src/agent/index.ts",
       "import": "./src/agent/index.ts"
@@ -288,6 +292,9 @@
       ],
       "transcription": [
         "src/transcription/index.ts"
+      ],
+      "transcription/node": [
+        "src/transcription/node.ts"
       ],
       "agent": [
         "src/agent/index.ts"

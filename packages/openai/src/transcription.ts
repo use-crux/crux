@@ -6,12 +6,12 @@ import type {
 } from 'openai/resources/audio/transcriptions'
 import {
   createUnsupportedCapabilityError,
-  downloadAudio,
   normalizeAudioSource,
   validateTranscriptionResult,
   type DataAsset,
   type Transcribe,
 } from '@use-crux/core'
+import { downloadAudio } from '@use-crux/core/transcription/node'
 
 type NativeControls = Omit<
   TranscriptionCreateParamsNonStreaming,
