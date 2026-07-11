@@ -50,6 +50,7 @@ describe('composition nesting', () => {
     const pipeline = createPipeline(executor)
 
     const result = await pipeline({
+      id: 'nesting.test-pipeline-1',
       context: { value: 'start' },
       steps: [
         { name: 'first', agent: agentA },
@@ -57,6 +58,7 @@ describe('composition nesting', () => {
           name: 'parallel-review',
           fn: async (ctx) => {
             const merged = await parallel({
+              id: 'nesting.test-parallel-1',
               agents: { reviewer1: agentB, reviewer2: agentC },
               input: ctx,
               merge: (r) => ({
@@ -86,6 +88,7 @@ describe('composition nesting', () => {
     const pipeline = createPipeline(executor)
 
     const result = await pipeline({
+      id: 'nesting.test-pipeline-2',
       context: { value: 'start' },
       steps: [
         { name: 'outer-first', agent: agentA },
@@ -93,6 +96,7 @@ describe('composition nesting', () => {
           name: 'inner-pipeline',
           fn: async (ctx) => {
             const inner = await pipeline({
+              id: 'nesting.test-pipeline-3',
               context: ctx,
               steps: [
                 { name: 'inner-first', agent: agentB },
@@ -119,6 +123,7 @@ describe('composition nesting', () => {
     const consensus = createConsensus(executor)
 
     const result = await pipeline({
+      id: 'nesting.test-pipeline-4',
       context: { value: 'start' },
       steps: [
         { name: 'research', agent: agentA },
@@ -126,6 +131,7 @@ describe('composition nesting', () => {
           name: 'classify',
           fn: async (ctx) => {
             const decision = await consensus({
+              id: 'nesting.test-consensus-1',
               agents: [agentB, agentB, agentB],
               input: ctx,
               extract: (r) => r.output.result,
@@ -161,6 +167,7 @@ describe('composition nesting', () => {
         orchestratorCtx = getExecutionContext()
         // Simulate an agent running a pipeline inside a tool
         const toolResult = await pipeline({
+          id: 'nesting.test-pipeline-5',
           context: { value: 'from-tool' },
           steps: [
             { name: 'sub-step-1', agent: agentB },
@@ -192,6 +199,7 @@ describe('composition nesting', () => {
     })
 
     const result = await swarm({
+      id: 'nesting.test-swarm-1',
       agents: { orchestrator },
       startAgent: 'orchestrator',
       input: { value: 'start' },
@@ -212,6 +220,7 @@ describe('composition nesting', () => {
     const parallel = createParallel(executor)
 
     await pipeline({
+      id: 'nesting.test-pipeline-6',
       context: { value: 'start' },
       sessionId: 'outer-session',
       steps: [
@@ -220,6 +229,7 @@ describe('composition nesting', () => {
           name: 'nested-parallel',
           fn: async (ctx) => {
             return parallel({
+              id: 'nesting.test-parallel-2',
               agents: { b: agentB },
               input: ctx,
               merge: (r) => r.b.output,

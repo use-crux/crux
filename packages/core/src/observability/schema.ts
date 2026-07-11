@@ -21,7 +21,11 @@ import {
   type CruxSpanEventId,
   type CruxSpanId,
   type CruxTraceId,
+  type DefinitionRef,
+  type DefinitionRefRole,
+  type SanitizedSourceRef,
 } from './contract'
+import { ProjectDefinitionKindSchema } from '../project-index'
 
 const nonEmptyString = z.string().min(1)
 const isoTimestamp = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
@@ -97,6 +101,30 @@ export const CruxSourceLocationSchema = z.object({
   function: nonEmptyString.optional(),
 })
 
+export const DefinitionRefRoleSchema = z.enum([
+  'resolved-prompt',
+  'resolved-context',
+  'invoked-tool',
+  'invoked-agent',
+  'invoked-flow',
+  'invoked-retriever',
+  'invoked-composition',
+  'invoked-blackboard',
+]) satisfies z.ZodType<DefinitionRefRole>
+
+export const SanitizedSourceRefSchema = z.object({
+  file: nonEmptyString,
+  line: z.number().int().positive(),
+  column: z.number().int().positive().optional(),
+}) satisfies z.ZodType<SanitizedSourceRef>
+
+export const DefinitionRefSchema = z.object({
+  id: nonEmptyString,
+  kind: ProjectDefinitionKindSchema,
+  role: DefinitionRefRoleSchema,
+  source: SanitizedSourceRefSchema.optional(),
+}) satisfies z.ZodType<DefinitionRef>
+
 export const CruxErrorSummarySchema = z.object({
   message: nonEmptyString,
   name: nonEmptyString.optional(),
@@ -124,6 +152,7 @@ export const CruxRunStartRecordSchema = CruxRecordBaseSchema.extend({
   status: z.literal('running'),
   attributes: CruxAttributesSchema.optional(),
   source: CruxSourceLocationSchema.optional(),
+  definitionRefs: z.array(DefinitionRefSchema).optional(),
 }).refine((record) => record.segmentSeq === 1, {
   message: 'run:start must be the first record in its segment',
   path: ['segmentSeq'],
@@ -178,6 +207,7 @@ export const CruxSpanStartRecordSchema = CruxRecordBaseSchema.extend({
   retrieverId: nonEmptyString.optional(),
   attributes: CruxAttributesSchema.optional(),
   source: CruxSourceLocationSchema.optional(),
+  definitionRefs: z.array(DefinitionRefSchema).optional(),
 }).refine((record) => CRUX_PRIMITIVE_FAMILY_BY_NAME[record.primitive] === record.family, {
   message: 'Span family must match primitive family',
   path: ['family'],
@@ -209,6 +239,7 @@ export const CruxSpanRecordSchema = CruxRecordBaseSchema.extend({
   error: CruxErrorSummarySchema.optional(),
   attributes: CruxAttributesSchema.optional(),
   source: CruxSourceLocationSchema.optional(),
+  definitionRefs: z.array(DefinitionRefSchema).optional(),
 }).refine((record) => CRUX_PRIMITIVE_FAMILY_BY_NAME[record.primitive] === record.family, {
   message: 'Span family must match primitive family',
   path: ['family'],

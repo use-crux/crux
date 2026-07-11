@@ -15,6 +15,7 @@ import type { ToolDef } from '../types/tool'
 import { inMemoryRecordStore } from '../storage'
 import { contextWithFamily } from '../prompt/context'
 import { observe } from '../observability'
+import { blackboardDefinitionRef } from '../observability/definition-ref'
 import { registerInspectableResource } from '../runtime-bridge/resources'
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -150,6 +151,9 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
 
   const records = config.records ?? inMemoryRecordStore()
   const recordKey = `blackboard:${config.id}`
+  // Canonical Project Index definition ref attached to every board read/write
+  // span, matching the indexer's `blackboard:<safeId(id)>` construction.
+  const definitionRef = blackboardDefinitionRef(config.id)
   const listeners = new Set<Listener>()
   const toolGuidance = config.tool?.description ? `\n\nGuidance:\n${config.tool.description}` : ''
 
@@ -291,6 +295,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
         name: `${config.id}.getAll`,
         primitive: 'memory.read',
         attributes: spanAttributes('getAll'),
+        definitionRefs: [definitionRef],
       },
       async () => {
         const state = await rawGetAll()
@@ -318,6 +323,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
           name: `${config.id}.get`,
           primitive: 'memory.read',
           attributes: spanAttributes('get', { field }),
+          definitionRefs: [definitionRef],
         },
         async () => {
           const state = await rawGetAll()
@@ -340,6 +346,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
           name: `${config.id}.set`,
           primitive: 'memory.write',
           attributes: spanAttributes('set', { fieldsChanged: [field] }),
+          definitionRefs: [definitionRef],
         },
         async () => {
           const before = (await rawGetAll()) ?? {}
@@ -364,6 +371,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
           name: `${config.id}.patch`,
           primitive: 'memory.write',
           attributes: spanAttributes('patch', { fieldsChanged: entries.map(([k]) => k) }),
+          definitionRefs: [definitionRef],
         },
         async () => {
           const before = ((await rawGetAll()) ?? {}) as Record<string, unknown>
@@ -390,6 +398,7 @@ export function blackboard<T extends z.ZodObject<z.ZodRawShape>>(config: Blackbo
           name: `${config.id}.clear`,
           primitive: 'memory.write',
           attributes: spanAttributes('clear', { fieldsChanged: ['*'] }),
+          definitionRefs: [definitionRef],
         },
         async () => {
           const before = await rawGetAll()

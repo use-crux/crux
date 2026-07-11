@@ -50,6 +50,8 @@ export interface ParallelResult<TResults extends Record<string, AgentResult>> {
 
 /** Options for `parallel()`. */
 export interface ParallelOptions<TAgents extends Record<string, AgentLike>> {
+  /** Stable author-supplied definition id, distinct from the random per-execution composition id. */
+  id: string
   /**
    * Seed context passed to all agents as input.
    *
@@ -105,6 +107,7 @@ export function createParallel(executor: AgentExecutor) {
     }>
   > {
     const {
+      id,
       context,
       agents,
       model,
@@ -127,6 +130,7 @@ export function createParallel(executor: AgentExecutor) {
     const agentIds = entries.map(([key, a]) => (isAgent(a) ? a.id : key))
     const runtime = createCompositionRuntime({
       kind: 'parallel',
+      id,
       agentIds,
       sessionId,
       attributes: { onError },

@@ -15,6 +15,7 @@ import {
   type CruxSpanStatus,
   type CruxSpanId,
   type CruxTraceId,
+  type DefinitionRef,
 } from './contract'
 import { channelHasSubscribers, publishObservabilityChannel } from './channel'
 import {
@@ -228,6 +229,13 @@ export interface ObserveSpanOptions<
   name: string
   primitive: P
   attributes?: AttributesFor<P>
+  /**
+   * Project Index definitions this span resolved or invoked. Emitted verbatim
+   * on the `span:start` record so the runtime→index join can attach evidence.
+   * Callers are responsible for canonical id construction and source
+   * sanitization (see `./definition-ref`).
+   */
+  definitionRefs?: DefinitionRef[]
   /**
    * When a span starts outside an active run, `observe.span()` normally opens
    * an implicit run so direct primitive calls remain inspectable. Detail
@@ -1104,6 +1112,9 @@ export const observe = {
         startedAt: now(),
         status: 'running',
         ...(options.attributes ? { attributes: options.attributes } : {}),
+        ...(options.definitionRefs && options.definitionRefs.length > 0
+          ? { definitionRefs: options.definitionRefs }
+          : {}),
       }),
       context.correlators ?? null,
     )
@@ -1230,6 +1241,9 @@ export const observe = {
         startedAt: now(),
         status: 'running',
         ...(options.attributes ? { attributes: options.attributes } : {}),
+        ...(options.definitionRefs && options.definitionRefs.length > 0
+          ? { definitionRefs: options.definitionRefs }
+          : {}),
       }),
       context.correlators ?? null,
     )

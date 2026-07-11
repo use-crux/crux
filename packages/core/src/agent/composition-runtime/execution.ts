@@ -2,6 +2,7 @@ import { isAgent } from '../agent'
 import type { AgentResult } from '../executor'
 import { executeWithRetry } from '../../generation/retry'
 import { observe } from '../../observability'
+import { agentDefinitionRef } from '../../observability/definition-ref'
 import { runWithExecutionContext } from '../../runtime/execution-context'
 import type { ExecutionContext } from '../../runtime/execution-context'
 import type {
@@ -52,6 +53,11 @@ async function executeAgentRun<TOutput>(
     stepId: input.stepId ?? stepId,
   })
   const agentId = agentIdFor(input)
+  // Only a compiled agent carries the authored identity the indexer joins on;
+  // a plain-function stage's `agentId` is the step label, so it emits no ref.
+  const definitionRefs = isAgent(input.agent)
+    ? [agentDefinitionRef(input.agent.id)]
+    : undefined
   const agentSpan = observe.openSpan({
     name: input.label,
     primitive: 'agent.run',
@@ -62,6 +68,7 @@ async function executeAgentRun<TOutput>(
       index: input.index,
       ...input.attributes,
     },
+    ...(definitionRefs ? { definitionRefs } : {}),
   })
 
   if (input.triggeredBy) {

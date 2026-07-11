@@ -1,3 +1,5 @@
+import type { ProjectDefinitionKind } from "../project-index";
+
 export const CRUX_OBSERVABILITY_SCHEMA_VERSION = 2;
 
 export const CRUX_CONTENT_DEGRADED_EVENT = "content.degraded" as const;
@@ -817,6 +819,44 @@ export interface CruxSourceLocation {
   function?: string;
 }
 
+/**
+ * Repo-relative source pointer attached to runtime evidence. Scalars match
+ * {@link CruxSourceLocation} conventions (positive line, optional positive
+ * column) but omit the transient call-site `function` name.
+ */
+export interface SanitizedSourceRef {
+  file: string;
+  line: number;
+  column?: number;
+}
+
+/**
+ * Closed set of roles a project definition can play as runtime evidence
+ * attached to a run or span record. Extend deliberately alongside the schema;
+ * unknown roles are rejected on the wire.
+ */
+export type DefinitionRefRole =
+  | "resolved-prompt"
+  | "resolved-context"
+  | "invoked-tool"
+  | "invoked-agent"
+  | "invoked-flow"
+  | "invoked-retriever"
+  | "invoked-composition"
+  | "invoked-blackboard";
+
+/**
+ * Evidence linking a runtime record back to the Project Index definition it
+ * resolved or invoked. Carries only stable identity — no fingerprint or
+ * project-revision, which belong to the index read-model, not the wire record.
+ */
+export interface DefinitionRef {
+  id: string;
+  kind: ProjectDefinitionKind;
+  role: DefinitionRefRole;
+  source?: SanitizedSourceRef;
+}
+
 export const CRUX_TOKEN_METRIC_KEYS = [
   "inputTokens",
   "outputTokens",
@@ -936,6 +976,7 @@ export interface CruxRunStartRecord extends CruxRecordBase {
   status: Extract<CruxRunStatus, "running">;
   attributes?: CruxAttributes;
   source?: CruxSourceLocation;
+  definitionRefs?: DefinitionRef[];
 }
 
 /** Non-terminal boundary that closes one physical execution segment. */
@@ -993,6 +1034,7 @@ export interface CruxSpanStartRecord extends CruxRecordBase {
   retrieverId?: string;
   attributes?: CruxAttributes;
   source?: CruxSourceLocation;
+  definitionRefs?: DefinitionRef[];
 }
 
 export interface CruxSpanEndRecord extends CruxRecordBase {
@@ -1021,6 +1063,7 @@ export interface CruxSpanRecord extends CruxRecordBase {
   error?: CruxErrorSummary;
   attributes?: CruxAttributes;
   source?: CruxSourceLocation;
+  definitionRefs?: DefinitionRef[];
 }
 
 export interface CruxSpanEventRecord extends CruxRecordBase {

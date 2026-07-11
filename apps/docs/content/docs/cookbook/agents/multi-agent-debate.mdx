@@ -81,6 +81,7 @@ const consensus = createConsensus({
 await debateBoard.patch({ proposal: 'Release auth v2 next Tuesday', risks: [] })
 
 const decision = await consensus({
+  id: 'multi-agent-debate-consensus-1',
   agents: [optimist, skeptic, pragmatist],
   model: openai('gpt-4o'),
   input: { proposal: 'Release auth v2 next Tuesday' },

@@ -49,6 +49,7 @@ import {
   sanitizePropagationCarrier,
   type OpenObservedSpan,
 } from '../observability'
+import { flowDefinitionRef } from '../observability/definition-ref'
 
 // Import from decomposed modules
 import type {
@@ -278,6 +279,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         goal: options?.goal ?? null,
         resume: isResume,
       },
+      // `name` is the authored, required first argument to `flow()` — the run-
+      // scoped definition key the indexer joins on, not the random `flowId`.
+      definitionRefs: [flowDefinitionRef(name)],
       implicitRun: false,
     })
   })

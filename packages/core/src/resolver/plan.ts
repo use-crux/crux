@@ -15,6 +15,7 @@
 
 import type { z } from "zod";
 import type { AnyPromptConfig } from "../prompt/prompt-types";
+import { promptDefinitionRef } from "../observability/definition-ref";
 import { runPromptPass } from "./pass";
 import {
   quietDiagnostics,
@@ -95,6 +96,12 @@ export function createPromptResolverPlan(
             hasMessages: !!config.messages,
             hasOutput: !!config.output,
           },
+          // Only authored ids reconstruct the indexer's canonical
+          // `prompt:<safeId(id)>`; an absent id falls back to the compile-time
+          // local name we cannot observe, so we omit the ref entirely.
+          ...(config.id
+            ? { definitionRefs: [promptDefinitionRef(config.id)] }
+            : {}),
         },
         () => runPromptPass(config, call, inputSchema, ports, "resolve"),
       );

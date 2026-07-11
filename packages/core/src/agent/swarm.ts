@@ -70,6 +70,12 @@ export interface SwarmOptions<
     string
   >,
 > {
+  /**
+   * Stable author-supplied definition id, used to join this composition
+   * with its Project Index definition and observability evidence. Distinct
+   * from the random per-execution composition id.
+   */
+  id: string;
   /** Named map of agents in the swarm. Keys must match agent IDs. */
   agents: TAgents;
   /** ID of the agent that starts the swarm. */
@@ -408,6 +414,7 @@ export function createSwarm(executor: AgentExecutor) {
     TStart extends Extract<keyof TAgents, string>,
   >(options: SwarmOptions<TAgents, TStart>): Promise<SwarmResult<TAgents>> {
     const {
+      id,
       agents,
       startAgent,
       input: originalInput,
@@ -448,6 +455,7 @@ export function createSwarm(executor: AgentExecutor) {
     const agentIds = Object.keys(agents);
     const runtime = createCompositionRuntime({
       kind: "swarm",
+      id,
       agentIds,
       sessionId,
       attributes: { startAgent, maxHandoffs },

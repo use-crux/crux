@@ -45,6 +45,7 @@ describe('pipeline: context accumulation', () => {
     const pipeline = createPipeline(executor)
 
     const result = await pipeline({
+      id: 'pipeline.test-pipeline-1',
       context: { userId: 'u1', projectId: 'p1' },
       steps: [
         { name: 'research', agent: researcher },
@@ -76,6 +77,7 @@ describe('pipeline: context accumulation', () => {
     const pipeline = createPipeline(executor)
 
     const result = await pipeline({
+      id: 'pipeline.test-pipeline-2',
       context: { query: 'AI safety' },
       steps: [
         { name: 'research', agent: researcher },
@@ -93,6 +95,7 @@ describe('pipeline: context accumulation', () => {
     const pipeline = createPipeline(executor)
 
     const result = await pipeline({
+      id: 'pipeline.test-pipeline-3',
       context: { userId: 'u1' },
       steps: [
         { name: 'research', agent: researcher },
@@ -116,6 +119,7 @@ describe('pipeline: context accumulation', () => {
     const pipeline = createPipeline(executor)
 
     const result = await pipeline({
+      id: 'pipeline.test-pipeline-4',
       context: { userId: 'u1' },
       steps: [
         { name: 'research', agent: researcher },
@@ -153,6 +157,7 @@ describe('pipeline: context accumulation', () => {
 
     await expect(
       pipeline({
+        id: 'pipeline.test-pipeline-5',
         context: {},
         steps: [
           { name: 'research', agent: researcher },
@@ -185,6 +190,7 @@ describe('pipeline: .created capture', () => {
 
     let downstreamCtx: any
     const result = await pipeline({
+      id: 'pipeline.test-pipeline-6',
       context: {},
       steps: [
         { name: 'plan', agent: planner },
@@ -215,6 +221,7 @@ describe('pipeline: .created capture', () => {
 
     let downstreamCtx: any
     const result = await pipeline({
+      id: 'pipeline.test-pipeline-7',
       context: {},
       steps: [
         { name: 'research', agent: researcher }, // no tools with .created

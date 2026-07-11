@@ -981,6 +981,7 @@ describe("adapter", () => {
       });
 
       await adapter.parallel({
+        id: 'define-adapter.test-parallel-1',
         context: { instruction: "review" },
         agents: { reviewer },
         model: "test-model",

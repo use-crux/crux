@@ -30,6 +30,7 @@ const refunds = agent({
 })
 
 const result = await swarm({
+  id: 'swarm-swarm-1',
   agents: { triage, billing, refunds },
   startAgent: 'triage',
   input: { message: 'I was charged twice and want a refund' },
@@ -98,6 +99,7 @@ Override at the swarm level with `activeTools`:
 
 ```ts
 await swarm({
+  id: 'swarm-swarm-2',
   agents: { billing, shipping },
   activeTools: {
     billing: ['lookupInvoice'], // overrides agent-level swarmTools
@@ -130,6 +132,7 @@ Agent B gets the original input plus handoff metadata. Clean and cheap — the L
 
 ```ts
 await swarm({
+  id: 'swarm-swarm-3',
   // ...
   history: 'transfer-only',
 })
@@ -143,6 +146,7 @@ Agent B gets the original input, the previous agent's output, and the full hando
 
 ```ts
 await swarm({
+  id: 'swarm-swarm-4',
   // ...
   history: 'accumulate',
 })
@@ -158,6 +162,7 @@ Full control over what each agent receives. The function receives a `SwarmHandof
 import type { SwarmHandoffContext } from '@use-crux/ai'
 
 await swarm({
+  id: 'swarm-swarm-5',
   // ...
   history: (ctx: SwarmHandoffContext) => ({
     message: ctx.originalInput.message,
@@ -175,6 +180,7 @@ In `'accumulate'` mode, context grows with each handoff. Prevent token bloat by 
 import { generateTextFn } from '@use-crux/ai'
 
 await swarm({
+  id: 'swarm-swarm-6',
   history: 'accumulate',
   summarize: {
     generate: generateTextFn, // your adapter's text generation function
@@ -194,6 +200,7 @@ Swarms multiply API costs — each handoff is another LLM call. Track costs and 
 
 ```ts title="cost-control.ts"
 await swarm({
+  id: 'swarm-swarm-7',
   onCost: ({ totalTokens, inputTokens, outputTokens, abort }) => {
     console.log(`Running total: ${totalTokens} tokens`)
     if (totalTokens > 10_000) abort() // stop the swarm
@@ -208,6 +215,7 @@ await swarm({
 
 ```ts
 const estimate = await swarm({
+  id: 'swarm-swarm-8',
   dryRun: true,
   // ...
 })
@@ -226,6 +234,7 @@ import { SwarmError } from '@use-crux/ai'
 
 try {
   await swarm({
+    id: 'swarm-swarm-9',
     agents: { triage, billing },
     startAgent: 'triage',
     input: { message: 'loop' },
@@ -249,6 +258,7 @@ Group related swarm runs (e.g., multiple turns in a customer conversation) under
 
 ```ts
 await swarm({
+  id: 'swarm-swarm-10',
   sessionId: 'customer-session-123',
   // ...
 })
@@ -262,6 +272,7 @@ Use `onHandoff` to log or react to each handoff:
 
 ```ts
 await swarm({
+  id: 'swarm-swarm-11',
   // ...
   onHandoff: ({ fromAgent, toAgent, reason, hopNumber }) => {
     console.log(`Hop ${hopNumber}: ${fromAgent} → ${toAgent} (${reason})`)
@@ -332,6 +343,7 @@ const escalation = agent({
 })
 
 const result = await swarm({
+  id: 'swarm-swarm-12',
   agents: { triage, billing, shipping, technical, escalation },
   startAgent: 'triage',
   input: { message: customerMessage, customerId },
@@ -369,6 +381,7 @@ const editor = agent({
 })
 
 const result = await swarm({
+  id: 'swarm-swarm-13',
   agents: { researcher, writer, editor },
   startAgent: 'researcher',
   input: { topic: 'AI safety in 2025' },

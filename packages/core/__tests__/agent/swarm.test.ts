@@ -93,6 +93,7 @@ describe('swarm', () => {
     const swarm = createSwarm(executor)
 
     const result = await swarm({
+      id: 'swarm.test-swarm-1',
       agents: { triage: triageAgent2, billing: billingAgent2 },
       startAgent: 'triage',
       input: { message: 'I was charged twice' },
@@ -114,6 +115,7 @@ describe('swarm', () => {
     const swarm = createSwarm(executor)
 
     const result = await swarm({
+      id: 'swarm.test-swarm-2',
       agents: { triage: triageAgent2, billing: billingAgent2 },
       startAgent: 'triage',
       input: { message: 'What are your hours?' },
@@ -135,6 +137,7 @@ describe('swarm', () => {
     const swarm = createSwarm(executor)
 
     const result = await swarm({
+      id: 'swarm.test-swarm-3',
       agents: {
         triage: triageAgent3,
         billing: billingAgent3,
@@ -159,6 +162,7 @@ describe('swarm', () => {
 
     await expect(
       swarm({
+        id: 'swarm.test-swarm-4',
         agents: { triage: triageAgent2, billing: billingAgent2 },
         startAgent: 'triage',
         input: { message: 'loop' },
@@ -173,6 +177,7 @@ describe('swarm', () => {
 
     await expect(
       swarm({
+        id: 'swarm.test-swarm-5',
         agents: { triage: triageAgent2 },
         startAgent: 'nonexistent',
         input: {},
@@ -191,6 +196,7 @@ describe('swarm', () => {
 
     await expect(
       swarm({
+        id: 'swarm.test-swarm-6',
         agents: { bad: agentWithBadHandoff },
         startAgent: 'bad',
         input: {},
@@ -203,6 +209,7 @@ describe('swarm', () => {
     const swarm = createSwarm(executor)
 
     await swarm({
+      id: 'swarm.test-swarm-7',
       agents: {
         triage: triageAgent3,
         billing: billingAgent3,
@@ -238,6 +245,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-8',
         agents: {
           triage: conditionalAgent,
           billing: billingAgent2,
@@ -281,6 +289,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-9',
         agents: { router: mixedAgent, 'fast-track': fastTrack, escalation },
         startAgent: 'router',
         input: {},
@@ -303,6 +312,7 @@ describe('swarm', () => {
 
       await expect(
         swarm({
+          id: 'swarm.test-swarm-10',
           agents: { bad: badAgent },
           startAgent: 'bad',
           input: {},
@@ -320,6 +330,7 @@ describe('swarm', () => {
     const swarm = createSwarm(executor)
 
     await swarm({
+      id: 'swarm.test-swarm-11',
       agents: { triage: triageAgent2, billing: billingAgent2 },
       startAgent: 'triage',
       input: {},
@@ -345,6 +356,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-12',
         agents: { triage: triageAgent2, billing: billingAgent2 },
         startAgent: 'triage',
         input: { message: 'original' },
@@ -369,6 +381,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-13',
         agents: { triage: triageAgent2, billing: billingAgent2 },
         startAgent: 'triage',
         input: { message: 'original' },
@@ -393,6 +406,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-14',
         agents: { triage: triageAgent2, billing: billingAgent2 },
         startAgent: 'triage',
         input: { message: 'original' },
@@ -429,6 +443,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-15',
         agents: {
           triage: triageAgent3,
           billing: billingAgent3,
@@ -467,6 +482,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-16',
         agents: { triage: triageAgent2, billing: billingAgent2 },
         startAgent: 'triage',
         input: { message: 'help' },
@@ -495,6 +511,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-17',
         agents: { triage: triageAgent2, billing: billingAgent2 },
         startAgent: 'triage',
         input: { message: 'help' },
@@ -536,6 +553,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-18',
         agents: { filtered: agent, helper },
         startAgent: 'filtered',
         input: {},
@@ -572,6 +590,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-19',
         agents: { agent, helper },
         startAgent: 'agent',
         input: {},
@@ -606,6 +625,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-20',
         agents: { unfiltered: agent, helper },
         startAgent: 'unfiltered',
         input: {},
@@ -636,6 +656,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       await swarm({
+        id: 'swarm.test-swarm-21',
         agents: { triage: triageAgent2, billing: billingAgent2 },
         startAgent: 'triage',
         input: {},
@@ -680,6 +701,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       const result = await swarm({
+        id: 'swarm.test-swarm-22',
         agents: { triage: triageAgent2, billing: billingAgent2 },
         startAgent: 'triage',
         input: {},
@@ -699,6 +721,7 @@ describe('swarm', () => {
       const swarm = createSwarm(executor)
 
       const result = await swarm({
+        id: 'swarm.test-swarm-23',
         agents: { triage: triageAgent2, billing: billingAgent2 },
         startAgent: 'triage',
         input: {},
@@ -718,6 +741,7 @@ describe('swarm', () => {
 
     await expect(
       swarm({
+        id: 'swarm.test-swarm-24',
         agents: { triage: triageAgent2, billing: billingAgent2 },
         startAgent: 'triage',
         input: {},

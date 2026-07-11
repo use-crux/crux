@@ -41,6 +41,7 @@ describe('parallel: named results with seed context', () => {
     const parallel = createParallel(executor)
 
     const result = await parallel({
+      id: 'parallel.test-parallel-1',
       context: { userId: 'u1' },
       agents: { reviewer: agentA, tagger: agentB },
     })
@@ -55,6 +56,7 @@ describe('parallel: named results with seed context', () => {
     const parallel = createParallel(executor)
 
     await parallel({
+      id: 'parallel.test-parallel-2',
       context: { content: 'test article' },
       agents: { a: agentA, b: agentB },
     })
@@ -85,6 +87,7 @@ describe('parallel: named results with seed context', () => {
     try {
       await Promise.race([
         parallel({
+          id: 'parallel.test-parallel-3',
           context: {},
           agents: { a: agentA, b: agentB },
         }),
@@ -111,6 +114,7 @@ describe('parallel: named results with seed context', () => {
     const parallel = createParallel(executor)
 
     const result = await parallel({
+      id: 'parallel.test-parallel-4',
       context: {},
       agents: {},
     })
@@ -124,7 +128,7 @@ describe('parallel: named results with seed context', () => {
     })
     const parallel = createParallel(executor)
 
-    await expect(parallel({ context: {}, agents: { a: agentA, b: agentB } })).rejects.toThrow('agent-b failed')
+    await expect(parallel({ id: 'parallel-test-fail-fast', context: {}, agents: { a: agentA, b: agentB } })).rejects.toThrow('agent-b failed')
   })
 
   it('continue mode: returns settled results with errors', async () => {
@@ -134,6 +138,7 @@ describe('parallel: named results with seed context', () => {
     const parallel = createParallel(executor)
 
     const result = await parallel({
+      id: 'parallel.test-parallel-5',
       context: {},
       agents: { a: agentA, b: agentB },
       onError: 'continue',
@@ -149,6 +154,7 @@ describe('parallel: named results with seed context', () => {
     const parallel = createParallel(executor)
 
     const result = await parallel({
+      id: 'parallel.test-parallel-6',
       context: { content: 'test' },
       agents: {
         reviewer: agentA,
@@ -165,6 +171,7 @@ describe('parallel: named results with seed context', () => {
     const parallel = createParallel(executor)
 
     await parallel({
+      id: 'parallel.test-parallel-7',
       context: {},
       agents: { reviewer: agentA, checker: agentB },
     })

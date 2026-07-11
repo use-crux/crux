@@ -10,6 +10,7 @@ import { consensus } from '@use-crux/ai'
 import { agent } from '@use-crux/core/agent'
 
 const decision = await consensus({
+  id: 'consensus-consensus-1',
   agents: [classifier, classifier, classifier],
   context: { ticket: supportTicket },
   extract: (result) => result.output.category,
@@ -86,6 +87,7 @@ You can use different agents (not just the same one repeated) for diverse perspe
 
 ```ts
 const decision = await consensus({
+  id: 'consensus-consensus-2',
   agents: [conservativeClassifier, aggressiveClassifier, balancedClassifier],
   context: { ticket: supportTicket },
   extract: (result) => result.output.category,

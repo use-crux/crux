@@ -39,6 +39,12 @@ export interface ConsensusOptions<
   TAgents extends readonly AgentLike[] = readonly AgentLike[],
   TVote extends string = string,
 > {
+  /**
+   * Stable author-supplied definition id, used to join this composition
+   * with its Project Index definition and observability evidence. Distinct
+   * from the random per-execution composition id.
+   */
+  id: string
   /** Agents to run as voters (can repeat the same agent). */
   agents: TAgents
   /** Input data passed to all agents. */
@@ -126,6 +132,7 @@ export function createConsensus(executor: AgentExecutor) {
     options: ConsensusOptions<TAgents, TVote>,
   ): Promise<ConsensusResult<TVote>> {
     const {
+      id,
       agents,
       input,
       model,
@@ -139,6 +146,7 @@ export function createConsensus(executor: AgentExecutor) {
     const agentIds = agents.map((a, i) => (isAgent(a) ? a.id : `voter-${i}`))
     const runtime = createCompositionRuntime({
       kind: 'consensus',
+      id,
       agentIds,
       sessionId,
       attributes: { quorum },

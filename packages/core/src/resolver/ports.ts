@@ -34,6 +34,7 @@ import type {
   CruxArtifactKind,
   CruxPrimitiveFamily,
   CruxPrimitiveName,
+  DefinitionRef,
 } from "../observability/contract";
 import type { SkillActivationSession } from "../skill/session";
 import type { SkillEntry } from "../prompt/context-types";
@@ -48,6 +49,13 @@ export interface ResolveTraceScope {
   family: CruxPrimitiveFamily;
   primitive: CruxPrimitiveName;
   attributes?: Record<string, unknown>;
+  /**
+   * Project Index definitions this scope resolved. Forwarded verbatim onto the
+   * `span:start` record so the runtime→index join can attach evidence; the
+   * default adapter passes them to `observe.span`. Callers own canonical id
+   * construction (see `../observability/definition-ref`).
+   */
+  definitionRefs?: DefinitionRef[];
 }
 
 /** An artifact record emitted during resolution (contribution, budget, input previews). */

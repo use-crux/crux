@@ -1,3 +1,9 @@
+import {
+  contextDefinitionRef,
+  promptDefinitionRef,
+  retrieverDefinitionRef,
+} from "@use-crux/core/observability";
+
 export interface SemanticBackendParityFixture {
   readonly name: string;
   /** Run outside the workspace so package imports intentionally stay unresolved. */
@@ -24,6 +30,65 @@ export interface SemanticBackendParityFixture {
 /** Semantic fixtures that must produce identical facts for every backend. */
 export const semanticBackendParityFixtures: readonly SemanticBackendParityFixture[] =
   [
+    {
+      // Locks the semantic-backend-emitted DefinitionRef kinds — prompt,
+      // context, and rag.retriever, the config-bearing primitives that produce
+      // standalone semantic definitions — to the exact `ProjectDefinition.ID`
+      // the runtime helpers in `@use-crux/core/observability` emit, so a runtime
+      // span joins the Project Index by a byte-identical id on both the default
+      // TypeScript semantic backend and the experimental native backend.
+      // Authored ids are intentionally hostile (spaces + punctuation) to
+      // exercise `safe_id` normalization; none place a literal `-` adjacent to
+      // an invalid run, the one shape where the regex/pending-dash normalizers
+      // legitimately differ. The relation-participant kinds (tool, agent, flow,
+      // blackboard) and the composition roots are not standalone semantic
+      // definitions; the runtime helpers build their ids with the same
+      // `<kind>:<safeId(authoredId)>` construction, pinned by the core
+      // definition-ref unit tests and the Rust composition/primitive facts.
+      name: "definition-ref-canonical-ids-across-touched-kinds",
+      files: {
+        "src/index.ts": `
+        import { context, prompt, tool } from '@use-crux/core'
+        import { retriever } from '@use-crux/core/retrieval'
+        import { inMemoryRecordStore } from '@use-crux/core/storage'
+        import { z } from 'zod'
+
+        export const searchTool = tool({
+          name: 'search tool@v2',
+          parameters: z.object({ query: z.string() }),
+          execute: async () => ({}),
+        })
+        export const brandContext = context({
+          id: 'Brand Context!',
+          tools: { searchTool },
+        })
+        export const writerPrompt = prompt({
+          id: 'Writer Prompt!',
+          use: [brandContext],
+          tools: { searchTool },
+        })
+        const docsRecords = inMemoryRecordStore()
+        export const docsRetriever = retriever({
+          id: 'Docs KB!',
+          records: docsRecords,
+        })
+      `,
+      },
+      expect: {
+        definitionIds: [
+          contextDefinitionRef("Brand Context!").id,
+          promptDefinitionRef("Writer Prompt!").id,
+          retrieverDefinitionRef("Docs KB!").id,
+        ],
+        relationTypes: [
+          "prompt.uses_context",
+          "prompt.uses_tool",
+          "context.uses_tool",
+          "rag.retriever.uses_record_store",
+        ],
+        sourceRefRoles: ["config"],
+      },
+    },
     {
       name: "direct-crux-no-zod-native-path",
       files: {

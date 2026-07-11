@@ -1,4 +1,5 @@
 export * from './contract'
+export * from './definition-ref'
 export * from './presentation'
 export * from './ids'
 export * from './errors'

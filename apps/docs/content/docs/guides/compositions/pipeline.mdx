@@ -10,6 +10,7 @@ import { pipeline } from '@use-crux/ai'
 import { agent } from '@use-crux/core/agent'
 
 const result = await pipeline({
+  id: 'pipeline-pipeline-1',
   steps: [
     { agent: researcher, name: 'research' },
     {
@@ -71,6 +72,7 @@ Steps can also be plain `{ name, fn }` objects alongside agent steps. Use this f
 
 ```ts
 const result = await pipeline({
+  id: 'pipeline-pipeline-2',
   steps: [
     { agent: researcher, name: 'research' },
     {
@@ -99,6 +101,7 @@ Each step can have its own retry configuration with backoff and fallback:
 
 ```ts title="resilient-pipeline.ts"
 const result = await pipeline({
+  id: 'pipeline-pipeline-3',
   steps: [
     {
       agent: researcher,
@@ -135,6 +138,7 @@ A pipeline with one step works — useful when you want the pipeline return shap
 
 ```ts
 const result = await pipeline({
+  id: 'pipeline-pipeline-4',
   steps: [{ agent: classifier, name: 'classify' }],
   context: { text: message },
   model,
@@ -153,6 +157,7 @@ When an agent step uses a `CreationTool` (a tool that produces artifacts), the p
 import { pipeline } from '@use-crux/ai'
 
 const result = await pipeline({
+  id: 'pipeline-pipeline-5',
   steps: [
     {
       agent: plannerAgent,  // uses a CreationTool called "createPlan"

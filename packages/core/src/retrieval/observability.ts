@@ -8,6 +8,7 @@
  */
 
 import { observe } from '../observability'
+import { retrieverDefinitionRef } from '../observability/definition-ref'
 import type { RetrieverHit, RetrieverMode } from './types'
 
 let retrievalOperationCounter = 0
@@ -42,6 +43,9 @@ export async function runRetrievalOperation(args: {
     name: `${args.retrieverId}.retrieve`,
     primitive: 'retrieval.query',
     attributes: eventBase,
+    // `retrieverId` is the authored, required `config.id` — the identity the
+    // indexer joins on via `rag.retriever:<safeId(id)>`.
+    definitionRefs: [retrieverDefinitionRef(args.retrieverId)],
   })
 
   try {
