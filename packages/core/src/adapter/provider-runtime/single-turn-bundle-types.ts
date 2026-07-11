@@ -58,7 +58,7 @@ export interface SingleTurnProviderBundleSpec<
   TProviderMessage = unknown,
   TCreateArgs extends readonly unknown[] = ProviderRuntimeDepsArg<TDeps>,
   THelperArgs extends readonly unknown[] = ProviderRuntimeDepsArg<TDeps>,
-  TExtensions extends object = Record<string, never>,
+  TExtensions extends object = Record<never, never>,
 > {
   /** Stable provider id used in metadata, observability, and provider matching. */
   readonly id: string
@@ -114,7 +114,7 @@ export interface DefinedSingleTurnProviderBundle<
   TDeps extends Record<string, unknown> = Record<string, never>,
   TCreateArgs extends readonly unknown[] = ProviderRuntimeDepsArg<TDeps>,
   THelperArgs extends readonly unknown[] = ProviderRuntimeDepsArg<TDeps>,
-  TExtensions extends object = Record<string, never>,
+  TExtensions extends object = Record<never, never>,
 > {
   /** Stable provider id used in metadata, observability, and provider matching. */
   readonly id: string

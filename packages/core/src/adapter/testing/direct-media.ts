@@ -14,6 +14,18 @@ import type { ContentPart } from '../../types/content'
 /** Stable provider id used by direct media conformance fixtures. */
 export type DirectMediaProvider = 'anthropic' | 'google' | 'openai'
 
+/** Adapter identity accepted by the shared semantic media fixture. */
+export type MediaConformanceAdapter = DirectMediaProvider | 'ai-sdk' | 'convex-agent'
+
+/** Provider-neutral semantic scenarios shared by every first-party media adapter. */
+export type MediaConformanceFixture = Readonly<{
+  supported: readonly Message[]
+  knownUnsupported: readonly Message[]
+  laterToolMedia: readonly Message[]
+  textOnly: readonly Message[]
+  unknownModel: string
+}>
+
 /** Canonical messages and values shared by direct adapter media tests. */
 export type DirectMediaFixture = Readonly<{
   messages: readonly Message[]
@@ -77,6 +89,49 @@ export function directMediaFixture(provider: DirectMediaProvider): DirectMediaFi
     pdfBytes,
     providerFileId,
     messages,
+  })
+}
+
+/**
+ * Create the common semantic cases every first-party media adapter must honor.
+ *
+ * Provider packages retain native wire assertions and model knowledge; this
+ * fixture supplies only canonical messages and a deliberately custom model id.
+ */
+export function mediaConformanceFixture(adapter: MediaConformanceAdapter): MediaConformanceFixture {
+  const supported = Object.freeze([
+    {
+      role: 'user',
+      content: Object.freeze([
+        { type: 'text', text: 'Inspect this image.' },
+        { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
+      ] satisfies readonly ContentPart[]),
+    },
+  ] satisfies readonly Message[])
+  const knownUnsupported = Object.freeze([
+    {
+      role: 'user',
+      content: Object.freeze([
+        { type: 'image', source: new Uint8Array([1]), mediaType: 'image/png' },
+        { type: 'file', source: new Uint8Array([2]), mediaType: 'application/pdf' },
+      ] satisfies readonly ContentPart[]),
+    },
+  ] satisfies readonly Message[])
+  const laterToolMedia = Object.freeze([
+    {
+      role: 'tool',
+      content: Object.freeze([
+        { type: 'text', text: 'tool result' },
+        { type: 'image', source: new Uint8Array([4, 5]), mediaType: 'image/png' },
+      ] satisfies readonly ContentPart[]),
+    },
+  ] satisfies readonly Message[])
+  return Object.freeze({
+    supported,
+    knownUnsupported,
+    laterToolMedia,
+    textOnly: Object.freeze([{ role: 'user', content: 'text only' }] satisfies readonly Message[]),
+    unknownModel: `custom-${adapter}-media-router`,
   })
 }
 

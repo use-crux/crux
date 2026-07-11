@@ -3,6 +3,7 @@ import { isInvalidMediaSourceError, isUnsupportedCapabilityError, prompt, tool }
 import {
   assertDirectMediaTranscriptIdentity,
   directMediaFixture,
+  mediaConformanceFixture,
   wrongProviderFileMessages,
 } from '@use-crux/core/adapter/testing'
 import { z } from 'zod'
@@ -126,6 +127,7 @@ describe('Google native media input', () => {
   })
 
   it('preflights unsupported models and wrong-provider files before I/O', async () => {
+    const fixture = mediaConformanceFixture('google')
     let resolved = false
     const resolvingPrompt = prompt({
       id: 'google-preflight-order',
@@ -142,12 +144,7 @@ describe('Google native media input', () => {
     await expect(
       adapter.generate(resolvingPrompt, {
         model: 'text-bison-001',
-        messages: [
-          {
-            role: 'user',
-            content: [{ type: 'image', source: 'https://example.com/private.png' }],
-          },
-        ],
+        messages: [...fixture.knownUnsupported],
       }),
     ).rejects.toSatisfy((error: unknown) => {
       expect(resolved).toBe(true)
@@ -158,7 +155,7 @@ describe('Google native media input', () => {
         capability: 'input.image',
         path: 'messages[0].content[0].source',
       })
-      expect(String(error)).not.toContain('private.png')
+      expect(error).toMatchObject({ issues: expect.arrayContaining([expect.objectContaining({ capability: 'input.file' })]) })
       return true
     })
 
@@ -181,7 +178,7 @@ describe('Google native media input', () => {
     const generateContent = vi.fn(async () => response('done'))
 
     await createGoogle(client({ generateContent }), { cachedContent: false }).generate(mediaPrompt, {
-      model: 'custom-gemini-media-router',
+      model: mediaConformanceFixture('google').unknownModel,
       messages: [
         {
           role: 'user',

@@ -2,15 +2,17 @@ import type { UnsupportedCapabilityIssue } from '../../content/media-errors'
 import { createUnsupportedCapabilityError } from '../../content/media-errors'
 import type { Message } from '../../generation/messages'
 
+/** Provider-owned media facts supplied at a side-effect-free request boundary. */
+export type ProviderMediaInput = Readonly<{
+  provider?: string
+  model: string
+  messages: readonly Message[]
+}>
+
 /** Provider-owned media checks used only while compiling a native request. */
 export type ProviderMediaHooks = Readonly<{
-  validate?: (
-    input: Readonly<{
-      provider?: string
-      model: string
-      messages: readonly Message[]
-    }>,
-  ) => readonly UnsupportedCapabilityIssue[]
+  validate?: (input: ProviderMediaInput) => readonly UnsupportedCapabilityIssue[]
+  estimateTokens?: (input: ProviderMediaInput) => number | undefined
 }>
 
 /** Run provider media checks and throw one safe aggregate before request encoding. */
@@ -19,7 +21,7 @@ export function assertProviderMediaSupported(
     providerId: string
     media?: ProviderMediaHooks
   }>,
-  input: Readonly<{ provider?: string; model: string; messages: readonly Message[] }>,
+  input: ProviderMediaInput,
 ): void {
   const issues = profile.media?.validate?.(input)
   if (!isNonEmpty(issues)) return

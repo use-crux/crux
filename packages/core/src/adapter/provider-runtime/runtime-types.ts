@@ -53,7 +53,7 @@ export interface DefinedProviderRuntime<
   TExtra extends Record<string, unknown> = Record<string, unknown>,
   TDeps extends Record<string, unknown> = Record<string, never>,
   TRuntime = ProviderGenerationRuntime<TClient, TModel, TRawResponse, TRawStream, TExtra>,
-  TExtensions extends object = Record<string, never>,
+  TExtensions extends object = Record<never, never>,
   TOwnership extends ProviderOwnership = ProviderOwnership,
 > {
   /** Stable provider runtime id. */
@@ -77,7 +77,7 @@ export interface DefinedSingleTurnProviderRuntime<
   TRawStream extends AsyncIterable<unknown>,
   TExtra extends Record<string, unknown>,
   TDeps extends Record<string, unknown> = Record<string, never>,
-  TExtensions extends object = Record<string, never>,
+  TExtensions extends object = Record<never, never>,
 > extends DefinedProviderRuntime<
   TClient,
   string,

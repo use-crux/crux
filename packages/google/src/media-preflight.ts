@@ -1,5 +1,12 @@
 import type { ContentPart, Message, UnsupportedCapabilityIssue } from '@use-crux/core'
 
+// Static, package-private projection consumed by validation today and docs generation later.
+const MEDIA_SUPPORT = Object.freeze({
+  adapter: 'google',
+  input: Object.freeze(['image', 'file'] as const),
+  knownTextOnlyModelPrefixes: Object.freeze(['text-', 'embedding-', 'aqa-', 'imagen-'] as const),
+})
+
 /** Google media checks consumed by the core-owned pre-request boundary. */
 export const googleMediaHooks = Object.freeze({
   validate: ({
@@ -84,7 +91,7 @@ function mediaTypeFor(part: ContentPart): string | undefined {
 }
 
 function isKnownTextOnlyModel(model: string): boolean {
-  return /^(?:text-|embedding-|aqa-|imagen-)/.test(model)
+  return MEDIA_SUPPORT.knownTextOnlyModelPrefixes.some((prefix) => model.startsWith(prefix))
 }
 
 function isSupportedGoogleMediaType(mediaType: string): boolean {

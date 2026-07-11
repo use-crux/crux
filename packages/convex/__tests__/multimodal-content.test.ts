@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setTokenizer } from '@use-crux/core'
+import { mediaConformanceFixture } from '@use-crux/core/adapter/testing'
 import { afterPreparedAgentCall } from '../src/agent/lifecycle-persistence'
 import { compactConversation, contentText, messageText, textPart } from '../src'
 
@@ -10,7 +11,7 @@ afterEach(() => {
 
 describe('@use-crux/convex multimodal content helpers', () => {
   it('re-exports the core content builders and projection helpers', () => {
-    const content = [textPart('chart'), { type: 'image' as const, source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }]
+    const content = mediaConformanceFixture('convex-agent').supported[0]!.content
 
     expect(contentText(content)).toContain('[image image/png 3B sha256:')
     expect(messageText({ content })).toBe(contentText(content))

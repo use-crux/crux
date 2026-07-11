@@ -37,7 +37,7 @@ export interface SingleTurnProviderRuntimeSpec<
   TExtra extends Record<string, unknown>,
   TDeps extends Record<string, unknown> = Record<string, never>,
   TProviderMessage = unknown,
-  TExtensions extends object = Record<string, never>,
+  TExtensions extends object = Record<never, never>,
 > {
   /** Stable id used in metadata, observability, and provider matching. */
   readonly id: string

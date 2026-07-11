@@ -54,7 +54,7 @@ export function defineSingleTurnProviderBundle<
   TProviderMessage = unknown,
   TCreateArgs extends readonly unknown[] = ProviderRuntimeDepsArg<TDeps>,
   THelperArgs extends readonly unknown[] = ProviderRuntimeDepsArg<TDeps>,
-  TExtensions extends object = Record<string, never>,
+  TExtensions extends object = Record<never, never>,
 >(
   spec: SingleTurnProviderBundleSpec<
     TClient,

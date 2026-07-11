@@ -43,7 +43,7 @@ export interface LoopOwnedProviderRuntimeSpec<
   TModel,
   TRawResponse = unknown,
   TRawStream = unknown,
-  TExtensions extends object = Record<string, never>,
+  TExtensions extends object = Record<never, never>,
 > {
   /** Stable id used in metadata, observability, and provider matching. */
   readonly id: string

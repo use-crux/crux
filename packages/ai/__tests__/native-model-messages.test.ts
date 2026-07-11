@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { convertToModelMessages, type LanguageModel, type ModelMessage, type UIMessage } from 'ai'
 import { isUnsupportedCapabilityError, prompt } from '@use-crux/core'
+import { mediaConformanceFixture } from '@use-crux/core/adapter/testing'
 import { createCruxAi, createUIMessageStreamResponse } from '../src'
 import { scriptedGateway } from './scripted-gateway'
 
@@ -101,13 +102,9 @@ describe('AI SDK native ModelMessage input', () => {
   })
 
   it('rejects known text-only models before gateway I/O but defers unknown custom models', async () => {
+    const fixture = mediaConformanceFixture('ai-sdk')
     const scripted = scriptedGateway({ generateText: [{ text: 'ok' }] })
-    const messages = [
-      {
-        role: 'user',
-        content: [{ type: 'image', image: new URL('https://example.com/private.png'), mediaType: 'image/png' }],
-      },
-    ] satisfies readonly ModelMessage[]
+    const messages = [...fixture.knownUnsupported]
     const ai = createCruxAi({ gateway: scripted.gateway })
 
     await expect(
@@ -130,7 +127,7 @@ describe('AI SDK native ModelMessage input', () => {
     expect(scripted.calls.generateText).toHaveLength(0)
 
     await ai.generate(textPrompt, {
-      model: model('gpt-3.5-turbo', 'custom-provider'),
+      model: model(fixture.unknownModel, 'custom-provider'),
       input: { message: 'inspect' },
       messages,
     })

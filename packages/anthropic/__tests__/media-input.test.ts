@@ -3,6 +3,7 @@ import { isInvalidMediaSourceError, isUnsupportedCapabilityError, prompt, tool }
 import {
   assertDirectMediaTranscriptIdentity,
   directMediaFixture,
+  mediaConformanceFixture,
   wrongProviderFileMessages,
 } from '@use-crux/core/adapter/testing'
 import { z } from 'zod'
@@ -128,6 +129,7 @@ describe('Anthropic native media input', () => {
   })
 
   it('preflights unsupported models, provider-file input, and wrong providers before I/O', async () => {
+    const fixture = mediaConformanceFixture('anthropic')
     let resolved = false
     const resolvingPrompt = prompt({
       id: 'anthropic-preflight-order',
@@ -142,12 +144,7 @@ describe('Anthropic native media input', () => {
     await expect(
       adapter.generate(resolvingPrompt, {
         model: 'claude-2.1',
-        messages: [
-          {
-            role: 'user',
-            content: [{ type: 'image', source: 'https://example.com/private.png' }],
-          },
-        ],
+        messages: [...fixture.knownUnsupported],
       }),
     ).rejects.toSatisfy((error: unknown) => {
       expect(resolved).toBe(true)
@@ -158,7 +155,7 @@ describe('Anthropic native media input', () => {
         capability: 'input.image',
         path: 'messages[0].content[0].source',
       })
-      expect(String(error)).not.toContain('private.png')
+      expect(error).toMatchObject({ issues: expect.arrayContaining([expect.objectContaining({ capability: 'input.file' })]) })
       return true
     })
 
@@ -212,7 +209,7 @@ describe('Anthropic native media input', () => {
     const create = vi.fn(async () => message('done'))
 
     await createAnthropic(client({ create })).generate(mediaPrompt, {
-      model: 'custom-claude-media-router',
+      model: mediaConformanceFixture('anthropic').unknownModel,
       messages: [
         {
           role: 'user',

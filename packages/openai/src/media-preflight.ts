@@ -1,5 +1,12 @@
 import type { ContentPart, Message, UnsupportedCapabilityIssue } from '@use-crux/core'
 
+// Static, package-private projection consumed by validation today and docs generation later.
+const MEDIA_SUPPORT = Object.freeze({
+  adapter: 'openai',
+  input: Object.freeze(['image', 'file'] as const),
+  knownTextOnlyModelPrefixes: Object.freeze(['gpt-3.5'] as const),
+})
+
 /** OpenAI media checks consumed by the core-owned pre-request boundary. */
 export const openAIMediaHooks = Object.freeze({
   validate: ({
@@ -111,7 +118,7 @@ function issue(
 }
 
 function isKnownTextOnlyModel(model: string): boolean {
-  return /^gpt-3\.5(?:-|$)/.test(model)
+  return MEDIA_SUPPORT.knownTextOnlyModelPrefixes.some((prefix) => model === prefix || model.startsWith(`${prefix}-`))
 }
 
 function isAsset(

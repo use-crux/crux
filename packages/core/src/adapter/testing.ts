@@ -22,11 +22,17 @@ export { assertCanonicalResult } from './testing/canonical-result'
 export {
   assertDirectMediaTranscriptIdentity,
   directMediaFixture,
+  mediaConformanceFixture,
   wrongProviderFileMessages,
 } from './testing/direct-media'
 export { providerRuntimeConformance } from './testing/provider-runtime'
 export { transcriptCodecConformance, transcriptRoundTripConformance } from './testing/transcript'
-export type { DirectMediaFixture, DirectMediaProvider } from './testing/direct-media'
+export type {
+  DirectMediaFixture,
+  DirectMediaProvider,
+  MediaConformanceAdapter,
+  MediaConformanceFixture,
+} from './testing/direct-media'
 export type {
   CanonicalFinalStepInfo,
   CanonicalGenerateResultLike,

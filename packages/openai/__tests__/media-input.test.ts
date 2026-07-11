@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { isInvalidMediaSourceError, isUnsupportedCapabilityError, prompt, tool } from '@use-crux/core'
-import { assertDirectMediaTranscriptIdentity, directMediaFixture } from '@use-crux/core/adapter/testing'
+import {
+  assertDirectMediaTranscriptIdentity,
+  directMediaFixture,
+  mediaConformanceFixture,
+} from '@use-crux/core/adapter/testing'
 import { z } from 'zod'
 import { createOpenAI } from '../src'
 import { client, completion } from './media-input.fixtures'
@@ -116,6 +120,7 @@ describe('OpenAI native media input', () => {
   })
 
   it('preflights exact model, media, and path after prompt resolution and before I/O', async () => {
+    const fixture = mediaConformanceFixture('openai')
     let resolved = false
     const resolvingPrompt = prompt({
       id: 'openai-preflight-order',
@@ -129,19 +134,7 @@ describe('OpenAI native media input', () => {
     await expect(
       createOpenAI(client({ create })).generate(resolvingPrompt, {
         model: 'gpt-3.5-turbo',
-        messages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Inspect this.' },
-              {
-                type: 'image',
-                source: 'https://example.com/private.png',
-                mediaType: 'image/png',
-              },
-            ],
-          },
-        ],
+        messages: [...fixture.knownUnsupported],
       }),
     ).rejects.toSatisfy((error: unknown) => {
       expect(resolved).toBe(true)
@@ -150,10 +143,10 @@ describe('OpenAI native media input', () => {
         adapter: 'openai',
         model: 'gpt-3.5-turbo',
         capability: 'input.image',
-        path: 'messages[0].content[1].source',
+        path: 'messages[0].content[0].source',
         mediaType: 'image/png',
       })
-      expect(String(error)).not.toContain('private.png')
+      expect(error).toMatchObject({ issues: expect.arrayContaining([expect.objectContaining({ capability: 'input.file' })]) })
       return true
     })
     expect(create).not.toHaveBeenCalled()

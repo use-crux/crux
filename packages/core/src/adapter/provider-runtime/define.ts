@@ -58,7 +58,7 @@ export function defineProviderRuntime<
   TExtra extends Record<string, unknown>,
   TDeps extends Record<string, unknown> = Record<string, never>,
   TProviderMessage = unknown,
-  TExtensions extends object = Record<string, never>,
+  TExtensions extends object = Record<never, never>,
 >(
   spec: SingleTurnProviderRuntimeSpec<
     TClient,
@@ -88,7 +88,7 @@ export function defineProviderRuntime<
   TModel,
   TRawResponse = unknown,
   TRawStream = unknown,
-  TExtensions extends object = Record<string, never>,
+  TExtensions extends object = Record<never, never>,
 >(
   spec: LoopOwnedProviderRuntimeSpec<TClient, TModel, TRawResponse, TRawStream, TExtensions>,
 ): DefinedProviderRuntime<

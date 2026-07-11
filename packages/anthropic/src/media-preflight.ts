@@ -1,5 +1,12 @@
 import type { ContentPart, Message, UnsupportedCapabilityIssue } from '@use-crux/core'
 
+// Static, package-private projection consumed by validation today and docs generation later.
+const MEDIA_SUPPORT = Object.freeze({
+  adapter: 'anthropic',
+  input: Object.freeze(['image', 'file'] as const),
+  knownTextOnlyModelPrefixes: Object.freeze(['claude-instant', 'claude-2'] as const),
+})
+
 /** Anthropic media checks consumed by the core-owned pre-request boundary. */
 export const anthropicMediaHooks = Object.freeze({
   validate: ({
@@ -119,7 +126,9 @@ function mediaTypeFor(part: ContentPart): string | undefined {
 }
 
 function isKnownTextOnlyModel(model: string): boolean {
-  return /^claude-(?:instant|2(?:\.|-|$))/.test(model)
+  return MEDIA_SUPPORT.knownTextOnlyModelPrefixes.some(
+    (prefix) => model === prefix || model.startsWith(`${prefix}.`) || model.startsWith(`${prefix}-`),
+  )
 }
 
 function isAnthropicImageMediaType(mediaType: string): boolean {
