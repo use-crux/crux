@@ -48,6 +48,9 @@ function anthropicContentBlock(part: ContentPart): AnthropicContentBlockParam[] 
       return [{ type: 'text', text: part.text }]
     case 'image':
       return [anthropicImageBlock(part)]
+    case 'audio':
+    case 'video':
+      throw unsupported(`input.${part.type}`, `Anthropic does not accept ${part.type} content in tool results.`)
     case 'file':
       return [anthropicDocumentBlock(part)]
   }

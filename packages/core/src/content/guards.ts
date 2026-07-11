@@ -1,8 +1,13 @@
-import type { ContentPart, MessageContent } from '../types/content'
+import type { AssistantContentPart, ContentPart, MessageContent } from '../types/content'
 
 /** Narrow unknown input to canonical message content. */
 export function isMessageContent(value: unknown): value is MessageContent {
   return typeof value === 'string' || (Array.isArray(value) && value.every(isContentPart))
+}
+
+/** Narrow unknown input to assistant message content (`ContentPart` plus lifecycle output). */
+export function isAssistantContent(value: unknown): value is string | readonly AssistantContentPart[] {
+  return typeof value === 'string' || (Array.isArray(value) && value.every(isAssistantContentPart))
 }
 
 /** Narrow unknown input to a canonical content part. */
@@ -13,11 +18,27 @@ export function isContentPart(value: unknown): value is ContentPart {
     case 'text':
       return typeof value.text === 'string'
     case 'image':
+    case 'audio':
+    case 'video':
       return isMediaSource(value.source) && optionalString(value.mediaType)
     case 'file':
       return isMediaSource(value.source) && optionalString(value.mediaType) && optionalString(value.filename)
     default:
       return false
+  }
+}
+
+/** Narrow unknown input to an assistant content part, including lifecycle output. */
+export function isAssistantContentPart(value: unknown): value is AssistantContentPart {
+  if (!isRecord(value) || typeof value.type !== 'string') return false
+
+  switch (value.type) {
+    case 'tool-call':
+      return typeof value.toolCallId === 'string' && typeof value.toolName === 'string' && 'input' in value
+    case 'reasoning':
+      return typeof value.text === 'string'
+    default:
+      return isContentPart(value)
   }
 }
 

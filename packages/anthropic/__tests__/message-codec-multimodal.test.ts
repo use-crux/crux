@@ -42,6 +42,26 @@ describe('anthropic multimodal transcript encoding', () => {
     ).toThrow('No provider request was made.')
   })
 
+  it('fails before provider I/O for dedicated audio and video parts', () => {
+    expect(() =>
+      anthropicTranscript.fromMessages([
+        {
+          role: 'user',
+          content: [{ type: 'audio', source: new Uint8Array([1]), mediaType: 'audio/mpeg' }],
+        },
+      ]),
+    ).toThrow('No provider request was made.')
+
+    expect(() =>
+      anthropicTranscript.fromMessages([
+        {
+          role: 'user',
+          content: [{ type: 'video', source: new Uint8Array([1]), mediaType: 'video/mp4' }],
+        },
+      ]),
+    ).toThrow('No provider request was made.')
+  })
+
   it('reads assistant image blocks into final content parts', () => {
     const turn = anthropicTranscript.readAssistant({
       content: [

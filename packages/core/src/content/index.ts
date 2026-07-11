@@ -1,5 +1,9 @@
 import type { Message } from "../generation/messages";
-import type { ContentPart, MessageContent } from "../types/content";
+import type {
+  AssistantContentPart,
+  ContentPart,
+  MessageContent,
+} from "../types/content";
 import { base64ToBytes, bytesToBase64 } from "./base64";
 import { sha256Hex } from "./sha256";
 
@@ -29,8 +33,16 @@ export function textPart(text: string): ContentPart {
   return { type: "text", text };
 }
 
-/** Project canonical content into bounded text for string-only subsystems. */
-export function contentText(content: MessageContent): string {
+/**
+ * Project canonical content into bounded text for string-only subsystems.
+ *
+ * Accepts both plain `ContentPart` content (system/user/tool messages) and
+ * assistant `AssistantContentPart` content, so callers can format any
+ * canonical message without branching on role.
+ */
+export function contentText(
+  content: string | readonly AssistantContentPart[],
+): string {
   if (typeof content === "string") return content;
   return content.map(partText).join("\n");
 }
@@ -45,20 +57,26 @@ export function hasMediaParts(content: MessageContent): boolean {
   return Array.isArray(content) && content.some((part) => part.type !== "text");
 }
 
-function partText(part: ContentPart): string {
+function partText(part: AssistantContentPart): string {
   switch (part.type) {
     case "text":
       return part.text;
     case "image":
-      return `[image${mediaTypeText(part.mediaType)} ${sourceDescriptor(part.source)}]`;
+    case "audio":
+    case "video":
+      return `[${part.type}${mediaTypeText(part.mediaType)} ${sourceDescriptor(part.source)}]`;
     case "file":
       return `[file${mediaTypeText(part.mediaType)}${part.filename ? ` ${quoteLabel(part.filename)}` : ""} ${sourceDescriptor(part.source)}]`;
+    case "tool-call":
+      return `[tool-call ${escapeBare(part.toolName)} ${escapeBare(part.toolCallId)}]`;
+    case "reasoning":
+      return `[reasoning] ${part.text}`;
   }
 }
 
 type MediaPartSource = Extract<
   ContentPart,
-  { type: "image" | "file" }
+  { type: "image" | "audio" | "video" | "file" }
 >["source"];
 
 function sourceDescriptor(source: MediaPartSource): string {

@@ -36,6 +36,31 @@ describe('openai multimodal transcript encoding', () => {
     ).toThrow('No provider request was made.')
   })
 
+  it('lowers audio content natively and fails video before provider I/O', () => {
+    expect(
+      fromMessages([
+        {
+          role: 'user',
+          content: [{ type: 'audio', source: new Uint8Array([1, 2, 3]), mediaType: 'audio/mpeg' }],
+        },
+      ]),
+    ).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'input_audio', input_audio: { data: 'AQID', format: 'mp3' } }],
+      },
+    ])
+
+    expect(() =>
+      openAITranscript.fromMessages([
+        {
+          role: 'user',
+          content: [{ type: 'video', source: new Uint8Array([1, 2, 3]), mediaType: 'video/mp4' }],
+        },
+      ]),
+    ).toThrow('No provider request was made.')
+  })
+
   it('reads assistant image content into final content parts', () => {
     const turn = openAITranscript.readAssistant({
       choices: [

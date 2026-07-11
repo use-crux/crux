@@ -20,7 +20,7 @@ import {
 import { normalizeInvocationDataUrl } from "./invocation-data-url";
 
 export interface NormalizeInvocationMediaSourceInput {
-  readonly kind: "image" | "file";
+  readonly kind: "image" | "audio" | "video" | "file";
   readonly source: InvocationMediaSource;
   readonly path: string;
   readonly mediaType?: string;
@@ -262,22 +262,39 @@ function sniffForKind(
   return mediaType;
 }
 
+const KIND_MEDIA_PREFIX: Readonly<Record<"image" | "audio" | "video", string>> = {
+  image: "image/",
+  audio: "audio/",
+  video: "video/",
+};
+
 function assertKind(
   input: NormalizeInvocationMediaSourceInput,
   asset: Asset,
 ): Asset {
   const mediaType = mediaTypeOf(asset);
-  if (input.kind === "image" && mediaType && !mediaType.startsWith("image/")) {
+  if (input.kind === "file") return projectAsset(asset, input.path);
+  const prefix = KIND_MEDIA_PREFIX[input.kind];
+  if (mediaType && !mediaType.startsWith(prefix)) {
     throw invalid(
       input.path,
-      `Image sources require an image mediaType, received ${mediaType}.`,
+      `${label(input.kind)} sources require a ${prefix}* mediaType, received ${mediaType}.`,
     );
   }
   return projectAsset(asset, input.path);
 }
 
-function label(kind: "image" | "file"): string {
-  return kind === "image" ? "Image" : "File";
+function label(kind: "image" | "audio" | "video" | "file"): string {
+  switch (kind) {
+    case "image":
+      return "Image";
+    case "audio":
+      return "Audio";
+    case "video":
+      return "Video";
+    case "file":
+      return "File";
+  }
 }
 
 function invalid(path: string, reason: string): never {

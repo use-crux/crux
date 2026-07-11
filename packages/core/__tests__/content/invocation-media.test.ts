@@ -270,6 +270,46 @@ describe("invocation media source normalization", () => {
         : String(providerError),
     ).not.toContain("file-secret-123");
   });
+
+  it("normalizes audio and video sources and enforces kind-specific mediaType prefixes", async () => {
+    const audio = await normalizeInvocationMediaSource({
+      kind: "audio",
+      source: new Uint8Array([1, 2, 3]),
+      mediaType: "audio/mpeg",
+      path: "messages[0].content[0].source",
+    });
+    expect(audio).toMatchObject({ type: "data", mediaType: "audio/mpeg" });
+
+    const video = await normalizeInvocationMediaSource({
+      kind: "video",
+      source: "https://example.com/clip.mp4",
+      mediaType: "video/mp4",
+      path: "messages[0].content[1].source",
+    });
+    expect(video).toMatchObject({ type: "url", mediaType: "video/mp4" });
+
+    await expect(
+      normalizeInvocationMediaSource({
+        kind: "audio",
+        source: new Uint8Array([1, 2, 3]),
+        mediaType: "video/mp4",
+        path: "messages[0].content[2].source",
+      }),
+    ).rejects.toMatchObject({
+      code: "invalid_media_source",
+      reason: "Audio sources require a audio/* mediaType, received video/mp4.",
+    });
+
+    await expect(
+      normalizeInvocationMediaSource({
+        kind: "video",
+        source: new Uint8Array([1, 2, 3]),
+        path: "messages[0].content[3].source",
+      }),
+    ).rejects.toMatchObject({
+      reason: "Video byte sources require an explicit mediaType.",
+    });
+  });
 });
 
 async function rejectionOf(promise: Promise<unknown>): Promise<unknown> {

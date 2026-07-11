@@ -1,5 +1,6 @@
 import {
   createUnsupportedCapabilityError,
+  type AssistantContentPart,
   type ContentPart,
   type DiagnosticsPort,
   type Message,
@@ -25,7 +26,7 @@ export interface AiSdkContentPartOptions {
  */
 export function encodeContentForAiSdk(
   role: Message['role'],
-  content: MessageContent,
+  content: MessageContent | readonly AssistantContentPart[],
   options: AiSdkContentPartOptions = {},
 ): string | Array<Record<string, unknown>> {
   if (typeof content === 'string') return content
@@ -120,13 +121,14 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
 }
 
 function encodePartForAiSdk(
-  part: ContentPart | Record<string, unknown>,
+  part: AssistantContentPart | Record<string, unknown>,
   options: AiSdkContentPartOptions,
 ): Record<string, unknown> {
-  const providerOptions = isRecord(part.providerOptions) ? (part.providerOptions as ProviderOptions) : undefined
-  switch (readString(part, 'type')) {
+  const record = part as Record<string, unknown>
+  const providerOptions = isRecord(record.providerOptions) ? (record.providerOptions as ProviderOptions) : undefined
+  switch (readString(record, 'type')) {
     case 'text':
-      return { type: 'text', text: readString(part, 'text') ?? '', ...(providerOptions ? { providerOptions } : {}) }
+      return { type: 'text', text: readString(record, 'text') ?? '', ...(providerOptions ? { providerOptions } : {}) }
     case 'image': {
       const contentPart = part as Extract<ContentPart, { type: 'image' }>
       const image = sourceForAiSdk(contentPart.source, 'image', options)
@@ -137,26 +139,48 @@ function encodePartForAiSdk(
         ...(providerOptions ? { providerOptions } : {}),
       }
     }
+    // AI SDK ModelMessage content has no dedicated audio/video part; both lower
+    // through the native `file` part, keyed only by mediaType.
+    case 'audio':
+    case 'video':
     case 'file': {
-      const contentPart = part as Extract<ContentPart, { type: 'file' }>
-      const data = sourceForAiSdk(contentPart.source, 'file', options)
+      const contentPart = part as Extract<ContentPart, { type: 'audio' | 'video' | 'file' }>
+      const data = sourceForAiSdk(contentPart.source, contentPart.type, options)
       return {
         type: 'file',
         data,
         ...(contentPart.mediaType ? { mediaType: contentPart.mediaType } : {}),
-        ...(contentPart.filename ? { filename: contentPart.filename } : {}),
+        ...('filename' in contentPart && contentPart.filename ? { filename: contentPart.filename } : {}),
+        ...(providerOptions ? { providerOptions } : {}),
+      }
+    }
+    case 'tool-call': {
+      const toolCallPart = part as Extract<AssistantContentPart, { type: 'tool-call' }>
+      return {
+        type: 'tool-call',
+        toolCallId: toolCallPart.toolCallId,
+        toolName: toolCallPart.toolName,
+        input: toolCallPart.input,
+        ...(providerOptions ? { providerOptions } : {}),
+      }
+    }
+    case 'reasoning': {
+      const reasoningPart = part as Extract<AssistantContentPart, { type: 'reasoning' }>
+      return {
+        type: 'reasoning',
+        text: reasoningPart.text,
         ...(providerOptions ? { providerOptions } : {}),
       }
     }
     default:
-      warnUnknownPart(part, options.diagnostics)
-      return part
+      warnUnknownPart(record, options.diagnostics)
+      return record
   }
 }
 
 function sourceForAiSdk(
-  source: Extract<ContentPart, { type: 'image' | 'file' }>['source'],
-  kind: 'image' | 'file',
+  source: Extract<ContentPart, { type: 'image' | 'audio' | 'video' | 'file' }>['source'],
+  kind: 'image' | 'audio' | 'video' | 'file',
   options: AiSdkContentPartOptions,
 ): unknown {
   if (typeof source === 'string' || source instanceof URL || source instanceof Uint8Array || source instanceof Blob) return source

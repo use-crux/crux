@@ -135,6 +135,28 @@ describe('AI SDK multimodal messages', () => {
     ])
   })
 
+  it('lowers dedicated audio/video content through native file parts', () => {
+    expect(
+      toModelMessages([
+        {
+          role: 'user',
+          content: [
+            { type: 'audio', source: new Uint8Array([1, 2, 3]), mediaType: 'audio/mpeg' },
+            { type: 'video', source: new URL('https://example.com/clip.mp4'), mediaType: 'video/mp4' },
+          ],
+        },
+      ]),
+    ).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'file', data: new Uint8Array([1, 2, 3]), mediaType: 'audio/mpeg' },
+          { type: 'file', data: new URL('https://example.com/clip.mp4'), mediaType: 'video/mp4' },
+        ],
+      },
+    ])
+  })
+
   it('routes unknown encode parts through the diagnostics sink', () => {
     const warnings: Array<{ message: string; detail?: unknown }> = []
 

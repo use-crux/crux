@@ -2,6 +2,7 @@ import type { Part } from '@google/genai'
 import {
   contentText,
   createUnsupportedCapabilityError,
+  type AssistantContentPart,
   type ContentPart,
   type DataAsset,
   type MessageContent,
@@ -10,13 +11,19 @@ import {
 } from '@use-crux/core'
 
 /** Encode canonical Crux message content into Google `Part[]` values. */
-export function googleContentParts(_role: 'system' | 'user' | 'assistant' | 'tool', content: MessageContent): Part[] {
+export function googleContentParts(
+  _role: 'system' | 'user' | 'assistant' | 'tool',
+  content: MessageContent,
+): Part[] {
   if (typeof content === 'string') return [{ text: content }]
   return content.map(googleContentPart)
 }
 
 /** Project Google content to text. */
-export function googleContentText(_role: 'system' | 'user' | 'assistant' | 'tool', content: MessageContent): string {
+export function googleContentText(
+  _role: 'system' | 'user' | 'assistant' | 'tool',
+  content: string | readonly AssistantContentPart[],
+): string {
   return contentText(content)
 }
 
@@ -79,13 +86,14 @@ function googleContentPart(part: ContentPart): Part {
     case 'text':
       return { text: part.text }
     case 'image':
-      return googleMediaPart(part)
+    case 'audio':
+    case 'video':
     case 'file':
       return googleMediaPart(part)
   }
 }
 
-function googleMediaPart(part: Extract<ContentPart, { type: 'image' | 'file' }>): Part {
+function googleMediaPart(part: Extract<ContentPart, { type: 'image' | 'audio' | 'video' | 'file' }>): Part {
   const source = part.source
   const mediaType = part.mediaType ?? mediaTypeFromSource(source)
   if (!mediaType) {
@@ -125,7 +133,9 @@ function googleMediaPart(part: Extract<ContentPart, { type: 'image' | 'file' }>)
   )
 }
 
-function googlePartOptions(part: Extract<ContentPart, { type: 'image' | 'file' }>): Pick<Part, 'mediaResolution'> {
+function googlePartOptions(
+  part: Extract<ContentPart, { type: 'image' | 'audio' | 'video' | 'file' }>,
+): Pick<Part, 'mediaResolution'> {
   const mediaResolution = part.providerOptions?.google?.mediaResolution
   return isRecord(mediaResolution) ? { mediaResolution } : {}
 }
@@ -162,20 +172,26 @@ function fileDataPart(fileUri: string, mimeType: string, displayName: string | u
   }
 }
 
-function mediaTypeFromSource(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): string | undefined {
+function mediaTypeFromSource(
+  source: Extract<ContentPart, { type: 'image' | 'audio' | 'video' | 'file' }>['source'],
+): string | undefined {
   return isDataAsset(source) || isUrlAsset(source) || isProviderFileAsset(source) ? source.mediaType : undefined
 }
 
-function isDataAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): source is DataAsset {
+function isDataAsset(
+  source: Extract<ContentPart, { type: 'image' | 'audio' | 'video' | 'file' }>['source'],
+): source is DataAsset {
   return typeof source === 'object' && source !== null && !isBlob(source) && 'type' in source && source.type === 'data'
 }
 
-function isUrlAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): source is UrlAsset {
+function isUrlAsset(
+  source: Extract<ContentPart, { type: 'image' | 'audio' | 'video' | 'file' }>['source'],
+): source is UrlAsset {
   return typeof source === 'object' && source !== null && !isBlob(source) && 'type' in source && source.type === 'url'
 }
 
 function isProviderFileAsset(
-  source: Extract<ContentPart, { type: 'image' | 'file' }>['source'],
+  source: Extract<ContentPart, { type: 'image' | 'audio' | 'video' | 'file' }>['source'],
 ): source is ProviderFileAsset {
   return (
     typeof source === 'object' &&

@@ -8,7 +8,7 @@ import type {
 } from "./invocation-types";
 import { clonePrivateJsonObject } from "./json-private";
 import type {
-  PersistedContentPart,
+  PersistedAssistantContentPart,
   PersistedMediaSource,
   PersistedMessage,
 } from "./persisted-message-types";
@@ -43,11 +43,11 @@ async function decodeMessage(
     ...(message.metadata
       ? { metadata: clonePrivateJsonObject(message.metadata) }
       : {}),
-  };
+  } as InvocationMessage;
 }
 
 async function decodeParts(
-  parts: readonly PersistedContentPart[],
+  parts: readonly PersistedAssistantContentPart[],
   messageIndex: number,
   storage: Storage,
 ): Promise<readonly InvocationContentPart[]> {
@@ -56,9 +56,27 @@ async function decodeParts(
     const path = `messages[${messageIndex}].content[${partIndex}]`;
     if (part.type === "text") {
       decoded.push({ ...part });
-    } else if (part.type === "image") {
+    } else if (part.type === "tool-call") {
       decoded.push({
-        type: "image",
+        type: "tool-call",
+        toolCallId: part.toolCallId,
+        toolName: part.toolName,
+        input: part.input,
+        ...(part.providerOptions
+          ? { providerOptions: cloneProviderOptions(part.providerOptions) }
+          : {}),
+      });
+    } else if (part.type === "reasoning") {
+      decoded.push({
+        type: "reasoning",
+        text: part.text,
+        ...(part.providerOptions
+          ? { providerOptions: cloneProviderOptions(part.providerOptions) }
+          : {}),
+      });
+    } else if (part.type === "image" || part.type === "audio" || part.type === "video") {
+      decoded.push({
+        type: part.type,
         source: await decodeMediaSource(part.source, `${path}.source`, storage),
         ...(part.mediaType ? { mediaType: part.mediaType } : {}),
         ...(part.providerOptions

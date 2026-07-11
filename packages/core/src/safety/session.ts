@@ -573,7 +573,10 @@ export function createSafety(options: SafetyCallOptions): Safety {
         if (result.content !== originalContent) {
           messages = messages.map((entry, entryIndex) =>
             entryIndex === index
-              ? { ...entry, content: replaceProjectedContent(entry.content, originalContent, result.content) }
+              ? {
+                  ...entry,
+                  content: replaceProjectedContent(entry.content as MessageContent, originalContent, result.content),
+                }
               : entry,
           )
         }

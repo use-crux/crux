@@ -56,6 +56,18 @@ export type ContentPart =
       readonly providerOptions?: ProviderOptions;
     }
   | {
+      readonly type: "audio";
+      readonly source: MediaSource;
+      readonly mediaType?: string;
+      readonly providerOptions?: ProviderOptions;
+    }
+  | {
+      readonly type: "video";
+      readonly source: MediaSource;
+      readonly mediaType?: string;
+      readonly providerOptions?: ProviderOptions;
+    }
+  | {
       readonly type: "file";
       readonly source: MediaSource;
       readonly mediaType?: string;
@@ -65,3 +77,43 @@ export type ContentPart =
 
 /** Canonical message content: plain text or structured multimodal parts. */
 export type MessageContent = string | readonly ContentPart[];
+
+/**
+ * A model-requested tool invocation surfaced in assistant output.
+ *
+ * `ToolCallPart` is assistant lifecycle output, not a `ContentPart`: it never
+ * appears in system/user/tool message content, and it is never itself a media
+ * or text input to a model. `input` stays `unknown` because tool argument
+ * shapes are declared by the tool definition, not by the content contract.
+ */
+export interface ToolCallPart {
+  readonly type: "tool-call";
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly input: unknown;
+  readonly providerOptions?: ProviderOptions;
+}
+
+/**
+ * Model-produced reasoning surfaced in assistant output.
+ *
+ * `ReasoningPart` is assistant lifecycle output, not a `ContentPart`. Providers
+ * that do not expose reasoning simply never produce this part; callers must
+ * not assume every assistant turn contains one.
+ */
+export interface ReasoningPart {
+  readonly type: "reasoning";
+  readonly text: string;
+  readonly providerOptions?: ProviderOptions;
+}
+
+/**
+ * Ordered assistant output: text/media content plus tool-call and reasoning
+ * lifecycle parts.
+ *
+ * Only assistant messages and `GenerateResult.content` use this wider union.
+ * System, user, and tool message content stays exactly `ContentPart`, so a
+ * persisted or replayed non-assistant message can never carry a tool call or
+ * reasoning trace as ordinary input.
+ */
+export type AssistantContentPart = ContentPart | ToolCallPart | ReasoningPart;

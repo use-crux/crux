@@ -3,6 +3,7 @@ import {
   createUnsupportedCapabilityError,
   type ContentPart,
   type DataAsset,
+  type MediaSource,
   type ProviderFileAsset,
   type UrlAsset,
 } from '@use-crux/core'
@@ -24,9 +25,23 @@ export function encodeOpenAIContentPart(part: ContentPart): OpenAIContentPart[] 
           },
         },
       ]
+    case 'audio':
+      return [encodeOpenAIAudioPart(part)]
+    case 'video':
+      throw unsupported('input.video', 'OpenAI chat completions do not accept video content.')
     case 'file':
       return [encodeOpenAIFilePart(part)]
   }
+}
+
+function encodeOpenAIAudioPart(part: Extract<ContentPart, { type: 'audio' }>): OpenAIContentPart {
+  const source = part.source
+  const mediaType = part.mediaType ?? (isAssetWithMediaType(source) ? source.mediaType : undefined)
+  const audioFormat = mediaType ? openAIAudioFormat(mediaType) : undefined
+  if (!audioFormat) {
+    throw unsupported('input.audio.format', 'OpenAI audio input requires a wav or mp3 mediaType.')
+  }
+  return { type: 'input_audio', input_audio: { data: sourceBase64(source), format: audioFormat } }
 }
 
 function imageUrl(part: Extract<ContentPart, { type: 'image' }>): string {
@@ -97,7 +112,7 @@ function openAIImageOptions(
   return detail === 'auto' || detail === 'low' || detail === 'high' ? { detail } : {}
 }
 
-function sourceBase64(source: Extract<ContentPart, { type: 'file' }>['source']): string {
+function sourceBase64(source: MediaSource): string {
   if (source instanceof Uint8Array) return base64(source)
   if (source instanceof ArrayBuffer) return base64(new Uint8Array(source))
   if (isDataAsset(source)) return dataSourceBase64(source.data)
@@ -117,10 +132,7 @@ function isProviderFile(source: Extract<ContentPart, { type: 'file' }>['source']
   return isAsset(source, 'provider-file')
 }
 
-function isAssetWithMediaType(source: Extract<ContentPart, { type: 'file' }>['source']): source is Extract<
-  ContentPart,
-  { type: 'file' }
->['source'] & {
+function isAssetWithMediaType(source: MediaSource): source is MediaSource & {
   readonly mediaType: string
 } {
   return (
@@ -132,11 +144,11 @@ function isAssetWithMediaType(source: Extract<ContentPart, { type: 'file' }>['so
   )
 }
 
-function isDataAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): source is DataAsset {
+function isDataAsset(source: MediaSource): source is DataAsset {
   return isAsset(source, 'data')
 }
 
-function isUrlAsset(source: Extract<ContentPart, { type: 'image' | 'file' }>['source']): source is UrlAsset {
+function isUrlAsset(source: MediaSource): source is UrlAsset {
   return isAsset(source, 'url')
 }
 

@@ -12,7 +12,7 @@
  * @module
  */
 
-import type { ContentPart, Message } from '@use-crux/core'
+import type { ContentPart, Message, MessageContent } from '@use-crux/core'
 import type { AiSdkContentPartOptions } from './content-parts'
 import { decodeContentFromAiSdkParts, encodeContentForAiSdk } from './content-parts'
 import { isRecord, readString } from './object-utils'
@@ -94,7 +94,7 @@ type AiSdkToolResultOutput =
   | { readonly type: 'text'; readonly value: string }
   | { readonly type: 'content'; readonly value: readonly ContentPart[] }
 
-function toolResultOutputFromContent(content: Message['content']): AiSdkToolResultOutput {
+function toolResultOutputFromContent(content: MessageContent): AiSdkToolResultOutput {
   return typeof content === 'string'
     ? { type: 'text', value: content }
     : { type: 'content', value: content }
@@ -275,7 +275,7 @@ function normalizeRole(role: string): Message['role'] {
   return 'user'
 }
 
-function toolResultContentFromResponsePart(part: ResponseMessagePart): Message['content'] {
+function toolResultContentFromResponsePart(part: ResponseMessagePart): MessageContent {
   const value = part.output?.value
   if (typeof value === 'string') return value
   if (Array.isArray(value)) return decodeContentFromAiSdkParts(value.filter(isRecord))

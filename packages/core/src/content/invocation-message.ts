@@ -1,4 +1,5 @@
 import type { Message } from "../generation/messages";
+import type { AssistantContentPart } from "../types/content";
 import { normalizeInvocationMediaSource } from "./invocation-media";
 
 /** Normalize media-bearing invocation messages before provider or store I/O. */
@@ -28,7 +29,7 @@ export async function normalizeInvocationMessages(
               ),
             }
           : {}),
-      };
+      } as Message;
     }),
   );
 }
@@ -75,34 +76,46 @@ async function normalizeInvocationContent(
 ): Promise<Message["content"]> {
   if (typeof content === "string") return content;
   return Promise.all(
-    content.map(async (part, partIndex) => {
-      switch (part.type) {
-        case "text":
-          return part;
-        case "image":
-          return {
-            ...part,
-            source: await normalizeInvocationMediaSource({
-              kind: "image",
-              source: part.source,
-              path: `${path}[${partIndex}].source`,
-              mediaType: part.mediaType,
-              provider: options.provider,
-            }),
-          };
-        case "file":
-          return {
-            ...part,
-            source: await normalizeInvocationMediaSource({
-              kind: "file",
-              source: part.source,
-              path: `${path}[${partIndex}].source`,
-              mediaType: part.mediaType,
-              filename: part.filename,
-              provider: options.provider,
-            }),
-          };
-      }
-    }),
+    content.map((part, partIndex) =>
+      normalizeInvocationContentPart(part, `${path}[${partIndex}]`, options),
+    ),
   );
+}
+
+async function normalizeInvocationContentPart(
+  part: AssistantContentPart,
+  path: string,
+  options: Readonly<{ provider?: string }>,
+): Promise<AssistantContentPart> {
+  switch (part.type) {
+    case "text":
+    case "tool-call":
+    case "reasoning":
+      return part;
+    case "image":
+    case "audio":
+    case "video":
+      return {
+        ...part,
+        source: await normalizeInvocationMediaSource({
+          kind: part.type,
+          source: part.source,
+          path: `${path}.source`,
+          mediaType: part.mediaType,
+          provider: options.provider,
+        }),
+      };
+    case "file":
+      return {
+        ...part,
+        source: await normalizeInvocationMediaSource({
+          kind: "file",
+          source: part.source,
+          path: `${path}.source`,
+          mediaType: part.mediaType,
+          filename: part.filename,
+          provider: options.provider,
+        }),
+      };
+  }
 }

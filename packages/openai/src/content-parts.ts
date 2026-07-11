@@ -1,22 +1,31 @@
 import type OpenAI from 'openai'
-import { contentText, createUnsupportedCapabilityError, type ContentPart, type MessageContent } from '@use-crux/core'
+import {
+  contentText,
+  createUnsupportedCapabilityError,
+  type AssistantContentPart,
+  type ContentPart,
+  type MessageContent,
+} from '@use-crux/core'
 import { encodeOpenAIContentPart } from './media-encoding'
 
 type OpenAIContentPart = OpenAI.ChatCompletionContentPart
 
 /** Encode canonical Crux message content into OpenAI chat-completion content. */
-export function openAIMessageContent(role: 'system' | 'assistant', content: MessageContent): string
+export function openAIMessageContent(
+  role: 'system' | 'assistant',
+  content: string | readonly AssistantContentPart[],
+): string
 export function openAIMessageContent(role: 'user', content: MessageContent): string | OpenAIContentPart[]
 export function openAIMessageContent(
   role: 'system' | 'user' | 'assistant',
-  content: MessageContent,
+  content: MessageContent | readonly AssistantContentPart[],
 ): string | OpenAIContentPart[] {
   if (typeof content === 'string') return content
   if (role !== 'user' && content.some((part) => part.type !== 'text')) {
     throw unsupported(`input.media.${role}`, `${role} messages do not accept media content in OpenAI chat completions.`)
   }
   if (role !== 'user') return contentText(content)
-  return content.flatMap(encodeOpenAIContentPart)
+  return (content as readonly ContentPart[]).flatMap(encodeOpenAIContentPart)
 }
 
 /** Decode an OpenAI chat content payload into canonical Crux content. */

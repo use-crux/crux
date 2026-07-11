@@ -586,7 +586,14 @@ export type {
   NativeGeneratedImage,
   NoImageGeneratedError,
 } from "./generation";
-export type { ContentPart, MediaSource, MessageContent } from "./types/content";
+export type {
+  AssistantContentPart,
+  ContentPart,
+  MediaSource,
+  MessageContent,
+  ReasoningPart,
+  ToolCallPart,
+} from "./types/content";
 export {
   createInvalidMediaSourceError,
   createUnsupportedCapabilityError,

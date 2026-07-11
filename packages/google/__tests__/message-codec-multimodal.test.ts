@@ -27,6 +27,28 @@ describe('google multimodal transcript encoding', () => {
     ])
   })
 
+  it('lowers dedicated audio/video parts through native inline/file data parts', () => {
+    expect(
+      fromMessages([
+        {
+          role: 'user',
+          content: [
+            { type: 'audio', source: new Uint8Array([1, 2, 3]), mediaType: 'audio/mpeg' },
+            { type: 'video', source: 'https://example.com/clip.mp4', mediaType: 'video/mp4' },
+          ],
+        },
+      ]),
+    ).toEqual([
+      {
+        role: 'user',
+        parts: [
+          { inlineData: { data: 'AQID', mimeType: 'audio/mpeg' } },
+          { fileData: { fileUri: 'https://example.com/clip.mp4', mimeType: 'video/mp4' } },
+        ],
+      },
+    ])
+  })
+
   it('fails before provider I/O for media URLs without a media type', () => {
     expect(() =>
       googleTranscript.fromMessages([

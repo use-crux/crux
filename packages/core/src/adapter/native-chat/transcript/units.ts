@@ -11,7 +11,7 @@
  * @module
  */
 
-import type { ContentPart, MessageContent } from '../../../types/content'
+import type { AssistantContentPart, ContentPart, MessageContent } from '../../../types/content'
 import type { ToolModelOutput } from '../../../types/tool'
 import type { NativeAssistantTurn } from '../types'
 
@@ -84,7 +84,7 @@ export type ProviderTranscriptUnit =
     }
   | {
       readonly kind: 'assistant'
-      readonly content: MessageContent
+      readonly content: string | readonly AssistantContentPart[]
       readonly toolCalls?: readonly ProviderToolCall[]
     }
   | {

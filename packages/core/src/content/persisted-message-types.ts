@@ -1,6 +1,6 @@
 import type { AssetInfo, AssetRef } from "../asset";
 import type { Message } from "../generation/messages";
-import type { JsonObject, ProviderOptions } from "../types/tool";
+import type { JsonObject, JsonValue, ProviderOptions } from "../types/tool";
 
 export type PersistedMediaSource =
   | {
@@ -30,15 +30,37 @@ export type PersistedContentPart =
       readonly providerOptions?: ProviderOptions;
     }
   | {
-      readonly type: "image" | "file";
+      readonly type: "image" | "audio" | "video" | "file";
       readonly source: PersistedMediaSource;
       readonly mediaType?: string;
       readonly filename?: string;
       readonly providerOptions?: ProviderOptions;
     };
 
+/** Persisted form of assistant-only `ToolCallPart` lifecycle output. */
+export type PersistedToolCallPart = {
+  readonly type: "tool-call";
+  readonly toolCallId: string;
+  readonly toolName: string;
+  readonly input: JsonValue;
+  readonly providerOptions?: ProviderOptions;
+};
+
+/** Persisted form of assistant-only `ReasoningPart` lifecycle output. */
+export type PersistedReasoningPart = {
+  readonly type: "reasoning";
+  readonly text: string;
+  readonly providerOptions?: ProviderOptions;
+};
+
+/** Persisted assistant content: ordinary parts plus lifecycle output. */
+export type PersistedAssistantContentPart =
+  | PersistedContentPart
+  | PersistedToolCallPart
+  | PersistedReasoningPart;
+
 export type PersistedMessage = Readonly<{
   role: Message["role"];
-  content: string | readonly PersistedContentPart[];
+  content: string | readonly PersistedAssistantContentPart[];
   metadata?: JsonObject;
 }>;

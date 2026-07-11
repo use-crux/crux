@@ -1,5 +1,5 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { ContentPart, Message, MessageContent } from '@use-crux/core'
+import type { AssistantContentPart, ContentPart, Message, MessageContent } from '@use-crux/core'
 import { contentText } from '@use-crux/core'
 import { defineProviderTranscriptCodec } from '@use-crux/core/adapter'
 import type {
@@ -84,7 +84,7 @@ function encodeContent(
 }
 
 function encodeAssistant(
-  content: MessageContent,
+  content: MessageContent | readonly AssistantContentPart[],
   toolCalls: readonly ProviderToolCall[],
 ): Anthropic.MessageParam {
   if (toolCalls.length === 0) {
@@ -92,7 +92,7 @@ function encodeAssistant(
       role: 'assistant',
       content: typeof content === 'string'
         ? content
-        : anthropicContentBlocks(content),
+        : anthropicContentBlocks(content as readonly ContentPart[]),
     }
   }
 
@@ -101,7 +101,7 @@ function encodeAssistant(
     ? content
       ? ([{ type: 'text', text: content }] satisfies Anthropic.TextBlockParam[])
       : []
-    : anthropicContentBlocks(content)
+    : anthropicContentBlocks(content as readonly ContentPart[])
   blocks.push(...contentBlocks)
   for (const toolCall of toolCalls) {
     blocks.push({

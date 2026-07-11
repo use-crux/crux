@@ -71,6 +71,11 @@ function validateSource(part: ContentPart, path: string, issues: UnsupportedCapa
   const source = part.source
   const mediaType = mediaTypeFor(part)
 
+  if (part.type === 'audio' || part.type === 'video') {
+    issues.push(issue(part, path, `Anthropic does not accept ${part.type} input.`))
+    return
+  }
+
   if (part.type === 'image') {
     if (isAsset(source, 'provider-file')) {
       issues.push(
@@ -155,7 +160,14 @@ function isAssetWithMediaType(value: unknown): value is Readonly<{ mediaType: st
 }
 
 function isContentPart(value: unknown): value is ContentPart {
-  return isRecord(value) && (value.type === 'text' || value.type === 'image' || value.type === 'file')
+  return (
+    isRecord(value) &&
+    (value.type === 'text' ||
+      value.type === 'image' ||
+      value.type === 'audio' ||
+      value.type === 'video' ||
+      value.type === 'file')
+  )
 }
 
 function isContentModelOutput(value: unknown): value is Readonly<{ type: 'content'; value: Message['content'] }> {

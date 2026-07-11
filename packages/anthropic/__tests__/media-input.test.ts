@@ -23,9 +23,10 @@ describe('Anthropic native media input', () => {
     const messages = [
       {
         ...fixture.messages[0]!,
+        role: 'user' as const,
         content: Array.isArray(fixtureContent) ? fixtureContent.slice(0, 3) : fixtureContent,
       },
-    ] satisfies Message[]
+    ] as Message[]
     const create = vi.fn(async (_request: unknown) => message('done'))
 
     const result = await createAnthropic(client({ create })).generate(mediaPrompt, {

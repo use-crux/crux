@@ -36,6 +36,12 @@ function isPersistedMessage(value: unknown): value is PersistedMessage {
   );
 }
 
+const MEDIA_TYPE_PREFIX: Readonly<Record<string, string>> = {
+  image: "image/",
+  audio: "audio/",
+  video: "video/",
+};
+
 function isPersistedPart(value: unknown): boolean {
   if (!isRecord(value) || !isProviderOptions(value.providerOptions))
     return false;
@@ -45,10 +51,29 @@ function isPersistedPart(value: unknown): boolean {
       typeof value.text === "string"
     );
   }
-  if (value.type !== "image" && value.type !== "file") return false;
-  const allowedKeys = value.type === "image"
-    ? ["type", "source", "mediaType", "providerOptions"]
-    : ["type", "source", "mediaType", "filename", "providerOptions"];
+  if (value.type === "reasoning") {
+    return (
+      hasOnlyKeys(value, "type", "text", "providerOptions") &&
+      typeof value.text === "string"
+    );
+  }
+  if (value.type === "tool-call") {
+    return (
+      hasOnlyKeys(value, "type", "toolCallId", "toolName", "input", "providerOptions") &&
+      nonEmptyString(value.toolCallId) &&
+      typeof value.toolName === "string" &&
+      isJsonValue(value.input)
+    );
+  }
+  if (
+    value.type !== "image" &&
+    value.type !== "audio" &&
+    value.type !== "video" &&
+    value.type !== "file"
+  ) return false;
+  const allowedKeys = value.type === "file"
+    ? ["type", "source", "mediaType", "filename", "providerOptions"]
+    : ["type", "source", "mediaType", "providerOptions"];
   if (!hasOnlyKeys(value, ...allowedKeys)) return false;
   if (!isPersistedSource(value.source)) return false;
   if (!optionalMediaType(value.mediaType)) return false;
@@ -61,14 +86,26 @@ function isPersistedPart(value: unknown): boolean {
     partMediaType !== sourceMediaType
   ) return false;
   const effectiveMediaType = partMediaType ?? sourceMediaType;
+  const requiredPrefix = MEDIA_TYPE_PREFIX[value.type];
   if (
-    value.type === "image" &&
+    requiredPrefix &&
     effectiveMediaType !== undefined &&
-    !effectiveMediaType.startsWith("image/")
+    !effectiveMediaType.startsWith(requiredPrefix)
   ) return false;
   return (
-    value.type === "image" ||
-    optionalNonEmptyString(value.filename)
+    value.type === "file"
+      ? optionalNonEmptyString(value.filename)
+      : true
+  );
+}
+
+function isJsonValue(value: unknown): boolean {
+  if (value === null || typeof value === "string" || typeof value === "boolean")
+    return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  return (
+    isRecord(value) && Object.values(value).every(isJsonValue)
   );
 }
 

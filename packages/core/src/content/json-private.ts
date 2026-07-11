@@ -10,7 +10,8 @@ export function clonePrivateJsonObject(value: JsonObject): JsonObject {
   return JSON.parse(JSON.stringify(value)) as JsonObject;
 }
 
-function isPrivateJsonValue(value: unknown): value is JsonValue {
+/** Return whether a value is a strict JSON value accepted by private codecs. */
+export function isPrivateJsonValue(value: unknown): value is JsonValue {
   if (value === null || typeof value === "string" || typeof value === "boolean")
     return true;
   if (typeof value === "number") return Number.isFinite(value);

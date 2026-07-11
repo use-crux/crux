@@ -1,12 +1,15 @@
 import type {
   Asset,
   AssetRef,
+  AssistantContentPart,
   ContentPart,
   GenerationSettings,
   MediaSource,
   Message,
   MessageContent,
   ProviderOptions,
+  ReasoningPart,
+  ToolCallPart,
   ToolModelOutput,
 } from "../src/index";
 
@@ -35,7 +38,7 @@ type OldFileUrlKind = `file-${"url"}`;
 type RemovedUnsupportedContentSettingKey = `unsupported${"Content"}`;
 
 type _ContentPartKinds = Expect<
-  AssertEqual<ContentPartKind, "text" | "image" | "file">
+  AssertEqual<ContentPartKind, "text" | "image" | "audio" | "video" | "file">
 >;
 
 type _NoMediaPart = Expect<AssertEqual<Extract<ContentPart, { type: "media" }>, never>>;
@@ -160,4 +163,67 @@ type _ImageSource = Expect<AssertEqual<ImagePart["source"], MediaSource>>;
 type _FileSource = Expect<AssertEqual<FilePart["source"], MediaSource>>;
 type _NoRemovedUnsupportedContentSetting = Expect<
   AssertEqual<Extract<keyof GenerationSettings, RemovedUnsupportedContentSettingKey>, never>
+>;
+
+// ─────────────────────────────────────────────────────────────────
+// Audio/video parts and assistant lifecycle content (phase 29)
+// ─────────────────────────────────────────────────────────────────
+
+type AudioPart = Extract<ContentPart, { type: "audio" }>;
+type VideoPart = Extract<ContentPart, { type: "video" }>;
+
+type _AudioSource = Expect<AssertEqual<AudioPart["source"], MediaSource>>;
+type _VideoSource = Expect<AssertEqual<VideoPart["source"], MediaSource>>;
+type _AudioOptionalKeys = Expect<
+  AssertEqual<OptionalKeys<AudioPart>, "mediaType" | "providerOptions">
+>;
+type _VideoOptionalKeys = Expect<
+  AssertEqual<OptionalKeys<VideoPart>, "mediaType" | "providerOptions">
+>;
+
+declare const toolCallPartValue: ToolCallPart;
+declare const reasoningPartValue: ReasoningPart;
+
+const assistantWithLifecycle: Message = {
+  role: "assistant",
+  content: [
+    { type: "text", text: "Looking that up." },
+    toolCallPartValue,
+    reasoningPartValue,
+  ] as const,
+};
+void assistantWithLifecycle;
+
+// @ts-expect-error system messages accept only ContentPart, not lifecycle output.
+const systemWithToolCall: Message = {
+  role: "system",
+  content: [toolCallPartValue],
+};
+void systemWithToolCall;
+
+// @ts-expect-error user messages accept only ContentPart, not lifecycle output.
+const userWithReasoning: Message = {
+  role: "user",
+  content: [reasoningPartValue],
+};
+void userWithReasoning;
+
+// @ts-expect-error tool messages accept only ContentPart, not lifecycle output.
+const toolWithToolCall: Message = {
+  role: "tool",
+  content: [toolCallPartValue],
+};
+void toolWithToolCall;
+
+type _ToolCallNotContentPart = Expect<
+  AssertEqual<Extract<ContentPart, { type: "tool-call" }>, never>
+>;
+type _ReasoningNotContentPart = Expect<
+  AssertEqual<Extract<ContentPart, { type: "reasoning" }>, never>
+>;
+type _AssistantContentPartKinds = Expect<
+  AssertEqual<
+    AssistantContentPart["type"],
+    "text" | "image" | "audio" | "video" | "file" | "tool-call" | "reasoning"
+  >
 >;
