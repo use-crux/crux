@@ -110,6 +110,17 @@ export type {
 // Provider runtime authoring layer
 export { defineProviderRuntime } from "./provider-runtime";
 export { defineSingleTurnProviderBundle } from "./provider-runtime";
+export {
+  defineCompletedOperation,
+  runCompletedMediaOperation,
+} from "./completed-operation";
+export type {
+  CompletedOperationConformanceCase,
+  CompletedOperationContext,
+  CompletedOperationDefinition,
+  CompletedOperationInvokeContext,
+  RunCompletedMediaOperationOptions,
+} from "./completed-operation";
 export type {
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
