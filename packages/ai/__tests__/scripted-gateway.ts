@@ -30,6 +30,7 @@ export interface ScriptedStream {
 }
 
 export interface ScriptedGatewayConfig {
+  generateImage?: Array<Record<string, unknown> | Error>
   generateText?: Array<ScriptedResult | Error>
   generateObject?: Array<ScriptedResult | Error>
   streamText?: ScriptedStream[]
@@ -41,6 +42,7 @@ export interface ScriptedGatewayConfig {
 export interface ScriptedGateway {
   gateway: SdkGateway
   calls: {
+    generateImage: Array<Record<string, unknown>>
     generateText: Array<Record<string, unknown>>
     generateObject: Array<Record<string, unknown>>
     streamText: Array<Record<string, unknown>>
@@ -77,6 +79,7 @@ function materialize(scripted: ScriptedResult, kind: 'text' | 'object'): Record<
 /** Build a scripted gateway. Methods throw scripted `Error`s verbatim. */
 export function scriptedGateway(config: ScriptedGatewayConfig = {}): ScriptedGateway {
   const generateTextScripts = [...(config.generateText ?? [])]
+  const generateImageScripts = [...(config.generateImage ?? [])]
   const generateObjectScripts = [...(config.generateObject ?? [])]
   const streamTextScripts = [...(config.streamText ?? [])]
   const streamObjectScripts = [...(config.streamObject ?? [])]
@@ -84,6 +87,7 @@ export function scriptedGateway(config: ScriptedGatewayConfig = {}): ScriptedGat
   const rerankScripts = [...(config.rerank ?? [])]
 
   const calls: ScriptedGateway['calls'] = {
+    generateImage: [],
     generateText: [],
     generateObject: [],
     streamText: [],
@@ -132,6 +136,19 @@ export function scriptedGateway(config: ScriptedGatewayConfig = {}): ScriptedGat
   }
 
   const gateway: SdkGateway = {
+    generateImage: async (args) => {
+      calls.generateImage.push(args as Record<string, unknown>)
+      const scripted = generateImageScripts.shift()
+      if (scripted instanceof Error) throw scripted
+      return (scripted ?? {
+        image: { base64: 'AQ==', uint8Array: new Uint8Array([1]), mediaType: 'image/png' },
+        images: [{ base64: 'AQ==', uint8Array: new Uint8Array([1]), mediaType: 'image/png' }],
+        warnings: [],
+        responses: [],
+        providerMetadata: {},
+        usage: {},
+      }) as unknown as Awaited<ReturnType<SdkGateway['generateImage']>>
+    },
     generateText: async (args) => {
       calls.generateText.push(args as Record<string, unknown>)
       const scripted = generateTextScripts.shift() ?? { text: 'scripted response' }

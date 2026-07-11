@@ -103,6 +103,7 @@ import {
   transportGateway,
 } from "./call-handle";
 import { prepareAiSdkMessages } from "./native-messages";
+import type { AIGenerateImage } from "./image-generation";
 export { fromResponse, toParams } from "./codec";
 export type { AiSdkCodecOptions } from "./codec";
 
@@ -111,6 +112,7 @@ export type { AiSdkCodecOptions } from "./codec";
 // ─────────────────────────────────────────────────────────────────
 
 export type { AIExtra, AIGenerateOptions, AITransport, AITransportInfo } from "./options";
+export type { AIGenerateImage, AIImageExtra } from "./image-generation";
 
 // ─────────────────────────────────────────────────────────────────
 // Result Types
@@ -226,6 +228,8 @@ export interface CruxAiOptions {
 
 /** The bound API surface returned by {@link createCruxAi}. */
 export interface CruxAi {
+  /** Run one stateless AI SDK image operation without entering a language loop. */
+  generateImage: AIGenerateImage;
   /** See the package-level {@link generate}. */
   generate<
     TOwnInput extends z.ZodType,
@@ -448,6 +452,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   ): Promise<CallHandle<Record<string, unknown>, SdkLoopResultLike, GenerateResult<SdkLoopResultLike | undefined>>> {
     const controller = createManualAiSdkGatewayController();
     const manualExecutor = aiSdkProviderRuntime.create({
+      generateImage: gateway.generateImage,
       generateText: (args) => controller.generateText(args),
       generateObject: (args) => controller.generateObject(args),
       streamText: () => {
@@ -558,6 +563,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   };
 
   return {
+    generateImage: executor.generateImage,
     generate: generateFn,
     stream: streamFn,
     prepare: prepareFn,
@@ -574,6 +580,17 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 // ─────────────────────────────────────────────────────────────────
 
 const defaultAi = createCruxAi();
+
+/**
+ * Generate images through the AI SDK's native image operation.
+ *
+ * @example
+ * ```ts
+ * const result = await generateImage({ model: openai.image('gpt-image-1'), prompt: 'A quiet canal' })
+ * await assetStore.put(result.image) // optional, explicit persistence
+ * ```
+ */
+export const generateImage: AIGenerateImage = defaultAi.generateImage;
 
 /**
  * Execute a prompt using the Vercel AI SDK.

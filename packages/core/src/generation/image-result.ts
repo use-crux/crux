@@ -8,19 +8,19 @@ export type NoImageGeneratedError = Error & {
 }
 
 /** Metadata preserved while normalizing a provider's successful image result. */
-export interface GeneratedImageResultMetadata<TRaw, TProviderMetadata = unknown, TResponse = unknown> {
+export interface GeneratedImageResultMetadata<TRaw, TProviderMetadata = unknown, TResponse = unknown, TWarning = string> {
   readonly raw: TRaw
   readonly usage?: GeneratedImageUsage
-  readonly warnings?: readonly string[]
+  readonly warnings?: readonly TWarning[]
   readonly providerMetadata?: TProviderMetadata
   readonly response?: TResponse
 }
 
 /** Validate native bytes and create an ordered, immediately usable image result. */
-export function createGeneratedImageResult<TRaw, TProviderMetadata = unknown, TResponse = unknown>(
+export function createGeneratedImageResult<TRaw, TProviderMetadata = unknown, TResponse = unknown, TWarning = string>(
   nativeImages: readonly NativeGeneratedImage[],
-  metadata: GeneratedImageResultMetadata<TRaw, TProviderMetadata, TResponse>,
-): GeneratedImage<TRaw, TProviderMetadata, TResponse> {
+  metadata: GeneratedImageResultMetadata<TRaw, TProviderMetadata, TResponse, TWarning>,
+): GeneratedImage<TRaw, TProviderMetadata, TResponse, TWarning> {
   try {
     if (nativeImages.length === 0) throw new Error('Native response contained no images.')
     const images = nativeImages.map((image, index) => normalizeImage(image, index))

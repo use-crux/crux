@@ -12,6 +12,7 @@ import type { z } from 'zod'
 import { embedding as coreEmbedding, type DenseEmbedding } from '@use-crux/core/embedding'
 import type { Reranker, RetrievalModel, RetrieverHit } from '@use-crux/core/retrieval'
 import type { SdkGateway } from './gateway'
+import { createAiSdkGenerateImage, type AIGenerateImage } from './image-generation'
 
 export interface AIRetrievalModelConfig {
   model: LanguageModel
@@ -43,6 +44,8 @@ export interface AIEmbeddingConfig {
 
 /** Extensions attached to a bound `aiSdkProviderRuntime`. */
 export interface AiSdkRuntimeExtensions {
+  /** Run one stateless AI SDK image operation. */
+  generateImage: AIGenerateImage
   /** Create a dense Crux embedding backed by AI SDK `embedMany()`. */
   embedding(config: AIEmbeddingConfig): DenseEmbedding
   /** Create a bound retrieval model backed by AI SDK generation helpers. */
@@ -54,6 +57,7 @@ export interface AiSdkRuntimeExtensions {
 /** Bind AI SDK non-generation capabilities to a scripted or live gateway. */
 export function createAiSdkRuntimeExtensions(gateway: SdkGateway): AiSdkRuntimeExtensions {
   return Object.freeze({
+    generateImage: createAiSdkGenerateImage(gateway),
     embedding(config: AIEmbeddingConfig) {
       return coreEmbedding({
         kind: 'dense',

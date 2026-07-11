@@ -62,11 +62,11 @@ export interface GeneratedImageUsage {
 }
 
 /** Result of one native image operation. The first image is also available as `image`. */
-export interface GeneratedImage<TRaw = unknown, TProviderMetadata = unknown, TResponse = unknown> {
+export interface GeneratedImage<TRaw = unknown, TProviderMetadata = unknown, TResponse = unknown, TWarning = string> {
   readonly image: DataAsset
   readonly images: readonly [DataAsset, ...DataAsset[]]
   readonly usage?: GeneratedImageUsage
-  readonly warnings?: readonly string[]
+  readonly warnings?: readonly TWarning[]
   readonly providerMetadata?: TProviderMetadata
   readonly response?: TResponse
   /** Unmodified native operation result. */
@@ -88,9 +88,10 @@ export type GenerateImage<
   TRaw = unknown,
   TProviderMetadata = unknown,
   TResponse = unknown,
+  TWarning = string,
 > = <TPrompt extends ImagePrompt>(
   options: GenerateImageOptions<TModel, TExtra, TPrompt>,
-) => Promise<GeneratedImage<TRaw, TProviderMetadata, TResponse>>
+) => Promise<GeneratedImage<TRaw, TProviderMetadata, TResponse, TWarning>>
 
 /** Native image bytes before provider-neutral result validation. */
 export interface NativeGeneratedImage {
