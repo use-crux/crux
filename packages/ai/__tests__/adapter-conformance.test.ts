@@ -59,6 +59,7 @@ function capturingGateway(gateway: SdkGateway): {
     calls,
     gateway: {
       generateImage: (args) => gateway.generateImage(args),
+      transcribe: (args) => gateway.transcribe(args),
       generateText: (args) => {
         calls.push(args)
         return gateway.generateText(args)

@@ -11,6 +11,7 @@ function imageGateway(raw: unknown): { gateway: SdkGateway; image: ReturnType<ty
   return {
     gateway: {
       generateImage: image as SdkGateway['generateImage'],
+      transcribe: unused as SdkGateway['transcribe'],
       generateText: text as SdkGateway['generateText'],
       generateObject: unused as SdkGateway['generateObject'],
       streamText: stream as SdkGateway['streamText'],

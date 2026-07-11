@@ -103,6 +103,7 @@ import {
   transportGateway,
 } from "./call-handle";
 import { prepareAiSdkMessages } from "./native-messages";
+import type { AITranscribe } from './transcription'
 import type { AIGenerateImage } from "./image-generation";
 export { fromResponse, toParams } from "./codec";
 export type { AiSdkCodecOptions } from "./codec";
@@ -230,6 +231,8 @@ export interface CruxAiOptions {
 export interface CruxAi {
   /** Run one stateless AI SDK image operation without entering a language loop. */
   generateImage: AIGenerateImage;
+  /** Run one stateless AI SDK transcription operation. */
+  transcribe: AITranscribe;
   /** See the package-level {@link generate}. */
   generate<
     TOwnInput extends z.ZodType,
@@ -453,6 +456,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     const controller = createManualAiSdkGatewayController();
     const manualExecutor = aiSdkProviderRuntime.create({
       generateImage: gateway.generateImage,
+      transcribe: gateway.transcribe,
       generateText: (args) => controller.generateText(args),
       generateObject: (args) => controller.generateObject(args),
       streamText: () => {
@@ -565,6 +569,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
   return {
     generateImage: executor.generateImage,
+    transcribe: executor.transcribe,
     generate: generateFn,
     stream: streamFn,
     prepare: prepareFn,
@@ -592,6 +597,9 @@ const defaultAi = createCruxAi();
  * ```
  */
 export const generateImage: AIGenerateImage = defaultAi.generateImage;
+
+/** Transcribe audio through exactly one native AI SDK transcription operation. */
+export const transcribe: AITranscribe = defaultAi.transcribe;
 
 /**
  * Execute a prompt using the Vercel AI SDK.
@@ -716,6 +724,7 @@ export function reranker(config: AIRerankerConfig): Reranker {
 
 export { liveSdkGateway } from "./gateway";
 export type { SdkGateway } from "./gateway";
+export type { AITranscribe, AITranscriptionExtra, AITranscriptionMetadata } from './transcription'
 export { createAiSdkLoopRuntime } from "./executor";
 export type {
   AiSdkLoopRuntime,

@@ -14,7 +14,7 @@
  * @module
  */
 
-import { embedMany, generateImage, generateObject, generateText, rerank, streamObject, streamText } from 'ai'
+import { embedMany, experimental_transcribe, generateImage, generateObject, generateText, rerank, streamObject, streamText } from 'ai'
 
 /**
  * The narrow surface of the `ai` package that `@use-crux/ai` consumes.
@@ -28,6 +28,8 @@ import { embedMany, generateImage, generateObject, generateText, rerank, streamO
 export interface SdkGateway {
   /** Mirror of AI SDK `generateImage` — one stateless image operation. */
   generateImage(args: Parameters<typeof generateImage>[0]): ReturnType<typeof generateImage>
+  /** Mirror of AI SDK transcription — one stateless native operation. */
+  transcribe(args: Parameters<typeof experimental_transcribe>[0]): ReturnType<typeof experimental_transcribe>
   /** Mirror of AI SDK `generateText` — the SDK-owned tool loop. */
   generateText(args: Parameters<typeof generateText>[0]): ReturnType<typeof generateText>
   /** Mirror of AI SDK `generateObject` — one structured-output attempt. */
@@ -49,6 +51,7 @@ export interface SdkGateway {
 export function liveSdkGateway(): SdkGateway {
   return {
     generateImage: (args) => generateImage(args),
+    transcribe: (args) => experimental_transcribe(args),
     generateText: (args) => generateText(args),
     generateObject: (args) => generateObject(args),
     streamText: (args) => streamText(args),

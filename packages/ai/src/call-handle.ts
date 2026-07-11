@@ -141,6 +141,9 @@ export function transportGateway(transport: AITransport): SdkGateway {
     generateImage: () => {
       throw new TypeError("AI SDK language transports do not support generateImage().");
     },
+    transcribe: () => {
+      throw new TypeError("AI SDK language transports do not support transcribe().");
+    },
     generateText: (args) => invoke(args) as ReturnType<SdkGateway["generateText"]>,
     generateObject: (args) => invoke(args) as ReturnType<SdkGateway["generateObject"]>,
     streamText: () => {

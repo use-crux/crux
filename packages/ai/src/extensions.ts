@@ -13,6 +13,7 @@ import { embedding as coreEmbedding, type DenseEmbedding } from '@use-crux/core/
 import type { Reranker, RetrievalModel, RetrieverHit } from '@use-crux/core/retrieval'
 import type { SdkGateway } from './gateway'
 import { createAiSdkGenerateImage, type AIGenerateImage } from './image-generation'
+import { createAiSdkTranscribe, type AITranscribe } from './transcription'
 
 export interface AIRetrievalModelConfig {
   model: LanguageModel
@@ -46,6 +47,8 @@ export interface AIEmbeddingConfig {
 export interface AiSdkRuntimeExtensions {
   /** Run one stateless AI SDK image operation. */
   generateImage: AIGenerateImage
+  /** Run one stateless AI SDK transcription operation. */
+  transcribe: AITranscribe
   /** Create a dense Crux embedding backed by AI SDK `embedMany()`. */
   embedding(config: AIEmbeddingConfig): DenseEmbedding
   /** Create a bound retrieval model backed by AI SDK generation helpers. */
@@ -58,6 +61,7 @@ export interface AiSdkRuntimeExtensions {
 export function createAiSdkRuntimeExtensions(gateway: SdkGateway): AiSdkRuntimeExtensions {
   return Object.freeze({
     generateImage: createAiSdkGenerateImage(gateway),
+    transcribe: createAiSdkTranscribe(gateway),
     embedding(config: AIEmbeddingConfig) {
       return coreEmbedding({
         kind: 'dense',

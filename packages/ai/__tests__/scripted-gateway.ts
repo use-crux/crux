@@ -30,6 +30,7 @@ export interface ScriptedStream {
 }
 
 export interface ScriptedGatewayConfig {
+  transcribe?: Array<Record<string, unknown> | Error>
   generateImage?: Array<Record<string, unknown> | Error>
   generateText?: Array<ScriptedResult | Error>
   generateObject?: Array<ScriptedResult | Error>
@@ -43,6 +44,7 @@ export interface ScriptedGateway {
   gateway: SdkGateway
   calls: {
     generateImage: Array<Record<string, unknown>>
+    transcribe: Array<Record<string, unknown>>
     generateText: Array<Record<string, unknown>>
     generateObject: Array<Record<string, unknown>>
     streamText: Array<Record<string, unknown>>
@@ -80,6 +82,7 @@ function materialize(scripted: ScriptedResult, kind: 'text' | 'object'): Record<
 export function scriptedGateway(config: ScriptedGatewayConfig = {}): ScriptedGateway {
   const generateTextScripts = [...(config.generateText ?? [])]
   const generateImageScripts = [...(config.generateImage ?? [])]
+  const transcribeScripts = [...(config.transcribe ?? [])]
   const generateObjectScripts = [...(config.generateObject ?? [])]
   const streamTextScripts = [...(config.streamText ?? [])]
   const streamObjectScripts = [...(config.streamObject ?? [])]
@@ -88,6 +91,7 @@ export function scriptedGateway(config: ScriptedGatewayConfig = {}): ScriptedGat
 
   const calls: ScriptedGateway['calls'] = {
     generateImage: [],
+    transcribe: [],
     generateText: [],
     generateObject: [],
     streamText: [],
@@ -136,6 +140,15 @@ export function scriptedGateway(config: ScriptedGatewayConfig = {}): ScriptedGat
   }
 
   const gateway: SdkGateway = {
+    transcribe: async (args) => {
+      calls.transcribe.push(args as Record<string, unknown>)
+      const scripted = transcribeScripts.shift()
+      if (scripted instanceof Error) throw scripted
+      return (scripted ?? {
+        text: 'scripted transcript', segments: [], language: undefined, durationInSeconds: undefined,
+        warnings: [], responses: [], providerMetadata: {},
+      }) as unknown as Awaited<ReturnType<SdkGateway['transcribe']>>
+    },
     generateImage: async (args) => {
       calls.generateImage.push(args as Record<string, unknown>)
       const scripted = generateImageScripts.shift()
