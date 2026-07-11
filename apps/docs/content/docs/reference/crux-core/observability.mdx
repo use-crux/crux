@@ -303,6 +303,67 @@ export const run = internalAction({
 
 `@use-crux/convex/server` actions flush automatically by default. Pass `observabilityFlushTimeoutMs: false` only when an outer serverless boundary already flushes.
 
+## Serverless and edge hosts
+
+A physical invocation can end before a background timer ever fires, so wrap
+handlers instead of relying on `observe.flush()` placement alone.
+
+`withObservableInvocation()` (from `@use-crux/core/observability`) wraps a
+generic async handler, binds one scoped host lifecycle per call, and awaits a
+bounded final drain before returning or rethrowing:
+
+```ts
+import { withObservableInvocation } from "@use-crux/core/observability";
+
+export const handler = withObservableInvocation(
+  async (event) => {
+    // Crux work here
+  },
+  (event) => ({ remainingTimeMs: 5000 }),
+);
+```
+
+`withNodeObservableInvocation()` (from `@use-crux/core/observability/node`)
+adapts this to Node Lambda-style `(event, context)` handlers, reading
+`context.getRemainingTimeInMillis()` automatically.
+
+### Cloudflare Workers
+
+Workers isolates can outlive the returned `Response` via
+`ExecutionContext.waitUntil`, so `withWorkersObservableInvocation()` (from
+`@use-crux/core/observability/workers`) registers the final drain with
+`ctx.waitUntil()` instead of awaiting it inline — telemetry drains in the
+background with no added response latency:
+
+```ts
+import { withWorkersObservableInvocation } from "@use-crux/core/observability/workers";
+
+const handleFetch = withWorkersObservableInvocation(
+  async (request, env, ctx) => {
+    // Crux work here
+    return new Response("ok");
+  },
+  (request, env, ctx) => ctx,
+  (ctx, request) => ({ flushTimeoutMs: 5000 }),
+);
+
+export default { fetch: handleFetch };
+```
+
+A raw Worker `fetch` handler must pass its `ExecutionContext` to the wrapper
+once, as shown above — `@use-crux/core/observability` has no way to discover
+`ctx` on its own. `@use-crux/core/observability/workers` never imports
+Cloudflare's runtime types and needs no `nodejs_compat` compatibility flag;
+`CruxExecutionContext` is a structural type satisfied by anything exposing
+`waitUntil(promise)`.
+
+Explicit propagation is the correctness path across Workers requests and
+isolates: use `observe.openRun(...).suspend({ reason })` to obtain a
+serializable `CruxPropagationCarrier`, hand it off (queue message, KV, a
+follow-up request body), and call `observe.resumeRun(carrier, { reason })` in
+the next request to continue the same logical run in a fresh segment. Neither
+call depends on `AsyncLocalStorage` or any state shared between isolates.
+
 Use `createHttpObservabilityTransport()` to send canonical batches to the local Crux backend endpoint:
 
 ```ts

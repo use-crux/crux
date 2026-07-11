@@ -57,7 +57,14 @@ export interface QueuedRecord {
 export interface DeliveryState extends DeliveryRetryState {
   transport: CruxObservabilityTransport | undefined
   options: NormalizedObservabilityDeliveryOptions
-  readonly sourceId: string
+  /**
+   * Lazily minted by {@link ensureSourceId} on first actual use, never at
+   * state construction. Generating it eagerly would call into random-ID
+   * generation from module scope for any consumer whose delivery engine is a
+   * module-level singleton (as `observe.ts`'s is), and Workers/workerd
+   * disallows random generation and other I/O outside a request handler.
+   */
+  sourceId: string | undefined
   readonly pendingDeliveries: Set<Promise<void>>
   pendingRecordCount: number
   pendingBytes: number
@@ -115,7 +122,7 @@ export function initialDeliveryState(): DeliveryState {
   return {
     transport: undefined,
     options: defaultDeliveryOptions(),
-    sourceId: `source_${createCruxSegmentId().slice(4)}`,
+    sourceId: undefined,
     pendingDeliveries: new Set(),
     pendingRecordCount: 0,
     pendingBytes: 0,
@@ -213,9 +220,15 @@ export function supersededChangeSignal(state: DeliveryState): Promise<void> {
   return state.supersededChangeWait
 }
 
+/** Lazily mint (and cache) this engine instance's source id on first actual use. */
+export function ensureSourceId(state: DeliveryState): string {
+  if (!state.sourceId) state.sourceId = `source_${createCruxSegmentId().slice(4)}`
+  return state.sourceId
+}
+
 export function sourceHealthSnapshot(state: DeliveryState): CruxDeliverySourceHealth {
   return {
-    sourceId: state.sourceId,
+    sourceId: ensureSourceId(state),
     accepted: state.accepted,
     retried: state.retried,
     permanentlyRejected: state.permanentlyRejected,

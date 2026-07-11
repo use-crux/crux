@@ -80,6 +80,10 @@
       "types": "./src/observability/node.ts",
       "import": "./src/observability/node.ts"
     },
+    "./observability/workers": {
+      "types": "./src/observability/workers.ts",
+      "import": "./src/observability/workers.ts"
+    },
     "./embedding": {
       "types": "./src/embedding/index.ts",
       "import": "./src/embedding/index.ts"
@@ -220,6 +224,9 @@
       "observability/node": [
         "src/observability/node.ts"
       ],
+      "observability/workers": [
+        "src/observability/workers.ts"
+      ],
       "embedding": [
         "src/embedding/index.ts"
       ],
@@ -303,15 +310,19 @@
   "scripts": {
     "test": "vitest run",
     "test:observability:serverless": "vitest run __tests__/observability/serverless-freeze.test.ts",
+    "test:observability:workers": "vitest run --config vitest.workers.config.ts",
     "typecheck": "node ./scripts/check-no-explicit-any.mjs && tsc -p tsconfig.json --noEmit",
     "typecheck:any:update": "node ./scripts/check-no-explicit-any.mjs --update-baseline"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.4",
+    "@cloudflare/workers-types": "^5.20260710.1",
     "@types/node": "^24.0.0",
     "esbuild": "^0.28.0",
     "fast-check": "^4.8.0",
     "typescript": "5.9.3",
-    "vitest": "^4.1.7"
+    "vitest": "^4.1.7",
+    "wrangler": "^4.110.0"
   },
   "repository": {
     "type": "git",

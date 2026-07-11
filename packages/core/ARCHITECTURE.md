@@ -160,6 +160,10 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── errors.ts       Normalized observed error summaries, safe raw capture, stack/cause extraction, redaction, and truncation
 │   ├── transport.ts    Transport interface plus in-memory and HTTP graph transports
 │   ├── devtools.ts     withDevtools() plugin + enableDevtools() — installs the canonical observability transport
+│   ├── continuation.ts W3C/Crux propagation carrier: create/sanitize/inject/extract, continuation identity
+│   ├── handler.ts       withObservableInvocation() — generic serverless wrapper: scoped host lifecycle, bounded final drain
+│   ├── node.ts (subpath `/observability/node`)     withNodeObservableInvocation() — Lambda-style (event, context) adapter over handler.ts
+│   ├── workers.ts (subpath `/observability/workers`)  withWorkersObservableInvocation() — structural ExecutionContext wrapper; registers the final drain with `ctx.waitUntil()` instead of awaiting it, so it never needs `observe.withHostLifecycle()`'s AsyncLocalStorage-dependent ambient scoping
 │   └── fixtures/       Shared TS/Go contract fixtures
 ├── routing/
 │   ├── index.ts        Barrel: router(), split(), retry(), cascade(), fallback(), resolveModel(), receipt helpers, and error types
