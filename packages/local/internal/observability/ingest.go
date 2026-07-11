@@ -84,11 +84,20 @@ func (s *Service) ingest(ctx context.Context, batch Batch) (err error) {
 		return fmt.Errorf("reconcile observability run/segment lifecycle: %w", err)
 	}
 
+	affectedRunIDs := make([]string, 0, len(statements.affectedRuns))
+	for runID := range statements.affectedRuns {
+		affectedRunIDs = append(affectedRunIDs, runID)
+	}
+	revisions, err := bumpRunRevisions(ctx, tx, affectedRunIDs, s.revisionLogRetentionOrDefault())
+	if err != nil {
+		return fmt.Errorf("advance observability run revisions: %w", err)
+	}
+
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit observability ingest transaction: %w", err)
 	}
 	committed = true
-	s.publishIngestEvents(runTraceIDs, tokenChunks)
+	s.publishIngestEvents(runTraceIDs, tokenChunks, revisions)
 	return nil
 }
 
@@ -103,12 +112,18 @@ func tokenChunkRecord(record Record) (SpanEventRecord, bool) {
 	return event, event.Name == tokenChunkEventName
 }
 
-func (s *Service) publishIngestEvents(runTraceIDs map[string]string, tokenChunks []SpanEventRecord) {
+// publishIngestEvents runs only after the ingest transaction has committed,
+// so a subscriber never observes a revision or run id that references
+// projections it cannot yet query.
+func (s *Service) publishIngestEvents(runTraceIDs map[string]string, tokenChunks []SpanEventRecord, revisions map[string]int64) {
 	now := time.Now().UnixMilli()
 	for runID, traceID := range runTraceIDs {
-		payloadMap := map[string]any{"runId": runID}
+		payloadMap := map[string]any{"runId": runID, "entity": "run"}
 		if traceID != "" {
 			payloadMap["traceId"] = traceID
+		}
+		if revision, ok := revisions[runID]; ok {
+			payloadMap["revision"] = revision
 		}
 		payload, _ := json.Marshal(payloadMap)
 		s.events.Publish(Event{

@@ -3,9 +3,11 @@ package localserver
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
@@ -81,6 +83,36 @@ func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Serv
 		writeObservabilityRead(w, runs, err)
 	})
 
+	// GET /api/observability/runs/page is the joined, revisioned Runs read
+	// model (binding spec 04 §3-4): stable filters/pagination executed in SQL
+	// before enrichment, a server-owned revision, and a stable next cursor.
+	// It is additive — GET /api/observability/runs keeps its existing bare
+	// array shape until DevTools migrates its Runs UI onto this contract.
+	mux.HandleFunc("GET /api/observability/runs/page", func(w http.ResponseWriter, r *http.Request) {
+		if service == nil {
+			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		page, err := service.RunsPage(r.Context(), parseObservabilityRunListOptions(r))
+		writeObservabilityRead(w, page, err)
+	})
+
+	// GET /api/observability/runs/delta is the bounded catch-up endpoint for a
+	// reconnecting client presenting the last revision it applied.
+	mux.HandleFunc("GET /api/observability/runs/delta", func(w http.ResponseWriter, r *http.Request) {
+		if service == nil {
+			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		since, err := parseObservabilityRevisionQueryParam(r, "since")
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		delta, err := service.RunsSince(r.Context(), since)
+		writeObservabilityRead(w, delta, err)
+	})
+
 	mux.HandleFunc("GET /api/observability/runs/{runId}", func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
@@ -136,7 +168,25 @@ func parseObservabilityRunListOptions(r *http.Request) observability.RunListOpti
 		}
 	}
 	opts.SessionID = r.URL.Query().Get("sessionId")
+	if value := r.URL.Query().Get("status"); value != "" {
+		opts.Status = strings.Split(value, ",")
+	}
+	opts.Since = r.URL.Query().Get("since")
+	opts.Until = r.URL.Query().Get("until")
+	opts.Cursor = r.URL.Query().Get("cursor")
 	return opts
+}
+
+func parseObservabilityRevisionQueryParam(r *http.Request, name string) (int64, error) {
+	value := r.URL.Query().Get(name)
+	if value == "" {
+		return 0, nil
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s query parameter", name)
+	}
+	return parsed, nil
 }
 
 func parseObservabilitySpanEventListOptions(r *http.Request) observability.SpanEventListOptions {

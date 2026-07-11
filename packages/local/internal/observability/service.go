@@ -45,6 +45,9 @@ type Service struct {
 
 	retentionSettings  retentionSettings
 	lifecycleRunDetail func(context.Context, string) (RunDetail, error)
+	// revisionLogRetention bounds the change log; tests shrink it to exercise
+	// catch-up expiry deterministically. Zero uses defaultRevisionLogRetention.
+	revisionLogRetention int
 
 	tokenMu      sync.Mutex
 	tokenPending map[tokenChunkKey]pendingTokenChunk
@@ -112,36 +115,57 @@ func (b *EventBus) Publish(event Event) {
 }
 
 type RunSummary struct {
-	RunID              string          `json:"runId"`
-	TraceID            string          `json:"traceId"`
-	SessionID          string          `json:"sessionId,omitempty"`
-	UserID             string          `json:"userId,omitempty"`
-	Name               string          `json:"name"`
-	RootPrimitive      string          `json:"rootPrimitive"`
-	Status             string          `json:"status"`
-	StartedAt          string          `json:"startedAt"`
-	EndedAt            string          `json:"endedAt"`
-	DurationMs         float64         `json:"durationMs"`
-	Model              string          `json:"model"`
-	Provider           string          `json:"provider"`
-	PromptID           string          `json:"promptId"`
-	RecordCount        int             `json:"recordCount"`
-	SpanCount          int             `json:"spanCount"`
-	EventCount         int             `json:"eventCount"`
-	ArtifactCount      int             `json:"artifactCount"`
-	EdgeCount          int             `json:"edgeCount"`
-	SegmentCount       int             `json:"segmentCount"`
-	ActiveSegmentID    string          `json:"activeSegmentId,omitempty"`
-	OrderingConfidence string          `json:"orderingConfidence"`
-	GapCount           int             `json:"gapCount"`
-	TraceAliasConflict bool            `json:"traceAliasConflict,omitempty"`
-	inputTokens        int             `json:"-"`
-	outputTokens       int             `json:"-"`
-	costUSD            float64         `json:"-"`
-	lastActivityAt     string          `json:"-"`
-	Attributes         json.RawMessage `json:"attributes,omitempty"`
-	Metrics            json.RawMessage `json:"metrics,omitempty"`
-	Error              json.RawMessage `json:"error,omitempty"`
+	RunID              string  `json:"runId"`
+	TraceID            string  `json:"traceId"`
+	SessionID          string  `json:"sessionId,omitempty"`
+	UserID             string  `json:"userId,omitempty"`
+	Name               string  `json:"name"`
+	RootPrimitive      string  `json:"rootPrimitive"`
+	Status             string  `json:"status"`
+	StartedAt          string  `json:"startedAt"`
+	EndedAt            string  `json:"endedAt"`
+	DurationMs         float64 `json:"durationMs"`
+	Model              string  `json:"model"`
+	Provider           string  `json:"provider"`
+	PromptID           string  `json:"promptId"`
+	RecordCount        int     `json:"recordCount"`
+	SpanCount          int     `json:"spanCount"`
+	EventCount         int     `json:"eventCount"`
+	ArtifactCount      int     `json:"artifactCount"`
+	EdgeCount          int     `json:"edgeCount"`
+	SegmentCount       int     `json:"segmentCount"`
+	ActiveSegmentID    string  `json:"activeSegmentId,omitempty"`
+	OrderingConfidence string  `json:"orderingConfidence"`
+	GapCount           int     `json:"gapCount"`
+	TraceAliasConflict bool    `json:"traceAliasConflict,omitempty"`
+	inputTokens        int     `json:"-"`
+	outputTokens       int     `json:"-"`
+	costUSD            float64 `json:"-"`
+	LastActivityAt     string  `json:"lastActivityAt,omitempty"`
+	// Revision is the server-owned read-model revision this run last changed
+	// at. Zero means the run predates revision tracking (pre-Phase-11 rows
+	// before their next write).
+	Revision int64 `json:"revision"`
+	// DeliveryHealth reports this run's ingest/delivery health. Nil means no
+	// health signal has been correlated to the run at all, which callers must
+	// render as "unknown" rather than assuming healthy.
+	DeliveryHealth *RunDeliveryHealth `json:"deliveryHealth,omitempty"`
+	Attributes     json.RawMessage    `json:"attributes,omitempty"`
+	Metrics        json.RawMessage    `json:"metrics,omitempty"`
+	Error          json.RawMessage    `json:"error,omitempty"`
+}
+
+// RunDeliveryHealth reports what is truthfully known about ingest/delivery
+// health for one run. "unknown" is a distinct status from "healthy": the
+// server never invents correlation between a run and an out-of-band source
+// health signal it cannot actually trace back to that run.
+type RunDeliveryHealth struct {
+	// Status is "unknown" (no persisted correlation to any health signal),
+	// "healthy" (correlated signals with no rejects), or "degraded"
+	// (correlated signals report retries/rejects/drops).
+	Status      string `json:"status"`
+	Rejected    int    `json:"rejected,omitempty"`
+	LastKnownAt string `json:"lastKnownAt,omitempty"`
 }
 
 type RunListOptions struct {
@@ -152,9 +176,30 @@ type RunListOptions struct {
 	// SessionID restricts the run list to runs that were started with this
 	// correlator. Empty means no session filter.
 	SessionID string
+	// Status restricts the run list to these lifecycle statuses. Empty means
+	// no status filter. Applied in SQL before Limit/Offset so filters are
+	// evaluated over the full history, not just the newest window.
+	Status []string
+	// Since/Until bound startedAt (RFC3339Nano, inclusive) before Limit/Offset.
+	Since string
+	Until string
+	// Cursor requests the page strictly after this opaque, server-issued
+	// cursor (see RunsPage/NextCursor) instead of Offset. Cursor pagination is
+	// stable across concurrent inserts; Offset is not and remains only for
+	// legacy/maintenance callers.
+	Cursor string
 	// IncludeExpensiveRollups asks list reads to scan span/event metric JSON.
 	// UI list endpoints leave this off; single-run detail reads remain exact.
 	IncludeExpensiveRollups bool
+}
+
+// RunsResponse is the one joined, revisioned Runs read model. Revision is the
+// server's current revision at read time; NextCursor is set when more rows
+// exist beyond Limit.
+type RunsResponse struct {
+	Revision   int64        `json:"revision"`
+	Rows       []RunSummary `json:"rows"`
+	NextCursor string       `json:"nextCursor,omitempty"`
 }
 
 type SpanEventListOptions struct {

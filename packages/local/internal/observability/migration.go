@@ -220,6 +220,25 @@ func observabilitySchemaStatements() []string {
 			last_error_message TEXT,
 			updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
+		// observability_revision is a single-row monotonic counter. Every run
+		// touched by a committed ingest transaction is assigned the next value,
+		// so the Runs read model can report a response-level revision and
+		// clients can detect which rows changed since a prior read.
+		`CREATE TABLE IF NOT EXISTS observability_revision (
+			id INTEGER PRIMARY KEY CHECK (id = 1),
+			value INTEGER NOT NULL DEFAULT 0
+		)`,
+		// observability_run_revision_log is a bounded change log used for
+		// server-owned delta/catch-up: reconnect clients present the last
+		// revision they applied and get back only the runs touched since,
+		// or an explicit expired signal once the log has been pruned past
+		// their watermark.
+		`CREATE TABLE IF NOT EXISTS observability_run_revision_log (
+			revision INTEGER PRIMARY KEY,
+			run_id TEXT NOT NULL,
+			changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_run_revision_log_run ON observability_run_revision_log(run_id)`,
 	}
 }
 
@@ -263,10 +282,17 @@ func createObservabilitySchema(ctx context.Context, runner sqliteRunner) error {
 		{name: "last_activity_at", ddl: `ALTER TABLE runs ADD COLUMN last_activity_at TEXT`},
 		{name: "lifecycle_status", ddl: `ALTER TABLE runs ADD COLUMN lifecycle_status TEXT`},
 		{name: "lifecycle_checked_at", ddl: `ALTER TABLE runs ADD COLUMN lifecycle_checked_at TEXT`},
+		{name: "revision", ddl: `ALTER TABLE runs ADD COLUMN revision INTEGER NOT NULL DEFAULT 0`},
 	} {
 		if err := ensureColumn(ctx, runner, "runs", column.name, column.ddl); err != nil {
 			return err
 		}
+	}
+	if _, err := runner.ExecContext(ctx, `INSERT OR IGNORE INTO observability_revision (id, value) VALUES (1, 0)`); err != nil {
+		return fmt.Errorf("seed observability revision counter: %w", err)
+	}
+	if _, err := runner.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_runs_revision ON runs(revision)`); err != nil {
+		return fmt.Errorf("create runs revision index: %w", err)
 	}
 	if _, err := runner.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_records_run_segment_seq ON records(run_id, segment_id, segment_seq, received_at, record_id)`); err != nil {
 		return fmt.Errorf("create records segment sequence index: %w", err)
@@ -373,6 +399,8 @@ func dropObservabilityTables(ctx context.Context, runner sqliteRunner) error {
 		"run_segments",
 		"ingest_health",
 		"observability_source_health",
+		"observability_revision",
+		"observability_run_revision_log",
 	} {
 		if _, err := runner.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
 			return fmt.Errorf("reset pre-v2 observability table %s: %w", table, err)

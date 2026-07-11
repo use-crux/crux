@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,7 +31,11 @@ func (s *Service) Run(ctx context.Context, runID string) (RunSummary, error) {
 	if err := s.enrichRunSummary(ctx, &run); err != nil {
 		return RunSummary{}, err
 	}
-	return run, nil
+	runs := []RunSummary{run}
+	if err := s.enrichRunDeliveryHealth(ctx, runs); err != nil {
+		return RunSummary{}, err
+	}
+	return runs[0], nil
 }
 
 func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCounts bool) (RunSummary, error) {
@@ -55,7 +60,7 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 			ifnull(r.status, ''), ifnull(r.started_at, ''), ifnull(r.ended_at, ''),
 			ifnull(r.duration_ms, 0),
 			'', '', '',`+countProjection+`,
-			ifnull(r.last_activity_at, ''),
+			ifnull(r.last_activity_at, ''), r.revision,
 			r.attributes_json, r.metrics_json, r.error_json
 		FROM runs r
 		WHERE r.run_id = ?
@@ -83,7 +88,8 @@ func (s *Service) loadRunSummary(ctx context.Context, runID string, includeCount
 		&run.inputTokens,
 		&run.outputTokens,
 		&run.costUSD,
-		&run.lastActivityAt,
+		&run.LastActivityAt,
+		&run.Revision,
 		&attributes,
 		&metrics,
 		&errorJSON,
@@ -101,10 +107,25 @@ func (s *Service) Runs(ctx context.Context) ([]RunSummary, error) {
 }
 
 func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]RunSummary, error) {
+	runs, _, err := s.runsWithOptions(ctx, opts)
+	return runs, err
+}
+
+// runsWithOptions is the shared core behind RunsWithOptions and RunsPage. All
+// status/time-range/session filtering and cursor pagination happen in SQL,
+// before any row is truncated by LIMIT, so a filtered query is never silently
+// restricted to whatever fit in the newest-first window. It returns the
+// fetchedLimit actually applied (0 when unbounded) so callers can detect a
+// full page and compute a next cursor.
+func (s *Service) runsWithOptions(ctx context.Context, opts RunListOptions) ([]RunSummary, int, error) {
 	queryCtx, cancel := s.queryContext(ctx)
 	defer cancel()
 
 	limit, offset, limited := normalizeRunListOptions(opts)
+	where, args, err := runListWhereClause(opts)
+	if err != nil {
+		return nil, 0, err
+	}
 	query := `
 		SELECT
 			r.run_id, ifnull(r.trace_id, ''), ifnull(r.session_id, ''), ifnull(r.user_id, ''),
@@ -114,22 +135,22 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 			'', '', '',
 			r.record_count, r.span_count, r.event_count, r.artifact_count, r.edge_count,
 			r.total_input_tokens, r.total_output_tokens, r.total_cost_usd,
-			ifnull(r.last_activity_at, ''),
+			ifnull(r.last_activity_at, ''), r.revision,
 			r.attributes_json, r.metrics_json, r.error_json
 			FROM runs r`
-	args := []any{}
-	if opts.SessionID != "" {
-		query += ` WHERE r.session_id = ?`
-		args = append(args, opts.SessionID)
+	if where != "" {
+		query += ` WHERE ` + where
 	}
 	query += ` ORDER BY r.started_at DESC, r.run_id DESC`
+	appliedLimit := 0
 	if limited {
+		appliedLimit = limit
 		query += ` LIMIT ? OFFSET ?`
 		args = append(args, limit, offset)
 	}
 	rows, err := s.db.QueryContext(queryCtx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query observability runs: %w", err)
+		return nil, 0, fmt.Errorf("query observability runs: %w", err)
 	}
 
 	var runs []RunSummary
@@ -158,12 +179,13 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 			&run.inputTokens,
 			&run.outputTokens,
 			&run.costUSD,
-			&run.lastActivityAt,
+			&run.LastActivityAt,
+			&run.Revision,
 			&attributes,
 			&metrics,
 			&errorJSON,
 		); err != nil {
-			return nil, fmt.Errorf("scan observability run: %w", err)
+			return nil, 0, fmt.Errorf("scan observability run: %w", err)
 		}
 		run.Attributes = json.RawMessage(attributes)
 		run.Metrics = json.RawMessage(metrics)
@@ -172,15 +194,148 @@ func (s *Service) RunsWithOptions(ctx context.Context, opts RunListOptions) ([]R
 	}
 	if err := rows.Err(); err != nil {
 		_ = rows.Close()
-		return nil, fmt.Errorf("iterate observability runs: %w", err)
+		return nil, 0, fmt.Errorf("iterate observability runs: %w", err)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, fmt.Errorf("close observability runs rows: %w", err)
+		return nil, 0, fmt.Errorf("close observability runs rows: %w", err)
 	}
 	if err := s.enrichRunSummaries(ctx, runs, opts.IncludeExpensiveRollups); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return runs, nil
+	if err := s.enrichRunDeliveryHealth(ctx, runs); err != nil {
+		return nil, 0, err
+	}
+	return runs, appliedLimit, nil
+}
+
+// runListWhereClause builds the SQL predicate for status/session/time-range
+// filters and, when a Cursor is present, the keyset predicate that continues
+// strictly after the row the cursor names. All of this runs before LIMIT so
+// filtered/paginated counts and visible rows agree with each other.
+func runListWhereClause(opts RunListOptions) (string, []any, error) {
+	var clauses []string
+	var args []any
+	if opts.SessionID != "" {
+		clauses = append(clauses, `r.session_id = ?`)
+		args = append(args, opts.SessionID)
+	}
+	if len(opts.Status) > 0 {
+		clauses = append(clauses, `r.status IN (`+queryPlaceholders(len(opts.Status))+`)`)
+		args = append(args, queryArgs(opts.Status)...)
+	}
+	if opts.Since != "" {
+		clauses = append(clauses, `ifnull(r.started_at, '') >= ?`)
+		args = append(args, opts.Since)
+	}
+	if opts.Until != "" {
+		clauses = append(clauses, `ifnull(r.started_at, '') <= ?`)
+		args = append(args, opts.Until)
+	}
+	if opts.Cursor != "" {
+		startedAt, runID, err := decodeRunListCursor(opts.Cursor)
+		if err != nil {
+			return "", nil, err
+		}
+		clauses = append(clauses, `(ifnull(r.started_at, '') < ? OR (ifnull(r.started_at, '') = ? AND r.run_id < ?))`)
+		args = append(args, startedAt, startedAt, runID)
+	}
+	if len(clauses) == 0 {
+		return "", nil, nil
+	}
+	return strings.Join(clauses, " AND "), args, nil
+}
+
+func encodeRunListCursor(startedAt, runID string) string {
+	return base64.RawURLEncoding.EncodeToString([]byte(startedAt + "\x00" + runID))
+}
+
+func decodeRunListCursor(cursor string) (string, string, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(cursor)
+	if err != nil {
+		return "", "", fmt.Errorf("invalid observability runs cursor: %w", err)
+	}
+	parts := strings.SplitN(string(raw), "\x00", 2)
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid observability runs cursor: malformed payload")
+	}
+	return parts[0], parts[1], nil
+}
+
+// RunsPage is the one joined, revisioned Runs read model: it runs
+// filters/pagination in SQL before enrichment, batches Quality-correlation-
+// adjacent delivery-health/segment/rollup joins so they never scale per row,
+// and reports the server's current revision alongside a stable cursor for
+// the next page.
+func (s *Service) RunsPage(ctx context.Context, opts RunListOptions) (RunsResponse, error) {
+	runs, appliedLimit, err := s.runsWithOptions(ctx, opts)
+	if err != nil {
+		return RunsResponse{}, err
+	}
+	revision, err := s.CurrentRevision(ctx)
+	if err != nil {
+		return RunsResponse{}, err
+	}
+	response := RunsResponse{Revision: revision, Rows: runs}
+	if appliedLimit > 0 && len(runs) == appliedLimit {
+		last := runs[len(runs)-1]
+		response.NextCursor = encodeRunListCursor(last.StartedAt, last.RunID)
+	}
+	return response, nil
+}
+
+// enrichRunDeliveryHealth batches one ingest_health query across every run in
+// the page, instead of one query per row, and reports "unknown" for runs
+// with no persisted health signal rather than defaulting to "healthy".
+func (s *Service) enrichRunDeliveryHealth(ctx context.Context, runs []RunSummary) error {
+	if len(runs) == 0 {
+		return nil
+	}
+	byRunID := make(map[string]*RunSummary, len(runs))
+	runIDs := make([]string, 0, len(runs))
+	for i := range runs {
+		runs[i].DeliveryHealth = &RunDeliveryHealth{Status: "unknown"}
+		byRunID[runs[i].RunID] = &runs[i]
+		runIDs = append(runIDs, runs[i].RunID)
+	}
+	for _, batch := range runIDBatches(runIDs, runSummaryRollupBatchSize) {
+		if err := s.enrichRunDeliveryHealthBatch(ctx, batch, byRunID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Service) enrichRunDeliveryHealthBatch(ctx context.Context, runIDs []string, byRunID map[string]*RunSummary) error {
+	batchCtx, cancel := s.queryContext(ctx)
+	defer cancel()
+	rows, err := s.db.QueryContext(batchCtx, `
+		SELECT run_id, sum(occurrence_count), max(last_seen_at)
+		FROM ingest_health
+		WHERE run_id IN (`+queryPlaceholders(len(runIDs))+`)
+		GROUP BY run_id
+	`, queryArgs(runIDs)...)
+	if err != nil {
+		return fmt.Errorf("query observability delivery health rollups: %w", err)
+	}
+	for rows.Next() {
+		var runID, lastSeenAt string
+		var rejected int
+		if err := rows.Scan(&runID, &rejected, &lastSeenAt); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("scan observability delivery health rollup: %w", err)
+		}
+		if run := byRunID[runID]; run != nil {
+			run.DeliveryHealth = &RunDeliveryHealth{Status: "degraded", Rejected: rejected, LastKnownAt: lastSeenAt}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return fmt.Errorf("iterate observability delivery health rollups: %w", err)
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("close observability delivery health rollups rows: %w", err)
+	}
+	return nil
 }
 
 func normalizeRunListOptions(opts RunListOptions) (int, int, bool) {
@@ -801,6 +956,11 @@ func (s *Service) graph(ctx context.Context, runID string, includeRecords bool) 
 		return Graph{}, fmt.Errorf("list edges for run %q: %w", runID, err)
 	}
 	applyRunSummaryGraphRollups(&run, spans, events, artifacts, edges)
+	graphRuns := []RunSummary{run}
+	if err := s.enrichRunDeliveryHealth(ctx, graphRuns); err != nil {
+		return Graph{}, err
+	}
+	run = graphRuns[0]
 
 	var records []StoredRecord
 	if includeRecords {

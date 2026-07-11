@@ -30,6 +30,7 @@ func deleteRunRows(ctx context.Context, tx *sql.Tx, runIDs []string) error {
 		"artifacts",
 		"edges",
 		"spans",
+		"observability_run_revision_log",
 		"runs",
 	}
 	for _, table := range tables {
