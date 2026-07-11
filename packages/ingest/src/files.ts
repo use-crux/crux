@@ -176,7 +176,7 @@ function normalizeExtension(extension: string): IngestFormat {
 
 function resolveFileFormat(extension: string, contentType: string | undefined, bytes: Uint8Array): IngestFormat {
   const media = inferMediaFormat({ extension, contentType, bytes })
-  return media === 'image' ? media : normalizeExtension(extension)
+  return media !== 'unknown' ? media : normalizeExtension(extension)
 }
 
 async function assetBytes(asset: Asset): Promise<Uint8Array> {

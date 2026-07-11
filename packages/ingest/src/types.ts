@@ -1,6 +1,11 @@
 import type { Asset, AudioSource, Message, TranscriptionResult } from '@use-crux/core'
 
-export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
+export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
+
+/** Explicit source coordinates retained by derived ingest parts. */
+export type IngestSourceLocation =
+  | { readonly type: 'page'; readonly pageNumber: number }
+  | { readonly type: 'time'; readonly unit: 'seconds'; readonly start: number; readonly end: number }
 
 export type IngestWarningCode =
   | 'unsupported_embedded_object'
@@ -35,6 +40,7 @@ export interface IngestPartBase {
   content?: string
   metadata?: Record<string, unknown>
   warnings?: IngestWarning[]
+  sourceLocation?: IngestSourceLocation
 }
 
 export interface IngestTextPart extends IngestPartBase {
@@ -117,7 +123,9 @@ export interface IngestMediaOperations {
     maxOutputTokens?: number
   }>) => Promise<{ readonly text: string }>
   /** Bound transcription operation used by audio ingestion. */
-  readonly transcribe?: (input: Readonly<{ audio: AudioSource; abortSignal?: AbortSignal }>) => Promise<TranscriptionResult>
+  readonly transcribe?: (input: Readonly<{ audio: AudioSource; abortSignal?: AbortSignal }>) => Promise<
+    TranscriptionResult<unknown, unknown, unknown>
+  >
 }
 
 export interface IngestParser {

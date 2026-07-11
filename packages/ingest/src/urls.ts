@@ -32,7 +32,8 @@ export function urlsSource(urls: string[], options: UrlsSourceOptions): SourceLo
 }
 
 async function loadUrlResult(url: string, options: UrlSourceOptions) {
-  const sourceId = options.sourceId ?? url
+  const sourceUrl = safeSourceUrl(url)
+  const sourceId = options.sourceId ?? sourceUrl
 
   try {
     if (!options.namespace.trim()) {
@@ -46,7 +47,7 @@ async function loadUrlResult(url: string, options: UrlSourceOptions) {
 
     const response = await fetchImpl(url)
     if (!response.ok) {
-      throw new Error(`Failed to fetch "${url}": ${response.status} ${response.statusText}`)
+      throw new Error(`Failed to fetch URL source: ${response.status} ${response.statusText}`)
     }
 
     const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
@@ -58,7 +59,7 @@ async function loadUrlResult(url: string, options: UrlSourceOptions) {
       bytes,
       format,
       metadata: {
-        sourceUrl: url,
+        sourceUrl,
         contentType,
       },
       options,
@@ -76,15 +77,24 @@ async function loadUrlResult(url: string, options: UrlSourceOptions) {
           ? String((error as { parser: unknown }).parser)
           : undefined,
       ),
-      metadata: { sourceUrl: url },
+      metadata: { sourceUrl },
     })
   }
+}
+
+function safeSourceUrl(value: string): string {
+  const url = new URL(value)
+  url.username = ''
+  url.password = ''
+  url.search = ''
+  url.hash = ''
+  return url.href
 }
 
 function inferFormat(contentType: string, url: string, bytes: Uint8Array): IngestFormat {
   const lowerUrl = url.toLowerCase()
   const media = inferMediaFormat({ extension: lowerUrl, contentType, bytes })
-  if (media === 'image') return media
+  if (media !== 'unknown') return media
   if (
     contentType.includes('application/pdf') ||
     lowerUrl.endsWith('.pdf') ||

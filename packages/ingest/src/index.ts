@@ -7,6 +7,7 @@ export type {
   IngestPagePart,
   IngestParser,
   IngestPart,
+  IngestSourceLocation,
   IngestSheetPart,
   IngestTablePart,
   IngestTextPart,

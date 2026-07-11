@@ -12,7 +12,7 @@ export const imageParser: IngestParser = {
     const generate = ctx.media?.generate
     const format = imageMediaType({
       extension: input.title,
-      contentType: typeof input.metadata?.contentType === 'string' ? input.metadata.contentType : undefined,
+      contentType: input.asset?.mediaType ?? (typeof input.metadata?.contentType === 'string' ? input.metadata.contentType : undefined),
       bytes: input.bytes,
     })
     if (!format) throw new Error(`Image source "${input.sourceId}" has an unsupported format; media.generate was not called.`)

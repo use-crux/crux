@@ -39,6 +39,80 @@ afterEach(async () => {
 })
 
 describe('@use-crux/ingest structured sources', () => {
+  it('derives one ordered text part per audio segment with seconds locations', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'meeting.wav')
+    await writeFile(path, new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]))
+    const transcribe = vi.fn(async () => ({
+      text: 'Hello world',
+      segments: [{ text: 'Hello', start: 0, end: 0.5 }, { text: 'world', start: 0.5, end: 1 }],
+      language: 'en', durationInSeconds: 1, warnings: ['native warning'],
+      metadata: { secret: 'provider-secret' }, raw: { secret: 'raw-secret' },
+    }))
+
+    const [document] = await collect(fileSource(path, { namespace: 'kb', media: { transcribe } }).documents())
+
+    expect(transcribe).toHaveBeenCalledTimes(1)
+    expect(document.parts).toMatchObject([
+      { content: 'Hello', sourceLocation: { type: 'time', unit: 'seconds', start: 0, end: 0.5 } },
+      { content: 'world', sourceLocation: { type: 'time', unit: 'seconds', start: 0.5, end: 1 } },
+    ])
+    expect(document.metadata).toMatchObject({ format: 'audio', parser: 'audio', language: 'en', durationInSeconds: 1 })
+    expect(document.warnings).toEqual([{ code: 'parser_warning', message: 'native warning' }])
+    expect(JSON.stringify(document)).not.toMatch(/raw-secret|provider-secret|82,73,70,70/)
+  })
+
+  it('uses one full transcript part without timing and propagates only StoredAsset refs', async () => {
+    const transcribe = vi.fn(async () => ({
+      text: 'Full transcript', segments: [], warnings: ['timing unavailable'], raw: null,
+    }))
+    const stored = {
+      type: 'data' as const,
+      data: new Uint8Array([0x49, 0x44, 0x33]),
+      mediaType: 'audio/mpeg',
+      filename: 'meeting.mp3',
+      ref: { uri: 'asset://meeting' },
+    }
+    const [document] = await collect(fileSource(stored, {
+      namespace: 'kb', sourceId: 'meeting', media: { transcribe },
+    }).documents())
+
+    expect(document.parts).toMatchObject([{ id: 'audio:text:1', content: 'Full transcript' }])
+    expect(document.metadata?.assetRef).toEqual({ uri: 'asset://meeting' })
+    expect(JSON.stringify(document)).not.toContain('73,68,51')
+  })
+
+  it('does not retain signed audio URLs after fetching', async () => {
+    const transcribe = vi.fn(async () => ({ text: 'Remote transcript', segments: [], raw: null }))
+    const [document] = await collect(urlSource('https://example.com/meeting.wav?signature=secret', {
+      namespace: 'kb', media: { transcribe },
+      fetch: async () => new Response(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]), {
+        headers: { 'content-type': 'audio/wav' },
+      }),
+    }).documents())
+
+    expect(document.sourceId).toBe('https://example.com/meeting.wav')
+    expect(document.metadata?.sourceUrl).toBe('https://example.com/meeting.wav')
+    expect(JSON.stringify(document)).not.toContain('secret')
+  })
+
+  it('fails precisely for missing transcription, invalid segments, and operation errors', async () => {
+    const dir = await makeTempDir()
+    const path = join(dir, 'meeting.wav')
+    await writeFile(path, new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]))
+    await expect(collect(fileSource(path, { namespace: 'kb' }).documents())).rejects.toThrow(/media\.transcribe/)
+
+    const invalid = vi.fn(async () => ({
+      text: 'Hello', segments: [{ text: 'Hello', start: 2, end: 1 }], raw: null,
+    }))
+    await expect(collect(fileSource(path, { namespace: 'kb', media: { transcribe: invalid } }).documents())).rejects.toThrow(/invalid seconds segments/)
+
+    const abort = Object.assign(new Error('operation aborted'), { name: 'AbortError' })
+    const failing = vi.fn(async () => Promise.reject(abort))
+    const [result] = await collect(fileSource(path, { namespace: 'kb', media: { transcribe: failing } }).load())
+    expect(result).toMatchObject({ ok: false, error: { message: 'operation aborted', parser: 'audio' } })
+  })
+
   it('derives ordinary text from image files through one bound media operation', async () => {
     const dir = await makeTempDir()
     const path = join(dir, 'chart.png')

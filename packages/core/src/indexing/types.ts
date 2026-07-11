@@ -63,9 +63,14 @@ export interface CruxIngestWarning {
   metadata?: Record<string, unknown>
 }
 
+/** Explicit source coordinates retained through indexing provenance. */
+export type CruxSourceLocation =
+  | { readonly type: 'page'; readonly pageNumber: number }
+  | { readonly type: 'time'; readonly unit: 'seconds'; readonly start: number; readonly end: number }
+
 /** A typed segment of an ingested document. */
-export type CruxIngestPart =
-  | {
+export type CruxIngestPart = (
+  {
       id: string
       kind: 'text'
       content: string
@@ -110,6 +115,7 @@ export type CruxIngestPart =
       valueType?: string
       metadata?: Record<string, unknown>
     }
+) & { readonly sourceLocation?: CruxSourceLocation }
 
 /** Where a chunk's content came from in its source document. */
 export interface ChunkProvenance {
@@ -118,6 +124,7 @@ export interface ChunkProvenance {
   sheets?: string[]
   tables?: string[]
   jsonPaths?: string[]
+  sourceLocations?: CruxSourceLocation[]
   sourceSpans?: Array<{
     start: number
     end: number

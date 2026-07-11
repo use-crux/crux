@@ -11,6 +11,7 @@ import { normalizeDocument } from './document'
 import { openIngestParseObservation } from './observability'
 import { parsePdf } from './pdf'
 import { imageParser } from './visual-image'
+import { audioParser } from './audio'
 import type {
   IngestDocument,
   IngestError,
@@ -304,6 +305,7 @@ export const builtInParsers: IngestParser[] = [
   htmlParser,
   pdfParser,
   imageParser,
+  audioParser,
   csvParser,
   jsonParser,
   docxParser,

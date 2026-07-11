@@ -25,6 +25,7 @@ export type {
   CruxParentChunk,
   CruxIngestWarning,
   CruxIngestPart,
+  CruxSourceLocation,
   ChunkProvenance,
   CruxIngestLoadResultLike,
   // Chunking + pipeline

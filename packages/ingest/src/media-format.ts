@@ -8,7 +8,27 @@ export function inferMediaFormat(input: {
   const extension = input.extension?.toLowerCase().split(/[?#]/, 1)[0] ?? ''
   const contentType = input.contentType?.toLowerCase().split(';', 1)[0] ?? ''
   if (isImageExtension(extension) || isImageType(contentType) || sniffImage(input.bytes)) return 'image'
+  if (isAudioExtension(extension) || isAudioType(contentType) || sniffAudio(input.bytes)) return 'audio'
   return 'unknown'
+}
+
+function isAudioType(value: string): boolean {
+  return ['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/x-m4a',
+    'audio/ogg', 'audio/flac', 'audio/x-flac', 'audio/webm'].includes(value)
+}
+
+function isAudioExtension(value: string): boolean {
+  return ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.webm'].some((extension) => value.endsWith(extension))
+}
+
+function sniffAudio(bytes: Uint8Array): string | undefined {
+  if (ascii(bytes, 0, 4) === 'RIFF' && ascii(bytes, 8, 4) === 'WAVE') return 'audio/wav'
+  if (ascii(bytes, 0, 4) === 'fLaC') return 'audio/flac'
+  if (ascii(bytes, 0, 4) === 'OggS') return 'audio/ogg'
+  if (ascii(bytes, 0, 3) === 'ID3' || (bytes[0] === 0xff && (bytes[1]! & 0xe0) === 0xe0)) return 'audio/mpeg'
+  if (bytes[0] === 0x1a && bytes[1] === 0x45 && bytes[2] === 0xdf && bytes[3] === 0xa3) return 'audio/webm'
+  if (ascii(bytes, 4, 4) === 'ftyp' && ['M4A ', 'M4B '].includes(ascii(bytes, 8, 4))) return 'audio/mp4'
+  return undefined
 }
 
 export function imageMediaType(input: { extension?: string; contentType?: string; bytes: Uint8Array }): string | undefined {
@@ -48,5 +68,6 @@ function starts(bytes: Uint8Array, prefix: readonly number[]): boolean {
 }
 
 function ascii(bytes: Uint8Array, start: number, length: number): string {
+  if (bytes.length < start + length) return ''
   return String.fromCharCode(...bytes.subarray(start, start + length))
 }
