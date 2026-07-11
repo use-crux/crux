@@ -30,6 +30,7 @@ export async function openAIStreamCompletion(
   const lastChoice = lastStreamChoice(values);
   const text = values.flatMap((chunk) => textDelta(chunk)).join("");
   const audioData = values.flatMap((chunk) => audioDelta(chunk)).join("");
+  const audioId = values.map((chunk) => audioIdDelta(chunk)).find((id) => id !== undefined);
   const toolCalls = collectToolCalls(values);
   const result = {
     id: last.id,
@@ -48,10 +49,9 @@ export async function openAIStreamCompletion(
           ...(audioData
             ? {
                 audio: {
-                  id: "",
-                  expires_at: 0,
                   data: audioData,
                   transcript: text,
+                  ...(audioId ? { id: audioId } : {}),
                 },
               }
             : {}),
@@ -98,6 +98,15 @@ function audioDelta(chunk: ChatCompletionChunk): string[] {
       | undefined
   )?.audio;
   return typeof audio?.data === "string" ? [audio.data] : [];
+}
+
+function audioIdDelta(chunk: ChatCompletionChunk): string | undefined {
+  const audio = (
+    chunk.choices[0]?.delta as
+      | { readonly audio?: { readonly id?: unknown } }
+      | undefined
+  )?.audio;
+  return typeof audio?.id === "string" && audio.id !== "" ? audio.id : undefined;
 }
 
 function collectToolCalls(chunks: readonly ChatCompletionChunk[]) {

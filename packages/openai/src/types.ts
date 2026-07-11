@@ -6,7 +6,7 @@ export interface OpenAIExtra extends Record<string, unknown> {
   readonly modalities?: readonly ("text" | "audio")[]
   /** Native generated-audio voice and container format. */
   readonly audio?: {
-    readonly format: "wav" | "mp3" | "flac" | "opus" | "pcm16"
+    readonly format: "wav" | "aac" | "mp3" | "flac" | "opus" | "pcm16"
     readonly voice: string
   }
   /** OpenAI tool definitions for function calling, bypassing Crux tool conversion. */

@@ -136,7 +136,20 @@ function decodeMessage(value: unknown): readonly ProviderTranscriptUnit[] {
   const toolResults: ProviderToolResult[] = [];
 
   for (const block of value.content) {
-    if (block.type === "text") {
+    if (isRedactedThinkingBlock(block)) {
+      contentParts.push({
+        type: "reasoning",
+        text: "",
+        providerOptions: {
+          anthropic: {
+            continuation: {
+              type: "redacted_thinking",
+              data: block.data,
+            },
+          },
+        },
+      });
+    } else if (block.type === "text") {
       contentParts.push({ type: "text", text: block.text });
     } else if (block.type === "thinking") {
       contentParts.push({
@@ -208,6 +221,16 @@ function mergeAdjacentText(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isRedactedThinkingBlock(
+  value: unknown,
+): value is { readonly type: "redacted_thinking"; readonly data: string } {
+  return (
+    isRecord(value) &&
+    value.type === "redacted_thinking" &&
+    typeof value.data === "string"
+  );
 }
 
 function isAnthropicMessageParam(

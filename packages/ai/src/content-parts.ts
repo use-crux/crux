@@ -251,6 +251,7 @@ function dataAsset(data: string, mediaType: string): Extract<ContentPart, { type
 
 function nativeMediaSource(value: unknown, mediaType: string | undefined): MediaSource | undefined {
   if (value instanceof URL || value instanceof Uint8Array) return value
+  if (value instanceof ArrayBuffer) return new Uint8Array(value)
   if (typeof Blob !== 'undefined' && value instanceof Blob) return value
   return typeof value === 'string' && mediaType ? dataAsset(value, mediaType) : undefined
 }
@@ -266,6 +267,7 @@ function decodedFilePart(
     ...(mediaType ? { mediaType } : {}),
     ...providerOptionsFrom(native),
   }
+  if (mediaType?.startsWith('image/')) return { type: 'image', ...shared }
   if (mediaType?.startsWith('audio/')) return { type: 'audio', ...shared }
   if (mediaType?.startsWith('video/')) return { type: 'video', ...shared }
   return {

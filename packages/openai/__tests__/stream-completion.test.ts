@@ -38,7 +38,11 @@ describe("OpenAI stream completion", () => {
       content: completion.content,
     });
     expect(completion.content).toContainEqual(
-      expect.objectContaining({ type: "audio", mediaType: "audio/mpeg" }),
+      expect.objectContaining({
+        type: "audio",
+        mediaType: "audio/mpeg",
+        providerOptions: { openai: { audioFormat: "mp3", audioId: "audio_1" } },
+      }),
     );
     expect(
       fromMessages([
@@ -99,12 +103,44 @@ describe("OpenAI stream completion", () => {
       content: completion.content,
     });
   });
+
+  it("marks streamed audio without a protocol id as unavailable for assistant continuation", async () => {
+    const client = {
+      chat: { completions: { create: async () => stream(false) } },
+    } as unknown as OpenAI;
+    const result = await createOpenAI(client).stream(
+      prompt({ id: "openai-stream-no-audio-id", prompt: "Inspect this." }),
+      {
+        model: "gpt-audio",
+        extra: {
+          modalities: ["text", "audio"],
+          audio: { format: "pcm16", voice: "alloy" },
+        },
+      },
+    );
+    for await (const _ of result.textStream) {
+      /* consume */
+    }
+    const completion = await result.completion;
+    expect(completion.content).toContainEqual(expect.objectContaining({
+      type: "audio",
+      mediaType: "audio/pcm",
+      providerOptions: {
+        openai: { audioFormat: "pcm16", audioContinuation: "unavailable" },
+      },
+    }));
+    expect(() => fromMessages([{ role: "assistant", content: completion.content }]))
+      .toThrow("native audio id");
+  });
 });
 
-function stream(): Stream<ChatCompletionChunk> {
+function stream(withAudioId = true): Stream<ChatCompletionChunk> {
   return {
     async *[Symbol.asyncIterator]() {
-      yield chunk({ content: "Listen", audio: { data: "AQ" } });
+      yield chunk({
+        content: "Listen",
+        audio: { ...(withAudioId ? { id: "audio_1" } : {}), data: "AQ" },
+      });
       yield chunk(
         {
           audio: { data: "ID" },

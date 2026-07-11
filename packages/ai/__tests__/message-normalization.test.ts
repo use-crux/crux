@@ -2,6 +2,43 @@ import { describe, expect, it, vi } from 'vitest'
 import { normalizeAiSdkMessages } from '../src/messages'
 
 describe('AI SDK message normalization', () => {
+  it('normalizes every documented native media data shape without dropping semantic media kinds', () => {
+    const bytes = new Uint8Array([1, 2, 3])
+    const buffer = bytes.buffer.slice(0)
+    const blob = new Blob([bytes], { type: 'video/mp4' })
+
+    const [message] = normalizeAiSdkMessages([
+      {
+        role: 'assistant',
+        content: [
+          { type: 'image', image: 'AQID', mediaType: 'image/png' },
+          { type: 'image', image: new URL('https://example.com/chart.png'), mediaType: 'image/png' },
+          { type: 'image', image: bytes, mediaType: 'image/png' },
+          { type: 'image', image: buffer, mediaType: 'image/png' },
+          { type: 'file', data: 'AQID', mediaType: 'audio/mpeg' },
+          { type: 'file', data: new URL('https://example.com/generated.png'), mediaType: 'image/png' },
+          { type: 'file', data: new URL('https://example.com/clip.mp4'), mediaType: 'video/mp4' },
+          { type: 'file', data: bytes, mediaType: 'application/pdf', filename: 'report.pdf' },
+          { type: 'file', data: buffer, mediaType: 'audio/wav' },
+          { type: 'file', data: blob, mediaType: 'video/mp4' },
+        ],
+      },
+    ])
+
+    expect(message?.content).toEqual([
+      expect.objectContaining({ type: 'image', source: expect.objectContaining({ type: 'data' }) }),
+      expect.objectContaining({ type: 'image', source: new URL('https://example.com/chart.png') }),
+      expect.objectContaining({ type: 'image', source: bytes }),
+      expect.objectContaining({ type: 'image', source: expect.any(Uint8Array) }),
+      expect.objectContaining({ type: 'audio', source: expect.objectContaining({ type: 'data' }) }),
+      expect.objectContaining({ type: 'image', source: new URL('https://example.com/generated.png') }),
+      expect.objectContaining({ type: 'video', source: new URL('https://example.com/clip.mp4') }),
+      expect.objectContaining({ type: 'file', source: bytes, filename: 'report.pdf' }),
+      expect.objectContaining({ type: 'audio', source: expect.any(Uint8Array) }),
+      expect.objectContaining({ type: 'video', source: blob }),
+    ])
+  })
+
   it('normalizes SDK text, image, and file parts into canonical content parts', () => {
     const messages = normalizeAiSdkMessages([
       {

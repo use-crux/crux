@@ -84,25 +84,26 @@ describe('openai multimodal transcript encoding', () => {
     ])
   })
 
-  it('makes generated audio immediately reusable with the requested format', () => {
-    const turn = openAITranscript.readAssistant(
-      {
-        choices: [
-          {
-            message: {
-              role: 'assistant',
-              content: 'Listen',
-              audio: { data: 'AQID' },
-            },
-          },
-        ],
-      } as unknown as ChatCompletion,
-      { request: { audio: { format: 'mp3', voice: 'alloy' } } },
-    )
+  it.each([
+    ['wav', 'audio/wav'],
+    ['aac', 'audio/aac'],
+    ['mp3', 'audio/mpeg'],
+    ['flac', 'audio/flac'],
+    ['opus', 'audio/opus'],
+    ['pcm16', 'audio/pcm'],
+  ] as const)('recovers honest generated-audio MIME for %s', (format, mediaType) => {
+    const turn = generatedAudioTurn(format)
 
-    expect(turn.content).toContainEqual(
-      expect.objectContaining({ type: 'audio', mediaType: 'audio/mpeg' }),
-    )
+    expect(turn.content).toContainEqual(expect.objectContaining({
+      type: 'audio',
+      mediaType,
+      providerOptions: { openai: { audioFormat: format, audioId: 'audio_1' } },
+    }))
+  })
+
+  it('makes generated mp3 audio immediately reusable as input', () => {
+    const turn = generatedAudioTurn('mp3')
+
     expect(
       fromMessages([
         {
@@ -118,6 +119,35 @@ describe('openai multimodal transcript encoding', () => {
           { type: 'input_audio', input_audio: { data: 'AQID', format: 'mp3' } },
         ],
       },
+    ])
+  })
+
+  it('encodes generated assistant audio by its native id during tool continuation', () => {
+    const turn = generatedAudioTurn('pcm16')
+    const next = openAITranscript.appendToolRound?.([], {
+      ...turn,
+      toolCalls: [{ id: 'tc_1', name: 'inspect', args: { page: 1 } }],
+    }, [{
+      toolCallId: 'tc_1',
+      name: 'inspect',
+      content: 'done',
+      modelOutput: { type: 'text', value: 'done' },
+      outputSize: 4,
+      modelOutputSize: 4,
+    }]) ?? []
+
+    expect(fromMessages(next)).toEqual([
+      {
+        role: 'assistant',
+        content: 'Listen',
+        audio: { id: 'audio_1' },
+        tool_calls: [{
+          id: 'tc_1',
+          type: 'function',
+          function: { name: 'inspect', arguments: '{"page":1}' },
+        }],
+      },
+      { role: 'tool', content: 'done', tool_call_id: 'tc_1' },
     ])
   })
 
@@ -146,3 +176,18 @@ describe('openai multimodal transcript encoding', () => {
     })
   })
 })
+
+function generatedAudioTurn(format: 'wav' | 'aac' | 'mp3' | 'flac' | 'opus' | 'pcm16') {
+  return openAITranscript.readAssistant(
+    {
+      choices: [{
+        message: {
+          role: 'assistant',
+          content: 'Listen',
+          audio: { id: 'audio_1', data: 'AQID' },
+        },
+      }],
+    } as unknown as ChatCompletion,
+    { request: { audio: { format, voice: 'alloy' } } },
+  )
+}

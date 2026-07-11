@@ -92,9 +92,12 @@ function sanitizeRecord(
   const keys = safeKeys(value);
   for (const key of keys.slice(0, MAX_KEYS)) {
     const child = safeProperty(value, key);
-    result[key] = SENSITIVE_MEDIA_KEY.test(key)
-      ? sanitizeLocator(key, child)
-      : sanitizeValue(child, state, depth + 1);
+    result[key] =
+      key === "continuation"
+        ? "[provider continuation]"
+        : SENSITIVE_MEDIA_KEY.test(key)
+          ? sanitizeLocator(key, child)
+          : sanitizeValue(child, state, depth + 1);
   }
   if (keys.length > MAX_KEYS) result.__truncated = true;
   return result;

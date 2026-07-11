@@ -71,9 +71,14 @@ function validateProviderOptions(part: ContentPart, path: string, issues: Unsupp
   if (part.type === 'text') return
   const options = part.providerOptions?.google
   if (!options) return
-  if (Object.keys(options).length === 1 && isMediaResolution(options.mediaResolution)) return
+  const keys = Object.keys(options)
+  if (
+    keys.every((key) => key === 'mediaResolution' || key === 'continuation') &&
+    (options.mediaResolution === undefined || isMediaResolution(options.mediaResolution)) &&
+    (options.continuation === undefined || isRecord(options.continuation))
+  ) return
   issues.push(
-    issue(part, path, 'Use only providerOptions.google.mediaResolution with level or numTokens on media parts.'),
+    issue(part, path, 'Use only Google media resolution or provider-issued continuation metadata on media parts.'),
   )
 }
 

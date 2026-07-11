@@ -11,6 +11,7 @@ import {
 } from "@use-crux/core";
 
 export {
+  continuationOptions,
   googlePartsText,
   messageContentFromGoogleParts,
   type GoogleInboundPart,
@@ -36,7 +37,10 @@ export function googleContentText(
 function googleContentPart(part: ContentPart): Part {
   switch (part.type) {
     case "text":
-      return { text: part.text };
+      return {
+        text: part.text,
+        ...continuationFields(part.providerOptions?.google?.continuation),
+      };
     case "image":
     case "audio":
     case "video":
@@ -56,7 +60,10 @@ function googleMediaPart(
       "Google media parts require a mediaType before request encoding.",
     );
   }
-  const displayName = part.type === "file" ? filename(part) : undefined;
+  const displayName =
+    part.type === "file"
+      ? filename(part)
+      : continuationDisplayName(part.providerOptions?.google?.continuation);
   const options = googlePartOptions(part);
   if (typeof source === "string")
     return { ...fileDataPart(source, mediaType, displayName), ...options };
@@ -92,9 +99,29 @@ function googleMediaPart(
 
 function googlePartOptions(
   part: Extract<ContentPart, { type: "image" | "audio" | "video" | "file" }>,
-): Pick<Part, "mediaResolution"> {
+): Record<string, unknown> {
   const mediaResolution = part.providerOptions?.google?.mediaResolution;
-  return isRecord(mediaResolution) ? { mediaResolution } : {};
+  const continuation = part.providerOptions?.google?.continuation;
+  return {
+    ...(isRecord(mediaResolution) ? { mediaResolution } : {}),
+    ...continuationFields(continuation),
+  };
+}
+
+function continuationFields(value: unknown): Record<string, unknown> {
+  return isRecord(value)
+    ? Object.fromEntries(
+        Object.entries(value).filter(
+          ([key]) => key !== "inlineDataDisplayName",
+        ),
+      )
+    : {};
+}
+
+function continuationDisplayName(value: unknown): string | undefined {
+  return isRecord(value) && typeof value.inlineDataDisplayName === "string"
+    ? value.inlineDataDisplayName
+    : undefined;
 }
 
 function filename(

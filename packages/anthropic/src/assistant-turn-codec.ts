@@ -66,7 +66,9 @@ export function readAnthropicAssistantTurn(
   const toolCalls: ProviderToolCall[] = [];
 
   for (const block of content) {
-    if (block.type === "thinking" && typeof block.thinking === "string") {
+    if (isRedactedThinkingBlock(block)) {
+      contentParts.push(redactedThinkingPart(block.data));
+    } else if (block.type === "thinking" && typeof block.thinking === "string") {
       contentParts.push({
         type: "reasoning",
         text: block.thinking,
@@ -115,6 +117,16 @@ function anthropicAssistantBlocks(
     if (part.type === "tool-call") return [];
     if (part.type !== "reasoning") return anthropicContentBlocks([part]);
 
+    const continuation = part.providerOptions?.anthropic?.continuation;
+    if (isRedactedThinkingBlock(continuation)) {
+      return [
+        {
+          type: "redacted_thinking",
+          data: continuation.data,
+        } as Anthropic.ContentBlockParam,
+      ];
+    }
+
     const signature = part.providerOptions?.anthropic?.signature;
     if (typeof signature !== "string" || signature === "") {
       throw createUnsupportedCapabilityError({
@@ -137,6 +149,28 @@ function anthropicAssistantBlocks(
       } as Anthropic.ContentBlockParam,
     ];
   });
+}
+
+function redactedThinkingPart(data: string): AssistantContentPart {
+  return {
+    type: "reasoning",
+    text: "",
+    providerOptions: {
+      anthropic: {
+        continuation: { type: "redacted_thinking", data },
+      },
+    },
+  };
+}
+
+function isRedactedThinkingBlock(
+  value: unknown,
+): value is { readonly type: "redacted_thinking"; readonly data: string } {
+  return (
+    isRecord(value) &&
+    value.type === "redacted_thinking" &&
+    typeof value.data === "string"
+  );
 }
 
 function toolInput(value: unknown): Record<string, unknown> {

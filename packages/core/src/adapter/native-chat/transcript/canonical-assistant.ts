@@ -1,4 +1,5 @@
 import type { AssistantContentPart } from "../../../types/content";
+import type { JsonValue, ProviderOptions } from "../../../types/tool";
 import type { ProviderToolCall } from "./units";
 
 /** Lower canonical assistant content to provider-neutral transcript fields. */
@@ -25,6 +26,9 @@ export function assistantTranscript(
           id: part.toolCallId,
           name: part.toolName,
           args: part.input,
+          ...(part.providerOptions
+            ? { providerOptions: part.providerOptions }
+            : {}),
         });
       }
       continue;
@@ -66,6 +70,7 @@ export function assistantContentWithToolCalls(
       toolCallId: call.id,
       toolName: call.name,
       input: call.args,
+      ...(call.providerOptions ? { providerOptions: call.providerOptions } : {}),
     });
   }
   return parts;
@@ -80,8 +85,36 @@ function toolCallsFromMetadata(value: unknown): ProviderToolCall[] {
       typeof item.name !== "string"
     )
       return [];
-    return [{ id: item.id, name: item.name, args: item.args }];
+    return [{
+      id: item.id,
+      name: item.name,
+      args: item.args,
+      ...(isProviderOptions(item.providerOptions)
+        ? { providerOptions: item.providerOptions }
+        : {}),
+    }];
   });
+}
+
+function isProviderOptions(value: unknown): value is ProviderOptions {
+  return (
+    isRecord(value) &&
+    Object.values(value).every(
+      (provider) =>
+        isRecord(provider) && Object.values(provider).every(isJsonValue),
+    )
+  );
+}
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (
+    value === null ||
+    typeof value === "string" ||
+    typeof value === "boolean"
+  ) return true;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.every(isJsonValue);
+  return isRecord(value) && Object.values(value).every(isJsonValue);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

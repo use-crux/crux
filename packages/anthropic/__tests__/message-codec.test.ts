@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
-import type { Message, ToolModelOutput } from "@use-crux/core";
+import { contentText, type Message, type ToolModelOutput } from "@use-crux/core";
 import { transcriptCodecConformance } from "@use-crux/core/adapter/testing";
 import type { ToolResultEntry } from "@use-crux/core/adapter";
 import {
@@ -10,6 +10,45 @@ import {
 } from "../src/message-codec";
 
 describe("anthropic transcript wire encoding", () => {
+  it("round-trips native redacted thinking without projecting its payload as text", () => {
+    const wire = [
+      {
+        role: "assistant",
+        content: [
+          { type: "redacted_thinking", data: "opaque-secret-payload" },
+          { type: "text", text: "Visible answer" },
+        ],
+      },
+    ];
+
+    const canonical = toMessages(wire);
+
+    expect(canonical).toEqual([
+      {
+        role: "assistant",
+        content: [
+          {
+            type: "reasoning",
+            text: "",
+            providerOptions: {
+              anthropic: {
+                continuation: {
+                  type: "redacted_thinking",
+                  data: "opaque-secret-payload",
+                },
+              },
+            },
+          },
+          { type: "text", text: "Visible answer" },
+        ],
+      },
+    ]);
+    expect(fromMessages(canonical)).toEqual(wire);
+    const projection = contentText(canonical[0]?.content ?? "");
+    expect(projection).toContain("Visible answer");
+    expect(projection).not.toContain("opaque-secret-payload");
+  });
+
   it("replays signed thinking and assistant media without silently dropping native blocks", () => {
     const canonical: Message[] = [
       {

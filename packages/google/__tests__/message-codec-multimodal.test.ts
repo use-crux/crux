@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { GenerateContentResponse } from '@google/genai'
-import { fromMessages, googleTranscript } from '../src/message-codec'
+import { fromMessages, googleTranscript, toMessages } from '../src/message-codec'
 
 describe('google multimodal transcript encoding', () => {
   it('serializes final image and PDF content parts to Google parts', () => {
@@ -82,5 +82,44 @@ describe('google multimodal transcript encoding', () => {
       ],
       toolCalls: undefined,
     })
+  })
+
+  it('round-trips assistant media with opaque thought continuation fields', () => {
+    const wire = [
+      {
+        role: 'model',
+        parts: [
+          {
+            text: 'Internal thought',
+            thought: true,
+            thoughtSignature: 'signed-text-thought',
+          },
+          {
+            inlineData: { data: 'AQID', mimeType: 'image/png', displayName: 'chart.png' },
+            thought: true,
+            thoughtSignature: 'signed-media-thought',
+          },
+          {
+            fileData: {
+              fileUri: 'https://example.com/report.pdf',
+              mimeType: 'application/pdf',
+              displayName: 'report.pdf',
+            },
+            thoughtSignature: 'signed-file-thought',
+          },
+        ],
+      },
+    ]
+
+    const canonical = toMessages(wire)
+    expect(canonical[0]?.content).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'reasoning', text: 'Internal thought' }),
+    ]))
+    expect(fromMessages(canonical)).toEqual(wire)
+
+    const turn = googleTranscript.readAssistant({
+      candidates: [{ content: wire[0] }],
+    } as unknown as GenerateContentResponse)
+    expect(turn.text).not.toContain('Internal thought')
   })
 })

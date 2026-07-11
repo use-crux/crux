@@ -15,6 +15,30 @@ describe("observability media privacy", () => {
     resetHooks();
   });
 
+  it("never exposes opaque provider continuation payloads in previews", () => {
+    const preview = sanitizeMediaPreview({
+      type: "reasoning",
+      text: "",
+      providerOptions: {
+        anthropic: {
+          continuation: {
+            type: "redacted_thinking",
+            data: "opaque-secret-payload",
+          },
+        },
+      },
+    });
+
+    expect(preview).toEqual({
+      type: "reasoning",
+      text: "",
+      providerOptions: {
+        anthropic: { continuation: "[provider continuation]" },
+      },
+    });
+    expect(JSON.stringify(preview)).not.toContain("opaque-secret-payload");
+  });
+
   it("uses semantic audio and video descriptors without retaining sources", () => {
     expect(
       sanitizeMediaPreview([

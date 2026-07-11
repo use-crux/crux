@@ -16,6 +16,8 @@ import {
   openAIContentText,
   openAIMessageContent,
 } from "./content-parts";
+import { encodeOpenAIAssistant } from "./assistant-message";
+import { generatedOpenAIAudioPart } from "./generated-audio";
 
 /** OpenAI assistant turn data read from a chat-completion response. */
 export type OpenAIAssistantTurn = NativeAssistantTurn;
@@ -37,11 +39,8 @@ const openAIDialect: ProviderTranscriptDialect<
     role === "system"
       ? { role, content: openAIMessageContent(role, content) }
       : { role, content: openAIMessageContent(role, content) },
-  encodeAssistant: ({ content, toolCalls }, options) =>
-    encodeAssistant(
-      openAIMessageContent("assistant", content),
-      toolCalls ?? [],
-    ),
+  encodeAssistant: ({ content, toolCalls }) =>
+    encodeOpenAIAssistant(content, toolCalls ?? []),
   encodeToolResults: ({ results }, helpers, options) =>
     results.flatMap((result) => encodeToolResult(result, helpers, options)),
   decodeMessage: decodeMessage,
@@ -80,7 +79,7 @@ export function readOpenAIAssistant(
     | OpenAI.ChatCompletionMessage
     | undefined;
   const toolCalls = toolCallsFromProvider(choiceMessage?.tool_calls);
-  const content = assistantContent(choiceMessage, toolCalls, requestedAudioMediaType(context));
+  const content = assistantContent(choiceMessage, toolCalls, context);
   return {
     text: openAIContentText(choiceMessage?.content),
     content,
@@ -91,7 +90,7 @@ export function readOpenAIAssistant(
 function assistantContent(
   message: OpenAI.ChatCompletionMessage | undefined,
   toolCalls: readonly ProviderToolCall[],
-  audioMediaType: "audio/wav" | "audio/mpeg" | undefined,
+  context: NativeAssistantReadContext | undefined,
 ): readonly AssistantContentPart[] {
   const decoded = messageContentFromOpenAIContent(message?.content);
   const parts: AssistantContentPart[] =
@@ -100,16 +99,8 @@ function assistantContent(
         ? []
         : [{ type: "text", text: decoded }]
       : [...decoded];
-  const audio = (
-    message as { readonly audio?: { readonly data?: unknown } } | undefined
-  )?.audio;
-  if (typeof audio?.data === "string") {
-    parts.push({
-      type: "audio",
-      source: new Uint8Array(Buffer.from(audio.data, "base64")),
-      ...(audioMediaType ? { mediaType: audioMediaType } : {}),
-    });
-  }
+  const audio = generatedOpenAIAudioPart(message, context);
+  if (audio) parts.push(audio);
   parts.push(
     ...toolCalls.map(
       (call): AssistantContentPart => ({
@@ -121,39 +112,6 @@ function assistantContent(
     ),
   );
   return parts;
-}
-
-function requestedAudioMediaType(
-  context: NativeAssistantReadContext | undefined,
-): "audio/wav" | "audio/mpeg" | undefined {
-  const request = context?.request;
-  if (!isRecord(request) || !isRecord(request.audio)) return undefined;
-  return request.audio.format === "wav"
-    ? "audio/wav"
-    : request.audio.format === "mp3"
-      ? "audio/mpeg"
-      : undefined;
-}
-
-function encodeAssistant(
-  content: string | readonly OpenAI.ChatCompletionContentPart[],
-  toolCalls: readonly ProviderToolCall[],
-): OpenAI.ChatCompletionMessageParam {
-  const text =
-    typeof content === "string" ? content : openAIContentText(content);
-  if (toolCalls.length === 0) return { role: "assistant", content: text };
-  return {
-    role: "assistant",
-    content: text || null,
-    tool_calls: toolCalls.map((toolCall) => ({
-      id: toolCall.id,
-      type: "function",
-      function: {
-        name: toolCall.name,
-        arguments: encodeArguments(toolCall.args),
-      },
-    })),
-  };
 }
 
 function encodeToolResult(

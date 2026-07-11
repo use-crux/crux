@@ -9,6 +9,7 @@ import type {
   ProviderTranscriptUnit,
 } from "@use-crux/core/adapter";
 import {
+  continuationOptions,
   googleContentParts,
   googleContentText,
   googlePartsText,
@@ -36,12 +37,13 @@ const googleDialect: ProviderTranscriptDialect<
   Content,
   GenerateContentResponse
 > = {
+  preserveAssistantReasoning: true,
   encodeContent: ({ role, content }) =>
     role === "system"
       ? (googleContentText(role, content), undefined)
       : { role: "user", parts: googleContentParts(role, content) },
   encodeAssistant: ({ content, toolCalls }) =>
-    encodeAssistant(googleContentText("assistant", content), toolCalls ?? []),
+    encodeAssistant(content, toolCalls ?? []),
   encodeToolResults: ({ results }) =>
     results.map((result) => encodeToolResult(result)),
   decodeMessage: decodeMessage,
@@ -89,6 +91,15 @@ function assistantContentFromParts(
   parts: readonly GoogleInboundPart[],
 ): readonly AssistantContentPart[] {
   return parts.flatMap((part, index): AssistantContentPart[] => {
+    if (part.thought === true && typeof part.text === "string") {
+      return [
+        {
+          type: "reasoning",
+          text: part.text,
+          ...continuationOptions(part),
+        },
+      ];
+    }
     if (isFunctionCall(part.functionCall)) {
       return [
         {
@@ -96,6 +107,7 @@ function assistantContentFromParts(
           toolCallId: part.functionCall.id ?? `tc_${index}`,
           toolName: part.functionCall.name ?? "",
           input: part.functionCall.args,
+          ...continuationOptions(part),
         },
       ];
     }
@@ -109,20 +121,35 @@ function assistantContentFromParts(
 }
 
 function encodeAssistant(
-  text: string,
+  content: string | readonly AssistantContentPart[],
   toolCalls: readonly ProviderToolCall[],
 ): Content {
-  if (toolCalls.length === 0) return { role: "model", parts: [{ text }] };
+  const contentParts =
+    typeof content === "string"
+      ? content
+        ? [{ text: content }]
+        : []
+      : content.flatMap((part) => {
+          if (part.type === "tool-call") return [];
+          if (part.type === "reasoning") {
+            const continuation = part.providerOptions?.google?.continuation;
+            return isRecord(continuation)
+              ? [{ text: part.text, ...continuation }]
+              : [];
+          }
+          return googleContentParts("assistant", [part]);
+        });
   return {
     role: "model",
     parts: [
-      ...(text ? [{ text }] : []),
+      ...contentParts,
       ...toolCalls.map((toolCall) => ({
         functionCall: {
           id: toolCall.id,
           name: toolCall.name,
           args: functionArgs(toolCall.args),
         },
+        ...providerContinuation(toolCall.providerOptions?.google?.continuation),
       })),
     ],
   };
@@ -172,7 +199,7 @@ function decodeMessage(value: unknown): ProviderTranscriptUnit {
     const toolCalls = toolCallsFromParts(parts);
     return {
       kind: "assistant",
-      content: messageContentFromGoogleParts(parts),
+      content: assistantContentFromParts(parts),
       ...(toolCalls.length > 0 ? { toolCalls } : {}),
     };
   }
@@ -210,9 +237,14 @@ function toolCallsFromParts(
         id: part.functionCall.id ?? `tc_${index}`,
         name: part.functionCall.name ?? "",
         args: part.functionCall.args,
+        ...continuationOptions(part),
       },
     ];
   });
+}
+
+function providerContinuation(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
 }
 
 function functionArgs(value: unknown): Record<string, unknown> {

@@ -12,7 +12,7 @@
  */
 
 import type { AssistantContentPart, ContentPart, MessageContent } from '../../../types/content'
-import type { ToolModelOutput } from '../../../types/tool'
+import type { ProviderOptions, ToolModelOutput } from '../../../types/tool'
 import type { NativeAssistantReadContext, NativeAssistantTurn } from '../types'
 
 /**
@@ -41,6 +41,8 @@ export interface ProviderToolCall {
   readonly name: string
   /** Raw, unparsed tool arguments as the model produced them. */
   readonly args: unknown
+  /** Opaque provider-owned fields required to replay this exact call. */
+  readonly providerOptions?: ProviderOptions
 }
 
 /**

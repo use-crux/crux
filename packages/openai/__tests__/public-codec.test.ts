@@ -90,5 +90,9 @@ describe("public OpenAI codecs", () => {
       "audio",
       "tool-call",
     ]);
+    expect(facts.content).toContainEqual(expect.objectContaining({
+      type: "audio",
+      providerOptions: { openai: { audioId: "audio_1" } },
+    }));
   });
 });
