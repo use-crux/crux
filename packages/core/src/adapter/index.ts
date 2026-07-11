@@ -117,11 +117,14 @@ export {
 } from "./completed-operation";
 export type {
   BindCompletedOperationOptions,
+  BoundCompletedOperation,
   CompletedOperationCall,
+  CompletedOperationModel,
   CompletedOperationConformanceCase,
   CompletedOperationContext,
   CompletedOperationDefinition,
   CompletedOperationInvokeContext,
+  CompletedOperationReport,
   RunCompletedMediaOperationOptions,
 } from "./completed-operation";
 export type {
@@ -133,6 +136,8 @@ export type {
   LoopOwnedRuntimeBindContext,
   LoopOwnedRuntimeContract,
   ProviderOwnership,
+  ProviderCompletedOperationFactories,
+  ProviderCompletedOperationFactory,
   ProviderRuntimeDepsArg,
   ProviderRuntimeKind,
   ProviderRuntimeExtension,

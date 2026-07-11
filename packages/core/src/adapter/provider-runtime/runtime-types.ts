@@ -4,19 +4,21 @@
  * @module
  */
 
-import type { NativeChatHelpers } from '../native-chat'
-import type { CruxAdapter } from '../define-adapter'
-import type { CruxExecutor } from '../define-executor'
+import type { NativeChatHelpers } from "../native-chat";
+import type { CruxAdapter } from "../define-adapter";
+import type { CruxExecutor } from "../define-executor";
 
 /** Closed set of provider runtime ownership models understood by core. */
-export type ProviderOwnership = 'single-turn' | 'loop-owned'
+export type ProviderOwnership = "single-turn" | "loop-owned";
 
 /** @deprecated Use {@link ProviderOwnership}. */
-export type ProviderRuntimeKind = ProviderOwnership
+export type ProviderRuntimeKind = ProviderOwnership;
 
 /** Dependency argument shape: required only when the provider declares deps. */
 export type ProviderRuntimeDepsArg<TDeps extends Record<string, unknown>> =
-  TDeps extends Record<string, never> ? readonly [deps?: TDeps] : readonly [deps: TDeps]
+  TDeps extends Record<string, never>
+    ? readonly [deps?: TDeps]
+    : readonly [deps: TDeps];
 
 /** Runtime produced by a single-turn provider spec. */
 export type SingleTurnProviderRuntime<
@@ -24,14 +26,15 @@ export type SingleTurnProviderRuntime<
   TRawResponse,
   TRawStream,
   TExtra extends Record<string, unknown>,
-> = CruxAdapter<TClient, TRawResponse, TRawStream, TExtra>
+> = CruxAdapter<TClient, TRawResponse, TRawStream, TExtra>;
 
 /** Runtime produced by a loop-owned provider spec. */
-export type LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream> = CruxExecutor<
+export type LoopOwnedProviderRuntime<
+  TClient,
   TModel,
   TRawResponse,
-  TRawStream
->
+  TRawStream,
+> = CruxExecutor<TModel, TRawResponse, TRawStream>;
 
 /** Runtime produced by either provider runtime branch. */
 export type ProviderGenerationRuntime<
@@ -42,7 +45,7 @@ export type ProviderGenerationRuntime<
   TExtra extends Record<string, unknown>,
 > =
   | SingleTurnProviderRuntime<TClient, TRawResponse, TRawStream, TExtra>
-  | LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream>
+  | LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream>;
 
 /** Runtime returned by `defineProviderRuntime()`. */
 export interface DefinedProviderRuntime<
@@ -52,16 +55,25 @@ export interface DefinedProviderRuntime<
   TRawStream = unknown,
   TExtra extends Record<string, unknown> = Record<string, unknown>,
   TDeps extends Record<string, unknown> = Record<string, never>,
-  TRuntime = ProviderGenerationRuntime<TClient, TModel, TRawResponse, TRawStream, TExtra>,
+  TRuntime = ProviderGenerationRuntime<
+    TClient,
+    TModel,
+    TRawResponse,
+    TRawStream,
+    TExtra
+  >,
   TExtensions extends object = Record<never, never>,
   TOwnership extends ProviderOwnership = ProviderOwnership,
 > {
   /** Stable provider runtime id. */
-  readonly id: string
+  readonly id: string;
   /** Which side owns the model/tool loop for this provider runtime. */
-  readonly ownership: TOwnership
+  readonly ownership: TOwnership;
   /** Bind the runtime to a provider client and optional provider-owned dependencies. */
-  create(client: TClient, ...depsArg: ProviderRuntimeDepsArg<TDeps>): TRuntime & TExtensions
+  create(
+    client: TClient,
+    ...depsArg: ProviderRuntimeDepsArg<TDeps>
+  ): TRuntime & TExtensions;
 }
 
 /**
@@ -78,6 +90,7 @@ export interface DefinedSingleTurnProviderRuntime<
   TExtra extends Record<string, unknown>,
   TDeps extends Record<string, unknown> = Record<string, never>,
   TExtensions extends object = Record<never, never>,
+  TCompleted extends object = Record<never, never>,
 > extends DefinedProviderRuntime<
   TClient,
   string,
@@ -85,10 +98,13 @@ export interface DefinedSingleTurnProviderRuntime<
   TRawStream,
   TExtra,
   TDeps,
-  SingleTurnProviderRuntime<TClient, TRawResponse, TRawStream, TExtra>,
+  SingleTurnProviderRuntime<TClient, TRawResponse, TRawStream, TExtra> &
+    TCompleted,
   TExtensions,
-  'single-turn'
+  "single-turn"
 > {
   /** Create lightweight framework-agnostic generation helpers. */
-  helpers(...depsArg: ProviderRuntimeDepsArg<TDeps>): NativeChatHelpers<TClient>
+  helpers(
+    ...depsArg: ProviderRuntimeDepsArg<TDeps>
+  ): NativeChatHelpers<TClient>;
 }

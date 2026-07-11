@@ -56,7 +56,7 @@ function operation(
     },
     report(result) {
       events.push("report");
-      return { kind: "text", length: result.value.length };
+      return { kind: "file", count: result.value.length };
     },
     conformance: [
       { name: "basic", input: { value: "hello" }, model: "model-a" },
@@ -133,7 +133,7 @@ describe("completed operation runner", () => {
       execution: { kind: "native", calls: 1 },
       raw: { value: "model-a:hello" },
     });
-    expect(reports).toEqual([{ kind: "text", length: 13 }]);
+    expect(reports).toEqual([{ kind: "file", count: 13 }]);
     expect(Object.isFrozen(definition)).toBe(true);
     expect(Object.isFrozen(definition.conformance)).toBe(true);
   });
@@ -232,7 +232,7 @@ describe("completed operation runner", () => {
     ).rejects.toBe(cancelled);
   });
 
-  it("sanitizes operation reports before they reach the descriptor sink", async () => {
+  it("closes operation reports to safe facts before they reach the descriptor sink", async () => {
     const reports: unknown[] = [];
     const unsafeReport = defineCompletedOperation({
       normalize: (input: Readonly<{ value: string }>) => input,
@@ -245,8 +245,13 @@ describe("completed operation runner", () => {
         raw,
       }),
       report: () => ({
+        kind: "audio",
+        segments: 2,
         url: "https://example.test/media?token=secret",
-        payload: "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXo=",
+        payload: "AQI=",
+        fileId: "file_secret",
+        filename: "secret.wav",
+        nested: { bytes: new Uint8Array([1, 2]) },
       }),
       conformance: [],
     });
@@ -260,6 +265,37 @@ describe("completed operation runner", () => {
       onReport: (report) => reports.push(report),
     });
 
-    expect(reports).toEqual([{ url: "[url]", payload: "[redacted media]" }]);
+    expect(reports).toEqual([{ kind: "audio", segments: 2 }]);
+  });
+
+  it("never lets provider report or descriptor sink failures change a successful call", async () => {
+    const reportFailure = defineCompletedOperation({
+      ...operation(),
+      report: () => {
+        throw new Error("report failed");
+      },
+    });
+    await expect(
+      runCompletedMediaOperation({
+        definition: reportFailure,
+        provider: "test",
+        operation: "media.test",
+        model: "model-a",
+        input: { value: "hello" },
+      }),
+    ).resolves.toMatchObject({ value: "model-a:hello" });
+
+    await expect(
+      runCompletedMediaOperation({
+        definition: operation(),
+        provider: "test",
+        operation: "media.test",
+        model: "model-a",
+        input: { value: "hello" },
+        onReport: () => {
+          throw new Error("sink failed");
+        },
+      }),
+    ).resolves.toMatchObject({ value: "model-a:hello" });
   });
 });

@@ -90,12 +90,14 @@ export interface CompletedOperationDefinition<
  * ```
  */
 export function defineCompletedOperation<
-  TModel,
   TInput,
   TNormalized,
   TNative,
   TResult extends CompletedOperationResult,
   TReport = unknown,
+  TModel = TInput extends Readonly<{ model: infer TInputModel }>
+    ? TInputModel
+    : unknown,
 >(
   definition: CompletedOperationDefinition<
     TModel,

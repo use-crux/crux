@@ -4,9 +4,14 @@
  * @module
  */
 
-import { defineNativeChatProvider } from '../native-chat'
-import { createLoopOwnedProviderRuntime } from './loop-compiler'
-import { createDefinedProviderRuntime } from './runtime-factory'
+import { defineNativeChatProvider } from "../native-chat";
+import { createLoopOwnedProviderRuntime } from "./loop-compiler";
+import { createDefinedProviderRuntime } from "./runtime-factory";
+import {
+  bindProviderCompletedOperations,
+  type DefinedCompletedOperations,
+  type ProviderCompletedOperationFactory,
+} from "./completed-operations";
 import type {
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
@@ -17,7 +22,7 @@ import type {
   ProviderRuntimeSpec,
   SingleTurnProviderRuntime,
   SingleTurnProviderRuntimeSpec,
-} from './types'
+} from "./types";
 
 /**
  * Define a Crux provider runtime from single-turn provider mechanics.
@@ -59,6 +64,13 @@ export function defineProviderRuntime<
   TDeps extends Record<string, unknown> = Record<string, never>,
   TProviderMessage = unknown,
   TExtensions extends object = Record<never, never>,
+  TImage extends ProviderCompletedOperationFactory<TClient> | undefined =
+    undefined,
+  TTranscription extends
+    | ProviderCompletedOperationFactory<TClient>
+    | undefined = undefined,
+  TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
+    undefined,
 >(
   spec: SingleTurnProviderRuntimeSpec<
     TClient,
@@ -68,9 +80,20 @@ export function defineProviderRuntime<
     TExtra,
     TDeps,
     TProviderMessage,
-    TExtensions
+    TExtensions,
+    TImage,
+    TTranscription,
+    TSpeech
   >,
-): DefinedSingleTurnProviderRuntime<TClient, TRawResponse, TRawStream, TExtra, TDeps, TExtensions>
+): DefinedSingleTurnProviderRuntime<
+  TClient,
+  TRawResponse,
+  TRawStream,
+  TExtra,
+  TDeps,
+  TExtensions,
+  DefinedCompletedOperations<TImage, TTranscription, TSpeech>
+>;
 
 /**
  * Define a Crux provider runtime from loop-owned SDK mechanics.
@@ -89,8 +112,24 @@ export function defineProviderRuntime<
   TRawResponse = unknown,
   TRawStream = unknown,
   TExtensions extends object = Record<never, never>,
+  TImage extends ProviderCompletedOperationFactory<TClient> | undefined =
+    undefined,
+  TTranscription extends
+    | ProviderCompletedOperationFactory<TClient>
+    | undefined = undefined,
+  TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
+    undefined,
 >(
-  spec: LoopOwnedProviderRuntimeSpec<TClient, TModel, TRawResponse, TRawStream, TExtensions>,
+  spec: LoopOwnedProviderRuntimeSpec<
+    TClient,
+    TModel,
+    TRawResponse,
+    TRawStream,
+    TExtensions,
+    TImage,
+    TTranscription,
+    TSpeech
+  >,
 ): DefinedProviderRuntime<
   TClient,
   TModel,
@@ -98,10 +137,11 @@ export function defineProviderRuntime<
   TRawStream,
   Record<string, unknown>,
   Record<string, never>,
-  LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream>,
+  LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream> &
+    DefinedCompletedOperations<TImage, TTranscription, TSpeech>,
   TExtensions,
-  'loop-owned'
->
+  "loop-owned"
+>;
 
 export function defineProviderRuntime(
   spec: ProviderRuntimeSpec,
@@ -115,29 +155,42 @@ export function defineProviderRuntime(
   object,
   object
 > {
-  const runtimeId = spec.id
-  const ownership = resolveProviderOwnership(spec)
+  const runtimeId = spec.id;
+  const ownership = resolveProviderOwnership(spec);
 
-  if (ownership === 'single-turn') {
-    const singleTurnSpec = spec as AnySingleTurnRuntimeSpec
-    const { bind, ...turnContract } = singleTurnSpec.turn
-    const provider = defineNativeChatProvider({ ...turnContract, providerId: runtimeId })
+  if (ownership === "single-turn") {
+    const singleTurnSpec = spec as AnySingleTurnRuntimeSpec;
+    const { bind, ...turnContract } = singleTurnSpec.turn;
+    const provider = defineNativeChatProvider({
+      ...turnContract,
+      providerId: runtimeId,
+    });
 
     return Object.freeze({
       ...createDefinedProviderRuntime(
         runtimeId,
-        'single-turn',
-        (client: unknown, ...depsArg: ProviderRuntimeDepsArg<Record<string, unknown>>) =>
-          provider.createFor(bind, ...depsArg)(client),
+        "single-turn",
+        (
+          client: unknown,
+          ...depsArg: ProviderRuntimeDepsArg<Record<string, unknown>>
+        ) =>
+          Object.freeze({
+            ...provider.createFor(bind, ...depsArg)(client),
+            ...bindProviderCompletedOperations(
+              runtimeId,
+              client,
+              singleTurnSpec,
+            ),
+          }),
         singleTurnSpec.extend,
       ),
       helpers(...depsArg: ProviderRuntimeDepsArg<Record<string, unknown>>) {
-        return provider.helpers(bind, ...depsArg)
+        return provider.helpers(bind, ...depsArg);
       },
-    })
+    });
   }
 
-  return createLoopOwnedProviderRuntime(spec as AnyLoopOwnedRuntimeSpec)
+  return createLoopOwnedProviderRuntime(spec as AnyLoopOwnedRuntimeSpec);
 }
 
 type AnySingleTurnRuntimeSpec = SingleTurnProviderRuntimeSpec<
@@ -148,16 +201,28 @@ type AnySingleTurnRuntimeSpec = SingleTurnProviderRuntimeSpec<
   Record<string, unknown>,
   Record<string, unknown>,
   unknown,
-  object
->
+  object,
+  ProviderCompletedOperationFactory<unknown> | undefined,
+  ProviderCompletedOperationFactory<unknown> | undefined,
+  ProviderCompletedOperationFactory<unknown> | undefined
+>;
 
-type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<unknown, unknown, unknown, unknown, object>
+type AnyLoopOwnedRuntimeSpec = LoopOwnedProviderRuntimeSpec<
+  unknown,
+  unknown,
+  unknown,
+  unknown,
+  object,
+  ProviderCompletedOperationFactory<unknown> | undefined,
+  ProviderCompletedOperationFactory<unknown> | undefined,
+  ProviderCompletedOperationFactory<unknown> | undefined
+>;
 
 interface RuntimeSpecShape {
-  readonly id: string
-  readonly ownership?: unknown
-  readonly turn?: unknown
-  readonly loop?: unknown
+  readonly id: string;
+  readonly ownership?: unknown;
+  readonly turn?: unknown;
+  readonly loop?: unknown;
 }
 
 /**
@@ -167,27 +232,33 @@ interface RuntimeSpecShape {
  * their mechanics. Explicit specs get a clear runtime error when loose
  * JavaScript or casts provide a mismatched discriminant.
  */
-function resolveProviderOwnership(spec: ProviderRuntimeSpec): ProviderOwnership {
-  const shape = spec as RuntimeSpecShape
-  const hasTurn = shape.turn !== undefined
-  const hasLoop = shape.loop !== undefined
+function resolveProviderOwnership(
+  spec: ProviderRuntimeSpec,
+): ProviderOwnership {
+  const shape = spec as RuntimeSpecShape;
+  const hasTurn = shape.turn !== undefined;
+  const hasLoop = shape.loop !== undefined;
 
   if (hasTurn === hasLoop) {
-    throw new Error(`Provider runtime "${shape.id}" must define exactly one of turn or loop mechanics.`)
+    throw new Error(
+      `Provider runtime "${shape.id}" must define exactly one of turn or loop mechanics.`,
+    );
   }
 
-  const inferred: ProviderOwnership = hasTurn ? 'single-turn' : 'loop-owned'
-  if (shape.ownership === undefined) return inferred
+  const inferred: ProviderOwnership = hasTurn ? "single-turn" : "loop-owned";
+  if (shape.ownership === undefined) return inferred;
 
-  if (shape.ownership !== 'single-turn' && shape.ownership !== 'loop-owned') {
-    throw new Error(`Provider runtime "${shape.id}" declares unknown ownership "${String(shape.ownership)}".`)
+  if (shape.ownership !== "single-turn" && shape.ownership !== "loop-owned") {
+    throw new Error(
+      `Provider runtime "${shape.id}" declares unknown ownership "${String(shape.ownership)}".`,
+    );
   }
 
   if (shape.ownership !== inferred) {
     throw new Error(
       `Provider runtime "${shape.id}" declares ownership "${shape.ownership}" but defines ${inferred} mechanics.`,
-    )
+    );
   }
 
-  return shape.ownership
+  return shape.ownership;
 }

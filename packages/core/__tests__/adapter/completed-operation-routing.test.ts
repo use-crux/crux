@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bindCompletedOperation,
   defineCompletedOperation,
   runCompletedMediaOperation,
 } from "../../src/adapter/completed-operation";
@@ -7,6 +8,7 @@ import { fallback } from "../../src/generation/fallback";
 import { retry } from "../../src/routing/retry";
 import { router } from "../../src/routing/router";
 import { split } from "../../src/routing/split";
+import type { RouteArgs } from "../../src/routing/types";
 
 function routedOperation(
   invoke: (model: string) => Promise<Readonly<{ value: string }>>,
@@ -30,6 +32,69 @@ function routedOperation(
 }
 
 describe("completed operation routing", () => {
+  it("reaches routed leaves through the bound public operation", async () => {
+    const normalizedModels: unknown[] = [];
+    const invokedModels: unknown[] = [];
+    const definition = defineCompletedOperation({
+      normalize: (
+        input: Readonly<{ model: string; value: string }>,
+        context,
+      ) => {
+        normalizedModels.push(input.model, context.model);
+        return { value: input.value };
+      },
+      support: () => "supported" as const,
+      invoke: async (_input, context) => {
+        invokedModels.push(context.model);
+        return { value: context.model };
+      },
+      validate: (raw) => ({
+        value: raw.value,
+        warnings: [],
+        execution: { kind: "native" as const, calls: 1 },
+        raw,
+      }),
+      report: () => ({}),
+      conformance: [],
+    });
+    const run = bindCompletedOperation({
+      definition,
+      provider: "test",
+      operation: "media.test",
+    });
+    const model = router({
+      classify: ({ context }: RouteArgs<{ readonly tier: "pro" }>) =>
+        context.tier,
+      routes: { pro: "selected", default: "default" },
+    });
+
+    const result = await run({
+      model,
+      value: "hello",
+      routing: { tier: "pro" },
+    });
+    const overridden = await run({
+      model,
+      value: "hello",
+      routing: { tier: "pro" },
+      route: "default",
+    });
+
+    expect(result.value).toBe("selected");
+    expect(overridden.value).toBe("default");
+    expect(normalizedModels).toEqual([
+      "selected",
+      "selected",
+      "default",
+      "default",
+      "selected",
+      "selected",
+      "default",
+      "default",
+    ]);
+    expect(invokedModels).toEqual(["selected", "default"]);
+  });
+
   it("routes retry, fallback, router, and split without losing attempts or causes", async () => {
     const attempts = new Map<string, number>();
     const errors = [
@@ -129,8 +194,8 @@ describe("completed operation routing", () => {
         raw,
       }),
       report: (result, _input, context) => ({
-        model: context.model,
-        value: result.value,
+        kind: "file" as const,
+        count: result.value === context.model ? 1 : 0,
       }),
       conformance: [],
     });
@@ -149,6 +214,39 @@ describe("completed operation routing", () => {
       calls: 3,
       operations: ["upload", "generate"],
     });
-    expect(reports).toEqual([{ model: "first", value: "first" }]);
+    expect(reports).toEqual([{ kind: "file", count: 1 }]);
+  });
+
+  it("adds failed attempts to the provider-reported native call count", async () => {
+    let attempted = false;
+    const definition = defineCompletedOperation({
+      normalize: (input: Readonly<{ value: string }>) => input,
+      support: () => "supported" as const,
+      invoke: async () => {
+        if (!attempted) {
+          attempted = true;
+          throw Object.assign(new Error("retry me"), { status: 503 });
+        }
+        return { value: "ok" };
+      },
+      validate: (raw) => ({
+        value: raw.value,
+        warnings: [],
+        execution: { kind: "native" as const, calls: 2 },
+        raw,
+      }),
+      report: () => ({}),
+      conformance: [],
+    });
+
+    const result = await runCompletedMediaOperation({
+      definition,
+      provider: "test",
+      operation: "media.test",
+      model: retry("model", { attempts: 2 }),
+      input: { value: "hello" },
+    });
+
+    expect(result.execution).toEqual({ kind: "native", calls: 3 });
   });
 });

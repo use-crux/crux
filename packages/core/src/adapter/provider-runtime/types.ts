@@ -9,8 +9,9 @@
  * @module
  */
 
-import type { SingleTurnProviderRuntimeSpec } from './single-turn-types'
-import type { LoopOwnedProviderRuntimeSpec } from './loop-owned-types'
+import type { SingleTurnProviderRuntimeSpec } from "./single-turn-types";
+import type { LoopOwnedProviderRuntimeSpec } from "./loop-owned-types";
+import type { ProviderCompletedOperationFactory } from "./completed-operations";
 
 export type {
   DefinedProviderRuntime,
@@ -21,18 +22,25 @@ export type {
   ProviderRuntimeDepsArg,
   ProviderRuntimeKind,
   SingleTurnProviderRuntime,
-} from './runtime-types'
-export type { SingleTurnProviderRuntimeSpec, SingleTurnRuntimeContract } from './single-turn-types'
+} from "./runtime-types";
+export type {
+  ProviderCompletedOperationFactories,
+  ProviderCompletedOperationFactory,
+} from "./completed-operations";
+export type {
+  SingleTurnProviderRuntimeSpec,
+  SingleTurnRuntimeContract,
+} from "./single-turn-types";
 export type {
   DefinedSingleTurnProviderBundle,
   SingleTurnProviderBundleDeps,
   SingleTurnProviderBundleSpec,
-} from './single-turn-bundle-types'
+} from "./single-turn-bundle-types";
 export type {
   LoopOwnedProviderRuntimeSpec,
   LoopOwnedRuntimeBindContext,
   LoopOwnedRuntimeContract,
-} from './loop-owned-types'
+} from "./loop-owned-types";
 
 /** Any public provider runtime spec. */
 export type ProviderRuntimeSpec =
@@ -44,6 +52,18 @@ export type ProviderRuntimeSpec =
       Record<string, unknown>,
       Record<string, unknown>,
       unknown,
-      object
+      object,
+      ProviderCompletedOperationFactory<unknown> | undefined,
+      ProviderCompletedOperationFactory<unknown> | undefined,
+      ProviderCompletedOperationFactory<unknown> | undefined
     >
-  | LoopOwnedProviderRuntimeSpec<unknown, unknown, unknown, unknown, object>
+  | LoopOwnedProviderRuntimeSpec<
+      unknown,
+      unknown,
+      unknown,
+      unknown,
+      object,
+      ProviderCompletedOperationFactory<unknown> | undefined,
+      ProviderCompletedOperationFactory<unknown> | undefined,
+      ProviderCompletedOperationFactory<unknown> | undefined
+    >;

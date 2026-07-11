@@ -3,7 +3,11 @@ import type {
   OperationTimeout,
 } from "../../completed-operation/contracts";
 import type { CompletedOperationDefinition } from "./definition";
-import { runCompletedMediaOperation } from "./runner";
+import {
+  runCompletedMediaOperation,
+  type RunCompletedMediaOperationOptions,
+} from "./runner";
+import type { AnyRoutable, RoutingCallOptions } from "../../routing/types";
 
 /** Minimum call shape shared by all bounded provider media operations. */
 export interface CompletedOperationCall<TModel> {
@@ -11,6 +15,21 @@ export interface CompletedOperationCall<TModel> {
   readonly abortSignal?: AbortSignal;
   readonly timeout?: OperationTimeout;
 }
+
+/** Model value accepted by a completed operation, including inert routing trees. */
+export type CompletedOperationModel<TModel> = TModel | AnyRoutable;
+
+/** Public call signature compiled from one provider-authored definition. */
+export type BoundCompletedOperation<
+  TModel,
+  TInput extends CompletedOperationCall<TModel>,
+  TResult extends CompletedOperationResult,
+> = ((input: TInput) => Promise<TResult>) &
+  (<TSelectedModel extends CompletedOperationModel<TInput["model"]>>(
+    input: Omit<TInput, "model" | "routing" | "route"> &
+      Readonly<{ model: TSelectedModel }> &
+      RoutingCallOptions<TSelectedModel>,
+  ) => Promise<TResult>);
 
 /** Adapter-author options for binding an immutable operation definition. */
 export interface BindCompletedOperationOptions<
@@ -67,16 +86,39 @@ export function bindCompletedOperation<
     TResult,
     TReport
   >,
-): (input: TInput) => Promise<TResult> {
-  return (input) =>
-    runCompletedMediaOperation({
+): BoundCompletedOperation<TModel, TInput, TResult> {
+  const run = <TSelectedModel extends CompletedOperationModel<TInput["model"]>>(
+    input: Omit<TInput, "model" | "routing" | "route"> &
+      Readonly<{ model: TSelectedModel }> &
+      RoutingCallOptions<TSelectedModel>,
+  ) => {
+    const call = input as unknown as TInput & {
+      readonly routing?: object;
+      readonly route?: string;
+    };
+    const runOptions = {
       definition: options.definition,
       provider: options.provider,
       operation: options.operation,
       model: input.model,
-      input,
+      input: call,
       abortSignal: input.abortSignal,
       timeout: input.timeout,
+      ...(call.routing !== undefined ? { routing: call.routing } : {}),
+      ...(call.route !== undefined ? { route: call.route } : {}),
       ...(options.onReport === undefined ? {} : { onReport: options.onReport }),
-    });
+    };
+    return runCompletedMediaOperation(
+      runOptions as RunCompletedMediaOperationOptions<
+        TModel,
+        TInput,
+        TNormalized,
+        TNative,
+        TResult,
+        TReport,
+        TSelectedModel
+      >,
+    );
+  };
+  return run as BoundCompletedOperation<TModel, TInput, TResult>;
 }

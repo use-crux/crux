@@ -1,5 +1,4 @@
 import {
-  validateOperationExecution,
   validateOperationTimeout,
   type CompletedOperationResult,
   type OperationTimeout,
@@ -10,26 +9,34 @@ import {
   createBudgetSignal,
   withAbortSignal,
 } from "../../generation/timeout";
-import { sanitizeMediaPreview } from "../../observability/media-preview";
 import type {
   CompletedOperationDefinition,
   CompletedOperationContext,
 } from "./definition";
+import type { AnyRoutable, RoutingCallOptions } from "../../routing/types";
 import {
   completedModelLeaves,
   resolveCompletedModel,
   type CompletedRoutingState,
 } from "./routing";
+import { safeCompletedOperationReport } from "./report";
+import {
+  completedLifecycleContext,
+  finalizeCompletedResult,
+  selectedCompletedInput,
+  withSelectedModel,
+} from "./lifecycle";
 
 /** Options owned by the shared bounded-media lifecycle. */
-export interface RunCompletedMediaOperationOptions<
+export type RunCompletedMediaOperationOptions<
   TModel,
   TInput,
   TNormalized,
   TNative,
   TResult extends CompletedOperationResult,
   TReport,
-> {
+  TSelectedModel extends TModel | AnyRoutable = TModel,
+> = Readonly<{
   readonly definition: CompletedOperationDefinition<
     TModel,
     TInput,
@@ -40,14 +47,18 @@ export interface RunCompletedMediaOperationOptions<
   >;
   readonly provider: string;
   readonly operation: string;
-  readonly model: TModel;
+  readonly model: TSelectedModel;
   readonly input: TInput;
   readonly abortSignal?: AbortSignal;
   readonly timeout?: OperationTimeout;
-  readonly routing?: Readonly<{ context?: object; route?: string }>;
+  /** Context consumed by router/split callbacks. */
+  readonly routing?: object;
+  /** Optional top-level route override. */
+  readonly route?: string;
   /** Internal descriptor sink. Reports must contain safe facts only. */
   readonly onReport?: (report: unknown) => void;
-}
+}> &
+  RoutingCallOptions<TSelectedModel>;
 
 /**
  * Run a bounded media operation through one provider-neutral lifecycle.
@@ -77,6 +88,7 @@ export async function runCompletedMediaOperation<
   TNative,
   TResult extends CompletedOperationResult,
   TReport = unknown,
+  TSelectedModel extends TModel | AnyRoutable = TModel,
 >(
   options: RunCompletedMediaOperationOptions<
     TModel,
@@ -84,7 +96,8 @@ export async function runCompletedMediaOperation<
     TNormalized,
     TNative,
     TResult,
-    TReport
+    TReport,
+    TSelectedModel
   >,
 ): Promise<TResult> {
   validateOperationTimeout(options.timeout);
@@ -104,17 +117,21 @@ export async function runCompletedMediaOperation<
         options.model,
         {
           input: options.input,
-          context: options.routing?.context,
-          route: options.routing?.route,
+          context: options.routing,
+          route: options.route,
           signal,
           stepMs: options.timeout?.stepMs,
         },
         state,
         async (candidate, attemptSignal) => {
-          const context = lifecycleContext(options, candidate as TModel);
+          const context = completedLifecycleContext(
+            options,
+            candidate as TModel,
+          );
+          const candidateInput = withSelectedModel(options.input, candidate);
           const normalized =
             prepared.get(candidate) ??
-            (await options.definition.normalize(options.input, context));
+            (await options.definition.normalize(candidateInput, context));
           const native = await options.definition.invoke(normalized, {
             ...context,
             signal: attemptSignal,
@@ -122,24 +139,54 @@ export async function runCompletedMediaOperation<
           return options.definition.validate(native, normalized, context);
         },
       );
-      const finalized = finalizeResult(result, state.calls);
-      const selected = await selectedNormalized(
+      const finalized = finalizeCompletedResult(result, state.calls);
+      const selected = await selectedCompletedInput(
         prepared,
         options.input,
         options.definition,
         options,
         state.selectedModel,
       );
-      const report = options.definition.report(
-        finalized,
-        selected.input,
-        selected.context,
-      );
-      options.onReport?.(sanitizeMediaPreview(report));
+      emitReport(options, finalized, selected);
       return finalized;
     }, signal);
   } finally {
     totalBudget.dispose();
+  }
+}
+
+function emitReport<
+  TModel,
+  TInput,
+  TNormalized,
+  TNative,
+  TResult extends CompletedOperationResult,
+  TReport,
+>(
+  options: Readonly<{
+    definition: CompletedOperationDefinition<
+      TModel,
+      TInput,
+      TNormalized,
+      TNative,
+      TResult,
+      TReport
+    >;
+    onReport?: (report: unknown) => void;
+  }>,
+  result: TResult,
+  selected: Readonly<{
+    input: TNormalized;
+    context: CompletedOperationContext<TModel>;
+  }>,
+): void {
+  try {
+    const report = safeCompletedOperationReport(
+      options.definition.report(result, selected.input, selected.context),
+    );
+    if (report) options.onReport?.(report);
+  } catch {
+    // Reporting is best-effort and must never change a successful provider result.
   }
 }
 
@@ -150,6 +197,7 @@ async function preflightCandidates<
   TNative,
   TResult extends CompletedOperationResult,
   TReport,
+  TSelectedModel extends TModel | AnyRoutable,
 >(
   options: RunCompletedMediaOperationOptions<
     TModel,
@@ -157,16 +205,18 @@ async function preflightCandidates<
     TNormalized,
     TNative,
     TResult,
-    TReport
+    TReport,
+    TSelectedModel
   >,
   signal: AbortSignal,
 ): Promise<ReadonlyMap<unknown, TNormalized>> {
   const prepared = new Map<unknown, TNormalized>();
   for (const candidate of unique(completedModelLeaves(options.model))) {
     throwIfAborted(signal);
-    const context = lifecycleContext(options, candidate as TModel);
+    const context = completedLifecycleContext(options, candidate as TModel);
+    const candidateInput = withSelectedModel(options.input, candidate);
     const normalized = await options.definition.normalize(
-      options.input,
+      candidateInput,
       context,
     );
     prepared.set(candidate, normalized);
@@ -180,73 +230,6 @@ async function preflightCandidates<
   }
   throwIfAborted(signal);
   return prepared;
-}
-
-function finalizeResult<TResult extends CompletedOperationResult>(
-  result: TResult,
-  calls: number,
-): TResult {
-  const execution = validateOperationExecution(
-    result.execution.kind === "composed"
-      ? {
-          ...result.execution,
-          calls: result.execution.calls + Math.max(0, calls - 1),
-        }
-      : { kind: "native", calls },
-  );
-  return Object.freeze({
-    ...result,
-    warnings: Object.freeze([...result.warnings]),
-    execution,
-  });
-}
-
-function lifecycleContext<TModel>(
-  options: Readonly<{ provider: string; operation: string }>,
-  model: TModel,
-): CompletedOperationContext<TModel> {
-  return Object.freeze({
-    provider: options.provider,
-    operation: options.operation,
-    model,
-  });
-}
-
-async function selectedNormalized<
-  TModel,
-  TInput,
-  TNormalized,
-  TNative,
-  TResult extends CompletedOperationResult,
-  TReport,
->(
-  prepared: ReadonlyMap<unknown, TNormalized>,
-  input: TInput,
-  definition: CompletedOperationDefinition<
-    TModel,
-    TInput,
-    TNormalized,
-    TNative,
-    TResult,
-    TReport
-  >,
-  options: Readonly<{ provider: string; operation: string; model: TModel }>,
-  selectedModel: unknown,
-): Promise<
-  Readonly<{
-    input: TNormalized;
-    context: CompletedOperationContext<TModel>;
-  }>
-> {
-  const first = prepared.entries().next().value as
-    | readonly [unknown, TNormalized]
-    | undefined;
-  const model = (selectedModel ?? first?.[0] ?? options.model) as TModel;
-  const context = lifecycleContext(options, model);
-  const normalized = prepared.has(selectedModel)
-    ? prepared.get(selectedModel)!
-    : (first?.[1] ?? (await definition.normalize(input, context)));
-  return { input: normalized, context };
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {

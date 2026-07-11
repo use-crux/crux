@@ -4,12 +4,13 @@
  * @module
  */
 
-import { defineProviderRuntime } from './define'
-import type { ProviderRuntimeDepsArg } from './runtime-types'
+import { defineProviderRuntime } from "./define";
+import type { ProviderRuntimeDepsArg } from "./runtime-types";
+import type { ProviderCompletedOperationFactory } from "./completed-operations";
 import type {
   DefinedSingleTurnProviderBundle,
   SingleTurnProviderBundleSpec,
-} from './single-turn-bundle-types'
+} from "./single-turn-bundle-types";
 
 /**
  * Define a provider runtime bundle for SDKs that execute one native turn at a time.
@@ -55,6 +56,13 @@ export function defineSingleTurnProviderBundle<
   TCreateArgs extends readonly unknown[] = ProviderRuntimeDepsArg<TDeps>,
   THelperArgs extends readonly unknown[] = ProviderRuntimeDepsArg<TDeps>,
   TExtensions extends object = Record<never, never>,
+  TImage extends ProviderCompletedOperationFactory<TClient> | undefined =
+    undefined,
+  TTranscription extends
+    | ProviderCompletedOperationFactory<TClient>
+    | undefined = undefined,
+  TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
+    undefined,
 >(
   spec: SingleTurnProviderBundleSpec<
     TClient,
@@ -66,7 +74,10 @@ export function defineSingleTurnProviderBundle<
     TProviderMessage,
     TCreateArgs,
     THelperArgs,
-    TExtensions
+    TExtensions,
+    TImage,
+    TTranscription,
+    TSpeech
   >,
 ): DefinedSingleTurnProviderBundle<
   TClient,
@@ -76,7 +87,10 @@ export function defineSingleTurnProviderBundle<
   TDeps,
   TCreateArgs,
   THelperArgs,
-  TExtensions
+  TExtensions,
+  TImage,
+  TTranscription,
+  TSpeech
 > {
   const runtime = defineProviderRuntime<
     TClient,
@@ -86,44 +100,52 @@ export function defineSingleTurnProviderBundle<
     TExtra,
     TDeps,
     TProviderMessage,
-    TExtensions
+    TExtensions,
+    TImage,
+    TTranscription,
+    TSpeech
   >({
     id: spec.id,
-    ownership: 'single-turn',
+    ownership: "single-turn",
     turn: {
       bind: spec.bind,
       ...spec.profile,
     },
     extend: spec.extend,
-  })
+    ...(spec.image === undefined ? {} : { image: spec.image }),
+    ...(spec.transcription === undefined
+      ? {}
+      : { transcription: spec.transcription }),
+    ...(spec.speech === undefined ? {} : { speech: spec.speech }),
+  });
 
   return Object.freeze({
     id: spec.id,
-    ownership: 'single-turn' as const,
+    ownership: "single-turn" as const,
     runtime,
     create(client: TClient, ...args: [...TCreateArgs]) {
       const deps = spec.deps?.create
         ? spec.deps.create(client, ...args)
-        : depsFromArgs<TDeps>(args)
-      return runtime.create(client, ...depsArgFor(deps))
+        : depsFromArgs<TDeps>(args);
+      return runtime.create(client, ...depsArgFor(deps));
     },
     helpers(...args: [...THelperArgs]) {
       const deps = spec.deps?.helpers
         ? spec.deps.helpers(...args)
-        : depsFromArgs<TDeps>(args)
-      return runtime.helpers(...depsArgFor(deps))
+        : depsFromArgs<TDeps>(args);
+      return runtime.helpers(...depsArgFor(deps));
     },
-  })
+  });
 }
 
 function depsFromArgs<TDeps extends Record<string, unknown>>(
   args: readonly unknown[],
 ): TDeps {
-  return (args[0] ?? {}) as TDeps
+  return (args[0] ?? {}) as TDeps;
 }
 
 function depsArgFor<TDeps extends Record<string, unknown>>(
   deps: TDeps,
 ): ProviderRuntimeDepsArg<TDeps> {
-  return [deps] as unknown as ProviderRuntimeDepsArg<TDeps>
+  return [deps] as unknown as ProviderRuntimeDepsArg<TDeps>;
 }

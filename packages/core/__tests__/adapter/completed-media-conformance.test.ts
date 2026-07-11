@@ -1,6 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import {
-  bindCompletedOperation,
   defineCompletedOperation,
   defineProviderRuntime,
 } from "../../src/adapter";
@@ -20,7 +19,7 @@ const audio = Object.freeze({
 });
 
 function fakeOperation(kind: "image" | "transcription") {
-  const definition = defineCompletedOperation({
+  return defineCompletedOperation({
     normalize: (input: Readonly<{ model: string }>) => input,
     support: () => "supported" as const,
     invoke: async () => ({ kind }),
@@ -32,29 +31,25 @@ function fakeOperation(kind: "image" | "transcription") {
     report: () => ({ kind }),
     conformance: [],
   });
-  return bindCompletedOperation({
-    definition,
-    provider: "fake",
-    operation: kind,
-  });
 }
 
 describe("completed media conformance", () => {
   it("traces image, transcription, and speech through one lifecycle law", async () => {
-    const image = fakeOperation("image");
-    const transcription = fakeOperation("transcription");
-    const speech = fakeSpeechRuntime().create({}).generateSpeech;
+    const runtime = fakeCompletedRuntime().create({});
 
     await expect(
       completedMediaConformance([
-        { operation: "image", run: () => image({ model: "image" }) },
+        {
+          operation: "image",
+          run: () => runtime.generateImage({ model: "image" }),
+        },
         {
           operation: "transcription",
-          run: () => transcription({ model: "audio" }),
+          run: () => runtime.transcribe({ model: "audio" }),
         },
         {
           operation: "speech",
-          run: () => speech({ model: "speech", text: "Hello" }),
+          run: () => runtime.generateSpeech({ model: "speech", text: "Hello" }),
         },
       ]),
     ).resolves.toEqual([]);
@@ -80,7 +75,7 @@ describe("completed media conformance", () => {
   });
 });
 
-function fakeSpeechRuntime() {
+function fakeCompletedRuntime() {
   const fake = fakeLoopRuntime({ loops: [[{ text: "unused" }]] });
   return defineProviderRuntime({
     id: "with-speech",
@@ -92,8 +87,10 @@ function fakeSpeechRuntime() {
         runStream: fake.runtime.runStream,
       }),
     },
-    extend: () => {
-      const definition = defineCompletedOperation({
+    image: () => fakeOperation("image"),
+    transcription: () => fakeOperation("transcription"),
+    speech: () =>
+      defineCompletedOperation({
         normalize: (input: Readonly<{ model: string; text: string }>) => {
           validateGenerateSpeechOptions(input);
           return input;
@@ -114,14 +111,6 @@ function fakeSpeechRuntime() {
             input: { model: "speech", text: "Hello" },
           },
         ],
-      });
-      return {
-        generateSpeech: bindCompletedOperation({
-          definition,
-          provider: "fake",
-          operation: "generateSpeech",
-        }),
-      };
-    },
+      }),
   });
 }

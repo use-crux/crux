@@ -4,6 +4,7 @@ import {
   defineCompletedOperation,
   runCompletedMediaOperation,
 } from "@use-crux/core/adapter";
+import { router, type RouteArgs } from "@use-crux/core/routing";
 // @ts-expect-error - support evidence stays private to operation definitions.
 import type { Support } from "@use-crux/core/adapter";
 // @ts-expect-error - completed operations intentionally expose no cache contract.
@@ -74,8 +75,19 @@ const bound = bindCompletedOperation({
   provider: "test",
   operation: "media.test",
 });
-expectTypeOf(bound)
-  .parameter(0)
-  .toEqualTypeOf<Readonly<{ model: string; text: string }>>();
+void bound({ model: "future-model", text: "hello" });
+const routedModel = router({
+  classify: ({ context }: RouteArgs<{ readonly tier: "pro" | "free" }>) =>
+    context.tier,
+  routes: { pro: "pro-model", free: "free-model", default: "free-model" },
+});
+void bound({
+  model: routedModel,
+  text: "hello",
+  routing: { tier: "pro" },
+  route: "pro",
+});
+// @ts-expect-error - routed completed operations require classifier context.
+void bound({ model: routedModel, text: "hello" });
 // @ts-expect-error - model operations never accept persistence dependencies.
 void bound({ model: "future-model", text: "hello", store: {} });
