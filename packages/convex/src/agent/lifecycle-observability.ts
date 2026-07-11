@@ -55,6 +55,7 @@ export async function observeAgentRun<R>(
     emitAgentToolsRegistered(agentName, operation, prepared)
     await flushObservability({
       timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS,
+      terminal: false,
     })
   }
   try {

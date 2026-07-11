@@ -720,10 +720,20 @@ export function createComponentSwarm(config: ComponentSwarmConfig) {
   }
 }
 
-/** Strip createdAt/updatedAt — managed by the component mutation. */
+/**
+ * Strip fields the component mutation rejects or manages itself.
+ *
+ * `state` may be a document `getState` read straight back from the db (its
+ * query handler returns the raw row), so this must strip Convex's own
+ * `_id`/`_creationTime` system fields in addition to `createdAt`/`updatedAt`,
+ * or `saveState`'s strict object validator rejects the round-tripped state.
+ */
 function toSaveArgs(
   state: ConvexSwarmState,
 ): Omit<ConvexSwarmState, 'createdAt' | 'updatedAt'> {
-  const { createdAt, updatedAt, ...args } = state
+  const { createdAt, updatedAt, _id, _creationTime, ...args } = state as ConvexSwarmState & {
+    _id?: unknown
+    _creationTime?: unknown
+  }
   return args
 }

@@ -68,7 +68,9 @@ async function runBestEffortPersistence(
   } catch (error) {
     span.error(error, { phase, errorKind: 'capture_error', bestEffort: true })
   } finally {
-    await flushObservability()
+    // Best-effort mid-operation capture, not the enclosing action's own
+    // terminal drain — a later boundary flush owns reporting real loss.
+    await flushObservability({ terminal: false })
   }
 }
 

@@ -288,20 +288,25 @@ await observe.flush({ timeout: 5000 });
 
 Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. Failed batches retry on a capped backoff without waiting for another emitted record, while runtime reset and transport replacement count stale in-flight failures as dropped instead of requeueing them into a later transport. HTTP delivery normalizes unknown preview values into JSON-safe shapes, sends `observability.token` / `CRUX_DEVTOOLS_TOKEN` as bearer auth when configured, and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
 
-Convex actions can use the helpers from `@use-crux/convex`:
+`createCruxConvex()`, `action`/`internalAction` from `@use-crux/convex/server`, and the agent/swarm wrappers all bind to a bounded final flush automatically — no per-function setup is required for first-party Crux Convex functions. The default budget is a short fixed window (`DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS`, 3 seconds), not the 20-second window from earlier releases: Convex exposes no per-invocation deadline API, so the bound must stay well under Convex's own action timeout instead of being derived from remaining host time. `flushObservability()` always returns a structured `ObservabilityFlushResult` (`status`, `delivered`, `rejected`, `remaining`, `deadlineExceeded`); pass `onDrain` to inspect it, or let the default reporter log a console warning whenever a drain does not fully complete so an incomplete flush is never silently discarded.
+
+A raw, hand-written Convex function (one not created through `action`/`internalAction`/`flow`) opts in once with `withObservabilityFlush` from `@use-crux/convex/observability`:
 
 ```ts
 import { withObservabilityFlush } from "@use-crux/convex/observability";
 
 export const run = internalAction({
   args: {},
-  handler: withObservabilityFlush(async (ctx, args) => {
-    // Crux work here
-  }),
+  handler: withObservabilityFlush(
+    async (ctx, args) => {
+      // Crux work here
+    },
+    { onDrain: (result) => console.log("crux drain", result) },
+  ),
 });
 ```
 
-`@use-crux/convex/server` actions flush automatically by default. Pass `observabilityFlushTimeoutMs: false` only when an outer serverless boundary already flushes.
+Pass `observabilityFlushTimeoutMs: false` on an `action`/`internalAction`/`flow` definition only when an outer serverless boundary already flushes.
 
 ## Serverless and edge hosts
 

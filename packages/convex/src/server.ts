@@ -399,6 +399,7 @@ function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
           emitConvexBoundaryEvent('requested', boundary)
           await flushObservability({
             timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS,
+            terminal: false,
           })
           const result = (await runAction(
             ref,
@@ -407,12 +408,14 @@ function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
           span.end({ status: runStatusFromResult(result) ?? 'ok' })
           await flushObservability({
             timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS,
+            terminal: false,
           })
           return result
         } catch (error) {
           span.error(error)
           await flushObservability({
             timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS,
+            terminal: false,
           })
           throw error
         }
@@ -494,6 +497,7 @@ function createCruxContext(ctx: ConvexLikeCtx): CruxConvexContext {
                 emitConvexBoundaryEvent('requested', boundary)
                 await flushObservability({
                   timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS,
+                  terminal: false,
                 })
                 return await scheduler.runAfter(
                   delayMs,
@@ -582,6 +586,7 @@ async function runWithBoundary<T>(
   try {
     await flushObservability({
       timeoutMs: CONVEX_BOUNDARY_START_FLUSH_TIMEOUT_MS,
+      terminal: false,
     })
     const result = await run.withContext(fn)
     const status = runStatusFromResult(result)
