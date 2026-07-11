@@ -23,7 +23,7 @@ const docs = retriever({
     return [
       {
         namespace: 'product-docs',
-        sourceId: 'guide.md',
+        source: { id: 'guide.md' },
         chunkId: 'chunk-1',
         content: query,
         metadata: {},

@@ -109,7 +109,7 @@ function resolveCitationsInner(
     }
 
     const matches = hits.filter((hit) => {
-      if (hit.sourceId !== citation.sourceId || hit.chunkId !== citation.chunkId) return false
+      if (hit.source.id !== citation.sourceId || hit.chunkId !== citation.chunkId) return false
       return citation.namespace === undefined || hit.namespace === citation.namespace
     })
 
@@ -147,19 +147,19 @@ function resolveCitationsInner(
     resolved.push({
       ...citation,
       namespace: hit.namespace,
-      ...((citation.url ?? hit.sourceUrl) ? { url: citation.url ?? hit.sourceUrl } : {}),
-      ...((citation.path ?? hit.sourcePath) ? { path: citation.path ?? hit.sourcePath } : {}),
+      ...((citation.url ?? hit.source.url) ? { url: citation.url ?? hit.source.url } : {}),
+      ...((citation.path ?? hit.source.path) ? { path: citation.path ?? hit.source.path } : {}),
       metadata: citation.metadata ?? hit.metadata,
       ...(hit.provenance ? { provenance: hit.provenance } : {}),
       hit: {
         namespace: hit.namespace,
-        sourceId: hit.sourceId,
+        sourceId: hit.source.id,
         chunkId: hit.chunkId,
         content: hit.content,
         score: hit.score,
         metadata: hit.metadata,
-        ...(hit.sourceUrl ? { sourceUrl: hit.sourceUrl } : {}),
-        ...(hit.sourcePath ? { sourcePath: hit.sourcePath } : {}),
+        ...(hit.source.url ? { sourceUrl: hit.source.url } : {}),
+        ...(hit.source.path ? { sourcePath: hit.source.path } : {}),
         ...(hit.provenance ? { provenance: hit.provenance } : {}),
       },
     })

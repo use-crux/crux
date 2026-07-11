@@ -683,6 +683,7 @@ export type {
   StepPhase,
   Retriever,
   RetrieverHit,
+  RetrieverSource,
   RetrieveOptions,
   RetrieverMode,
   RetrievalInjectMode,

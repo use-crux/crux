@@ -155,6 +155,7 @@ export function asIndexedParentRecord(value: unknown): IndexedParentStoredRecord
     parentId: value.parentId,
     content: value.content,
     metadata: isRecord(value.metadata) ? value.metadata : {},
+    ...(isRecord(value.source) ? { source: projectSourceFacts(value.source) } : {}),
   } as IndexedParentStoredRecord
 }
 
@@ -184,15 +185,15 @@ export function indexedChunkToHit(input: {
       }
     : undefined
 
+  const source = projectSourceFacts(isRecord(value.source) ? value.source : undefined)
+
   return {
     namespace: value.namespace,
-    sourceId: value.sourceId,
+    source: { id: value.sourceId, ...(source ?? {}) },
     chunkId: value.chunkId,
     content: value.content,
     metadata: isRecord(value.metadata) ? value.metadata : {},
     score: input.score,
-    ...(typeof value.sourceUrl === 'string' ? { sourceUrl: value.sourceUrl } : {}),
-    ...(typeof value.sourcePath === 'string' ? { sourcePath: value.sourcePath } : {}),
     ...(parent && Object.keys(parent).length > 0 ? { parent } : {}),
     ...(isRecord(value.provenance) ? { provenance: value.provenance } : {}),
   }

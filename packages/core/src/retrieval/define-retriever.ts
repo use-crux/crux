@@ -20,6 +20,7 @@ import { indexedChunkKey } from '../indexed-knowledge/keys'
 import { indexedChunkToHit } from '../indexed-knowledge/records'
 import type { IndexedChunkSearchQuery } from '../indexed-knowledge'
 import type { CustomRetrieverConfig, DenseStoreBackedRetrieverConfig, RetrieveOptions, Retriever, RetrieverHit } from './types'
+import { normalizeRetrieverHit } from './source'
 
 /**
  * Create a retriever from a store-backed or custom configuration.
@@ -215,7 +216,7 @@ function createCustomRetriever(config: CustomRetrieverConfig): Retriever {
         threshold: options.threshold,
         filter: options.filter,
         fusion: normalizeFusion(options.fusion),
-        run: async () => config.retrieve(query, options),
+        run: async () => (await config.retrieve(query, options)).map(normalizeRetrieverHit),
       }),
     defaultContext: config.context,
     defaultInject: config.inject,

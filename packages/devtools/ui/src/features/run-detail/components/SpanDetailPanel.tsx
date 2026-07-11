@@ -2364,7 +2364,10 @@ function RetrievalSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
 /** design `ChunkHit` atom — #rank · sourceId · chunkId · 2-line preview · score chip. */
 function ChunkHitRow({ hit, rank }: { hit: Record<string, unknown>; rank: number }) {
   const { navigate } = useNavigation()
-  const sourceId = typeof hit.sourceId === 'string' ? hit.sourceId : undefined
+  const source = hit.source && typeof hit.source === 'object' && !Array.isArray(hit.source)
+    ? hit.source as Record<string, unknown>
+    : undefined
+  const sourceId = typeof source?.id === 'string' ? source.id : undefined
   const chunkId =
     typeof hit.chunkId === 'string' ? hit.chunkId : typeof hit.id === 'string' ? (hit.id as string) : undefined
   const score = typeof hit.score === 'number' ? (hit.score as number) : undefined

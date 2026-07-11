@@ -2,7 +2,9 @@ import { Buffer } from 'node:buffer'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { resetHooks } from '@use-crux/core'
+import { indexer, resetHooks, retriever } from '@use-crux/core'
+import { embedding } from '@use-crux/core/embedding'
+import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
 import {
   subscribeObservability,
   type CruxGraphRecord,
@@ -181,6 +183,47 @@ describe('@use-crux/ingest structured sources', () => {
       { type: 'file', mediaType: 'application/pdf' },
     ])
     expect(visual[0].content).toContain('Diagram page.')
+  })
+
+  it('retrieves visual PDF pages and audio segments with structured AssetRef attribution', async () => {
+    const pdf = {
+      type: 'data' as const, data: new Uint8Array(makePdf('')), mediaType: 'application/pdf', filename: 'diagram.pdf',
+      ref: { uri: 'asset://diagram' },
+    }
+    const audio = {
+      type: 'data' as const, data: new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]),
+      mediaType: 'audio/wav', filename: 'meeting.wav', ref: { uri: 'asset://meeting' },
+    }
+    const [pdfDocument] = await collect(fileSource(pdf, {
+      namespace: 'kb', sourceId: 'visual-pdf', media: { generate: async () => ({ text: 'Architecture diagram' }) },
+    }).documents())
+    const [audioDocument] = await collect(fileSource(audio, {
+      namespace: 'kb', sourceId: 'meeting-audio', media: { transcribe: async () => ({
+        text: 'Launch discussion', segments: [{ text: 'Launch discussion', start: 1, end: 2.5 }], raw: null,
+      }) },
+    }).documents())
+    const records = inMemoryRecordStore()
+    const vectors = inMemoryVectorStore()
+    const dense = embedding({
+      kind: 'dense', name: 'media-attribution', dimensions: 2, maxInputTokens: 100, batch: { maxSize: 8 },
+      embed: async (texts) => texts.map((text) => text.toLowerCase().includes('diagram') ? [1, 0] : [0, 1]),
+    })
+    await indexer({ id: 'media', namespace: 'kb', records, vectors, dense })
+      .indexDocuments([pdfDocument, audioDocument])
+    const search = retriever({ id: 'media', namespace: 'kb', records, vectors, dense })
+
+    await expect(search.retrieve('diagram', { limit: 1 })).resolves.toMatchObject([{
+      source: {
+        id: 'visual-pdf', assetRef: { uri: 'asset://diagram' }, mediaType: 'application/pdf',
+        location: { type: 'page', pageNumber: 1 },
+      },
+    }])
+    await expect(search.retrieve('launch', { limit: 1 })).resolves.toMatchObject([{
+      source: {
+        id: 'meeting-audio', assetRef: { uri: 'asset://meeting' }, mediaType: 'audio/wav',
+        location: { type: 'time', unit: 'seconds', start: 1, end: 2.5 },
+      },
+    }])
   })
 
   it('textSource load yields result objects and documents yields plain documents', async () => {

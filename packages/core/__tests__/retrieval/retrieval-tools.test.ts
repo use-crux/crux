@@ -24,7 +24,7 @@ describe('retriever tools', () => {
       retrieve: async () => [
         {
           namespace: 'docs',
-          sourceId: 'doc-1',
+          source: { id: 'doc-1' },
           chunkId: '0',
           content: 'Release notes',
           metadata: {},
@@ -44,7 +44,7 @@ describe('retriever tools', () => {
       hits: [
         {
           namespace: 'docs',
-          sourceId: 'doc-1',
+          source: { id: 'doc-1' },
           chunkId: '0',
           content: 'Release notes',
           score: 0.93,
@@ -69,7 +69,7 @@ describe('retriever tools', () => {
       retrieve: async (query, options) => [
         {
           namespace: 'docs',
-          sourceId: 'doc-4',
+          source: { id: 'doc-4' },
           chunkId: '1',
           content: `${query}:${options.limit}`,
           metadata: { kind: 'note' },
@@ -89,7 +89,7 @@ describe('retriever tools', () => {
       hits: [
         {
           namespace: 'docs',
-          sourceId: 'doc-4',
+          source: { id: 'doc-4' },
           chunkId: '1',
           content: 'ops:2',
           score: 0.7,
@@ -140,7 +140,7 @@ describe('retriever tools', () => {
       hits: [
         {
           namespace: 'docs',
-          sourceId: 'guide.md',
+          source: { id: 'guide.md' },
           chunkId,
           content: 'Store-backed source body',
         },

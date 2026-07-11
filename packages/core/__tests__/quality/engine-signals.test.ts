@@ -89,8 +89,8 @@ async function emitSignalSpans(): Promise<void> {
         query: 'refunds',
         returned: 2,
         hits: [
-          { rank: 1, sourceId: 'docs/refunds', chunkId: 'c1', score: 0.92 },
-          { rank: 2, sourceId: 'docs/shipping', chunkId: 'c2', score: 0.4 },
+          { rank: 1, source: { id: 'docs/refunds' }, chunkId: 'c1', score: 0.92 },
+          { rank: 2, source: { id: 'docs/shipping' }, chunkId: 'c2', score: 0.4 },
         ],
       },
     })
@@ -451,7 +451,7 @@ describe('task execution — prompt, flow, retriever, agent', () => {
       _tag: 'Retriever' as const,
       id: 'docs',
       retrieve: async (query: string) => [
-        { sourceId: 'docs/refunds', chunkId: 'c1', score: 0.9, text: `about ${query}` },
+        { source: { id: 'docs/refunds' }, chunkId: 'c1', score: 0.9, text: `about ${query}` },
       ],
     }
     const evaluation = evaluate({
@@ -461,8 +461,8 @@ describe('task execution — prompt, flow, retriever, agent', () => {
       data: [{ input: { question: 'refunds' } }],
     })
     const experiment = await run(evaluation)
-    const output = experiment.cells[0]!.output as Array<{ sourceId: string }>
-    expect(output[0]!.sourceId).toBe('docs/refunds')
+    const output = experiment.cells[0]!.output as Array<{ source: { id: string } }>
+    expect(output[0]!.source.id).toBe('docs/refunds')
   })
 
   it('agent tasks resolve tool mocks into executable tools for the adapter', async () => {

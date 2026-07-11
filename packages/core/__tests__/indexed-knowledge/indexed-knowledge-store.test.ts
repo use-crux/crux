@@ -185,7 +185,7 @@ describe('indexed knowledge store', () => {
     await expect(
       records.expandParent({
         namespace: 'kb',
-        sourceId: 'guide',
+        source: { id: 'guide' },
         chunkId: 'child-a',
         content: 'child body',
         metadata: {},
@@ -204,7 +204,7 @@ describe('indexed knowledge store', () => {
       records.expandParent(
         {
           namespace: 'kb',
-          sourceId: 'guide',
+          source: { id: 'guide' },
           chunkId: 'child-b',
           content: 'child body',
           metadata: {},

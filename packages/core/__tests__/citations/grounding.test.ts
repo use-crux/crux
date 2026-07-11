@@ -11,7 +11,7 @@ import type { Constraint } from '../../src/safety/constraint'
 function makeHit(content = 'Hybrid search combines dense and sparse retrieval.'): RetrieverHit {
   return {
     namespace: 'docs',
-    sourceId: 'guide.md',
+    source: { id: 'guide.md' },
     chunkId: 'chunk-1',
     content,
     metadata: {},
@@ -127,7 +127,7 @@ describe('grounding()', () => {
     expect(source).toMatchObject({
       hits: [
         {
-          sourceId: 'guide.md',
+          source: { id: 'guide.md' },
           chunkId: 'chunk-1',
           content: 'Hybrid search combines dense and sparse retrieval.',
         },

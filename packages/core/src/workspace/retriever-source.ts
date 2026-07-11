@@ -195,8 +195,8 @@ function hitWorkspacePath(
 ): WorkspacePath {
   const rawPath =
     options.pathForHit?.(hit) ??
-    hit.sourcePath?.replace(/^\/+/, "") ??
-    `${hit.sourceId}/${hit.chunkId}.md`;
+    hit.source.path?.replace(/^\/+/, "") ??
+    `${hit.source.id}/${hit.chunkId}.md`;
   const candidate = rawPath.startsWith("/")
     ? normalizePath(rawPath)
     : normalizePath(`${mountPath}/${rawPath}`);
@@ -210,7 +210,7 @@ function hitWorkspacePath(
 
 function hitMetadata(hit: RetrieverHit): Record<string, JsonValue> | undefined {
   const metadata: Record<string, JsonValue> = {
-    sourceId: hit.sourceId,
+    sourceId: hit.source.id,
     chunkId: hit.chunkId,
   };
   for (const [key, value] of Object.entries(hit.metadata)) {

@@ -364,7 +364,16 @@ export interface CruxPromptInputPreview {
 
 export interface CruxRetrievalHitPreview {
   rank: number
-  sourceId: string
+  source: {
+    id: string
+    url?: string
+    path?: string
+    assetRef?: { uri: string }
+    mediaType?: string
+    location?:
+      | { type: 'page'; pageNumber: number }
+      | { type: 'time'; unit: 'seconds'; start: number; end: number }
+  }
   chunkId: string
   score?: number
   preview?: string

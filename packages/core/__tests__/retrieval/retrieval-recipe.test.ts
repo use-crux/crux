@@ -7,7 +7,7 @@ import { inMemoryRecordStore } from '../../src/storage'
 function hit(id: string, content: string, score = 1, metadata: Record<string, unknown> = {}): RetrieverHit {
   return {
     namespace: 'docs',
-    sourceId: id.split('/')[0] ?? id,
+    source: { id: id.split('/')[0] ?? id },
     chunkId: id.split('/')[1] ?? '0',
     content,
     metadata,
@@ -157,7 +157,7 @@ describe('retrievalRecipe', () => {
     await expect(grounded.resolve({ question: 'launch' })).resolves.toMatchObject({
       groundingId: 'grounding:launch-recipe',
       retrieverId: 'launch-recipe',
-      hits: [expect.objectContaining({ sourceId: 'doc-1', content: 'Launch checklist' })],
+      hits: [expect.objectContaining({ source: { id: 'doc-1' }, content: 'Launch checklist' })],
     })
   })
 
@@ -200,7 +200,7 @@ describe('retrievalRecipe', () => {
     expect(retrieveFn.mock.calls.map(([query]) => query)).toEqual(['refund', 'refund policy', 'returns policy'])
     expect(maxInFlight).toBe(2)
     expect(hits[0]).toMatchObject({
-      sourceId: 'doc-1',
+      source: { id: 'doc-1' },
       chunkId: 'a',
       score: expect.any(Number),
       provenance: {
@@ -282,7 +282,7 @@ describe('retrievalRecipe', () => {
 
     expect(hits).toEqual([
       expect.objectContaining({
-        sourceId: 'pricing',
+        source: { id: 'pricing' },
         chunkId: 'a',
         content: 'Relevant setup sentence.',
         score: 0.97,

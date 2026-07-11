@@ -128,7 +128,7 @@ const custom = retrieval.retriever({
   retrieve: async (query) => [
     {
       namespace: 'custom-docs',
-      sourceId: 'guide.md',
+      source: { id: 'guide.md' },
       chunkId: 'chunk-1',
       content: query,
       metadata: {},
@@ -139,6 +139,12 @@ const custom = retrieval.retriever({
 })
 
 expectTypeOf(custom.retrieve('refund policy')).resolves.toEqualTypeOf<RetrieverHit[]>()
+declare const attributedHit: RetrieverHit
+expectTypeOf(attributedHit.source.id).toEqualTypeOf<string>()
+// @ts-expect-error flat source identity was replaced by structured attribution.
+attributedHit.sourceId
+// @ts-expect-error source attribution is immutable.
+attributedHit.source = { id: 'other' }
 
 const exactRequest = {
   query: 'refund policy',

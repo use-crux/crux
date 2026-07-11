@@ -8,7 +8,7 @@
  */
 
 import { observe } from '../observability'
-import type { RetrieverHit, RetrieverMode } from './types'
+import type { RetrieverHit, RetrieverMode, RetrieverSource } from './types'
 
 let retrievalOperationCounter = 0
 
@@ -122,13 +122,35 @@ function retrievalHitPreview(hit: RetrieverHit, index: number): Record<string, u
   return {
     rank: index + 1,
     namespace: hit.namespace,
-    sourceId: hit.sourceId,
+    source: captureSource(hit.source),
     chunkId: hit.chunkId,
     score: hit.score,
     preview: hit.content.slice(0, 240),
     contentPreview: hit.content.slice(0, 240),
-    ...(hit.sourceUrl ? { sourceUrl: hit.sourceUrl } : {}),
-    ...(hit.sourcePath ? { sourcePath: hit.sourcePath } : {}),
     ...(hit.parent?.parentId ? { parentId: hit.parent.parentId } : {}),
+  }
+}
+
+function captureSource(source: RetrieverSource): Record<string, unknown> {
+  return {
+    id: source.id,
+    ...(source.url ? { url: redactUrlCredentials(source.url) } : {}),
+    ...(source.path ? { path: source.path } : {}),
+    ...(source.assetRef ? { assetRef: { uri: '[redacted]' } } : {}),
+    ...(source.mediaType ? { mediaType: source.mediaType } : {}),
+    ...(source.location ? { location: source.location } : {}),
+  }
+}
+
+function redactUrlCredentials(value: string): string {
+  try {
+    const url = new URL(value)
+    url.username = ''
+    url.password = ''
+    url.search = ''
+    url.hash = ''
+    return url.href
+  } catch {
+    return '[redacted]'
   }
 }

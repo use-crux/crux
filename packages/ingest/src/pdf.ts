@@ -33,6 +33,7 @@ export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn'
           id: `pdf:page:${pageNumber}`,
           kind: 'page',
           pageNumber,
+          sourceLocation: { type: 'page', pageNumber },
           content: pageText,
         })
         continue
@@ -57,6 +58,7 @@ export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn'
             id: `pdf:page:${pageNumber}:visual`,
             kind: 'page',
             pageNumber,
+            sourceLocation: { type: 'page', pageNumber },
             content: generated.text.trim(),
           })
           continue

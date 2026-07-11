@@ -608,7 +608,7 @@ interface ExpectedSource {
 
 /** A ranked retrieval hit, from the task output or captured retrieval signals. */
 interface RankedHit {
-  sourceId?: string
+  source?: { id?: string }
   chunkId?: string
   rank?: number
 }
@@ -626,7 +626,7 @@ function parseExpectedSources(expected: unknown, name: string): ExpectedSource[]
 
 /**
  * Derive the ranked hit list a retrieval scorer measures: the task output
- * when it is hit-shaped (an array of `{ sourceId }` records, or `{ hits }`),
+ * when it is hit-shaped (an array of `{ source: { id } }` records, or `{ hits }`),
  * sorted by `rank` when every entry carries one.
  */
 function rankedHitsFromOutput(output: unknown): RankedHit[] | undefined {
@@ -640,7 +640,7 @@ function rankedHitsFromOutput(output: unknown): RankedHit[] | undefined {
 }
 
 function hitMatches(hit: RankedHit, source: ExpectedSource): boolean {
-  return hit.sourceId === source.sourceId && (source.chunkId === undefined || hit.chunkId === source.chunkId)
+  return hit.source?.id === source.sourceId && (source.chunkId === undefined || hit.chunkId === source.chunkId)
 }
 
 /**
@@ -658,7 +658,7 @@ function retrievalScorer<N extends string>(name: N, metric: (hits: readonly Rank
         name,
         score: null,
         metadata: {
-          reason: 'output is not a ranked hit list (expected an array of { sourceId } or { hits })',
+          reason: 'output is not a ranked hit list (expected an array of { source: { id } } or { hits })',
         },
       }
     }
