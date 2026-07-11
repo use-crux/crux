@@ -121,7 +121,7 @@ export type {
   ConvexMemoryNamespaceArgs,
   ConvexRuntimeTarget,
 } from './runtime'
-export { convexAgent } from './agent'
+export { convexAgent, transcribe } from './agent'
 
 import type { z } from 'zod'
 import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@use-crux/core'

@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import { isNoTranscriptError } from '@use-crux/core'
+import { transcriptionConformanceRow } from '@use-crux/core/adapter/testing'
 import { createOpenAI } from '../src'
 
 const wav = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45])
 
 describe('OpenAI transcription', () => {
   it('performs exactly one native call and normalizes ordered seconds segments', async () => {
+    expect(transcriptionConformanceRow('openai').support).toBe('native')
     const create = vi.fn(async (_body: unknown, _options?: unknown) => ({
       text: 'Hello world',
       language: 'en',

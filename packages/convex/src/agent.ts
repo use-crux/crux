@@ -8,7 +8,7 @@
  * @module
  */
 
-export { generateImage } from '@use-crux/ai'
+export { generateImage, transcribe } from '@use-crux/ai'
 
 export { Agent, convexAgent, convexTools, createAgent, createTool, wrapConvexTool } from './agent/sdk'
 

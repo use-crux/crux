@@ -30,6 +30,7 @@ export {
   imageGenerationConformanceRow,
   imageGenerationSupportProjection,
 } from './testing/image-generation'
+export { TRANSCRIPTION_CONFORMANCE, transcriptionConformanceRow } from './testing/transcription'
 export { providerRuntimeConformance } from './testing/provider-runtime'
 export { transcriptCodecConformance, transcriptRoundTripConformance } from './testing/transcript'
 export type {
@@ -42,6 +43,7 @@ export type {
   ImageGenerationConformanceRow,
   ImageGenerationFixtureAdapter,
 } from './testing/image-generation'
+export type { TranscriptionConformanceRow, TranscriptionFixtureAdapter } from './testing/transcription'
 export type {
   CanonicalFinalStepInfo,
   CanonicalGenerateResultLike,

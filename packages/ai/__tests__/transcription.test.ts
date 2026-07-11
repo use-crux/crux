@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { createCruxAi, transcribe } from '../src'
+import { transcriptionConformanceRow } from '@use-crux/core/adapter/testing'
 import { scriptedGateway } from './scripted-gateway'
 
 const wav = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45])
 
 describe('AI SDK transcription', () => {
   it('performs exactly one native gateway operation and preserves native result facts', async () => {
+    expect(transcriptionConformanceRow('ai-sdk').support).toBe('native')
     const scripted = scriptedGateway({ transcribe: [{
       text: 'Hello',
       segments: [{ text: 'Hello', startSecond: 0, endSecond: 1 }],
