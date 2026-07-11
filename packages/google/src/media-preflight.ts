@@ -1,4 +1,5 @@
 import type { ContentPart, Message, UnsupportedCapabilityIssue } from '@use-crux/core'
+import { estimateGoogleMediaTokens } from './media-token-estimate'
 
 // Static, package-private projection consumed by validation today and docs generation later.
 const MEDIA_SUPPORT = Object.freeze({
@@ -16,6 +17,7 @@ export const googleMediaHooks = Object.freeze({
     model: string
     messages: readonly Message[]
   }>) => validateGoogleMedia(model, messages),
+  estimateTokens: estimateGoogleMediaTokens,
 })
 
 function validateGoogleMedia(model: string, messages: readonly Message[]): readonly UnsupportedCapabilityIssue[] {

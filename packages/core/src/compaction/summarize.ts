@@ -12,6 +12,7 @@ import type { SummarizeConfig } from './types'
 import { countTokens } from '../shared/tokenizer'
 import { observe } from '../observability'
 import { messageText } from '../content'
+import { estimateMessageTokens } from '../adapter/native-chat/media-tokens'
 
 /**
  * Format messages into a numbered conversation transcript for the LLM.
@@ -49,7 +50,7 @@ export async function summarizeMessages(config: SummarizeConfig): Promise<Compac
       }
 
       const transcript = formatTranscript(messages)
-      const tokensBefore = countTokens(transcript)
+      const tokensBefore = estimateMessageTokens(messages, { model: modelLabel(model) }).totalTokens
 
       const focusInstruction = focus?.length ? `\n\nPrioritize these aspects: ${focus.join(', ')}.` : ''
 

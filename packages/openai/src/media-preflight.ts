@@ -1,4 +1,5 @@
 import type { ContentPart, Message, UnsupportedCapabilityIssue } from '@use-crux/core'
+import { estimateOpenAIMediaTokens } from './media-token-estimate'
 
 // Static, package-private projection consumed by validation today and docs generation later.
 const MEDIA_SUPPORT = Object.freeze({
@@ -16,6 +17,7 @@ export const openAIMediaHooks = Object.freeze({
     model: string
     messages: readonly Message[]
   }>) => validateOpenAIMedia(model, messages),
+  estimateTokens: estimateOpenAIMediaTokens,
 })
 
 function validateOpenAIMedia(model: string, messages: readonly Message[]): readonly UnsupportedCapabilityIssue[] {

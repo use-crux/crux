@@ -60,7 +60,7 @@ describe('summarizeMessages', () => {
     expect(result.summary).toBe('User asked about European capitals. France: Paris, Germany: Berlin.')
   })
 
-    it('computes token metrics', async () => {
+  it('computes token metrics', async () => {
     const result = await summarizeMessages({
       messages: sampleMessages,
       generate: mockGenerate,
@@ -71,6 +71,19 @@ describe('summarizeMessages', () => {
     expect(result.tokensAfter).toBeGreaterThan(0)
     expect(result.ratio).toBeGreaterThan(0)
     expect(result.ratio).toBeLessThanOrEqual(1)
+  })
+
+  it('accounts for unknown media conservatively in compaction metrics', async () => {
+    const result = await summarizeMessages({
+      messages: [{
+        role: 'user',
+        content: [textPart('Inspect'), { type: 'image', source: new Uint8Array([1]), mediaType: 'image/png' }],
+      }],
+      generate: async () => ({ text: 'summary' }),
+      model: 'custom-model',
+    })
+
+    expect(result.tokensBefore).toBeGreaterThan(4096)
   })
 
     it('returns empty result for empty messages', async () => {

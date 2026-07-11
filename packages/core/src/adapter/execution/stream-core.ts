@@ -21,6 +21,7 @@ import { initialCoreMessages } from "./messages";
 import { createCachedStreamHandle } from "./metadata";
 import { buildResolveOpts } from "./shared";
 import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
+import { emitInputTokenEstimate } from './media-token-budget'
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -127,8 +128,15 @@ export async function streamCore<
       createCachedStreamResult: (cached) =>
         createCachedStreamHandle(cached) as unknown as MiddlewareResult,
     },
-    async () =>
-      withBudget(
+    async () => {
+      emitInputTokenEstimate({
+        messages: providerMessages,
+        provider: modelInfo.provider,
+        model: modelInfo.modelId,
+        media: dialect.media,
+        tokenBudget: args.tokenBudget,
+      })
+      return withBudget(
         (signal) =>
           dialect.stream(dialect.client, callArgs, {
             signal: composeAbortSignals(args.signal, signal),
@@ -137,7 +145,8 @@ export async function streamCore<
           budget: "step",
           limitMs: args.timeout?.stepMs,
         },
-      ),
+      )
+    },
   );
 
   const safetyStream = safety.enabled ? safety.openStream() : undefined;

@@ -11,7 +11,7 @@ import { adapter } from "../define-adapter";
 import type { AdapterSpec } from "../spec";
 import type { AdapterResponse, CallArgs, StreamHandle } from "../types";
 import { appendNativeToolRound } from "./tool-round";
-import { assertProviderMediaSupported } from "./media-hooks";
+import { assertProviderMediaSupported, attachProviderMediaHooks } from "./media-hooks";
 import type {
   NativeCallMode,
   NativeChatRequestArgs,
@@ -139,7 +139,7 @@ export function defineNativeChatProvider<
     if (profile.sanitizeToolSchema)
       spec.sanitizeToolSchema = profile.sanitizeToolSchema;
     if (profile.outputSchema) spec.wrapOutputSchema = profile.outputSchema;
-    return spec;
+    return attachProviderMediaHooks(spec, profile.media);
   }
 
   function createFor<TClient>(

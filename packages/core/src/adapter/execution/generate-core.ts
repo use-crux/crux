@@ -22,6 +22,7 @@ import { createSafety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
+import { emitInputTokenEstimate } from './media-token-budget'
 import type { AdapterResponse, CallArgs } from "../types";
 import {
   createResultAccumulator,
@@ -175,6 +176,13 @@ export async function generateCore<
       for (let step = 0; step < maxSteps; step++) {
         steps++;
         const providerMessages = await prepareProviderMessages(messages);
+        emitInputTokenEstimate({
+          messages: providerMessages,
+          provider: modelInfo.provider,
+          model: modelInfo.modelId,
+          media: dialect.media,
+          tokenBudget: args.tokenBudget,
+        })
         const callArgs: CallArgs<TExtra> = {
           model: modelInfo.modelId,
           system: currentSystem,
