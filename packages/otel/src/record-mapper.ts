@@ -45,22 +45,28 @@ interface SpanEventTarget {
 }
 
 /**
- * Create a subscriber that maps canonical Crux graph records to OTel spans.
+ * Open run/span reference lookup shared between the record-mapper subscriber
+ * and the span activation hook.
  *
- * The returned subscriber is synchronous and safe to install with
- * `subscribeObservability()`. It keeps only open span/run references and
- * ignores unmatched end records, matching the old hook path's no-crash
- * behavior for duplicate or out-of-order end events.
- *
- * @param spanManager - Span lifecycle implementation used by the exporter.
- * @param options - Telemetry options whose custom attributes are attached to
- * every started span.
- * @returns A Crux observability subscriber.
+ * The subscriber owns writes (spans are created/removed in response to graph
+ * records); the activation hook only reads, resolving the same span the
+ * subscriber already started for the current observability context so real
+ * work runs with it active.
  */
-export function createOtelRecordSubscriber(
-  spanManager: SpanManager,
-  options: TelemetryOptions = {},
-): CruxObservabilitySubscriber {
+export interface OtelSpanRegistry {
+  readonly openRuns: ReturnType<typeof createBoundedRegistry<string, SpanRef>>
+  readonly openSpans: ReturnType<typeof createBoundedRegistry<string, SpanRef>>
+  /** Resolve the span to activate for a context: prefers the current span, falls back to the run root. */
+  lookup(context: { readonly runId: string; readonly currentSpanId?: string }): SpanRef | undefined
+}
+
+/**
+ * Create the shared open run/span registry backing one telemetry install.
+ *
+ * @param spanManager - Span lifecycle implementation; evicted entries are
+ * force-ended through it so registry pressure never leaks span objects.
+ */
+export function createSpanRegistry(spanManager: SpanManager): OtelSpanRegistry {
   const openRuns = createBoundedRegistry<string, SpanRef>({
     maxEntries: OPEN_REGISTRY_MAX_ENTRIES,
     maxAgeMs: OPEN_REGISTRY_MAX_AGE_MS,
@@ -75,6 +81,38 @@ export function createOtelRecordSubscriber(
       spanManager.expireSpan(ref)
     },
   })
+
+  return {
+    openRuns,
+    openSpans,
+    lookup(context) {
+      return (context.currentSpanId ? openSpans.get(context.currentSpanId) : undefined) ?? openRuns.get(context.runId)
+    },
+  }
+}
+
+/**
+ * Create a subscriber that maps canonical Crux graph records to OTel spans.
+ *
+ * The returned subscriber is synchronous and safe to install with
+ * `subscribeObservability()`. It keeps only open span/run references and
+ * ignores unmatched end records, matching the old hook path's no-crash
+ * behavior for duplicate or out-of-order end events.
+ *
+ * @param spanManager - Span lifecycle implementation used by the exporter.
+ * @param options - Telemetry options whose custom attributes are attached to
+ * every started span.
+ * @param registry - Shared open run/span registry. Defaults to a fresh
+ * registry when the caller does not need to share it with the span
+ * activation hook (e.g. direct tests of the subscriber).
+ * @returns A Crux observability subscriber.
+ */
+export function createOtelRecordSubscriber(
+  spanManager: SpanManager,
+  options: TelemetryOptions = {},
+  registry: OtelSpanRegistry = createSpanRegistry(spanManager),
+): CruxObservabilitySubscriber {
+  const { openRuns, openSpans } = registry
   const recentlyEndedSpans = createTtlMap<string, RecentlyEndedSpan>({
     maxEntries: RECENTLY_ENDED_SPAN_MAX_ENTRIES,
     ttlMs: RECENTLY_ENDED_SPAN_TTL_MS,
@@ -101,6 +139,43 @@ export function createOtelRecordSubscriber(
         const ref = openRuns.delete(record.runId)
         if (!ref) break
         finishSpan(spanManager, ref, record)
+        break
+      }
+      case 'run:suspend': {
+        // A logical run does not hold one SDK span open across a physical
+        // suspension boundary — end this segment's root span with a truthful
+        // non-error status. `run:resume` (possibly in a fresh process) starts
+        // a fresh root span sharing the same trace ID.
+        const ref = openRuns.delete(record.runId)
+        if (!ref) break
+        spanManager.setAttributes(ref, {
+          'crux.run.suspended': true,
+          'crux.run.suspend_reason': record.reason,
+        })
+        spanManager.setStatus(ref, { code: 'OK' })
+        spanManager.endSpan(ref)
+        break
+      }
+      case 'run:resume': {
+        // No live SDK span/context crosses the physical boundary. Segment
+        // correlation is explicit: same trace ID plus a `previousSegmentId`
+        // attribute, never a coerced Crux ID standing in for a W3C span ID.
+        const ref = spanManager.startSpan(
+          `run.resume ${record.reason}`,
+          {
+            ...baseAttributes(options),
+            'crux.run.id': record.runId,
+            'crux.run.resumed': true,
+            'crux.run.resume_reason': record.reason,
+            ...(record.previousSegmentId
+              ? { 'crux.run.previous_segment_id': record.previousSegmentId }
+              : {}),
+            ...attributesFor(record.attributes),
+          },
+          undefined,
+          { traceId: record.traceId },
+        )
+        openRuns.set(record.runId, ref)
         break
       }
       case 'span:start': {

@@ -1,5 +1,11 @@
 import type { TraceAttributeValue, SpanStatus } from './types'
-import { createLightweightSpanManager, type SpanManager } from './span-manager'
+import {
+  createLightweightSpanManager,
+  type SpanManager,
+  type SpanManagerFlushOptions,
+  type SpanManagerFlushResult,
+  type SpanRef,
+} from './span-manager'
 import type { SpanExporter } from './exporter'
 import { createBoundedRegistry } from './bounded-registry'
 
@@ -25,13 +31,16 @@ interface OtelSpanLike {
 interface OtelApiLike {
   context: {
     active(): unknown
+    with<T>(context: unknown, fn: () => T): T
   }
   isSpanContextValid?: (context: OtelSpanContextLike) => boolean
   trace: {
     getTracer(name: string): {
       startSpan(name: string, options?: { attributes?: Record<string, OtelAttributeValue> }, context?: unknown): OtelSpanLike
     }
+    getTracerProvider(): unknown
     setSpan(context: unknown, span: OtelSpanLike): unknown
+    setSpanContext(context: unknown, spanContext: OtelSpanContextLike & { traceFlags: number; isRemote?: boolean }): unknown
     isSpanContextValid?: (context: OtelSpanContextLike) => boolean
   }
   SpanStatusCode: {
@@ -81,7 +90,21 @@ export function createOpenTelemetrySpanManager(
       if (fallbackManager) return fallbackManager.startSpan(name, attributes, parentSpanId, identity)
 
       const parent = parentSpanId ? activeSpans.get(parentSpanId) : undefined
-      const parentContext = parent ? api.trace.setSpan(api.context.active(), parent.span) : api.context.active()
+      const parentContext = parent
+        ? api.trace.setSpan(api.context.active(), parent.span)
+        : identity?.traceId && isValidW3cTraceId(identity.traceId)
+          ? // No live parent span crosses this boundary (e.g. `run:resume` in a
+            // fresh process). A remote parent context keeps the exported OTel
+            // trace ID aligned with the Crux graph's `traceId` instead of
+            // minting an unrelated random one, without holding any span open
+            // across the boundary or coercing a Crux ID into a span ID.
+            api.trace.setSpanContext(api.context.active(), {
+              traceId: identity.traceId,
+              spanId: randomHexId(16),
+              traceFlags: 1,
+              isRemote: true,
+            })
+          : api.context.active()
       const span = tracer.startSpan(name, otelAttributesOption(attributes), parentContext)
       const context = span.spanContext()
       if (!spanContextIsValid(api, context)) {
@@ -154,6 +177,13 @@ export function createOpenTelemetrySpanManager(
       active.span.end()
     },
 
+    runActive<T>(ref: SpanRef, fn: () => T): T {
+      if (fallbackManager) return fallbackManager.runActive(ref, fn)
+      const active = activeSpans.get(ref.spanId)
+      if (!active) return fn()
+      return api.context.with(api.trace.setSpan(api.context.active(), active.span), fn)
+    },
+
     expireSpan(ref) {
       if (fallbackManager) {
         fallbackManager.expireSpan(ref)
@@ -164,11 +194,60 @@ export function createOpenTelemetrySpanManager(
       expireOtelSpan(active)
     },
 
+    async forceFlush(options) {
+      if (fallbackManager) return await fallbackManager.forceFlush(options)
+      return await forceFlushTracerProvider(api, options)
+    },
+
     async shutdown() {
+      if (!fallbackManager) await forceFlushTracerProvider(api, { deadlineMs: SHUTDOWN_FLUSH_DEADLINE_MS })
       activeSpans.clear()
       await fallbackManager?.shutdown()
     },
   }
+}
+
+const SHUTDOWN_FLUSH_DEADLINE_MS = 5_000
+
+interface ForceFlushableProvider {
+  forceFlush?(): Promise<void>
+  /** `ProxyTracerProvider` (the global provider handle) does not itself expose `forceFlush`; unwrap to the real registered provider. */
+  getDelegate?(): unknown
+}
+
+/**
+ * Force-flush the globally registered TracerProvider, bounded by an optional
+ * deadline.
+ *
+ * The base `TracerProvider` API contract does not require `forceFlush` (only
+ * SDK implementations like `BasicTracerProvider`/`NodeTracerProvider` provide
+ * it), so this degrades to a no-op success when the registered provider does
+ * not support it — never throws through application work.
+ */
+async function forceFlushTracerProvider(
+  api: OtelApiLike,
+  options?: SpanManagerFlushOptions,
+): Promise<SpanManagerFlushResult> {
+  const handle = api.trace.getTracerProvider() as ForceFlushableProvider
+  const delegate = (typeof handle.getDelegate === 'function' ? handle.getDelegate() : undefined) as
+    | ForceFlushableProvider
+    | undefined
+  const provider = typeof delegate?.forceFlush === 'function' ? delegate : handle
+  if (typeof provider.forceFlush !== 'function') return { flushed: 0, pending: 0, timedOut: false }
+
+  const settle = provider
+    .forceFlush()
+    .then(() => false)
+    .catch(() => false)
+  const deadlineMs = options?.deadlineMs
+  const timedOut =
+    deadlineMs === undefined
+      ? await settle
+      : await Promise.race([
+          settle,
+          new Promise<boolean>((resolve) => setTimeout(() => resolve(true), Math.max(0, deadlineMs))),
+        ])
+  return timedOut ? { flushed: 0, pending: 1, timedOut: true } : { flushed: 1, pending: 0, timedOut: false }
 }
 
 function expireOtelSpan(active: ActiveOtelSpan): void {
@@ -203,6 +282,22 @@ function createFallbackSpanManager(exporter?: SpanExporter): SpanManager {
     export: () => {},
     shutdown: async () => {},
   })
+}
+
+const HEX_TRACE_ID = /^[0-9a-f]{32}$/u
+const HEX_CHARS = '0123456789abcdef'
+
+function isValidW3cTraceId(traceId: string): boolean {
+  return HEX_TRACE_ID.test(traceId) && !/^0+$/u.test(traceId)
+}
+
+/** Generate a fresh, valid W3C hex ID. Never derived from an existing Crux ID. */
+function randomHexId(length: number): string {
+  let id = ''
+  for (let index = 0; index < length; index++) {
+    id += HEX_CHARS[Math.floor(Math.random() * HEX_CHARS.length)]
+  }
+  return id
 }
 
 function spanContextIsValid(api: OtelApiLike, context: OtelSpanContextLike): boolean {

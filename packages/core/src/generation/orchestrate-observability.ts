@@ -252,7 +252,12 @@ async function* observedStream(
   try {
     const iterator = rawStream[Symbol.asyncIterator]()
     while (true) {
-      const next = await nextStreamChunk(iterator, normalizedChunkMs)
+      // Each provider chunk production runs under the operation span's
+      // context — not only the initial synchronous call into the provider —
+      // so an installed telemetry plugin's active-span/context activation
+      // (e.g. `trace.getActiveSpan()`) is correct for the actual work that
+      // produces each chunk, not just for the call that started the stream.
+      const next = await span.withContext(() => nextStreamChunk(iterator, normalizedChunkMs))
       if (next.done) break
       const chunk = next.value
       const delta = extractTextDelta(chunk)

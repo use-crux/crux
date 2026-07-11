@@ -11,7 +11,7 @@
  * @module
  */
 
-import type { CruxHooks } from './runtime'
+import type { CruxHooks, SpanActivationHook, TelemetryFlushHook, TelemetryResumeAttributesHook } from './runtime'
 import type { ResolveHook, ResolveHookArgs, StreamProgressReporter } from './middleware'
 import type { PromptMiddleware } from './types'
 
@@ -56,6 +56,24 @@ export function mergeHooks(base: CruxHooks, patch: Partial<CruxHooks>): CruxHook
 
   if (patch.streamProgressHook !== undefined) {
     result.streamProgressHook = fanOutStreamProgressHook(base.streamProgressHook, patch.streamProgressHook)
+  }
+
+  // Span activation: layered chaining (new activates around old, innermost fn last)
+  if (patch.spanActivationHook !== undefined) {
+    result.spanActivationHook = chainSpanActivationHook(base.spanActivationHook, patch.spanActivationHook)
+  }
+
+  // Telemetry flush: fan-out — every installed manager's flush is awaited, all must succeed for `ok`.
+  if (patch.telemetryFlushHook !== undefined) {
+    result.telemetryFlushHook = fanOutTelemetryFlushHook(base.telemetryFlushHook, patch.telemetryFlushHook)
+  }
+
+  // Resume attributes: fan-out — attribute objects from every plugin are merged, patch wins on key conflicts.
+  if (patch.telemetryResumeAttributesHook !== undefined) {
+    result.telemetryResumeAttributesHook = fanOutResumeAttributesHook(
+      base.telemetryResumeAttributesHook,
+      patch.telemetryResumeAttributesHook,
+    )
   }
 
   // Global safety policies: concat so multiple plugins compose
@@ -119,6 +137,45 @@ function fanOutResolveHook(base: ResolveHook | undefined, patch: ResolveHook): R
     await base(args)
     return patch(args)
   }
+}
+
+/**
+ * Chain span activation hooks: patch activates around a callback that itself
+ * runs the base activation, so both stay active for the real work.
+ */
+function chainSpanActivationHook(
+  base: SpanActivationHook | undefined,
+  patch: SpanActivationHook,
+): SpanActivationHook {
+  if (!base) return patch
+  return (context, fn) => patch(context, () => base(context, fn))
+}
+
+/**
+ * Fan-out telemetry flush hooks: both flushed concurrently with the same
+ * bound, combined into one non-throwing result.
+ */
+function fanOutTelemetryFlushHook(
+  base: TelemetryFlushHook | undefined,
+  patch: TelemetryFlushHook,
+): TelemetryFlushHook {
+  if (!base) return patch
+  return async (options) => {
+    const [a, b] = await Promise.all([base(options), patch(options)])
+    return { ok: a.ok && b.ok, timedOut: Boolean(a.timedOut) || Boolean(b.timedOut) }
+  }
+}
+
+/**
+ * Fan-out resume-attribute hooks: attribute objects from every plugin are
+ * merged, with the later-installed (patch) plugin winning on key conflicts.
+ */
+function fanOutResumeAttributesHook(
+  base: TelemetryResumeAttributesHook | undefined,
+  patch: TelemetryResumeAttributesHook,
+): TelemetryResumeAttributesHook {
+  if (!base) return patch
+  return (carrier) => ({ ...(base(carrier) ?? {}), ...(patch(carrier) ?? {}) })
 }
 
 /**

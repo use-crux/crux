@@ -52,8 +52,9 @@ import type {
   ObservabilityFlushOptions,
   ObservabilityFlushResult,
 } from './delivery/options'
-import { runWithHostLifecycle } from './delivery/host-scope'
-import type { CruxHostLifecycle } from '../runtime/api/host-lifecycle'
+import { activeHostLifecycle, runWithHostLifecycle } from './delivery/host-scope'
+import { remainingHostDeadlineMs, type CruxHostLifecycle } from '../runtime/api/host-lifecycle'
+import { getHooks } from '../runtime/runtime'
 import {
   currentCruxCorrelators,
   currentObservabilityContext,
@@ -295,7 +296,45 @@ function currentContext(): ObservabilityContext | undefined {
 }
 
 function withContext<R>(context: ObservabilityContext, fn: () => R): R {
-  return withObservabilityContext(context, fn)
+  return withObservabilityContext(context, () => activateSpan(context, fn))
+}
+
+/**
+ * Run `fn` through the installed {@link SpanActivationHook}, if any.
+ *
+ * This is the single choke point every `withContext()` call passes through
+ * (`observe.run`, `observe.span`, `observe.openSpan().withContext`,
+ * `observe.openRun().withContext`, resumed segments), so a telemetry plugin
+ * that installs the hook activates its real span around the actual callback
+ * for every instrumented entry point without per-call-site wiring.
+ */
+function activateSpan<R>(context: ObservabilityContext, fn: () => R): R {
+  const hook = getHooks().spanActivationHook
+  if (!hook) return fn()
+  const currentSpanId = context.spanStack[context.spanStack.length - 1]
+  return hook(captureContextValue(context, context.spanStack, currentSpanId), fn)
+}
+
+/**
+ * Merge explicit resume attributes with any attributes an installed
+ * telemetry plugin derives from the propagation carrier (e.g. allowlisted
+ * W3C baggage). The hook never throws through app work; a throw or
+ * non-object return is treated as "nothing to add".
+ */
+function resumeAttributesFor(
+  carrier: CruxPropagationCarrier,
+  explicit: CruxAttributes | undefined,
+): CruxAttributes | undefined {
+  const hook = getHooks().telemetryResumeAttributesHook
+  if (!hook) return explicit
+  let derived: CruxAttributes | undefined
+  try {
+    derived = hook(carrier)
+  } catch {
+    derived = undefined
+  }
+  if (!derived || Object.keys(derived).length === 0) return explicit
+  return { ...derived, ...(explicit ?? {}) }
 }
 
 function now(): string {
@@ -689,6 +728,7 @@ export function resetObservabilityRuntime(): void {
   endedRunStatuses.clear()
   recordSequencer.reset()
   defaultCorrelators = undefined
+  telemetryFlushFailures = 0
 }
 
 export function observabilityDeliveryErrors(): readonly unknown[] {
@@ -866,6 +906,7 @@ export const observe = {
       previousSegmentId: segmentId,
       correlators: context.correlators,
     })
+    const resumeAttributes = resumeAttributesFor(carrier, options.attributes)
 
     emitObserved(
       () => ({
@@ -880,7 +921,7 @@ export const observe = {
         ...(identity.previousSegmentId
           ? { previousSegmentId: identity.previousSegmentId }
           : {}),
-        ...(options.attributes ? { attributes: options.attributes } : {}),
+        ...(resumeAttributes ? { attributes: resumeAttributes } : {}),
       }),
       context.correlators ?? null,
     )
@@ -1431,14 +1472,54 @@ export const observe = {
   async flush(
     options: ObservabilityFlushOptions = {},
   ): Promise<ObservabilityFlushResult> {
-    return await deliveryEngine.flush(options)
+    const [result] = await Promise.all([
+      deliveryEngine.flush(options),
+      runTelemetryFlushHook(options),
+    ])
+    return result
   },
 
   async shutdown(
     options: ObservabilityFlushOptions = {},
   ): Promise<ObservabilityFlushResult> {
-    return await deliveryEngine.shutdown(options)
+    const [result] = await Promise.all([
+      deliveryEngine.shutdown(options),
+      runTelemetryFlushHook(options),
+    ])
+    return result
   },
+}
+
+let telemetryFlushFailures = 0
+
+/** Total non-throwing telemetry flush hook failures observed since the last reset. */
+export function observabilityTelemetryFlushFailures(): number {
+  return telemetryFlushFailures
+}
+
+/**
+ * Bound the telemetry flush hook's wait to the smaller of an explicit
+ * `timeoutMs` and the active host lifecycle's remaining deadline, mirroring
+ * the delivery engine's own deadline combination in `drainDeliveryState`.
+ */
+function telemetryFlushDeadlineMs(options: ObservabilityFlushOptions): number | undefined {
+  const hostRemainingMs = remainingHostDeadlineMs(activeHostLifecycle())
+  const explicitMs = options.timeoutMs === undefined ? undefined : Math.max(0, options.timeoutMs)
+  if (hostRemainingMs === undefined) return explicitMs
+  if (explicitMs === undefined) return hostRemainingMs
+  return Math.min(explicitMs, hostRemainingMs)
+}
+
+/** Run the installed telemetry flush hook, if any. Never throws through app work. */
+async function runTelemetryFlushHook(options: ObservabilityFlushOptions): Promise<void> {
+  const hook = getHooks().telemetryFlushHook
+  if (!hook) return
+  try {
+    const result = await hook({ deadlineMs: telemetryFlushDeadlineMs(options) })
+    if (!result?.ok) telemetryFlushFailures += 1
+  } catch {
+    telemetryFlushFailures += 1
+  }
 }
 
 function rememberEndedRun(runId: CruxRunId, status: EndedRunStatus): boolean {

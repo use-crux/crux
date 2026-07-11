@@ -579,7 +579,8 @@ function messageArtifact(
     schemaVersion: 1,
     recordId: 'rec_message_env_guard',
     runId: 'run_message_env_guard',
-    seq: 1,
+    segmentId: 'seg_message_env_guard',
+    segmentSeq: 1,
     traceId: '11111111111111111111111111111111',
     spanId: '1111111111111111',
     artifactId: 'artifact_message_env_guard',
@@ -590,5 +591,5 @@ function messageArtifact(
       messages: [{ role: 'user', content: text }],
     },
     createdAt: '2026-07-03T00:00:00.000Z',
-  } as Extract<CruxGraphRecord, { type: 'artifact' }>
+  } as unknown as Extract<CruxGraphRecord, { type: 'artifact' }>
 }

@@ -2,7 +2,19 @@ import { afterEach, describe, expect, it } from "vitest";
 import { observe, resetObservabilityRuntime } from "@use-crux/core/observability";
 import { inMemoryRecordStore, workspace } from "@use-crux/core";
 import { withTelemetry } from "../src";
+import { extractCruxPropagationCarrier, injectCruxPropagationCarrier } from "../src/propagation";
 import type { TraceSpan } from "../src/types";
+
+function headerMap(initial: Record<string, string> = {}) {
+  const store = new Map<string, string>(Object.entries(initial));
+  return {
+    get: (name: string) => store.get(name) ?? null,
+    set: (name: string, value: string) => {
+      store.set(name, value);
+    },
+    raw: store,
+  };
+}
 
 describe("workspace OTel privacy", () => {
   afterEach(() => {
@@ -156,5 +168,116 @@ describe("workspace OTel privacy", () => {
     expect(
       spans.flatMap((span) => Object.values(span.attributes)),
     ).not.toContain("workspace-inline://research/thread%3A1/outputs/report.md");
+  });
+});
+
+describe("W3C carrier propagation privacy and bounds", () => {
+  it("round-trips traceparent, tracestate, and the crux field through inject/extract", () => {
+    const run = observe.openRun({ name: "carrier round-trip", rootPrimitive: "flow.run" });
+    const carrier = run.captureContinuation();
+    run.end();
+
+    const target = headerMap();
+    injectCruxPropagationCarrier(carrier, target);
+    expect(target.raw.get("traceparent")).toBe(carrier.traceparent);
+    expect(target.raw.get("crux")).toBeDefined();
+
+    const { carrier: extracted, baggageAttributes } = extractCruxPropagationCarrier(target);
+    expect(extracted?.crux.runId).toBe(carrier.crux.runId);
+    expect(extracted?.traceparent).toBe(carrier.traceparent);
+    expect(baggageAttributes).toEqual({});
+  });
+
+  it("rejects an invalid traceparent instead of throwing, and does not fabricate a carrier", () => {
+    const target = headerMap({
+      traceparent: "not-a-valid-traceparent",
+      crux: JSON.stringify({ runId: "run_aaaaaaaaaaaaaaaaaaaaaaaa" }),
+    });
+
+    const { carrier, baggageAttributes } = extractCruxPropagationCarrier(target);
+    expect(carrier).toBeUndefined();
+    expect(baggageAttributes).toEqual({});
+  });
+
+  it("rejects oversized baggage instead of throwing", () => {
+    const oversizedBaggage = Array.from({ length: 2000 }, (_, i) => `k${i}=v`).join(",");
+    const run = observe.openRun({ name: "oversized baggage", rootPrimitive: "flow.run" });
+    const carrier = run.captureContinuation();
+    run.end();
+
+    const target = headerMap({
+      traceparent: carrier.traceparent!,
+      crux: JSON.stringify(carrier.crux),
+      baggage: oversizedBaggage,
+    });
+
+    const { carrier: extracted, baggageAttributes } = extractCruxPropagationCarrier(target, {
+      baggageAttributeAllowlist: ["k0"],
+    });
+    expect(extracted).toBeUndefined();
+    expect(baggageAttributes).toEqual({});
+  });
+
+  it("copies only allowlisted baggage keys into attributes, dropping everything else by default", () => {
+    const run = observe.openRun({ name: "baggage allowlist", rootPrimitive: "flow.run" });
+    const carrier = run.captureContinuation();
+    run.end();
+
+    const target = headerMap({
+      traceparent: carrier.traceparent!,
+      crux: JSON.stringify(carrier.crux),
+      baggage: "tenant=acme,secret=do-not-leak",
+    });
+
+    const withoutAllowlist = extractCruxPropagationCarrier(target);
+    expect(withoutAllowlist.baggageAttributes).toEqual({});
+
+    const withAllowlist = extractCruxPropagationCarrier(target, {
+      baggageAttributeAllowlist: ["tenant"],
+    });
+    expect(withAllowlist.baggageAttributes).toEqual({ "crux.baggage.tenant": "acme" });
+    expect(Object.keys(withAllowlist.baggageAttributes)).not.toContain("crux.baggage.secret");
+    expect(JSON.stringify(withAllowlist.baggageAttributes)).not.toContain("do-not-leak");
+  });
+
+  it("never accepts an incoming sessionId/userId as trusted identity beyond correlation", () => {
+    const run = observe.openRun({
+      name: "correlator carrier",
+      rootPrimitive: "flow.run",
+      attributes: {},
+    });
+    const carrier = run.captureContinuation();
+    run.end();
+
+    const target = headerMap({
+      traceparent: carrier.traceparent!,
+      crux: JSON.stringify({ ...carrier.crux, sessionId: "attacker-supplied", userId: "attacker-supplied" }),
+    });
+
+    const { carrier: extracted } = extractCruxPropagationCarrier(target);
+    // Extraction only returns correlation fields to be treated as untrusted
+    // hints — callers must apply their own trusted correlators. This test
+    // pins that the value is passed through as opaque data, not silently
+    // upgraded to any authenticated identity by the extraction step itself.
+    expect(extracted?.crux.sessionId).toBe("attacker-supplied");
+    expect(extracted?.crux.userId).toBe("attacker-supplied");
+  });
+
+  it("strips control characters and caps baggage attribute value length", () => {
+    const run = observe.openRun({ name: "baggage bounds", rootPrimitive: "flow.run" });
+    const carrier = run.captureContinuation();
+    run.end();
+
+    const longValue = "a".repeat(500);
+    const target = headerMap({
+      traceparent: carrier.traceparent!,
+      crux: JSON.stringify(carrier.crux),
+      baggage: `long=${longValue}`,
+    });
+
+    const { baggageAttributes } = extractCruxPropagationCarrier(target, {
+      baggageAttributeAllowlist: ["long"],
+    });
+    expect(baggageAttributes["crux.baggage.long"]?.length).toBeLessThanOrEqual(201);
   });
 });

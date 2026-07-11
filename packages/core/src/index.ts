@@ -390,7 +390,15 @@ export {
   restoreHooksLayer,
   resolveRecords,
 } from "./runtime";
-export type { CruxHooks, HooksLayerToken } from "./runtime";
+export type {
+  CruxHooks,
+  HooksLayerToken,
+  SpanActivationHook,
+  TelemetryFlushHook,
+  TelemetryFlushHookOptions,
+  TelemetryFlushHookResult,
+  TelemetryResumeAttributesHook,
+} from "./runtime";
 export type { PromptMiddleware, PromptMiddlewareArgs } from "./runtime";
 
 // Canonical observability graph contract.

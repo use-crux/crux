@@ -7,13 +7,16 @@
  * @module
  */
 
-import type { CruxPlugin } from '@use-crux/core'
-import { subscribeObservability } from '@use-crux/core/observability'
+import type { CruxPlugin, TelemetryFlushHookResult } from '@use-crux/core'
+import { remainingHostDeadlineMs } from '@use-crux/core'
+import { activeHostLifecycle, subscribeObservability, type CruxPropagationCarrier } from '@use-crux/core/observability'
 import type { TraceSpan } from './types'
 import { createCallbackExporter, createUrlExporter, type SpanExporter } from './exporter'
-import { createLightweightSpanManager, type SpanManager } from './span-manager'
+import { createLightweightSpanManager, type SpanManager, type SpanManagerFlushOptions } from './span-manager'
 import { createOpenTelemetrySpanManager } from './otel-span-manager'
-import { createOtelRecordSubscriber } from './record-mapper'
+import { createOtelRecordSubscriber, createSpanRegistry } from './record-mapper'
+import { createSpanActivationHook } from './activation'
+import { baggageAttributesFromCarrier } from './propagation'
 
 let telemetryInstalled = false
 let warnedAboutDoubleInstall = false
@@ -92,6 +95,17 @@ export interface TelemetryOptions {
    * events directly.
    */
   exporter?: UrlExporter | CallbackExporter
+
+  /**
+   * Baggage member keys allowed to cross a resumed run/segment boundary as
+   * `crux.baggage.<key>` attributes on the resumed root span.
+   *
+   * Baggage is untrusted input carried on the propagation carrier — nothing
+   * is copied by default. Applies to every first-party resume boundary
+   * (Flow suspend/resume, Convex) since they all funnel through
+   * `observe.resumeRun()`.
+   */
+  baggageAttributeAllowlist?: readonly string[]
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -133,13 +147,20 @@ export function withTelemetry(options?: TelemetryOptions): CruxPlugin {
 
       telemetryInstalled = true
       const spanManager = createSpanManager(opts)
-      const unsubscribe = subscribeObservability(createOtelRecordSubscriber(spanManager, opts))
+      const registry = createSpanRegistry(spanManager)
+      const unsubscribe = subscribeObservability(createOtelRecordSubscriber(spanManager, opts, registry))
 
+      const allowlist = opts.baggageAttributeAllowlist
       return {
+        spanActivationHook: createSpanActivationHook(spanManager, registry),
+        telemetryFlushHook: createTelemetryFlushHook(spanManager),
+        ...(allowlist && allowlist.length > 0
+          ? { telemetryResumeAttributesHook: (carrier: CruxPropagationCarrier) => baggageAttributesFromCarrier(carrier, allowlist) }
+          : {}),
         dispose() {
           unsubscribe()
           telemetryInstalled = false
-          spanManager.shutdown()
+          return shutdownBoundToHostLifecycle(spanManager)
         },
       }
     },
@@ -170,6 +191,53 @@ function createSpanManager(options: TelemetryOptions): SpanManager {
       export: () => {},
       shutdown: async () => {},
     })
+}
+
+/**
+ * Create the `telemetryFlushHook` installed by `withTelemetry()`.
+ *
+ * Bridges `observe.flush()`/`observe.shutdown()` — and therefore every
+ * existing host wrapper and explicit boundary flush — to this manager's own
+ * `forceFlush`, for both the standard OTel path and the lightweight
+ * exporter path. Never throws; a timeout or exporter failure reports
+ * `{ ok: false }` instead.
+ */
+function createTelemetryFlushHook(spanManager: SpanManager) {
+  return async (options: { deadlineMs?: number }): Promise<TelemetryFlushHookResult> => {
+    try {
+      const flushOptions: SpanManagerFlushOptions | undefined =
+        options.deadlineMs === undefined ? undefined : { deadlineMs: options.deadlineMs }
+      const result = await spanManager.forceFlush(flushOptions)
+      return { ok: !result.timedOut, timedOut: result.timedOut }
+    } catch {
+      return { ok: false }
+    }
+  }
+}
+
+/**
+ * Shut down `spanManager`, deferring or bounding the work to the active host
+ * lifecycle when one is bound (e.g. via `observe.withHostLifecycle()` in a
+ * Node/serverless/Workers/Convex wrapper).
+ *
+ * With a host deadline, `forceFlush` is bounded to the remaining budget before
+ * teardown instead of the manager's own default flush window. With a `defer`
+ * capability, the shutdown work is registered on the host's background-task
+ * primitive (e.g. `waitUntil`) instead of blocking `dispose()` itself.
+ */
+function shutdownBoundToHostLifecycle(spanManager: SpanManager): void | Promise<void> {
+  const lifecycle = activeHostLifecycle()
+  const deadlineMs = remainingHostDeadlineMs(lifecycle)
+  const shutdownPromise =
+    deadlineMs === undefined
+      ? spanManager.shutdown()
+      : spanManager.forceFlush({ deadlineMs }).then(() => spanManager.shutdown())
+
+  if (lifecycle?.defer) {
+    lifecycle.defer(shutdownPromise)
+    return
+  }
+  return shutdownPromise
 }
 
 function warnAboutDoubleInstall(): void {
