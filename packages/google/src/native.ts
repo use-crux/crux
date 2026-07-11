@@ -16,6 +16,7 @@ import {
 import { googleResponseMeta, googleResponseText } from './response'
 import { googleTextDelta } from './stream'
 import type { GoogleExtra, GoogleRequest } from './types'
+import { createGoogleGenerateImage } from './image-generation'
 
 /** Configuration for `google.retrievalModel()`. */
 export interface GoogleRetrievalModelConfig {
@@ -115,6 +116,7 @@ export const createGoogle = google.create
 export const googleHelpers = google.helpers()
 
 function createGoogleRuntimeExtensions(client: GoogleGenAI): {
+  generateImage: ReturnType<typeof createGoogleGenerateImage>
   retrievalModel(config: GoogleRetrievalModelConfig): RetrievalModel
   reranker(config: GoogleRerankerConfig): Reranker
 } {
@@ -127,6 +129,7 @@ function createGoogleRuntimeExtensions(client: GoogleGenAI): {
     }
   }
   return {
+    generateImage: createGoogleGenerateImage(client),
     retrievalModel,
     reranker(config) {
       return judgeReranker({
