@@ -971,12 +971,12 @@ func TestHTTPServer_quality_runs_endpoint_enriches_traces_for_workbench(t *testi
 	}
 
 	srv := newObservabilityHTTPServer(t, dir,
-		`{"schemaVersion":1,"recordId":"run-start-1","type":"run:start","runId":"run-1","traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"span-start-1","type":"span:start","runId":"run-1","traceId":"tr-1","spanId":"span-1","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:00.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"support"}`,
-		`{"schemaVersion":1,"recordId":"tool-start-1","type":"span:start","runId":"run-1","traceId":"tr-1","spanId":"tool-1","parentSpanId":"span-1","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:00.010Z","status":"running","toolName":"searchDocs"}`,
-		`{"schemaVersion":1,"recordId":"tool-end-1","type":"span:end","runId":"run-1","traceId":"tr-1","spanId":"tool-1","endedAt":"2026-05-16T18:00:00.020Z","durationMs":10,"status":"ok"}`,
-		`{"schemaVersion":1,"recordId":"span-end-1","type":"span:end","runId":"run-1","traceId":"tr-1","spanId":"span-1","endedAt":"2026-05-16T18:00:00.042Z","durationMs":41,"status":"ok","metrics":{"inputTokens":10,"outputTokens":12,"totalTokens":22,"costUsd":0.02}}`,
-		`{"schemaVersion":1,"recordId":"run-end-1","type":"run:end","runId":"run-1","traceId":"tr-1","endedAt":"2026-05-16T18:00:00.043Z","durationMs":43,"status":"ok","metrics":{"inputTokens":10,"outputTokens":12,"totalTokens":22,"costUsd":0.02}}`,
+		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"span-start-1","type":"span:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":2,"traceId":"tr-1","spanId":"span-1","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:00.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"support"}`,
+		`{"schemaVersion":2,"recordId":"tool-start-1","type":"span:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":3,"traceId":"tr-1","spanId":"tool-1","parentSpanId":"span-1","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:00.010Z","status":"running","toolName":"searchDocs"}`,
+		`{"schemaVersion":2,"recordId":"tool-end-1","type":"span:end","runId":"run-1","segmentId":"run-1_seg","segmentSeq":4,"traceId":"tr-1","spanId":"tool-1","endedAt":"2026-05-16T18:00:00.020Z","durationMs":10,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"span-end-1","type":"span:end","runId":"run-1","segmentId":"run-1_seg","segmentSeq":5,"traceId":"tr-1","spanId":"span-1","endedAt":"2026-05-16T18:00:00.042Z","durationMs":41,"status":"ok","metrics":{"inputTokens":10,"outputTokens":12,"totalTokens":22,"costUsd":0.02}}`,
+		`{"schemaVersion":2,"recordId":"run-end-1","type":"run:end","runId":"run-1","segmentId":"run-1_seg","segmentSeq":6,"traceId":"tr-1","endedAt":"2026-05-16T18:00:00.043Z","durationMs":43,"status":"ok","metrics":{"inputTokens":10,"outputTokens":12,"totalTokens":22,"costUsd":0.02}}`,
 	)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
@@ -1014,14 +1014,14 @@ func TestHTTPServer_quality_runs_endpoint_enriches_traces_for_workbench(t *testi
 func TestHTTPServer_quality_delete_runs_removes_observability(t *testing.T) {
 	dir := t.TempDir()
 	srv := newObservabilityHTTPServer(t, dir,
-		`{"schemaVersion":1,"recordId":"run-start-1","type":"run:start","runId":"run-1","traceId":"trace-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"span-start-1","type":"span:start","runId":"run-1","traceId":"trace-1","spanId":"span-1","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"span-event-1","type":"span:event","runId":"run-1","traceId":"trace-1","spanId":"span-1","eventId":"event-1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.002Z","attributes":{"chunkIndex":0,"charCount":2,"text":"ok","firstDeltaAt":"2026-05-16T18:00:00.001Z","lastDeltaAt":"2026-05-16T18:00:00.002Z"}}`,
-		`{"schemaVersion":1,"recordId":"artifact-1","type":"artifact","runId":"run-1","traceId":"trace-1","artifactId":"artifact-1","spanId":"span-1","kind":"output","createdAt":"2026-05-16T18:00:00.003Z","contentType":"application/json","encoding":"json","preview":{"text":"ok"}}`,
-		`{"schemaVersion":1,"recordId":"edge-1","type":"edge","runId":"run-1","traceId":"trace-1","edgeId":"edge-1","edgeType":"produced","from":{"kind":"span","id":"span-1"},"to":{"kind":"artifact","id":"artifact-1"},"createdAt":"2026-05-16T18:00:00.004Z"}`,
-		`{"schemaVersion":1,"recordId":"run-end-1","type":"run:end","runId":"run-1","traceId":"trace-1","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok"}`,
-		`{"schemaVersion":1,"recordId":"run-start-2","type":"run:start","runId":"run-2","traceId":"trace-2","name":"writer","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:01:00.000Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"run-end-2","type":"run:end","runId":"run-2","traceId":"trace-2","endedAt":"2026-05-16T18:01:00.010Z","durationMs":10,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"trace-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"span-start-1","type":"span:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":2,"traceId":"trace-1","spanId":"span-1","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:00.001Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"span-event-1","type":"span:event","runId":"run-1","segmentId":"run-1_seg","segmentSeq":3,"traceId":"trace-1","spanId":"span-1","eventId":"event-1","name":"token.chunk","timestamp":"2026-05-16T18:00:00.002Z","attributes":{"chunkIndex":0,"charCount":2,"text":"ok","firstDeltaAt":"2026-05-16T18:00:00.001Z","lastDeltaAt":"2026-05-16T18:00:00.002Z"}}`,
+		`{"schemaVersion":2,"recordId":"artifact-1","type":"artifact","runId":"run-1","segmentId":"run-1_seg","segmentSeq":4,"traceId":"trace-1","artifactId":"artifact-1","spanId":"span-1","kind":"output","createdAt":"2026-05-16T18:00:00.003Z","contentType":"application/json","encoding":"json","preview":{"text":"ok"}}`,
+		`{"schemaVersion":2,"recordId":"edge-1","type":"edge","runId":"run-1","segmentId":"run-1_seg","segmentSeq":5,"traceId":"trace-1","edgeId":"edge-1","edgeType":"produced","from":{"kind":"span","id":"span-1"},"to":{"kind":"artifact","id":"artifact-1"},"createdAt":"2026-05-16T18:00:00.004Z"}`,
+		`{"schemaVersion":2,"recordId":"run-end-1","type":"run:end","runId":"run-1","segmentId":"run-1_seg","segmentSeq":6,"traceId":"trace-1","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"run-start-2","type":"run:start","runId":"run-2","segmentId":"run-2_seg","segmentSeq":1,"traceId":"trace-2","name":"writer","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:01:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"run-end-2","type":"run:end","runId":"run-2","segmentId":"run-2_seg","segmentSeq":2,"traceId":"trace-2","endedAt":"2026-05-16T18:01:00.010Z","durationMs":10,"status":"ok"}`,
 	)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
@@ -1109,18 +1109,18 @@ func TestHTTPServer_quality_insights_endpoint_derives_attention_items(t *testing
 		t.Fatalf("write feedback: %v", err)
 	}
 	srv := newObservabilityHTTPServer(t, dir,
-		`{"schemaVersion":1,"recordId":"run-start-loop","type":"run:start","runId":"run-loop","traceId":"tr-loop","name":"agent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"span-start-loop","type":"span:start","runId":"run-loop","traceId":"tr-loop","spanId":"span-loop","family":"agent","primitive":"agent.run","name":"agent","startedAt":"2026-05-16T18:00:00.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"agent"}`,
-		`{"schemaVersion":1,"recordId":"tool-start-1","type":"span:start","runId":"run-loop","traceId":"tr-loop","spanId":"tool-1","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.010Z","status":"ok","toolName":"search"}`,
-		`{"schemaVersion":1,"recordId":"tool-start-2","type":"span:start","runId":"run-loop","traceId":"tr-loop","spanId":"tool-2","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.020Z","status":"ok","toolName":"search"}`,
-		`{"schemaVersion":1,"recordId":"tool-start-3","type":"span:start","runId":"run-loop","traceId":"tr-loop","spanId":"tool-3","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.030Z","status":"ok","toolName":"search"}`,
-		`{"schemaVersion":1,"recordId":"tool-start-4","type":"span:start","runId":"run-loop","traceId":"tr-loop","spanId":"tool-4","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.040Z","status":"ok","toolName":"search"}`,
-		`{"schemaVersion":1,"recordId":"tool-start-5","type":"span:start","runId":"run-loop","traceId":"tr-loop","spanId":"tool-5","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.050Z","status":"ok","toolName":"search"}`,
-		`{"schemaVersion":1,"recordId":"tool-start-6","type":"span:start","runId":"run-loop","traceId":"tr-loop","spanId":"tool-6","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.060Z","status":"ok","toolName":"search"}`,
-		`{"schemaVersion":1,"recordId":"tool-start-7","type":"span:start","runId":"run-loop","traceId":"tr-loop","spanId":"tool-7","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.070Z","status":"ok","toolName":"search"}`,
-		`{"schemaVersion":1,"recordId":"tool-start-8","type":"span:start","runId":"run-loop","traceId":"tr-loop","spanId":"tool-8","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.080Z","status":"ok","toolName":"search"}`,
-		`{"schemaVersion":1,"recordId":"span-end-loop","type":"span:end","runId":"run-loop","traceId":"tr-loop","spanId":"span-loop","endedAt":"2026-05-16T18:00:00.500Z","durationMs":500,"status":"ok"}`,
-		`{"schemaVersion":1,"recordId":"run-end-loop","type":"run:end","runId":"run-loop","traceId":"tr-loop","endedAt":"2026-05-16T18:00:00.500Z","durationMs":500,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"run-start-loop","type":"run:start","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":1,"traceId":"tr-loop","name":"agent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"span-start-loop","type":"span:start","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":2,"traceId":"tr-loop","spanId":"span-loop","family":"agent","primitive":"agent.run","name":"agent","startedAt":"2026-05-16T18:00:00.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"agent"}`,
+		`{"schemaVersion":2,"recordId":"tool-start-1","type":"span:start","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":3,"traceId":"tr-loop","spanId":"tool-1","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.010Z","status":"ok","toolName":"search"}`,
+		`{"schemaVersion":2,"recordId":"tool-start-2","type":"span:start","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":4,"traceId":"tr-loop","spanId":"tool-2","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.020Z","status":"ok","toolName":"search"}`,
+		`{"schemaVersion":2,"recordId":"tool-start-3","type":"span:start","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":5,"traceId":"tr-loop","spanId":"tool-3","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.030Z","status":"ok","toolName":"search"}`,
+		`{"schemaVersion":2,"recordId":"tool-start-4","type":"span:start","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":6,"traceId":"tr-loop","spanId":"tool-4","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.040Z","status":"ok","toolName":"search"}`,
+		`{"schemaVersion":2,"recordId":"tool-start-5","type":"span:start","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":7,"traceId":"tr-loop","spanId":"tool-5","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.050Z","status":"ok","toolName":"search"}`,
+		`{"schemaVersion":2,"recordId":"tool-start-6","type":"span:start","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":8,"traceId":"tr-loop","spanId":"tool-6","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.060Z","status":"ok","toolName":"search"}`,
+		`{"schemaVersion":2,"recordId":"tool-start-7","type":"span:start","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":9,"traceId":"tr-loop","spanId":"tool-7","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.070Z","status":"ok","toolName":"search"}`,
+		`{"schemaVersion":2,"recordId":"tool-start-8","type":"span:start","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":10,"traceId":"tr-loop","spanId":"tool-8","parentSpanId":"span-loop","family":"tool","primitive":"tool.call","name":"search","startedAt":"2026-05-16T18:00:00.080Z","status":"ok","toolName":"search"}`,
+		`{"schemaVersion":2,"recordId":"span-end-loop","type":"span:end","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":11,"traceId":"tr-loop","spanId":"span-loop","endedAt":"2026-05-16T18:00:00.500Z","durationMs":500,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"run-end-loop","type":"run:end","runId":"run-loop","segmentId":"run-loop_seg","segmentSeq":12,"traceId":"tr-loop","endedAt":"2026-05-16T18:00:00.500Z","durationMs":500,"status":"ok"}`,
 	)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
@@ -1223,8 +1223,8 @@ func TestHTTPServer_quality_insight_status_persists(t *testing.T) {
 func TestHTTPServer_quality_insight_silences_create_list_delete(t *testing.T) {
 	dir := t.TempDir()
 	srv := newObservabilityHTTPServer(t, dir,
-		`{"schemaVersion":1,"recordId":"run-start-1","type":"run:start","runId":"run-1","traceId":"run-1","name":"karyla-agent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running","metrics":{"totalTokens":12000}}`,
-		`{"schemaVersion":1,"recordId":"run-end-1","type":"run:end","runId":"run-1","traceId":"run-1","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok","metrics":{"totalTokens":12000}}`,
+		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"run-1","name":"karyla-agent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running","metrics":{"totalTokens":12000}}`,
+		`{"schemaVersion":2,"recordId":"run-end-1","type":"run:end","runId":"run-1","segmentId":"run-1_seg","segmentSeq":2,"traceId":"run-1","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok","metrics":{"totalTokens":12000}}`,
 	)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
@@ -1323,10 +1323,10 @@ func TestHTTPServer_quality_overview_endpoint_returns_workbench_counts(t *testin
 		t.Fatalf("write feedback: %v", err)
 	}
 	srv := newObservabilityHTTPServer(t, dir,
-		`{"schemaVersion":1,"recordId":"run-start-1","type":"run:start","runId":"run-1","traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"span-start-1","type":"span:start","runId":"run-1","traceId":"tr-1","spanId":"span-1","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:00.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"support"}`,
-		`{"schemaVersion":1,"recordId":"span-end-1","type":"span:end","runId":"run-1","traceId":"tr-1","spanId":"span-1","endedAt":"2026-05-16T18:00:00.042Z","durationMs":41,"status":"ok"}`,
-		`{"schemaVersion":1,"recordId":"run-end-1","type":"run:end","runId":"run-1","traceId":"tr-1","endedAt":"2026-05-16T18:00:00.043Z","durationMs":43,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"span-start-1","type":"span:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":2,"traceId":"tr-1","spanId":"span-1","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:00.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"support"}`,
+		`{"schemaVersion":2,"recordId":"span-end-1","type":"span:end","runId":"run-1","segmentId":"run-1_seg","segmentSeq":3,"traceId":"tr-1","spanId":"span-1","endedAt":"2026-05-16T18:00:00.042Z","durationMs":41,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"run-end-1","type":"run:end","runId":"run-1","segmentId":"run-1_seg","segmentSeq":4,"traceId":"tr-1","endedAt":"2026-05-16T18:00:00.043Z","durationMs":43,"status":"ok"}`,
 	)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()
@@ -1354,14 +1354,14 @@ func TestHTTPServer_quality_overview_endpoint_returns_design_kpis(t *testing.T) 
 	writeQualityRecordFixture(t, dir, "experiments", "01KTSUPPORTV1AAAAAAAAAAAAA", specOverviewExperimentFixture("01KTSUPPORTV1AAAAAAAAAAAAA", 1, 1))
 
 	srv := newObservabilityHTTPServer(t, dir,
-		`{"schemaVersion":1,"recordId":"run-start-1","type":"run:start","runId":"run-1","traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"span-start-1","type":"span:start","runId":"run-1","traceId":"tr-1","spanId":"span-1","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:00.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"support"}`,
-		`{"schemaVersion":1,"recordId":"span-end-1","type":"span:end","runId":"run-1","traceId":"tr-1","spanId":"span-1","endedAt":"2026-05-16T18:00:00.100Z","durationMs":100,"status":"ok","metrics":{"totalTokens":10,"costUsd":0.2}}`,
-		`{"schemaVersion":1,"recordId":"run-end-1","type":"run:end","runId":"run-1","traceId":"tr-1","endedAt":"2026-05-16T18:00:00.100Z","durationMs":100,"status":"ok","metrics":{"totalTokens":10,"costUsd":0.2}}`,
-		`{"schemaVersion":1,"recordId":"run-start-2","type":"run:start","runId":"run-2","traceId":"tr-2","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:01.000Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"span-start-2","type":"span:start","runId":"run-2","traceId":"tr-2","spanId":"span-2","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:01.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"support"}`,
-		`{"schemaVersion":1,"recordId":"span-end-2","type":"span:end","runId":"run-2","traceId":"tr-2","spanId":"span-2","endedAt":"2026-05-16T18:00:01.300Z","durationMs":300,"status":"error","metrics":{"totalTokens":20,"costUsd":0.3}}`,
-		`{"schemaVersion":1,"recordId":"run-end-2","type":"run:end","runId":"run-2","traceId":"tr-2","endedAt":"2026-05-16T18:00:01.300Z","durationMs":300,"status":"error","metrics":{"totalTokens":20,"costUsd":0.3}}`,
+		`{"schemaVersion":2,"recordId":"run-start-1","type":"run:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":1,"traceId":"tr-1","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"span-start-1","type":"span:start","runId":"run-1","segmentId":"run-1_seg","segmentSeq":2,"traceId":"tr-1","spanId":"span-1","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:00.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"support"}`,
+		`{"schemaVersion":2,"recordId":"span-end-1","type":"span:end","runId":"run-1","segmentId":"run-1_seg","segmentSeq":3,"traceId":"tr-1","spanId":"span-1","endedAt":"2026-05-16T18:00:00.100Z","durationMs":100,"status":"ok","metrics":{"totalTokens":10,"costUsd":0.2}}`,
+		`{"schemaVersion":2,"recordId":"run-end-1","type":"run:end","runId":"run-1","segmentId":"run-1_seg","segmentSeq":4,"traceId":"tr-1","endedAt":"2026-05-16T18:00:00.100Z","durationMs":100,"status":"ok","metrics":{"totalTokens":10,"costUsd":0.2}}`,
+		`{"schemaVersion":2,"recordId":"run-start-2","type":"run:start","runId":"run-2","segmentId":"run-2_seg","segmentSeq":1,"traceId":"tr-2","name":"support","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:01.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"span-start-2","type":"span:start","runId":"run-2","segmentId":"run-2_seg","segmentSeq":2,"traceId":"tr-2","spanId":"span-2","family":"generation","primitive":"generation.call","name":"support","startedAt":"2026-05-16T18:00:01.001Z","status":"running","model":"gpt-4o","provider":"openai","promptId":"support"}`,
+		`{"schemaVersion":2,"recordId":"span-end-2","type":"span:end","runId":"run-2","segmentId":"run-2_seg","segmentSeq":3,"traceId":"tr-2","spanId":"span-2","endedAt":"2026-05-16T18:00:01.300Z","durationMs":300,"status":"error","metrics":{"totalTokens":20,"costUsd":0.3}}`,
+		`{"schemaVersion":2,"recordId":"run-end-2","type":"run:end","runId":"run-2","segmentId":"run-2_seg","segmentSeq":4,"traceId":"tr-2","endedAt":"2026-05-16T18:00:01.300Z","durationMs":300,"status":"error","metrics":{"totalTokens":20,"costUsd":0.3}}`,
 	)
 	ts := httptest.NewServer(srv)
 	defer ts.Close()

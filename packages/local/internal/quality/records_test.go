@@ -23,7 +23,7 @@ func TestServiceRunsUsesObservabilityWhenAvailable(t *testing.T) {
 	}
 	defer obs.Close()
 
-	raw, err := os.ReadFile("../../../core/observability/fixtures/generation-run.json")
+	raw, err := os.ReadFile("../../../core/src/observability/fixtures/generation-run.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,12 +88,12 @@ func TestServiceRunsWithOptionsFiltersByRunRowRollups(t *testing.T) {
 
 	var batch observability.Batch
 	if err := json.Unmarshal([]byte(`{"records":[
-		{"schemaVersion":1,"recordId":"run-gen-start","type":"run:start","runId":"run_filter_generation","traceId":"trace_filter_generation","name":"support reply","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"span-gen","type":"span","runId":"run_filter_generation","traceId":"trace_filter_generation","spanId":"span_filter_generation","family":"generation","primitive":"generation.call","name":"support reply","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.100Z","durationMs":90,"status":"ok","model":"gpt-4o","provider":"openai","metrics":{"totalTokens":42}},
-		{"schemaVersion":1,"recordId":"run-gen-end","type":"run:end","runId":"run_filter_generation","traceId":"trace_filter_generation","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"ok"},
-		{"schemaVersion":1,"recordId":"run-ret-start","type":"run:start","runId":"run_filter_retrieval","traceId":"trace_filter_retrieval","name":"search docs","rootPrimitive":"retrieval.query","startedAt":"2026-05-16T18:01:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"span-ret","type":"span","runId":"run_filter_retrieval","traceId":"trace_filter_retrieval","spanId":"span_filter_retrieval","family":"retrieval","primitive":"retrieval.query","name":"search docs","startedAt":"2026-05-16T18:01:00.010Z","endedAt":"2026-05-16T18:01:00.100Z","durationMs":90,"status":"ok","model":"claude-3-5-sonnet","provider":"anthropic"},
-		{"schemaVersion":1,"recordId":"run-ret-end","type":"run:end","runId":"run_filter_retrieval","traceId":"trace_filter_retrieval","endedAt":"2026-05-16T18:01:00.120Z","durationMs":120,"status":"ok"}
+		{"schemaVersion":2,"recordId":"run-gen-start","type":"run:start","runId":"run_filter_generation","segmentId":"run_filter_generation_seg","segmentSeq":1,"traceId":"trace_filter_generation","name":"support reply","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"span-gen","type":"span","runId":"run_filter_generation","segmentId":"run_filter_generation_seg","segmentSeq":2,"traceId":"trace_filter_generation","spanId":"span_filter_generation","family":"generation","primitive":"generation.call","name":"support reply","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.100Z","durationMs":90,"status":"ok","model":"gpt-4o","provider":"openai","metrics":{"totalTokens":42}},
+		{"schemaVersion":2,"recordId":"run-gen-end","type":"run:end","runId":"run_filter_generation","segmentId":"run_filter_generation_seg","segmentSeq":3,"traceId":"trace_filter_generation","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"ok"},
+		{"schemaVersion":2,"recordId":"run-ret-start","type":"run:start","runId":"run_filter_retrieval","segmentId":"run_filter_retrieval_seg","segmentSeq":1,"traceId":"trace_filter_retrieval","name":"search docs","rootPrimitive":"retrieval.query","startedAt":"2026-05-16T18:01:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"span-ret","type":"span","runId":"run_filter_retrieval","segmentId":"run_filter_retrieval_seg","segmentSeq":2,"traceId":"trace_filter_retrieval","spanId":"span_filter_retrieval","family":"retrieval","primitive":"retrieval.query","name":"search docs","startedAt":"2026-05-16T18:01:00.010Z","endedAt":"2026-05-16T18:01:00.100Z","durationMs":90,"status":"ok","model":"claude-3-5-sonnet","provider":"anthropic"},
+		{"schemaVersion":2,"recordId":"run-ret-end","type":"run:end","runId":"run_filter_retrieval","segmentId":"run_filter_retrieval_seg","segmentSeq":3,"traceId":"trace_filter_retrieval","endedAt":"2026-05-16T18:01:00.120Z","durationMs":120,"status":"ok"}
 	]}`), &batch); err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func TestServiceRunsWithOptionsFiltersByRunRowRollups(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	traceID := "run_filter_generation"
+	traceID := "trace_filter_generation"
 	if _, err := qualityfs.Put(qualityfs.Open(dir), qualityFeedbackRecord{
 		Tag:       "QualityFeedback",
 		ID:        "feedback-filter-generation",
@@ -124,7 +124,7 @@ func TestServiceRunsWithOptionsFiltersByRunRowRollups(t *testing.T) {
 			CaseID:    "case-1",
 			VariantID: "candidate",
 			Status:    "passed",
-			TraceID:   "run_filter_generation",
+			TraceID:   "trace_filter_generation",
 		}},
 	}); err != nil {
 		t.Fatal(err)
@@ -182,11 +182,11 @@ func TestServiceOverviewIncludesRunTabCounts(t *testing.T) {
 
 	var batch observability.Batch
 	if err := json.Unmarshal([]byte(`{"records":[
-		{"schemaVersion":1,"recordId":"run-counts-ok-start","type":"run:start","runId":"run_counts_ok","traceId":"trace_counts_ok","name":"ok run","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"run-counts-ok-end","type":"run:end","runId":"run_counts_ok","traceId":"trace_counts_ok","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"ok"},
-		{"schemaVersion":1,"recordId":"run-counts-live-start","type":"run:start","runId":"run_counts_live","traceId":"trace_counts_live","name":"live run","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:01:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"run-counts-error-start","type":"run:start","runId":"run_counts_error","traceId":"trace_counts_error","name":"error run","rootPrimitive":"tool.call","startedAt":"2026-05-16T18:02:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"run-counts-error-end","type":"run:end","runId":"run_counts_error","traceId":"trace_counts_error","endedAt":"2026-05-16T18:02:00.120Z","durationMs":120,"status":"error","error":{"message":"tool failed"}}
+		{"schemaVersion":2,"recordId":"run-counts-ok-start","type":"run:start","runId":"run_counts_ok","segmentId":"run_counts_ok_seg","segmentSeq":1,"traceId":"trace_counts_ok","name":"ok run","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"run-counts-ok-end","type":"run:end","runId":"run_counts_ok","segmentId":"run_counts_ok_seg","segmentSeq":2,"traceId":"trace_counts_ok","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"ok"},
+		{"schemaVersion":2,"recordId":"run-counts-live-start","type":"run:start","runId":"run_counts_live","segmentId":"run_counts_live_seg","segmentSeq":1,"traceId":"trace_counts_live","name":"live run","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:01:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"run-counts-error-start","type":"run:start","runId":"run_counts_error","segmentId":"run_counts_error_seg","segmentSeq":1,"traceId":"trace_counts_error","name":"error run","rootPrimitive":"tool.call","startedAt":"2026-05-16T18:02:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"run-counts-error-end","type":"run:end","runId":"run_counts_error","segmentId":"run_counts_error_seg","segmentSeq":2,"traceId":"trace_counts_error","endedAt":"2026-05-16T18:02:00.120Z","durationMs":120,"status":"error","error":{"message":"tool failed"}}
 	]}`), &batch); err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestServiceOverviewIncludesRunTabCounts(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	traceID := "run_counts_ok"
+	traceID := "trace_counts_ok"
 	if _, err := qualityfs.Put(qualityfs.Open(dir), qualityFeedbackRecord{
 		Tag:       "QualityFeedback",
 		ID:        "feedback-counts-ok",
@@ -227,9 +227,9 @@ func TestServiceRunsRowIncludesErrorPreviewAndDiagnosticSeverity(t *testing.T) {
 
 	var batch observability.Batch
 	if err := json.Unmarshal([]byte(`{"records":[
-		{"schemaVersion":1,"recordId":"run-error-start","type":"run:start","runId":"run_error_rollup","traceId":"trace_error_rollup","name":"error rollup","rootPrimitive":"tool.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"span-error","type":"span","runId":"run_error_rollup","traceId":"trace_error_rollup","spanId":"span_error_rollup","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.100Z","durationMs":90,"status":"error","attributes":{"diagnosticCode":"tool-contract-mismatch","diagnosticSeverity":"error"},"error":{"message":"tool contract mismatch"}},
-		{"schemaVersion":1,"recordId":"run-error-end","type":"run:end","runId":"run_error_rollup","traceId":"trace_error_rollup","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"error","error":{"message":"tool contract mismatch"}}
+		{"schemaVersion":2,"recordId":"run-error-start","type":"run:start","runId":"run_error_rollup","segmentId":"run_error_rollup_seg","segmentSeq":1,"traceId":"trace_error_rollup","name":"error rollup","rootPrimitive":"tool.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"span-error","type":"span","runId":"run_error_rollup","segmentId":"run_error_rollup_seg","segmentSeq":2,"traceId":"trace_error_rollup","spanId":"span_error_rollup","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.100Z","durationMs":90,"status":"error","attributes":{"diagnosticCode":"tool-contract-mismatch","diagnosticSeverity":"error"},"error":{"message":"tool contract mismatch"}},
+		{"schemaVersion":2,"recordId":"run-error-end","type":"run:end","runId":"run_error_rollup","segmentId":"run_error_rollup_seg","segmentSeq":3,"traceId":"trace_error_rollup","endedAt":"2026-05-16T18:00:00.120Z","durationMs":120,"status":"error","error":{"message":"tool contract mismatch"}}
 	]}`), &batch); err != nil {
 		t.Fatal(err)
 	}
@@ -265,21 +265,21 @@ func TestServiceRunDetailNarrativeIncludesArtifactContent(t *testing.T) {
 
 	var batch observability.Batch
 	if err := json.Unmarshal([]byte(`{"records":[
-		{"schemaVersion":1,"recordId":"run-story-start","type":"run:start","runId":"run_story_content","traceId":"trace_story_content","name":"story content","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"agent-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_agent","family":"agent","primitive":"agent.run","name":"support agent","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:01.000Z","durationMs":990,"status":"ok","metrics":{"totalTokens":123,"costUsd":0.0042}},
-		{"schemaVersion":1,"recordId":"tool-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_tool","parentSpanId":"span_story_agent","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:00.100Z","endedAt":"2026-05-16T18:00:00.200Z","durationMs":100,"status":"ok","toolName":"searchDocs"},
-		{"schemaVersion":1,"recordId":"artifact-tool-args","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_tool","artifactId":"artifact_tool_args","kind":"tool.args","createdAt":"2026-05-16T18:00:00.110Z","contentType":"application/json","encoding":"json","preview":{"query":"refund policy"},"attributes":{"toolName":"searchDocs"}},
-		{"schemaVersion":1,"recordId":"artifact-tool-result","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_tool","artifactId":"artifact_tool_result","kind":"tool.result","createdAt":"2026-05-16T18:00:00.190Z","contentType":"application/json","encoding":"json","preview":{"answer":"Refunds are available for 30 days."},"attributes":{"toolName":"searchDocs"}},
-		{"schemaVersion":1,"recordId":"retrieval-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_retrieval","parentSpanId":"span_story_agent","family":"retrieval","primitive":"retrieval.query","name":"retrieve docs","startedAt":"2026-05-16T18:00:00.300Z","endedAt":"2026-05-16T18:00:00.400Z","durationMs":100,"status":"ok"},
-		{"schemaVersion":1,"recordId":"artifact-retrieval-hits","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_retrieval","artifactId":"artifact_retrieval_hits","kind":"retrieval.hits","createdAt":"2026-05-16T18:00:00.390Z","contentType":"application/json","encoding":"json","preview":{"query":"refund policy","hits":[{"sourceId":"refunds.md","chunkId":"refunds#1","score":0.91,"preview":"Refunds are available for 30 days."}],"returned":1}},
-		{"schemaVersion":1,"recordId":"score-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_score","parentSpanId":"span_story_agent","family":"scoring","primitive":"scoring.judge","name":"citation judge","startedAt":"2026-05-16T18:00:00.500Z","endedAt":"2026-05-16T18:00:00.600Z","durationMs":100,"status":"ok"},
-		{"schemaVersion":1,"recordId":"artifact-score-report","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_score","artifactId":"artifact_score_report","kind":"score.report","createdAt":"2026-05-16T18:00:00.590Z","contentType":"application/json","encoding":"json","preview":{"verdict":"fail","rationale":"Missing citation for refund policy.","judges":[{"name":"citation judge","score":0.4,"threshold":0.8,"status":"failed","rationale":"No marker in the answer."}]}},
-		{"schemaVersion":1,"recordId":"citation-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_citation","parentSpanId":"span_story_agent","family":"citation","primitive":"citation.check","name":"citation check","startedAt":"2026-05-16T18:00:00.610Z","endedAt":"2026-05-16T18:00:00.700Z","durationMs":90,"status":"ok"},
-		{"schemaVersion":1,"recordId":"artifact-citation-report","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_citation","artifactId":"artifact_citation_report","kind":"citation.report","createdAt":"2026-05-16T18:00:00.690Z","contentType":"application/json","encoding":"json","preview":{"markers":[{"marker":"[1]","sourceId":"refunds.md","chunkId":"refunds#1","score":0.95,"grounded":true}]}},
-		{"schemaVersion":1,"recordId":"memory-story","type":"span","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_memory","parentSpanId":"span_story_agent","family":"memory","primitive":"memory.write","name":"memory write","startedAt":"2026-05-16T18:00:00.710Z","endedAt":"2026-05-16T18:00:00.800Z","durationMs":90,"status":"ok"},
-		{"schemaVersion":1,"recordId":"artifact-memory-snapshot","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_memory","artifactId":"artifact_memory_snapshot","kind":"memory.snapshot","createdAt":"2026-05-16T18:00:00.790Z","contentType":"application/json","encoding":"json","preview":{"memoryType":"working","blocks":[{"key":"refund-policy","preview":"Refunds are available for 30 days.","score":0.8}],"mode":"auto","status":"written"}},
-		{"schemaVersion":1,"recordId":"artifact-output","type":"artifact","runId":"run_story_content","traceId":"trace_story_content","spanId":"span_story_agent","artifactId":"artifact_output","kind":"output","createdAt":"2026-05-16T18:00:00.990Z","contentType":"application/json","encoding":"json","preview":{"text":"You can request a refund within 30 days."}},
-		{"schemaVersion":1,"recordId":"run-story-end","type":"run:end","runId":"run_story_content","traceId":"trace_story_content","endedAt":"2026-05-16T18:00:01.000Z","durationMs":1000,"status":"ok"}
+		{"schemaVersion":2,"recordId":"run-story-start","type":"run:start","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":1,"traceId":"trace_story_content","name":"story content","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"agent-story","type":"span","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":2,"traceId":"trace_story_content","spanId":"span_story_agent","family":"agent","primitive":"agent.run","name":"support agent","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:01.000Z","durationMs":990,"status":"ok","metrics":{"totalTokens":123,"costUsd":0.0042}},
+		{"schemaVersion":2,"recordId":"tool-story","type":"span","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":3,"traceId":"trace_story_content","spanId":"span_story_tool","parentSpanId":"span_story_agent","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:00.100Z","endedAt":"2026-05-16T18:00:00.200Z","durationMs":100,"status":"ok","toolName":"searchDocs"},
+		{"schemaVersion":2,"recordId":"artifact-tool-args","type":"artifact","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":4,"traceId":"trace_story_content","spanId":"span_story_tool","artifactId":"artifact_tool_args","kind":"tool.args","createdAt":"2026-05-16T18:00:00.110Z","contentType":"application/json","encoding":"json","preview":{"query":"refund policy"},"attributes":{"toolName":"searchDocs"}},
+		{"schemaVersion":2,"recordId":"artifact-tool-result","type":"artifact","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":5,"traceId":"trace_story_content","spanId":"span_story_tool","artifactId":"artifact_tool_result","kind":"tool.result","createdAt":"2026-05-16T18:00:00.190Z","contentType":"application/json","encoding":"json","preview":{"answer":"Refunds are available for 30 days."},"attributes":{"toolName":"searchDocs"}},
+		{"schemaVersion":2,"recordId":"retrieval-story","type":"span","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":6,"traceId":"trace_story_content","spanId":"span_story_retrieval","parentSpanId":"span_story_agent","family":"retrieval","primitive":"retrieval.query","name":"retrieve docs","startedAt":"2026-05-16T18:00:00.300Z","endedAt":"2026-05-16T18:00:00.400Z","durationMs":100,"status":"ok"},
+		{"schemaVersion":2,"recordId":"artifact-retrieval-hits","type":"artifact","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":7,"traceId":"trace_story_content","spanId":"span_story_retrieval","artifactId":"artifact_retrieval_hits","kind":"retrieval.hits","createdAt":"2026-05-16T18:00:00.390Z","contentType":"application/json","encoding":"json","preview":{"query":"refund policy","hits":[{"sourceId":"refunds.md","chunkId":"refunds#1","score":0.91,"preview":"Refunds are available for 30 days."}],"returned":1}},
+		{"schemaVersion":2,"recordId":"score-story","type":"span","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":8,"traceId":"trace_story_content","spanId":"span_story_score","parentSpanId":"span_story_agent","family":"scoring","primitive":"scoring.judge","name":"citation judge","startedAt":"2026-05-16T18:00:00.500Z","endedAt":"2026-05-16T18:00:00.600Z","durationMs":100,"status":"ok"},
+		{"schemaVersion":2,"recordId":"artifact-score-report","type":"artifact","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":9,"traceId":"trace_story_content","spanId":"span_story_score","artifactId":"artifact_score_report","kind":"score.report","createdAt":"2026-05-16T18:00:00.590Z","contentType":"application/json","encoding":"json","preview":{"verdict":"fail","rationale":"Missing citation for refund policy.","judges":[{"name":"citation judge","score":0.4,"threshold":0.8,"status":"failed","rationale":"No marker in the answer."}]}},
+		{"schemaVersion":2,"recordId":"citation-story","type":"span","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":10,"traceId":"trace_story_content","spanId":"span_story_citation","parentSpanId":"span_story_agent","family":"citation","primitive":"citation.check","name":"citation check","startedAt":"2026-05-16T18:00:00.610Z","endedAt":"2026-05-16T18:00:00.700Z","durationMs":90,"status":"ok"},
+		{"schemaVersion":2,"recordId":"artifact-citation-report","type":"artifact","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":11,"traceId":"trace_story_content","spanId":"span_story_citation","artifactId":"artifact_citation_report","kind":"citation.report","createdAt":"2026-05-16T18:00:00.690Z","contentType":"application/json","encoding":"json","preview":{"markers":[{"marker":"[1]","sourceId":"refunds.md","chunkId":"refunds#1","score":0.95,"grounded":true}]}},
+		{"schemaVersion":2,"recordId":"memory-story","type":"span","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":12,"traceId":"trace_story_content","spanId":"span_story_memory","parentSpanId":"span_story_agent","family":"memory","primitive":"memory.write","name":"memory write","startedAt":"2026-05-16T18:00:00.710Z","endedAt":"2026-05-16T18:00:00.800Z","durationMs":90,"status":"ok"},
+		{"schemaVersion":2,"recordId":"artifact-memory-snapshot","type":"artifact","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":13,"traceId":"trace_story_content","spanId":"span_story_memory","artifactId":"artifact_memory_snapshot","kind":"memory.snapshot","createdAt":"2026-05-16T18:00:00.790Z","contentType":"application/json","encoding":"json","preview":{"memoryType":"working","blocks":[{"key":"refund-policy","preview":"Refunds are available for 30 days.","score":0.8}],"mode":"auto","status":"written"}},
+		{"schemaVersion":2,"recordId":"artifact-output","type":"artifact","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":14,"traceId":"trace_story_content","spanId":"span_story_agent","artifactId":"artifact_output","kind":"output","createdAt":"2026-05-16T18:00:00.990Z","contentType":"application/json","encoding":"json","preview":{"text":"You can request a refund within 30 days."}},
+		{"schemaVersion":2,"recordId":"run-story-end","type":"run:end","runId":"run_story_content","segmentId":"run_story_content_seg","segmentSeq":15,"traceId":"trace_story_content","endedAt":"2026-05-16T18:00:01.000Z","durationMs":1000,"status":"ok"}
 	]}`), &batch); err != nil {
 		t.Fatal(err)
 	}
@@ -342,14 +342,14 @@ func TestServiceInsightsDeriveObservabilityAttentionItems(t *testing.T) {
 
 	var batch observability.Batch
 	if err := json.Unmarshal([]byte(`{"records":[
-		{"schemaVersion":1,"recordId":"run-start","type":"run:start","runId":"run_attention","traceId":"trace_attention","name":"support-agent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"agent-start","type":"span:start","runId":"run_attention","traceId":"trace_attention","spanId":"span_agent","family":"agent","primitive":"agent.run","name":"support-agent","startedAt":"2026-05-16T18:00:00.001Z","status":"running","promptId":"support-agent"},
-		{"schemaVersion":1,"recordId":"tool-start","type":"span:start","runId":"run_attention","traceId":"trace_attention","spanId":"span_tool","parentSpanId":"span_agent","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:01.000Z","status":"running","toolName":"searchDocs"},
-		{"schemaVersion":1,"recordId":"tool-end","type":"span:end","runId":"run_attention","traceId":"trace_attention","spanId":"span_tool","endedAt":"2026-05-16T18:00:01.100Z","durationMs":100,"status":"error","error":{"message":"search failed"}},
-		{"schemaVersion":1,"recordId":"score-start","type":"span:start","runId":"run_attention","traceId":"trace_attention","spanId":"span_score","parentSpanId":"span_agent","family":"scoring","primitive":"scoring.judge","name":"citation-validity","startedAt":"2026-05-16T18:00:02.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"score-end","type":"span:end","runId":"run_attention","traceId":"trace_attention","spanId":"span_score","endedAt":"2026-05-16T18:00:02.100Z","durationMs":100,"status":"blocked"},
-		{"schemaVersion":1,"recordId":"agent-end","type":"span:end","runId":"run_attention","traceId":"trace_attention","spanId":"span_agent","endedAt":"2026-05-16T18:01:20.000Z","durationMs":80000,"status":"ok","metrics":{"totalTokens":18000}},
-		{"schemaVersion":1,"recordId":"run-end","type":"run:end","runId":"run_attention","traceId":"trace_attention","endedAt":"2026-05-16T18:01:20.000Z","durationMs":80000,"status":"ok","metrics":{"totalTokens":18000}}
+		{"schemaVersion":2,"recordId":"run-start","type":"run:start","runId":"run_attention","segmentId":"run_attention_seg","segmentSeq":1,"traceId":"trace_attention","name":"support-agent","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"agent-start","type":"span:start","runId":"run_attention","segmentId":"run_attention_seg","segmentSeq":2,"traceId":"trace_attention","spanId":"span_agent","family":"agent","primitive":"agent.run","name":"support-agent","startedAt":"2026-05-16T18:00:00.001Z","status":"running","promptId":"support-agent"},
+		{"schemaVersion":2,"recordId":"tool-start","type":"span:start","runId":"run_attention","segmentId":"run_attention_seg","segmentSeq":3,"traceId":"trace_attention","spanId":"span_tool","parentSpanId":"span_agent","family":"tool","primitive":"tool.call","name":"searchDocs","startedAt":"2026-05-16T18:00:01.000Z","status":"running","toolName":"searchDocs"},
+		{"schemaVersion":2,"recordId":"tool-end","type":"span:end","runId":"run_attention","segmentId":"run_attention_seg","segmentSeq":4,"traceId":"trace_attention","spanId":"span_tool","endedAt":"2026-05-16T18:00:01.100Z","durationMs":100,"status":"error","error":{"message":"search failed"}},
+		{"schemaVersion":2,"recordId":"score-start","type":"span:start","runId":"run_attention","segmentId":"run_attention_seg","segmentSeq":5,"traceId":"trace_attention","spanId":"span_score","parentSpanId":"span_agent","family":"scoring","primitive":"scoring.judge","name":"citation-validity","startedAt":"2026-05-16T18:00:02.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"score-end","type":"span:end","runId":"run_attention","segmentId":"run_attention_seg","segmentSeq":6,"traceId":"trace_attention","spanId":"span_score","endedAt":"2026-05-16T18:00:02.100Z","durationMs":100,"status":"blocked"},
+		{"schemaVersion":2,"recordId":"agent-end","type":"span:end","runId":"run_attention","segmentId":"run_attention_seg","segmentSeq":7,"traceId":"trace_attention","spanId":"span_agent","endedAt":"2026-05-16T18:01:20.000Z","durationMs":80000,"status":"ok","metrics":{"totalTokens":18000}},
+		{"schemaVersion":2,"recordId":"run-end","type":"run:end","runId":"run_attention","segmentId":"run_attention_seg","segmentSeq":8,"traceId":"trace_attention","endedAt":"2026-05-16T18:01:20.000Z","durationMs":80000,"status":"ok","metrics":{"totalTokens":18000}}
 	]}`), &batch); err != nil {
 		t.Fatal(err)
 	}

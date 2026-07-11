@@ -975,6 +975,10 @@ func (s *Service) graph(ctx context.Context, runID string, includeRecords bool) 
 	}
 	applyRunSummaryGraphRollups(&run, spans, events, artifacts, edges)
 	graphRuns := []RunSummary{run}
+	byRunID := map[string]*RunSummary{canonicalRunID: &graphRuns[0]}
+	if err := s.enrichRunSegmentSummaries(ctx, []string{canonicalRunID}, byRunID); err != nil {
+		return Graph{}, fmt.Errorf("enrich observability run %q segments: %w", runID, err)
+	}
 	if err := s.enrichRunDeliveryHealth(ctx, graphRuns); err != nil {
 		return Graph{}, err
 	}

@@ -62,10 +62,10 @@ func TestCellEvidenceAPIUsesExactAssertionSpanEvidence(t *testing.T) {
   }]
 }`)
 	obs := openTraceEvidenceObservability(t, ctx, `{"records":[
-		{"schemaVersion":1,"recordId":"run-start-exact","type":"run:start","runId":"run_trace_exact","traceId":"trace_exact","name":"draft check","rootPrimitive":"flow.run","startedAt":"2026-06-14T12:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"span-root-exact","type":"span","runId":"run_trace_exact","traceId":"trace_exact","spanId":"span_trace_exact_root","family":"flow","primitive":"flow.run","name":"draft check","startedAt":"2026-06-14T12:00:00.000Z","endedAt":"2026-06-14T12:00:00.120Z","durationMs":120,"status":"ok"},
-		{"schemaVersion":1,"recordId":"span-draft-exact","type":"span","runId":"run_trace_exact","traceId":"trace_exact","spanId":"span_trace_exact_draft","parentSpanId":"span_trace_exact_root","family":"flow","primitive":"flow.step","name":"draft","startedAt":"2026-06-14T12:00:00.010Z","endedAt":"2026-06-14T12:00:00.090Z","durationMs":80,"status":"error","attributes":{"stepLabel":"draft"}},
-		{"schemaVersion":1,"recordId":"run-end-exact","type":"run:end","runId":"run_trace_exact","traceId":"trace_exact","endedAt":"2026-06-14T12:00:00.120Z","durationMs":120,"status":"ok"}
+		{"schemaVersion":2,"recordId":"run-start-exact","type":"run:start","runId":"run_trace_exact","segmentId":"run_trace_exact_seg","segmentSeq":1,"traceId":"trace_exact","name":"draft check","rootPrimitive":"flow.run","startedAt":"2026-06-14T12:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"span-root-exact","type":"span","runId":"run_trace_exact","segmentId":"run_trace_exact_seg","segmentSeq":2,"traceId":"trace_exact","spanId":"span_trace_exact_root","family":"flow","primitive":"flow.run","name":"draft check","startedAt":"2026-06-14T12:00:00.000Z","endedAt":"2026-06-14T12:00:00.120Z","durationMs":120,"status":"ok"},
+		{"schemaVersion":2,"recordId":"span-draft-exact","type":"span","runId":"run_trace_exact","segmentId":"run_trace_exact_seg","segmentSeq":3,"traceId":"trace_exact","spanId":"span_trace_exact_draft","parentSpanId":"span_trace_exact_root","family":"flow","primitive":"flow.step","name":"draft","startedAt":"2026-06-14T12:00:00.010Z","endedAt":"2026-06-14T12:00:00.090Z","durationMs":80,"status":"error","attributes":{"stepLabel":"draft"}},
+		{"schemaVersion":2,"recordId":"run-end-exact","type":"run:end","runId":"run_trace_exact","segmentId":"run_trace_exact_seg","segmentSeq":4,"traceId":"trace_exact","endedAt":"2026-06-14T12:00:00.120Z","durationMs":120,"status":"ok"}
 	]}`)
 	defer obs.Close()
 
@@ -158,10 +158,10 @@ func TestCellEvidenceAPIUsesScoreThresholdTraceHeuristic(t *testing.T) {
   }]
 }`)
 	obs := openTraceEvidenceObservability(t, ctx, `{"records":[
-		{"schemaVersion":1,"recordId":"run-start-heuristic","type":"run:start","runId":"run_trace_heuristic","traceId":"trace_heuristic","name":"score check","rootPrimitive":"flow.run","startedAt":"2026-06-14T12:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"span-root-heuristic","type":"span","runId":"run_trace_heuristic","traceId":"trace_heuristic","spanId":"span_trace_heuristic_root","family":"flow","primitive":"flow.run","name":"score check","startedAt":"2026-06-14T12:00:00.000Z","endedAt":"2026-06-14T12:00:00.160Z","durationMs":160,"status":"ok"},
-		{"schemaVersion":1,"recordId":"span-score-heuristic","type":"span","runId":"run_trace_heuristic","traceId":"trace_heuristic","spanId":"span_trace_heuristic_score","parentSpanId":"span_trace_heuristic_root","family":"scoring","primitive":"scoring.judge","name":"helpful judge","startedAt":"2026-06-14T12:00:00.090Z","endedAt":"2026-06-14T12:00:00.150Z","durationMs":60,"status":"ok"},
-		{"schemaVersion":1,"recordId":"run-end-heuristic","type":"run:end","runId":"run_trace_heuristic","traceId":"trace_heuristic","endedAt":"2026-06-14T12:00:00.160Z","durationMs":160,"status":"ok"}
+		{"schemaVersion":2,"recordId":"run-start-heuristic","type":"run:start","runId":"run_trace_heuristic","segmentId":"run_trace_heuristic_seg","segmentSeq":1,"traceId":"trace_heuristic","name":"score check","rootPrimitive":"flow.run","startedAt":"2026-06-14T12:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"span-root-heuristic","type":"span","runId":"run_trace_heuristic","segmentId":"run_trace_heuristic_seg","segmentSeq":2,"traceId":"trace_heuristic","spanId":"span_trace_heuristic_root","family":"flow","primitive":"flow.run","name":"score check","startedAt":"2026-06-14T12:00:00.000Z","endedAt":"2026-06-14T12:00:00.160Z","durationMs":160,"status":"ok"},
+		{"schemaVersion":2,"recordId":"span-score-heuristic","type":"span","runId":"run_trace_heuristic","segmentId":"run_trace_heuristic_seg","segmentSeq":3,"traceId":"trace_heuristic","spanId":"span_trace_heuristic_score","parentSpanId":"span_trace_heuristic_root","family":"scoring","primitive":"scoring.judge","name":"helpful judge","startedAt":"2026-06-14T12:00:00.090Z","endedAt":"2026-06-14T12:00:00.150Z","durationMs":60,"status":"ok"},
+		{"schemaVersion":2,"recordId":"run-end-heuristic","type":"run:end","runId":"run_trace_heuristic","segmentId":"run_trace_heuristic_seg","segmentSeq":4,"traceId":"trace_heuristic","endedAt":"2026-06-14T12:00:00.160Z","durationMs":160,"status":"ok"}
 	]}`)
 	defer obs.Close()
 
@@ -241,8 +241,8 @@ func TestCellEvidenceAPIPreservesRootOnlyTraceLinks(t *testing.T) {
   }]
 }`)
 	obs := openTraceEvidenceObservability(t, ctx, `{"records":[
-		{"schemaVersion":1,"recordId":"run-start-root-only","type":"run:start","runId":"run_trace_root_only","traceId":"trace_root_only","name":"root-only check","rootPrimitive":"eval.case","startedAt":"2026-06-14T12:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"run-end-root-only","type":"run:end","runId":"run_trace_root_only","traceId":"trace_root_only","endedAt":"2026-06-14T12:00:00.090Z","durationMs":90,"status":"ok"}
+		{"schemaVersion":2,"recordId":"run-start-root-only","type":"run:start","runId":"run_trace_root_only","segmentId":"run_trace_root_only_seg","segmentSeq":1,"traceId":"trace_root_only","name":"root-only check","rootPrimitive":"eval.case","startedAt":"2026-06-14T12:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"run-end-root-only","type":"run:end","runId":"run_trace_root_only","segmentId":"run_trace_root_only_seg","segmentSeq":2,"traceId":"trace_root_only","endedAt":"2026-06-14T12:00:00.090Z","durationMs":90,"status":"ok"}
 	]}`)
 	defer obs.Close()
 

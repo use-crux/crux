@@ -29,6 +29,51 @@ func TestServiceProjectsOutOfOrderMultiSegmentLifecycle(t *testing.T) {
 	assertSegmentProjection(t, service, "seg_oo_b", "ok", "2026-05-16T18:01:00.000Z", "", "signal", "seg_oo_a")
 }
 
+// Run detail and the graph endpoint must carry the same segment/ordering
+// enrichment as the Runs list (service.Run), per binding spec 04 section 3's
+// "run detail reads the same revisioned projection and shared presentation
+// contract." A live smoke test against a real build found these two paths
+// diverging: service.graph() (used by both RunDetail() and Graph()) never
+// called the segment-summary enrichment service.Run() calls, so DevTools run
+// detail's segment/gap/ordering-confidence reliability badge was always empty
+// even when the Runs list correctly showed it.
+func TestGraphAndRunDetailCarrySameSegmentEnrichmentAsRunsList(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	if err := service.Ingest(ctx, mustBatch(t,
+		`{"schemaVersion":2,"recordId":"rec_gd_start","type":"run:start","runId":"run_graph_detail","traceId":"55555555555555555555555555555555","segmentId":"seg_gd_a","segmentSeq":1,"name":"graph detail","rootPrimitive":"flow.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_gd_suspend","type":"run:suspend","runId":"run_graph_detail","traceId":"55555555555555555555555555555555","segmentId":"seg_gd_a","segmentSeq":2,"suspendedAt":"2026-05-16T18:00:01.000Z","reason":"await-signal"}`,
+		`{"schemaVersion":2,"recordId":"rec_gd_resume","type":"run:resume","runId":"run_graph_detail","traceId":"55555555555555555555555555555555","segmentId":"seg_gd_b","segmentSeq":1,"resumedAt":"2026-05-16T18:00:02.000Z","reason":"signal","previousSegmentId":"seg_gd_a"}`,
+		`{"schemaVersion":2,"recordId":"rec_gd_end","type":"run:end","runId":"run_graph_detail","traceId":"55555555555555555555555555555555","segmentId":"seg_gd_b","segmentSeq":2,"endedAt":"2026-05-16T18:00:03.000Z","durationMs":3000,"status":"ok"}`,
+	)); err != nil {
+		t.Fatal(err)
+	}
+
+	run, err := service.Run(ctx, "run_graph_detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.SegmentCount != 2 || run.OrderingConfidence != "causal" || run.GapCount != 0 {
+		t.Fatalf("Run() projection = %#v", run)
+	}
+
+	graph, err := service.Graph(ctx, "run_graph_detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if graph.Run.SegmentCount != run.SegmentCount || graph.Run.OrderingConfidence != run.OrderingConfidence || graph.Run.GapCount != run.GapCount {
+		t.Fatalf("Graph() run projection = %#v, want it to match Run() = %#v", graph.Run, run)
+	}
+
+	detail, err := service.RunDetail(ctx, "run_graph_detail")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Run.SegmentCount != run.SegmentCount || detail.Run.OrderingConfidence != run.OrderingConfidence || detail.Run.GapCount != run.GapCount {
+		t.Fatalf("RunDetail() run projection = %#v, want it to match Run() = %#v", detail.Run, run)
+	}
+}
+
 func TestServiceMarksConcurrentSegmentsAsPartialOrder(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)

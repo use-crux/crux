@@ -184,9 +184,9 @@ func TestDevServer_ingest_and_read(t *testing.T) {
 
 	baseURL := fmt.Sprintf("http://localhost:%d", port)
 
-	body := `{"records":[
-		{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run-live","traceId":"trace-live","name":"live","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"rec_run_end","type":"run:end","runId":"run-live","traceId":"trace-live","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok"}
+	body := `{"schemaVersion":2,"records":[
+		{"schemaVersion":2,"recordId":"rec_run_start","type":"run:start","runId":"run-live","segmentId":"seg-live","segmentSeq":1,"traceId":"trace-live","name":"live","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"rec_run_end","type":"run:end","runId":"run-live","segmentId":"seg-live","segmentSeq":2,"traceId":"trace-live","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok"}
 	]}`
 	resp, err := http.Post(baseURL+"/api/observability/records", "application/json", strings.NewReader(body))
 	if err != nil {
