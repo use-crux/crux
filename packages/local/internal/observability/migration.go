@@ -239,6 +239,30 @@ func observabilitySchemaStatements() []string {
 			changed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 		)`,
 		`CREATE INDEX IF NOT EXISTS idx_run_revision_log_run ON observability_run_revision_log(run_id)`,
+		// run_definition_activity is a DERIVED projection of the runtime↔Project
+		// Index join: for each run, which authored definitions its records
+		// referenced (via DefinitionRef), in what role, how often, and when it
+		// was first/last seen. It is rebuildable at any time by replaying the
+		// immutable `records` rows (see RebuildDefinitionActivity), so it holds
+		// NO revision, fingerprint, or identity column of its own — it is
+		// addressed only through the run_id it derives from, reuses
+		// observability_revision for change tracking (a definition's activity
+		// only changes as a side effect of ingesting a record that already bumps
+		// its run's revision), and follows the parent run's retention/deletion
+		// exactly. It never persists a denormalized Project Index copy: only the
+		// runtime-emitted id/kind/role, resolved against the current snapshot at
+		// read time by consumers.
+		`CREATE TABLE IF NOT EXISTS run_definition_activity (
+			run_id TEXT NOT NULL,
+			definition_id TEXT NOT NULL,
+			definition_kind TEXT NOT NULL,
+			role TEXT NOT NULL,
+			first_seen_at TEXT NOT NULL,
+			last_seen_at TEXT NOT NULL,
+			occurrence_count INTEGER NOT NULL DEFAULT 0,
+			PRIMARY KEY (run_id, definition_id)
+		)`,
+		`CREATE INDEX IF NOT EXISTS idx_run_definition_activity_definition ON run_definition_activity(definition_id)`,
 	}
 }
 
@@ -401,6 +425,7 @@ func dropObservabilityTables(ctx context.Context, runner sqliteRunner) error {
 		"observability_source_health",
 		"observability_revision",
 		"observability_run_revision_log",
+		"run_definition_activity",
 	} {
 		if _, err := runner.ExecContext(ctx, "DROP TABLE IF EXISTS "+table); err != nil {
 			return fmt.Errorf("reset pre-v2 observability table %s: %w", table, err)

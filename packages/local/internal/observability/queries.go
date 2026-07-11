@@ -231,6 +231,10 @@ func runListWhereClause(opts RunListOptions) (string, []any, error) {
 		clauses = append(clauses, `ifnull(r.started_at, '') <= ?`)
 		args = append(args, opts.Until)
 	}
+	if opts.DefinitionID != "" {
+		clauses = append(clauses, `r.run_id IN (SELECT run_id FROM run_definition_activity WHERE definition_id = ?)`)
+		args = append(args, opts.DefinitionID)
+	}
 	if opts.Cursor != "" {
 		startedAt, runID, err := decodeRunListCursor(opts.Cursor)
 		if err != nil {

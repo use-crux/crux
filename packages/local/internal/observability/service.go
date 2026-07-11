@@ -183,6 +183,13 @@ type RunListOptions struct {
 	// Since/Until bound startedAt (RFC3339Nano, inclusive) before Limit/Offset.
 	Since string
 	Until string
+	// DefinitionID restricts the run list to runs whose records referenced this
+	// Project Index definition (via DefinitionRef), backed by the derived
+	// run_definition_activity projection. Empty means no definition filter. It
+	// is a plain indexed equality lookup on the runtime-emitted id — it never
+	// consults the current Project Index snapshot, so runs that referenced a
+	// since-deleted definition are still returned rather than silently dropped.
+	DefinitionID string
 	// Cursor requests the page strictly after this opaque, server-issued
 	// cursor (see RunsPage/NextCursor) instead of Offset. Cursor pagination is
 	// stable across concurrent inserts; Offset is not and remains only for

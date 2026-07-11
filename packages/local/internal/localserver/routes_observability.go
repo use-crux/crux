@@ -113,6 +113,24 @@ func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Serv
 		writeObservabilityRead(w, delta, err)
 	})
 
+	// GET /api/observability/definitions/{definitionId}/runs is the
+	// filtered-by-definition Runs query (binding spec 03 §4.4): "runs whose
+	// DefinitionRefs include definition X", backed by the derived
+	// run_definition_activity projection. It returns the same revisioned
+	// {Revision, Rows, NextCursor} envelope and honors the same status/session/
+	// time-range/cursor filters as the page route, so DevTools' existing
+	// revision-aware catch-up needs no new invalidation model.
+	mux.HandleFunc("GET /api/observability/definitions/{definitionId}/runs", func(w http.ResponseWriter, r *http.Request) {
+		if service == nil {
+			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		opts := parseObservabilityRunListOptions(r)
+		opts.DefinitionID = r.PathValue("definitionId")
+		page, err := service.RunsPage(r.Context(), opts)
+		writeObservabilityRead(w, page, err)
+	})
+
 	mux.HandleFunc("GET /api/observability/runs/{runId}", func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
@@ -174,6 +192,7 @@ func parseObservabilityRunListOptions(r *http.Request) observability.RunListOpti
 	opts.Since = r.URL.Query().Get("since")
 	opts.Until = r.URL.Query().Get("until")
 	opts.Cursor = r.URL.Query().Get("cursor")
+	opts.DefinitionID = r.URL.Query().Get("definitionId")
 	return opts
 }
 

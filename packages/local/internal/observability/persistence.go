@@ -30,6 +30,10 @@ func deleteRunRows(ctx context.Context, tx *sql.Tx, runIDs []string) error {
 		"artifacts",
 		"edges",
 		"spans",
+		// run_definition_activity is a derived projection with no independent
+		// retention/TTL: a run's activity rows must not survive that run's
+		// deletion, so they are removed in the same transaction as the run.
+		"run_definition_activity",
 		"runs",
 	}
 	// observability_run_revision_log is deliberately NOT purged here: it is
@@ -260,6 +264,13 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 		return nil
 	}
 	statements.markAffected(record.RunID, record.SegmentID)
+	// Project the runtime↔definition join in the same transaction as the record
+	// ingest and the run-revision bump. A rollback undoes this write with
+	// everything else; a duplicate record never reaches here (storedInserted is
+	// false), so occurrence_count is not double-counted.
+	if err := projectDefinitionActivity(ctx, statements, record); err != nil {
+		return err
+	}
 	switch record.Type {
 	case RecordRunStart:
 		var run RunStartRecord
