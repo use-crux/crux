@@ -232,7 +232,15 @@ export async function streamCore<
   };
 }
 
-/** Replace provider-buffered text while retaining ordered non-text output. */
+/**
+ * Replace provider-buffered text without moving it across mixed content.
+ *
+ * Streaming guardrails expose one authoritative transformed text value but do
+ * not expose a span map back to provider text parts. Put that value in the
+ * first existing text slot and retain every later text slot as empty. This
+ * keeps media/tool/reasoning positions and the provider's text-slot topology
+ * exact without reintroducing unsafe provider text.
+ */
 function replaceTextContent(
   content: readonly AssistantContentPart[],
   text: string,
@@ -244,10 +252,8 @@ function replaceTextContent(
       result.push(part);
       continue;
     }
-    if (!inserted) {
-      if (text) result.push({ ...part, text });
-      inserted = true;
-    }
+    result.push({ ...part, text: inserted ? "" : text });
+    inserted = true;
   }
   if (!inserted && text) result.unshift({ type: "text", text });
   return result;
