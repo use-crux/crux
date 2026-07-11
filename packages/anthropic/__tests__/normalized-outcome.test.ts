@@ -2,11 +2,21 @@ import { describe, expect, it } from "vitest";
 import type Anthropic from "@anthropic-ai/sdk";
 import { prompt as makePrompt } from "@use-crux/core";
 import { classifyProviderHttpError, CruxAdapterError, isCruxAdapterError } from "@use-crux/core/adapter";
-import { describeNormalizedOutcomeConformance, standardHttpErrorCases } from "@use-crux/core/adapter/testing";
+import {
+  describeNormalizedOutcomeBehavior,
+  describeNormalizedOutcomeConformance,
+  standardHttpErrorCases,
+} from "@use-crux/core/adapter/testing";
 import { createAnthropic } from "../src";
 import { mapAnthropicStopReason } from "../src/response";
+import { anthropicBehavioralHarness } from "./normalized-outcome-behavior-harness";
 
 const textPrompt = makePrompt({ id: "anthropic-normalized", prompt: "Hi" });
+
+describeNormalizedOutcomeBehavior({
+  name: "anthropic",
+  harness: anthropicBehavioralHarness(),
+});
 
 describeNormalizedOutcomeConformance({
   name: "anthropic",

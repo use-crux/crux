@@ -118,6 +118,7 @@ export interface SdkLoopResultLike {
 /** Structural shape of one AI SDK step result the codec reads. */
 export interface SdkStepResultLike {
   text?: string
+  toolCalls?: Array<{ toolCallId: string; toolName: string; input?: unknown; args?: unknown }>
   usage?: SdkUsageLike
   finishReason?: string
   response?: { id?: string; modelId?: string }

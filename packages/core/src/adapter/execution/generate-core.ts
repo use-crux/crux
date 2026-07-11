@@ -401,6 +401,7 @@ function stepFactsFromResponse(response: AdapterResponse): ResultStepFacts {
   return {
     text: response.text,
     ...(response.usage !== undefined ? { usage: response.usage } : {}),
+    ...(response.toolCalls !== undefined ? { toolCalls: response.toolCalls } : {}),
     finishReason: response.finishReason,
     responseId: response.responseId,
     modelId: response.actualModelId,

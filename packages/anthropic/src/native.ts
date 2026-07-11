@@ -1,5 +1,4 @@
 import type Anthropic from '@anthropic-ai/sdk'
-import type { MessageStream } from '@anthropic-ai/sdk/lib/MessageStream'
 import {
   classifyProviderHttpError,
   CruxAdapterError,
@@ -23,6 +22,7 @@ import {
 } from './request-params'
 import { anthropicResponseMeta, anthropicResponseText, anthropicStreamCompletionMeta } from './response'
 import type { AnthropicParsedMessage } from './response'
+import { AnthropicChatStream, createAnthropicStreamCapture } from './stream'
 import type { AnthropicExtra, AnthropicRequest } from './types'
 
 /** Configuration for `anthropic.retrievalModel()`. */
@@ -87,7 +87,7 @@ const anthropic = defineSingleTurnProviderBundle({
     Anthropic,
     AnthropicRequest,
     AnthropicParsedMessage,
-    MessageStream,
+    AnthropicChatStream,
     AnthropicExtra,
     Record<string, never>,
     Anthropic.MessageParam
@@ -107,14 +107,16 @@ export const anthropicProviderRuntime = anthropic.runtime
 /** Bind an Anthropic SDK client to the narrow native chat provider port. */
 function bindAnthropic(
   client: Anthropic,
-): NativeProviderPort<AnthropicRequest, AnthropicParsedMessage, MessageStream> {
+): NativeProviderPort<AnthropicRequest, AnthropicParsedMessage, AnthropicChatStream> {
   return {
     call: (request, mode, options) =>
       mode === 'structured'
         ? client.messages.parse(asAnthropicNonStreamingParams(request), { signal: options?.signal })
         : client.messages.create(asAnthropicNonStreamingParams(request), { signal: options?.signal }),
     stream: async (request, options) =>
-      client.messages.stream(asAnthropicStreamingParams(request), { signal: options?.signal }),
+      createAnthropicStreamCapture(
+        client.messages.stream(asAnthropicStreamingParams(request), { signal: options?.signal }),
+      ),
   }
 }
 

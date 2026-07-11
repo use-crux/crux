@@ -115,6 +115,7 @@ function completionFromMeta(
   accumulator.addStep({
     text,
     ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),
+    ...(meta?.toolCalls !== undefined ? { toolCalls: meta.toolCalls } : {}),
     finishReason: mapAiSdkFinishReason(meta?.finishReason),
     responseId: meta?.responseId,
     modelId: meta?.actualModelId,

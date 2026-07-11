@@ -30,6 +30,8 @@ export interface FinalStepInfo {
    * fabricates zeros for unmetered provider responses.
    */
   readonly usage?: TokenUsage;
+  /** Fully assembled tool calls reported by the final provider step. */
+  readonly toolCalls?: TraceMeta["toolCalls"];
   /** Provider finish reason for the final step, when reported. */
   readonly finishReason: string | undefined;
   /** Provider response id for the final step, when reported. */
@@ -91,6 +93,8 @@ export interface ResultStepFacts {
   readonly text: string;
   /** Usage reported by this step, if any. */
   readonly usage?: TokenUsage;
+  /** Fully assembled tool calls reported by this step. */
+  readonly toolCalls?: TraceMeta["toolCalls"];
   /** Provider finish reason, if any. */
   readonly finishReason: string | undefined;
   /** Provider response id, if any. */
@@ -211,6 +215,7 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
     accumulator.addStep({
       text,
       ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),
+      ...(meta?.toolCalls !== undefined ? { toolCalls: meta.toolCalls } : {}),
       finishReason: meta?.finishReason,
       responseId: meta?.responseId,
       modelId: meta?.actualModelId,
@@ -314,6 +319,7 @@ function finalStepInfo(step: ResultStepFacts | undefined): FinalStepInfo {
   return {
     text: step.text,
     ...(step.usage !== undefined ? { usage: step.usage } : {}),
+    ...(step.toolCalls !== undefined ? { toolCalls: step.toolCalls } : {}),
     finishReason: step.finishReason,
     responseId: step.responseId,
     modelId: step.modelId,

@@ -201,6 +201,15 @@ function sdkStepFacts(
     return {
       text: step.text ?? "",
       ...(usage !== undefined ? { usage } : {}),
+      ...(step.toolCalls && step.toolCalls.length > 0
+        ? {
+            toolCalls: step.toolCalls.map((call) => ({
+              id: call.toolCallId,
+              name: call.toolName,
+              args: call.input ?? call.args,
+            })),
+          }
+        : {}),
       finishReason: mapAiSdkFinishReason(step.finishReason),
       responseId: step.response?.id,
       modelId: step.response?.modelId,

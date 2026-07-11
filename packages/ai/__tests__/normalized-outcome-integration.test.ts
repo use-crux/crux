@@ -13,6 +13,14 @@ import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { fallback, prompt as makePrompt } from '@use-crux/core'
 import { CruxAdapterError, isCruxAdapterError } from '@use-crux/core/adapter'
+import type { CruxFinishReason } from '@use-crux/core/adapter'
+import {
+  describeNormalizedOutcomeBehavior,
+  type NormalizedErrorSnapshot,
+  type NormalizedOutcomeBehavioralHarness,
+  type NormalizedResultSnapshot,
+  type NormalizedStreamErrorSnapshot,
+} from '@use-crux/core/adapter/testing'
 import type { LanguageModel } from 'ai'
 import { createCruxAi } from '../src'
 import { scriptedGateway } from './scripted-gateway'
@@ -35,6 +43,90 @@ async function captureError(promise: Promise<unknown>): Promise<unknown> {
     return error
   }
 }
+
+/** Project a rejecting promise into the provider-neutral normalized-error shape. */
+async function errorSnapshot(promise: Promise<unknown>): Promise<NormalizedErrorSnapshot> {
+  const error = await captureError(promise)
+  if (!isCruxAdapterError(error)) throw error
+  return { kind: error.providerError.kind, retryable: error.providerError.retryable }
+}
+
+/**
+ * The AI SDK behavioral harness. The SDK exposes a content-filter finish reason
+ * but no distinct refusal signal, so the harness supplies `contentFilter` and
+ * omits `refusal`. Stream scenarios route through a single-tier `fallback()` so
+ * `completion` awaits stream exhaustion (the routed-model pattern), which is
+ * what makes a mid-stream failure surface on both iteration and completion.
+ */
+function aiBehavioralHarness(): NormalizedOutcomeBehavioralHarness {
+  const generateFinish = async (finishReason: string): Promise<NormalizedResultSnapshot> => {
+    const scripted = scriptedGateway({ generateText: [{ text: 'hi', finishReason }] })
+    const ai = createCruxAi({ gateway: scripted.gateway })
+    const result = await ai.generate(textPrompt, { model: model(), input: { message: 'go' } })
+    return { finishReason: result.finalStep.finishReason as CruxFinishReason }
+  }
+
+  const generateError = (error: Error): Promise<NormalizedErrorSnapshot> => {
+    const scripted = scriptedGateway({ generateText: [error] })
+    const ai = createCruxAi({ gateway: scripted.gateway })
+    return errorSnapshot(ai.generate(textPrompt, { model: model(), input: { message: 'go' } }))
+  }
+
+  return {
+    generateSuccess: () => generateFinish('stop'),
+    streamCompletedToolCall: async (): Promise<NormalizedResultSnapshot> => {
+      const scripted = scriptedGateway({
+        streamText: [
+          {
+            chunks: ['Looking'],
+            finish: {
+              finishReason: 'tool-calls',
+              toolCalls: [{ toolCallId: 'call_1', toolName: 'lookup', input: { q: 'x' } }],
+            },
+          },
+        ],
+      })
+      const ai = createCruxAi({ gateway: scripted.gateway })
+      const result = await ai.stream(textPrompt, {
+        model: fallback([model('primary'), model('backup')]),
+        input: { message: 'go' },
+      })
+      for await (const _ of result.textStream) void _
+      const completion = await result.completion
+      return {
+        finishReason: completion.finalStep.finishReason as CruxFinishReason,
+        toolCalls: completion.finalStep.toolCalls,
+      }
+    },
+    contentFilter: () => generateFinish('content-filter'),
+    timeout: () => generateError(Object.assign(new Error('too slow'), { name: 'AI_TimeoutError' })),
+    userAbort: () => generateError(Object.assign(new Error('user aborted'), { name: 'AI_AbortError' })),
+    erroringStream: async (): Promise<NormalizedStreamErrorSnapshot> => {
+      const scripted = scriptedGateway({
+        streamText: [
+          {
+            chunks: ['partial'],
+            errorAfterChunks: Object.assign(new Error('connection reset'), { statusCode: 503 }),
+          },
+        ],
+      })
+      const ai = createCruxAi({ gateway: scripted.gateway })
+      const result = await ai.stream(textPrompt, {
+        model: fallback([model('primary'), model('backup')]),
+        input: { message: 'go' },
+      })
+      const iteration = await errorSnapshot(
+        (async () => {
+          for await (const _ of result.textStream) void _
+        })(),
+      )
+      const completion = await errorSnapshot(result.completion)
+      return { iteration, completion }
+    },
+  }
+}
+
+describeNormalizedOutcomeBehavior({ name: 'ai-sdk', harness: aiBehavioralHarness() })
 
 describe('generate() finish-reason mapping', () => {
   const cases: Array<[string, string]> = [

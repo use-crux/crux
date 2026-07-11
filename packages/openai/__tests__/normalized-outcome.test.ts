@@ -2,11 +2,21 @@ import { describe, expect, it } from "vitest";
 import type OpenAI from "openai";
 import { prompt as makePrompt } from "@use-crux/core";
 import { classifyProviderHttpError, CruxAdapterError, isCruxAdapterError } from "@use-crux/core/adapter";
-import { describeNormalizedOutcomeConformance, standardHttpErrorCases } from "@use-crux/core/adapter/testing";
+import {
+  describeNormalizedOutcomeBehavior,
+  describeNormalizedOutcomeConformance,
+  standardHttpErrorCases,
+} from "@use-crux/core/adapter/testing";
 import { createOpenAI } from "../src";
 import { mapOpenAIFinishReason } from "../src/response";
+import { openaiBehavioralHarness } from "./normalized-outcome-behavior-harness";
 
 const textPrompt = makePrompt({ id: "openai-normalized", prompt: "Hi" });
+
+describeNormalizedOutcomeBehavior({
+  name: "openai",
+  harness: openaiBehavioralHarness(),
+});
 
 describeNormalizedOutcomeConformance({
   name: "openai",

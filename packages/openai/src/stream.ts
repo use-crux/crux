@@ -5,6 +5,7 @@ import {
   CruxAdapterError,
   cruxProviderError,
 } from '@use-crux/core/adapter'
+import { safeParseJson } from './message-codec'
 import { mapOpenAIFinishReason, openAIUsage, type OpenAIUsageShape } from './response'
 
 /** Extract a text delta from an OpenAI chat-completion stream chunk. */
@@ -109,7 +110,7 @@ export class OpenAIChatStream implements AsyncIterable<ChatCompletionChunk> {
       assembled.push({
         id: call.id ?? `call_${index}`,
         name: call.name,
-        args: parseArgs(call.args),
+        args: safeParseJson(call.args),
       })
     }
     return assembled
@@ -121,15 +122,6 @@ export function createOpenAIStreamCapture(
   raw: AsyncIterable<ChatCompletionChunk>,
 ): OpenAIChatStream {
   return new OpenAIChatStream(raw)
-}
-
-function parseArgs(text: string): unknown {
-  if (text.length === 0) return {}
-  try {
-    return JSON.parse(text)
-  } catch {
-    return {}
-  }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

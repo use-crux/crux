@@ -2,12 +2,22 @@ import { describe, expect, it } from 'vitest'
 import type { GenerateContentResponse, GoogleGenAI } from '@google/genai'
 import { prompt as makePrompt } from '@use-crux/core'
 import { classifyProviderHttpError, CruxAdapterError, isCruxAdapterError } from '@use-crux/core/adapter'
-import { describeNormalizedOutcomeConformance, standardHttpErrorCases } from '@use-crux/core/adapter/testing'
+import {
+  describeNormalizedOutcomeBehavior,
+  describeNormalizedOutcomeConformance,
+  standardHttpErrorCases,
+} from '@use-crux/core/adapter/testing'
 import { createGoogle } from '../src'
 import { mapGoogleFinishReason } from '../src/response'
 import { createGoogleStreamCapture } from '../src/stream'
+import { googleBehavioralHarness } from './normalized-outcome-behavior-harness'
 
 const textPrompt = makePrompt({ id: 'google-normalized', prompt: 'Hi' })
+
+describeNormalizedOutcomeBehavior({
+  name: 'google',
+  harness: googleBehavioralHarness(),
+})
 
 describeNormalizedOutcomeConformance({
   name: 'google',

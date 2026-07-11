@@ -89,7 +89,45 @@ describe("Anthropic stream handling", () => {
     const completion = await handle.completion;
     expect(completion.finalStep.finishReason).toBe("tool-calls");
   });
+
+  it("normalizes a mid-stream iteration failure for both textStream and completion", async () => {
+    const client = {
+      messages: {
+        stream: () => erroringIterationStream(),
+      },
+    } as unknown as Anthropic;
+
+    const adapter = createAnthropic(client);
+    const handle = await adapter.stream(
+      makePrompt({ id: "anthropic-stream-iter-error", prompt: "Hello" }),
+      { model: "claude-sonnet-4-5-20250929" },
+    );
+
+    const chunks: string[] = [];
+    const drain = (async () => {
+      for await (const chunk of handle.textStream) chunks.push(chunk);
+    })();
+
+    await expect(drain).rejects.toBeInstanceOf(CruxAdapterError);
+    expect(chunks.join("")).toBe("partial");
+    await expect(handle.completion).rejects.toBeInstanceOf(CruxAdapterError);
+  });
 });
+
+function erroringIterationStream(): MessageStream {
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield {
+        type: "content_block_delta",
+        delta: { type: "text_delta", text: "partial" },
+      };
+      throw new Error("connection reset");
+    },
+    finalMessage: async () => {
+      throw new Error("connection reset");
+    },
+  } as unknown as MessageStream;
+}
 
 function failingCompletionStream(): MessageStream {
   return {

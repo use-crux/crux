@@ -67,9 +67,18 @@ export { loopRuntimePortConformance } from './testing/loop-runtime-conformance'
 export type { ConformanceViolation, LoopRuntimeConformanceHarness } from './testing/loop-runtime-conformance'
 
 // Shared normalized-outcome (finish reason + error taxonomy) conformance suite.
-export { describeNormalizedOutcomeConformance, standardHttpErrorCases } from './testing/normalized-outcome-conformance'
+export {
+  describeNormalizedOutcomeBehavior,
+  describeNormalizedOutcomeConformance,
+  standardHttpErrorCases,
+} from './testing/normalized-outcome-conformance'
 export type {
   NormalizedErrorCase,
+  NormalizedErrorSnapshot,
   NormalizedFinishReasonCase,
+  NormalizedOutcomeBehaviorSpec,
+  NormalizedOutcomeBehavioralHarness,
   NormalizedOutcomeConformanceSpec,
+  NormalizedResultSnapshot,
+  NormalizedStreamErrorSnapshot,
 } from './testing/normalized-outcome-conformance'

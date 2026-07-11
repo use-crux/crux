@@ -32,6 +32,19 @@ const FINISH_REASONS: readonly CruxFinishReason[] = [
   "unknown",
 ];
 
+/** The full closed provider-error-kind vocabulary, for membership assertions. */
+const ERROR_KINDS: readonly CruxProviderErrorKind[] = [
+  "refusal",
+  "safety",
+  "content-filter",
+  "rate-limit",
+  "timeout",
+  "aborted",
+  "invalid-request",
+  "provider-error",
+  "unknown",
+];
+
 /** One provider-raw → normalized finish-reason expectation. */
 export interface NormalizedFinishReasonCase<TRaw> {
   /** Human-readable case label (usually the raw provider value). */
@@ -155,6 +168,173 @@ export function describeNormalizedOutcomeConformance<TRaw>(
       it("defers an unrecognized error to core generic classification", () => {
         expect(spec.mapError(spec.unrecognizedError)).toBeUndefined();
       });
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Behavioral conformance — real adapter/runtime surfaces
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Provider-neutral snapshot of a normalized *successful* adapter outcome.
+ *
+ * Captured by driving a real adapter surface (`generate()`/`stream()`) and
+ * reading the canonical `finalStep.finishReason`, so every provider is compared
+ * against the same shape instead of its raw finish signal.
+ */
+export interface NormalizedResultSnapshot {
+  /** The normalized finish reason the adapter reported. */
+  readonly finishReason: CruxFinishReason;
+  /** Fully assembled calls exposed only after the provider step completed. */
+  readonly toolCalls?: readonly {
+    readonly id?: string;
+    readonly name: string;
+    readonly args: unknown;
+  }[];
+}
+
+/**
+ * Provider-neutral snapshot of a normalized adapter *failure*.
+ *
+ * Captured from a thrown {@link CruxProviderError} (`kind`/`retryable`), so a
+ * timeout, abort, or mid-stream error compares identically across providers.
+ */
+export interface NormalizedErrorSnapshot {
+  /** The normalized error kind the adapter classified the failure as. */
+  readonly kind: CruxProviderErrorKind;
+  /** Whether the adapter marked the failure retryable. */
+  readonly retryable: boolean;
+}
+
+/**
+ * Snapshot of an erroring stream. A runtime that surfaces the failure on both
+ * `textStream` iteration and the completion promise reports both; one that only
+ * exposes the completion promise omits `iteration`.
+ */
+export interface NormalizedStreamErrorSnapshot {
+  /** Error observed while iterating `textStream`, where the runtime exposes it. */
+  readonly iteration?: NormalizedErrorSnapshot;
+  /** Error observed awaiting the completion promise. */
+  readonly completion: NormalizedErrorSnapshot;
+}
+
+/**
+ * A small async harness each adapter package implements over its *real*
+ * adapter/runtime surface using its own local scripted client/gateway.
+ *
+ * Core owns this provider-neutral contract and the assertions in
+ * {@link describeNormalizedOutcomeBehavior}; no adapter package depends on
+ * another, and core imports no provider SDK. Model-side blocking is truthfully
+ * optional: providers with no distinct refusal signal (AI SDK, Google) omit
+ * `refusal`, and providers with no distinct content-filter stop reason
+ * (Anthropic) omit `contentFilter` — but every harness must supply at least one.
+ */
+export interface NormalizedOutcomeBehavioralHarness {
+  /** Drive a successful single-shot generate to a normal `stop`. */
+  readonly generateSuccess: () => Promise<NormalizedResultSnapshot>;
+  /**
+   * Drive a successful stream that completes with a completed tool call. The
+   * suite asserts only the completed `tool-calls` finish reason, never streamed
+   * delta fragments.
+   */
+  readonly streamCompletedToolCall: () => Promise<NormalizedResultSnapshot>;
+  /** Drive a content-filter stop, or omit when the provider has no such stop. */
+  readonly contentFilter?: () => Promise<NormalizedResultSnapshot>;
+  /** Drive a model-side refusal, or omit when the provider has no distinct refusal. */
+  readonly refusal?: () => Promise<NormalizedResultSnapshot>;
+  /** Drive a step timeout and capture the normalized error. */
+  readonly timeout: () => Promise<NormalizedErrorSnapshot>;
+  /** Drive a user abort and capture the normalized error. */
+  readonly userAbort: () => Promise<NormalizedErrorSnapshot>;
+  /** Drive a mid-stream failure and capture the normalized error(s). */
+  readonly erroringStream: () => Promise<NormalizedStreamErrorSnapshot>;
+}
+
+/** Per-adapter inputs for {@link describeNormalizedOutcomeBehavior}. */
+export interface NormalizedOutcomeBehaviorSpec {
+  /** Adapter name, used in the suite title. */
+  readonly name: string;
+  /** The adapter's harness over its real generate/stream surface. */
+  readonly harness: NormalizedOutcomeBehavioralHarness;
+}
+
+/** Assert a captured error snapshot is a well-formed member of the taxonomy. */
+function assertNormalizedError(snapshot: NormalizedErrorSnapshot): void {
+  expect(ERROR_KINDS).toContain(snapshot.kind);
+  expect(typeof snapshot.retryable).toBe("boolean");
+}
+
+/**
+ * Register the shared *behavioral* normalized-outcome suite for one adapter.
+ *
+ * Unlike {@link describeNormalizedOutcomeConformance} (which tests pure
+ * mappers), this drives each adapter's real generate/stream surface with its
+ * local scripted client/gateway and asserts the provider-neutral normalized
+ * result/error shape for: a successful generate; a completed streamed tool
+ * call; model-side blocking (content-filter and/or refusal, per provider); a
+ * step timeout; a user abort; and an erroring stream completion (checking both
+ * iteration and completion where the runtime exposes both). No adapter is
+ * skipped: the required scenarios run for every adapter, and each must expose at
+ * least one model-side blocking outcome.
+ *
+ * @param spec - The adapter name and its behavioral harness.
+ */
+export function describeNormalizedOutcomeBehavior(
+  spec: NormalizedOutcomeBehaviorSpec,
+): void {
+  const { harness } = spec;
+  const { contentFilter, refusal } = harness;
+  describe(`${spec.name} normalized-outcome behavior`, () => {
+    it("normalizes a successful generate to stop", async () => {
+      const snapshot = await harness.generateSuccess();
+      expect(snapshot.finishReason).toBe("stop");
+    });
+
+    it("normalizes a completed streamed tool call to tool-calls", async () => {
+      const snapshot = await harness.streamCompletedToolCall();
+      expect(snapshot.finishReason).toBe("tool-calls");
+      expect(snapshot.toolCalls).toEqual([
+        expect.objectContaining({ name: "lookup", args: { q: "x" } }),
+      ]);
+    });
+
+    it("exposes at least one model-side blocking outcome", () => {
+      expect(contentFilter !== undefined || refusal !== undefined).toBe(true);
+    });
+
+    if (contentFilter) {
+      it("normalizes a content-filter stop to content-filter", async () => {
+        const snapshot = await contentFilter();
+        expect(snapshot.finishReason).toBe("content-filter");
+      });
+    }
+
+    if (refusal) {
+      it("normalizes a model-side refusal to refusal", async () => {
+        const snapshot = await refusal();
+        expect(snapshot.finishReason).toBe("refusal");
+      });
+    }
+
+    it("normalizes a step timeout to a retryable timeout error", async () => {
+      const snapshot = await harness.timeout();
+      assertNormalizedError(snapshot);
+      expect(snapshot.kind).toBe("timeout");
+      expect(snapshot.retryable).toBe(true);
+    });
+
+    it("normalizes a user abort to a non-retryable aborted error", async () => {
+      const snapshot = await harness.userAbort();
+      assertNormalizedError(snapshot);
+      expect(snapshot.kind).toBe("aborted");
+      expect(snapshot.retryable).toBe(false);
+    });
+
+    it("normalizes an erroring stream completion", async () => {
+      const snapshot = await harness.erroringStream();
+      if (snapshot.iteration) assertNormalizedError(snapshot.iteration);
+      assertNormalizedError(snapshot.completion);
     });
   });
 }
