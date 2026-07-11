@@ -1,13 +1,13 @@
-import type { GenerateImageResult, ImageModel } from 'ai'
+import type { GenerateImageResult as AiSdkImageResult, ImageModel } from 'ai'
 import {
   createGeneratedImageResult,
   createUnsupportedCapabilityError,
   lowerImagePrompt,
   validateGenerateImageOptions,
   type GenerateImage,
-  type GeneratedImage,
   type UnsupportedCapabilityIssue,
 } from '@use-crux/core'
+import { bindCompletedOperation, defineCompletedOperation } from '@use-crux/core/adapter'
 import type { SdkGateway } from './gateway'
 
 type NativeImageArgs = Parameters<SdkGateway['generateImage']>[0]
@@ -33,66 +33,79 @@ export interface AIImageExtra extends Record<string, unknown> {
 export type AIGenerateImage = GenerateImage<
   ImageModel,
   AIImageExtra,
-  GenerateImageResult,
-  GenerateImageResult['providerMetadata'],
-  GenerateImageResult['responses'],
-  GenerateImageResult['warnings'][number]
+  AiSdkImageResult,
+  AiSdkImageResult['providerMetadata'],
+  AiSdkImageResult['warnings'][number]
 >
 
 /** Bind one AI SDK image operation to an injectable gateway. */
 export function createAiSdkGenerateImage(gateway: SdkGateway): AIGenerateImage {
-  return async (options): Promise<GeneratedImage<
-    GenerateImageResult,
-    GenerateImageResult['providerMetadata'],
-    GenerateImageResult['responses'],
-    GenerateImageResult['warnings'][number]
-  >> => {
-    validateGenerateImageOptions(options)
-    const prompt = await lowerImagePrompt(options, { adapter: 'ai-sdk', model: imageModelId(options.model) })
-    const unsupported = [...prompt.images, ...(prompt.mask ? [prompt.mask] : [])]
-      .map((asset, index): UnsupportedCapabilityIssue | undefined => asset.type === 'data' ? undefined : ({
-        capability: 'image.edit.asset',
-        path: index < prompt.images.length ? `prompt.images[${index}]` : 'prompt.mask',
-        remediation: 'Hydrate the edit input to a data asset before generation.',
-      }))
-      .filter((issue): issue is UnsupportedCapabilityIssue => issue !== undefined)
-    if (unsupported.length > 0) {
-      throw createUnsupportedCapabilityError({
+  const definition = defineCompletedOperation({
+    async normalize(options: Parameters<AIGenerateImage>[0]) {
+      validateGenerateImageOptions(options)
+      const prompt = await lowerImagePrompt(options, {
         adapter: 'ai-sdk',
         model: imageModelId(options.model),
-        issues: unsupported as [UnsupportedCapabilityIssue, ...UnsupportedCapabilityIssue[]],
       })
-    }
-
-    const nativePrompt = await toNativePrompt(prompt)
-    const raw = await gateway.generateImage({
-      model: options.model,
-      prompt: nativePrompt,
-      ...(options.n === undefined ? {} : { n: options.n }),
-      ...(options.size === undefined ? {} : { size: options.size }),
-      ...(options.aspectRatio === undefined ? {} : { aspectRatio: options.aspectRatio }),
-      ...(options.seed === undefined ? {} : { seed: options.seed }),
-      ...options.extra,
-    })
-    return createGeneratedImageResult(
-      raw.images.map((image) => ({ data: image.uint8Array, mediaType: image.mediaType })),
-      {
-        raw,
-        usage: {
-          images: raw.images.length,
-          inputTokens: raw.usage.inputTokens,
-          outputTokens: raw.usage.outputTokens,
-          totalTokens: raw.usage.totalTokens,
+      const unsupported = [...prompt.images, ...(prompt.mask ? [prompt.mask] : [])]
+        .map((asset, index): UnsupportedCapabilityIssue | undefined =>
+          asset.type === 'data'
+            ? undefined
+            : {
+                capability: 'image.edit.asset',
+                path: index < prompt.images.length ? `prompt.images[${index}]` : 'prompt.mask',
+                remediation: 'Hydrate the edit input to a data asset before generation.',
+              },
+        )
+        .filter((issue): issue is UnsupportedCapabilityIssue => issue !== undefined)
+      if (unsupported.length > 0) {
+        throw createUnsupportedCapabilityError({
+          adapter: 'ai-sdk',
+          model: imageModelId(options.model),
+          issues: unsupported as [UnsupportedCapabilityIssue, ...UnsupportedCapabilityIssue[]],
+        })
+      }
+      return { options, prompt: await toNativePrompt(prompt) }
+    },
+    support: () => 'unknown' as const,
+    invoke: ({ options, prompt }, { signal }) =>
+      gateway.generateImage({
+        model: options.model,
+        prompt,
+        ...(options.n === undefined ? {} : { n: options.n }),
+        ...(options.size === undefined ? {} : { size: options.size }),
+        ...(options.aspectRatio === undefined ? {} : { aspectRatio: options.aspectRatio }),
+        ...(options.seed === undefined ? {} : { seed: options.seed }),
+        ...options.extra,
+        abortSignal: signal,
+      }),
+    validate(raw) {
+      return createGeneratedImageResult(
+        raw.images.map((image) => ({
+          data: image.uint8Array,
+          mediaType: image.mediaType,
+        })),
+        {
+          raw,
+          warnings: raw.warnings ?? [],
+          execution: { kind: 'native', calls: 1 },
+          providerMetadata: raw.providerMetadata,
         },
-        warnings: raw.warnings,
-        providerMetadata: raw.providerMetadata,
-        response: raw.responses,
-      },
-    )
-  }
+      )
+    },
+    report: (result) => ({ kind: 'image', count: result.images.length }),
+    conformance: [],
+  })
+  return bindCompletedOperation({
+    definition,
+    provider: 'ai-sdk',
+    operation: 'generateImage',
+  })
 }
 
-async function toNativePrompt(prompt: Awaited<ReturnType<typeof lowerImagePrompt>>): Promise<NativeImageArgs['prompt']> {
+async function toNativePrompt(
+  prompt: Awaited<ReturnType<typeof lowerImagePrompt>>,
+): Promise<NativeImageArgs['prompt']> {
   if (prompt.images.length === 0 && !prompt.mask) return prompt.text
   return {
     text: prompt.text,

@@ -99,7 +99,7 @@ export async function runCompletedMediaOperation<
   const state: CompletedRoutingState = { calls: 0 };
   try {
     return await withAbortSignal(async () => {
-      const prepared = preflightCandidates(options, signal);
+      const prepared = await preflightCandidates(options, signal);
       const result = await resolveCompletedModel(
         options.model,
         {
@@ -114,7 +114,7 @@ export async function runCompletedMediaOperation<
           const context = lifecycleContext(options, candidate as TModel);
           const normalized =
             prepared.get(candidate) ??
-            options.definition.normalize(options.input, context);
+            (await options.definition.normalize(options.input, context));
           const native = await options.definition.invoke(normalized, {
             ...context,
             signal: attemptSignal,
@@ -123,7 +123,7 @@ export async function runCompletedMediaOperation<
         },
       );
       const finalized = finalizeResult(result, state.calls);
-      const selected = selectedNormalized(
+      const selected = await selectedNormalized(
         prepared,
         options.input,
         options.definition,
@@ -143,7 +143,7 @@ export async function runCompletedMediaOperation<
   }
 }
 
-function preflightCandidates<
+async function preflightCandidates<
   TModel,
   TInput,
   TNormalized,
@@ -160,12 +160,15 @@ function preflightCandidates<
     TReport
   >,
   signal: AbortSignal,
-): ReadonlyMap<unknown, TNormalized> {
+): Promise<ReadonlyMap<unknown, TNormalized>> {
   const prepared = new Map<unknown, TNormalized>();
   for (const candidate of unique(completedModelLeaves(options.model))) {
     throwIfAborted(signal);
     const context = lifecycleContext(options, candidate as TModel);
-    const normalized = options.definition.normalize(options.input, context);
+    const normalized = await options.definition.normalize(
+      options.input,
+      context,
+    );
     prepared.set(candidate, normalized);
     if (options.definition.support(normalized, context) === "unsupported") {
       throw createUnsupportedCapabilityError({
@@ -209,7 +212,7 @@ function lifecycleContext<TModel>(
   });
 }
 
-function selectedNormalized<
+async function selectedNormalized<
   TModel,
   TInput,
   TNormalized,
@@ -229,10 +232,12 @@ function selectedNormalized<
   >,
   options: Readonly<{ provider: string; operation: string; model: TModel }>,
   selectedModel: unknown,
-): Readonly<{
-  input: TNormalized;
-  context: CompletedOperationContext<TModel>;
-}> {
+): Promise<
+  Readonly<{
+    input: TNormalized;
+    context: CompletedOperationContext<TModel>;
+  }>
+> {
   const first = prepared.entries().next().value as
     | readonly [unknown, TNormalized]
     | undefined;
@@ -240,7 +245,7 @@ function selectedNormalized<
   const context = lifecycleContext(options, model);
   const normalized = prepared.has(selectedModel)
     ? prepared.get(selectedModel)!
-    : (first?.[1] ?? definition.normalize(input, context));
+    : (first?.[1] ?? (await definition.normalize(input, context)));
   return { input: normalized, context };
 }
 

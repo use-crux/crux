@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { fallback } from "../../src/generation/fallback";
 import {
+  bindCompletedOperation,
   defineCompletedOperation,
   runCompletedMediaOperation,
 } from "../../src/adapter/completed-operation";
@@ -64,6 +65,46 @@ function operation(
 }
 
 describe("completed operation runner", () => {
+  it("binds async normalization to the shared lifecycle without storage", async () => {
+    const events: string[] = [];
+    const definition = defineCompletedOperation({
+      async normalize(input: Readonly<{ model: string; value: string }>) {
+        events.push("normalize");
+        await Promise.resolve();
+        return { value: input.value.trim() };
+      },
+      support: () => {
+        events.push("support");
+        return "supported" as const;
+      },
+      invoke: async (input) => {
+        events.push("invoke");
+        return { value: input.value };
+      },
+      validate: (raw) => ({
+        value: raw.value,
+        warnings: [],
+        execution: { kind: "native" as const, calls: 1 },
+        raw,
+      }),
+      report: () => ({ kind: "text" }),
+      conformance: [],
+    });
+    const run = bindCompletedOperation({
+      definition,
+      provider: "test",
+      operation: "media.test",
+    });
+
+    await expect(
+      run({ model: "model-a", value: " hello " }),
+    ).resolves.toMatchObject({
+      value: "hello",
+      execution: { kind: "native", calls: 1 },
+    });
+    expect(events).toEqual(["normalize", "support", "invoke"]);
+  });
+
   it("runs the immutable lifecycle in order and finalizes common result facts", async () => {
     const events: string[] = [];
     const reports: unknown[] = [];

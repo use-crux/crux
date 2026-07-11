@@ -5,9 +5,9 @@ import {
   lowerImagePrompt,
   validateGenerateImageOptions,
   type GenerateImage,
-  type GeneratedImage,
   type UnsupportedCapabilityIssue,
 } from '@use-crux/core'
+import { bindCompletedOperation, defineCompletedOperation } from '@use-crux/core/adapter'
 
 /** Google-only Imagen controls forwarded to `models.generateImages()`. */
 export type GoogleImageExtra = Omit<GenerateImagesConfig, 'numberOfImages' | 'aspectRatio' | 'seed'> &
@@ -26,59 +26,89 @@ export type GoogleGenerateImage = GenerateImage<string, GoogleImageExtra, Genera
 
 const GOOGLE_IMAGE_OPERATION_SUPPORT = Object.freeze({
   unsupportedModelPrefixes: Object.freeze(['gemini-', 'text-', 'embedding-', 'imagen-3.0-capability-']),
-  common: Object.freeze({ n: true, aspectRatio: true, seed: true, size: false }),
+  common: Object.freeze({
+    n: true,
+    aspectRatio: true,
+    seed: true,
+    size: false,
+  }),
   edits: false,
 })
 
 /** Create one native Google image operation sharing the bound SDK client. */
 export function createGoogleGenerateImage(client: GoogleGenAI): GoogleGenerateImage {
-  return async (options): Promise<GeneratedImage<GenerateImagesResponse>> => {
-    validateGenerateImageOptions(options)
-    const prompt = await lowerImagePrompt(options, { adapter: 'google', model: options.model })
-    const issues = googleImageIssues(options, prompt)
-    if (issues.length > 0) {
-      throw createUnsupportedCapabilityError({
+  const definition = defineCompletedOperation({
+    async normalize(options: Parameters<GoogleGenerateImage>[0]) {
+      validateGenerateImageOptions(options)
+      const prompt = await lowerImagePrompt(options, {
         adapter: 'google',
         model: options.model,
-        issues: issues as [UnsupportedCapabilityIssue, ...UnsupportedCapabilityIssue[]],
       })
-    }
-
-    const raw = await client.models.generateImages({
-      model: options.model,
-      prompt: prompt.text,
-      config: {
-        ...options.extra,
-        ...(options.n === undefined ? {} : { numberOfImages: options.n }),
-        ...(options.aspectRatio === undefined ? {} : { aspectRatio: options.aspectRatio }),
-        ...(options.seed === undefined ? {} : { seed: options.seed }),
-      },
-    })
-    const generated = raw.generatedImages ?? []
-    const images = generated.flatMap((item) =>
-      item.image?.imageBytes && item.image.mimeType
-        ? [{ data: item.image.imageBytes, mediaType: item.image.mimeType }]
-        : [],
-    )
-    const warnings = generated.flatMap((item) => item.raiFilteredReason ? [`Image blocked: ${item.raiFilteredReason}`] : [])
-    const headers = raw.sdkHttpResponse?.headers
-    const requestId = headers?.['x-request-id'] ?? headers?.['x-goog-request-id']
-    const status = raw.sdkHttpResponse?.responseInternal?.status
-    const safety = generated.flatMap((item) => item.safetyAttributes ? [{
-      categories: item.safetyAttributes.categories,
-      scores: item.safetyAttributes.scores,
-    }] : [])
-    return createGeneratedImageResult(images, {
-      raw,
-      usage: { images: images.length },
-      ...(warnings.length === 0 ? {} : { warnings }),
-      providerMetadata: {
-        ...(requestId === undefined ? {} : { requestId }),
-        ...(status === undefined ? {} : { status }),
-        ...(safety.length === 0 ? {} : { safety }),
-      },
-    })
-  }
+      const issues = googleImageIssues(options, prompt)
+      if (issues.length > 0) {
+        throw createUnsupportedCapabilityError({
+          adapter: 'google',
+          model: options.model,
+          issues: issues as [UnsupportedCapabilityIssue, ...UnsupportedCapabilityIssue[]],
+        })
+      }
+      return { options, prompt }
+    },
+    support: () => 'supported' as const,
+    invoke: ({ options, prompt }, { signal }) =>
+      client.models.generateImages({
+        model: options.model,
+        prompt: prompt.text,
+        config: {
+          ...options.extra,
+          abortSignal: signal,
+          ...(options.n === undefined ? {} : { numberOfImages: options.n }),
+          ...(options.aspectRatio === undefined ? {} : { aspectRatio: options.aspectRatio }),
+          ...(options.seed === undefined ? {} : { seed: options.seed }),
+        },
+      }),
+    validate(raw) {
+      const generated = raw.generatedImages ?? []
+      const images = generated.flatMap((item) =>
+        item.image?.imageBytes && item.image.mimeType
+          ? [{ data: item.image.imageBytes, mediaType: item.image.mimeType }]
+          : [],
+      )
+      const warnings = generated.flatMap((item) =>
+        item.raiFilteredReason ? [`Image blocked: ${item.raiFilteredReason}`] : [],
+      )
+      const headers = raw.sdkHttpResponse?.headers
+      const requestId = headers?.['x-request-id'] ?? headers?.['x-goog-request-id']
+      const status = raw.sdkHttpResponse?.responseInternal?.status
+      const safety = generated.flatMap((item) =>
+        item.safetyAttributes
+          ? [
+              {
+                categories: item.safetyAttributes.categories,
+                scores: item.safetyAttributes.scores,
+              },
+            ]
+          : [],
+      )
+      return createGeneratedImageResult(images, {
+        raw,
+        warnings,
+        execution: { kind: 'native', calls: 1 },
+        providerMetadata: {
+          ...(requestId === undefined ? {} : { requestId }),
+          ...(status === undefined ? {} : { status }),
+          ...(safety.length === 0 ? {} : { safety }),
+        },
+      })
+    },
+    report: (result) => ({ kind: 'image', count: result.images.length }),
+    conformance: [],
+  })
+  return bindCompletedOperation({
+    definition,
+    provider: 'google',
+    operation: 'generateImage',
+  })
 }
 
 function googleImageIssues(

@@ -1,5 +1,6 @@
 import { expectTypeOf } from "vitest";
 import {
+  bindCompletedOperation,
   defineCompletedOperation,
   runCompletedMediaOperation,
 } from "@use-crux/core/adapter";
@@ -57,3 +58,24 @@ expectTypeOf(result).toEqualTypeOf<
     raw: { text: string; model: string };
   }>
 >();
+
+const boundDefinition = defineCompletedOperation({
+  normalize: (input: Readonly<{ model: string; text: string }>) => ({
+    text: input.text.trim(),
+  }),
+  support: definition.support,
+  invoke: definition.invoke,
+  validate: definition.validate,
+  report: definition.report,
+  conformance: [],
+});
+const bound = bindCompletedOperation({
+  definition: boundDefinition,
+  provider: "test",
+  operation: "media.test",
+});
+expectTypeOf(bound)
+  .parameter(0)
+  .toEqualTypeOf<Readonly<{ model: string; text: string }>>();
+// @ts-expect-error - model operations never accept persistence dependencies.
+void bound({ model: "future-model", text: "hello", store: {} });

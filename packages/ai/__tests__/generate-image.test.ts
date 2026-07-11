@@ -3,7 +3,12 @@ import type { ImageModel } from 'ai'
 import { imageGenerationConformanceRow } from '@use-crux/core/adapter/testing'
 import { createCruxAi, generateImage, type SdkGateway } from '../src'
 
-function imageGateway(raw: unknown): { gateway: SdkGateway; image: ReturnType<typeof vi.fn>; text: ReturnType<typeof vi.fn>; stream: ReturnType<typeof vi.fn> } {
+function imageGateway(raw: unknown): {
+  gateway: SdkGateway
+  image: ReturnType<typeof vi.fn>
+  text: ReturnType<typeof vi.fn>
+  stream: ReturnType<typeof vi.fn>
+} {
   const image = vi.fn(async (_args: unknown) => raw)
   const text = vi.fn()
   const stream = vi.fn()
@@ -28,12 +33,22 @@ function imageGateway(raw: unknown): { gateway: SdkGateway; image: ReturnType<ty
 describe('AI SDK image generation', () => {
   it('performs one generateImage operation without entering the language loop', async () => {
     expect(imageGenerationConformanceRow('ai-sdk').support).toBe('native')
-    const file = { base64: 'AQI=', uint8Array: new Uint8Array([1, 2]), mediaType: 'image/png' }
+    const file = {
+      base64: 'AQI=',
+      uint8Array: new Uint8Array([1, 2]),
+      mediaType: 'image/png',
+    }
     const raw = {
       image: file,
       images: [file],
       warnings: [{ type: 'unsupported-setting', setting: 'x' }],
-      responses: [{ timestamp: new Date(0), modelId: 'image-model', headers: { request: '1' } }],
+      responses: [
+        {
+          timestamp: new Date(0),
+          modelId: 'image-model',
+          headers: { request: '1' },
+        },
+      ],
       providerMetadata: { test: { requestId: 'req-1' } },
       usage: { inputTokens: 4, outputTokens: 5, totalTokens: 9 },
     }
@@ -66,13 +81,18 @@ describe('AI SDK image generation', () => {
       maxRetries: 0,
       headers: { 'x-test': 'yes' },
       providerOptions: { test: { style: 'quiet' } },
+      abortSignal: expect.any(AbortSignal),
     })
     expect(result.raw).toBe(raw)
     expect(result.image).toBe(result.images[0])
     expect(result.providerMetadata).toBe(raw.providerMetadata)
-    expect(result.response).toBe(raw.responses)
+    expect(result).not.toHaveProperty('response')
     expect(result.warnings).toEqual(raw.warnings)
-    expect(result.image.data).toEqual(new Uint8Array([1, 2]))
+    expect(result.execution).toEqual({ kind: 'native', calls: 1 })
+    expect(result.image).toMatchObject({
+      type: 'data',
+      data: new Uint8Array([1, 2]),
+    })
     expectTypeOf(generateImage).toBeFunction()
     expectTypeOf(ai.generateImage).toBeFunction()
   })
@@ -81,15 +101,25 @@ describe('AI SDK image generation', () => {
     const providerError = new Error('provider failed')
     const scripted = imageGateway(undefined)
     scripted.image.mockRejectedValueOnce(providerError)
-    const image = { type: 'data' as const, data: new Uint8Array([1]), mediaType: 'image/png' }
+    const image = {
+      type: 'data' as const,
+      data: new Uint8Array([1]),
+      mediaType: 'image/png',
+    }
 
-    await expect(createCruxAi({ gateway: scripted.gateway }).generateImage({
-      model: {} as ImageModel,
-      prompt: { text: 'Edit', images: [image], mask: image },
-    })).rejects.toBe(providerError)
+    await expect(
+      createCruxAi({ gateway: scripted.gateway }).generateImage({
+        model: {} as ImageModel,
+        prompt: { text: 'Edit', images: [image], mask: image },
+      }),
+    ).rejects.toBe(providerError)
 
     expect(scripted.image.mock.calls[0]?.[0]).toMatchObject({
-      prompt: { text: 'Edit', images: [new Uint8Array([1])], mask: new Uint8Array([1]) },
+      prompt: {
+        text: 'Edit',
+        images: [new Uint8Array([1])],
+        mask: new Uint8Array([1]),
+      },
     })
   })
 })

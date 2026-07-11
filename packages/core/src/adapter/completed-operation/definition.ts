@@ -41,7 +41,7 @@ export interface CompletedOperationDefinition<
     this: void,
     input: TInput,
     context: CompletedOperationContext<TModel>,
-  ) => TNormalized;
+  ) => TNormalized | Promise<TNormalized>;
   readonly support: (
     this: void,
     input: TNormalized,

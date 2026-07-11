@@ -2,9 +2,11 @@ import type { Experimental_TranscriptionResult as AiSdkTranscriptionResult, Tran
 import {
   createUnsupportedCapabilityError,
   normalizeAudioSource,
+  validateTranscribeOptions,
   validateTranscriptionResult,
   type Transcribe,
 } from '@use-crux/core'
+import { bindCompletedOperation, defineCompletedOperation } from '@use-crux/core/adapter'
 import { downloadAudio } from '@use-crux/core/transcription/node'
 import type { SdkGateway } from './gateway'
 
@@ -34,52 +36,93 @@ export type AITranscribe = Transcribe<
 
 /** Bind one native AI SDK transcription operation to an injectable gateway. */
 export function createAiSdkTranscribe(gateway: SdkGateway): AITranscribe {
-  return async (options) => {
-    const issue = options.language !== undefined
-      ? { capability: 'transcription.language', path: 'language', remediation: 'Pass provider-specific language controls in extra.providerOptions only when supported.' }
-      : options.prompt !== undefined
-        ? { capability: 'transcription.prompt', path: 'prompt', remediation: 'Pass provider-specific prompt controls in extra.providerOptions only when supported.' }
-        : undefined
-    if (issue) {
-      throw createUnsupportedCapabilityError({
-        adapter: 'ai-sdk',
-        model: modelId(options.model),
-        issues: [issue],
+  const definition = defineCompletedOperation({
+    async normalize(options: Parameters<AITranscribe>[0]) {
+      validateTranscribeOptions(options)
+      const issue =
+        options.language !== undefined
+          ? {
+              capability: 'transcription.language',
+              path: 'language',
+              remediation: 'Pass provider-specific language controls in extra.providerOptions only when supported.',
+            }
+          : options.prompt !== undefined
+            ? {
+                capability: 'transcription.prompt',
+                path: 'prompt',
+                remediation: 'Pass provider-specific prompt controls in extra.providerOptions only when supported.',
+              }
+            : undefined
+      if (issue) {
+        throw createUnsupportedCapabilityError({
+          adapter: 'ai-sdk',
+          model: modelId(options.model),
+          issues: [issue],
+        })
+      }
+      const audio = await normalizeAudioSource(options.audio)
+      if (audio.type === 'provider-file') {
+        throw createUnsupportedCapabilityError({
+          adapter: 'ai-sdk',
+          model: modelId(options.model),
+          issues: [
+            {
+              capability: 'transcription.provider-file',
+              path: 'audio',
+              mediaType: audio.mediaType,
+              remediation: 'Hydrate the provider file to bytes before transcription.',
+            },
+          ],
+        })
+      }
+      return { options, audio }
+    },
+    support: () => 'unknown' as const,
+    async invoke({ options, audio }, { signal }) {
+      return gateway.transcribe({
+        model: options.model,
+        audio: audio.type === 'url' ? audio.url : await dataBytes(audio.data),
+        ...(audio.type === 'url' ? { download: secureDownload } : {}),
+        abortSignal: signal,
+        ...(options.extra?.providerOptions === undefined ? {} : { providerOptions: options.extra.providerOptions }),
+        ...(options.extra?.maxRetries === undefined ? {} : { maxRetries: options.extra.maxRetries }),
+        ...(options.extra?.headers === undefined ? {} : { headers: options.extra.headers }),
       })
-    }
-    const normalized = await normalizeAudioSource(options.audio)
-    if (normalized.type === 'provider-file') {
-      throw createUnsupportedCapabilityError({
-        adapter: 'ai-sdk',
-        model: modelId(options.model),
-        issues: [{
-          capability: 'transcription.provider-file', path: 'audio', mediaType: normalized.mediaType,
-          remediation: 'Hydrate the provider file to bytes before transcription.',
-        }],
-      })
-    }
-    const raw = await gateway.transcribe({
-      model: options.model,
-      audio: normalized.type === 'url' ? normalized.url : await dataBytes(normalized.data),
-      ...(normalized.type === 'url' ? { download: secureDownload } : {}),
-      ...(options.abortSignal === undefined ? {} : { abortSignal: options.abortSignal }),
-      ...(options.extra?.providerOptions === undefined ? {} : { providerOptions: options.extra.providerOptions }),
-      ...(options.extra?.maxRetries === undefined ? {} : { maxRetries: options.extra.maxRetries }),
-      ...(options.extra?.headers === undefined ? {} : { headers: options.extra.headers }),
-    })
-    return validateTranscriptionResult({
-      text: raw.text,
-      segments: raw.segments.map((segment) => ({
-        text: segment.text,
-        start: segment.startSecond,
-        end: segment.endSecond,
-      })),
-      ...(raw.language === undefined ? {} : { language: raw.language }),
-      ...(raw.durationInSeconds === undefined ? {} : { durationInSeconds: raw.durationInSeconds }),
-      warnings: raw.warnings,
-      metadata: { responses: raw.responses, providerMetadata: raw.providerMetadata },
-    }, raw)
-  }
+    },
+    validate(raw) {
+      return validateTranscriptionResult(
+        {
+          text: raw.text,
+          segments: raw.segments.map((segment) => ({
+            text: segment.text,
+            startSecond: segment.startSecond,
+            endSecond: segment.endSecond,
+          })),
+          words: [],
+          ...(raw.language === undefined ? {} : { language: raw.language }),
+          ...(raw.durationInSeconds === undefined ? {} : { durationInSeconds: raw.durationInSeconds }),
+          warnings: raw.warnings,
+          providerMetadata: {
+            responses: raw.responses,
+            providerMetadata: raw.providerMetadata,
+          },
+          execution: { kind: 'native', calls: 1 },
+        },
+        raw,
+      )
+    },
+    report: (result) => ({
+      kind: 'audio',
+      segments: result.segments.length,
+      words: result.words.length,
+    }),
+    conformance: [],
+  })
+  return bindCompletedOperation({
+    definition,
+    provider: 'ai-sdk',
+    operation: 'transcribe',
+  })
 }
 
 async function secureDownload(input: { url: URL; abortSignal?: AbortSignal }) {

@@ -7,10 +7,12 @@ import type {
 import {
   createUnsupportedCapabilityError,
   normalizeAudioSource,
+  validateTranscribeOptions,
   validateTranscriptionResult,
   type DataAsset,
   type Transcribe,
 } from '@use-crux/core'
+import { bindCompletedOperation, defineCompletedOperation } from '@use-crux/core/adapter'
 import { downloadAudio } from '@use-crux/core/transcription/node'
 
 type NativeControls = Omit<
@@ -38,52 +40,82 @@ export type OpenAITranscribe = Transcribe<
 
 /** Build one stateless OpenAI audio transcription operation. */
 export function createOpenAITranscribe(client: OpenAI): OpenAITranscribe {
-  return async (options) => {
-    const normalized = await normalizeAudioSource(options.audio)
-    if (normalized.type === 'provider-file') {
-      throw createUnsupportedCapabilityError({
-        adapter: 'openai',
-        model: options.model,
-        issues: [{
-          capability: 'transcription.provider-file',
-          path: 'audio',
-          mediaType: normalized.mediaType,
-          remediation: 'Pass audio bytes, a Blob, data URL, or an HTTPS URL.',
-        }],
-      })
-    }
-    const audio = normalized.type === 'url'
-      ? await downloadAudio(normalized.url, { signal: options.abortSignal })
-      : normalized
-    const responseFormat = options.extra?.response_format ?? defaultResponseFormat(options.model)
-    const raw = await client.audio.transcriptions.create({
-      ...options.extra,
-      file: await uploadable(audio),
-      model: options.model,
-      response_format: responseFormat,
-      ...(options.language === undefined ? {} : { language: options.language }),
-      ...(options.prompt === undefined ? {} : { prompt: options.prompt }),
-      stream: false,
-    } as TranscriptionCreateParamsNonStreaming, options.abortSignal ? { signal: options.abortSignal } : undefined) as TranscriptionCreateResponse
-
-    const segments = 'segments' in raw && Array.isArray(raw.segments)
-      ? raw.segments.map((segment) => ({ text: segment.text, start: segment.start, end: segment.end }))
-      : []
-    const warnings = segments.length === 0 ? ['OpenAI transcription response omitted timestamp segments.'] : undefined
-    const language = 'language' in raw && typeof raw.language === 'string' ? raw.language : undefined
-    const durationInSeconds = 'duration' in raw && typeof raw.duration === 'number'
-      ? raw.duration
-      : durationUsage(raw.usage)
-
-    return validateTranscriptionResult({
-      text: raw.text,
-      segments,
-      ...(language === undefined ? {} : { language }),
-      ...(durationInSeconds === undefined ? {} : { durationInSeconds }),
-      ...(warnings === undefined ? {} : { warnings }),
-      ...(raw.usage === undefined ? {} : { metadata: { usage: raw.usage } }),
-    }, raw)
-  }
+  const definition = defineCompletedOperation({
+    async normalize(options: Parameters<OpenAITranscribe>[0]) {
+      validateTranscribeOptions(options)
+      const audio = await normalizeAudioSource(options.audio)
+      if (audio.type === 'provider-file') {
+        throw createUnsupportedCapabilityError({
+          adapter: 'openai',
+          model: options.model,
+          issues: [
+            {
+              capability: 'transcription.provider-file',
+              path: 'audio',
+              mediaType: audio.mediaType,
+              remediation: 'Pass audio bytes, a Blob, data URL, or an HTTPS URL.',
+            },
+          ],
+        })
+      }
+      return { options, audio }
+    },
+    support: () => 'supported' as const,
+    async invoke({ options, audio }, { signal }) {
+      const materialized = audio.type === 'url' ? await downloadAudio(audio.url, { signal }) : audio
+      const responseFormat = options.extra?.response_format ?? defaultResponseFormat(options.model)
+      return client.audio.transcriptions.create(
+        {
+          ...options.extra,
+          file: await uploadable(materialized),
+          model: options.model,
+          response_format: responseFormat,
+          ...(options.language === undefined ? {} : { language: options.language }),
+          ...(options.prompt === undefined ? {} : { prompt: options.prompt }),
+          stream: false,
+        } as TranscriptionCreateParamsNonStreaming,
+        { signal },
+      ) as Promise<TranscriptionCreateResponse>
+    },
+    validate(raw) {
+      const segments =
+        'segments' in raw && Array.isArray(raw.segments)
+          ? raw.segments.map((segment) => ({
+              text: segment.text,
+              startSecond: segment.start,
+              endSecond: segment.end,
+            }))
+          : []
+      const warnings = segments.length === 0 ? ['OpenAI transcription response omitted timestamp segments.'] : []
+      const language = 'language' in raw && typeof raw.language === 'string' ? raw.language : undefined
+      const durationInSeconds =
+        'duration' in raw && typeof raw.duration === 'number' ? raw.duration : durationUsage(raw.usage)
+      return validateTranscriptionResult(
+        {
+          text: raw.text,
+          segments,
+          words: [],
+          warnings,
+          execution: { kind: 'native', calls: 1 },
+          ...(language === undefined ? {} : { language }),
+          ...(durationInSeconds === undefined ? {} : { durationInSeconds }),
+          ...(raw.usage === undefined ? {} : { providerMetadata: { usage: raw.usage } }),
+        },
+        raw,
+      )
+    },
+    report: (result) => ({
+      kind: 'audio',
+      segments: result.segments.length,
+      words: result.words.length,
+    }),
+    conformance: [],
+  })
+  return bindCompletedOperation({
+    definition,
+    provider: 'openai',
+    operation: 'transcribe',
+  })
 }
 
 async function uploadable(asset: DataAsset): Promise<Uploadable> {

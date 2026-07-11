@@ -111,10 +111,13 @@ export type {
 export { defineProviderRuntime } from "./provider-runtime";
 export { defineSingleTurnProviderBundle } from "./provider-runtime";
 export {
+  bindCompletedOperation,
   defineCompletedOperation,
   runCompletedMediaOperation,
 } from "./completed-operation";
 export type {
+  BindCompletedOperationOptions,
+  CompletedOperationCall,
   CompletedOperationConformanceCase,
   CompletedOperationContext,
   CompletedOperationDefinition,

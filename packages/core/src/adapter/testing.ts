@@ -19,6 +19,7 @@
 
 export { adapterSpecConformance } from './testing/native'
 export { assertCanonicalResult } from './testing/canonical-result'
+export { completedMediaConformance } from './testing/completed-media'
 export {
   assertDirectMediaTranscriptIdentity,
   directMediaFixture,
@@ -35,15 +36,17 @@ export { MEDIA_ADAPTER_MATRIX, mediaAdapterMatrixMarkdown } from './testing/medi
 export { providerRuntimeConformance } from './testing/provider-runtime'
 export { transcriptCodecConformance, transcriptRoundTripConformance } from './testing/transcript'
 export type {
+  CompletedMediaConformanceCase,
+  CompletedMediaConformanceViolation,
+  CompletedMediaOperationName,
+} from './testing/completed-media'
+export type {
   DirectMediaFixture,
   DirectMediaProvider,
   MediaConformanceAdapter,
   MediaConformanceFixture,
 } from './testing/direct-media'
-export type {
-  ImageGenerationConformanceRow,
-  ImageGenerationFixtureAdapter,
-} from './testing/image-generation'
+export type { ImageGenerationConformanceRow, ImageGenerationFixtureAdapter } from './testing/image-generation'
 export type { TranscriptionConformanceRow, TranscriptionFixtureAdapter } from './testing/transcription'
 export type {
   CanonicalFinalStepInfo,

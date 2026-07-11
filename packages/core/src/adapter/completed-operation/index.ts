@@ -1,3 +1,8 @@
+export { bindCompletedOperation } from "./bind";
+export type {
+  BindCompletedOperationOptions,
+  CompletedOperationCall,
+} from "./bind";
 export { defineCompletedOperation } from "./definition";
 export type {
   CompletedOperationConformanceCase,

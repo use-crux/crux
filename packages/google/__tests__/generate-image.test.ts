@@ -16,7 +16,10 @@ describe('Google image generation', () => {
     expect(imageGenerationConformanceRow('google').support).toBe('native')
     const raw = {
       generatedImages: [
-        { image: { imageBytes: 'AQI=', mimeType: 'image/png' }, enhancedPrompt: 'Enhanced' },
+        {
+          image: { imageBytes: 'AQI=', mimeType: 'image/png' },
+          enhancedPrompt: 'Enhanced',
+        },
         { image: { imageBytes: 'AwQ=', mimeType: 'image/webp' } },
       ],
       sdkHttpResponse: {
@@ -33,7 +36,11 @@ describe('Google image generation', () => {
       n: 2,
       aspectRatio: '16:9',
       seed: 7,
-      extra: { outputMimeType: 'image/webp', includeRaiReason: true, imageSize: '2K' },
+      extra: {
+        outputMimeType: 'image/webp',
+        includeRaiReason: true,
+        imageSize: '2K',
+      },
     })
 
     expect(generateImages).toHaveBeenCalledOnce()
@@ -41,6 +48,7 @@ describe('Google image generation', () => {
       model: 'imagen-4.0-generate-001',
       prompt: 'A quiet canal',
       config: {
+        abortSignal: expect.any(AbortSignal),
         numberOfImages: 2,
         aspectRatio: '16:9',
         seed: 7,
@@ -51,8 +59,13 @@ describe('Google image generation', () => {
     })
     expect(result.raw).toBe(raw)
     expect(result.images.map((image) => image.mediaType)).toEqual(['image/png', 'image/webp'])
-    expect(result.providerMetadata).toEqual({ requestId: 'req-1', status: 200 })
-    expect(result.usage).toEqual({ images: 2 })
+    expect(result.providerMetadata).toEqual({
+      requestId: 'req-1',
+      status: 200,
+    })
+    expect(result.warnings).toEqual([])
+    expect(result.execution).toEqual({ kind: 'native', calls: 1 })
+    expect(result).not.toHaveProperty('usage')
     expectTypeOf(google.generateImage).toBeFunction()
   })
 
@@ -63,29 +76,37 @@ describe('Google image generation', () => {
     await expect(google.generateImage({ model: 'gemini-2.5-flash', prompt: 'x' })).rejects.toMatchObject({
       code: 'unsupported_capability',
     })
-    await expect(google.generateImage({
-      model: 'custom-image-model',
-      prompt: {
-        text: 'edit',
-        images: [{ type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' }],
-      },
-    })).rejects.toMatchObject({ code: 'unsupported_capability' })
+    await expect(
+      google.generateImage({
+        model: 'custom-image-model',
+        prompt: {
+          text: 'edit',
+          images: [{ type: 'data', data: new Uint8Array([1]), mediaType: 'image/png' }],
+        },
+      }),
+    ).rejects.toMatchObject({ code: 'unsupported_capability' })
     expect(generateImages).not.toHaveBeenCalled()
   })
 
   it('turns filtered/text-only successes into no-image errors and preserves native failures', async () => {
-    const blocked = clientWith({ generatedImages: [{ raiFilteredReason: 'safety policy' }] })
-    await expect(createGoogle(blocked.client, { cachedContent: false }).generateImage({
-      model: 'imagen-4.0-generate-001',
-      prompt: 'x',
-    })).rejects.toMatchObject({ code: 'no_image_generated' })
+    const blocked = clientWith({
+      generatedImages: [{ raiFilteredReason: 'safety policy' }],
+    })
+    await expect(
+      createGoogle(blocked.client, { cachedContent: false }).generateImage({
+        model: 'imagen-4.0-generate-001',
+        prompt: 'x',
+      }),
+    ).rejects.toMatchObject({ code: 'no_image_generated' })
 
     const providerError = new Error('native failure')
     const failing = clientWith(undefined)
     failing.generateImages.mockRejectedValueOnce(providerError)
-    await expect(createGoogle(failing.client, { cachedContent: false }).generateImage({
-      model: 'custom-image-model',
-      prompt: 'x',
-    })).rejects.toBe(providerError)
+    await expect(
+      createGoogle(failing.client, { cachedContent: false }).generateImage({
+        model: 'custom-image-model',
+        prompt: 'x',
+      }),
+    ).rejects.toBe(providerError)
   })
 })

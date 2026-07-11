@@ -2,18 +2,27 @@ import type { GenerateContentConfig, GenerateContentResponse, GoogleGenAI, Part 
 import {
   createUnsupportedCapabilityError,
   normalizeAudioSource,
+  validateTranscribeOptions,
   validateTranscriptionResult,
   type Asset,
   type Transcribe,
-  type TranscriptionSegment,
+  type TranscriptInterval,
 } from '@use-crux/core'
+import { bindCompletedOperation, defineCompletedOperation } from '@use-crux/core/adapter'
 import { downloadAudio } from '@use-crux/core/transcription/node'
 
 /** Google generation controls allowed on the composed transcription route. */
 export type GoogleTranscriptionExtra = Omit<
   GenerateContentConfig,
-  'abortSignal' | 'systemInstruction' | 'responseMimeType' | 'responseSchema' | 'responseJsonSchema' | 'tools' | 'toolConfig'
-> & Record<string, unknown>
+  | 'abortSignal'
+  | 'systemInstruction'
+  | 'responseMimeType'
+  | 'responseSchema'
+  | 'responseJsonSchema'
+  | 'tools'
+  | 'toolConfig'
+> &
+  Record<string, unknown>
 
 /** Safe facts retained from Google's composed generation response. */
 export interface GoogleTranscriptionMetadata {
@@ -42,39 +51,74 @@ const INSTRUCTION = [
 
 /** Build Google's single-call composed audio transcription route. */
 export function createGoogleTranscribe(client: GoogleGenAI): GoogleTranscribe {
-  return async (options) => {
-    assertGoogleAudioModel(options.model)
-    if (options.language !== undefined || options.prompt !== undefined) {
-      const path = options.language !== undefined ? 'language' : 'prompt'
-      throw createUnsupportedCapabilityError({
-        adapter: 'google', model: options.model,
-        issues: [{ capability: `transcription.${path}`, path, remediation: 'Use the fixed Crux transcript-only route without call-specific instructions.' }],
+  const definition = defineCompletedOperation({
+    async normalize(options: Parameters<GoogleTranscribe>[0]) {
+      validateTranscribeOptions(options)
+      assertGoogleAudioModel(options.model)
+      if (options.language !== undefined || options.prompt !== undefined) {
+        const path = options.language !== undefined ? 'language' : 'prompt'
+        throw createUnsupportedCapabilityError({
+          adapter: 'google',
+          model: options.model,
+          issues: [
+            {
+              capability: `transcription.${path}`,
+              path,
+              remediation: 'Use the fixed Crux transcript-only route without call-specific instructions.',
+            },
+          ],
+        })
+      }
+      return { options, audio: await normalizeAudioSource(options.audio) }
+    },
+    support: () => 'supported' as const,
+    async invoke({ options, audio }, { signal }) {
+      const part = await googleAudioPart(audio, signal, options.model)
+      return client.models.generateContent({
+        model: options.model,
+        contents: [{ role: 'user', parts: [{ text: INSTRUCTION }, part] }],
+        config: {
+          ...options.extra,
+          abortSignal: signal,
+          responseMimeType: 'application/json',
+          responseJsonSchema: TRANSCRIPT_SCHEMA,
+        },
       })
-    }
-    const normalized = await normalizeAudioSource(options.audio)
-    const audio = await googleAudioPart(normalized, options.abortSignal, options.model)
-    const raw = await client.models.generateContent({
-      model: options.model,
-      contents: [{ role: 'user', parts: [{ text: INSTRUCTION }, audio] }],
-      config: {
-        ...options.extra,
-        ...(options.abortSignal === undefined ? {} : { abortSignal: options.abortSignal }),
-        responseMimeType: 'application/json',
-        responseJsonSchema: TRANSCRIPT_SCHEMA,
-      },
-    })
-    const parsed = parseResponse(raw.text)
-    const timing = normalizeTiming(parsed.segments)
-    const warnings = ['Google transcription used one composed generateContent route.']
-    if (!timing.valid) warnings.push('Google transcription response omitted valid timestamp segments.')
-    return validateTranscriptionResult({
-      text: typeof parsed.text === 'string' ? parsed.text : '',
-      segments: timing.segments,
-      ...(typeof parsed.language === 'string' && parsed.language.trim() ? { language: parsed.language } : {}),
-      warnings,
-      metadata: googleMetadata(raw),
-    }, raw)
-  }
+    },
+    validate(raw) {
+      const parsed = parseResponse(raw.text)
+      const timing = normalizeTiming(parsed.segments)
+      const warnings = ['Google transcription used one composed generateContent route.']
+      if (!timing.valid) warnings.push('Google transcription response omitted valid timestamp segments.')
+      return validateTranscriptionResult(
+        {
+          text: typeof parsed.text === 'string' ? parsed.text : '',
+          segments: timing.segments,
+          words: [],
+          warnings,
+          execution: {
+            kind: 'composed',
+            calls: 1,
+            operations: ['generation.call'],
+          },
+          providerMetadata: googleMetadata(raw),
+          ...(typeof parsed.language === 'string' && parsed.language.trim() ? { language: parsed.language } : {}),
+        },
+        raw,
+      )
+    },
+    report: (result) => ({
+      kind: 'audio',
+      segments: result.segments.length,
+      words: result.words.length,
+    }),
+    conformance: [],
+  })
+  return bindCompletedOperation({
+    definition,
+    provider: 'google',
+    operation: 'transcribe',
+  })
 }
 
 const TRANSCRIPT_SCHEMA = {
@@ -86,7 +130,11 @@ const TRANSCRIPT_SCHEMA = {
       type: 'array',
       items: {
         type: 'object',
-        properties: { text: { type: 'string' }, start: { type: 'number' }, end: { type: 'number' } },
+        properties: {
+          text: { type: 'string' },
+          start: { type: 'number' },
+          end: { type: 'number' },
+        },
         required: ['text', 'start', 'end'],
         additionalProperties: false,
       },
@@ -111,32 +159,51 @@ async function googleAudioPart(asset: Asset, signal: AbortSignal | undefined, mo
 }
 
 function inlineAudio(data: Uint8Array, mediaType: string): Part {
-  return { inlineData: { data: Buffer.from(data).toString('base64'), mimeType: mediaType } }
+  return {
+    inlineData: {
+      data: Buffer.from(data).toString('base64'),
+      mimeType: mediaType,
+    },
+  }
 }
 
 function parseResponse(text: string | undefined): Record<string, unknown> {
   if (!text) return { text: '' }
   try {
     const value: unknown = JSON.parse(text)
-    return value && typeof value === 'object' ? value as Record<string, unknown> : { text: '' }
+    return value && typeof value === 'object' ? (value as Record<string, unknown>) : { text: '' }
   } catch {
     throw new TypeError('Google transcription returned invalid structured JSON.')
   }
 }
 
-function normalizeTiming(value: unknown): { valid: boolean; segments: readonly TranscriptionSegment[] } {
+function normalizeTiming(value: unknown): {
+  valid: boolean
+  segments: readonly TranscriptInterval[]
+} {
   if (!Array.isArray(value) || value.length === 0) return { valid: false, segments: [] }
   let previousEnd = 0
-  const segments: TranscriptionSegment[] = []
+  const segments: TranscriptInterval[] = []
   for (const item of value) {
     if (!item || typeof item !== 'object') return { valid: false, segments: [] }
     const record = item as Record<string, unknown>
-    if (typeof record.text !== 'string' || !record.text.trim() ||
-      typeof record.start !== 'number' || !Number.isFinite(record.start) || record.start < previousEnd ||
-      typeof record.end !== 'number' || !Number.isFinite(record.end) || record.end < record.start) {
+    if (
+      typeof record.text !== 'string' ||
+      !record.text.trim() ||
+      typeof record.start !== 'number' ||
+      !Number.isFinite(record.start) ||
+      record.start < previousEnd ||
+      typeof record.end !== 'number' ||
+      !Number.isFinite(record.end) ||
+      record.end < record.start
+    ) {
       return { valid: false, segments: [] }
     }
-    segments.push({ text: record.text.trim(), start: record.start, end: record.end })
+    segments.push({
+      text: record.text.trim(),
+      startSecond: record.start,
+      endSecond: record.end,
+    })
     previousEnd = record.end
   }
   return { valid: true, segments }
@@ -147,24 +214,37 @@ function googleMetadata(raw: GenerateContentResponse): GoogleTranscriptionMetada
   return {
     ...(raw.responseId ? { responseId: raw.responseId } : {}),
     ...(raw.modelVersion ? { modelVersion: raw.modelVersion } : {}),
-    ...(!usage ? {} : { usage: {
-      ...(usage.promptTokenCount === undefined ? {} : { inputTokens: usage.promptTokenCount }),
-      ...(usage.candidatesTokenCount === undefined ? {} : { outputTokens: usage.candidatesTokenCount }),
-      ...(usage.totalTokenCount === undefined ? {} : { totalTokens: usage.totalTokenCount }),
-    } }),
+    ...(!usage
+      ? {}
+      : {
+          usage: {
+            ...(usage.promptTokenCount === undefined ? {} : { inputTokens: usage.promptTokenCount }),
+            ...(usage.candidatesTokenCount === undefined ? {} : { outputTokens: usage.candidatesTokenCount }),
+            ...(usage.totalTokenCount === undefined ? {} : { totalTokens: usage.totalTokenCount }),
+          },
+        }),
   }
 }
 
 function assertGoogleAudioModel(model: string): void {
   const supported = /^gemini-(?:1\.5|2\.0|2\.5|3(?:\.\d+)?)-/.test(model)
-  const knownUnsupported = model.startsWith('gemini-') || ['imagen-', 'veo-', 'embedding-', 'text-'].some((prefix) => model.startsWith(prefix))
+  const knownUnsupported =
+    model.startsWith('gemini-') || ['imagen-', 'veo-', 'embedding-', 'text-'].some((prefix) => model.startsWith(prefix))
   if (!supported && knownUnsupported) throw unsupportedAudio(model)
 }
 
 function unsupportedAudio(model: string, mediaType?: string) {
   return createUnsupportedCapabilityError({
-    adapter: 'google', model,
-    issues: [{ capability: 'transcription.audio', path: 'audio', ...(mediaType ? { mediaType } : {}), remediation: 'Use a confirmed audio-capable Gemini model and usable audio bytes or URI.' }],
+    adapter: 'google',
+    model,
+    issues: [
+      {
+        capability: 'transcription.audio',
+        path: 'audio',
+        ...(mediaType ? { mediaType } : {}),
+        remediation: 'Use a confirmed audio-capable Gemini model and usable audio bytes or URI.',
+      },
+    ],
   })
 }
 
