@@ -625,7 +625,7 @@ Generation, streaming, and tool spans emit canonical graph records with latency 
 
 Manual spans use an explicit terminal API: call `span.end({ attributes, metrics, status })` for terminal metadata, or `span.setAttributes(attributes)` for metadata discovered before the span closes. Raw attribute bags are not accepted by `span.end()`, so `{ error: value }` always means an error end instead of an ambiguous attribute object.
 
-Streaming spans close through a single finalizer. Raw stream drain and provider completion metadata are merged before the terminal `span:end` when both are available; if completion metadata is never awaited, the span closes after a bounded grace window with stream-derived metrics. Early stream cancellation ends the span as `cancelled`.
+Streaming spans close through a single finalizer, and only the stream's own terminal signal (drain, early return, or throw) ends the span - never a timer. The span closes immediately with stream-derived metrics; provider completion metadata that is still pending, or that arrives after, is attached as a linked `usage.observed` event and output artifact and never mutates the already-recorded duration/status. Early stream cancellation ends the span as `cancelled`.
 
 Metric objects may include optional expressions that evaluate to `undefined`. The observability runtime strips `undefined`, `NaN`, and infinite metric values before records reach subscribers, diagnostics-channel consumers, devtools transports, or OTel, so malformed metrics do not interrupt application code.
 Custom metric keys must use the `custom.*` namespace; built-in generation and token keys are typed.

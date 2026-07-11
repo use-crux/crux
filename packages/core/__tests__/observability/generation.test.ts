@@ -320,7 +320,7 @@ describe('generation observability', () => {
     })
   })
 
-    it('ends stream spans once with usage metrics when drain happens before completion', async () => {
+    it('ends the stream span immediately on drain, before provider completion arrives', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
 
@@ -342,26 +342,36 @@ describe('generation observability', () => {
     }
     expect(chunks).toHaveLength(2)
     await observe.flush()
-    expect(transport.records.filter((record) => record.type === 'span:event').map((record) => record.name)).toEqual([
-      'token.chunk',
-    ])
-    expect(transport.records.find((record) => record.type === 'span:event' && record.name === 'token.chunk')).toMatchObject({
-      attributes: {
-        text: 'hello',
-        chunkIndex: 0,
-        charCount: 5,
-        firstDeltaAt: expect.any(String),
-        lastDeltaAt: expect.any(String),
-      },
-    })
+
+    // The span (and its implicit run) is already terminal - drain is the
+    // terminal signal, not provider completion, and nothing waited for it.
     expect(transport.records.map((record) => record.type)).toEqual([
       'run:start',
       'span:start',
       'artifact',
       'edge',
       'span:event',
+      'span:end',
+      'run:end',
     ])
+    const spanEndBeforeCompletion = transport.records.find((record) => record.type === 'span:end')
+    expect(spanEndBeforeCompletion).toMatchObject({
+      type: 'span:end',
+      status: 'ok',
+      attributes: {
+        streamCompleted: true,
+        tokenChunkCount: 1,
+        streamFinalizedReason: 'stream-end',
+      },
+      metrics: expect.objectContaining({
+        'gen.duration_ms': expect.any(Number),
+        'gen.output_tokens_per_second': expect.any(Number),
+      }),
+    })
 
+    // Provider completion metadata arrives after the span already ended. It
+    // is attached as linked telemetry, not a second terminal record, and it
+    // cannot change the recorded duration/status above.
     await handle.completion()
     await observe.flush()
 
@@ -371,25 +381,20 @@ describe('generation observability', () => {
       'artifact',
       'edge',
       'span:event',
+      'span:end',
+      'run:end',
       'span:event',
       'artifact',
       'edge',
-      'span:end',
-      'run:end',
     ])
     const spanEnds = transport.records.filter((record) => record.type === 'span:end')
     expect(spanEnds).toHaveLength(1)
-    expect(spanEnds[0]).toMatchObject({
-      type: 'span:end',
-      status: 'ok',
-      attributes: {
-        streamCompleted: true,
-        tokenChunkCount: 1,
-      },
-      metrics: expect.objectContaining({
-        'gen.duration_ms': expect.any(Number),
-        'gen.output_tokens_per_second': expect.any(Number),
-      }),
+    expect(spanEnds[0]).toBe(spanEndBeforeCompletion)
+    const usageEvent = transport.records.find(
+      (record) => record.type === 'span:event' && record.name === 'usage.observed',
+    )
+    expect(usageEvent).toMatchObject({
+      attributes: { inputTokens: 5, outputTokens: 6, totalTokens: 11 },
     })
     expect(transport.records[1]).toMatchObject({
       type: 'span:start',
@@ -504,10 +509,20 @@ describe('generation observability', () => {
       attributes: {
         streamCompleted: true,
         tokenChunkCount: 1,
+        streamFinalizedReason: 'stream-end',
       },
       metrics: expect.objectContaining({
-        'gen.output_tokens_per_second': 12,
+        // Stream-drain metrics, not provider-reported throughput: the
+        // provider's tokensPerSecond arrived as linked usage metadata below
+        // and never mutates the already-recorded span-end metrics.
+        'gen.output_tokens_per_second': expect.any(Number),
       }),
+    })
+    const usageEvent = transport.records.find(
+      (record) => record.type === 'span:event' && record.name === 'usage.observed',
+    )
+    expect(usageEvent).toMatchObject({
+      attributes: { tokensPerSecond: 12 },
     })
   })
 
@@ -564,6 +579,68 @@ describe('generation observability', () => {
         'gen.output_tokens_per_second': expect.any(Number),
         'gen.time_per_output_chunk_ms': expect.any(Number),
       }),
+    })
+  })
+
+    it('attaches late completion metadata once even if the completion function is read twice', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const handle = await orchestrateStream(generationSpec('stream'), async () => ({
+      rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
+      extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+      completion: async () => ({
+        usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, inputTokenDetails: {}, outputTokenDetails: {} },
+      }),
+    }))
+
+    for await (const _chunk of handle.rawStream as AsyncIterable<unknown>) {
+      void _chunk
+    }
+    await handle.completion()
+    await handle.completion()
+    await observe.flush()
+
+    const usageEvents = transport.records.filter(
+      (record) => record.type === 'span:event' && record.name === 'usage.observed',
+    )
+    const producedArtifacts = transport.records.filter((record) => record.type === 'artifact' && record.kind === 'stream.timeline')
+    expect(usageEvents).toHaveLength(1)
+    expect(producedArtifacts).toHaveLength(1)
+    expect(transport.records.filter((record) => record.type === 'span:end')).toHaveLength(1)
+  })
+
+    it('links a completion error as diagnostic telemetry without reopening the already-ended span', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const handle = await orchestrateStream(generationSpec('stream'), async () => ({
+      rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
+      extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+      completion: async () => {
+        throw new Error('provider completion failed')
+      },
+    }))
+
+    for await (const _chunk of handle.rawStream as AsyncIterable<unknown>) {
+      void _chunk
+    }
+    await observe.flush()
+    const spanEnd = transport.records.find((record) => record.type === 'span:end')
+    expect(spanEnd).toMatchObject({ status: 'ok' })
+
+    await expect(handle.completion()).rejects.toThrow('provider completion failed')
+    await observe.flush()
+
+    // The already-recorded terminal span:end is untouched: exactly one, and
+    // still 'ok'. The completion failure surfaces as a linked diagnostic
+    // event instead of mutating span status/duration.
+    expect(transport.records.filter((record) => record.type === 'span:end')).toEqual([spanEnd])
+    const completionError = transport.records.find(
+      (record) => record.type === 'span:event' && record.name === 'completion.error',
+    )
+    expect(completionError).toMatchObject({
+      attributes: expect.objectContaining({ message: 'provider completion failed' }),
     })
   })
 
@@ -650,7 +727,7 @@ describe('generation observability', () => {
     })
   })
 
-    it('ends stream spans with available metrics when completion is never awaited', async () => {
+    it('ends stream spans with available metrics immediately when completion never arrives, with no pending timer', async () => {
     vi.useFakeTimers()
     try {
       const transport = createInMemoryObservabilityTransport()
@@ -659,20 +736,16 @@ describe('generation observability', () => {
       const handle = await orchestrateStream(generationSpec('stream'), async () => ({
         rawStream: streamChunks([{ text: 'hel' }, { text: 'lo' }]),
         extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
-        completion: async () => ({
-          usage: { inputTokens: 5, outputTokens: 6, totalTokens: 11, inputTokenDetails: {}, outputTokenDetails: {} },
-        }),
+        completion: () => new Promise(() => undefined),
       }))
 
       for await (const _chunk of handle.rawStream as AsyncIterable<unknown>) {
         void _chunk
       }
       await observe.flush()
-      expect(transport.records.some((record) => record.type === 'span:end')).toBe(false)
 
-      await vi.advanceTimersByTimeAsync(10_000)
-      await observe.flush()
-
+      // The span ends immediately on drain, with no grace timer: nothing is
+      // waiting on the completion promise above, which never settles.
       const spanEnd = transport.records.find((record) => record.type === 'span:end')
       expect(spanEnd).toMatchObject({
         type: 'span:end',
@@ -680,9 +753,10 @@ describe('generation observability', () => {
         attributes: {
           streamCompleted: true,
           tokenChunkCount: 1,
-          streamFinalizedReason: 'timeout',
+          streamFinalizedReason: 'stream-end',
         },
       })
+      expect(vi.getTimerCount()).toBe(0)
     } finally {
       vi.useRealTimers()
     }

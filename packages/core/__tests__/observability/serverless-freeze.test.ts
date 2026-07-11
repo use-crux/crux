@@ -102,4 +102,24 @@ describe('serverless child-process freeze (real process, no mocked waitUntil)', 
     const delivered = entries.find((entry) => entry.event === 'delivered')
     expect(delivered).toBeUndefined()
   })
+
+  it('delivers a terminal stream span end on freeze even though provider completion never arrives', () => {
+    // Transport takes 20ms; the process freezes right after the handler
+    // returns, with no completion promise ever settling. If span end still
+    // depended on a grace timer, this span would never close.
+    const { entries } = runHarness('stream', 20)
+
+    const returned = entries.find((entry) => entry.event === 'handler-returned')
+    const delivered = entries.filter((entry) => entry.event === 'delivered')
+    const spanEndDelivery = delivered.find((entry) => entry.hasSpanEnd === true)
+
+    expect(returned).toBeDefined()
+    expect(returned!.result).toBe('ok')
+    expect(delivered.length).toBeGreaterThan(0)
+    expect(spanEndDelivery).toBeDefined()
+    // Delivery (including the stream span's own end) is drained inside the
+    // wrapper, so it is recorded before the handler-returned marker that
+    // immediately precedes process.exit().
+    expect(entries.indexOf(spanEndDelivery!)).toBeLessThan(entries.indexOf(returned!))
+  })
 })

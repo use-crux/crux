@@ -2,9 +2,13 @@
  * Single-owner finalization for observed stream spans.
  *
  * Stream orchestration has two independent completion signals: raw stream
- * consumption and provider completion metadata. This helper keeps the public
- * span lifecycle boring: one `span.end()` call, with provider metadata merged
- * into the final metrics whenever it arrives before the grace timeout.
+ * consumption and provider completion metadata. Only the raw stream signal
+ * (or, when there is no raw stream to observe, provider completion) is
+ * terminal: the span ends exactly once, immediately, with whatever metrics
+ * are known at that moment. Provider completion metadata that is still
+ * observed after that (or that never observes a raw stream at all) is
+ * attached as linked telemetry by the caller; this module never reopens or
+ * mutates an already-ended span's duration/status.
  *
  * @module
  * @internal
@@ -14,8 +18,6 @@ import type { observe } from '../observability'
 import type { GenerationPerformanceTracker } from './performance-metrics'
 
 type ObservedSpan = ReturnType<typeof observe.openSpan>
-
-const completionGraceMs = 10_000
 
 export interface StreamSpanFinalizerOptions {
   readonly span: ObservedSpan
@@ -45,43 +47,21 @@ export interface StreamSpanFinalizer {
 }
 
 /**
- * Create a finalizer that closes a stream span exactly once.
+ * Create a finalizer that closes a stream span exactly once, on the actual
+ * stream terminal signal, never on a timer.
  *
- * The first successful signal waits for the other expected signal. Stream
- * abandonment and errors are terminal immediately because the provider metadata
- * can no longer make the stream complete successfully.
+ * When a raw stream is observed, only that stream's own terminal signal
+ * (drain, early return, or throw) ends the span. Provider completion is
+ * then late, linked metadata handled by the caller and must never reopen the
+ * span. When no raw stream is observed, provider completion is itself the
+ * terminal signal.
  */
 export function createStreamSpanFinalizer(
   options: StreamSpanFinalizerOptions,
 ): StreamSpanFinalizer {
-  let streamReported = !options.expectsStream
-  let completionReported = !options.expectsCompletion
-  let completionMeta: Record<string, unknown> | undefined
-  let streamTokenChunkCount = 0
-  let streamCompleted = !options.expectsStream
   let finalized = false
-  let graceTimer: ReturnType<typeof setTimeout> | undefined
-
-  const clearGraceTimer = (): void => {
-    if (graceTimer === undefined) return
-    clearTimeout(graceTimer)
-    graceTimer = undefined
-  }
-
-  const scheduleGraceTimer = (): void => {
-    if (
-      !options.expectsCompletion ||
-      completionReported ||
-      graceTimer !== undefined ||
-      finalized
-    )
-      return
-    graceTimer = setTimeout(() => {
-      completionReported = true
-      finalize('timeout', 'ok')
-    }, completionGraceMs)
-    unrefTimer(graceTimer)
-  }
+  let streamCompleted = !options.expectsStream
+  let streamTokenChunkCount = 0
 
   const commonAttributes = (reason?: string) => ({
     streamCompleted,
@@ -89,21 +69,17 @@ export function createStreamSpanFinalizer(
     ...(reason ? { streamFinalizedReason: reason } : {}),
   })
 
-  const maybeFinalize = (): void => {
-    if (streamReported && completionReported) finalize(undefined, 'ok')
-  }
-
   const finalize = (
     reason: string | undefined,
     status: 'ok' | 'error' | 'cancelled',
+    meta: Record<string, unknown> | undefined,
     error?: unknown,
   ): void => {
     if (finalized) return
     finalized = true
-    clearGraceTimer()
     options.span.end({
       status,
-      metrics: options.performance.metrics(completionMeta),
+      metrics: options.performance.metrics(meta),
       ...(error !== undefined ? { error } : {}),
       attributes: commonAttributes(reason),
     })
@@ -112,44 +88,33 @@ export function createStreamSpanFinalizer(
   return {
     streamEnded({ tokenChunkCount }) {
       if (finalized) return
-      streamReported = true
       streamCompleted = true
       streamTokenChunkCount = tokenChunkCount
-      if (!completionReported) {
-        scheduleGraceTimer()
-        return
-      }
-      maybeFinalize()
+      finalize('stream-end', 'ok', undefined)
     },
     streamReturned({ tokenChunkCount }) {
       if (finalized) return
-      streamReported = true
       streamCompleted = false
       streamTokenChunkCount = tokenChunkCount
-      finalize('return', 'cancelled')
+      finalize('return', 'cancelled', undefined)
     },
     streamErrored({ tokenChunkCount, error }) {
       if (finalized) return
-      streamReported = true
       streamCompleted = false
       streamTokenChunkCount = tokenChunkCount
-      finalize('throw', 'error', error)
+      finalize('throw', 'error', undefined, error)
     },
     completionSettled({ meta }) {
-      if (finalized) return
-      completionReported = true
-      completionMeta = meta
-      maybeFinalize()
+      // A raw stream, when observed, is the sole terminal signal. Completion
+      // arriving here is late/linked metadata handled by the caller, not a
+      // reason to end (or re-end) the span.
+      if (options.expectsStream) return
+      streamCompleted = true
+      finalize(undefined, 'ok', meta)
     },
     completionErrored(error) {
-      if (finalized) return
-      completionReported = true
-      finalize('completion-error', 'error', error)
+      if (options.expectsStream) return
+      finalize('completion-error', 'error', undefined, error)
     },
   }
-}
-
-function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
-  const maybeUnref = (timer as { unref?: unknown }).unref
-  if (typeof maybeUnref === 'function') maybeUnref.call(timer)
 }

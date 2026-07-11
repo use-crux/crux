@@ -10,7 +10,7 @@
  * @internal
  */
 
-import { observe } from '../observability'
+import { observe, observedErrorSummary } from '../observability'
 import type { ResolvedPrompt } from '../resolver/types'
 import type { OrchestrationSpec } from './orchestrate-types'
 import { TimeoutError, normalizeBudgetMs, type TimeoutOptions } from './timeout'
@@ -184,30 +184,44 @@ export function attachStreamObservability(
     return
   }
 
+  // Provider completion may settle before or after the span's own terminal
+  // signal. Either way it is attached at most once: a linked usage
+  // event/artifact (or, on error, a linked diagnostic event) that never
+  // reopens or mutates the span's already-recorded duration/status.
+  let completionAttached = false
   record.completion = async (...args: unknown[]) => {
     try {
       const meta = await span.withContext(() => (completion as (...inner: unknown[]) => Promise<unknown>)(...args))
-      await span.withContext(() => {
-        if (meta && typeof meta === 'object') {
-          const metaRecord = meta as Record<string, unknown>
-          const usageAttributes = generationUsageAttributes(metaRecord)
-          if (usageAttributes) {
-            observe.event({ name: 'usage.observed', attributes: usageAttributes })
+      if (!completionAttached) {
+        completionAttached = true
+        await span.withContext(() => {
+          if (meta && typeof meta === 'object') {
+            const metaRecord = meta as Record<string, unknown>
+            const usageAttributes = generationUsageAttributes(metaRecord)
+            if (usageAttributes) {
+              observe.event({ name: 'usage.observed', attributes: usageAttributes })
+            }
+            const outputArtifactId = observe.artifact({
+              kind: 'stream.timeline',
+              contentType: 'application/json',
+              encoding: 'json',
+              preview: metaRecord,
+            })
+            linkActiveSpanToArtifact('produced', outputArtifactId)
           }
-          const outputArtifactId = observe.artifact({
-            kind: 'stream.timeline',
-            contentType: 'application/json',
-            encoding: 'json',
-            preview: metaRecord,
-          })
-          linkActiveSpanToArtifact('produced', outputArtifactId)
-        }
-      })
+        })
+      }
       finalizer.completionSettled({
         meta: meta && typeof meta === 'object' ? (meta as Record<string, unknown>) : undefined,
       })
       return meta
     } catch (error) {
+      if (!completionAttached) {
+        completionAttached = true
+        span.withContext(() => {
+          observe.event({ name: 'completion.error', attributes: { ...observedErrorSummary(error) } })
+        })
+      }
       finalizer.completionErrored(error)
       throw error
     }

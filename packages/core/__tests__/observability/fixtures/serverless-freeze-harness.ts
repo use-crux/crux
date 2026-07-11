@@ -8,7 +8,7 @@
  * the process immediately after it returns a response.
  *
  * Usage: node serverless-freeze-harness.bundle.mjs <mode> <resultFile> <sendDelayMs>
- *   mode: 'unbound' | 'wrapped' | 'deadline'
+ *   mode: 'unbound' | 'wrapped' | 'deadline' | 'stream'
  */
 import { appendFileSync, writeFileSync } from 'node:fs'
 
@@ -20,6 +20,7 @@ import {
   type CruxGraphRecord,
   type CruxObservabilityTransport,
 } from '../../../src/observability'
+import { orchestrateStream } from '../../../src/generation'
 
 const mode = process.argv[2]
 const resultFile = process.argv[3]
@@ -33,7 +34,11 @@ const transport: CruxObservabilityTransport = {
   send(records: readonly CruxGraphRecord[]) {
     return new Promise((resolve) => {
       setTimeout(() => {
-        appendResult({ event: 'delivered', count: records.length })
+        appendResult({
+          event: 'delivered',
+          count: records.length,
+          hasSpanEnd: records.some((record) => record.type === 'span:end'),
+        })
         resolve(acceptedDeliveryReceipt(records))
       }, sendDelayMs)
     })
@@ -73,6 +78,41 @@ async function run(): Promise<void> {
     )
     const result = await handler()
     appendResult({ event: 'handler-returned', result, drainResult })
+    process.exit(0)
+  }
+
+  if (mode === 'stream') {
+    // The stream span must end on drain alone: the handler never reads
+    // provider completion (it never settles), and the wrapper exits/freezes
+    // immediately after the handler returns. No pending grace timer is
+    // available (or needed) to finish the span.
+    const handler = withObservableInvocation(async () => {
+      const handle = await orchestrateStream(
+        {
+          promptId: 'freeze.harness',
+          promptConfig: {} as never,
+          preparedArgs: {},
+          model: 'freeze-model',
+          input: {},
+          provider: 'freeze',
+          outputMode: 'text',
+        },
+        async () => ({
+          rawStream: (async function* (): AsyncIterable<{ text: string }> {
+            yield { text: 'a' }
+            yield { text: 'b' }
+          })(),
+          extractTextDelta: (chunk: unknown) => (chunk as { text: string }).text,
+          completion: () => new Promise<never>(() => undefined),
+        }),
+      )
+      for await (const _chunk of handle.rawStream as AsyncIterable<unknown>) {
+        void _chunk
+      }
+      return 'ok'
+    })
+    const result = await handler()
+    appendResult({ event: 'handler-returned', result })
     process.exit(0)
   }
 
