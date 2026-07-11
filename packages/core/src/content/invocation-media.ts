@@ -2,7 +2,10 @@ import { createInvalidMediaSourceError } from "./media-errors";
 import type { Asset } from "../asset";
 import { sha256Hex } from "./sha256";
 import type { InvocationMediaSource } from "./invocation-types";
-import { sniffImageMediaType } from "./media-sniff";
+import {
+  assertInvocationMediaKind as assertKind,
+  sniffInvocationMediaType as sniffForKind,
+} from "./invocation-media-kind";
 import {
   blobFilename,
   isAsset,
@@ -116,7 +119,7 @@ async function normalizeAssetSource(
     return assertKind(input, {
       ...sourceInfo,
       ...decoded,
-      ...(input.filename ?? sourceFilename
+      ...((input.filename ?? sourceFilename)
         ? { filename: input.filename ?? sourceFilename }
         : {}),
     });
@@ -245,56 +248,6 @@ function normalizeBytes(
       input.filename,
     ),
   );
-}
-
-function sniffForKind(
-  input: NormalizeInvocationMediaSourceInput,
-  bytes: Uint8Array,
-): string {
-  const mediaType =
-    input.kind === "image" ? sniffImageMediaType(bytes) : undefined;
-  if (!mediaType) {
-    throw invalid(
-      input.path,
-      `${label(input.kind)} byte sources require an explicit mediaType.`,
-    );
-  }
-  return mediaType;
-}
-
-const KIND_MEDIA_PREFIX: Readonly<Record<"image" | "audio" | "video", string>> = {
-  image: "image/",
-  audio: "audio/",
-  video: "video/",
-};
-
-function assertKind(
-  input: NormalizeInvocationMediaSourceInput,
-  asset: Asset,
-): Asset {
-  const mediaType = mediaTypeOf(asset);
-  if (input.kind === "file") return projectAsset(asset, input.path);
-  const prefix = KIND_MEDIA_PREFIX[input.kind];
-  if (mediaType && !mediaType.startsWith(prefix)) {
-    throw invalid(
-      input.path,
-      `${label(input.kind)} sources require a ${prefix}* mediaType, received ${mediaType}.`,
-    );
-  }
-  return projectAsset(asset, input.path);
-}
-
-function label(kind: "image" | "audio" | "video" | "file"): string {
-  switch (kind) {
-    case "image":
-      return "Image";
-    case "audio":
-      return "Audio";
-    case "video":
-      return "Video";
-    case "file":
-      return "File";
-  }
 }
 
 function invalid(path: string, reason: string): never {

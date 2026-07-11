@@ -30,9 +30,19 @@ function isPersistedMessage(value: unknown): value is PersistedMessage {
   if (!isRole(value.role)) return false;
   if (value.metadata !== undefined && !isPrivateJsonObject(value.metadata))
     return false;
+  if (typeof value.content === "string") return true;
+  if (!Array.isArray(value.content)) return false;
+  return value.content.every(
+    (part) =>
+      isPersistedPart(part) &&
+      (value.role === "assistant" || !isAssistantLifecyclePart(part)),
+  );
+}
+
+function isAssistantLifecyclePart(value: unknown): boolean {
   return (
-    typeof value.content === "string" ||
-    (Array.isArray(value.content) && value.content.every(isPersistedPart))
+    isRecord(value) &&
+    (value.type === "reasoning" || value.type === "tool-call")
   );
 }
 
@@ -59,7 +69,14 @@ function isPersistedPart(value: unknown): boolean {
   }
   if (value.type === "tool-call") {
     return (
-      hasOnlyKeys(value, "type", "toolCallId", "toolName", "input", "providerOptions") &&
+      hasOnlyKeys(
+        value,
+        "type",
+        "toolCallId",
+        "toolName",
+        "input",
+        "providerOptions",
+      ) &&
       nonEmptyString(value.toolCallId) &&
       typeof value.toolName === "string" &&
       isJsonValue(value.input)
@@ -70,10 +87,12 @@ function isPersistedPart(value: unknown): boolean {
     value.type !== "audio" &&
     value.type !== "video" &&
     value.type !== "file"
-  ) return false;
-  const allowedKeys = value.type === "file"
-    ? ["type", "source", "mediaType", "filename", "providerOptions"]
-    : ["type", "source", "mediaType", "providerOptions"];
+  )
+    return false;
+  const allowedKeys =
+    value.type === "file"
+      ? ["type", "source", "mediaType", "filename", "providerOptions"]
+      : ["type", "source", "mediaType", "providerOptions"];
   if (!hasOnlyKeys(value, ...allowedKeys)) return false;
   if (!isPersistedSource(value.source)) return false;
   if (!optionalMediaType(value.mediaType)) return false;
@@ -84,19 +103,17 @@ function isPersistedPart(value: unknown): boolean {
     partMediaType !== undefined &&
     typeof sourceMediaType === "string" &&
     partMediaType !== sourceMediaType
-  ) return false;
+  )
+    return false;
   const effectiveMediaType = partMediaType ?? sourceMediaType;
   const requiredPrefix = MEDIA_TYPE_PREFIX[value.type];
   if (
     requiredPrefix &&
     effectiveMediaType !== undefined &&
     !effectiveMediaType.startsWith(requiredPrefix)
-  ) return false;
-  return (
-    value.type === "file"
-      ? optionalNonEmptyString(value.filename)
-      : true
-  );
+  )
+    return false;
+  return value.type === "file" ? optionalNonEmptyString(value.filename) : true;
 }
 
 function isJsonValue(value: unknown): boolean {
@@ -104,9 +121,7 @@ function isJsonValue(value: unknown): boolean {
     return true;
   if (typeof value === "number") return Number.isFinite(value);
   if (Array.isArray(value)) return value.every(isJsonValue);
-  return (
-    isRecord(value) && Object.values(value).every(isJsonValue)
-  );
+  return isRecord(value) && Object.values(value).every(isJsonValue);
 }
 
 function isPersistedSource(value: unknown): value is PersistedMediaSource {

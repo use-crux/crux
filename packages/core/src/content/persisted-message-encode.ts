@@ -1,6 +1,5 @@
 import type { Asset, AssetInfo, AssetRef, StoredAsset } from "../asset";
 import type { Storage } from "../storage";
-import type { JsonObject, JsonValue } from "../types/tool";
 import { sha256Hex } from "./sha256";
 import { createInvalidMediaSourceError } from "./media-errors";
 import { normalizeInvocationMediaSource } from "./invocation-media";
@@ -9,12 +8,13 @@ import type {
   InvocationMessage,
 } from "./invocation-types";
 import {
-  clonePrivateJsonObject,
-  isPrivateJsonObject,
-  isPrivateJsonValue,
-} from "./json-private";
+  projectPersistedJsonValue,
+  projectPersistedMetadata,
+  projectPersistedProviderOptions,
+} from "./persisted-message-json";
 import type {
   PersistedAssistantContentPart,
+  PersistedContentPart,
   PersistedMediaSource,
   PersistedMessage,
 } from "./persisted-message-types";
@@ -42,24 +42,47 @@ async function encodeMessage(
   messageIndex: number,
   state: EncodeState,
 ): Promise<PersistedMessage> {
-  const metadata = projectMetadata(
+  const metadata = projectPersistedMetadata(
     message.metadata,
     `messages[${messageIndex}].metadata`,
   );
+  if (message.role === "assistant") {
+    return {
+      role: "assistant",
+      content:
+        typeof message.content === "string"
+          ? message.content
+          : await encodeParts(message.content, messageIndex, state, true),
+      ...(metadata ? { metadata } : {}),
+    };
+  }
   return {
     role: message.role,
     content:
       typeof message.content === "string"
         ? message.content
-        : await encodeParts(message.content, messageIndex, state),
+        : await encodeParts(message.content, messageIndex, state, false),
     ...(metadata ? { metadata } : {}),
   };
 }
 
+function encodeParts(
+  parts: readonly InvocationContentPart[],
+  messageIndex: number,
+  state: EncodeState,
+  allowLifecycle: false,
+): Promise<readonly PersistedContentPart[]>;
+function encodeParts(
+  parts: readonly InvocationContentPart[],
+  messageIndex: number,
+  state: EncodeState,
+  allowLifecycle: true,
+): Promise<readonly PersistedAssistantContentPart[]>;
 async function encodeParts(
   parts: readonly InvocationContentPart[],
   messageIndex: number,
   state: EncodeState,
+  allowLifecycle: boolean,
 ): Promise<readonly PersistedAssistantContentPart[]> {
   const encoded: PersistedAssistantContentPart[] = [];
   for (const [partIndex, part] of parts.entries()) {
@@ -68,27 +91,37 @@ async function encodeParts(
       encoded.push({
         type: "text",
         text: part.text,
-        ...projectProviderOptions(
+        ...projectPersistedProviderOptions(
           part.providerOptions,
           `${path}.providerOptions`,
         ),
       });
     } else if (part.type === "tool-call") {
+      if (!allowLifecycle)
+        throw createInvalidMediaSourceError({
+          path,
+          reason: "Tool calls are assistant-only content.",
+        });
       encoded.push({
         type: "tool-call",
         toolCallId: part.toolCallId,
         toolName: part.toolName,
-        input: projectJsonValue(part.input, `${path}.input`),
-        ...projectProviderOptions(
+        input: projectPersistedJsonValue(part.input, `${path}.input`),
+        ...projectPersistedProviderOptions(
           part.providerOptions,
           `${path}.providerOptions`,
         ),
       });
     } else if (part.type === "reasoning") {
+      if (!allowLifecycle)
+        throw createInvalidMediaSourceError({
+          path,
+          reason: "Reasoning is assistant-only content.",
+        });
       encoded.push({
         type: "reasoning",
         text: part.text,
-        ...projectProviderOptions(
+        ...projectPersistedProviderOptions(
           part.providerOptions,
           `${path}.providerOptions`,
         ),
@@ -104,7 +137,7 @@ async function encodeParts(
         ...(part.type === "file" && part.filename
           ? { filename: part.filename }
           : {}),
-        ...projectProviderOptions(
+        ...projectPersistedProviderOptions(
           part.providerOptions,
           `${path}.providerOptions`,
         ),
@@ -191,48 +224,6 @@ function persistedAssetRef(
     ref: { uri: asset.ref.uri },
     mediaType,
     ...projectInfo(asset),
-  };
-}
-
-function projectJsonValue(value: unknown, path: string): JsonValue {
-  if (!isPrivateJsonValue(value)) {
-    throw createInvalidMediaSourceError({
-      path,
-      reason: "Tool-call input must be a JSON value to persist.",
-    });
-  }
-  return JSON.parse(JSON.stringify(value)) as JsonValue;
-}
-
-function projectMetadata(
-  metadata: unknown,
-  path: string,
-): JsonObject | undefined {
-  if (metadata === undefined) return undefined;
-  if (!isPrivateJsonObject(metadata)) {
-    throw createInvalidMediaSourceError({
-      path,
-      reason: "Message metadata must be a JSON object.",
-    });
-  }
-  return clonePrivateJsonObject(metadata);
-}
-
-function projectProviderOptions(
-  providerOptions: unknown,
-  path: string,
-): { readonly providerOptions?: InvocationContentPart["providerOptions"] } {
-  if (providerOptions === undefined) return {};
-  if (!isPrivateJsonObject(providerOptions)) {
-    throw createInvalidMediaSourceError({
-      path,
-      reason: "Provider options must be a JSON object.",
-    });
-  }
-  return {
-    providerOptions: clonePrivateJsonObject(
-      providerOptions,
-    ) as InvocationContentPart["providerOptions"],
   };
 }
 

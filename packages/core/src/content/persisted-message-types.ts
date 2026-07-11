@@ -59,8 +59,17 @@ export type PersistedAssistantContentPart =
   | PersistedToolCallPart
   | PersistedReasoningPart;
 
-export type PersistedMessage = Readonly<{
-  role: Message["role"];
-  content: string | readonly PersistedAssistantContentPart[];
-  metadata?: JsonObject;
-}>;
+type PersistedMessageMetadata = Readonly<{ metadata?: JsonObject }>;
+
+/** Persisted messages retain the same assistant-only lifecycle law as runtime messages. */
+export type PersistedMessage =
+  | (Readonly<{
+      role: "assistant";
+      content: string | readonly PersistedAssistantContentPart[];
+    }> &
+      PersistedMessageMetadata)
+  | (Readonly<{
+      role: Exclude<Message["role"], "assistant">;
+      content: string | readonly PersistedContentPart[];
+    }> &
+      PersistedMessageMetadata);

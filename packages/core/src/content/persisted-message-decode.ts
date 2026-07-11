@@ -26,7 +26,7 @@ export async function decodePersistedMessages(
   for (const [messageIndex, message] of input.messages.entries()) {
     decoded.push(await decodeMessage(message, messageIndex, input.storage));
   }
-  return decoded;
+  return Object.freeze(decoded);
 }
 
 async function decodeMessage(
@@ -34,7 +34,7 @@ async function decodeMessage(
   messageIndex: number,
   storage: Storage,
 ): Promise<InvocationMessage> {
-  return {
+  return Object.freeze({
     role: message.role,
     content:
       typeof message.content === "string"
@@ -43,7 +43,7 @@ async function decodeMessage(
     ...(message.metadata
       ? { metadata: clonePrivateJsonObject(message.metadata) }
       : {}),
-  } as InvocationMessage;
+  } as InvocationMessage);
 }
 
 async function decodeParts(
@@ -74,7 +74,11 @@ async function decodeParts(
           ? { providerOptions: cloneProviderOptions(part.providerOptions) }
           : {}),
       });
-    } else if (part.type === "image" || part.type === "audio" || part.type === "video") {
+    } else if (
+      part.type === "image" ||
+      part.type === "audio" ||
+      part.type === "video"
+    ) {
       decoded.push({
         type: part.type,
         source: await decodeMediaSource(part.source, `${path}.source`, storage),
@@ -95,7 +99,7 @@ async function decodeParts(
       });
     }
   }
-  return decoded;
+  return Object.freeze(decoded);
 }
 
 async function decodeMediaSource(
