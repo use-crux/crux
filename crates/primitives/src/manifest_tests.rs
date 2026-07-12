@@ -15,8 +15,9 @@ use crate::manifest::{
     FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, first_party_primitive_manifest_digest,
 };
 
-const COVERAGE_FIXTURE: &str =
-    include_str!("../../../packages/indexer/src/contracts/fixtures/primitive-coverage-identities.json");
+const COVERAGE_FIXTURE: &str = include_str!(
+    "../../../packages/indexer/src/contracts/fixtures/primitive-coverage-identities.json"
+);
 
 #[derive(Deserialize)]
 struct CoverageFixture {
@@ -116,7 +117,7 @@ fn manifest_identity_is_aligned_with_static_index_cache_identity() {
         FIRST_PARTY_PRIMITIVE_MANIFEST_NAME,
         "crux-first-party-primitives"
     );
-    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "8");
+    assert_eq!(FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION, "9");
 }
 
 #[test]
@@ -126,6 +127,6 @@ fn manifest_digest_is_stable() {
     // Static Index primitive-manifest cache identity in the same change.
     assert_eq!(
         first_party_primitive_manifest_digest(),
-        "sha256:501703d7548ed8dcfc930f1ebca81af1e2dd5e8f868a5143e5ef07bedb435fda"
+        "sha256:7de6eff95ce24a7c5daeb6f9ec1c573280cc1e105e3bab621e2bf0a32a83b741"
     );
 }

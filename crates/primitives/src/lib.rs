@@ -45,6 +45,10 @@ mod injection {
 pub mod manifest;
 #[cfg(test)]
 mod manifest_tests;
+mod media {
+    pub(crate) mod facts;
+    pub(crate) mod ingest;
+}
 mod memory {
     pub(crate) mod block_metadata;
     pub(crate) mod blocks;

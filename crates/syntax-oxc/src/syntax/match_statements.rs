@@ -4,8 +4,9 @@ use oxc_semantic::Scoping;
 use crate::{
     protocol::StaticSourceMatch,
     syntax::match_build::{MatchContext, match_from_declarator, new_match, traversal_needles},
-    syntax::match_arguments::visit_argument,
-    syntax::match_expressions::{visit_expression, visit_expression_call},
+    syntax::match_expressions::{
+        visit_expression, visit_expression_call, visit_expression_children,
+    },
     syntax::match_interests::CalleeMatcher,
     syntax::semantic_imports::SemanticImportIndex,
     syntax::semantic_initializers::SemanticInitializerIndex,
@@ -157,9 +158,14 @@ fn visit_variable_declarator(
     matches: &mut Vec<StaticSourceMatch>,
 ) {
     if let Some(match_record) = match_from_declarator(context, declarator, exported) {
+        let owner = match_variable_name(&match_record).to_string();
         matches.push(match_record);
+        let nested_start = matches.len();
         if let Some(init) = &declarator.init {
-            visit_matched_initializer_children(context, init, matches);
+            visit_expression_children(context, init, matches);
+        }
+        for nested in &mut matches[nested_start..] {
+            set_owner_variable_name(nested, &owner);
         }
         return;
     }
@@ -169,37 +175,30 @@ fn visit_variable_declarator(
     }
 }
 
-fn visit_matched_initializer_children(
-    context: MatchContext<'_, '_>,
-    expression: &Expression<'_>,
-    matches: &mut Vec<StaticSourceMatch>,
-) {
-    match expression {
-        Expression::CallExpression(call) => {
-            visit_expression(context, &call.callee, matches);
-            for argument in &call.arguments {
-                visit_argument(context, argument, matches);
-            }
+fn match_variable_name(source_match: &StaticSourceMatch) -> &str {
+    match source_match {
+        StaticSourceMatch::Call { variable_name, .. }
+        | StaticSourceMatch::New { variable_name, .. }
+        | StaticSourceMatch::Object { variable_name, .. } => variable_name,
+    }
+}
+
+fn set_owner_variable_name(source_match: &mut StaticSourceMatch, owner: &str) {
+    match source_match {
+        StaticSourceMatch::Call {
+            owner_variable_name,
+            ..
         }
-        Expression::NewExpression(new_expression) => {
-            visit_expression(context, &new_expression.callee, matches);
-            for argument in &new_expression.arguments {
-                visit_argument(context, argument, matches);
-            }
+        | StaticSourceMatch::New {
+            owner_variable_name,
+            ..
         }
-        Expression::ObjectExpression(object) => {
-            for property in &object.properties {
-                match property {
-                    ObjectPropertyKind::ObjectProperty(property) => {
-                        visit_expression(context, &property.value, matches);
-                    }
-                    ObjectPropertyKind::SpreadProperty(spread) => {
-                        visit_expression(context, &spread.argument, matches);
-                    }
-                }
-            }
+        | StaticSourceMatch::Object {
+            owner_variable_name,
+            ..
+        } => {
+            *owner_variable_name = Some(owner.to_string());
         }
-        _ => {}
     }
 }
 

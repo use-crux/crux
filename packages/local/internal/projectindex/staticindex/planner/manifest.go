@@ -6,7 +6,7 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/projectindex"
 )
 
-const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.7"
+const syntaxFrontendVersion = "oxc_parser@0.139.0+crux_native_group3.8"
 
 var defaultCallNames = []string{
 	"Agent",
@@ -25,12 +25,18 @@ var defaultCallNames = []string{
 	"createTool",
 	"cruxFlow",
 	"durableTask",
+	"describe",
 	"evaluate",
 	"expandParents",
 	"fallback",
 	"fanout",
+	"fileSource",
+	"filesSource",
 	"flow",
 	"fromRegistry",
+	"generate",
+	"generateImage",
+	"generateSpeech",
 	"guardrail",
 	"inMemoryAssetStore",
 	"inMemoryRecordStore",
@@ -56,11 +62,16 @@ var defaultCallNames = []string{
 	"scope",
 	"split",
 	"storage",
+	"stream",
 	"swarm",
 	"task",
+	"textSource",
 	"tool",
+	"transcribe",
 	"upstashRedisRecordStore",
 	"upstashVectorStore",
+	"urlSource",
+	"urlsSource",
 	"workspace",
 }
 
@@ -80,12 +91,18 @@ var defaultCallInterestNames = []string{
 	"createTool",
 	"cruxFlow",
 	"durableTask",
+	"describe",
 	"evaluate",
 	"expandParents",
 	"fallback",
 	"fanout",
+	"fileSource",
+	"filesSource",
 	"flow",
 	"fromRegistry",
+	"generate",
+	"generateImage",
+	"generateSpeech",
 	"guardrail",
 	"inMemoryAssetStore",
 	"inMemoryRecordStore",
@@ -111,11 +128,16 @@ var defaultCallInterestNames = []string{
 	"scope",
 	"split",
 	"storage",
+	"stream",
 	"swarm",
 	"task",
+	"textSource",
 	"tool",
+	"transcribe",
 	"upstashRedisRecordStore",
 	"upstashVectorStore",
+	"urlSource",
+	"urlsSource",
 	"workspace",
 }
 
@@ -130,7 +152,7 @@ func defaultCallInterests() []projectindex.StaticCallInterest {
 		if name == "durableTask" {
 			interest.ImportFrom = []string{"@use-crux/core", "@use-crux/core/runtime"}
 		}
-		if name == "evaluate" {
+		if name == "evaluate" || name == "fileSource" || name == "filesSource" || name == "urlSource" || name == "urlsSource" || name == "textSource" {
 			arg := 1
 			interest.ConfigArg = &arg
 		}
@@ -181,6 +203,20 @@ func defaultHost() json.RawMessage {
 			"extension": map[string]string{
 				"name":    "@use-crux/indexer/crux-core",
 				"version": "2",
+			},
+			"name": family,
+			"mode": "native-covered",
+			"native": map[string]any{
+				"covered": true,
+				"family":  family,
+			},
+		})
+	}
+	for _, family := range []string{"media.operation", "ingest.source"} {
+		extractors = append(extractors, map[string]any{
+			"extension": map[string]string{
+				"name":    "@use-crux/indexer/crux-core-media",
+				"version": "1",
 			},
 			"name": family,
 			"mode": "native-covered",

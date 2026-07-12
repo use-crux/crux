@@ -129,6 +129,40 @@ pub(crate) fn visit_expression(
     }
 }
 
+pub(crate) fn visit_expression_children(
+    context: MatchContext<'_, '_>,
+    expression: &Expression<'_>,
+    matches: &mut Vec<StaticSourceMatch>,
+) {
+    match expression {
+        Expression::CallExpression(call) => {
+            visit_expression(context, &call.callee, matches);
+            for argument in &call.arguments {
+                visit_argument(context, argument, matches);
+            }
+        }
+        Expression::NewExpression(expression) => {
+            visit_expression(context, &expression.callee, matches);
+            for argument in &expression.arguments {
+                visit_argument(context, argument, matches);
+            }
+        }
+        Expression::ObjectExpression(object) => {
+            for property in &object.properties {
+                match property {
+                    ObjectPropertyKind::ObjectProperty(property) => {
+                        visit_expression(context, &property.value, matches);
+                    }
+                    ObjectPropertyKind::SpreadProperty(spread) => {
+                        visit_expression(context, &spread.argument, matches);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 pub(crate) fn visit_expression_call(
     context: MatchContext<'_, '_>,
     call: &CallExpression<'_>,

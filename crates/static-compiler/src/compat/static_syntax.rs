@@ -66,6 +66,7 @@ fn prune_native_fact_match(
     match source_match {
         StaticSourceMatch::Call {
             variable_name,
+            owner_variable_name,
             local_name,
             exported,
             eager_execution,
@@ -74,6 +75,7 @@ fn prune_native_fact_match(
             ..
         } if prune_call_names.contains(&callee.name) => StaticSourceMatch::Call {
             variable_name,
+            owner_variable_name,
             local_name,
             exported,
             eager_execution,

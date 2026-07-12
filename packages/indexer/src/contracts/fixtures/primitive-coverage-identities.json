@@ -13,6 +13,50 @@
   ],
   "identities": [
     {
+      "extension": "@use-crux/indexer/crux-core-media",
+      "extractor": "media.operation",
+      "family": "media.operation",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "media-native-static.test.ts",
+        "relations": "media-native-static.test.ts",
+        "sourceRefs": "media-native-static.test.ts",
+        "diagnostics": "media-native-static.test.ts",
+        "dependencies": "media-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "media-native-static.test.ts",
+        "sourceGraph": "media-native-static.test.ts",
+        "runtimeMetadata": "media-native-static.test.ts",
+        "degradedBehavior": "media-native-static.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "media-native-static.test.ts",
+        "negative": "media-native-static.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core-media",
+      "extractor": "ingest.source",
+      "family": "ingest.source",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "media-native-static.test.ts",
+        "relations": "media-native-static.test.ts",
+        "sourceRefs": "media-native-static.test.ts",
+        "diagnostics": "media-native-static.test.ts",
+        "dependencies": "media-native-static.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "media-native-static.test.ts",
+        "sourceGraph": "media-native-static.test.ts",
+        "runtimeMetadata": "media-native-static.test.ts",
+        "degradedBehavior": "media-native-static.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "media-native-static.test.ts",
+        "negative": "media-native-static.test.ts"
+      }
+    },
+    {
       "extension": "@use-crux/indexer/crux-core",
       "extractor": "rag.retriever",
       "family": "rag.retriever",
