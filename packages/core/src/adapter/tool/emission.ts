@@ -13,6 +13,7 @@
 import { getHooks } from '../../runtime/runtime'
 import { currentObservabilityTransport, hasObservabilitySubscribers, observe } from '../../observability'
 import { toolDefinitionRef } from '../../observability/definition-ref'
+import { toolMiddlewareDefinitionRefs } from '../../tools/middleware'
 import type { DefinitionRef } from '../../observability/contract'
 import { redactSensitiveValue } from '../../shared/redaction'
 import { contentText } from '../../content'
@@ -175,7 +176,11 @@ function toolCallDefinitionRefs(tool: unknown): DefinitionRef[] | undefined {
       : typeof authored?.title === 'string' && authored.title.length > 0
         ? authored.title
         : undefined
-  return authoredName ? [toolDefinitionRef(authoredName)] : undefined
+  const refs = [
+    ...(authoredName ? [toolDefinitionRef(authoredName)] : []),
+    ...toolMiddlewareDefinitionRefs(tool),
+  ]
+  return refs.length > 0 ? refs : undefined
 }
 
 /** Emit a `tool.args` artifact consumed by the given span. */

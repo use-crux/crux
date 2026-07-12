@@ -1,5 +1,5 @@
 import { observe } from '../../observability'
-import { compositionDefinitionRef } from '../../observability/definition-ref'
+import { compositionDefinitionRef, parallelBranchDefinitionRef } from '../../observability/definition-ref'
 import { getExecutionContext } from '../../runtime/execution-context'
 import type { ExecutionContext } from '../../runtime/execution-context'
 import { executeAgent, executeFunctionStep } from './execution'
@@ -50,7 +50,14 @@ export function createCompositionRuntime(
 
       const scope: CompositionScope = {
         executeAgent: (input) =>
-          executeAgent(compositionId, childContext, input),
+          executeAgent(
+            compositionId,
+            childContext,
+            input,
+            config.kind === 'parallel'
+              ? parallelBranchDefinitionRef(config.id, input.label)
+              : undefined,
+          ),
         executeFunctionStep: (input) =>
           executeFunctionStep(compositionId, childContext, input),
         report: (input) => emitCompositionReport(config.kind, input),

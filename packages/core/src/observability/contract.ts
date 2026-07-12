@@ -859,7 +859,13 @@ export type DefinitionRefRole =
   | "invoked-workspace"
   | "invoked-memory"
   | "invoked-recipe"
-  | "invoked-reranker";
+  | "invoked-reranker"
+  | "contributed-knowledge-base"
+  | "contributed-tool-policy"
+  | "invoked-flow-step"
+  | "invoked-composition-branch"
+  | "invoked-recipe-step"
+  | "invoked-scorer";
 
 /**
  * Evidence linking a runtime record back to the Project Index definition it

@@ -86,6 +86,14 @@ describe('composition root spans emit an invoked-composition definition ref', ()
     expect(compositionId).toMatch(/^comp-/)
     expect(compositionId).not.toBe(start?.definitionRefs?.[0].id)
     expect(start?.definitionRefs?.[0].source).toBeUndefined()
+    expect(startRecord(transport, 'agent.run')?.definitionRefs).toEqual([
+      { id: 'agent:echo-agent', kind: 'agent', role: 'invoked-agent' },
+      {
+        id: 'composition.parallel:review-parallel:branch:echo',
+        kind: 'composition.parallel.branch',
+        role: 'invoked-composition-branch',
+      },
+    ])
   })
 
   it('pipeline() emits composition.pipeline:<id>', async () => {

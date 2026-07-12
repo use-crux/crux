@@ -14,6 +14,8 @@ import type { SafetyDecision, SafetyFinding, SafetyRunContext } from '../decisio
 import { safeCaptureSummary } from '../errors'
 import { validateGuardrailRunResult } from '../guardrail/types'
 import { ToolPolicyBlockedError } from './errors'
+import { toolPolicyDefinitionRef } from '../../observability/definition-ref'
+import { withToolMiddlewareDefinitionRef } from '../../tools/middleware'
 import type {
   ToolPolicyArgsOptions,
   ToolPolicyApprovalOptions,
@@ -32,7 +34,7 @@ interface ToolPolicyFactory {
 /** Create a Safety-owned tool policy mounted through the tool middleware seam. */
 function defineToolPolicy(config: ToolPolicyConfig): ToolMiddleware {
   if (config.action === 'requestApproval') {
-    return approvalMiddleware({
+    return withToolMiddlewareDefinitionRef(approvalMiddleware({
       id: config.id,
       match: normalizeMatch(config.match),
       onRequest: config.reason
@@ -40,10 +42,10 @@ function defineToolPolicy(config: ToolPolicyConfig): ToolMiddleware {
             // Approval request copy is carried by docs/devtools in Phase 5.
           }
         : undefined,
-    })
+    }), toolPolicyDefinitionRef(config.id))
   }
 
-  return toolMiddleware({
+  return withToolMiddlewareDefinitionRef(toolMiddleware({
     id: config.id,
     match: normalizeMatch(config.match),
     aroundExecute: async (call, next) => {
@@ -61,7 +63,7 @@ function defineToolPolicy(config: ToolPolicyConfig): ToolMiddleware {
       }
       return next(call.input, call.options)
     },
-  })
+  }), toolPolicyDefinitionRef(config.id))
 }
 
 function approval(options: ToolPolicyApprovalOptions): ToolMiddleware {

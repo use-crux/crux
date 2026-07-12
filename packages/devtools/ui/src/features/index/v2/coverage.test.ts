@@ -23,11 +23,12 @@ describe('describeCatalogCoverage', () => {
     })
   })
 
-  it('classifies a runtime-contributor kind with declared runtime primitives as contributor', () => {
-    expect(describeCatalogCoverage('injectable', activity(5))).toMatchObject({
+  it('uses parent activity for a contributor without independent runtime identity', () => {
+    expect(describeCatalogCoverage('injectable', activity(0), activity(5))).toMatchObject({
       treatment: 'contributor',
       runCount: 5,
       hasRuntimeEvidence: true,
+      parentDerived: true,
     })
   })
 
@@ -39,9 +40,10 @@ describe('describeCatalogCoverage', () => {
   })
 
   it('classifies a structural-child kind with no declared runtime primitive as a truthful derived contributor', () => {
-    expect(describeCatalogCoverage('routing.router.route', activity(9))).toMatchObject({
+    expect(describeCatalogCoverage('routing.router.route', activity(0), activity(9))).toMatchObject({
       treatment: 'contributor',
       runCount: 9,
+      parentDerived: true,
     })
   })
 
@@ -79,6 +81,14 @@ describe('describeCatalogCoverage', () => {
 
   it('classifies the fallback sentinel kind as no-runtime', () => {
     expect(describeCatalogCoverage('unknown', undefined)).toMatchObject({
+      treatment: 'no-runtime',
+      runCount: 0,
+      hasRuntimeEvidence: false,
+    })
+  })
+
+  it('keeps a child with no live identity path at truthful zero runtime', () => {
+    expect(describeCatalogCoverage('rag.pipeline.stage', activity(9), activity(9))).toMatchObject({
       treatment: 'no-runtime',
       runCount: 0,
       hasRuntimeEvidence: false,

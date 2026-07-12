@@ -80,11 +80,14 @@ describe('retrieval recipe/reranker spans emit canonical definition refs', () =>
     const rerankStep = stepSpans.find((s) => s.attributes?.stepKind === 'rerank')
     // The reranker ref targets the authored engine name, not the step label.
     expect(rerankStep?.definitionRefs).toEqual([
+      { id: 'rag.recipe:hybrid-search:step:rerank', kind: 'rag.recipe.step', role: 'invoked-recipe-step' },
       { id: 'rag.reranker:cross-encoder', kind: 'rag.reranker', role: 'invoked-reranker' },
     ])
 
-    // A non-reranker step (retrieve) carries no rag.reranker evidence.
+    // A non-reranker step still carries its own canonical recipe-child evidence.
     const retrieveStep = stepSpans.find((s) => s.attributes?.stepKind === 'retrieve')
-    expect(retrieveStep?.definitionRefs).toBeUndefined()
+    expect(retrieveStep?.definitionRefs).toEqual([
+      { id: 'rag.recipe:hybrid-search:step:retrieve', kind: 'rag.recipe.step', role: 'invoked-recipe-step' },
+    ])
   })
 })

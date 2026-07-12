@@ -76,6 +76,19 @@ export interface CoverageDescriptor {
    * no runtime primitive mapping at all.
    */
   readonly runtimePrimitiveNames?: readonly CruxPrimitiveName[];
+  /**
+   * How runtime activity obtains this definition's canonical identity when
+   * the primary treatment alone is insufficient.
+   *
+   * - `definition-ref` — an executed record can carry this definition's exact id.
+   * - `parent-derived` — only the indexed parent is directly observed.
+   * - `quality` — the existing Quality correlation is authoritative.
+   * - `none` — no live runtime identity exists.
+   *
+   * Directly-observed kinds implicitly use `definition-ref`; static/fallback
+   * kinds implicitly use `none`.
+   */
+  readonly runtimeIdentity?: "definition-ref" | "parent-derived" | "quality" | "none";
 }
 
 /**
@@ -121,47 +134,51 @@ export const DEFINITION_KIND_COVERAGE = {
 
   // Category B — runtime contributor/dependency (6 kinds). Referenced by an
   // owner's span, never itself the subject of one.
-  injectable: { primary: "runtime-contributor", runtimePrimitiveNames: ["prompt.resolve", "context.resolve"] },
+  injectable: { primary: "runtime-contributor", runtimeIdentity: "parent-derived", runtimePrimitiveNames: ["prompt.resolve", "context.resolve"] },
   "rag.knowledgeBase": {
     primary: "runtime-contributor",
+    runtimeIdentity: "definition-ref",
     runtimePrimitiveNames: ["retrieval.retrieve", "retrieval.query"],
   },
   "storage.recordStore": {
     primary: "runtime-contributor",
+    runtimeIdentity: "parent-derived",
     runtimePrimitiveNames: ["indexing.pipeline", "ingest.parse", "corpus.sync"],
   },
   "storage.vectorStore": {
     primary: "runtime-contributor",
+    runtimeIdentity: "parent-derived",
     runtimePrimitiveNames: ["embedding.call", "retrieval.retrieve", "retrieval.query"],
   },
   "storage.blobStore": {
     primary: "runtime-contributor",
+    runtimeIdentity: "parent-derived",
     runtimePrimitiveNames: ["ingest.parse", "corpus.sync"],
   },
-  toolPolicy: { primary: "runtime-contributor", runtimePrimitiveNames: ["tool.call", "tool.approval"] },
+  toolPolicy: { primary: "runtime-contributor", runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["tool.call", "tool.approval"] },
 
   // Category C — structural child (14 kinds; `evaluation.case`/`suite.case`
   // are also Quality-owned via `secondary`). Classified mechanically: a
   // `<parent>.<child>` kind whose `parent` is itself a union member.
-  "flow.step": { primary: "structural-child", runtimePrimitiveNames: ["flow.step"] },
-  "composition.parallel.branch": { primary: "structural-child", runtimePrimitiveNames: ["composition.branch"] },
-  "composition.pipeline.stage": { primary: "structural-child" },
-  "routing.router.route": { primary: "structural-child" },
-  "routing.split.route": { primary: "structural-child" },
-  "routing.retry.target": { primary: "structural-child" },
-  "routing.cascade.tier": { primary: "structural-child" },
-  "routing.fallback.option": { primary: "structural-child" },
-  "rag.recipe.step": { primary: "structural-child", runtimePrimitiveNames: ["retrieval.step"] },
-  "rag.pipeline.stage": { primary: "structural-child", runtimePrimitiveNames: ["retrieval.stage"] },
-  "memory.store": { primary: "structural-child" },
-  "memory.block": { primary: "structural-child" },
-  "evaluation.case": { primary: "structural-child", secondary: ["quality-owned"] },
-  "suite.case": { primary: "structural-child", secondary: ["quality-owned"] },
+  "flow.step": { primary: "structural-child", runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["flow.step"] },
+  "composition.parallel.branch": { primary: "structural-child", runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["agent.run"] },
+  "composition.pipeline.stage": { primary: "structural-child", runtimeIdentity: "parent-derived" },
+  "routing.router.route": { primary: "structural-child", runtimeIdentity: "parent-derived" },
+  "routing.split.route": { primary: "structural-child", runtimeIdentity: "parent-derived" },
+  "routing.retry.target": { primary: "structural-child", runtimeIdentity: "parent-derived" },
+  "routing.cascade.tier": { primary: "structural-child", runtimeIdentity: "parent-derived" },
+  "routing.fallback.option": { primary: "structural-child", runtimeIdentity: "parent-derived" },
+  "rag.recipe.step": { primary: "structural-child", runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["retrieval.step"] },
+  "rag.pipeline.stage": { primary: "structural-child", runtimeIdentity: "none", runtimePrimitiveNames: ["retrieval.stage"] },
+  "memory.store": { primary: "structural-child", runtimeIdentity: "parent-derived" },
+  "memory.block": { primary: "structural-child", runtimeIdentity: "parent-derived" },
+  "evaluation.case": { primary: "structural-child", secondary: ["quality-owned"], runtimeIdentity: "quality" },
+  "suite.case": { primary: "structural-child", secondary: ["quality-owned"], runtimeIdentity: "quality" },
 
   // Category D — Quality-owned artifact (10 kinds total; `evaluation.case`/
   // `suite.case` above account for the other 2). `scorer` is dual-use:
   // Quality-primary, but must not omit live `scoring.judge` spans.
-  scorer: { primary: "quality-owned", secondary: ["direct-runtime"], runtimePrimitiveNames: ["scoring.judge"] },
+  scorer: { primary: "quality-owned", secondary: ["direct-runtime"], runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["scoring.judge"] },
   dataset: { primary: "quality-owned" },
   evaluation: { primary: "quality-owned" },
   suite: { primary: "quality-owned" },

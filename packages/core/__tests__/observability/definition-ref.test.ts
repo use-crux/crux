@@ -4,8 +4,14 @@ import {
   blackboardDefinitionRef,
   compositionDefinitionRef,
   flowDefinitionRef,
+  flowStepDefinitionRef,
+  knowledgeBaseDefinitionRef,
+  parallelBranchDefinitionRef,
+  recipeStepDefinitionRef,
   retrieverDefinitionRef,
   sanitizeDefinitionSource,
+  scorerDefinitionRef,
+  toolPolicyDefinitionRef,
 } from '../../src/observability/definition-ref'
 
 describe('sanitizeDefinitionSource', () => {
@@ -191,5 +197,18 @@ describe('agent / flow / retriever definition refs', () => {
       role: 'invoked-agent',
       source: { file: 'src/a.ts', line: 4 },
     })
+  })
+})
+
+describe('contributor and child definition refs', () => {
+  it.each([
+    [knowledgeBaseDefinitionRef('docs'), { id: 'rag.knowledgeBase:docs', kind: 'rag.knowledgeBase', role: 'contributed-knowledge-base' }],
+    [toolPolicyDefinitionRef('approval'), { id: 'toolPolicy:approval', kind: 'toolPolicy', role: 'contributed-tool-policy' }],
+    [flowStepDefinitionRef('research', 'load docs'), { id: 'flow.step:research:load-docs', kind: 'flow.step', role: 'invoked-flow-step' }],
+    [parallelBranchDefinitionRef('fanout', 'researcher'), { id: 'composition.parallel:fanout:branch:researcher', kind: 'composition.parallel.branch', role: 'invoked-composition-branch' }],
+    [recipeStepDefinitionRef('search', 'rerank'), { id: 'rag.recipe:search:step:rerank', kind: 'rag.recipe.step', role: 'invoked-recipe-step' }],
+    [scorerDefinitionRef('helpfulness'), { id: 'scorer:helpfulness', kind: 'scorer', role: 'invoked-scorer' }],
+  ])('builds a canonical ref from identities held by the runtime', (actual, expected) => {
+    expect(actual).toEqual(expected)
   })
 })

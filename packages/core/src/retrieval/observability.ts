@@ -8,7 +8,7 @@
  */
 
 import { observe } from '../observability'
-import { retrieverDefinitionRef } from '../observability/definition-ref'
+import { knowledgeBaseDefinitionRef, retrieverDefinitionRef } from '../observability/definition-ref'
 import type { RetrieverHit, RetrieverMode } from './types'
 
 let retrievalOperationCounter = 0
@@ -16,6 +16,7 @@ let retrievalOperationCounter = 0
 /** Run a single retrieve inside a span, emitting hooks and a hits artifact. */
 export async function runRetrievalOperation(args: {
   retrieverId: string
+  knowledgeBaseId?: string
   namespace: string
   mode: RetrieverMode
   query: string
@@ -45,7 +46,10 @@ export async function runRetrievalOperation(args: {
     attributes: eventBase,
     // `retrieverId` is the authored, required `config.id` — the identity the
     // indexer joins on via `rag.retriever:<safeId(id)>`.
-    definitionRefs: [retrieverDefinitionRef(args.retrieverId)],
+    definitionRefs: [
+      retrieverDefinitionRef(args.retrieverId),
+      ...(args.knowledgeBaseId ? [knowledgeBaseDefinitionRef(args.knowledgeBaseId)] : []),
+    ],
   })
 
   try {

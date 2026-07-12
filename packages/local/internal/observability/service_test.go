@@ -1808,8 +1808,12 @@ func TestServiceResourceActivityLimitsLatestWithAttachments(t *testing.T) {
 			fmt.Sprintf(`{"schemaVersion":2,"recordId":"rec_activity_edge_%03d","type":"edge","runId":"run_activity_limit","segmentId":"seg_activity_limit_a","segmentSeq":%d,"traceId":"trace_activity_limit","edgeId":"edge_activity_%03d","edgeType":"memory.write","from":{"kind":"span","id":%q},"to":{"kind":"artifact","id":%q},"createdAt":%q}`, i, 4+i*3, i, spanID, artifactID, timestamp),
 		)
 	}
-	if err := service.Ingest(ctx, mustBatch(t, records...)); err != nil {
-		t.Fatal(err)
+	const ingestBatchSize = 250
+	for start := 0; start < len(records); start += ingestBatchSize {
+		end := min(start+ingestBatchSize, len(records))
+		if err := service.Ingest(ctx, mustBatch(t, records[start:end]...)); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	activity, err := service.ResourceActivity(ctx, "memory")

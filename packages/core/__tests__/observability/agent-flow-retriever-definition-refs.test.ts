@@ -91,7 +91,13 @@ describe('agent.run spans emit an invoked-agent definition ref', () => {
       (s) => s.attributes?.agentId === 'shape',
     )
     expect(fnSpan).toBeDefined()
-    expect(fnSpan?.definitionRefs).toBeUndefined()
+    expect(fnSpan?.definitionRefs).toEqual([
+      {
+        id: 'composition.parallel:p:branch:shape',
+        kind: 'composition.parallel.branch',
+        role: 'invoked-composition-branch',
+      },
+    ])
   })
 })
 
@@ -103,7 +109,7 @@ describe('flow.run spans emit an invoked-flow definition ref', () => {
   it('flow() emits flow:<safeId(name)> on its flow.run span', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
-    const research = flow('My Flow!', async () => 'done')
+    const research = flow('My Flow!', async (scope) => scope.step('Load docs!', async () => 'done'))
     await research.run()
     await observe.flush()
 
@@ -112,6 +118,9 @@ describe('flow.run spans emit an invoked-flow definition ref', () => {
     // safe_id parity: spaces collapse to `-`, trailing punctuation trimmed.
     expect(flowSpans[0].definitionRefs).toEqual([
       { id: 'flow:My-Flow', kind: 'flow', role: 'invoked-flow' },
+    ])
+    expect(startRecords(transport, 'flow.step')[0]?.definitionRefs).toEqual([
+      { id: 'flow.step:My-Flow:Load-docs', kind: 'flow.step', role: 'invoked-flow-step' },
     ])
   })
 })

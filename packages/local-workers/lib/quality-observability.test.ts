@@ -114,7 +114,7 @@ describe('quality runner observability', () => {
 
   it('flushes queued observability records before the worker exits', async () => {
     const core = {
-      observe: { flush: vi.fn(async () => true) },
+      observe: { flush: vi.fn(async () => ({ delivered: 1, pending: 0 })) },
     }
 
     await flushQualityRunnerObservability(core, 1234)

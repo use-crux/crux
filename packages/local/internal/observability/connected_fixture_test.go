@@ -1,38 +1,36 @@
 package observability
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
 	"testing"
 )
 
-// connectedCategoryARefs is a representative set of category-A (directly-observed)
-// definition kinds used by the Phase 8 connected fixture. The full manifest lives
-// in TypeScript (`DEFINITION_KIND_COVERAGE`); this table proves the Go projection
-// and filtered Runs path stay truthful for the mission-critical join surface.
-var connectedCategoryARefs = []struct {
-	id   string
-	kind string
-	role string
-}{
-	{"prompt:connected-greet", "prompt", "resolved-prompt"},
-	{"context:connected-brand", "context", "resolved-context"},
-	{"tool:connected-lookup", "tool", "invoked-tool"},
-	{"agent:connected-planner", "agent", "invoked-agent"},
-	{"flow:connected-research", "flow", "invoked-flow"},
-	{"rag.retriever:connected-docs", "rag.retriever", "invoked-retriever"},
-	{"composition.parallel:connected-fanout", "composition.parallel", "invoked-composition"},
-	{"composition.pipeline:connected-pipe", "composition.pipeline", "invoked-composition"},
-	{"routing.router:connected-route", "routing.router", "invoked-routing"},
-	{"skill:connected-ops", "skill", "loaded-skill"},
-	{"guardrail:connected-pii", "guardrail", "invoked-guardrail"},
-	{"constraint:connected-format", "constraint", "invoked-constraint"},
-	{"task:connected-embed", "task", "invoked-task"},
-	{"workspace:connected-ws", "workspace", "invoked-workspace"},
-	{"memory:connected-mem", "memory", "invoked-memory"},
-	{"rag.recipe:connected-recipe", "rag.recipe", "invoked-recipe"},
-	{"rag.reranker:connected-rerank", "rag.reranker", "invoked-reranker"},
-	{"blackboard:connected-bb", "blackboard", "invoked-blackboard"},
+type connectedCoverageFixture struct {
+	Adapters []string                `json:"adapters"`
+	Cases    []connectedCoverageCase `json:"cases"`
+}
+
+type connectedCoverageCase struct {
+	Kind              string         `json:"kind"`
+	ExpectedTreatment string         `json:"expectedTreatment"`
+	DefinitionRef     *DefinitionRef `json:"definitionRef"`
+}
+
+func loadConnectedCoverageFixture(t *testing.T) connectedCoverageFixture {
+	t.Helper()
+	raw, err := os.ReadFile("../../../core/src/project-index/fixtures/definition-coverage.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fixture connectedCoverageFixture
+	if err := json.Unmarshal(raw, &fixture); err != nil {
+		t.Fatal(err)
+	}
+	return fixture
 }
 
 // TestConnectedFixtureDefinitionJoinDeliveryAndCatchup is the Phase 8 connected
@@ -42,11 +40,19 @@ var connectedCategoryARefs = []struct {
 func TestConnectedFixtureDefinitionJoinDeliveryAndCatchup(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
+	fixture := loadConnectedCoverageFixture(t)
 
 	// ── 1. Healthy multi-segment run with a dense DefinitionRef set ──────────
-	refs := make([]string, 0, len(connectedCategoryARefs))
-	for _, r := range connectedCategoryARefs {
-		refs = append(refs, definitionRefJSON(r.id, r.kind, r.role))
+	refs := make([]string, 0, len(fixture.Cases))
+	for _, entry := range fixture.Cases {
+		if entry.ExpectedTreatment == "definition-ref" {
+			if entry.DefinitionRef == nil {
+				t.Fatalf("definition-ref treatment for %s has no ref", entry.Kind)
+			}
+			refs = append(refs, definitionRefJSON(entry.DefinitionRef.ID, entry.DefinitionRef.Kind, entry.DefinitionRef.Role))
+		} else if entry.DefinitionRef != nil {
+			t.Fatalf("non-direct treatment for %s fabricated a ref: %+v", entry.Kind, entry.DefinitionRef)
+		}
 	}
 	traceHealthy := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	mustIngest(t, service,
@@ -55,40 +61,47 @@ func TestConnectedFixtureDefinitionJoinDeliveryAndCatchup(t *testing.T) {
 		`{"schemaVersion":2,"recordId":"cf_h_suspend","type":"run:suspend","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_a","segmentSeq":2,"suspendedAt":"2026-07-01T12:00:01.000Z","reason":"await-tool"}`,
 		`{"schemaVersion":2,"recordId":"cf_h_resume","type":"run:resume","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":1,"resumedAt":"2026-07-01T12:00:02.000Z","reason":"tool-done","previousSegmentId":"seg_cf_a"}`,
 		fmt.Sprintf(`{"schemaVersion":2,"recordId":"cf_h_span","type":"span","runId":"run_cf_healthy","traceId":%q,"segmentId":"seg_cf_b","segmentSeq":2,"spanId":"sp_cf_h","family":"generation","primitive":"generation.call","name":"generate","startedAt":"2026-07-01T12:00:02.500Z","status":"ok","definitionRefs":[%s]}`,
-			traceHealthy, definitionRefJSON("prompt:connected-greet", "prompt", "resolved-prompt")),
+			traceHealthy, definitionRefJSON("prompt:connected", "prompt", "resolved-prompt")),
+		`{"schemaVersion":2,"recordId":"cf_h_openai","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":3,"spanId":"sp_cf_openai","family":"generation","primitive":"generation.call","name":"openai","startedAt":"2026-07-01T12:00:02.600Z","status":"ok","provider":"openai","attributes":{"adapterPackage":"@use-crux/openai"}}`,
+		`{"schemaVersion":2,"recordId":"cf_h_anthropic","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":4,"spanId":"sp_cf_anthropic","family":"generation","primitive":"generation.call","name":"anthropic","startedAt":"2026-07-01T12:00:02.620Z","status":"ok","provider":"anthropic","attributes":{"adapterPackage":"@use-crux/anthropic"}}`,
+		`{"schemaVersion":2,"recordId":"cf_h_google","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":5,"spanId":"sp_cf_google","family":"generation","primitive":"generation.call","name":"google","startedAt":"2026-07-01T12:00:02.640Z","status":"ok","provider":"google","attributes":{"adapterPackage":"@use-crux/google"}}`,
+		`{"schemaVersion":2,"recordId":"cf_h_ai","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":6,"spanId":"sp_cf_ai","family":"generation","primitive":"generation.call","name":"ai-sdk","startedAt":"2026-07-01T12:00:02.660Z","status":"ok","provider":"ai-sdk","attributes":{"adapterPackage":"@use-crux/ai"}}`,
 		// Secondary direct-runtime evidence for Quality-primary scorer (scoring.judge span).
-		`{"schemaVersion":2,"recordId":"cf_h_judge","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":3,"spanId":"sp_cf_judge","family":"scoring","primitive":"scoring.judge","name":"judge","startedAt":"2026-07-01T12:00:02.700Z","status":"ok"}`,
-		`{"schemaVersion":2,"recordId":"cf_h_end","type":"run:end","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":4,"endedAt":"2026-07-01T12:00:03.000Z","durationMs":3000,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"cf_h_judge","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":7,"spanId":"sp_cf_judge","family":"scoring","primitive":"scoring.judge","name":"judge","startedAt":"2026-07-01T12:00:02.700Z","status":"ok","definitionRefs":[{"id":"scorer:connected","kind":"scorer","role":"invoked-scorer"}]}`,
+		`{"schemaVersion":2,"recordId":"cf_h_end","type":"run:end","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":8,"endedAt":"2026-07-01T12:00:03.000Z","durationMs":3000,"status":"ok"}`,
 	)
 
 	// ── 2. Deliberately degraded sibling run (record-id conflict → ingest_health) ─
 	mustIngest(t, service,
 		runStartWithRefsJSON("cf_d_start", "run_cf_degraded", "seg_cf_d", 1, "2026-07-01T13:00:00.000Z",
-			definitionRefJSON("agent:connected-planner", "agent", "invoked-agent")),
+			definitionRefJSON("agent:connected", "agent", "invoked-agent")),
 	)
-	conflict := mustBatch(t, `{"schemaVersion":2,"recordId":"cf_d_start","type":"run:start","runId":"run_cf_degraded","segmentId":"seg_cf_d","segmentSeq":1,"name":"different payload","rootPrimitive":"agent.run","startedAt":"2026-07-01T13:00:00.000Z","status":"running","definitionRefs":[{"id":"agent:connected-planner","kind":"agent","role":"invoked-agent"}]}`)
+	conflict := mustBatch(t, `{"schemaVersion":2,"recordId":"cf_d_start","type":"run:start","runId":"run_cf_degraded","segmentId":"seg_cf_d","segmentSeq":1,"name":"different payload","rootPrimitive":"agent.run","startedAt":"2026-07-01T13:00:00.000Z","status":"running","definitionRefs":[{"id":"agent:connected","kind":"agent","role":"invoked-agent"}]}`)
 	if err := service.Ingest(ctx, conflict); err == nil {
 		t.Fatal("expected record identity conflict to degrade delivery health")
 	}
 
 	// ── 3. Activity: every connected definition has ≥1 run ───────────────────
-	for _, r := range connectedCategoryARefs {
-		summary, err := service.DefinitionActivitySummary(ctx, r.id)
+	for _, entry := range fixture.Cases {
+		if entry.DefinitionRef == nil {
+			continue
+		}
+		summary, err := service.DefinitionActivitySummary(ctx, entry.DefinitionRef.ID)
 		if err != nil {
-			t.Fatalf("activity summary for %s: %v", r.id, err)
+			t.Fatalf("activity summary for %s: %v", entry.DefinitionRef.ID, err)
 		}
 		if summary.RunCount < 1 {
-			t.Fatalf("definition %s: expected runCount ≥ 1, got %+v", r.id, summary)
+			t.Fatalf("definition %s: expected runCount ≥ 1, got %+v", entry.DefinitionRef.ID, summary)
 		}
 	}
 
 	// ── 4. Filtered Runs by definition (Catalog View Runs) ───────────────────
-	page, err := service.RunsPage(ctx, RunListOptions{DefinitionID: "agent:connected-planner"})
+	page, err := service.RunsPage(ctx, RunListOptions{DefinitionID: "agent:connected"})
 	if err != nil {
 		t.Fatalf("filtered runs: %v", err)
 	}
 	if len(page.Rows) < 2 {
-		t.Fatalf("agent:connected-planner should touch healthy+degraded runs, got %d rows", len(page.Rows))
+		t.Fatalf("agent:connected should touch healthy+degraded runs, got %d rows", len(page.Rows))
 	}
 	if page.Revision == 0 {
 		t.Fatal("filtered Runs envelope must carry a non-zero revision for reconnect catch-up")
@@ -120,8 +133,17 @@ func TestConnectedFixtureDefinitionJoinDeliveryAndCatchup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("run detail: %v", err)
 	}
-	if len(detail.DefinitionRefs) < len(connectedCategoryARefs) {
-		t.Fatalf("run detail refs = %d, want ≥ %d", len(detail.DefinitionRefs), len(connectedCategoryARefs))
+	if len(detail.DefinitionRefs) < len(refs) {
+		t.Fatalf("run detail refs = %d, want ≥ %d", len(detail.DefinitionRefs), len(refs))
+	}
+	detailJSON, err := json.Marshal(detail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, adapter := range fixture.Adapters {
+		if !containsJSONText(detailJSON, adapter) {
+			t.Fatalf("run detail does not retain adapter evidence for %q", adapter)
+		}
 	}
 
 	// ── 7. Revision catch-up: current revision is a no-op delta ───────────────
@@ -138,7 +160,7 @@ func TestConnectedFixtureDefinitionJoinDeliveryAndCatchup(t *testing.T) {
 		`{"schemaVersion":2,"recordId":"cf_q_start","type":"run:start","runId":"run_cf_quality","traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","segmentId":"seg_cf_q","segmentSeq":1,"name":"quality case","rootPrimitive":"eval.case","startedAt":"2026-07-01T14:00:00.000Z","status":"running"}`,
 		`{"schemaVersion":2,"recordId":"cf_q_end","type":"run:end","runId":"run_cf_quality","traceId":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb","segmentId":"seg_cf_q","segmentSeq":2,"endedAt":"2026-07-01T14:00:01.000Z","status":"ok"}`,
 	)
-	afterQuality, err := service.RunsPage(ctx, RunListOptions{DefinitionID: "prompt:connected-greet"})
+	afterQuality, err := service.RunsPage(ctx, RunListOptions{DefinitionID: "prompt:connected"})
 	if err != nil {
 		t.Fatalf("filtered after quality: %v", err)
 	}
@@ -150,4 +172,9 @@ func TestConnectedFixtureDefinitionJoinDeliveryAndCatchup(t *testing.T) {
 	if afterQuality.Revision <= revisionAfterIngest {
 		t.Fatalf("revision must advance after quality ingest: before=%d after=%d", revisionAfterIngest, afterQuality.Revision)
 	}
+}
+
+func containsJSONText(raw []byte, value string) bool {
+	quoted, _ := json.Marshal(value)
+	return bytes.Contains(raw, quoted)
 }

@@ -366,6 +366,11 @@ function coverageNote(state: ReturnType<typeof describeCatalogCoverage>): string
         ? 'Static/declarative — never the target or subject of a runtime primitive.'
         : 'No runtime evidence path is defined for this kind.'
     case 'contributor':
+      if (state.parentDerived) {
+        return state.runCount > 0
+          ? `Parent ran in ${state.runCount} run${state.runCount === 1 ? '' : 's'}; this definition is not independently observed.`
+          : 'Parent-derived evidence — this definition is not independently observed. No parent runs yet.'
+      }
       if (state.coverage.primary === 'structural-child' && !state.coverage.runtimePrimitiveNames?.length) {
         return state.coverage.secondary?.includes('quality-owned')
           ? 'Structural child — Quality owns its primary evidence; it has no independent runtime span.'
@@ -385,8 +390,14 @@ function coverageNote(state: ReturnType<typeof describeCatalogCoverage>): string
 
 export function IndexObservability({ def }: { def: ViewDef }) {
   const { navigate } = useNavigation()
+  const idx = useIndexIndex()
   const { activity } = useDefinitionActivity(def.id)
-  const state = describeCatalogCoverage(def.kind, activity)
+  const parentDefinitionId =
+    def.presentation?.parentDefinitionId ?? idx.relationsOf(def.id).incoming[0]?.from
+  const { activity: parentActivity } = useDefinitionActivity(parentDefinitionId)
+  const state = describeCatalogCoverage(def.kind, activity, parentActivity)
+  const displayedActivity = state.parentDerived ? parentActivity : activity
+  const runsDefinitionId = state.parentDerived ? parentDefinitionId : def.id
   const rjn = def.runtimeJoin
   const note = coverageNote(state)
   const idKeys = [
@@ -417,8 +428,8 @@ export function IndexObservability({ def }: { def: ViewDef }) {
       <SectionHead
         eyebrow="Observability"
         right={
-          state.runCount > 0 ? (
-            <Btn size="xs" icon="trace" onClick={() => navigate({ view: 'runs', definitionId: def.id })}>
+          state.runCount > 0 && runsDefinitionId ? (
+            <Btn size="xs" icon="trace" onClick={() => navigate({ view: 'runs', definitionId: runsDefinitionId })}>
               View {state.runCount} runs
             </Btn>
           ) : null
@@ -446,15 +457,15 @@ export function IndexObservability({ def }: { def: ViewDef }) {
             {note}
           </div>
         )}
-        {activity?.lastRun && (
+        {displayedActivity?.lastRun && (
           <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: T.fgMuted }}>
             <span className="font-mono" style={{ color: T.fg }}>
-              latest {activity.lastRun.status}
+              latest {displayedActivity.lastRun.status}
             </span>
             <span>·</span>
-            <span>{new Date(activity.lastRun.endedAt || activity.lastRun.startedAt).toLocaleString()}</span>
-            {activity.lastRun.deliveryHealth?.status && (
-              <DeliveryHealthBadge status={activity.lastRun.deliveryHealth.status} />
+            <span>{new Date(displayedActivity.lastRun.endedAt || displayedActivity.lastRun.startedAt).toLocaleString()}</span>
+            {displayedActivity.lastRun.deliveryHealth?.status && (
+              <DeliveryHealthBadge status={displayedActivity.lastRun.deliveryHealth.status} />
             )}
           </div>
         )}

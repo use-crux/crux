@@ -113,10 +113,13 @@ describe('@use-crux/convex observability runtime binding (Phase 8)', () => {
     it('warns instead of silently discarding an incomplete drain when no onDrain is supplied', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       let resolveSend!: () => void
+      let markSendStarted!: () => void
+      const sendStarted = new Promise<void>((resolve) => { markSendStarted = resolve })
       setObservabilityTransport({
         async send(records) {
           await new Promise<void>((resolve) => {
             resolveSend = resolve
+            markSendStarted()
           })
           return acceptedDeliveryReceipt(records)
         },
@@ -124,7 +127,9 @@ describe('@use-crux/convex observability runtime binding (Phase 8)', () => {
       const span = observe.openSpan({ name: 'observability-runtime-test', primitive: 'custom.operation' })
       span.withContext(() => observe.event({ name: 'observability-runtime-test.event' }))
 
-      const result = await flushObservability({ timeoutMs: 5 })
+      const flush = flushObservability({ timeoutMs: 5 })
+      await sendStarted
+      const result = await flush
 
       expect(result.status).toBe('deadline')
       expect(warnSpy).toHaveBeenCalledWith(
@@ -137,10 +142,13 @@ describe('@use-crux/convex observability runtime binding (Phase 8)', () => {
     it('does not warn on an incomplete opportunistic (terminal: false) mid-operation flush', async () => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
       let resolveSend!: () => void
+      let markSendStarted!: () => void
+      const sendStarted = new Promise<void>((resolve) => { markSendStarted = resolve })
       setObservabilityTransport({
         async send(records) {
           await new Promise<void>((resolve) => {
             resolveSend = resolve
+            markSendStarted()
           })
           return acceptedDeliveryReceipt(records)
         },
@@ -148,7 +156,9 @@ describe('@use-crux/convex observability runtime binding (Phase 8)', () => {
       const span = observe.openSpan({ name: 'observability-runtime-opportunistic', primitive: 'custom.operation' })
       span.withContext(() => observe.event({ name: 'observability-runtime-opportunistic.event' }))
 
-      const result = await flushObservability({ timeoutMs: 5, terminal: false })
+      const flush = flushObservability({ timeoutMs: 5, terminal: false })
+      await sendStarted
+      const result = await flush
 
       expect(result.status).toBe('deadline')
       expect(warnSpy).not.toHaveBeenCalled()
@@ -157,10 +167,13 @@ describe('@use-crux/convex observability runtime binding (Phase 8)', () => {
 
     it('still reports an incomplete opportunistic flush to an explicit onDrain callback', async () => {
       let resolveSend!: () => void
+      let markSendStarted!: () => void
+      const sendStarted = new Promise<void>((resolve) => { markSendStarted = resolve })
       setObservabilityTransport({
         async send(records) {
           await new Promise<void>((resolve) => {
             resolveSend = resolve
+            markSendStarted()
           })
           return acceptedDeliveryReceipt(records)
         },
@@ -169,7 +182,9 @@ describe('@use-crux/convex observability runtime binding (Phase 8)', () => {
       span.withContext(() => observe.event({ name: 'observability-runtime-opportunistic-ondrain.event' }))
       const onDrain = vi.fn()
 
-      const result = await flushObservability({ timeoutMs: 5, terminal: false, onDrain })
+      const flush = flushObservability({ timeoutMs: 5, terminal: false, onDrain })
+      await sendStarted
+      const result = await flush
 
       expect(result.status).toBe('deadline')
       expect(onDrain).toHaveBeenCalledWith(expect.objectContaining({ status: 'deadline' }))

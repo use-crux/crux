@@ -1054,9 +1054,9 @@ export function tokenChunks(node: ObservabilityRunDetailNode | undefined): reado
   if (!node) return []
   const events: TokenChunkEvent[] = []
   function visit(n: ObservabilityRunDetailNode) {
-    events.push(...n.events)
+    events.push(...(n.events ?? []))
     for (const detail of n.details ?? []) {
-      events.push(...detail.events)
+      events.push(...(detail.events ?? []))
     }
     for (const child of n.children ?? []) visit(child)
   }

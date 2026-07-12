@@ -111,6 +111,45 @@ export function definitionRef<K extends DirectlyObservedKind>(
   }
 }
 
+function relatedDefinitionRef(
+  kind: DefinitionRef['kind'],
+  id: string,
+  role: DefinitionRefRole,
+  source?: SanitizedSourceRef,
+): DefinitionRef {
+  return { id, kind, role, ...(source ? { source } : {}) }
+}
+
+/** Build an authored knowledge-base contributor ref. */
+export function knowledgeBaseDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
+  return relatedDefinitionRef('rag.knowledgeBase', `rag.knowledgeBase:${safeDefinitionId(id)}`, 'contributed-knowledge-base', source)
+}
+
+/** Build an authored tool-policy contributor ref. */
+export function toolPolicyDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
+  return relatedDefinitionRef('toolPolicy', `toolPolicy:${safeDefinitionId(id)}`, 'contributed-tool-policy', source)
+}
+
+/** Build the canonical child ref for an executed authored flow step. */
+export function flowStepDefinitionRef(flowName: string, stepLabel: string, source?: SanitizedSourceRef): DefinitionRef {
+  return relatedDefinitionRef('flow.step', `flow.step:${safeDefinitionId(flowName)}:${safeDefinitionId(stepLabel)}`, 'invoked-flow-step', source)
+}
+
+/** Build the canonical child ref for an executed parallel-composition branch. */
+export function parallelBranchDefinitionRef(compositionId: string, branchId: string, source?: SanitizedSourceRef): DefinitionRef {
+  return relatedDefinitionRef('composition.parallel.branch', `composition.parallel:${safeDefinitionId(compositionId)}:branch:${safeDefinitionId(branchId)}`, 'invoked-composition-branch', source)
+}
+
+/** Build the canonical child ref for an executed retrieval-recipe step. */
+export function recipeStepDefinitionRef(recipeId: string, stepId: string, source?: SanitizedSourceRef): DefinitionRef {
+  return relatedDefinitionRef('rag.recipe.step', `rag.recipe:${safeDefinitionId(recipeId)}:step:${safeDefinitionId(stepId)}`, 'invoked-recipe-step', source)
+}
+
+/** Build an authored scorer ref for a live scoring invocation. */
+export function scorerDefinitionRef(id: string, source?: SanitizedSourceRef): DefinitionRef {
+  return relatedDefinitionRef('scorer', `scorer:${safeDefinitionId(id)}`, 'invoked-scorer', source)
+}
+
 /** Composition modes that own a canonical `composition.<kind>` definition. */
 export type CompositionRefKind = 'parallel' | 'pipeline' | 'consensus' | 'swarm'
 

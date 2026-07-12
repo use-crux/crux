@@ -31,7 +31,7 @@ describe('Postgres + HTTP wake runtime path', () => {
 
   beforeAll(async () => {
     testDatabase = await startPostgresTestDatabase()
-  })
+  }, 30_000)
 
   afterAll(async () => {
     try {
@@ -47,7 +47,7 @@ describe('Postgres + HTTP wake runtime path', () => {
         await cleanup.end()
       }
     } finally {
-      await testDatabase.close()
+      await testDatabase?.close()
     }
   })
 

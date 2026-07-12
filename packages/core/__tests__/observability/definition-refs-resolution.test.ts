@@ -4,6 +4,8 @@ import { context } from '../../src/prompt/context'
 import { prompt as makePrompt } from '../../src/prompt/prompt'
 import { tool } from '../../src/tools/define-tool'
 import { instrumentToolSet } from '../../src/adapter/tool/emission'
+import { toolPolicy } from '../../src/safety/toolPolicy'
+import { applyToolMiddleware } from '../../src/tools/middleware'
 import type { CruxSpanStartRecord, DefinitionRef } from '../../src/observability/contract'
 import {
   createInMemoryObservabilityTransport,
@@ -107,5 +109,23 @@ describe('prompt/context/tool DefinitionRef emission', () => {
     expect(refsFor(transport.records, 'prompt.resolve')).toEqual([[]])
     expect(refsFor(transport.records, 'context.resolve')).toEqual([[]])
     expect(refsFor(transport.records, 'tool.call')).toEqual([[]])
+  })
+
+  it('attaches authored tool-policy contributor identity to the tool owner span', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const policy = toolPolicy({ id: 'allow-search', action: 'allow' })
+    const wrapped = applyToolMiddleware({
+      search: tool({ name: 'search', description: 'search', input: z.object({}), execute: async () => 'ok' }),
+    }, policy)
+    const tools = instrumentToolSet(wrapped) as Record<string, Instrumented>
+
+    await tools.search.execute({}, { toolCallId: 'tc-policy' })
+    await observe.flush()
+
+    expect(refsFor(transport.records, 'tool.call')).toEqual([[
+      { id: 'tool:search', kind: 'tool', role: 'invoked-tool' },
+      { id: 'toolPolicy:allow-search', kind: 'toolPolicy', role: 'contributed-tool-policy' },
+    ]])
   })
 })

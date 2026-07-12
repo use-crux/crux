@@ -120,6 +120,7 @@ function createDenseStoreBackedRetriever(config: DenseStoreBackedRetrieverConfig
 
     return runRetrievalOperation({
       retrieverId: config.id,
+      knowledgeBaseId: config.knowledgeBaseId,
       namespace: config.namespace,
       mode,
       query,

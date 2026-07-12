@@ -122,6 +122,8 @@ export interface RetrievalInjectionConfig {
 /** Configuration for a store-backed dense/sparse/hybrid retriever. Internal. */
 export interface DenseStoreBackedRetrieverConfig {
   id: string
+  /** Authored knowledge-base owner identity when this retriever was derived from one. @internal */
+  knowledgeBaseId?: string
   /** Indexer id used to derive parent/chunk record keys. Defaults to `id`. */
   indexerId?: string
   namespace: string

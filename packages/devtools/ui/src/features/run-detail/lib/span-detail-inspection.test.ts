@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { tokenChunksFromEvents } from './span-detail-inspection'
-import type { ObservabilitySpanEventSummary } from '@/types'
+import { tokenChunks, tokenChunksFromEvents } from './span-detail-inspection'
+import type { ObservabilityRunDetailNode, ObservabilitySpanEventSummary } from '@/types'
 
 describe('span detail inspection helpers', () => {
   it('extracts token chunk text from lazy span events in stream order', () => {
@@ -14,6 +14,16 @@ describe('span detail inspection helpers', () => {
     ]
 
     expect(tokenChunksFromEvents(events)).toEqual(['Hello', ' world'])
+  })
+
+  it('treats null event collections from empty persisted runs as empty', () => {
+    const node = {
+      events: null,
+      details: [{ events: null }],
+      children: [],
+    } as unknown as ObservabilityRunDetailNode
+
+    expect(tokenChunks(node)).toEqual([])
   })
 })
 

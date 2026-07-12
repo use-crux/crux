@@ -77,6 +77,29 @@ func TestDefinitionActivityProjectedInIngestTransaction(t *testing.T) {
 	}
 }
 
+func TestDefinitionActivityProjectsContributorChildAndScorerRefsWithoutKindSpecialCases(t *testing.T) {
+	service := newTestService(t)
+	mustIngest(t, service,
+		spanWithRefsJSON("r-related", "run-related", "seg-related", 1, "sp-related", "2026-01-01T00:00:00.000Z",
+			definitionRefJSON("rag.knowledgeBase:docs", "rag.knowledgeBase", "contributed-knowledge-base"),
+			definitionRefJSON("toolPolicy:approval", "toolPolicy", "contributed-tool-policy"),
+			definitionRefJSON("flow.step:research:load", "flow.step", "invoked-flow-step"),
+			definitionRefJSON("composition.parallel:fanout:branch:writer", "composition.parallel.branch", "invoked-composition-branch"),
+			definitionRefJSON("rag.recipe:search:step:rerank", "rag.recipe.step", "invoked-recipe-step"),
+			definitionRefJSON("scorer:helpfulness", "scorer", "invoked-scorer")),
+	)
+
+	got := definitionActivity(t, service, "run-related")
+	if len(got) != 6 {
+		t.Fatalf("related definition activity = %d rows, want 6: %+v", len(got), got)
+	}
+	for _, row := range got {
+		if row.OccurrenceCount != 1 {
+			t.Fatalf("related definition activity row = %+v, want one occurrence", row)
+		}
+	}
+}
+
 func TestRunDetailCarriesCanonicalDefinitionRefsWithLastKnownSource(t *testing.T) {
 	service := newTestService(t)
 	mustIngest(t, service,

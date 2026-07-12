@@ -56,6 +56,13 @@ authored `id` / literal name / object-map key). Stack-trace guessing is forbidde
 omit the ref. A compile-time `DirectlyObservedKind → DefinitionRefRole` map fails the build if a
 directly-observed kind lacks a role.
 
+The same rule applies category by category beyond directly-observed owners. Knowledge bases and tool
+policies attach contributor refs to their owner spans; executed flow steps, parallel branches, recipe
+steps, and authored scorers attach child/scorer refs when their canonical identity is present. A
+structural child without such runtime identity derives activity only from its indexed parent and is
+labelled explicitly as not independently observed. Static-only kinds retain zero runtime activity.
+The runtime never fabricates a child id or derives one from display text.
+
 Compositions (`parallel` / `pipeline` / `swarm` / `consensus`) take a **required** authored `id`; the
 random per-execution `compositionId` remains a separate execution identity. Recipe rerankers require
 a named engine (`rerank({ engine })` / `judgeReranker({ name, … })`) so `rag.reranker` ids are
@@ -120,7 +127,8 @@ this workstream owns.
 
 - Catalog can answer definition-level runtime questions without leaving the Index surface.
 - Adapter consumers get one finish/error taxonomy across providers.
-- Contributors must update `DEFINITION_KIND_COVERAGE` and the role map when adding kinds or emitters.
+- Contributors must update `DEFINITION_KIND_COVERAGE`, its runtime-identity treatment, and the role
+  map/builders when adding kinds or emitters.
 - Composition and reranker call sites must supply authored ids (breaking, pre-launch).
 - Cache epochs are unchanged for the join itself; semantic facts epoch may bump only when indexer
   discovery rules for shared kinds change (documented in release notes when that happens).
@@ -129,8 +137,9 @@ this workstream owns.
 
 - Unit/integration: DefinitionRef emission, kind coverage exhaustiveness, Go activity
   projection/filter/rebuild/retention, adapter normalized-outcome conformance for all four packages.
-- Connected fixture: multi-kind refs, multi-segment healthy run, degraded delivery via record-id
-  conflict, filtered Runs, revision catch-up, Quality-shaped runs not polluting definition filters
+- Connected fixture: generated from every manifest entry with direct, contributor, child,
+  parent-derived, Quality, and zero-runtime treatments; multi-segment healthy run, degraded delivery
+  via record-id conflict, filtered Runs, revision catch-up, and real Quality experiment correlation
   (`TestConnectedFixtureDefinitionJoinDeliveryAndCatchup`).
 - Quality: nested triggered-run closure so flow step matchers capture under `eval.case` cells.
 - DevTools: `check:ui-architecture` green; Catalog coverage treatments unit-tested.

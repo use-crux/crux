@@ -30,6 +30,8 @@ export interface CatalogCoverageState {
   /** Distinct runs that referenced this definition, per the activity rollup. */
   runCount: number
   hasRuntimeEvidence: boolean
+  /** Activity comes from the indexed parent, not an independently observed child. */
+  parentDerived: boolean
 }
 
 /**
@@ -54,9 +56,11 @@ export interface CatalogCoverageState {
 export function describeCatalogCoverage(
   kind: string,
   activity: ObservabilityDefinitionActivitySummary | undefined,
+  parentActivity?: ObservabilityDefinitionActivitySummary,
 ): CatalogCoverageState {
   const coverage = coverageForKind(kind)
-  const runCount = activity?.runCount ?? 0
+  const parentDerived = coverage.runtimeIdentity === 'parent-derived'
+  const runCount = (parentDerived ? parentActivity : activity)?.runCount ?? 0
   const declaresDirectRuntime =
     coverage.primary === 'directly-observed' || Boolean(coverage.secondary?.includes('direct-runtime'))
 
@@ -66,18 +70,23 @@ export function describeCatalogCoverage(
       coverage,
       runCount: declaresDirectRuntime ? runCount : 0,
       hasRuntimeEvidence: declaresDirectRuntime && runCount > 0,
+      parentDerived: false,
     }
   }
 
   if (coverage.primary === 'directly-observed') {
-    return { treatment: 'direct-activity', coverage, runCount, hasRuntimeEvidence: runCount > 0 }
+    return { treatment: 'direct-activity', coverage, runCount, hasRuntimeEvidence: runCount > 0, parentDerived: false }
+  }
+
+  if (coverage.runtimeIdentity === 'none') {
+    return { treatment: 'no-runtime', coverage, runCount: 0, hasRuntimeEvidence: false, parentDerived: false }
   }
 
   const isDerivedContributor = coverage.primary === 'runtime-contributor' || coverage.primary === 'structural-child'
 
   if (isDerivedContributor) {
-    return { treatment: 'contributor', coverage, runCount, hasRuntimeEvidence: runCount > 0 }
+    return { treatment: 'contributor', coverage, runCount, hasRuntimeEvidence: runCount > 0, parentDerived }
   }
 
-  return { treatment: 'no-runtime', coverage, runCount: 0, hasRuntimeEvidence: false }
+  return { treatment: 'no-runtime', coverage, runCount: 0, hasRuntimeEvidence: false, parentDerived: false }
 }

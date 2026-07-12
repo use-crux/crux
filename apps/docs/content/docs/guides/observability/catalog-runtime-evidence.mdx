@@ -25,7 +25,14 @@ interface DefinitionRef {
 }
 ```
 
-Roles describe how the definition participated (`resolved-prompt`, `invoked-agent`, `invoked-tool`, `invoked-composition`, …). Kind is the full Project Index kind; role is a coarser family label used for display and filtering.
+Roles describe how the definition participated (`resolved-prompt`, `invoked-agent`, `contributed-tool-policy`, `invoked-flow-step`, …). Kind is the full Project Index kind; role is a coarser relationship label used for display and filtering.
+
+The coverage manifest also declares `runtimeIdentity` for definitions that are not top-level execution owners:
+
+- `definition-ref`: the runtime holds the exact authored identity and records it directly.
+- `parent-derived`: the index relates the definition to an observed owner; Catalog reports the parent's activity and says the child/contributor was not independently observed.
+- `quality`: the existing Quality correlation is authoritative.
+- `none`: no truthful live identity path exists.
 
 ## Catalog Observability section
 
@@ -34,13 +41,13 @@ Open a definition in Catalog / Index. The **Observability** section is classifie
 | Treatment | Kind primary (manifest) | What you see (UI copy) |
 | --- | --- | --- |
 | **Direct activity** | `directly-observed` | Latest status / time / delivery badge when present; **View N runs** when `N > 0`. Zero activity: *No runs have referenced this definition yet.* |
-| **Contributor** | `runtime-contributor` or structural children with runtime primitives | With activity: *Referenced by N runs — never itself the subject of a run.* Without: *Referenced by an owner’s span when invoked — never itself the subject of a run. No runs yet.* |
+| **Contributor** | `runtime-contributor` or structural child | Canonical contributor/child refs show *Referenced by N runs*. Parent-derived definitions show *Parent ran in N runs; this definition is not independently observed.* No count is inferred from a display name. |
 | **Quality-primary** | `quality-owned` (and dual-tagged cases) | *Quality-primary — correlates through the Quality ↔ observability join…*; secondary direct runtime (e.g. live `scoring.judge` for `scorer`) still surfaces when present |
 | **No runtime** | `static-only` / fallback | *Static/declarative — never the target or subject of a runtime primitive.* (or *No runtime evidence path is defined for this kind.*) — no fabricated counts, no dead View Runs link |
 
 Zero activity is a real state, not a broken link. **View N runs** appears only when the activity rollup reports `runCount > 0`.
 
-When activity exists, Catalog shows the latest run's status, timestamp, and delivery-health badge, and **View N runs** navigates to Runs pre-filtered to that definition id (`definitionId` query on the Runs list / `GET /api/observability/definitions/{definitionId}/runs`).
+When direct activity exists, Catalog shows the latest run's status, timestamp, and delivery-health badge, and **View N runs** navigates to Runs pre-filtered to that definition id (`definitionId` query on the Runs list / `GET /api/observability/definitions/{definitionId}/runs`). For parent-derived evidence, the same controls are explicitly based on the indexed parent's id and activity.
 
 ## Run Detail → Catalog
 
@@ -55,7 +62,10 @@ Runs whose refs point at a since-deleted definition still appear in the filtered
 
 Not every Project Index kind is a top-level run subject. Examples of truthful non-coverage:
 
-- Structural children (e.g. stages nested under a parent) inherit display under their parent; they are not independent run subjects unless the manifest declares otherwise.
+- Executed flow steps, parallel branches, and recipe steps carry canonical child refs because their parent identity and authored child key are both available at runtime.
+- Other structural children inherit evidence from an indexed parent and are labelled *not independently observed*.
+- Knowledge-base and tool-policy contributors carry canonical refs on their owner spans. Storage ports and legacy injectable definitions do not expose a provably canonical runtime id, so Catalog uses indexed owner/parent relations instead of guessing from variable or display names.
+- Scorers remain Quality-primary; an authored `judge({ id })` also attaches a scorer ref to its live `scoring.judge` span.
 - File-loaded skills without a registry composite id do not invent a join key; registry-loaded skills do emit `DefinitionRef`.
 - Compositions (`parallel` / `pipeline` / `swarm` / `consensus`) require an authored `id` so runtime and index share `composition.<kind>:<id>`.
 

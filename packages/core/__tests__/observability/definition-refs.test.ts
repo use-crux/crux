@@ -86,6 +86,12 @@ describe('DefinitionRef wire contract', () => {
       'invoked-memory',
       'invoked-recipe',
       'invoked-reranker',
+      'contributed-knowledge-base',
+      'contributed-tool-policy',
+      'invoked-flow-step',
+      'invoked-composition-branch',
+      'invoked-recipe-step',
+      'invoked-scorer',
     ])
   })
 

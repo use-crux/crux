@@ -7,6 +7,7 @@
 import { observe } from '../../observability'
 import {
   recipeDefinitionRef,
+  recipeStepDefinitionRef,
   rerankerDefinitionRef,
 } from '../../observability/definition-ref'
 import { RetrievalRunError } from '../errors'
@@ -201,10 +202,14 @@ async function runOneStep(args: {
   // A rerank step records the authored reranker id it invokes; other step
   // kinds carry no `rag.reranker` evidence.
   const rerankerId = getRerankerDefinitionId(args.step)
+  const definitionRefs = [
+    recipeStepDefinitionRef(args.config.recipeId, args.step.id),
+    ...(rerankerId ? [rerankerDefinitionRef(rerankerId)] : []),
+  ]
   const span = observe.openSpan({
     name: `${args.state.phase}:${args.step.id}`,
     primitive: 'retrieval.step',
-    ...(rerankerId ? { definitionRefs: [rerankerDefinitionRef(rerankerId)] } : {}),
+    definitionRefs,
     attributes: {
       recipeId: args.config.recipeId,
       stepId: args.step.id,

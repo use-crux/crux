@@ -49,7 +49,7 @@ import {
   sanitizePropagationCarrier,
   type OpenObservedSpan,
 } from '../observability'
-import { flowDefinitionRef } from '../observability/definition-ref'
+import { flowDefinitionRef, flowStepDefinitionRef } from '../observability/definition-ref'
 
 // Import from decomposed modules
 import type {
@@ -339,6 +339,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       const stepSpan = observe.openSpan({
         name: label,
         primitive: 'flow.step',
+        definitionRefs: [flowStepDefinitionRef(name, label)],
         attributes: {
           flowId,
           stepId,
