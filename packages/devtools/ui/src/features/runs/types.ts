@@ -7,6 +7,8 @@ export interface RunsFilters {
   last?: 'all' | '1h' | '24h' | '7d' | '30d'
   has?: 'feedback' | 'experiment'
   search?: string
+  /** Pre-filter to runs whose DefinitionRefs include this Catalog definition (Phase 3 filter). */
+  definitionId?: string
 }
 
 export interface RunsProps {

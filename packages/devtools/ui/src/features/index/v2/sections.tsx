@@ -19,6 +19,10 @@ import { Btn, Chip, SectionHead } from './primitives'
 import { Bar, KindBadge, KindGlyph, kindMeta } from './kit'
 import type { ViewDef } from './adapt'
 import { useIndexIndex } from './context'
+import { useNavigation } from '@/app/navigation/useNavigation'
+import { useDefinitionActivity } from '@/shared/query/useDefinitionActivity'
+import { describeCatalogCoverage } from './coverage'
+import { DeliveryHealthBadge } from '@/shared/components/DeliveryHealthBadge'
 
 function statusTone(s?: string): Tone {
   return s === 'active' ? 'ok' : s === 'stale' ? 'warn' : s === 'missing' ? 'danger' : 'muted'
@@ -164,19 +168,6 @@ export function IndexQuality({ def }: { def: ViewDef }) {
               </div>
             </>
           )}
-          <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-            {q.runCount ? (
-              <Btn
-                size="sm"
-                icon="trace"
-                variant="soft"
-                disabled
-                title="Run navigation isn’t available from the index yet"
-              >
-                View {q.runCount} runs
-              </Btn>
-            ) : null}
-          </div>
         </div>
 
         {/* coverage + artifacts */}
@@ -367,10 +358,37 @@ export function IndexQuality({ def }: { def: ViewDef }) {
   )
 }
 
-// ── OBSERVABILITY (runtimeJoin) ──────────────────────────────────────────────
+// ── OBSERVABILITY (exhaustive coverage: direct / contributor / quality-primary / no-runtime) ──
+function coverageNote(state: ReturnType<typeof describeCatalogCoverage>): string {
+  switch (state.treatment) {
+    case 'no-runtime':
+      return state.coverage.primary === 'static-only'
+        ? 'Static/declarative — never the target or subject of a runtime primitive.'
+        : 'No runtime evidence path is defined for this kind.'
+    case 'contributor':
+      if (state.coverage.primary === 'structural-child' && !state.coverage.runtimePrimitiveNames?.length) {
+        return state.coverage.secondary?.includes('quality-owned')
+          ? 'Structural child — Quality owns its primary evidence; it has no independent runtime span.'
+          : 'Structural child of its Catalog parent — it has no independent runtime span.'
+      }
+      return state.runCount > 0
+        ? `Referenced by ${state.runCount} run${state.runCount === 1 ? '' : 's'} — never itself the subject of a run.`
+        : 'Referenced by an owner’s span when invoked — never itself the subject of a run. No runs yet.'
+    case 'quality-primary':
+      return state.hasRuntimeEvidence
+        ? `Quality-primary — correlates through the Quality ↔ observability join. Also invoked directly in ${state.runCount} run${state.runCount === 1 ? '' : 's'}${state.coverage.runtimePrimitiveNames ? ` (${state.coverage.runtimePrimitiveNames.join(', ')})` : ''}.`
+        : 'Quality-primary — correlates through the Quality ↔ observability join, not direct runtime evidence.'
+    case 'direct-activity':
+      return state.hasRuntimeEvidence ? '' : 'No runs have referenced this definition yet.'
+  }
+}
+
 export function IndexObservability({ def }: { def: ViewDef }) {
+  const { navigate } = useNavigation()
+  const { activity } = useDefinitionActivity(def.id)
+  const state = describeCatalogCoverage(def.kind, activity)
   const rjn = def.runtimeJoin
-  if (!rjn) return null
+  const note = coverageNote(state)
   const idKeys = [
     'promptId',
     'contextId',
@@ -386,7 +404,7 @@ export function IndexObservability({ def }: { def: ViewDef }) {
     'flowName',
     'stepLabel',
   ] as const
-  const ids = idKeys.filter((k) => rjn[k]).map((k) => [k, String(rjn[k])] as const)
+  const ids = rjn ? idKeys.filter((k) => rjn[k]).map((k) => [k, String(rjn[k])] as const) : []
   const kv = (k: string, v: ReactNode) =>
     v ? (
       <div style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 11.5 }}>
@@ -399,9 +417,9 @@ export function IndexObservability({ def }: { def: ViewDef }) {
       <SectionHead
         eyebrow="Observability"
         right={
-          def.quality && def.quality.runCount ? (
-            <Btn size="xs" icon="trace" disabled title="Run navigation isn’t available from the index yet">
-              View {def.quality.runCount} runs
+          state.runCount > 0 ? (
+            <Btn size="xs" icon="trace" onClick={() => navigate({ view: 'runs', definitionId: def.id })}>
+              View {state.runCount} runs
             </Btn>
           ) : null
         }
@@ -410,43 +428,69 @@ export function IndexObservability({ def }: { def: ViewDef }) {
         style={{
           background: T.bgElev,
           border: `1px solid ${T.border}`,
-          borderLeft: `3px solid ${T.crux}`,
+          borderLeft: `3px solid ${state.treatment === 'no-runtime' ? T.border : T.crux}`,
           borderRadius: 11,
           padding: '14px 18px',
           marginBottom: 22,
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
-          <Icon name="trace" size={15} color={T.crux} />
-          <span style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 600, color: T.fg }}>
-            {rjn.spanName || rjn.primitive}
-          </span>
-          {rjn.primitive && (
-            <Chip tone="crux" mono>
-              {rjn.primitive}
-            </Chip>
-          )}
-          {rjn.backend && (
-            <Chip tone="muted" mono>
-              {rjn.backend}
-            </Chip>
-          )}
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {kv('primitive', rjn.primitive)}
-            {kv('backend', rjn.backend)}
-            {kv('resource', rjn.resource)}
-            {kv('id prefix', rjn.runtimeIdPrefix)}
-            {ids.map(([k, v]) => (
-              <div key={k} style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 11.5 }}>
-                <span style={{ color: T.fgFaint, minWidth: 110 }}>{k}</span>
-                <span style={{ color: T.fg }}>{v}</span>
-              </div>
-            ))}
+        {note && (
+          <div
+            style={{
+              fontSize: 12,
+              color: T.fgMuted,
+              marginBottom: rjn ? 12 : 0,
+              lineHeight: 1.5,
+            }}
+          >
+            {note}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {rjn.correlationAttributes && (
+        )}
+        {activity?.lastRun && (
+          <div className="mb-3 flex flex-wrap items-center gap-2 text-[11px]" style={{ color: T.fgMuted }}>
+            <span className="font-mono" style={{ color: T.fg }}>
+              latest {activity.lastRun.status}
+            </span>
+            <span>·</span>
+            <span>{new Date(activity.lastRun.endedAt || activity.lastRun.startedAt).toLocaleString()}</span>
+            {activity.lastRun.deliveryHealth?.status && (
+              <DeliveryHealthBadge status={activity.lastRun.deliveryHealth.status} />
+            )}
+          </div>
+        )}
+        {rjn && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
+              <Icon name="trace" size={15} color={T.crux} />
+              <span style={{ fontFamily: T.mono, fontSize: 14, fontWeight: 600, color: T.fg }}>
+                {rjn.spanName || rjn.primitive}
+              </span>
+              {rjn.primitive && (
+                <Chip tone="crux" mono>
+                  {rjn.primitive}
+                </Chip>
+              )}
+              {rjn.backend && (
+                <Chip tone="muted" mono>
+                  {rjn.backend}
+                </Chip>
+              )}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {kv('primitive', rjn.primitive)}
+                {kv('backend', rjn.backend)}
+                {kv('resource', rjn.resource)}
+                {kv('id prefix', rjn.runtimeIdPrefix)}
+                {ids.map(([k, v]) => (
+                  <div key={k} style={{ display: 'flex', gap: 10, fontFamily: T.mono, fontSize: 11.5 }}>
+                    <span style={{ color: T.fgFaint, minWidth: 110 }}>{k}</span>
+                    <span style={{ color: T.fg }}>{v}</span>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {rjn.correlationAttributes && (
               <div>
                 <div
                   style={{
@@ -503,8 +547,10 @@ export function IndexObservability({ def }: { def: ViewDef }) {
                 </div>
               </div>
             )}
-          </div>
-        </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </>
   )

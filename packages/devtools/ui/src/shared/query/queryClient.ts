@@ -87,6 +87,8 @@ export const qk = {
       options?: { name?: string; limit?: number },
     ) => ['observability', 'span-events', runId, spanId, options ?? null] as const,
     resource: (family: string) => ['observability', 'resource', family] as const,
+    definitionActivity: (definitionId: string | null | undefined) =>
+      ['observability', 'definition-activity', definitionId] as const,
   },
   runtime: {
     all: ['runtime'] as const,

@@ -13,6 +13,7 @@ import type {
   CruxSpanEventId,
   CruxSpanId,
   CruxTraceId,
+  DefinitionRef,
 } from '../contract'
 import type {
   CruxPresentationDisplay,
@@ -262,5 +263,7 @@ export interface CruxRunDetail {
     metadata: number
     attachedDetails: number
   }
+  /** Canonical runtime refs recovered from authoritative run records. */
+  definitionRefs: DefinitionRef[]
   debug?: unknown
 }

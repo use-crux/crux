@@ -233,6 +233,7 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: Ru
                   orderingConfidence: run.orderingConfidence,
                   gapCount: run.gapCount,
                   traceAliasConflict: run.traceAliasConflict,
+                  deliveryHealth: run.deliveryHealth?.status,
                 }
               : undefined
           }

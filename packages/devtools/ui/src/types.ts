@@ -1212,6 +1212,15 @@ export interface ObservabilityRunsPageOptions {
   until?: string;
   cursor?: string;
   limit?: number;
+  /** Restrict to runs whose DefinitionRefs include this definition id (Phase 3 filter). */
+  definitionId?: string;
+}
+
+/** Mirrors `observability.DefinitionActivitySummary` — the Catalog rollup for one definition. */
+export interface ObservabilityDefinitionActivitySummary {
+  definitionId: string;
+  runCount: number;
+  lastRun?: ObservabilityRunSummary;
 }
 
 export interface ObservabilitySpanSummary {

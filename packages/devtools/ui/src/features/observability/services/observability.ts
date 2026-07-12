@@ -76,6 +76,7 @@ function runsPageQuery(options: ObservabilityRunsPageOptions): string {
   if (options.until) params.set('until', options.until)
   if (options.cursor) params.set('cursor', options.cursor)
   if (options.limit != null) params.set('limit', String(options.limit))
+  if (options.definitionId) params.set('definitionId', options.definitionId)
   const query = params.toString()
   return query ? `?${query}` : ''
 }

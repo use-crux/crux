@@ -8,6 +8,9 @@
  */
 
 import { Icon } from '@/qw/shell/Icon'
+import { explainRunReliability, reliabilityTone } from '@/shared/lib/run-reliability'
+import { ReliabilityGlyph } from '@/shared/components/ReliabilityGlyph'
+import { DeliveryHealthBadge } from '@/shared/components/DeliveryHealthBadge'
 import { StatStrip, StatusPill, type StatItem } from './atoms'
 
 /** Failure stepper — `‹ ⚠ n/N ›` that walks the shared selection through the
@@ -33,6 +36,8 @@ export interface RunReliabilityDetail {
   orderingConfidence?: string
   gapCount?: number
   traceAliasConflict?: boolean
+  /** Delivery/export health; "unknown" is distinct from "healthy" — see `deliveryHealthTone`. */
+  deliveryHealth?: string
 }
 
 export interface RunContextStripProps {
@@ -43,28 +48,11 @@ export interface RunContextStripProps {
   reliability?: RunReliabilityDetail
 }
 
-function reliabilityMessage(reliability: RunReliabilityDetail): string | undefined {
-  const parts: string[] = []
-  if ((reliability.segmentCount ?? 1) > 1) {
-    parts.push(
-      `${reliability.segmentCount} execution segments` +
-        (reliability.activeSegmentId ? ` · active: ${reliability.activeSegmentId}` : ' · none currently live'),
-    )
-  }
-  if ((reliability.gapCount ?? 0) > 0) {
-    parts.push(`${reliability.gapCount} sequence gap${reliability.gapCount === 1 ? '' : 's'} or missing parent reference${reliability.gapCount === 1 ? '' : 's'}`)
-  }
-  if (reliability.orderingConfidence === 'partial') {
-    parts.push('display order is partial, not fully causal')
-  }
-  if (reliability.traceAliasConflict) {
-    parts.push('this trace alias also identifies another logical run')
-  }
-  return parts.length > 0 ? parts.join(' · ') : undefined
-}
-
 export function RunContextStrip({ status, items, diagnosticsCount, errorStepper, reliability }: RunContextStripProps) {
-  const reliabilityMsg = reliability ? reliabilityMessage(reliability) : undefined
+  // Plain-language explanation for suspended/incomplete/conflicted statuses and
+  // degraded delivery health — shares its wording and signal set with the Runs
+  // list's `ReliabilityGlyph` tooltip, just spelled out in full sentences.
+  const reliabilityMsg = reliability ? explainRunReliability({ ...reliability, status }) : undefined
   const isRunning = status === 'running'
   return (
     <div
@@ -73,21 +61,18 @@ export function RunContextStrip({ status, items, diagnosticsCount, errorStepper,
     >
       <div className="flex items-center gap-3.5 px-6 py-2.5">
         <StatusPill status={status} />
+        {reliability?.deliveryHealth && <DeliveryHealthBadge status={reliability.deliveryHealth} />}
         <StatStrip items={items} size={11.5} gap={14} />
-        {reliabilityMsg && (
+        {reliabilityMsg && reliability && (
           <div
             className="flex items-center gap-1.5 rounded-[6px] px-2.5 py-1"
-            style={{ background: reliability?.traceAliasConflict ? 'var(--qw-danger-soft)' : 'var(--qw-crux-soft)' }}
+            style={{ background: `var(--qw-${reliabilityTone(reliability)}-soft)` }}
             title={reliabilityMsg}
           >
-            <Icon
-              name="layers"
-              size={12}
-              color={reliability?.traceAliasConflict ? 'var(--qw-danger)' : 'var(--qw-crux)'}
-            />
+            <ReliabilityGlyph run={reliability} />
             <span
               className="max-w-[420px] truncate text-[11px] font-medium"
-              style={{ color: reliability?.traceAliasConflict ? 'var(--qw-danger)' : 'var(--qw-crux)' }}
+              style={{ color: `var(--qw-${reliabilityTone(reliability)})` }}
             >
               {reliabilityMsg}
             </span>

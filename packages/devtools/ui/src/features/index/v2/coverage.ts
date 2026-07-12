@@ -1,0 +1,83 @@
+/**
+ * Catalog runtime-coverage classification.
+ *
+ * Consumes the compiler-owned `DEFINITION_KIND_COVERAGE` manifest
+ * (`@use-crux/core/project-index`) plus the per-definition activity rollup
+ * (`GET /api/observability/definitions/{id}/activity`) to decide which of
+ * the four Catalog Observability treatments a definition gets. This is
+ * deliberately not a hand-rolled switch over `ProjectDefinitionKind` — every
+ * branch below reads `primary`/`secondary`/`runtimePrimitiveNames` off the
+ * manifest, so a newly-added kind is classified correctly the moment its
+ * manifest entry lands, with no Catalog-side kind list to keep in sync.
+ */
+
+import { DEFINITION_KIND_COVERAGE, type CoverageDescriptor } from '@use-crux/core/project-index'
+import type { ObservabilityDefinitionActivitySummary } from '@/types'
+
+const FALLBACK_COVERAGE: CoverageDescriptor = { primary: 'fallback' }
+
+/** Look up a kind's coverage descriptor, tolerating kinds absent from the manifest (never expected, but never a crash). */
+export function coverageForKind(kind: string): CoverageDescriptor {
+  return (DEFINITION_KIND_COVERAGE as Record<string, CoverageDescriptor | undefined>)[kind] ?? FALLBACK_COVERAGE
+}
+
+export type CatalogCoverageTreatment = 'direct-activity' | 'contributor' | 'quality-primary' | 'no-runtime'
+
+/** The Catalog Observability section's read model for one definition. */
+export interface CatalogCoverageState {
+  treatment: CatalogCoverageTreatment
+  coverage: CoverageDescriptor
+  /** Distinct runs that referenced this definition, per the activity rollup. */
+  runCount: number
+  hasRuntimeEvidence: boolean
+}
+
+/**
+ * Classify one definition for the Catalog Observability section.
+ *
+ * - `direct-activity` — the kind is `directly-observed`: it's the subject of
+ *   its own runtime span. Shows the span-correlation card + "View N runs".
+ * - `contributor` — `runtime-contributor` or `structural-child` kinds that
+ *   declare at least one `runtimePrimitiveNames` entry: referenced by an
+ *   owner's span/artifacts. Shows "referenced by N runs", never a top-level
+ *   run subject.
+ * - `quality-primary` — `quality-owned` kinds (correlates through the
+ *   Quality↔observability join elsewhere on the page). When `secondary`
+ *   declares `direct-runtime` (e.g. `scorer`), the activity rollup still
+ *   surfaces genuine secondary runtime evidence (e.g. live `scoring.judge`
+ *   spans) instead of silently dropping it.
+ * - `no-runtime` — `static-only`, the `fallback` sentinel, or a
+ *   `structural-child` with no declared runtime primitive: genuinely never
+ *   the target or subject of any runtime primitive. Truthful — never a
+ *   fabricated count or a dead "View runs" link.
+ */
+export function describeCatalogCoverage(
+  kind: string,
+  activity: ObservabilityDefinitionActivitySummary | undefined,
+): CatalogCoverageState {
+  const coverage = coverageForKind(kind)
+  const runCount = activity?.runCount ?? 0
+  const declaresDirectRuntime =
+    coverage.primary === 'directly-observed' || Boolean(coverage.secondary?.includes('direct-runtime'))
+
+  if (coverage.primary === 'quality-owned' || coverage.secondary?.includes('quality-owned')) {
+    return {
+      treatment: 'quality-primary',
+      coverage,
+      runCount: declaresDirectRuntime ? runCount : 0,
+      hasRuntimeEvidence: declaresDirectRuntime && runCount > 0,
+    }
+  }
+
+  if (coverage.primary === 'directly-observed') {
+    return { treatment: 'direct-activity', coverage, runCount, hasRuntimeEvidence: runCount > 0 }
+  }
+
+  const isDerivedContributor = coverage.primary === 'runtime-contributor' || coverage.primary === 'structural-child'
+
+  if (isDerivedContributor) {
+    return { treatment: 'contributor', coverage, runCount, hasRuntimeEvidence: runCount > 0 }
+  }
+
+  return { treatment: 'no-runtime', coverage, runCount: 0, hasRuntimeEvidence: false }
+}

@@ -171,6 +171,97 @@ func (s *Service) RunDefinitionActivity(ctx context.Context, runID string) ([]De
 	return activity, nil
 }
 
+// runDefinitionRefs reconstructs the canonical runtime refs for Run Detail
+// from authoritative raw records. Source pointers deliberately stay out of the
+// derived activity table, so this read-time projection is also the only place
+// a since-deleted definition's last-known repo-relative source is recovered.
+func (s *Service) runDefinitionRefs(ctx context.Context, runID string) ([]DefinitionRef, error) {
+	rows, err := s.db.QueryContext(ctx, `
+		SELECT payload_json
+		FROM records
+		WHERE run_id = ? AND type IN ('run:start', 'span:start', 'span')
+		ORDER BY segment_seq, record_id
+	`, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	type refKey struct{ id, role string }
+	refs := make([]DefinitionRef, 0)
+	positions := make(map[refKey]int)
+	for rows.Next() {
+		var payload []byte
+		if err := rows.Scan(&payload); err != nil {
+			return nil, err
+		}
+		var envelope definitionRefsEnvelope
+		if err := json.Unmarshal(payload, &envelope); err != nil {
+			continue
+		}
+		for _, ref := range envelope.DefinitionRefs {
+			if ref.ID == "" {
+				continue
+			}
+			key := refKey{id: ref.ID, role: ref.Role}
+			if position, ok := positions[key]; ok {
+				if ref.Source != nil {
+					refs[position].Source = ref.Source
+				}
+				continue
+			}
+			positions[key] = len(refs)
+			refs = append(refs, ref)
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return refs, nil
+}
+
+// DefinitionActivitySummary is the per-definition Catalog rollup: how many
+// distinct runs referenced this definition, and the single most recent one,
+// enriched (status/delivery health) the same way the Runs list enriches every
+// row. It is derived entirely from run_definition_activity + RunsPage at read
+// time — no separate storage, no Project Index resolution (a definition
+// deleted from source still reports its historical activity truthfully).
+type DefinitionActivitySummary struct {
+	DefinitionID string      `json:"definitionId"`
+	RunCount     int         `json:"runCount"`
+	LastRun      *RunSummary `json:"lastRun,omitempty"`
+}
+
+// DefinitionActivitySummary answers "what has this definition actually done
+// at runtime": a distinct-run count plus the newest matching run, fully
+// enriched via the same RunsPage path the Runs list uses (so its delivery
+// health/status/tone are never a second, independently-derived rendering).
+func (s *Service) DefinitionActivitySummary(ctx context.Context, definitionID string) (DefinitionActivitySummary, error) {
+	summary := DefinitionActivitySummary{DefinitionID: definitionID}
+	if definitionID == "" {
+		return summary, nil
+	}
+	countCtx, cancel := s.queryContext(ctx)
+	defer cancel()
+	if err := s.db.QueryRowContext(countCtx, `
+		SELECT COUNT(DISTINCT run_id) FROM run_definition_activity WHERE definition_id = ?
+	`, definitionID).Scan(&summary.RunCount); err != nil {
+		return DefinitionActivitySummary{}, fmt.Errorf("count runs for definition %q: %w", definitionID, err)
+	}
+	if summary.RunCount == 0 {
+		return summary, nil
+	}
+	page, err := s.RunsPage(ctx, RunListOptions{DefinitionID: definitionID, Limit: 1})
+	if err != nil {
+		return DefinitionActivitySummary{}, fmt.Errorf("load latest run for definition %q: %w", definitionID, err)
+	}
+	if len(page.Rows) > 0 {
+		lastRun := page.Rows[0]
+		summary.LastRun = &lastRun
+	}
+	return summary, nil
+}
+
 // RebuildDefinitionActivity truncates run_definition_activity and reprojects it
 // from the immutable stored records, proving the table is a derived projection
 // rebuildable from the authoritative source alone. It never bumps a revision:

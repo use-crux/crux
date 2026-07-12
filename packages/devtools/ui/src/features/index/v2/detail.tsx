@@ -214,7 +214,12 @@ export function IndexDetail({ def, onExpand }: { def: ViewDef | undefined; onExp
   const chips = indexFactChips(def)
   const q = def.quality
   const directLints = idx.lintsForDef(def.id).filter((f) => f.primaryDefinitionId === def.id)
-  const order = indexSectionOrder(def)
+  const configuredOrder = indexSectionOrder(def)
+  // Runtime coverage is exhaustive and manifest-driven; even static-only and
+  // structural kinds need a truthful "no runtime evidence" explanation.
+  const order = configuredOrder.includes('observability')
+    ? configuredOrder
+    : [...configuredOrder, 'observability']
   const actions = KIND_ACTIONS[def.kind] ?? ['Open in runs']
 
   // quick-reference properties band — the at-a-glance health of the entry

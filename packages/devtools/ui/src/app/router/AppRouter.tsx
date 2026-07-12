@@ -73,6 +73,7 @@ export function AppRouter({ nav }: { nav: NavState }) {
                   last: nav.last,
                   has: nav.has,
                   search: nav.search,
+                  definitionId: nav.definitionId,
                 }
               : {}
           }

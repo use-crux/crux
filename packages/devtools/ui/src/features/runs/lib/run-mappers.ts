@@ -14,6 +14,7 @@ export function runsPageOptionsFromFilters(filters: RunsFilters): ObservabilityR
   return {
     status: filters.status && filters.status.length > 0 ? filters.status : undefined,
     since: since != null ? new Date(since).toISOString() : undefined,
+    definitionId: filters.definitionId || undefined,
   }
 }
 

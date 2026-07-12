@@ -131,6 +131,20 @@ func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Serv
 		writeObservabilityRead(w, page, err)
 	})
 
+	// GET /api/observability/definitions/{definitionId}/activity is the Catalog
+	// rollup for one definition: a distinct-run count plus the newest matching
+	// run (fully enriched, including delivery health). It never validates the
+	// id against the current Project Index snapshot — the DevTools UI owns
+	// that read-time resolution, per binding spec 04 §2.
+	mux.HandleFunc("GET /api/observability/definitions/{definitionId}/activity", func(w http.ResponseWriter, r *http.Request) {
+		if service == nil {
+			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
+			return
+		}
+		summary, err := service.DefinitionActivitySummary(r.Context(), r.PathValue("definitionId"))
+		writeObservabilityRead(w, summary, err)
+	})
+
 	mux.HandleFunc("GET /api/observability/runs/{runId}", func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)

@@ -14,10 +14,12 @@ import { useMemo, type ReactNode } from 'react'
 import { cn } from '@/shared/lib/utils'
 import { Chip, ScoreBar } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
-import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
+import { useNavigation } from '@/app/navigation/useNavigation'
+import { useProjectDefinitionIds } from '@/shared/query/useProjectDefinitionIds'
 import type { ObservabilityRunDetail, ObservabilityRunDetailNode } from '@/types'
 import type { CruxCitationReportPreview, CruxScoreReportPreview } from '@use-crux/core/observability'
 import { KindTag, StatusPill, type RunNodeKind } from './atoms'
+import { definitionRefLinks, type DefinitionRefLink } from '../lib/definition-ref-links'
 import { routingFacts, governanceFacts } from './GenerationDecisions'
 import { RunInsightFacts, TurnInspectorFacts } from './explain/InspectorFacts'
 import { collectTurnReports } from '@/features/run-detail/lib/explain/rollup'
@@ -85,32 +87,6 @@ function Metric({ k, v, tone }: { k: string; v: ReactNode; tone?: string }) {
   )
 }
 
-// ─── index link rows (contextual IDs → Project Index) ────────────
-
-interface IndexLink {
-  label: string
-  value: string
-  /** Nav target when the index has a home for this id; else plain text. */
-  to?: NavState
-}
-
-function indexLinks(node: ObservabilityRunDetailNode): IndexLink[] {
-  const out: IndexLink[] = []
-  if (node.promptId)
-    out.push({ label: 'prompt', value: node.promptId, to: { view: 'library-index', promptId: node.promptId } })
-  if (node.contextId)
-    out.push({ label: 'context', value: node.contextId, to: { view: 'library-index', contextId: node.contextId } })
-  if (node.toolName)
-    out.push({ label: 'tool', value: node.toolName, to: { view: 'library-index', toolName: node.toolName } })
-  if (node.memoryId)
-    out.push({ label: 'memory', value: node.memoryId, to: { view: 'library-memory', memoryId: node.memoryId } })
-  // No dedicated index route yet — show as plain text (don't render a dead link).
-  if (node.agentId) out.push({ label: 'agent', value: node.agentId })
-  if (node.flowId) out.push({ label: 'flow', value: node.flowId })
-  if (node.retrieverId) out.push({ label: 'retriever', value: node.retrieverId })
-  return out
-}
-
 // ─── attributes (metadata catch-all) ────────────────────────────────
 
 function attributeRows(node: ObservabilityRunDetailNode): { k: string; v: string }[] {
@@ -160,6 +136,11 @@ export function SpanInspector({
     return runDetail.root
   }, [runDetail, selectedNodeId])
 
+  // Read-time resolution against the *current* Project Index snapshot — a
+  // DefinitionRef captured at run time can outlive a rename/delete of its
+  // source definition, so every id is checked here rather than assumed live.
+  const knownDefinitionIds = useProjectDefinitionIds()
+
   const runLevel = !node || node.id === runDetail?.root.id || node.kind === 'run'
 
   if (!node) {
@@ -194,7 +175,7 @@ export function SpanInspector({
   const detailsMs = timing?.detailsMs
   const timingTotal = (selfMs ?? 0) + (childrenMs ?? 0) + (detailsMs ?? 0)
 
-  const links = indexLinks(node)
+  const links = runLevel ? definitionRefLinks(runDetail?.definitionRefs ?? [], knownDefinitionIds) : []
   const relations = node.relations ?? []
   const diagnostics = node.diagnostics ?? []
   const attrs = attributeRows(node)
@@ -558,24 +539,37 @@ function InspectorHeader({ runLevel, onCollapse }: { runLevel: boolean; onCollap
   )
 }
 
-function IndexRow({ link }: { link: IndexLink }) {
+function IndexRow({ link }: { link: DefinitionRefLink }) {
   const { navigate } = useNavigation()
-  const clickable = link.to != null
+  const clickable = link.resolved && link.to != null
   return (
     <div
       className={cn('flex items-center gap-2 py-0.5', clickable && 'cursor-pointer')}
-      onClick={clickable ? () => navigate(link.to as NavState) : undefined}
+      onClick={clickable ? () => navigate(link.to!) : undefined}
+      title={link.resolved ? undefined : 'Not found in the current Project Index — the source definition may have been renamed or deleted.'}
     >
       <span className="w-[52px] font-mono text-[9.5px]" style={{ color: 'var(--qw-fg-faint)' }}>
         {link.label}
       </span>
-      <span
-        className="flex-1 truncate font-mono text-[11px]"
-        style={{ color: clickable ? 'var(--qw-crux)' : 'var(--qw-fg-muted)' }}
-      >
-        {link.value}
-      </span>
-      {clickable && <Icon name="link" size={11} color="var(--qw-fg-faint)" />}
+      <div className="min-w-0 flex-1">
+        <div
+          className="truncate font-mono text-[11px]"
+          style={{ color: clickable ? 'var(--qw-crux)' : 'var(--qw-fg-muted)' }}
+        >
+          {link.value}
+        </div>
+        <div className="truncate font-mono text-[9px]" style={{ color: 'var(--qw-fg-faint)' }}>
+          {link.role}
+          {link.source ? ` · ${link.source.file}:${link.source.line}` : ''}
+        </div>
+      </div>
+      {clickable ? (
+        <Icon name="link" size={11} color="var(--qw-fg-faint)" />
+      ) : (
+        <span className="font-mono text-[9px]" style={{ color: 'var(--qw-fg-faint)' }}>
+          unresolved
+        </span>
+      )}
     </div>
   )
 }

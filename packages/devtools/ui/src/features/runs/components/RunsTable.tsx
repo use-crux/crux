@@ -12,7 +12,6 @@ import { summarizeRunGroup, type RunGroup } from '../lib/run-groups'
 import {
   KIND_DOT_COLOR,
   KIND_TONE,
-  deliveryHealthTone,
   formatCost,
   formatGraphCounts,
   formatLatency,
@@ -21,6 +20,8 @@ import {
   isLiveStatus,
   statusTone,
 } from '../lib/run-format'
+import { ReliabilityGlyph } from '@/shared/components/ReliabilityGlyph'
+import { DeliveryHealthBadge } from '@/shared/components/DeliveryHealthBadge'
 
 interface RunsTableProps {
   groups: readonly RunGroup[]
@@ -296,24 +297,6 @@ function DiagnosticsGlyph({ count, severity }: { count: number; severity?: strin
  * single-segment runs stay visually calm (binding spec 04 §5). Plain-
  * language detail lives in the run-detail context strip; this is a heads-up.
  */
-function ReliabilityGlyph({ run }: { run: RunRow }) {
-  const parts: string[] = []
-  if ((run.segmentCount ?? 1) > 1) parts.push(`${run.segmentCount} segments`)
-  if ((run.gapCount ?? 0) > 0) parts.push(`${run.gapCount} sequence gap${run.gapCount === 1 ? '' : 's'}`)
-  if (run.traceAliasConflict) parts.push('conflicting trace alias')
-  if (run.orderingConfidence === 'partial') parts.push('partial ordering')
-  if (run.deliveryHealth === 'degraded') parts.push('delivery degraded')
-  const tone = run.traceAliasConflict ? 'danger' : run.deliveryHealth === 'degraded' ? deliveryHealthTone('degraded') : 'crux'
-  const color = tone === 'danger' ? 'var(--qw-danger)' : tone === 'warn' ? 'var(--qw-warn)' : 'var(--qw-crux)'
-  return (
-    <QwTooltip content={parts.join(' · ')}>
-      <span className="flex flex-shrink-0 items-center" style={{ color }} aria-label={parts.join(', ')}>
-        <Icon name="layers" size={11} color={color} />
-      </span>
-    </QwTooltip>
-  )
-}
-
 function RunCell({ run, col, visibleSet }: { run: RunRow; col: ColumnId; visibleSet: ReadonlySet<ColumnId> }) {
   switch (col) {
     case 'kind':
@@ -336,6 +319,7 @@ function RunCell({ run, col, visibleSet }: { run: RunRow; col: ColumnId; visible
           <Chip tone={statusTone(run.status)} dot={!live}>
             {run.status}
           </Chip>
+          {run.deliveryHealth && <DeliveryHealthBadge status={run.deliveryHealth} />}
           {hasReliabilityDetail(run) && <ReliabilityGlyph run={run} />}
         </span>
       )

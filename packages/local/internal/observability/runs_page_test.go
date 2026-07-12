@@ -215,3 +215,49 @@ func TestRunsPageDeliveryHealthIsUnknownWithoutIngestConflictsAndDegradedWithThe
 		t.Fatalf("delivery health rejected = %d, want >= 1", page.Rows[0].DeliveryHealth.Rejected)
 	}
 }
+
+func TestRunsPageDeliveryHealthIsHealthyForAFullyDeliveredTerminalRun(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	ingestRunStart(t, service, "run_health_ok", "seg_health_ok", "trace_health_ok", "running", "2026-05-16T23:00:00.000Z")
+
+	end := mustBatch(t, `{"schemaVersion":2,"recordId":"rec_end_run_health_ok","type":"run:end","runId":"run_health_ok","segmentId":"seg_health_ok","segmentSeq":2,"traceId":"trace_health_ok","endedAt":"2026-05-16T23:00:01.000Z","durationMs":1000,"status":"ok"}`)
+	if err := service.Ingest(ctx, end); err != nil {
+		t.Fatalf("ingest run end: %v", err)
+	}
+
+	page, err := service.RunsPage(ctx, RunListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Rows) != 1 {
+		t.Fatalf("rows = %#v", page.Rows)
+	}
+	row := page.Rows[0]
+	if row.Status != "ok" || row.EndedAt == "" {
+		t.Fatalf("run did not reach a clean terminal state: %#v", row)
+	}
+	if row.GapCount != 0 || row.OrderingConfidence != "causal" || row.TraceAliasConflict {
+		t.Fatalf("run is not a clean single-segment delivery: gapCount=%d orderingConfidence=%q traceAliasConflict=%v", row.GapCount, row.OrderingConfidence, row.TraceAliasConflict)
+	}
+	if row.DeliveryHealth == nil || row.DeliveryHealth.Status != "healthy" {
+		t.Fatalf("delivery health = %#v, want healthy for a fully-delivered terminal run", row.DeliveryHealth)
+	}
+}
+
+func TestRunsPageDeliveryHealthStaysUnknownForARunningRun(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	ingestRunStart(t, service, "run_health_running", "seg_health_running", "trace_health_running", "running", "2026-05-16T23:05:00.000Z")
+
+	page, err := service.RunsPage(ctx, RunListOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(page.Rows) != 1 {
+		t.Fatalf("rows = %#v", page.Rows)
+	}
+	if page.Rows[0].DeliveryHealth == nil || page.Rows[0].DeliveryHealth.Status != "unknown" {
+		t.Fatalf("delivery health = %#v, want unknown for a still-running run", page.Rows[0].DeliveryHealth)
+	}
+}

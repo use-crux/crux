@@ -1,5 +1,12 @@
 import type { ChipTone } from '@/qw/shell/primitives'
 import type { RunKind, RunRow } from '../types'
+export {
+  deliveryHealthTone,
+  explainRunReliability,
+  reliabilityParts,
+  reliabilityTone,
+  type ReliabilitySignals,
+} from '@/shared/lib/run-reliability'
 
 // Runtime-plane family→tone, mirroring the canonical registry in
 // run-detail/components/atoms.tsx (KIND_TONE) and the design system §3:
@@ -59,17 +66,6 @@ export function statusTone(status: string): ChipTone {
 /** A run is "live" (warrants the pulsing indicator) only while running. */
 export function isLiveStatus(status: string): boolean {
   return status === 'running'
-}
-
-const DELIVERY_HEALTH_TONE: Record<string, ChipTone> = {
-  healthy: 'ok',
-  degraded: 'warn',
-  unknown: 'muted', // deliberately distinct from "healthy" — no persisted correlation, not a clean bill of health
-}
-
-export function deliveryHealthTone(status: string | undefined): ChipTone {
-  if (!status) return 'muted'
-  return DELIVERY_HEALTH_TONE[status] ?? 'muted'
 }
 
 /**

@@ -293,15 +293,16 @@ type presentationDetail struct {
 }
 
 type RunDetail struct {
-	SchemaVersion int                           `json:"schemaVersion"`
-	Run           RunSummary                    `json:"run"`
-	Root          RunDetailNode                 `json:"root"`
-	Rows          []RunDetailRow                `json:"rows"`
-	SpanIndex     map[string]RunDetailPlacement `json:"spanIndex"`
-	Facets        map[string]map[string]int     `json:"facets"`
-	Diagnostics   []RunDetailDiagnostic         `json:"diagnostics"`
-	Counts        RunDetailCounts               `json:"counts"`
-	Debug         *Graph                        `json:"debug,omitempty"`
+	SchemaVersion  int                           `json:"schemaVersion"`
+	Run            RunSummary                    `json:"run"`
+	Root           RunDetailNode                 `json:"root"`
+	Rows           []RunDetailRow                `json:"rows"`
+	SpanIndex      map[string]RunDetailPlacement `json:"spanIndex"`
+	Facets         map[string]map[string]int     `json:"facets"`
+	Diagnostics    []RunDetailDiagnostic         `json:"diagnostics"`
+	Counts         RunDetailCounts               `json:"counts"`
+	DefinitionRefs []DefinitionRef               `json:"definitionRefs"`
+	Debug          *Graph                        `json:"debug,omitempty"`
 }
 
 type RunDetailCounts struct {

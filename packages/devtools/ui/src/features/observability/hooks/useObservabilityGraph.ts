@@ -243,8 +243,17 @@ export function useObservabilityRunsPage(options: ObservabilityRunsPageOptions =
       until: options.until,
       cursor: options.cursor,
       limit: options.limit,
+      definitionId: options.definitionId || undefined,
     }),
-    [options.status, options.sessionId, options.since, options.until, options.cursor, options.limit],
+    [
+      options.status,
+      options.sessionId,
+      options.since,
+      options.until,
+      options.cursor,
+      options.limit,
+      options.definitionId,
+    ],
   )
   const key = qk.observability.runsPage(stableOptions)
   const client = useQueryClient()

@@ -13,6 +13,10 @@ func definitionRefJSON(id, kind, role string) string {
 	return fmt.Sprintf(`{"id":%q,"kind":%q,"role":%q}`, id, kind, role)
 }
 
+func definitionRefWithSourceJSON(id, kind, role, file string, line int) string {
+	return fmt.Sprintf(`{"id":%q,"kind":%q,"role":%q,"source":{"file":%q,"line":%d}}`, id, kind, role, file, line)
+}
+
 func runStartWithRefsJSON(recordID, runID, segmentID string, seq int, startedAt string, refs ...string) string {
 	return fmt.Sprintf(`{"schemaVersion":2,"recordId":%q,"type":"run:start","runId":%q,"segmentId":%q,"segmentSeq":%d,"name":"n","rootPrimitive":"agent.run","startedAt":%q,"status":"running","definitionRefs":[%s]}`,
 		recordID, runID, segmentID, seq, startedAt, joinRefs(refs))
@@ -70,6 +74,45 @@ func TestDefinitionActivityProjectedInIngestTransaction(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("definition activity mismatch:\n got %+v\nwant %+v", got, want)
+	}
+}
+
+func TestRunDetailCarriesCanonicalDefinitionRefsWithLastKnownSource(t *testing.T) {
+	service := newTestService(t)
+	mustIngest(t, service,
+		runStartWithRefsJSON("r-start-detail", "run-detail-refs", "seg-detail", 1, "2026-01-01T00:00:00.000Z",
+			definitionRefWithSourceJSON("agent:planner", "agent", "invoked-agent", "src/agent.ts", 12)),
+		spanWithRefsJSON("r-span-detail", "run-detail-refs", "seg-detail", 2, "sp-detail", "2026-01-01T00:00:01.000Z",
+			definitionRefWithSourceJSON("retriever:docs", "retriever", "invoked-retriever", "src/retrieval.ts", 8)),
+	)
+
+	detail, err := service.RunDetail(context.Background(), "run-detail-refs")
+	if err != nil {
+		t.Fatalf("run detail: %v", err)
+	}
+	want := []DefinitionRef{
+		{ID: "agent:planner", Kind: "agent", Role: "invoked-agent", Source: &SanitizedSourceRef{File: "src/agent.ts", Line: 12}},
+		{ID: "retriever:docs", Kind: "retriever", Role: "invoked-retriever", Source: &SanitizedSourceRef{File: "src/retrieval.ts", Line: 8}},
+	}
+	if !reflect.DeepEqual(detail.DefinitionRefs, want) {
+		t.Fatalf("definition refs mismatch:\n got %+v\nwant %+v", detail.DefinitionRefs, want)
+	}
+}
+
+func TestDefinitionActivitySummaryReportsDistinctRunsAndLatestRun(t *testing.T) {
+	service := newTestService(t)
+	ref := definitionRefJSON("agent:planner", "agent", "invoked-agent")
+	mustIngest(t, service,
+		runStartWithRefsJSON("r-summary-old", "run-summary-old", "seg-summary-old", 1, "2026-01-01T00:00:00.000Z", ref),
+		runStartWithRefsJSON("r-summary-new", "run-summary-new", "seg-summary-new", 1, "2026-01-02T00:00:00.000Z", ref),
+	)
+
+	summary, err := service.DefinitionActivitySummary(context.Background(), "agent:planner")
+	if err != nil {
+		t.Fatalf("definition activity summary: %v", err)
+	}
+	if summary.RunCount != 2 || summary.LastRun == nil || summary.LastRun.RunID != "run-summary-new" {
+		t.Fatalf("unexpected summary: %+v", summary)
 	}
 }
 

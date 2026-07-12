@@ -288,8 +288,12 @@ func (s *Service) RunsPage(ctx context.Context, opts RunListOptions) (RunsRespon
 }
 
 // enrichRunDeliveryHealth batches one ingest_health query across every run in
-// the page, instead of one query per row, and reports "unknown" for runs
-// with no persisted health signal rather than defaulting to "healthy".
+// the page, instead of one query per row, reports "degraded" for runs with a
+// persisted ingest-health rejection, "healthy" for runs that reached a
+// terminal state with no observed gaps/conflicts and no rejection, and
+// "unknown" for everything else (e.g. still running, or reconciled with
+// segment gaps/ordering uncertainty short of an outright conflict) rather
+// than defaulting to "healthy".
 func (s *Service) enrichRunDeliveryHealth(ctx context.Context, runs []RunSummary) error {
 	if len(runs) == 0 {
 		return nil
@@ -306,7 +310,29 @@ func (s *Service) enrichRunDeliveryHealth(ctx context.Context, runs []RunSummary
 			return err
 		}
 	}
+	for i := range runs {
+		if runs[i].DeliveryHealth.Status == "unknown" && isFullyDeliveredRun(&runs[i]) {
+			runs[i].DeliveryHealth = &RunDeliveryHealth{Status: "healthy"}
+		}
+	}
 	return nil
+}
+
+// isFullyDeliveredRun reports whether a run reached a terminal, non-conflict
+// lifecycle status with a fully causal segment chain (no gaps, no broken
+// chain, no trace-id aliasing) — the only truthful, positive basis for
+// reporting "healthy" delivery. A run that is still running, was reconciled
+// as incomplete/conflicted, or whose segment ordering is only "partial"
+// stays "unknown": the server has no persisted signal proving delivery
+// completed cleanly, and "unknown" must never be conflated with "healthy".
+func isFullyDeliveredRun(run *RunSummary) bool {
+	return run.EndedAt != "" &&
+		run.Status != "running" &&
+		run.Status != "incomplete" &&
+		run.Status != "conflicted" &&
+		run.OrderingConfidence == "causal" &&
+		run.GapCount == 0 &&
+		!run.TraceAliasConflict
 }
 
 func (s *Service) enrichRunDeliveryHealthBatch(ctx context.Context, runIDs []string, byRunID map[string]*RunSummary) error {
@@ -1015,7 +1041,12 @@ func (s *Service) RunDetail(ctx context.Context, runID string) (RunDetail, error
 	if err != nil {
 		return RunDetail{}, err
 	}
-	return ProjectRunDetail(graph, DefaultProjectionOptions()), nil
+	detail := ProjectRunDetail(graph, DefaultProjectionOptions())
+	detail.DefinitionRefs, err = s.runDefinitionRefs(ctx, graph.Run.RunID)
+	if err != nil {
+		return RunDetail{}, fmt.Errorf("list definition refs for run %q: %w", runID, err)
+	}
+	return detail, nil
 }
 
 func applyRunSummaryGraphRollups(run *RunSummary, spans []SpanSummary, events []SpanEventSummary, artifacts []ArtifactSummary, edges []EdgeSummary) {

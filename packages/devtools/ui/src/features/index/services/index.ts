@@ -1,4 +1,5 @@
 import { expectOk, fetchJson, postJson } from '@/shared/services/http'
+import { fetchProjectIndex } from '@/shared/services/project-index'
 import type { ProjectIndexData, ProjectIndexWatchRunInfo, ProjectIndexWatchStatus } from '@/types'
 
 export type IndexData = ProjectIndexData
@@ -7,21 +8,7 @@ type IndexWatchStatusPayload = Partial<Omit<IndexWatchStatus, 'lastRun'> & { las
 
 export const indexService = {
   async getIndex(signal?: AbortSignal): Promise<IndexData> {
-    const payload = await fetchJson<Partial<IndexData> | null>('/api/index', signal)
-    return {
-      schemaVersion: payload?.schemaVersion ?? 1,
-      prompts: payload?.prompts ?? [],
-      contexts: payload?.contexts ?? [],
-      tools: payload?.tools ?? [],
-      project: payload?.project,
-      indexedAt: payload?.indexedAt,
-      indexing: payload?.indexing,
-      definitions: payload?.definitions ?? [],
-      relations: payload?.relations ?? [],
-      diagnostics: payload?.diagnostics ?? [],
-      lintFindings: payload?.lintFindings ?? [],
-      sources: payload?.sources ?? [],
-    }
+    return fetchProjectIndex(signal)
   },
 
   /**
