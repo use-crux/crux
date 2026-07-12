@@ -8,8 +8,17 @@ export function inferMediaFormat(input: {
   const extension = input.extension?.toLowerCase().split(/[?#]/, 1)[0] ?? ''
   const contentType = input.contentType?.toLowerCase().split(';', 1)[0] ?? ''
   if (isImageExtension(extension) || isImageType(contentType) || sniffImage(input.bytes)) return 'image'
+  if (isVideoExtension(extension) || isVideoType(contentType)) return 'video'
   if (isAudioExtension(extension) || isAudioType(contentType) || sniffAudio(input.bytes)) return 'audio'
   return 'unknown'
+}
+
+function isVideoType(value: string): boolean {
+  return ['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska'].includes(value)
+}
+
+function isVideoExtension(value: string): boolean {
+  return ['.mp4', '.mov', '.mkv'].some((extension) => value.endsWith(extension))
 }
 
 function isAudioType(value: string): boolean {

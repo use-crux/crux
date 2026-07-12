@@ -1,6 +1,6 @@
 import type { Asset, AssetRef, AudioSource, Message, TranscriptionResult } from '@use-crux/core'
 
-export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
+export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | 'video' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
 
 /** Explicit source coordinates retained by derived ingest parts. */
 export type IngestSourceLocation =
@@ -125,11 +125,12 @@ export interface SourceLoader {
 
 /** Application-owned model operations used to derive ordinary ingest text. */
 export interface IngestMediaOperations {
-  /** Bound language generation operation; the application closes over its model. */
-  readonly generate?: (input: Readonly<{
-    messages: readonly Message[]
-    system?: string
-    maxOutputTokens?: number
+  /** Bound semantic description operation; the application closes over its model/provider. */
+  readonly describe?: (input: Readonly<{
+    readonly messages: readonly Message[]
+    readonly system?: string
+    readonly maxOutputTokens?: number
+    readonly abortSignal?: AbortSignal
   }>) => Promise<{ readonly text: string }>
   /** Bound transcription operation used by audio ingestion. */
   readonly transcribe?: (input: Readonly<{ audio: AudioSource; abortSignal?: AbortSignal }>) => Promise<

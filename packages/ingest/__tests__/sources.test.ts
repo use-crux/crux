@@ -47,9 +47,9 @@ describe('@use-crux/ingest structured sources', () => {
     await writeFile(path, new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]))
     const transcribe = vi.fn(async () => ({
       text: 'Hello world',
-      segments: [{ text: 'Hello', start: 0, end: 0.5 }, { text: 'world', start: 0.5, end: 1 }],
+      segments: [{ text: 'Hello', startSecond: 0, endSecond: 0.5 }, { text: 'world', startSecond: 0.5, endSecond: 1 }], words: [],
       language: 'en', durationInSeconds: 1, warnings: ['native warning'],
-      metadata: { secret: 'provider-secret' }, raw: { secret: 'raw-secret' },
+      providerMetadata: { secret: 'provider-secret' }, raw: { secret: 'raw-secret' }, execution: { kind: 'native' as const, calls: 1 },
     }))
 
     const [document] = await collect(fileSource(path, { namespace: 'kb', media: { transcribe } }).documents())
@@ -67,7 +67,7 @@ describe('@use-crux/ingest structured sources', () => {
 
   it('uses one full transcript part without timing and propagates only StoredAsset refs', async () => {
     const transcribe = vi.fn(async () => ({
-      text: 'Full transcript', segments: [], warnings: ['timing unavailable'], raw: null,
+      text: 'Full transcript', segments: [], words: [], warnings: ['timing unavailable'], raw: null, execution: { kind: 'native' as const, calls: 1 },
     }))
     const stored = {
       type: 'data' as const,
@@ -87,7 +87,7 @@ describe('@use-crux/ingest structured sources', () => {
   })
 
   it('does not retain signed audio URLs after fetching', async () => {
-    const transcribe = vi.fn(async () => ({ text: 'Remote transcript', segments: [], raw: null }))
+    const transcribe = vi.fn(async () => ({ text: 'Remote transcript', segments: [], words: [], warnings: [], raw: null, execution: { kind: 'native' as const, calls: 1 } }))
     const [document] = await collect(urlSource('https://example.com/meeting.wav?signature=secret', {
       namespace: 'kb', media: { transcribe },
       fetch: async () => new Response(new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x41, 0x56, 0x45]), {
@@ -108,7 +108,7 @@ describe('@use-crux/ingest structured sources', () => {
     await expect(collect(fileSource(path, { namespace: 'kb' }).documents())).rejects.toThrow(/media\.transcribe/)
 
     const invalid = vi.fn(async () => ({
-      text: 'Hello', segments: [{ text: 'Hello', start: 2, end: 1 }], raw: null,
+      text: 'Hello', segments: [{ text: 'Hello', startSecond: 2, endSecond: 1 }], words: [], warnings: [], raw: null, execution: { kind: 'native' as const, calls: 1 },
     }))
     await expect(collect(fileSource(path, { namespace: 'kb', media: { transcribe: invalid } }).documents())).rejects.toThrow(/invalid seconds segments/)
 
@@ -118,20 +118,46 @@ describe('@use-crux/ingest structured sources', () => {
     expect(result).toMatchObject({ ok: false, error: { message: 'operation aborted', parser: 'audio' } })
   })
 
+  it('derives video visual and soundtrack evidence explicitly with time lineage', async () => {
+    const asset = {
+      type: 'data' as const,
+      data: new Uint8Array([0, 0, 0, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]),
+      mediaType: 'video/mp4',
+    }
+    const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => ({ text: 'A chart is shown.' }))
+    const transcribe = vi.fn(async () => ({
+      text: 'Revenue doubled.', segments: [{ text: 'Revenue doubled.', startSecond: 2, endSecond: 4 }], words: [], warnings: [], raw: null, execution: { kind: 'native' as const, calls: 1 },
+    }))
+
+    const [document] = await collect(fileSource(asset, {
+      namespace: 'kb', sourceId: 'demo', media: { describe, transcribe },
+    }).documents())
+
+    expect(describe.mock.calls[0]?.[0].messages[0]).toMatchObject({
+      content: [{ type: 'text' }, { type: 'video', mediaType: 'video/mp4' }],
+    })
+    expect(document.parts).toMatchObject([
+      { id: 'video:visual:1', content: 'A chart is shown.' },
+      { id: 'video:soundtrack:1', content: 'Revenue doubled.', sourceLocation: { type: 'time', start: 2, end: 4 } },
+    ])
+    expect(document.metadata).toMatchObject({ format: 'video', parser: 'video', derivationMode: 'visual-and-soundtrack' })
+    expect(document.warnings).toEqual([{ code: 'parser_warning', message: 'Video derivation used visual and soundtrack evidence.' }])
+  })
+
   it('derives ordinary text from image files through one bound media operation', async () => {
     const dir = await makeTempDir()
     const path = join(dir, 'chart.png')
     await writeFile(path, new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a]))
-    const generate = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['generate']>>[0]) => ({ text: 'Revenue rose from 10 to 20.' }))
+    const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => ({ text: 'Revenue rose from 10 to 20.' }))
 
-    const media = { generate } satisfies IngestMediaOperations
+    const media = { describe } satisfies IngestMediaOperations
     const docs = await collect(fileSource(path, {
       namespace: 'kb',
       media,
     }).documents())
 
-    expect(generate).toHaveBeenCalledTimes(1)
-    expect(generate.mock.calls[0]?.[0].messages[0]).toMatchObject({
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(describe.mock.calls[0]?.[0].messages[0]).toMatchObject({
       role: 'user',
       content: [{ type: 'text' }, { type: 'image', mediaType: 'image/png' }],
     })
@@ -139,7 +165,7 @@ describe('@use-crux/ingest structured sources', () => {
   })
 
   it('accepts explicitly identified Assets without retaining their bytes', async () => {
-    const generate = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['generate']>>[0]) => ({ text: 'A small chart.' }))
+    const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => ({ text: 'A small chart.' }))
     const asset = {
       type: 'data' as const,
       data: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
@@ -147,7 +173,7 @@ describe('@use-crux/ingest structured sources', () => {
       filename: 'chart.png',
     }
     const [document] = await collect(fileSource(asset, {
-      namespace: 'kb', sourceId: 'asset:chart', media: { generate },
+      namespace: 'kb', sourceId: 'asset:chart', media: { describe },
     }).documents())
 
     expect(document.sourceId).toBe('asset:chart')
@@ -155,7 +181,7 @@ describe('@use-crux/ingest structured sources', () => {
     expect(JSON.stringify(document)).not.toContain('137,80,78,71')
   })
 
-  it('detects URL images by response MIME and fails precisely without media.generate', async () => {
+  it('detects URL images by response MIME and fails precisely without media.describe', async () => {
     const source = urlSource('https://example.com/chart', {
       namespace: 'kb',
       fetch: async () => new Response(new Uint8Array([0x89, 0x50, 0x4e, 0x47]), {
@@ -163,7 +189,7 @@ describe('@use-crux/ingest structured sources', () => {
       }),
     })
 
-    await expect(collect(source.documents())).rejects.toThrow(/chart.*image\/png.*media\.generate/i)
+    await expect(collect(source.documents())).rejects.toThrow(/chart.*image\/png.*media\.describe/i)
   })
 
   it('uses media generation only for PDF pages without meaningful native text', async () => {
@@ -172,13 +198,13 @@ describe('@use-crux/ingest structured sources', () => {
     const visualPath = join(dir, 'visual.pdf')
     await writeFile(textPath, makePdf('Native text'))
     await writeFile(visualPath, makePdf(''))
-    const generate = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['generate']>>[0]) => ({ text: 'Diagram page.' }))
+    const describe = vi.fn(async (_input: Parameters<NonNullable<IngestMediaOperations['describe']>>[0]) => ({ text: 'Diagram page.' }))
 
-    await collect(fileSource(textPath, { namespace: 'kb', media: { generate } }).documents())
-    const visual = await collect(fileSource(visualPath, { namespace: 'kb', media: { generate } }).documents())
+    await collect(fileSource(textPath, { namespace: 'kb', media: { describe } }).documents())
+    const visual = await collect(fileSource(visualPath, { namespace: 'kb', media: { describe } }).documents())
 
-    expect(generate).toHaveBeenCalledTimes(1)
-    expect(generate.mock.calls[0]?.[0].messages[0].content).toMatchObject([
+    expect(describe).toHaveBeenCalledTimes(1)
+    expect(describe.mock.calls[0]?.[0].messages[0].content).toMatchObject([
       { type: 'text', text: expect.stringContaining('page 1') },
       { type: 'file', mediaType: 'application/pdf' },
     ])
@@ -195,11 +221,11 @@ describe('@use-crux/ingest structured sources', () => {
       mediaType: 'audio/wav', filename: 'meeting.wav', ref: { uri: 'asset://meeting' },
     }
     const [pdfDocument] = await collect(fileSource(pdf, {
-      namespace: 'kb', sourceId: 'visual-pdf', media: { generate: async () => ({ text: 'Architecture diagram' }) },
+      namespace: 'kb', sourceId: 'visual-pdf', media: { describe: async () => ({ text: 'Architecture diagram' }) },
     }).documents())
     const [audioDocument] = await collect(fileSource(audio, {
       namespace: 'kb', sourceId: 'meeting-audio', media: { transcribe: async () => ({
-        text: 'Launch discussion', segments: [{ text: 'Launch discussion', start: 1, end: 2.5 }], raw: null,
+        text: 'Launch discussion', segments: [{ text: 'Launch discussion', startSecond: 1, endSecond: 2.5 }], words: [], warnings: [], raw: null, execution: { kind: 'native' as const, calls: 1 },
       }) },
     }).documents())
     const records = inMemoryRecordStore()

@@ -1,4 +1,4 @@
-import type { Asset, TranscriptionResult, TranscriptionSegment } from '@use-crux/core'
+import type { Asset, TranscriptInterval, TranscriptionResult } from '@use-crux/core'
 import type { IngestParser, IngestPart, IngestWarning } from './types'
 
 /** Built-in audio parser backed only by the configured media operation. */
@@ -30,26 +30,26 @@ export const audioParser: IngestParser = {
   },
 }
 
-function validateSegments(segments: TranscriptionResult<unknown, unknown, unknown>['segments'], sourceId: string): readonly TranscriptionSegment[] {
+function validateSegments(segments: TranscriptionResult<unknown, unknown, unknown>['segments'], sourceId: string): readonly TranscriptInterval[] {
   if (!Array.isArray(segments)) throw new Error(`Audio source "${sourceId}" returned invalid segments from media.transcribe.`)
   let previousEnd = 0
   return segments.map((segment) => {
     if (!segment || typeof segment.text !== 'string' || !segment.text.trim() ||
-      !Number.isFinite(segment.start) || !Number.isFinite(segment.end) || segment.start < previousEnd || segment.end < segment.start) {
+      !Number.isFinite(segment.startSecond) || !Number.isFinite(segment.endSecond) || segment.startSecond < previousEnd || segment.endSecond < segment.startSecond) {
       throw new Error(`Audio source "${sourceId}" returned invalid seconds segments from media.transcribe.`)
     }
-    previousEnd = segment.end
-    return { text: segment.text.trim(), start: segment.start, end: segment.end }
+    previousEnd = segment.endSecond
+    return { text: segment.text.trim(), startSecond: segment.startSecond, endSecond: segment.endSecond, ...(segment.speaker ? { speaker: segment.speaker } : {}) }
   })
 }
 
-function segmentParts(segments: readonly TranscriptionSegment[]): IngestPart[] {
+function segmentParts(segments: readonly TranscriptInterval[]): IngestPart[] {
   return segments.map((segment, index) => ({
     id: `audio:segment:${index + 1}`,
     kind: 'text',
     role: 'paragraph',
     content: segment.text,
-    sourceLocation: { type: 'time', unit: 'seconds', start: segment.start, end: segment.end },
+    sourceLocation: { type: 'time', unit: 'seconds', start: segment.startSecond, end: segment.endSecond },
   }))
 }
 

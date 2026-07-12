@@ -39,11 +39,11 @@ export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn'
         continue
       }
 
-      if (ctx.media?.generate) {
+      if (ctx.media?.describe) {
         const asset: Asset = input.asset ?? {
           type: 'data', data: bytes.slice(), mediaType: 'application/pdf', ...(input.title ? { filename: input.title } : {}),
         }
-        const generated = await ctx.media.generate({
+        const generated = await ctx.media.describe({
           messages: [{
             role: 'user',
             content: [
@@ -63,10 +63,10 @@ export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn'
           })
           continue
         }
-        throw new Error(`PDF source "${input.sourceId}" page ${pageNumber} returned empty text from media.generate.`)
+        throw new Error(`PDF source "${input.sourceId}" page ${pageNumber} returned empty text from media.describe.`)
       }
 
-      throw new Error(`PDF source "${input.sourceId}" page ${pageNumber} has no meaningful text and requires ParserOptions.media.generate.`)
+      throw new Error(`PDF source "${input.sourceId}" page ${pageNumber} has no meaningful text and requires ParserOptions.media.describe.`)
     }
 
     const metadata = await document.getMetadata().catch(() => undefined)

@@ -12,6 +12,7 @@ import { openIngestParseObservation } from './observability'
 import { parsePdf } from './pdf'
 import { imageParser } from './visual-image'
 import { audioParser } from './audio'
+import { videoParser } from './video'
 import type {
   IngestDocument,
   IngestError,
@@ -309,6 +310,7 @@ export const builtInParsers: IngestParser[] = [
   pdfParser,
   imageParser,
   audioParser,
+  videoParser,
   csvParser,
   jsonParser,
   docxParser,

@@ -18,6 +18,16 @@ describe('audio format detection', () => {
   })
 })
 
+describe('video format detection', () => {
+  it.each(['mp4', 'mov', 'mkv'])('detects .%s sources', (extension) => {
+    expect(inferMediaFormat({ extension: `clip.${extension}`, bytes: new Uint8Array() })).toBe('video')
+  })
+
+  it.each(['video/mp4', 'video/webm', 'video/quicktime', 'video/x-matroska'])('detects %s sources', (contentType) => {
+    expect(inferMediaFormat({ contentType, bytes: new Uint8Array() })).toBe('video')
+  })
+})
+
 function bytes(value: string): Uint8Array {
   return Uint8Array.from(value, (character) => character.charCodeAt(0))
 }

@@ -217,13 +217,14 @@ function mediaTypeFor(format: IngestFormat, contentType: string | undefined, tit
   const extension = extname(title ?? '').toLowerCase()
   const media = {
     '.wav': 'audio/wav', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.flac': 'audio/flac',
-    '.ogg': 'audio/ogg', '.webm': 'audio/webm', '.png': 'image/png', '.jpg': 'image/jpeg',
+    '.ogg': 'audio/ogg', '.webm': format === 'video' ? 'video/webm' : 'audio/webm', '.mp4': 'video/mp4',
+    '.mov': 'video/quicktime', '.mkv': 'video/x-matroska', '.png': 'image/png', '.jpg': 'image/jpeg',
     '.jpeg': 'image/jpeg', '.gif': 'image/gif', '.webp': 'image/webp',
   }[extension]
   if (media) return media
   return {
     txt: 'text/plain', md: 'text/markdown', html: 'text/html', pdf: 'application/pdf',
-    image: undefined, audio: undefined, csv: 'text/csv', json: 'application/json',
+    image: undefined, audio: undefined, video: undefined, csv: 'text/csv', json: 'application/json',
     docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', unknown: undefined,
   }[format]
