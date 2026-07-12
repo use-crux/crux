@@ -33,6 +33,8 @@ import {
 } from './internal/rag-metrics'
 import { MissingQualityModelBindingError } from './internal/errors'
 import type { GenerateFn, ModelRef } from './target'
+import type { Asset } from '../asset'
+import type { ContentPart } from '../types/content'
 
 // ─────────────────────────────────────────────────────────────────
 // Core contracts
@@ -58,6 +60,9 @@ export interface Score {
   /** Free-form diagnostics; judge rationale lives here. */
   metadata?: Record<string, unknown>
 }
+
+/** Content that may be supplied directly to the existing model judge. */
+export type JudgeContent = string | Asset | readonly ContentPart[]
 
 /**
  * A scoring function. Any `({ input, output, expected }) => Score` works —
@@ -137,7 +142,9 @@ export interface JudgeOptionsBase<N extends string> {
  * structured-output evaluations using text judges are a compile error, not
  * silently stringified JSON). @internal
  */
-export type JudgeSelect<O> = [O] extends [string] ? { select?: (output: O) => string } : { select: (output: O) => string }
+export type JudgeSelect<O> = [O] extends [JudgeContent]
+  ? { select?: (output: O) => JudgeContent }
+  : { select: (output: O) => JudgeContent }
 
 // ─────────────────────────────────────────────────────────────────
 // Library interfaces (standalone + evaluation-bound)
@@ -396,7 +403,7 @@ export function jsonSimilarity(actual: unknown, expected: unknown): number {
 // The library
 // ─────────────────────────────────────────────────────────────────
 
-function judgeScorer(opts: JudgeOptionsBase<string> & { select?: (output: never) => string }): AnyScorerFn & {
+function judgeScorer(opts: JudgeOptionsBase<string> & { select?: (output: never) => JudgeContent }): AnyScorerFn & {
   scorerName?: string
   costClass?: 'code' | 'model'
 } {

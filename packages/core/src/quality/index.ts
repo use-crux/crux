@@ -65,6 +65,7 @@ export type {
   Scorer,
   ScorerArgs,
   Score,
+  JudgeContent,
   ScorerFactory,
   ScorerLibrary,
   BoundScorerLib,
