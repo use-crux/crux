@@ -16,7 +16,12 @@ export type {
   GoogleRerankerConfig,
   GoogleRetrievalModelConfig,
 } from "./native";
-export type { GoogleGenerateImage, GoogleImageExtra } from "./image-generation";
+export type {
+  GoogleGeminiImageExtra,
+  GoogleGenerateImage,
+  GoogleImageExtra,
+  GoogleImagenImageExtra,
+} from "./image-generation";
 export type {
   GoogleTranscribe,
   GoogleTranscriptionExtra,

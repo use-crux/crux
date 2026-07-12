@@ -73,6 +73,24 @@ describe("Google speech", () => {
     ).rejects.toMatchObject({ code: "unsupported_capability" });
     expect(generateContent).not.toHaveBeenCalled();
   });
+
+  it("lets unknown Gemini ids reach the SDK and rejects missing audio MIME", async () => {
+    const withoutMime = {
+      candidates: [{ content: { parts: [{ inlineData: { data: "AQID" } }] } }],
+    };
+    const generateContent = vi.fn(async () => withoutMime);
+    const google = createGoogle(client(generateContent), {
+      cachedContent: false,
+    });
+
+    await expect(
+      google.generateSpeech({
+        model: "gemini-future-voice-model",
+        text: "Hello",
+      }),
+    ).rejects.toThrow(/MIME/i);
+    expect(generateContent).toHaveBeenCalledOnce();
+  });
 });
 
 function client(generateContent: ReturnType<typeof vi.fn>): GoogleGenAI {

@@ -100,11 +100,16 @@ export function createGoogleSpeechOperation(client: GoogleGenAI) {
         .find((candidatePart) => candidatePart.inlineData?.data);
       const data = part?.inlineData?.data;
       const mediaType = part?.inlineData?.mimeType;
+      if (typeof mediaType !== "string" || !mediaType.startsWith("audio/")) {
+        throw new TypeError(
+          "Google speech response omitted a valid audio MIME type.",
+        );
+      }
       return createGenerateSpeechResult(
         {
           type: "data",
           data: new Uint8Array(Buffer.from(data ?? "", "base64")),
-          mediaType: mediaType ?? "audio/L16",
+          mediaType,
         },
         { raw, warnings: [], execution: { kind: "native", calls: 1 } },
       );
@@ -147,7 +152,7 @@ function isMultiSpeaker(voice: GoogleSpeechVoice): voice is Readonly<{
 }
 
 function googleSpeechIssue(options: GoogleSpeechInput) {
-  if (options.model.startsWith("gemini-") && !options.model.includes("tts"))
+  if (KNOWN_NON_SPEECH_MODELS.has(options.model))
     return issue("speech.model", "model");
   if (options.outputFormat !== undefined)
     return issue("speech.output-format", "outputFormat");
@@ -163,6 +168,10 @@ function googleSpeechIssue(options: GoogleSpeechInput) {
   }
   return undefined;
 }
+
+const KNOWN_NON_SPEECH_MODELS = Object.freeze(
+  new Set(["gemini-2.0-flash", "gemini-2.5-flash", "gemini-2.5-pro"]),
+);
 
 function issue(capability: string, path: string) {
   return {

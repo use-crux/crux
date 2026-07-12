@@ -1,6 +1,7 @@
 import type {
   GenerateImagesConfig,
   GenerateImagesResponse,
+  GenerateContentConfig,
   GenerateContentResponse,
   GoogleGenAI,
   Part,
@@ -20,12 +21,23 @@ import {
   defineCompletedOperation,
 } from "@use-crux/core/adapter";
 
-/** Google-only Imagen controls forwarded to `models.generateImages()`. */
-export type GoogleImageExtra = Omit<
+/** Native Imagen controls, excluding portable fields owned by Crux. */
+export type GoogleImagenImageExtra = Omit<
   GenerateImagesConfig,
   "numberOfImages" | "aspectRatio" | "seed"
-> &
-  Record<string, unknown>;
+>;
+
+/** Native Gemini generation controls, excluding image lifecycle fields owned by Crux. */
+export type GoogleGeminiImageExtra = Omit<
+  GenerateContentConfig,
+  "abortSignal" | "responseModalities" | "imageConfig" | "seed"
+>;
+
+/** Model-family-specific native image options. */
+export interface GoogleImageExtra {
+  readonly imagen?: GoogleImagenImageExtra;
+  readonly gemini?: GoogleGeminiImageExtra;
+}
 
 /**
  * Flat Google image operation attached to a bound adapter.
@@ -48,11 +60,14 @@ type GoogleImageInput = GenerateImageOptions<
 >;
 
 const GOOGLE_IMAGE_OPERATION_SUPPORT = Object.freeze({
-  unsupportedModelPrefixes: Object.freeze([
-    "text-",
-    "embedding-",
-    "imagen-3.0-capability-",
-  ]),
+  knownUnsupportedModels: Object.freeze(
+    new Set([
+      "gemini-2.0-flash",
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+      "text-embedding-004",
+    ]),
+  ),
   common: Object.freeze({
     n: true,
     aspectRatio: true,
@@ -101,7 +116,7 @@ export function createGoogleImageOperation(client: GoogleGenAI) {
       { options, prompt },
       { signal, call },
     ): Promise<GenerateImagesResponse | GenerateContentResponse> {
-      if (isGeminiImageModel(options.model)) {
+      if (isGeminiEndpoint(options.model)) {
         return call("image.generate", async () =>
           client.models.generateContent({
             model: options.model,
@@ -109,7 +124,7 @@ export function createGoogleImageOperation(client: GoogleGenAI) {
               { role: "user", parts: await geminiPromptParts(prompt) },
             ],
             config: {
-              ...options.extra,
+              ...options.extra?.gemini,
               abortSignal: signal,
               responseModalities: ["IMAGE"],
               ...(options.seed === undefined ? {} : { seed: options.seed }),
@@ -125,7 +140,7 @@ export function createGoogleImageOperation(client: GoogleGenAI) {
           model: options.model,
           prompt: prompt.text,
           config: {
-            ...options.extra,
+            ...options.extra?.imagen,
             abortSignal: signal,
             ...(options.n === undefined ? {} : { numberOfImages: options.n }),
             ...(options.aspectRatio === undefined
@@ -207,33 +222,33 @@ function googleImageIssues(
 ): UnsupportedCapabilityIssue[] {
   const issues: UnsupportedCapabilityIssue[] = [];
   if (
-    GOOGLE_IMAGE_OPERATION_SUPPORT.unsupportedModelPrefixes.some((prefix) =>
-      options.model.startsWith(prefix),
-    )
+    GOOGLE_IMAGE_OPERATION_SUPPORT.knownUnsupportedModels.has(options.model)
   ) {
     issues.push(issue("image.model"));
   }
-  if (options.model.startsWith("gemini-") && !isGeminiImageModel(options.model))
-    issues.push(issue("image.model"));
   if (!GOOGLE_IMAGE_OPERATION_SUPPORT.common.size && options.size !== undefined)
     issues.push(issue("image.size"));
-  if (!isGeminiImageModel(options.model)) {
+  if (!isGeminiEndpoint(options.model)) {
     prompt.images.forEach((_asset, index) =>
       issues.push(issue("image.edit.reference", `prompt.images[${index}]`)),
     );
     if (prompt.mask) issues.push(issue("image.edit.mask", "prompt.mask"));
   }
   if (
-    isGeminiImageModel(options.model) &&
+    isGeminiEndpoint(options.model) &&
     options.n !== undefined &&
     options.n !== 1
   )
     issues.push(issue("image.n"));
+  if (isGeminiEndpoint(options.model) && options.extra?.imagen !== undefined)
+    issues.push(issue("image.extra.imagen", "extra.imagen"));
+  if (!isGeminiEndpoint(options.model) && options.extra?.gemini !== undefined)
+    issues.push(issue("image.extra.gemini", "extra.gemini"));
   return issues;
 }
 
-function isGeminiImageModel(model: string): boolean {
-  return model.startsWith("gemini-") && model.includes("image");
+function isGeminiEndpoint(model: string): boolean {
+  return model.startsWith("gemini-");
 }
 
 async function geminiPromptParts(

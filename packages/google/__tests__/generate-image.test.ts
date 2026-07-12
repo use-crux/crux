@@ -108,9 +108,11 @@ describe("Google image generation", () => {
       aspectRatio: "16:9",
       seed: 7,
       extra: {
-        outputMimeType: "image/webp",
-        includeRaiReason: true,
-        imageSize: "2K",
+        imagen: {
+          outputMimeType: "image/webp",
+          includeRaiReason: true,
+          imageSize: "2K",
+        },
       },
     });
 
@@ -141,6 +143,41 @@ describe("Google image generation", () => {
     expect(result.execution).toEqual({ kind: "native", calls: 1 });
     expect(result).not.toHaveProperty("usage");
     expectTypeOf(google.generateImage).toBeFunction();
+  });
+
+  it("keeps endpoint extras isolated and lets unknown Gemini ids reach native validation", async () => {
+    const { client, generateContent, generateImages } = clientWith({
+      candidates: [
+        {
+          content: {
+            parts: [{ inlineData: { data: "AQI=", mimeType: "image/png" } }],
+          },
+        },
+      ],
+    });
+    const google = createGoogle(client, { cachedContent: false });
+
+    await google.generateImage({
+      model: "gemini-future-image-model",
+      prompt: "x",
+      extra: { gemini: { temperature: 0.2 } },
+    });
+    expect(generateContent.mock.calls[0]?.[0]).toMatchObject({
+      config: { temperature: 0.2, responseModalities: ["IMAGE"] },
+    });
+    expect(generateContent.mock.calls[0]?.[0]).not.toMatchObject({
+      config: { outputMimeType: expect.anything() },
+    });
+    expect(generateImages).not.toHaveBeenCalled();
+
+    await expect(
+      google.generateImage({
+        model: "gemini-future-image-model",
+        prompt: "x",
+        extra: { imagen: { outputMimeType: "image/webp" } },
+      } as never),
+    ).rejects.toMatchObject({ code: "unsupported_capability" });
+    expect(generateContent).toHaveBeenCalledOnce();
   });
 
   it("rejects known unsupported models before client I/O", async () => {
