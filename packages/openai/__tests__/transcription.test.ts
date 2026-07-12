@@ -123,9 +123,10 @@ describe("OpenAI transcription", () => {
     ]);
   });
 
-  it("rejects unsupported requested controls before OpenAI I/O", async () => {
+  it("routes supported English translation natively and rejects unsupported detail before I/O", async () => {
     const create = vi.fn(async () => ({ text: "unused" }));
-    const adapter = createOpenAI(client(create));
+    const translate = vi.fn(async () => ({ text: "Hello" }));
+    const adapter = createOpenAI(client(create, translate));
     await expect(
       adapter.transcribe({
         model: "gpt-4o-transcribe",
@@ -135,13 +136,17 @@ describe("OpenAI transcription", () => {
     ).rejects.toMatchObject({
       code: "unsupported_capability",
     });
-    await expect(
-      adapter.transcribe({
-        model: "whisper-1",
-        audio: wav,
-        task: { type: "translate", targetLanguage: "en" },
-      }),
-    ).rejects.toMatchObject({ code: "unsupported_capability" });
+    const result = await adapter.transcribe({
+      model: "whisper-1",
+      audio: wav,
+      task: { type: "translate", targetLanguage: "en" },
+      prompt: "Crux",
+    });
+    expect(result.text).toBe("Hello");
+    expect(translate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: "whisper-1", prompt: "Crux" }),
+      { signal: expect.any(AbortSignal) },
+    );
     expect(create).not.toHaveBeenCalled();
   });
 
@@ -172,8 +177,10 @@ describe("OpenAI transcription", () => {
   });
 });
 
-function client(create: ReturnType<typeof vi.fn>) {
-  const value = { audio: { transcriptions: { create } } };
+function client(create: ReturnType<typeof vi.fn>, translate = vi.fn()) {
+  const value = {
+    audio: { transcriptions: { create }, translations: { create: translate } },
+  };
   Object.defineProperty(value, "storage", {
     get: () => {
       throw new Error("storage must not be read");

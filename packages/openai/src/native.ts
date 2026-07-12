@@ -30,6 +30,7 @@ import { openAIStreamCompletion, openAITextDelta } from "./stream";
 import type { OpenAIChatRequest, OpenAIExtra } from "./types";
 import { createOpenAIImageOperation } from "./image-generation";
 import { createOpenAITranscriptionOperation } from "./transcription";
+import { createOpenAISpeechOperation } from "./speech";
 
 /** Configuration for `openai.retrievalModel()`. */
 export interface OpenAIRetrievalModelConfig {
@@ -74,6 +75,7 @@ const openAI = defineSingleTurnProviderBundle({
   >["profile"],
   image: createOpenAIImageOperation,
   transcription: createOpenAITranscriptionOperation,
+  speech: createOpenAISpeechOperation,
   extend: ({ client }) => createOpenAIRuntimeExtensions(client),
 });
 

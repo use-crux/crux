@@ -4,6 +4,10 @@ import type {
   TranscriptionCreateParamsNonStreaming,
   TranscriptionCreateResponse,
 } from "openai/resources/audio/transcriptions";
+import type {
+  TranslationCreateParams,
+  TranslationCreateResponse,
+} from "openai/resources/audio/translations";
 import {
   createUnsupportedCapabilityError,
   normalizeAudioSource,
@@ -18,6 +22,14 @@ import {
   defineCompletedOperation,
 } from "@use-crux/core/adapter";
 import { downloadAudio } from "@use-crux/core/transcription/node";
+import {
+  isTranslation,
+  openAITranscriptionIssue,
+  requestedSegments,
+  requestedWords,
+  responseFormatFor,
+  timestampGranularities,
+} from "./transcription-options";
 
 type NativeControls = Omit<
   TranscriptionCreateParamsNonStreaming,
@@ -34,14 +46,18 @@ export interface OpenAITranscriptionMetadata {
   readonly usage?: TranscriptionCreateResponse["usage"];
 }
 
+type OpenAITranscriptionRaw =
+  | TranscriptionCreateResponse
+  | TranslationCreateResponse;
+
 /** Flat transcription operation attached to a bound OpenAI adapter. */
 export type OpenAITranscribe = Transcribe<
   string,
   OpenAITranscriptionExtra,
-  TranscriptionCreateResponse,
+  OpenAITranscriptionRaw,
   OpenAITranscriptionMetadata
 >;
-type OpenAITranscriptionInput = TranscribeOptions<
+export type OpenAITranscriptionInput = TranscribeOptions<
   string,
   OpenAITranscriptionExtra
 >;
@@ -88,29 +104,57 @@ export function createOpenAITranscriptionOperation(client: OpenAI) {
       return { options, audio };
     },
     support: () => "supported" as const,
-    async invoke({ options, audio }, { signal, call }) {
+    async invoke(
+      { options, audio },
+      { signal, call },
+    ): Promise<OpenAITranscriptionRaw> {
       const materialized =
         audio.type === "url"
           ? await downloadAudio(audio.url, { signal })
           : audio;
       const responseFormat = responseFormatFor(options);
-      return call("audio.transcribe", async () => client.audio.transcriptions.create(
-        {
-          ...options.extra,
-          file: await uploadable(materialized),
-          model: options.model,
-          response_format: responseFormat,
-          ...(options.language === undefined
-            ? {}
-            : { language: options.language }),
-          ...(options.prompt === undefined ? {} : { prompt: options.prompt }),
-          ...(timestampGranularities(options) === undefined
-            ? {}
-            : { timestamp_granularities: timestampGranularities(options) }),
-          stream: false,
-        } as TranscriptionCreateParamsNonStreaming,
-        { signal },
-      ) as Promise<TranscriptionCreateResponse>);
+      if (isTranslation(options)) {
+        return call(
+          "audio.translate",
+          async () =>
+            client.audio.translations.create(
+              {
+                ...options.extra,
+                file: await uploadable(materialized),
+                model: options.model,
+                ...(options.prompt === undefined
+                  ? {}
+                  : { prompt: options.prompt }),
+                response_format:
+                  responseFormat === "verbose_json" ? "verbose_json" : "json",
+              } as TranslationCreateParams,
+              { signal },
+            ) as Promise<TranslationCreateResponse>,
+        );
+      }
+      return call(
+        "audio.transcribe",
+        async () =>
+          client.audio.transcriptions.create(
+            {
+              ...options.extra,
+              file: await uploadable(materialized),
+              model: options.model,
+              response_format: responseFormat,
+              ...(options.language === undefined
+                ? {}
+                : { language: options.language }),
+              ...(options.prompt === undefined
+                ? {}
+                : { prompt: options.prompt }),
+              ...(timestampGranularities(options) === undefined
+                ? {}
+                : { timestamp_granularities: timestampGranularities(options) }),
+              stream: false,
+            } as TranscriptionCreateParamsNonStreaming,
+            { signal },
+          ) as Promise<TranscriptionCreateResponse>,
+      );
     },
     validate(raw, { options }) {
       const segments =
@@ -147,10 +191,11 @@ export function createOpenAITranscriptionOperation(client: OpenAI) {
         "language" in raw && typeof raw.language === "string"
           ? raw.language
           : undefined;
+      const usage = transcriptionUsage(raw);
       const durationInSeconds =
         "duration" in raw && typeof raw.duration === "number"
           ? raw.duration
-          : durationUsage(raw.usage);
+          : durationUsage(usage);
       return validateTranscriptionResult(
         {
           text: raw.text,
@@ -160,9 +205,7 @@ export function createOpenAITranscriptionOperation(client: OpenAI) {
           execution: { kind: "native", calls: 1 },
           ...(language === undefined ? {} : { language }),
           ...(durationInSeconds === undefined ? {} : { durationInSeconds }),
-          ...(raw.usage === undefined
-            ? {}
-            : { providerMetadata: { usage: raw.usage } }),
+          ...(usage === undefined ? {} : { providerMetadata: { usage } }),
         },
         raw,
       );
@@ -177,76 +220,20 @@ export function createOpenAITranscriptionOperation(client: OpenAI) {
   return definition;
 }
 
+function transcriptionUsage(
+  raw: OpenAITranscriptionRaw,
+): TranscriptionCreateResponse["usage"] {
+  return "usage" in raw
+    ? (raw as TranscriptionCreateResponse).usage
+    : undefined;
+}
+
 async function uploadable(asset: DataAsset): Promise<Uploadable> {
   return toFile(
     asset.data,
     asset.filename ?? `audio.${extensionFor(asset.mediaType)}`,
     { type: asset.mediaType },
   );
-}
-
-function responseFormatFor(
-  options: OpenAITranscriptionInput,
-): "json" | "verbose_json" | "diarized_json" {
-  if (options.diarization) return "diarized_json";
-  if (requestedSegments(options) || requestedWords(options))
-    return "verbose_json";
-  return options.extra?.response_format ?? "json";
-}
-
-function timestampGranularities(
-  options: OpenAITranscriptionInput,
-): readonly ("segment" | "word")[] | undefined {
-  if (options.timestamps === "segment") return ["segment"];
-  if (options.timestamps === "word") return ["word"];
-  if (options.timestamps === "segment-and-word") return ["segment", "word"];
-  return undefined;
-}
-
-function requestedSegments(options: OpenAITranscriptionInput): boolean {
-  return (
-    options.diarization === true ||
-    options.timestamps === "segment" ||
-    options.timestamps === "segment-and-word"
-  );
-}
-
-function requestedWords(options: OpenAITranscriptionInput): boolean {
-  return (
-    options.timestamps === "word" || options.timestamps === "segment-and-word"
-  );
-}
-
-function openAITranscriptionIssue(options: OpenAITranscriptionInput) {
-  if (options.task !== undefined && options.task !== "transcribe") {
-    return unsupportedControl("transcription.translate", "task");
-  }
-  if (options.diarization && !options.model.includes("diarize")) {
-    return unsupportedControl("transcription.diarization", "diarization");
-  }
-  if (requestedWords(options) && options.model !== "whisper-1") {
-    return unsupportedControl("transcription.timestamps.word", "timestamps");
-  }
-  if (
-    requestedSegments(options) &&
-    !options.diarization &&
-    options.model !== "whisper-1"
-  ) {
-    return unsupportedControl("transcription.timestamps.segment", "timestamps");
-  }
-  if (options.diarization && options.prompt !== undefined) {
-    return unsupportedControl("transcription.prompt", "prompt");
-  }
-  return undefined;
-}
-
-function unsupportedControl(capability: string, path: string) {
-  return {
-    capability,
-    path,
-    remediation:
-      "Choose an OpenAI transcription model that natively supports the requested detail.",
-  };
 }
 
 function durationUsage(
