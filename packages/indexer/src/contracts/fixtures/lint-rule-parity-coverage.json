@@ -222,6 +222,41 @@
       "ruleId": "runtime.non_serializable_payload",
       "positiveFixture": "index-lint-native-parity.test.ts",
       "negativeFixture": "index-lint-native-parity.test.ts"
+    },
+    {
+      "ruleId": "media.unsupported-capability",
+      "positiveFixture": "media-lint-contract.test.ts",
+      "negativeFixture": "media-lint-contract.test.ts"
+    },
+    {
+      "ruleId": "media.invalid-provider-file",
+      "positiveFixture": "semantic-media-evidence.test.ts",
+      "negativeFixture": "semantic-media-evidence.test.ts"
+    },
+    {
+      "ruleId": "media.asset-ref-not-hydrated",
+      "positiveFixture": "semantic-media-evidence.test.ts",
+      "negativeFixture": "semantic-media-evidence.test.ts"
+    },
+    {
+      "ruleId": "media.missing-derivation",
+      "positiveFixture": "media-lint-contract.test.ts",
+      "negativeFixture": "media-lint-contract.test.ts"
+    },
+    {
+      "ruleId": "media.missing-attribution",
+      "positiveFixture": "media-lint-contract.test.ts",
+      "negativeFixture": "media-lint-contract.test.ts"
+    },
+    {
+      "ruleId": "media.output-discarded",
+      "positiveFixture": "semantic-media-evidence.test.ts",
+      "negativeFixture": "semantic-media-evidence.test.ts"
+    },
+    {
+      "ruleId": "media.raw-retention",
+      "positiveFixture": "media-lint-contract.test.ts",
+      "negativeFixture": "media-lint-contract.test.ts"
     }
   ]
 }

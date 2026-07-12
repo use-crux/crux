@@ -654,7 +654,7 @@ func missingBaselineLintFinding(def store.ProjectDefinition, q *store.IndexQuali
 			Description:  "This definition has completed experiment data but no baseline quality record.",
 			DefinitionID: def.ID,
 			Source:       def.Source,
-			Data:         data,
+			Data:         mustMarshalJSON(data),
 		}},
 		Fixes: []store.IndexLintFix{
 			{

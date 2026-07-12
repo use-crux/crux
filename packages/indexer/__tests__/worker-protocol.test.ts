@@ -1,158 +1,294 @@
-import { describe, expect, it } from 'vitest'
-import type { ResolvedProjectModel } from '@use-crux/core/project-index'
-import type { IndexPatch } from '../src/indexer/patches'
+import { describe, expect, it } from "vitest";
+import type { ResolvedProjectModel } from "@use-crux/core/project-index";
+import type { IndexPatch } from "../src/indexer/patches";
 import {
   indexPatchFromWorkerEvents,
   projectIndexArtifactToWorkerEvents,
   indexPatchToWorkerEvents,
   projectIndexArtifactToWorkerEvent,
-} from '../src/contracts/worker-events'
+} from "../src/contracts/worker-events";
 import {
   workerEventFixtureOptions,
   workerEventFixturePatch,
-} from '../src/contracts/worker-events/fixtures'
-import { readStaticIndexRuntimeSharedFixture } from '../src/contracts/fixtures'
+} from "../src/contracts/worker-events/fixtures";
+import { readStaticIndexRuntimeSharedFixture } from "../src/contracts/fixtures";
 
-describe('project index worker protocol', () => {
-  it('streams contract fixture facts in ordered batches and reconstructs the same patch', () => {
-    const events = indexPatchToWorkerEvents(workerEventFixturePatch, workerEventFixtureOptions)
+describe("project index worker protocol", () => {
+  it("round-trips safe media architecture and lint evidence through shared events", () => {
+    const patch: IndexPatch = {
+      schemaVersion: 1,
+      phase: "semantic",
+      project: { root: "/repo", name: "media" },
+      startedAt: "2026-07-12T00:00:00.000Z",
+      status: "ok",
+      facts: {
+        definitions: [
+          {
+            id: "media.operation:cover",
+            kind: "media.operation",
+            name: "cover",
+            fidelity: "resolved",
+            status: "active",
+            metadata: {
+              facts: {
+                kind: "media.operation",
+                operation: "generateImage",
+                outputModalities: ["image"],
+                adapter: "google",
+                execution: "unknown",
+              },
+            },
+          },
+          {
+            id: "ingest.source:manual",
+            kind: "ingest.source",
+            name: "manual",
+            fidelity: "resolved",
+            status: "active",
+            metadata: {
+              facts: {
+                kind: "ingest.source",
+                sourceKind: "file",
+                mediaKinds: ["document"],
+                attribution: ["page"],
+              },
+            },
+          },
+        ],
+        relations: [
+          {
+            id: "media.uses_routing:cover",
+            type: "media.uses_routing",
+            from: "media.operation:cover",
+            to: "routing.router:vision",
+            fidelity: "resolved",
+          },
+        ],
+        lintFindings: [
+          {
+            id: "media.output-discarded:cover",
+            ruleId: "media.output-discarded",
+            severity: "warning",
+            category: "quality",
+            maturity: "experimental",
+            confidence: "high",
+            profiles: ["recommended", "strict"],
+            title: "Media output is discarded",
+            message: "Consume the canonical result.",
+            rationale: "Resolved authored evidence.",
+            impact: "The media result is lost.",
+            primaryDefinitionId: "media.operation:cover",
+            relatedDefinitionIds: [],
+            evidence: [
+              {
+                kind: "source",
+                label: "Resolved media evidence",
+                data: {
+                  source: "semantic",
+                  fidelity: "resolved",
+                  adapter: "google",
+                  capability: "generateImage",
+                },
+              },
+            ],
+            fixes: [
+              {
+                title: "Consume the result",
+                description: "Read content or messages.",
+                kind: "manual",
+              },
+            ],
+            docsUrl: "/docs/guides/multimodal",
+          },
+        ],
+      },
+    };
+
+    const events = indexPatchToWorkerEvents(patch, {
+      transactionId: "tx-media",
+      producer: { name: "@use-crux/indexer", version: "test" },
+    });
+    const projected = indexPatchFromWorkerEvents(events);
+
+    expect(projected).toEqual(patch);
+    expect(JSON.stringify(events)).not.toMatch(
+      /private-file-id|private-ref|data:image|base64/,
+    );
+  });
+
+  it("streams contract fixture facts in ordered batches and reconstructs the same patch", () => {
+    const events = indexPatchToWorkerEvents(
+      workerEventFixturePatch,
+      workerEventFixtureOptions,
+    );
 
     expect(events.map((event) => event.type)).toEqual([
-      'phase:start',
-      'fact:batch',
-      'fact:batch',
-      'sourceProfile:batch',
-      'phase:done',
-    ])
-    expect(events[1]).toMatchObject({ type: 'fact:batch', sequence: 0 })
-    expect(events[2]).toMatchObject({ type: 'fact:batch', sequence: 1 })
+      "phase:start",
+      "fact:batch",
+      "fact:batch",
+      "sourceProfile:batch",
+      "phase:done",
+    ]);
+    expect(events[1]).toMatchObject({ type: "fact:batch", sequence: 0 });
+    expect(events[2]).toMatchObject({ type: "fact:batch", sequence: 1 });
 
-    expect(indexPatchFromWorkerEvents(events)).toEqual(workerEventFixturePatch)
-  })
+    expect(indexPatchFromWorkerEvents(events)).toEqual(workerEventFixturePatch);
+  });
 
-  it('reconstructs the shared worker event fixture file', () => {
-    const fixture = readStaticIndexRuntimeSharedFixture('worker-events')
+  it("reconstructs the shared worker event fixture file", () => {
+    const fixture = readStaticIndexRuntimeSharedFixture("worker-events");
 
     expect(fixture.events.map((event) => event.type)).toEqual([
-      'phase:start',
-      'fact:batch',
-      'sourceProfile:batch',
-      'phase:done',
-    ])
+      "phase:start",
+      "fact:batch",
+      "sourceProfile:batch",
+      "phase:done",
+    ]);
     expect(indexPatchFromWorkerEvents(fixture.events)).toMatchObject({
-      phase: 'ast',
-      project: { root: '/repo', name: 'contract-spine' },
+      phase: "ast",
+      project: { root: "/repo", name: "contract-spine" },
       facts: {
-        definitions: [expect.objectContaining({ id: 'prompt:contract-spine' })],
-        diagnostics: [expect.objectContaining({ id: 'diagnostic:contract-spine' })],
+        definitions: [expect.objectContaining({ id: "prompt:contract-spine" })],
+        diagnostics: [
+          expect.objectContaining({ id: "diagnostic:contract-spine" }),
+        ],
       },
-    })
-  })
+    });
+  });
 
-  it('loads shared worker event edge-case fixtures', () => {
-    const fixture = readStaticIndexRuntimeSharedFixture('worker-event-cases')
+  it("loads shared worker event edge-case fixtures", () => {
+    const fixture = readStaticIndexRuntimeSharedFixture("worker-event-cases");
 
     expect(fixture.artifactDone).toMatchObject({
       protocolVersion: 2,
-      type: 'artifact:done',
-      artifact: 'projectStaticSyntaxPlan',
-      root: '/repo',
-    })
+      type: "artifact:done",
+      artifact: "projectStaticSyntaxPlan",
+      root: "/repo",
+    });
     expect(fixture.artifactError).toMatchObject({
       protocolVersion: 2,
-      type: 'artifact:error',
-      error: { message: 'static syntax plan failed' },
-    })
+      type: "artifact:error",
+      error: { message: "static syntax plan failed" },
+    });
     expect(fixture.phaseError).toMatchObject({
       protocolVersion: 2,
-      type: 'phase:error',
-      phase: 'ast',
-      error: { code: 'E_STATIC_INDEX' },
-    })
-    expect(fixture.outOfOrderEvents.map((event) => event.type)).toEqual(['phase:start', 'fact:batch'])
-    expect(fixture.outOfOrderEvents[1]).toMatchObject({ type: 'fact:batch', sequence: 1 })
-  })
+      type: "phase:error",
+      phase: "ast",
+      error: { code: "E_STATIC_INDEX" },
+    });
+    expect(fixture.outOfOrderEvents.map((event) => event.type)).toEqual([
+      "phase:start",
+      "fact:batch",
+    ]);
+    expect(fixture.outOfOrderEvents[1]).toMatchObject({
+      type: "fact:batch",
+      sequence: 1,
+    });
+  });
 
-  it('streams source profile rows and carries terminal profile metadata on phase:done', () => {
+  it("streams source profile rows and carries terminal profile metadata on phase:done", () => {
     const patch: IndexPatch = {
       schemaVersion: 1,
-      phase: 'ast',
-      project: { root: '/repo', name: 'fixture' },
-      startedAt: '2026-06-18T10:00:00.000Z',
-      finishedAt: '2026-06-18T10:00:00.001Z',
-      status: 'ok',
+      phase: "ast",
+      project: { root: "/repo", name: "fixture" },
+      startedAt: "2026-06-18T10:00:00.000Z",
+      finishedAt: "2026-06-18T10:00:00.001Z",
+      status: "ok",
       facts: {},
       semanticSourceProfile: {
         files: [
           {
-            file: '/repo/src/writer.ts',
-            sourceHash: 'hash',
+            file: "/repo/src/writer.ts",
+            sourceHash: "hash",
             sourceBytes: 10,
-            hints: { nativeDirectCruxCandidate: true, cruxCallNames: ['prompt'] },
+            hints: {
+              nativeDirectCruxCandidate: true,
+              cruxCallNames: ["prompt"],
+            },
           },
         ],
-        dependencyClosure: ['/repo/src/writer.ts'],
+        dependencyClosure: ["/repo/src/writer.ts"],
         sourceBytes: 10,
         complete: true,
       },
-    }
+    };
 
     const events = indexPatchToWorkerEvents(patch, {
-      transactionId: 'tx-ast',
-      producer: { name: '@use-crux/indexer', version: 'test' },
+      transactionId: "tx-ast",
+      producer: { name: "@use-crux/indexer", version: "test" },
       maxFactsPerBatch: 2,
-    })
+    });
 
-    expect(events.map((event) => event.type)).toEqual(['phase:start', 'sourceProfile:batch', 'phase:done'])
-    const semanticSourceProfile = patch.semanticSourceProfile
-    if (!semanticSourceProfile) throw new Error('Expected semantic source profile fixture')
-    const sourceProfileBatch = events.find((event) => event.type === 'sourceProfile:batch')
-    expect(sourceProfileBatch).toMatchObject({ type: 'sourceProfile:batch', files: semanticSourceProfile.files })
-    expect(sourceProfileBatch).not.toHaveProperty('complete')
-    expect(events.find((event) => event.type === 'phase:done')).toMatchObject({
+    expect(events.map((event) => event.type)).toEqual([
+      "phase:start",
+      "sourceProfile:batch",
+      "phase:done",
+    ]);
+    const semanticSourceProfile = patch.semanticSourceProfile;
+    if (!semanticSourceProfile)
+      throw new Error("Expected semantic source profile fixture");
+    const sourceProfileBatch = events.find(
+      (event) => event.type === "sourceProfile:batch",
+    );
+    expect(sourceProfileBatch).toMatchObject({
+      type: "sourceProfile:batch",
+      files: semanticSourceProfile.files,
+    });
+    expect(sourceProfileBatch).not.toHaveProperty("complete");
+    expect(events.find((event) => event.type === "phase:done")).toMatchObject({
       patch: { semanticSourceProfile },
-    })
-    expect(indexPatchFromWorkerEvents(events)).toEqual(patch)
-  })
+    });
+    expect(indexPatchFromWorkerEvents(events)).toEqual(patch);
+  });
 
-  it('splits fact batches by serialized event bytes', () => {
+  it("splits fact batches by serialized event bytes", () => {
     const patch: IndexPatch = {
       schemaVersion: 1,
-      phase: 'ast',
-      project: { root: '/repo', name: 'fixture' },
-      startedAt: '2026-07-06T10:00:00.000Z',
-      finishedAt: '2026-07-06T10:00:00.001Z',
-      status: 'ok',
+      phase: "ast",
+      project: { root: "/repo", name: "fixture" },
+      startedAt: "2026-07-06T10:00:00.000Z",
+      finishedAt: "2026-07-06T10:00:00.001Z",
+      status: "ok",
       facts: {
         diagnostics: [
-          diagnosticFixture('diagnostic:large-a'),
-          diagnosticFixture('diagnostic:large-b'),
+          diagnosticFixture("diagnostic:large-a"),
+          diagnosticFixture("diagnostic:large-b"),
         ],
       },
-    }
+    };
 
     const events = indexPatchToWorkerEvents(patch, {
-      transactionId: 'tx-large-facts',
-      producer: { name: '@use-crux/indexer', version: 'test' },
+      transactionId: "tx-large-facts",
+      producer: { name: "@use-crux/indexer", version: "test" },
       maxFactsPerBatch: 10,
       maxEventBytes: 1_500,
-    })
-    const factBatches = events.filter((event) => event.type === 'fact:batch')
+    });
+    const factBatches = events.filter((event) => event.type === "fact:batch");
 
-    expect(factBatches).toHaveLength(2)
-    expect(factBatches.map((event) => event.facts)).toEqual([[expect.any(Object)], [expect.any(Object)]])
-    expect(indexPatchFromWorkerEvents(events)).toEqual(patch)
-  })
+    expect(factBatches).toHaveLength(2);
+    expect(factBatches.map((event) => event.facts)).toEqual([
+      [expect.any(Object)],
+      [expect.any(Object)],
+    ]);
+    expect(indexPatchFromWorkerEvents(events)).toEqual(patch);
+  });
 
-  it('streams JSON artifacts through typed V2 artifact events', () => {
+  it("streams JSON artifacts through typed V2 artifact events", () => {
     const projectModel = {
       root: {
-        value: '/repo',
-        provenance: { kind: 'filesystem', path: '/repo', convention: 'resolved project root' },
+        value: "/repo",
+        provenance: {
+          kind: "filesystem",
+          path: "/repo",
+          convention: "resolved project root",
+        },
       },
       resolutionMode: {
-        value: 'config-policy',
-        provenance: { kind: 'runtime', attribute: 'project-model.resolutionMode' },
+        value: "config-policy",
+        provenance: {
+          kind: "runtime",
+          attribute: "project-model.resolutionMode",
+        },
       },
       configFiles: [],
       sourceRoots: [],
@@ -161,11 +297,11 @@ describe('project index worker protocol', () => {
       relations: [],
       quality: {
         persistenceRoot: {
-          value: '/repo/.crux/quality',
+          value: "/repo/.crux/quality",
           provenance: {
-            kind: 'filesystem',
-            path: '/repo/.crux/quality',
-            convention: 'default quality persistence root',
+            kind: "filesystem",
+            path: "/repo/.crux/quality",
+            convention: "default quality persistence root",
           },
         },
         includeGlobs: [],
@@ -173,94 +309,105 @@ describe('project index worker protocol', () => {
         evaluationFiles: [],
       },
       diagnostics: [],
-    } satisfies ResolvedProjectModel
+    } satisfies ResolvedProjectModel;
 
-    const event = projectIndexArtifactToWorkerEvent('projectModel', projectModel, {
-      root: '/repo',
-      transactionId: 'artifact-project-model',
-    })
+    const event = projectIndexArtifactToWorkerEvent(
+      "projectModel",
+      projectModel,
+      {
+        root: "/repo",
+        transactionId: "artifact-project-model",
+      },
+    );
 
     expect(event).toMatchObject({
       protocolVersion: 2,
-      type: 'artifact:done',
-      artifact: 'projectModel',
-      root: '/repo',
+      type: "artifact:done",
+      artifact: "projectModel",
+      root: "/repo",
       payload: projectModel,
-    })
-  })
+    });
+  });
 
-  it('chunks JSON artifacts by serialized event bytes', () => {
+  it("chunks JSON artifacts by serialized event bytes", () => {
     const payload = {
-      root: '/repo',
+      root: "/repo",
       files: [
-        { file: '/repo/src/a.ts', source: 'x'.repeat(800) },
-        { file: '/repo/src/b.ts', source: 'y'.repeat(800) },
+        { file: "/repo/src/a.ts", source: "x".repeat(800) },
+        { file: "/repo/src/b.ts", source: "y".repeat(800) },
       ],
-    } as unknown as ResolvedProjectModel
+    } as unknown as ResolvedProjectModel;
 
-    const events = projectIndexArtifactToWorkerEvents('projectModel', payload, {
-      root: '/repo',
-      transactionId: 'artifact-large-project-model',
+    const events = projectIndexArtifactToWorkerEvents("projectModel", payload, {
+      root: "/repo",
+      transactionId: "artifact-large-project-model",
       maxEventBytes: 700,
-    })
-    const chunks = events.filter((event) => event.type === 'artifact:chunk')
-    const done = events.at(-1)
-    const decoded = Buffer.concat(chunks.map((event) => Buffer.from(event.payloadChunk, 'base64'))).toString('utf8')
+    });
+    const chunks = events.filter((event) => event.type === "artifact:chunk");
+    const done = events.at(-1);
+    const decoded = Buffer.concat(
+      chunks.map((event) => Buffer.from(event.payloadChunk, "base64")),
+    ).toString("utf8");
 
-    expect(chunks.length).toBeGreaterThan(1)
+    expect(chunks.length).toBeGreaterThan(1);
     expect(done).toMatchObject({
-      type: 'artifact:done',
-      artifact: 'projectModel',
-      root: '/repo',
-    })
-    expect(done).not.toHaveProperty('payload')
-    expect(JSON.parse(decoded)).toEqual(payload)
-  })
+      type: "artifact:done",
+      artifact: "projectModel",
+      root: "/repo",
+    });
+    expect(done).not.toHaveProperty("payload");
+    expect(JSON.parse(decoded)).toEqual(payload);
+  });
 
-  it('marks runtime patch facts as runtime-observed evidence', () => {
+  it("marks runtime patch facts as runtime-observed evidence", () => {
     const patch: IndexPatch = {
       schemaVersion: 1,
-      phase: 'runtime',
-      project: { root: '/repo', name: 'fixture' },
-      startedAt: '2026-06-20T10:00:00.000Z',
-      finishedAt: '2026-06-20T10:00:00.001Z',
-      status: 'ok',
+      phase: "runtime",
+      project: { root: "/repo", name: "fixture" },
+      startedAt: "2026-06-20T10:00:00.000Z",
+      finishedAt: "2026-06-20T10:00:00.001Z",
+      status: "ok",
       facts: {
         definitions: [
           {
-            id: 'prompt:runtime',
-            kind: 'prompt',
-            name: 'runtime',
-            fidelity: 'resolved',
-            status: 'active',
+            id: "prompt:runtime",
+            kind: "prompt",
+            name: "runtime",
+            fidelity: "resolved",
+            status: "active",
           },
         ],
       },
-    }
+    };
 
     const events = indexPatchToWorkerEvents(patch, {
-      transactionId: 'tx-runtime',
-      producer: { name: '@use-crux/indexer/project-runtime-indexer', version: 'test' },
-    })
-    const batch = events.find((event) => event.type === 'fact:batch')
+      transactionId: "tx-runtime",
+      producer: {
+        name: "@use-crux/indexer/project-runtime-indexer",
+        version: "test",
+      },
+    });
+    const batch = events.find((event) => event.type === "fact:batch");
 
     expect(batch).toMatchObject({
-      type: 'fact:batch',
+      type: "fact:batch",
       facts: [
         expect.objectContaining({
-          fidelity: 'runtime-observed',
-          provenance: { kind: 'runtime', attribute: 'project-index.runtime' },
+          fidelity: "runtime-observed",
+          provenance: { kind: "runtime", attribute: "project-index.runtime" },
         }),
       ],
-    })
-  })
-})
+    });
+  });
+});
 
-function diagnosticFixture(id: string): NonNullable<IndexPatch['facts']['diagnostics']>[number] {
+function diagnosticFixture(
+  id: string,
+): NonNullable<IndexPatch["facts"]["diagnostics"]>[number] {
   return {
     id,
-    severity: 'info',
-    code: 'index.large_fact',
-    message: 'x'.repeat(800),
-  }
+    severity: "info",
+    code: "index.large_fact",
+    message: "x".repeat(800),
+  };
 }

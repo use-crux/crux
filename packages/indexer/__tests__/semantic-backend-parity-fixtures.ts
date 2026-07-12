@@ -52,11 +52,18 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
             type: 'asset-ref', ref: { uri: 'private-ref' }
           } }] }],
         })
+        export const unsupported = image({ adapter: 'anthropic' })
+        export const retained = image({ adapter: 'google', observability: { metadata: { rawMedia: sourceImage } } })
         export const unknown = generate({ messages: dynamicMessages })
       `,
       },
       expect: {
-        definitionIds: ["media.operation:cover", "media.operation:unsafe"],
+        definitionIds: [
+          "media.operation:cover",
+          "media.operation:unsafe",
+          "media.operation:unsupported",
+          "media.operation:retained",
+        ],
         definitionFacts: {
           "media.operation:cover": {
             kind: "media.operation",
@@ -78,6 +85,8 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           "media.invalid-provider-file",
           "media.asset-ref-not-hydrated",
           "media.output-discarded",
+          "media.unsupported-capability",
+          "media.raw-retention",
         ],
       },
     },

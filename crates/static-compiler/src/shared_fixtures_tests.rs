@@ -346,7 +346,14 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "defer.missing_scope",
             "runtime.missing_runtime_config",
             "flow.nondeterministic_code",
-            "runtime.non_serializable_payload"
+            "runtime.non_serializable_payload",
+            "media.unsupported-capability",
+            "media.invalid-provider-file",
+            "media.asset-ref-not-hydrated",
+            "media.missing-derivation",
+            "media.missing-attribution",
+            "media.output-discarded",
+            "media.raw-retention"
         ]
     );
 
