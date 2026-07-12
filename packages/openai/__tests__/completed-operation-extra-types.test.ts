@@ -13,6 +13,12 @@ it("keeps OpenAI completed-operation extras endpoint-specific", () => {
   const sse: OpenAISpeechExtra = { stream_format: "sse" };
   expectTypeOf(chunking).toMatchTypeOf<OpenAITranslationExtra>();
   expectTypeOf(sse).toMatchTypeOf<OpenAISpeechExtra>();
+  // @ts-expect-error endpoint namespaces are mutually exclusive.
+  const both: import("../src").OpenAITranscriptionExtra = {
+    transcription: { temperature: 0 },
+    translation: { temperature: 0 },
+  };
+  expectTypeOf(both).toMatchTypeOf<import("../src").OpenAITranscriptionExtra>();
 
   const adapter = createOpenAI({} as OpenAI);
   if (false) {

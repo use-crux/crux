@@ -3,6 +3,9 @@ import type { OpenAITranscriptionInput } from "./transcription";
 export function responseFormatFor(
   options: OpenAITranscriptionInput,
 ): "json" | "verbose_json" | "diarized_json" {
+  if (isTranslation(options)) {
+    return requestedSegments(options) ? "verbose_json" : "json";
+  }
   if (options.diarization) return "diarized_json";
   if (requestedSegments(options) || requestedWords(options))
     return "verbose_json";
@@ -34,6 +37,8 @@ export function requestedWords(options: OpenAITranscriptionInput): boolean {
 
 export function openAITranscriptionIssue(options: OpenAITranscriptionInput) {
   if (isTranslation(options)) {
+    if (options.extra?.transcription !== undefined)
+      return inactiveEndpoint("translation", "extra.transcription");
     const target = options.task.targetLanguage.toLowerCase();
     if (target !== "en" && target !== "english")
       return unsupportedControl(
@@ -53,7 +58,10 @@ export function openAITranscriptionIssue(options: OpenAITranscriptionInput) {
         options.diarization ? "diarization" : "timestamps",
       );
     }
+    return undefined;
   }
+  if (options.extra?.translation !== undefined)
+    return inactiveEndpoint("transcription", "extra.translation");
   if (options.diarization && !options.model.includes("diarize"))
     return unsupportedControl("transcription.diarization", "diarization");
   if (requestedWords(options) && options.model !== "whisper-1")
@@ -68,6 +76,14 @@ export function openAITranscriptionIssue(options: OpenAITranscriptionInput) {
   if (options.diarization && options.prompt !== undefined)
     return unsupportedControl("transcription.prompt", "prompt");
   return undefined;
+}
+
+function inactiveEndpoint(endpoint: string, path: string) {
+  return {
+    capability: `transcription.${endpoint}.extra`,
+    path,
+    remediation: `Use only the ${endpoint} endpoint namespace for this task.`,
+  };
 }
 
 export function isTranslation(

@@ -41,13 +41,20 @@ export type OpenAITranslationExtra = Readonly<
   Pick<TranslationCreateParams, "temperature">
 >;
 
-/** Endpoint-isolated OpenAI transcription and translation controls. */
-export interface OpenAITranscriptionExtra {
-  readonly transcription?: NativeControls & {
-    readonly response_format?: "json" | "verbose_json" | "diarized_json";
-  };
-  readonly translation?: OpenAITranslationExtra;
-}
+type OpenAITranscriptionNativeExtra = NativeControls & {
+  readonly response_format?: "json" | "verbose_json" | "diarized_json";
+};
+
+/** Endpoint-isolated, mutually exclusive OpenAI audio controls. */
+export type OpenAITranscriptionExtra =
+  | Readonly<{
+      transcription?: OpenAITranscriptionNativeExtra;
+      translation?: never;
+    }>
+  | Readonly<{
+      transcription?: never;
+      translation?: OpenAITranslationExtra;
+    }>;
 
 /** Safe OpenAI transcription metadata projected from the native response. */
 export interface OpenAITranscriptionMetadata {

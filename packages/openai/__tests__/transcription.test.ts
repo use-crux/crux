@@ -143,11 +143,7 @@ describe("OpenAI transcription", () => {
       prompt: "Crux",
       extra: {
         translation: { temperature: 0.2 },
-        transcription: {
-          chunking_strategy: "auto",
-          include: ["logprobs"],
-        },
-      } as never,
+      },
     });
     expect(result.text).toBe("Hello");
     expect(translate).toHaveBeenCalledWith(
@@ -161,6 +157,37 @@ describe("OpenAI transcription", () => {
       { signal: expect.any(AbortSignal) },
     );
     expect(create).not.toHaveBeenCalled();
+  });
+
+  it("rejects inactive endpoint extra namespaces before I/O", async () => {
+    const create = vi.fn(async () => ({ text: "unused" }));
+    const translate = vi.fn(async () => ({ text: "unused" }));
+    const adapter = createOpenAI(client(create, translate));
+
+    await expect(
+      adapter.transcribe({
+        model: "whisper-1",
+        audio: wav,
+        task: { type: "translate", targetLanguage: "en" },
+        extra: { transcription: { response_format: "verbose_json" } },
+      } as never),
+    ).rejects.toMatchObject({
+      code: "unsupported_capability",
+      issues: [expect.objectContaining({ path: "extra.transcription" })],
+    });
+    await expect(
+      adapter.transcribe({
+        model: "whisper-1",
+        audio: wav,
+        task: "transcribe",
+        extra: { translation: { temperature: 0.2 } },
+      } as never),
+    ).rejects.toMatchObject({
+      code: "unsupported_capability",
+      issues: [expect.objectContaining({ path: "extra.translation" })],
+    });
+    expect(create).not.toHaveBeenCalled();
+    expect(translate).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported provider files before I/O and tags semantic emptiness", async () => {
