@@ -1,10 +1,12 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { SpeechModel } from "ai";
+import { speechConformanceRow } from "@use-crux/core/adapter/testing";
 import { createCruxAi, generateSpeech } from "../src";
 import { scriptedGateway } from "./scripted-gateway";
 
 describe("AI SDK speech", () => {
   it("exports an unbound runner-backed native speech operation", async () => {
+    expect(speechConformanceRow("ai-sdk").support).toBe("native");
     const raw = {
       audio: {
         uint8Array: new Uint8Array([1, 2, 3]),

@@ -1,10 +1,12 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type OpenAI from "openai";
 import { fallback } from "@use-crux/core";
+import { speechConformanceRow } from "@use-crux/core/adapter/testing";
 import { createOpenAI } from "../src";
 
 describe("OpenAI speech", () => {
   it("performs one native call and returns immediately usable audio bytes", async () => {
+    expect(speechConformanceRow("openai").support).toBe("native");
     const raw = new Response(new Uint8Array([1, 2, 3]));
     const create = vi.fn(async () => raw);
     const openai = createOpenAI(client(create));

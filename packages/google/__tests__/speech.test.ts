@@ -1,9 +1,11 @@
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { GoogleGenAI } from "@google/genai";
+import { speechConformanceRow } from "@use-crux/core/adapter/testing";
 import { createGoogle } from "../src";
 
 describe("Google speech", () => {
   it("performs one native audio generation with a structured multi-speaker voice", async () => {
+    expect(speechConformanceRow("google").support).toBe("native");
     const raw = {
       candidates: [
         {
