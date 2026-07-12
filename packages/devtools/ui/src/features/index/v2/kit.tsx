@@ -22,7 +22,8 @@ export type FamilyId =
   | "routing"
   | "state"
   | "safety"
-  | "quality";
+  | "quality"
+  | "media";
 
 export interface FamilyDef {
   label: string;
@@ -75,6 +76,12 @@ export const INDEX_FAMILIES: Record<FamilyId, FamilyDef> = {
     tone: "gold",
     blurb: "How behaviour is measured — scorers, datasets, suites and evals.",
   },
+  media: {
+    label: "Media",
+    tone: "blue",
+    blurb:
+      "Authored multimodal operations and ingest sources — images, audio, video, documents, and derivation.",
+  },
 };
 
 export const INDEX_FAMILY_ORDER: FamilyId[] = [
@@ -86,6 +93,7 @@ export const INDEX_FAMILY_ORDER: FamilyId[] = [
   "state",
   "safety",
   "quality",
+  "media",
 ];
 
 // ── kinds ────────────────────────────────────────────────────────────────────
@@ -252,6 +260,16 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     glyph: "layers",
   },
   "storage.scope": { label: "Storage scope", family: "state", glyph: "grid" },
+  "media.operation": {
+    label: "Media operation",
+    family: "media",
+    glyph: "doc",
+  },
+  "ingest.source": {
+    label: "Ingest source",
+    family: "media",
+    glyph: "layers",
+  },
   constraint: { label: "Constraint", family: "safety", glyph: "lock" },
   guardrail: { label: "Guardrail", family: "safety", glyph: "shield" },
   scorer: { label: "Scorer", family: "quality", glyph: "gauge" },

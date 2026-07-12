@@ -59,6 +59,13 @@ export const GEN_AI_OUTPUT_MESSAGES = 'gen_ai.output.messages'
 /** Opt-in system instructions content. */
 export const GEN_AI_SYSTEM_INSTRUCTIONS = 'gen_ai.system_instructions'
 
+/**
+ * GenAI operation names projected onto OTel spans.
+ *
+ * Image, transcription, and speech use Crux system-specific names until the
+ * GenAI semantic convention grows equivalents. Description maps to
+ * `generate_content`.
+ */
 export type GenAiOperationName =
   | 'chat'
   | 'embeddings'
@@ -68,12 +75,20 @@ export type GenAiOperationName =
   | 'retrieval'
   | 'search_memory'
   | 'create_memory'
+  | 'generate_image'
+  | 'transcribe'
+  | 'generate_speech'
+  | 'generate_content'
 
 /** Fallback span names for every Crux primitive. GenAI primitives override these dynamically. */
 export const primitiveSpanNames = {
   run: 'crux.run',
   'generation.call': 'crux.generation.call',
   'generation.stream': 'crux.generation.stream',
+  'media.generate_image': 'crux.media.generate_image',
+  'media.transcribe': 'crux.media.transcribe',
+  'media.generate_speech': 'crux.media.generate_speech',
+  'media.describe': 'crux.media.describe',
   'prompt.resolve': 'crux.prompt.resolve',
   'prompt.budget': 'crux.prompt.budget',
   'context.resolve': 'crux.context.resolve',
@@ -144,6 +159,10 @@ export function genAiOperationName(
 ): GenAiOperationName | undefined {
   if (primitive === 'generation.call' || primitive === 'generation.stream')
     return 'chat'
+  if (primitive === 'media.generate_image') return 'generate_image'
+  if (primitive === 'media.transcribe') return 'transcribe'
+  if (primitive === 'media.generate_speech') return 'generate_speech'
+  if (primitive === 'media.describe') return 'generate_content'
   if (primitive === 'embedding.call') return 'embeddings'
   if (primitive === 'tool.call') return 'execute_tool'
   if (primitive === 'agent.run') return 'invoke_agent'

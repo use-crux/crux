@@ -5,6 +5,7 @@ export const CRUX_CONTENT_DEGRADED_EVENT = 'content.degraded' as const
 export const CRUX_PRIMITIVE_FAMILIES = [
   'run',
   'generation',
+  'media',
   'prompt',
   'context',
   'agent',
@@ -43,6 +44,10 @@ export const CRUX_PRIMITIVE_NAMES = [
   'run',
   'generation.call',
   'generation.stream',
+  'media.generate_image',
+  'media.transcribe',
+  'media.generate_speech',
+  'media.describe',
   'prompt.resolve',
   'prompt.budget',
   'context.resolve',
@@ -128,6 +133,7 @@ export const CRUX_CANONICAL_EDGE_TYPES = [
   'eval.case_of',
   'comparison.baseline',
   'comparison.candidate',
+  'derived.from',
 ] as const
 
 export const CRUX_CANONICAL_ARTIFACT_KINDS = [
@@ -169,12 +175,17 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   'ingest.report',
   'corpus.report',
   'security.report',
+  'media.report',
 ] as const
 
 export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   run: 'run',
   'generation.call': 'generation',
   'generation.stream': 'generation',
+  'media.generate_image': 'media',
+  'media.transcribe': 'media',
+  'media.generate_speech': 'media',
+  'media.describe': 'media',
   'prompt.resolve': 'prompt',
   'prompt.budget': 'prompt',
   'context.resolve': 'context',

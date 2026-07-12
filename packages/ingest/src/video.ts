@@ -1,5 +1,6 @@
 import type { Asset, TranscriptInterval, TranscriptionResult } from '@use-crux/core'
 import type { IngestParser, IngestPart, IngestWarning } from './types'
+import { observeIngestMediaCall } from './media-observation'
 
 const VIDEO_INSTRUCTION =
   'Describe the visible factual content of this video for document indexing. Return only faithful plain text; do not claim audio facts you cannot observe.'
@@ -19,15 +20,37 @@ export const videoParser: IngestParser = {
     }
     const parts: IngestPart[] = []
     if (describe) {
-      const result = await describe({ messages: [{ role: 'user', content: [
-        { type: 'text', text: VIDEO_INSTRUCTION },
-        { type: 'video', source: asset, mediaType: asset.mediaType },
-      ] }], maxOutputTokens: 2000 })
+      const result = await observeIngestMediaCall(
+        'media.describe',
+        () =>
+          describe({
+            messages: [{
+              role: 'user',
+              content: [
+                { type: 'text', text: VIDEO_INSTRUCTION },
+                { type: 'video', source: asset, mediaType: asset.mediaType },
+              ],
+            }],
+            maxOutputTokens: 2000,
+          }),
+        { sourceId: input.sourceId },
+      )
       const text = result.text.trim()
       if (!text) throw new Error(`Video source "${input.sourceId}" returned empty text from media.describe.`)
       parts.push({ id: 'video:visual:1', kind: 'text', role: 'paragraph', content: text })
     }
-    if (transcribe) parts.push(...transcriptParts(await transcribe({ audio: asset }), input.sourceId))
+    if (transcribe) {
+      parts.push(
+        ...transcriptParts(
+          await observeIngestMediaCall(
+            'media.transcribe',
+            () => transcribe({ audio: asset }),
+            { sourceId: input.sourceId },
+          ),
+          input.sourceId,
+        ),
+      )
+    }
     const mode = describe && transcribe ? 'visual and soundtrack' : describe ? 'visual only' : 'soundtrack only'
     const warnings: IngestWarning[] = [{ code: 'parser_warning', message: `Video derivation used ${mode} evidence.` }]
     return { parts, warnings, metadata: { derivationMode: mode.replaceAll(' ', '-') } }

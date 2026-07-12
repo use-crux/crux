@@ -328,6 +328,7 @@ const OPERATION_REPORT_KINDS = [
   "corpus.report",
   "indexing.report",
   "ingest.report",
+  "media.report",
 ] as const;
 
 /** First operation report present on the node (typed by its `kind`). */

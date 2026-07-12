@@ -3,7 +3,6 @@ import {
   type CompletedOperationResult,
   type OperationTimeout,
 } from "../../completed-operation/contracts";
-import { createUnsupportedCapabilityError } from "../../content/media-errors";
 import {
   composeAbortSignals,
   createBudgetSignal,
@@ -15,7 +14,6 @@ import type {
 } from "./definition";
 import type { CompletedOperationModelGuard, RoutingCallOptions } from "../../routing/types";
 import {
-  completedModelLeaves,
   resolveCompletedModel,
   type CompletedRoutingState,
 } from "./routing";
@@ -26,6 +24,13 @@ import {
   selectedCompletedInput,
   withSelectedModel,
 } from "./lifecycle";
+import {
+  openCompletedMediaObservation,
+  safeMediaInputPreview,
+  safeMediaOutputPreview,
+  type CompletedMediaObservation,
+} from "./observability-graph";
+import { preflightCompletedCandidates } from "./preflight";
 
 /** Options owned by the shared bounded-media lifecycle. */
 export type RunCompletedMediaOperationOptions<
@@ -69,12 +74,17 @@ export type RunCompletedMediaOperationOptions<
  * uses `AggregateError.errors` to retain every original cause. The runner
  * neither persists media nor enters the language/tool loop.
  *
+ * When `operation` maps to the media vocabulary (`generateImage`, `transcribe`,
+ * `generateSpeech`, `describe`), the lifecycle emits one media span, safe
+ * input/output/`media.report` artifacts, `derived.from` lineage, and nested
+ * child spans for composed primitives such as `generation.call`.
+ *
  * @example
  * ```ts
  * return runCompletedMediaOperation({
  *   definition: imageOperation,
  *   provider: 'example',
- *   operation: 'image.generate',
+ *   operation: 'generateImage',
  *   model: options.model,
  *   input: options,
  *   abortSignal: options.abortSignal,
@@ -110,10 +120,47 @@ export async function runCompletedMediaOperation<
   const signal =
     composeAbortSignals(options.abortSignal, totalBudget.signal) ??
     new AbortController().signal;
-  const state: CompletedRoutingState = { calls: 0 };
+  const observation = openCompletedMediaObservation({
+    provider: options.provider,
+    operation: options.operation,
+    model: options.model,
+  });
   try {
-    return await withAbortSignal(async () => {
-      const prepared = await preflightCandidates(options, signal);
+    return await withAbortSignal(
+      () => runWithObservation(options, signal, observation),
+      signal,
+    );
+  } finally {
+    totalBudget.dispose();
+  }
+}
+
+async function runWithObservation<
+  TModel,
+  TInput,
+  TNormalized,
+  TNative,
+  TResult extends CompletedOperationResult,
+  TReport,
+  TSelectedModel,
+>(
+  options: RunCompletedMediaOperationOptions<
+    TModel,
+    TInput,
+    TNormalized,
+    TNative,
+    TResult,
+    TReport,
+    TSelectedModel
+  >,
+  signal: AbortSignal,
+  observation: CompletedMediaObservation | undefined,
+): Promise<TResult> {
+  const execute = async (): Promise<TResult> => {
+    const state: CompletedRoutingState = { calls: 0 };
+    const inputPreview = safeMediaInputPreview(options.input);
+    try {
+      const prepared = await preflightCompletedCandidates(options, signal);
       const result = await resolveCompletedModel(
         options.model,
         {
@@ -137,10 +184,15 @@ export async function runCompletedMediaOperation<
             ...context,
             signal: attemptSignal,
             call: async (operation, start) => {
-              if (!operation.trim())
-                throw new TypeError("Completed child operation must have a name.");
+              if (!operation.trim()) {
+                throw new TypeError(
+                  "Completed child operation must have a name.",
+                );
+              }
               state.calls += 1;
-              return start();
+              return observation
+                ? observation.observeChildCall(operation, start)
+                : start();
             },
           });
           return options.definition.validate(native, normalized, context);
@@ -154,12 +206,21 @@ export async function runCompletedMediaOperation<
         options,
         state.selectedModel,
       );
-      emitReport(options, finalized, selected);
+      const report = emitReport(options, finalized, selected);
+      observation?.succeed(
+        finalized,
+        report,
+        inputPreview,
+        safeMediaOutputPreview(finalized),
+      );
       return finalized;
-    }, signal);
-  } finally {
-    totalBudget.dispose();
-  }
+    } catch (error) {
+      observation?.fail(error, inputPreview);
+      throw error;
+    }
+  };
+
+  return observation ? await observation.withContext(execute) : await execute();
 }
 
 function emitReport<
@@ -186,77 +247,20 @@ function emitReport<
     input: TNormalized;
     context: CompletedOperationContext<TModel>;
   }>,
-): void {
+): unknown {
   try {
     const report = safeCompletedOperationReport(
       options.definition.report(result, selected.input, selected.context),
     );
     if (report) options.onReport?.(report);
+    return report;
   } catch {
     // Reporting is best-effort and must never change a successful provider result.
+    return undefined;
   }
-}
-
-async function preflightCandidates<
-  TModel,
-  TInput,
-  TNormalized,
-  TNative,
-  TResult extends CompletedOperationResult,
-  TReport,
-  TSelectedModel,
->(
-  options: RunCompletedMediaOperationOptions<
-    TModel,
-    TInput,
-    TNormalized,
-    TNative,
-    TResult,
-    TReport,
-    TSelectedModel
-  >,
-  signal: AbortSignal,
-): Promise<ReadonlyMap<unknown, TNormalized>> {
-  const prepared = new Map<unknown, TNormalized>();
-  for (const candidate of unique(completedModelLeaves(options.model))) {
-    throwIfAborted(signal);
-    const context = completedLifecycleContext(options, candidate as TModel);
-    const candidateInput = withSelectedModel(options.input, candidate);
-    const normalized = await options.definition.normalize(
-      candidateInput,
-      context,
-    );
-    prepared.set(candidate, normalized);
-    if (options.definition.support(normalized, context) === "unsupported") {
-      throw createUnsupportedCapabilityError({
-        adapter: options.provider,
-        model: describeModel(candidate),
-        issues: [{ capability: options.operation }],
-      });
-    }
-  }
-  throwIfAborted(signal);
-  return prepared;
 }
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted)
     throw signal.reason ?? new DOMException("aborted", "AbortError");
-}
-
-function unique(values: readonly unknown[]): readonly unknown[] {
-  return [...new Set(values)];
-}
-
-function describeModel(model: unknown): string {
-  if (typeof model === "string") return model;
-  if (typeof model === "object" && model !== null) {
-    const value = model as {
-      readonly modelId?: unknown;
-      readonly id?: unknown;
-    };
-    if (typeof value.modelId === "string") return value.modelId;
-    if (typeof value.id === "string") return value.id;
-  }
-  return String(model);
 }

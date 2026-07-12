@@ -143,7 +143,10 @@ function safePartText(value: unknown): readonly string[] {
 
 function isSafeMediaDescriptor(value: Record<string, unknown>): boolean {
   return (
-    (value.kind === 'image' || value.kind === 'file') &&
+    (value.kind === 'image' ||
+      value.kind === 'audio' ||
+      value.kind === 'video' ||
+      value.kind === 'file') &&
     typeof value.sourceCategory === 'string' &&
     !('source' in value) &&
     !('data' in value) &&

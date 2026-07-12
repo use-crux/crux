@@ -92,6 +92,8 @@ import { memoryRenderBudgetDecision } from '../lib/memory-span-detail'
 import { AgentCard, CompositionCard, EvalCard, EvalRunCard, FlowCard, OperationReportCard } from './PrimitiveCards'
 import { DeferredWorkCard } from './DeferredWorkCard'
 import { GenerationDetail } from './GenerationDetail'
+import { MediaRunPanel } from './MediaRunPanel'
+import { projectMediaRunFromNode } from '../lib/media-run-from-node'
 import { RunInsight } from './explain/RunInsight'
 import { collectTurnReports } from '@/features/run-detail/lib/explain/rollup'
 import { ContextComposition, hasContextContributions } from './ContextComposition'
@@ -3251,6 +3253,27 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
           isRoot={isRoot}
           providedTools={providedToolsForNode(detail.root, node.id)}
         />
+      </div>
+    )
+  }
+
+  // Multimodal completed operations get a purpose-built panel: summary,
+  // safe descriptors, attempts, transcript/absence, and lineage. Never
+  // falls through to generic JSON / media playback surfaces.
+  if (node.primitive?.startsWith('media.')) {
+    const mediaView = projectMediaRunFromNode(node)
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <SectionErrorBoundary title="Media" compact resetKey={node.id}>
+            {mediaView ? (
+              <MediaRunPanel view={mediaView} />
+            ) : (
+              <OperationReportCard node={node} />
+            )}
+          </SectionErrorBoundary>
+        </div>
       </div>
     )
   }

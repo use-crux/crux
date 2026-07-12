@@ -41,4 +41,15 @@ describe('kindMeta', () => {
       family: 'orchestration',
     })
   })
+
+  it('registers media.operation and ingest.source in the media family', () => {
+    expect(kindMeta('media.operation')).toMatchObject({
+      label: 'Media operation',
+      family: 'media',
+    })
+    expect(kindMeta('ingest.source')).toMatchObject({
+      label: 'Ingest source',
+      family: 'media',
+    })
+  })
 })

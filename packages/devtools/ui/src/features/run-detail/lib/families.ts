@@ -67,6 +67,8 @@ export function primitiveFamily(primitive: string | undefined): PrimitiveFamily 
   if (hasPrefix(p, ['composition.', 'flow', 'defer.'])) return 'orchestration'
   if (p === 'defer') return 'orchestration'
   if (hasPrefix(p, ['generation.', 'compaction.'])) return 'generation'
+  // Multimodal completed operations read as generation-adjacent (warn tone).
+  if (hasPrefix(p, ['media.'])) return 'generation'
   if (hasPrefix(p, ['retrieval.', 'embedding.', 'tool.', 'cache.'])) return 'capabilities'
   if (
     p === 'operation' ||

@@ -1,5 +1,6 @@
 import type { Asset, TranscriptInterval, TranscriptionResult } from '@use-crux/core'
 import type { IngestParser, IngestPart, IngestWarning } from './types'
+import { observeIngestMediaCall } from './media-observation'
 
 /** Built-in audio parser backed only by the configured media operation. */
 export const audioParser: IngestParser = {
@@ -11,7 +12,11 @@ export const audioParser: IngestParser = {
     const audio: Asset = input.asset ?? {
       type: 'data', data: input.bytes.slice(), mediaType: audioMediaType(input), ...(input.title ? { filename: input.title } : {}),
     }
-    const result = await transcribe({ audio })
+    const result = await observeIngestMediaCall(
+      'media.transcribe',
+      () => transcribe({ audio }),
+      { sourceId: input.sourceId },
+    )
     const text = typeof result.text === 'string' ? result.text.trim() : ''
     if (!text) throw new Error(`Audio source "${input.sourceId}" returned empty text from media.transcribe.`)
     const segments = validateSegments(result.segments, input.sourceId)

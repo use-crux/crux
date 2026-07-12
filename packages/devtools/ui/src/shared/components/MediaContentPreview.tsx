@@ -1,4 +1,4 @@
-type MediaKind = 'image' | 'file'
+type MediaKind = 'image' | 'audio' | 'video' | 'file'
 
 export type MediaContentDescriptor = Readonly<{
   kind: MediaKind
@@ -19,7 +19,14 @@ interface MediaContentPreviewProps {
 
 /** Render retained media facts as one compact, non-expandable accessible label. */
 export function MediaContentPreview({ descriptor, label }: MediaContentPreviewProps) {
-  const title = descriptor.kind === 'image' ? 'Image' : 'File'
+  const title =
+    descriptor.kind === 'image'
+      ? 'Image'
+      : descriptor.kind === 'audio'
+        ? 'Audio'
+        : descriptor.kind === 'video'
+          ? 'Video'
+          : 'File'
   const visible = [
     title,
     descriptor.mediaType,
@@ -54,7 +61,15 @@ export function MediaContentPreview({ descriptor, label }: MediaContentPreviewPr
 
 /** Recognize only the scalar descriptor envelope emitted by observability retention. */
 export function isMediaContentDescriptor(value: unknown): value is MediaContentDescriptor {
-  if (!isRecord(value) || (value.kind !== 'image' && value.kind !== 'file')) return false
+  if (
+    !isRecord(value) ||
+    (value.kind !== 'image' &&
+      value.kind !== 'audio' &&
+      value.kind !== 'video' &&
+      value.kind !== 'file')
+  ) {
+    return false
+  }
   if (typeof value.sourceCategory !== 'string') return false
   return (
     optionalString(value.mediaType) &&

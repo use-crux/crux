@@ -1,5 +1,6 @@
 import type { Asset } from '@use-crux/core'
 import type { IngestPart, ParseContext, ParseInput, ParseResult } from './types'
+import { observeIngestMediaCall } from './media-observation'
 
 export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn' | 'media'>): Promise<ParseResult> {
   const bytes = input.bytes
@@ -43,16 +44,22 @@ export async function parsePdf(input: ParseInput, ctx: Pick<ParseContext, 'warn'
         const asset: Asset = input.asset ?? {
           type: 'data', data: bytes.slice(), mediaType: 'application/pdf', ...(input.title ? { filename: input.title } : {}),
         }
-        const generated = await ctx.media.describe({
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: `Extract faithful plain text and visible factual content from page ${pageNumber} of this PDF for document indexing. Return only content from that one page.` },
-              { type: 'file', source: asset, mediaType: 'application/pdf', ...(input.title ? { filename: input.title } : {}) },
-            ],
-          }],
-          maxOutputTokens: 2000,
-        })
+        const describe = ctx.media.describe
+        const generated = await observeIngestMediaCall(
+          'media.describe',
+          () =>
+            describe({
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'text', text: `Extract faithful plain text and visible factual content from page ${pageNumber} of this PDF for document indexing. Return only content from that one page.` },
+                  { type: 'file', source: asset, mediaType: 'application/pdf', ...(input.title ? { filename: input.title } : {}) },
+                ],
+              }],
+              maxOutputTokens: 2000,
+            }),
+          { sourceId: input.sourceId, pageNumber },
+        )
         if (generated.text.trim()) {
           parts.push({
             id: `pdf:page:${pageNumber}:visual`,

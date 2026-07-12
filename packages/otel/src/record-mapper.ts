@@ -288,7 +288,14 @@ function spanNameSubject(
   record: Extract<CruxGraphRecord, { type: 'span:start' | 'span' }>,
   operation: NonNullable<ReturnType<typeof genAiOperationName>>,
 ): string {
-  if (operation === 'chat' || operation === 'embeddings') {
+  if (
+    operation === 'chat' ||
+    operation === 'embeddings' ||
+    operation === 'generate_image' ||
+    operation === 'transcribe' ||
+    operation === 'generate_speech' ||
+    operation === 'generate_content'
+  ) {
     return (
       stringValue('model' in record ? record.model : undefined) ??
       stringValue(record.attributes?.model) ??
