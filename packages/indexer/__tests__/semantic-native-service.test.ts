@@ -30,7 +30,7 @@ describe('native semantic index service', () => {
       Promise.resolve(backend.compilerRuntimeIdentity?.({ root, backend: backend.identity })),
     ).resolves.toEqual({
       name: 'tsgo',
-      version: 'native-preview-v1',
+      version: 'native-preview-v2',
       executable: '/opt/bin/tsgo',
     })
   })

@@ -3,7 +3,7 @@ import { resolveTsgoExecutablePath } from './executable'
 import type { NativeSemanticEngineName } from './types'
 
 /** Protocol/package version recorded for TypeScript-Go semantic runtime identity. */
-export const tsgoNativeSemanticRuntimeVersion = 'native-preview-v1'
+export const tsgoNativeSemanticRuntimeVersion = 'native-preview-v2'
 
 export interface NativeSemanticCompilerRuntimeIdentityOptions {
   /** Absolute Project Index root used to resolve workspace-local native-preview packages. */

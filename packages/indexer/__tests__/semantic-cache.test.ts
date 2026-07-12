@@ -266,10 +266,14 @@ describe('semantic facts cache', () => {
     const file = join(root, 'src/writer.ts')
     await writeFile(file, `export const writer = true`)
     const backendIdentity: SemanticBackendIdentity = { name: 'test-cache-runtime', version: 'v1' }
-    const firstRuntime: SemanticCompilerRuntimeIdentity = { name: 'typescript', version: '5.9.3' }
-    const secondRuntime: SemanticCompilerRuntimeIdentity = {
+    const firstRuntime: SemanticCompilerRuntimeIdentity = {
       name: 'tsgo',
       version: 'native-preview-v1',
+      executable: '/opt/tsgo',
+    }
+    const secondRuntime: SemanticCompilerRuntimeIdentity = {
+      name: 'tsgo',
+      version: 'native-preview-v2',
       executable: '/opt/tsgo',
     }
     let producerCalls = 0

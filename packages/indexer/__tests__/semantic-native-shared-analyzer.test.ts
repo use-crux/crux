@@ -112,6 +112,39 @@ describe('native semantic shared analyzer', () => {
     expect(result.syntaxTraversals).toEqual(['native-ast'])
     expect(result.extractorNames).toEqual([['crux.shared-analyzer']])
   }, 20_000)
+
+  it('routes authored media through one complete shared analysis without partial direct facts', async () => {
+    const root = await fixtureRoot()
+    await writeTsconfig(root)
+    const file = join(root, 'src/media.ts')
+    await writeFile(
+      file,
+      `
+        import { generateImage as image } from '@use-crux/ai'
+        import { generate, router } from '@use-crux/core'
+
+        const render = image
+        const route = router({ id: 'vision-route' })
+        const options = {
+          adapter: 'google', model: route, n: 2,
+          messages: [{ role: 'user', content: [{ type: 'image', source: {
+            type: 'provider-file', provider: 'openai', fileId: 'private-file-id'
+          } }] }],
+        }
+        export const cover = render(options)
+        export const unsafe = generate({ adapter: 'google', messages: [{
+          role: 'user', content: [{ type: 'image', source: {
+            type: 'asset-ref', ref: { uri: 'private-ref' }
+          } }],
+        }] })
+      `,
+    )
+
+    const result = await compareNativeToTypeScript(root, [file])
+
+    expect(result.timingNames).toContain('semantic.native.analyzer.shared')
+    expect(result.extractorNames).toEqual([['crux.shared-analyzer']])
+  }, 20_000)
 })
 
 async function compareNativeToTypeScript(

@@ -27,6 +27,61 @@ export interface SemanticBackendParityFixture {
 export const semanticBackendParityFixtures: readonly SemanticBackendParityFixture[] =
   [
     {
+      name: "authored-media-shared-analyzer",
+      externalRoot: true,
+      files: {
+        "src/media.ts": `
+        import { generateImage as image } from '@use-crux/ai'
+        import { generate, router } from '@use-crux/core'
+
+        const render = image
+        const route = router({ id: 'vision-route' })
+        const options = {
+          adapter: 'google',
+          model: route,
+          n: 2,
+          size: '1024x1024',
+          messages: [{ role: 'user', content: [{ type: 'image', source: {
+            type: 'provider-file', provider: 'openai', fileId: 'private-file-id'
+          } }] }],
+        }
+        export const cover = render(options)
+        export const unsafe = generate({
+          adapter: 'google',
+          messages: [{ role: 'user', content: [{ type: 'image', source: {
+            type: 'asset-ref', ref: { uri: 'private-ref' }
+          } }] }],
+        })
+        export const unknown = generate({ messages: dynamicMessages })
+      `,
+      },
+      expect: {
+        definitionIds: ["media.operation:cover", "media.operation:unsafe"],
+        definitionFacts: {
+          "media.operation:cover": {
+            kind: "media.operation",
+            operation: "generateImage",
+            outputModalities: ["image"],
+            adapter: "google",
+            execution: "unknown",
+            authoredOptions: { n: 2, size: "1024x1024" },
+          },
+          "media.operation:unsafe": {
+            kind: "media.operation",
+            operation: "generate",
+            inputModalities: ["image"],
+          },
+        },
+        relationTypes: ["media.uses_routing"],
+        sourceRefRoles: ["config"],
+        lintRuleIds: [
+          "media.invalid-provider-file",
+          "media.asset-ref-not-hydrated",
+          "media.output-discarded",
+        ],
+      },
+    },
+    {
       name: "direct-crux-no-zod-native-path",
       files: {
         "src/index.ts": `

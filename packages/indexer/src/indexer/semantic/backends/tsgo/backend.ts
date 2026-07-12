@@ -17,7 +17,7 @@ import type {
 /** Stable identity for the experimental native semantic backend. */
 export const nativeSemanticBackendIdentity = {
   name: 'native',
-  version: 'tsgo-native-preview-v1',
+  version: 'tsgo-native-preview-v2',
 } as const
 
 /** Operational profile for the experimental native semantic backend. */

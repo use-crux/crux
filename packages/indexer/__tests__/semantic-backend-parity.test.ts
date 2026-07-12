@@ -38,6 +38,9 @@ describe('semantic backend parity', () => {
       expect(nativePatch.status).toBe('ok')
       assertFixtureCoverage(fixture, typescriptPatch.facts)
       expect(normalizedFacts(nativePatch.facts)).toEqual(normalizedFacts(typescriptPatch.facts))
+      if (fixture.name === 'authored-media-shared-analyzer') {
+        expect(JSON.stringify(nativePatch.facts)).not.toMatch(/private-file-id|private-ref/)
+      }
     }, 20_000)
 
     it(`matches TypeScript semantic facts through public cached indexing for ${fixture.name}`, async () => {
