@@ -3,6 +3,7 @@
 "@use-crux/postgres": minor
 "@use-crux/convex": minor
 "@use-crux/indexer": minor
+"@use-crux/next": minor
 ---
 
 Add request-scoped `defer(callback)` with bounded host-lifetime execution, the
@@ -23,3 +24,13 @@ spans with causal `triggered` edges, one lightweight grouped run when no
 originating Crux run exists, and quiet diagnostics-only internal composition.
 Devtools Catalog and Runs surface deferred-work kinds, lifecycle states, and
 honest handler-returned streaming notes.
+Provider-neutral serverless hosts live at `@use-crux/core/defer/serverless`
+(injected `waitUntil` / `after` / named-only). `@use-crux/next` binds Next.js
+`after()` as response-finished. Convex bridge runs install a named-only lifetime
+so inline callbacks fail with `DEFER_CAPABILITY_MISSING` while named Runtime work
+remains supported.
+Docs cover host reliability boundaries, completion classes, strict named commit,
+at-least-once edges, cancellation limits, and the distinction from
+`flow.defer()` / future Effects. Unified project setup aggregation and
+`crux runtime setup` compatibility aliases are **not** part of this release note
+until the separate setup foundation lands.

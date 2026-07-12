@@ -19,16 +19,19 @@ export type { DeferLifetimeLimits } from "./host-types";
 export interface HandlerReturnedLifetimeOptions {
   readonly limits: DeferLifetimeLimits;
   readonly durableFinalization: boolean;
+  /** Defaults to `true` when omitted so existing hosts keep inline support. */
+  readonly supportsInline?: boolean;
   readonly handoff: (promise: Promise<void>) => void;
 }
 
 /** Create a capability whose work starts when its handler returns. */
 export function createHandlerReturnedDeferLifetime(
   options: HandlerReturnedLifetimeOptions,
-): DeferLifetimeCapability {
+): DeferLifetimeCapability & { readonly completion: "handler-returned" } {
   return Object.freeze({
     completion: "handler-returned" as const,
     limits: options.limits,
+    supportsInline: options.supportsInline ?? true,
     durableFinalization: options.durableFinalization,
     schedule(task: DeferScheduledTask): void {
       let promise: Promise<void>;
@@ -52,6 +55,8 @@ export interface ResponseFinishedTerminal {
 export interface ResponseFinishedLifetimeOptions {
   readonly limits: DeferLifetimeLimits;
   readonly durableFinalization: boolean;
+  /** Defaults to `true` when omitted so existing hosts keep inline support. */
+  readonly supportsInline?: boolean;
   readonly subscribe: (terminal: ResponseFinishedTerminal) => () => void;
   readonly start: (task: DeferScheduledTask) => void;
 }
@@ -59,7 +64,7 @@ export interface ResponseFinishedLifetimeOptions {
 /** Create a capability whose work starts at an explicit response terminal. */
 export function createResponseFinishedDeferLifetime(
   options: ResponseFinishedLifetimeOptions,
-): DeferLifetimeCapability {
+): DeferLifetimeCapability & { readonly completion: "response-finished" } {
   let task: DeferScheduledTask | undefined;
   let state: "pending" | "finished" | "cancelled" = "pending";
   let started = false;
@@ -101,6 +106,7 @@ export function createResponseFinishedDeferLifetime(
   return Object.freeze({
     completion: "response-finished" as const,
     limits: options.limits,
+    supportsInline: options.supportsInline ?? true,
     durableFinalization: options.durableFinalization,
     schedule(nextTask: DeferScheduledTask): void {
       if (task) {

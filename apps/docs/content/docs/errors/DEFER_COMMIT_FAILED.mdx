@@ -1,0 +1,35 @@
+---
+title: DEFER_COMMIT_FAILED
+description: Named deferred work could not be committed before the host response boundary.
+---
+
+## What failed
+
+The invocation’s `committed` barrier rejected. The host adapter must discard the
+handler’s produced response/result and surface this error instead of sending a
+successful reply.
+
+Typical causes:
+
+- Staging failure (missing Runtime, invalid input, store error)
+- Atomic finalization/release failure
+- Sibling abandon after strict commit failure
+
+## Why
+
+Named `defer` is strict. Partial acceptance would leave the client thinking work
+was scheduled when it was not. Catching the caller-facing promise cannot
+downgrade durability to best-effort.
+
+## What still works
+
+- Best-effort post-response work via `defer(callback)` when the host supports inline
+- Inspecting `error.cause` for the original Runtime or validation failure
+- Retrying the request after fixing Runtime/store configuration
+
+## Fix
+
+1. Read `error.cause` (often `RUNTIME_REQUIRED`, store, or validation errors)
+2. Ensure `config({ runtime })` and adapter schema are healthy
+3. Ensure the host lifetime sets `durableFinalization: true` for named work
+4. Use the callback overload only when best-effort is acceptable

@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 567,
-    "definitions": 409,
-    "relations": 227,
+    "files": 578,
+    "definitions": 414,
+    "relations": 228,
     "diagnostics": 34,
-    "dependencies": 1077,
-    "canonicalBytes": 2570837
+    "dependencies": 1091,
+    "canonicalBytes": 2579736
   },
   "files": [
     {
@@ -1202,7 +1202,25 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/__type_tests__/defer-examples-contract.ts",
+      "sha256": "b16a792cfae10f0cc472b9a7e4cb6563fc4fb671defd3f7bcba8d79d1804db0f",
+      "bytes": 7530,
+      "definitions": 5,
+      "relations": 1,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/__type_tests__/defer-node-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/defer-serverless-contract.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -1769,6 +1787,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/src/defer/host-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/src/defer/index.ts",
       "sha256": "f1be9a791a5b98dae6aceca4d8737f2fd4c1ed8a74369aa1e883d6b6dd2fa1ce",
       "bytes": 327,
@@ -1797,12 +1824,21 @@
     },
     {
       "file": "packages/core/src/defer/internal/invocation-scope.ts",
-      "sha256": "bf194c42264f4e8d96b82c40636b6e16231814c6a4e21d04138c49c6e60db9ba",
-      "bytes": 333,
+      "sha256": "5956f12f4568c3c8bdc2554156e68ddc20adeab0e4ffba9d1b986f45714c872f",
+      "bytes": 392,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/src/defer/internal/observability.ts",
+      "sha256": "6e308b66478f2ecee5caf3c41c56aaca91fd30525eb1b51a28f62fbaae249a9d",
+      "bytes": 117,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/core/src/defer/internal/port.ts",
@@ -1821,6 +1857,51 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 1
+    },
+    {
+      "file": "packages/core/src/defer/serverless.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/defer/serverless/after.ts",
+      "sha256": "3d81224662dfec8532ce6f0e9dc6b572ab08afec3b9d1aa96912e10df8f381c5",
+      "bytes": 164,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/src/defer/serverless/named-only.ts",
+      "sha256": "8e1179bfd79a5d60776666ab793bc5c6c2dd3ceee5c627e45567be4a4194c2af",
+      "bytes": 167,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/src/defer/serverless/wait-until.ts",
+      "sha256": "7abda2f85f4e392341d342aa881201960a62abd828aa767f19e5e01c7d6c75e2",
+      "bytes": 210,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/src/defer/serverless/wrap.ts",
+      "sha256": "fd643d1b379f2638fd395c821bfdcfe6db7ef35939b1e6a7f0f4dd92be6e5330",
+      "bytes": 277,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
     },
     {
       "file": "packages/core/src/defer/types.ts",
@@ -4656,6 +4737,24 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
+    },
+    {
+      "file": "packages/next/src/after.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/next/src/index.ts",
+      "sha256": "bacd5d5e03bef8271225d865aaf8934be95f504b9f4a4c744054936f07a9bc2f",
+      "bytes": 103,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
     },
     {
       "file": "packages/openai/src/codec.ts",

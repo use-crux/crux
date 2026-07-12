@@ -14,7 +14,8 @@ Crux is split into focused packages. Everyone needs `@use-crux/core`. Pick an ad
 
 | Package               | What it does                                                                                                                         | Install when                                           |
 | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------ |
-| `@use-crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability | Always — this is the base                              |
+| `@use-crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability, request-scoped `defer()` | Always — this is the base                              |
+| `@use-crux/next`      | Next.js host wrapper for request-scoped `defer()` via `after()`                                                                      | Next.js App Router / route handlers using inline defer |
 | `@use-crux/react`     | React provider, hooks, transports, and SSE server helper                                                                             | You render Crux plans/tasks/memory in React            |
 | `@use-crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`), `@use-crux/ai/agent`, and stream integration for plans/tasks                           | You use `ai` / `@ai-sdk/*`                             |
 | `@use-crux/openai`    | OpenAI SDK adapter (`createOpenAI`)                                                                                                  | You use the `openai` package directly                  |
@@ -32,7 +33,9 @@ The base package. Contains all SDK-agnostic primitives, organized into subpath e
 
 | Subpath                         | Exports                                                                              |
 | ------------------------------- | ------------------------------------------------------------------------------------ |
-| `@use-crux/core`                | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`    |
+| `@use-crux/core`                | `prompt`, `context`, `createPrompts`, `createContexts`, `config`, `when`, `match`, `defer` |
+| `@use-crux/core/defer/node`     | `withNodeDefer`, `createNodeDeferHost` for Node HTTP                                 |
+| `@use-crux/core/defer/serverless` | `withWaitUntilDefer`, `withAfterDefer`, `withNamedOnlyDefer`, lifetime factories   |
 | `@use-crux/core/memory`         | `memory`, `workingState`, `episodes`, `facts`, `procedures`                          |
 | `@use-crux/core/storage`        | `RecordStore`, `VectorStore`, `BlobStore`, `storage`, `inMemoryStorage`              |
 | `@use-crux/core/compaction`     | `createSlidingWindow`, `createBudgetManager`, `extractKeyFacts`, `summarizeMessages` |

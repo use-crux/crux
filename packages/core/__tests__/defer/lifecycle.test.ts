@@ -40,6 +40,7 @@ describe("generic defer lifetimes", () => {
     expect(lifetime).toMatchObject({
       completion: "handler-returned",
       limits,
+      supportsInline: true,
       durableFinalization: true,
     } satisfies Partial<DeferLifetimeCapability>);
     expect(task.run).toHaveBeenCalledOnce();
@@ -68,6 +69,7 @@ describe("generic defer lifetimes", () => {
 
     expect(lifetime).toMatchObject({
       completion: "response-finished",
+      supportsInline: true,
       durableFinalization: false,
     });
     expect(start).toHaveBeenCalledOnce();

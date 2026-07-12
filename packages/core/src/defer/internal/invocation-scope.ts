@@ -116,6 +116,13 @@ export function createInvocationDeferScope(
             "defer() cannot register work after its invocation was sealed.",
         });
       }
+      if (!lifetime.supportsInline) {
+        throw createDeferError({
+          code: "DEFER_CAPABILITY_MISSING",
+          message:
+            "The active host does not support inline defer(callback). Use await defer(target, input) with a configured Runtime, or install a host lifetime integration.",
+        });
+      }
       if (registrations.length >= lifetime.limits.maxCallbacks) {
         throw createDeferError({
           code: "DEFER_LIMIT_EXCEEDED",

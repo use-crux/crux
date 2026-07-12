@@ -19,6 +19,7 @@ describe("invocation defer scope", () => {
         concurrency: 1,
         maxNestingDepth: 2,
       },
+      supportsInline: true,
       durableFinalization: false,
       schedule(task) {
         scheduled = () => task.run();
@@ -52,6 +53,7 @@ describe("invocation defer scope", () => {
         concurrency: 1,
         maxNestingDepth: 2,
       },
+      supportsInline: true,
       durableFinalization: false,
       schedule(task) {
         scheduled = () => task.run();
@@ -87,6 +89,7 @@ describe("invocation defer scope", () => {
         concurrency: 2,
         maxNestingDepth: 2,
       },
+      supportsInline: true,
       durableFinalization: false,
       schedule(task) {
         scheduled = () => task.run();
@@ -140,6 +143,7 @@ describe("invocation defer scope", () => {
             concurrency: 3,
             maxNestingDepth: 2,
           },
+          supportsInline: true,
           durableFinalization: false,
           schedule(task) {
             scheduled = () => task.run();

@@ -40,6 +40,9 @@
     "runtime-target-not-exported",
     "runtime-closure-defer",
     "runtime-missing-runtime-config",
+    "defer-replay-unsafe",
+    "defer-floating-named-promise",
+    "defer-missing-scope",
     "flow-nondeterministic-code",
     "runtime-non-serializable-payload"
   ]

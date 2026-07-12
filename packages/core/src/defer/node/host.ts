@@ -29,6 +29,7 @@ export function createNodeDeferHostImplementation(): NodeDeferHost {
         let cancelWaiting: (reason?: unknown) => void = () => {};
         const lifetime = createResponseFinishedDeferLifetime({
           limits: NODE_DEFER_POLICY,
+          supportsInline: true,
           durableFinalization: false,
           subscribe(terminal) {
             cancelWaiting = terminal.cancel;

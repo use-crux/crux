@@ -34,6 +34,15 @@ export interface DeferLifetimeLimits {
 export interface DeferLifetimeCapability {
   readonly completion: DeferCompletionClass;
   readonly limits: DeferLifetimeLimits;
+  /**
+   * Whether `defer(callback)` may register on this host.
+   *
+   * Named `defer(target, input)` is gated separately by
+   * {@link DeferLifetimeCapability.durableFinalization}. Hosts such as AWS
+   * Lambda and Convex set this to `false` and still accept named work when a
+   * Runtime is configured.
+   */
+  readonly supportsInline: boolean;
   readonly durableFinalization: boolean;
   schedule(task: DeferScheduledTask): void;
 }

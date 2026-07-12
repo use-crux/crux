@@ -1,4 +1,4 @@
-import { config, resetHooks } from '@use-crux/core'
+import { config, defer, resetHooks, type CruxDeferError } from '@use-crux/core'
 import { createRuntimeWithHostContext } from '@use-crux/core/runtime'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { convexRuntimeRecords, getConvexCruxRuntime, type ConvexCtxPort } from '../src'
@@ -124,6 +124,32 @@ describe('Convex runtime bridge', () => {
 
     expect(runtime.id).toBe('convex')
     runtime.dispose()
+  })
+
+  it('rejects inline defer(callback) while leaving named Runtime work as the supported path', async () => {
+    const records = inMemoryRecordStore()
+    const bridge = createConvexRuntimeBridge<TenantCtx>({
+      component: { marker: 'crux' } as never,
+      storage: {
+        create: () => records,
+      },
+    })
+    const ctx: TenantCtx = {
+      tenantId: 'tenant-1',
+      runQuery: vi.fn(),
+      runMutation: vi.fn(),
+    }
+    const callback = vi.fn()
+
+    await expect(
+      bridge.run(ctx, undefined, async () => {
+        defer(callback)
+        return 'response'
+      }),
+    ).rejects.toMatchObject({
+      code: 'DEFER_CAPABILITY_MISSING',
+    } satisfies Partial<CruxDeferError>)
+    expect(callback).not.toHaveBeenCalled()
   })
 
   it('executes bridge commands through the runtime bridge store path', async () => {

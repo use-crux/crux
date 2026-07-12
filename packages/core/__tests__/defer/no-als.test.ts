@@ -23,6 +23,7 @@ describe("defer without AsyncLocalStorage", () => {
         concurrency: 1,
         maxNestingDepth: 2,
       },
+      supportsInline: true,
       durableFinalization: false,
       schedule(task) {
         scheduled = () => task.run();

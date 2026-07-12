@@ -17,6 +17,7 @@ export function testLifetime(
       maxNestingDepth: 3,
       ...limits,
     },
+    supportsInline: true,
     durableFinalization: false,
     schedule(task) {
       schedule(() => task.run(), task);

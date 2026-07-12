@@ -60,6 +60,10 @@
       "types": "./src/defer/node.ts",
       "import": "./src/defer/node.ts"
     },
+    "./defer/serverless": {
+      "types": "./src/defer/serverless.ts",
+      "import": "./src/defer/serverless.ts"
+    },
     "./project-index": {
       "types": "./src/project-index/index.ts",
       "import": "./src/project-index/index.ts"
@@ -216,6 +220,9 @@
       ],
       "defer/node": [
         "src/defer/node.ts"
+      ],
+      "defer/serverless": [
+        "src/defer/serverless.ts"
       ],
       "project-index": [
         "src/project-index/index.ts"
