@@ -64,4 +64,38 @@ describe('multimodal release tracer', () => {
     await expect(failingStore.put(result.image)).rejects.toBe(persistenceError)
     expect(scripted.calls.generateImage).toHaveLength(1)
   })
+
+  it('carries every normal-message media modality and ordered mixed output through one framework call', async () => {
+    const messages = prompt({ messages: () => [{ role: 'user' as const, content: [
+      { type: 'image' as const, source: new Uint8Array([1]), mediaType: 'image/png' },
+      { type: 'audio' as const, source: new Uint8Array([2]), mediaType: 'audio/wav' },
+      { type: 'video' as const, source: new Uint8Array([3]), mediaType: 'video/mp4' },
+      { type: 'file' as const, source: new Uint8Array([4]), mediaType: 'application/pdf' },
+    ] }] })
+    const scripted = scriptedGateway({ generateText: [{
+      text: 'summary',
+      content: [
+        { type: 'reasoning', text: 'checked all inputs' },
+        { type: 'text', text: 'summary' },
+        { type: 'file', data: new Uint8Array([9]), mediaType: 'image/png' },
+      ],
+    }] })
+    const ai = createCruxAi({ gateway: scripted.gateway })
+    const model = { provider: 'custom', modelId: 'multimodal', specificationVersion: 'v3' } as unknown as LanguageModel
+
+    const result = await ai.generate(messages, { model })
+
+    expect(scripted.calls.generateText).toHaveLength(1)
+    expect(scripted.calls.generateText[0]?.messages).toMatchObject([{ content: [
+      { type: 'image', image: expect.any(Uint8Array) },
+      { type: 'file', data: expect.any(Uint8Array), mediaType: 'audio/wav' },
+      { type: 'file', data: expect.any(Uint8Array), mediaType: 'video/mp4' },
+      { type: 'file', data: expect.any(Uint8Array), mediaType: 'application/pdf' },
+    ] }])
+    expect(result.content).toMatchObject([
+      { type: 'reasoning', text: 'checked all inputs' },
+      { type: 'text', text: 'summary' },
+      { type: 'image', source: expect.any(Uint8Array) },
+    ])
+  })
 })
