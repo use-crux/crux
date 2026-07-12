@@ -30,7 +30,7 @@ Roles describe how the definition participated (`resolved-prompt`, `invoked-agen
 The coverage manifest also declares `runtimeIdentity` for definitions that are not top-level execution owners:
 
 - `definition-ref`: the runtime holds the exact authored identity and records it directly.
-- `parent-derived`: the index relates the definition to an observed owner; Catalog reports the parent's activity and says the child/contributor was not independently observed.
+- `parent-derived`: the index gives a structural child one exact containment parent; Catalog reports that parent's activity and says the child was not independently observed. Contributors without canonical runtime identity remain truthful zero-runtime states rather than selecting an arbitrary owner.
 - `quality`: the existing Quality correlation is authoritative.
 - `none`: no truthful live identity path exists.
 

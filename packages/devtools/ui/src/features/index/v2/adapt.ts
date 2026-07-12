@@ -793,6 +793,8 @@ export interface IndexIndex {
    *  for genuinely external/built-in references not in the index. */
   resolve: (ref: string) => ViewDef | undefined;
   childrenOf: (id: string) => ViewDef[];
+  /** Exact structural parent resolved from presentation or containment relations. */
+  parentOf: (id: string) => string | undefined;
   relationsOf: (id: string) => {
     incoming: ProjectRelation[];
     outgoing: ProjectRelation[];
@@ -1023,6 +1025,10 @@ export function buildIndex(index: ProjectIndexData): IndexIndex {
     byId: (id) => byIdMap.get(id),
     resolve,
     childrenOf: (id) => childrenByParent.get(id) ?? [],
+    parentOf: (id) => {
+      const definition = byIdMap.get(id);
+      return definition ? parentOf(definition) : undefined;
+    },
     relationsOf: (id) => ({
       incoming: incoming.get(id) ?? [],
       outgoing: outgoing.get(id) ?? [],

@@ -392,8 +392,7 @@ export function IndexObservability({ def }: { def: ViewDef }) {
   const { navigate } = useNavigation()
   const idx = useIndexIndex()
   const { activity } = useDefinitionActivity(def.id)
-  const parentDefinitionId =
-    def.presentation?.parentDefinitionId ?? idx.relationsOf(def.id).incoming[0]?.from
+  const parentDefinitionId = idx.parentOf(def.id)
   const { activity: parentActivity } = useDefinitionActivity(parentDefinitionId)
   const state = describeCatalogCoverage(def.kind, activity, parentActivity)
   const displayedActivity = state.parentDerived ? parentActivity : activity

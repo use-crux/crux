@@ -134,7 +134,7 @@ export const DEFINITION_KIND_COVERAGE = {
 
   // Category B — runtime contributor/dependency (6 kinds). Referenced by an
   // owner's span, never itself the subject of one.
-  injectable: { primary: "runtime-contributor", runtimeIdentity: "parent-derived", runtimePrimitiveNames: ["prompt.resolve", "context.resolve"] },
+  injectable: { primary: "runtime-contributor", runtimeIdentity: "none", runtimePrimitiveNames: ["prompt.resolve", "context.resolve"] },
   "rag.knowledgeBase": {
     primary: "runtime-contributor",
     runtimeIdentity: "definition-ref",
@@ -142,17 +142,17 @@ export const DEFINITION_KIND_COVERAGE = {
   },
   "storage.recordStore": {
     primary: "runtime-contributor",
-    runtimeIdentity: "parent-derived",
+    runtimeIdentity: "none",
     runtimePrimitiveNames: ["indexing.pipeline", "ingest.parse", "corpus.sync"],
   },
   "storage.vectorStore": {
     primary: "runtime-contributor",
-    runtimeIdentity: "parent-derived",
+    runtimeIdentity: "none",
     runtimePrimitiveNames: ["embedding.call", "retrieval.retrieve", "retrieval.query"],
   },
   "storage.blobStore": {
     primary: "runtime-contributor",
-    runtimeIdentity: "parent-derived",
+    runtimeIdentity: "none",
     runtimePrimitiveNames: ["ingest.parse", "corpus.sync"],
   },
   toolPolicy: { primary: "runtime-contributor", runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["tool.call", "tool.approval"] },

@@ -23,12 +23,12 @@ describe('describeCatalogCoverage', () => {
     })
   })
 
-  it('uses parent activity for a contributor without independent runtime identity', () => {
+  it('does not fabricate activity for a contributor without canonical runtime identity', () => {
     expect(describeCatalogCoverage('injectable', activity(0), activity(5))).toMatchObject({
-      treatment: 'contributor',
-      runCount: 5,
-      hasRuntimeEvidence: true,
-      parentDerived: true,
+      treatment: 'no-runtime',
+      runCount: 0,
+      hasRuntimeEvidence: false,
+      parentDerived: false,
     })
   })
 

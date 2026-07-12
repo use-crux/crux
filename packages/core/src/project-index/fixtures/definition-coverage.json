@@ -360,7 +360,7 @@
         "prompt.resolve",
         "context.resolve"
       ],
-      "expectedTreatment": "parent-derived",
+      "expectedTreatment": "none",
       "definitionRef": null
     },
     {
@@ -387,7 +387,7 @@
         "ingest.parse",
         "corpus.sync"
       ],
-      "expectedTreatment": "parent-derived",
+      "expectedTreatment": "none",
       "definitionRef": null
     },
     {
@@ -399,7 +399,7 @@
         "retrieval.retrieve",
         "retrieval.query"
       ],
-      "expectedTreatment": "parent-derived",
+      "expectedTreatment": "none",
       "definitionRef": null
     },
     {
@@ -410,7 +410,7 @@
         "ingest.parse",
         "corpus.sync"
       ],
-      "expectedTreatment": "parent-derived",
+      "expectedTreatment": "none",
       "definitionRef": null
     },
     {

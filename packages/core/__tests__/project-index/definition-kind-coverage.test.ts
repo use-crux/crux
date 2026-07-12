@@ -98,12 +98,12 @@ describe("DEFINITION_KIND_COVERAGE", () => {
     for (const kind of categoryB) {
       expect(DEFINITION_KIND_COVERAGE[kind].primary, kind).toBe("runtime-contributor");
     }
-    expect(DEFINITION_KIND_COVERAGE.injectable.runtimeIdentity).toBe("parent-derived");
+    expect(DEFINITION_KIND_COVERAGE.injectable.runtimeIdentity).toBe("none");
     expect(DEFINITION_KIND_COVERAGE["rag.knowledgeBase"].runtimeIdentity).toBe("definition-ref");
     expect(DEFINITION_KIND_COVERAGE.toolPolicy.runtimeIdentity).toBe("definition-ref");
-    expect(DEFINITION_KIND_COVERAGE["storage.recordStore"].runtimeIdentity).toBe("parent-derived");
-    expect(DEFINITION_KIND_COVERAGE["storage.vectorStore"].runtimeIdentity).toBe("parent-derived");
-    expect(DEFINITION_KIND_COVERAGE["storage.blobStore"].runtimeIdentity).toBe("parent-derived");
+    expect(DEFINITION_KIND_COVERAGE["storage.recordStore"].runtimeIdentity).toBe("none");
+    expect(DEFINITION_KIND_COVERAGE["storage.vectorStore"].runtimeIdentity).toBe("none");
+    expect(DEFINITION_KIND_COVERAGE["storage.blobStore"].runtimeIdentity).toBe("none");
   });
 
   it("classifies dotted structural-child kinds whose parent is itself a ProjectDefinitionKind member", () => {
