@@ -56,17 +56,16 @@ Named calls without Runtime also reuse `runtime.missing_runtime_config` when
 provable. Host capability cannot always be proven statically; runtime still
 throws `DEFER_CAPABILITY_MISSING` when the live host cannot honor the call.
 
-## Setup tooling status
+## Check project setup
 
-Unified project setup aggregation (`crux setup` / contributor planners) is a
-separate product track. Until that foundation ships:
+Run `crux setup` for a read-only aggregate check, or `crux setup --apply` to
+apply safe additive Runtime resources and recheck. The defer contributor reports
+missing host integrations and named-durability configuration with exact
+remediation and a privacy-safe coding-agent prompt. Dynamic lifetime capability
+is still verified at the live host boundary; an installed package alone is not
+treated as proof.
 
-- Configure Runtime with `config({ runtime })` and the existing Runtime guides
-- Install host wrappers explicitly (`@use-crux/core/defer/node`,
-  `@use-crux/next`, serverless ports)
-- Use `crux runtime generate` / adapter docs for Runtime artifacts
-
-Do not assume a root `crux setup` command exists yet.
+See [Project setup](/docs/guides/setup) for modes and JSON output.
 
 ## Related
 

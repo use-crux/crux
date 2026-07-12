@@ -22,6 +22,7 @@ func newRuntimeSetupCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Com
 			if check == apply {
 				return fmt.Errorf("choose exactly one of --check or --apply")
 			}
+			fmt.Fprintln(cmd.ErrOrStderr(), "warning: `crux runtime setup` is deprecated; use `crux setup` instead")
 			operation := "setup-check"
 			if apply {
 				operation = "setup-apply"

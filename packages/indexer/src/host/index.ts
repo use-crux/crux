@@ -68,6 +68,7 @@ export {
   manifestFromDefinitions,
 } from '../indexer/runtime-artifacts'
 export { runRuntimeOperation } from '../indexer/runtime-ops'
+export { runSetupOperation } from '../indexer/setup-ops'
 export type {
   GenerateRuntimeArtifactsOptions,
   RuntimeArtifactDriftReport,

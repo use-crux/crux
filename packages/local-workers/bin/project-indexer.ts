@@ -205,6 +205,8 @@ function requestResolutionMode(value: unknown): ProjectModelResolutionMode | und
 
 function isRuntimeOperationKind(value: string): value is RuntimeOperationKind {
   return (
+    value === 'project-setup-check' ||
+    value === 'project-setup-apply' ||
     value === 'setup-check' ||
     value === 'setup-apply' ||
     value === 'status' ||

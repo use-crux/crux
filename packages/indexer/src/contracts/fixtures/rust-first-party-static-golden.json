@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 578,
-    "definitions": 414,
-    "relations": 228,
+    "files": 585,
+    "definitions": 417,
+    "relations": 229,
     "diagnostics": 34,
-    "dependencies": 1091,
-    "canonicalBytes": 2579736
+    "dependencies": 1095,
+    "canonicalBytes": 2584429
   },
   "files": [
     {
@@ -64,6 +64,33 @@
       "bytes": 68,
       "definitions": 0,
       "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "crux.config.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "examples/node-basic/defer-http.example.ts",
+      "sha256": "5af6c5de61ab495e7e7312392dd590042afb6d1b0537c85a5c7c0fe8d9516afd",
+      "bytes": 1715,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "examples/node-basic/defer-named.example.ts",
+      "sha256": "ec70594f208ac24ca1195c9704bcad770c14be90d2c6d49dc1190da07dbdb1ec",
+      "bytes": 2408,
+      "definitions": 2,
+      "relations": 1,
       "diagnostics": 0,
       "dependencies": 0
     },
@@ -1398,6 +1425,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 1
+    },
+    {
+      "file": "packages/core/__type_tests__/setup-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/core/__type_tests__/single-turn-provider-bundle-public-surface.ts",
@@ -3876,12 +3912,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/runtime-ops.ts",
-      "sha256": "4a500fe53b39323bc79139be05bc4b200f52f6de634249eb75aa8845a4a7d71d",
-      "bytes": 164,
+      "sha256": "f179cbc47b590ca1928b210c74e394b3d67060c14ae99c27547d7cb66196a958",
+      "bytes": 215,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 3
     },
     {
       "file": "packages/indexer/src/indexer/semantic-support.ts",
@@ -4182,6 +4218,33 @@
     },
     {
       "file": "packages/indexer/src/indexer/semantic/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/src/indexer/setup-ops.ts",
+      "sha256": "247a2f2f53017268fdb4d0645b4a8cab5c96cd88f63582b50ba0d544da31090e",
+      "bytes": 247,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/src/indexer/setup/defer-contributor.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/src/indexer/setup/runtime-contributor.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,

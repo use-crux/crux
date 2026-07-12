@@ -84,6 +84,10 @@
       "types": "./src/runtime/public.ts",
       "import": "./src/runtime/public.ts"
     },
+    "./setup": {
+      "types": "./src/setup/index.ts",
+      "import": "./src/setup/index.ts"
+    },
     "./runtime/testing": {
       "types": "./src/runtime/testing/index.ts",
       "import": "./src/runtime/testing/index.ts"
@@ -238,6 +242,9 @@
       ],
       "runtime": [
         "src/runtime/public.ts"
+      ],
+      "setup": [
+        "src/setup/index.ts"
       ],
       "runtime/testing": [
         "src/runtime/testing/index.ts"

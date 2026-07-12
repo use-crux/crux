@@ -69,6 +69,7 @@ func newRootCommand(f *cli.Factory) *cobra.Command {
 	rootCmd.AddCommand(commands.NewFlowsCmd(f))
 	rootCmd.AddCommand(commands.NewInspectCmd(f))
 	rootCmd.AddCommand(commands.NewRuntimeCmd(f))
+	rootCmd.AddCommand(commands.NewSetupCmd(f))
 
 	return rootCmd
 }

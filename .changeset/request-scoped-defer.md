@@ -31,6 +31,8 @@ so inline callbacks fail with `DEFER_CAPABILITY_MISSING` while named Runtime wor
 remains supported.
 Docs cover host reliability boundaries, completion classes, strict named commit,
 at-least-once edges, cancellation limits, and the distinction from
-`flow.defer()` / future Effects. Unified project setup aggregation and
-`crux runtime setup` compatibility aliases are **not** part of this release note
-until the separate setup foundation lands.
+`flow.defer()` / future Effects.
+
+The defer setup contributor now participates in `crux setup`, reporting host
+integration and named Runtime durability readiness without redefining the
+shared `@use-crux/core/setup` contract.

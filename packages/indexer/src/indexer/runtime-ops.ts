@@ -24,6 +24,7 @@ import type {
   RuntimeStatusCount,
 } from './runtime-ops-types'
 import type { RuntimeArtifactManifest } from '@use-crux/core/runtime'
+import { runSetupOperation } from './setup-ops'
 
 export type {
   RuntimeCancelOperationResult,
@@ -51,6 +52,13 @@ const WORK_STATUSES = [
 export async function runRuntimeOperation(
   options: RuntimeOperationOptions,
 ): Promise<RuntimeOperationResult> {
+  switch (options.operation) {
+    case 'project-setup-check':
+    case 'project-setup-apply': {
+      const mode = options.operation === 'project-setup-apply' ? 'apply' : 'check'
+      return { operation: options.operation, ...await runSetupOperation({ root: options.root, mode }), mode }
+    }
+  }
   const runtimeDefinition = await loadRuntimeDefinition(options.root)
   switch (options.operation) {
     case 'setup-check':

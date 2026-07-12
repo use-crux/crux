@@ -8,6 +8,8 @@ import type {
 
 /** Runtime operation command executed by Crux Local's TypeScript worker. */
 export type RuntimeOperationKind =
+  | 'project-setup-check'
+  | 'project-setup-apply'
   | 'setup-check'
   | 'setup-apply'
   | 'preflight'
@@ -30,12 +32,22 @@ export interface RuntimeOperationOptions {
 
 /** JSON-safe result for one Runtime Engine operation. */
 export type RuntimeOperationResult =
+  | ProjectSetupOperationResult
   | RuntimeSetupOperationResult
   | RuntimePreflightOperationResult
   | RuntimeStatusOperationResult
   | RuntimeInspectOperationResult
   | RuntimeRetryOperationResult
   | RuntimeCancelOperationResult
+
+export interface ProjectSetupOperationResult {
+  readonly operation: 'project-setup-check' | 'project-setup-apply'
+  readonly ok: boolean
+  readonly mode: 'check' | 'apply'
+  readonly findings: readonly import('@use-crux/core/setup').SetupFinding[]
+  readonly actions: readonly import('@use-crux/core/setup').SetupAction[]
+  readonly applied: readonly import('@use-crux/core/setup').SetupResult[]
+}
 
 export interface RuntimeSetupOperationResult {
   readonly operation: 'setup-check' | 'setup-apply'
