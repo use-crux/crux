@@ -24,7 +24,7 @@ import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
 import { emitInputTokenEstimate } from "./media-token-budget";
 import { responseContent } from "../assistant-output";
 import type { Message } from "../../generation/messages";
-import { replaceSafeTextContent } from "./stream-content";
+import { replaceTextSlots } from "./stream-content";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -191,36 +191,53 @@ export async function streamCore<
       isSafetyTextChunk(chunk) ? chunk.text : handle.extractTextDelta(chunk),
     completion: async () => {
       const meta = await handle.completion();
-      const stamped = meta ? safety.stamp(meta) : meta;
-      const text = safety.enabled
-        ? streamedAssistantText
-        : stamped?.text ?? streamedAssistantText;
       const providerContent = responseContent({
-        content: stamped?.content,
-        text,
-        toolCalls: stamped?.toolCalls?.flatMap((call) =>
+        content: meta?.content,
+        text: meta?.text ?? "",
+        toolCalls: meta?.toolCalls?.flatMap((call) =>
           typeof call.id === "string"
             ? [{ id: call.id, name: call.name, args: call.args }]
             : [],
         ),
       });
-      const content = safety.enabled
-        ? replaceSafeTextContent(providerContent, text)
-        : providerContent;
+      const providerTextSlots = providerContent.flatMap((part) =>
+        part.type === "text" ? [part.text] : [],
+      );
+      const hasMixedProviderText =
+        providerTextSlots.length > 1 ||
+        (providerTextSlots.length > 0 &&
+          providerContent.some((part) => part.type !== "text"));
+      const guardedSlots =
+        safety.enabled && hasMixedProviderText
+          ? await safety.guardOutputTextParts(providerTextSlots)
+          : undefined;
+      const text = guardedSlots
+        ? guardedSlots.join("")
+        : safety.enabled
+          ? streamedAssistantText
+          : (meta?.text ?? streamedAssistantText);
+      const content = guardedSlots
+        ? replaceTextSlots(providerContent, guardedSlots)
+        : safety.enabled
+          ? replaceTextSlots(
+              providerContent,
+              providerTextSlots.length === 0 ? [] : [text],
+              text,
+            )
+          : providerContent;
+      const stamped = meta ? safety.stamp(meta) : meta;
       const assistantMessage: Message = {
         role: "assistant",
         content,
-        ...(stamped?.toolCalls
-          ? { metadata: { toolCalls: stamped.toolCalls } }
-          : {}),
+        ...(meta?.toolCalls ? { metadata: { toolCalls: meta.toolCalls } } : {}),
       };
-      const completionMessages = stamped?.messages
-        ? replaceFinalAssistant(stamped.messages, assistantMessage)
+      const completionMessages = meta?.messages
+        ? replaceFinalAssistant(meta.messages, assistantMessage)
         : [...messages, assistantMessage];
       await lifecycle.captureTurn({
         messages,
         assistantText: streamedAssistantText || undefined,
-        toolCalls: stamped?.toolCalls,
+        toolCalls: meta?.toolCalls,
       });
       return {
         ...stamped,

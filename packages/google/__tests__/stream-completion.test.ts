@@ -31,7 +31,7 @@ describe("Google stream completion", () => {
     });
   });
 
-  it("keeps every original text slot around media after safety rewrites", async () => {
+  it("guards every provider text slot in place around media", async () => {
     const client = {
       models: { generateContentStream: async () => safetyStream() },
     } as unknown as GoogleGenAI;
@@ -41,47 +41,7 @@ describe("Google stream completion", () => {
         model: "gemini-mixed",
         guardrails: [
           guardrail({
-            id: "rewrite-unsafe-slots",
-            on: boundary.output.text(),
-            stream: "chunk",
-            run: async (text) => ({
-              action: "rewrite" as const,
-              value: text.replace("unsafe", "safe"),
-              rewrite: { kind: "redact" as const },
-            }),
-          }),
-        ],
-      },
-    );
-
-    let emitted = "";
-    for await (const delta of result.textStream) emitted += delta;
-    const completion = await result.completion;
-
-    expect(emitted).toBe("safe-Asafe-B");
-    expect(completion.text).toBe(emitted);
-    expect(completion.content).toEqual([
-      { type: "text", text: "safe-A" },
-      expect.objectContaining({ type: "image" }),
-      { type: "text", text: "safe-B" },
-    ]);
-    expect(completion.messages.at(-1)).toMatchObject({
-      role: "assistant",
-      content: completion.content,
-    });
-  });
-
-  it("repartitions changed-length safe text without restoring unsafe provider text", async () => {
-    const client = {
-      models: { generateContentStream: async () => mismatchedSafetyStream() },
-    } as unknown as GoogleGenAI;
-    const result = await createGoogle(client, { cachedContent: false }).stream(
-      prompt({ id: "google-stream-safe-mismatch", prompt: "Inspect this." }),
-      {
-        model: "gemini-mixed",
-        guardrails: [
-          guardrail({
-            id: "expand-secret",
+            id: "redact-secret-slot",
             on: boundary.output.text(),
             stream: "chunk",
             run: async (text) => ({
@@ -97,17 +57,58 @@ describe("Google stream completion", () => {
     let emitted = "";
     for await (const delta of result.textStream) emitted += delta;
     const completion = await result.completion;
+
+    expect(emitted).toBe("[REDACTED]WORLD");
+    expect(completion.text).toBe(emitted);
     expect(completion.content).toEqual([
       { type: "text", text: "[REDACTED]" },
       expect.objectContaining({ type: "image" }),
-      { type: "text", text: "AB" },
+      { type: "text", text: "WORLD" },
+    ]);
+    expect(completion.messages.at(-1)).toMatchObject({
+      role: "assistant",
+      content: completion.content,
+    });
+    expect(JSON.stringify(completion)).not.toContain("secret");
+  });
+
+  it("applies multiple independent slot rewrites without restoring provider text", async () => {
+    const client = {
+      models: { generateContentStream: async () => mismatchedSafetyStream() },
+    } as unknown as GoogleGenAI;
+    const result = await createGoogle(client, { cachedContent: false }).stream(
+      prompt({ id: "google-stream-safe-mismatch", prompt: "Inspect this." }),
+      {
+        model: "gemini-mixed",
+        guardrails: [
+          guardrail({
+            id: "rewrite-each-slot",
+            on: boundary.output.text(),
+            stream: "chunk",
+            run: async (text) => ({
+              action: "rewrite" as const,
+              value: text === "alpha" ? "A" : text === "beta" ? "B" : text,
+              rewrite: { kind: "redact" as const },
+            }),
+          }),
+        ],
+      },
+    );
+
+    let emitted = "";
+    for await (const delta of result.textStream) emitted += delta;
+    const completion = await result.completion;
+    expect(completion.content).toEqual([
+      { type: "text", text: "A" },
+      expect.objectContaining({ type: "image" }),
+      { type: "text", text: "B" },
     ]);
     expect(
-      completion.content.flatMap((part) =>
-        part.type === "text" ? [part.text] : [],
-      ).join(""),
+      completion.content
+        .flatMap((part) => (part.type === "text" ? [part.text] : []))
+        .join(""),
     ).toBe(emitted);
-    expect(JSON.stringify(completion.content)).not.toContain("secret");
+    expect(JSON.stringify(completion.content)).not.toMatch(/alpha|beta/);
   });
 
   it("keeps zero-length text slots deterministic", async () => {
@@ -190,7 +191,7 @@ async function* safetyStream(): AsyncIterable<GenerateContentResponse> {
         content: {
           role: "model",
           parts: [
-            { text: "unsafe-A" },
+            { text: "secret" },
             { inlineData: { data: "AQID", mimeType: "image/png" } },
           ],
         },
@@ -201,7 +202,7 @@ async function* safetyStream(): AsyncIterable<GenerateContentResponse> {
     candidates: [
       {
         finishReason: "STOP",
-        content: { role: "model", parts: [{ text: "unsafe-B" }] },
+        content: { role: "model", parts: [{ text: "WORLD" }] },
       },
     ],
   } as GenerateContentResponse;
@@ -214,7 +215,7 @@ async function* mismatchedSafetyStream(): AsyncIterable<GenerateContentResponse>
         content: {
           role: "model",
           parts: [
-            { text: "secretA" },
+            { text: "alpha" },
             { inlineData: { data: "AQID", mimeType: "image/png" } },
           ],
         },
@@ -225,7 +226,7 @@ async function* mismatchedSafetyStream(): AsyncIterable<GenerateContentResponse>
     candidates: [
       {
         finishReason: "STOP",
-        content: { role: "model", parts: [{ text: "B" }] },
+        content: { role: "model", parts: [{ text: "beta" }] },
       },
     ],
   } as GenerateContentResponse;

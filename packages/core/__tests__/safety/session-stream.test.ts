@@ -97,6 +97,30 @@ describe('openStream — hold and release', () => {
 // ── redact mid-stream ──────────────────────────────────────────────
 
 describe('openStream — chunk rewrites', () => {
+  it('propagates blocked completion-slot guardrails without running constraints', async () => {
+    let constraintCalls = 0
+    const blocker = guardrail({
+      id: 'completion-slot-blocker',
+      on: boundary.output.text(),
+      run: async (text) =>
+        text === 'blocked' ? { action: 'block' as const, reason: 'blocked slot' } : { action: 'allow' as const },
+    })
+    const neverRun = constraint({
+      id: 'completion-slot-constraint',
+      on: boundary.output.text(),
+      run: async () => {
+        constraintCalls++
+        return { pass: true as const }
+      },
+    })
+    const safety = session({
+      call: { guardrails: [blocker], constraints: [neverRun] },
+    })
+
+    await expect(safety.guardOutputTextParts(['safe', 'blocked'])).rejects.toBeInstanceOf(GuardrailBlockedError)
+    expect(constraintCalls).toBe(0)
+  })
+
   it('redacted chunks reach the consumer without exposing the original in audit', async () => {
     const redactor = guardrail({
       id: 'key-redactor',
