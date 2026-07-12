@@ -13,6 +13,7 @@ import { mapAiSdkSettings } from "./sdk-codec";
 import { aiSdkMediaHooks } from "./media-preflight";
 import { createAiSdkImageOperation } from "./image-generation";
 import { createAiSdkTranscriptionOperation } from "./transcription";
+import { createAiSdkSpeechOperation } from "./speech";
 
 /**
  * Public provider runtime for the Vercel AI SDK.
@@ -38,5 +39,6 @@ export const aiSdkProviderRuntime = defineProviderRuntime({
   },
   image: createAiSdkImageOperation,
   transcription: createAiSdkTranscriptionOperation,
+  speech: createAiSdkSpeechOperation,
   extend: ({ client }) => createAiSdkRuntimeExtensions(client),
 });

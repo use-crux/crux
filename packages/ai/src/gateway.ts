@@ -14,7 +14,17 @@
  * @module
  */
 
-import { embedMany, experimental_transcribe, generateImage, generateObject, generateText, rerank, streamObject, streamText } from 'ai'
+import {
+  embedMany,
+  experimental_generateSpeech,
+  experimental_transcribe,
+  generateImage,
+  generateObject,
+  generateText,
+  rerank,
+  streamObject,
+  streamText,
+} from "ai";
 
 /**
  * The narrow surface of the `ai` package that `@use-crux/ai` consumes.
@@ -27,21 +37,39 @@ import { embedMany, experimental_transcribe, generateImage, generateObject, gene
  */
 export interface SdkGateway {
   /** Mirror of AI SDK `generateImage` — one stateless image operation. */
-  generateImage(args: Parameters<typeof generateImage>[0]): ReturnType<typeof generateImage>
+  generateImage(
+    args: Parameters<typeof generateImage>[0],
+  ): ReturnType<typeof generateImage>;
+  /** Mirror of AI SDK speech generation. */
+  generateSpeech(
+    args: Parameters<typeof experimental_generateSpeech>[0],
+  ): ReturnType<typeof experimental_generateSpeech>;
   /** Mirror of AI SDK transcription — one stateless native operation. */
-  transcribe(args: Parameters<typeof experimental_transcribe>[0]): ReturnType<typeof experimental_transcribe>
+  transcribe(
+    args: Parameters<typeof experimental_transcribe>[0],
+  ): ReturnType<typeof experimental_transcribe>;
   /** Mirror of AI SDK `generateText` — the SDK-owned tool loop. */
-  generateText(args: Parameters<typeof generateText>[0]): ReturnType<typeof generateText>
+  generateText(
+    args: Parameters<typeof generateText>[0],
+  ): ReturnType<typeof generateText>;
   /** Mirror of AI SDK `generateObject` — one structured-output attempt. */
-  generateObject(args: Parameters<typeof generateObject>[0]): ReturnType<typeof generateObject>
+  generateObject(
+    args: Parameters<typeof generateObject>[0],
+  ): ReturnType<typeof generateObject>;
   /** Mirror of AI SDK `streamText`. */
-  streamText(args: Parameters<typeof streamText>[0]): ReturnType<typeof streamText>
+  streamText(
+    args: Parameters<typeof streamText>[0],
+  ): ReturnType<typeof streamText>;
   /** Mirror of AI SDK `streamObject`. */
-  streamObject(args: Parameters<typeof streamObject>[0]): ReturnType<typeof streamObject>
+  streamObject(
+    args: Parameters<typeof streamObject>[0],
+  ): ReturnType<typeof streamObject>;
   /** Mirror of AI SDK `embedMany` (string values). */
-  embedMany(args: Parameters<typeof embedMany>[0]): ReturnType<typeof embedMany>
+  embedMany(
+    args: Parameters<typeof embedMany>[0],
+  ): ReturnType<typeof embedMany>;
   /** Mirror of AI SDK `rerank`. */
-  rerank(args: Parameters<typeof rerank>[0]): ReturnType<typeof rerank>
+  rerank(args: Parameters<typeof rerank>[0]): ReturnType<typeof rerank>;
 }
 
 /**
@@ -51,6 +79,7 @@ export interface SdkGateway {
 export function liveSdkGateway(): SdkGateway {
   return {
     generateImage: (args) => generateImage(args),
+    generateSpeech: (args) => experimental_generateSpeech(args),
     transcribe: (args) => experimental_transcribe(args),
     generateText: (args) => generateText(args),
     generateObject: (args) => generateObject(args),
@@ -58,5 +87,5 @@ export function liveSdkGateway(): SdkGateway {
     streamObject: (args) => streamObject(args),
     embedMany: (args) => embedMany(args),
     rerank: (args) => rerank(args),
-  }
+  };
 }

@@ -1,16 +1,19 @@
-import type { LanguageModel } from 'ai'
-import type { ProviderConformanceScript, ProviderRuntimeConformanceHarness } from '@use-crux/core/adapter'
-import { describeCruxAdapterConformance } from '@use-crux/core/adapter/testing/vitest'
-import { aiSdkProviderRuntime } from '../src'
-import { liveSdkGateway, type SdkGateway } from '../src/gateway'
-import { emissionModel, streamingModel, structuredModel } from './mock-model'
+import type { LanguageModel } from "ai";
+import type {
+  ProviderConformanceScript,
+  ProviderRuntimeConformanceHarness,
+} from "@use-crux/core/adapter";
+import { describeCruxAdapterConformance } from "@use-crux/core/adapter/testing/vitest";
+import { aiSdkProviderRuntime } from "../src";
+import { liveSdkGateway, type SdkGateway } from "../src/gateway";
+import { emissionModel, streamingModel, structuredModel } from "./mock-model";
 
 describeCruxAdapterConformance({
-  name: 'ai-sdk',
+  name: "ai-sdk",
   runtime: aiSdkProviderRuntime,
   harness: aiSdkConformanceHarness(),
   capabilities: {
-    ownership: 'loop-owned',
+    ownership: "loop-owned",
     structuredOutput: true,
     streaming: true,
     toolCalls: true,
@@ -18,26 +21,30 @@ describeCruxAdapterConformance({
     observerDirectives: true,
     providerCache: true,
   },
-})
+});
 
-function aiSdkConformanceHarness(): ProviderRuntimeConformanceHarness<SdkGateway, LanguageModel> {
+function aiSdkConformanceHarness(): ProviderRuntimeConformanceHarness<
+  SdkGateway,
+  LanguageModel
+> {
   return {
     providerCache: {
       assertRequest: assertAiSdkAnthropicCacheBoundary,
     },
     prepare(script) {
-      const captured = capturingGateway(liveSdkGateway())
+      const captured = capturingGateway(liveSdkGateway());
       return {
         client: captured.gateway,
         model: modelForScript(script),
         inspect: {
           calls: () => captured.calls,
-          messagesForCall: (index) => readRecord(captured.calls[index])?.messages,
+          messagesForCall: (index) =>
+            readRecord(captured.calls[index])?.messages,
           bodyForCall: (index) => captured.calls[index],
         },
-      }
+      };
     },
-  }
+  };
 }
 
 function modelForScript(script: ProviderConformanceScript): LanguageModel {
@@ -45,84 +52,92 @@ function modelForScript(script: ProviderConformanceScript): LanguageModel {
     ? structuredModel(script.structuredTexts)
     : script.streamChunks
       ? streamingModel(script.streamChunks)
-      : emissionModel(script.emissions ?? [])
+      : emissionModel(script.emissions ?? []);
 
-  return script.providerCache ? asAnthropicModel(model) : model
+  return script.providerCache ? asAnthropicModel(model) : model;
 }
 
 function capturingGateway(gateway: SdkGateway): {
-  readonly gateway: SdkGateway
-  readonly calls: readonly unknown[]
+  readonly gateway: SdkGateway;
+  readonly calls: readonly unknown[];
 } {
-  const calls: unknown[] = []
+  const calls: unknown[] = [];
   return {
     calls,
     gateway: {
       generateImage: (args) => gateway.generateImage(args),
+      generateSpeech: (args) => gateway.generateSpeech(args),
       transcribe: (args) => gateway.transcribe(args),
       generateText: (args) => {
-        calls.push(args)
-        return gateway.generateText(args)
+        calls.push(args);
+        return gateway.generateText(args);
       },
       generateObject: (args) => {
-        calls.push(args)
-        return gateway.generateObject(args)
+        calls.push(args);
+        return gateway.generateObject(args);
       },
       streamText: (args) => {
-        calls.push(args)
-        return gateway.streamText(args)
+        calls.push(args);
+        return gateway.streamText(args);
       },
       streamObject: (args) => {
-        calls.push(args)
-        return gateway.streamObject(args)
+        calls.push(args);
+        return gateway.streamObject(args);
       },
       embedMany: (args) => gateway.embedMany(args),
       rerank: (args) => gateway.rerank(args),
     },
-  }
+  };
 }
 
 function asAnthropicModel(model: LanguageModel): LanguageModel {
-  if (typeof model !== 'object' || model === null) return model
+  if (typeof model !== "object" || model === null) return model;
   return Object.assign(Object.create(model), {
-    provider: 'anthropic.messages',
-    modelId: 'claude-conformance',
-  }) as LanguageModel
+    provider: "anthropic.messages",
+    modelId: "claude-conformance",
+  }) as LanguageModel;
 }
 
 function assertAiSdkAnthropicCacheBoundary(body: unknown): string | undefined {
-  const system = readRecord(body)?.system
-  if (!Array.isArray(system)) return `expected AI SDK Anthropic system messages, got ${JSON.stringify(system)}`
+  const system = readRecord(body)?.system;
+  if (!Array.isArray(system))
+    return `expected AI SDK Anthropic system messages, got ${JSON.stringify(system)}`;
 
   const markerMessages = system.filter(
-    (message) => readRecord(readRecord(message)?.providerOptions)?.anthropic !== undefined,
-  )
+    (message) =>
+      readRecord(readRecord(message)?.providerOptions)?.anthropic !== undefined,
+  );
   if (markerMessages.length !== 1) {
-    return `expected one AI SDK Anthropic cacheControl marker, got ${markerMessages.length}`
+    return `expected one AI SDK Anthropic cacheControl marker, got ${markerMessages.length}`;
   }
 
-  const marked = readRecord(markerMessages[0])
-  if (marked?.content !== 'Cached rule B.') {
-    return `expected cacheControl on "Cached rule B.", got ${JSON.stringify(marked)}`
+  const marked = readRecord(markerMessages[0]);
+  if (marked?.content !== "Cached rule B.") {
+    return `expected cacheControl on "Cached rule B.", got ${JSON.stringify(marked)}`;
   }
-  const anthropicOptions = readRecord(readRecord(marked.providerOptions)?.anthropic)
-  const cacheControl = readRecord(anthropicOptions?.cacheControl)
-  if (cacheControl?.type !== 'ephemeral') {
-    return `expected ephemeral cacheControl on "Cached rule B.", got ${JSON.stringify(marked.providerOptions)}`
+  const anthropicOptions = readRecord(
+    readRecord(marked.providerOptions)?.anthropic,
+  );
+  const cacheControl = readRecord(anthropicOptions?.cacheControl);
+  if (cacheControl?.type !== "ephemeral") {
+    return `expected ephemeral cacheControl on "Cached rule B.", got ${JSON.stringify(marked.providerOptions)}`;
   }
 
-  const serialized = JSON.stringify(system)
+  const serialized = JSON.stringify(system);
   for (const expected of [
-    'Stable identity.',
-    'Cached rule A.',
-    'Cached rule B.',
-    'Dynamic tail: Run the conformance scenario.',
+    "Stable identity.",
+    "Cached rule A.",
+    "Cached rule B.",
+    "Dynamic tail: Run the conformance scenario.",
   ]) {
-    if (!serialized.includes(expected)) return `AI SDK request omitted ${expected}`
+    if (!serialized.includes(expected))
+      return `AI SDK request omitted ${expected}`;
   }
-  return undefined
+  return undefined;
 }
 
 function readRecord(value: unknown): Record<string, unknown> | undefined {
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : undefined
+  return typeof value === "object" && value !== null
+    ? (value as Record<string, unknown>)
+    : undefined;
 }

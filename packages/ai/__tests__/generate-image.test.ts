@@ -17,6 +17,7 @@ function imageGateway(raw: unknown): {
   return {
     gateway: {
       generateImage: image as SdkGateway["generateImage"],
+      generateSpeech: unused as SdkGateway["generateSpeech"],
       transcribe: unused as SdkGateway["transcribe"],
       generateText: text as SdkGateway["generateText"],
       generateObject: unused as SdkGateway["generateObject"],
