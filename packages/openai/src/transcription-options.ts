@@ -6,7 +6,7 @@ export function responseFormatFor(
   if (options.diarization) return "diarized_json";
   if (requestedSegments(options) || requestedWords(options))
     return "verbose_json";
-  return options.extra?.response_format ?? "json";
+  return options.extra?.transcription?.response_format ?? "json";
 }
 
 export function timestampGranularities(

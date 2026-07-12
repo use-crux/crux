@@ -35,7 +35,7 @@ describe("OpenAI transcription", () => {
       language: "en",
       prompt: "Product names: Crux",
       timestamps: "segment",
-      extra: { temperature: 0 },
+      extra: { transcription: { temperature: 0 } },
     });
 
     expect(create).toHaveBeenCalledTimes(1);
@@ -142,9 +142,11 @@ describe("OpenAI transcription", () => {
       task: { type: "translate", targetLanguage: "en" },
       prompt: "Crux",
       extra: {
-        temperature: 0.2,
-        chunking_strategy: "auto",
-        include: ["logprobs"],
+        translation: { temperature: 0.2 },
+        transcription: {
+          chunking_strategy: "auto",
+          include: ["logprobs"],
+        },
       } as never,
     });
     expect(result.text).toBe("Hello");

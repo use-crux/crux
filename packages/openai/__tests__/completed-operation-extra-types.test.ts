@@ -1,5 +1,7 @@
 import { expectTypeOf, it } from "vitest";
 import type { OpenAISpeechExtra, OpenAITranslationExtra } from "../src";
+import type OpenAI from "openai";
+import { createOpenAI } from "../src";
 
 it("keeps OpenAI completed-operation extras endpoint-specific", () => {
   const translation = { temperature: 0 } satisfies OpenAITranslationExtra;
@@ -11,4 +13,15 @@ it("keeps OpenAI completed-operation extras endpoint-specific", () => {
   const sse: OpenAISpeechExtra = { stream_format: "sse" };
   expectTypeOf(chunking).toMatchTypeOf<OpenAITranslationExtra>();
   expectTypeOf(sse).toMatchTypeOf<OpenAISpeechExtra>();
+
+  const adapter = createOpenAI({} as OpenAI);
+  if (false) {
+    adapter.transcribe({
+      model: "whisper-1",
+      audio: new Uint8Array([1]),
+      task: { type: "translate", targetLanguage: "en" },
+      // @ts-expect-error endpoint extras must use the translation/transcription keys.
+      extra: { chunking_strategy: "auto" },
+    });
+  }
 });
