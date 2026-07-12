@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { InterceptedGeneration } from '../../src/adapter/interception'
 import { buildNormalizedCall, normalizedCallKey } from '../../src/quality/internal/cassette'
-import { CASSETTE_CACHE_EPOCH, OUTPUT_CACHE_EPOCH } from '../../src/quality/internal/cache-identity'
+import { CASSETTE_CACHE_EPOCH, OUTPUT_CACHE_EPOCH, fingerprintValue } from '../../src/quality/internal/cache-identity'
 import { cellCacheKey, readCellCache, writeCellCache } from '../../src/quality/internal/output-cache'
 
 const dirs: string[] = []
@@ -34,5 +34,14 @@ describe('Quality media cache identity', () => {
     await writeCellCache(dir, 'media', key, { output: { type: 'data', data: new Uint8Array([1, 2, 3]) },
       signals: { captured: [] }, durationMs: 1, traceIds: [], cachedAt: new Date(0).toISOString() })
     await expect(readCellCache(dir, 'media', key)).resolves.toBeUndefined()
+  })
+
+  it('never reuses unknowable Blob identity across calls or simulated restarts', () => {
+    const blob = new Blob([new Uint8Array([7, 8, 9])], { type: 'image/png' })
+    const first = fingerprintValue({ blob })
+    const sameObjectAgain = fingerprintValue({ blob })
+    const simulatedRestart = fingerprintValue({ blob: new Blob([new Uint8Array([7, 8, 9])], { type: 'image/png' }) })
+    expect(sameObjectAgain).not.toBe(first)
+    expect(simulatedRestart).not.toBe(first)
   })
 })

@@ -189,6 +189,7 @@ function containsImplicitMedia(value: unknown, seen = new WeakSet<object>()): bo
 
 /** Whole-value projection — the legacy `cassette.middleware()` path. */
 function projectValue(result: unknown): unknown {
+  if (containsImplicitMedia(result)) return undefined
   const value = toSerializable(result)
   if (value === undefined) return undefined
   return { status: 'value', value }

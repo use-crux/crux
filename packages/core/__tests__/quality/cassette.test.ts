@@ -100,6 +100,20 @@ describe('normalizedCallKey', () => {
 })
 
 describe('cassette session — record-new', () => {
+  it.each([
+    new Uint8Array([1, 2, 3]),
+    { type: 'data', data: new Uint8Array([4]), mediaType: 'image/png' },
+    { type: 'url', url: new URL('https://secret.example/media?token=secret'), mediaType: 'image/png' },
+    { type: 'provider-file', provider: 'secret-provider', fileId: 'file-secret' },
+  ])('does not record whole-value media through interceptValue', async (value) => {
+    const path = await tempCassette('whole-value-media')
+    const session = await openCassetteSession({ path, mode: 'record-new' })
+    await expect(session.interceptValue({ kind: 'value', input: 'media' }, async () => value)).resolves.toBe(value)
+    await session.flush()
+    await expect(readFile(path, 'utf8')).rejects.toThrow()
+    expect(session.stats.recorded).toBe(0)
+  })
+
   it('executes misses live, records them, and replays hits without executing', async () => {
     const path = await tempCassette()
     const recordSession = await openCassetteSession({
