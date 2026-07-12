@@ -1,48 +1,38 @@
-import { safeId } from "../../../definitions";
-import { staticDefinition } from "../../../static/definition-builder";
-import {
-  createStaticRecordArgumentReader,
-  createStaticRecordObjectReader,
-} from "../../syntax/record/readers";
+import { safeId } from '../../../definitions'
+import { staticDefinition } from '../../../static/definition-builder'
+import { createStaticRecordArgumentReader, createStaticRecordObjectReader } from '../../syntax/record/readers'
 import type {
   StaticInitializerRecord,
   StaticObjectValue,
   StaticSourceMatch,
   StaticSyntaxFileRecord,
-} from "../../syntax/record/types";
-import type { StaticSyntaxInitializerMap } from "../../syntax/record/value";
-import {
-  createDefinitionBuilder,
-  createReferenceBuilder,
-} from "../../../extensions/public-contract/builders";
-import { createStaticRecordSyntaxHandle } from "./native-context";
-import { createStaticRecordSourceRefBuilder } from "./source-ref";
-import type {
-  ExtractContext,
-  IndexExtractor,
-  IndexerExtension,
-} from "../../../extensions/public-contract/types";
+} from '../../syntax/record/types'
+import type { StaticSyntaxInitializerMap } from '../../syntax/record/value'
+import { createDefinitionBuilder, createReferenceBuilder } from '../../../extensions/public-contract/builders'
+import { createStaticRecordSyntaxHandle } from './native-context'
+import { createStaticRecordSourceRefBuilder } from './source-ref'
+import type { ExtractContext, IndexExtractor, IndexerExtension } from '../../../extensions/public-contract/types'
 
 /** Input required to build one record-backed extractor context. */
 export interface StaticRecordExtractContextInput {
   /** Project root used for deterministic local ids. */
-  readonly root: string;
+  readonly root: string
   /** Syntax record that owns the source match. */
-  readonly record: StaticSyntaxFileRecord;
+  readonly record: StaticSyntaxFileRecord
   /** Source match selected by registry dispatch. */
-  readonly match: StaticSourceMatch;
+  readonly match: StaticSourceMatch
   /** Config object selected for the running extractor pattern. */
-  readonly objectArg?: StaticObjectValue;
+  readonly objectArg?: StaticObjectValue
   /** Source-local initializer lookup for conservative alias resolution. */
-  readonly initializers: StaticSyntaxInitializerMap;
+  readonly initializers: StaticSyntaxInitializerMap
   /** Source-local initializer records visible at the current match. */
-  readonly initializerRecords: readonly StaticInitializerRecord[];
+  readonly initializerRecords: readonly StaticInitializerRecord[]
   /** Extension that owns the running extractor. */
-  readonly extension: IndexerExtension;
+  readonly extension: IndexerExtension
   /** Extractor being invoked. */
-  readonly extractor: IndexExtractor;
+  readonly extractor: IndexExtractor
   /** Already parsed syntax records keyed by absolute file path for direct import source refs. */
-  readonly recordsByFile?: ReadonlyMap<string, StaticSyntaxFileRecord>;
+  readonly recordsByFile?: ReadonlyMap<string, StaticSyntaxFileRecord>
 }
 
 /**
@@ -52,10 +42,8 @@ export interface StaticRecordExtractContextInput {
  * execution must be usable by any parser frontend and cannot expose TypeScript or Oxc parser objects
  * to extension code.
  */
-export function createStaticRecordExtractContext(
-  input: StaticRecordExtractContextInput,
-): ExtractContext {
-  const args = input.match.kind === "object" ? [] : input.match.args;
+export function createStaticRecordExtractContext(input: StaticRecordExtractContextInput): ExtractContext {
+  const args = input.match.kind === 'object' ? [] : input.match.args
   return {
     extension: { name: input.extension.name, version: input.extension.version },
     extractor: input.extractor.name,
@@ -64,28 +52,15 @@ export function createStaticRecordExtractContext(
       root: input.root,
       file: input.record.file,
       variableName: input.match.variableName,
-      ...(input.match.ownerVariableName
-        ? { ownerVariableName: input.match.ownerVariableName }
-        : {}),
+      ...(input.match.ownerVariableName ? { ownerVariableName: input.match.ownerVariableName } : {}),
       exported: input.match.exported,
       localName: input.match.localName,
       safeId,
     },
     args: createStaticRecordArgumentReader(args, input.initializers),
-    config: input.objectArg
-      ? createStaticRecordObjectReader(input.objectArg, input.initializers)
-      : undefined,
+    config: input.objectArg ? createStaticRecordObjectReader(input.objectArg, input.initializers) : undefined,
     define: createDefinitionBuilder(({ id, kind, name, metadata }) =>
-      staticDefinition(
-        input.record.file,
-        id,
-        kind,
-        name,
-        undefined,
-        input.match.source,
-        input.match.snippet,
-        metadata,
-      ),
+      staticDefinition(input.record.file, id, kind, name, undefined, input.match.source, input.match.snippet, metadata),
     ),
     ref: createReferenceBuilder(),
     sourceRef: createStaticRecordSourceRefBuilder({
@@ -103,9 +78,9 @@ export function createStaticRecordExtractContext(
       ...(input.recordsByFile ? { recordsByFile: input.recordsByFile } : {}),
       ...(input.objectArg ? { objectArg: input.objectArg } : {}),
     }),
-  };
+  }
 }
 
 function matchName(match: StaticSourceMatch): string {
-  return match.kind === "object" ? "object" : match.callee.name;
+  return match.kind === 'object' ? 'object' : match.callee.name
 }

@@ -1,19 +1,15 @@
-import type {
-  IndexDiagnostic,
-  ProjectDefinition,
-  ProjectSourceRef,
-} from "@use-crux/core/project-index";
-import type { StaticRelationRef } from "../../types";
+import type { IndexDiagnostic, ProjectDefinition, ProjectSourceRef } from '@use-crux/core/project-index'
+import type { StaticRelationRef } from '../../types'
 import type {
   DefinitionBuilder,
   ReferenceBuilder,
   SourceRefBuilder,
   StaticArgumentReader,
   StaticObjectReader,
-} from "./authoring-types";
-import type { IndexDependency } from "./cache-dependency-types";
-import type { NativeSyntaxHandle } from "../../static-index/compatibility/syntax-record-bridge/native-context";
-import type { ExtensionIdentity } from "./manifest-types";
+} from './authoring-types'
+import type { IndexDependency } from './cache-dependency-types'
+import type { NativeSyntaxHandle } from '../../static-index/compatibility/syntax-record-bridge/native-context'
+import type { ExtensionIdentity } from './manifest-types'
 
 /**
  * Source shape that can trigger an extractor.
@@ -26,28 +22,28 @@ import type { ExtensionIdentity } from "./manifest-types";
 export type ExtractPattern =
   | {
       /** Matches a normal call expression such as `prompt({ ... })`. */
-      readonly kind: "call";
+      readonly kind: 'call'
       /** Callee name considered by the static parser prefilter. */
-      readonly name: string;
+      readonly name: string
       /** Optional module-specifier constraint for hardening call matching beyond bare callee names. */
-      readonly importFrom?: readonly string[];
+      readonly importFrom?: readonly string[]
       /** Reserved index of the object/config argument when it is not the first argument. */
-      readonly configArg?: number;
+      readonly configArg?: number
     }
   | {
       /** Matches a constructor call such as `new Agent({ ... })`. */
-      readonly kind: "new";
+      readonly kind: 'new'
       /** Constructor/class name considered by parser dispatch. */
-      readonly name: string;
+      readonly name: string
       /** Optional module-specifier constraint for hardening constructor matching. */
-      readonly importFrom?: readonly string[];
+      readonly importFrom?: readonly string[]
       /** Reserved index of the object/config argument when it is not the first argument. */
-      readonly configArg?: number;
+      readonly configArg?: number
     }
   | {
       /** Matches an object literal expression, usually for first-party compatibility object schemas. */
-      readonly kind: "object";
-    };
+      readonly kind: 'object'
+    }
 
 /**
  * Source-local fact extractor.
@@ -58,9 +54,9 @@ export type ExtractPattern =
  */
 export interface IndexExtractor {
   /** Stable extractor name used in diagnostics, ordering, and future cache keys. */
-  readonly name: string;
+  readonly name: string
   /** Source patterns that make this extractor eligible for a parser-owned source match. */
-  readonly patterns: readonly ExtractPattern[];
+  readonly patterns: readonly ExtractPattern[]
   /**
    * Converts a source-local match into immutable compiler facts.
    *
@@ -69,7 +65,7 @@ export interface IndexExtractor {
    * append diagnostics to shared arrays, update caches, or read unrelated files. Cross-file linking
    * belongs in resolver/query stages so static extraction stays cacheable.
    */
-  extract(ctx: ExtractContext): ExtractResult;
+  extract(ctx: ExtractContext): ExtractResult
 }
 
 /**
@@ -90,41 +86,41 @@ export interface ExtractContext {
    * Useful for diagnostics and future dependency declarations. It should be treated as read-only input,
    * not as a handle for registering more behavior during extraction.
    */
-  readonly extension: ExtensionIdentity;
+  readonly extension: ExtensionIdentity
   /**
    * Name of the running extractor inside its extension.
    *
    * This mirrors `IndexExtractor.name` so diagnostics can point to a precise contribution even when
    * several extractors come from the same extension.
    */
-  readonly extractor: string;
+  readonly extractor: string
   /**
    * Parser match that caused this extractor invocation.
    *
    * Use `ctx.match.name` when one extractor handles several factory names, for example routing
    * extractors that distinguish `router`, `cascade`, and `fallback`.
    */
-  readonly match: ExtractMatch;
+  readonly match: ExtractMatch
   /**
    * Source-local identity and file information for the current match.
    *
    * This is the stable replacement for reaching into TypeScript AST nodes for basic file/binding data.
    */
-  readonly source: SourceView;
+  readonly source: SourceView
   /**
    * Conservative reader for call or constructor arguments.
    *
    * Use this for positional APIs such as `suite('name', ...)`. Methods return literal/JSON-like values
    * or `undefined` when a value cannot be represented safely.
    */
-  readonly args: StaticArgumentReader;
+  readonly args: StaticArgumentReader
   /**
    * Conservative reader for the selected object/config argument.
    *
    * `undefined` means the matched source did not have an object config argument. Extractors should
    * return `none()` or degrade gracefully instead of assuming an object is always present.
    */
-  readonly config: StaticObjectReader | undefined;
+  readonly config: StaticObjectReader | undefined
   /**
    * Definition builder bound to compiler-owned source and metadata defaults.
    *
@@ -132,14 +128,14 @@ export interface ExtractContext {
    * extractor code focused on index identity/metadata while the compiler supplies source ranges,
    * snippets, fidelity, and status.
    */
-  readonly define: DefinitionBuilder;
+  readonly define: DefinitionBuilder
   /**
    * Builder for unresolved relation references.
    *
    * Use `ctx.ref.variable(...)` for authored identifiers that resolvers should bind after imports are
    * known. Use `ctx.ref.id(...)` only when the extractor already has a stable index id.
    */
-  readonly ref: ReferenceBuilder;
+  readonly ref: ReferenceBuilder
   /**
    * Builder for supplemental source references.
    *
@@ -147,14 +143,14 @@ export interface ExtractContext {
    * exists or where important supporting source lives, such as schemas, callbacks, helper functions, or
    * template interpolations.
    */
-  readonly sourceRef: SourceRefBuilder;
+  readonly sourceRef: SourceRefBuilder
   /**
    * Compiler-owned payload for first-party adapters.
    *
    * Public extension authors do not receive this field. It carries an opaque handle instead of raw
    * structurally typed AST objects so native syntax access remains centralized in compiler helpers.
    */
-  readonly internalNative?: NativeSyntaxHandle;
+  readonly internalNative?: NativeSyntaxHandle
 }
 
 /**
@@ -165,9 +161,9 @@ export interface ExtractContext {
  */
 export interface ExtractMatch {
   /** Pattern family that matched the source node. */
-  readonly kind: ExtractPattern["kind"];
+  readonly kind: ExtractPattern['kind']
   /** Matched call or constructor name. */
-  readonly name: string;
+  readonly name: string
 }
 
 /**
@@ -178,27 +174,27 @@ export interface ExtractMatch {
  */
 export interface SourceView {
   /** Project root used for relative source ids and cache boundaries. */
-  readonly root: string;
+  readonly root: string
   /** Absolute source file path being parsed. */
-  readonly file: string;
+  readonly file: string
   /**
    * Authored binding name associated with the matched expression.
    *
    * For exported declarations this is the export-local variable. For local call-site discovery the
    * compiler supplies a deterministic fallback name.
    */
-  readonly variableName: string;
+  readonly variableName: string
   /** Authored binding that lexically contains this call-site match, when statically known. */
-  readonly ownerVariableName?: string;
+  readonly ownerVariableName?: string
   /** Whether this match comes from a top-level named export in the source file. */
-  readonly exported?: boolean;
+  readonly exported?: boolean
   /**
    * Human-readable fallback name for definitions discovered outside stable exports.
    *
    * Extractors can use this when config does not provide an explicit id/name and `variableName` is a
    * generated call-site fallback.
    */
-  readonly localName: string;
+  readonly localName: string
   /**
    * Sanitizes authored names for use inside index definition ids.
    *
@@ -207,7 +203,7 @@ export interface SourceView {
    * native AST context. Use this for the variable segment of ids such as `prompt:${ctx.source.safeId(name)}`;
    * keep the index kind prefix explicit in the extractor so ids remain readable.
    */
-  safeId(value: string): string;
+  safeId(value: string): string
 }
 
 /**
@@ -220,20 +216,20 @@ export interface SourceView {
  */
 export type ExtractResult =
   | {
-      readonly kind: "none";
-      readonly dependencies?: readonly IndexDependency[];
+      readonly kind: 'none'
+      readonly dependencies?: readonly IndexDependency[]
     }
   | {
-      readonly kind: "facts";
-      readonly facts: ExtractedFacts;
-      readonly dependencies?: readonly IndexDependency[];
+      readonly kind: 'facts'
+      readonly facts: ExtractedFacts
+      readonly dependencies?: readonly IndexDependency[]
     }
   | {
-      readonly kind: "degraded";
-      readonly facts?: ExtractedFacts;
-      readonly diagnostics: readonly IndexDiagnostic[];
-      readonly dependencies?: readonly IndexDependency[];
-    };
+      readonly kind: 'degraded'
+      readonly facts?: ExtractedFacts
+      readonly diagnostics: readonly IndexDiagnostic[]
+      readonly dependencies?: readonly IndexDependency[]
+    }
 
 /**
  * Immutable fact packet emitted by one extractor invocation.
@@ -243,15 +239,15 @@ export type ExtractResult =
  */
 export interface ExtractedFacts {
   /** Definitions and folded child definitions discovered from the matched source. */
-  readonly definitions?: readonly ExtractedDefinition[];
+  readonly definitions?: readonly ExtractedDefinition[]
   /** Source-local references that resolver slots later bind into index relations. */
-  readonly references?: readonly UnresolvedReference[];
+  readonly references?: readonly UnresolvedReference[]
   /** Additional source locations attached to definitions without changing their primary source. */
-  readonly sourceRefs?: readonly ExtractedSourceRef[];
+  readonly sourceRefs?: readonly ExtractedSourceRef[]
   /** Diagnostics produced by partial/degraded extraction. */
-  readonly diagnostics?: readonly IndexDiagnostic[];
+  readonly diagnostics?: readonly IndexDiagnostic[]
   /** Additional compiler inputs declared by the extractor result. */
-  readonly dependencies?: readonly IndexDependency[];
+  readonly dependencies?: readonly IndexDependency[]
 }
 
 /**
@@ -263,16 +259,16 @@ export interface ExtractedFacts {
  */
 export interface ExtractedDefinition {
   /** Source binding associated with this definition contribution. */
-  readonly variableName: string;
+  readonly variableName: string
   /** Index definition using the stable `@use-crux/core/project-index` contract. */
-  readonly definition: ProjectDefinition;
+  readonly definition: ProjectDefinition
   /**
    * Folded child definitions that should travel with the primary extracted definition.
    *
    * Use this for authored children discovered inside the same source expression, such as suite cases,
    * route children, or retrieval pipeline stages.
    */
-  readonly extraDefinitions?: readonly ProjectDefinition[];
+  readonly extraDefinitions?: readonly ProjectDefinition[]
 }
 
 /**
@@ -282,7 +278,7 @@ export interface ExtractedDefinition {
  * Keeping this unresolved lets extraction stay pure and file-local while resolver stages handle
  * cross-file imports, validation, and relation policy.
  */
-export type UnresolvedReference = StaticRelationRef;
+export type UnresolvedReference = StaticRelationRef
 
 /**
  * Source reference contribution targeted at a specific index definition id.
@@ -293,9 +289,9 @@ export type UnresolvedReference = StaticRelationRef;
  */
 export interface ExtractedSourceRef {
   /** Index definition id that should receive the supplemental source reference. */
-  readonly definitionId: string;
+  readonly definitionId: string
   /** Source reference value in the stable index format. */
-  readonly ref: ProjectSourceRef;
+  readonly ref: ProjectSourceRef
 }
 
-export type { IndexDependency } from "./cache-dependency-types";
+export type { IndexDependency } from './cache-dependency-types'
