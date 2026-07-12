@@ -55,4 +55,30 @@ describe("AI SDK speech", () => {
     expect(result.execution).toEqual({ kind: "native", calls: 1 });
     expectTypeOf(generateSpeech).toBeFunction();
   });
+
+  it("keeps top-level portable fields authoritative over runtime-cast extras", async () => {
+    const scripted = scriptedGateway();
+    const ai = createCruxAi({ gateway: scripted.gateway });
+    const model = { provider: "custom", modelId: "voice-1" } as SpeechModel;
+
+    await ai.generateSpeech({
+      model,
+      text: "Canonical",
+      voice: "alloy",
+      extra: {
+        model: { provider: "evil", modelId: "shadow" },
+        text: "Shadow",
+        voice: "shadow",
+        abortSignal: new AbortController().signal,
+        maxRetries: 0,
+      },
+    } as never);
+
+    expect(scripted.calls.generateSpeech[0]).toMatchObject({
+      model,
+      text: "Canonical",
+      voice: "alloy",
+      maxRetries: 0,
+    });
+  });
 });

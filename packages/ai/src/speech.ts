@@ -16,11 +16,19 @@ import type { SdkGateway } from "./gateway";
 
 type NativeArgs = Parameters<SdkGateway["generateSpeech"]>[0];
 
-/** AI SDK-native speech controls forwarded unchanged. */
-export interface AISpeechExtra extends Record<string, unknown> {
+/** AI SDK-native speech controls that do not shadow portable Crux fields. */
+export interface AISpeechExtra {
   readonly providerOptions?: NativeArgs["providerOptions"];
   readonly maxRetries?: NativeArgs["maxRetries"];
   readonly headers?: NativeArgs["headers"];
+  readonly model?: never;
+  readonly text?: never;
+  readonly voice?: never;
+  readonly outputFormat?: never;
+  readonly instructions?: never;
+  readonly speed?: never;
+  readonly language?: never;
+  readonly abortSignal?: never;
 }
 
 /** Provider response facts retained from the AI SDK speech result. */
@@ -82,7 +90,15 @@ export function createAiSdkSpeechOperation(gateway: SdkGateway) {
           ...(options.language === undefined
             ? {}
             : { language: options.language }),
-          ...options.extra,
+          ...(options.extra?.providerOptions === undefined
+            ? {}
+            : { providerOptions: options.extra.providerOptions }),
+          ...(options.extra?.maxRetries === undefined
+            ? {}
+            : { maxRetries: options.extra.maxRetries }),
+          ...(options.extra?.headers === undefined
+            ? {}
+            : { headers: options.extra.headers }),
           abortSignal: signal,
         }),
       ),
