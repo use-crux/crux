@@ -1,6 +1,8 @@
 (function () {
   const root = document.documentElement
+  root.classList.add('js')
   const buttons = document.querySelectorAll('[data-theme-toggle]')
+  const systemTheme = window.matchMedia('(prefers-color-scheme: dark)')
   let stored = null
   try {
     stored = localStorage.getItem('crux-plan-theme')
@@ -12,7 +14,7 @@
 
   function resolvedTheme() {
     if (root.dataset.theme) return root.dataset.theme
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+    return systemTheme.matches ? 'dark' : 'light'
   }
 
   function updateLabels() {
@@ -35,6 +37,8 @@
       updateLabels()
     })
   })
+
+  systemTheme.addEventListener?.('change', updateLabels)
 
   updateLabels()
 })()

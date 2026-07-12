@@ -19,19 +19,18 @@
 <h2>Proof that specialists can create value</h2>
 <p>These are provider-published case studies, not independent audits. They establish plausibility and buyer language—not guaranteed outcomes.</p>
 <div class="table-wrap"><table><thead><tr><th>Workload</th><th>Vendor-reported result</th><th>Signal for Crux</th></tr></thead><tbody>
-  <tr><td>Checkr background-check classification</td><td>Fine-tuned 8B model reportedly reached 90% accuracy on the hardest 2%, with 5× lower cost and 30× lower latency than GPT-4 experiments.</td><td>High-volume, bounded classification supports a clear ROI case.</td></tr>
-  <tr><td>Convirza call scoring</td><td>Reported 10× cost reduction, 8% higher F1, and multi-LoRA serving across many indicators.</td><td>One specialist per metric/customer can be a product capability.</td></tr>
-  <tr><td>Axis regulatory processing</td><td>Reported more than 95% per-token savings and reduced repeated prompt tokens.</td><td>Stable instructions can move from every prompt into weights.</td></tr>
-  <tr><td>Genspark deep research</td><td>Reported 12% higher quality, 33% more tool calls, and 50% cost reduction after RFT.</td><td>Agent trajectories and executable evaluators can matter beyond SFT.</td></tr>
-  <tr><td>Vercel code fixing</td><td>Reported comparable or better error-free generation at 10–40× speed.</td><td>Verifiable, narrow tasks are the strongest RL wedge.</td></tr>
+  <tr><td>Checkr background-check classification</td><td>Fine-tuned 8B model reportedly reached 90% accuracy on the hardest 2%, with 5× lower cost and 30× lower latency than GPT-4 experiments. <a href="sources.html#source-checkr">Source</a></td><td>High-volume, bounded classification supports a clear ROI case.</td></tr>
+  <tr><td>Axis regulatory processing</td><td>Reported more than 95% per-token savings and reduced repeated prompt tokens. <a href="sources.html#source-axis">Source</a></td><td>Stable instructions can move from every prompt into weights.</td></tr>
+  <tr><td>Genspark deep research</td><td>Reported 12% higher quality, 33% more tool calls, and 50% cost reduction after RFT. <a href="sources.html#source-genspark">Source</a></td><td>Agent trajectories and executable evaluators can matter beyond SFT.</td></tr>
+  <tr><td>Vercel code fixing</td><td>Reported comparable or better error-free generation at 10–40× speed. <a href="sources.html#source-vercel">Source</a></td><td>Verifiable, narrow tasks are the strongest RL wedge.</td></tr>
 </tbody></table></div>
 
 <h2>The training layer is commoditizing</h2>
 <div class="grid grid-2">
-  <section class="panel"><div class="metric">$0.50</div><p class="metric-caption">Fireworks list price per 1M LoRA SFT training tokens for models up to 16B, as checked 2026-07-12.</p></section>
-  <section class="panel"><div class="metric">$0.48</div><p class="metric-caption">Together list price per 1M LoRA SFT training tokens for models up to 16B, with minimum charges and separate hosting economics.</p></section>
+  <section class="panel"><div class="metric">$0.50</div><p class="metric-caption">Fireworks list price per 1M LoRA SFT training tokens for models up to 16B, as checked 2026-07-12. <a href="sources.html#source-fireworks-pricing">Source</a></p></section>
+  <section class="panel"><div class="metric">$0.48</div><p class="metric-caption">Together list price per 1M LoRA SFT training tokens for models up to 16B, with minimum charges and separate hosting economics. <a href="sources.html#source-together-pricing">Source</a></p></section>
 </div>
-<p>The exact prices will change. The durable conclusion is that training compute alone cannot support Crux’s margin. Fireworks also offers RFT, evaluation, multi-LoRA, and provider-hosted deployment. Together spans inference, fine-tuning, and dedicated capacity. Predibase now sits inside Rubrik. OpenPipe joined CoreWeave and announced that its legacy training and inference product is migrating into Weights & Biases in July 2026.</p>
+<p>The exact prices will change. The durable conclusion is that training compute alone cannot support Crux’s margin. Fireworks also offers RFT, evaluation, multi-LoRA, and provider-hosted deployment. <a href="sources.html#source-fireworks-tune">Source</a> Together spans inference, fine-tuning, and dedicated capacity. <a href="sources.html#source-together-pricing">Source</a> Predibase now sits inside Rubrik. <a href="sources.html#source-rubrik-predibase">Source</a> OpenPipe joined CoreWeave and announced that its legacy training and inference product is migrating into Weights &amp; Biases in July 2026. <a href="sources.html#source-openpipe-migration">Source</a></p>
 
 <h2>Competitive map</h2>
 <div class="table-wrap"><table><thead><tr><th>Category</th><th>Examples</th><th>What they own</th><th>Opening for Crux</th></tr></thead><tbody>
@@ -53,7 +52,7 @@
 <p class="callout-small">These are arithmetic scenarios, not forecasts or validated willingness to pay. The first commercial goal is one paid engagement, not a theoretical TAM.</p>
 
 <h2>Evidence that budgets exist</h2>
-<p>Evaluation vendors charge recurring platform and usage fees: Braintrust lists a $249/month Pro plan, LangSmith charges by retained traces and collaboration tier, and Arize offers paid cloud plus custom enterprise plans. Infrastructure funding is substantial: Fireworks announced a $250M round at a $4B valuation in October 2025; Together announced $305M at a $3.3B valuation in February 2025. This demonstrates strategic interest, but also the intensity of competition.</p>
+<p>Evaluation vendors charge recurring platform and usage fees: Braintrust lists a $249/month Pro plan, LangSmith charges by retained traces and collaboration tier, and Arize offers paid cloud plus custom enterprise plans. <a href="sources.html#source-braintrust-pricing">Braintrust source</a> · <a href="sources.html#source-langsmith-pricing">LangSmith source</a> · <a href="sources.html#source-arize-pricing">Arize source</a> Infrastructure funding is substantial: Fireworks announced a $250M round at a $4B valuation in October 2025; Together announced $305M at a $3.3B valuation in February 2025. <a href="sources.html#source-fireworks-funding">Fireworks source</a> · <a href="sources.html#source-together-funding">Together source</a> This demonstrates strategic interest, but also the intensity of competition.</p>
 
 <section class="decision"><div class="meta-label">Market gate</div><h3>The category is not the customer</h3><p>Do not interpret funding rounds as product-market fit for Crux. Continue only when direct interviews reveal repeated pain that buyers cannot cheaply solve inside their existing provider or observability platform.</p></section>
 <section class="action"><div class="meta-label">Founder action</div><h3>Test three pains, not one pitch</h3><p>In interviews, separately test: (1) diagnosing harness failures, (2) turning production evidence into reliable evals, and (3) replacing a repeated frontier-model workflow with a certified specialist. Record which pain has urgency, budget, and an existing workaround.</p></section>
