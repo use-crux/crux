@@ -8,9 +8,16 @@
  * @module
  */
 
-export { generateImage, transcribe } from '@use-crux/ai'
+export { generateImage, generateSpeech, transcribe } from "@use-crux/ai";
 
-export { Agent, convexAgent, convexTools, createAgent, createTool, wrapConvexTool } from './agent/sdk'
+export {
+  Agent,
+  convexAgent,
+  convexTools,
+  createAgent,
+  createTool,
+  wrapConvexTool,
+} from "./agent/sdk";
 
 export type {
   ConvexAgentCallArgs,
@@ -57,4 +64,4 @@ export type {
   CreateAgentOptions,
   CruxConvexAgent,
   CruxConvexThread,
-} from './agent/sdk'
+} from "./agent/sdk";
