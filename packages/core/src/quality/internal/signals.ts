@@ -2,10 +2,11 @@
  * Trace-backed signal capture for the Quality engine.
  *
  * Signals come from the observability span model, never from output-shape
- * guessing (direction doc §5.1): the engine tees the configured observability
- * transport, runs every cell inside its own observed run, and extracts typed
- * per-cell signals from the records that carry the cell's `runId`. This is
- * also what links every Experiment cell to its devtools trace run.
+ * guessing (direction doc §5.1): the engine captures graph records while each
+ * cell runs inside its own observed run, then extracts typed per-cell signals
+ * from that run **and any nested runs it triggered** (e.g. a `flow()` task
+ * opens a durable `flow.run` child run for its steps). That closure is what
+ * links every Experiment cell to its devtools trace tree.
  *
  * @internal Not exported from `@use-crux/core/quality` — engine plumbing only.
  * @module
@@ -191,7 +192,11 @@ export function emptyCellSignals(): CellSignals {
 
 /** A per-run record capture. @internal */
 export interface SignalCapture extends QualityCaptureSession {
-  /** Records captured for one observed run (one cell). */
+  /**
+   * Records for one Quality cell: the cell's root run plus every nested run
+   * linked by a `triggered` edge (BFS closure). Concurrent cells share the
+   * same capture session and must not see each other's nested runs.
+   */
   take(runId: string): CruxGraphRecord[]
   /** Drain pending deliveries so `take()` sees everything emitted so far. */
   settle(): Promise<void>
@@ -217,7 +222,7 @@ export function installSignalCapture(): SignalCapture {
       }
     },
     take(runId) {
-      return byRun.get(runId) ?? []
+      return collectTriggeredRunClosure(byRun, runId)
     },
     async settle() {
       // The tee receives records synchronously when the queue dispatches —
@@ -232,6 +237,45 @@ export function installSignalCapture(): SignalCapture {
       byRun.clear()
     },
   }
+}
+
+/**
+ * Collect records for `rootRunId` and every run it transitively triggered.
+ *
+ * Nested flows (and other primitives that open a durable child run under an
+ * ambient Quality `eval.case` run) emit `edgeType: 'triggered'` on the parent
+ * run, pointing `to: { kind: 'run', id }`. Without following those edges,
+ * step/tool signals living on the child run are invisible to expect matchers
+ * and honest-fail as "uncaptured".
+ *
+ * @internal
+ */
+export function collectTriggeredRunClosure(
+  byRun: ReadonlyMap<string, readonly CruxGraphRecord[]>,
+  rootRunId: string,
+): CruxGraphRecord[] {
+  const visited = new Set<string>()
+  const ordered: CruxGraphRecord[] = []
+  const queue = [rootRunId]
+
+  while (queue.length > 0) {
+    const runId = queue.shift()!
+    if (visited.has(runId)) continue
+    visited.add(runId)
+
+    const records = byRun.get(runId) ?? []
+    for (const record of records) {
+      ordered.push(record)
+      if (record.type !== 'edge' || record.edgeType !== 'triggered') continue
+      if (record.to.kind !== 'run') continue
+      const childRunId = record.to.id
+      if (typeof childRunId === 'string' && childRunId.length > 0 && !visited.has(childRunId)) {
+        queue.push(childRunId)
+      }
+    }
+  }
+
+  return ordered
 }
 
 /** Run `fn` while `capture` receives Quality observability records. @internal */
