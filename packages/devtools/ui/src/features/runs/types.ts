@@ -30,6 +30,7 @@ export type RunKind =
   | 'retrieval'
   | 'generate'
   | 'resolve'
+  | 'defer'
   | 'trace'
 
 export type ColumnId =

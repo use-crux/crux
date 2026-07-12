@@ -21,6 +21,7 @@ import type {
 import { createMemoryRuntimeData } from './data'
 import { cloneMemoryRuntimeData, replaceMemoryRuntimeData } from './data'
 import { createMemoryEventPort } from './events'
+import { createMemoryDeferredStore } from './deferred'
 import { createMemoryLeasePort } from './leases'
 import { createAsyncMutex } from './mutex'
 import type { MemoryOutboxFaults } from './outbox'
@@ -75,6 +76,7 @@ export function inMemoryRuntimeStore(): InMemoryRuntimeStore {
       waiters: createMemoryWaiterPort(target, recordWrite),
       timers: createMemoryTimerStore(target, recordWrite),
       outbox: createMemoryOutboxPort(target, outboxFaults, recordWrite),
+      deferred: createMemoryDeferredStore(target, recordWrite),
     }
   }
 

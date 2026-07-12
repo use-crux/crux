@@ -65,6 +65,8 @@ pub struct StaticSyntaxFileRecord {
     pub schema_version: u8,
     pub frontend: StaticSyntaxFrontendIdentity,
     pub file: String,
+    #[serde(default)]
+    pub relative_path: String,
     pub source_hash: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub interface_hash: Option<String>,
@@ -149,6 +151,8 @@ pub enum StaticSourceMatch {
         variable_name: String,
         local_name: String,
         exported: bool,
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        eager_execution: bool,
         callee: StaticCalleeRecord,
         args: Vec<StaticSyntaxValue>,
         #[serde(skip_serializing_if = "Option::is_none")]

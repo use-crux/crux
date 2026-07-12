@@ -103,7 +103,7 @@ func TestComparisonFixtureToleratesExternalRunEdgeRefs(t *testing.T) {
 
 func TestSharedTaxonomyFixtureMatchesGoTaxonomy(t *testing.T) {
 	var taxonomy taxonomyFixture
-	raw, err := os.ReadFile("../../../core/observability/fixtures/taxonomy.json")
+	raw, err := os.ReadFile("../../../core/src/observability/fixtures/taxonomy.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -135,7 +135,7 @@ type taxonomyFixture struct {
 
 func loadConformanceFixtures(t *testing.T) []conformanceFixture {
 	t.Helper()
-	files, err := filepath.Glob("../../../core/observability/fixtures/*.json")
+	files, err := filepath.Glob("../../../core/src/observability/fixtures/*.json")
 	if err != nil {
 		t.Fatal(err)
 	}

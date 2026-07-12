@@ -45,7 +45,7 @@ fn builtin_index_lint_findings(facts: &StaticIndexPatchFacts) -> Vec<StaticIndex
     let mut findings = core_lint_findings(&builder, facts, &by_id);
     findings.extend(runtime_lint_findings(
         &builder,
-        &facts.definitions,
+        facts,
         facts
             .project
             .as_ref()
@@ -53,4 +53,74 @@ fn builtin_index_lint_findings(facts: &StaticIndexPatchFacts) -> Vec<StaticIndex
     ));
     findings.extend(injection_lint_findings(&builder, facts, &by_id));
     propagate_findings(findings, &facts.relations)
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+    use crate::filter::StaticIndexLintOptions;
+
+    #[test]
+    fn defer_replay_finding_suppresses_site_local_scope_and_runtime_findings() {
+        let mut facts: StaticIndexPatchFacts = serde_json::from_value(json!({
+            "project": { "root": "/fixture", "runtimeConfigured": false },
+            "definitions": [
+                {
+                    "id": "flow:send", "kind": "flow", "name": "send",
+                    "fidelity": "resolved", "metadata": {}
+                },
+                {
+                    "id": "deferred-work:named:src-api.ts:769911c416ccf851:1",
+                    "kind": "deferred-work", "name": "named deferred work",
+                    "fidelity": "resolved",
+                    "metadata": { "mode": "named", "consumed": false, "eagerExecution": true }
+                }
+            ],
+            "relations": [{
+                "id": "relation:defer.contained_by:deferred:flow",
+                "type": "defer.contained_by",
+                "from": "deferred-work:named:src-api.ts:769911c416ccf851:1",
+                "to": "flow:send",
+                "fidelity": "resolved"
+            }]
+        }))
+        .expect("fixture facts decode");
+
+        append_builtin_lint_findings(&mut facts, &StaticIndexLintOptions::default());
+        let rule_ids = facts
+            .lint_findings
+            .iter()
+            .map(|finding| finding.rule_id.as_str())
+            .collect::<Vec<_>>();
+        assert!(rule_ids.contains(&"defer.replay_unsafe"));
+        assert!(!rule_ids.contains(&"defer.floating_named_promise"));
+        assert!(!rule_ids.contains(&"defer.missing_scope"));
+        assert!(!rule_ids.contains(&"runtime.missing_runtime_config"));
+    }
+
+    #[test]
+    fn named_defer_reports_floating_scope_and_explicit_runtime_evidence() {
+        let mut facts: StaticIndexPatchFacts = serde_json::from_value(json!({
+            "project": { "root": "/fixture", "runtimeConfigured": false },
+            "definitions": [{
+                "id": "deferred-work:named:src-api.ts:769911c416ccf851:1",
+                "kind": "deferred-work", "name": "named deferred work",
+                "fidelity": "resolved",
+                "metadata": { "mode": "named", "consumed": false, "eagerExecution": true }
+            }]
+        }))
+        .expect("fixture facts decode");
+
+        append_builtin_lint_findings(&mut facts, &StaticIndexLintOptions::default());
+        let rule_ids = facts
+            .lint_findings
+            .iter()
+            .map(|finding| finding.rule_id.as_str())
+            .collect::<Vec<_>>();
+        assert!(rule_ids.contains(&"defer.floating_named_promise"));
+        assert!(rule_ids.contains(&"defer.missing_scope"));
+        assert!(rule_ids.contains(&"runtime.missing_runtime_config"));
+    }
 }

@@ -111,9 +111,16 @@ describe("invocation defer scope", () => {
     expect(secondHandle).toBe(firstHandle);
 
     await expect(scheduled?.()).resolves.toBeUndefined();
-    await expect(firstHandle.settled).resolves.toEqual({
+    await expect(firstHandle.settled).resolves.toMatchObject({
       callbacks: [
-        { sequence: 0, outcome: "failed" },
+        {
+          sequence: 0,
+          outcome: "failed",
+          error: {
+            code: "DEFER_CALLBACK_FAILED",
+            cause: expect.objectContaining({ message: "contained" }),
+          },
+        },
         { sequence: 1, outcome: "completed" },
       ],
       timedOut: false,

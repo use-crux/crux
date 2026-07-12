@@ -42,5 +42,21 @@ describe("defer package surfaces", () => {
     expect(host).not.toHaveProperty("registerInline");
     expect(core).not.toHaveProperty("runWithDeferInvocation");
     expect(core).not.toHaveProperty("createInvocationDeferScope");
+    expect(core).not.toHaveProperty("scheduleDiagnosticsOnlyDeferredCallback");
+    expect(runtime).not.toHaveProperty(
+      "scheduleDiagnosticsOnlyDeferredCallback",
+    );
+    expect(host).not.toHaveProperty("scheduleDiagnosticsOnlyDeferredCallback");
+  });
+
+  it("does not declare a diagnostics-only defer package subpath", async () => {
+    const manifest = JSON.parse(
+      await readFile(new URL("../../package.json", import.meta.url), "utf8"),
+    ) as CorePackageManifest;
+
+    expect(manifest.exports).not.toHaveProperty("./internal/defer-port");
+    expect(manifest.typesVersions?.["*"]).not.toHaveProperty(
+      "internal/defer-port",
+    );
   });
 });

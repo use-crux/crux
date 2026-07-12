@@ -20,6 +20,7 @@ pub(crate) struct MatchContext<'a, 'b> {
     pub(crate) view: &'a SourceView<'a>,
     pub(crate) initializer_index: &'b SemanticInitializerIndex<'b>,
     pub(crate) scope_id: ScopeId,
+    pub(crate) root_scope_id: ScopeId,
     pub(crate) imports: &'b SemanticImportIndex<'b>,
     pub(crate) call_matcher: &'b CalleeMatcher,
     pub(crate) constructor_matcher: &'b CalleeMatcher,
@@ -79,6 +80,7 @@ pub(crate) fn call_match(
         local_name: fallback_local_name(context.root, context.file, &variable_name),
         variable_name,
         exported,
+        eager_execution: context.scope_id == context.root_scope_id,
         callee,
         args: call_args(context.view, &call.arguments, context.imports),
         object_arg: object_arg(

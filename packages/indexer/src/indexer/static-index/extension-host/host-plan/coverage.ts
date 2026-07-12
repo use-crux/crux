@@ -77,6 +77,10 @@ const staticIndexExtractorIds = new Set([
   }),
   extractorKey({
     extension: { name: CRUX_CORE_EXTENSION, version: '*' },
+    name: 'defer',
+  }),
+  extractorKey({
+    extension: { name: CRUX_CORE_EXTENSION, version: '*' },
     name: 'runtime.task',
   }),
 ])

@@ -246,6 +246,7 @@ export type {
   Awaitable,
   CruxDeferErrorCode,
   DeferredCallback,
+  DeferredWorkRef,
   DeferErrorInput,
 } from "./defer";
 

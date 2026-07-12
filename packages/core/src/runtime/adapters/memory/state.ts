@@ -293,6 +293,11 @@ function statusAllowed(
 }
 
 export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
+  const scheduledWork =
+    snapshot.scheduledWork ??
+    (snapshot as FlowSnapshot & {
+      readonly scheduledEffects?: FlowSnapshot['scheduledWork']
+    }).scheduledEffects
   return Object.freeze({
     flowId: snapshot.flowId,
     workId: snapshot.workId,
@@ -323,12 +328,12 @@ export function cloneFlowSnapshot(snapshot: FlowSnapshot): FlowSnapshot {
           ),
         )
       : undefined,
-    scheduledEffects: snapshot.scheduledEffects
+    scheduledWork: scheduledWork
       ? Object.freeze(
           Object.fromEntries(
-            Object.entries(snapshot.scheduledEffects).map(([key, effect]) => [
+            Object.entries(scheduledWork).map(([key, work]) => [
               key,
-              { workId: effect.workId, timerId: effect.timerId },
+              { workId: work.workId, timerId: work.timerId },
             ]),
           ),
         )

@@ -13,6 +13,7 @@ const CRUX_SIGNAL_PATTERNS = [
   /\bagent\s*\(/,
   /\bconvexAgent\s*\(/,
   /\bflow\s*\(/,
+  /\bdefer\s*\(/,
   /\bcruxFlow\s*\(/,
   /\bparallel\s*\(/,
   /\bpipeline\s*\(/,

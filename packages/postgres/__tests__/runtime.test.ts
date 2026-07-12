@@ -4,6 +4,8 @@ import {
   type RunStoreAdapterTestsOptions,
 } from '@use-crux/core/runtime/testing'
 import type {
+  FlowId,
+  FlowSnapshot,
   RuntimeOutboxItem,
   RuntimeTargetId,
   WorkId,
@@ -72,6 +74,67 @@ describe('@use-crux/postgres runtime', () => {
   }
 
   runStoreAdapterTests(options)
+
+  it('reads legacy scheduled_effects rows and writes scheduled_work only', async () => {
+    const store = await createStore()
+    const schema = schemas.at(-1)!
+    const pool = createPostgresTestPool(testDatabase.url)
+    try {
+      await pool.query(
+        `ALTER TABLE ${quoteIdent(schema)}.snapshots
+           ADD COLUMN IF NOT EXISTS scheduled_effects jsonb`,
+      )
+      await pool.query(
+        `INSERT INTO ${quoteIdent(schema)}.snapshots
+          (namespace, flow_id, work_id, target_id, status, input,
+           completed_steps, fingerprint, pending_suspends, scheduled_effects,
+           updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb,
+                 $9::jsonb, $10::jsonb, $11)`,
+        [
+          'tenant-a',
+          'flow_legacy',
+          'work_parent',
+          'review',
+          'suspended',
+          '{}',
+          '{}',
+          '[]',
+          '[]',
+          JSON.stringify({ 'defer:1': { workId: 'work_child' } }),
+          new Date('2026-07-12T00:00:00.000Z'),
+        ],
+      )
+
+      await expect(
+        store.state.getSnapshot('flow_legacy' as FlowId, {
+          namespace: 'tenant-a',
+        }),
+      ).resolves.toMatchObject({
+        scheduledWork: {
+          'defer:1': { workId: 'work_child' },
+        },
+      })
+
+      await store.state.putSnapshot(
+        snapshotFixture('flow_new', {
+          'defer:1': { workId: 'work_child' as WorkId },
+        }),
+      )
+      const written = await pool.query(
+        `SELECT scheduled_work, scheduled_effects
+           FROM ${quoteIdent(schema)}.snapshots
+          WHERE namespace = $1 AND flow_id = $2`,
+        ['tenant-a', 'flow_new'],
+      )
+      expect(written.rows[0]).toEqual({
+        scheduled_work: { 'defer:1': { workId: 'work_child' } },
+        scheduled_effects: null,
+      })
+    } finally {
+      await pool.end()
+    }
+  })
 
   it('keeps setup-check required columns aligned with create-table DDL', () => {
     const statements = ddlStatements('crux_runtime_test')
@@ -209,6 +272,25 @@ describe('@use-crux/postgres runtime', () => {
 
 function quoteIdent(identifier: string): string {
   return `"${identifier.replaceAll('"', '""')}"`
+}
+
+function snapshotFixture(
+  flowId: string,
+  scheduledWork: NonNullable<FlowSnapshot['scheduledWork']>,
+): FlowSnapshot {
+  return {
+    flowId: flowId as FlowId,
+    workId: 'work_parent' as WorkId,
+    targetId: 'review' as RuntimeTargetId,
+    namespace: 'tenant-a',
+    status: 'suspended',
+    input: {},
+    completedSteps: {},
+    fingerprint: [],
+    pendingSuspends: [],
+    scheduledWork,
+    updatedAt: new Date('2026-07-12T00:00:00.000Z'),
+  }
 }
 
 function columnsFromCreateTable(statement: string): readonly string[] {

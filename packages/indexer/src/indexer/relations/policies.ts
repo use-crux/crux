@@ -12,6 +12,22 @@ export const indexRelationPolicies = [
   ...injectableContributionRelationPolicies,
   ...promptContextAccessRelationPolicies,
   {
+    type: 'defer.contained_by',
+    fromKinds: ['deferred-work'],
+    toKinds: ['prompt', 'tool', 'agent', 'flow', 'flow.step'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: 'defer.targets_task',
+    fromKinds: ['deferred-work'],
+    toKinds: ['task'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
     type: 'agent.uses_prompt',
     fromKinds: ['agent'],
     toKinds: ['prompt'],
@@ -246,7 +262,12 @@ export const indexRelationPolicies = [
   ...routingTargetRelationPolicies,
   {
     type: 'composition.uses_agent',
-    fromKinds: ['composition.parallel', 'composition.pipeline', 'composition.swarm', 'composition.consensus'],
+    fromKinds: [
+      'composition.parallel',
+      'composition.pipeline',
+      'composition.swarm',
+      'composition.consensus',
+    ],
     toKinds: ['agent'],
     presentation: 'both',
     partial: true,
@@ -254,7 +275,12 @@ export const indexRelationPolicies = [
   },
   {
     type: 'composition.uses_flow',
-    fromKinds: ['composition.parallel', 'composition.pipeline', 'composition.swarm', 'composition.consensus'],
+    fromKinds: [
+      'composition.parallel',
+      'composition.pipeline',
+      'composition.swarm',
+      'composition.consensus',
+    ],
     toKinds: ['flow'],
     presentation: 'both',
     partial: true,
@@ -262,7 +288,12 @@ export const indexRelationPolicies = [
   },
   {
     type: 'composition.uses_prompt',
-    fromKinds: ['composition.parallel', 'composition.pipeline', 'composition.swarm', 'composition.consensus'],
+    fromKinds: [
+      'composition.parallel',
+      'composition.pipeline',
+      'composition.swarm',
+      'composition.consensus',
+    ],
     toKinds: ['prompt'],
     presentation: 'both',
     partial: true,
@@ -270,7 +301,12 @@ export const indexRelationPolicies = [
   },
   {
     type: 'composition.uses_tool',
-    fromKinds: ['composition.parallel', 'composition.pipeline', 'composition.swarm', 'composition.consensus'],
+    fromKinds: [
+      'composition.parallel',
+      'composition.pipeline',
+      'composition.swarm',
+      'composition.consensus',
+    ],
     toKinds: ['tool'],
     presentation: 'both',
     partial: true,

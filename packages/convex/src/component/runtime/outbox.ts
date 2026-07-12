@@ -39,24 +39,48 @@ export const get = mutation({
 })
 
 export const claimPending = mutation({
-  args: { namespace: v.optional(v.string()), now: v.number(), limit: v.optional(v.number()) },
+  args: {
+    namespace: v.optional(v.string()),
+    now: v.number(),
+    limit: v.optional(v.number()),
+  },
   returns: v.any(),
   handler: async (ctx, { namespace, now, limit }) => {
     const resolvedNamespace = requireRuntimeNamespace(namespace, 'outbox.claimPending')
-    const rows = await ctx.db
-      .query('runtimeOutbox')
-      .withIndex('by_namespace_state_next', (q) => q.eq('namespace', resolvedNamespace).eq('state', 'pending'))
-      .take(limit ?? 1_000)
-    const due = limitRows(rows.filter((row) => row.state === 'pending' && row.nextAttemptAt <= now), limit)
+    const rows = (
+      await Promise.all(
+        (['pending', 'dispatched'] as const).map((state) =>
+          ctx.db
+            .query('runtimeOutbox')
+            .withIndex('by_namespace_state_next', (q) => q.eq('namespace', resolvedNamespace).eq('state', state))
+            .take(limit ?? 1_000),
+        ),
+      )
+    ).flat()
+    const due = limitRows(
+      rows.filter((row) => row.nextAttemptAt <= now).sort((left, right) => left.nextAttemptAt - right.nextAttemptAt),
+      limit,
+    )
     for (const row of due) {
-      await ctx.db.patch(row._id, { state: 'dispatched', attempts: row.attempts + 1 })
+      await ctx.db.patch(row._id, {
+        state: 'dispatched',
+        attempts: row.attempts + 1,
+      })
     }
-    return due.map((row) => ({ ...row, state: 'dispatched', attempts: row.attempts + 1 }))
+    return due.map((row) => ({
+      ...row,
+      state: 'dispatched',
+      attempts: row.attempts + 1,
+    }))
   },
 })
 
 export const list = mutation({
-  args: { namespace: v.string(), state: v.optional(v.string()), limit: v.optional(v.number()) },
+  args: {
+    namespace: v.string(),
+    state: v.optional(v.string()),
+    limit: v.optional(v.number()),
+  },
   returns: v.any(),
   handler: async (ctx, { namespace, state, limit }) => {
     const states = state === undefined ? OUTBOX_STATES : [state]
@@ -65,9 +89,7 @@ export const list = mutation({
         states.map((rowState) =>
           ctx.db
             .query('runtimeOutbox')
-            .withIndex('by_namespace_state_next', (q) =>
-              q.eq('namespace', namespace).eq('state', rowState),
-            )
+            .withIndex('by_namespace_state_next', (q) => q.eq('namespace', namespace).eq('state', rowState))
             .take(limit ?? 1_000),
         ),
       )
@@ -99,9 +121,7 @@ export const listByWork = mutation({
           }
           return ctx.db
             .query('runtimeOutbox')
-            .withIndex('by_work_state_next', (q) =>
-              q.eq('workId', workId).eq('state', rowState),
-            )
+            .withIndex('by_work_state_next', (q) => q.eq('workId', workId).eq('state', rowState))
             .take(limit ?? 1_000)
         }),
       )
@@ -115,7 +135,11 @@ export const confirm = mutation({
   returns: v.null(),
   handler: async (ctx, { outboxId }) => {
     const item = await byId(ctx, outboxId)
-    if (item) await ctx.db.patch(item._id, { state: 'confirmed', confirmedAt: Date.now() })
+    if (item)
+      await ctx.db.patch(item._id, {
+        state: 'confirmed',
+        confirmedAt: Date.now(),
+      })
     return null
   },
 })
@@ -159,5 +183,8 @@ export const prune = mutation({
 })
 
 async function byId(ctx: MutationCtx, outboxId: string) {
-  return await ctx.db.query('runtimeOutbox').withIndex('by_outbox_id', (q) => q.eq('outboxId', outboxId)).first()
+  return await ctx.db
+    .query('runtimeOutbox')
+    .withIndex('by_outbox_id', (q) => q.eq('outboxId', outboxId))
+    .first()
 }

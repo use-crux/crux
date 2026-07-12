@@ -25,7 +25,7 @@ func TestServiceStatsRoutesPreferObservability(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture, err := os.ReadFile("../../../core/observability/fixtures/generation-run.json")
+	fixture, err := os.ReadFile("../../../core/src/observability/fixtures/generation-run.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestObservedInjectionReadModelUsesContextContributionArtifacts(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	fixture, err := os.ReadFile("../../../core/observability/fixtures/generation-run.json")
+	fixture, err := os.ReadFile("../../../core/src/observability/fixtures/generation-run.json")
 	if err != nil {
 		t.Fatal(err)
 	}

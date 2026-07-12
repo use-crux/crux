@@ -83,6 +83,7 @@ export function callMatch(
     : undefined
   return {
     kind: 'call',
+    eagerExecution: isEagerExecution(call),
     variableName,
     localName: staticFallbackLocalName(input.root, input.file, variableName),
     exported,
@@ -93,6 +94,22 @@ export function callMatch(
     snippet: sourceSnippetForNode(input.sourceFile, call),
     ...(scopedInitializers.length > 0 ? { localInitializers: scopedInitializers } : {}),
   }
+}
+
+function isEagerExecution(call: ts.CallExpression): boolean {
+  for (let current: ts.Node | undefined = call.parent; current; current = current.parent) {
+    if (
+      ts.isFunctionDeclaration(current) ||
+      ts.isFunctionExpression(current) ||
+      ts.isArrowFunction(current) ||
+      ts.isMethodDeclaration(current) ||
+      ts.isConstructorDeclaration(current)
+    ) {
+      return false
+    }
+    if (ts.isSourceFile(current)) return true
+  }
+  return false
 }
 
 /** Creates a Static Syntax match for a matched constructor expression. */

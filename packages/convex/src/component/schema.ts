@@ -65,6 +65,8 @@ export default defineSchema({
     fingerprint: v.array(v.string()),
     pendingSuspends: v.any(),
     deliveredSuspends: v.optional(v.any()),
+    scheduledWork: v.optional(v.any()),
+    /** @deprecated Read-only compatibility with pre-scheduledWork snapshots. */
     scheduledEffects: v.optional(v.any()),
     updatedAt: v.number(),
   })
@@ -72,8 +74,8 @@ export default defineSchema({
     .index('by_namespace_status_updated', ['namespace', 'status', 'updatedAt'])
     .index('by_status_updated', ['status', 'updatedAt']),
 
-	  runtimeEvents: defineTable({
-	    eventId: v.union(v.number(), v.string()),
+  runtimeEvents: defineTable({
+    eventId: v.union(v.number(), v.string()),
     eventKey: v.optional(v.string()),
     idempotencyKey: v.optional(v.string()),
     namespace: v.string(),
@@ -163,4 +165,31 @@ export default defineSchema({
     scope: v.string(),
     count: v.number(),
   }).index('by_namespace_scope', ['namespace', 'scope']),
+
+  runtimeDeferredScopes: defineTable({
+    namespace: v.string(),
+    scopeId: v.string(),
+    leaseToken: v.string(),
+    leaseExpiresAt: v.number(),
+    finalization: v.any(),
+    finalizationState: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_scope', ['namespace', 'scopeId'])
+    .index('by_namespace_state_expiry', ['namespace', 'finalizationState', 'leaseExpiresAt']),
+
+  runtimeDeferredIntents: defineTable({
+    namespace: v.string(),
+    scopeId: v.string(),
+    intentId: v.string(),
+    workId: v.string(),
+    targetId: v.string(),
+    input: v.any(),
+    state: v.string(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index('by_intent', ['namespace', 'intentId'])
+    .index('by_scope_state', ['namespace', 'scopeId', 'state']),
 })

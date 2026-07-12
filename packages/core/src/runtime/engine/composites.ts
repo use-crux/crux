@@ -17,9 +17,7 @@ import type {
   RuntimeTimerRecord,
 } from '../store'
 import type { WakeEnvelope } from './envelope'
-import {
-  blockMissingTargetInTransaction,
-} from './kernel-wake'
+import { blockMissingTargetInTransaction } from './kernel-wake'
 import {
   completeWorkInTransaction,
   failWorkInTransaction,
@@ -52,6 +50,16 @@ import type {
   ScanTimersResult,
 } from './kernel-types'
 import type { WorkItem } from './work'
+import type { RuntimeDeferredIntent } from '../ports/deferred'
+import {
+  abandonDeferredScopeInTransaction,
+  finalizeDeferredScopeInTransaction,
+  stageDeferredIntentInTransaction,
+  type AbandonDeferredScopeInput,
+  type DeferredScopeTransitionResult,
+  type FinalizeDeferredScopeInput,
+  type StageDeferredIntentInput,
+} from './kernel-deferred'
 
 /** Non-serialized kernel dependencies supplied to composite bodies. */
 export interface RuntimeCompositeDeps {
@@ -76,6 +84,9 @@ export type RuntimeCompositeKind =
   | 'maintenance.reclaim-lease'
   | 'maintenance.requeue-orphan'
   | 'maintenance.expire-waiters'
+  | 'defer.stage'
+  | 'defer.finalize'
+  | 'defer.abandon'
 
 /** Input payloads accepted by named composite operations. */
 export interface RuntimeCompositeInput {
@@ -128,6 +139,12 @@ export interface RuntimeCompositeInput {
   readonly 'maintenance.expire-waiters': {
     readonly waiters: readonly RuntimeWaiter[]
   }
+  /** Durably stage named work without making it runnable. */
+  readonly 'defer.stage': StageDeferredIntentInput
+  /** Atomically finalize a scope and release all staged siblings. */
+  readonly 'defer.finalize': FinalizeDeferredScopeInput
+  /** Atomically abandon an unfinalized scope and all staged siblings. */
+  readonly 'defer.abandon': AbandonDeferredScopeInput
 }
 
 /** Results returned by named composite operations. */
@@ -158,6 +175,12 @@ export interface RuntimeCompositeResult {
   readonly 'maintenance.requeue-orphan': boolean
   /** Number of expired waiters that produced runnable work. */
   readonly 'maintenance.expire-waiters': number
+  /** Accepted staged intent and its stable work identity. */
+  readonly 'defer.stage': RuntimeDeferredIntent
+  /** Result of the terminal finalization compare-and-set. */
+  readonly 'defer.finalize': DeferredScopeTransitionResult
+  /** Result of the terminal abandonment compare-and-set. */
+  readonly 'defer.abandon': DeferredScopeTransitionResult
 }
 
 /** Execute a named composite operation. */
@@ -190,6 +213,9 @@ export const runtimeCompositeBodies: {
   'maintenance.reclaim-lease': reclaimLeasedWorkInTransaction,
   'maintenance.requeue-orphan': requeuePendingWorkIfStillOrphanedInTransaction,
   'maintenance.expire-waiters': expireWaitersInTransaction,
+  'defer.stage': stageDeferredIntentInTransaction,
+  'defer.finalize': finalizeDeferredScopeInTransaction,
+  'defer.abandon': abandonDeferredScopeInTransaction,
 })
 
 /**
@@ -198,7 +224,9 @@ export const runtimeCompositeBodies: {
  * This is the behavior used by ordinary adapters. Substrate-native adapters can
  * provide `runComposite` and still call the same body registry server-side.
  */
-export async function runDefaultRuntimeComposite<K extends RuntimeCompositeKind>(
+export async function runDefaultRuntimeComposite<
+  K extends RuntimeCompositeKind,
+>(
   store: RuntimeStoreAdapter,
   deps: RuntimeCompositeDeps,
   kind: K,

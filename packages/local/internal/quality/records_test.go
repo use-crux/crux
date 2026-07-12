@@ -23,7 +23,7 @@ func TestServiceRunsUsesObservabilityWhenAvailable(t *testing.T) {
 	}
 	defer obs.Close()
 
-	raw, err := os.ReadFile("../../../core/observability/fixtures/generation-run.json")
+	raw, err := os.ReadFile("../../../core/src/observability/fixtures/generation-run.json")
 	if err != nil {
 		t.Fatal(err)
 	}

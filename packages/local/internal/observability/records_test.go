@@ -7,7 +7,7 @@ import (
 )
 
 func TestSharedGenerationFixtureDecodes(t *testing.T) {
-	raw, err := os.ReadFile("../../../core/observability/fixtures/generation-run.json")
+	raw, err := os.ReadFile("../../../core/src/observability/fixtures/generation-run.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -76,7 +76,7 @@ func TestSharedGenerationFixtureDecodes(t *testing.T) {
 }
 
 func TestValidateRecordRejectsInvalidSemantics(t *testing.T) {
-	raw, err := os.ReadFile("../../../core/observability/fixtures/generation-run.json")
+	raw, err := os.ReadFile("../../../core/src/observability/fixtures/generation-run.json")
 	if err != nil {
 		t.Fatal(err)
 	}

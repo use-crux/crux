@@ -46,6 +46,7 @@ import { executeWithRetry } from '../generation/retry'
 import type { JsonObject, JsonValue, RecordStore } from '../storage'
 import type { CapturedObservabilityContext } from '../observability'
 import { observe } from '../observability'
+import { runWithDeferReplayGuard } from '../defer/internal/replay-guard'
 
 // Import from decomposed modules
 import type {
@@ -260,7 +261,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   // Track aggregates across steps
   let stepCount = 0
   let suspendCount = 0
-  let durableEffectCount = 0
+  let scheduledWorkCount = 0
   const emittedSuspensionMarkers = new Set<string>()
 
   // Accumulated step results — pre-populated from snapshot on resume
@@ -511,15 +512,15 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       if (!runtimeExecution) {
         throw runtimeRequiredError({ api: 'flow.defer()' })
       }
-      durableEffectCount++
+      scheduledWorkCount++
       runtimeExecution.fingerprint.observe(`defer:${taskTarget.name}`)
-      const key = `defer:${durableEffectCount}`
-      const recorded = runtimeExecution.snapshot.scheduledEffects?.[key]
+      const key = `defer:${scheduledWorkCount}`
+      const recorded = runtimeExecution.snapshot.scheduledWork?.[key]
       if (recorded?.workId) return { workId: recorded.workId }
 
       assertFlowJsonValue(input, { boundary: 'flow snapshot metadata' })
       const workId = runtimeWorkId()
-      runtimeExecution.scheduledEffects.push({
+      runtimeExecution.scheduledWork.push({
         kind: 'defer',
         key,
         namespace: runtimeExecution.work.namespace,
@@ -540,13 +541,13 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
       if (!runtimeExecution) {
         throw runtimeRequiredError({ api: 'flow.after()' })
       }
-      durableEffectCount++
+      scheduledWorkCount++
       runtimeExecution.fingerprint.observe(`after:${taskTarget.name}`)
-      const key = `after:${durableEffectCount}`
-      if (runtimeExecution.snapshot.scheduledEffects?.[key]) return
+      const key = `after:${scheduledWorkCount}`
+      if (runtimeExecution.snapshot.scheduledWork?.[key]) return
 
       assertFlowJsonValue(input, { boundary: 'flow snapshot metadata' })
-      runtimeExecution.scheduledEffects.push({
+      runtimeExecution.scheduledWork.push({
         kind: 'after',
         key,
         namespace: runtimeExecution.work.namespace,
@@ -580,8 +581,8 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
         runtimeExecution.work.namespace,
         idleScope,
       )
-      const bufferedDeferCount = runtimeExecution.scheduledEffects.filter(
-        (effect) => effect.kind === 'defer' && effect.idleScope === idleScope,
+      const bufferedDeferCount = runtimeExecution.scheduledWork.filter(
+        (work) => work.kind === 'defer' && work.idleScope === idleScope,
       ).length
       if (count === 0 && bufferedDeferCount === 0) return
 
@@ -604,8 +605,14 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
   // Run the flow function with flow/session metadata while the canonical
   // observability span context is active.
   try {
+    const invokeHandler = () =>
+      runWithExecutionContext({ ...existing, flowId, parentFlowId }, () =>
+        fn(scope, flowInput),
+      )
     const result = await flowSpan.withContext(() =>
-      runWithExecutionContext({ ...existing, flowId, parentFlowId }, () => fn(scope, flowInput)),
+      runtimeExecution
+        ? runWithDeferReplayGuard(invokeHandler)
+        : invokeHandler(),
     )
 
     if (runtimeExecution) {
@@ -616,9 +623,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
           status: 'completed',
           input: flowInput,
           completedSteps,
-          scheduledEffects: runtimeExecution.snapshot.scheduledEffects,
+          scheduledWork: runtimeExecution.snapshot.scheduledWork,
         }),
-        scheduledEffects: runtimeExecution.scheduledEffects,
+        scheduledWork: runtimeExecution.scheduledWork,
       }
       runtimeExecution.result = { status: 'completed', output: result, flowId }
     }
@@ -663,7 +670,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
               completedSteps: runtimeCompletedSteps(completedSteps),
               fingerprint: runtimeExecution.fingerprint.observed,
               deliveredSuspends: runtimeExecution.snapshot.deliveredSuspends,
-              scheduledEffects: runtimeExecution.snapshot.scheduledEffects,
+              scheduledWork: runtimeExecution.snapshot.scheduledWork,
             },
             suspends: [
               {
@@ -676,7 +683,7 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
                 timeoutAt,
               },
             ],
-            scheduledEffects: runtimeExecution.scheduledEffects,
+            scheduledWork: runtimeExecution.scheduledWork,
           },
         }
         runtimeExecution.result = { status: 'suspended', flowId, suspendedAt: error.suspendPoint }
@@ -747,9 +754,9 @@ async function executeFlow<T, TInput = void, TSignals extends FlowSignalMap | un
             status: 'cancelled',
             input: flowInput,
             completedSteps,
-            scheduledEffects: runtimeExecution.snapshot.scheduledEffects,
+            scheduledWork: runtimeExecution.snapshot.scheduledWork,
           }),
-          scheduledEffects: runtimeExecution.scheduledEffects,
+          scheduledWork: runtimeExecution.scheduledWork,
         }
         runtimeExecution.result = { status: 'cancelled', flowId, cancelReason: error.reason }
         flowSpan.end({
@@ -998,7 +1005,7 @@ export function flow(
           recorded: runtimeSnapshot.status === 'running' ? [] : runtimeSnapshot.fingerprint,
         }),
         deliveredPayloads: await deliveredRuntimePayloads(runtime, runtimeSnapshot),
-        scheduledEffects: [],
+        scheduledWork: [],
       }
       try {
         await executeFlow<unknown, unknown, FlowSignalMap | undefined>(name, executeHandler, {
@@ -1077,7 +1084,7 @@ export function flow(
           completedSteps: {},
           fingerprint: [],
           pendingSuspends: [],
-          scheduledEffects: {},
+          scheduledWork: {},
           updatedAt: now,
         })
         return created

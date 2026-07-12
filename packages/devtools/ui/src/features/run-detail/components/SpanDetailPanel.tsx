@@ -90,6 +90,7 @@ import { retrievalEntries } from '../lib/span-detail-retrieval'
 import { collectToolRequests, resolveToolPayload } from '../lib/span-detail-tool'
 import { memoryRenderBudgetDecision } from '../lib/memory-span-detail'
 import { AgentCard, CompositionCard, EvalCard, EvalRunCard, FlowCard, OperationReportCard } from './PrimitiveCards'
+import { DeferredWorkCard } from './DeferredWorkCard'
 import { GenerationDetail } from './GenerationDetail'
 import { RunInsight } from './explain/RunInsight'
 import { collectTurnReports } from '@/features/run-detail/lib/explain/rollup'
@@ -3275,6 +3276,21 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
         <div className="flex-1 overflow-auto px-4 py-4">
           <SectionErrorBoundary title="Flow" compact resetKey={node.id}>
             <FlowCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
+          </SectionErrorBoundary>
+        </div>
+      </div>
+    )
+  }
+
+  // Deferred work keeps lifecycle and host completion class on one card so
+  // handler-returned streaming overlap stays explicit.
+  if (node.primitive === 'defer.scheduled' || node.primitive === 'defer.run') {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <SectionErrorBoundary title="Deferred work" compact resetKey={node.id}>
+            <DeferredWorkCard node={node} />
           </SectionErrorBoundary>
         </div>
       </div>

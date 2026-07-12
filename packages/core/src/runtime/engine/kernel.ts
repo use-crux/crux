@@ -31,6 +31,11 @@ import type {
 import { handleWake } from './kernel-wake'
 import { resolveRuntimeRetentionConfig } from './retention'
 import { runDefaultRuntimeComposite } from './composites'
+import type {
+  AbandonDeferredScopeInput,
+  FinalizeDeferredScopeInput,
+  StageDeferredIntentInput,
+} from './kernel-deferred'
 
 const DEFAULT_LEASE_TTL_MS = 60_000
 
@@ -52,8 +57,8 @@ export type {
   ScheduleTimerInput,
   RuntimeSuspendRegistration,
   RuntimeSuspensionSnapshotInput,
-  RuntimeScheduledEffectIntent,
-  RuntimeScheduledEffectFlushRecord,
+  RuntimeScheduledWorkIntent,
+  RuntimeScheduledWorkFlushRecord,
   RuntimeLeaseExtensionOptions,
   RuntimeLeaseExtensionSchedule,
   RuntimeTarget,
@@ -97,6 +102,12 @@ export function createRuntimeKernel(
   })
 
   return Object.freeze({
+    stageDeferredIntent: (input: StageDeferredIntentInput) =>
+      runComposite('defer.stage', input),
+    finalizeDeferredScope: (input: FinalizeDeferredScopeInput) =>
+      runComposite('defer.finalize', input),
+    abandonDeferredScope: (input: AbandonDeferredScopeInput) =>
+      runComposite('defer.abandon', input),
     enqueueTask: (input: EnqueueTaskInput) => enqueueTask(deps, input),
     recordSuspension: (input: RecordSuspensionInput) =>
       recordSuspension(deps, input),

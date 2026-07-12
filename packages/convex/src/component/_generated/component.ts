@@ -67,6 +67,60 @@ export type ComponentApi<Name extends string | undefined = string | undefined> =
       >;
     };
     runtime: {
+      deferred: {
+        getIntent: FunctionReference<
+          "mutation",
+          "internal",
+          { intentId: string; namespace: string },
+          any,
+          Name
+        >;
+        getScope: FunctionReference<
+          "mutation",
+          "internal",
+          { namespace: string; scopeId: string },
+          any,
+          Name
+        >;
+        listIntents: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            limit?: number;
+            namespace: string;
+            scopeId: string;
+            state?: string;
+          },
+          any,
+          Name
+        >;
+        listScopes: FunctionReference<
+          "mutation",
+          "internal",
+          {
+            leaseExpiresBefore?: number;
+            limit?: number;
+            namespace: string;
+            state?: string;
+          },
+          any,
+          Name
+        >;
+        putIntent: FunctionReference<
+          "mutation",
+          "internal",
+          { intent: any },
+          null,
+          Name
+        >;
+        putScope: FunctionReference<
+          "mutation",
+          "internal",
+          { scope: any },
+          null,
+          Name
+        >;
+      };
       composites: {
         run: FunctionReference<
           "mutation",

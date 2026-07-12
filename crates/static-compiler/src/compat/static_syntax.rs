@@ -68,6 +68,7 @@ fn prune_native_fact_match(
             variable_name,
             local_name,
             exported,
+            eager_execution,
             callee,
             source,
             ..
@@ -75,6 +76,7 @@ fn prune_native_fact_match(
             variable_name,
             local_name,
             exported,
+            eager_execution,
             callee,
             args: Vec::new(),
             object_arg: None,

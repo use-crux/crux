@@ -11,7 +11,7 @@
 import type { JsonValue } from '../storage'
 import type { ResolvedRuntimeEngine } from '../runtime/api/create-runtime'
 import type { RuntimeTargetOutcome } from '../runtime/engine/kernel'
-import type { RuntimeScheduledEffectIntent } from '../runtime/engine/kernel'
+import type { RuntimeScheduledWorkIntent } from '../runtime/engine/kernel'
 import type { ReplayFingerprint } from '../runtime/engine/replay'
 import type { WorkItem } from '../runtime/engine/work'
 import type { FlowResumeOptions } from './types'
@@ -40,7 +40,7 @@ export interface RuntimeFlowExecution {
   /** Delivered event payloads keyed by source-order suspend occurrence. */
   readonly deliveredPayloads: ReadonlyMap<string, JsonValue>
   /** Buffered defer/after intents waiting for the next durable barrier. */
-  readonly scheduledEffects: RuntimeScheduledEffectIntent[]
+  readonly scheduledWork: RuntimeScheduledWorkIntent[]
   /** Kernel outcome produced by the flow executor. */
   outcome?: RuntimeTargetOutcome
   /** Object-bound result returned to the caller when execution is inline. */
@@ -95,7 +95,7 @@ export function runtimeFlowSnapshot(
     readonly status: RuntimeFlowSnapshot['status']
     readonly input: unknown
     readonly completedSteps: Record<string, { output: JsonValue; durationMs: number }>
-    readonly scheduledEffects?: RuntimeFlowSnapshot['scheduledEffects']
+    readonly scheduledWork?: RuntimeFlowSnapshot['scheduledWork']
   },
 ): RuntimeFlowSnapshot {
   return {
@@ -109,7 +109,7 @@ export function runtimeFlowSnapshot(
     fingerprint: execution.fingerprint.observed,
     pendingSuspends: [],
     deliveredSuspends: execution.snapshot.deliveredSuspends,
-    scheduledEffects: options.scheduledEffects ?? execution.snapshot.scheduledEffects ?? {},
+    scheduledWork: options.scheduledWork ?? execution.snapshot.scheduledWork ?? {},
     updatedAt: execution.runtime.now(),
   }
 }

@@ -10,6 +10,9 @@ describe("Project Index schemas", () => {
   it("accepts definition kinds exposed by the public union", () => {
     expect(ProjectDefinitionKindSchema.parse("injectable")).toBe("injectable");
     expect(ProjectDefinitionKindSchema.parse("evaluation")).toBe("evaluation");
+    expect(ProjectDefinitionKindSchema.parse("deferred-work")).toBe(
+      "deferred-work",
+    );
     expect(ProjectDefinitionKindSchema.parse("evaluation.case")).toBe(
       "evaluation.case",
     );

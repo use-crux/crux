@@ -326,7 +326,7 @@ async function seedReplayDivergedWork(store: PostgresRuntimeStore): Promise<void
     completedSteps: {},
     fingerprint: ['step:old-label'],
     pendingSuspends: [],
-    scheduledEffects: {},
+    scheduledWork: {},
     updatedAt: now,
   })
   await store.state.putWork(

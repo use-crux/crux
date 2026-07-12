@@ -191,6 +191,7 @@ function maintenanceDidWork(result: MaintenanceTickResult): boolean {
       result.outboxFailed +
       result.timersFired +
       result.leasesReclaimed +
+      result.deferredScopesAbandoned +
       result.waitersExpired +
       result.pendingRequeued >
     0
@@ -204,6 +205,7 @@ function idleMaintenanceTick(): MaintenanceTickResult {
     timersFired: 0,
     timersSkipped: 0,
     leasesReclaimed: 0,
+    deferredScopesAbandoned: 0,
     waitersExpired: 0,
     pendingRequeued: 0,
     retainedRecordsRemoved: 0,

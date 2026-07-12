@@ -13,6 +13,13 @@ import {
   type DeferRegistrationScope,
 } from "./context";
 import { drainInlineCallbacks } from "./drain";
+import { createDurableDeferController } from "./durable";
+import { createDeferCommitBarrier } from "./commit-barrier";
+import {
+  createDeferScopeObservability,
+  type DeferredScheduledObservation,
+  type DeferEvidencePolicy,
+} from "./observability";
 
 type InvocationState = "open" | "sealed";
 type DeferredCallbackOutcome =
@@ -26,17 +33,15 @@ export interface InlineRegistration {
   readonly depth: number;
   readonly callback: DeferredCallback;
   readonly capturedScope: CapturedAsyncScope;
+  readonly observation: DeferredScheduledObservation;
 }
-
-type CommitOperationResult =
-  | { readonly ok: true }
-  | { readonly ok: false; readonly error: unknown };
 
 /** Result retained internally for shutdown, tests, and later diagnostics. */
 export interface DeferredDrainResult {
   readonly callbacks: readonly {
     readonly sequence: number;
     readonly outcome: DeferredCallbackOutcome;
+    readonly error?: unknown;
   }[];
   readonly timedOut: boolean;
   readonly cancelled: boolean;
@@ -65,8 +70,36 @@ export function createInvocationDeferScope(
   let drainClosed = false;
   let handle: DeferredDrainHandle | undefined;
   const registrations: InlineRegistration[] = [];
-  const commitOperations: Array<Promise<CommitOperationResult>> = [];
+  const commitBarrier = createDeferCommitBarrier();
   const abortController = new AbortController();
+  const evidence = createDeferScopeObservability({
+    completion: lifetime.completion,
+  });
+  const durable = createDurableDeferController(lifetime, {
+    onStaged(input) {
+      evidence.recordNamedScheduled({
+        sequence: input.sequence,
+        policy: "public",
+        targetId: input.targetId,
+        workId: input.workId,
+        scopeId: input.scopeId,
+      });
+    },
+    onTerminal(intents, intentState) {
+      for (const intent of intents) {
+        evidence.markNamedTerminal(
+          {
+            policy: "public",
+            sequence: intent.sequence,
+            mode: "named",
+            completion: lifetime.completion,
+            scheduledAtMs: intent.scheduledAtMs,
+          },
+          intentState,
+        );
+      }
+    },
+  });
 
   const scope: InvocationDeferScope = {
     signal: abortController.signal,
@@ -98,12 +131,28 @@ export function createInvocationDeferScope(
           message: `defer() exceeded the host nesting limit of ${lifetime.limits.maxNestingDepth}.`,
         });
       }
+      const policy: DeferEvidencePolicy =
+        registration.evidence ?? "public";
+      const sequence = registrations.length;
+      const observation = evidence.recordInlineScheduled(sequence, policy);
       registrations.push({
-        sequence: registrations.length,
+        sequence,
         depth: registration.depth,
         callback,
         capturedScope: captureAsyncScope(),
+        observation,
       });
+    },
+    stageNamed(target, input) {
+      if (state !== "open") {
+        throw createDeferError({
+          code: "DEFER_SCOPE_SEALED",
+          message: "defer() cannot stage durable work after sealing.",
+        });
+      }
+      const operation = durable.stage(target, input);
+      scope.trackCommit(operation);
+      return operation;
     },
     trackCommit(operation) {
       if (state !== "open") {
@@ -112,15 +161,7 @@ export function createInvocationDeferScope(
           message: "defer() cannot track durable acceptance after sealing.",
         });
       }
-      commitOperations.push(
-        Promise.resolve(operation).then<
-          CommitOperationResult,
-          CommitOperationResult
-        >(
-          () => ({ ok: true }),
-          (error: unknown) => ({ ok: false, error }),
-        ),
-      );
+      commitBarrier.track(operation);
     },
     seal(outcome) {
       void outcome;
@@ -129,21 +170,23 @@ export function createInvocationDeferScope(
 
       const settlement = deferred<DeferredDrainResult>();
       handle = {
-        committed: settleCommitOperations(commitOperations),
+        committed: durable.commit(outcome, commitBarrier.settle()),
         settled: settlement.promise,
       };
       lifetime.schedule({
         async run() {
-          settlement.resolve(
-            await drainInlineCallbacks(scope, registrations, {
-              concurrency: lifetime.limits.concurrency,
-              maxDrainMs: lifetime.limits.maxDrainMs,
-              abortController,
-              close: () => {
-                drainClosed = true;
-              },
-            }),
-          );
+          const result = await drainInlineCallbacks(scope, registrations, {
+            concurrency: lifetime.limits.concurrency,
+            maxDrainMs: lifetime.limits.maxDrainMs,
+            lifetime,
+            abortController,
+            evidence,
+            close: () => {
+              drainClosed = true;
+            },
+          });
+          evidence.settle(result);
+          settlement.resolve(result);
         },
         cancel(reason) {
           scope.cancel(reason);
@@ -154,19 +197,6 @@ export function createInvocationDeferScope(
   };
 
   return scope;
-}
-
-async function settleCommitOperations(
-  operations: readonly Promise<CommitOperationResult>[],
-): Promise<void> {
-  const results = await Promise.all(operations);
-  const failure = results.find(
-    (
-      result,
-    ): result is Extract<CommitOperationResult, { readonly ok: false }> =>
-      !result.ok,
-  );
-  if (failure) throw failure.error;
 }
 
 function deferred<T>(): {

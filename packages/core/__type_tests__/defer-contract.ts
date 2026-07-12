@@ -1,7 +1,13 @@
 /** Compile-time contract for request-scoped `defer()`. */
 
 import { expectTypeOf } from "vitest";
-import { defer, type Awaitable, type DeferredCallback } from "@use-crux/core";
+import {
+  defer,
+  type Awaitable,
+  type DeferredCallback,
+  type DeferredWorkRef,
+} from "@use-crux/core";
+import { durableTask } from "@use-crux/core/runtime";
 import {
   runWithDeferInvocation,
   type DeferHostBoundaryOptions,
@@ -14,6 +20,35 @@ const asynchronousResult = defer(async () => {});
 expectTypeOf(synchronousResult).toEqualTypeOf<void>();
 expectTypeOf(asynchronousResult).toEqualTypeOf<void>();
 expectTypeOf<ReturnType<DeferredCallback>>().toEqualTypeOf<Awaitable<void>>();
+
+const sendEmail = durableTask("send-email", {
+  run: async (input: { readonly messageId: string }) => input.messageId,
+});
+const namedResult = defer(sendEmail, { messageId: "message_1" });
+expectTypeOf(namedResult).toEqualTypeOf<Promise<DeferredWorkRef>>();
+namedResult.then((reference) => {
+  if (reference.kind === "deferred.work") {
+    expectTypeOf(reference.workId).toEqualTypeOf<string>();
+    expectTypeOf(reference.targetId).toEqualTypeOf<string>();
+  }
+});
+
+// @ts-expect-error Named targets require their inferred JSON input.
+defer(sendEmail);
+// @ts-expect-error Named target input is inferred from its target brand.
+defer(sendEmail, { messageId: 42 });
+// @ts-expect-error Non-JSON values cannot cross the durable target boundary.
+defer(sendEmail, { messageId: () => "message_1" });
+
+const auditMessage = durableTask("audit-message", {
+  run: async (input: { readonly auditId: string }) => input.auditId,
+});
+declare const targetUnion: typeof sendEmail | typeof auditMessage;
+declare const mismatchedUnionInput:
+  | { readonly messageId: string }
+  | { readonly auditId: string };
+// @ts-expect-error A target union cannot be paired with an independently chosen input union.
+defer(targetUnion, mismatchedUnionInput);
 
 // @ts-expect-error Public inline callbacks remain zero-argument functions.
 defer((input: string) => {

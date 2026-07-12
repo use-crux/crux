@@ -1,15 +1,18 @@
-import { runWithDeferRegistration } from "./context";
-import { runWithCapturedAsyncScope } from "../../async-scope/internal/carrier";
+import type { DeferLifetimeCapability } from "../host-types";
+import { executeDeferredCallback } from "./callback-boundary";
 import type {
   DeferredDrainResult,
   InlineRegistration,
   InvocationDeferScope,
 } from "./invocation-scope";
+import type { DeferScopeObservability } from "./observability";
 
 interface DrainInlineCallbacksOptions {
   readonly concurrency: number;
   readonly maxDrainMs: number;
+  readonly lifetime: DeferLifetimeCapability;
   readonly abortController: AbortController;
+  readonly evidence: DeferScopeObservability;
   readonly close: () => void;
 }
 
@@ -19,7 +22,10 @@ export async function drainInlineCallbacks(
   registrations: InlineRegistration[],
   options: DrainInlineCallbacksOptions,
 ): Promise<DeferredDrainResult> {
-  const outcomes = new Map<number, "completed" | "failed">();
+  const outcomes = new Map<
+    number,
+    { readonly outcome: "completed" | "failed"; readonly error?: unknown }
+  >();
   let nextIndex = 0;
   let closed = false;
 
@@ -30,18 +36,18 @@ export async function drainInlineCallbacks(
       const registration = registrations[index];
       if (!registration) continue;
 
-      let outcome: "completed" | "failed" = "completed";
       try {
-        await runWithCapturedAsyncScope(registration.capturedScope, () =>
-          runWithDeferRegistration(
-            { scope, phase: "drain", depth: registration.depth + 1 },
-            registration.callback,
-          ),
+        await options.evidence.runInline(registration.observation, () =>
+          executeDeferredCallback(scope, registration, options.lifetime),
         );
-      } catch {
-        outcome = "failed";
+        if (!closed) {
+          outcomes.set(registration.sequence, { outcome: "completed" });
+        }
+      } catch (error) {
+        if (!closed) {
+          outcomes.set(registration.sequence, { outcome: "failed", error });
+        }
       }
-      if (!closed) outcomes.set(registration.sequence, outcome);
     }
   }
 
@@ -81,12 +87,15 @@ export async function drainInlineCallbacks(
   }
 
   return {
-    callbacks: registrations.map((registration) => ({
-      sequence: registration.sequence,
-      outcome:
-        outcomes.get(registration.sequence) ??
-        (ending === "timed-out" ? "timed-out" : "cancelled"),
-    })),
+    callbacks: registrations.map((registration) => {
+      const result = outcomes.get(registration.sequence);
+      return {
+        sequence: registration.sequence,
+        ...(result ?? {
+          outcome: ending === "timed-out" ? "timed-out" : "cancelled",
+        }),
+      };
+    }),
     timedOut: ending === "timed-out",
     cancelled: ending === "cancelled",
   };

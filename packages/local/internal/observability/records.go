@@ -223,6 +223,8 @@ var primitiveFamilyByName = map[string]string{
 	"security.warning":        "security",
 	"cost.record":             "cost",
 	"feedback.record":         "feedback",
+	"defer.scheduled":         "defer",
+	"defer.run":               "defer",
 	"custom.operation":        "custom",
 }
 

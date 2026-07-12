@@ -11,6 +11,12 @@ import {
 } from './run-mappers'
 
 describe('runs row mapping', () => {
+  it('maps deferred-work root primitives to the defer kind', async () => {
+    const { canonicalPrimitiveKind } = await import('./run-mappers')
+    expect(canonicalPrimitiveKind('defer.scheduled')).toBe('defer')
+    expect(canonicalPrimitiveKind('defer.run')).toBe('defer')
+  })
+
   it('uses observability list rollups and root session ids directly', () => {
     const run = {
       runId: 'run_live',

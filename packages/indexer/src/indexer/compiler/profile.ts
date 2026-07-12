@@ -1,4 +1,8 @@
-import type { IndexerExtension, IndexerExtensionRuntime, ResolvedIndexerExtension } from '../extensions'
+import type {
+  IndexerExtension,
+  IndexerExtensionRuntime,
+  ResolvedIndexerExtension,
+} from '../extensions'
 import { createIndexerExtensionRuntime } from '../extensions'
 export { compilerProfileCacheInputs } from '../cache-identity'
 
@@ -24,28 +28,38 @@ export interface StaticExtensionHostRuntime {
 
 export const cruxCoreCompilerProjections = [
   {
+    name: 'deferred-work-containment',
+    version: '1',
+    phase: 'resolve',
+    reason:
+      'Compiler-owned source ranges attach public deferred work only to proven enclosing indexed definitions.',
+  },
+  {
     name: 'source-ref-projection',
     version: '1',
     phase: 'parse',
-    reason: 'Parser-owned source-reference helpers project config properties, callbacks, templates, schemas, and helper usages.',
+    reason:
+      'Parser-owned source-reference helpers project config properties, callbacks, templates, schemas, and helper usages.',
   },
   {
     name: 'runtime-prepare-use-entries',
     version: '1',
     phase: 'parse',
-    reason: 'Runtime prepare helper usage is inferred from function bodies by compiler-owned traversal.',
+    reason:
+      'Runtime prepare helper usage is inferred from function bodies by compiler-owned traversal.',
   },
   {
     name: 'prompt-context-tree-paths',
     version: '1',
     phase: 'resolve',
-    reason: 'createPrompts/createContexts path projection annotates known definitions after source-local extraction.',
+    reason:
+      'createPrompts/createContexts path projection annotates known definitions after source-local extraction.',
   },
 ] as const satisfies readonly CompilerOwnedProjection[]
 
 export const cruxCoreCompilerProfile = {
   name: '@use-crux/indexer/crux-core-profile',
-  version: '1',
+  version: '2',
   extensions: [],
   projections: cruxCoreCompilerProjections,
 } as const satisfies ProjectIndexCompilerProfile
@@ -55,7 +69,9 @@ export function createStaticExtensionHostRuntime(
 ): StaticExtensionHostRuntime {
   return {
     profile,
-    extensionRuntime: createIndexerExtensionRuntime({ extensions: profile.extensions }),
+    extensionRuntime: createIndexerExtensionRuntime({
+      extensions: profile.extensions,
+    }),
   }
 }
 
@@ -73,19 +89,31 @@ export function compilerProfileWithResolvedExtensions(
   if (extensions.length === 0) return profile
   return {
     ...profile,
-    extensions: [...profile.extensions, ...extensions.map((entry) => entry.extension)],
+    extensions: [
+      ...profile.extensions,
+      ...extensions.map((entry) => entry.extension),
+    ],
     projections: [
       ...(profile.projections ?? []),
       ...extensions.map((entry) => ({
         name: `indexer-extension-package:${entry.reference.package}#${entry.reference.export ?? 'default'}`,
         version: entry.packageVersion ?? entry.extension.version,
         phase: 'parse' as const,
-        reason: 'Configured Indexer extension package identity participates in static cache invalidation.',
+        reason:
+          'Configured Indexer extension package identity participates in static cache invalidation.',
       })),
     ],
   }
 }
 
-export function compilerProjectionStaticCallNames(profile: ProjectIndexCompilerProfile): readonly string[] {
-  return [...new Set((profile.projections ?? []).flatMap((projection) => projection.staticCallNames ?? []))].sort()
+export function compilerProjectionStaticCallNames(
+  profile: ProjectIndexCompilerProfile,
+): readonly string[] {
+  return [
+    ...new Set(
+      (profile.projections ?? []).flatMap(
+        (projection) => projection.staticCallNames ?? [],
+      ),
+    ),
+  ].sort()
 }

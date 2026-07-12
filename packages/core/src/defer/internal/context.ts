@@ -1,5 +1,8 @@
 import { createAsyncScopeFacet } from "../../async-scope";
 import type { DeferredCallback } from "../types";
+import type { DeferredWorkRef } from "../types";
+import type { RuntimeTaskTarget } from "../../runtime/api/task";
+import type { DeferEvidencePolicy } from "./observability";
 
 /** Internal phase in which a callback registration occurs. */
 export type DeferRegistrationPhase = "handler" | "drain";
@@ -11,13 +14,23 @@ export interface DeferRegistrationScope {
     registration: DeferRegistrationContext,
   ): void;
   trackCommit(operation: PromiseLike<unknown>): void;
+  stageNamed(
+    target: RuntimeTaskTarget,
+    input: unknown,
+  ): Promise<DeferredWorkRef>;
 }
 
-/** Context needed to register authored work without exposing the scope kernel. */
+/**
+ * Context needed to register authored work without exposing the scope kernel.
+ *
+ * `evidence` defaults to `public`. The diagnostics-only composition port sets
+ * `diagnostics-only` so internal reuse never creates Catalog or user Runs.
+ */
 export interface DeferRegistrationContext {
   readonly scope: DeferRegistrationScope;
   readonly phase: DeferRegistrationPhase;
   readonly depth: number;
+  readonly evidence?: DeferEvidencePolicy;
 }
 
 const deferRegistrationScope = createAsyncScopeFacet<DeferRegistrationContext>(

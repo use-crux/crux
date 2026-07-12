@@ -26,6 +26,7 @@ mod data {
     pub(crate) mod output;
 }
 mod definition;
+mod defer;
 mod eval {
     pub(crate) mod assertions;
     pub(crate) mod catalog;

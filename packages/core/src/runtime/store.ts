@@ -16,6 +16,7 @@ import type {
   RuntimeCompositeResult,
 } from './engine/composites'
 import type { DurableEventPort } from './ports/events'
+import type { RuntimeDeferredStorePort } from './ports/deferred'
 import type { LeasePort } from './ports/leases'
 import type { TimerId, WaiterId, WorkId } from './ports/ids'
 import type { RuntimeStatePort } from './ports/state'
@@ -186,7 +187,9 @@ export interface RuntimeWaiterStorePort extends WaiterPort {
   /** List waiter records owned by one work item for cancellation and retention. */
   listByWork(workId: WorkId): Promise<readonly RuntimeWaiter[]>
   /** Claim armed waiters whose timeout passed when no native timer fired them. */
-  claimExpired(options: ClaimExpiredWaitersOptions): Promise<readonly RuntimeWaiter[]>
+  claimExpired(
+    options: ClaimExpiredWaitersOptions,
+  ): Promise<readonly RuntimeWaiter[]>
   /** Move a waiter through one compare-and-set race transition. */
   transition(
     waiterId: RuntimeWaiter['waiterId'],
@@ -214,6 +217,8 @@ export interface RuntimeStoreTransaction {
   readonly waiters: RuntimeWaiterStorePort
   readonly timers: RuntimeTimerStorePort
   readonly outbox: RuntimeOutboxPort
+  /** Durable invocation scopes and their staged named work. */
+  readonly deferred: RuntimeDeferredStorePort
 }
 
 /** Durable record store used by Runtime Engine kernels. */

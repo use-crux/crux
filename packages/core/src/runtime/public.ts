@@ -70,8 +70,8 @@ export type {
   RuntimeLeaseExtensionOptions,
   RuntimeLeaseExtensionSchedule,
   RuntimeKernelOptions,
-  RuntimeScheduledEffectFlushRecord,
-  RuntimeScheduledEffectIntent,
+  RuntimeScheduledWorkFlushRecord,
+  RuntimeScheduledWorkIntent,
   RuntimeSuspendRegistration,
   RuntimeSuspensionSnapshotInput,
   RuntimeTarget,
@@ -223,6 +223,8 @@ export type {
   RuntimeEvent,
 } from './ports/events'
 export type {
+  DeferredIntentId,
+  DeferredScopeId,
   EventCursor,
   FlowId,
   LeaseToken,
@@ -232,6 +234,16 @@ export type {
   WaiterId,
   WorkId,
 } from './ports/ids'
+export type {
+  ListRuntimeDeferredIntentsOptions,
+  ListRuntimeDeferredScopesOptions,
+  RuntimeDeferredIntent,
+  RuntimeDeferredIntentState,
+  RuntimeDeferredScope,
+  RuntimeDeferredStorePort,
+  RuntimeDeferFinalization,
+  RuntimeDeferInvocationOutcome,
+} from './ports/deferred'
 export type {
   ClaimOptions,
   Lease,

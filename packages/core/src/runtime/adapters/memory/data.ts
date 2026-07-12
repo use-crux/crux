@@ -2,6 +2,10 @@ import type { RuntimeEvent } from '../../ports/events'
 import type { Lease } from '../../ports/leases'
 import type { FlowSnapshot, IdempotencyRecord } from '../../ports/state'
 import type { RuntimeWaiter } from '../../ports/waiters'
+import type {
+  RuntimeDeferredIntent,
+  RuntimeDeferredScope,
+} from '../../ports/deferred'
 import type { WorkItem } from '../../engine/work'
 import type { RuntimeOutboxItem, RuntimeTimerRecord } from '../../store'
 
@@ -31,6 +35,8 @@ export interface MemoryRuntimeData {
   timerDuplicateKeys: Map<string, MemoryRuntimeTimerRecord>
   outbox: Map<string, MemoryRuntimeOutboxItem>
   idleCounters: Map<string, number>
+  deferredScopes: Map<string, RuntimeDeferredScope>
+  deferredIntents: Map<string, RuntimeDeferredIntent>
   nextEventId: number
   nextWaiterId: number
   nextLeaseId: number
@@ -51,6 +57,8 @@ export function createMemoryRuntimeData(): MemoryRuntimeData {
     timerDuplicateKeys: new Map(),
     outbox: new Map(),
     idleCounters: new Map(),
+    deferredScopes: new Map(),
+    deferredIntents: new Map(),
     nextEventId: 1,
     nextWaiterId: 1,
     nextLeaseId: 1,
@@ -59,7 +67,9 @@ export function createMemoryRuntimeData(): MemoryRuntimeData {
   }
 }
 
-export function cloneMemoryRuntimeData(data: MemoryRuntimeData): MemoryRuntimeData {
+export function cloneMemoryRuntimeData(
+  data: MemoryRuntimeData,
+): MemoryRuntimeData {
   return {
     work: new Map(data.work),
     snapshots: new Map(data.snapshots),
@@ -72,6 +82,8 @@ export function cloneMemoryRuntimeData(data: MemoryRuntimeData): MemoryRuntimeDa
     timerDuplicateKeys: new Map(data.timerDuplicateKeys),
     outbox: new Map(data.outbox),
     idleCounters: new Map(data.idleCounters),
+    deferredScopes: new Map(data.deferredScopes),
+    deferredIntents: new Map(data.deferredIntents),
     nextEventId: data.nextEventId,
     nextWaiterId: data.nextWaiterId,
     nextLeaseId: data.nextLeaseId,
@@ -95,6 +107,8 @@ export function replaceMemoryRuntimeData(
   target.timerDuplicateKeys = source.timerDuplicateKeys
   target.outbox = source.outbox
   target.idleCounters = source.idleCounters
+  target.deferredScopes = source.deferredScopes
+  target.deferredIntents = source.deferredIntents
   target.nextEventId = source.nextEventId
   target.nextWaiterId = source.nextWaiterId
   target.nextLeaseId = source.nextLeaseId

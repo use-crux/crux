@@ -27,6 +27,7 @@ use crate::{
 /// Results are returned in match order so downstream finalization stays stable.
 pub(crate) fn project_first_party_facts(
     file: &str,
+    relative_path: &str,
     source_text: &str,
     imports: &[StaticImportRecord],
     local_initializers: &[StaticInitializerRecord],
@@ -39,9 +40,11 @@ pub(crate) fn project_first_party_facts(
         .filter_map(|(match_index, source_match)| {
             project_match(
                 file,
+                relative_path,
                 source_text,
                 imports,
                 local_initializers,
+                matches,
                 match_index,
                 source_match,
                 records_by_file,
@@ -55,9 +58,11 @@ pub(crate) fn project_first_party_facts(
 /// Resolves the first manifest entry that projects a packet for one match.
 fn project_match(
     file: &str,
+    relative_path: &str,
     source_text: &str,
     imports: &[StaticImportRecord],
     local_initializers: &[StaticInitializerRecord],
+    matches: &[StaticSourceMatch],
     match_index: usize,
     source_match: &StaticSourceMatch,
     records_by_file: Option<&HashMap<String, StaticSyntaxFileRecord>>,
@@ -82,8 +87,12 @@ fn project_match(
     for entry in FIRST_PARTY_PRIMITIVE_MANIFEST {
         let custom_input = CustomProjectionInput {
             file,
+            relative_path,
+            source_text,
             imports,
             local_initializers,
+            matches,
+            match_index,
             source_match,
             records_by_file,
         };

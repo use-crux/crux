@@ -40,6 +40,7 @@ import {
   encodeWork,
   encodeWorkForCreate,
 } from './codec'
+import { assertConvexDeferredComponent, createConvexDeferredStore } from './deferred-store'
 
 /** Component refs needed by the Runtime Engine store adapter. */
 export interface ConvexRuntimeComponent {
@@ -50,6 +51,7 @@ export interface ConvexRuntimeComponent {
     readonly timers: Record<string, unknown>
     readonly outbox: Record<string, unknown>
     readonly leases: Record<string, unknown>
+    readonly deferred?: Record<string, unknown>
     readonly composites?: {
       readonly run?: unknown
     }
@@ -73,20 +75,28 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
   const now = options.now ?? (() => new Date())
   const run = <TResult>(ref: unknown, args: Record<string, unknown>) =>
     options.ctx.runMutation<TResult>(ref, cleanArgs(args))
-  const refs = options.component.runtime
+  // Keep store construction lazy for older generated component refs. Existing
+  // Runtime operations fail at their own missing ref; named defer provides the
+  // more specific version diagnostic when its port is first used.
+  const refs = options.component.runtime ?? ({} as ConvexRuntimeComponent['runtime'])
 
   const state: RuntimeStatePort = {
     createWork: async (work) => decodeWork(await run(refs.state.createWork, { work: encodeWorkForCreate(work) })),
     getWork: async (workId, read) => {
-      const result = await run<unknown>(refs.state.getWork, { workId, namespace: read.namespace })
+      const result = await run<unknown>(refs.state.getWork, {
+        workId,
+        namespace: read.namespace,
+      })
       return result ? decodeWork(result) : null
     },
     putWork: (work) => run(refs.state.putWork, { work: encodeWork(work) }).then(noop),
     listWork: async (query) =>
-      (await run<readonly unknown[]>(refs.state.listWork, {
-        ...query,
-        updatedBefore: query.updatedBefore?.getTime(),
-      })).map(decodeWork),
+      (
+        await run<readonly unknown[]>(refs.state.listWork, {
+          ...query,
+          updatedBefore: query.updatedBefore?.getTime(),
+        })
+      ).map(decodeWork),
     pruneTerminalWork: (query) =>
       run(refs.state.pruneTerminalWork, {
         ...query,
@@ -105,7 +115,10 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
       return result ? decodeWork(result) : null
     },
     getSnapshot: async (flowId, read) => {
-      const result = await run<unknown>(refs.state.getSnapshot, { flowId, namespace: read.namespace })
+      const result = await run<unknown>(refs.state.getSnapshot, {
+        flowId,
+        namespace: read.namespace,
+      })
       return result ? decodeSnapshot(result) : null
     },
     putSnapshot: (snapshot) => run(refs.state.putSnapshot, { snapshot: encodeSnapshot(snapshot) }).then(noop),
@@ -118,7 +131,9 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
       run(refs.state.markSnapshotDelivered, { workId, ...delivery }).then(noop),
     hasIdempotencyKey: (namespace, key) => run(refs.state.hasIdempotencyKey, { namespace, key }),
     putIdempotencyKey: (record) =>
-      run(refs.state.putIdempotencyKey, { record: encodeIdempotency(record) }).then(noop),
+      run(refs.state.putIdempotencyKey, {
+        record: encodeIdempotency(record),
+      }).then(noop),
     pruneIdempotencyKeys: (query) =>
       run(refs.state.pruneIdempotencyKeys, {
         ...query,
@@ -139,7 +154,10 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
       ),
     read: async (query) => {
       const result = await run<{ events: readonly unknown[]; cursor?: string }>(refs.events.read, { ...query })
-      return { events: result.events.map(decodeEvent), cursor: result.cursor as EventCursor | undefined }
+      return {
+        events: result.events.map(decodeEvent),
+        cursor: result.cursor as EventCursor | undefined,
+      }
     },
     prune: (query) =>
       run(refs.events.prune, {
@@ -151,20 +169,25 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
   const waiters: RuntimeWaiterStorePort = {
     register: async (waiter) => decodeWaiter(await run(refs.waiters.register, { waiter: encodeWaiter(waiter) })),
     resolve: async (eventName, payload, read = {}) =>
-      (await run<readonly unknown[]>(refs.waiters.resolve, {
-        eventName,
-        payload,
-        namespace: requireNamespace(read.namespace, 'waiters.resolve'),
-      })).map(decodeWaiter),
+      (
+        await run<readonly unknown[]>(refs.waiters.resolve, {
+          eventName,
+          payload,
+          namespace: requireNamespace(read.namespace, 'waiters.resolve'),
+        })
+      ).map(decodeWaiter),
     cancel: (waiterId) => run(refs.waiters.cancel, { waiterId }).then(noop),
     attachTimer: (waiterId, timerId) => run(refs.waiters.attachTimer, { waiterId, timerId }).then(noop),
-    listByWork: async (workId) => (await run<readonly unknown[]>(refs.waiters.listByWork, { workId })).map(decodeWaiter),
+    listByWork: async (workId) =>
+      (await run<readonly unknown[]>(refs.waiters.listByWork, { workId })).map(decodeWaiter),
     claimExpired: async (query: ClaimExpiredWaitersOptions) =>
-      (await run<readonly unknown[]>(refs.waiters.claimExpired, {
-        ...query,
-        namespace: requireNamespace(query.namespace, 'waiters.claimExpired'),
-        now: query.now.getTime(),
-      })).map(decodeWaiter),
+      (
+        await run<readonly unknown[]>(refs.waiters.claimExpired, {
+          ...query,
+          namespace: requireNamespace(query.namespace, 'waiters.claimExpired'),
+          now: query.now.getTime(),
+        })
+      ).map(decodeWaiter),
     transition: (waiterId, from, to) => run(refs.waiters.transition, { waiterId, from, to }),
     prune: (query) =>
       run(refs.waiters.prune, {
@@ -180,11 +203,13 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
       return result ? decodeTimer(result) : null
     },
     claimDue: async (query: ClaimDueTimersOptions) =>
-      (await run<readonly unknown[]>(refs.timers.claimDue, {
-        ...query,
-        namespace: requireNamespace(query.namespace, 'timers.claimDue'),
-        now: query.now.getTime(),
-      })).map(decodeTimer),
+      (
+        await run<readonly unknown[]>(refs.timers.claimDue, {
+          ...query,
+          namespace: requireNamespace(query.namespace, 'timers.claimDue'),
+          now: query.now.getTime(),
+        })
+      ).map(decodeTimer),
     list: async (query) => (await run<readonly unknown[]>(refs.timers.list, { ...query })).map(decodeTimer),
     listByWork: async (workId) => (await run<readonly unknown[]>(refs.timers.listByWork, { workId })).map(decodeTimer),
     transition: (timerId, from, to) => run(refs.timers.transition, { timerId, from, to }),
@@ -197,20 +222,24 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
 
   const outbox: RuntimeOutboxPort = {
     put: async (envelope, options) =>
-      decodeOutbox(await run(refs.outbox.put, {
-        envelope: encodeWakeEnvelope(envelope),
-        nextAttemptAt: (options?.deliverAt ?? now()).getTime(),
-      })),
+      decodeOutbox(
+        await run(refs.outbox.put, {
+          envelope: encodeWakeEnvelope(envelope),
+          nextAttemptAt: (options?.deliverAt ?? now()).getTime(),
+        }),
+      ),
     get: async (outboxId) => {
       const result = await run<unknown>(refs.outbox.get, { outboxId })
       return result ? decodeOutbox(result) : null
     },
     claimPending: async (query: ClaimOutboxOptions) =>
-      (await run<readonly unknown[]>(refs.outbox.claimPending, {
-        ...query,
-        namespace: requireNamespace(query.namespace, 'outbox.claimPending'),
-        now: query.now.getTime(),
-      })).map(decodeOutbox) as readonly RuntimeOutboxItem[],
+      (
+        await run<readonly unknown[]>(refs.outbox.claimPending, {
+          ...query,
+          namespace: requireNamespace(query.namespace, 'outbox.claimPending'),
+          now: query.now.getTime(),
+        })
+      ).map(decodeOutbox) as readonly RuntimeOutboxItem[],
     list: async (query) =>
       (await run<readonly unknown[]>(refs.outbox.list, { ...query })).map(decodeOutbox) as readonly RuntimeOutboxItem[],
     listByWork: async (workId, query = {}) =>
@@ -219,7 +248,10 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
       ) as readonly RuntimeOutboxItem[],
     confirm: (outboxId) => run(refs.outbox.confirm, { outboxId }).then(noop),
     retryLater: (outboxId, nextAttemptAt) =>
-      run(refs.outbox.retryLater, { outboxId, nextAttemptAt: encodeOutboxDate(nextAttemptAt) }).then(noop),
+      run(refs.outbox.retryLater, {
+        outboxId,
+        nextAttemptAt: encodeOutboxDate(nextAttemptAt),
+      }).then(noop),
     prune: (query) =>
       run(refs.outbox.prune, {
         ...query,
@@ -229,7 +261,11 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
 
   const leases: LeasePort = {
     claim: (resource, lease) =>
-      run<unknown>(refs.leases.claim, { ...lease, resource, now: now().getTime() }).then(decodeLease),
+      run<unknown>(refs.leases.claim, {
+        ...lease,
+        resource,
+        now: now().getTime(),
+      }).then(decodeLease),
     extend: async (lease: Lease, ttlMs) => {
       const result = await run<unknown>(refs.leases.extend, {
         lease: encodeLease(lease),
@@ -243,7 +279,19 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
     release: (lease) => run(refs.leases.release, { lease: encodeLease(lease) }).then(noop),
   }
 
-  const transaction: RuntimeStoreTransaction = { state, events, waiters, timers, outbox }
+  const deferred = createConvexDeferredStore({
+    run,
+    ...(refs.deferred ? { refs: refs.deferred } : {}),
+  })
+
+  const transaction: RuntimeStoreTransaction = {
+    state,
+    events,
+    waiters,
+    timers,
+    outbox,
+    deferred,
+  }
   return Object.freeze({
     id: 'convex',
     ...transaction,
@@ -252,12 +300,14 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
       kind: K,
       input: RuntimeCompositeInput[K],
     ): Promise<RuntimeCompositeResult[K]> => {
+      if (kind.startsWith('defer.')) {
+        assertConvexDeferredComponent(refs.deferred)
+      }
       const ref = refs.composites?.run
       if (!ref) {
         throw createRuntimeError({
           code: 'SETUP_REQUIRED',
-          whatFailed:
-            'Convex Runtime Engine component is missing runtime.composites.run.',
+          whatFailed: 'Convex Runtime Engine component is missing runtime.composites.run.',
           why: 'Runtime Engine composites must execute inside one Convex component mutation for host-bound atomicity.',
           whatStillWorks:
             'Non-runtime Convex storage and already deployed older runtime functions can still run until they hit a composite commit.',
@@ -273,7 +323,7 @@ export function convexRuntimeStore<TCtx extends ConvexCtxPort>(
   })
 }
 
-function noop(): void { }
+function noop(): void {}
 
 function requireNamespace(namespace: string | undefined, operation: string): string {
   if (namespace) return namespace
@@ -283,8 +333,7 @@ function requireNamespace(namespace: string | undefined, operation: string): str
     why: 'The Convex component cannot safely satisfy namespace-less runtime scans without reading unbounded runtime tables.',
     whatStillWorks:
       'Runtime handlers and maintenance created from convex({ namespace }) continue to pass their configured namespace.',
-    nextStep:
-      'Pass an explicit runtime namespace or use a Convex Runtime Engine definition configured with namespace.',
+    nextStep: 'Pass an explicit runtime namespace or use a Convex Runtime Engine definition configured with namespace.',
   })
 }
 

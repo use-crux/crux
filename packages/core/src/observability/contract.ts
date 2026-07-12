@@ -35,6 +35,7 @@ export const CRUX_PRIMITIVE_FAMILIES = [
   "security",
   "feedback",
   "runtime",
+  "defer",
   "custom",
 ] as const;
 
@@ -101,6 +102,8 @@ export const CRUX_PRIMITIVE_NAMES = [
   "runtime.convex.schedule",
   "runtime.convex.resume",
   "runtime.convex.flush",
+  "defer.scheduled",
+  "defer.run",
   "custom.operation",
 ] as const;
 
@@ -231,6 +234,8 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   "runtime.convex.schedule": "runtime",
   "runtime.convex.resume": "runtime",
   "runtime.convex.flush": "runtime",
+  "defer.scheduled": "defer",
+  "defer.run": "defer",
   "custom.operation": "custom",
 } as const satisfies Record<
   (typeof CRUX_PRIMITIVE_NAMES)[number],
@@ -883,10 +888,46 @@ export interface CruxPromptResolveAttributes {
   excludedContextCount?: number;
 }
 
+/**
+ * Attributes recorded when public deferred work is accepted.
+ *
+ * `intentState` is used for named durable work; inline registrations close
+ * immediately after acceptance and leave it unset.
+ */
+export interface CruxDeferScheduledAttributes {
+  mode: "inline" | "named";
+  completion: "response-finished" | "handler-returned";
+  sequence: number;
+  definitionId?: string;
+  targetId?: string;
+  workId?: string;
+  intentState?: "staged" | "released" | "abandoned";
+  scopeId?: string;
+}
+
+/**
+ * Attributes recorded while a deferred callback or named target executes.
+ *
+ * Execution is causally linked to its `defer.scheduled` span rather than
+ * temporally nested under a closed response span.
+ */
+export interface CruxDeferRunAttributes {
+  mode: "inline" | "named";
+  completion: "response-finished" | "handler-returned";
+  sequence: number;
+  definitionId?: string;
+  targetId?: string;
+  workId?: string;
+  outcome?: "completed" | "failed" | "timed-out" | "cancelled";
+  queueDelayMs?: number;
+}
+
 export type CruxSpanAttributesByPrimitive = {
   "generation.call": CruxGenerationCallAttributes;
   "generation.stream": CruxGenerationStreamAttributes;
   "prompt.resolve": CruxPromptResolveAttributes;
+  "defer.scheduled": CruxDeferScheduledAttributes;
+  "defer.run": CruxDeferRunAttributes;
   "custom.operation": CruxAttributes;
 };
 
