@@ -14,8 +14,8 @@ Fetches the URL with `fetch`, inspects the `Content-Type` header, and:
 
 - **HTML** (`text/html`, or content that looks like HTML) → extracts title, text blocks, headings, lists, code, and tables
 - **Plain text / Markdown / CSV / JSON** → parses into structured parts
-- **PDF** (`application/pdf`, `.pdf`, or `%PDF` bytes) → extracts page parts; visual pages can use `media.generate`
-- **Image/audio** → derives ordinary text through bound `media.generate` / `media.transcribe` operations
+- **PDF** (`application/pdf`, `.pdf`, or `%PDF` bytes) → extracts page parts; visual pages can use `media.describe`
+- **Image/audio/video** → derives ordinary text through explicitly bound `media.describe` / `media.transcribe` operations
 - **DOCX / XLSX** (`.docx`, `.xlsx`) → parses remote Office files when the URL extension identifies the format
 
 For the full parser inventory and output shapes, see the [@use-crux/ingest overview](/docs/reference/ingest#bundled-parsers).
@@ -40,7 +40,7 @@ urlSource('https://example.com/article', {
 | `sourceId`  | `string?`         | Defaults to the URL                                                            |
 | `fetch`     | `typeof fetch?`   | Inject a custom fetch (e.g. for testing or proxies)                            |
 | `parsers`   | `IngestParser[]?` | Optional parser overrides. Custom parsers beat built-ins for matching formats. |
-| `media`     | `IngestMediaOperations?` | Bound generation/transcription operations for visual or audio sources. |
+| `media`     | `IngestMediaOperations?` | Bound semantic description/transcription operations for media sources. |
 
 ### Document metadata
 

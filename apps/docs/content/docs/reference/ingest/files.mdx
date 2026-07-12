@@ -17,9 +17,10 @@ import type { FileSourceOptions, FilesSourceOptions, FilesDirectoryInput, FilesG
 | `.txt`             | Plain text | Loaded verbatim                                                |
 | `.md`, `.markdown` | Markdown   | Extracts headings, paragraphs, code/list text, and GFM tables  |
 | `.html`, `.htm`    | HTML       | Extracts title, text blocks, headings, lists, code, and tables |
-| `.pdf`             | PDF        | Extracts page parts; visual pages can use `media.generate`     |
-| image formats      | Image      | Derives text through `media.generate`                          |
+| `.pdf`             | PDF        | Extracts page parts; visual pages can use `media.describe`     |
+| image formats      | Image      | Derives text through `media.describe`                          |
 | audio formats      | Audio      | Derives text and time segments through `media.transcribe`      |
+| video formats      | Video      | Uses explicitly bound `media.describe`, `media.transcribe`, or both |
 | `.csv`             | CSV        | Extracts a table part                                          |
 | `.json`            | JSON       | Extracts JSON path parts                                       |
 | `.docx`            | DOCX       | Extracts text and tables through Mammoth                       |
@@ -49,7 +50,7 @@ Returns a `SourceLoader` that yields exactly one `IngestDocument`.
 | `namespace` | `string`          | Required, non-empty. Used as the indexer namespace prefix.                     |
 | `sourceId`  | `string?`         | Optional. Defaults to the file's absolute path.                                |
 | `parsers`   | `IngestParser[]?` | Optional parser overrides. Custom parsers beat built-ins for matching formats. |
-| `media`     | `IngestMediaOperations?` | Bound generation/transcription operations for visual or audio sources. |
+| `media`     | `IngestMediaOperations?` | Bound semantic description/transcription operations for media sources. |
 
 ### Document metadata
 
