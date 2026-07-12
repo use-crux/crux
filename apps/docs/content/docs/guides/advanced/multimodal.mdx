@@ -114,7 +114,7 @@ const [hit] = await meetingRetriever.retrieve("launch date");
 console.log(hit.source.id, hit.source.location);
 ```
 
-Image and visual-PDF ingestion bind a normal generation function through `media.generate`; audio binds `media.transcribe`. Retrieval returns structured, validated attribution: `source.id` plus allowed URL/path/AssetRef/media type and page/time narrowing. Retrieval never hydrates media. Only if the application needs the original should it explicitly call `assetStore.get(hit.source.assetRef)`.
+Image and visual-PDF ingestion bind an application-owned semantic description function through `media.describe`; audio binds `media.transcribe`. Retrieval returns structured, validated attribution: `source.id` plus allowed URL/path/AssetRef/media type and page/time narrowing, while vector metadata remains locator-free. Retrieval never hydrates media. Only if the application needs the original should it explicitly call `assetStore.get(hit.source.assetRef)`.
 
 ## Tested adapter matrix
 
