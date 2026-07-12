@@ -213,7 +213,7 @@ function collectMatches(
 ): readonly StaticSourceMatch[] {
   const matches: StaticSourceMatch[] = [];
 
-  const visit = (node: ts.Node): void => {
+  const visit = (node: ts.Node, ownerVariableName?: string): void => {
     if (
       ts.isFunctionDeclaration(node) ||
       ts.isFunctionExpression(node) ||
@@ -227,9 +227,10 @@ function collectMatches(
       for (const declaration of node.declarationList.declarations) {
         let matchedInitializer = false;
         if (ts.isIdentifier(declaration.name) && declaration.initializer) {
+          const variableName = declaration.name.text;
           const match = matchFromInitializer(
             input,
-            declaration.name.text,
+            variableName,
             declaration.initializer,
             exported,
             scopedInitializerRecordsForNode(
@@ -241,11 +242,19 @@ function collectMatches(
           if (match) {
             matches.push(match);
             matchedInitializer = true;
-            ts.forEachChild(declaration.initializer, visit);
+            ts.forEachChild(declaration.initializer, (child) =>
+              visit(child, variableName),
+            );
           }
         }
         if (!matchedInitializer) {
-          ts.forEachChild(declaration, visit);
+          if (ts.isIdentifier(declaration.name) && declaration.initializer) {
+            visit(declaration.initializer, declaration.name.text);
+          } else {
+            ts.forEachChild(declaration, (child) =>
+              visit(child, ownerVariableName),
+            );
+          }
         }
       }
       return;
@@ -267,6 +276,7 @@ function collectMatches(
               node,
               input.importsByLocalName,
             ),
+            ownerVariableName,
           ),
         );
       }
@@ -285,7 +295,7 @@ function collectMatches(
       );
       if (match) matches.push(match);
     }
-    ts.forEachChild(node, visit);
+    ts.forEachChild(node, (child) => visit(child, ownerVariableName));
   };
 
   visit(input.sourceFile);

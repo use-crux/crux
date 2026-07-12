@@ -2,6 +2,7 @@ import {
   injectableContributionRelationPolicies,
   injectableUseRelationPolicies,
   invocationAccessRelationPolicies,
+  mediaRelationPolicies,
   promptContextAccessRelationPolicies,
   routingTargetRelationPolicies,
 } from './policy-groups'
@@ -11,6 +12,7 @@ export const indexRelationPolicies = [
   ...injectableUseRelationPolicies,
   ...injectableContributionRelationPolicies,
   ...promptContextAccessRelationPolicies,
+  ...mediaRelationPolicies,
   {
     type: 'defer.contained_by',
     fromKinds: ['deferred-work'],

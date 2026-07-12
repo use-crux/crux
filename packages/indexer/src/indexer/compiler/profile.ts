@@ -4,6 +4,7 @@ import type {
   ResolvedIndexerExtension,
 } from '../extensions'
 import { createIndexerExtensionRuntime } from '../extensions'
+import { mediaPrimitiveManifest } from '../media/primitive-manifest'
 export { compilerProfileCacheInputs } from '../cache-identity'
 
 export interface CompilerOwnedProjection {
@@ -60,7 +61,7 @@ export const cruxCoreCompilerProjections = [
 export const cruxCoreCompilerProfile = {
   name: '@use-crux/indexer/crux-core-profile',
   version: '2',
-  extensions: [],
+  extensions: [mediaPrimitiveManifest],
   projections: cruxCoreCompilerProjections,
 } as const satisfies ProjectIndexCompilerProfile
 

@@ -356,7 +356,8 @@ export type ProjectDefinitionIndexPresentationRole =
   | "block"
   | "store"
   | "storage"
-  | "case";
+  | "case"
+  | "operation";
 
 export interface ProjectDefinitionIndexPresentation {
   standalone: boolean;
@@ -463,7 +464,66 @@ export type ProjectDefinitionKind =
   | "eval.flow"
   | "eval.rag"
   | "eval.quality"
+  | "media.operation"
+  | "ingest.source"
   | "unknown";
+
+/** Media modality proven from an authored Project Index definition. */
+export type ProjectIndexMediaModality =
+  | "text"
+  | "image"
+  | "audio"
+  | "video"
+  | "document";
+
+/** Safe, allowlisted options authored for a media operation. */
+export interface MediaOperationAuthoredOptions {
+  readonly n?: number;
+  readonly size?: string;
+  readonly aspectRatio?: string;
+  readonly seed?: number;
+  readonly timestamps?: string;
+  readonly diarization?: boolean;
+  readonly taskType?: string;
+  readonly voice?: string;
+}
+
+/**
+ * Static facts for an authored media-bearing operation.
+ *
+ * These facts deliberately exclude prompts, media values, locators, provider
+ * file identifiers, and arbitrary provider option records.
+ */
+export interface MediaOperationFacts {
+  readonly kind: "media.operation";
+  readonly operation:
+    | "generate"
+    | "stream"
+    | "generateImage"
+    | "transcribe"
+    | "generateSpeech"
+    | "describe";
+  readonly inputModalities?: readonly ProjectIndexMediaModality[];
+  readonly outputModalities?: readonly ProjectIndexMediaModality[];
+  readonly adapter?: string;
+  readonly model?: string;
+  readonly execution?: "native" | "composed" | "unknown";
+  readonly authoredOptions?: Readonly<MediaOperationAuthoredOptions>;
+}
+
+/**
+ * Safe semantic categories for an authored ingest source.
+ *
+ * Runtime source values, paths, URLs, filenames, and asset references are
+ * intentionally absent from this contract.
+ */
+export interface IngestSourceFacts {
+  readonly kind: "ingest.source";
+  readonly sourceKind: "file" | "url" | "asset" | "custom";
+  readonly mediaKinds?: readonly ProjectIndexMediaModality[];
+  readonly namespace?: string;
+  readonly attribution?: readonly ("page" | "time")[];
+}
 
 export interface PromptFacts {
   kind: "prompt";
@@ -858,7 +918,9 @@ export type PrimitiveSpecificFacts =
   | StorageFacts
   | SafetyFacts
   | ScorerFacts
-  | EvalFacts;
+  | EvalFacts
+  | MediaOperationFacts
+  | IngestSourceFacts;
 
 export type ProjectDefinitionFacts =
   | PrimitiveSpecificFacts
@@ -1310,6 +1372,8 @@ export const ProjectDefinitionKindSchema = z.enum([
   "eval.flow",
   "eval.rag",
   "eval.quality",
+  "media.operation",
+  "ingest.source",
   "unknown",
 ]);
 
@@ -1677,6 +1741,7 @@ export const ProjectDefinitionIndexPresentationSchema = z.object({
       "store",
       "storage",
       "case",
+      "operation",
     ])
     .optional(),
   order: z.number().optional(),

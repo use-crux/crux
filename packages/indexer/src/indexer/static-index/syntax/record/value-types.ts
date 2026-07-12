@@ -8,6 +8,8 @@ export type StaticSourceMatch = StaticCallSourceMatch | StaticNewSourceMatch | S
 export interface StaticSourceMatchBase {
   /** Authored binding name or deterministic fallback for call-site matches. */
   readonly variableName: string
+  /** Authored variable whose initializer lexically contains this nested match. */
+  readonly ownerVariableName?: string
   /** Project-relative deterministic fallback name. */
   readonly localName: string
   /** Whether the declaration was exported from this source file. */
