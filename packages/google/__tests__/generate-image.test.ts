@@ -6,9 +6,13 @@ import { createGoogle } from "../src";
 
 function clientWith(response: unknown) {
   const generateImages = vi.fn(async (_args: unknown) => response);
+  const generateContent = vi.fn(async (_args: unknown) => response);
   return {
-    client: { models: { generateImages } } as unknown as GoogleGenAI,
+    client: {
+      models: { generateImages, generateContent },
+    } as unknown as GoogleGenAI,
     generateImages,
+    generateContent,
   };
 }
 
@@ -26,6 +30,57 @@ describe("Google image generation", () => {
     expect(generateImages.mock.calls[0]?.[0]).toMatchObject({
       model: "imagen-4.0-generate-001",
     });
+  });
+
+  it("routes Gemini image generation and reference editing through one native content call", async () => {
+    const { client, generateImages, generateContent } = clientWith({
+      candidates: [
+        {
+          content: {
+            parts: [{ inlineData: { data: "AQI=", mimeType: "image/png" } }],
+          },
+        },
+      ],
+    });
+    const result = await createGoogle(client, {
+      cachedContent: false,
+    }).generateImage({
+      model: "gemini-2.5-flash-image",
+      prompt: {
+        text: "Remove the boat",
+        images: [
+          { type: "data", data: new Uint8Array([3]), mediaType: "image/png" },
+        ],
+      },
+      aspectRatio: "16:9",
+      seed: 4,
+    });
+
+    expect(generateImages).not.toHaveBeenCalled();
+    expect(generateContent).toHaveBeenCalledOnce();
+    expect(generateContent.mock.calls[0]?.[0]).toMatchObject({
+      model: "gemini-2.5-flash-image",
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: "Remove the boat" },
+            { inlineData: { data: "Aw==", mimeType: "image/png" } },
+          ],
+        },
+      ],
+      config: {
+        responseModalities: ["IMAGE"],
+        seed: 4,
+        imageConfig: { aspectRatio: "16:9" },
+      },
+    });
+    expect(result.raw).toBe(
+      generateContent.mock.results[0]?.value
+        ? await generateContent.mock.results[0].value
+        : undefined,
+    );
+    expect(result.image.mediaType).toBe("image/png");
   });
 
   it("uses one native generateImages call and preserves ordered image bytes", async () => {
@@ -88,7 +143,7 @@ describe("Google image generation", () => {
     expectTypeOf(google.generateImage).toBeFunction();
   });
 
-  it("rejects known unsupported models and edit inputs before client I/O", async () => {
+  it("rejects known unsupported models before client I/O", async () => {
     const { client, generateImages } = clientWith({ generatedImages: [] });
     const google = createGoogle(client, { cachedContent: false });
 
@@ -97,17 +152,6 @@ describe("Google image generation", () => {
     ).rejects.toMatchObject({
       code: "unsupported_capability",
     });
-    await expect(
-      google.generateImage({
-        model: "custom-image-model",
-        prompt: {
-          text: "edit",
-          images: [
-            { type: "data", data: new Uint8Array([1]), mediaType: "image/png" },
-          ],
-        },
-      }),
-    ).rejects.toMatchObject({ code: "unsupported_capability" });
     expect(generateImages).not.toHaveBeenCalled();
   });
 

@@ -8,16 +8,29 @@
  * @module
  */
 
-export { createGoogle, googleProviderRuntime } from './native'
-export { fromResponse, googleCodecCachedContent, toParams } from './codec'
-export type { GoogleCodecOptions } from './codec'
-export type { CreateGoogleOptions, GoogleRerankerConfig, GoogleRetrievalModelConfig } from './native'
-export type { GoogleGenerateImage, GoogleImageExtra } from './image-generation'
-export type { GoogleTranscribe, GoogleTranscriptionExtra, GoogleTranscriptionMetadata } from './transcription'
-export { createGenerateObjectFn, createGenerateTextFn } from './helpers'
-export { embedding } from './embedding'
-export { fromMessages, googleTranscript, toMessages } from './message-codec'
-export type { GoogleAssistantTurn } from './message-codec'
+export { createGoogle, googleProviderRuntime } from "./native";
+export { fromResponse, googleCodecCachedContent, toParams } from "./codec";
+export type { GoogleCodecOptions } from "./codec";
+export type {
+  CreateGoogleOptions,
+  GoogleRerankerConfig,
+  GoogleRetrievalModelConfig,
+} from "./native";
+export type { GoogleGenerateImage, GoogleImageExtra } from "./image-generation";
+export type {
+  GoogleTranscribe,
+  GoogleTranscriptionExtra,
+  GoogleTranscriptionMetadata,
+} from "./transcription";
+export type {
+  GoogleGenerateSpeech,
+  GoogleSpeechExtra,
+  GoogleSpeechVoice,
+} from "./speech";
+export { createGenerateObjectFn, createGenerateTextFn } from "./helpers";
+export { embedding } from "./embedding";
+export { fromMessages, googleTranscript, toMessages } from "./message-codec";
+export type { GoogleAssistantTurn } from "./message-codec";
 export type {
   GoogleCacheConfig,
   GoogleCachedContentCachePort,
@@ -28,5 +41,10 @@ export type {
   GoogleCachedContentPlan,
   GoogleCachedContentPrepareArgs,
   GoogleCacheName,
-} from './cached-content'
-export type { GoogleEmbeddingConfig, GoogleExtra, GoogleFunctionDeclaration, GoogleRequest } from './types'
+} from "./cached-content";
+export type {
+  GoogleEmbeddingConfig,
+  GoogleExtra,
+  GoogleFunctionDeclaration,
+  GoogleRequest,
+} from "./types";

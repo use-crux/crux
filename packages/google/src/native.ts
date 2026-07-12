@@ -36,6 +36,7 @@ import { googleStreamCompletion, googleTextDelta } from "./stream";
 import type { GoogleExtra, GoogleRequest } from "./types";
 import { createGoogleImageOperation } from "./image-generation";
 import { createGoogleTranscriptionOperation } from "./transcription";
+import { createGoogleSpeechOperation } from "./speech";
 
 /** Configuration for `google.retrievalModel()`. */
 export interface GoogleRetrievalModelConfig {
@@ -121,6 +122,7 @@ const google = defineSingleTurnProviderBundle({
   },
   image: createGoogleImageOperation,
   transcription: createGoogleTranscriptionOperation,
+  speech: createGoogleSpeechOperation,
   extend: ({ client }) => createGoogleRuntimeExtensions(client),
 });
 
