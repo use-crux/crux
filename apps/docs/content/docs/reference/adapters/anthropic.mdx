@@ -32,6 +32,10 @@ Create an adapter bound to an Anthropic client.
 
 Anthropic content support is part-aware beneath the public codec surface: user image data/URLs encode as image blocks, PDF data/URLs encode as document blocks, assistant image/document blocks decode back into canonical message content, and unsupported parts such as audio fail before the provider call.
 
+Video is likewise unsupported. `generateImage()`, `transcribe()`, and
+`generateSpeech()` are structurally absent from this package rather than
+throwing at runtime.
+
 | Field    | Type        | Description                   |
 | -------- | ----------- | ----------------------------- |
 | `client` | `Anthropic` | The Anthropic client instance |

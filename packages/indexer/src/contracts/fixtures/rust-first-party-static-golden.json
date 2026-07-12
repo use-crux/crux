@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 628,
+    "files": 631,
     "definitions": 46,
     "relations": 2,
     "diagnostics": 9,
-    "dependencies": 1179,
-    "canonicalBytes": 139265
+    "dependencies": 1192,
+    "canonicalBytes": 140231
   },
   "files": [
     {
@@ -4317,12 +4317,30 @@
     },
     {
       "file": "packages/indexer/src/indexer/semantic/evidence/facts.ts",
-      "sha256": "43f3a2781144a11a1dc25fae74ae03815176808c63f4851babc204e91ad3abb5",
-      "bytes": 788,
+      "sha256": "69174f130fc76fbb0f8da8fd532737f6331b3fc9425dc89c94d7a7de3ddb0b2c",
+      "bytes": 912,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 11
+      "dependencies": 13
+    },
+    {
+      "file": "packages/indexer/src/indexer/semantic/media-facts.ts",
+      "sha256": "7e87ca3851c946e96838ca935d209d1051194f0946b07091e387fc1b01a9c066",
+      "bytes": 511,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 7
+    },
+    {
+      "file": "packages/indexer/src/indexer/semantic/media-lints.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/indexer/src/indexer/semantic/model/relation-types.ts",
@@ -4857,12 +4875,12 @@
     },
     {
       "file": "packages/ingest/src/audio.ts",
-      "sha256": "9a17f47fad718428870e6b709e5deb367471bbb1035bbabd9df11b22a66e0b37",
-      "bytes": 1033,
+      "sha256": "72151f285c359fb5aedeb8f2cd4f336a74c849e8ac2f609f7005e3dff441ab95",
+      "bytes": 1082,
       "definitions": 1,
       "relations": 0,
       "diagnostics": 1,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/ingest/src/files.ts",
@@ -4872,6 +4890,15 @@
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 3
+    },
+    {
+      "file": "packages/ingest/src/media-observation.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/ingest/src/observability.ts",
@@ -4893,12 +4920,12 @@
     },
     {
       "file": "packages/ingest/src/pdf.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "sha256": "4801a9113ee320d547aa3e853f4038fca5a027ac6287fa4a58a70b09faf80616",
+      "bytes": 117,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/ingest/src/types.ts",
@@ -4911,21 +4938,21 @@
     },
     {
       "file": "packages/ingest/src/video.ts",
-      "sha256": "915ab68c8bdec9df7e7b4c5ceb68e89e3c78b247f6a02432b9fb2102a9b7853c",
-      "bytes": 1993,
+      "sha256": "3763cbe6119880d56cb8757f743d225c2dd25c130f921cf9a9aa372bf1b1cb9e",
+      "bytes": 2042,
       "definitions": 2,
       "relations": 0,
       "diagnostics": 2,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/ingest/src/visual-image.ts",
-      "sha256": "f484ae2647c52f427e580208182df7d6c035cc0f1c4dd94fc6ef920b76830f80",
-      "bytes": 1084,
+      "sha256": "5ed995d279f0f49235ff7c9cdf53ef49bd0f8e837af8dd7499f0074ea76c5b69",
+      "bytes": 1132,
       "definitions": 1,
       "relations": 0,
       "diagnostics": 1,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/local-workers/bin/project-indexer-protocol.ts",

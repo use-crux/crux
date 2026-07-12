@@ -17,6 +17,11 @@ describe('image generation support projection', () => {
 
   it('keeps the public media matrix generated from tested fixtures', async () => {
     const guide = await readFile(resolve(process.cwd(), '../../apps/docs/content/docs/guides/advanced/multimodal.mdx'), 'utf8')
-    expect(guide).toContain(mediaAdapterMatrixMarkdown())
+    const matrix = mediaAdapterMatrixMarkdown()
+    expect(matrix).toContain('| Capability | OpenAI | Google | Anthropic | AI SDK | Convex Agent |')
+    expect(matrix).toContain('| Audio input | audio models | native | unsupported | model-owned | AI SDK-owned |')
+    expect(matrix).toContain('| Video input | unsupported | native | unsupported | model-owned | AI SDK-owned |')
+    expect(matrix).toContain('| `generateSpeech` | native | native incl. multi-speaker | absent | native | exact Crux AI re-export |')
+    expect(guide).toContain(matrix)
   })
 })

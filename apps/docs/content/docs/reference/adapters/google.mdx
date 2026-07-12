@@ -3,6 +3,13 @@ title: "@use-crux/google"
 description: Google GenAI SDK adapter — factory pattern with provider caching plus dense embedding helpers.
 ---
 
+Google message content supports native image, audio, video, and documents.
+Specialized exports include Imagen/Gemini-native `generateImage()`, native
+Gemini `generateSpeech()` (including two-speaker configuration), and composed
+`transcribe()`. Composed transcription returns text with no word timing or
+diarization and rejects those requests before I/O. Endpoint-specific options
+stay separated in typed `extra` records.
+
 Peer dependency: `@google/genai` (`^1.0.0 || ^2.0.0`)
 
 ```ts

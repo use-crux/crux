@@ -30,6 +30,12 @@ Create an adapter bound to an OpenAI client.
 
 OpenAI Chat content support maps image parts to `image_url`, wav/mp3 `file` parts with data sources to `input_audio`, and supported file data/provider-file sources to OpenAI file parts. Unsupported model/content combinations throw after prompt resolution and before the client or custom transport runs. Assistant/user media returned in provider content arrays decodes back into canonical `ContentPart[]`. Chat Completions tool messages remain text-only; when a tool returns media, Crux sends the correlated text tool result followed by native media in a user content part on the same next turn.
 
+The package also exports native `generateImage()`, `transcribe()`, and
+`generateSpeech()` operations. Translation is selected through the
+transcription task union; requested timing/detail must match the selected
+endpoint. Returned image/audio assets are usable immediately and are never
+persisted implicitly. Typed `extra` records expose endpoint-specific controls.
+
 | Field    | Type     | Description                |
 | -------- | -------- | -------------------------- |
 | `client` | `OpenAI` | The OpenAI client instance |

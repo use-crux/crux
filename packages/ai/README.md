@@ -71,6 +71,16 @@ rejects with `CruxTransportStreamUnsupportedError`.
 
 Streaming structured output uses AI SDK `streamObject()`. In AI SDK v6 that API does not expose the text-loop tool event surface, so Crux omits tools for structured streams and emits a one-time warning when a structured stream declares tools. Use `generate()` for structured tool loops, or stream without an output schema when live tool observability is required.
 
+## Media
+
+AI SDK `ModelMessage` and `useChat` content stay model-owned. Crux preserves
+normal image/audio/video/file parts and ordered mixed assistant output without
+adding a second message or tool loop. The package exports native AI SDK
+`generateImage()`, `transcribe()`, and `generateSpeech()` wrappers with the
+shared Crux result tail, cancellation, timeout, and descriptor-only reporting.
+Provider-native controls remain in typed `extra`; persistence is a separate
+application `assetStore.put()` call.
+
 For Anthropic AI SDK models, Crux converts the stable provider-cache prefix into system messages and places `providerOptions.anthropic.cacheControl` on the single `cacheBoundary` block.
 
 ## Agent frameworks

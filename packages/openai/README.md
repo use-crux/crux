@@ -61,6 +61,14 @@ Images accept HTTPS/data URLs, bytes, `Blob`, or usable assets. Files accept
 data or an OpenAI provider-file asset. Known unsupported model/media pairs fail
 before the OpenAI client or a custom transport is called.
 
+For guaranteed media results, the package also exports `generateImage()`,
+`transcribe()`, and `generateSpeech()`. They use OpenAI's native image,
+transcription/translation, and speech endpoints and return usable media or
+validated seconds-based transcript facts. Provider-only controls belong in
+each operation's typed `extra`; model operations never accept an `AssetStore`
+or persist implicitly. Chat audio input is limited to supported audio models
+and WAV/MP3, while video input rejects before I/O.
+
 The adapter also exposes `stream()` and agent composition methods (parallel, pipeline, consensus, swarm), plus `embedding()`, `createGenerateObjectFn()`, and `createGenerateTextFn()` for `@use-crux/core` APIs that expect framework-agnostic functions. `generate()` returns the canonical Crux envelope with accumulated `text`, optional `usage`, optional `cost`, `steps`, `finalStep`, provider-neutral `messages`, typed `raw`, and retained `_meta`; `usage` is present only when every provider-call step reported usage. `stream()` returns `{ textStream, raw, completion }`, where `completion` resolves to the same envelope fields without `raw`/`_meta`. `createGenerateObjectFn()` is provider-native: it uses OpenAI structured parsing and preserves provider errors, but it does not run Crux prompt resolution, validation retry, safety, cassettes, tools, memory, or instrumentation. Use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction` when a helper call needs full adapter runtime behavior.
 
 The package exports `openaiProviderRuntime` for advanced adapter composition. Internally, OpenAI uses `defineSingleTurnProviderBundle()` from `@use-crux/core/adapter`; adapter authors building similar single-turn providers should start there.

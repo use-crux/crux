@@ -3,6 +3,12 @@ title: "@use-crux/ai"
 description: Vercel AI SDK adapter — generate, stream, dense embedding helpers, and the SdkGateway test seam.
 ---
 
+AI SDK `ModelMessage` and `useChat` media remain model-owned. The adapter
+preserves image/audio/video/file input and ordered mixed assistant output, and
+exports native SDK `generateImage()`, `transcribe()`, and `generateSpeech()`
+operations. Convex re-exports those functions by exact identity. Provider
+options stay in typed `extra`, and no operation persists media implicitly.
+
 ```ts
 import {
   generate,

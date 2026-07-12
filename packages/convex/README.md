@@ -732,3 +732,12 @@ const transport = createConvexTransport({ api: api.crux, useQuery })
 ```
 
 The transport reads from the crux Convex component's `memory.get` and page-shaped `memory.list` queries, deserializing current Crux store documents back to `JsonObject` on read. `useDocumentList()` consumes `{ docs, cursor }` and applies decoded-value filters locally instead of passing them into the Convex component query.
+
+## Media
+
+Convex Agent media stays AI SDK-native across file storage, thread reloads,
+tool continuation, and UI messages; Crux does not duplicate those writes. The
+package re-exports the Crux AI `generateImage`, `transcribe`, and
+`generateSpeech` functions by exact identity. Specialized results are not
+automatically written to Convex storage—call the chosen `AssetStore` explicitly
+when durable reuse is required.

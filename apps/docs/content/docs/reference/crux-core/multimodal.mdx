@@ -1,6 +1,6 @@
 ---
 title: Multimodal Content
-description: ContentPart, MessageContent, media sources, text projection helpers, and media errors.
+description: Canonical message media, ordered assistant output, specialized operations, and safe projection.
 ---
 
 ```ts
@@ -23,15 +23,17 @@ type MessageContent = string | readonly ContentPart[];
 
 `MediaSource` is an `Asset`, HTTPS/data URL string, `URL`, `Uint8Array`, `ArrayBuffer`, or `Blob`. `AssetRef` is not model input; hydrate it with `assetStore.get(ref)` first.
 
-`ContentPart` is a closed visible-content union:
+`ContentPart` is a closed model-visible content union:
 
 | Part    | Required fields | Notes                                                              |
 | ------- | --------------- | ------------------------------------------------------------------ |
 | `text`  | `text`          | Plain visible text.                                                |
 | `image` | `source`        | Optional `mediaType`; source accepts `MediaSource`.                |
+| `audio` | `source`        | Optional `mediaType`; source accepts `MediaSource`.                |
+| `video` | `source`        | Optional `mediaType`; source accepts `MediaSource`.                |
 | `file`  | `source`        | Optional `mediaType` and `filename`; source accepts `MediaSource`. |
 
-Every part may carry `providerOptions`. Protocol/control state such as tool calls and approvals belongs in `Message.metadata`, not in `ContentPart`.
+Every model-visible part may carry `providerOptions`. Assistant content may additionally contain ordered `ReasoningPart` and `ToolCallPart` values. System, user, and tool messages cannot. `GenerateResult.content` is authoritative; `text` is its text-part projection.
 
 ## Parts
 
@@ -56,6 +58,18 @@ const file: ContentPart = {
   mediaType: "application/pdf",
   filename: "report.pdf",
 };
+
+const audio: ContentPart = {
+  type: "audio",
+  source: wavBytes,
+  mediaType: "audio/wav",
+};
+
+const video: ContentPart = {
+  type: "video",
+  source: videoBlob,
+  mediaType: "video/mp4",
+};
 ```
 
 Model calls normalize and validate media before provider I/O. They do not persist media.
@@ -73,7 +87,7 @@ const projected = contentText([
 ]);
 ```
 
-Text parts are emitted verbatim. Data-backed parts include byte size and a short SHA-256 hash. URL-backed parts include the URL, optional MIME type, and optional filename. Labels are escaped and data URLs are truncated to their scheme and MIME type.
+Text parts are emitted verbatim. Other parts become bounded semantic descriptors. This projection may include a locator or filename and is intended for model-facing text, not logs.
 
 ### `messageText(message)`
 
@@ -96,6 +110,16 @@ Return `true` when a content array contains any non-text part.
 ## Media Errors
 
 Malformed media throws `InvalidMediaSourceError`. Valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError` before provider I/O.
+
+## Specialized operations
+
+`generateImage()`, `transcribe()`, and `generateSpeech()` are separate bounded operations for callers that require a guaranteed image, transcript, or audio result. They share cancellation, timeout, warning, execution, provider-metadata, and raw-result conventions, but they are not a universal executor and do not stream or persist.
+
+Adapters omit unsupported operations structurally. Portable options are validated before I/O; provider-native options belong in the operation's typed `extra` record. Returned media is immediately usable and may be persisted explicitly with `assetStore.put(asset)`.
+
+## Privacy
+
+Observability uses a stricter descriptor projection than `contentText()`. At every capture level it excludes bytes, base64/data URLs, bearer refs, provider file IDs, filenames, signed URL details, and native media payloads. Local text/transcript capture defaults on and production export defaults off; neither mode enables raw media.
 
 ## Convex Mirror
 

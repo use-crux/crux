@@ -1,11 +1,11 @@
 ---
 title: Multimodal
-description: Chat with media, persist it explicitly, generate images, transcribe audio, and retrieve attributed source chunks.
+description: Use media in ordinary messages, run specialized operations, persist explicitly, and inspect the result safely.
 ---
 
-Crux uses one media model everywhere: pass usable media to a model, and use an `AssetStore` only when your application wants durable reuse. Model calls never hide storage work.
+Crux uses one media model throughout the SDK: usable media goes directly into an ordinary message. Storage is separate and optional.
 
-## Chat with an image or file
+## Start with a normal message
 
 ```ts
 import { prompt } from "@use-crux/core";
@@ -24,9 +24,13 @@ const inspect = prompt({
 const answer = await generate(inspect, { model: "gpt-4o" });
 ```
 
-`source` accepts bytes, a `Blob`, an HTTPS/data URL, or an `Asset`. Invalid media and known unsupported adapter/model combinations fail before provider I/O with safe paths and no payload in the error.
+Image, audio, video, and file parts accept a usable `Asset`, HTTPS or data URL, `Blob`, or byte array. `AssetRef` is a storage reference, not model input. Known unsupported adapter/model combinations fail before provider I/O; custom model identifiers reach the provider's native validation.
 
-With the AI SDK, keep `useChat` attachments native at the route boundary:
+The same content works with `stream()`. Live deltas remain text-only; `completion` carries the exact ordered assistant content, including reasoning, tool calls, and returned media.
+
+### Keep framework edges native
+
+AI SDK `ModelMessage` and `useChat` attachments stay native at the route boundary:
 
 ```ts
 import { convertToModelMessages } from "ai";
@@ -42,62 +46,49 @@ export async function POST(request: Request) {
 }
 ```
 
-Convex Agent stays Convex-native: pass AI SDK image/file parts to `Agent` or a continued thread. Convex Agent owns its file lifecycle, thread history, and autosave threshold; Crux does not duplicate those writes.
+Convex Agent likewise owns its file lifecycle, thread history, reloads, tool continuation, and autosave behavior. Crux does not copy those messages or writes.
 
-## Persist only when you need reuse
+## Ask for a specialized result
 
-```ts
-import { prompt } from "@use-crux/core";
-import { inMemoryAssetStore } from "@use-crux/core/storage";
-import { generate } from "@use-crux/openai";
-
-const assets = inMemoryAssetStore();
-const stored = await assets.put({
-  type: "data",
-  data: imageBytes,
-  mediaType: "image/png",
-});
-
-const image = await assets.get(stored.ref);
-const reuse = prompt({
-  messages: () => [{ role: "user", content: [{ type: "image", source: image }] }],
-});
-await generate(reuse, { model: "gpt-4o" });
-```
-
-Persistence is an ordinary application step. If `put()` fails after image generation, handle or retry that storage operation; do not regenerate the image.
-
-## Generate an image
+Use a specialized operation only when the result shape matters:
 
 ```ts
-import { generateImage } from "@use-crux/openai";
+import { generateImage, generateSpeech, transcribe } from "@use-crux/openai";
 
-const result = await generateImage({
+const picture = await generateImage({
   model: "gpt-image-1",
   prompt: "A restrained editorial illustration of a quiet canal",
 });
 
-const stored = await assets.put(result.image); // optional
-```
-
-Generated images are immediately usable data assets. Anthropic intentionally does not export `generateImage`.
-
-## Transcribe audio
-
-```ts
-import { transcribe } from "@use-crux/openai";
-
 const transcript = await transcribe({
   model: "gpt-4o-mini-transcribe",
-  audio: { type: "data", data: wavBytes, mediaType: "audio/wav" },
+  audio: meetingAudio,
 });
 
-console.log(transcript.text, transcript.segments);
+const narration = await generateSpeech({
+  model: "gpt-4o-mini-tts",
+  text: transcript.text,
+  voice: "alloy",
+});
 ```
 
-Transcription exposes validated seconds-based segments when the provider supplies measured timing. Anthropic intentionally omits this operation; Google's composed transcript route returns text with empty timing arrays and rejects timestamp requests rather than inventing timing.
+`generateImage()` returns immediately usable images, `transcribe()` returns honest measured intervals when available, and `generateSpeech()` returns one usable audio asset. These are bounded non-streaming operations with cancellation and total/per-attempt timeouts. Their typed `extra` option is the provider-native escape hatch.
 
-## Ingest and retrieve media
+Unsupported operations are absent from an adapter's type and runtime object. Anthropic, for example, exports none of the three specialized operations. Google transcription is a text-only composition: it returns no word timing or diarization and rejects timing requests instead of inventing measurements.
+
+## Persist only when you want reuse
+
+```ts
+import { inMemoryAssetStore } from "@use-crux/core/storage";
+
+const assets = inMemoryAssetStore();
+const stored = await assets.put(picture.image);
+const reusableImage = await assets.get(stored.ref);
+```
+
+No model operation accepts an `AssetStore` or persists implicitly. If `put()` fails, retry storage without regenerating the media. Treat every `AssetRef` as a bearer reference owned by its store; namespacing keys is not an authorization boundary.
+
+## Derive, retrieve, and evaluate
 
 ```ts
 import { fileSource } from "@use-crux/ingest";
@@ -105,29 +96,42 @@ import { fileSource } from "@use-crux/ingest";
 const source = fileSource(storedAudio, {
   namespace: "meetings",
   sourceId: "weekly-sync",
-  media: { transcribe: ({ audio }) => transcribe({ model: "gpt-4o-mini-transcribe", audio }) },
+  media: {
+    transcribe: ({ audio, abortSignal }) =>
+      transcribe({ model: "gpt-4o-mini-transcribe", audio, abortSignal }),
+  },
 });
 
 await meetingIndex.indexDocuments(source.documents());
 const [hit] = await meetingRetriever.retrieve("launch date");
-
 console.log(hit.source.id, hit.source.location);
 ```
 
-Image and visual-PDF ingestion bind an application-owned semantic description function through `media.describe`; audio binds `media.transcribe`. Retrieval returns structured, validated attribution: `source.id` plus allowed URL/path/AssetRef/media type and page/time narrowing, while vector metadata remains locator-free. Retrieval never hydrates media. Only if the application needs the original should it explicitly call `assetStore.get(hit.source.assetRef)`.
+Image and visual-PDF ingestion use an application-owned `media.describe`; audio uses `media.transcribe`; video may use either or both. Derivation becomes ordinary text with page/time attribution. Retrieval returns structured source facts and never hydrates media. Vector metadata stays locator-free.
+
+Quality judges accept text, an `Asset`, or canonical content parts. Binary outputs are not written implicitly to cassettes or output caches, and safe descriptor projections—not media bytes or locators—enter experiment artifacts.
+
+## Inspect authored and executed media work
+
+Project Index and Catalog show authored `generateImage`, `transcribe`, `generateSpeech`, and ingest operations, including safe modality/options facts and deterministic lints. JavaScript/Oxc and JavaScript/TypeScript-Go produce the same facts.
+
+Observability and Runs show actual `media.generate_image`, `media.transcribe`, `media.generate_speech`, and `media.describe` attempts, execution mode, latency, safe reports, and `derived.from` lineage. Local text/transcript capture defaults on; production export defaults off. Neither setting permits bytes, base64/data URLs, `AssetRef`, provider file IDs, filenames, signed URL credentials, thumbnails, or playback.
 
 ## Tested adapter matrix
 
-This table is generated from the internal conformance fixtures. It is documentation, not a runtime capability API; selected-model support is still checked by the owning adapter before I/O.
+This table is generated from private conformance fixtures. It is documentation, not a runtime capability API; the owning adapter still validates the selected model before I/O.
 
-| Adapter | Chat image/file | `generateImage` | `transcribe` |
-| --- | --- | --- | --- |
-| AI SDK | image + file | native | native |
-| Anthropic | image + file | — | — |
-| Convex Agent | image + file | AI SDK-owned | AI SDK-owned |
-| Google | image + file | native | composed |
-| OpenAI | image + file | native | native |
+| Capability | OpenAI | Google | Anthropic | AI SDK | Convex Agent |
+| --- | --- | --- | --- | --- | --- |
+| Image input | native | native | native | model-owned | AI SDK-owned |
+| Audio input | audio models | native | unsupported | model-owned | AI SDK-owned |
+| Video input | unsupported | native | unsupported | model-owned | AI SDK-owned |
+| PDF/document input | native | native | native | model-owned | AI SDK-owned |
+| Mixed assistant media | model-owned | model-owned | limited native file/tool output | model-owned | AI SDK-owned |
+| `generateImage` | native | Imagen/Gemini native | absent | native | exact Crux AI re-export |
+| `transcribe` | native | honest composition, no word timing/diarization | absent | native | exact Crux AI re-export |
+| `generateSpeech` | native | native incl. multi-speaker | absent | native | exact Crux AI re-export |
 
-## Privacy and errors
+## Errors and remediation
 
-Crux observability records bounded media facts, never bytes, base64/data URLs, bearer refs, provider file IDs, filenames, or signed URL details. `InvalidMediaSourceError`, `UnsupportedCapabilityError`, storage errors, and empty image/transcript errors are safe to surface without logging the original payload.
+Invalid sources fail with `InvalidMediaSourceError`; a known unsupported model or portable option fails with `UnsupportedCapabilityError`; empty or malformed provider output fails validation. Use a supported model, remove the unsupported modality/option, or move provider-native controls into typed `extra`. Error messages and reports contain safe paths and reason tags, never the original payload.
