@@ -50,17 +50,20 @@ func TestObservabilityHTTPIngestAndReadGraph(t *testing.T) {
 		t.Fatalf("accepted = %d, want 13 (dispositions = %#v)", accepted, ingested.Dispositions)
 	}
 
-	resp, err = http.Get(ts.URL + "/api/observability/runs")
+	resp, err = http.Get(ts.URL + "/api/observability/runs/page")
 	if err != nil {
-		t.Fatalf("GET runs error: %v", err)
+		t.Fatalf("GET runs page error: %v", err)
 	}
 	defer resp.Body.Close()
-	var runs []observability.RunSummary
-	if err := json.NewDecoder(resp.Body).Decode(&runs); err != nil {
+	var page observability.RunsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
 		t.Fatal(err)
 	}
-	if len(runs) != 1 || runs[0].RunID != runID {
-		t.Fatalf("runs = %#v", runs)
+	if page.Revision == 0 {
+		t.Fatal("page.Revision was not populated")
+	}
+	if len(page.Rows) != 1 || page.Rows[0].RunID != runID {
+		t.Fatalf("page.Rows = %#v", page.Rows)
 	}
 
 	resp, err = http.Get(ts.URL + "/api/observability/runs/" + runID + "/graph")

@@ -116,7 +116,7 @@ func TestRequireSessionAuth_ingestBearerCanOnlyPostObservabilityRecords(t *testi
 		method string
 		path   string
 	}{
-		{method: http.MethodGet, path: "/api/observability/runs"},
+		{method: http.MethodGet, path: "/api/observability/runs/page"},
 		{method: http.MethodPost, path: "/api/quality/run"},
 		{method: http.MethodGet, path: "/ws/ui"},
 	} {

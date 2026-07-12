@@ -39,16 +39,15 @@ describe('isBlanketInvalidatableObservabilityQueryKey', () => {
     )
   })
 
-  it('still sweeps the legacy bare-array runs list', () => {
-    expect(isBlanketInvalidatableObservabilityQueryKey(['observability', 'runs'])).toBe(true)
-  })
-
-  it('still sweeps run detail, span events, and resource activity', () => {
+  it('still sweeps run detail, span events, resource activity, and definition activity', () => {
     expect(isBlanketInvalidatableObservabilityQueryKey(['observability', 'run', 'run_1'])).toBe(true)
     expect(isBlanketInvalidatableObservabilityQueryKey(['observability', 'span-events', 'run_1', 'span_1', null])).toBe(
       true,
     )
     expect(isBlanketInvalidatableObservabilityQueryKey(['observability', 'resource', 'tool'])).toBe(true)
+    expect(isBlanketInvalidatableObservabilityQueryKey(['observability', 'definition-activity', 'prompt:greeting'])).toBe(
+      true,
+    )
   })
 
   it('never matches a query key outside the observability prefix', () => {

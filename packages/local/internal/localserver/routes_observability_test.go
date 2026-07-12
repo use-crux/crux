@@ -12,12 +12,30 @@ import (
 )
 
 func TestParseObservabilityRunListOptionsIncludesSessionID(t *testing.T) {
-	request := httptest.NewRequest("GET", "/api/observability/runs?limit=50&offset=10&sessionId=session-1", nil)
+	request := httptest.NewRequest("GET", "/api/observability/runs/page?limit=50&offset=10&sessionId=session-1", nil)
 
 	opts := parseObservabilityRunListOptions(request)
 
 	if opts.Limit != 50 || opts.Offset != 10 || opts.SessionID != "session-1" {
 		t.Fatalf("options = %#v", opts)
+	}
+}
+
+func TestObservabilityBareRunsListRouteIsNotRegistered(t *testing.T) {
+	service, err := observability.OpenService(context.Background(), ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = service.Close() })
+	mux := http.NewServeMux()
+	registerObservabilityRoutes(mux, service, nil)
+
+	request := httptest.NewRequest(http.MethodGet, "/api/observability/runs", nil)
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 for removed bare list route; body = %s", response.Code, response.Body.String())
 	}
 }
 

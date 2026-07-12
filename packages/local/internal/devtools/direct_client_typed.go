@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/use-crux/crux/packages/local/internal/api"
+	"github.com/use-crux/crux/packages/local/internal/observability"
 	"github.com/use-crux/crux/packages/local/internal/readmodel"
 	"github.com/use-crux/crux/packages/local/internal/readmodel/endpoints"
 )
@@ -54,10 +55,17 @@ func (c *DirectClient) RunDetail(ctx context.Context, traceID string) (api.Quali
 	return record, err == nil, err
 }
 
+// ObservabilityRuns loads the revisioned runs page and returns its rows for
+// list-oriented TUI and CLI rendering.
 func (c *DirectClient) ObservabilityRuns(ctx context.Context) ([]api.ObservabilityRunSummary, error) {
-	var runs []api.ObservabilityRunSummary
-	err := c.GetJSON(ctx, "/api/observability/runs", &runs)
-	return runs, err
+	if c.observability == nil {
+		return nil, errNoObservabilityService
+	}
+	page, err := c.observability.RunsPage(ctx, observability.RunListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return page.Rows, nil
 }
 
 func (c *DirectClient) ObservabilityRunDetail(ctx context.Context, runID string) (api.ObservabilityRunDetail, bool, error) {

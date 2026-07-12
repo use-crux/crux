@@ -346,7 +346,7 @@ Everything REST-shaped is on Query. The hooks live in
   `useQualityEvaluationExperiments(evaluationId, limit?)`, not the flat list.
   Pass `status`/`evaluation`/`window` as filter opts; the backend computes the
   tab counts + evaluation dropdown facets.
-- `useObservabilityRuns`, `useObservabilityGraph`, `useObservabilityResourceActivity`
+- `useObservabilityRunsPage`, `useObservabilityGraph`, `useObservabilityResourceActivity`
 - `useIndex` (prompts/contexts/tools)
 
 ### What lives in the Zustand runtime store (and why)

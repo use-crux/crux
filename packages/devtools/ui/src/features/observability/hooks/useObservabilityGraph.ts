@@ -1,11 +1,9 @@
 /**
  * Observability hooks backed by TanStack Query.
  *
- *   - useObservabilityRuns           → /api/observability/runs (legacy bare-array list,
- *                                       kept for the global-search feature)
  *   - useObservabilityRunsPage       → /api/observability/runs/page (the one joined,
- *                                       revisioned Runs list — this is what the Runs
- *                                       feature consumes; see runs/hooks/useRuns.ts)
+ *                                       revisioned Runs list — Runs page + Global Search;
+ *                                       see runs/hooks/useRuns.ts)
  *   - useObservabilityGraph(runId)   → /api/observability/runs/{runId}
  *   - useObservabilityResourceActivity(family) → /api/observability/resources/{family}
  *
@@ -18,6 +16,8 @@
  * CustomEvent on the window for every `observability.*` notification.
  * We still listen for it and invalidate the matching key so the realtime
  * push path stays sub-second even when the polling interval hasn't fired.
+ * The revisioned `runs-page` slice is excluded from the blanket WS sweep and
+ * owns its own revision-gated catch-up instead.
  */
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -30,7 +30,6 @@ import type {
   ObservabilityRunDetailNode,
   ObservabilityRunsPage,
   ObservabilityRunsPageOptions,
-  ObservabilityRunSummary,
   ObservabilitySpanEventSummary,
 } from '@/types'
 import type { SpanNode } from '@/features/observability/lib/span-tree'
@@ -185,31 +184,6 @@ export function useObservabilityGraph(runId: string | undefined): ObservabilityG
   return {
     runDetail,
     spanTree,
-    loading: q.isPending || q.isFetching,
-    error: q.error ?? null,
-  }
-}
-
-export function useObservabilityRuns(): {
-  runs: ObservabilityRunSummary[]
-  loading: boolean
-  error: Error | null
-} {
-  const key = qk.observability.runs()
-  useInvalidateOnObservabilityEvent(undefined, key)
-
-  const q = useQuery<ObservabilityRunSummary[], Error>({
-    queryKey: key,
-    queryFn: ({ signal }) => observabilityService.listRuns(signal),
-    refetchInterval: (query) => {
-      const data = query.state.data as ObservabilityRunSummary[] | undefined
-      // Poll fast while any run is in-flight, slow otherwise.
-      return data && data.some((r) => !isTerminalStatus(r.status)) ? 1000 : 5000
-    },
-  })
-
-  return {
-    runs: q.data ?? [],
     loading: q.isPending || q.isFetching,
     error: q.error ?? null,
   }

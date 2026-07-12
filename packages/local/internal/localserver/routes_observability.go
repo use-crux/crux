@@ -74,20 +74,10 @@ func registerObservabilityRoutes(mux *http.ServeMux, service *observability.Serv
 		}
 	})
 
-	mux.HandleFunc("GET /api/observability/runs", func(w http.ResponseWriter, r *http.Request) {
-		if service == nil {
-			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)
-			return
-		}
-		runs, err := service.RunsWithOptions(r.Context(), parseObservabilityRunListOptions(r))
-		writeObservabilityRead(w, runs, err)
-	})
-
 	// GET /api/observability/runs/page is the joined, revisioned Runs read
 	// model (binding spec 04 §3-4): stable filters/pagination executed in SQL
 	// before enrichment, a server-owned revision, and a stable next cursor.
-	// It is additive — GET /api/observability/runs keeps its existing bare
-	// array shape until DevTools migrates its Runs UI onto this contract.
+	// This is the only runs list HTTP surface (DevTools, TUI/CLI facades, tests).
 	mux.HandleFunc("GET /api/observability/runs/page", func(w http.ResponseWriter, r *http.Request) {
 		if service == nil {
 			http.Error(w, "observability service unavailable", http.StatusServiceUnavailable)

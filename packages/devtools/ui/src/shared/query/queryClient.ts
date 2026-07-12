@@ -78,7 +78,6 @@ export const qk = {
   },
   observability: {
     all: ['observability'] as const,
-    runs: () => ['observability', 'runs'] as const,
     runsPage: (options: Record<string, unknown> | null) => ['observability', 'runs-page', options] as const,
     run: (runId: string | null | undefined) => ['observability', 'run', runId] as const,
     spanEvents: (

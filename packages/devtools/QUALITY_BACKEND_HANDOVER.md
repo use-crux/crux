@@ -69,11 +69,11 @@ POST /api/quality/cassettes/issues
 GET  /api/quality/scorers
 ```
 
-Legacy trace endpoints are retired. They return `410 Gone` with pointers to
-the canonical observability and quality APIs. Detail drilldown should use:
+Trace endpoints have been removed. List and detail drilldown use the canonical
+observability and Quality APIs:
 
 ```txt
-GET /api/observability/runs
+GET /api/observability/runs/page
 GET /api/observability/runs/{runId}
 GET /api/quality/runs
 GET /api/quality/runs/{traceId}

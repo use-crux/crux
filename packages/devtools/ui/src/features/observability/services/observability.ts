@@ -4,7 +4,6 @@ import type {
   ObservabilityRunsDelta,
   ObservabilityRunsPage,
   ObservabilityRunsPageOptions,
-  ObservabilityRunSummary,
   ObservabilitySpanEventSummary,
 } from '@/types'
 import { fetchJson, fetchJsonOr404 } from '@/shared/services/http'
@@ -19,19 +18,14 @@ export interface ObservabilitySpanEventsOptions {
 }
 
 export const observabilityService = {
-  listRuns(signal?: AbortSignal): Promise<ObservabilityRunSummary[]> {
-    return fetchJson<ObservabilityRunSummary[]>('/api/observability/runs', signal)
-  },
-
   getRun(runId: string, signal?: AbortSignal): Promise<ObservabilityRunDetail | null> {
     return fetchJsonOr404<ObservabilityRunDetail>(`/api/observability/runs/${encodeURIComponent(runId)}`, signal)
   },
 
   /**
    * The one joined, revisioned Runs read model (binding spec 04 §3). Filters
-   * execute server-side, in SQL, before pagination — the Runs UI's canonical
-   * row source, replacing the old client-side Quality-terminal +
-   * observability-running merge.
+   * execute server-side, in SQL, before pagination — the single list source for
+   * the Runs page and Global Search (no bare-array list client).
    */
   listRunsPage(options: ObservabilityRunsPageOptions = {}, signal?: AbortSignal): Promise<ObservabilityRunsPage> {
     return fetchJson<ObservabilityRunsPage>(`/api/observability/runs/page${runsPageQuery(options)}`, signal)

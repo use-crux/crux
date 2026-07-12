@@ -39,19 +39,19 @@ export interface CatalogCoverageState {
  *
  * - `direct-activity` — the kind is `directly-observed`: it's the subject of
  *   its own runtime span. Shows the span-correlation card + "View N runs".
- * - `contributor` — `runtime-contributor` or `structural-child` kinds that
- *   declare at least one `runtimePrimitiveNames` entry: referenced by an
- *   owner's span/artifacts. Shows "referenced by N runs", never a top-level
- *   run subject.
+ * - `contributor` — `runtime-contributor` or `structural-child` with a live
+ *   identity path (`definition-ref` or `parent-derived`). Canonical refs may
+ *   show "referenced by N runs"; parent-derived children report the parent's
+ *   activity as not independently observed. Never a top-level run subject.
  * - `quality-primary` — `quality-owned` kinds (correlates through the
  *   Quality↔observability join elsewhere on the page). When `secondary`
  *   declares `direct-runtime` (e.g. `scorer`), the activity rollup still
  *   surfaces genuine secondary runtime evidence (e.g. live `scoring.judge`
  *   spans) instead of silently dropping it.
- * - `no-runtime` — `static-only`, the `fallback` sentinel, or a
- *   `structural-child` with no declared runtime primitive: genuinely never
- *   the target or subject of any runtime primitive. Truthful — never a
- *   fabricated count or a dead "View runs" link.
+ * - `no-runtime` — `static-only`, the `fallback` sentinel, or
+ *   `runtimeIdentity: 'none'` (injectables, storage ports, unsupported
+ *   structural children): truthful zero runtime — never a fabricated count,
+ *   arbitrary owner, or dead "View runs" link.
  */
 export function describeCatalogCoverage(
   kind: string,

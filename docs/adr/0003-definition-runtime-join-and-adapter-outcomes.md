@@ -31,8 +31,10 @@ This workstream closes both without redesigning either plane.
 `@use-crux/core`. Every kind is classified as one of:
 
 - `directly-observed` — subject of a runtime span; Catalog shows View Runs when activity exists
-- `runtime-contributor` — referenced by an owner; Catalog shows "referenced by N runs"
-- `structural-child` — nested under a parent for Catalog display
+- `runtime-contributor` — referenced by an owner span, never itself the subject of a run. Catalog
+  copy depends on `runtimeIdentity` (below), not a single "referenced by N runs" promise for every
+  contributor
+- `structural-child` — nested under a parent for Catalog display; identity may be direct or parent-derived
 - `quality-owned` — primary evidence is the Quality↔observability join
 - `static-only` — declarative; truthful empty runtime state
 - `fallback` — the `unknown` sentinel
@@ -40,6 +42,16 @@ This workstream closes both without redesigning either plane.
 Secondary treatments (`direct-runtime`, `quality-owned`) cover dual cases such as `scorer`
 (Quality-primary with live `scoring.judge` secondary evidence). Catalog and DevTools derive treatment
 from this manifest; they do not hard-code a six-family subset.
+
+`runtimeIdentity` refines how Catalog obtains activity for non-owner kinds:
+
+- `definition-ref` — the runtime holds the exact authored identity (e.g. knowledge base, tool policy,
+  executed flow step) and may show *Referenced by N runs* when the activity rollup reports `N > 0`
+- `parent-derived` — only the indexed structural parent is directly observed; Catalog reports the
+  parent's activity and labels the child *not independently observed*
+- `quality` — the existing Quality correlation is authoritative
+- `none` — no truthful live identity path (e.g. injectables, storage ports); Catalog keeps a
+  zero-runtime / non-independent state and never selects an arbitrary owner or invents run counts
 
 ### DefinitionRef envelope
 

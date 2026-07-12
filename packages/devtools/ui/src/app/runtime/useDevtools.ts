@@ -69,15 +69,14 @@ export function useDevtools(): void {
               detail: (msg as { event?: unknown }).event,
             }),
           )
-          // Any observability mutation invalidates the legacy/detail
-          // observability views (bare-array runs list, run detail, span
-          // events, resource activity) — but NOT the revisioned `runs-page`
-          // slice, which owns its own revision-gated invalidation and
-          // bounded catch-up (`useObservabilityRunsPage`); see
-          // `isBlanketInvalidatableObservabilityQueryKey`. The run detail
-          // screen still reads the legacy quality projection, so also
-          // invalidate that exact run immediately instead of waiting for
-          // the compatibility quality event path.
+          // Any observability mutation invalidates detail/resource
+          // observability views (run detail, span events, resource activity,
+          // definition activity) — but NOT the revisioned `runs-page` slice,
+          // which owns its own revision-gated invalidation and bounded
+          // catch-up (`useObservabilityRunsPage`); see
+          // `isBlanketInvalidatableObservabilityQueryKey`. Also invalidate
+          // the matching Quality run projection so run-detail annotations
+          // refresh without waiting on a separate quality event.
           void queryClient.invalidateQueries({
             predicate: (query) => isBlanketInvalidatableObservabilityQueryKey(query.queryKey),
           })
