@@ -12,13 +12,13 @@ import {
   defineCompletedOperation,
 } from "@use-crux/core/adapter";
 
-type NativeExtra = Omit<
-  SpeechCreateParams,
-  "input" | "model" | "voice" | "instructions" | "response_format" | "speed"
->;
-
-/** OpenAI-native speech controls without a portable Crux equivalent. */
-export type OpenAISpeechExtra = Readonly<NativeExtra>;
+/**
+ * OpenAI speech has no extra body controls beyond Crux's portable fields.
+ * Streaming formats stay excluded because this operation returns completed audio.
+ */
+export interface OpenAISpeechExtra {
+  readonly stream_format?: never;
+}
 
 /** Voice names and custom voice references accepted by OpenAI speech models. */
 export type OpenAISpeechVoice = SpeechCreateParams["voice"];
@@ -81,7 +81,6 @@ export function createOpenAISpeechOperation(client: OpenAI) {
       call("audio.speech", async () => {
         const raw = await client.audio.speech.create(
           {
-            ...options.extra,
             model: options.model,
             input: options.text,
             voice: options.voice ?? "alloy",
@@ -120,6 +119,17 @@ export function createOpenAISpeechOperation(client: OpenAI) {
 }
 
 function speechIssue(options: OpenAISpeechInput) {
+  if (
+    options.extra &&
+    Object.hasOwn(options.extra as object, "stream_format")
+  ) {
+    return {
+      capability: "speech.stream-format",
+      path: "extra.stream_format",
+      remediation:
+        "Use the completed audio response; SSE speech is not decoded by generateSpeech().",
+    };
+  }
   if (options.language !== undefined) {
     return {
       capability: "speech.language",

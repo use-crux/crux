@@ -18,7 +18,6 @@ describe("OpenAI speech", () => {
       outputFormat: "wav",
       instructions: "Speak warmly",
       speed: 1.25,
-      extra: { stream_format: "audio" },
     });
 
     expect(create).toHaveBeenCalledOnce();
@@ -30,7 +29,6 @@ describe("OpenAI speech", () => {
         response_format: "wav",
         instructions: "Speak warmly",
         speed: 1.25,
-        stream_format: "audio",
       },
       { signal: expect.any(AbortSignal) },
     );
@@ -66,6 +64,19 @@ describe("OpenAI speech", () => {
         voice: "alloy",
       }),
     ).rejects.toBe(providerError);
+  });
+
+  it("rejects SSE speech responses before I/O even through a runtime cast", async () => {
+    const create = vi.fn();
+    const openai = createOpenAI(client(create));
+    await expect(
+      openai.generateSpeech({
+        model: "gpt-4o-mini-tts",
+        text: "Hello",
+        extra: { stream_format: "sse" },
+      } as never),
+    ).rejects.toMatchObject({ code: "unsupported_capability" });
+    expect(create).not.toHaveBeenCalled();
   });
 });
 

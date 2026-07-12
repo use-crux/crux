@@ -141,10 +141,21 @@ describe("OpenAI transcription", () => {
       audio: wav,
       task: { type: "translate", targetLanguage: "en" },
       prompt: "Crux",
+      extra: {
+        temperature: 0.2,
+        chunking_strategy: "auto",
+        include: ["logprobs"],
+      } as never,
     });
     expect(result.text).toBe("Hello");
     expect(translate).toHaveBeenCalledWith(
-      expect.objectContaining({ model: "whisper-1", prompt: "Crux" }),
+      {
+        file: expect.anything(),
+        model: "whisper-1",
+        prompt: "Crux",
+        response_format: "json",
+        temperature: 0.2,
+      },
       { signal: expect.any(AbortSignal) },
     );
     expect(create).not.toHaveBeenCalled();

@@ -36,6 +36,11 @@ type NativeControls = Omit<
   "file" | "model" | "language" | "prompt" | "response_format" | "stream"
 >;
 
+/** OpenAI translation controls supported by the installed translations endpoint. */
+export type OpenAITranslationExtra = Readonly<
+  Pick<TranslationCreateParams, "temperature">
+>;
+
 /** OpenAI-native non-streaming transcription controls. */
 export type OpenAITranscriptionExtra = NativeControls & {
   readonly response_format?: "json" | "verbose_json" | "diarized_json";
@@ -119,7 +124,11 @@ export function createOpenAITranscriptionOperation(client: OpenAI) {
           async () =>
             client.audio.translations.create(
               {
-                ...options.extra,
+                ...(translationExtra(options.extra).temperature === undefined
+                  ? {}
+                  : {
+                      temperature: translationExtra(options.extra).temperature,
+                    }),
                 file: await uploadable(materialized),
                 model: options.model,
                 ...(options.prompt === undefined
@@ -226,6 +235,14 @@ function transcriptionUsage(
   return "usage" in raw
     ? (raw as TranscriptionCreateResponse).usage
     : undefined;
+}
+
+function translationExtra(
+  extra: OpenAITranscriptionExtra | undefined,
+): OpenAITranslationExtra {
+  return extra?.temperature === undefined
+    ? {}
+    : { temperature: extra.temperature };
 }
 
 async function uploadable(asset: DataAsset): Promise<Uploadable> {

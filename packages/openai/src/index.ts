@@ -31,6 +31,7 @@ export type {
   OpenAITranscribe,
   OpenAITranscriptionExtra,
   OpenAITranscriptionMetadata,
+  OpenAITranslationExtra,
 } from "./transcription";
 export type {
   OpenAIGenerateSpeech,
