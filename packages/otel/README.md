@@ -181,14 +181,19 @@ budget), registered with that host's lifecycle instead of blocking the return pa
 Both devtools and OTel can run simultaneously. The plugin system's fan-out semantics ensure both receive every event:
 
 ```ts
-import { withDevtools } from '@use-crux/core/observability'
 import { withTelemetry } from '@use-crux/otel'
+import { config } from '@use-crux/core'
 
 config({
-  prompts,
-  plugins: [withDevtools({ serverUrl: process.env.DEVTOOLS_URL }), withTelemetry({ serviceName: 'my-app' })],
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
 ```
+
+Public docs: production telemetry guide under `apps/docs` (`guides/observability/telemetry`), plus privacy and runtime-setup pages for capture policy and host flush wrappers.
 
 ## Architecture
 

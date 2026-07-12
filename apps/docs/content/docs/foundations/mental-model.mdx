@@ -133,19 +133,17 @@ Adapt is matched by exact provider first, then a slash-prefixed `modelId` provid
 
 ## 4. Observe
 
-Every interesting moment in the pipeline can emit an event:
+Every interesting moment in the pipeline emits a **canonical graph record**
+(`run:start` / `span:start` / `span:event` / `artifact` / `edge` / `span:end` /
+`run:end`) rather than a swarm of ad-hoc callback names. Built-in primitives open
+spans such as `generation.call`, `tool.call`, `memory.read`, `flow.step`,
+`scoring.judge`, and `composition.parallel`.
 
-- `onGenerateStart` / `onGenerateEnd`
-- `onContextResolve`, `onContextCacheHit`, `onContextCacheMiss`
-- `onToolCall`, `onToolResult`
-- `onMemoryRead`, `onMemoryWrite`
-- `onCompactStart`, `onCompactEnd`
-- `onJudgeResult`, `onEvalCase`
-- `onBudgetCheck`
-- `onBlackboardUpdate`, `onHandoffPrepare`, `onDelegateStart`, `onDelegateComplete`
-- `onFlowStep`, `onFlowSuspend`, `onFlowResume`
-
-Plugins install themselves into these hooks via `mergeHooks()`. The same event fans out to all installed plugins — OTel spans, custom telemetry, policy hooks — without primitives ever knowing they're being watched. Devtools tracing uses the canonical `@use-crux/core/observability` graph transport so the Go backend owns tree and relation assembly for both the web UI and TUI.
+Plugins and integrations observe that stream with `subscribeObservability()`,
+the Node `crux:observability` diagnostics channel, the HTTP devtools transport,
+or `@use-crux/otel` — all consumers see the same sanitized records. Custom metrics
+plugins subscribe to graph records and clean up in `dispose`; they do not install
+per-event callback maps on `CruxHooks`.
 
 ```ts
 import { config } from '@use-crux/core'

@@ -4,6 +4,12 @@
   "pages": [
     "index",
     "devtools",
+    "catalog-runtime-evidence",
+    "runs-and-delivery",
+    "adapter-outcomes",
+    "runtime-setup",
+    "privacy",
+    "troubleshooting",
     "debug-model-turns",
     "devtools-cloud",
     "observability-context",

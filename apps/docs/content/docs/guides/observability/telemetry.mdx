@@ -137,13 +137,14 @@ events, deliberately configured destinations.
 
 ## Options
 
-| Option        | Type                              | Default            | Description                                   |
-| ------------- | --------------------------------- | ------------------ | --------------------------------------------- |
-| `serviceName` | `string`                          | `'@use-crux/otel'` | Tracer name / service identifier              |
-| `attributes`  | `Record<string, string>`          | —                  | Custom attributes on every span               |
-| `exporter`    | `UrlExporter \| CallbackExporter` | —                  | Export strategy (omit for standard OTel path) |
-| `captureMessageContent` | `boolean`                | `false`            | Export GenAI input/output message attributes  |
-| `semconvVersion` | `'genai-dev-2026-06'`          | current table      | Forward compatibility knob for semconv names  |
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `serviceName` | `string` | `'@use-crux/otel'` | Tracer name / service identifier |
+| `attributes` | `Record<string, string>` | — | Custom attributes on every span |
+| `exporter` | `UrlExporter \| CallbackExporter` | — | Export strategy (omit for standard OTel path) |
+| `captureMessageContent` | `boolean` | `false` | Export GenAI input/output message attributes |
+| `semconvVersion` | `'genai-dev-2026-06'` | current table | Forward compatibility knob for semconv names |
+| `baggageAttributeAllowlist` | `readonly string[]` | unset | Baggage keys copied onto resumed root spans as `crux.baggage.*` |
 
 Payload capture is configured centrally with
 `config({ observability: { recordInputs, recordOutputs, redactRecord } })`.
@@ -166,6 +167,61 @@ Crux emits W3C-format trace and span IDs. Lightweight OTel exports reuse those
 IDs directly; standard OTel exports keep provider-issued IDs and include Crux
 IDs as correlation attributes.
 
+## Active span bridge and W3C propagation
+
+`withTelemetry()` activates a real OTel span around instrumented callbacks —
+`trace.getActiveSpan()` resolves inside provider, tool, agent, and flow work, and
+nested spans parent correctly. This is not post-hoc span creation after the work
+already finished.
+
+Suspend/resume never reuses one SDK span object across a host boundary:
+
+- `run:suspend` **ends** the current segment's root OTel span
+- `run:resume` **starts a fresh** root span that shares the original Crux `traceId`
+
+For custom queues or RPC hops, round-trip the same `CruxPropagationCarrier` Flow
+and Convex use for in-process resume through standard W3C headers:
+
+```ts
+import {
+  injectCruxPropagationCarrier,
+  extractCruxPropagationCarrier,
+} from '@use-crux/otel'
+import { observe } from '@use-crux/core/observability'
+
+// Header-like carrier: any object with get/set/keys.
+const headers = new Map<string, string>()
+const headerCarrier = {
+  get: (key: string) => headers.get(key),
+  set: (key: string, value: string) => {
+    headers.set(key, value)
+  },
+  keys: () => [...headers.keys()],
+}
+
+// Producer: serialize W3C headers from a suspend carrier.
+const carrier = run.suspend({ reason: 'queued-work' })
+injectCruxPropagationCarrier(carrier, headerCarrier)
+await queue.send({ body, headers: Object.fromEntries(headers) })
+
+// Consumer: restore correlation before resuming work.
+const extracted = extractCruxPropagationCarrier(headerCarrier)
+if (extracted.carrier) {
+  const resumed = observe.resumeRun(extracted.carrier, { reason: 'worker-start' })
+  // ...
+  resumed.end()
+}
+```
+
+Incoming carriers are untrusted: format/length limits and baggage caps apply.
+Baggage keys become `crux.baggage.*` span attributes only when listed in
+`withTelemetry({ baggageAttributeAllowlist: ['tenant', …] })` — nothing is
+copied by default.
+
+`observe.flush()` / `observe.shutdown()` and the [host lifecycle wrappers](/docs/guides/observability/runtime-setup)
+also force-flush the installed telemetry manager (lightweight in-flight exports
+or the standard `TracerProvider.forceFlush()`), bounded by the same deadline.
+
 ## Next steps
 
 <Cards>
@@ -184,5 +240,7 @@ IDs as correlation attributes.
     description="Visual development tracing with crux dev."
     href="/docs/guides/observability/devtools"
   />
+  <Card title="Runtime setup" description="Node, serverless, Workers, Convex flush bindings." href="/docs/guides/observability/runtime-setup" />
+  <Card title="Privacy" description="What OTel keeps off by default." href="/docs/guides/observability/privacy" />
   <Card title="API Reference" description="@use-crux/otel API reference." href="/docs/reference/plugins/otel" />
 </Cards>

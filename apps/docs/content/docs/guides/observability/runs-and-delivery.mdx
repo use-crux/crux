@@ -1,0 +1,99 @@
+---
+title: Runs and delivery health
+description: Run lifecycle statuses and delivery-health tri-state — the same vocabulary and plain-language copy DevTools shows.
+---
+
+Runs are the user-visible unit of work in Crux Local. A logical run can span multiple physical **segments** (process, isolate, or invocation) when it suspends and resumes. Status describes lifecycle; **delivery health** describes whether telemetry for that run was observed cleanly. They are independent axes.
+
+## Run status vocabulary
+
+| Status | Kind | Meaning |
+| --- | --- | --- |
+| `running` | Live | The only currently live state. Work is in progress in at least one open segment. |
+| `suspended` | Durable pause | Non-terminal. Waiting on a signal, event, or timer; may resume later in a new segment. |
+| `ok` | Terminal | Completed successfully. |
+| `error` | Terminal | Completed with a thrown / failed outcome. |
+| `cancelled` | Terminal | Explicitly cancelled. |
+| `incomplete` | Terminal (reconciled) | Telemetry ended without a clean `run:end` (or equivalent terminal proof). |
+| `conflicted` | Terminal (reconciled) | Stored terminal evidence or trace identity conflicts; identity could not be resolved. |
+
+### Plain-language explanations (UI copy)
+
+DevTools uses these explanations on Runs and Run Detail (shared helper — list and detail do not drift):
+
+**`suspended`**
+
+- Default: *This run is durably suspended, waiting on a signal, event, or timer.*
+- With multiple segments: *This run is durably suspended, waiting on a signal, event, or timer. N execution segments have been observed so far.*
+
+**`incomplete`**
+
+- Default: *Telemetry ended without a run:end record — the run may still be executing out of view, or its process exited before reporting a terminal status.*
+- With sequence gaps: *Telemetry ended without a run:end record, and N sequence gap(s) or missing parent reference(s) were observed — the run may still be executing out of view, or its process exited before reporting a terminal status.*
+
+**`conflicted`**
+
+- Trace alias conflict: *A trace alias identifies more than one logical run, so the server could not establish one immutable identity for this trace.*
+- Otherwise: *The stored terminal evidence for this run conflicts with what was previously recorded, so its identity could not be resolved.*
+
+These are **truthful states**, not UI bugs. Fix the underlying flush/host lifecycle or identity conflict when you need a cleaner terminal status; do not “force green” client-side.
+
+## Delivery health (tri-state)
+
+| Status | Chip | Meaning |
+| --- | --- | --- |
+| `unknown` | muted | Default whenever the server cannot prove clean delivery. **Never treated as healthy.** |
+| `healthy` | ok | Server observed a clean terminal run with causal ordering and no gaps, conflicts, or rejected delivery. |
+| `degraded` | warn | Some telemetry records were rejected or delivery could not complete cleanly. |
+
+### UI badge tooltips (exact copy)
+
+- **healthy:** *The server observed a clean terminal run with causal ordering and no gaps, conflicts, or rejected delivery.*
+- **degraded:** *Some telemetry records were rejected or delivery could not complete cleanly.*
+- **unknown:** *The server has not observed enough delivery evidence to call this run healthy or degraded.*
+
+### When is `healthy` reachable?
+
+The local Go read model sets `healthy` only when **all** of the following hold:
+
+- The run has ended (`endedAt` set) and is not `running` / `incomplete` / `conflicted`
+- `orderingConfidence === 'causal'`
+- `gapCount === 0`
+- No `traceAliasConflict`
+- No persisted ingest-health rejections for that run
+
+Still-running runs stay `unknown`. Incomplete or partially ordered runs stay `unknown` unless a rejection marks them `degraded`. The server never invents `healthy`.
+
+**Degraded** explanation variants:
+
+- Default: *Delivery/export health is degraded — some records were rejected during export.*
+- With partial ordering: *Delivery/export health is degraded, and the server could not establish one causal display order across segments — some records may be missing or rejected.*
+
+## Segment and ordering signals
+
+Alongside status and delivery health, run rows may surface:
+
+| Field | Meaning |
+| --- | --- |
+| `segmentCount` | Physical execution segments observed for this logical run |
+| `gapCount` | Missing segment-local sequence values or unresolved parent references |
+| `orderingConfidence` | `causal` when one display order is established; `partial` otherwise |
+| `traceAliasConflict` | A trace alias maps to more than one logical run |
+| `revision` | Server-owned read-model revision for catch-up / reconnect |
+
+Reliability chips may also say “N segments”, “N sequence gaps”, “conflicting trace alias”, “partial ordering”, or “delivery degraded”.
+
+## Filtering Runs by definition
+
+Catalog **View N runs** opens Runs with `definitionId` set. The backend filters via the derived `run_definition_activity` projection (rebuildable from raw records; no separate revision stream). See [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence).
+
+## Host lifecycle and incomplete runs
+
+Ephemeral hosts that return before flushing the delivery queue commonly produce `incomplete` or long-lived `running` presentation until reconciliation. Use the host wrappers documented under [Runtime setup](/docs/guides/observability/runtime-setup) and the observability reference so `run:end` / `span:end` actually land.
+
+## Related
+
+- [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence)
+- [Runtime setup](/docs/guides/observability/runtime-setup)
+- [Troubleshooting](/docs/guides/observability/troubleshooting)
+- [Observability reference](/docs/reference/crux-core/observability) — segments, receipts, flush results

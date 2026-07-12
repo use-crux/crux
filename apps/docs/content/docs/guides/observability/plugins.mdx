@@ -3,7 +3,7 @@ title: Plugins
 description: Extend Crux with composable plugins for telemetry, logging, and custom instrumentation.
 ---
 
-Crux has a generic plugin system for extending the runtime. Plugins can install middleware, instrumentation hooks, reporters, and other cross-cutting concerns — all composable, all zero-overhead when not installed.
+Crux has a generic plugin system for extending the runtime. Plugins can install middleware, observability transports, reporters, and other cross-cutting concerns — all composable, all zero-overhead when not installed.
 
 ## Using plugins
 
@@ -80,27 +80,32 @@ without installing a Crux plugin.
 
 ## Writing a custom plugin
 
-Implement the `CruxPlugin` interface:
+Implement the `CruxPlugin` interface. Prefer **subscribing to graph records** for instrumentation —
+`CruxHooks` is not a free-form per-event callback map. Use `subscribeObservability()` (or the
+diagnostics channel) for tool starts, generation ends, and similar signals.
 
 ```ts title="my-plugin.ts"
 import type { CruxPlugin } from '@use-crux/core'
+import { subscribeObservability } from '@use-crux/core/observability'
 
 export function createMyPlugin(options: { endpoint: string }): CruxPlugin {
   return {
     name: 'my-tracer',
-    install(hooks) {
+    install() {
+      const unsubscribe = subscribeObservability(['span:start'] as const, (record) => {
+        if (record.primitive !== 'tool.call') return
+        const toolName =
+          typeof record.attributes?.toolName === 'string'
+            ? record.attributes.toolName
+            : undefined
+        void fetch(options.endpoint, {
+          method: 'POST',
+          body: JSON.stringify({ event: 'tool.start', tool: toolName, spanId: record.spanId }),
+        }).catch(() => {}) // fire-and-forget
+      })
+
       return {
-        observability subscribers: {
-          tool.call start records: (e) => {
-            fetch(options.endpoint, {
-              method: 'POST',
-              body: JSON.stringify({ event: 'tool.start', tool: e.toolName }),
-            }).catch(() => {}) // fire-and-forget
-          },
-        },
-        dispose: () => {
-          // cleanup resources
-        },
+        dispose: unsubscribe,
       }
     },
   }
@@ -118,33 +123,26 @@ Return a `CruxPluginResult` — any subset of `CruxHooks` fields plus an optiona
 | Field                    | Type                           | Description                                      |
 | ------------------------ | ------------------------------ | ------------------------------------------------ |
 | `middleware`             | `PromptMiddleware`             | Wraps every `generate()`/`stream()` call         |
-| `observability subscribers`   | `graph-record subscribers`         | Observe memory, tools, flows, compositions, etc. |
 | `resolveHook`            | `ResolveHook`                  | Observe prompt `.resolve()` calls                |
 | `executionHook`          | `ExecutionHook`                | Observe model calls from agent adapters          |
 | `streamProgressHook`     | `StreamProgressHook`           | Live streaming metrics                           |
 | `streamStartHook`        | `StreamStartHook`              | Fires before first chunk                         |
-| `evalReporter`           | `EvalReporter`                 | Eval run progress                                |
-| `flowEvalReporter`       | `FlowEvalReporter`             | Flow eval progress                               |
 | `observabilityTransport` | `CruxObservabilityTransport`   | Canonical graph transport instance               |
 | `observabilityDelivery`  | `ObservabilityDeliveryOptions` | Non-blocking batching, retry, and queue bounds   |
-| `dispose`                | `() => void`                   | Cleanup on `registry.dispose()`                  |
+| `observabilityCapture`   | capture policy                 | Central payload capture / redaction policy       |
+| `spanActivationHook`     | `SpanActivationHook`           | Activate real execution context (e.g. OTel span) |
+| `telemetryFlushHook`     | `TelemetryFlushHook`           | Force-flush installed telemetry exporters        |
+| `dispose`                | `() => void \| Promise<void>`  | Cleanup on `registry.dispose()`                  |
+
+For raw graph consumption, call `subscribeObservability()` inside `install()` and return
+`dispose: unsubscribe` — do not invent parallel hook maps on `CruxHooks`.
 
 ## How composition works
 
-### Hook fan-out
+### Transport and middleware
 
-When two plugins install the same instrumentation hook (e.g., `tool.call start records`), both handlers are called for every event. Neither can suppress the other.
-
-```
-Plugin A installs tool.call start records → logs to console
-Plugin B installs tool.call start records → sends to PostHog
-                                ↓
-Every tool call → both handlers fire
-```
-
-### Middleware layering
-
-When two plugins install middleware, the later plugin wraps the earlier one. The outer middleware controls when `next()` is called:
+- **Middleware** — later plugins wrap earlier ones; the outer middleware controls when `next()` is called.
+- **Transports / capture / activation hooks** — merged according to `mergeHooks` rules (last writer or layered activation depending on the field). Prefer one observability transport plus OTel as a graph subscriber.
 
 ```
 Plugin A middleware (inner)
@@ -154,7 +152,9 @@ Plugin B middleware (outer)
 Adapter generate() call
 ```
 
-Calling `next()` in the outer middleware invokes the inner middleware, which then calls the adapter.
+### Graph-record fan-out
+
+Every installed subscriber, diagnostics-channel listener, HTTP transport, and `@use-crux/otel` projection observes the **same** sanitized record stream. Subscriber errors are isolated from user code and counted in `observabilityDiagnostics().subscriberErrors`.
 
 ### Dispose order
 
@@ -172,6 +172,11 @@ Plugin `dispose()` functions are called in **reverse** order during `registry.di
     title="Middleware"
     description="Global middleware for logging, timing, and error handling."
     href="/docs/guides/observability/middleware"
+  />
+  <Card
+    title="Adapter outcomes"
+    description="Normalized finish reasons and provider errors."
+    href="/docs/guides/observability/adapter-outcomes"
   />
   <Card
     title="CruxPlugin Reference"

@@ -25,13 +25,14 @@ config({
 
 **Options:**
 
-| Field                   | Type                              | Default            | Description                                                 |
-| ----------------------- | --------------------------------- | ------------------ | ----------------------------------------------------------- |
-| `serviceName`           | `string`                          | `'@use-crux/otel'` | Tracer name for span identification                         |
-| `attributes`            | `Record<string, string>`          | —                  | Custom attributes added to every span                       |
-| `exporter`              | `UrlExporter \| CallbackExporter` | —                  | Export strategy. Omit for standard OTel TracerProvider path |
-| `captureMessageContent` | `boolean`                         | `false`            | Export GenAI input/output message attributes                |
-| `semconvVersion`        | `'genai-dev-2026-06'`             | current table      | Forward compatibility knob for semconv names                |
+| Field | Type | Default | Description |
+| --- | --- | --- | --- |
+| `serviceName` | `string` | `'@use-crux/otel'` | Tracer name for span identification |
+| `attributes` | `Record<string, string>` | — | Custom attributes added to every span |
+| `exporter` | `UrlExporter \| CallbackExporter` | — | Export strategy. Omit for standard OTel TracerProvider path |
+| `captureMessageContent` | `boolean` | `false` | Export GenAI input/output message attributes |
+| `semconvVersion` | `'genai-dev-2026-06'` | current table | Forward compatibility knob for semconv names |
+| `baggageAttributeAllowlist` | `readonly string[]` | unset | Baggage keys copied onto resumed root spans as `crux.baggage.*` |
 
 Payload capture is controlled by the core observability policy:
 `config({ observability: { recordInputs, recordOutputs, redactRecord } })`.
@@ -94,6 +95,15 @@ Structured span data used by the lightweight exporter path.
 | `attributes`   | `Record<string, string \| number \| boolean \| Array<string \| number \| boolean>>` | Key-value attributes                                                              |
 | `status`       | `SpanStatus`                                                                        | `{ code: 'OK' \| 'ERROR' \| 'UNSET', message?: string }`                          |
 | `events`       | `Array<{ name, time, attributes? }>?`                                               | Point-in-time events (e.g., exceptions)                                           |
+
+### Propagation helpers
+
+| Export | Purpose |
+| --- | --- |
+| `injectCruxPropagationCarrier(carrier, target)` | Write W3C `traceparent` / `tracestate` / baggage (+ optional OTel propagator fields) into a header-like carrier with `.set` |
+| `extractCruxPropagationCarrier(source, options?)` | Read a validated carrier + allowlisted baggage attributes from a header-like carrier with `.get`; never throws |
+
+See the [telemetry guide](/docs/guides/observability/telemetry#active-span-bridge-and-w3c-propagation) for suspend/resume and queue examples.
 
 ### `createUrlExporter(options)`
 

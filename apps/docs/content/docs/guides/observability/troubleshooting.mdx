@@ -1,0 +1,94 @@
+---
+title: Troubleshooting observability
+description: Why deliveryHealth is unknown, runs are incomplete or conflicted, and definitions show no runs — truthful states, not silent bugs.
+---
+
+Most “broken” observability UI states are **accurate reports** of partial telemetry. Start from the state vocabulary, then check host flush and identity emission.
+
+## Why is `deliveryHealth: unknown`?
+
+**This is the default.** The local server only promotes `healthy` when it can prove a clean terminal delivery: ended run, causal ordering, zero gaps, no trace-alias conflict, and no ingest rejections. Still-running work, incomplete reconciliation, and partial ordering stay `unknown`.
+
+UI tooltip: *The server has not observed enough delivery evidence to call this run healthy or degraded.*
+
+**What to check**
+
+1. Did the run actually end (`run:end` ingested)?
+2. Is the host wrapper flushing before freeze/exit? See [Runtime setup](/docs/guides/observability/runtime-setup).
+3. Any `degraded` badge instead? Then some records were rejected — inspect local diagnostics / rejected counts, not client invention of healthy.
+
+`unknown` is **not** “healthy but unlabeled.” Never treat missing proof as success.
+
+## Why is my run `incomplete`?
+
+UI copy: *Telemetry ended without a run:end record — the run may still be executing out of view, or its process exited before reporting a terminal status.* (Plus gap wording when sequence gaps exist.)
+
+**Common causes**
+
+- Serverless / Worker / Convex action returned without a bounded flush
+- Process killed mid-generation (OOM, deploy, hard timeout)
+- Transport failures after lifecycle start records already landed
+- Operation deadline expired while terminal records never arrived (presentation may mark incomplete without rewriting raw records)
+
+**What to do**
+
+- Bind the correct host wrapper for your runtime
+- Confirm `ObservabilityFlushResult.status === 'drained'` via `onDrain`
+- For Convex, use first-party `action` / `internalAction` / `createCruxConvex` so flush is automatic
+- Re-run with `crux dev` + tunnel when debugging cloud workers
+
+## Why is my run `conflicted`?
+
+- *A trace alias identifies more than one logical run…* when `traceAliasConflict` is set
+- Otherwise *stored terminal evidence … conflicts with what was previously recorded*
+
+Usually a propagation / identity bug: two logical runs sharing an alias, or contradictory terminal records under one `runId`. Fix identity at the source; do not merge client-side.
+
+## Why doesn’t my definition show any runs?
+
+Catalog zero-activity copy: *No runs have referenced this definition yet.*
+
+**Checklist**
+
+| Check | Detail |
+| --- | --- |
+| Did it run under a Crux adapter / primitive that emits spans? | Static-only kinds never get direct activity. |
+| Does the handle carry a canonical id? | Anonymous prompts/contexts/tools and non-literal composition ids omit `DefinitionRef`. Compositions need required authored `id`. |
+| Is the kind a contributor / structural child? | You may see “referenced by N runs” rather than being the subject of a run. |
+| Quality-owned kinds | Primary lens is Quality; secondary direct runtime only when the manifest declares it (e.g. `scorer` / `scoring.judge`). |
+| File-loaded skills | Registry skills join; bare file-loaded directory ids are a different id space and intentionally do not emit refs. |
+| Since-deleted definitions | Runs still filter by the historical id; Catalog may show unresolved links from old runs. |
+
+View Runs appears only when the activity rollup reports `runCount > 0`. An empty state with no button is intentional.
+
+## Why is Run Detail missing Catalog links?
+
+Links come from runtime `definitionRefs` on the run/span. If refs were never emitted (anonymous handle, non-instrumented path), there is nothing to link. If refs exist but the Project Index no longer contains the id, the row shows **unresolved** with: *Not found in the current Project Index — the source definition may have been renamed or deleted.*
+
+## Why did stream completion miss usage / finish reason?
+
+First-party adapters now capture completion metadata on stream settle and surface completion failures as `CruxAdapterError`. If you still see empty finish/usage:
+
+- Confirm you are on the first-party adapter packages (not a custom dialect that skips the completion hook)
+- Confirm the provider actually returned usage (OpenAI streams need usage enabled — Crux requests it for OpenAI streams)
+- Distinguish **aborted** / **error** finishes from missing metadata
+
+Progressive tool-call argument fragments are **never** exposed — wait for completed tool calls on the stream completion.
+
+## Why don’t my OTel spans parent correctly?
+
+`withTelemetry()` activates a real SDK span around instrumented work. Requirements:
+
+- Register a `TracerProvider` **before** installing the plugin (standard path), or pass a lightweight `exporter`
+- Do not expect one OTel span object to survive `run:suspend` — resume starts a **new** root span sharing the Crux `traceId`
+- Propagate across queues with `injectCruxPropagationCarrier` / `extractCruxPropagationCarrier` (W3C `traceparent` / `tracestate`)
+
+See [Telemetry](/docs/guides/observability/telemetry).
+
+## Related
+
+- [Runs and delivery health](/docs/guides/observability/runs-and-delivery)
+- [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence)
+- [Runtime setup](/docs/guides/observability/runtime-setup)
+- [Adapter outcomes](/docs/guides/observability/adapter-outcomes)
+- [Privacy](/docs/guides/observability/privacy)

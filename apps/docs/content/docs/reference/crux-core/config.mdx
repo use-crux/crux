@@ -386,18 +386,19 @@ those promises before reporting shutdown complete.
 | `plugins[].install` | `(hooks: Readonly<CruxHooks>) => CruxPluginResult` | required | Returns hook fields to merge plus optional cleanup. |
 
 ```ts title="crux.config.ts"
+import { subscribeObservability } from '@use-crux/core/observability'
+
 export default config({
   plugins: [
     {
       name: 'my-plugin',
-      install(hooks) {
-        return {
-          observability subscribers: {
-            tool.call start records(event) {
-              console.log(event.toolName)
-            },
-          },
-        }
+      install() {
+        const unsubscribe = subscribeObservability(['span:start'] as const, (record) => {
+          if (record.primitive === 'tool.call') {
+            console.log(record.attributes?.toolName)
+          }
+        })
+        return { dispose: unsubscribe }
       },
     },
   ],

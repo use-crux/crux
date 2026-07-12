@@ -1,0 +1,71 @@
+---
+title: Catalog runtime evidence
+description: How Catalog and Project Index join authored definitions to live Runs via DefinitionRef activity.
+---
+
+The Project Index answers *what is authored*. The observability graph answers *what ran*. Catalog joins them without mixing the two planes: runtime evidence is a derived rollup over graph records, never part of the compiler snapshot or cache identity.
+
+## Two planes, one join key
+
+| Plane | Owner | Facts |
+| --- | --- | --- |
+| Project Index | Compiler / indexer | Definition id, kind, name, source refs, static/semantic relations |
+| Observability graph | Runtime + local Go server | Runs, spans, delivery health, costs, outcomes |
+| Join | Runtime-emitted `DefinitionRef` | Canonical `id` matching `store.ProjectDefinition.ID` |
+
+A `DefinitionRef` is emitted only when the runtime already holds a real compiled definition handle (required `id` / literal name / map key). Crux never guesses identity from a stack trace. Anonymous or non-literal definitions simply omit the ref.
+
+```ts
+interface DefinitionRef {
+  id: string
+  kind: ProjectDefinitionKind
+  role: DefinitionRefRole
+  /** Optional repo-relative source — absolute host paths are never emitted. */
+  source?: { file: string; line: number; column?: number }
+}
+```
+
+Roles describe how the definition participated (`resolved-prompt`, `invoked-agent`, `invoked-tool`, `invoked-composition`, …). Kind is the full Project Index kind; role is a coarser family label used for display and filtering.
+
+## Catalog Observability section
+
+Open a definition in Catalog / Index. The **Observability** section is classified from the compiler-owned `DEFINITION_KIND_COVERAGE` manifest plus the server rollup `GET /api/observability/definitions/{id}/activity`:
+
+| Treatment | Kind primary (manifest) | What you see |
+| --- | --- | --- |
+| **Direct activity** | `directly-observed` | Run count, latest status / time / delivery badge when present, and **View N runs** when `N > 0` |
+| **Contributor** | `runtime-contributor` or structural children with runtime primitives | “Referenced by N runs — never itself the subject of a run.” |
+| **Quality-primary** | `quality-owned` (and dual-tagged cases) | Quality join is primary; secondary direct runtime (e.g. live `scoring.judge` for `scorer`) still surfaces when present |
+| **No runtime** | `static-only` / fallback / structural children with no primitive | Truthful empty state — no fabricated counts, no dead View Runs link |
+
+Zero activity is a real state, not a broken link:
+
+> *No runs have referenced this definition yet.*
+
+When activity exists, Catalog shows the latest run's status, timestamp, and delivery-health badge, and **View N runs** navigates to Runs pre-filtered to that definition id (`definitionId` query on the Runs list / `GET /api/observability/definitions/{definitionId}/runs`).
+
+## Run Detail → Catalog
+
+Run Detail lists every `DefinitionRef` on the run/span. Resolved ids link into Catalog. If the definition was renamed or deleted since the run:
+
+- The row keeps `role`, `kind`, id, and any sanitized `source` captured on the wire
+- The link is **not** a dead navigation target — UI marks it **unresolved** with title text: *Not found in the current Project Index — the source definition may have been renamed or deleted.*
+
+Runs whose refs point at a since-deleted definition still appear in the filtered Runs list. The projection stores runtime-emitted identity only; it is never validated against the current index at write time.
+
+## Coverage honesty
+
+Not every Project Index kind is a top-level run subject. Examples of truthful non-coverage:
+
+- Structural children (e.g. stages nested under a parent) inherit display under their parent; they are not independent run subjects unless the manifest declares otherwise.
+- File-loaded skills without a registry composite id do not invent a join key; registry-loaded skills do emit `DefinitionRef`.
+- Compositions (`parallel` / `pipeline` / `swarm` / `consensus`) require an authored `id` so runtime and index share `composition.<kind>:<id>`.
+
+For status vocabulary and delivery health on those runs, see [Runs and delivery health](/docs/guides/observability/runs-and-delivery).
+
+## Related
+
+- [Devtools](/docs/guides/observability/devtools) — dashboard surfaces
+- [Runs and delivery health](/docs/guides/observability/runs-and-delivery)
+- [Privacy](/docs/guides/observability/privacy) — `DefinitionRef.source` sanitization
+- [Troubleshooting](/docs/guides/observability/troubleshooting) — “why doesn’t my definition show runs?”

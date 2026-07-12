@@ -42,6 +42,27 @@ Generation nodes and aggregating nodes can include `request?: CruxRunDetailReque
 
 Contextual retrieval, memory, and embedding spans fold into attached details when they are request-input evidence for a generation. Operational retrieval inside a tool, flow, composition, or agent boundary remains visible even when that branch lives under an agent generation stream; retrieval query/embed internals can still fold into the retrieval pipeline node.
 
+## DefinitionRef (runtime ↔ Project Index join)
+
+Runtime records may carry `definitionRefs?: DefinitionRef[]` on `run:start`,
+`span:start`, and full `span` records when the runtime already holds a compiled
+definition handle:
+
+```ts
+interface DefinitionRef {
+  id: string // matches store.ProjectDefinition.ID exactly
+  kind: ProjectDefinitionKind
+  role: DefinitionRefRole // e.g. resolved-prompt, invoked-agent, invoked-tool
+  source?: { file: string; line: number; column?: number } // repo-relative only
+}
+```
+
+Refs are omitted for anonymous handles — Crux never invents an id from a stack
+trace. `source` is root-redacted via `sanitizeDefinitionSource` (see the
+[privacy guide](/docs/guides/observability/privacy)). Catalog **View runs** and
+Run Detail Catalog links use this envelope; details in
+[Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence).
+
 ## Error evidence
 
 Thrown errors are represented with a shared normalized shape. `observe.span()` and `observe.openSpan().error()` attach:
