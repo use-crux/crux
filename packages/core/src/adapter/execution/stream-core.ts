@@ -23,8 +23,8 @@ import { buildResolveOpts } from "./shared";
 import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
 import { emitInputTokenEstimate } from "./media-token-budget";
 import { responseContent } from "../assistant-output";
-import type { AssistantContentPart } from "../../types/content";
 import type { Message } from "../../generation/messages";
+import { replaceSafeTextContent } from "./stream-content";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -205,7 +205,7 @@ export async function streamCore<
         ),
       });
       const content = safety.enabled
-        ? replaceTextContent(providerContent, text)
+        ? replaceSafeTextContent(providerContent, text)
         : providerContent;
       const assistantMessage: Message = {
         role: "assistant",
@@ -230,33 +230,6 @@ export async function streamCore<
       };
     },
   };
-}
-
-/**
- * Replace provider-buffered text without moving it across mixed content.
- *
- * Streaming guardrails expose one authoritative transformed text value but do
- * not expose a span map back to provider text parts. Put that value in the
- * first existing text slot and retain every later text slot as empty. This
- * keeps media/tool/reasoning positions and the provider's text-slot topology
- * exact without reintroducing unsafe provider text.
- */
-function replaceTextContent(
-  content: readonly AssistantContentPart[],
-  text: string,
-): readonly AssistantContentPart[] {
-  const result: AssistantContentPart[] = [];
-  let inserted = false;
-  for (const part of content) {
-    if (part.type !== "text") {
-      result.push(part);
-      continue;
-    }
-    result.push({ ...part, text: inserted ? "" : text });
-    inserted = true;
-  }
-  if (!inserted && text) result.unshift({ type: "text", text });
-  return result;
 }
 
 /** Stamp authoritative assistant output into a provider-completed transcript. */
