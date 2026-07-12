@@ -21,6 +21,7 @@ import { semanticSchemaCandidates } from '../schema-candidates'
 import { semanticSourceRefCandidates } from '../source-ref-candidates'
 import type { SemanticAnalyzerResult } from '../types'
 import { measureSemanticTiming } from '../instrumentation'
+import { semanticMediaFacts } from '../media-facts'
 import {
   createTypeScriptSemanticFactInput,
   type SemanticIndexFactsOptions,
@@ -121,12 +122,14 @@ export function* semanticIndexEvidenceBatchesForSourceFiles<TView extends Semant
     return
   }
   const result = runSemanticAnalyzers(input.sourceFiles, input.view, semanticAnalyzers, options)
+  const media = semanticMediaFacts(input.sourceFiles, input.view)
 
   yield* semanticEvidenceBatchesFromFacts({
-    definitions: result.definitions,
-    sourceRefs: result.sourceRefs,
-    relations: result.relations,
+    definitions: [...result.definitions, ...media.definitions],
+    sourceRefs: [...result.sourceRefs, ...media.sourceRefs],
+    relations: [...result.relations, ...media.relations],
     diagnostics: [],
+    lintFindings: media.lintFindings,
   })
 }
 

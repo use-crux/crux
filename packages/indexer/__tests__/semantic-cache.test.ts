@@ -1,4 +1,4 @@
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { SEMANTIC_FACTS_CACHE_EPOCH } from '../src/indexer/cache-identity'
@@ -22,6 +22,42 @@ afterEach(async () => {
 })
 
 describe('semantic facts cache', () => {
+  it('uses the authored-media semantic epoch instead of stale v23 artifacts', () => {
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe('semantic-facts-v24')
+  })
+
+  it('does not reuse a valid cache artifact from the pre-media v23 namespace', async () => {
+    const root = await fixtureRoot()
+    const file = join(root, 'src/writer.ts')
+    await writeFile(file, `export const writer = true`)
+    const backendIdentity: SemanticBackendIdentity = { name: 'test-cache-media-epoch', version: 'v1' }
+    const produce = () => ({
+      async *produceEvidence() {
+        yield { kind: 'definitions' as const, facts: cachedFacts().definitions ?? [] }
+        yield { kind: 'diagnostics' as const, facts: [] }
+      },
+    })
+
+    await semanticIndexFactsCached(root, [file], { backendIdentity, ...produce() })
+    const [cacheName] = await cacheFileNames(root)
+    const currentDir = join(root, '.crux/cache/index', SEMANTIC_FACTS_CACHE_EPOCH)
+    const staleDir = join(root, '.crux/cache/index', 'semantic-facts-v23')
+    await mkdir(staleDir, { recursive: true })
+    await copyFile(join(currentDir, cacheName), join(staleDir, cacheName))
+    await rm(currentDir, { recursive: true, force: true })
+
+    let producerCalls = 0
+    await semanticIndexFactsCached(root, [file], {
+      backendIdentity,
+      async *produceEvidence() {
+        producerCalls += 1
+        yield { kind: 'definitions', facts: cachedFacts().definitions ?? [] }
+        yield { kind: 'diagnostics', facts: [] }
+      },
+    })
+    expect(producerCalls).toBe(1)
+  })
+
   it('writes and reads binary semantic fact caches without rerunning the producer', async () => {
     const root = await fixtureRoot()
     const file = join(root, 'src/writer.ts')

@@ -1,5 +1,6 @@
 import type { SemanticAnalyzerSourceFile, SemanticAnalyzerView } from '../../candidates'
 import type { SemanticIndexInstrumentation } from '../../instrumentation'
+import type { SemanticSourceProfile } from '../../source-profile'
 import { measureSemanticTiming } from '../../instrumentation'
 import { semanticProgram, type SemanticProgramSession } from './program'
 import { createTypeScriptSemanticCompilerView, type TypeScriptSemanticCompilerView } from './compiler-view'
@@ -11,6 +12,8 @@ export interface SemanticIndexFactsOptions {
   readonly programSession?: SemanticProgramSession
   /** Stable source/config identity used to decide whether program state can be reused. */
   readonly programIdentity?: string
+  /** Preflight source text shared with the compiler program host. */
+  readonly sourceProfile?: SemanticSourceProfile
 }
 
 export interface SemanticSourceFileFactInput<TView extends SemanticAnalyzerView = TypeScriptSemanticCompilerView> {
@@ -29,8 +32,11 @@ export function createTypeScriptSemanticFactInput(
     ? options.programSession.program(files, {
         identity: options.programIdentity,
         instrumentation: options.instrumentation,
+        sourceProfile: options.sourceProfile,
       })
-    : measureSemanticTiming(options.instrumentation, 'semantic.program.create', () => semanticProgram(files))
+    : measureSemanticTiming(options.instrumentation, 'semantic.program.create', () =>
+        semanticProgram(files, { sourceProfile: options.sourceProfile }),
+      )
   const checker = measureSemanticTiming(options.instrumentation, 'semantic.checker.create', () =>
     program.getTypeChecker(),
   )

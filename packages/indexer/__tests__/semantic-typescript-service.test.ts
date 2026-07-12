@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import ts from 'typescript'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createSemanticIndexService, createTypeScriptSemanticBackend } from '../src/indexer/semantic/service'
+import { semanticSourceProfileFileFromSource } from '../src/indexer/semantic/source-profile'
 
 const roots: string[] = []
 
@@ -78,5 +79,41 @@ describe('typescript semantic index service', () => {
     expect(
       timingNames.filter((name) => name === 'semantic.program.create' || name === 'semantic.program.reuse'),
     ).toEqual(['semantic.program.create', 'semantic.program.reuse'])
+  })
+
+  it('uses preflight source text without rereading the local closure from disk', async () => {
+    const root = await fixtureRoot()
+    await mkdir(join(root, 'src'), { recursive: true })
+    const file = join(root, 'src/writer.ts')
+    const helper = join(root, 'src/helper.ts')
+    const helperSource = `export const profiledSystem = 'Use the source profile.'`
+    const profiledSource = `import { prompt } from '@use-crux/core'\nimport { profiledSystem } from './helper'\nexport const writer = prompt({ id: 'profiled-writer', system: profiledSystem })`
+    const profile = semanticSourceProfileFileFromSource(file, profiledSource, { includeSource: true })
+    const helperProfile = semanticSourceProfileFileFromSource(helper, helperSource, { includeSource: true })
+
+    const patch = await createSemanticIndexService({
+      backend: createTypeScriptSemanticBackend({ cache: 'disabled' }),
+    }).indexFiles({
+      root,
+      files: [file],
+      sourceProfile: {
+        files: [helperProfile, profile],
+        dependencyClosure: [helper, file].sort(),
+        sourceBytes: profile.sourceBytes + helperProfile.sourceBytes,
+        complete: true,
+      },
+    })
+
+    expect(patch.status).toBe('ok')
+    expect(patch.facts?.sourceRefs).toContainEqual(
+      expect.objectContaining({
+        definitionId: 'prompt:profiled-writer',
+        ref: expect.objectContaining({
+          property: 'system',
+          symbol: 'profiledSystem',
+          source: expect.objectContaining({ file: helper }),
+        }),
+      }),
+    )
   })
 })
