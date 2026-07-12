@@ -49,7 +49,7 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
     const text = typeof meta?.text === "string" ? meta.text : streamedText;
     const accumulator = createResultAccumulator();
     accumulator.addStep({
-      content: meta?.content ?? [{ type: "text", text }],
+      content: meta?.content?.length ? meta.content : [{ type: "text", text }],
       ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),
       finishReason: meta?.finishReason,
       responseId: meta?.responseId,
