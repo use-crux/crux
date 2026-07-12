@@ -31,16 +31,14 @@ Roles describe how the definition participated (`resolved-prompt`, `invoked-agen
 
 Open a definition in Catalog / Index. The **Observability** section is classified from the compiler-owned `DEFINITION_KIND_COVERAGE` manifest plus the server rollup `GET /api/observability/definitions/{id}/activity`:
 
-| Treatment | Kind primary (manifest) | What you see |
+| Treatment | Kind primary (manifest) | What you see (UI copy) |
 | --- | --- | --- |
-| **Direct activity** | `directly-observed` | Run count, latest status / time / delivery badge when present, and **View N runs** when `N > 0` |
-| **Contributor** | `runtime-contributor` or structural children with runtime primitives | “Referenced by N runs — never itself the subject of a run.” |
-| **Quality-primary** | `quality-owned` (and dual-tagged cases) | Quality join is primary; secondary direct runtime (e.g. live `scoring.judge` for `scorer`) still surfaces when present |
-| **No runtime** | `static-only` / fallback / structural children with no primitive | Truthful empty state — no fabricated counts, no dead View Runs link |
+| **Direct activity** | `directly-observed` | Latest status / time / delivery badge when present; **View N runs** when `N > 0`. Zero activity: *No runs have referenced this definition yet.* |
+| **Contributor** | `runtime-contributor` or structural children with runtime primitives | With activity: *Referenced by N runs — never itself the subject of a run.* Without: *Referenced by an owner’s span when invoked — never itself the subject of a run. No runs yet.* |
+| **Quality-primary** | `quality-owned` (and dual-tagged cases) | *Quality-primary — correlates through the Quality ↔ observability join…*; secondary direct runtime (e.g. live `scoring.judge` for `scorer`) still surfaces when present |
+| **No runtime** | `static-only` / fallback | *Static/declarative — never the target or subject of a runtime primitive.* (or *No runtime evidence path is defined for this kind.*) — no fabricated counts, no dead View Runs link |
 
-Zero activity is a real state, not a broken link:
-
-> *No runs have referenced this definition yet.*
+Zero activity is a real state, not a broken link. **View N runs** appears only when the activity rollup reports `runCount > 0`.
 
 When activity exists, Catalog shows the latest run's status, timestamp, and delivery-health badge, and **View N runs** navigates to Runs pre-filtered to that definition id (`definitionId` query on the Runs list / `GET /api/observability/definitions/{definitionId}/runs`).
 

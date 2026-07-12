@@ -229,11 +229,13 @@ stream for custom integrations:
 import { subscribeObservability } from '@use-crux/core/observability'
 
 const unsubscribe = subscribeObservability((record) => {
-  if (record.type === 'span:event' && record.name === 'security.warning') {
-    // attributes include pattern / field / severity when present
+  // emitSecurityWarningSpan opens a real span (not a free-floating span:event).
+  if (record.type === 'span:start' && record.primitive === 'security.warning') {
+    // attributes: promptId, field, pattern, inputPreview
     myLogger.send(record)
   }
-  if (record.type === 'span:start' && record.primitive === 'security.warning') {
+  if (record.type === 'artifact' && record.kind === 'security.report') {
+    // JSON preview carries severity, message, field, pattern
     myLogger.send(record)
   }
 })

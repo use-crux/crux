@@ -114,25 +114,28 @@ export function createMyPlugin(options: { endpoint: string }): CruxPlugin {
 
 ### What `install()` receives
 
-The `hooks` parameter is a frozen snapshot of the current `CruxHooks` — all hooks installed by previous plugins. You don't need to manually call previous hooks; the framework composes them for you.
+`install(hooks)` receives a frozen snapshot of the current `CruxHooks` (everything installed by previous plugins). Most graph-only plugins ignore that snapshot and only return `dispose`. You never need to manually fan out prior handlers — the framework merges hook fields for you.
 
 ### What `install()` returns
 
-Return a `CruxPluginResult` — any subset of `CruxHooks` fields plus an optional `dispose` function:
+Return a `CruxPluginResult` — any subset of `CruxHooks` fields plus an optional `dispose` function. Observability-relevant fields:
 
-| Field                    | Type                           | Description                                      |
-| ------------------------ | ------------------------------ | ------------------------------------------------ |
-| `middleware`             | `PromptMiddleware`             | Wraps every `generate()`/`stream()` call         |
-| `resolveHook`            | `ResolveHook`                  | Observe prompt `.resolve()` calls                |
-| `executionHook`          | `ExecutionHook`                | Observe model calls from agent adapters          |
-| `streamProgressHook`     | `StreamProgressHook`           | Live streaming metrics                           |
-| `streamStartHook`        | `StreamStartHook`              | Fires before first chunk                         |
-| `observabilityTransport` | `CruxObservabilityTransport`   | Canonical graph transport instance               |
-| `observabilityDelivery`  | `ObservabilityDeliveryOptions` | Non-blocking batching, retry, and queue bounds   |
-| `observabilityCapture`   | capture policy                 | Central payload capture / redaction policy       |
-| `spanActivationHook`     | `SpanActivationHook`           | Activate real execution context (e.g. OTel span) |
-| `telemetryFlushHook`     | `TelemetryFlushHook`           | Force-flush installed telemetry exporters        |
-| `dispose`                | `() => void \| Promise<void>`  | Cleanup on `registry.dispose()`                  |
+| Field | Type | Description |
+| --- | --- | --- |
+| `middleware` | `PromptMiddleware` | Wraps every `generate()` / `stream()` call |
+| `resolveHook` | `ResolveHook` | Observe prompt `.resolve()` calls |
+| `executionHook` | `ExecutionHook` | Observe model calls from agent adapters |
+| `streamProgressHook` | `StreamProgressHook` | Live streaming metrics |
+| `streamStartHook` | `StreamStartHook` | Fires before first chunk |
+| `observabilityTransport` | `CruxObservabilityTransport` | Canonical graph transport instance |
+| `observabilityDelivery` | `ObservabilityDeliveryOptions` | Non-blocking batching, retry, and queue bounds |
+| `observabilityCapture` | capture policy | Central payload capture / redaction policy |
+| `spanActivationHook` | `SpanActivationHook` | Activate real execution context (e.g. OTel span) |
+| `telemetryFlushHook` | `TelemetryFlushHook` | Force-flush installed telemetry exporters |
+| `telemetryResumeAttributesHook` | `TelemetryResumeAttributesHook` | Extra attributes on resume from a propagation carrier |
+| `dispose` | `() => void \| Promise<void>` | Cleanup on `registry.dispose()` |
+
+`CruxHooks` also carries non-observability slots (`records`, `runtimeEngine`, global constraints/guardrails, …) that plugins may set; they are not free-form event maps.
 
 For raw graph consumption, call `subscribeObservability()` inside `install()` and return
 `dispose: unsubscribe` — do not invent parallel hook maps on `CruxHooks`.

@@ -76,8 +76,10 @@ const fetch = withWorkersObservableInvocation(
     // Crux work
     return new Response('ok')
   },
-  (_request, _env, ctx) => ctx, // pass ExecutionContext once
-  () => ({ flushTimeoutMs: 5_000 }),
+  // resolveContext — return the ExecutionContext (structural { waitUntil })
+  (_request, _env, ctx) => ctx,
+  // resolveInvocation(ctx, ...args) — optional drain knobs
+  (_ctx) => ({ flushTimeoutMs: 5_000 }),
 )
 
 export default { fetch }

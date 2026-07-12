@@ -60,6 +60,8 @@ export function withCostTracker(options: CostTrackerOptions): CruxPlugin {
           }
           const attributes = record.attributes ?? {}
           openGenerations.set(record.spanId, {
+            // Generation openSpan puts identity on attributes (and may also
+            // promote promptId/model onto top-level span fields when present).
             promptId:
               typeof record.promptId === 'string'
                 ? record.promptId
@@ -69,8 +71,8 @@ export function withCostTracker(options: CostTrackerOptions): CruxPlugin {
             modelId:
               typeof record.model === 'string'
                 ? record.model
-                : typeof attributes.modelId === 'string'
-                  ? attributes.modelId
+                : typeof attributes.model === 'string'
+                  ? attributes.model
                   : undefined,
             // Correlator metadata is projected as meta.<key> attributes.
             tenantId:
