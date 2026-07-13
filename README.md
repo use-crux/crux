@@ -85,7 +85,7 @@ The `use` array is the bus. Memory, retrieval, guardrails, skills, blackboards, 
 import { prompt } from '@use-crux/core'
 import { memory, facts, recentMessages } from '@use-crux/core/memory'
 import { retriever } from '@use-crux/core/retrieval'
-import { constraint, guardrail } from '@use-crux/core/safety'
+import { boundary, constraint, guardrail } from '@use-crux/core/safety'
 import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
 import { z } from 'zod'
@@ -100,23 +100,24 @@ const chat = memory({
 const docs = retriever({
   id: 'docs',
   namespace: 'product-docs',
-  data,
+  records,
   vectors,
   dense,
   context: { query: ({ question }) => question },
 })
 
 const injection = guardrail({
-  name: 'injection',
-  phase: 'input',
-  validate: detectPromptInjection,
+  id: 'injection',
+  on: boundary.input.text(),
+  run: guardrail.injection({ action: 'block' }),
 })
 
 const grounded = constraint({
-  name: 'grounded',
+  id: 'grounded',
+  on: boundary.output.object<{ answer: string; citations: { title: string; url: string }[] }>(),
   severity: 'assert',
-  check: async (output) =>
-    output.parsed.citations.length > 0 ? { pass: true } : { pass: false, feedback: 'Cite at least one source.' },
+  run: async (output) =>
+    output.citations.length > 0 ? { pass: true } : { pass: false, feedback: 'Cite at least one source.' },
 })
 
 const reply = prompt({
@@ -207,13 +208,7 @@ define -> resolve -> adapt -> observe
 | Adapt   | An adapter maps that resolved prompt to Vercel AI SDK, OpenAI, Anthropic, Google GenAI, Convex Agent, or another runner.                                        |
 | Observe | Hooks emit structured events for generations, context resolution, memory reads/writes, retrieval, tools, evals, judge scores, artifacts, errors, and cost.      |
 
-This separation is the point. You can inspect what the model will see, run the same prompt through multiple providers, and keep quality checks tied to the definitions they protect.
-
-Under the hood, Crux has three layers:
-
-- **Catalog:** adopt typed prompts, contexts, memory, retrieval, guardrails, routing, quality, or devtools one block at a time.
-- **Bus:** every contribution enters the model call through the same `use[]` composition model, instead of becoming another hidden side channel.
-- **Proof:** because the pieces share one composition model, Crux can show what happened and test the setup around the answer.
+This separation is the point. You can inspect what the model will see, run the same prompt through multiple providers, and keep quality checks tied to the definitions they protect. See the [mental model](https://cruxjs.dev/docs/foundations/mental-model) for how the pieces compose.
 
 ## What Crux Is Not
 
@@ -250,11 +245,7 @@ Planned work includes definition-centric health pages, PR/CI review mode, sugges
 
 ## TypeScript compatibility
 
-Crux public TypeScript packages are verified against TypeScript `>=5.5 <7`. The repository keeps explicit compatibility checks for the lower bound (`typescript@5.5.4`), the current stable major (`typescript@6.0.3`), and the checked-in compiler version.
-
-TypeScript 7 is tracked through `@typescript/native-preview` / `tsgo` as a preview lane. That lane validates the public package type surfaces where the native preview can run today, but it is not a stable support promise until the TypeScript 7 compiler and programmatic APIs settle.
-
-`@use-crux/indexer` is different from the other packages: it uses the TypeScript compiler as a runtime dependency for source intelligence and includes the compiler version in cache identity. Its stable compatibility is tested with the JavaScript `typescript` package; TypeScript 7 native-preview support is intentionally treated as a separate indexer-runtime project.
+Crux packages are verified against TypeScript `>=5.5 <7`, with TypeScript 7 (`tsgo`) tracked as a preview lane. See [TypeScript compatibility](https://cruxjs.dev/docs/reference/crux-core#typescript-compatibility) for the full support matrix.
 
 ## Learn more
 
