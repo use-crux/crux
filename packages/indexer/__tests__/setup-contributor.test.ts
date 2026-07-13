@@ -1,12 +1,91 @@
 import { describe, expect, it } from 'vitest'
+import { createSetupPlanner } from '@use-crux/core/setup'
 import {
   node,
   inMemoryRuntimeStore,
+  serverless,
   type RuntimeSetupPort,
 } from '@use-crux/core/runtime'
 import { createRuntimeSetupContributor } from '../src/indexer/setup/runtime-contributor'
 
 describe('Runtime setup contributor', () => {
+  it('warns about a fallback serverless namespace without failing setup', async () => {
+    const runtime = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      env: {},
+      wake: {
+        id: 'test',
+        capabilities: { signed: false },
+        createWake: () => async () => undefined,
+      },
+    })
+    const contributor = createRuntimeSetupContributor(runtime)
+    const report = await createSetupPlanner([contributor]).check({
+      root: '/project',
+      mode: 'check',
+    })
+
+    expect(report.ok).toBe(true)
+    expect(report.findings).toContainEqual(
+      expect.objectContaining({
+        contributorId: 'runtime',
+        code: 'NAMESPACE_AMBIGUOUS',
+        severity: 'warning',
+      }),
+    )
+  })
+
+  it('does not warn when namespace provenance is configured, inferred, or absent', async () => {
+    const wake = { enqueue: async () => undefined }
+    const runtimes = [
+      serverless({
+        store: inMemoryRuntimeStore(),
+        publicUrl: 'https://app.example.com',
+        namespace: 'tenant-a',
+        wake: {
+          id: 'explicit',
+          capabilities: { signed: false },
+          createWake: () => wake.enqueue,
+        },
+      }),
+      serverless({
+        store: inMemoryRuntimeStore(),
+        publicUrl: 'https://app.example.com',
+        env: { CRUX_RUNTIME_NAMESPACE: 'tenant-a' },
+        wake: {
+          id: 'env',
+          capabilities: { signed: false },
+          createWake: () => wake.enqueue,
+        },
+      }),
+      serverless({
+        store: inMemoryRuntimeStore(),
+        publicUrl: 'https://app.example.com',
+        env: { NODE_ENV: 'production', VERCEL_ENV: 'production' },
+        wake: {
+          id: 'inferred',
+          capabilities: { signed: false },
+          createWake: () => wake.enqueue,
+        },
+      }),
+      node({ store: inMemoryRuntimeStore(), autoStartMaintenance: false }),
+    ]
+
+    const findings = await Promise.all(
+      runtimes.map((runtime) =>
+        createRuntimeSetupContributor(runtime).inspect({
+          root: '/project',
+          mode: 'check',
+        }),
+      ),
+    )
+
+    expect(findings.flat()).not.toContainEqual(
+      expect.objectContaining({ code: 'NAMESPACE_AMBIGUOUS' }),
+    )
+  })
+
   it('maps findings and safely applies unhealthy setup', async () => {
     let healthy = false
     const setup: RuntimeSetupPort = {
