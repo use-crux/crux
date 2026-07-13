@@ -1,5 +1,5 @@
 ---
-"@use-crux/core": major
+"@use-crux/core": minor
 "@use-crux/otel": minor
 "@use-crux/convex": minor
 "@use-crux/local": minor
