@@ -78,7 +78,12 @@ for (const staged of index.packages) {
     continue
   }
 
-  const [result] = JSON.parse(pack.stdout)
+  const packOutput = JSON.parse(pack.stdout)
+  const result = Array.isArray(packOutput) ? packOutput[0] : packOutput[staged.name]
+  if (!result) {
+    failures.push(`${staged.name}: npm pack --dry-run returned an unexpected JSON result`)
+    continue
+  }
   const paths = result.files.map((file) => file.path)
   const localPlatform = localPlatformPackages.get(staged.name)
   if (localPlatform) {
