@@ -9,8 +9,8 @@
     "definitions": 66,
     "relations": 2,
     "diagnostics": 17,
-    "dependencies": 1247,
-    "canonicalBytes": 176986
+    "dependencies": 1248,
+    "canonicalBytes": 177030
   },
   "files": [
     {
@@ -3201,12 +3201,12 @@
     },
     {
       "file": "packages/core/src/safety/session.ts",
-      "sha256": "343dfae306aac9482dfd7acc84ed055683f6d88685c56b2036ba81373f81ec8f",
-      "bytes": 468,
+      "sha256": "01164c2a6e621f8fe6306e296a510321f5585824fa106929f29ee05272ccde4d",
+      "bytes": 512,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 8
+      "dependencies": 9
     },
     {
       "file": "packages/core/src/safety/toolPolicy/types.ts",
