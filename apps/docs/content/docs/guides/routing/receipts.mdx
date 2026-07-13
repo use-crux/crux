@@ -37,4 +37,4 @@ Receipts are exposed on:
 - `CascadeExhaustedError.routing`
 - stream completion errors after mid-stream failure
 
-The same receipt is what devtools renders: each routed resolution attaches it as a `routing.report` observability artifact. See the [Observability reference](/docs/reference/crux-core/observability) for the artifact shape and how devtools presents TTFT, attempt errors, and cascade notes from it.
+The same receipt is what devtools renders: each routed resolution attaches it as a `routing.report` observability artifact. The `routing.report` artifact carries that `kind` tag; the receipt itself has no `kind` property, so read its fields directly. See the [Observability reference](/docs/reference/crux-core/observability) for the artifact shape and how devtools presents TTFT, attempt errors, and cascade notes from it.
