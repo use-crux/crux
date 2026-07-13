@@ -83,6 +83,8 @@ export const primitiveSpanNames = {
   'flow.run': 'crux.flow.run',
   'flow.step': 'crux.flow.step',
   'flow.suspension': 'crux.flow.suspension',
+  'defer.scheduled': 'crux.defer.scheduled',
+  'defer.run': 'crux.defer.run',
   'composition.parallel': 'crux.composition.parallel',
   'composition.pipeline': 'crux.composition.pipeline',
   'composition.consensus': 'crux.composition.consensus',
