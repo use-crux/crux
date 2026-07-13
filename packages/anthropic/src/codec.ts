@@ -38,7 +38,6 @@ export function toParams(
   const callArgs = callArgsFromResolvedPrompt(resolved, {
       model: options.model,
       settings,
-      unsupportedContent: generationSettings.unsupportedContent,
       extra: options.extra,
       messages: options.messages,
       tools: options.tools ? [...options.tools] : undefined,
@@ -46,9 +45,7 @@ export function toParams(
     })
   const request = anthropicRequest({
     ...callArgs,
-    providerMessages: anthropicTranscript.fromMessages(callArgs.messages, {
-      unsupportedContent: callArgs.unsupportedContent,
-    }),
+    providerMessages: anthropicTranscript.fromMessages(callArgs.messages),
   })
   return asAnthropicNonStreamingParams(request)
 }

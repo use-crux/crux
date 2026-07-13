@@ -46,7 +46,7 @@ describe('AI SDK call handle', () => {
     })
 
     expect(result.text).toBe('hello')
-    expect(result.steps).toBe(1)
+    expect(result.steps).toHaveLength(1)
     expect(result.finalStep).toMatchObject({
       text: 'hello',
       finishReason: 'stop',

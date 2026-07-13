@@ -17,6 +17,8 @@ import {
   composeAbortSignals,
   createBudgetSignal,
 } from "../../generation/timeout";
+import { normalizeInvocationMessages } from "../../content/invocation-message";
+import { assertProviderMediaSupported } from "../native-chat/media-hooks";
 import { withDefaultResolverPorts } from "../../resolver/ports";
 import type {
   ExecutorRequest,
@@ -32,6 +34,7 @@ import {
   inspectForDevtools,
   withSkillActivationInput,
 } from "./shared";
+import { emitInputTokenEstimate } from './media-token-budget'
 
 /**
  * Start one SDK-owned stream for a concrete model attempt.
@@ -78,7 +81,10 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
   });
   const tools = lifecycle.tools;
   let { messages, promptText } = initialMessageState(resolved, args.messages);
-  messages = (await lifecycle.resume(messages)).messages;
+  let nativeMessages = args.nativeMessages;
+  const resumed = await lifecycle.resume(messages);
+  messages = resumed.messages;
+  if (resumed.replayed > 0) nativeMessages = undefined;
   const safety = createSafety({
     call: {
       constraints: args.constraints,
@@ -99,6 +105,7 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     messages,
     prompt: promptText,
   });
+  if (guardedInput.messages !== messages) nativeMessages = undefined;
   messages = [...guardedInput.messages];
   promptText = guardedInput.prompt;
 
@@ -106,15 +113,25 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
     budget: "step",
     limitMs: args.timeout?.stepMs,
   });
+  const providerMessages =
+    messages.length > 0
+      ? await normalizeInvocationMessages(messages, {
+          provider: modelInfo.provider,
+        })
+      : undefined;
+  assertProviderMediaSupported(
+    { providerId: dialect.id, media: dialect.media },
+    { provider: modelInfo.provider, model: modelInfo.modelId, messages: providerMessages ?? [] },
+  );
   const request: ExecutorRequest<TModel> & { schema?: z.ZodType } = {
     model: args.model,
     modelInfo,
     system: resolved.system,
     systemBlocks: resolved.systemBlocks,
     prompt: promptText,
-    messages,
+    messages: providerMessages,
+    nativeMessages,
     settings: mappedSettings,
-    unsupportedContent: resolved.settings.unsupportedContent,
     tools,
     toolApproval: (call) =>
       lifecycle.requiresApproval(
@@ -172,7 +189,16 @@ export async function streamSdk<TModel, TRawResponse, TRawStream>(
             }
           : {}),
       },
-      async () => dialect.runStream(request),
+      async () => {
+        emitInputTokenEstimate({
+          messages: providerMessages ?? [],
+          provider: modelInfo.provider,
+          model: modelInfo.modelId,
+          media: dialect.media,
+          tokenBudget: args.tokenBudget,
+        })
+        return dialect.runStream(request)
+      },
     );
   } catch (error) {
     stepBudget.dispose();

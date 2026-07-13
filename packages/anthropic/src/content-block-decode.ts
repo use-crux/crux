@@ -35,8 +35,8 @@ export function decodeAnthropicToolResultContent(
       }
     } else if (block.type === 'document' && block.source.type === 'base64') {
       parts.push({
-        type: 'file-data',
-        data: block.source.data,
+        type: 'file',
+        source: dataAsset(block.source.data, block.source.media_type),
         mediaType: block.source.media_type,
         ...(typeof block.title === 'string' ? { filename: block.title } : {}),
       })
@@ -50,8 +50,8 @@ export function decodeAnthropicToolResultContent(
 
 /** Decode one Anthropic image block source into canonical content. */
 export function anthropicImageBlockToPart(source: Anthropic.ImageBlockParam['source']): ContentPart | undefined {
-  if (source.type === 'base64') return { type: 'image-data', data: source.data, mediaType: source.media_type }
-  if (source.type === 'url') return { type: 'image-url', url: source.url }
+  if (source.type === 'base64') return { type: 'image', source: dataAsset(source.data, source.media_type), mediaType: source.media_type }
+  if (source.type === 'url') return { type: 'image', source: source.url }
   return undefined
 }
 
@@ -60,21 +60,25 @@ export function anthropicDocumentBlockToPart(block: Anthropic.DocumentBlockParam
   const source = block.source
   if (source.type === 'base64') {
     return {
-      type: 'file-data',
-      data: source.data,
+      type: 'file',
+      source: dataAsset(source.data, source.media_type),
       mediaType: source.media_type,
       ...(typeof block.title === 'string' ? { filename: block.title } : {}),
     }
   }
   if (source.type === 'url') {
     return {
-      type: 'file-url',
-      url: source.url,
+      type: 'file',
+      source: source.url,
       mediaType: 'application/pdf',
       ...(typeof block.title === 'string' ? { filename: block.title } : {}),
     }
   }
   return undefined
+}
+
+function dataAsset(data: string, mediaType: string): Extract<ContentPart, { type: 'image' | 'file' }>['source'] {
+  return { type: 'data', data: new Uint8Array(Buffer.from(data, 'base64')), mediaType }
 }
 
 /** Collapse text-only parts to string while preserving rich arrays. */

@@ -33,6 +33,7 @@ pub(crate) struct PrimitiveContext<'a> {
 pub(crate) struct CallParts<'a> {
     pub match_kind: &'static str,
     pub variable_name: &'a str,
+    pub owner_variable_name: Option<&'a str>,
     pub local_name: &'a str,
     pub exported: bool,
     pub eager_execution: bool,
@@ -237,6 +238,7 @@ pub(crate) fn call_parts(source_match: &StaticSourceMatch) -> Option<CallParts<'
     match source_match {
         StaticSourceMatch::Call {
             variable_name,
+            owner_variable_name,
             local_name,
             exported,
             eager_execution,
@@ -250,6 +252,7 @@ pub(crate) fn call_parts(source_match: &StaticSourceMatch) -> Option<CallParts<'
         } => Some(CallParts {
             match_kind: "call",
             variable_name,
+            owner_variable_name: owner_variable_name.as_deref(),
             local_name,
             exported: *exported,
             eager_execution: *eager_execution,
@@ -265,6 +268,7 @@ pub(crate) fn call_parts(source_match: &StaticSourceMatch) -> Option<CallParts<'
         }),
         StaticSourceMatch::New {
             variable_name,
+            owner_variable_name,
             local_name,
             exported,
             callee,
@@ -277,6 +281,7 @@ pub(crate) fn call_parts(source_match: &StaticSourceMatch) -> Option<CallParts<'
         } => Some(CallParts {
             match_kind: "new",
             variable_name,
+            owner_variable_name: owner_variable_name.as_deref(),
             local_name,
             exported: *exported,
             eager_execution: false,

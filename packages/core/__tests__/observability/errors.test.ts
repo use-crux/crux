@@ -14,6 +14,7 @@ describe('observability error normalization', () => {
       metadata: {
         apiKey: 'secret-key',
         safe: 'visible',
+        generated: { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
       },
     })
 
@@ -38,6 +39,12 @@ describe('observability error normalization', () => {
     const metadata = normalized.raw.metadata as Record<string, unknown>
     expect(metadata.apiKey).toBe('[redacted]')
     expect(metadata.safe).toBe('visible')
+    expect(metadata.generated).toMatchObject({
+      kind: 'image',
+      mediaType: 'image/png',
+      sizeBytes: 3,
+      sourceCategory: 'bytes',
+    })
   })
 
     it('normalizes thrown values and keeps circular raw data JSON-safe', () => {

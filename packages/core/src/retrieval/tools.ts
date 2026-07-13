@@ -10,7 +10,8 @@
 import { z } from 'zod'
 import type { ToolDef } from '../types/tool'
 import type { ExactFilter } from '../storage'
-import type { RetrievalToolConfig, RetrievalToolName, Retriever, RetrieverHit } from './types'
+import type { RetrievalToolConfig, RetrievalToolName, Retriever, RetrieverHit, RetrieverSource } from './types'
+import { normalizeRetrieverSource } from './source'
 
 /** Discriminator for typed retrieval tool results. */
 export const RETRIEVAL_HITS_KIND = 'crux.retrieval.hits' as const
@@ -18,11 +19,10 @@ export const RETRIEVAL_HITS_KIND = 'crux.retrieval.hits' as const
 /** Lean retrieval hit exposed through typed tool results. */
 export interface RetrievalToolHit {
   namespace: string
-  sourceId: string
+  readonly source: RetrieverSource
   chunkId: string
   content: string
   score: number
-  sourceUrl?: string
 }
 
 /** Structured payload returned by retrieval search tools. */
@@ -139,7 +139,7 @@ async function getDiscoveredSource(
   const hit = (await session.allowedHits()).find(
     (candidate) =>
       candidate.namespace === lookup.namespace &&
-      candidate.sourceId === lookup.sourceId &&
+      candidate.source.id === lookup.sourceId &&
       candidate.chunkId === lookup.chunkId,
   )
   if (!hit) {
@@ -232,17 +232,16 @@ function toToolPrefix(value: string): string {
 function toToolHit(hit: RetrieverHit): RetrievalToolHit {
   return {
     namespace: hit.namespace,
-    sourceId: hit.sourceId,
+    source: normalizeRetrieverSource(hit.source),
     chunkId: hit.chunkId,
     content: hit.content,
     score: hit.score,
-    ...(hit.sourceUrl ? { sourceUrl: hit.sourceUrl } : {}),
   }
 }
 
 function renderRetrievalToolPayload(payload: RetrievalToolPayload): string {
   return payload.hits
-    .map((hit) => `[${hit.sourceId}/${hit.chunkId}] (${formatScore(hit.score)}) ${hit.content}`)
+    .map((hit) => `[${hit.source.id}/${hit.chunkId}] (${formatScore(hit.score)}) ${hit.content}`)
     .join('\n')
 }
 

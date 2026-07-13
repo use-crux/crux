@@ -19,6 +19,8 @@ import type {
   SdkStreamFinishEvent,
   SdkStreamResultLike,
 } from "./types";
+import { decodeAssistantContentFromAiSdkParts } from "../assistant-content";
+import { fromResponseMessages } from "../messages";
 
 interface StreamPlanDeps {
   readonly clock: () => number;
@@ -147,6 +149,9 @@ export async function createStreamCallPlan(
         durationMs > 0 && outputTokens
           ? Math.round((outputTokens / durationMs) * 1000)
           : undefined;
+      const content = event.content
+        ? decodeAssistantContentFromAiSdkParts(event.content)
+        : undefined;
 
       resolveCompletion({
         usage,
@@ -163,6 +168,16 @@ export async function createStreamCallPlan(
         actualModelId: event.response?.modelId,
         cost: extractCost(event.providerMetadata),
         text: event.text,
+        ...(content !== undefined && (content.length > 0 || !event.text)
+          ? { content }
+          : {}),
+        ...(event.response?.messages !== undefined
+          ? { messages: fromResponseMessages(event.response.messages) }
+          : {}),
+        ...(event.warnings !== undefined ? { warnings: event.warnings } : {}),
+        ...(event.providerMetadata !== undefined
+          ? { providerMetadata: event.providerMetadata }
+          : {}),
         streaming: {
           ttftMs:
             firstChunkTime != null

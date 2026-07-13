@@ -47,6 +47,7 @@ pub(crate) fn match_from_declarator(
     match init {
         Expression::ObjectExpression(object) => Some(StaticSourceMatch::Object {
             variable_name: variable_name.clone(),
+            owner_variable_name: None,
             local_name: fallback_local_name(context.root, context.file, &variable_name),
             exported,
             object: object_value(context.view, object, context.imports),
@@ -79,6 +80,7 @@ pub(crate) fn call_match(
     StaticSourceMatch::Call {
         local_name: fallback_local_name(context.root, context.file, &variable_name),
         variable_name,
+        owner_variable_name: None,
         exported,
         eager_execution: context.scope_id == context.root_scope_id,
         callee,
@@ -110,6 +112,7 @@ pub(crate) fn new_match(
     Some(StaticSourceMatch::New {
         local_name: fallback_local_name(context.root, context.file, &variable_name),
         variable_name,
+        owner_variable_name: None,
         exported,
         callee,
         args: call_args(context.view, &new_expression.arguments, context.imports),

@@ -13,6 +13,7 @@ import type { z } from "zod";
 import type { GenerationSettings } from "../../generation/types";
 import type { Message } from "../../generation/messages";
 import type { LoopRuntimePort } from "../loop-runtime-port";
+import type { ProviderMediaHooks } from '../native-chat/media-hooks'
 import type {
   AdapterResponse,
   CallArgs,
@@ -64,6 +65,9 @@ export interface CoreStepDialect<
 
   /** Provider identifier used for adaptation, tracing, and defaults. */
   readonly id: string;
+
+  /** Compiler-private provider media hooks. */
+  readonly media?: ProviderMediaHooks;
 
   /** Client bound by the public adapter factory. */
   readonly client: TClient;

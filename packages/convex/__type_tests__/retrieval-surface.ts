@@ -46,7 +46,7 @@ const custom = retriever({
   retrieve: async () => [
     {
       namespace: 'tenant-a',
-      sourceId: 'guide',
+      source: { id: 'guide' },
       chunkId: 'a',
       content: 'Guide',
       metadata: {},

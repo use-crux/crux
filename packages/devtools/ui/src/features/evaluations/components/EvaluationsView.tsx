@@ -25,7 +25,7 @@ import {
   type VerdictState,
 } from '@/qw/shell/qualityKit'
 import { EvalProgressStrip } from './EvalProgressStrip'
-import { JudgeReportPanel } from '@/features/scorers/components/JudgeReportPanel'
+import { JudgeReportPanel } from '@/shared/quality/JudgeReportPanel'
 import { navTarget } from '@/app/navigation/navTarget'
 import {
   useQualityEvaluations,

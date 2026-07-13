@@ -149,6 +149,8 @@ pub struct StaticCalleeRecord {
 pub enum StaticSourceMatch {
     Call {
         variable_name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        owner_variable_name: Option<String>,
         local_name: String,
         exported: bool,
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -165,6 +167,8 @@ pub enum StaticSourceMatch {
     },
     New {
         variable_name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        owner_variable_name: Option<String>,
         local_name: String,
         exported: bool,
         callee: StaticCalleeRecord,
@@ -179,6 +183,8 @@ pub enum StaticSourceMatch {
     },
     Object {
         variable_name: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        owner_variable_name: Option<String>,
         local_name: String,
         exported: bool,
         object: StaticSyntaxValue,

@@ -75,6 +75,7 @@ export function createTypeScriptSemanticBackend(
                 instrumentation: analyzeInput.instrumentation,
                 programSession,
                 programIdentity: cacheIdentity,
+                sourceProfile: analyzeInput.sourceProfile,
               }),
           })
         },

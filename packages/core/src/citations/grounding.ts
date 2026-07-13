@@ -125,7 +125,7 @@ export function grounding(config: GroundingConfig): Grounding {
             ...(query ? { query } : {}),
             allowedHits: (await session.allowedHits()).map((hit) => ({
               namespace: hit.namespace,
-              sourceId: hit.sourceId,
+              sourceId: hit.source.id,
               chunkId: hit.chunkId,
               score: hit.score,
             })),
@@ -174,9 +174,9 @@ export function renderCitationContext(
 
   for (const hit of hits) {
     lines.push('')
-    lines.push(`Source: ${hit.namespace}/${hit.sourceId}/${hit.chunkId}`)
-    if (hit.sourceUrl) lines.push(`URL: ${hit.sourceUrl}`)
-    if (hit.sourcePath) lines.push(`Path: ${hit.sourcePath}`)
+    lines.push(`Source: ${hit.namespace}/${hit.source.id}/${hit.chunkId}`)
+    if (hit.source.url) lines.push(`URL: ${hit.source.url}`)
+    if (hit.source.path) lines.push(`Path: ${hit.source.path}`)
     lines.push(`Score: ${hit.score}`)
     lines.push(hit.content.slice(0, maxContentChars))
   }
@@ -222,11 +222,10 @@ function createGroundingToolMiddleware(
 function toolHitToRetrieverHit(hit: RetrievalToolHit): RetrieverHit {
   return {
     namespace: hit.namespace,
-    sourceId: hit.sourceId,
+    source: hit.source,
     chunkId: hit.chunkId,
     content: hit.content,
     metadata: {},
     score: hit.score,
-    ...(hit.sourceUrl ? { sourceUrl: hit.sourceUrl } : {}),
   }
 }

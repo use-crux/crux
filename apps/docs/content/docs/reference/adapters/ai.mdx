@@ -3,6 +3,12 @@ title: "@use-crux/ai"
 description: Vercel AI SDK adapter — generate, stream, dense embedding helpers, and the SdkGateway test seam.
 ---
 
+AI SDK `ModelMessage` and `useChat` media remain model-owned. The adapter
+preserves image/audio/video/file input and ordered mixed assistant output, and
+exports native SDK `generateImage()`, `transcribe()`, and `generateSpeech()`
+operations. Convex re-exports those functions by exact identity. Provider
+options stay in typed `extra`, and no operation persists media implicitly.
+
 ```ts
 import {
   generate,
@@ -40,7 +46,23 @@ For Anthropic AI SDK models, Crux converts resolved `systemBlocks` into AI SDK s
 
 ### Multimodal content
 
-`@use-crux/ai` accepts canonical `ContentPart[]` message content and encodes it to AI SDK text, image, and file parts. AI SDK-shaped message arrays from `convertToModelMessages()` normalize back to canonical parts when no fields would be dropped; legacy v6 `media` parts decode as `file-data`. SDK control parts such as tool calls and approval responses move into `Message.metadata`, while genuinely unknown part shapes pass through with a diagnostics warning.
+`@use-crux/ai` accepts canonical `ContentPart[]` message content and encodes it to AI SDK text, image, and file parts. It also accepts native AI SDK `ModelMessage[]` from `convertToModelMessages()` and passes native file/image parts plus provider options through to the AI SDK loop without a Crux media conversion step. SDK control parts such as tool calls and approval responses move into `Message.metadata` only for the canonical result history.
+
+```ts
+import { convertToModelMessages } from "ai";
+import { createUIMessageStreamResponse, stream } from "@use-crux/ai";
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+  const result = await stream(chatPrompt, {
+    model,
+    input: { tenantId: "acme" },
+    messages: await convertToModelMessages(messages),
+  });
+
+  return createUIMessageStreamResponse(result);
+}
+```
 
 **Cross-adapter parity:** switching a prompt between `@use-crux/ai` and a native adapter (`@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) changes nothing observable except model behavior itself — same default tool-loop budget (`maxSteps: 10`), same corrective-retry messages, same approval suspend/resume protocol, same canonical `tool.call` / `tool.args` / raw and model-facing `tool.result` telemetry, same routing and audit metadata. This is enforced by a cross-dialect parity suite in `@use-crux/core`. Note this differs from the raw AI SDK's own `generateText` default (`stopWhen: stepCountIs(1)`): Crux adapters loop tools by default; pass `maxSteps: 1` for single-step behavior.
 
@@ -91,7 +113,7 @@ Execute a prompt using the Vercel AI SDK.
 | `options.extra.headers`         | `Record<string, string \| undefined>?`                       | AI SDK HTTP headers for HTTP-based providers.                                                                                                                                                                                                        |
 | `options.extra.maxRetries`      | `number?`                                                    | AI SDK retry policy.                                                                                                                                                                                                                                 |
 | `options.activeTools`           | `string[]?`                                                  | Restrict available tools                                                                                                                                                                                                                             |
-| `options.messages`              | `ModelMessage[]?`                                            | Explicit AI SDK message history. Used for approval resume and advanced chat-loop control.                                                                                                                                                            |
+| `options.messages`              | `Message[] \| ModelMessage[]?`                               | Explicit message history. Pass `ModelMessage[]` from `convertToModelMessages()` to preserve native AI SDK attachments and provider options.                                                                                                          |
 | `options.tokenBudget`           | `number?`                                                    | Token budget for context dropping                                                                                                                                                                                                                    |
 | `options.timeout`               | `{ totalMs?, stepMs?, chunkMs?, toolMs?, tools? }?`          | Structured timeout budgets. Crux rejects with `TimeoutError`; `tools[name]` overrides `toolMs` for one tool.                                                                                                                                         |
 | `options.validationRetry`       | [`ValidationRetryOptions?`](/docs/guides/safety/constraints) | Retry structured output on validation failure                                                                                                                                                                                                        |

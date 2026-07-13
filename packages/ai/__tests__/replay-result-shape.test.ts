@@ -11,43 +11,50 @@
  * recording runs (raw present) passed.
  */
 
-import { afterEach, describe, expect, it } from 'vitest'
-import { z } from 'zod'
-import { prompt as makePrompt } from '@use-crux/core'
-import { clearGenerationInterceptor, setGenerationInterceptor } from '@use-crux/core/adapter'
-import type { LanguageModel } from 'ai'
-import { createCruxAi } from '../src'
-import { scriptedGateway } from './scripted-gateway'
+import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
+import { prompt as makePrompt } from "@use-crux/core";
+import {
+  clearGenerationInterceptor,
+  setGenerationInterceptor,
+} from "@use-crux/core/adapter";
+import type { LanguageModel } from "ai";
+import { createCruxAi } from "../src";
+import { scriptedGateway } from "./scripted-gateway";
 
-function model(id = 'gpt-4o', provider = 'openai'): LanguageModel {
-  return { provider, modelId: id, specificationVersion: 'v3' } as unknown as LanguageModel
+function model(id = "gpt-4o", provider = "openai"): LanguageModel {
+  return {
+    provider,
+    modelId: id,
+    specificationVersion: "v3",
+  } as unknown as LanguageModel;
 }
 
 const objectPrompt = makePrompt({
-  id: 'replay-object',
-  system: 'Return JSON.',
+  id: "replay-object",
+  system: "Return JSON.",
   prompt: ({ input }) => (input as { message: string }).message,
   input: z.object({ message: z.string() }),
   output: z.object({ title: z.string(), count: z.number() }),
-})
+});
 
 const textPrompt = makePrompt({
-  id: 'replay-text',
-  system: 'You are terse.',
+  id: "replay-text",
+  system: "You are terse.",
   prompt: ({ input }) => (input as { message: string }).message,
   input: z.object({ message: z.string() }),
-})
+});
 
 afterEach(() => {
-  clearGenerationInterceptor()
-})
+  clearGenerationInterceptor();
+});
 
-describe('generate — replayed (raw: undefined) result shape', () => {
-  it('carries the parsed object when a structured attempt is replayed', async () => {
+describe("generate — replayed (raw: undefined) result shape", () => {
+  it("carries the parsed object when a structured attempt is replayed", async () => {
     // Fabricated cassette replay: the spec call never runs; the outcome is
     // the revived recording (raw is never recorded, so it is undefined).
     setGenerationInterceptor(async () => ({
-      status: 'ok',
+      status: "ok",
       raw: undefined,
       response: {
         text: '{"title":"Replayed","count":2}',
@@ -58,31 +65,36 @@ describe('generate — replayed (raw: undefined) result shape', () => {
           inputTokenDetails: {},
           outputTokenDetails: {},
         },
-        finishReason: 'stop',
+        finishReason: "stop",
       },
-      object: { title: 'Replayed', count: 2 },
-    }))
+      object: { title: "Replayed", count: 2 },
+    }));
 
-    const scripted = scriptedGateway({})
-    const ai = createCruxAi({ gateway: scripted.gateway })
+    const scripted = scriptedGateway({});
+    const ai = createCruxAi({ gateway: scripted.gateway });
 
     const result = (await ai.generate(objectPrompt, {
       model: model(),
-      input: { message: 'go' },
-    })) as unknown as { text: string; object?: unknown; messages?: unknown[]; _meta?: Record<string, unknown> }
+      input: { message: "go" },
+    })) as unknown as {
+      text: string;
+      object?: unknown;
+      messages?: unknown[];
+      _meta?: Record<string, unknown>;
+    };
 
-    expect(result.object).toEqual({ title: 'Replayed', count: 2 })
-    expect(result.text).toBe('{"title":"Replayed","count":2}')
-    expect(result._meta).toBeDefined()
-    expect(scripted.calls.generateObject).toHaveLength(0)
-  })
+    expect(result.object).toEqual({ title: "Replayed", count: 2 });
+    expect(result.text).toBe('{"title":"Replayed","count":2}');
+    expect(result._meta).toBeDefined();
+    expect(scripted.calls.generateObject).toHaveLength(0);
+  });
 
-  it('carries text and messages when a loop outcome is replayed', async () => {
+  it("carries text and messages when a loop outcome is replayed", async () => {
     setGenerationInterceptor(async () => ({
-      status: 'complete',
+      status: "complete",
       raw: undefined,
       response: {
-        text: 'replayed answer',
+        text: "replayed answer",
         usage: {
           inputTokens: 10,
           outputTokens: 5,
@@ -90,26 +102,29 @@ describe('generate — replayed (raw: undefined) result shape', () => {
           inputTokenDetails: {},
           outputTokenDetails: {},
         },
-        finishReason: 'stop',
+        finishReason: "stop",
       },
       messages: [
-        { role: 'user', content: 'go' },
-        { role: 'assistant', content: 'replayed answer' },
+        { role: "user", content: "go" },
+        { role: "assistant", content: "replayed answer" },
       ],
       steps: 1,
       meta: {},
-    }))
+    }));
 
-    const scripted = scriptedGateway({})
-    const ai = createCruxAi({ gateway: scripted.gateway })
+    const scripted = scriptedGateway({});
+    const ai = createCruxAi({ gateway: scripted.gateway });
 
     const result = (await ai.generate(textPrompt, {
       model: model(),
-      input: { message: 'go' },
-    })) as { text: string; messages?: { role: string }[] }
+      input: { message: "go" },
+    })) as { text: string; messages?: readonly { role: string }[] };
 
-    expect(result.text).toBe('replayed answer')
-    expect(result.messages?.map((message) => message.role)).toEqual(['user', 'assistant'])
-    expect(scripted.calls.generateText).toHaveLength(0)
-  })
-})
+    expect(result.text).toBe("replayed answer");
+    expect(result.messages?.map((message) => message.role)).toEqual([
+      "user",
+      "assistant",
+    ]);
+    expect(scripted.calls.generateText).toHaveLength(0);
+  });
+});

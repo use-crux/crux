@@ -4,16 +4,22 @@
  * @module
  */
 
-import type { ModelInfo } from '../../types'
-import type { GenerationSettings } from '../../generation/types'
-import type { BoundLoopRuntime } from '../loop-runtime-port'
-import type { ProviderRuntimeExtender } from './extension-types'
-import type { LoopOwnedProviderRuntime } from './runtime-types'
+import type { ModelInfo } from "../../types";
+import type { GenerationSettings } from "../../generation/types";
+import type { BoundLoopRuntime } from "../loop-runtime-port";
+import type { ProviderRuntimeExtender } from "./extension-types";
+import type { LoopOwnedProviderRuntime } from "./runtime-types";
+import type { ProviderMediaHooks } from "../native-chat/media-hooks";
+import type {
+  DefinedCompletedOperations,
+  ProviderCompletedOperationFactories,
+  ProviderCompletedOperationFactory,
+} from "./completed-operations";
 
 /** Context passed when binding a loop-owned runtime to a concrete client. */
 export interface LoopOwnedRuntimeBindContext {
   /** Stable provider runtime id. */
-  readonly id: string
+  readonly id: string;
 }
 
 /**
@@ -25,13 +31,26 @@ export interface LoopOwnedRuntimeBindContext {
  * ({@link BoundLoopRuntime}); core assembles them with `describeModel` and
  * `settings` into the full {@link LoopRuntimePort}.
  */
-export interface LoopOwnedRuntimeContract<TClient, TModel, TRawResponse = unknown, TRawStream = unknown> {
+export interface LoopOwnedRuntimeContract<
+  TClient,
+  TModel,
+  TRawResponse = unknown,
+  TRawStream = unknown,
+> {
   /** Extract provider/model identity from an SDK model reference. */
-  describeModel?: (model: TModel) => ModelInfo
+  describeModel?: (model: TModel) => ModelInfo;
   /** Map canonical generation settings to SDK-native option names. */
-  settings?: (settings: GenerationSettings, model: ModelInfo) => Record<string, unknown>
+  settings?: (
+    settings: GenerationSettings,
+    model: ModelInfo,
+  ) => Record<string, unknown>;
+  /** Provider-authored media validation consumed privately before SDK I/O. */
+  media?: ProviderMediaHooks;
   /** Bind a concrete SDK client to the SDK-owned generation loop. */
-  bind(client: TClient, ctx: LoopOwnedRuntimeBindContext): BoundLoopRuntime<TModel, TRawResponse, TRawStream>
+  bind(
+    client: TClient,
+    ctx: LoopOwnedRuntimeBindContext,
+  ): BoundLoopRuntime<TModel, TRawResponse, TRawStream>;
 }
 
 /** Provider runtime spec for the loop-owned branch. */
@@ -40,10 +59,22 @@ export interface LoopOwnedProviderRuntimeSpec<
   TModel,
   TRawResponse = unknown,
   TRawStream = unknown,
-  TExtensions extends object = Record<string, never>,
+  TExtensions extends object = Record<never, never>,
+  TImage extends ProviderCompletedOperationFactory<TClient> | undefined =
+    undefined,
+  TTranscription extends
+    | ProviderCompletedOperationFactory<TClient>
+    | undefined = undefined,
+  TSpeech extends ProviderCompletedOperationFactory<TClient> | undefined =
+    undefined,
+> extends ProviderCompletedOperationFactories<
+  TClient,
+  TImage,
+  TTranscription,
+  TSpeech
 > {
   /** Stable id used in metadata, observability, and provider matching. */
-  readonly id: string
+  readonly id: string;
   /**
    * Declares that an upstream SDK owns the model/tool loop while Crux owns
    * policy around the loop boundary.
@@ -51,15 +82,21 @@ export interface LoopOwnedProviderRuntimeSpec<
    * Existing specs may omit this during migration; core infers `'loop-owned'`
    * from the `loop` contract.
    */
-  readonly ownership?: 'loop-owned'
+  readonly ownership?: "loop-owned";
   /** Loop-owned SDK mechanics. */
-  readonly loop: LoopOwnedRuntimeContract<TClient, TModel, TRawResponse, TRawStream>
+  readonly loop: LoopOwnedRuntimeContract<
+    TClient,
+    TModel,
+    TRawResponse,
+    TRawStream
+  >;
   /** Provider-specific capabilities to expose next to generation. */
   readonly extend?: ProviderRuntimeExtender<
     TClient,
-    LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream>,
+    LoopOwnedProviderRuntime<TClient, TModel, TRawResponse, TRawStream> &
+      DefinedCompletedOperations<TImage, TTranscription, TSpeech>,
     TExtensions
-  >
+  >;
   /** Disallow mixing provider runtime dialects. */
-  readonly turn?: never
+  readonly turn?: never;
 }

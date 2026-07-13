@@ -50,7 +50,7 @@ async function runConstraint<B extends BoundaryDef>(c: Constraint<B>, subject: S
 function hit(overrides: Partial<RetrieverHit> = {}): RetrieverHit {
   return {
     namespace: 'docs',
-    sourceId: 'guide.md',
+    source: { id: 'guide.md' },
     chunkId: 'chunk-1',
     content: 'Hybrid search combines dense and sparse retrieval for better recall.',
     metadata: {},

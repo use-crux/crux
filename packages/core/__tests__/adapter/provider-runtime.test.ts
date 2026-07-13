@@ -170,6 +170,8 @@ describe('provider runtime', () => {
 
     expect(provider.id).toBe('runtime-loop-owned')
     expect(provider.ownership).toBe('loop-owned')
+    expect(runtime).not.toHaveProperty('media')
+    expect(runtime).not.toHaveProperty('capabilities')
     expect(runtime.executorId).toBe('runtime-loop-owned')
     expect(result.text).toBe('loop-owned text')
     expect(fake.calls.runTextLoop[0]?.modelInfo).toEqual({ provider: 'fake', modelId: 'runtime-model' })

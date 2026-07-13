@@ -27,13 +27,20 @@ interface PendingAiSdkCall {
 }
 
 export interface ManualAiSdkGatewayController {
-  generateText(args: Parameters<SdkGateway["generateText"]>[0]): ReturnType<SdkGateway["generateText"]>;
-  generateObject(args: Parameters<SdkGateway["generateObject"]>[0]): ReturnType<SdkGateway["generateObject"]>;
+  generateText(
+    args: Parameters<SdkGateway["generateText"]>[0],
+  ): ReturnType<SdkGateway["generateText"]>;
+  generateObject(
+    args: Parameters<SdkGateway["generateObject"]>[0],
+  ): ReturnType<SdkGateway["generateObject"]>;
   first(): Promise<PendingAiSdkCall>;
   advance(
     pending: PendingAiSdkCall,
     raw: SdkLoopResultLike,
-  ): Promise<{ readonly done: true; readonly result: GenerateResult<SdkLoopResultLike | undefined> }>;
+  ): Promise<{
+    readonly done: true;
+    readonly result: GenerateResult<SdkLoopResultLike | undefined>;
+  }>;
   fail(error: unknown): void;
   complete(result: GenerateResult<SdkLoopResultLike | undefined>): void;
 }
@@ -45,9 +52,16 @@ export function createManualAiSdkGatewayController(): ManualAiSdkGatewayControll
   let completed: GenerateResult<SdkLoopResultLike | undefined> | undefined;
   let failed: unknown;
   const waiters: Array<(pending: PendingAiSdkCall) => void> = [];
-  const doneWaiters: Array<(outcome: { result?: GenerateResult<SdkLoopResultLike | undefined>; error?: unknown }) => void> = [];
+  const doneWaiters: Array<
+    (outcome: {
+      result?: GenerateResult<SdkLoopResultLike | undefined>;
+      error?: unknown;
+    }) => void
+  > = [];
 
-  const call = (params: Record<string, unknown>): Promise<SdkLoopResultLike> => {
+  const call = (
+    params: Record<string, unknown>,
+  ): Promise<SdkLoopResultLike> => {
     if (failed !== undefined) return Promise.reject(failed);
     version += 1;
     return new Promise((resolve, reject) => {
@@ -58,7 +72,10 @@ export function createManualAiSdkGatewayController(): ManualAiSdkGatewayControll
 
   const waitNextOrDone = async (): Promise<
     | { readonly kind: "pending"; readonly pending: PendingAiSdkCall }
-    | { readonly kind: "done"; readonly result: GenerateResult<SdkLoopResultLike | undefined> }
+    | {
+        readonly kind: "done";
+        readonly result: GenerateResult<SdkLoopResultLike | undefined>;
+      }
   > => {
     if (failed !== undefined) throw failed;
     if (completed !== undefined) return { kind: "done", result: completed };
@@ -68,32 +85,42 @@ export function createManualAiSdkGatewayController(): ManualAiSdkGatewayControll
       waiters.push((next) => resolve({ kind: "pending", pending: next }));
       doneWaiters.push((outcome) => {
         if (outcome.error !== undefined) reject(outcome.error);
-        else if (outcome.result !== undefined) resolve({ kind: "done", result: outcome.result });
+        else if (outcome.result !== undefined)
+          resolve({ kind: "done", result: outcome.result });
       });
     });
   };
 
   return {
     generateText(args) {
-      return call(args as Record<string, unknown>) as ReturnType<SdkGateway["generateText"]>;
+      return call(args as Record<string, unknown>) as ReturnType<
+        SdkGateway["generateText"]
+      >;
     },
     generateObject(args) {
-      return call(args as Record<string, unknown>) as ReturnType<SdkGateway["generateObject"]>;
+      return call(args as Record<string, unknown>) as ReturnType<
+        SdkGateway["generateObject"]
+      >;
     },
     async first() {
       const next = await waitNextOrDone();
       if (next.kind === "done") {
-        throw new Error("AI SDK call handle completed before producing SDK params.");
+        throw new Error(
+          "AI SDK call handle completed before producing SDK params.",
+        );
       }
       return next.pending;
     },
     async advance(current, raw) {
-      if (pending?.version !== current.version) throw new CruxStaleHandleError();
+      if (pending?.version !== current.version)
+        throw new CruxStaleHandleError();
       pending = undefined;
       current.resolve(raw);
       const next = await waitNextOrDone();
       if (next.kind === "done") return { done: true, result: next.result };
-      throw new CruxIncompleteCallError("AI SDK call handle produced another SDK call; use generate() for SDK-owned loops.");
+      throw new CruxIncompleteCallError(
+        "AI SDK call handle produced another SDK call; use generate() for SDK-owned loops.",
+      );
     },
     fail(error) {
       failed = error;
@@ -111,7 +138,11 @@ export function createManualAiSdkGatewayController(): ManualAiSdkGatewayControll
 export function aiSdkHandleFor(
   pending: Awaited<ReturnType<ManualAiSdkGatewayController["first"]>>,
   controller: ManualAiSdkGatewayController,
-): CallHandle<Record<string, unknown>, SdkLoopResultLike, GenerateResult<SdkLoopResultLike | undefined>> {
+): CallHandle<
+  Record<string, unknown>,
+  SdkLoopResultLike,
+  GenerateResult<SdkLoopResultLike | undefined>
+> {
   return Object.freeze({
     params: pending.params,
     async step(response: SdkLoopResultLike) {
@@ -127,7 +158,9 @@ export function aiSdkHandleFor(
 export function transportGateway(transport: AITransport): SdkGateway {
   let stepIndex = 0;
   const invoke = async (
-    params: Parameters<SdkGateway["generateText"]>[0] | Parameters<SdkGateway["generateObject"]>[0],
+    params:
+      | Parameters<SdkGateway["generateText"]>[0]
+      | Parameters<SdkGateway["generateObject"]>[0],
   ) => {
     const signal = readAbortSignal(params) ?? new AbortController().signal;
     return transport(params, {
@@ -138,8 +171,25 @@ export function transportGateway(transport: AITransport): SdkGateway {
   };
 
   return {
-    generateText: (args) => invoke(args) as ReturnType<SdkGateway["generateText"]>,
-    generateObject: (args) => invoke(args) as ReturnType<SdkGateway["generateObject"]>,
+    generateImage: () => {
+      throw new TypeError(
+        "AI SDK language transports do not support generateImage().",
+      );
+    },
+    generateSpeech: () => {
+      throw new TypeError(
+        "AI SDK language transports do not support generateSpeech().",
+      );
+    },
+    transcribe: () => {
+      throw new TypeError(
+        "AI SDK language transports do not support transcribe().",
+      );
+    },
+    generateText: (args) =>
+      invoke(args) as ReturnType<SdkGateway["generateText"]>,
+    generateObject: (args) =>
+      invoke(args) as ReturnType<SdkGateway["generateObject"]>,
     streamText: () => {
       throw new TypeError("AI SDK transport does not support streamText().");
     },

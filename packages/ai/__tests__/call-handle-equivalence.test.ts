@@ -133,7 +133,7 @@ function expectComparable(result: {
   readonly text: string
   readonly object?: unknown
   readonly usage?: unknown
-  readonly steps: number
+  readonly steps: readonly unknown[]
   readonly finalStep: unknown
   readonly messages: readonly { readonly role: string }[]
   readonly pendingApprovals?: readonly unknown[]

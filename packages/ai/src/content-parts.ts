@@ -1,52 +1,57 @@
-import type { DiagnosticsPort, MessageContent, ProviderOptions } from '@use-crux/core'
-import type { Message } from '@use-crux/core'
-import { degradeContentPart, degradeContentToText } from '@use-crux/core/adapter'
-import type { ContentPart } from '@use-crux/core'
+import {
+  createUnsupportedCapabilityError,
+  type AssistantContentPart,
+  type ContentPart,
+  type DiagnosticsPort,
+  type Message,
+  type MessageContent,
+  type MediaSource,
+  type ProviderOptions,
+} from '@use-crux/core'
 import { isRecord, readString } from './object-utils'
 
 /** Options that affect AI SDK content-part conversion. */
 export interface AiSdkContentPartOptions {
-  /** Provider-facing name used in diagnostics and strict-mode errors. */
+  /** Provider-facing name used in diagnostics. */
   readonly provider?: string
-  /** Strict mode rejects unsupported parts before the SDK call. */
-  readonly unsupportedContent?: 'degrade' | 'error'
-  /** Optional diagnostics sink for unsupported part degradation. */
+  /** Optional diagnostics sink for unknown native parts. */
   readonly diagnostics?: DiagnosticsPort
 }
 
 /**
  * Convert canonical Crux message content into AI SDK `ModelMessage` content.
  *
- * The AI SDK accepts text/image/file parts but has role-specific limits. This
- * helper is the single adapter-owned place where canonical media becomes SDK
- * parts or deliberate placeholder text.
+ * Media must already be usable at this boundary. Core-managed calls normalize
+ * public URL/Blob/byte sources before invoking the AI SDK loop, while public
+ * codecs accept native AI SDK message parts without adding Crux persistence.
  */
 export function encodeContentForAiSdk(
   role: Message['role'],
-  content: MessageContent,
+  content: MessageContent | readonly AssistantContentPart[],
   options: AiSdkContentPartOptions = {},
 ): string | Array<Record<string, unknown>> {
   if (typeof content === 'string') return content
-
-  if (role === 'system') {
-    return degradeContentToText(content, {
-      provider: options.provider ?? 'ai-sdk',
-      role,
-      reason: 'AI SDK system messages are text-only',
-      unsupportedContent: options.unsupportedContent,
-      diagnostics: options.diagnostics,
+  if (role === 'system' && content.some((part) => part.type !== 'text')) {
+    throw createUnsupportedCapabilityError({
+      adapter: options.provider ?? 'ai-sdk',
+      model: '<custom>',
+      issues: [
+        {
+          capability: 'input.media.system',
+          remediation: 'Move media to a user message before calling the AI SDK.',
+        },
+      ],
     })
   }
-
-  return content.map((part) => encodePartForAiSdk(role, part as ContentPart | Record<string, unknown>, options))
+  return content.map((part) => encodePartForAiSdk(part, options))
 }
 
 /**
  * Decode AI SDK assistant text/image/file parts into canonical Crux content.
  *
- * Text-only arrays collapse back to a string to preserve the pre-multimodal
- * transcript shape. Media-bearing arrays stay structured so assistant-returned
- * files and images survive in `result.messages`.
+ * Text-only arrays collapse back to a string to preserve text transcript shape.
+ * Media-bearing arrays stay structured so assistant-returned files and images
+ * survive in `result.messages`.
  */
 export function decodeContentFromAiSdkParts(parts: readonly Record<string, unknown>[]): MessageContent {
   const content: Array<ContentPart | Record<string, unknown>> = []
@@ -61,31 +66,20 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
       content.push({ type: 'text', text: readString(part, 'text') ?? '', ...providerOptionsFrom(part) })
       continue
     }
-    if (type === 'media') {
-      const data = readString(part, 'data')
-      const mediaType = readString(part, 'mediaType')
-      if (data && mediaType) {
-        content.push({ type: 'file-data', data, mediaType, ...providerOptionsFrom(part) })
-      } else {
-        warnMalformedPart(part, 'AI SDK media parts require data and mediaType.')
-      }
-      continue
-    }
     if (type === 'tool-call' || type === 'tool-approval-request' || type === 'tool-approval-response') {
       continue
     }
     if (type === 'image') {
       const image = part.image
       const mediaType = readString(part, 'mediaType')
-      if (image instanceof URL) {
+      const source = nativeMediaSource(image, mediaType)
+      if (source !== undefined) {
         content.push({
-          type: 'image-url',
-          url: image.toString(),
+          type: 'image',
+          source,
           ...(mediaType ? { mediaType } : {}),
           ...providerOptionsFrom(part),
         })
-      } else if (typeof image === 'string' && mediaType) {
-        content.push({ type: 'image-data', data: image, mediaType, ...providerOptionsFrom(part) })
       } else {
         warnMalformedPart(part, 'AI SDK image parts require image and mediaType.')
       }
@@ -95,22 +89,9 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
       const data = part.data
       const mediaType = readString(part, 'mediaType')
       const filename = readString(part, 'filename')
-      if (data instanceof URL) {
-        content.push({
-          type: 'file-url',
-          url: data.toString(),
-          ...(mediaType ? { mediaType } : {}),
-          ...(filename ? { filename } : {}),
-          ...providerOptionsFrom(part),
-        })
-      } else if (typeof data === 'string' && mediaType) {
-        content.push({
-          type: 'file-data',
-          data,
-          mediaType,
-          ...(filename ? { filename } : {}),
-          ...providerOptionsFrom(part),
-        })
+      const source = nativeMediaSource(data, mediaType)
+      if (source !== undefined) {
+        content.push(decodedFilePart(source, mediaType, filename, part))
       } else {
         warnMalformedPart(part, 'AI SDK file parts require data and mediaType.')
       }
@@ -127,81 +108,88 @@ export function decodeContentFromAiSdkParts(parts: readonly Record<string, unkno
 }
 
 function encodePartForAiSdk(
-  role: Message['role'],
-  part: ContentPart | Record<string, unknown>,
+  part: AssistantContentPart | Record<string, unknown>,
   options: AiSdkContentPartOptions,
 ): Record<string, unknown> {
-  const providerOptions = isRecord(part.providerOptions) ? (part.providerOptions as ProviderOptions) : undefined
-  switch (readString(part, 'type')) {
+  const record = part as Record<string, unknown>
+  const providerOptions = isRecord(record.providerOptions) ? (record.providerOptions as ProviderOptions) : undefined
+  switch (readString(record, 'type')) {
     case 'text':
-      return { type: 'text', text: readString(part, 'text') ?? '', ...(providerOptions ? { providerOptions } : {}) }
-    case 'image-data': {
-      const contentPart = part as Extract<ContentPart, { type: 'image-data' }>
+      return { type: 'text', text: readString(record, 'text') ?? '', ...(providerOptions ? { providerOptions } : {}) }
+    case 'image': {
+      const contentPart = part as Extract<ContentPart, { type: 'image' }>
+      const image = sourceForAiSdk(contentPart.source, 'image', options)
       return {
         type: 'image',
-        image: contentPart.data,
-        mediaType: contentPart.mediaType,
-        ...(providerOptions ? { providerOptions } : {}),
-      }
-    }
-    case 'image-url': {
-      const contentPart = part as Extract<ContentPart, { type: 'image-url' }>
-      return {
-        type: 'image',
-        image: new URL(contentPart.url),
+        image,
         ...(contentPart.mediaType ? { mediaType: contentPart.mediaType } : {}),
         ...(providerOptions ? { providerOptions } : {}),
       }
     }
-    case 'file-data': {
-      const contentPart = part as Extract<ContentPart, { type: 'file-data' }>
+    // AI SDK ModelMessage content has no dedicated audio/video part; both lower
+    // through the native `file` part, keyed only by mediaType.
+    case 'audio':
+    case 'video':
+    case 'file': {
+      const contentPart = part as Extract<ContentPart, { type: 'audio' | 'video' | 'file' }>
+      const data = sourceForAiSdk(contentPart.source, contentPart.type, options)
       return {
         type: 'file',
-        data: contentPart.data,
-        mediaType: contentPart.mediaType,
-        ...(contentPart.filename ? { filename: contentPart.filename } : {}),
+        data,
+        ...(contentPart.mediaType ? { mediaType: contentPart.mediaType } : {}),
+        ...('filename' in contentPart && contentPart.filename ? { filename: contentPart.filename } : {}),
         ...(providerOptions ? { providerOptions } : {}),
       }
     }
-    case 'file-url': {
-      const contentPart = part as Extract<ContentPart, { type: 'file-url' }>
-      if (contentPart.mediaType) {
-        return {
-          type: 'file',
-          data: new URL(contentPart.url),
-          mediaType: contentPart.mediaType,
-          ...(contentPart.filename ? { filename: contentPart.filename } : {}),
-          ...(providerOptions ? { providerOptions } : {}),
-        }
+    case 'tool-call': {
+      const toolCallPart = part as Extract<AssistantContentPart, { type: 'tool-call' }>
+      return {
+        type: 'tool-call',
+        toolCallId: toolCallPart.toolCallId,
+        toolName: toolCallPart.toolName,
+        input: toolCallPart.input,
+        ...(providerOptions ? { providerOptions } : {}),
       }
-      return degradedTextPart(role, contentPart, 'AI SDK file URL parts require mediaType', options)
     }
-    case 'image-file-id':
-    case 'file-id':
-    case 'custom': {
-      const contentPart = part as ContentPart
-      return degradedTextPart(role, contentPart, `AI SDK does not support canonical ${contentPart.type} parts`, options)
+    case 'reasoning': {
+      const reasoningPart = part as Extract<AssistantContentPart, { type: 'reasoning' }>
+      return {
+        type: 'reasoning',
+        text: reasoningPart.text,
+        ...(providerOptions ? { providerOptions } : {}),
+      }
     }
     default:
-      warnUnknownPart(part, options.diagnostics)
-      return part
+      warnUnknownPart(record, options.diagnostics)
+      return record
   }
 }
 
-function degradedTextPart(
-  role: Message['role'],
-  part: ContentPart,
-  reason: string,
+function sourceForAiSdk(
+  source: Extract<ContentPart, { type: 'image' | 'audio' | 'video' | 'file' }>['source'],
+  kind: 'image' | 'audio' | 'video' | 'file',
   options: AiSdkContentPartOptions,
-): Record<string, unknown> {
-  const degraded = degradeContentPart(part, {
-    provider: options.provider ?? 'ai-sdk',
-    role,
-    reason,
-    unsupportedContent: options.unsupportedContent,
-    diagnostics: options.diagnostics,
-  })
-  return { type: 'text', text: degraded.text }
+): unknown {
+  if (typeof source === 'string' || source instanceof URL || source instanceof Uint8Array || source instanceof Blob) return source
+  if (source instanceof ArrayBuffer) return new Uint8Array(source)
+  switch (source.type) {
+    case 'data':
+      return source.data
+    case 'url':
+      return source.url
+    case 'provider-file':
+      throw createUnsupportedCapabilityError({
+        adapter: options.provider ?? 'ai-sdk',
+        model: '<custom>',
+        issues: [
+          {
+            capability: `input.${kind}.provider-file`,
+            mediaType: source.mediaType,
+            remediation: 'Use an AI SDK-native file part or hydrate the file into data/URL first.',
+          },
+        ],
+      })
+  }
 }
 
 function providerOptionsFrom(part: Record<string, unknown>): { readonly providerOptions?: ProviderOptions } {
@@ -216,61 +204,77 @@ function canonicalPartFrom(part: Record<string, unknown>): ContentPart | undefin
       const text = readString(part, 'text')
       return text === undefined ? undefined : { type, text, ...providerOptionsFrom(part) }
     }
-    case 'image-data': {
-      const data = readString(part, 'data')
-      const mediaType = readString(part, 'mediaType')
-      return data && mediaType ? { type, data, mediaType, ...providerOptionsFrom(part) } : undefined
-    }
-    case 'image-url': {
-      const url = readString(part, 'url')
-      const mediaType = readString(part, 'mediaType')
-      return url ? { type, url, ...(mediaType ? { mediaType } : {}), ...providerOptionsFrom(part) } : undefined
-    }
-    case 'image-file-id': {
-      const fileId = fileIdFrom(part.fileId)
-      return fileId ? { type, fileId, ...providerOptionsFrom(part) } : undefined
-    }
-    case 'file-data': {
-      const data = readString(part, 'data')
-      const mediaType = readString(part, 'mediaType')
-      const filename = readString(part, 'filename')
-      return data && mediaType
-        ? { type, data, mediaType, ...(filename ? { filename } : {}), ...providerOptionsFrom(part) }
-        : undefined
-    }
-    case 'file-url': {
-      const url = readString(part, 'url')
-      const mediaType = readString(part, 'mediaType')
-      const filename = readString(part, 'filename')
-      return url
+    case 'image':
+    case 'audio':
+    case 'video': {
+      const source = part.source
+      return isMediaSource(source)
         ? {
             type,
-            url,
-            ...(mediaType ? { mediaType } : {}),
-            ...(filename ? { filename } : {}),
+            source,
+            ...(readString(part, 'mediaType') ? { mediaType: readString(part, 'mediaType') } : {}),
             ...providerOptionsFrom(part),
           }
         : undefined
     }
-    case 'file-id': {
-      const fileId = fileIdFrom(part.fileId)
-      return fileId ? { type, fileId, ...providerOptionsFrom(part) } : undefined
+    case 'file': {
+      const source = part.source
+      const mediaType = readString(part, 'mediaType')
+      const filename = readString(part, 'filename')
+      return isMediaSource(source) ? decodedFilePart(source, mediaType, filename, part) : undefined
     }
-    case 'custom':
-      return { type, ...providerOptionsFrom(part) }
     default:
       return undefined
   }
 }
 
-function fileIdFrom(value: unknown): string | Record<string, string> | undefined {
-  if (typeof value === 'string') return value
-  if (!isRecord(value)) return undefined
-  const entries = Object.entries(value)
-  if (entries.every((entry): entry is [string, string] => typeof entry[1] === 'string')) {
-    return Object.fromEntries(entries)
+function isMediaSource(value: unknown): value is Extract<ContentPart, { type: 'image' | 'file' }>['source'] {
+  if (typeof value === 'string' || value instanceof URL || value instanceof Uint8Array || value instanceof ArrayBuffer) return true
+  if (typeof Blob !== 'undefined' && value instanceof Blob) return true
+  if (!isRecord(value) || typeof value.type !== 'string') return false
+  if (value.type === 'data') {
+    return (value.data instanceof Uint8Array || (typeof Blob !== 'undefined' && value.data instanceof Blob))
+      && typeof value.mediaType === 'string'
   }
-  return undefined
+  if (value.type === 'url') return value.url instanceof URL
+  if (value.type === 'provider-file') return typeof value.provider === 'string' && typeof value.fileId === 'string'
+  return false
+}
+
+function dataAsset(data: string, mediaType: string): Extract<ContentPart, { type: 'image' | 'file' }>['source'] {
+  return {
+    type: 'data',
+    data: new Uint8Array(Buffer.from(data, 'base64')),
+    mediaType,
+  }
+}
+
+function nativeMediaSource(value: unknown, mediaType: string | undefined): MediaSource | undefined {
+  if (value instanceof URL || value instanceof Uint8Array) return value
+  if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  if (typeof Blob !== 'undefined' && value instanceof Blob) return value
+  return typeof value === 'string' && mediaType ? dataAsset(value, mediaType) : undefined
+}
+
+function decodedFilePart(
+  source: MediaSource,
+  mediaType: string | undefined,
+  filename: string | undefined,
+  native: Record<string, unknown>,
+): ContentPart {
+  const shared = {
+    source,
+    ...(mediaType ? { mediaType } : {}),
+    ...providerOptionsFrom(native),
+  }
+  if (mediaType?.startsWith('image/')) return { type: 'image', ...shared }
+  if (mediaType?.startsWith('audio/')) return { type: 'audio', ...shared }
+  if (mediaType?.startsWith('video/')) return { type: 'video', ...shared }
+  return {
+    type: 'file',
+    ...shared,
+    ...(filename ? { filename } : {}),
+  }
 }
 
 function warnUnknownPart(part: Record<string, unknown>, diagnostics?: DiagnosticsPort): void {

@@ -4,7 +4,7 @@
 //! primitive, in dispatch precedence order. Projection logic, the entry type,
 //! and the digest live in the parent `manifest` module; this file is the table.
 
-use super::{FirstPartyPrimitive, LocalReferenceForm, Projector, first_party};
+use super::{FirstPartyPrimitive, LocalReferenceForm, Projector, first_party, media_party};
 use crate::{
     agent::facts::agent_facts,
     blackboard::facts::blackboard_facts,
@@ -14,6 +14,7 @@ use crate::{
     eval::facts::eval_facts,
     flow::facts::flow_facts,
     injection::injectable::injectable_facts,
+    media::{facts::media_operation_facts, ingest::ingest_source_facts},
     memory::facts::memory_facts,
     prompt::facts::prompt_facts,
     rag::facts::rag_facts,
@@ -46,6 +47,54 @@ const LOCAL_REFERENCE_FORMS: &[LocalReferenceForm] = &[
 /// a source match wins. Names are otherwise disjoint, but the order is the
 /// historical projection order and is preserved deliberately.
 pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
+    media_party(
+        "media.operation",
+        &[
+            "generate",
+            "stream",
+            "generateImage",
+            "transcribe",
+            "generateSpeech",
+            "describe",
+        ],
+        &["media.operation"],
+        &["media.operation:"],
+        &[
+            "adapter",
+            "model",
+            "execution",
+            "n",
+            "size",
+            "aspectRatio",
+            "seed",
+            "timestamps",
+            "diarization",
+            "task",
+            "voice",
+        ],
+        Projector::CallParts(media_operation_facts),
+    ),
+    media_party(
+        "ingest.source",
+        &[
+            "fileSource",
+            "filesSource",
+            "urlSource",
+            "urlsSource",
+            "textSource",
+        ],
+        &["ingest.source"],
+        &["ingest.source:"],
+        &[
+            "mediaKinds",
+            "namespace",
+            "attribution",
+            "derivation",
+            "index",
+            "corpus",
+        ],
+        Projector::CallParts(ingest_source_facts),
+    ),
     first_party(
         "workspace",
         &["workspace"],
@@ -141,11 +190,11 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
             "scope",
             "inMemoryRecordStore",
             "inMemoryVectorStore",
-            "inMemoryBlobStore",
+            "inMemoryAssetStore",
             "inMemoryStorage",
             "convexRecordStore",
             "convexVectorStore",
-            "convexWorkspaceBlobStore",
+            "convexAssetStore",
             "convexStorage",
             "upstashRedisRecordStore",
             "upstashVectorStore",
@@ -154,14 +203,14 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
         &[
             "storage.recordStore",
             "storage.vectorStore",
-            "storage.blobStore",
+            "storage.assetStore",
             "storage.bundle",
             "storage.scope",
         ],
         &[
             "storage.recordStore:",
             "storage.vectorStore:",
-            "storage.blobStore:",
+            "storage.assetStore:",
             "storage.bundle:",
             "storage.scope:",
         ],

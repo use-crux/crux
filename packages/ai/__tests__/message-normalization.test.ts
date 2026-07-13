@@ -2,6 +2,43 @@ import { describe, expect, it, vi } from 'vitest'
 import { normalizeAiSdkMessages } from '../src/messages'
 
 describe('AI SDK message normalization', () => {
+  it('normalizes every documented native media data shape without dropping semantic media kinds', () => {
+    const bytes = new Uint8Array([1, 2, 3])
+    const buffer = bytes.buffer.slice(0)
+    const blob = new Blob([bytes], { type: 'video/mp4' })
+
+    const [message] = normalizeAiSdkMessages([
+      {
+        role: 'assistant',
+        content: [
+          { type: 'image', image: 'AQID', mediaType: 'image/png' },
+          { type: 'image', image: new URL('https://example.com/chart.png'), mediaType: 'image/png' },
+          { type: 'image', image: bytes, mediaType: 'image/png' },
+          { type: 'image', image: buffer, mediaType: 'image/png' },
+          { type: 'file', data: 'AQID', mediaType: 'audio/mpeg' },
+          { type: 'file', data: new URL('https://example.com/generated.png'), mediaType: 'image/png' },
+          { type: 'file', data: new URL('https://example.com/clip.mp4'), mediaType: 'video/mp4' },
+          { type: 'file', data: bytes, mediaType: 'application/pdf', filename: 'report.pdf' },
+          { type: 'file', data: buffer, mediaType: 'audio/wav' },
+          { type: 'file', data: blob, mediaType: 'video/mp4' },
+        ],
+      },
+    ])
+
+    expect(message?.content).toEqual([
+      expect.objectContaining({ type: 'image', source: expect.objectContaining({ type: 'data' }) }),
+      expect.objectContaining({ type: 'image', source: new URL('https://example.com/chart.png') }),
+      expect.objectContaining({ type: 'image', source: bytes }),
+      expect.objectContaining({ type: 'image', source: expect.any(Uint8Array) }),
+      expect.objectContaining({ type: 'audio', source: expect.objectContaining({ type: 'data' }) }),
+      expect.objectContaining({ type: 'image', source: new URL('https://example.com/generated.png') }),
+      expect.objectContaining({ type: 'video', source: new URL('https://example.com/clip.mp4') }),
+      expect.objectContaining({ type: 'file', source: bytes, filename: 'report.pdf' }),
+      expect.objectContaining({ type: 'audio', source: expect.any(Uint8Array) }),
+      expect.objectContaining({ type: 'video', source: blob }),
+    ])
+  })
+
   it('normalizes SDK text, image, and file parts into canonical content parts', () => {
     const messages = normalizeAiSdkMessages([
       {
@@ -30,14 +67,14 @@ describe('AI SDK message normalization', () => {
         content: [
           { type: 'text', text: 'Compare these.' },
           {
-            type: 'image-data',
-            data: 'AQID',
+            type: 'image',
+            source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
             mediaType: 'image/png',
             providerOptions: { openai: { detail: 'low' } },
           },
           {
-            type: 'file-url',
-            url: 'https://example.com/report.pdf',
+            type: 'file',
+            source: new URL('https://example.com/report.pdf'),
             mediaType: 'application/pdf',
             filename: 'report.pdf',
           },
@@ -81,22 +118,6 @@ describe('AI SDK message normalization', () => {
     ])
   })
 
-  it('normalizes legacy AI SDK v6 media parts to file-data', () => {
-    expect(
-      normalizeAiSdkMessages([
-        {
-          role: 'user',
-          content: [{ type: 'media', data: 'SGVsbG8=', mediaType: 'audio/mpeg' }],
-        },
-      ]),
-    ).toEqual([
-      {
-        role: 'user',
-        content: [{ type: 'file-data', data: 'SGVsbG8=', mediaType: 'audio/mpeg' }],
-      },
-    ])
-  })
-
   it('passes through unrecognized SDK parts with a diagnostics warning', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
@@ -119,7 +140,28 @@ describe('AI SDK message normalization', () => {
     }
   })
 
-  it('warns before dropping malformed known SDK media parts', () => {
+  it('does not keep the removed AI SDK media compatibility decoder', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      const removedPartType = 'me' + 'dia'
+      const removedPart = { type: removedPartType, data: 'SGVsbG8=', mediaType: 'audio/mpeg' }
+      expect(
+        normalizeAiSdkMessages([
+          { role: 'user', content: [{ type: 'text', text: 'Keep this.' }, removedPart] },
+        ]),
+      ).toEqual([
+        { role: 'user', content: [{ type: 'text', text: 'Keep this.' }, removedPart] },
+      ])
+      expect(warn).toHaveBeenCalledWith(
+        '[@use-crux/ai] Passing through unrecognized AI SDK content part.',
+        { partType: removedPartType },
+      )
+    } finally {
+      warn.mockRestore()
+    }
+  })
+
+  it('warns before dropping malformed known SDK image and file parts', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     try {
       expect(
@@ -128,18 +170,13 @@ describe('AI SDK message normalization', () => {
             role: 'user',
             content: [
               { type: 'text', text: 'Keep this.' },
-              { type: 'media', data: 'SGVsbG8=' },
               { type: 'image', image: 'AQID' },
               { type: 'file', data: 'JVBERi0x' },
             ],
           },
         ]),
       ).toEqual([{ role: 'user', content: 'Keep this.' }])
-      expect(warn).toHaveBeenCalledTimes(3)
-      expect(warn).toHaveBeenCalledWith(
-        '[@use-crux/ai] Dropping malformed AI SDK content part.',
-        { partType: 'media', reason: 'AI SDK media parts require data and mediaType.' },
-      )
+      expect(warn).toHaveBeenCalledTimes(2)
       expect(warn).toHaveBeenCalledWith(
         '[@use-crux/ai] Dropping malformed AI SDK content part.',
         { partType: 'image', reason: 'AI SDK image parts require image and mediaType.' },

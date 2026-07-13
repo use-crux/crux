@@ -110,7 +110,7 @@ and skip honestly (`score: null`) when nothing was retrieved:
 export default evaluate('docs.rag', {
   task: async (input: { question: string }) => {
     const hits = await docsRetriever.retrieve(input.question)
-    return { answer: await answerFrom(hits), sources: hits.map((h) => h.sourceId) }
+    return { answer: await answerFrom(hits), sources: hits.map((h) => h.source.id) }
   },
   data: [{ input: { question: 'How do refunds work?' } }],
   scorers: (s) => [s.rag.faithfulness(), s.rag.answerRelevancy()],

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Agent as ConvexAgentBase } from '@convex-dev/agent'
+import type { CruxArtifactRecord } from '@use-crux/core/observability/contract'
 import {
   createInMemoryObservabilityTransport,
   observe,
@@ -236,5 +237,124 @@ describe('agent stream basics', () => {
         }),
       }),
     )
+  })
+
+  it('redacts Agent-native media URLs from call argument artifacts', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    vi.spyOn(ConvexAgentBase.prototype, 'generateText').mockResolvedValue({
+      text: 'ok',
+    } as never)
+    const agent = new Agent({} as never, {
+      name: 'Karyla',
+      languageModel: {} as never,
+      tools: {},
+    })
+
+    await observe.run(
+      { name: 'chat', rootPrimitive: 'agent.run' },
+      async () => {
+        await agent.generateText(
+          {} as never,
+          { threadId: 'thread-1', userId: 'user-1' },
+          {
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'inspect this' },
+                  {
+                    type: 'image',
+                    image: new URL('https://files.example/storage_existing_1?token=secret'),
+                    mediaType: 'image/png',
+                  },
+                ],
+              },
+            ],
+          } as never,
+        )
+      },
+    )
+    await observe.flush()
+
+    const artifact = transport.records.find(
+      (record): record is CruxArtifactRecord =>
+        record.type === 'artifact' &&
+        record.kind === 'messages' &&
+        typeof record.preview === 'object' &&
+        record.preview !== null &&
+        'phase' in record.preview &&
+        record.preview.phase === 'call-args',
+    )
+    const preview = JSON.stringify(artifact?.preview)
+    expect(preview).toContain('"kind":"image"')
+    expect(preview).toContain('"mediaType":"image/png"')
+    expect(preview).toContain('"sourceCategory":"url"')
+    expect(preview).not.toContain('https://files.example')
+    expect(preview).not.toContain('storage_existing_1')
+    expect(preview).not.toContain('token=secret')
+  })
+
+  it('projects Agent data-URL media as canonical data descriptors in call-arg artifacts', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    vi.spyOn(ConvexAgentBase.prototype, 'generateText').mockResolvedValue({
+      text: 'ok',
+    } as never)
+    const agent = new Agent({} as never, {
+      name: 'Karyla',
+      languageModel: {} as never,
+      tools: {},
+    })
+    const payload = 'data:image/png;base64,SECRET_INLINE_BYTES'
+
+    await observe.run(
+      { name: 'chat', rootPrimitive: 'agent.run' },
+      async () => {
+        await agent.generateText(
+          {} as never,
+          { threadId: 'thread-1', userId: 'user-1' },
+          {
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  { type: 'text', text: 'inspect this' },
+                  {
+                    type: 'image',
+                    image: payload,
+                    mediaType: 'image/png',
+                  },
+                ],
+              },
+            ],
+          } as never,
+        )
+      },
+    )
+    await observe.flush()
+
+    const artifact = transport.records.find(
+      (record): record is CruxArtifactRecord =>
+        record.type === 'artifact' &&
+        record.kind === 'messages' &&
+        typeof record.preview === 'object' &&
+        record.preview !== null &&
+        'phase' in record.preview &&
+        record.preview.phase === 'call-args',
+    )
+    const preview = JSON.stringify(artifact?.preview)
+    expect(preview).toContain('"kind":"image"')
+    expect(preview).toContain('"mediaType":"image/png"')
+    expect(preview).toContain('"sourceCategory":"data"')
+    expect(preview).not.toContain('"sourceCategory":"url"')
+    expect(preview).not.toContain('data-url')
+    expect(preview).not.toContain('SECRET_INLINE_BYTES')
+    expect(preview).not.toContain('base64')
+    expect(preview).not.toContain(payload)
+    // Media descriptor has no raw source field; top-level artifact source is metadata.
+    expect(preview).not.toMatch(/"kind":"image"[^}]*"source"\s*:/)
+    const messages = (artifact?.preview as { messages?: unknown })?.messages
+    expect(JSON.stringify(messages)).not.toMatch(/"source"\s*:/)
   })
 })

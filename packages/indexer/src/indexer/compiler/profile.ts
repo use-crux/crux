@@ -4,6 +4,7 @@ import type {
   ResolvedIndexerExtension,
 } from '../extensions'
 import { createIndexerExtensionRuntime } from '../extensions'
+import { mediaPrimitiveManifest } from '../media/primitive-manifest'
 export { compilerProfileCacheInputs } from '../cache-identity'
 
 export interface CompilerOwnedProjection {
@@ -29,10 +30,11 @@ export interface StaticExtensionHostRuntime {
 export const cruxCoreCompilerProjections = [
   {
     name: 'deferred-work-containment',
-    version: '1',
+    version: '2',
     phase: 'resolve',
     reason:
       'Compiler-owned source ranges attach public deferred work only to proven enclosing indexed definitions.',
+    staticCallNames: ['defer'],
   },
   {
     name: 'source-ref-projection',
@@ -60,7 +62,7 @@ export const cruxCoreCompilerProjections = [
 export const cruxCoreCompilerProfile = {
   name: '@use-crux/indexer/crux-core-profile',
   version: '2',
-  extensions: [],
+  extensions: [mediaPrimitiveManifest],
   projections: cruxCoreCompilerProjections,
 } as const satisfies ProjectIndexCompilerProfile
 

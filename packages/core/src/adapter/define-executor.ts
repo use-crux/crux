@@ -20,14 +20,13 @@
  */
 
 import type { AnyPrompt } from "../prompt/prompt-types";
-import type { GenerationSettings, TraceMeta } from "../generation/types";
-import type { RoutingReceipt } from "../routing/receipt";
+import type { GenerationSettings } from "../generation/types";
 import { Deadline } from "../generation/timeout";
 import type { TimeoutOptions } from "../generation/timeout";
 import type { Message } from "../generation/messages";
 import type { LoopRuntimePort } from "./loop-runtime-port";
 import type { ExecutorStreamHandle, StepObserver } from "./executor-types";
-import type { ApprovalRequestInfo } from "./tool/approval";
+import type { GenerateResult } from "./result-accumulator";
 import type { ValidationRetryOptions } from "../generation/validation-retry";
 import type { Constraint } from "../safety/constraint/types";
 import type { Guardrail } from "../safety/guardrail/types";
@@ -155,24 +154,9 @@ export type ExecutorStreamOptions<
  * the approval-request message — persist it, collect a decision, append a
  * `tool-approval-response`, and call `generate()` again with `messages`.
  */
-export interface ExecutorGenerateResult<TRawResponse> {
-  /** The SDK's own result object. `undefined` only when suspended on approval. */
-  raw: TRawResponse | undefined;
-  /** Final assistant text (or serialized JSON for structured output). */
-  text: string;
-  /** The parsed, schema-valid object — present for structured prompts. */
-  object?: unknown;
-  /** Normalized metadata (usage, finish reason, cost, audits, routing). */
-  _meta: TraceMeta;
-  /** Routing decisions for calls that used a routing wrapper. */
-  routing?: RoutingReceipt;
-  /** Budget-consuming steps taken (validation retries count; refunds don't). */
-  steps: number;
-  /** Canonical message history, including approval request/resume messages. */
-  messages: Message[];
-  /** Approval requests awaiting a decision — present only when suspended. */
-  pendingApprovals?: readonly ApprovalRequestInfo[];
-}
+export type ExecutorGenerateResult<TRawResponse> = GenerateResult<
+  TRawResponse | undefined
+>;
 
 /** The executor interface returned by the factory. */
 export interface CruxExecutor<
@@ -307,6 +291,7 @@ export function loopRuntimeAdapter<
     signal: AbortSignal | undefined,
     params: CallProfileParams | undefined,
   ): Promise<GenerateResult> {
+    const nativeMessages = (opts as { readonly nativeMessages?: readonly unknown[] }).nativeMessages;
     return (await execution.generate({
       prompt,
       model,
@@ -317,6 +302,7 @@ export function loopRuntimeAdapter<
       toolMiddleware: opts.toolMiddleware,
       toolApproval: opts.toolApproval,
       messages: opts.messages,
+      nativeMessages,
       maxSteps: opts.maxSteps,
       settings: mergeSettings(params, opts.settings),
       tokenBudget: opts.tokenBudget,
@@ -378,6 +364,7 @@ export function loopRuntimeAdapter<
     signal: AbortSignal | undefined,
     params: CallProfileParams | undefined,
   ): Promise<ExecutorStreamHandle<TRawStream>> {
+    const nativeMessages = (opts as { readonly nativeMessages?: readonly unknown[] }).nativeMessages;
     return (await execution.stream({
       prompt,
       model,
@@ -388,6 +375,7 @@ export function loopRuntimeAdapter<
       toolMiddleware: opts.toolMiddleware,
       toolApproval: opts.toolApproval,
       messages: opts.messages,
+      nativeMessages,
       maxSteps: opts.maxSteps,
       settings: mergeSettings(params, opts.settings),
       tokenBudget: opts.tokenBudget,

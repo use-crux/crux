@@ -143,8 +143,8 @@ export interface ProjectRuntimeJoin {
   recordStoreId?: string;
   /** Runtime join key for a Storage Beta vector-store definition. */
   vectorStoreId?: string;
-  /** Runtime join key for a Storage Beta blob-store definition. */
-  blobStoreId?: string;
+  /** Runtime join key for a Storage Beta asset-store definition. */
+  assetStoreId?: string;
   /** Runtime join key for a Storage Beta bundle definition. */
   storageId?: string;
   /** Runtime join key for a scoped Storage Beta wrapper definition. */
@@ -266,7 +266,7 @@ export interface DataAccessFact {
     | "block"
     | "storage.recordStore"
     | "storage.vectorStore"
-    | "storage.blobStore"
+    | "storage.assetStore"
     | "storage.bundle"
     | "storage.scope";
   key?: string;
@@ -330,8 +330,8 @@ export interface DependencyFacts {
   recordStores?: string[];
   /** Storage Beta vector-store dependencies referenced by variable or definition id. */
   vectorStores?: string[];
-  /** Storage Beta blob-store dependencies referenced by variable or definition id. */
-  blobStores?: string[];
+  /** Storage Beta asset-store dependencies referenced by variable or definition id. */
+  assetStores?: string[];
   /** Storage Beta bundle dependencies referenced by variable or definition id. */
   storage?: string[];
   /** Scoped Storage Beta wrappers referenced by variable or definition id. */
@@ -685,15 +685,6 @@ export interface IndexedStorageCapabilities {
     /** Read-after-write visibility expected from the vector backend. */
     consistency?: "strong" | "eventual" | "unknown";
   };
-  /** Blob-store capabilities when the definition is a blob store or bundle. */
-  blob?: {
-    /** Whether multipart uploads are available for large blobs. */
-    multipart?: boolean | "unknown";
-    /** Whether the adapter can mint signed URLs for direct blob access. */
-    signedUrls?: boolean | "unknown";
-    /** Maximum blob size in bytes when known statically. */
-    maxBytes?: number | "unknown";
-  };
 }
 
 /** First-class Storage Beta definition facts emitted by Project Index. */
@@ -701,7 +692,7 @@ export interface StorageFacts {
   kind:
     | "storage.recordStore"
     | "storage.vectorStore"
-    | "storage.blobStore"
+    | "storage.assetStore"
     | "storage.bundle"
     | "storage.scope";
   /** Store or bundle factory name when statically known, for example `inMemoryStorage`. */
@@ -714,8 +705,8 @@ export interface StorageFacts {
   records?: string;
   /** Vector store variable or definition id used by a bundle. */
   vectors?: string;
-  /** Blob store variable or definition id used by a bundle. */
-  blobs?: string;
+  /** Asset store variable or definition id used by a bundle. */
+  assets?: string;
   /** Base storage variable or definition id wrapped by a scope. */
   storage?: string;
   /** Key prefix used by a scoped storage wrapper when statically known. */
@@ -1996,138 +1987,138 @@ export interface QualityGateResult {
 
 /** Full spec-02 ExperimentRecord — `GET /api/quality/experiments/{experimentId}` serves it verbatim. */
 export interface QualityExperimentDetail {
-  schemaVersion: number
-  experimentId: string
-  evaluationId: string
-  qualityId: string
-  experimentLabel?: string
-  startedAt: string
-  endedAt: string
-  configFingerprint: string
-  taskFingerprint: string
-  filteredRun: boolean
-  replay: QualityExperimentReplay
-  baselineRef?: QualityExperimentBaselineRef
-  variants: readonly QualityExperimentVariantDecl[]
-  cells: readonly QualityExperimentCell[]
-  aggregates: { perVariant: Readonly<Record<string, QualityVariantAggregate>> }
-  comparison?: QualityExperimentComparison
+  schemaVersion: number;
+  experimentId: string;
+  evaluationId: string;
+  qualityId: string;
+  experimentLabel?: string;
+  startedAt: string;
+  endedAt: string;
+  configFingerprint: string;
+  taskFingerprint: string;
+  filteredRun: boolean;
+  replay: QualityExperimentReplay;
+  baselineRef?: QualityExperimentBaselineRef;
+  variants: readonly QualityExperimentVariantDecl[];
+  cells: readonly QualityExperimentCell[];
+  aggregates: { perVariant: Readonly<Record<string, QualityVariantAggregate>> };
+  comparison?: QualityExperimentComparison;
   gates: {
-    passed: boolean
-    informational: boolean
-    results: readonly QualityGateResult[]
-  }
-  passed: boolean
+    passed: boolean;
+    informational: boolean;
+    results: readonly QualityGateResult[];
+  };
+  passed: boolean;
   /**
    * Core-owned per-cell failure artifacts embedded in the record. Each carries
    * the fix-surface classification and dataset provenance the UI renders as
    * chips and the failure panel (blueprint §6.2/§12.1).
    */
-  failures?: readonly QualityFailureArtifact[]
+  failures?: readonly QualityFailureArtifact[];
 }
 
 /** Core-owned fix-surface classification for a failing cell. */
 export type QualitySuggestedFixSurface =
-  | 'prompt'
-  | 'context'
-  | 'retriever'
-  | 'tool-schema'
-  | 'handoff'
-  | 'judge'
-  | 'flake'
-  | 'unknown'
+  | "prompt"
+  | "context"
+  | "retriever"
+  | "tool-schema"
+  | "handoff"
+  | "judge"
+  | "flake"
+  | "unknown";
 
 /** One machine-readable failure entry embedded in an experiment record. */
 export interface QualityFailureArtifact {
-  caseId: string
-  caseName?: string
-  variant: string
-  trial: number
-  phase: string
-  scores: readonly QualityFailureArtifactScore[]
-  sourceRef?: string
-  covers: readonly string[]
-  traceId?: string
-  spanIds: readonly string[]
-  cassetteId?: string
-  cost?: { usd?: number }
-  durationMs?: number
-  datasetProvenance?: { path: string; contentFingerprint: string }
-  suggestedFixSurfaces: readonly QualitySuggestedFixSurface[]
+  caseId: string;
+  caseName?: string;
+  variant: string;
+  trial: number;
+  phase: string;
+  scores: readonly QualityFailureArtifactScore[];
+  sourceRef?: string;
+  covers: readonly string[];
+  traceId?: string;
+  spanIds: readonly string[];
+  cassetteId?: string;
+  cost?: { usd?: number };
+  durationMs?: number;
+  datasetProvenance?: { path: string; contentFingerprint: string };
+  suggestedFixSurfaces: readonly QualitySuggestedFixSurface[];
 }
 
 /** One score entry in a failure artifact, with baseline delta and rationale. */
 export interface QualityFailureArtifactScore {
-  name: string
-  score: number | null
-  baselineScore?: number | null
-  delta?: number
-  rationale?: string
+  name: string;
+  score: number | null;
+  baselineScore?: number | null;
+  delta?: number;
+  rationale?: string;
 }
 
 /** Judge-vs-human agreement report for one evaluation (blueprint §4.5). */
 export interface QualityJudgeReport {
-  schemaVersion: 1
-  evaluationId: string
-  scorers: readonly QualityJudgeReportScorer[]
+  schemaVersion: 1;
+  evaluationId: string;
+  scorers: readonly QualityJudgeReportScorer[];
 }
 
 /** Per-scorer judge-vs-human agreement stats. */
 export interface QualityJudgeReportScorer {
-  name: string
-  threshold: number
-  labeled: number
-  confusion: { tp: number; fp: number; fn: number; tn: number }
-  agreement: number
-  precision: number
-  recall: number
-  kappa: number | null
-  disagreements: readonly QualityJudgeReportDisagreement[]
+  name: string;
+  threshold: number;
+  labeled: number;
+  confusion: { tp: number; fp: number; fn: number; tn: number };
+  agreement: number;
+  precision: number;
+  recall: number;
+  kappa: number | null;
+  disagreements: readonly QualityJudgeReportDisagreement[];
 }
 
 /** One judge-vs-human disagreement, linkable to its cell evidence. */
 export interface QualityJudgeReportDisagreement {
-  experimentId: string
-  caseId: string
-  variant: string
-  trial: number
-  human: string
-  judgeScore: number
-  rationale?: string
+  experimentId: string;
+  caseId: string;
+  variant: string;
+  trial: number;
+  human: string;
+  judgeScore: number;
+  rationale?: string;
 }
 
 /** Machine-readable experiment-to-experiment diff (blueprint §6.3). */
 export interface QualityExperimentDiff {
-  schemaVersion: 1
-  a: { experimentId: string }
-  b: { experimentId: string }
-  comparable: boolean
-  fingerprintDrift: readonly string[]
-  scores: readonly QualityExperimentDiffScore[]
-  cases: readonly QualityExperimentDiffCase[]
-  onlyInA: readonly string[]
-  onlyInB: readonly string[]
-  gatesVerdict: { aPassed: boolean; bPassed: boolean }
+  schemaVersion: 1;
+  a: { experimentId: string };
+  b: { experimentId: string };
+  comparable: boolean;
+  fingerprintDrift: readonly string[];
+  scores: readonly QualityExperimentDiffScore[];
+  cases: readonly QualityExperimentDiffCase[];
+  onlyInA: readonly string[];
+  onlyInB: readonly string[];
+  gatesVerdict: { aPassed: boolean; bPassed: boolean };
 }
 
 /** Aggregate score delta in an experiment diff. */
 export interface QualityExperimentDiffScore {
-  name: string
-  aMean: number
-  bMean: number
-  delta: number
-  sem: number
-  significant: boolean
+  name: string;
+  aMean: number;
+  bMean: number;
+  delta: number;
+  sem: number;
+  significant: boolean;
 }
 
 /** One matched case+variant row in an experiment diff. */
 export interface QualityExperimentDiffCase {
-  caseId: string
-  variant: string
-  aPassed: boolean
-  bPassed: boolean
-  scoreDeltas: Readonly<Record<string, number>>
-  datasetProvenance?: { path: string; contentFingerprint: string }
+  caseId: string;
+  variant: string;
+  aPassed: boolean;
+  bPassed: boolean;
+  scoreDeltas: Readonly<Record<string, number>>;
+  datasetProvenance?: { path: string; contentFingerprint: string };
 }
 
 export type QualityCellEvidenceStatus =

@@ -93,10 +93,10 @@ fn finalize_request_is_accepted_through_worker_path() {
         parsed.events[2]["patch"]["project"]["root"],
         "/workspace/acme"
     );
-    assert_eq!(parsed.events[2]["summary"]["factCount"], 45);
+    assert_eq!(parsed.events[2]["summary"]["factCount"], 52);
     assert_eq!(stage["method"], STATIC_INDEX_FINALIZE_METHOD);
     assert_eq!(stage["telemetry"]["facts"]["definitions"], 1);
-    assert_eq!(stage["telemetry"]["facts"]["ruleDescriptors"], 44);
+    assert_eq!(stage["telemetry"]["facts"]["ruleDescriptors"], 51);
     assert_eq!(stage["telemetry"]["cache"]["writes"], 1);
 }
 
@@ -150,7 +150,7 @@ pub(crate) fn run_identity_json() -> Value {
     json!({
         "protocolVersion": STATIC_INDEX_PROTOCOL_VERSION,
         "compiler": version_identity_json("crux-static-index", "0.1.0"),
-        "oxc": version_identity_json("oxc-rust", "oxc_parser@0.139.0+crux_native_group3.7"),
+        "oxc": version_identity_json("oxc-rust", "oxc_parser@0.139.0+crux_native_group3.8"),
         "primitiveManifest": digest_identity_json("crux-first-party-primitives"),
         "relationPolicy": digest_identity_json("crux-relation-policy"),
         "extensionManifests": [digest_identity_json("@acme/crux-extra")],

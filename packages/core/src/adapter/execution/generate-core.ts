@@ -10,6 +10,7 @@
  */
 
 import type { TraceMeta } from "../../generation/types";
+import type { Message } from "../../generation/messages";
 import {
   findTriggeredStopCondition,
   normalizeStopConditions,
@@ -20,7 +21,10 @@ import { ValidationExhaustedError } from "../../generation/validation-retry";
 import { createSafety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
+import { normalizeInvocationMessages } from "../../content/invocation-message";
+import { emitInputTokenEstimate } from './media-token-budget'
 import type { AdapterResponse, CallArgs } from "../types";
+import { responseContent } from "../assistant-output";
 import {
   createResultAccumulator,
   type ResultStepFacts,
@@ -139,6 +143,8 @@ export async function generateCore<
 
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
+  const prepareProviderMessages = (canonical: readonly Message[]) =>
+    normalizeInvocationMessages(canonical, { provider: modelInfo.provider });
   messages = (await lifecycle.resume(messages)).messages;
 
   const generated = await orchestrateGenerate(
@@ -150,7 +156,6 @@ export async function generateCore<
         system: currentSystem,
         systemBlocks: currentSystemBlocks,
         messages,
-        unsupportedContent: resolved.settings.unsupportedContent,
         settings: mappedSettings,
         schema: resolved.schema,
         schemaParams,
@@ -171,12 +176,19 @@ export async function generateCore<
 
       for (let step = 0; step < maxSteps; step++) {
         steps++;
+        const providerMessages = await prepareProviderMessages(messages);
+        emitInputTokenEstimate({
+          messages: providerMessages,
+          provider: modelInfo.provider,
+          model: modelInfo.modelId,
+          media: dialect.media,
+          tokenBudget: args.tokenBudget,
+        })
         const callArgs: CallArgs<TExtra> = {
           model: modelInfo.modelId,
           system: currentSystem,
           systemBlocks: currentSystemBlocks,
-          messages,
-          unsupportedContent: resolved.settings.unsupportedContent,
+          messages: providerMessages,
           settings: mappedSettings,
           schema: resolved.schema,
           schemaParams,
@@ -297,13 +309,14 @@ export async function generateCore<
             replaceLastStep({ ...lastExtracted!, text: "" });
             messages = dialect.appendToolRound(messages, lastExtracted!, []);
             messages = [...messages, ...corrective];
+            const providerMessages = await prepareProviderMessages(messages);
             const regen = await withBudget(
               (signal) =>
                 dialect.call(
                   dialect.client,
                   {
                     ...lastCallArgs!,
-                    messages,
+                    messages: providerMessages,
                   },
                   { signal: composeAbortSignals(args.signal, signal) },
                 ),
@@ -397,10 +410,14 @@ export async function generateCore<
 
 function stepFactsFromResponse(response: AdapterResponse): ResultStepFacts {
   return {
-    text: response.text,
+    content: responseContent(response),
     ...(response.usage !== undefined ? { usage: response.usage } : {}),
     finishReason: response.finishReason,
     responseId: response.responseId,
     modelId: response.actualModelId,
+    ...(response.warnings !== undefined ? { warnings: response.warnings } : {}),
+    ...(response.providerMetadata !== undefined
+      ? { providerMetadata: response.providerMetadata }
+      : {}),
   };
 }

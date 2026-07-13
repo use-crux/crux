@@ -18,7 +18,7 @@ interface ExpectedSource {
 }
 
 interface RankedHit {
-  sourceId?: string
+  source?: { id?: string }
   chunkId?: string
   rank?: number
 }
@@ -98,7 +98,11 @@ function rankedHits(
 }
 
 function hitMatches(hit: RankedHit, source: ExpectedSource): boolean {
-  return hit.sourceId === source.sourceId && (source.chunkId === undefined || hit.chunkId === source.chunkId)
+  return hit.source?.id === source.sourceId && (source.chunkId === undefined || hit.chunkId === source.chunkId)
+}
+
+function citationMatches(citation: CitationLike, source: ExpectedSource): boolean {
+  return citation.sourceId === source.sourceId && (source.chunkId === undefined || citation.chunkId === source.chunkId)
 }
 
 function sourceKey(source: ExpectedSource): string {
@@ -237,7 +241,7 @@ export function ragCitationValidity<const N extends string = 'rag.citationValidi
     const valid = citations.filter((citation) => {
       if (citation.grounded === false) return false
       if (sources === undefined) return citation.sourceId !== undefined
-      return sources.some((source) => hitMatches(citation, source))
+      return sources.some((source) => citationMatches(citation, source))
     })
     return { name, score: valid.length / citations.length }
   })

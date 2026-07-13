@@ -17,17 +17,64 @@
  * @module
  */
 
-export { adapterSpecConformance } from './testing/native'
-export { assertCanonicalResult } from './testing/canonical-result'
-export { providerRuntimeConformance } from './testing/provider-runtime'
-export { transcriptCodecConformance, transcriptRoundTripConformance } from './testing/transcript'
+export { adapterSpecConformance } from "./testing/native";
+export { assertCanonicalResult } from "./testing/canonical-result";
+export { completedMediaConformance } from "./testing/completed-media";
+export {
+  assertDirectMediaTranscriptIdentity,
+  directMediaFixture,
+  mediaConformanceFixture,
+  wrongProviderFileMessages,
+} from "./testing/direct-media";
+export {
+  IMAGE_GENERATION_CONFORMANCE,
+  imageGenerationConformanceRow,
+  imageGenerationSupportProjection,
+} from "./testing/image-generation";
+export {
+  TRANSCRIPTION_CONFORMANCE,
+  transcriptionConformanceRow,
+} from "./testing/transcription";
+export { SPEECH_CONFORMANCE, speechConformanceRow } from "./testing/speech";
+export {
+  MEDIA_ADAPTER_MATRIX,
+  mediaAdapterMatrixMarkdown,
+} from "./testing/media-matrix";
+export { providerRuntimeConformance } from "./testing/provider-runtime";
+export {
+  transcriptCodecConformance,
+  transcriptRoundTripConformance,
+} from "./testing/transcript";
+export type {
+  CompletedMediaConformanceCase,
+  CompletedMediaConformanceViolation,
+  CompletedMediaOperationName,
+} from "./testing/completed-media";
+export type {
+  DirectMediaFixture,
+  DirectMediaProvider,
+  MediaConformanceAdapter,
+  MediaConformanceFixture,
+} from "./testing/direct-media";
+export type {
+  ImageGenerationConformanceRow,
+  ImageGenerationFixtureAdapter,
+} from "./testing/image-generation";
+export type {
+  TranscriptionConformanceRow,
+  TranscriptionFixtureAdapter,
+} from "./testing/transcription";
+export type {
+  SpeechConformanceRow,
+  SpeechFixtureAdapter,
+} from "./testing/speech";
 export type {
   CanonicalFinalStepInfo,
   CanonicalGenerateResultLike,
   CanonicalResultExpectation,
   CanonicalResultStepExpectation,
   CanonicalTokenUsage,
-} from './testing/canonical-result'
+} from "./testing/canonical-result";
 export type {
   AdapterConformanceCapabilities,
   AdapterConformanceEmission,
@@ -35,7 +82,7 @@ export type {
   AdapterConformanceInspector,
   AdapterConformancePrepared,
   AdapterConformanceScript,
-} from './testing/native'
+} from "./testing/native";
 export type {
   ProviderConformanceEmission,
   ProviderConformancePrepared,
@@ -46,22 +93,25 @@ export type {
   ProviderRuntimeConformanceHarness,
   ProviderRuntimeConformanceRuntime,
   ProviderRuntimeConformanceStreamHandle,
-} from './testing/provider-runtime'
+} from "./testing/provider-runtime";
 export type {
   TranscriptConformanceScenario,
   TranscriptRoundTripConformanceSuite,
   TranscriptRoundTripFixture,
   TranscriptWrapperExpectation,
-} from './testing/transcript'
+} from "./testing/transcript";
 
 // Loop runtime test double + contract suite (SDK-driven loop).
-export { fakeLoopRuntime } from './testing/fake-loop-runtime'
+export { fakeLoopRuntime } from "./testing/fake-loop-runtime";
 export type {
   FakeLoopEmission,
   FakeLoopRuntime,
   FakeLoopRuntimeConfig,
   FakeRawResponse,
   FakeRawStream,
-} from './testing/fake-loop-runtime'
-export { loopRuntimePortConformance } from './testing/loop-runtime-conformance'
-export type { ConformanceViolation, LoopRuntimeConformanceHarness } from './testing/loop-runtime-conformance'
+} from "./testing/fake-loop-runtime";
+export { loopRuntimePortConformance } from "./testing/loop-runtime-conformance";
+export type {
+  ConformanceViolation,
+  LoopRuntimeConformanceHarness,
+} from "./testing/loop-runtime-conformance";

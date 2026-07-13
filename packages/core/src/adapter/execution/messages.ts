@@ -11,6 +11,7 @@
 
 import type { Message } from '../../generation/messages'
 import type { AdapterResponse } from '../types'
+import { responseContent } from '../assistant-output'
 
 /**
  * Append the final assistant response to a provider-agnostic Crux transcript.
@@ -24,7 +25,7 @@ export function appendAssistantResultMessage(messages: Message[], response: Adap
     ...messages,
     {
       role: 'assistant' as const,
-      content: response.text,
+      content: responseContent(response),
       ...(response.toolCalls ? { metadata: { toolCalls: response.toolCalls } } : {}),
     },
   ]

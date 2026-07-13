@@ -19,6 +19,8 @@ import type {
   SingleTurnRuntimeContract,
   StructuredAttempt,
 } from '@use-crux/core/adapter'
+// @ts-expect-error - capability reports are intentionally not a public adapter contract.
+import type { CapabilityReport } from '@use-crux/core/adapter'
 import type { Message } from '../src/generation/messages'
 import type { ModelInfo } from '../src/types'
 import type { AnyPrompt } from '../src/prompt/prompt-types'
@@ -113,6 +115,10 @@ expectTypeOf(singleRuntime).toMatchTypeOf<
   }
 >()
 expectTypeOf(singleProvider.helpers({ tenant: 'acme' }).createGenerateTextFn).toBeFunction()
+// @ts-expect-error - private provider media hooks never appear on public runtime records.
+singleRuntime.media
+// @ts-expect-error - capability discovery is intentionally not a public runtime API.
+singleRuntime.capabilities()
 
 void singleRuntime.generate(prompt, {
   model: 'single-model',
@@ -166,6 +172,10 @@ const loopContract = {
     return { provider: model.provider, modelId: model.modelId }
   },
   settings: () => ({}),
+  media: {
+    validate: () => [],
+    estimateTokens: () => undefined,
+  },
   bind(client: LoopClient) {
     expectTypeOf(client).toEqualTypeOf<LoopClient>()
     return {
@@ -236,7 +246,7 @@ const loopMutualExclusion = {
 // @ts-expect-error - loop-owned ownership still forbids turn mechanics.
 defineProviderRuntime(loopMutualExclusion)
 
-defineProviderRuntime({
+const loopRuntimeCollision = {
   id: 'typed-loop-collision',
   loop: {
     describeModel(model: LoopModel): ModelInfo {
@@ -249,16 +259,23 @@ defineProviderRuntime({
       runStream: async () => loopStream,
     }),
   },
-  // @ts-expect-error - provider runtime extensions cannot replace generated runtime members.
   extend: () => ({
     generate() {
       return 'extension generate'
     },
   }),
-})
+}
+// @ts-expect-error - provider runtime extensions cannot replace generated runtime members.
+defineProviderRuntime(loopRuntimeCollision)
 
 const loopRuntime = loopProvider.create(loopClient)
 expectTypeOf(loopRuntime).toMatchTypeOf<CruxExecutor<LoopModel, LoopRawResponse, LoopRawStream>>()
+// @ts-expect-error - private provider media hooks never appear on public loop runtimes.
+loopRuntime.media
+// @ts-expect-error - capability discovery is intentionally not a public loop API.
+loopRuntime.capabilities()
+
+void (undefined as unknown as CapabilityReport)
 
 void loopRuntime.generate(prompt, {
   model: loopModel,

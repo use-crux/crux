@@ -94,7 +94,6 @@ const AI_SDK_MAPPED_SETTING_KEYS = new Set([
   "stopWhen",
   "maxSteps",
   "reasoning",
-  "unsupportedContent",
 ]);
 
 function mergeProviderOptions(

@@ -9,6 +9,7 @@ import { buildSystemArg } from "../provider-profile";
 import { extractResponse } from "../result-shape";
 import { canonicalBase, buildBaseArgs } from "./request-args";
 import { withToolCallRepair } from "./tool-call-repair";
+import { decodeAssistantContentFromAiSdkParts } from "../assistant-content";
 import type {
   AiSdkCallPlan,
   SdkLoopResultLike,
@@ -197,8 +198,16 @@ function sdkStepFacts(
   if (!steps || steps.length === 0) return undefined;
   const facts = steps.map((step) => {
     const usage = normalizeUsage(step.usage);
+    const content = step.content
+      ? decodeAssistantContentFromAiSdkParts(step.content)
+      : undefined;
     return {
-      text: step.text ?? "",
+      content:
+        content !== undefined && (content.length > 0 || !step.text)
+          ? content
+          : step.text
+            ? ([{ type: "text", text: step.text }] as const)
+            : [],
       ...(usage !== undefined ? { usage } : {}),
       finishReason: step.finishReason,
       responseId: step.response?.id,
@@ -210,7 +219,9 @@ function sdkStepFacts(
 
 function hasStepFact(fact: LoopStepFacts[number]): boolean {
   return (
-    fact.text !== "" ||
+    fact.content.some(
+      (part) => part.type !== "text" || part.text !== "",
+    ) ||
     fact.usage !== undefined ||
     fact.finishReason !== undefined ||
     fact.responseId !== undefined ||

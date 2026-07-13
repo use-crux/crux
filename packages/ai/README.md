@@ -38,6 +38,24 @@ result.text; // string
 
 A prompt with an `output` schema routes through `generateObject` and returns a typed `result.object`, with tiered repair/retry when `validationRetry` is set. Models may be plain or wrapped in core's `fallback()` / `router()` / `cascade()`. Tool loops run up to `maxSteps: 10` by default — identical to every Crux adapter (and unlike the raw AI SDK's single-step default), so prompts behave the same when moved between adapters. Use Crux's portable `maxTokens`, `topK`, `stopSequences`, `seed`, `toolChoice`, `stopWhen`, `maxSteps()`, `hasToolCall()`, `reasoning`, and `toolApproval` settings for adapter-neutral control; AI SDK-native stop conditions, tool-choice variants, `providerOptions`, headers, retries, and fine-grained provider reasoning controls belong under the typed `extra` option. Tools that declare `contextSchema` require `toolsContext.<toolName>` at the call site, and `runtimeContext` is threaded through tool execution, middleware, and function-form approval policies. `timeout` accepts structured budgets (`totalMs`, `stepMs`, `chunkMs`, `toolMs`, and `tools[name]`) and expired budgets reject with `TimeoutError`. `generate()` returns the canonical Crux envelope: accumulated `text`, optional complete `usage`, optional `cost`, `steps`, `finalStep`, provider-neutral `messages`, retained `_meta`, and typed `.raw` for the AI SDK result. `stream()` returns `{ textStream, raw, completion }`; `raw` is the AI SDK stream result, and `completion` resolves to the canonical completion envelope. Use `createUIMessageStreamResponse(result)` or `pipeUIMessageStreamToResponse(result, options)` for AI SDK `useChat` integration. `embedding()` binds AI SDK embedding models as Crux primitives, and `generateObjectFn` / `generateTextFn` satisfy `@use-crux/core` APIs that expect a generate function (e.g. `llmJudge`, `summarizeMessages`, and retrieval recipe model steps). `generateObjectFn` uses the same AI SDK structured-attempt mechanics as prompt structured generation: provider schema sanitation, core-backed `experimental_repairText`, and router/cascade model resolution before returning `{ object }`. If a `GenerateObjectFn` call needs to go through full adapter prompt execution, use `createGenerateObjectFnFromGenerate(generate)` from `@use-crux/core/compaction`.
 
+For `useChat` route handlers, keep the AI SDK message edge native:
+
+```ts
+import { convertToModelMessages } from "ai";
+import { createUIMessageStreamResponse, stream } from "@use-crux/ai";
+
+export async function POST(req: Request) {
+  const { messages } = await req.json();
+  const result = await stream(chatPrompt, {
+    model,
+    input: { tenantId: "acme" },
+    messages: await convertToModelMessages(messages),
+  });
+
+  return createUIMessageStreamResponse(result);
+}
+```
+
 `toParams(resolved, { model })` exposes the AI SDK request-planning codec for
 headless power users, and `fromResponse(response)` normalizes an AI SDK
 generate result into Crux response facts. These helpers translate only; use
@@ -52,6 +70,16 @@ make each `SdkGateway` call. Streaming with `transport` is not supported and
 rejects with `CruxTransportStreamUnsupportedError`.
 
 Streaming structured output uses AI SDK `streamObject()`. In AI SDK v6 that API does not expose the text-loop tool event surface, so Crux omits tools for structured streams and emits a one-time warning when a structured stream declares tools. Use `generate()` for structured tool loops, or stream without an output schema when live tool observability is required.
+
+## Media
+
+AI SDK `ModelMessage` and `useChat` content stay model-owned. Crux preserves
+normal image/audio/video/file parts and ordered mixed assistant output without
+adding a second message or tool loop. The package exports native AI SDK
+`generateImage()`, `transcribe()`, and `generateSpeech()` wrappers with the
+shared Crux result tail, cancellation, timeout, and descriptor-only reporting.
+Provider-native controls remain in typed `extra`; persistence is a separate
+application `assetStore.put()` call.
 
 For Anthropic AI SDK models, Crux converts the stable provider-cache prefix into system messages and places `providerOptions.anthropic.cacheControl` on the single `cacheBoundary` block.
 

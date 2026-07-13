@@ -154,7 +154,7 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
           if (regen.status === "ok") {
             if (stepFacts.length > 0) {
               const previous = stepFacts[stepFacts.length - 1]!;
-              stepFacts[stepFacts.length - 1] = { ...previous, text: "" };
+              stepFacts[stepFacts.length - 1] = { ...previous, content: [] };
             }
             finalText = regen.response.text;
             finalObject = regen.object;
@@ -197,7 +197,7 @@ export async function generateSdkStructured<TModel, TRawResponse, TRawStream>(
       attempts++;
       validationRetry?.onRetry?.(attempts, attempt.error);
       stepFacts.push({
-        text: "",
+        content: [],
         finishReason: undefined,
         responseId: undefined,
         modelId: undefined,

@@ -67,7 +67,7 @@ describe("loopRuntimeAdapter — text generation", () => {
     });
 
     expect(result.text).toBe("hello world");
-    expect(result.steps).toBe(1);
+    expect(result.steps).toHaveLength(1);
     expect(result._meta.finishReason).toBe("stop");
     expect(result.messages.at(-1)).toMatchObject({
       role: "assistant",
@@ -106,7 +106,7 @@ describe("loopRuntimeAdapter — text generation", () => {
       expect.objectContaining({ toolCallId: expect.any(String) }),
     );
     expect(result.text).toBe("answer");
-    expect(result.steps).toBe(2);
+    expect(result.steps).toHaveLength(2);
     expect(result.messages.some((m) => m.role === "tool")).toBe(true);
   });
 
@@ -132,7 +132,7 @@ describe("loopRuntimeAdapter — text generation", () => {
       },
     });
 
-    expect(result.steps).toBe(1);
+    expect(result.steps).toHaveLength(1);
     expect(result.text).toBe("step one");
   });
 });
@@ -148,7 +148,7 @@ describe("loopRuntimeAdapter — structured output + validation retry", () => {
     });
 
     expect(result.object).toEqual({ title: "hi", count: 2 });
-    expect(result.steps).toBe(1);
+    expect(result.steps).toHaveLength(1);
     expect(fake.calls.runStructuredAttempt).toHaveLength(1);
   });
 
@@ -221,7 +221,7 @@ describe("loopRuntimeAdapter — structured output + validation retry", () => {
     });
 
     expect(result.object).toEqual({ title: "hi", count: 2 });
-    expect(result.steps).toBe(2);
+    expect(result.steps).toHaveLength(2);
     expect(onRetry).toHaveBeenCalledTimes(1);
 
     // The retry attempt carries the failed output and corrective feedback.

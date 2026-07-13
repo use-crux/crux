@@ -15,6 +15,7 @@ import type { GenerationSettings, TraceMeta } from "../../generation/types";
 import type { TokenUsage } from "../../generation/types";
 import type { TimeoutOptions } from "../../generation/timeout";
 import type { Message } from "../../generation/messages";
+import type { AssistantContentPart } from "../../types/content";
 import type { ValidationRetryOptions } from "../../generation/validation-retry";
 import type { Constraint } from "../../safety/constraint/types";
 import type { Guardrail } from "../../safety/guardrail/types";
@@ -73,6 +74,13 @@ export interface AdapterExecutionGenerateArgs<
 
   /** Existing conversation history to continue. */
   readonly messages?: Message[];
+
+  /**
+   * SDK-native history for loop-owned adapters with a native message edge.
+   * Execution modules keep canonical `messages` for policy and results; only
+   * the owning runtime may interpret this payload.
+   */
+  readonly nativeMessages?: readonly unknown[];
 
   /** Additional tools merged after prompt/context tools. */
   readonly tools?: Record<string, unknown>;
@@ -143,6 +151,8 @@ export interface AdapterExecutionGenerateResult<TRawResponse> {
 
   /** Final assistant text after validation and safety processing. */
   readonly text: string;
+  /** Exact ordered assistant output; `text` is its text-only projection. */
+  readonly content: readonly AssistantContentPart[];
 
   /** Parsed structured output, present when the prompt has an output schema. */
   readonly object?: unknown;
@@ -156,14 +166,18 @@ export interface AdapterExecutionGenerateResult<TRawResponse> {
   /** Provider-reported cost promoted from `_meta`, when present. */
   readonly cost?: TraceMeta["cost"];
 
-  /** Number of model attempts or loop steps consumed by the run. */
-  readonly steps: number;
+  /** Ordered model-attempt or loop-step facts. */
+  readonly steps: readonly FinalStepInfo[];
 
   /** Facts from the final provider-call step. */
   readonly finalStep: FinalStepInfo;
 
   /** Provider-agnostic Crux message history for resume or memory capture. */
-  readonly messages: Message[];
+  readonly messages: readonly Message[];
+  /** Non-fatal warnings accumulated in execution order. */
+  readonly warnings: readonly unknown[];
+  /** Provider-owned metadata from the terminal step, when supplied. */
+  readonly providerMetadata?: unknown;
 
   /** Tool approval requests when execution suspended instead of completing. */
   readonly pendingApprovals?: readonly ApprovalRequestInfo[];

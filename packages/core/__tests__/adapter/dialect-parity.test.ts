@@ -810,8 +810,8 @@ describe('dialect parity — default step budget', () => {
       tools,
     })
 
-    expect(nativeResult.steps).toBe(10)
-    expect(executorResult.steps).toBe(10)
+    expect(nativeResult.steps).toHaveLength(10)
+    expect(executorResult.steps).toHaveLength(10)
   })
 })
 

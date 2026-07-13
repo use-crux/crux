@@ -66,6 +66,29 @@ export type {
   TraceMeta,
 } from "./types";
 export {
+  createGeneratedImageResult,
+  isNoImageGeneratedError,
+  validateGenerateImageOptions,
+} from "./image-result";
+export { lowerImagePrompt } from "./image-prompt";
+export type {
+  GenerateImage,
+  GenerateImageCommonOptions,
+  GenerateImageOptions,
+  GenerateImageResult,
+  ImagePrompt,
+  ImagePromptContent,
+  NativeGeneratedImage,
+} from "./image-contracts";
+export type {
+  GenerateImageResultFields,
+  NoImageGeneratedError,
+} from "./image-result";
+export type {
+  ImagePromptLoweringContext,
+  LoweredImagePrompt,
+} from "./image-prompt";
+export {
   Deadline,
   TimeoutError,
   composeAbortSignals,
@@ -75,6 +98,11 @@ export {
   withAbortSignal,
   withBudget,
 } from "./timeout";
+export type {
+  CompletedOperationResult,
+  OperationExecution,
+  OperationTimeout,
+} from "../completed-operation/contracts";
 export type {
   TimeoutBudget,
   TimeoutOptions,

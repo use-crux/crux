@@ -26,7 +26,7 @@ function signalsWithHits(...previews: string[]): CellSignals {
     captured: new Set(['retrieval']),
     retrievalHits: previews.map((preview, index) => ({
       rank: index + 1,
-      sourceId: `s${index}`,
+      source: { id: `s${index}` },
       preview,
     })),
   }

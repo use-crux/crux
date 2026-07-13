@@ -31,7 +31,7 @@ describe('Anthropic call handle', () => {
     const result = await call.finish(anthropicMessage({ text: 'hello' }, 1))
 
     expect(result.text).toBe('hello')
-    expect(result.steps).toBe(1)
+    expect(result.steps).toHaveLength(1)
     expect(result.finalStep).toMatchObject({
       text: 'hello',
       finishReason: 'end_turn',
@@ -76,8 +76,46 @@ describe('Anthropic call handle', () => {
 
     const result = await first.next.finish(anthropicMessage({ text: 'done' }, 2))
     expect(result.text).toBe('done')
-    expect(result.steps).toBe(2)
+    expect(result.steps).toHaveLength(2)
     expect(result.messages.some((message) => message.role === 'tool')).toBe(true)
+  })
+
+  it('replays redacted thinking verbatim through an actual tool-loop continuation', async () => {
+    const anthropic = createAnthropic(noNetworkClient())
+    const p = prompt({
+      id: 'anthropic-handle-redacted-thinking',
+      prompt: 'Use the echo tool.',
+      tools: {
+        echo: tool({
+          description: 'Echo text.',
+          input: z.object({ value: z.string() }),
+          execute: ({ value }) => `echo:${value}`,
+        }),
+      },
+    })
+    const call = await anthropic.prepare!(p, { model: 'claude-handle', maxSteps: 3 })
+
+    const first = await call.step({
+      ...anthropicMessage(
+        { text: '', toolCalls: [{ id: 'call_echo', name: 'echo', args: { value: 'hello' } }] },
+        1,
+      ),
+      content: [
+        { type: 'redacted_thinking', data: 'opaque-secret-payload' },
+        { type: 'tool_use', id: 'call_echo', name: 'echo', input: { value: 'hello' } },
+      ],
+    } as AnthropicParsedMessage)
+
+    expect(first.done).toBe(false)
+    if (first.done) throw new Error('expected another provider call')
+    const nextParams = first.next.params as Anthropic.MessageCreateParams
+    expect(nextParams.messages).toContainEqual({
+      role: 'assistant',
+      content: [
+        { type: 'redacted_thinking', data: 'opaque-secret-payload' },
+        { type: 'tool_use', id: 'call_echo', name: 'echo', input: { value: 'hello' } },
+      ],
+    })
   })
 })
 

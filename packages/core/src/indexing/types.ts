@@ -10,12 +10,15 @@
  */
 
 import type { DenseEmbedding, SparseEmbedding } from '../embedding'
+import type { AssetRef } from '../asset'
 import type { JsonObject, RecordStore, Storage, VectorStore } from '../storage'
 
 /** A loaded source document, optionally split into typed parts. */
 export interface CruxDocument {
   namespace: string
   sourceId: string
+  /** Safe facts about the original source; never provider responses or bytes. */
+  readonly source?: CruxSourceFacts
   content: string
   title?: string
   metadata?: Record<string, unknown>
@@ -27,6 +30,8 @@ export interface CruxDocument {
 export interface CruxChunk {
   namespace: string
   sourceId: string
+  /** Safe source projection inherited from the document and its part location. */
+  readonly source?: CruxSourceFacts
   chunkId: string
   generationId?: string
   active?: boolean
@@ -46,6 +51,8 @@ export interface CruxChunk {
 export interface CruxParentChunk {
   namespace: string
   sourceId: string
+  /** Safe source projection shared by the grouped child content. */
+  readonly source?: CruxSourceFacts
   parentId: string
   generationId?: string
   active?: boolean
@@ -63,9 +70,23 @@ export interface CruxIngestWarning {
   metadata?: Record<string, unknown>
 }
 
+/** Explicit source coordinates retained through indexing provenance. */
+export type CruxSourceLocation =
+  | { readonly type: 'page'; readonly pageNumber: number }
+  | { readonly type: 'time'; readonly unit: 'seconds'; readonly start: number; readonly end: number }
+
+/** Allowlisted source facts safe to persist with an indexed record. */
+export interface CruxSourceFacts {
+  readonly url?: string
+  readonly path?: string
+  readonly assetRef?: AssetRef
+  readonly mediaType?: string
+  readonly location?: CruxSourceLocation
+}
+
 /** A typed segment of an ingested document. */
-export type CruxIngestPart =
-  | {
+export type CruxIngestPart = (
+  {
       id: string
       kind: 'text'
       content: string
@@ -110,6 +131,7 @@ export type CruxIngestPart =
       valueType?: string
       metadata?: Record<string, unknown>
     }
+) & { readonly sourceLocation?: CruxSourceLocation }
 
 /** Where a chunk's content came from in its source document. */
 export interface ChunkProvenance {
@@ -118,6 +140,7 @@ export interface ChunkProvenance {
   sheets?: string[]
   tables?: string[]
   jsonPaths?: string[]
+  sourceLocations?: CruxSourceLocation[]
   sourceSpans?: Array<{
     start: number
     end: number

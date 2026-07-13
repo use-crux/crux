@@ -157,7 +157,7 @@ function defaultRenderContext(
   hits: RetrieverHit[],
   meta: { query: string; mode: RetrieverMode; namespace: string },
 ): string {
-  const lines = hits.map((hit) => `- [${hit.sourceId}/${hit.chunkId}] (score: ${hit.score.toFixed(2)}) ${hit.content}`)
+  const lines = hits.map((hit) => `- [${hit.source.id}/${hit.chunkId}] (score: ${hit.score.toFixed(2)}) ${hit.content}`)
   return `## Retrieved Context (${meta.query})\n${lines.join('\n')}`
 }
 
@@ -169,9 +169,9 @@ function defaultRenderContextContent(
     segments: [
       { text: `## Retrieved Context (${meta.query})\n`, dynamic: false },
       ...hits.map((hit, index) => ({
-        text: `${index > 0 ? '\n' : ''}- [${hit.sourceId}/${hit.chunkId}] (score: ${hit.score.toFixed(2)}) ${hit.content}`,
+        text: `${index > 0 ? '\n' : ''}- [${hit.source.id}/${hit.chunkId}] (score: ${hit.score.toFixed(2)}) ${hit.content}`,
         dynamic: true,
-        source: `${meta.namespace}:${hit.sourceId}/${hit.chunkId}`,
+        source: `${meta.namespace}:${hit.source.id}/${hit.chunkId}`,
         ...retrieverHitFreshness(hit),
       })),
     ],

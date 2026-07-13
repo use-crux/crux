@@ -2,6 +2,7 @@ import {
   injectableContributionRelationPolicies,
   injectableUseRelationPolicies,
   invocationAccessRelationPolicies,
+  mediaRelationPolicies,
   promptContextAccessRelationPolicies,
   routingTargetRelationPolicies,
 } from './policy-groups'
@@ -11,6 +12,7 @@ export const indexRelationPolicies = [
   ...injectableUseRelationPolicies,
   ...injectableContributionRelationPolicies,
   ...promptContextAccessRelationPolicies,
+  ...mediaRelationPolicies,
   {
     type: 'defer.contained_by',
     fromKinds: ['deferred-work'],
@@ -545,9 +547,9 @@ export const indexRelationPolicies = [
     runtimeJoin: false,
   },
   {
-    type: 'rag.retriever.uses_blob_store',
+    type: 'rag.retriever.uses_asset_store',
     fromKinds: ['rag.retriever'],
-    toKinds: ['storage.blobStore'],
+    toKinds: ['storage.assetStore'],
     presentation: 'both',
     partial: true,
     runtimeJoin: false,
@@ -623,9 +625,9 @@ export const indexRelationPolicies = [
     runtimeJoin: false,
   },
   {
-    type: 'workspace.uses_blob_store',
+    type: 'workspace.uses_asset_store',
     fromKinds: ['workspace'],
-    toKinds: ['storage.blobStore'],
+    toKinds: ['storage.assetStore'],
     presentation: 'both',
     partial: true,
     runtimeJoin: false,
@@ -647,9 +649,9 @@ export const indexRelationPolicies = [
     runtimeJoin: false,
   },
   {
-    type: 'storage.bundle.uses_blob_store',
+    type: 'storage.bundle.uses_asset_store',
     fromKinds: ['storage.bundle'],
-    toKinds: ['storage.blobStore'],
+    toKinds: ['storage.assetStore'],
     presentation: 'both',
     partial: true,
     runtimeJoin: false,

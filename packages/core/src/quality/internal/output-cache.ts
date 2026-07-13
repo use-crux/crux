@@ -95,6 +95,7 @@ export async function readCellCache(cacheDir: string, evaluationId: string, key:
 
 /** Write one cached execution; failures are swallowed (the cache is best-effort). */
 export async function writeCellCache(cacheDir: string, evaluationId: string, key: string, entry: CachedCellExecution): Promise<void> {
+  if (containsImplicitMedia(entry.output)) return
   try {
     const path = entryPath(cacheDir, evaluationId, key)
     await mkdir(dirname(path), { recursive: true })
@@ -102,4 +103,14 @@ export async function writeCellCache(cacheDir: string, evaluationId: string, key
   } catch {
     // Best-effort: a read-only disk must not fail the run.
   }
+}
+
+function containsImplicitMedia(value: unknown, seen = new WeakSet<object>()): boolean {
+  if (value instanceof Uint8Array || value instanceof ArrayBuffer || (typeof Blob !== 'undefined' && value instanceof Blob)) return true
+  if (!value || typeof value !== 'object') return false
+  if (seen.has(value)) return false
+  seen.add(value)
+  if ('type' in value && ['data', 'url', 'provider-file'].includes(String((value as { type?: unknown }).type))) return true
+  if (Array.isArray(value)) return value.some((entry) => containsImplicitMedia(entry, seen))
+  return Object.values(value as Record<string, unknown>).some((entry) => containsImplicitMedia(entry, seen))
 }

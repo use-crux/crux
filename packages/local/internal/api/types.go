@@ -1208,7 +1208,7 @@ type ProjectDefinition struct {
 	Fidelity      string             `json:"fidelity"`
 	Status        string             `json:"status,omitempty"`
 	Fingerprint   string             `json:"fingerprint,omitempty"`
-	Metadata      map[string]any     `json:"metadata,omitempty"`
+	Metadata      json.RawMessage    `json:"metadata,omitempty"`
 	Quality       *IndexQuality      `json:"quality,omitempty"`
 }
 
@@ -1260,13 +1260,13 @@ type IndexQualityDriftRow struct {
 
 // ProjectRelation describes graph edges between authored Crux definitions.
 type ProjectRelation struct {
-	ID       string         `json:"id"`
-	Type     string         `json:"type"`
-	From     string         `json:"from"`
-	To       string         `json:"to"`
-	Fidelity string         `json:"fidelity"`
-	Source   *SourceLoc     `json:"source,omitempty"`
-	Metadata map[string]any `json:"metadata,omitempty"`
+	ID       string          `json:"id"`
+	Type     string          `json:"type"`
+	From     string          `json:"from"`
+	To       string          `json:"to"`
+	Fidelity string          `json:"fidelity"`
+	Source   *SourceLoc      `json:"source,omitempty"`
+	Metadata json.RawMessage `json:"metadata,omitempty"`
 }
 
 // IndexDiagnostic describes an indexer or index-fidelity issue.
@@ -1308,13 +1308,13 @@ type IndexLintFinding struct {
 }
 
 type IndexLintEvidence struct {
-	Kind         string                 `json:"kind"`
-	Label        string                 `json:"label"`
-	Description  string                 `json:"description,omitempty"`
-	DefinitionID string                 `json:"definitionId,omitempty"`
-	RelationID   string                 `json:"relationId,omitempty"`
-	Source       *SourceLoc             `json:"source,omitempty"`
-	Data         map[string]interface{} `json:"data,omitempty"`
+	Kind         string          `json:"kind"`
+	Label        string          `json:"label"`
+	Description  string          `json:"description,omitempty"`
+	DefinitionID string          `json:"definitionId,omitempty"`
+	RelationID   string          `json:"relationId,omitempty"`
+	Source       *SourceLoc      `json:"source,omitempty"`
+	Data         json.RawMessage `json:"data,omitempty"`
 }
 
 type IndexLintFix struct {

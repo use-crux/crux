@@ -1,6 +1,6 @@
 {
   "title": "Workspaces",
-  "description": "Durable agent work areas for scratch files, generated outputs, uploads, and blob-backed files.",
+  "description": "Durable agent work areas for scratch files, generated outputs, uploads, and asset-backed files.",
   "pages": [
     "index",
     "files-and-artifacts",

@@ -155,7 +155,7 @@ expectTypeOf<WorkspaceRetrieverMountSource>().toExtend<WorkspaceMountSource>();
 expectTypeOf(
   retrieverWorkspaceMountSource(sourceRetriever, {
     query: ({ operation }) => operation,
-    pathForHit: (hit) => `${hit.sourceId}/${hit.chunkId}.md`,
+    pathForHit: (hit) => `${hit.source.id}/${hit.chunkId}.md`,
   }),
 ).toExtend<WorkspaceCustomMountSource>();
 expectTypeOf<{

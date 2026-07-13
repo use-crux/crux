@@ -74,7 +74,10 @@ export interface WorkspaceToolOperations {
     options?: WorkspaceGrepOptions,
   ): Promise<WorkspaceGrepResult>;
   remove(path: string, options?: WorkspaceDeleteOptions): Promise<void>;
-  undo(path: string, options?: WorkspaceNamespaceOption): Promise<WorkspaceFile>;
+  undo(
+    path: string,
+    options?: WorkspaceNamespaceOption,
+  ): Promise<WorkspaceFile>;
 }
 
 /**
@@ -148,7 +151,7 @@ export function createWorkspaceTools<
         toModelOutput: ({ output }) => readModelOutput(output),
       },
       [names.writeFile]: {
-        description: `Write a workspace file in "${workspaceId}". Binary and oversized content require a WorkspaceBlobStore.`,
+        description: `Write a workspace file in "${workspaceId}". Binary and oversized content require an AssetStore.`,
         parameters: z.object({
           path: z
             .string()

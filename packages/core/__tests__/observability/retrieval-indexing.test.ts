@@ -18,7 +18,7 @@ import type { RetrieverHit } from '../../src/retrieval'
 function hit(id: string, content: string, score = 1): RetrieverHit {
   return {
     namespace: 'kb',
-    sourceId: id.split('/')[0] ?? id,
+    source: { id: id.split('/')[0] ?? id },
     chunkId: id.split('/')[1] ?? '0',
     content,
     metadata: {},
@@ -38,11 +38,27 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
       id: 'docs',
       namespace: 'kb',
       retrieve: async () => [
-        hit('refund/a', 'Refunds are issued within 14 days.', 0.92),
+        {
+          ...hit('refund/a', 'Refunds are issued within 14 days.', 0.92),
+          source: {
+            id: 'refund',
+            url: 'https://user:password@example.com/refund.pdf?token=secret',
+            assetRef: { uri: 'asset://private-ref' },
+            mediaType: 'application/pdf',
+            location: { type: 'page' as const, pageNumber: 2 },
+            providerId: 'provider-secret',
+          } as never,
+        },
       ],
     })
 
-    await docs.retrieve('refund policy', { limit: 1 })
+    const [applicationHit] = await docs.retrieve('refund policy', { limit: 1 })
+    expect(applicationHit.source).toMatchObject({
+      url: 'https://user:password@example.com/refund.pdf?token=secret',
+      assetRef: { uri: 'asset://private-ref' },
+      location: { type: 'page', pageNumber: 2 },
+    })
+    expect(applicationHit.source).not.toHaveProperty('providerId')
     await observe.flush()
 
     expect(transport.records).toContainEqual(
@@ -57,6 +73,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
         }),
       }),
     )
+    expect(JSON.stringify(transport.records)).not.toMatch(/password|token=secret|asset:\/\/private-ref|provider-secret/)
     expect(transport.records).toContainEqual(
       expect.objectContaining({ type: 'artifact', kind: 'retrieval.hits' }),
     )
@@ -73,7 +90,7 @@ describe('canonical retrieval, indexing, and corpus observability', () => {
             expect.objectContaining({
               rank: 1,
               namespace: 'kb',
-              sourceId: 'refund',
+              source: expect.objectContaining({ id: 'refund' }),
               chunkId: 'a',
               score: 0.92,
               preview: 'Refunds are issued within 14 days.',

@@ -17,39 +17,45 @@
  * @module
  */
 
-export { convexWorkspaceBlobStore } from './workspace'
-export type { ConvexWorkspaceBlobStoreConfig } from './workspace'
-export { convexRecordStore, convexStorage, convexVectorStore } from './storage'
-export type { ConvexStorageConfig } from './storage'
-export { flushObservability, withObservabilityFlush } from './observability'
-export type { ConvexActionHandler, ConvexObservabilityFlushOptions } from './observability'
-export { setup } from './bridge'
-export type { CruxConvexBridgeHttpRouter, CruxConvexBridgeSetupOptions } from './bridge'
-export { createCruxConvex } from './profile'
+export { convexAssetStore } from "./workspace";
+export type { ConvexAssetStoreConfig } from "./workspace";
+export { convexRecordStore, convexStorage, convexVectorStore } from "./storage";
+export type { ConvexStorageConfig } from "./storage";
+export { flushObservability, withObservabilityFlush } from "./observability";
+export type {
+  ConvexActionHandler,
+  ConvexObservabilityFlushOptions,
+} from "./observability";
+export { setup } from "./bridge";
+export type {
+  CruxConvexBridgeHttpRouter,
+  CruxConvexBridgeSetupOptions,
+} from "./bridge";
+export { createCruxConvex } from "./profile";
 export type {
   CreateCruxConvexOptions,
   CruxConvexComponents,
   CruxConvexProfile,
   CruxConvexProfileAgentConfig,
   CruxConvexRunScope,
-} from './profile'
-export { convexComponentDocumentPort } from './store'
+} from "./profile";
+export { convexComponentDocumentPort } from "./store";
 export type {
   ConvexComponentDocumentPortConfig,
   ConvexContext,
   ConvexCtxPort,
   ConvexMemoryStoreConfig,
-} from './store'
+} from "./store";
 export {
   createInMemoryConvexStoreDocumentComponent,
   isConvexStoreDocumentComponent,
-} from './store-document-component'
-export { createConvexTransport } from './react'
-export type { ConvexTransportConfig, CruxTransport, UseQueryFn } from './react'
+} from "./store-document-component";
+export { createConvexTransport } from "./react";
+export type { ConvexTransportConfig, CruxTransport, UseQueryFn } from "./react";
 export type {
   InMemoryConvexStoreDocumentComponent,
   InMemoryConvexStoreDocumentComponentOptions,
-} from './store-document-component'
+} from "./store-document-component";
 export type {
   ConvexCruxStorageComponent,
   ConvexCruxStorageMemoryComponent,
@@ -57,7 +63,7 @@ export type {
   ConvexStoreDocumentComponent,
   ConvexStoreDocumentComponentIoOptions,
   ConvexStoreDocumentComponentReadOptions,
-} from './store-component'
+} from "./store-component";
 export type {
   ComponentDocumentPort,
   StoreDocDenseSearchQuery,
@@ -65,7 +71,7 @@ export type {
   StoreDocPageQuery,
   StoreDocRecord,
   StoreDocWrite,
-} from './store-doc'
+} from "./store-doc";
 export {
   context,
   contributor,
@@ -73,9 +79,7 @@ export {
   createPrompts,
   contentText,
   escapeXml,
-  filePart,
   hasMediaParts,
-  imagePart,
   limit,
   match,
   messageText,
@@ -87,7 +91,7 @@ export {
   userContent,
   when,
   wrap,
-} from '@use-crux/core'
+} from "@use-crux/core";
 export type {
   AnyPrompt,
   ConditionalContext,
@@ -109,29 +113,43 @@ export type {
   PromptTreeResult,
   ResolveOptions,
   ResolvedPrompt,
-} from '@use-crux/core'
+} from "@use-crux/core";
 export {
   convexRuntimeRecords,
   convexRuntimeStorage,
   getConvexCruxRuntime,
   resolveConvexMemoryNamespace,
   runWithConvexCruxRuntime,
-} from './runtime'
+} from "./runtime";
 export type {
   ConvexCruxRuntime,
   ConvexMemoryNamespace,
   ConvexMemoryNamespaceArgs,
   ConvexRuntimeTarget,
-} from './runtime'
-export { convexAgent } from './agent'
+} from "./runtime";
+export {
+  convexAgent,
+  generateImage,
+  generateSpeech,
+  transcribe,
+} from "./agent";
 
-import type { z } from 'zod'
-import type { CompactionResult, Message, Context, ContextEntry, Prompt } from '@use-crux/core'
-import type { GenerateTextFn } from '@use-crux/core/compaction'
-import { summarizeMessages } from '@use-crux/core/compaction'
-import { countTokens, messageText as coreMessageText } from '@use-crux/core'
-import { observeConversationCompaction } from './compaction-observability'
-import type { ConvexContext } from './store'
+import type { z } from "zod";
+import type {
+  CompactionResult,
+  Message,
+  Context,
+  ContextEntry,
+  Prompt,
+} from "@use-crux/core";
+import type {
+  CompactionMediaConfig,
+  GenerateTextFn,
+} from "@use-crux/core/compaction";
+import { summarizeMessages } from "@use-crux/core/compaction";
+import { countTokens, messageText as coreMessageText } from "@use-crux/core";
+import { observeConversationCompaction } from "./compaction-observability";
+import type { ConvexContext } from "./store";
 
 // ─────────────────────────────────────────────────────────────────
 // Types
@@ -144,15 +162,17 @@ import type { ConvexContext } from './store'
 /** Arguments for `compactConversation()`. */
 export interface CompactConversationArgs {
   /** Messages that just fell out of the recent window. */
-  evictedMessages: Message[]
+  evictedMessages: Message[];
   /** Existing running summary from thread metadata (empty string if none). */
-  existingSummary: string
+  existingSummary: string;
   /** Text generation function. */
-  generate: GenerateTextFn
+  generate: GenerateTextFn;
   /** Cheap/fast model for summarization. */
-  model: unknown
+  model: unknown;
   /** Max tokens for the summary. Default: 1000. */
-  summaryBudget?: number
+  summaryBudget?: number;
+  /** Optional media-description overrides. */
+  media?: CompactionMediaConfig;
 }
 
 /**
@@ -166,27 +186,49 @@ export interface CompactConversationArgs {
  * @param args - Evicted messages, existing summary, generate fn, model
  * @returns Merged summary and token metrics
  */
-export async function compactConversation(args: CompactConversationArgs): Promise<CompactionResult> {
-  const { evictedMessages, existingSummary, generate, model, summaryBudget = 1000 } = args
+export async function compactConversation(
+  args: CompactConversationArgs,
+): Promise<CompactionResult> {
+  const {
+    evictedMessages,
+    existingSummary,
+    generate,
+    model,
+    summaryBudget = 1000,
+    media,
+  } = args;
 
   if (evictedMessages.length === 0 && !existingSummary) {
-    return { summary: '', tokensBefore: 0, tokensAfter: 0, ratio: 1 }
+    return { summary: "", tokensBefore: 0, tokensAfter: 0, ratio: 1 };
   }
 
   if (evictedMessages.length === 0) {
-    const tokens = countTokens(existingSummary)
-    return { summary: existingSummary, tokensBefore: tokens, tokensAfter: tokens, ratio: 1 }
+    const tokens = countTokens(existingSummary);
+    return {
+      summary: existingSummary,
+      tokensBefore: tokens,
+      tokensAfter: tokens,
+      ratio: 1,
+    };
   }
 
   // Merge: prepend existing summary as context for the new evicted batch
   const messagesToSummarize: Message[] = existingSummary
-    ? [{ role: 'system', content: `Previous conversation summary:\n${existingSummary}` }, ...evictedMessages]
-    : evictedMessages
+    ? [
+        {
+          role: "system",
+          content: `Previous conversation summary:\n${existingSummary}`,
+        },
+        ...evictedMessages,
+      ]
+    : evictedMessages;
 
   // Count only the actual evicted message tokens (exclude the summary wrapper)
   const inputTokens =
-    evictedMessages.reduce((sum, m) => sum + countTokens(coreMessageText(m)), 0) +
-    (existingSummary ? countTokens(existingSummary) : 0)
+    evictedMessages.reduce(
+      (sum, m) => sum + countTokens(coreMessageText(m)),
+      0,
+    ) + (existingSummary ? countTokens(existingSummary) : 0);
 
   return await observeConversationCompaction({
     inputMessageCount: evictedMessages.length,
@@ -197,9 +239,10 @@ export async function compactConversation(args: CompactConversationArgs): Promis
         generate,
         model,
         maxTokens: summaryBudget,
-        focus: ['decisions', 'key_facts', 'user_preferences'],
+        focus: ["decisions", "key_facts", "user_preferences"],
+        media,
       }),
-  })
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -208,20 +251,20 @@ export async function compactConversation(args: CompactConversationArgs): Promis
 
 /** Generic message type compatible with Convex Agent SDK's ModelMessage. */
 interface SystemMessage {
-  role: 'system'
-  content: string
+  role: "system";
+  content: string;
 }
 
 /** Arguments passed to the context handler by the Convex Agent SDK. */
 export interface ContextHandlerArgs {
-  allMessages: Array<{ role: string; content: unknown }>
-  search: Array<{ role: string; content: unknown }>
-  recent: Array<{ role: string; content: unknown }>
-  inputMessages: Array<{ role: string; content: unknown }>
-  inputPrompt: Array<{ role: string; content: unknown }>
-  existingResponses: Array<{ role: string; content: unknown }>
-  userId: string | undefined
-  threadId: string | undefined
+  allMessages: Array<{ role: string; content: unknown }>;
+  search: Array<{ role: string; content: unknown }>;
+  recent: Array<{ role: string; content: unknown }>;
+  inputMessages: Array<{ role: string; content: unknown }>;
+  inputPrompt: Array<{ role: string; content: unknown }>;
+  existingResponses: Array<{ role: string; content: unknown }>;
+  userId: string | undefined;
+  threadId: string | undefined;
 }
 
 /** Configuration for `createContextHandler()`. */
@@ -235,7 +278,10 @@ export interface ContextHandlerConfig<TInput extends Record<string, unknown>> {
    * Memory `.asContext()` contexts resolve their own data from their backing store.
    * Only custom contexts (project, draft, compaction) need data in the input object.
    */
-  handler: (ctx: ConvexContext, args: ContextHandlerArgs) => Promise<{ contexts: Context<z.ZodType>[]; input: TInput }>
+  handler: (
+    ctx: ConvexContext,
+    args: ContextHandlerArgs,
+  ) => Promise<{ contexts: Context<z.ZodType>[]; input: TInput }>;
 }
 
 /**
@@ -264,30 +310,36 @@ export interface ContextHandlerConfig<TInput extends Record<string, unknown>> {
  */
 export function createContextHandler<TInput extends Record<string, unknown>>(
   config: ContextHandlerConfig<TInput>,
-): (ctx: ConvexContext, args: ContextHandlerArgs) => Promise<Array<{ role: string; content: unknown }>> {
+): (
+  ctx: ConvexContext,
+  args: ContextHandlerArgs,
+) => Promise<Array<{ role: string; content: unknown }>> {
   return async (ctx, args) => {
-    const { contexts, input } = await config.handler(ctx, args)
+    const { contexts, input } = await config.handler(ctx, args);
 
     // Resolve all contexts in parallel
     // Context.systemFn takes the merged input and returns the system text
     const parts = await Promise.all(
       contexts.map(async (c) => {
         try {
-          const text = await c.systemFn(input as Record<string, unknown>)
-          return typeof text === 'string' ? text : ''
+          const text = await c.systemFn(input as Record<string, unknown>);
+          return typeof text === "string" ? text : "";
         } catch {
-          return ''
+          return "";
         }
       }),
-    )
+    );
 
-    const systemContent = parts.filter(Boolean).join('\n\n')
+    const systemContent = parts.filter(Boolean).join("\n\n");
 
     if (!systemContent) {
-      return args.allMessages
+      return args.allMessages;
     }
 
-    const systemMessage: SystemMessage = { role: 'system', content: systemContent }
-    return [systemMessage, ...args.allMessages]
-  }
+    const systemMessage: SystemMessage = {
+      role: "system",
+      content: systemContent,
+    };
+    return [systemMessage, ...args.allMessages];
+  };
 }

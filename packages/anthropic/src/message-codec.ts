@@ -1,23 +1,33 @@
-import type Anthropic from '@anthropic-ai/sdk'
-import type { ContentPart, Message, MessageContent } from '@use-crux/core'
-import { contentText } from '@use-crux/core'
-import { defineProviderTranscriptCodec, degradeContentToText } from '@use-crux/core/adapter'
+import type Anthropic from "@anthropic-ai/sdk";
 import type {
-  NativeAssistantTurn,
+  AssistantContentPart,
+  ContentPart,
+  Message,
+  MessageContent,
+} from "@use-crux/core";
+import { defineProviderTranscriptCodec } from "@use-crux/core/adapter";
+import type {
   ProviderToolCall,
   ProviderToolResult,
   ProviderTranscriptDialect,
   ProviderTranscriptUnit,
   ToolResultEncodingHelpers,
-  TranscriptEncodeOptions,
-} from '@use-crux/core/adapter'
-import { anthropicContentBlocks, anthropicToolResultContent } from './tool-result-content'
+} from "@use-crux/core/adapter";
+import {
+  encodeAnthropicAssistant,
+  readAnthropicAssistantTurn,
+} from "./assistant-turn-codec";
+export type { AnthropicAssistantTurn } from "./assistant-turn-codec";
+import {
+  anthropicContentBlocks,
+  anthropicToolResultContent,
+} from "./tool-result-content";
 import {
   anthropicDocumentBlockToPart,
   anthropicImageBlockToPart,
   decodeAnthropicToolResultContent,
   messageContentFromAnthropicParts,
-} from './content-block-decode'
+} from "./content-block-decode";
 
 /**
  * Canonical assistant turn data read from Anthropic content blocks.
@@ -26,8 +36,6 @@ import {
  * loops — assistant text and ordered tool calls. Usage, finish reasons, and
  * model ids stay in the adapter response normalizer.
  */
-export type AnthropicAssistantTurn = NativeAssistantTurn
-
 /**
  * Anthropic wire dialect for the canonical transcript IR.
  *
@@ -36,16 +44,23 @@ export type AnthropicAssistantTurn = NativeAssistantTurn
  * blocks. Core supplies neutral transcript units and the tool-result encoding
  * helpers; this dialect only translates them to and from Anthropic blocks.
  */
-const anthropicDialect: ProviderTranscriptDialect<Anthropic.MessageParam, Pick<Anthropic.Message, 'content'>> = {
-  encodeContent: ({ role, content }, options) => encodeContent(role, content, options),
-  encodeAssistant: ({ content, toolCalls }, options) => encodeAssistant(content, toolCalls ?? [], options),
-  encodeToolResults: ({ results }, helpers, options) => results.map((result) => encodeToolResult(result, helpers, options)),
+const anthropicDialect: ProviderTranscriptDialect<
+  Anthropic.MessageParam,
+  Pick<Anthropic.Message, "content">
+> = {
+  preserveAssistantReasoning: true,
+  encodeContent: ({ role, content }) => encodeContent(role, content),
+  encodeAssistant: ({ content, toolCalls }) =>
+    encodeAnthropicAssistant(content, toolCalls ?? []),
+  encodeToolResults: ({ results }, helpers) =>
+    results.map((result) => encodeToolResult(result, helpers)),
   decodeMessage: decodeMessage,
-  readAssistant: readAssistantTurn,
-}
+  readAssistant: readAnthropicAssistantTurn,
+};
 
 /** Anthropic provider transcript codec used by request builders and response normalization. */
-export const anthropicTranscript = defineProviderTranscriptCodec(anthropicDialect)
+export const anthropicTranscript =
+  defineProviderTranscriptCodec(anthropicDialect);
 
 /**
  * Convert canonical Crux messages into Anthropic request messages.
@@ -53,8 +68,10 @@ export const anthropicTranscript = defineProviderTranscriptCodec(anthropicDialec
  * Compatibility wrapper around the compiled {@link anthropicTranscript} codec;
  * Anthropic-specific tool-round semantics are owned by the canonical IR in core.
  */
-export function fromMessages(messages: readonly Message[]): Anthropic.MessageParam[] {
-  return [...anthropicTranscript.fromMessages(messages)]
+export function fromMessages(
+  messages: readonly Message[],
+): Anthropic.MessageParam[] {
+  return [...anthropicTranscript.fromMessages(messages)];
 }
 
 /**
@@ -65,193 +82,163 @@ export function fromMessages(messages: readonly Message[]): Anthropic.MessagePar
  * canonical `tool` messages.
  */
 export function toMessages(sdkMessages: readonly unknown[]): Message[] {
-  return anthropicTranscript.toMessages(sdkMessages)
+  return anthropicTranscript.toMessages(sdkMessages);
 }
 
 function encodeContent(
-  role: 'system' | 'user',
+  role: "system" | "user",
   content: MessageContent,
-  options: TranscriptEncodeOptions,
 ): Anthropic.MessageParam | undefined {
-  if (role === 'system') {
-    if (Array.isArray(content)) {
-      degradeContentToText(content, {
-        provider: 'anthropic',
-        role,
-        unsupportedContent: options.unsupportedContent,
-        reason: 'Anthropic system-role content is encoded outside request messages and is text-only',
-      })
-    }
-    return undefined
+  if (role === "system") {
+    return undefined;
   }
 
   return {
     role,
-    content: typeof content === 'string'
-      ? content
-      : anthropicContentBlocks(content, {
-          provider: 'anthropic',
-          role,
-          unsupportedContent: options.unsupportedContent,
-          reason: 'unsupported Anthropic message content part',
-        }),
-  }
-}
-
-function encodeAssistant(
-  content: MessageContent,
-  toolCalls: readonly ProviderToolCall[],
-  options: TranscriptEncodeOptions,
-): Anthropic.MessageParam {
-  if (toolCalls.length === 0) {
-    return {
-      role: 'assistant',
-      content: typeof content === 'string'
-        ? content
-        : anthropicContentBlocks(content, {
-            provider: 'anthropic',
-            role: 'assistant',
-            unsupportedContent: options.unsupportedContent,
-            reason: 'unsupported Anthropic assistant content part',
-          }),
-    }
-  }
-
-  const blocks: Anthropic.ContentBlockParam[] = []
-  const contentBlocks = typeof content === 'string'
-    ? content
-      ? ([{ type: 'text', text: content }] satisfies Anthropic.TextBlockParam[])
-      : []
-    : anthropicContentBlocks(content, {
-        provider: 'anthropic',
-        role: 'assistant',
-        unsupportedContent: options.unsupportedContent,
-        reason: 'unsupported Anthropic assistant content part',
-      })
-  blocks.push(...contentBlocks)
-  for (const toolCall of toolCalls) {
-    blocks.push({
-      type: 'tool_use',
-      id: toolCall.id,
-      name: toolCall.name,
-      input: toolInput(toolCall.args),
-    })
-  }
-  return { role: 'assistant', content: blocks }
+    content:
+      typeof content === "string" ? content : anthropicContentBlocks(content),
+  };
 }
 
 function encodeToolResult(
   result: ProviderToolResult,
   helpers: ToolResultEncodingHelpers,
-  options: TranscriptEncodeOptions,
 ): Anthropic.MessageParam {
   return {
-    role: 'user',
+    role: "user",
     content: [
       {
-        type: 'tool_result',
+        type: "tool_result",
         tool_use_id: result.toolCallId,
-        content: anthropicToolResultContent(result.modelOutput, helpers.plainText(result), {
-          unsupportedContent: options.unsupportedContent,
-        }),
+        content: anthropicToolResultContent(
+          result.modelOutput,
+          helpers.plainText(result),
+        ),
         ...(helpers.errorFlag(result) ? { is_error: true } : {}),
       },
     ],
-  }
+  };
 }
 
 function decodeMessage(value: unknown): readonly ProviderTranscriptUnit[] {
   if (!isAnthropicMessageParam(value)) {
-    return [{ kind: 'content', role: 'user', content: String(value ?? '') }]
+    return [{ kind: "content", role: "user", content: String(value ?? "") }];
   }
 
-  if (typeof value.content === 'string') {
-    return value.role === 'assistant'
-      ? [{ kind: 'assistant', content: value.content }]
-      : [{ kind: 'content', role: 'user', content: value.content }]
+  if (typeof value.content === "string") {
+    return value.role === "assistant"
+      ? [{ kind: "assistant", content: value.content }]
+      : [{ kind: "content", role: "user", content: value.content }];
   }
 
-  const contentParts: ContentPart[] = []
-  const toolCalls: ProviderToolCall[] = []
-  const toolResults: ProviderToolResult[] = []
+  const contentParts: AssistantContentPart[] = [];
+  const toolCalls: ProviderToolCall[] = [];
+  const toolResults: ProviderToolResult[] = [];
 
   for (const block of value.content) {
-    if (block.type === 'text') {
-      contentParts.push({ type: 'text', text: block.text })
-    } else if (block.type === 'image') {
-      const part = anthropicImageBlockToPart(block.source)
-      if (part) contentParts.push(part)
-    } else if (block.type === 'document') {
-      const part = anthropicDocumentBlockToPart(block)
-      if (part) contentParts.push(part)
-    } else if (block.type === 'tool_use') {
-      toolCalls.push({ id: block.id, name: block.name, args: block.input })
-    } else if (block.type === 'tool_result') {
-      const decoded = decodeAnthropicToolResultContent(block.content)
+    if (isRedactedThinkingBlock(block)) {
+      contentParts.push({
+        type: "reasoning",
+        text: "",
+        providerOptions: {
+          anthropic: {
+            continuation: {
+              type: "redacted_thinking",
+              data: block.data,
+            },
+          },
+        },
+      });
+    } else if (block.type === "text") {
+      contentParts.push({ type: "text", text: block.text });
+    } else if (block.type === "thinking") {
+      contentParts.push({
+        type: "reasoning",
+        text: block.thinking,
+        providerOptions: { anthropic: { signature: block.signature } },
+      });
+    } else if (block.type === "image") {
+      const part = anthropicImageBlockToPart(block.source);
+      if (part) contentParts.push(part);
+    } else if (block.type === "document") {
+      const part = anthropicDocumentBlockToPart(block);
+      if (part) contentParts.push(part);
+    } else if (block.type === "tool_use") {
+      toolCalls.push({ id: block.id, name: block.name, args: block.input });
+    } else if (block.type === "tool_result") {
+      const decoded = decodeAnthropicToolResultContent(block.content);
       toolResults.push({
         toolCallId: block.tool_use_id,
         text: decoded.text,
         ...(decoded.modelOutput ? { modelOutput: decoded.modelOutput } : {}),
         ...(block.is_error ? { isError: true } : {}),
-      })
+      });
     }
   }
 
-  const content = messageContentFromAnthropicParts(contentParts)
-  if (value.role === 'assistant') {
+  if (value.role === "assistant") {
     return [
       {
-        kind: 'assistant',
-        content,
+        kind: "assistant",
+        content: mergeAdjacentText(contentParts),
         ...(toolCalls.length > 0 ? { toolCalls } : {}),
       },
-    ]
+    ];
   }
 
-  const units: ProviderTranscriptUnit[] = []
-  if (contentParts.length > 0) units.push({ kind: 'content', role: 'user', content })
-  if (toolResults.length > 0) units.push({ kind: 'tool-results', results: toolResults })
-  return units.length > 0 ? units : [{ kind: 'content', role: 'user', content: '' }]
+  const units: ProviderTranscriptUnit[] = [];
+  const content = messageContentFromAnthropicParts(
+    contentParts.filter((part): part is ContentPart =>
+      part.type !== "reasoning" && part.type !== "tool-call",
+    ),
+  );
+  if (contentParts.length > 0)
+    units.push({ kind: "content", role: "user", content });
+  if (toolResults.length > 0)
+    units.push({ kind: "tool-results", results: toolResults });
+  return units.length > 0
+    ? units
+    : [{ kind: "content", role: "user", content: "" }];
 }
 
-function readAssistantTurn(message: Pick<Anthropic.Message, 'content'>): AnthropicAssistantTurn {
-  const content = (message as { readonly content?: unknown }).content
-  if (typeof content === 'string') return { text: content, toolCalls: undefined }
-  if (!Array.isArray(content)) return { text: '', toolCalls: undefined }
-
-  const contentParts: ContentPart[] = []
-  const toolCalls: ProviderToolCall[] = []
-
-  for (const block of content) {
-    if (block.type === 'text') {
-      contentParts.push({ type: 'text', text: block.text })
-    } else if (block.type === 'image') {
-      const part = anthropicImageBlockToPart(block.source)
-      if (part) contentParts.push(part)
-    } else if (block.type === 'document') {
-      const part = anthropicDocumentBlockToPart(block)
-      if (part) contentParts.push(part)
-    } else if (block.type === 'tool_use') {
-      toolCalls.push({ id: block.id, name: block.name, args: block.input })
+function mergeAdjacentText(
+  parts: readonly AssistantContentPart[],
+): readonly AssistantContentPart[] {
+  const merged: AssistantContentPart[] = [];
+  for (const part of parts) {
+    const previous = merged.at(-1);
+    if (part.type === "text" && previous?.type === "text") {
+      merged[merged.length - 1] = {
+        ...previous,
+        text: previous.text + part.text,
+      };
+    } else {
+      merged.push(part);
     }
   }
-
-  const contentValue = messageContentFromAnthropicParts(contentParts)
-  return {
-    text: typeof contentValue === 'string' ? contentValue : contentText(contentValue),
-    ...(typeof contentValue === 'string' ? {} : { content: contentValue }),
-    toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-  }
-}
-
-function toolInput(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : { value }
+  return merged;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function isAnthropicMessageParam(value: unknown): value is Anthropic.MessageParam {
-  return isRecord(value) && (value.role === 'user' || value.role === 'assistant') && 'content' in value
+function isRedactedThinkingBlock(
+  value: unknown,
+): value is { readonly type: "redacted_thinking"; readonly data: string } {
+  return (
+    isRecord(value) &&
+    value.type === "redacted_thinking" &&
+    typeof value.data === "string"
+  );
+}
+
+function isAnthropicMessageParam(
+  value: unknown,
+): value is Anthropic.MessageParam {
+  return (
+    isRecord(value) &&
+    (value.role === "user" || value.role === "assistant") &&
+    "content" in value
+  );
 }

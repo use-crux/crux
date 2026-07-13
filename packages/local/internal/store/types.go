@@ -916,13 +916,13 @@ type IndexLintFinding struct {
 }
 
 type IndexLintEvidence struct {
-	Kind         string                 `json:"kind"`
-	Label        string                 `json:"label"`
-	Description  string                 `json:"description,omitempty"`
-	DefinitionID string                 `json:"definitionId,omitempty"`
-	RelationID   string                 `json:"relationId,omitempty"`
-	Source       *SourceLoc             `json:"source,omitempty"`
-	Data         map[string]interface{} `json:"data,omitempty"`
+	Kind         string          `json:"kind"`
+	Label        string          `json:"label"`
+	Description  string          `json:"description,omitempty"`
+	DefinitionID string          `json:"definitionId,omitempty"`
+	RelationID   string          `json:"relationId,omitempty"`
+	Source       *SourceLoc      `json:"source,omitempty"`
+	Data         json.RawMessage `json:"data,omitempty"`
 }
 
 type IndexLintFix struct {

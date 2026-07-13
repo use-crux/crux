@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
-    definition::{NativeDefinitionInput, safe_id, static_index_definition},
+    definition::{safe_id, static_index_definition, NativeDefinitionInput},
     protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
         direct_string_property, has_property, number_property, object_array_value,
@@ -88,8 +88,8 @@ pub(crate) fn workspace_facts(
     }
     if let Some(config) = config {
         metadata.insert(
-            "hasBlobStorage".to_string(),
-            Value::Bool(has_property(config, "blobs") || has_property(config, "storage")),
+            "hasAssetStorage".to_string(),
+            Value::Bool(has_property(config, "assets") || has_property(config, "storage")),
         );
     }
     if let Some(intelligence) = workspace_intelligence(

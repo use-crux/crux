@@ -19,6 +19,7 @@ import {
 } from './observability'
 import { normalizeChunk, normalizeParentChunk, validateChunks, validateDocuments } from './normalize'
 import { applyParentProvenanceConfidence, applyProvenanceConfidence } from './provenance'
+import { sourceFactsWithLocations } from './source-facts'
 import { indexingPipeline, stageFingerprint } from './pipeline'
 import { createIndexedKnowledgeStore } from '../indexed-knowledge'
 import { observe } from '../observability'
@@ -293,7 +294,7 @@ export function indexer(config: IndexerConfig): Indexer {
             if (next.content !== before.content && !markedDerived) {
               provenanceConfidence = 'derived'
             }
-            return next
+            return { ...next, ...(before.source ? { source: before.source } : {}) }
           },
         })
         sourceHash = stableHash({
@@ -323,10 +324,16 @@ export function indexer(config: IndexerConfig): Indexer {
       })
 
       let chunks = chunkingResult.chunks.map((item) =>
-        normalizeChunk(applyProvenanceConfidence(item, provenanceConfidence), config.namespace),
+        normalizeChunk(applyProvenanceConfidence({
+          ...item,
+          source: sourceFactsWithLocations(item.source ?? document.source, item.provenance?.sourceLocations ?? []),
+        }, provenanceConfidence), config.namespace),
       )
       let parents = (chunkingResult.parents ?? []).map((item) =>
-        normalizeParentChunk(applyParentProvenanceConfidence(item, provenanceConfidence), config.namespace),
+        normalizeParentChunk(applyParentProvenanceConfidence({
+          ...item,
+          source: sourceFactsWithLocations(item.source ?? document.source, item.provenance?.sourceLocations ?? []),
+        }, provenanceConfidence), config.namespace),
       )
 
       for (const chunkTransform of pipeline.chunks) {
@@ -345,7 +352,13 @@ export function indexer(config: IndexerConfig): Indexer {
           onStage: (stage) => allStages.push(stage),
           run: async () => {
             const nextChunks = await chunkTransform.run(chunks, { sourceHash })
-            return nextChunks.map((item) => normalizeChunk(item, config.namespace))
+            return nextChunks.map((item) => normalizeChunk({
+              ...item,
+              source: sourceFactsWithLocations(
+                item.source ?? document.source,
+                item.provenance?.sourceLocations ?? [],
+              ),
+            }, config.namespace))
           },
         })
       }

@@ -100,7 +100,7 @@ export interface AiSdkCodecDeps {
 export interface SdkLoopResultLike {
   text?: string
   object?: unknown
-  content?: Array<{
+  content?: Array<Record<string, unknown> & {
     type?: string
     approvalId?: string
     toolCall?: { toolCallId?: string; toolName?: string; input?: unknown }
@@ -111,6 +111,7 @@ export interface SdkLoopResultLike {
   totalUsage?: SdkUsageLike
   finishReason?: string
   response?: { id?: string; modelId?: string; messages?: ReadonlyArray<unknown> }
+  warnings?: readonly unknown[]
   providerMetadata?: unknown
   _meta?: Record<string, unknown>
 }
@@ -118,6 +119,7 @@ export interface SdkLoopResultLike {
 /** Structural shape of one AI SDK step result the codec reads. */
 export interface SdkStepResultLike {
   text?: string
+  content?: Array<Record<string, unknown>>
   usage?: SdkUsageLike
   finishReason?: string
   response?: { id?: string; modelId?: string }

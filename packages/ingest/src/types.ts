@@ -1,4 +1,19 @@
-export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
+import type { Asset, AssetRef, AudioSource, Message, TranscriptionResult } from '@use-crux/core'
+
+export type IngestFormat = 'txt' | 'md' | 'html' | 'pdf' | 'image' | 'audio' | 'video' | 'csv' | 'json' | 'docx' | 'xlsx' | 'unknown'
+
+/** Explicit source coordinates retained by derived ingest parts. */
+export type IngestSourceLocation =
+  | { readonly type: 'page'; readonly pageNumber: number }
+  | { readonly type: 'time'; readonly unit: 'seconds'; readonly start: number; readonly end: number }
+
+/** Safe origin facts retained without bytes, provider ids, or delivery credentials. */
+export interface IngestSourceFacts {
+  readonly url?: string
+  readonly path?: string
+  readonly assetRef?: AssetRef
+  readonly mediaType?: string
+}
 
 export type IngestWarningCode =
   | 'unsupported_embedded_object'
@@ -33,6 +48,7 @@ export interface IngestPartBase {
   content?: string
   metadata?: Record<string, unknown>
   warnings?: IngestWarning[]
+  sourceLocation?: IngestSourceLocation
 }
 
 export interface IngestTextPart extends IngestPartBase {
@@ -81,6 +97,7 @@ export type IngestPart = IngestTextPart | IngestPagePart | IngestTablePart | Ing
 export interface IngestDocument {
   namespace: string
   sourceId: string
+  readonly source?: IngestSourceFacts
   title?: string
   parts: IngestPart[]
   content: string
@@ -106,15 +123,19 @@ export interface SourceLoader {
   documents(): AsyncIterable<IngestDocument>
 }
 
-export interface OcrHook {
-  name: string
-  extract(input: {
-    bytes: Uint8Array
-    mimeType?: string
-    sourceId: string
-    pageNumber?: number
-    metadata?: Record<string, unknown>
-  }): Promise<{ text: string; confidence?: number; metadata?: Record<string, unknown> }>
+/** Application-owned model operations used to derive ordinary ingest text. */
+export interface IngestMediaOperations {
+  /** Bound semantic description operation; the application closes over its model/provider. */
+  readonly describe?: (input: Readonly<{
+    readonly messages: readonly Message[]
+    readonly system?: string
+    readonly maxOutputTokens?: number
+    readonly abortSignal?: AbortSignal
+  }>) => Promise<{ readonly text: string }>
+  /** Bound transcription operation used by audio ingestion. */
+  readonly transcribe?: (input: Readonly<{ audio: AudioSource; abortSignal?: AbortSignal }>) => Promise<
+    TranscriptionResult<unknown, unknown, unknown>
+  >
 }
 
 export interface IngestParser {
@@ -125,16 +146,18 @@ export interface IngestParser {
 
 export interface ParseInput {
   bytes: Uint8Array
+  asset?: Asset
   text?: string
   format: IngestFormat
   sourceId: string
+  source?: IngestSourceFacts
   namespace: string
   title?: string
   metadata?: Record<string, unknown>
 }
 
 export interface ParseContext {
-  ocr?: OcrHook
+  media?: IngestMediaOperations
   warn(warning: IngestWarning): void
 }
 
@@ -146,6 +169,6 @@ export interface ParseResult {
 }
 
 export interface ParserOptions {
-  parsers?: IngestParser[]
-  ocr?: OcrHook
+  readonly parsers?: readonly IngestParser[]
+  readonly media?: Readonly<IngestMediaOperations>
 }

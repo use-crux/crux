@@ -10,6 +10,9 @@ import { deriveContent } from './document'
 import { normalizeDocument } from './document'
 import { openIngestParseObservation } from './observability'
 import { parsePdf } from './pdf'
+import { imageParser } from './visual-image'
+import { audioParser } from './audio'
+import { videoParser } from './video'
 import type {
   IngestDocument,
   IngestError,
@@ -28,9 +31,11 @@ export async function parseDocument(input: {
   namespace: string
   sourceId: string
   bytes: Uint8Array
+  asset?: import('@use-crux/core').Asset
   format: IngestFormat
   title?: string
   metadata?: Record<string, unknown>
+  source?: IngestDocument['source']
   contentType?: string
   options?: ParserOptions
 }): Promise<IngestDocument> {
@@ -51,15 +56,17 @@ export async function parseDocument(input: {
       const parsed = await parser.parse(
         {
           bytes: input.bytes,
+          ...(input.asset ? { asset: input.asset } : {}),
           ...(text !== undefined ? { text } : {}),
           format: input.format,
           sourceId: input.sourceId,
+          source: input.source,
           namespace: input.namespace,
           title: input.title,
           metadata: input.metadata,
         },
         {
-          ocr: input.options?.ocr,
+          media: input.options?.media,
           warn: (warning) => warnings.push(warning),
         },
       )
@@ -68,6 +75,7 @@ export async function parseDocument(input: {
       const document = normalizeDocument({
         namespace: input.namespace,
         sourceId: input.sourceId,
+        source: input.source,
         title: parsed.title ?? input.title,
         parts: parsed.parts,
         metadata: {
@@ -196,7 +204,7 @@ export const pdfParser: IngestParser = {
   name: 'pdf',
   formats: ['pdf'],
   async parse(input, ctx) {
-    return parsePdf(input.bytes, ctx)
+    return parsePdf(input, ctx)
   },
 }
 
@@ -300,6 +308,9 @@ export const builtInParsers: IngestParser[] = [
   markdownParser,
   htmlParser,
   pdfParser,
+  imageParser,
+  audioParser,
+  videoParser,
   csvParser,
   jsonParser,
   docxParser,

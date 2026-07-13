@@ -1,205 +1,253 @@
-import { describe, expect, it, vi } from 'vitest'
-import { prompt } from '../../src/prompt/prompt'
-import { inMemoryBlobStore, inMemoryRecordStore, storage } from '../../src/storage'
-import { workspace, workspaceToolNames } from '../../src/workspace'
-import { resetHooks, setHooks } from '../../src/runtime/runtime'
+import { describe, expect, it, vi } from "vitest";
+import { prompt } from "../../src/prompt/prompt";
+import {
+  inMemoryAssetStore,
+  inMemoryRecordStore,
+  storage,
+} from "../../src/storage";
+import { workspace, workspaceToolNames } from "../../src/workspace";
+import { resetHooks, setHooks } from "../../src/runtime/runtime";
 
-describe('workspace()', () => {
-  it('creates default /workspace and /outputs mounts', async () => {
+describe("workspace()", () => {
+  it("creates default /workspace and /outputs mounts", async () => {
     const ws = workspace({
-      id: 'research',
-      namespace: 'thread:1',
-      storage: storage({ records: inMemoryRecordStore(), blobs: inMemoryBlobStore() }),
-    })
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({
+        records: inMemoryRecordStore(),
+        assets: inMemoryAssetStore(),
+      }),
+    });
 
-    const listing = await ws.list('/')
+    const listing = await ws.list("/");
 
-    expect(ws._tag).toBe('Workspace')
-    expect(Object.isFrozen(ws)).toBe(true)
-    expect(listing.entries.map((entry) => entry.path)).toEqual(['/outputs', '/workspace'])
-  })
+    expect(ws._tag).toBe("Workspace");
+    expect(Object.isFrozen(ws)).toBe(true);
+    expect(listing.entries.map((entry) => entry.path)).toEqual([
+      "/outputs",
+      "/workspace",
+    ]);
+  });
 
-    it('rejects traversal and paths outside configured mounts before storage access', async () => {
-    const data = inMemoryRecordStore()
-    const setSpy = vi.spyOn(data, 'put')
-    const ws = workspace({ id: 'research', namespace: 'thread:1', data })
+  it("rejects traversal and paths outside configured mounts before storage access", async () => {
+    const data = inMemoryRecordStore();
+    const setSpy = vi.spyOn(data, "put");
+    const ws = workspace({ id: "research", namespace: "thread:1", data });
 
-    await expect(ws.write('/workspace/../secret.md', 'nope')).rejects.toThrow(/path traversal/i)
-    await expect(ws.write('/sources/source.md', 'nope')).rejects.toThrow(/outside configured workspace mounts/i)
-    expect(setSpy).not.toHaveBeenCalled()
-  })
+    await expect(ws.write("/workspace/../secret.md", "nope")).rejects.toThrow(
+      /path traversal/i,
+    );
+    await expect(ws.write("/sources/source.md", "nope")).rejects.toThrow(
+      /outside configured workspace mounts/i,
+    );
+    expect(setSpy).not.toHaveBeenCalled();
+  });
 
-    it('round-trips inline text through the store', async () => {
+  it("round-trips inline text through the store", async () => {
     const ws = workspace({
-      id: 'research',
-      namespace: 'thread:1',
-      storage: storage({ records: inMemoryRecordStore(), blobs: inMemoryBlobStore() }),
-    })
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({
+        records: inMemoryRecordStore(),
+        assets: inMemoryAssetStore(),
+      }),
+    });
 
-    await ws.write('/workspace/notes.md', '# Notes', { mimeType: 'text/markdown' })
-    const file = await ws.read('/workspace/notes.md')
+    await ws.write("/workspace/notes.md", "# Notes", {
+      mimeType: "text/markdown",
+    });
+    const file = await ws.read("/workspace/notes.md");
 
     expect(file).toMatchObject({
-      kind: 'text',
-      path: '/workspace/notes.md',
-      mimeType: 'text/markdown',
-      content: '# Notes',
+      kind: "text",
+      path: "/workspace/notes.md",
+      mimeType: "text/markdown",
+      content: "# Notes",
       size: 7,
-    })
-  })
+    });
+  });
 
-    it('lists directories and simple globs', async () => {
+  it("lists directories and simple globs", async () => {
     const ws = workspace({
-      id: 'research',
-      namespace: 'thread:1',
-      storage: storage({ records: inMemoryRecordStore(), blobs: inMemoryBlobStore() }),
-    })
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({
+        records: inMemoryRecordStore(),
+        assets: inMemoryAssetStore(),
+      }),
+    });
 
-    await ws.write('/workspace/notes.md', 'notes')
-    await ws.write('/workspace/nested/brief.md', 'brief')
-    await ws.write('/outputs/report.pdf', new Uint8Array([1, 2, 3]), { mimeType: 'application/pdf' })
+    await ws.write("/workspace/notes.md", "notes");
+    await ws.write("/workspace/nested/brief.md", "brief");
+    await ws.write("/outputs/report.pdf", new Uint8Array([1, 2, 3]), {
+      mimeType: "application/pdf",
+    });
 
-    await expect(ws.list('/workspace')).resolves.toMatchObject({
-      entries: [{ path: '/workspace/nested' }, { path: '/workspace/notes.md' }],
-    })
-    const markdownListing = await ws.list('/workspace/**/*.md')
+    await expect(ws.list("/workspace")).resolves.toMatchObject({
+      entries: [{ path: "/workspace/nested" }, { path: "/workspace/notes.md" }],
+    });
+    const markdownListing = await ws.list("/workspace/**/*.md");
     expect(markdownListing.entries.map((entry) => entry.path).sort()).toEqual([
-      '/workspace/nested/brief.md',
-      '/workspace/notes.md',
-    ])
-    await expect(ws.list('/outputs/*.pdf')).resolves.toMatchObject({
-      entries: [{ path: '/outputs/report.pdf' }],
-    })
-  })
+      "/workspace/nested/brief.md",
+      "/workspace/notes.md",
+    ]);
+    await expect(ws.list("/outputs/*.pdf")).resolves.toMatchObject({
+      entries: [{ path: "/outputs/report.pdf" }],
+    });
+  });
 
-    it('stores binary content in blobs and keeps metadata in the store', async () => {
-    const data = inMemoryRecordStore()
-    const blobs = inMemoryBlobStore()
-    const ws = workspace({ id: 'research', namespace: 'thread:1', storage: storage({ records: data, blobs }) })
+  it("stores binary content in assets and keeps metadata in the store", async () => {
+    const data = inMemoryRecordStore();
+    const assets = inMemoryAssetStore();
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({ records: data, assets }),
+    });
 
-    await ws.write('/outputs/report.pdf', new Uint8Array([1, 2, 3]), { mimeType: 'application/pdf' })
-    const file = await ws.read('/outputs/report.pdf')
+    await ws.write("/outputs/report.pdf", new Uint8Array([1, 2, 3]), {
+      mimeType: "application/pdf",
+    });
+    const file = await ws.read("/outputs/report.pdf");
 
     expect(file).toMatchObject({
-      kind: 'binary',
-      path: '/outputs/report.pdf',
-      mimeType: 'application/pdf',
+      kind: "binary",
+      path: "/outputs/report.pdf",
+      mimeType: "application/pdf",
       size: 3,
-    })
-    expect(file.kind === 'binary' ? file.uri : '').toMatch(/^memory:\/\//)
-    await expect(blobs.get(file.kind === 'binary' ? file.uri : '')).resolves.toMatchObject({
-      mimeType: 'application/pdf',
+    });
+    expect(file.kind === "binary" ? file.uri : "").toMatch(/^memory:\/\//);
+    await expect(
+      assets.get({ uri: file.kind === "binary" ? file.uri : "" }),
+    ).resolves.toMatchObject({
+      mediaType: "application/pdf",
       size: 3,
-    })
-  })
+    });
+  });
 
-    it('throws clearly when binary content is written without a blob store', async () => {
-    const ws = workspace({ id: 'research', namespace: 'thread:1', records: inMemoryRecordStore() })
+  it("throws clearly when binary content is written without an asset store", async () => {
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      records: inMemoryRecordStore(),
+    });
 
-    await expect(ws.write('/outputs/report.pdf', new Uint8Array([1]), { mimeType: 'application/pdf' })).rejects.toThrow(
-      /WorkspaceBlobStore/,
-    )
-  })
+    await expect(
+      ws.write("/outputs/report.pdf", new Uint8Array([1]), {
+        mimeType: "application/pdf",
+      }),
+    ).rejects.toThrow(/AssetStore/);
+  });
 
-    it('renders manifest context without dumping file contents', async () => {
-    const ws = workspace({ id: 'research', namespace: 'thread:1', records: inMemoryRecordStore() })
-    await ws.write('/workspace/notes.md', 'private notes')
+  it("renders manifest context without dumping file contents", async () => {
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      records: inMemoryRecordStore(),
+    });
+    await ws.write("/workspace/notes.md", "private notes");
 
     const resolved = await prompt({
-      id: 'analyst',
+      id: "analyst",
       use: [ws],
-      system: 'Analyze.',
-    }).resolve({})
+      system: "Analyze.",
+    }).resolve({});
 
-    expect(resolved.system).toContain('## Workspace (research)')
-    expect(resolved.system).toContain('/workspace/notes.md')
-    expect(resolved.system).not.toContain('private notes')
-  })
+    expect(resolved.system).toContain("## Workspace (research)");
+    expect(resolved.system).toContain("/workspace/notes.md");
+    expect(resolved.system).not.toContain("private notes");
+  });
 
-    it('injects default tools and omits delete by default', async () => {
-    const ws = workspace({ id: 'research', namespace: 'thread:1', records: inMemoryRecordStore() })
+  it("injects default tools and omits delete by default", async () => {
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      records: inMemoryRecordStore(),
+    });
     const resolved = await prompt({
-      id: 'analyst',
+      id: "analyst",
       use: [ws],
-      system: 'Analyze.',
-    }).resolve({})
+      system: "Analyze.",
+    }).resolve({});
 
     expect(Object.keys(resolved.tools ?? {}).sort()).toEqual([
-      'editWorkspaceFile',
-      'grepWorkspace',
-      'listWorkspace',
-      'readWorkspaceFile',
-      'renameWorkspaceFile',
-      'writeWorkspaceFile',
-    ])
-  })
+      "editWorkspaceFile",
+      "grepWorkspace",
+      "listWorkspace",
+      "readWorkspaceFile",
+      "renameWorkspaceFile",
+      "writeWorkspaceFile",
+    ]);
+  });
 
-    it('binds injected tools to the same dynamic namespace as the manifest', async () => {
+  it("binds injected tools to the same dynamic namespace as the manifest", async () => {
     const ws = workspace({
-      id: 'research',
+      id: "research",
       namespace: ({ input }) => {
-        const threadId = input.threadId
-        if (typeof threadId !== 'string') throw new Error('threadId is required')
-        return `thread:${threadId}`
+        const threadId = input.threadId;
+        if (typeof threadId !== "string")
+          throw new Error("threadId is required");
+        return `thread:${threadId}`;
       },
       records: inMemoryRecordStore(),
-    })
+    });
     const resolved = await prompt({
-      id: 'analyst',
+      id: "analyst",
       use: [ws],
-      system: 'Analyze.',
-    }).resolve({ input: { threadId: 'alpha' } })
+      system: "Analyze.",
+    }).resolve({ input: { threadId: "alpha" } });
 
     await resolved.tools?.writeWorkspaceFile?.execute?.({
-      path: '/workspace/notes.md',
-      content: 'alpha notes',
-    })
+      path: "/workspace/notes.md",
+      content: "alpha notes",
+    });
     const read = await resolved.tools?.readWorkspaceFile?.execute?.({
-      path: '/workspace/notes.md',
-    })
+      path: "/workspace/notes.md",
+    });
 
-    expect(resolved.system).toContain('Namespace: thread:alpha')
+    expect(resolved.system).toContain("Namespace: thread:alpha");
     expect(read).toMatchObject({
-      kind: 'text',
-      content: 'alpha notes',
-    })
-  })
+      kind: "text",
+      content: "alpha notes",
+    });
+  });
 
-    it('supports prefixed tools and delete opt-in', () => {
+  it("supports prefixed tools and delete opt-in", () => {
     const ws = workspace({
-      id: 'research',
-      namespace: 'thread:1',
+      id: "research",
+      namespace: "thread:1",
       records: inMemoryRecordStore(),
-      tools: { prefix: 'research', delete: true },
-    })
+      tools: { prefix: "research", delete: true },
+    });
 
     expect(Object.keys(ws.asTools()).sort()).toEqual([
-      'deleteResearchWorkspaceFile',
-      'editResearchWorkspaceFile',
-      'grepResearchWorkspace',
-      'listResearchWorkspace',
-      'readResearchWorkspaceFile',
-      'renameResearchWorkspaceFile',
-      'writeResearchWorkspaceFile',
-    ])
-    expect(workspaceToolNames({ prefix: 'research' })).toMatchObject({
-      deleteFile: 'deleteResearchWorkspaceFile',
-      grep: 'grepResearchWorkspace',
-      renameFile: 'renameResearchWorkspaceFile',
-      writeFile: 'writeResearchWorkspaceFile',
-    })
-  })
+      "deleteResearchWorkspaceFile",
+      "editResearchWorkspaceFile",
+      "grepResearchWorkspace",
+      "listResearchWorkspace",
+      "readResearchWorkspaceFile",
+      "renameResearchWorkspaceFile",
+      "writeResearchWorkspaceFile",
+    ]);
+    expect(workspaceToolNames({ prefix: "research" })).toMatchObject({
+      deleteFile: "deleteResearchWorkspaceFile",
+      grep: "grepResearchWorkspace",
+      renameFile: "renameResearchWorkspaceFile",
+      writeFile: "writeResearchWorkspaceFile",
+    });
+  });
 
-    it('throws on multiple unprefixed workspace injections', async () => {
-    const data = inMemoryRecordStore()
-    const one = workspace({ id: 'one', namespace: 'thread:1', data })
-    const two = workspace({ id: 'two', namespace: 'thread:1', data })
+  it("throws on multiple unprefixed workspace injections", async () => {
+    const data = inMemoryRecordStore();
+    const one = workspace({ id: "one", namespace: "thread:1", data });
+    const two = workspace({ id: "two", namespace: "thread:1", data });
 
     await expect(
       prompt({
-        id: 'analyst',
+        id: "analyst",
         use: [one, two],
-        system: 'Analyze.',
+        system: "Analyze.",
       }).resolve({}),
-    ).rejects.toThrow(/tool name collision/i)
-  })})
+    ).rejects.toThrow(/tool name collision/i);
+  });
+});

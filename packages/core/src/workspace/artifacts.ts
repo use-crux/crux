@@ -223,7 +223,7 @@ export function recordToArtifact(
     mimeType: record.mimeType,
     size: record.size,
     uri:
-      record.uri ??
+      record.assetRef?.uri ??
       inlineArtifactUri(scope.workspaceId, scope.namespace, record.path),
     ...(record.preview ? { preview: record.preview } : {}),
     ...(record.producedBy ? { producedBy: record.producedBy } : {}),

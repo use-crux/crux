@@ -12,6 +12,8 @@ Use it when Devtools or the TUI shows findings such as:
 - a router target is unresolved
 - a runnable definition has no visible eval coverage
 - a workspace write has no visible guardrail or policy
+- a media operation discards its result or declares a provably unsupported adapter
+- a retained media option could expose raw payloads, locators, or provider identifiers
 
 ## Start With Recommended
 
@@ -38,6 +40,8 @@ Profiles are additive:
 | `off` | You need to disable index lint findings for a project. |
 
 Stable-beta rules are the default quality-gate set. They cover inspectable schemas, hidden required prompt input, dynamic injection visibility, flow replay and suspend contracts, routing defaults, unresolved RAG recipe steps, runtime target identity, and runtime serialization safety. Preview rules can still appear in the recommended, strict, or experimental profiles, but treat them as advisory until their policy and backend evidence are promoted.
+
+Media rules are deterministic authored-source checks. They cover discarded specialized results, provably unsupported adapter/operation pairs, unsafe retained options, invalid image edit combinations, impossible transcription timing/diarization requests, speech configuration conflicts, and media sources without a derivation operation. They never inspect media bodies or turn the private adapter truth table into a runtime API.
 
 ## Read Findings As Design Feedback
 

@@ -11,18 +11,40 @@
  * @module
  */
 
-import type { MessageContent } from '../types/content'
+import type { AssistantContentPart, MessageContent } from '../types/content'
 
 // ─────────────────────────────────────────────────────────────────
 // Canonical Message Type
 // ─────────────────────────────────────────────────────────────────
 
-/** Canonical framework-agnostic message. */
-export interface Message {
-  role: 'system' | 'user' | 'assistant' | 'tool'
-  content: MessageContent
-  metadata?: Record<string, unknown>
-}
+/**
+ * Canonical framework-agnostic message.
+ *
+ * `content` is role-restricted: system/user/tool messages carry only
+ * `ContentPart`s (text/media), while assistant messages may additionally
+ * carry `ToolCallPart`/`ReasoningPart` lifecycle output. This keeps a
+ * persisted or replayed non-assistant message from ever being misread as
+ * containing a tool call or reasoning trace.
+ *
+ * @example
+ * ```ts
+ * const history: Message[] = [
+ *   { role: 'user', content: 'Summarize this image.' },
+ *   { role: 'assistant', content: [{ type: 'text', text: 'It shows...' }] },
+ * ]
+ * ```
+ */
+export type Message =
+  | {
+      role: 'system' | 'user' | 'tool'
+      content: MessageContent
+      metadata?: Record<string, unknown>
+    }
+  | {
+      role: 'assistant'
+      content: string | readonly AssistantContentPart[]
+      metadata?: Record<string, unknown>
+    }
 
 /** Result of a compaction operation. */
 export interface CompactionResult {

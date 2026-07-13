@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { scorers } from '../../src/quality/scorers'
 
 /** Ranked hits as a retriever task would output them. */
-const hits = (...sourceIds: string[]) => sourceIds.map((sourceId, index) => ({ sourceId, rank: index + 1 }))
+const hits = (...sourceIds: string[]) => sourceIds.map((sourceId, index) => ({ source: { id: sourceId }, rank: index + 1 }))
 
 const expectedSources = (...sourceIds: string[]) => ({ sources: sourceIds.map((sourceId) => ({ sourceId })) })
 
@@ -74,7 +74,7 @@ describe('scorers.retrieval.recallAtK / precisionAtK', () => {
     const scorer = scorers.retrieval.recallAtK(3)
     const score = await scorer({
       input: {},
-      output: [{ sourceId: 'a', chunkId: 'c1' }],
+      output: [{ source: { id: 'a' }, chunkId: 'c1' }],
       expected: { sources: [{ sourceId: 'a', chunkId: 'c2' }] },
     })
     expect(score.score).toBe(0)
@@ -114,8 +114,8 @@ describe('scorers.retrieval.mrr / ndcg', () => {
     const score = await scorer({
       input: {},
       output: [
-        { sourceId: 'a', rank: 2 },
-        { sourceId: 'b', rank: 1 },
+        { source: { id: 'a' }, rank: 2 },
+        { source: { id: 'b' }, rank: 1 },
       ],
       expected: expectedSources('a'),
     })

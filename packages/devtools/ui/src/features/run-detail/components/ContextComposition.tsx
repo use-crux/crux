@@ -33,7 +33,7 @@
 import { useMemo, useState, type ReactNode } from 'react'
 import { Chip, Eyebrow } from '@/qw/shell/primitives'
 import { Icon } from '@/qw/shell/Icon'
-import { InjectStateChip, type InjectState } from '@/features/index/v2/kit'
+import { InjectStateChip, type InjectState } from '@/shared/components/InjectionState'
 import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
 import type {
   CruxContextContributionPreview,

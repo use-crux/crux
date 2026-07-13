@@ -2,7 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { ProjectDefinition, ProjectIndexData } from "@/types";
-import { glyphFor } from "../components/IndexKind";
+import { glyphFor } from "@/features/index/components/IndexKind";
 import { buildIndex } from "./adapt";
 import { kindMeta } from "./kit";
 import { RoutingCatalogFacts } from "./routing-catalog";

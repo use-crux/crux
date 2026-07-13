@@ -108,6 +108,7 @@ export interface ParentExpansionOptions {
 export interface IndexedParentRecord {
   readonly parentId: string
   readonly sourceId: string
+  readonly source?: CruxParentChunk['source']
   readonly content: string
   readonly metadata: Record<string, unknown>
 }

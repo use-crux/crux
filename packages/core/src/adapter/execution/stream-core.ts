@@ -13,6 +13,7 @@ import type { MiddlewareResult } from "../../runtime/types";
 import { createSafety } from "../../safety/session";
 import { orchestrateStream } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
+import { normalizeInvocationMessages } from "../../content/invocation-message";
 import type { CallArgs, StreamHandle } from "../types";
 import { createToolLifecycle } from "../tool/session";
 import type { AdapterExecutionStreamArgs, CoreStepDialect } from "./types";
@@ -20,6 +21,10 @@ import { initialCoreMessages } from "./messages";
 import { createCachedStreamHandle } from "./metadata";
 import { buildResolveOpts } from "./shared";
 import { createSafetyTextChunk, isSafetyTextChunk } from "./stream-safety";
+import { emitInputTokenEstimate } from "./media-token-budget";
+import { responseContent } from "../assistant-output";
+import type { Message } from "../../generation/messages";
+import { replaceTextSlots } from "./stream-content";
 
 /**
  * Start one provider stream through the core-owned adapter dialect.
@@ -96,13 +101,15 @@ export async function streamCore<
   if (resolved.schema && dialect.wrapOutputSchema) {
     schemaParams = dialect.wrapOutputSchema(resolved.schema);
   }
+  const providerMessages = await normalizeInvocationMessages(messages, {
+    provider: modelInfo.provider,
+  });
 
   const callArgs: CallArgs<TExtra> = {
     model: modelInfo.modelId,
     system: resolved.system,
     systemBlocks: resolved.systemBlocks,
-    messages,
-    unsupportedContent: resolved.settings.unsupportedContent,
+    messages: providerMessages,
     settings: mappedSettings,
     schema: resolved.schema,
     schemaParams,
@@ -124,8 +131,15 @@ export async function streamCore<
       createCachedStreamResult: (cached) =>
         createCachedStreamHandle(cached) as unknown as MiddlewareResult,
     },
-    async () =>
-      withBudget(
+    async () => {
+      emitInputTokenEstimate({
+        messages: providerMessages,
+        provider: modelInfo.provider,
+        model: modelInfo.modelId,
+        media: dialect.media,
+        tokenBudget: args.tokenBudget,
+      });
+      return withBudget(
         (signal) =>
           dialect.stream(dialect.client, callArgs, {
             signal: composeAbortSignals(args.signal, signal),
@@ -134,7 +148,8 @@ export async function streamCore<
           budget: "step",
           limitMs: args.timeout?.stepMs,
         },
-      ),
+      );
+    },
   );
 
   const safetyStream = safety.enabled ? safety.openStream() : undefined;
@@ -176,13 +191,76 @@ export async function streamCore<
       isSafetyTextChunk(chunk) ? chunk.text : handle.extractTextDelta(chunk),
     completion: async () => {
       const meta = await handle.completion();
+      const providerContent = responseContent({
+        content: meta?.content,
+        text: meta?.text ?? "",
+        toolCalls: meta?.toolCalls?.flatMap((call) =>
+          typeof call.id === "string"
+            ? [{ id: call.id, name: call.name, args: call.args }]
+            : [],
+        ),
+      });
+      const providerTextSlots = providerContent.flatMap((part) =>
+        part.type === "text" ? [part.text] : [],
+      );
+      const hasMixedProviderText =
+        providerTextSlots.length > 1 ||
+        (providerTextSlots.length > 0 &&
+          providerContent.some((part) => part.type !== "text"));
+      const guardedSlots =
+        safety.enabled && hasMixedProviderText
+          ? await safety.guardOutputTextParts(providerTextSlots)
+          : undefined;
+      const text = guardedSlots
+        ? guardedSlots.join("")
+        : safety.enabled
+          ? streamedAssistantText
+          : (meta?.text ?? streamedAssistantText);
+      const content = guardedSlots
+        ? replaceTextSlots(providerContent, guardedSlots)
+        : safety.enabled
+          ? replaceTextSlots(
+              providerContent,
+              providerTextSlots.length === 0 ? [] : [text],
+              text,
+            )
+          : providerContent;
       const stamped = meta ? safety.stamp(meta) : meta;
+      const assistantMessage: Message = {
+        role: "assistant",
+        content,
+        ...(meta?.toolCalls ? { metadata: { toolCalls: meta.toolCalls } } : {}),
+      };
+      const completionMessages = meta?.messages
+        ? replaceFinalAssistant(meta.messages, assistantMessage)
+        : [...messages, assistantMessage];
       await lifecycle.captureTurn({
         messages,
         assistantText: streamedAssistantText || undefined,
-        toolCalls: stamped?.toolCalls,
+        toolCalls: meta?.toolCalls,
       });
-      return stamped;
+      return {
+        ...stamped,
+        text,
+        content,
+        messages: completionMessages,
+      };
     },
   };
+}
+
+/** Stamp authoritative assistant output into a provider-completed transcript. */
+function replaceFinalAssistant(
+  messages: readonly Message[],
+  assistant: Message,
+): readonly Message[] {
+  const result = [...messages];
+  for (let index = result.length - 1; index >= 0; index -= 1) {
+    if (result[index]?.role === "assistant") {
+      result[index] = assistant;
+      return result;
+    }
+  }
+  result.push(assistant);
+  return result;
 }

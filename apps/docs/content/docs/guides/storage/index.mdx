@@ -9,73 +9,73 @@ Crux storage is three capabilities, not one overloaded interface.
 
 `VectorStore` stores dense, sparse, or hybrid vectors. Use it for indexing and retrieval, plus any custom feature that needs similarity search.
 
-`BlobStore` stores bytes. Use it for workspace PDFs, images, CSVs, generated files, uploads, and oversized text.
+`AssetStore` stores bytes. Use it for workspace PDFs, images, CSVs, generated files, uploads, and oversized text.
 
-Most production apps compose capabilities: a `RecordStore` for records, a `VectorStore` for retrieval, and a `BlobStore` for large files. For Convex-specific wiring, see the [Convex guide](/docs/guides/convex).
+Most production apps compose capabilities: a `RecordStore` for records, a `VectorStore` for retrieval, and an `AssetStore` for large files. For Convex-specific wiring, see the [Convex guide](/docs/guides/convex).
 
-That split keeps the API honest. A Redis adapter can be a `RecordStore` without pretending to be blob storage. Upstash Vector can be a `VectorStore` without owning JSON records. Convex can implement records and blobs, and can expose vector search only when configured truthfully.
+That split keeps the API honest. A Redis adapter can be a `RecordStore` without pretending to be asset storage. Upstash Vector can be a `VectorStore` without owning JSON records. Convex can implement records and assets, and can expose vector search only when configured truthfully.
 
 ## Which One Do I Need?
 
 Use `RecordStore` for structured Crux records:
 
 ```ts
-workspace({ id: 'files', namespace, records })
+workspace({ id: "files", namespace, records });
 ```
 
 Use `VectorStore` when a feature needs similarity search:
 
 ```ts
 retriever({
-  id: 'docs',
+  id: "docs",
   records,
   vectors,
   dense,
   sparse,
-  search: { mode: 'hybrid' },
-})
+  search: { mode: "hybrid" },
+});
 ```
 
-Use `BlobStore` when workspace content is binary or large:
+Use `AssetStore` when workspace content is binary or large:
 
 ```ts
-await files.write('/outputs/report.pdf', pdfBytes, {
-  mimeType: 'application/pdf',
-})
+await files.write("/outputs/report.pdf", pdfBytes, {
+  mimeType: "application/pdf",
+});
 ```
 
-Small text and JSON can live inline in `RecordStore`. Binary and oversized payloads go to `BlobStore`. If binary data is written without a blob store, Crux throws a clear error.
+Small text and JSON can live inline in `RecordStore`. Binary and oversized payloads go to `AssetStore`. If binary data is written without an asset store, Crux throws a clear error.
 
 ## Bundled Storage
 
-| Package | Capability | Use for |
-| --- | --- | --- |
-| `@use-crux/core/storage` | `inMemoryRecordStore()` | Tests, local demos, non-durable JSON records |
-| `@use-crux/core/storage` | `inMemoryVectorStore()` | Tests and local vector search |
-| `@use-crux/core/storage` | `inMemoryBlobStore()` | Tests and demos that need blob behavior |
-| `@use-crux/core/storage` | `inMemoryStorage()` | Complete in-memory `{ records, vectors, blobs }` bundle |
-| `@use-crux/convex` | `convexRecordStore()` | Durable Convex-backed JSON records |
-| `@use-crux/convex` | `convexVectorStore()` | Dense-only Convex-backed vector search |
-| `@use-crux/convex` | `convexWorkspaceBlobStore()` | Workspace binary/large files in Convex file storage |
-| `@use-crux/upstash` | `upstashRedisRecordStore()` | Durable Redis-backed records with native TTL |
-| `@use-crux/upstash` | `upstashVectorStore()` | Upstash Vector dense search by default, sparse/hybrid when configured |
+| Package                  | Capability                  | Use for                                                               |
+| ------------------------ | --------------------------- | --------------------------------------------------------------------- |
+| `@use-crux/core/storage` | `inMemoryRecordStore()`     | Tests, local demos, non-durable JSON records                          |
+| `@use-crux/core/storage` | `inMemoryVectorStore()`     | Tests and local vector search                                         |
+| `@use-crux/core/storage` | `inMemoryAssetStore()`      | Tests and demos that need asset behavior                              |
+| `@use-crux/core/storage` | `inMemoryStorage()`         | Complete in-memory `{ records, vectors, assets }` bundle              |
+| `@use-crux/convex`       | `convexRecordStore()`       | Durable Convex-backed JSON records                                    |
+| `@use-crux/convex`       | `convexVectorStore()`       | Dense-only Convex-backed vector search                                |
+| `@use-crux/convex`       | `convexAssetStore()`        | Workspace binary/large files in Convex file storage                   |
+| `@use-crux/upstash`      | `upstashRedisRecordStore()` | Durable Redis-backed records with native TTL                          |
+| `@use-crux/upstash`      | `upstashVectorStore()`      | Upstash Vector dense search by default, sparse/hybrid when configured |
 
 Bundle capabilities with `storage()`:
 
 ```ts
-import { storage } from '@use-crux/core/storage'
+import { storage } from "@use-crux/core/storage";
 
 const appStorage = storage({
   records,
   vectors,
-  blobs,
-})
+  assets,
+});
 ```
 
 Use `storage.scope()` when a user, tenant, session, or workspace should get isolated keys:
 
 ```ts
-const userStorage = storage.scope(appStorage, `user:${userId}`)
+const userStorage = storage.scope(appStorage, `user:${userId}`);
 ```
 
 ## Migration Note
@@ -96,9 +96,9 @@ Storage Beta is a pre-launch API. Treat the current `@use-crux/core/storage` con
     href="/docs/guides/storage/vector-store"
   />
   <Card
-    title="BlobStore"
+    title="AssetStore"
     description="Binary files, generated outputs, S3/R2/GCS-style implementations, and workspace integration."
-    href="/docs/guides/storage/blob-storage"
+    href="/docs/guides/storage/asset-storage"
   />
   <Card
     title="Postgres RecordStore"

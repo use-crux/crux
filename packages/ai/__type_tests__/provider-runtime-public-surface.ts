@@ -30,5 +30,13 @@ expectTypeOf<Awaited<ReturnType<AiRuntime['stream']>>>().toEqualTypeOf<
   ExecutorStreamHandle<SdkStreamResultLike>
 >()
 expectTypeOf<AiGenerateOptions['model']>().toEqualTypeOf<ExecutorModelArg<LanguageModel>>()
+// @ts-expect-error - media estimation remains private adapter integration.
+type MissingMediaEstimator = AiGenerateOptions['mediaEstimator']
+// @ts-expect-error - private media hooks do not appear on provider runtime records.
+aiSdkProviderRuntime.media
+// @ts-expect-error - capability setup is intentionally absent.
+aiSdkProviderRuntime.capabilities()
 expectTypeOf<ReturnType<AiRuntime['retrievalModel']>>().toEqualTypeOf<RetrievalModel>()
 expectTypeOf<ReturnType<AiRuntime['reranker']>>().toEqualTypeOf<Reranker>()
+
+void (undefined as unknown as MissingMediaEstimator)

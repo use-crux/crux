@@ -56,10 +56,10 @@ export function crawlSite(options: {
         yield {
           namespace: options.namespace,
           sourceId: url,
+          source: { url },
           content: extracted.content,
           title: extracted.title,
           metadata: {
-            sourceUrl: url,
             format: 'html',
           },
         }

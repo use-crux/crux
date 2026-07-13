@@ -194,7 +194,7 @@ function workspaceResultPreview(
       size: record.size,
       status: record.status,
       artifactKind: record.kind,
-      uri: record.uri,
+      assetRef: opaqueRefDescriptor(record.assetRef),
       metadata: record.metadata,
       contentStored: false,
     };
@@ -226,7 +226,7 @@ function workspaceResultAttributes(result: unknown): Record<string, unknown> {
       ...(typeof record.kind === "string" ? { artifactKind: record.kind } : {}),
       mimeType: record.mimeType,
       size: record.size,
-      ...(typeof record.uri === "string" ? { uri: record.uri } : {}),
+      ...(typeof record.uri === "string" ? { assetRef: "present" } : {}),
     };
   }
   if (typeof record.kind === "string") {
@@ -245,7 +245,7 @@ function workspaceResultAttributes(result: unknown): Record<string, unknown> {
       ...(typeof record.artifactKind === "string"
         ? { artifactKind: record.artifactKind }
         : {}),
-      ...(typeof record.uri === "string" ? { uri: record.uri } : {}),
+      ...(typeof record.uri === "string" ? { assetRef: "present" } : {}),
     };
   }
   return {};
@@ -269,6 +269,12 @@ function isWorkspaceArtifactRecord(
     typeof record.updatedAt === "number" &&
     record.kind !== "file"
   );
+}
+
+function opaqueRefDescriptor(value: unknown): "present" | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const uri = (value as { readonly uri?: unknown }).uri;
+  return typeof uri === "string" ? "present" : undefined;
 }
 
 function hashString(value: string): string {

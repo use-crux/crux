@@ -74,6 +74,7 @@ export function callMatch(
   call: ts.CallExpression,
   exported: boolean,
   scopedInitializers: readonly StaticInitializerRecord[] = [],
+  ownerVariableName?: string,
 ): StaticSourceMatch {
   const callee = staticCalleeRecordFromExpression(call.expression, input.importsByLocalName)
   const evidence = input.callMatcher.evidenceFor(callee)
@@ -85,6 +86,7 @@ export function callMatch(
     kind: 'call',
     eagerExecution: isEagerExecution(call),
     variableName,
+    ...(ownerVariableName ? { ownerVariableName } : {}),
     localName: staticFallbackLocalName(input.root, input.file, variableName),
     exported,
     callee,

@@ -388,7 +388,7 @@ describe('indexer', () => {
     expect(firstPass.entries).toHaveLength(1)
     const docs = makeRetriever({ id: 'docs', namespace: 'kb', records, vectors, dense })
     await expect(docs.retrieve('first version', { threshold: 0.5 })).resolves.toEqual([
-      expect.objectContaining({ sourceId: 'doc-1', content: 'first version' }),
+      expect.objectContaining({ source: { id: 'doc-1' }, content: 'first version' }),
     ])
 
     await indexer.indexDocuments(
@@ -443,7 +443,7 @@ describe('indexer', () => {
     expect(entries.entries).toHaveLength(1)
     const docs = makeRetriever({ id: 'docs', namespace: 'kb', records, vectors, dense })
     await expect(docs.retrieve('hello from async iterable', { threshold: 0.5 })).resolves.toEqual([
-      expect.objectContaining({ sourceId: 'doc-async', content: 'hello from async iterable' }),
+      expect.objectContaining({ source: { id: 'doc-async' }, content: 'hello from async iterable' }),
     ])
   })
 
@@ -536,7 +536,7 @@ describe('indexer', () => {
       search: { mode: 'sparse' },
     })
     await expect(docs.retrieve('hello', { threshold: 0.5 })).resolves.toEqual([
-      expect.objectContaining({ sourceId: 'doc-1', chunkId: 'a', content: 'hello' }),
+      expect.objectContaining({ source: { id: 'doc-1' }, chunkId: 'a', content: 'hello' }),
     ])
   })
 
@@ -592,7 +592,7 @@ describe('indexer', () => {
       search: { mode: 'hybrid' },
     })
     await expect(docs.retrieve('hello', { threshold: 0.5 })).resolves.toEqual([
-      expect.objectContaining({ sourceId: 'doc-1', chunkId: 'a', content: 'hello' }),
+      expect.objectContaining({ source: { id: 'doc-1' }, chunkId: 'a', content: 'hello' }),
     ])
   })
 

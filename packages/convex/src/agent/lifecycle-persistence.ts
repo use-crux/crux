@@ -1,5 +1,4 @@
-import { messageText } from '@use-crux/core'
-import type { MessageContent, ResolvedPrompt } from '@use-crux/core'
+import type { ResolvedPrompt } from '@use-crux/core'
 import type { SkillActivationSession } from '@use-crux/core/skill'
 import { observe } from '@use-crux/core/observability'
 import { flushObservability } from '../observability'
@@ -7,7 +6,8 @@ import type { ConvexAgentContextMessage } from './driver'
 import type { ConvexAgentPersistenceConfig } from './lifecycle-types'
 import { convexSkillActivationPersistence } from './skill-activation-persistence'
 import { isRecord, stringValue } from './lifecycle-utils'
-
+import { trimmedContentProjection } from './message-preview'
+import { collectResultToolCalls } from './lifecycle-result-tools'
 interface ConvexMemoryDiffSummary {
   readonly before?: unknown
   readonly after?: unknown
@@ -20,7 +20,6 @@ interface ConvexMemoryDiffSummary {
     readonly preview: string
   }[]
 }
-
 /** Run best-effort skill and memory persistence after a successful agent turn. */
 export async function afterPreparedAgentCall(args: {
   readonly resolved: ResolvedPrompt
@@ -50,7 +49,6 @@ export async function afterPreparedAgentCall(args: {
     )
   }
 }
-
 async function runBestEffortPersistence(
   name: string,
   phase: string,
@@ -71,7 +69,6 @@ async function runBestEffortPersistence(
     await flushObservability()
   }
 }
-
 /** Read active skill ids from the request-scoped Crux store. */
 export async function readPersistedSkillIds(): Promise<string[]> {
   const snapshot = await convexSkillActivationPersistence().load({})
@@ -278,9 +275,7 @@ function lastUserText(resolved: ResolvedPrompt): string | undefined {
 }
 
 function trimmedMessageProjection(content: unknown): string | undefined {
-  if (typeof content !== 'string' && !Array.isArray(content)) return undefined
-  const text = messageText({ content: content as MessageContent }).trim()
-  return text ? text : undefined
+  return trimmedContentProjection(content)
 }
 
 function extractAssistantText(value: unknown): string | undefined {
@@ -300,34 +295,4 @@ function extractAssistantTextFromMessages(value: unknown): string | undefined {
     if (text) texts.push(text)
   }
   return texts.length > 0 ? texts.join('\n') : undefined
-}
-
-function collectResultToolCalls(
-  value: unknown,
-): Array<{ id?: string; name: string; args: unknown }> {
-  const calls: Array<{ id?: string; name: string; args: unknown }> = []
-  appendResultToolCalls(calls, value)
-  return calls
-}
-
-function appendResultToolCalls(
-  target: Array<{ id?: string; name: string; args: unknown }>,
-  value: unknown,
-): void {
-  if (!value) return
-  if (Array.isArray(value)) {
-    for (const item of value) appendResultToolCalls(target, item)
-    return
-  }
-  if (!isRecord(value)) return
-  const name = stringValue(value.toolName) ?? stringValue(value.name)
-  if (name) {
-    target.push({
-      id: stringValue(value.toolCallId) ?? stringValue(value.id),
-      name,
-      args: value.args ?? value.input ?? value.arguments,
-    })
-  }
-  appendResultToolCalls(target, value.toolCalls)
-  appendResultToolCalls(target, value.steps)
 }

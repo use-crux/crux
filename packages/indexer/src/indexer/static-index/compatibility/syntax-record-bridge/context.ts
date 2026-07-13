@@ -1,6 +1,9 @@
 import { safeId } from '../../../definitions'
 import { staticDefinition } from '../../../static/definition-builder'
-import { createStaticRecordArgumentReader, createStaticRecordObjectReader } from '../../syntax/record/readers'
+import {
+  createStaticRecordArgumentReader,
+  createStaticRecordObjectReader,
+} from '../../syntax/record/readers'
 import type {
   StaticInitializerRecord,
   StaticObjectValue,
@@ -8,10 +11,17 @@ import type {
   StaticSyntaxFileRecord,
 } from '../../syntax/record/types'
 import type { StaticSyntaxInitializerMap } from '../../syntax/record/value'
-import { createDefinitionBuilder, createReferenceBuilder } from '../../../extensions/public-contract/builders'
+import {
+  createDefinitionBuilder,
+  createReferenceBuilder,
+} from '../../../extensions/public-contract/builders'
 import { createStaticRecordSyntaxHandle } from './native-context'
 import { createStaticRecordSourceRefBuilder } from './source-ref'
-import type { ExtractContext, IndexExtractor, IndexerExtension } from '../../../extensions/public-contract/types'
+import type {
+  ExtractContext,
+  IndexExtractor,
+  IndexerExtension,
+} from '../../../extensions/public-contract/types'
 
 /** Input required to build one record-backed extractor context. */
 export interface StaticRecordExtractContextInput {
@@ -42,24 +52,49 @@ export interface StaticRecordExtractContextInput {
  * execution must be usable by any parser frontend and cannot expose TypeScript or Oxc parser objects
  * to extension code.
  */
-export function createStaticRecordExtractContext(input: StaticRecordExtractContextInput): ExtractContext {
+export function createStaticRecordExtractContext(
+  input: StaticRecordExtractContextInput,
+): ExtractContext {
   const args = input.match.kind === 'object' ? [] : input.match.args
   return {
     extension: { name: input.extension.name, version: input.extension.version },
     extractor: input.extractor.name,
-    match: { kind: input.match.kind, name: matchName(input.match) },
+    match: {
+      kind: input.match.kind,
+      name: matchName(input.match),
+      ...(input.match.kind !== 'object' && input.match.callee.moduleSpecifier
+        ? { moduleSpecifier: input.match.callee.moduleSpecifier }
+        : {}),
+      ...(input.match.kind !== 'object' && input.match.callee.importedName
+        ? { importedName: input.match.callee.importedName }
+        : {}),
+    },
     source: {
       root: input.root,
       file: input.record.file,
       variableName: input.match.variableName,
+      ...(input.match.ownerVariableName
+        ? { ownerVariableName: input.match.ownerVariableName }
+        : {}),
       exported: input.match.exported,
       localName: input.match.localName,
       safeId,
     },
     args: createStaticRecordArgumentReader(args, input.initializers),
-    config: input.objectArg ? createStaticRecordObjectReader(input.objectArg, input.initializers) : undefined,
+    config: input.objectArg
+      ? createStaticRecordObjectReader(input.objectArg, input.initializers)
+      : undefined,
     define: createDefinitionBuilder(({ id, kind, name, metadata }) =>
-      staticDefinition(input.record.file, id, kind, name, undefined, input.match.source, input.match.snippet, metadata),
+      staticDefinition(
+        input.record.file,
+        id,
+        kind,
+        name,
+        undefined,
+        input.match.source,
+        input.match.snippet,
+        metadata,
+      ),
     ),
     ref: createReferenceBuilder(),
     sourceRef: createStaticRecordSourceRefBuilder({

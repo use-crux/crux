@@ -12,6 +12,8 @@ describe('runtime isolate bundle compatibility', () => {
     await writeFile(
       entry,
       [
+        "import '@use-crux/core'",
+        "import '@use-crux/core/transcription'",
         "import '@use-crux/core/runtime'",
         "import '@use-crux/core/internal/async-scope'",
         "import '@use-crux/core/internal/defer-host'",
@@ -68,5 +70,6 @@ function coreSubpath(specifier: string): string {
   if (subpath === 'internal/async-scope') return 'packages/core/src/async-scope/index.ts'
   if (subpath === 'internal/defer-host') return 'packages/core/src/defer/host.ts'
   if (subpath === 'internal/defer-lifecycle') return 'packages/core/src/defer/lifecycle.ts'
+  if (subpath === 'transcription') return 'packages/core/src/transcription/index.ts'
   return `packages/core/src/${subpath}.ts`
 }

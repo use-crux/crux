@@ -140,6 +140,18 @@
       "types": "./src/scoring/index.ts",
       "import": "./src/scoring/index.ts"
     },
+    "./transcription": {
+      "types": "./src/transcription/index.ts",
+      "import": "./src/transcription/index.ts"
+    },
+    "./transcription/node": {
+      "types": "./src/transcription/node.ts",
+      "import": "./src/transcription/node.ts"
+    },
+    "./speech": {
+      "types": "./src/speech/index.ts",
+      "import": "./src/speech/index.ts"
+    },
     "./agent": {
       "types": "./src/agent/index.ts",
       "import": "./src/agent/index.ts"
@@ -281,6 +293,15 @@
       ],
       "scoring": [
         "src/scoring/index.ts"
+      ],
+      "transcription": [
+        "src/transcription/index.ts"
+      ],
+      "transcription/node": [
+        "src/transcription/node.ts"
+      ],
+      "speech": [
+        "src/speech/index.ts"
       ],
       "agent": [
         "src/agent/index.ts"

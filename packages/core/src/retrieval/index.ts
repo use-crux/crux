@@ -58,6 +58,7 @@ export type {
   RetrievalToolName,
   Retriever,
   RetrieverHit,
+  RetrieverSource,
   RetrieverMode,
   RetrieverTools,
 } from './types'

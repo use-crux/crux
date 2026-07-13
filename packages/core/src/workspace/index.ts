@@ -3,14 +3,14 @@
  *
  * Workspaces give prompts a scoped, filesystem-like tree for scratch files and
  * generated outputs. Metadata lives in a `RecordStore`; binary or oversized
- * payloads live in a `BlobStore`.
+ * payloads live in an `AssetStore`.
  *
  * @module
  */
 
-export { workspace, memoryWorkspaceBlobStore } from './define-workspace'
-export { retrieverWorkspaceMountSource } from './retriever-source'
-export { workspaceToolNames } from './tool-io'
+export { workspace } from "./define-workspace";
+export { retrieverWorkspaceMountSource } from "./retriever-source";
+export { workspaceToolNames } from "./tool-io";
 
 export type {
   WorkspaceArtifact,
@@ -18,21 +18,18 @@ export type {
   WorkspaceArtifactStatus,
   WorkspaceFinalizeOptions,
   WorkspaceProvenance,
-} from './artifact-types'
+} from "./artifact-types";
 
 export type {
   WorkspaceRetrieverMountOperation,
   WorkspaceRetrieverMountQueryInput,
   WorkspaceRetrieverMountSource,
   WorkspaceRetrieverMountSourceOptions,
-} from './retriever-source'
+} from "./retriever-source";
 
 export type {
   Workspace,
   WorkspaceAppendOptions,
-  WorkspaceBlobReadResult,
-  WorkspaceBlobRef,
-  WorkspaceBlobStore,
   WorkspaceConfig,
   WorkspaceContent,
   WorkspaceContentOptions,
@@ -81,7 +78,7 @@ export type {
   WorkspaceVersion,
   WorkspaceVersioning,
   WorkspaceVersionOperation,
-} from './types'
+} from "./types";
 export type {
   WorkspaceChangeEvent,
   WorkspaceChangeType,
@@ -90,4 +87,4 @@ export type {
   WorkspaceWatchCallback,
   WorkspaceWatchHandle,
   WorkspaceWatchOptions,
-} from './watch'
+} from "./watch";

@@ -9,6 +9,7 @@
 
 import type {
   LanguageModel,
+  ModelMessage,
   StopCondition as AiStopCondition,
   ToolChoice as AiToolChoice,
   ToolSet,
@@ -18,9 +19,9 @@ import type {
   Context,
   GenerationSettings,
   KnownToolsFor,
+  Message,
   MergedInput,
   Prompt,
-  ResolvedPrompt,
   TimeoutOptions,
   ToolsContextOption,
 } from "@use-crux/core";
@@ -53,6 +54,9 @@ type AiTransportParams =
   | Parameters<SdkGateway["generateText"]>[0]
   | Parameters<SdkGateway["generateObject"]>[0];
 type AiTransportResult = SdkLoopResultLike;
+
+/** Message history accepted by `@use-crux/ai` generation calls. */
+export type AIMessageHistory = readonly Message[] | readonly ModelMessage[];
 
 /** Metadata passed to an AI SDK adapter `transport` callback. */
 export interface AITransportInfo {
@@ -117,11 +121,13 @@ interface AIGenerateBaseOptions<
   /** Shared context threaded through tool execution, middleware, approvals, and step hooks. */
   runtimeContext?: TRuntimeContext;
   /**
-   * Message history override for resume flows such as tool approval.
-   * Pass the prior assistant messages plus a `tool-approval-response` tool
-   * message.
+   * Message history override.
+   *
+   * Pass canonical Crux messages for Crux-owned resume flows, or AI SDK
+   * `ModelMessage[]` from `convertToModelMessages()` to preserve native
+   * file/image parts and provider options through the AI SDK loop.
    */
-  messages?: ResolvedPrompt["messages"];
+  messages?: AIMessageHistory;
   /**
    * Maximum tool-loop steps, identical to every Crux adapter.
    *

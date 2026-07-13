@@ -9,7 +9,7 @@
  */
 
 import { unique, uniqueNumbers } from './collections'
-import type { ChunkProvenance, CruxChunk, CruxDocument, CruxIngestPart, CruxParentChunk } from './types'
+import type { ChunkProvenance, CruxChunk, CruxDocument, CruxIngestPart, CruxParentChunk, CruxSourceLocation } from './types'
 
 /** Build coarse provenance (part ids, pages, sheets, tables) from parts. */
 export function coarseProvenance(parts: CruxIngestPart[]): ChunkProvenance {
@@ -29,12 +29,14 @@ export function coarseProvenance(parts: CruxIngestPart[]): ChunkProvenance {
     }),
   )
   const tables = parts.filter((part) => part.kind === 'table').map((part) => part.id)
+  const sourceLocations = uniqueSourceLocations(parts.flatMap((part) => part.sourceLocation ? [part.sourceLocation] : []))
 
   return {
     ...(partIds.length ? { partIds } : {}),
     ...(pages.length ? { pages } : {}),
     ...(sheets.length ? { sheets } : {}),
     ...(tables.length ? { tables } : {}),
+    ...(sourceLocations.length ? { sourceLocations } : {}),
     confidence: 'exact',
   }
 }
@@ -82,9 +84,22 @@ export function mergeProvenance(items: ChunkProvenance[]): ChunkProvenance | und
     sheets: unique(items.flatMap((item) => item.sheets ?? [])),
     tables: unique(items.flatMap((item) => item.tables ?? [])),
     jsonPaths: unique(items.flatMap((item) => item.jsonPaths ?? [])),
+    sourceLocations: uniqueSourceLocations(items.flatMap((item) => item.sourceLocations ?? [])),
     sourceSpans: items.flatMap((item) => item.sourceSpans ?? []),
     confidence: items.some((item) => item.confidence === 'derived') ? 'derived' : 'exact',
   }
+}
+
+function uniqueSourceLocations(locations: readonly CruxSourceLocation[]): CruxSourceLocation[] {
+  const seen = new Set<string>()
+  return locations.filter((location) => {
+    const key = location.type === 'page'
+      ? `page:${location.pageNumber}`
+      : `time:${location.unit}:${location.start}:${location.end}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 /** Apply a confidence downgrade to a chunk's provenance. */

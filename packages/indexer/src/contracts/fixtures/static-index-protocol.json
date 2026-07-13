@@ -9,7 +9,7 @@
       "identity": {
         "protocolVersion": 2,
         "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
-        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.139.0+crux_native_group3.7" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.139.0+crux_native_group3.8" },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
           "version": "2",
@@ -63,7 +63,7 @@
       "identity": {
         "protocolVersion": 2,
         "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
-        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.139.0+crux_native_group3.7" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.139.0+crux_native_group3.8" },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
           "version": "2",
@@ -130,7 +130,7 @@
       "identity": {
         "protocolVersion": 2,
         "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
-        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.139.0+crux_native_group3.7" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.139.0+crux_native_group3.8" },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
           "version": "2",
@@ -262,7 +262,7 @@
       "identity": {
         "protocolVersion": 2,
         "compiler": { "name": "crux-indexer-static-compiler", "version": "phase-3" },
-        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.139.0+crux_native_group3.7" },
+        "oxc": { "name": "oxc-rust", "version": "oxc_parser@0.139.0+crux_native_group3.8" },
         "primitiveManifest": {
           "name": "crux-first-party-primitives",
           "version": "2",

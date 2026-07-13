@@ -14,7 +14,8 @@ Fetches the URL with `fetch`, inspects the `Content-Type` header, and:
 
 - **HTML** (`text/html`, or content that looks like HTML) → extracts title, text blocks, headings, lists, code, and tables
 - **Plain text / Markdown / CSV / JSON** → parses into structured parts
-- **PDF** (`application/pdf`, `.pdf`, or `%PDF` bytes) → extracts page parts, with optional OCR hook support
+- **PDF** (`application/pdf`, `.pdf`, or `%PDF` bytes) → extracts page parts; visual pages can use `media.describe`
+- **Image/audio/video** → derives ordinary text through explicitly bound `media.describe` / `media.transcribe` operations
 - **DOCX / XLSX** (`.docx`, `.xlsx`) → parses remote Office files when the URL extension identifies the format
 
 For the full parser inventory and output shapes, see the [@use-crux/ingest overview](/docs/reference/ingest#bundled-parsers).
@@ -29,7 +30,7 @@ urlSource('https://example.com/article', {
   sourceId?: string,         // defaults to the URL
   fetch?: typeof fetch,       // for testing / custom HTTP clients
   parsers?: IngestParser[],
-  ocr?: OcrHook,
+  media?: IngestMediaOperations,
 })
 ```
 
@@ -39,7 +40,7 @@ urlSource('https://example.com/article', {
 | `sourceId`  | `string?`         | Defaults to the URL                                                            |
 | `fetch`     | `typeof fetch?`   | Inject a custom fetch (e.g. for testing or proxies)                            |
 | `parsers`   | `IngestParser[]?` | Optional parser overrides. Custom parsers beat built-ins for matching formats. |
-| `ocr`       | `OcrHook?`        | Optional hook for PDF pages without extractable text.                          |
+| `media`     | `IngestMediaOperations?` | Bound semantic description/transcription operations for media sources. |
 
 ### Document metadata
 
@@ -49,10 +50,10 @@ For HTML responses:
 {
   namespace: '...',
   sourceId: 'https://example.com/article',
+  source: { url: 'https://example.com/article', mediaType: 'text/html' },
   content: '...',                 // extracted text
   title: '...',                   // from <title> tag
   metadata: {
-    sourceUrl: 'https://example.com/article',
     format: 'html',
     parser: 'html',
   },
@@ -70,7 +71,6 @@ For non-HTML responses (`text/plain`, `text/markdown`, `text/csv`, `application/
   sourceId: '...',
   content: rawText,
   metadata: {
-    sourceUrl: '...',
     format: 'txt' | 'md' | 'csv' | 'json',
     parser: 'text' | 'markdown' | 'csv' | 'json',
   },
@@ -90,7 +90,7 @@ urlsSource(['https://example.com/a', 'https://example.com/b', 'https://example.c
 | `namespace` | `string`          | Required, non-empty                     |
 | `fetch`     | `typeof fetch?`   | Custom fetch shared across all URLs     |
 | `parsers`   | `IngestParser[]?` | Parser overrides shared across all URLs |
-| `ocr`       | `OcrHook?`        | OCR hook shared across PDF URLs         |
+| `media`     | `IngestMediaOperations?` | Media operations shared across URLs |
 
 URLs are loaded **sequentially** (one at a time). For high-volume ingestion, batch your own concurrency above this layer.
 

@@ -16,6 +16,8 @@ import type { InternalPromptInjection } from '../prompt/internal-injection'
 import type { QueryableCruxEntity } from '../tools/entity'
 import type { RetrieveOptions, RetrieveRequest } from './request'
 import type { RetrievalToolDef } from './tools'
+import type { CruxSourceFacts } from '../indexing'
+import type { AssetRef } from '../asset'
 
 export type { RetrieveOptions, RetrieveRequest } from './request'
 
@@ -58,13 +60,12 @@ export type RetrieverTools<TConfig extends RetrievalToolConfig | undefined = und
 /** A single scored retrieval result. */
 export interface RetrieverHit {
   namespace: string
-  sourceId: string
+  /** Structured attribution hydrated from the indexed record. */
+  readonly source: RetrieverSource
   chunkId: string
   content: string
   metadata: Record<string, unknown>
   score: number
-  sourceUrl?: string
-  sourcePath?: string
   parent?: {
     parentId?: string
     key?: string
@@ -74,6 +75,16 @@ export interface RetrieverHit {
     metadata?: Record<string, unknown>
   }
   provenance?: HitProvenance
+}
+
+/** Safe source attribution returned with a retrieval hit. */
+export interface RetrieverSource extends Omit<CruxSourceFacts, 'assetRef'> {
+  readonly id: string
+  /**
+   * Optional reference to original media. Retrieval never hydrates it; call
+   * `assetStore.get(hit.source.assetRef)` only when the application needs the original.
+   */
+  readonly assetRef?: AssetRef
 }
 
 /** Structured scoring and transformation history for a retrieval hit. */

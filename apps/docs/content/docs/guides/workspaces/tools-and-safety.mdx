@@ -36,14 +36,14 @@ Multiple workspaces need prefixes so tool names do not collide:
 const research = workspace({
   id: "research",
   namespace,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
   tools: { prefix: "research" },
 });
 
 const drafts = workspace({
   id: "drafts",
   namespace,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
   tools: { prefix: "drafts" },
 });
 
@@ -88,7 +88,7 @@ Delete is intentionally not injected by default:
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
   tools: {
     delete: true,
   },

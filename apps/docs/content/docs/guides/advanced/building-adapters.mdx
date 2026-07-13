@@ -78,6 +78,14 @@ describeCruxAdapterConformance({
 
 Keep provider-specific transcript tests for unusual message conversion behavior.
 
+### Media and completed operations
+
+Treat canonical image, audio, video, and file parts as ordinary messages. Normalize and validate them in the package that owns the provider SDK, before the network boundary. Known unsupported combinations should throw `UnsupportedCapabilityError` before I/O; unknown custom model ids should reach native provider validation. Preserve provider continuation state only in typed provider options, never visible text or observability.
+
+Use `defineCompletedOperation()` plus `bindCompletedOperation()` for non-streaming image generation, transcription, or speech. The immutable definition owns normalization, private support preflight, invocation, result validation, and descriptor-only reporting. It must not accept storage, expose a capability registry, or enter the language/tool loop. If the provider cannot implement an operation, omit it from the runtime extension instead of returning a throwing stub.
+
+Test the public bound operation with deterministic SDK fakes and contribute its support row to the private conformance fixtures. Reports may contain provider/model/execution/call counts and bounded media descriptors, but never bytes, URLs, file ids, filenames, refs, or native responses.
+
 ## Native transcript codec
 
 Convert between Crux's canonical `Message` format and your SDK's format with a `NativeTranscriptCodec`:

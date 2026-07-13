@@ -146,6 +146,7 @@ export const ARTIFACT_CAPTURE_DECISIONS = {
   'ingest.report': 'exempt',
   'corpus.report': 'exempt',
   'security.report': 'exempt',
+  'media.report': 'exempt',
   'constraint.report': 'safety',
 } as const satisfies Record<CruxCanonicalArtifactKind, CruxObservabilityArtifactCaptureDecision>
 

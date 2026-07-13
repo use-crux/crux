@@ -36,6 +36,7 @@ export function sourceLoader(load: () => AsyncIterable<IngestLoadResult>): Sourc
 export function normalizeDocument(document: {
   namespace: string
   sourceId: string
+  source?: IngestDocument['source']
   title?: string
   parts?: IngestPart[]
   content?: string
@@ -65,6 +66,7 @@ export function normalizeDocument(document: {
   return {
     namespace: document.namespace,
     sourceId: document.sourceId,
+    ...(document.source ? { source: document.source } : {}),
     ...(document.title ? { title: document.title } : {}),
     parts,
     content: document.content ?? deriveContent(parts),
@@ -145,6 +147,15 @@ export function errorFromUnknown(error: unknown, code: IngestError['code'], pars
       code,
       message: error.message,
       ...(error.stack ? { stack: error.stack } : {}),
+      ...(parser ? { parser } : {}),
+    }
+  }
+
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') {
+    return {
+      code,
+      message: error.message,
+      ...('stack' in error && typeof error.stack === 'string' ? { stack: error.stack } : {}),
       ...(parser ? { parser } : {}),
     }
   }

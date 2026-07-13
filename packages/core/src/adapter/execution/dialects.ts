@@ -11,6 +11,7 @@
 import type { AdapterSpec } from '../spec'
 import type { LoopRuntimePort } from '../loop-runtime-port'
 import type { CoreStepDialect, SdkLoopDialect } from './types'
+import { providerMediaHooksFor } from '../native-chat/media-hooks'
 
 /**
  * Convert an `AdapterSpec` and bound client into the core-step dialect.
@@ -36,6 +37,7 @@ export function coreStepDialect<
   return {
     kind: 'core-step',
     id: spec.providerId,
+    media: providerMediaHooksFor(spec),
     client,
     mapSettings: spec.mapSettings,
     call: spec.call,
@@ -66,6 +68,7 @@ export function sdkLoopDialect<TModel, TRawResponse, TRawStream>(
   const dialect: SdkLoopDialect<TModel, TRawResponse, TRawStream> = {
     kind: 'sdk-loop',
     id: port.id,
+    media: port.media,
     describeModel: (model) => port.describeModel(model),
     mapSettings: (settings, model) => port.mapSettings(settings, model),
     runTextLoop: (request) => port.runTextLoop(request),

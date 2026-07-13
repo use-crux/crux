@@ -327,7 +327,7 @@ const docsRetriever = retriever({
   retrieve: async (query) => [
     {
       namespace: 'kb',
-      sourceId: 'kb-refunds',
+      source: { id: 'kb-refunds' },
       chunkId: 'kb-refunds#0',
       content: `Refund policy for: ${query}`,
       metadata: {},
@@ -367,7 +367,7 @@ export const retrievalRecipeEval = evaluate('docs.retrieval-recipe', {
 export const ragEval = evaluate('docs.rag', {
   task: async (input: { question: string }) => {
     const hits = await docsRetriever.retrieve(input.question)
-    return { answer: hits.map((h) => h.content).join('\n'), sources: hits.map((h) => h.sourceId) }
+    return { answer: hits.map((h) => h.content).join('\n'), sources: hits.map((h) => h.source.id) }
   },
   data: [{ input: { question: 'How do refunds work?' } }],
   scorers: (s) => [s.rag.faithfulness(), s.rag.answerRelevancy()],

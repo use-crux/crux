@@ -70,7 +70,7 @@ export interface SplitModel<
  * ```
  */
 export function split<
-  Routes extends Record<string, SplitRoute>,
+  const Routes extends Record<string, SplitRoute>,
   TCtx extends object = object,
 >(config: SplitConfig<Routes, TCtx>): SplitModel<Routes, TCtx> {
   return Object.freeze({

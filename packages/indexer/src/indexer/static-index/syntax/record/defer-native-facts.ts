@@ -155,11 +155,13 @@ function callbackSourceRef(
 function isPublicDeferCall(
   match: StaticSourceMatch,
 ): match is StaticCallSourceMatch {
+  const publicModules = new Set(['@use-crux/core', '@use-crux/core/defer'])
   return (
     match.kind === 'call' &&
     match.callee.name === 'defer' &&
     match.callee.direct !== false &&
-    match.callee.moduleSpecifier === '@use-crux/core'
+    match.callee.moduleSpecifier !== undefined &&
+    publicModules.has(match.callee.moduleSpecifier)
   )
 }
 

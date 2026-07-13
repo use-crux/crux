@@ -11,9 +11,9 @@
  * @module
  */
 
-import type { ContentPart, MessageContent } from '../../../types/content'
-import type { ToolModelOutput } from '../../../types/tool'
-import type { NativeAssistantTurn } from '../types'
+import type { AssistantContentPart, ContentPart, MessageContent } from '../../../types/content'
+import type { ProviderOptions, ToolModelOutput } from '../../../types/tool'
+import type { NativeAssistantReadContext, NativeAssistantTurn } from '../types'
 
 /**
  * One value, a readonly list of values, or nothing.
@@ -41,6 +41,8 @@ export interface ProviderToolCall {
   readonly name: string
   /** Raw, unparsed tool arguments as the model produced them. */
   readonly args: unknown
+  /** Opaque provider-owned fields required to replay this exact call. */
+  readonly providerOptions?: ProviderOptions
 }
 
 /**
@@ -66,10 +68,7 @@ export interface ProviderToolResult {
 }
 
 /** Options that affect provider transcript encoding without changing provider wire params. */
-export interface TranscriptEncodeOptions {
-  /** How codecs handle canonical content parts the selected provider cannot represent. */
-  readonly unsupportedContent?: 'degrade' | 'error'
-}
+export type TranscriptEncodeOptions = Readonly<Record<never, never>>
 
 /**
  * The neutral unit of a transcript: the smallest piece a dialect encodes.
@@ -87,7 +86,7 @@ export type ProviderTranscriptUnit =
     }
   | {
       readonly kind: 'assistant'
-      readonly content: MessageContent
+      readonly content: string | readonly AssistantContentPart[]
       readonly toolCalls?: readonly ProviderToolCall[]
     }
   | {
@@ -123,6 +122,8 @@ export interface ToolResultEncodingHelpers {
  * @typeParam TRawResponse - Provider-native non-streaming response shape.
  */
 export interface ProviderTranscriptDialect<TProviderMessage, TRawResponse> {
+  /** Preserve signed/provider-native reasoning for continuation replay. */
+  readonly preserveAssistantReasoning?: boolean
   /** Encode a `system`/`user` content turn into provider messages. */
   encodeContent(
     unit: Extract<ProviderTranscriptUnit, { kind: 'content' }>,
@@ -142,5 +143,8 @@ export interface ProviderTranscriptDialect<TProviderMessage, TRawResponse> {
   /** Decode one provider message back into canonical transcript units. */
   decodeMessage(value: unknown): OneOrMany<ProviderTranscriptUnit>
   /** Read assistant text and tool-call intent from a raw provider response. */
-  readAssistant(raw: TRawResponse): NativeAssistantTurn
+  readAssistant(
+    raw: TRawResponse,
+    context?: NativeAssistantReadContext,
+  ): NativeAssistantTurn
 }

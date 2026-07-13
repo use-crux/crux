@@ -11,13 +11,15 @@
  */
 
 import { z } from 'zod'
+import { Buffer } from 'node:buffer'
+import { randomUUID } from 'node:crypto'
 import { canonicalJson, sha256Hex } from './json'
 
 /** Bump when normalized-call construction changes in a way not captured by its inputs. */
-export const CASSETTE_CACHE_EPOCH = 1
+export const CASSETTE_CACHE_EPOCH = 2
 
 /** Bump when cell/output cache key semantics change. */
-export const OUTPUT_CACHE_EPOCH = 1
+export const OUTPUT_CACHE_EPOCH = 2
 
 /** Bump when baseline config-fingerprint composition changes. */
 export const BASELINE_FINGERPRINT_EPOCH = 1
@@ -72,6 +74,14 @@ function isZodSchema(value: unknown): value is z.ZodType {
 
 function replaceFunctionLeaves(value: unknown): unknown {
   if (typeof value === 'function') return fingerprintFunction(value as (...args: never[]) => unknown)
+  if (value instanceof Uint8Array) return { mediaDigest: sha256Hex(Buffer.from(value).toString('base64')), byteLength: value.byteLength }
+  if (value instanceof ArrayBuffer) return { mediaDigest: sha256Hex(Buffer.from(value).toString('base64')), byteLength: value.byteLength }
+  if (typeof Blob !== 'undefined' && value instanceof Blob) {
+    // A synchronous key cannot know Blob content. A fresh nonce deliberately
+    // disables cache reuse rather than colliding on size/MIME across restarts.
+    return { uncacheableBlob: randomUUID() }
+  }
+  if (value instanceof URL) return { urlDigest: sha256Hex(value.href) }
   if (Array.isArray(value)) return value.map((item) => replaceFunctionLeaves(item))
   if (value instanceof Date) return value
   if (value instanceof Map) {

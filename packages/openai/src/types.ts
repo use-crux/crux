@@ -2,6 +2,13 @@ import type OpenAI from 'openai'
 
 /** Provider-specific extra options for the OpenAI chat adapter. */
 export interface OpenAIExtra extends Record<string, unknown> {
+  /** Native output modalities requested from an audio-capable chat model. */
+  readonly modalities?: readonly ("text" | "audio")[]
+  /** Native generated-audio voice and container format. */
+  readonly audio?: {
+    readonly format: "wav" | "aac" | "mp3" | "flac" | "opus" | "pcm16"
+    readonly voice: string
+  }
   /** OpenAI tool definitions for function calling, bypassing Crux tool conversion. */
   readonly tools?: OpenAI.ChatCompletionTool[]
   /** OpenAI tool choice strategy. */

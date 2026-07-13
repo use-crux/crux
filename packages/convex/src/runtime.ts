@@ -156,8 +156,8 @@ export const convexRuntimeVectors: VectorStore = {
 export const convexRuntimeStorage: Storage = {
   records: convexRuntimeRecords,
   vectors: convexRuntimeVectors,
-  get blobs() {
-    return resolveRuntimeStorage().blobs
+  get assets() {
+    return resolveRuntimeStorage().assets
   },
 }
 

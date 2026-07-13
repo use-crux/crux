@@ -4,8 +4,8 @@ description: Design-plane contract for discovered Crux definitions, relations, s
 ---
 
 ```ts
-import type { ProjectIndexSnapshot } from '@use-crux/core/project-index'
-import { serializeProjectIndex } from '@use-crux/core/project-index/serializers'
+import type { ProjectIndexSnapshot } from "@use-crux/core/project-index";
+import { serializeProjectIndex } from "@use-crux/core/project-index/serializers";
 ```
 
 The Project Index describes what exists in a local Crux project. It is separate from runtime observability: index definitions are prompts, contexts, tools, agents, flows, flow steps, compositions, RAG resources, memory, memory blocks, blackboards, workspaces, safety definitions, suites, evals, and other design-time resources; spans describe what happened during a run.
@@ -16,21 +16,21 @@ The Project Index describes what exists in a local Crux project. It is separate 
 
 ```ts
 interface ProjectIndexSnapshot {
-  schemaVersion: 1
-  project?: ProjectIdentity
-  lint?: CruxLintConfig
-  indexedAt: string
-  indexing?: ProjectIndexingStatus
-  sourceGraph?: ProjectIndexSourceGraph
-  prompts: PromptMeta[]
-  contexts: ContextMeta[]
-  tools: ToolMeta[]
-  definitions: ProjectDefinition[]
-  relations: ProjectRelation[]
-  diagnostics: IndexDiagnostic[]
-  lintFindings: IndexLintFinding[]
-  ruleDescriptors: IndexRuleDescriptor[]
-  sources: IndexSourceFile[]
+  schemaVersion: 1;
+  project?: ProjectIdentity;
+  lint?: CruxLintConfig;
+  indexedAt: string;
+  indexing?: ProjectIndexingStatus;
+  sourceGraph?: ProjectIndexSourceGraph;
+  prompts: PromptMeta[];
+  contexts: ContextMeta[];
+  tools: ToolMeta[];
+  definitions: ProjectDefinition[];
+  relations: ProjectRelation[];
+  diagnostics: IndexDiagnostic[];
+  lintFindings: IndexLintFinding[];
+  ruleDescriptors: IndexRuleDescriptor[];
+  sources: IndexSourceFile[];
 }
 ```
 
@@ -48,7 +48,10 @@ explain what Crux inferred or explicitly received while keeping policy/config se
 source visibility.
 
 ```ts
-import type { ProjectModelProvenance, ResolvedProjectModel } from '@use-crux/core/project-index'
+import type {
+  ProjectModelProvenance,
+  ResolvedProjectModel,
+} from "@use-crux/core/project-index";
 ```
 
 The model contains the selected root, optional package name, config files, source roots, ignored
@@ -74,11 +77,11 @@ through `crux config inspect` for human or `--json` output.
 
 ```ts
 type ProjectModelProvenance =
-  | { kind: 'source'; file: string; exportName?: string }
-  | { kind: 'runtime'; traceId?: string; attribute: string }
-  | { kind: 'filesystem'; path: string; convention: string }
-  | { kind: 'config'; path: string; key: string }
-  | { kind: 'cli'; flag: string }
+  | { kind: "source"; file: string; exportName?: string }
+  | { kind: "runtime"; traceId?: string; attribute: string }
+  | { kind: "filesystem"; path: string; convention: string }
+  | { kind: "config"; path: string; key: string }
+  | { kind: "cli"; flag: string };
 ```
 
 Diagnostics use stable `ProjectModelDiagnosticCode` values, such as
@@ -151,19 +154,19 @@ run used TypeScript extension compatibility or degraded setup, not a different P
 
 Export definitions from discovered modules for full source visibility. Use `crux.config.*` for explicit policy, trust, ownership, or overrides rather than duplicating every primitive registration. Inline or dynamically generated definitions may still appear as partial entries, but Crux surfaces a diagnostic when it cannot prove IDs, relations, cases, or source locations.
 
-Static relation extraction currently covers common design-time links such as prompt-to-context, agent-to-prompt, agent-to-tool, skill-to-registry, agent handoffs, flow-to-step, statically visible agent/tool/flow-step memory access, RAG pipeline-to-retriever, memory-to-memory-block, and composition-to-agent/flow. Workspaces carry source, namespace, mounts, tool exposure, and blob-storage hints when those values are literal. Source file entries include produced definition ids plus dependency/dependent file edges when known, and `sourceGraph` records whether those source rows are complete enough for source-closure planning. The Go service owns these definitions and relations so web devtools and the TUI render the same graph.
+Static relation extraction currently covers common design-time links such as prompt-to-context, agent-to-prompt, agent-to-tool, skill-to-registry, agent handoffs, flow-to-step, statically visible agent/tool/flow-step memory access, RAG pipeline-to-retriever, memory-to-memory-block, and composition-to-agent/flow. Workspaces carry source, namespace, mounts, tool exposure, and asset-storage hints when those values are literal. Source file entries include produced definition ids plus dependency/dependent file edges when known, and `sourceGraph` records whether those source rows are complete enough for source-closure planning. The Go service owns these definitions and relations so web devtools and the TUI render the same graph.
 
 ### Routing definitions and catalog facts
 
 The Project Index represents each authored routing policy as a parent plus first-class children:
 
-| Parent             | Child                      | Containment relation       |
-| ------------------ | -------------------------- | -------------------------- |
-| `routing.router`   | `routing.router.route`     | `router.includes_route`    |
-| `routing.split`    | `routing.split.route`      | `split.includes_route`     |
-| `routing.retry`    | `routing.retry.target`     | `retry.uses_target`        |
-| `routing.cascade`  | `routing.cascade.tier`     | `cascade.includes_tier`    |
-| `routing.fallback` | `routing.fallback.option`  | `fallback.includes_option` |
+| Parent             | Child                     | Containment relation       |
+| ------------------ | ------------------------- | -------------------------- |
+| `routing.router`   | `routing.router.route`    | `router.includes_route`    |
+| `routing.split`    | `routing.split.route`     | `split.includes_route`     |
+| `routing.retry`    | `routing.retry.target`    | `retry.uses_target`        |
+| `routing.cascade`  | `routing.cascade.tier`    | `cascade.includes_tier`    |
+| `routing.fallback` | `routing.fallback.option` | `fallback.includes_option` |
 
 Children remain searchable, lintable, directly inspectable graph definitions. Their `metadata.indexPresentation` hint tells catalog clients when to fold them under the parent and supplies role/order data; it does not remove them from `definitions` or `relations`. Target relations such as `router.route.uses_prompt`, `split.route.uses_prompt`, `retry.target.uses_prompt`, `cascade.tier.uses_fallback`, and `fallback.option.uses_agent` connect those children to index-visible prompts, agents, and nested routing policies.
 
@@ -175,38 +178,38 @@ Definitions can include supporting source references in `sourceRefs`. `source` r
 
 ```ts
 interface ProjectSourceRef {
-  id: string
+  id: string;
   role:
-    | 'schema'
-    | 'callback'
-    | 'handler'
-    | 'execute'
-    | 'prompt'
-    | 'system'
-    | 'resolver'
-    | 'validator'
-    | 'policy'
-    | 'config'
-    | 'helper'
-  property?: string
-  symbol?: string
-  source: SourceLocation
-  snippet?: SourceSnippet
-  fidelity: 'resolved' | 'partial'
-  description?: string
+    | "schema"
+    | "callback"
+    | "handler"
+    | "execute"
+    | "prompt"
+    | "system"
+    | "resolver"
+    | "validator"
+    | "policy"
+    | "config"
+    | "helper";
+  property?: string;
+  symbol?: string;
+  source: SourceLocation;
+  snippet?: SourceSnippet;
+  fidelity: "resolved" | "partial";
+  description?: string;
   metadata?: {
-    schemaKind?: 'zod' | 'convex-validator' | 'json-schema'
-    parsedSchema?: boolean
-    nested?: boolean
-    injected?: boolean
-    fragment?: boolean
-    factoryArg?: boolean
-    argumentIndex?: number
-    argumentName?: string
-    toolMapContributor?: 'spread' | 'property'
-    referencedDefinitionIds?: string[]
-    dataAccess?: boolean
-  }
+    schemaKind?: "zod" | "convex-validator" | "json-schema";
+    parsedSchema?: boolean;
+    nested?: boolean;
+    injected?: boolean;
+    fragment?: boolean;
+    factoryArg?: boolean;
+    argumentIndex?: number;
+    argumentName?: string;
+    toolMapContributor?: "spread" | "property";
+    referencedDefinitionIds?: string[];
+    dataAccess?: boolean;
+  };
 }
 ```
 
@@ -270,8 +273,8 @@ const snapshot = serializeProjectIndex({
   prompts,
   contexts,
   tools,
-  project: { root: process.cwd(), name: 'my-app' },
-})
+  project: { root: process.cwd(), name: "my-app" },
+});
 ```
 
 Clients should read the Go service through `GET /api/project/index` or `GET /api/index` rather than importing user source or running serializers themselves.

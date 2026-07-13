@@ -72,3 +72,17 @@ with `transport` is not supported and rejects with
 Portable `GenerationSettings.reasoning` maps to Google `thinkingConfig.thinkingLevel` (`LOW` / `MEDIUM` / `HIGH`). `toolApproval` declares portable human-in-the-loop approval policy by tool name at context, prompt, or call site. Tools that declare `contextSchema` require `toolsContext.<toolName>` at the call site, and `runtimeContext` is threaded through tool execution, middleware, and function-form approval policies. `timeout` accepts structured budgets (`totalMs`, `stepMs`, `chunkMs`, `toolMs`, and `tools[name]`) and expired budgets reject with `TimeoutError`. Exact thinking budgets and thought-output controls are Google-native settings and belong in typed `extra`.
 
 See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) and the [Crux docs](https://cruxjs.dev) for the full API.
+
+## Media
+
+Normal messages support native image, audio, video, and document parts. The
+package exports native Imagen/Gemini `generateImage()` and native Gemini
+`generateSpeech()` operations, including two-speaker voice configuration.
+`transcribe()` is an honest one-call composition: it returns text with empty
+timing arrays and rejects word timing or diarization before I/O. Returned media
+is persisted only through an explicit application `assetStore.put()` call.
+Imagen prompts with data-asset references use the native `editImage()`
+endpoint; an optional portable mask becomes a user-provided mask reference.
+Put edit-only Google controls under `extra.edit`. Gemini reference-image
+generation remains native, while Gemini masks fail before provider I/O instead
+of being emulated.

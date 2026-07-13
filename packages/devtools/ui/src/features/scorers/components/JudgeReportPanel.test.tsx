@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 import type { QualityJudgeReport } from '@/types'
-import { JudgeReportPanelView } from './JudgeReportPanel'
+import { JudgeReportPanelView } from '@/shared/quality/JudgeReportPanel'
 
 const report: QualityJudgeReport = {
   schemaVersion: 1,

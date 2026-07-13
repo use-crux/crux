@@ -36,7 +36,7 @@ describe('renderToolModelOutput', () => {
       type: 'content',
       value: [
         { type: 'text', text: 'Chart captured.' },
-        { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+        { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
       ],
     })
 

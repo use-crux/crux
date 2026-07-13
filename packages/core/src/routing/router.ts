@@ -83,7 +83,7 @@ export type AnyRouterModel<M = unknown> = RouterModel<string, Record<string, M>>
  */
 export function router<
   TRoutes extends string,
-  Routes extends Record<string, RouterRouteTarget>,
+  const Routes extends Record<string, RouterRouteTarget>,
   TCtx extends object = object,
   TIn = never,
 >(config: RouterConfig<TRoutes, Routes, TCtx, TIn>): RouterModel<TRoutes, Routes, TCtx, TIn> {

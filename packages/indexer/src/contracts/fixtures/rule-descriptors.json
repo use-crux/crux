@@ -1279,6 +1279,209 @@
       "phase": "index",
       "requires": ["definitions", "relations"],
       "fidelity": "safe"
+    },
+    {
+      "id": "media.unsupported-capability",
+      "source": "builtin",
+      "severity": "error",
+      "category": "contracts",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Media capability is unsupported",
+      "description": "Resolved adapter and model capability evidence proves that the authored media operation, modality, or option is unsupported.",
+      "rationale": "Conclusive capability mismatches should fail during review instead of at provider I/O.",
+      "impact": "The authored model operation will fail before producing a usable media result.",
+      "docsUrl": "/docs/guides/multimodal#capabilities",
+      "fixes": [
+        {
+          "title": "Choose a supported capability",
+          "description": "Use an adapter/model that supports the authored operation and modalities, or remove the unsupported option.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line media.unsupported-capability -- reason"
+      },
+      "phase": "semantic",
+      "requires": ["definitions", "sources"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "media.invalid-provider-file",
+      "source": "builtin",
+      "severity": "error",
+      "category": "contracts",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Provider file belongs to another adapter",
+      "description": "Resolved source evidence identifies a provider-file asset passed to a different provider adapter.",
+      "rationale": "Provider file identifiers are scoped to the provider that created them.",
+      "impact": "The destination provider cannot read the file and the model call will fail.",
+      "docsUrl": "/docs/guides/multimodal#provider-files",
+      "fixes": [
+        {
+          "title": "Hydrate or upload the file",
+          "description": "Hydrate the asset and upload it through the destination provider before invoking the media operation.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line media.invalid-provider-file -- reason"
+      },
+      "phase": "semantic",
+      "requires": ["definitions", "sources"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "media.asset-ref-not-hydrated",
+      "source": "builtin",
+      "severity": "error",
+      "category": "contracts",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "AssetRef is not hydrated",
+      "description": "Resolved source evidence proves an opaque AssetRef is passed directly to a model operation.",
+      "rationale": "AssetRef is a persistence reference, not model-readable media.",
+      "impact": "The model cannot consume the reference and the operation will fail before provider I/O.",
+      "docsUrl": "/docs/guides/multimodal#asset-refs",
+      "fixes": [
+        {
+          "title": "Hydrate the asset",
+          "description": "Call the owning AssetStore get operation and pass the resulting Asset to the model.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line media.asset-ref-not-hydrated -- reason"
+      },
+      "phase": "semantic",
+      "requires": ["definitions", "sources"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "media.missing-derivation",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "quality",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Media ingest has no text derivation",
+      "description": "Indexed media ingest evidence has no required describe or transcribe derivation binding.",
+      "rationale": "Retrieval requires derived text for media that is not directly searchable.",
+      "impact": "The ingested media may be stored without searchable semantic content.",
+      "docsUrl": "/docs/guides/multimodal#ingest",
+      "fixes": [
+        {
+          "title": "Bind a derivation",
+          "description": "Attach an explicit describe or transcribe operation to the media ingest source.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line media.missing-derivation -- reason"
+      },
+      "phase": "index",
+      "requires": ["definitions", "relations"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "media.missing-attribution",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "quality",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Derived media text loses attribution",
+      "description": "Available page or time attribution is not preserved on derived searchable text.",
+      "rationale": "Attribution connects retrieved text to the source frame that supports it.",
+      "impact": "Retrieved evidence cannot be traced back to its page or time range.",
+      "docsUrl": "/docs/guides/multimodal#attribution",
+      "fixes": [
+        {
+          "title": "Preserve attribution",
+          "description": "Carry available page or time attribution from the ingest derivation into indexed text records.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line media.missing-attribution -- reason"
+      },
+      "phase": "index",
+      "requires": ["definitions", "relations"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "media.output-discarded",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "quality",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Media output is discarded",
+      "description": "A proven media output is bound while canonical content and messages are unread in the compiler-visible module graph.",
+      "rationale": "Generated media is useful only when the canonical result is consumed or persisted explicitly.",
+      "impact": "The operation spends provider time and cost but its media result is lost.",
+      "docsUrl": "/docs/guides/multimodal#results",
+      "fixes": [
+        {
+          "title": "Consume the result",
+          "description": "Read content or messages, or explicitly persist the generated Asset with an AssetStore.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line media.output-discarded -- reason"
+      },
+      "phase": "semantic",
+      "requires": ["definitions", "sources"],
+      "fidelity": "safe"
+    },
+    {
+      "id": "media.raw-retention",
+      "source": "builtin",
+      "severity": "warning",
+      "category": "observability",
+      "maturity": "experimental",
+      "confidence": "high",
+      "profiles": ["recommended", "strict"],
+      "title": "Raw media is routed to retained metadata",
+      "description": "Resolved architecture evidence proves raw media is explicitly routed to observability or vector metadata.",
+      "rationale": "Ordinary observability and vector metadata must retain bounded descriptors rather than media payloads.",
+      "impact": "Raw media or bearer references may leak into durable telemetry or retrieval metadata.",
+      "docsUrl": "/docs/guides/multimodal#privacy",
+      "fixes": [
+        {
+          "title": "Store a safe descriptor",
+          "description": "Remove raw media from retained metadata and project only bounded modality, size, and MIME facts.",
+          "kind": "manual"
+        }
+      ],
+      "suppression": {
+        "supported": true,
+        "scope": "next-line",
+        "directive": "// crux-lint-disable-next-line media.raw-retention -- reason"
+      },
+      "phase": "index",
+      "requires": ["definitions", "relations"],
+      "fidelity": "safe"
     }
   ]
 }

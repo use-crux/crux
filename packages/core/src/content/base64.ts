@@ -1,7 +1,5 @@
 const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-const BASE64_LOOKUP = new Map<string, number>(
-  [...BASE64_ALPHABET].map((char, index) => [char, index] as const),
-)
+const BASE64_LOOKUP = new Map<string, number>([...BASE64_ALPHABET].map((char, index) => [char, index] as const))
 
 BASE64_LOOKUP.set('-', 62)
 BASE64_LOOKUP.set('_', 63)
@@ -25,21 +23,20 @@ export function bytesToBase64(bytes: Uint8Array): string {
 
 /** Decode base64 bytes for placeholder sizing and hashing. */
 export function base64ToBytes(base64: string): Uint8Array {
-  const values: number[] = []
-
-  for (const char of base64.replace(/\s/g, '')) {
-    if (char === '=') continue
-    const value = BASE64_LOOKUP.get(char)
-    if (value !== undefined) values.push(value)
+  let valueCount = 0
+  for (const char of base64) {
+    if (BASE64_LOOKUP.has(char)) valueCount += 1
   }
 
-  const byteLength = Math.floor((values.length * 6) / 8)
+  const byteLength = Math.floor((valueCount * 6) / 8)
   const bytes = new Uint8Array(byteLength)
   let buffer = 0
   let bits = 0
   let offset = 0
 
-  for (const value of values) {
+  for (const char of base64) {
+    const value = BASE64_LOOKUP.get(char)
+    if (value === undefined) continue
     buffer = (buffer << 6) | value
     bits += 6
     if (bits >= 8 && offset < bytes.length) {

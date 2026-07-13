@@ -11,7 +11,7 @@ system.
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
   mounts: [
     {
       path: "/sources",
@@ -60,7 +60,7 @@ const docs = retriever({
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
   mounts: [
     { path: "/workspace", access: "readwrite" },
     { path: "/outputs", access: "readwrite" },
@@ -77,7 +77,7 @@ const ws = workspace({
 });
 ```
 
-The default path is `hit.sourcePath` when present, otherwise
+The default path is `hit.source.path` when present, otherwise
 `${sourceId}/${chunkId}.md`. Use `pathForHit`, `contentForHit`, or `mimeType`
 when your corpus needs a different mapping:
 
@@ -90,7 +90,7 @@ when your corpus needs a different mapping:
     retriever: docs,
     query: ({ operation, query, path }) =>
       operation === "grep" ? query ?? "" : path ?? "source docs",
-    pathForHit: (hit) => `${hit.sourceId}.md`,
+    pathForHit: (hit) => `${hit.source.id}.md`,
     contentForHit: (hit) => hit.parent?.content ?? hit.content,
   },
 }
@@ -101,7 +101,7 @@ The helper form is useful when you want to keep the mount config compact:
 ```ts
 source: retrieverWorkspaceMountSource(docs, {
   query: "current task source documents",
-  pathForHit: (hit) => `${hit.sourceId}/${hit.chunkId}.md`,
+  pathForHit: (hit) => `${hit.source.id}/${hit.chunkId}.md`,
 });
 ```
 

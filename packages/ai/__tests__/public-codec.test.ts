@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import type { LanguageModel } from 'ai'
-import { UnsupportedContentError, imagePart, prompt, textPart } from '@use-crux/core'
+import { prompt, textPart } from '@use-crux/core'
 import { fromResponse, toParams } from '../src'
 
 describe('public AI SDK codecs', () => {
@@ -68,10 +68,12 @@ describe('public AI SDK codecs', () => {
           content: [
             textPart('Describe this chart.'),
             {
-              ...imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+              type: 'image',
+              source: new Uint8Array([1, 2, 3]),
+              mediaType: 'image/png',
               providerOptions: { openai: { detail: 'low' } },
             },
-            imagePart({ url: 'https://example.com/chart.png', mediaType: 'image/png' }),
+            { type: 'image', source: new URL('https://example.com/chart.png'), mediaType: 'image/png' },
           ],
         },
       ],
@@ -84,7 +86,7 @@ describe('public AI SDK codecs', () => {
           { type: 'text', text: 'Describe this chart.' },
           {
             type: 'image',
-            image: 'AQID',
+            image: new Uint8Array([1, 2, 3]),
             mediaType: 'image/png',
             providerOptions: { openai: { detail: 'low' } },
           },
@@ -96,39 +98,5 @@ describe('public AI SDK codecs', () => {
         ],
       },
     ])
-  })
-
-  it('keeps unsupportedContent out of AI SDK params and honors strict mode before the call', async () => {
-    const model = { provider: 'openai', modelId: 'gpt-codec' } as unknown as LanguageModel
-    const p = prompt({
-      id: 'ai-codec-unsupported-content',
-      prompt: 'fallback prompt',
-    })
-    const resolved = await p.resolve({
-      provider: 'openai',
-      modelId: 'gpt-codec',
-    })
-
-    const degraded = toParams(resolved, {
-      model,
-      settings: { unsupportedContent: 'degrade' },
-      messages: [{ role: 'user', content: [{ type: 'file-url', url: 'https://example.com/no-mime' }] }],
-    })
-
-    expect(degraded).not.toHaveProperty('unsupportedContent')
-    expect(degraded.messages).toEqual([
-      {
-        role: 'user',
-        content: [{ type: 'text', text: '[file https://example.com/no-mime]' }],
-      },
-    ])
-
-    expect(() =>
-      toParams(resolved, {
-        model,
-        settings: { unsupportedContent: 'error' },
-        messages: [{ role: 'user', content: [{ type: 'file-url', url: 'https://example.com/no-mime' }] }],
-      }),
-    ).toThrow(UnsupportedContentError)
   })
 })

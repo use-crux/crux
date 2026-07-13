@@ -1,36 +1,36 @@
 ---
 title: Storage Interfaces
-description: RecordStore, VectorStore, BlobStore, storage(), and in-memory Storage Beta implementations.
+description: RecordStore, VectorStore, AssetStore, storage(), and in-memory Storage Beta implementations.
 ---
 
 ```ts
 import {
-  inMemoryBlobStore,
+  inMemoryAssetStore,
   inMemoryRecordStore,
   inMemoryStorage,
   inMemoryVectorStore,
   storage,
   StorageError,
-} from '@use-crux/core/storage'
+} from "@use-crux/core/storage";
 
 import type {
-  BlobStore,
+  AssetStore,
   RecordStore,
   Storage,
   VectorStore,
-} from '@use-crux/core/storage'
+} from "@use-crux/core/storage";
 ```
 
 ## Overview
 
 Crux storage is split into explicit capabilities:
 
-| Interface | Purpose |
-| --- | --- |
+| Interface     | Purpose                                                                                                      |
+| ------------- | ------------------------------------------------------------------------------------------------------------ |
 | `RecordStore` | JSON records with `get`, `put`, `create`, `delete`, paged `list`, optional `scan`, TTL, filters, and watches |
-| `VectorStore` | Dense, sparse, and hybrid vector indexes with explicit capability claims |
-| `BlobStore` | Binary and oversized payload storage with `put`, `get`, `head`, and `delete` |
-| `Storage` | A capability bundle: `{ records, vectors?, blobs? }` |
+| `VectorStore` | Dense, sparse, and hybrid vector indexes with explicit capability claims                                     |
+| `AssetStore`  | Binary and oversized payload storage with `put`, `get`, and `delete`                                         |
+| `Storage`     | A capability bundle: `{ records, vectors?, assets? }`                                                        |
 
 Use this module for application code. `@use-crux/core/storage` is the canonical Storage Beta entry point.
 
@@ -42,21 +42,21 @@ Normalize and shallow-freeze a capability bundle:
 const appStorage = storage({
   records,
   vectors,
-  blobs,
-})
+  assets,
+});
 ```
 
 Primitives can consume the whole bundle or the specific capability they need:
 
 ```ts
-workspace({ id: 'files', namespace, storage: appStorage })
-retriever({ id: 'docs', records, vectors, dense })
+workspace({ id: "files", namespace, storage: appStorage });
+retriever({ id: "docs", records, vectors, dense });
 ```
 
 Use `storage.scope()` for tenant, user, session, or workspace isolation:
 
 ```ts
-const tenantStorage = storage.scope(appStorage, `tenant:${tenantId}`)
+const tenantStorage = storage.scope(appStorage, `tenant:${tenantId}`);
 ```
 
 Scoped storage preserves capability claims while prefixing record and vector keys.
@@ -65,17 +65,20 @@ Scoped storage preserves capability claims while prefixing record and vector key
 
 ```ts
 interface RecordStore<T extends JsonObject = JsonObject> {
-  get(key: string): Promise<T | null>
-  getMany?(keys: readonly string[]): Promise<readonly (T | null)[]>
-  put(key: string, value: T, options?: RecordWriteOptions): Promise<void>
-  putMany?(entries: readonly RecordWrite<T>[]): Promise<void>
-  create(key: string, value: T, options?: RecordWriteOptions): Promise<boolean>
-  delete(key: string): Promise<void>
-  deleteMany?(keys: readonly string[]): Promise<void>
-  list(prefix: string, options?: RecordListOptions): Promise<RecordPage<T>>
-  scan?(prefix: string, options?: Omit<RecordListOptions, 'cursor'>): AsyncIterable<RecordEntry<T>>
-  watch?(prefix: string, callback: (event: RecordEvent<T>) => void): () => void
-  capabilities(): RecordStoreCapabilities
+  get(key: string): Promise<T | null>;
+  getMany?(keys: readonly string[]): Promise<readonly (T | null)[]>;
+  put(key: string, value: T, options?: RecordWriteOptions): Promise<void>;
+  putMany?(entries: readonly RecordWrite<T>[]): Promise<void>;
+  create(key: string, value: T, options?: RecordWriteOptions): Promise<boolean>;
+  delete(key: string): Promise<void>;
+  deleteMany?(keys: readonly string[]): Promise<void>;
+  list(prefix: string, options?: RecordListOptions): Promise<RecordPage<T>>;
+  scan?(
+    prefix: string,
+    options?: Omit<RecordListOptions, "cursor">,
+  ): AsyncIterable<RecordEntry<T>>;
+  watch?(prefix: string, callback: (event: RecordEvent<T>) => void): () => void;
+  capabilities(): RecordStoreCapabilities;
 }
 ```
 
@@ -85,19 +88,19 @@ Capability levels are explicit:
 
 ```ts
 type RecordStoreCapabilities = {
-  ttl: 'native' | 'lazy' | false
-  filter: 'native' | 'scan' | false
-  watch: boolean
-  batch: boolean
-}
+  ttl: "native" | "lazy" | false;
+  filter: "native" | "scan" | false;
+  watch: boolean;
+  batch: boolean;
+};
 ```
 
 Filters are exact top-level scalar equality only:
 
 ```ts
-await records.list('docs:', {
-  filter: { namespace: 'public', active: true, deletedAt: null },
-})
+await records.list("docs:", {
+  filter: { namespace: "public", active: true, deletedAt: null },
+});
 ```
 
 Adapters must reject unsupported filters with `StorageError` code `invalid_filter`; they must not silently drop filter clauses.
@@ -106,10 +109,10 @@ Adapters must reject unsupported filters with `StorageError` code `invalid_filte
 
 ```ts
 interface VectorStore {
-  upsert(records: readonly VectorRecord[]): Promise<void>
-  delete(keys: readonly string[]): Promise<void>
-  search(query: VectorSearchQuery): Promise<readonly VectorHit[]>
-  capabilities(): VectorStoreCapabilities
+  upsert(records: readonly VectorRecord[]): Promise<void>;
+  delete(keys: readonly string[]): Promise<void>;
+  search(query: VectorSearchQuery): Promise<readonly VectorHit[]>;
+  capabilities(): VectorStoreCapabilities;
 }
 ```
 
@@ -117,44 +120,41 @@ interface VectorStore {
 
 ```ts
 await vectors.search({
-  mode: 'hybrid',
+  mode: "hybrid",
   dense: [0.12, 0.4, 0.9],
   sparse: { indices: [12, 98], values: [0.8, 0.3] },
-  fusion: 'dbsf',
+  fusion: "dbsf",
   limit: 10,
-  filter: { namespace: 'docs' },
-})
+  filter: { namespace: "docs" },
+});
 ```
 
 Capability levels are part of correctness:
 
 ```ts
 type VectorStoreCapabilities = {
-  dense: boolean
-  sparse: boolean
-  hybrid: boolean
-  fusion: readonly ('rrf' | 'dbsf')[]
-  filter: 'pre' | 'post' | false
-  consistency: 'strong' | 'eventual'
-}
+  dense: boolean;
+  sparse: boolean;
+  hybrid: boolean;
+  fusion: readonly ("rrf" | "dbsf")[];
+  filter: "pre" | "post" | false;
+  consistency: "strong" | "eventual";
+};
 ```
 
 Production filtered retrieval requires `filter: 'pre'`. A `post` filter can be useful for local tooling, but Crux primitives that rely on exact filtered top-k results reject it unless they explicitly opt into approximate behavior.
 
-## `BlobStore`
+## `AssetStore`
 
 ```ts
-interface BlobStore {
-  put(input: BlobPutInput): Promise<BlobRef>
-  get(uri: string): Promise<BlobReadResult>
-  head?(uri: string): Promise<BlobRef | null>
-  delete(uri: string): Promise<void>
-  createReadUrl?(uri: string, options?: { expiresInMs?: number }): Promise<string>
-  capabilities(): BlobStoreCapabilities
+interface AssetStore {
+  put(asset: Asset, options?: AssetPutOptions): Promise<StoredAsset>;
+  get(ref: AssetRef): Promise<StoredAsset>;
+  delete(ref: AssetRef): Promise<void>;
 }
 ```
 
-Blob URIs are internal application references, not automatic public URLs. Signed URLs are app-authorized and are not shown in devtools by default.
+Asset URIs are internal application references, not automatic public URLs. Signed URLs are app-authorized and are not shown in devtools by default.
 
 ## Errors
 
@@ -162,9 +162,9 @@ Storage contract failures throw `StorageError`:
 
 ```ts
 try {
-  await records.put('cache:key', { value: 'x' }, { ttlMs: 60_000 })
+  await records.put("cache:key", { value: "x" }, { ttlMs: 60_000 });
 } catch (error) {
-  if (error instanceof StorageError && error.code === 'ttl_unsupported') {
+  if (error instanceof StorageError && error.code === "ttl_unsupported") {
     // choose a non-TTL path
   }
 }
@@ -177,19 +177,35 @@ Error codes include `not_found`, `conflict`, `unsupported_capability`, `invalid_
 Use these for tests, demos, and local examples:
 
 ```ts
-const records = inMemoryRecordStore()
-const vectors = inMemoryVectorStore()
-const blobs = inMemoryBlobStore()
-const all = inMemoryStorage()
+const records = inMemoryRecordStore();
+const vectors = inMemoryVectorStore();
+const assets = inMemoryAssetStore();
+const all = inMemoryStorage();
 ```
 
-In-memory stores are process-local and not durable. They are contract-correct reference implementations: records use lazy TTL and scan filtering, vectors pre-filter metadata before scoring, and blobs support `head()` and `delete()`.
+In-memory stores are process-local and not durable. They are contract-correct reference implementations: records use lazy TTL and scan filtering, vectors pre-filter metadata before scoring, and assets support explicit `put()`, `get()`, and `delete()` lifecycle behavior.
 
 ## Related
 
 <Cards>
-  <Card title="RecordStore guide" description="JSON record storage, TTL, filters, watches, and custom database implementations." href="/docs/guides/storage/crux-store" />
-  <Card title="VectorStore guide" description="Dense, sparse, and hybrid vector search." href="/docs/guides/storage/vector-store" />
-  <Card title="BlobStore guide" description="Binary files, generated outputs, and custom object storage." href="/docs/guides/storage/blob-storage" />
-  <Card title="Postgres RecordStore" description="A complete cookbook implementation for SQL-backed record storage." href="/docs/cookbook/basics/postgres-data-store" />
+  <Card
+    title="RecordStore guide"
+    description="JSON record storage, TTL, filters, watches, and custom database implementations."
+    href="/docs/guides/storage/crux-store"
+  />
+  <Card
+    title="VectorStore guide"
+    description="Dense, sparse, and hybrid vector search."
+    href="/docs/guides/storage/vector-store"
+  />
+  <Card
+    title="AssetStore guide"
+    description="Binary files, generated outputs, and custom object storage."
+    href="/docs/guides/storage/asset-storage"
+  />
+  <Card
+    title="Postgres RecordStore"
+    description="A complete cookbook implementation for SQL-backed record storage."
+    href="/docs/cookbook/basics/postgres-data-store"
+  />
 </Cards>

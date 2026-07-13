@@ -110,6 +110,6 @@ export function fuseQueryGroups(
     .sort((left, right) => right.score - left.score)
 }
 
-function hitIdentity(hit: Pick<RetrieverHit, 'namespace' | 'sourceId' | 'chunkId'>): string {
-  return `${hit.namespace}/${hit.sourceId}/${hit.chunkId}`
+function hitIdentity(hit: Pick<RetrieverHit, 'namespace' | 'source' | 'chunkId'>): string {
+  return `${hit.namespace}/${hit.source.id}/${hit.chunkId}`
 }
