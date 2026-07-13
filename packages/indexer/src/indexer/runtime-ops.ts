@@ -8,6 +8,7 @@ import {
   runtimeTargetMap,
   type ResolvedRuntimeEngine,
   type RuntimeEngineDefinition,
+  type RuntimeSetupResult,
   type RuntimeSetupPort,
   type RuntimeTargetRuntimeRef,
   type WorkId,
@@ -15,6 +16,7 @@ import {
 } from '@use-crux/core/runtime'
 import { loadProjectConfig } from './config'
 import { importUserModule } from './imports'
+import { namespaceFallbackFinding } from './setup/namespace-finding'
 import type {
   RuntimeInspectOperationResult,
   RuntimeOperationOptions,
@@ -210,11 +212,14 @@ async function statusCounts(
   )
 }
 
-async function preflightRuntime(
+export async function preflightRuntime(
   root: string,
   runtimeDefinition: RuntimeEngineDefinition,
 ): Promise<RuntimeOperationResult> {
-  const setup = await setupPort(runtimeDefinition).check()
+  const setup = appendNamespaceFallbackFinding(
+    await setupPort(runtimeDefinition).check(),
+    runtimeDefinition,
+  )
   if (!setup.ok) {
     return {
       operation: 'preflight',
@@ -235,6 +240,18 @@ async function preflightRuntime(
       missingTargets,
     }
   })
+}
+
+function appendNamespaceFallbackFinding(
+  setup: RuntimeSetupResult,
+  runtime: RuntimeEngineDefinition,
+): RuntimeSetupResult {
+  const finding = namespaceFallbackFinding(runtime)
+  if (finding === undefined) return setup
+  return {
+    ...setup,
+    findings: [...setup.findings, finding],
+  }
 }
 
 async function readRuntimeArtifactManifest(

@@ -69,6 +69,13 @@ func printRuntimePreflight(io *output.IO, root string) {
 		return
 	}
 
+	for _, finding := range result.Setup.Findings {
+		fmt.Fprintf(io.Out, "%s %s %s: %s\n", io.Sprint(output.Yellow, "warn"), io.Sprint(output.Dim, finding.Code), finding.Resource, finding.Message)
+		if finding.Remediation != "" {
+			fmt.Fprintf(io.Out, "  %s %s\n", io.Sprint(output.Dim, "fix:"), finding.Remediation)
+		}
+	}
+
 	if len(result.MissingTargets) == 0 {
 		fmt.Fprintf(io.Out, "%s Runtime preflight passed\n", io.Sprint(output.Green, "OK"))
 		return

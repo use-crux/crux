@@ -33,6 +33,10 @@ Durable payloads must be JSON-compatible. Pass ids, URLs, or application storage
 
 When a durable event resumes a waiting flow, the Runtime Engine copies the event payload into the flow snapshot. Replay reads that snapshot payload directly instead of scanning the event log.
 
+## Namespace resolution
+
+`serverless()` resolves durable-state namespaces in this order: explicit `namespace`, non-empty `CRUX_RUNTIME_NAMESPACE`, supported Vercel inference, then `local` outside production. On Vercel, production resolves to `production` and previews resolve to `preview-<sanitized branch>`. Other production hosts must configure `namespace` or `CRUX_RUNTIME_NAMESPACE`; otherwise composition throws `NAMESPACE_AMBIGUOUS`. `node()` intentionally keeps its `local` default.
+
 ## Retention
 
 Maintenance prunes retained runtime records in bounded batches. Configure TTLs on the runtime composer:

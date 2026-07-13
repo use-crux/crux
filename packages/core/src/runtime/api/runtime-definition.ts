@@ -16,6 +16,13 @@ import type { RuntimeWakeRequestVerifier } from '../handler/verify'
 import type { RuntimeRetentionConfig } from '../engine/retention'
 import { createRuntimeError } from '../engine/errors'
 
+/** Provenance of a Runtime Engine namespace resolved by a composer. */
+export type RuntimeNamespaceSource =
+  | 'explicit'
+  | 'env'
+  | 'inferred'
+  | 'fallback'
+
 /** Options passed to a composer when `createRuntime()` builds wake delivery. */
 export interface RuntimeWakeFactoryInput<
   TStore extends RuntimeStoreAdapter = RuntimeStoreAdapter,
@@ -52,6 +59,8 @@ export interface InProcessRuntimeEngineDefinition<
   readonly capabilities: CruxEngineCapabilities
   /** Default namespace for local/runtime-owned operations. */
   readonly namespace?: string
+  /** Provenance of the resolved namespace, used by setup/preflight tooling. */
+  readonly namespaceSource?: RuntimeNamespaceSource
   /** Optional automatic maintenance-loop defaults. */
   readonly maintenance?: RuntimeMaintenanceLoopOptions
   /** Retention policy for terminal Runtime Engine records. */

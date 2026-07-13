@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 659,
+    "files": 660,
     "definitions": 66,
     "relations": 2,
     "diagnostics": 17,
-    "dependencies": 1248,
-    "canonicalBytes": 177030
+    "dependencies": 1250,
+    "canonicalBytes": 177228
   },
   "files": [
     {
@@ -4326,12 +4326,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/runtime-ops.ts",
-      "sha256": "4a500fe53b39323bc79139be05bc4b200f52f6de634249eb75aa8845a4a7d71d",
-      "bytes": 164,
+      "sha256": "910a4d91371308274f9779f9081c53337bfdd8473564fcfe0ae5a08982c8a4d8",
+      "bytes": 229,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 3
     },
     {
       "file": "packages/indexer/src/indexer/semantic-support.ts",
@@ -4703,13 +4703,22 @@
       "dependencies": 0
     },
     {
-      "file": "packages/indexer/src/indexer/setup/runtime-contributor.ts",
-      "sha256": "8df81adbaa1e1e7bf76f9b684f68d06aa62e53e4ef09bf87f0fa2e33bab13992",
-      "bytes": 121,
+      "file": "packages/indexer/src/indexer/setup/namespace-finding.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/src/indexer/setup/runtime-contributor.ts",
+      "sha256": "0707c86b495d283162a698f15c1f5cbfedb69bec2b6d2323547ed07463f67bc7",
+      "bytes": 186,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
     },
     {
       "file": "packages/indexer/src/indexer/shards/discovery.ts",
