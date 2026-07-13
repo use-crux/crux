@@ -9,6 +9,166 @@ import {
 } from '@use-crux/core/runtime'
 
 describe('serverless() Runtime Engine composer', () => {
+  it('uses an explicit namespace ahead of environment and Vercel inference', () => {
+    const definition = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      namespace: 'tenant-a',
+      env: {
+        NODE_ENV: 'production',
+        CRUX_RUNTIME_NAMESPACE: 'environment',
+        VERCEL_ENV: 'production',
+      },
+      wake: genericQueue({ enqueue: async () => undefined }),
+    })
+
+    expect(definition).toMatchObject({
+      namespace: 'tenant-a',
+      namespaceSource: 'explicit',
+    })
+  })
+
+  it('uses a non-empty environment namespace and treats blank values as unset', () => {
+    const configured = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      env: { CRUX_RUNTIME_NAMESPACE: ' tenant-a ' },
+      wake: genericQueue({ enqueue: async () => undefined }),
+    })
+    const blank = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      env: { CRUX_RUNTIME_NAMESPACE: ' \t ' },
+      wake: genericQueue({ enqueue: async () => undefined }),
+    })
+
+    expect(configured).toMatchObject({
+      namespace: 'tenant-a',
+      namespaceSource: 'env',
+    })
+    expect(blank).toMatchObject({
+      namespace: 'local',
+      namespaceSource: 'fallback',
+    })
+  })
+
+  it('uses the local namespace fallback outside production', () => {
+    const definition = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      env: {},
+      wake: genericQueue({ enqueue: async () => undefined }),
+    })
+
+    expect(definition).toMatchObject({
+      namespace: 'local',
+      namespaceSource: 'fallback',
+    })
+  })
+
+  it('infers Vercel production and preview namespaces', () => {
+    const production = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      env: { NODE_ENV: 'production', VERCEL_ENV: 'production' },
+      wake: genericQueue({ enqueue: async () => undefined }),
+    })
+    const preview = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      env: {
+        NODE_ENV: 'production',
+        VERCEL_ENV: 'preview',
+        VERCEL_GIT_COMMIT_REF: 'Feature/Foo',
+      },
+      wake: genericQueue({ enqueue: async () => undefined }),
+    })
+
+    expect(production).toMatchObject({
+      namespace: 'production',
+      namespaceSource: 'inferred',
+    })
+    expect(preview).toMatchObject({
+      namespace: 'preview-feature-foo',
+      namespaceSource: 'inferred',
+    })
+  })
+
+  it('treats preview refs that sanitize to nothing as an unavailable signal', () => {
+    const emptyRef = () =>
+      serverless({
+        store: inMemoryRuntimeStore(),
+        publicUrl: 'https://app.example.com',
+        wake: genericQueue({ enqueue: async () => undefined }),
+        env: {
+          NODE_ENV: 'production',
+          VERCEL_ENV: 'preview',
+          VERCEL_GIT_COMMIT_REF: '日本語🔥',
+        },
+      })
+    const devEmptyRef = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      wake: genericQueue({ enqueue: async () => undefined }),
+      env: { VERCEL_ENV: 'preview', VERCEL_GIT_COMMIT_REF: '' },
+    })
+
+    expect(emptyRef).toThrow(/Code: NAMESPACE_AMBIGUOUS/)
+    expect(devEmptyRef).toMatchObject({
+      namespace: 'local',
+      namespaceSource: 'fallback',
+    })
+  })
+
+  it('sanitizes Vercel preview branch names deterministically', () => {
+    const definition = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      env: {
+        NODE_ENV: 'production',
+        VERCEL_ENV: 'preview',
+        VERCEL_GIT_COMMIT_REF: '--FEATURE///🔥foo__bar---',
+      },
+      wake: genericQueue({ enqueue: async () => undefined }),
+    })
+    const capped = serverless({
+      store: inMemoryRuntimeStore(),
+      publicUrl: 'https://app.example.com',
+      env: {
+        NODE_ENV: 'production',
+        VERCEL_ENV: 'preview',
+        VERCEL_GIT_COMMIT_REF: 'a'.repeat(65),
+      },
+      wake: genericQueue({ enqueue: async () => undefined }),
+    })
+
+    expect(definition.namespace).toBe('preview-feature-foo__bar')
+    expect(capped.namespace).toBe(`preview-${'a'.repeat(64)}`)
+  })
+
+  it('rejects ambiguous production namespaces before public URL resolution', () => {
+    const ambiguous = () =>
+      serverless({
+        store: inMemoryRuntimeStore(),
+        wake: genericQueue({ enqueue: async () => undefined }),
+        env: { NODE_ENV: 'production' },
+      })
+    const previewWithoutRef = () =>
+      serverless({
+        store: inMemoryRuntimeStore(),
+        publicUrl: 'https://app.example.com',
+        wake: genericQueue({ enqueue: async () => undefined }),
+        env: { NODE_ENV: 'production', VERCEL_ENV: 'preview' },
+      })
+
+    expect(ambiguous).toThrow(CruxRuntimeError)
+    expect(ambiguous).toThrow(/Code: NAMESPACE_AMBIGUOUS/)
+    expect(ambiguous).toThrow(
+      'Set CRUX_RUNTIME_NAMESPACE=production or pass serverless({ namespace: "..." }).',
+    )
+    expect(previewWithoutRef).toThrow(/Code: NAMESPACE_AMBIGUOUS/)
+  })
+
   it('delivers wake envelopes through a generic queue adapter using the resolved public endpoint', async () => {
     const delivered: Array<{
       readonly id: string
@@ -174,6 +334,7 @@ describe('serverless() Runtime Engine composer', () => {
     expect(() =>
       serverless({
         store: inMemoryRuntimeStore(),
+        namespace: 'test',
         wake: genericQueue({ enqueue: async () => undefined }),
         env: { NODE_ENV: 'production' },
       }),
@@ -181,6 +342,7 @@ describe('serverless() Runtime Engine composer', () => {
     expect(() =>
       serverless({
         store: inMemoryRuntimeStore(),
+        namespace: 'test',
         wake: genericQueue({ enqueue: async () => undefined }),
         env: { NODE_ENV: 'production' },
       }),
@@ -192,6 +354,7 @@ describe('serverless() Runtime Engine composer', () => {
     const runtime = createRuntime({
       runtime: serverless({
         store: inMemoryRuntimeStore(),
+        namespace: 'test',
         endpoint: 'api/runtime',
         env: {
           NODE_ENV: 'production',

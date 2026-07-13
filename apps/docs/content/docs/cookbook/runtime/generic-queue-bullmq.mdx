@@ -31,6 +31,10 @@ export default config({
 
 Secrets shorter than 16 characters are rejected. Use at least 32 random bytes for production.
 
+## Production namespace
+
+`genericQueue()` does not imply a deployment host, so set `CRUX_RUNTIME_NAMESPACE` or pass `namespace` to `serverless()` in production. Without an explicit namespace, environment namespace, or supported Vercel signal, `serverless()` throws `NAMESPACE_AMBIGUOUS` rather than sharing the `local` partition.
+
 ## BullMQ worker sketch
 
 ```ts

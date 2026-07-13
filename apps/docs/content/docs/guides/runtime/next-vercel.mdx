@@ -24,6 +24,7 @@ export default config({
     store: postgres({ url: process.env.DATABASE_URL }),
     wake: qstash(),
     publicUrl: process.env.CRUX_PUBLIC_URL,
+    // Optional on Vercel: production and preview namespaces are inferred.
     namespace: process.env.CRUX_RUNTIME_NAMESPACE,
     retention: {
       events: '24h',
@@ -35,6 +36,8 @@ export default config({
 ```
 
 `publicUrl` can be omitted when Crux can infer a stable URL from Vercel environment variables. Production setup fails with `PUBLIC_URL_UNRESOLVED` when no stable URL exists.
+
+`namespace` is also optional on Vercel. `VERCEL_ENV=production` resolves to `production`; previews resolve to `preview-<sanitized-VERCEL_GIT_COMMIT_REF>`, such as `preview-feature-foo`. An explicit `namespace` or `CRUX_RUNTIME_NAMESPACE` still wins when you need a custom partition.
 
 ## Generate the route
 
@@ -70,7 +73,7 @@ Use `crux setup --apply` only when you want Crux to create missing Crux-owned Po
 ## Production notes
 
 - Keep `DATABASE_URL`, QStash credentials, and `CRUX_PUBLIC_URL` in deployment secrets.
-- Use an explicit `CRUX_RUNTIME_NAMESPACE` when preview and production share the same substrate.
+- Vercel production and preview deployments receive distinct inferred namespaces. Set `CRUX_RUNTIME_NAMESPACE` or `namespace` when you need a custom partition; non-Vercel production deployments must set one or `serverless()` throws `NAMESPACE_AMBIGUOUS`.
 - Keep `retention.idempotencyKeys` at least as long as QStash's max wake delay, or set it to `false`.
 - Regenerate artifacts in CI and fail builds on `ARTIFACTS_STALE`.
 - Inspect stuck work with `crux runtime inspect <workId>`; retry blocked/dead-letter work with `crux runtime retry <workId>` after fixing the cause.

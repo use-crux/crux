@@ -787,6 +787,13 @@ export const { GET, POST } = createRuntimeHandler({
 });
 ```
 
+`serverless()` resolves its durable-state namespace in order: explicit
+`namespace`, non-empty `CRUX_RUNTIME_NAMESPACE`, Vercel deployment inference,
+then `local` outside production. Vercel production resolves to `production` and
+previews resolve to `preview-<sanitized branch>`. Other production hosts must
+configure `namespace` or `CRUX_RUNTIME_NAMESPACE`; composition otherwise throws
+`NAMESPACE_AMBIGUOUS`. `node()` intentionally keeps its `local` default.
+
 Advanced and generated entry files can resolve a composer explicitly with
 `createRuntime({ runtime, targets })`. The `@use-crux/core/runtime/testing`
 subpath exposes `createTestRuntime()` for app-level flow and task tests, plus

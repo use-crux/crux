@@ -1,26 +1,46 @@
 ---
 title: NAMESPACE_AMBIGUOUS
-description: The inferred runtime namespace is ambiguous.
+description: serverless() could not resolve a safe production Runtime Engine namespace.
 ---
 
 ## What failed
 
-Crux inferred a namespace that may not safely separate production, preview, local, or shared-substrate environments.
+`serverless()` throws this error while composing a runtime in production when it cannot resolve a safe namespace. A runtime namespace partitions all durable work, events, waiters, timers, outbox records, leases, and idempotency keys.
 
 ## Why
 
-Every durable row, cursor, idempotency key, and wake message includes a namespace. Ambiguous namespace inference can make environments share runtime state accidentally.
+Production and preview deployments can share a database or queue substrate. Falling back to `local` there could make those deployments share runtime state accidentally.
+
+## Resolution order
+
+Crux uses the first available value:
+
+1. `serverless({ namespace: "..." })`
+2. A non-empty `CRUX_RUNTIME_NAMESPACE` environment variable (surrounding whitespace is removed)
+3. Vercel deployment inference:
+   - `VERCEL_ENV=production` resolves to `production`.
+   - `VERCEL_ENV=preview` with `VERCEL_GIT_COMMIT_REF` resolves to `preview-<branch>`. Branch names are lowercased and sanitized; for example, `Feature/Foo` becomes `preview-feature-foo`.
+4. Outside production (`NODE_ENV !== "production"`), Crux resolves `local` for development.
+
+If none of the first three steps applies in production, composition throws `NAMESPACE_AMBIGUOUS`.
 
 ## What still works
 
-The configured runtime may still operate, but setup/preflight warns so you can pin the environment boundary before deployment.
+Development can use the `local` fallback. Any serverless runtime with an explicit namespace, a configured environment namespace, or supported Vercel deployment signals continues to work.
 
 ## Fix
 
-Set an explicit namespace:
+Set a production namespace:
 
 ```bash
 CRUX_RUNTIME_NAMESPACE=production
 ```
 
-Or pass `namespace` in the runtime config.
+Or pass `namespace` in the runtime config:
+
+```ts
+serverless({
+  namespace: 'production',
+  // store and wake adapters
+})
+```
