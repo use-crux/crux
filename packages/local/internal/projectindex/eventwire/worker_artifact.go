@@ -29,6 +29,8 @@ const (
 	ProjectIndexArtifactRuntimeArtifacts ProjectIndexArtifactKind = "runtimeArtifacts"
 	// ProjectIndexArtifactRuntimeOperation is a Runtime Engine CLI operation result.
 	ProjectIndexArtifactRuntimeOperation ProjectIndexArtifactKind = "runtimeOperation"
+	// ProjectIndexArtifactSetupOperation is an aggregate project setup result.
+	ProjectIndexArtifactSetupOperation ProjectIndexArtifactKind = "setupOperation"
 )
 
 // ProjectIndexArtifactStreamOptions configures host-side validation for a JSON

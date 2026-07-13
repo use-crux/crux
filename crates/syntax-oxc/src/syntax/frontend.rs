@@ -86,6 +86,7 @@ pub fn parse_source(input: ParseRequest) -> Result<StaticSyntaxFileRecord, Strin
             version: FRONTEND_VERSION.to_string(),
         },
         file: input.file.clone(),
+        relative_path: relative_source_path(&input.root, &input.file),
         source_hash: sha256(&input.source),
         interface_hash: Some(source_interface_hash_from_program(
             &parsed.program,
@@ -108,4 +109,12 @@ pub fn parse_source(input: ParseRequest) -> Result<StaticSyntaxFileRecord, Strin
             })
             .collect(),
     })
+}
+
+fn relative_source_path(root: &str, file: &str) -> String {
+    let root = root.replace('\\', "/").trim_end_matches('/').to_string();
+    let file = file.replace('\\', "/");
+    file.strip_prefix(&format!("{root}/"))
+        .unwrap_or(&file)
+        .to_string()
 }

@@ -58,6 +58,11 @@ export type RuntimeTaskInput<TTarget> = TTarget extends RuntimeTaskTarget<infer 
   ? TInput
   : never
 
+/** @internal Identify the V1 non-callable durable target brand. */
+export function isRuntimeTaskTarget(value: unknown): value is RuntimeTaskTarget {
+  return typeof value === 'object' && value !== null && RUNTIME_TASK_TARGET in value
+}
+
 /**
  * Define an executable durable task target.
  *

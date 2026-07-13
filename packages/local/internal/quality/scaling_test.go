@@ -79,7 +79,7 @@ func newQualityBenchmarkObservability(tb testing.TB) *observability.Service {
 			tb.Fatal(err)
 		}
 	})
-	raw, err := os.ReadFile("../../../core/observability/fixtures/generation-run.json")
+	raw, err := os.ReadFile("../../../core/src/observability/fixtures/generation-run.json")
 	if err != nil {
 		tb.Fatal(err)
 	}

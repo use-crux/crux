@@ -414,6 +414,7 @@ export type ProjectDefinitionKind =
   | "flow"
   | "flow.step"
   | "task"
+  | "deferred-work"
   | "composition.parallel"
   | "composition.parallel.branch"
   | "composition.pipeline"
@@ -1269,6 +1270,7 @@ export const ProjectDefinitionKindSchema = z.enum([
   "flow",
   "flow.step",
   "task",
+  "deferred-work",
   "composition.parallel",
   "composition.parallel.branch",
   "composition.pipeline",

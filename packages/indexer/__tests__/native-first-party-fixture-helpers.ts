@@ -4,7 +4,10 @@ import { dirname, join } from 'node:path'
 import { expect, it } from 'vitest'
 import { createStaticExtraction, type SourceReader } from '../src/indexer/static/extraction/engine'
 import type { StaticFileExtraction } from '../src/indexer/static/extraction/engine'
-import { createProvidedStaticSyntaxFrontend } from '../src/indexer/static-index/syntax'
+import {
+  createProvidedStaticSyntaxFrontend,
+  createTypeScriptStaticSyntaxFrontend,
+} from '../src/indexer/static-index/syntax'
 import { createRustOxcStaticSyntaxFrontend, rustOxcSyntaxFrontendTestStatus } from '../src/testing/rust-oxc-frontend'
 
 const rustOxcStatus = rustOxcSyntaxFrontendTestStatus()
@@ -81,11 +84,18 @@ export async function extractNativeAndFallback(input: NativeFirstPartyFixtureInp
         records: records.map((item) => ({ ...item, nativeFacts: [] })),
       }),
     })
-    const [nativeOut, fallbackOut] = await Promise.all([
+    const typescriptExtraction = createStaticExtraction({
+      root,
+      cache: 'none',
+      sources,
+      syntaxFrontend: createTypeScriptStaticSyntaxFrontend,
+    })
+    const [nativeOut, fallbackOut, typescriptOut] = await Promise.all([
       nativeExtraction.extractFile(file),
       fallbackExtraction.extractFile(file),
+      typescriptExtraction.extractFile(file),
     ])
-    return { fallbackOut, nativeOut, record }
+    return { fallbackOut, nativeOut, record, typescriptOut }
   } finally {
     await rm(root, { recursive: true, force: true })
   }

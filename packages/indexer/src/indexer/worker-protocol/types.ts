@@ -8,7 +8,10 @@
  * @module
  */
 
-import type { ProjectModelProvenance, ResolvedProjectModel } from '@use-crux/core/project-index'
+import type {
+  ProjectModelProvenance,
+  ResolvedProjectModel,
+} from '@use-crux/core/project-index'
 import type { IndexPatch, IndexPatchFacts, IndexPatchPhase } from '../patches'
 import type { ProjectConfigInspect } from '../project-config-inspect'
 import type { ProjectStaticIndexConfig } from '../static-index/config/inspect'
@@ -22,6 +25,7 @@ import type {
 } from '../extensions'
 import type { RuntimeArtifactGenerationResult } from '../runtime-artifacts'
 import type { RuntimeOperationResult } from '../runtime-ops'
+import type { SetupReport } from '@use-crux/core/setup'
 
 /** Current Project Index worker stream protocol version. */
 export const PROJECT_INDEX_WORKER_PROTOCOL_VERSION = 2 as const
@@ -42,7 +46,11 @@ export interface ProjectIndexFactProducer {
 }
 
 /** Evidence fidelity attached to streamed fact envelopes. */
-export type ProjectIndexFactFidelity = 'authoritative' | 'inferred' | 'best-effort' | 'runtime-observed'
+export type ProjectIndexFactFidelity =
+  | 'authoritative'
+  | 'inferred'
+  | 'best-effort'
+  | 'runtime-observed'
 
 /**
  * Typed mapping between `IndexPatchFacts` fields and streamed fact values.
@@ -60,7 +68,9 @@ export interface ProjectIndexPatchFactMap {
   readonly sourceRefs: ArrayItem<NonNullable<IndexPatchFacts['sourceRefs']>>
   readonly diagnostics: ArrayItem<NonNullable<IndexPatchFacts['diagnostics']>>
   readonly lintFindings: ArrayItem<NonNullable<IndexPatchFacts['lintFindings']>>
-  readonly ruleDescriptors: ArrayItem<NonNullable<IndexPatchFacts['ruleDescriptors']>>
+  readonly ruleDescriptors: ArrayItem<
+    NonNullable<IndexPatchFacts['ruleDescriptors']>
+  >
   readonly sources: ArrayItem<NonNullable<IndexPatchFacts['sources']>>
   readonly sourceGraph: NonNullable<IndexPatchFacts['sourceGraph']>
 }
@@ -74,7 +84,9 @@ export type ProjectIndexPatchFactKind = keyof ProjectIndexPatchFactMap
  * The generic parameter narrows `fact` from the envelope kind, giving worker
  * helpers precise inference without exposing raw compiler objects.
  */
-export interface ProjectIndexFactEnvelopeFor<TKind extends ProjectIndexPatchFactKind> {
+export interface ProjectIndexFactEnvelopeFor<
+  TKind extends ProjectIndexPatchFactKind,
+> {
   /** Envelope schema version. */
   readonly schemaVersion: 1
   /** Stable identifier for this fact within the transaction. */
@@ -129,6 +141,8 @@ export interface ProjectIndexArtifactMap {
   readonly runtimeArtifacts: RuntimeArtifactGenerationResult
   /** Runtime operation result emitted for Crux Local CLI commands. */
   readonly runtimeOperation: RuntimeOperationResult
+  /** Aggregate project setup result emitted for `crux setup`. */
+  readonly setupOperation: SetupReport
 }
 
 /** JSON artifact kinds supported by the V2 worker stream. */

@@ -18,6 +18,7 @@
     "compaction",
     "agent",
     "flow",
+    "defer",
     "runtime-engine",
     "plan",
     "tasks",

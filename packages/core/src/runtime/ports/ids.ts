@@ -33,3 +33,9 @@ export type TimerId = RuntimeBrand<'TimerId'>
 
 /** Opaque token proving ownership of a leased runtime resource. */
 export type LeaseToken = RuntimeBrand<'LeaseToken'>
+
+/** Stable id for one durable deferred invocation scope. */
+export type DeferredScopeId = RuntimeBrand<'DeferredScopeId'>
+
+/** Stable id for one registration within a deferred invocation scope. */
+export type DeferredIntentId = RuntimeBrand<'DeferredIntentId'>

@@ -101,7 +101,7 @@ func (s *Service) ResourceActivity(ctx context.Context, family string) ([]Resour
 
 func isResourceFamily(family string) bool {
 	switch family {
-	case "memory", "workspace", "plan", "task", "retrieval", "indexing", "ingest", "corpus", "skill", "security", "cost", "feedback":
+	case "memory", "workspace", "plan", "task", "retrieval", "indexing", "ingest", "corpus", "skill", "security", "cost", "feedback", "defer":
 		return true
 	default:
 		return false
@@ -141,6 +141,16 @@ func resourceIDForFamily(family string, attributes json.RawMessage, indexed map[
 			return indexed["promptId"]
 		}
 		return stringAttribute(attributes, "model")
+	case "defer":
+		// Prefer durable Runtime identity, then authored definition, then
+		// invocation scope so inline registrations still join somewhere.
+		if id := stringAttribute(attributes, "workId"); id != "" {
+			return id
+		}
+		if id := stringAttribute(attributes, "definitionId"); id != "" {
+			return id
+		}
+		return stringAttribute(attributes, "scopeId")
 	default:
 		if indexed["toolName"] != "" {
 			return indexed["toolName"]

@@ -109,6 +109,11 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     glyph: "step",
     child: true,
   },
+  "deferred-work": {
+    label: "Deferred work",
+    family: "orchestration",
+    glyph: "step",
+  },
   "composition.parallel": {
     label: "Parallel",
     family: "orchestration",

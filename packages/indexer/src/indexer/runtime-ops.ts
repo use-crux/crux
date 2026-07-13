@@ -24,6 +24,7 @@ import type {
   RuntimeStatusCount,
 } from './runtime-ops-types'
 import type { RuntimeArtifactManifest } from '@use-crux/core/runtime'
+import { runRuntimeSetupOperation } from './setup-ops'
 
 export type {
   RuntimeCancelOperationResult,
@@ -51,64 +52,115 @@ const WORK_STATUSES = [
 export async function runRuntimeOperation(
   options: RuntimeOperationOptions,
 ): Promise<RuntimeOperationResult> {
-  const runtimeDefinition = await loadRuntimeDefinition(options.root)
   switch (options.operation) {
     case 'setup-check':
-      return setupResult('setup-check', await setupPort(runtimeDefinition).check())
+      return runtimeSetupResult(
+        'setup-check',
+        await runRuntimeSetupOperation({ root: options.root, mode: 'check' }),
+      )
     case 'setup-apply':
-      return setupResult('setup-apply', await setupPort(runtimeDefinition).apply())
+      return runtimeSetupResult(
+        'setup-apply',
+        await runRuntimeSetupOperation({ root: options.root, mode: 'apply' }),
+      )
+  }
+  const runtimeDefinition = await loadRuntimeDefinition(options.root)
+  switch (options.operation) {
     case 'preflight':
       return await preflightRuntime(options.root, runtimeDefinition)
     case 'status':
-      return await withRuntime(options.root, runtimeDefinition, false, async (runtime) => {
-        const base = {
-          operation: 'status' as const,
-          ok: true as const,
-          namespace: runtime.namespace,
-          counts: await statusCounts(runtime),
-        }
-        if (!options.includeDetails) return base
-        return {
-          ...base,
-          ...(await statusDetails(runtime)),
-        }
-      })
+      return await withRuntime(
+        options.root,
+        runtimeDefinition,
+        false,
+        async (runtime) => {
+          const base = {
+            operation: 'status' as const,
+            ok: true as const,
+            namespace: runtime.namespace,
+            counts: await statusCounts(runtime),
+          }
+          if (!options.includeDetails) return base
+          return {
+            ...base,
+            ...(await statusDetails(runtime)),
+          }
+        },
+      )
     case 'inspect':
-      return await withRuntime(options.root, runtimeDefinition, false, async (runtime) =>
-        inspectWork(runtime, requiredWorkId(options)),
+      return await withRuntime(
+        options.root,
+        runtimeDefinition,
+        false,
+        async (runtime) => inspectWork(runtime, requiredWorkId(options)),
       )
     case 'retry':
-      return await withRuntime(options.root, runtimeDefinition, true, async (runtime) => {
-        const retry = await runtime.kernel.retryWork({
-          namespace: runtime.namespace,
-          workId: requiredWorkId(options),
-        })
-        const dispatch = retry.retried ? await runtime.dispatcher.nudge() : undefined
-        return {
-          operation: 'retry',
-          ok: retry.retried,
-          namespace: runtime.namespace,
-          retried: retry.retried,
-          ...(retry.retried ? { work: retry.work, dispatch } : {}),
-        }
-      })
+      return await withRuntime(
+        options.root,
+        runtimeDefinition,
+        true,
+        async (runtime) => {
+          const retry = await runtime.kernel.retryWork({
+            namespace: runtime.namespace,
+            workId: requiredWorkId(options),
+          })
+          const dispatch = retry.retried
+            ? await runtime.dispatcher.nudge()
+            : undefined
+          return {
+            operation: 'retry',
+            ok: retry.retried,
+            namespace: runtime.namespace,
+            retried: retry.retried,
+            ...(retry.retried ? { work: retry.work, dispatch } : {}),
+          }
+        },
+      )
     case 'cancel':
-      return await withRuntime(options.root, runtimeDefinition, false, async (runtime) => {
-        const cancel = await runtime.kernel.cancelWork({
-          namespace: runtime.namespace,
-          workId: requiredWorkId(options),
-        })
-        return {
-          operation: 'cancel',
-          ok: cancel.cancelled,
-          namespace: runtime.namespace,
-          cancelled: cancel.cancelled,
-        }
-      })
+      return await withRuntime(
+        options.root,
+        runtimeDefinition,
+        false,
+        async (runtime) => {
+          const cancel = await runtime.kernel.cancelWork({
+            namespace: runtime.namespace,
+            workId: requiredWorkId(options),
+          })
+          return {
+            operation: 'cancel',
+            ok: cancel.cancelled,
+            namespace: runtime.namespace,
+            cancelled: cancel.cancelled,
+          }
+        },
+      )
   }
 }
 
-async function loadRuntimeDefinition(root: string): Promise<RuntimeEngineDefinition> {
+function runtimeSetupResult(
+  operation: RuntimeSetupOperationResult['operation'],
+  report: Awaited<ReturnType<typeof runRuntimeSetupOperation>>,
+): RuntimeSetupOperationResult {
+  return {
+    operation,
+    ok: report.ok,
+    setup: {
+      ok: report.ok,
+      findings: report.findings.map(
+        ({ code, resource, message, remediation }) => ({
+          code,
+          resource,
+          message,
+          ...(remediation === undefined ? {} : { remediation }),
+        }),
+      ),
+    },
+  }
+}
+
+async function loadRuntimeDefinition(
+  root: string,
+): Promise<RuntimeEngineDefinition> {
   const { loaded } = await loadProjectConfig(root, undefined, 'runtime-rich')
   const runtime = loaded.crux?.config.runtime
   if (!runtime) throw runtimeRequiredError({ api: 'crux runtime' })
@@ -118,7 +170,7 @@ async function loadRuntimeDefinition(root: string): Promise<RuntimeEngineDefinit
 function setupPort(runtime: RuntimeEngineDefinition): RuntimeSetupPort {
   if (runtime.kind === 'host-bound') {
     throw runtimeHostOnlyError({
-      api: 'crux runtime setup',
+      api: 'crux setup',
       host: runtime.host,
       entry: runtime.entry,
     })
@@ -129,8 +181,10 @@ function setupPort(runtime: RuntimeEngineDefinition): RuntimeSetupPort {
       code: 'CAPABILITY_MISSING',
       whatFailed: `Runtime adapter \`${runtime.id}\` does not expose setup checks.`,
       why: 'This runtime stack has no adapter-owned resources for the setup command to verify.',
-      whatStillWorks: 'Runtime work can still run when the configured store and wake adapters are usable.',
-      nextStep: 'Use `crux runtime status` to inspect durable work, or choose an adapter with setup support.',
+      whatStillWorks:
+        'Runtime work can still run when the configured store and wake adapters are usable.',
+      nextStep:
+        'Use `crux runtime status` to inspect durable work, or choose an adapter with setup support.',
     })
   }
   return setup
@@ -161,7 +215,10 @@ async function importGeneratedTargetModules(root: string): Promise<void> {
   let manifest: { readonly targets?: readonly { readonly module?: string }[] }
   try {
     manifest = JSON.parse(
-      await readFile(join(root, '.crux/generated/runtime/manifest.json'), 'utf8'),
+      await readFile(
+        join(root, '.crux/generated/runtime/manifest.json'),
+        'utf8',
+      ),
     ) as typeof manifest
   } catch {
     return
@@ -176,8 +233,12 @@ async function importGeneratedTargetModules(root: string): Promise<void> {
   }
 }
 
-async function statusCounts(runtime: ResolvedRuntimeEngine): Promise<readonly RuntimeStatusCount[]> {
-  return [...await runtime.store.state.countWork({ namespace: runtime.namespace })].sort(
+async function statusCounts(
+  runtime: ResolvedRuntimeEngine,
+): Promise<readonly RuntimeStatusCount[]> {
+  return [
+    ...(await runtime.store.state.countWork({ namespace: runtime.namespace })),
+  ].sort(
     (a, b) =>
       codepointCompare(a.namespace, b.namespace) ||
       codepointCompare(a.status, b.status) ||
@@ -212,7 +273,9 @@ async function preflightRuntime(
   })
 }
 
-async function readRuntimeArtifactManifest(root: string): Promise<RuntimeArtifactManifest> {
+async function readRuntimeArtifactManifest(
+  root: string,
+): Promise<RuntimeArtifactManifest> {
   return JSON.parse(
     await readFile(join(root, '.crux/generated/runtime/manifest.json'), 'utf8'),
   ) as RuntimeArtifactManifest
@@ -228,15 +291,25 @@ function missingRuntimeTargets(
     if (isTerminalRuntimeStatus(count.status) || known.has(count.targetId)) {
       continue
     }
-    missing.set(count.targetId, (missing.get(count.targetId) ?? 0) + count.count)
+    missing.set(
+      count.targetId,
+      (missing.get(count.targetId) ?? 0) + count.count,
+    )
   }
   return [...missing]
     .map(([targetId, count]) => ({ targetId, count }))
     .sort((a, b) => codepointCompare(a.targetId, b.targetId))
 }
 
-function isTerminalRuntimeStatus(status: RuntimeStatusCount['status']): boolean {
-  return status === 'completed' || status === 'cancelled' || status === 'blocked' || status === 'dead-letter'
+function isTerminalRuntimeStatus(
+  status: RuntimeStatusCount['status'],
+): boolean {
+  return (
+    status === 'completed' ||
+    status === 'cancelled' ||
+    status === 'blocked' ||
+    status === 'dead-letter'
+  )
 }
 
 async function statusDetails(runtime: ResolvedRuntimeEngine) {
@@ -294,7 +367,9 @@ async function inspectWork(
       ? work.work.flowId
       : undefined
   const snapshot = flowId
-    ? await runtime.store.state.getSnapshot(flowId, { namespace: runtime.namespace })
+    ? await runtime.store.state.getSnapshot(flowId, {
+        namespace: runtime.namespace,
+      })
     : undefined
   return {
     operation: 'inspect',
@@ -314,20 +389,14 @@ async function inspectWork(
   }
 }
 
-function setupResult(
-  operation: RuntimeSetupOperationResult['operation'],
-  setup: RuntimeSetupOperationResult['setup'],
-): RuntimeSetupOperationResult {
-  return { operation, ok: setup.ok, setup }
-}
-
 function requiredWorkId(options: RuntimeOperationOptions): WorkId {
   if (options.workId) return options.workId as WorkId
   throw createRuntimeError({
     code: 'TARGET_NOT_FOUND',
     whatFailed: `crux runtime ${options.operation} requires a work id.`,
     why: 'The operation needs one durable work item to inspect or mutate.',
-    whatStillWorks: '`crux runtime status` can still list work without a work id.',
+    whatStillWorks:
+      '`crux runtime status` can still list work without a work id.',
     nextStep: `Run \`crux runtime ${options.operation} <workId>\`.`,
   })
 }

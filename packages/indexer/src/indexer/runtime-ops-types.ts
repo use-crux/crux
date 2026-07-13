@@ -37,6 +37,7 @@ export type RuntimeOperationResult =
   | RuntimeRetryOperationResult
   | RuntimeCancelOperationResult
 
+/** Deprecated Runtime-only setup operation envelope retained for compatibility. */
 export interface RuntimeSetupOperationResult {
   readonly operation: 'setup-check' | 'setup-apply'
   readonly ok: boolean

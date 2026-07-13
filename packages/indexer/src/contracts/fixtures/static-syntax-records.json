@@ -4,6 +4,7 @@
       "schemaVersion": 1,
       "frontend": { "name": "oxc-rust", "version": "contract-fixture" },
       "file": "/repo/src/contract.ts",
+      "relativePath": "src/contract.ts",
       "sourceHash": "sha256:contract",
       "imports": [
         {

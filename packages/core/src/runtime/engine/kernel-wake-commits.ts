@@ -13,9 +13,9 @@ import type { CruxRuntimeErrorCode } from './errors'
 import type { RuntimeTargetOutcome, RuntimeWakeResult } from './kernel-types'
 import { recordSuspensionInTransaction } from './kernel-events'
 import {
-  flushScheduledEffectsInTransaction,
-  mergeScheduledEffectRecords,
-} from './kernel-effects'
+  flushScheduledWorkInTransaction,
+  mergeScheduledWorkRecords,
+} from './kernel-scheduled-work'
 import { putWorkWithIdleAccounting } from './kernel-idle'
 import {
   assertLeaseHeldInTransaction,
@@ -230,16 +230,16 @@ export async function completeWorkInTransaction(
       input.outcome.status === 'cancelled') &&
     'flowSnapshot' in input.outcome
   ) {
-    const flushedEffects = await flushScheduledEffectsInTransaction(
+    const flushedWork = await flushScheduledWorkInTransaction(
       tx,
-      input.outcome.scheduledEffects,
+      input.outcome.scheduledWork,
       deps.now,
     )
     await tx.state.putSnapshot({
       ...input.outcome.flowSnapshot,
-      scheduledEffects: mergeScheduledEffectRecords(
-        input.outcome.flowSnapshot.scheduledEffects,
-        flushedEffects,
+      scheduledWork: mergeScheduledWorkRecords(
+        input.outcome.flowSnapshot.scheduledWork,
+        flushedWork,
       ),
     })
   }

@@ -1,0 +1,31 @@
+---
+title: DEFER_REPLAY_UNSAFE
+description: Public defer() cannot run inside replayable flow execution.
+---
+
+## What failed
+
+`defer()` was called from a replayable flow body or step.
+
+## Why
+
+Inline callbacks have no stable replay occurrence identity. Re-running the flow
+would re-register side effects. Binding them to an ancestor HTTP scope would
+also re-fire on every replay.
+
+## What still works
+
+- `flow.defer(target, input)` for durable, identity-stable flow children
+- Public `defer()` outside flows (HTTP/server handlers with a host wrapper)
+- Object-bound non-replay flow APIs that are not under the Runtime replay guard
+
+## Fix
+
+```ts
+// Inside a flow:
+await flow.defer(embedDocument, { documentId })
+
+// Not:
+defer(() => embed(documentId))
+await defer(embedDocument, { documentId })
+```

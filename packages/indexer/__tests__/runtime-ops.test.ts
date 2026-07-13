@@ -2,10 +2,17 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { transition, type FlowId, type RuntimeTargetId, type TaskId, type WorkId } from '@use-crux/core/runtime'
+import {
+  transition,
+  type FlowId,
+  type RuntimeTargetId,
+  type TaskId,
+  type WorkId,
+} from '@use-crux/core/runtime'
 import { flow } from '@use-crux/core/flow'
 import { postgres, type PostgresRuntimeStore } from '@use-crux/postgres/runtime'
 import { runRuntimeOperation } from '../src/indexer/runtime-ops'
+import { runSetupOperation } from '../src/indexer/setup-ops'
 import {
   closeRuntimeOpsPools,
   dropPostgresSchemas,
@@ -30,7 +37,9 @@ describe('runtime operations', () => {
 
   afterEach(async () => {
     await closeRuntimeOpsPools()
-    await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+    await Promise.all(
+      roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+    )
   })
 
   afterAll(async () => {
@@ -47,16 +56,22 @@ describe('runtime operations', () => {
     schemas.push(schema)
     const root = await runtimeOpsFixtureRoot({ schema })
 
-    await expect(runRuntimeOperation({ root, operation: 'setup-check' })).resolves.toMatchObject({
-      operation: 'setup-check',
+    await expect(
+      runSetupOperation({ root, mode: 'check' }),
+    ).resolves.toMatchObject({
+      mode: 'check',
       ok: false,
     })
-    await expect(runRuntimeOperation({ root, operation: 'setup-apply' })).resolves.toMatchObject({
-      operation: 'setup-apply',
+    await expect(
+      runSetupOperation({ root, mode: 'apply' }),
+    ).resolves.toMatchObject({
+      mode: 'apply',
       ok: true,
     })
-    await expect(runRuntimeOperation({ root, operation: 'setup-check' })).resolves.toMatchObject({
-      operation: 'setup-check',
+    await expect(
+      runSetupOperation({ root, mode: 'check' }),
+    ).resolves.toMatchObject({
+      mode: 'check',
       ok: true,
     })
 
@@ -91,7 +106,9 @@ describe('runtime operations', () => {
       ]),
     })
 
-    await expect(runRuntimeOperation({ root, operation: 'preflight' })).resolves.toMatchObject({
+    await expect(
+      runRuntimeOperation({ root, operation: 'preflight' }),
+    ).resolves.toMatchObject({
       operation: 'preflight',
       ok: false,
       setup: { ok: true },
@@ -166,7 +183,9 @@ describe('runtime operations', () => {
       work: {
         status: 'pending',
         attempt: 1,
-        idempotencyKey: expect.stringMatching(/^retry:work_runtime_ops_replay:/),
+        idempotencyKey: expect.stringMatching(
+          /^retry:work_runtime_ops_replay:/,
+        ),
       },
       dispatch: { delivered: 1, failed: 0 },
     })
@@ -200,13 +219,43 @@ describe('runtime operations', () => {
     })
   }, 30_000)
 
+  it('keeps legacy setup operations as Runtime contributor compatibility wrappers', async () => {
+    const schema = `crux_runtime_ops_legacy_setup_${Date.now()}`
+    schemas.push(schema)
+    const root = await runtimeOpsFixtureRoot({ schema })
+
+    await expect(
+      runRuntimeOperation({ root, operation: 'setup-check' }),
+    ).resolves.toMatchObject({
+      operation: 'setup-check',
+      ok: false,
+      setup: { ok: false, findings: expect.any(Array) },
+    })
+    await expect(
+      runRuntimeOperation({ root, operation: 'setup-apply' }),
+    ).resolves.toMatchObject({
+      operation: 'setup-apply',
+      ok: true,
+      setup: { ok: true, findings: [] },
+    })
+    await expect(
+      runRuntimeOperation({ root, operation: 'setup-check' }),
+    ).resolves.toEqual({
+      operation: 'setup-check',
+      ok: true,
+      setup: { ok: true, findings: [] },
+    })
+  }, 30_000)
+
   it('reports exact status counts beyond the status detail page size', async () => {
     const schema = `crux_runtime_ops_counts_${Date.now()}`
     schemas.push(schema)
     const root = await runtimeOpsFixtureRoot({ schema })
 
-    await expect(runRuntimeOperation({ root, operation: 'setup-apply' })).resolves.toMatchObject({
-      operation: 'setup-apply',
+    await expect(
+      runSetupOperation({ root, mode: 'apply' }),
+    ).resolves.toMatchObject({
+      mode: 'apply',
       ok: true,
     })
 
@@ -236,7 +285,9 @@ describe('runtime operations', () => {
       await seedStore.close()
     }
 
-    await expect(runRuntimeOperation({ root, operation: 'status' })).resolves.toMatchObject({
+    await expect(
+      runRuntimeOperation({ root, operation: 'status' }),
+    ).resolves.toMatchObject({
       operation: 'status',
       ok: true,
       counts: expect.arrayContaining([
@@ -250,12 +301,19 @@ describe('runtime operations', () => {
   }, 30_000)
 })
 
-async function runtimeOpsFixtureRoot(options: { readonly schema: string }): Promise<string> {
-  const root = await mkdtemp(join(dirname(fileURLToPath(import.meta.url)), '.tmp-runtime-ops-'))
+async function runtimeOpsFixtureRoot(options: {
+  readonly schema: string
+}): Promise<string> {
+  const root = await mkdtemp(
+    join(dirname(fileURLToPath(import.meta.url)), '.tmp-runtime-ops-'),
+  )
   roots.push(root)
   await mkdir(join(root, 'src'), { recursive: true })
   await mkdir(join(root, '.crux/generated/runtime'), { recursive: true })
-  await writeFile(join(root, 'package.json'), JSON.stringify({ type: 'module' }))
+  await writeFile(
+    join(root, 'package.json'),
+    JSON.stringify({ type: 'module' }),
+  )
   await writeFile(
     join(root, 'crux.config.ts'),
     [
@@ -306,7 +364,9 @@ async function runtimeOpsFixtureRoot(options: { readonly schema: string }): Prom
   return root
 }
 
-async function seedReplayDivergedWork(store: PostgresRuntimeStore): Promise<void> {
+async function seedReplayDivergedWork(
+  store: PostgresRuntimeStore,
+): Promise<void> {
   const now = new Date('2026-07-03T00:00:00.000Z')
   const work = await store.state.createWork({
     workId: 'work_runtime_ops_replay' as WorkId,
@@ -326,7 +386,7 @@ async function seedReplayDivergedWork(store: PostgresRuntimeStore): Promise<void
     completedSteps: {},
     fingerprint: ['step:old-label'],
     pendingSuspends: [],
-    scheduledEffects: {},
+    scheduledWork: {},
     updatedAt: now,
   })
   await store.state.putWork(

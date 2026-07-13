@@ -42,6 +42,7 @@ pub fn project_static_syntax_record_with_records(
 ) -> Vec<StaticNativeFactProjection> {
     dispatch::project_first_party_facts(
         &record.file,
+        &record.relative_path,
         source_text,
         &record.imports,
         &record.local_initializers,
@@ -59,6 +60,7 @@ pub fn project_native_facts(
     matches: &[StaticSourceMatch],
 ) -> Vec<StaticNativeFactProjection> {
     dispatch::project_first_party_facts(
+        file,
         file,
         source_text,
         imports,
@@ -78,6 +80,7 @@ pub fn project_native_facts_with_records(
     records_by_file: Option<&HashMap<String, StaticSyntaxFileRecord>>,
 ) -> Vec<StaticNativeFactProjection> {
     dispatch::project_first_party_facts(
+        file,
         file,
         source_text,
         imports,

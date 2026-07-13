@@ -14,9 +14,13 @@ import {
   inspectProjectConfig,
   resolveProjectModel,
   runRuntimeOperation,
+  runSetupOperation,
   type RuntimeOperationKind,
 } from '@use-crux/indexer/host'
-import { isProjectModelResolutionMode, type ProjectModelResolutionMode } from '@use-crux/core/project-index'
+import {
+  isProjectModelResolutionMode,
+  type ProjectModelResolutionMode,
+} from '@use-crux/core/project-index'
 import {
   createProjectIndexWorkerRequestAssembler,
   type ProjectIndexWorkerRequest,
@@ -40,7 +44,8 @@ let pending = 0
 let closing = false
 let lineQueue = Promise.resolve()
 
-const assembleProjectIndexWorkerRequest = createProjectIndexWorkerRequestAssembler()
+const assembleProjectIndexWorkerRequest =
+  createProjectIndexWorkerRequestAssembler()
 
 function maybeExit(): void {
   if (closing && pending === 0) process.exit(0)
@@ -88,9 +93,19 @@ async function handleLine(line: string): Promise<void> {
     const message = error instanceof Error ? error.message : String(error)
     process.stderr.write(`[project-indexer] error: ${message}\n`)
     if (streamError?.kind === 'phase') {
-      await writeProjectIndexPhaseError(writeResponse, streamError.method, streamError.phase, message)
+      await writeProjectIndexPhaseError(
+        writeResponse,
+        streamError.method,
+        streamError.phase,
+        message,
+      )
     } else if (streamError?.kind === 'artifact') {
-      await writeProjectIndexArtifactError(writeResponse, streamError.method, streamError.artifact, message)
+      await writeProjectIndexArtifactError(
+        writeResponse,
+        streamError.method,
+        streamError.artifact,
+        message,
+      )
     } else {
       await writeResponse({ error: message })
     }
@@ -112,7 +127,12 @@ async function runAssembledRequest(
           projectName: req.projectName,
           resolutionMode: requestResolutionMode(req.resolutionMode),
         })
-        await writeArtifactEvent(writeResponse, 'projectModel', projectModel, req.root)
+        await writeArtifactEvent(
+          writeResponse,
+          'projectModel',
+          projectModel,
+          req.root,
+        )
         break
       }
       case 'inspectProjectConfig': {
@@ -124,21 +144,33 @@ async function runAssembledRequest(
           projectName: req.projectName,
           resolutionMode: requestResolutionMode(req.resolutionMode),
         })
-        await writeArtifactEvent(writeResponse, 'projectConfig', config, req.root)
+        await writeArtifactEvent(
+          writeResponse,
+          'projectConfig',
+          config,
+          req.root,
+        )
         break
       }
       case 'inspectProjectStaticIndexConfig': {
-        if (!req.root) throw new Error('inspectProjectStaticIndexConfig requires root')
+        if (!req.root)
+          throw new Error('inspectProjectStaticIndexConfig requires root')
         assertProjectIndexWorkerProtocolV2(req.protocolVersion)
         const config = await inspectProjectStaticIndexConfig({
           root: req.root,
           configPath: req.configPath,
         })
-        await writeArtifactEvent(writeResponse, 'projectStaticIndexConfig', config, req.root)
+        await writeArtifactEvent(
+          writeResponse,
+          'projectStaticIndexConfig',
+          config,
+          req.root,
+        )
         break
       }
       case 'inspectProjectStaticSyntaxPlan': {
-        if (!req.root) throw new Error('inspectProjectStaticSyntaxPlan requires root')
+        if (!req.root)
+          throw new Error('inspectProjectStaticSyntaxPlan requires root')
         assertProjectIndexWorkerProtocolV2(req.protocolVersion)
         const plan = await inspectProjectStaticSyntaxPlan({
           root: req.root,
@@ -147,7 +179,12 @@ async function runAssembledRequest(
           resolutionMode: requestResolutionMode(req.resolutionMode),
           includeCacheStatus: req.includeStaticCacheStatus,
         })
-        await writeArtifactEvent(writeResponse, 'projectStaticSyntaxPlan', plan, req.root)
+        await writeArtifactEvent(
+          writeResponse,
+          'projectStaticSyntaxPlan',
+          plan,
+          req.root,
+        )
         break
       }
       case 'loadStaticExtensionHostManifest':
@@ -164,12 +201,18 @@ async function runAssembledRequest(
           root: req.root,
           definitions: req.definitions,
         })
-        await writeArtifactEvent(writeResponse, 'runtimeArtifacts', result, req.root)
+        await writeArtifactEvent(
+          writeResponse,
+          'runtimeArtifacts',
+          result,
+          req.root,
+        )
         break
       }
       case 'runRuntimeOperation': {
         if (!req.root) throw new Error('runRuntimeOperation requires root')
-        if (!req.runtimeOperation) throw new Error('runRuntimeOperation requires runtimeOperation')
+        if (!req.runtimeOperation)
+          throw new Error('runRuntimeOperation requires runtimeOperation')
         if (!isRuntimeOperationKind(req.runtimeOperation)) {
           throw new Error(`unknown runtime operation: ${req.runtimeOperation}`)
         }
@@ -180,7 +223,30 @@ async function runAssembledRequest(
           workId: req.runtimeWorkId,
           includeDetails: req.runtimeIncludeDetails === true,
         })
-        await writeArtifactEvent(writeResponse, 'runtimeOperation', result, req.root)
+        await writeArtifactEvent(
+          writeResponse,
+          'runtimeOperation',
+          result,
+          req.root,
+        )
+        break
+      }
+      case 'runSetupOperation': {
+        if (!req.root) throw new Error('runSetupOperation requires root')
+        if (req.setupMode !== 'check' && req.setupMode !== 'apply') {
+          throw new Error('runSetupOperation requires setupMode check or apply')
+        }
+        assertProjectIndexWorkerProtocolV2(req.protocolVersion)
+        const report = await runSetupOperation({
+          root: req.root,
+          mode: req.setupMode,
+        })
+        await writeArtifactEvent(
+          writeResponse,
+          'setupOperation',
+          report,
+          req.root,
+        )
         break
       }
       default:
@@ -190,23 +256,33 @@ async function runAssembledRequest(
     const message = error instanceof Error ? error.message : String(error)
     process.stderr.write(`[project-indexer] error: ${message}\n`)
     if (streamError?.kind === 'phase') {
-      await writeProjectIndexPhaseError(writeResponse, streamError.method, streamError.phase, message)
+      await writeProjectIndexPhaseError(
+        writeResponse,
+        streamError.method,
+        streamError.phase,
+        message,
+      )
     } else if (streamError?.kind === 'artifact') {
-      await writeProjectIndexArtifactError(writeResponse, streamError.method, streamError.artifact, message)
+      await writeProjectIndexArtifactError(
+        writeResponse,
+        streamError.method,
+        streamError.artifact,
+        message,
+      )
     } else {
       await writeResponse({ error: message })
     }
   }
 }
 
-function requestResolutionMode(value: unknown): ProjectModelResolutionMode | undefined {
+function requestResolutionMode(
+  value: unknown,
+): ProjectModelResolutionMode | undefined {
   return isProjectModelResolutionMode(value) ? value : undefined
 }
 
 function isRuntimeOperationKind(value: string): value is RuntimeOperationKind {
   return (
-    value === 'setup-check' ||
-    value === 'setup-apply' ||
     value === 'status' ||
     value === 'inspect' ||
     value === 'retry' ||

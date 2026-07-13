@@ -1,0 +1,25 @@
+---
+title: DEFER_LIMIT_EXCEEDED
+description: defer() exceeded host callback count, nesting, or related bounds.
+---
+
+## What failed
+
+Registration exceeded a host-declared bound (callback count, nesting depth, or
+related limit) before the callback was invoked.
+
+## Why
+
+Hosts keep deferred work bounded. Unlimited registration can outlive the process
+guarantee and starve shutdown.
+
+## What still works
+
+Already accepted registrations drain within concurrency and deadline limits.
+Named Runtime work is not a substitute for unbounded inline fan-out.
+
+## Fix
+
+Reduce the number of inline registrations, collapse work into fewer callbacks,
+or move high-volume work to named Runtime targets. V1 does not expose public
+tuning knobs; effective limits are fixed per host policy.

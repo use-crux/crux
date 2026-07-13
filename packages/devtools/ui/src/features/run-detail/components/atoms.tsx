@@ -67,6 +67,7 @@ const KIND_TONE: Record<string, ChipTone> = {
   tool: 'muted',
   step: 'muted',
   resolve: 'muted',
+  defer: 'crux',
   trace: 'muted',
   detail: 'muted',
   operation: 'plum',

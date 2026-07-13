@@ -1,10 +1,13 @@
 import { expect } from 'vitest'
 import type { RuntimeWaiter } from '../ports/waiters'
 import type { RuntimeTimerRecord } from '../store'
+import type { RuntimeDeferredIntent } from '../ports/deferred'
+import type { DeferredIntentId, DeferredScopeId } from '../ports/ids'
 import { makeConformanceWorkItem } from './store-fixtures'
 import {
   FLOW_ID,
   LATER,
+  LEASE_TOKEN,
   NAMESPACE,
   TARGET_ID,
   TASK_ID,
@@ -21,7 +24,73 @@ export function operationalCompositeRollbackCases(): StoreCompositeRollbackCase[
     maintenanceReclaimLeaseCase(),
     maintenanceRequeueOrphanCase(),
     maintenanceExpireWaitersCase(),
+    deferStageCase(),
+    deferFinalizeCase(),
   ]
+}
+
+function deferStageCase(): StoreCompositeRollbackCase {
+  const scopeId = 'defer_scope_conformance_stage' as DeferredScopeId
+  const intentId = 'defer_intent_conformance_stage' as DeferredIntentId
+  return {
+    kind: 'defer.stage',
+    writesBeforeFailure: 1,
+    run: async (store) => {
+      await runComposite(store, 'defer.stage', {
+        namespace: NAMESPACE,
+        scopeId,
+        intentId,
+        leaseToken: LEASE_TOKEN,
+        leaseExpiresAt: LATER,
+        targetId: TARGET_ID,
+        input: { documentId: 'doc_1' },
+      })
+    },
+    verifyRollback: async (store) => {
+      await expect(store.deferred.getScope(scopeId, { namespace: NAMESPACE })).resolves.toBeNull()
+      await expect(store.deferred.getIntent(intentId, { namespace: NAMESPACE })).resolves.toBeNull()
+    },
+  }
+}
+
+function deferFinalizeCase(): StoreCompositeRollbackCase {
+  const scopeId = 'defer_scope_conformance_finalize' as DeferredScopeId
+  const intentId = 'defer_intent_conformance_finalize' as DeferredIntentId
+  let intent: RuntimeDeferredIntent | undefined
+  return {
+    kind: 'defer.finalize',
+    writesBeforeFailure: 1,
+    prepare: async (store) => {
+      intent = await runComposite(store, 'defer.stage', {
+        namespace: NAMESPACE,
+        scopeId,
+        intentId,
+        leaseToken: LEASE_TOKEN,
+        leaseExpiresAt: LATER,
+        targetId: TARGET_ID,
+        input: { documentId: 'doc_1' },
+      })
+    },
+    run: async (store) => {
+      await runComposite(store, 'defer.finalize', {
+        namespace: NAMESPACE,
+        scopeId,
+        leaseToken: LEASE_TOKEN,
+        outcome: 'success',
+      })
+    },
+    verifyRollback: async (store) => {
+      if (!intent) throw new Error('Expected deferred intent fixture.')
+      await expect(store.deferred.getScope(scopeId, { namespace: NAMESPACE })).resolves.toMatchObject({
+        finalization: { state: 'open' },
+      })
+      await expect(store.deferred.getIntent(intentId, { namespace: NAMESPACE })).resolves.toMatchObject({
+        state: 'staged',
+      })
+      await expect(store.state.getWork(intent.workId, { namespace: NAMESPACE })).resolves.toBeNull()
+      await expect(store.outbox.list({ namespace: NAMESPACE, state: 'pending' })).resolves.toEqual([])
+    },
+  }
 }
 
 function timersFireDueCase(): StoreCompositeRollbackCase {
@@ -50,9 +119,7 @@ function timersFireDueCase(): StoreCompositeRollbackCase {
         state: 'scheduled',
       })
       expect(timers).toHaveLength(1)
-      await expect(
-        store.outbox.list({ namespace: NAMESPACE, state: 'pending' }),
-      ).resolves.toEqual([])
+      await expect(store.outbox.list({ namespace: NAMESPACE, state: 'pending' })).resolves.toEqual([])
     },
   }
 }
@@ -79,9 +146,9 @@ function workCancelCase(): StoreCompositeRollbackCase {
       })
     },
     verifyRollback: async (store) => {
-      await expect(
-        store.state.getWork(work.workId, { namespace: work.namespace }),
-      ).resolves.toMatchObject({ status: 'pending' })
+      await expect(store.state.getWork(work.workId, { namespace: work.namespace })).resolves.toMatchObject({
+        status: 'pending',
+      })
       const waiters = await store.waiters.listByWork(work.workId)
       expect(waiters).toEqual([expect.objectContaining({ state: 'armed' })])
     },
@@ -103,12 +170,10 @@ function operatorRetryCase(): StoreCompositeRollbackCase {
       })
     },
     verifyRollback: async (store) => {
-      await expect(
-        store.state.getWork(work.workId, { namespace: work.namespace }),
-      ).resolves.toMatchObject({ status: 'blocked' })
-      await expect(
-        store.events.read({ namespace: work.namespace }),
-      ).resolves.toMatchObject({ events: [] })
+      await expect(store.state.getWork(work.workId, { namespace: work.namespace })).resolves.toMatchObject({
+        status: 'blocked',
+      })
+      await expect(store.events.read({ namespace: work.namespace })).resolves.toMatchObject({ events: [] })
     },
   }
 }
@@ -125,12 +190,10 @@ function maintenanceReclaimLeaseCase(): StoreCompositeRollbackCase {
       await runComposite(store, 'maintenance.reclaim-lease', { work })
     },
     verifyRollback: async (store) => {
-      await expect(
-        store.state.getWork(work.workId, { namespace: work.namespace }),
-      ).resolves.toMatchObject({ status: 'leased' })
-      await expect(
-        store.outbox.list({ namespace: work.namespace, state: 'pending' }),
-      ).resolves.toEqual([])
+      await expect(store.state.getWork(work.workId, { namespace: work.namespace })).resolves.toMatchObject({
+        status: 'leased',
+      })
+      await expect(store.outbox.list({ namespace: work.namespace, state: 'pending' })).resolves.toEqual([])
     },
   }
 }
@@ -147,9 +210,7 @@ function maintenanceRequeueOrphanCase(): StoreCompositeRollbackCase {
       await runComposite(store, 'maintenance.requeue-orphan', { work })
     },
     verifyRollback: async (store) => {
-      await expect(
-        store.outbox.list({ namespace: work.namespace, state: 'pending' }),
-      ).resolves.toEqual([])
+      await expect(store.outbox.list({ namespace: work.namespace, state: 'pending' })).resolves.toEqual([])
     },
   }
 }
@@ -184,9 +245,7 @@ function maintenanceExpireWaitersCase(): StoreCompositeRollbackCase {
         now: LATER,
       })
       expect(expired).toEqual([expect.objectContaining({ state: 'armed' })])
-      await expect(
-        store.outbox.list({ namespace: NAMESPACE, state: 'pending' }),
-      ).resolves.toEqual([])
+      await expect(store.outbox.list({ namespace: NAMESPACE, state: 'pending' })).resolves.toEqual([])
     },
   }
 }

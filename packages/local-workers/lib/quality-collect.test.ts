@@ -1,9 +1,19 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { prompt } from '@use-crux/core'
 import * as runnerCore from '@use-crux/core/quality/internal/runner'
-import { loadQualityProject, resolveQualityRunnerSettings } from './quality-config'
+import {
+  loadQualityProject,
+  resolveQualityRunnerSettings,
+} from './quality-config'
 import {
   collectEvaluationFiles,
   collectPromptTests,
@@ -15,28 +25,44 @@ const FIXTURE_ROOT = resolve(__dirname, '__fixtures__/quality-collect')
 
 describe('deriveEvaluationId', () => {
   it('derives the id from the POSIX relative path, stripping the compound eval suffix', () => {
-    expect(deriveEvaluationId('evals/support/refunds.eval.ts', 'default')).toBe('evals.support.refunds')
+    expect(deriveEvaluationId('evals/support/refunds.eval.ts', 'default')).toBe(
+      'evals.support.refunds',
+    )
   })
 
   it('appends #exportName for non-default exports', () => {
-    expect(deriveEvaluationId('evals/support/refunds.eval.ts', 'edgeCases')).toBe('evals.support.refunds#edgeCases')
+    expect(
+      deriveEvaluationId('evals/support/refunds.eval.ts', 'edgeCases'),
+    ).toBe('evals.support.refunds#edgeCases')
   })
 
   it('strips only the final extension for files without an .eval suffix', () => {
-    expect(deriveEvaluationId('checks/smoke.ts', 'default')).toBe('checks.smoke')
+    expect(deriveEvaluationId('checks/smoke.ts', 'default')).toBe(
+      'checks.smoke',
+    )
   })
 
   it('handles Windows-style separators by normalizing to POSIX first', () => {
-    expect(deriveEvaluationId('evals\\support\\refunds.eval.ts', 'default')).toBe('evals.support.refunds')
+    expect(
+      deriveEvaluationId('evals\\support\\refunds.eval.ts', 'default'),
+    ).toBe('evals.support.refunds')
   })
 })
 
 describe('collectEvaluationFiles', () => {
   it('collects file evaluations from a no-config project with an empty prompt registry', async () => {
-    const projectRoot = mkdtempSync(join(FIXTURE_ROOT, 'no-config-project-'))
+    const projectRoot = mkdtempSync(join(tmpdir(), 'crux-quality-collect-'))
+    symlinkSync(
+      resolve(__dirname, '../node_modules'),
+      join(projectRoot, 'node_modules'),
+      'dir',
+    )
     const evalRoot = join(projectRoot, 'evals')
     mkdirSync(evalRoot, { recursive: true })
-    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: '@acme/no-config-collect' }))
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ name: '@acme/no-config-collect' }),
+    )
     writeFileSync(
       join(evalRoot, 'no-config.eval.ts'),
       `
@@ -53,7 +79,10 @@ export default evaluate({
     try {
       process.chdir(evalRoot)
       const project = await loadQualityProject()
-      const settings = resolveQualityRunnerSettings(project.quality, project.configDir)
+      const settings = resolveQualityRunnerSettings(
+        project.quality,
+        project.configDir,
+      )
       const fromFiles = await collectEvaluationFiles({
         rootDir: project.configDir,
         include: settings.include,
@@ -65,7 +94,9 @@ export default evaluate({
       expect(project.prompts).toEqual([])
       expect(fromPrompts).toEqual({ evaluations: [], errors: [] })
       expect(fromFiles.errors).toEqual([])
-      expect(fromFiles.evaluations.map((entry) => entry.id)).toEqual(['evals.no-config'])
+      expect(fromFiles.evaluations.map((entry) => entry.id)).toEqual([
+        'evals.no-config',
+      ])
     } finally {
       process.chdir(previousCwd)
       rmSync(projectRoot, { recursive: true, force: true })
@@ -95,8 +126,12 @@ export default evaluate({
       })
 
       expect(result.errors).toEqual([])
-      expect(result.evaluations.map((entry) => entry.file)).toEqual(['evals/overlap.eval.ts'])
-      expect(result.evaluations.map((entry) => entry.id)).toEqual(['evals.overlap'])
+      expect(result.evaluations.map((entry) => entry.file)).toEqual([
+        'evals/overlap.eval.ts',
+      ])
+      expect(result.evaluations.map((entry) => entry.id)).toEqual([
+        'evals.overlap',
+      ])
     } finally {
       rmSync(projectRoot, { recursive: true, force: true })
     }
@@ -131,7 +166,10 @@ export default evaluate({
 
     expect(result.errors).toEqual([])
     const byId = new Map(result.evaluations.map((entry) => [entry.id, entry]))
-    expect([...byId.keys()].sort()).toEqual(['evals.multi#alpha', 'support.pinned'])
+    expect([...byId.keys()].sort()).toEqual([
+      'evals.multi#alpha',
+      'support.pinned',
+    ])
     expect(byId.get('evals.multi#alpha')!.explicitId).toBe(false)
     expect(byId.get('evals.multi#alpha')!.exportName).toBe('alpha')
     expect(byId.get('support.pinned')!.explicitId).toBe(true)
@@ -157,7 +195,9 @@ export default evaluate({
       include: ['bad/throws.eval.ts', 'evals/greeting.eval.ts'],
     })
 
-    expect(result.evaluations.map((entry) => entry.id)).toEqual(['evals.greeting'])
+    expect(result.evaluations.map((entry) => entry.id)).toEqual([
+      'evals.greeting',
+    ])
     expect(result.errors).toHaveLength(1)
     expect(result.errors[0]!.message).toContain('boom at import time')
     expect(result.errors[0]!.file).toBe('bad/throws.eval.ts')

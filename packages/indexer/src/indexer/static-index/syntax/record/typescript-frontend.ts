@@ -27,6 +27,7 @@ import {
   type TypeScriptStaticSyntaxMatchInput,
 } from "./typescript-matches";
 import { staticCalleeRecordFromExpression } from "./typescript-values";
+import { typeScriptDeferNativeFacts } from "./defer-native-facts";
 
 const DEFAULT_CONSTRUCTOR_NAMES = ["Agent"] as const;
 
@@ -86,14 +87,22 @@ function parseTypeScriptSyntaxFile(
     callMatcher,
     constructorMatcher,
   });
+  const relativePath = relativeSourcePath(input.root, input.file);
   return {
     schemaVersion: 1,
     frontend: { name: "typescript", version: ts.version },
     file: input.file,
+    relativePath,
     sourceHash: sha256(input.source),
     interfaceHash: sourceInterfaceHashFromSourceFile(sourceFile),
     imports,
     matches,
+    nativeFacts: typeScriptDeferNativeFacts(
+      input.file,
+      relativePath,
+      input.source,
+      matches,
+    ),
     localInitializers,
     diagnostics: (sourceFile.parseDiagnostics ?? []).map(
       (diagnostic, index) => ({
@@ -108,6 +117,14 @@ function parseTypeScriptSyntaxFile(
       }),
     ),
   };
+}
+
+function relativeSourcePath(root: string, file: string): string {
+  const normalizedRoot = root.replaceAll("\\", "/").replace(/\/$/, "");
+  const normalizedFile = file.replaceAll("\\", "/");
+  return normalizedFile.startsWith(`${normalizedRoot}/`)
+    ? normalizedFile.slice(normalizedRoot.length + 1)
+    : normalizedFile;
 }
 
 function collectImportRecords(
@@ -224,6 +241,7 @@ function collectMatches(
           if (match) {
             matches.push(match);
             matchedInitializer = true;
+            ts.forEachChild(declaration.initializer, visit);
           }
         }
         if (!matchedInitializer) {

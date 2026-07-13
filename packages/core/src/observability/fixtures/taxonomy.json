@@ -19,6 +19,8 @@
     "corpus.sync": "corpus",
     "cost.record": "cost",
     "custom.operation": "custom",
+    "defer.run": "defer",
+    "defer.scheduled": "defer",
     "delegate.invoke": "delegate",
     "embedding.call": "embedding",
     "eval.case": "eval",

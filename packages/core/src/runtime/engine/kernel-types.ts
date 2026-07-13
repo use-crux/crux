@@ -29,6 +29,15 @@ import type { RuntimeRetentionConfig } from './retention'
 import type { WakeEnvelope } from './envelope'
 import type { RuntimeWakeDeliver } from './outbox'
 import type { WorkItem, WorkItemError } from './work'
+import type { RuntimeDeferredIntent } from '../ports/deferred'
+import type {
+  AbandonDeferredScopeInput,
+  DeferredScopeTransitionResult,
+  FinalizeDeferredScopeInput,
+  RenewDeferredScopeLeaseInput,
+  RenewDeferredScopeLeaseResult,
+  StageDeferredIntentInput,
+} from './kernel-deferred'
 
 /** Result returned by a runtime target execution. */
 export type RuntimeTargetOutcome =
@@ -37,15 +46,15 @@ export type RuntimeTargetOutcome =
       readonly status: 'completed'
       /** Flow snapshot status to persist atomically with completed flow work. */
       readonly flowSnapshot: RuntimeFlowSnapshot
-      /** Replay-visible durable effects to flush with flow completion. */
-      readonly scheduledEffects?: readonly RuntimeScheduledEffectIntent[]
+      /** Replay-visible durable work to flush with flow completion. */
+      readonly scheduledWork?: readonly RuntimeScheduledWorkIntent[]
     }
   | {
       readonly status: 'cancelled'
       /** Flow snapshot status to persist atomically with cancelled flow work. */
       readonly flowSnapshot: RuntimeFlowSnapshot
-      /** Replay-visible durable effects to flush with flow cancellation. */
-      readonly scheduledEffects?: readonly RuntimeScheduledEffectIntent[]
+      /** Replay-visible durable work to flush with flow cancellation. */
+      readonly scheduledWork?: readonly RuntimeScheduledWorkIntent[]
     }
   | {
       readonly status: 'suspended'
@@ -153,12 +162,12 @@ export interface RuntimeSuspensionSnapshotInput {
   readonly fingerprint: readonly string[]
   /** Event cursors for already consumed suspend deliveries. */
   readonly deliveredSuspends?: RuntimeFlowSnapshot['deliveredSuspends']
-  /** Durable effects already flushed in prior replay passes. */
-  readonly scheduledEffects?: RuntimeFlowSnapshot['scheduledEffects']
+  /** Durable work already flushed in prior replay passes. */
+  readonly scheduledWork?: RuntimeFlowSnapshot['scheduledWork']
 }
 
-/** Buffered replay-visible durable effect produced by `flow.defer()`/`after()`. */
-export type RuntimeScheduledEffectIntent =
+/** Buffered replay-visible work produced by `flow.defer()`/`after()`. */
+export type RuntimeScheduledWorkIntent =
   | {
       readonly kind: 'defer'
       readonly key: string
@@ -180,8 +189,8 @@ export type RuntimeScheduledEffectIntent =
       readonly idleScope: string
     }
 
-/** Committed metadata produced by flushing one durable effect. */
-export interface RuntimeScheduledEffectFlushRecord {
+/** Committed metadata produced by flushing one durable work intent. */
+export interface RuntimeScheduledWorkFlushRecord {
   readonly key: string
   readonly workId?: WorkId
   readonly timerId?: TimerId
@@ -201,8 +210,8 @@ export interface RecordSuspensionInput {
   readonly snapshot: RuntimeSuspensionSnapshotInput
   /** Waiters to register before the suspension commits. */
   readonly suspends: readonly RuntimeSuspendRegistration[]
-  /** Replay-visible durable effects to flush with this suspension. */
-  readonly scheduledEffects?: readonly RuntimeScheduledEffectIntent[]
+  /** Replay-visible durable work to flush with this suspension. */
+  readonly scheduledWork?: readonly RuntimeScheduledWorkIntent[]
 }
 
 /** Input for appending an event and firing matching waiters. */
@@ -332,6 +341,8 @@ export interface MaintenanceTickResult {
   readonly timersSkipped: number
   /** Leased work moved back to pending after lease expiry. */
   readonly leasesReclaimed: number
+  /** Unfinalized deferred invocation scopes abandoned after lease expiry. */
+  readonly deferredScopesAbandoned: number
   /** Waiters expired by the no-native-timer backstop. */
   readonly waitersExpired: number
   /** Pending work rows with no live outbox wake that maintenance re-enqueued. */
@@ -360,6 +371,22 @@ export type RuntimeWakeResult =
 
 /** Runtime kernel operations for durable work and wake handling. */
 export interface RuntimeKernel {
+  /** Durably accept named deferred work without making it runnable. */
+  stageDeferredIntent(
+    input: StageDeferredIntentInput,
+  ): Promise<RuntimeDeferredIntent>
+  /** Atomically finalize an invocation and release all staged siblings. */
+  finalizeDeferredScope(
+    input: FinalizeDeferredScopeInput,
+  ): Promise<DeferredScopeTransitionResult>
+  /** Atomically abandon an unfinalized invocation and all staged siblings. */
+  abandonDeferredScope(
+    input: AbandonDeferredScopeInput,
+  ): Promise<DeferredScopeTransitionResult>
+  /** Renew or fence the durable deferred scope lease token/expiry. */
+  renewDeferredScopeLease(
+    input: RenewDeferredScopeLeaseInput,
+  ): Promise<RenewDeferredScopeLeaseResult>
   /** Create pending task work and write its wake envelope to the outbox. */
   enqueueTask(input: EnqueueTaskInput): Promise<WorkItem>
   /** Persist a flow suspension and owned waiter registrations atomically. */

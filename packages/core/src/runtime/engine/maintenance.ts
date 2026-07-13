@@ -17,6 +17,7 @@ import type {
   MaintenanceTickResult,
 } from './kernel-types'
 import { pruneRetainedRecords } from './maintenance-retention'
+import { abandonExpiredDeferredScopes } from './maintenance-deferred'
 import { scanTimers, type KernelTimerDeps } from './kernel-timers'
 import { transition, type WorkItem } from './work'
 import type { RuntimeWaiter } from '../ports/waiters'
@@ -58,6 +59,11 @@ export async function maintenanceTick(
     namespace: options.namespace,
     limit: options.workLimit,
   })
+  const deferredScopesAbandoned = await abandonExpiredDeferredScopes(deps, {
+    namespace: options.namespace,
+    now,
+    limit: options.workLimit,
+  })
   const waitersExpired = await expireWaiters(deps, {
     namespace: options.namespace,
     now,
@@ -79,6 +85,7 @@ export async function maintenanceTick(
     timersFired: timers.fired,
     timersSkipped: timers.skipped,
     leasesReclaimed,
+    deferredScopesAbandoned,
     waitersExpired,
     pendingRequeued,
     retainedRecordsRemoved: retention.removed,

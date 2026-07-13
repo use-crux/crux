@@ -55,17 +55,17 @@ export interface FlowSnapshot {
    * exact occurrence.
    */
   readonly deliveredSuspends?: RuntimeDeliveredSuspends
-  /** Durable effects already flushed for replay-visible defer/after calls. */
-  readonly scheduledEffects?: Readonly<Record<string, RuntimeScheduledEffect>>
+  /** Durable work already flushed for replay-visible defer/after calls. */
+  readonly scheduledWork?: Readonly<Record<string, RuntimeScheduledWork>>
   /** Last update time. */
   readonly updatedAt: Date
 }
 
-/** Committed replay-visible durable effect metadata. */
-export interface RuntimeScheduledEffect {
-  /** Child work id for `flow.defer()` effects. */
+/** Committed replay-visible scheduled-work metadata. */
+export interface RuntimeScheduledWork {
+  /** Child work id for `flow.defer()` work. */
   readonly workId?: WorkId
-  /** Timer id for `flow.after()` effects. */
+  /** Timer id for `flow.after()` work. */
   readonly timerId?: TimerId
 }
 

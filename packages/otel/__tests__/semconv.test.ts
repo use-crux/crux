@@ -118,6 +118,27 @@ describe('GenAI semconv projection', () => {
     ])
   })
 
+  it('exports request-scoped defer lifecycle spans with stable names', () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+
+    observe.openSpan({ name: 'scheduled', primitive: 'defer.scheduled' }).end()
+    observe.openSpan({ name: 'run', primitive: 'defer.run' }).end()
+    installed.dispose?.()
+
+    expect(
+      spans
+        .filter((span) =>
+          String(span.attributes['crux.primitive.name']).startsWith('defer.'),
+        )
+        .map((span) => span.name),
+    ).toEqual(['crux.defer.scheduled', 'crux.defer.run'])
+  })
+
   it('exports generation message content only when explicitly enabled', async () => {
     const defaultSpans: TraceSpan[] = []
     const defaultInstall = withTelemetry({

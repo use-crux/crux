@@ -18,12 +18,10 @@ import {
   wakeEnvelopeForWork,
 } from './kernel-shared'
 import { putWorkWithIdleAccounting } from './kernel-idle'
-import {
-  isLeaseLostError,
-  startLeaseExtensionHeartbeat,
-} from './kernel-leases'
+import { isLeaseLostError, startLeaseExtensionHeartbeat } from './kernel-leases'
 import { completeWork, failWork } from './kernel-wake-commits'
 import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
+import { executeWithNamedDeferEvidence } from './named-defer-evidence'
 import { transition } from './work'
 
 /** Dependencies for wake handling. */
@@ -141,7 +139,9 @@ export async function handleWake(
       },
     )
     try {
-      const outcome = await target.execute({ work: leased, lease })
+      const outcome = await executeWithNamedDeferEvidence(leased, () =>
+        target.execute({ work: leased, lease }),
+      )
       await completeWork({
         runComposite: deps.runComposite,
         work: leased,

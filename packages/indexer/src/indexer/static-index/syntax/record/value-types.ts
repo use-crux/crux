@@ -23,6 +23,8 @@ export interface StaticSourceMatchBase {
 /** Factory call match such as `prompt({ ... })`. */
 export interface StaticCallSourceMatch extends StaticSourceMatchBase {
   readonly kind: 'call'
+  /** Whether syntax proves the call runs during eager module/class initialization. */
+  readonly eagerExecution?: boolean
   readonly callee: StaticCalleeRecord
   readonly args: readonly StaticSyntaxValue[]
   readonly objectArg?: StaticObjectValue

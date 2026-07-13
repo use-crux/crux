@@ -1,4 +1,8 @@
-import type { IndexDiagnostic, SourceLocation, SourceSnippet } from '@use-crux/core/project-index'
+import type {
+  IndexDiagnostic,
+  SourceLocation,
+  SourceSnippet,
+} from '@use-crux/core/project-index'
 import type { StaticSourceMatch, StaticSyntaxValue } from './value-types'
 
 export type {
@@ -55,7 +59,9 @@ export interface StaticSyntaxFrontend {
   /** Structured frontend identity for cache keys and diagnostics. */
   readonly identity: StaticSyntaxFrontendIdentity
   /** Parses one source file into a compact normalized syntax record. */
-  parseFile(input: StaticSyntaxFileInput): Promise<StaticSyntaxFileRecord> | StaticSyntaxFileRecord
+  parseFile(
+    input: StaticSyntaxFileInput,
+  ): Promise<StaticSyntaxFileRecord> | StaticSyntaxFileRecord
   /**
    * Parses many source files in one frontend-owned batch.
    *
@@ -64,7 +70,9 @@ export interface StaticSyntaxFrontend {
    */
   parseFiles?(
     inputs: readonly StaticSyntaxFileInput[],
-  ): Promise<readonly StaticSyntaxFileRecord[]> | readonly StaticSyntaxFileRecord[]
+  ):
+    | Promise<readonly StaticSyntaxFileRecord[]>
+    | readonly StaticSyntaxFileRecord[]
 }
 
 /**
@@ -173,6 +181,8 @@ export interface StaticSyntaxFileRecord {
   readonly frontend: StaticSyntaxFrontendIdentity
   /** Absolute source file path. */
   readonly file: string
+  /** Project-root-relative source path with portable `/` separators. */
+  readonly relativePath: string
   /** SHA-256 hash of the exact parsed source text. */
   readonly sourceHash: string
   /** SHA-256 hash of the exported surface used to firewall dependent invalidation. */

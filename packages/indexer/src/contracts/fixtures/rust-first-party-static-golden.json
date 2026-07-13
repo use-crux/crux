@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 551,
-    "definitions": 382,
-    "relations": 223,
-    "diagnostics": 32,
-    "dependencies": 1028,
-    "canonicalBytes": 2531736
+    "files": 587,
+    "definitions": 417,
+    "relations": 229,
+    "diagnostics": 34,
+    "dependencies": 1101,
+    "canonicalBytes": 2588418
   },
   "files": [
     {
@@ -64,6 +64,33 @@
       "bytes": 68,
       "definitions": 0,
       "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "crux.config.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "examples/node-basic/defer-http.example.ts",
+      "sha256": "5af6c5de61ab495e7e7312392dd590042afb6d1b0537c85a5c7c0fe8d9516afd",
+      "bytes": 1715,
+      "definitions": 1,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "examples/node-basic/defer-named.example.ts",
+      "sha256": "bcfb2a00cf8990d42fce13ddb200fa4502573d5f7e8da5c1c9ad36dadf48fb3b",
+      "bytes": 2982,
+      "definitions": 2,
+      "relations": 1,
       "diagnostics": 0,
       "dependencies": 0
     },
@@ -761,6 +788,15 @@
       "dependencies": 1
     },
     {
+      "file": "packages/convex/src/component/runtime/composite_deferred.ts",
+      "sha256": "b0a9c8095b0cfa3c0104d4f1b44e51dd88e8fbc6b66a35cdd282e9506ca0be3a",
+      "bytes": 177,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
       "file": "packages/convex/src/component/runtime/composite_events.ts",
       "sha256": "70f671432ab484c6b628746cea3fd58a77e9ddb0fa0677725bb5feb53252d445",
       "bytes": 243,
@@ -798,12 +834,12 @@
     },
     {
       "file": "packages/convex/src/component/runtime/composite_transaction.ts",
-      "sha256": "93a0c05e2f423a2c4d46133804c09308429426d5a2e1e6d2dbe05f8182842ea1",
-      "bytes": 402,
+      "sha256": "9973dc725455846f6c19dbea176bb8ecf861cd8a67bb6ca3181be1c6a727dc57",
+      "bytes": 471,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 5
+      "dependencies": 6
     },
     {
       "file": "packages/convex/src/component/runtime/composite_utils.ts",
@@ -879,9 +915,9 @@
     },
     {
       "file": "packages/convex/src/profile.ts",
-      "sha256": "1d037e2eb50901db2d3f2e44bb91625e1de475a85d6035c54fb70b886ee33f6e",
-      "bytes": 198,
-      "definitions": 0,
+      "sha256": "ca0831b1fec6581e2780cb0307c71a736dfe53d8504b9e9ebb672a1320e193dc",
+      "bytes": 1588,
+      "definitions": 1,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 3
@@ -923,6 +959,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/convex/src/runtime-engine/deferred-store.ts",
+      "sha256": "8433ea025163c25f362f802bb632bea538c3807d82d3c79ee5b925050171ded2",
+      "bytes": 120,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/convex/src/runtime-engine/definition.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -960,16 +1005,16 @@
     },
     {
       "file": "packages/convex/src/runtime-engine/store.ts",
-      "sha256": "8433ea025163c25f362f802bb632bea538c3807d82d3c79ee5b925050171ded2",
-      "bytes": 120,
+      "sha256": "3cd7c6911df42f9079d558722e0bbc3d851d7ba345438649106d6db785c543c9",
+      "bytes": 182,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
     },
     {
       "file": "packages/convex/src/runtime.ts",
-      "sha256": "0e4588aff5b2748b06afd7153393cf04a014be3f389ed3422ca5691057bf6cb1",
+      "sha256": "d173d52f8154fd9b0b5cf7a0bf7fdac7642f73175e58ff99a7b5992be0944fcc",
       "bytes": 2018,
       "definitions": 1,
       "relations": 2,
@@ -1140,9 +1185,9 @@
     },
     {
       "file": "packages/core/__type_tests__/composition-inference.ts",
-      "sha256": "1ab39025968a794d1f6a346d0580214a9380143749022256e6ac61bdea26845b",
-      "bytes": 11258,
-      "definitions": 6,
+      "sha256": "948924e60becff9f52a6fa5298e44fb1483c1543ee24e1737350926056128086",
+      "bytes": 12441,
+      "definitions": 7,
       "relations": 5,
       "diagnostics": 0,
       "dependencies": 6
@@ -1173,6 +1218,42 @@
       "relations": 14,
       "diagnostics": 0,
       "dependencies": 6
+    },
+    {
+      "file": "packages/core/__type_tests__/defer-contract.ts",
+      "sha256": "9445b4fa91439c1bc55d45a046ae9369695702d806b19f083d65b4ff777164bb",
+      "bytes": 19282,
+      "definitions": 12,
+      "relations": 3,
+      "diagnostics": 1,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/defer-examples-contract.ts",
+      "sha256": "407084f87a284016b7605a413f6acae0f64cbac7e9fc3da3f4a56fc9c1a183b7",
+      "bytes": 8148,
+      "definitions": 5,
+      "relations": 1,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/defer-node-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/__type_tests__/defer-serverless-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
     },
     {
       "file": "packages/core/__type_tests__/fixtures/quality-perf-fixture.ts",
@@ -1293,9 +1374,9 @@
     },
     {
       "file": "packages/core/__type_tests__/retrieval-beta-contract.ts",
-      "sha256": "0356308e717b4fff5536e1ed34dee63c69b6c01653b4e3f7843ea84cb174a684",
-      "bytes": 25876,
-      "definitions": 18,
+      "sha256": "f970557cd46636b166ff2edd078251ad12b7d973c416d13903e37a0c7929e88f",
+      "bytes": 28300,
+      "definitions": 20,
       "relations": 9,
       "diagnostics": 0,
       "dependencies": 2
@@ -1311,11 +1392,11 @@
     },
     {
       "file": "packages/core/__type_tests__/routing.test-d.ts",
-      "sha256": "bfe87b34deb69e051207bfe1cc4c9282359887a5f9efd02d8b98cc7ec5f98dfb",
-      "bytes": 91496,
-      "definitions": 44,
-      "relations": 32,
-      "diagnostics": 25,
+      "sha256": "71a6f60532732d288f96e6393790b4680548d39239cb3451b682296dd803cc3c",
+      "bytes": 94738,
+      "definitions": 46,
+      "relations": 33,
+      "diagnostics": 26,
       "dependencies": 2
     },
     {
@@ -1346,6 +1427,15 @@
       "dependencies": 1
     },
     {
+      "file": "packages/core/__type_tests__/setup-contract.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/__type_tests__/single-turn-provider-bundle-public-surface.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -1374,9 +1464,9 @@
     },
     {
       "file": "packages/core/__type_tests__/store-conformance.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
+      "sha256": "e741d12f1fea4c9be83e592f9bf570116e2b428220eab68bb26cd95183baaa6e",
+      "bytes": 7212,
+      "definitions": 6,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
@@ -1733,6 +1823,132 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/src/defer/host-types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/defer/index.ts",
+      "sha256": "f1be9a791a5b98dae6aceca4d8737f2fd4c1ed8a74369aa1e883d6b6dd2fa1ce",
+      "bytes": 327,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/core/src/defer/internal/callback-boundary.ts",
+      "sha256": "d0b3cad8f42a41aa26ad9469dd386376bb606a2c653355545cfc91b6a6321683",
+      "bytes": 335,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 5
+    },
+    {
+      "file": "packages/core/src/defer/internal/durable.ts",
+      "sha256": "95d60faa0e194fd304786da09e2535a503d010039ce353d789b5da81e0920964",
+      "bytes": 611,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 10
+    },
+    {
+      "file": "packages/core/src/defer/internal/invocation-scope.ts",
+      "sha256": "5956f12f4568c3c8bdc2554156e68ddc20adeab0e4ffba9d1b986f45714c872f",
+      "bytes": 392,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 6
+    },
+    {
+      "file": "packages/core/src/defer/internal/observability.ts",
+      "sha256": "6e308b66478f2ecee5caf3c41c56aaca91fd30525eb1b51a28f62fbaae249a9d",
+      "bytes": 117,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/src/defer/internal/port.ts",
+      "sha256": "386a29bf4c057e3a90f92ef445afda3d02ad502ad802ae8fa746195b75504fea",
+      "bytes": 120,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/src/defer/node.ts",
+      "sha256": "8fd5ab3e58784c2f0dc3ab71f80090aa86b0d2d5e79edcdfae704ef0f5cea848",
+      "bytes": 113,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
+      "file": "packages/core/src/defer/serverless.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/defer/serverless/after.ts",
+      "sha256": "3d81224662dfec8532ce6f0e9dc6b572ab08afec3b9d1aa96912e10df8f381c5",
+      "bytes": 164,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/src/defer/serverless/named-only.ts",
+      "sha256": "8e1179bfd79a5d60776666ab793bc5c6c2dd3ceee5c627e45567be4a4194c2af",
+      "bytes": 167,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/core/src/defer/serverless/wait-until.ts",
+      "sha256": "7abda2f85f4e392341d342aa881201960a62abd828aa767f19e5e01c7d6c75e2",
+      "bytes": 210,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/core/src/defer/serverless/wrap.ts",
+      "sha256": "fd643d1b379f2638fd395c821bfdcfe6db7ef35939b1e6a7f0f4dd92be6e5330",
+      "bytes": 277,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 4
+    },
+    {
+      "file": "packages/core/src/defer/types.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/core/src/embedding/index.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -1761,12 +1977,12 @@
     },
     {
       "file": "packages/core/src/flow/scope.ts",
-      "sha256": "8abbb96169c337d0800db7427467c60ec96eb40ce7d0d1105d4ba8ad86f1e29e",
-      "bytes": 1128,
+      "sha256": "d0473a6967526353ac44d3612d95d8d0708f61322feed0a0aec88845da0455f7",
+      "bytes": 1186,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 21
+      "dependencies": 22
     },
     {
       "file": "packages/core/src/flow/signals.ts",
@@ -2427,9 +2643,9 @@
     },
     {
       "file": "packages/core/src/retrieval/knowledge-base.ts",
-      "sha256": "0d7f59ba597a9656045f0a1fbcee488e50878a14f3980a349a3897a72a575613",
-      "bytes": 293,
-      "definitions": 0,
+      "sha256": "0f6715300de3a84f3a0e3d086d63d387126b87a0636716d6d6ebebc51c7d08c7",
+      "bytes": 2367,
+      "definitions": 2,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 4
@@ -2516,6 +2732,15 @@
       "dependencies": 0
     },
     {
+      "file": "packages/core/src/runtime/api/flows.ts",
+      "sha256": "4afc0667c2c86003ee23d75dc2903fd21b09c8e94906cf57a649ce4544ca1163",
+      "bytes": 500,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 8
+    },
+    {
       "file": "packages/core/src/runtime/api/task.ts",
       "sha256": "cab55c0e94304d00598f4ec589fbf3f697a912a3220079599821e41481d8bb77",
       "bytes": 125,
@@ -2561,6 +2786,15 @@
       "dependencies": 1
     },
     {
+      "file": "packages/core/src/runtime/engine/kernel-scheduled-work.ts",
+      "sha256": "572f363f0cbec6395bddeb5105f5c93b021c8990a7605cd3ea01cab22cd2c162",
+      "bytes": 242,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
       "file": "packages/core/src/runtime/engine/kernel-types.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
@@ -2571,12 +2805,12 @@
     },
     {
       "file": "packages/core/src/runtime/execution-context.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
+      "sha256": "fbc75c436c8cf609d15ead3f4f5e2b2632710d8ab3a3120483d2ed3f559aff0f",
+      "bytes": 115,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 0
+      "dependencies": 1
     },
     {
       "file": "packages/core/src/runtime/handler/create-runtime-handler.ts",
@@ -2625,6 +2859,24 @@
     },
     {
       "file": "packages/core/src/runtime/ports/ids.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/runtime/ports/state.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/core/src/runtime/ports/work.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -3075,9 +3327,9 @@
     },
     {
       "file": "packages/devtools/ui/src/shared/hooks/useLibraryApi.ts",
-      "sha256": "c59f0f19f18dee23e0fcd516abb3169690a4042f66e3eced03ffa73faa75fc43",
-      "bytes": 5005,
-      "definitions": 5,
+      "sha256": "a9fddf0019b7e535f07b337b8cf73d7d7cc8203535ba545bcf8c4b7f0fe4a188",
+      "bytes": 6020,
+      "definitions": 6,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
@@ -3669,12 +3921,12 @@
     },
     {
       "file": "packages/indexer/src/indexer/runtime-ops.ts",
-      "sha256": "4a500fe53b39323bc79139be05bc4b200f52f6de634249eb75aa8845a4a7d71d",
-      "bytes": 164,
+      "sha256": "f179cbc47b590ca1928b210c74e394b3d67060c14ae99c27547d7cb66196a958",
+      "bytes": 215,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 2
+      "dependencies": 3
     },
     {
       "file": "packages/indexer/src/indexer/semantic-support.ts",
@@ -3983,6 +4235,42 @@
       "dependencies": 0
     },
     {
+      "file": "packages/indexer/src/indexer/setup-ops.ts",
+      "sha256": "247a2f2f53017268fdb4d0645b4a8cab5c96cd88f63582b50ba0d544da31090e",
+      "bytes": 247,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/src/indexer/setup/defer-contributor.ts",
+      "sha256": "cbe863989094729b149828caaa4e6d5ef1255368001f1c581368bd303d9b2e70",
+      "bytes": 183,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/indexer/src/indexer/setup/defer-source-evidence.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/indexer/src/indexer/setup/runtime-contributor.ts",
+      "sha256": "8df81adbaa1e1e7bf76f9b684f68d06aa62e53e4ef09bf87f0fa2e33bab13992",
+      "bytes": 121,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/indexer/src/indexer/shards/discovery.ts",
       "sha256": "b18f8cacd04b4e18f0ed070349f1d0318f6c3ef2af69d981ba3994500eb701f8",
       "bytes": 113,
@@ -4127,13 +4415,22 @@
       "dependencies": 12
     },
     {
-      "file": "packages/indexer/src/indexer/static-index/syntax/record/file.ts",
-      "sha256": "df82259cb78ac29d0963f242d636cc2bc7753bcfa7322d6d03073a52155a3146",
-      "bytes": 703,
+      "file": "packages/indexer/src/indexer/static-index/syntax/record/defer-native-facts.ts",
+      "sha256": "b2c388a11122de46deaacba9c188ea2826f28a3318a15a1c18d5985cd5ea43e6",
+      "bytes": 120,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 8
+      "dependencies": 1
+    },
+    {
+      "file": "packages/indexer/src/indexer/static-index/syntax/record/file.ts",
+      "sha256": "1a03fdae5edfc2f6bc1a81adeae90a7707031081552425a354b2ccc8e82dc096",
+      "bytes": 789,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 9
     },
     {
       "file": "packages/indexer/src/indexer/static-index/syntax/record/imported-definitions.ts",
@@ -4523,6 +4820,24 @@
       "dependencies": 0
     },
     {
+      "file": "packages/next/src/after.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/next/src/index.ts",
+      "sha256": "bacd5d5e03bef8271225d865aaf8934be95f504b9f4a4c744054936f07a9bc2f",
+      "bytes": 103,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 1
+    },
+    {
       "file": "packages/openai/src/codec.ts",
       "sha256": "3987217c40faa239e26fb11b8cb1d51e607700c64e7bd7c69680bbcfa6a1b698",
       "bytes": 194,
@@ -4686,12 +5001,21 @@
     },
     {
       "file": "packages/postgres/src/runtime/ddl.ts",
-      "sha256": "c57c373c89211e7b1151802936fc3832175c8cf985e1edfbd10d63067d6890f0",
-      "bytes": 113,
+      "sha256": "f297162ed01f3e584a02ebfb0e902b1dc54ad87a105373b6aec3c34630a78d6d",
+      "bytes": 168,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 1
+      "dependencies": 2
+    },
+    {
+      "file": "packages/postgres/src/runtime/deferred.ts",
+      "sha256": "7cbe6ab1da35bd1325e34b611a7caab39c42c174bd4ca62090677418ce0d1724",
+      "bytes": 210,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
     },
     {
       "file": "packages/postgres/src/runtime/events.ts",
@@ -4713,12 +5037,12 @@
     },
     {
       "file": "packages/postgres/src/runtime/index.ts",
-      "sha256": "398cc1ba22b6a3f7eeff17e6c7765e9c755af519d4cb87f7326d45aa836bbca6",
-      "bytes": 550,
+      "sha256": "a0bb769fac5bff54b47013f0a58e4d2fa910e410c82a91e4ebd8de20aaed65f9",
+      "bytes": 601,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 10
+      "dependencies": 11
     },
     {
       "file": "packages/postgres/src/runtime/leases.ts",

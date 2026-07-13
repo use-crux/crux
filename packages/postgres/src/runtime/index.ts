@@ -20,6 +20,7 @@ import { createPostgresStatePort } from './state'
 import { createPostgresTimerStore } from './timers'
 import { createPostgresWaiterPort } from './waiters'
 import { DEFAULT_POSTGRES_SCHEMA } from './ddl'
+import { createPostgresDeferredStore } from './deferred'
 
 /** Setup policy for the Postgres Runtime Engine store. */
 export interface PostgresSetupOptions {
@@ -134,6 +135,7 @@ export function postgres(
       waiters: createPostgresWaiterPort(client, schema, txFaults),
       timers: createPostgresTimerStore(client, schema, txFaults),
       outbox: createPostgresOutboxPort(client, schema, txFaults),
+      deferred: createPostgresDeferredStore(client, schema, txFaults),
     }
   }
 

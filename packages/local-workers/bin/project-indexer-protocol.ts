@@ -66,7 +66,8 @@ function withPatchEventTimings(
   event: ProjectIndexWorkerEvent,
   timings: readonly ProjectIndexPhaseTiming[] | undefined,
 ): ProjectIndexWorkerEvent {
-  if (!timings || timings.length === 0 || event.type !== 'phase:done') return event
+  if (!timings || timings.length === 0 || event.type !== 'phase:done')
+    return event
   return {
     ...event,
     summary: {
@@ -77,7 +78,9 @@ function withPatchEventTimings(
 }
 
 /** Writes one typed JSON artifact through the V2 worker protocol. */
-export async function writeArtifactEvent<TKind extends ProjectIndexArtifactKind>(
+export async function writeArtifactEvent<
+  TKind extends ProjectIndexArtifactKind,
+>(
   write: ProjectIndexWorkerWriter,
   artifact: TKind,
   payload: ProjectIndexArtifactMap[TKind],
@@ -126,7 +129,9 @@ export async function writeProjectIndexArtifactError(
 }
 
 /** Returns the V2 error event context for a worker request method. */
-export function errorContextForMethod(method: string | undefined): ProjectIndexWorkerErrorContext | undefined {
+export function errorContextForMethod(
+  method: string | undefined,
+): ProjectIndexWorkerErrorContext | undefined {
   switch (method) {
     case 'resolveProjectModel':
       return { kind: 'artifact', method, artifact: 'projectModel' }
@@ -137,15 +142,25 @@ export function errorContextForMethod(method: string | undefined): ProjectIndexW
     case 'inspectProjectStaticSyntaxPlan':
       return { kind: 'artifact', method, artifact: 'projectStaticSyntaxPlan' }
     case 'loadStaticExtensionHostManifest':
-      return { kind: 'artifact', method, artifact: 'staticExtensionHostManifest' }
+      return {
+        kind: 'artifact',
+        method,
+        artifact: 'staticExtensionHostManifest',
+      }
     case 'extractStaticEvidenceBatch':
-      return { kind: 'artifact', method, artifact: 'staticExtensionEvidenceBatch' }
+      return {
+        kind: 'artifact',
+        method,
+        artifact: 'staticExtensionEvidenceBatch',
+      }
     case 'checkStaticRules':
       return { kind: 'artifact', method, artifact: 'staticRuleCheck' }
     case 'generateRuntimeArtifacts':
       return { kind: 'artifact', method, artifact: 'runtimeArtifacts' }
     case 'runRuntimeOperation':
       return { kind: 'artifact', method, artifact: 'runtimeOperation' }
+    case 'runSetupOperation':
+      return { kind: 'artifact', method, artifact: 'setupOperation' }
     case 'indexProjectSemantic':
     case 'indexProjectRuntime':
       return { kind: 'phase', method, phase: phaseForMethod(method) }
@@ -159,7 +174,9 @@ export function assertProjectIndexWorkerProtocolV2(
   value: unknown,
 ): asserts value is typeof PROJECT_INDEX_WORKER_PROTOCOL_VERSION {
   if (value !== PROJECT_INDEX_WORKER_PROTOCOL_VERSION) {
-    throw new Error(`project index worker protocol version ${PROJECT_INDEX_WORKER_PROTOCOL_VERSION} is required`)
+    throw new Error(
+      `project index worker protocol version ${PROJECT_INDEX_WORKER_PROTOCOL_VERSION} is required`,
+    )
   }
 }
 
@@ -168,8 +185,12 @@ function transactionIdForPatch(method: string, patch: IndexPatch): string {
 }
 
 function phaseForMethod(method: ProjectIndexPatchMethod): IndexPatch['phase']
-function phaseForMethod(method: string | undefined): IndexPatch['phase'] | undefined
-function phaseForMethod(method: string | undefined): IndexPatch['phase'] | undefined {
+function phaseForMethod(
+  method: string | undefined,
+): IndexPatch['phase'] | undefined
+function phaseForMethod(
+  method: string | undefined,
+): IndexPatch['phase'] | undefined {
   switch (method) {
     case 'indexProjectSemantic':
       return 'semantic'
@@ -181,13 +202,13 @@ function phaseForMethod(method: string | undefined): IndexPatch['phase'] | undef
 }
 
 function maxFactsPerBatchForMethod(method: string): number {
-  if (isProjectIndexPatchMethod(method)) return projectIndexMaxFactsPerBatchByMethod[method]
+  if (isProjectIndexPatchMethod(method))
+    return projectIndexMaxFactsPerBatchByMethod[method]
   return 100
 }
 
-function isProjectIndexPatchMethod(method: string): method is ProjectIndexPatchMethod {
-  return (
-    method === 'indexProjectSemantic' ||
-    method === 'indexProjectRuntime'
-  )
+function isProjectIndexPatchMethod(
+  method: string,
+): method is ProjectIndexPatchMethod {
+  return method === 'indexProjectSemantic' || method === 'indexProjectRuntime'
 }

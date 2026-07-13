@@ -8,6 +8,10 @@ import type {
   RuntimeTargetId,
   RuntimeTimerRecord,
   RuntimeWaiter,
+  RuntimeDeferredIntent,
+  RuntimeDeferredScope,
+  DeferredIntentId,
+  DeferredScopeId,
   TimerId,
   WaiterId,
   WorkId,
@@ -75,13 +79,14 @@ export function decodeFlowSnapshot(row: JsonRecord): FlowSnapshot {
           >,
         )
       : undefined,
-    scheduledEffects: row.scheduled_effects
-      ? Object.freeze(
-          row.scheduled_effects as NonNullable<
-            FlowSnapshot['scheduledEffects']
-          >,
-        )
-      : undefined,
+    scheduledWork:
+      (row.scheduled_work ?? row.scheduled_effects)
+        ? Object.freeze(
+            (row.scheduled_work ?? row.scheduled_effects) as NonNullable<
+              FlowSnapshot['scheduledWork']
+            >,
+          )
+        : undefined,
     updatedAt: new Date(row.updated_at as string),
   })
 }
@@ -141,6 +146,51 @@ export function decodeLease(row: JsonRecord): Lease {
     token: row.token as LeaseToken,
     expiresAt: new Date(row.expires_at as string),
     ownerId: row.owner_id as string | undefined,
+  })
+}
+
+export function decodeDeferredScope(row: JsonRecord): RuntimeDeferredScope {
+  const finalization = row.finalization as RuntimeDeferredScope['finalization']
+  return Object.freeze({
+    namespace: row.namespace as string,
+    scopeId: row.scope_id as DeferredScopeId,
+    leaseToken: row.lease_token as LeaseToken,
+    leaseExpiresAt: new Date(row.lease_expires_at as string),
+    finalization:
+      finalization.state === 'finalized'
+        ? Object.freeze({
+            ...finalization,
+            finalizedAt: new Date(finalization.finalizedAt),
+          })
+        : finalization.state === 'abandoned'
+          ? Object.freeze({
+              ...finalization,
+              abandonedAt: new Date(finalization.abandonedAt),
+            })
+          : Object.freeze({ state: 'open' }),
+    createdAt: new Date(row.created_at as string),
+    updatedAt: new Date(row.updated_at as string),
+  })
+}
+
+export function decodeDeferredIntent(row: JsonRecord): RuntimeDeferredIntent {
+  return Object.freeze({
+    namespace: row.namespace as string,
+    scopeId: row.scope_id as DeferredScopeId,
+    intentId: row.intent_id as DeferredIntentId,
+    workId: row.work_id as WorkId,
+    targetId: row.target_id as RuntimeTargetId,
+    input: row.input as RuntimeDeferredIntent['input'],
+    ...(row.provenance !== null && row.provenance !== undefined
+      ? {
+          provenance: row.provenance as NonNullable<
+            RuntimeDeferredIntent['provenance']
+          >,
+        }
+      : {}),
+    state: row.state as RuntimeDeferredIntent['state'],
+    createdAt: new Date(row.created_at as string),
+    updatedAt: new Date(row.updated_at as string),
   })
 }
 

@@ -1,8 +1,5 @@
 {
-  "requiredEvidence": [
-    "positive",
-    "negative"
-  ],
+  "requiredEvidence": ["positive", "negative"],
   "policyFixture": "index-lint-native-policy-parity.test.ts",
   "nativeParityOmittedRules": [
     {
@@ -11,6 +8,21 @@
     }
   ],
   "rules": [
+    {
+      "ruleId": "defer.replay_unsafe",
+      "positiveFixture": "defer-native-fixtures.test.ts",
+      "negativeFixture": "defer-native-fixtures.test.ts"
+    },
+    {
+      "ruleId": "defer.floating_named_promise",
+      "positiveFixture": "defer-native-fixtures.test.ts",
+      "negativeFixture": "defer-native-fixtures.test.ts"
+    },
+    {
+      "ruleId": "defer.missing_scope",
+      "positiveFixture": "defer-native-fixtures.test.ts",
+      "negativeFixture": "defer-native-fixtures.test.ts"
+    },
     {
       "ruleId": "definition.missing_eval_coverage",
       "positiveFixture": "index-lint-native-parity.test.ts",

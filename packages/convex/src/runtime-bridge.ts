@@ -10,6 +10,7 @@
  */
 
 import type { Crux } from '@use-crux/core'
+import { withNamedOnlyDefer } from '@use-crux/core/defer/serverless'
 import {
   bindHostRuntime,
   runWithRuntimeHost,
@@ -177,13 +178,19 @@ export function createConvexRuntimeBridge<TCtx extends ConvexCtxPort = ConvexCtx
             }),
           },
           () =>
-            fn({
-              ctx,
-              target,
-              storage,
-              records: storage.records,
-              runtime,
-            }),
+            // Convex has no reliable post-return inline drain. Named Runtime
+            // work remains available; inline defer(callback) throws.
+            withNamedOnlyDefer(
+              () =>
+                fn({
+                  ctx,
+                  target,
+                  storage,
+                  records: storage.records,
+                  runtime,
+                }),
+              { host: 'convex', durableFinalization: true },
+            )(),
         ),
       )
     },

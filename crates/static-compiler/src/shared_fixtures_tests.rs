@@ -341,6 +341,9 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "runtime.non_literal_target_name",
             "runtime.target_not_exported",
             "runtime.closure_defer",
+            "defer.replay_unsafe",
+            "defer.floating_named_promise",
+            "defer.missing_scope",
             "runtime.missing_runtime_config",
             "flow.nondeterministic_code",
             "runtime.non_serializable_payload"
@@ -356,7 +359,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .iter()
             .any(|class| class == "dependencies")
     );
-    assert_eq!(coverage.identities.len(), 19);
+    assert_eq!(coverage.identities.len(), 20);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it

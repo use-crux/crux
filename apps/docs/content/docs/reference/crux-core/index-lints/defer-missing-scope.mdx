@@ -1,0 +1,26 @@
+---
+title: defer.missing_scope
+---
+
+## What it checks
+
+Public `defer()` at module/class eager scope or other sites that are not inside
+a proven host-compatible execution container.
+
+## Why it matters
+
+Without a live invocation scope, runtime throws `DEFER_SCOPE_REQUIRED` or
+`DEFER_CAPABILITY_MISSING`.
+
+## How to fix
+
+Call `defer` from a host-wrapped handler (Node, Next, waitUntil, Convex bridge,
+etc.).
+
+## Rule metadata
+
+- Rule id: `defer.missing_scope`
+- Category: `runtime`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

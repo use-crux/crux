@@ -51,6 +51,7 @@ Allowed:
 - `@use-crux/anthropic` -> `@use-crux/core`
 - `@use-crux/google` -> `@use-crux/core`
 - `@use-crux/convex` -> `@use-crux/core`
+- `@use-crux/next` -> `@use-crux/core` (peer: `next`; binds `after()` only)
 - `@use-crux/upstash` -> `@use-crux/core`
 - `@use-crux/otel` -> `@use-crux/core`
 - `@use-crux/ingest` -> `@use-crux/core`
@@ -58,7 +59,10 @@ Allowed:
 
 Avoid:
 
-- `@use-crux/core` depending on provider SDKs, Convex, React, or app-specific packages.
+- `@use-crux/core` depending on provider SDKs, Convex, React, Next, Vercel,
+  Cloudflare, or app-specific packages. Provider-neutral defer host ports live
+  at `@use-crux/core/defer/node` and `@use-crux/core/defer/serverless`; framework
+  packages inject concrete platform hooks.
 - Cross-package relative imports. Use workspace package imports.
 
 ## Package Rules

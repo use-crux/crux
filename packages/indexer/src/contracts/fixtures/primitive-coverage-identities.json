@@ -410,6 +410,28 @@
     },
     {
       "extension": "@use-crux/indexer/crux-core",
+      "extractor": "defer",
+      "family": "defer",
+      "nativeCovered": true,
+      "fixtureClasses": {
+        "definitions": "defer-native-fixtures.test.ts",
+        "relations": "defer-native-fixtures.test.ts",
+        "sourceRefs": "defer-native-fixtures.test.ts",
+        "diagnostics": "defer-native-fixtures.test.ts",
+        "dependencies": "defer-native-fixtures.test.ts",
+        "lints": "lint-rule-parity-coverage.json",
+        "sources": "defer-native-fixtures.test.ts",
+        "sourceGraph": "defer-native-fixtures.test.ts",
+        "runtimeMetadata": "defer-native-fixtures.test.ts",
+        "degradedBehavior": "static-provided-record-index.test.ts"
+      },
+      "parityFixtures": {
+        "positive": "defer-native-fixtures.test.ts",
+        "negative": "first-party-native-negative-fixtures.test.ts"
+      }
+    },
+    {
+      "extension": "@use-crux/indexer/crux-core",
       "extractor": "runtime.task",
       "family": "runtime.task",
       "nativeCovered": true,

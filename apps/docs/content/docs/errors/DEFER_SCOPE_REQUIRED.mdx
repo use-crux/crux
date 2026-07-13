@@ -1,0 +1,37 @@
+---
+title: DEFER_SCOPE_REQUIRED
+description: defer() was called without an active Crux invocation scope.
+---
+
+## What failed
+
+`defer()` was called outside any host-installed invocation scope.
+
+## Why
+
+Request-scoped deferred work must attach to a concrete request/handler lifetime.
+Without a scope, Crux cannot know when the completion boundary is or who owns
+cancellation and drain bounds.
+
+## What still works
+
+- Synchronous application logic outside the handler
+- Durable work via Runtime APIs once a Runtime and host scope exist
+- `flow.defer()` inside a properly configured flow (different API)
+
+## Fix
+
+Wrap the handler with the matching host integration:
+
+```ts
+// Node
+import { withNodeDefer } from '@use-crux/core/defer/node'
+
+// Next
+import { withNextDefer } from '@use-crux/next'
+
+// waitUntil hosts
+import { withWaitUntilDefer } from '@use-crux/core/defer/serverless'
+```
+
+See the [host matrix](/docs/guides/defer/hosts).

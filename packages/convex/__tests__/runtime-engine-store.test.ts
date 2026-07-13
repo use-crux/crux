@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { createRuntimeKernel } from '@use-crux/core/runtime'
 import type {
   FlowId,
+  DeferredIntentId,
+  DeferredScopeId,
   LeaseToken,
   RuntimeTargetId,
   TaskId,
@@ -19,6 +21,7 @@ const component = {
     timers: {},
     outbox: {},
     leases: {},
+    deferred: {},
   },
 } satisfies ConvexRuntimeComponent
 
@@ -48,7 +51,10 @@ describe('convexRuntimeStore()', () => {
   })
 
   it('routes kernel composites through one component mutation', async () => {
-    const calls: Array<{ readonly ref: unknown; readonly args: Record<string, unknown> }> = []
+    const calls: Array<{
+      readonly ref: unknown
+      readonly args: Record<string, unknown>
+    }> = []
     const componentRef = {}
     const ctx: ConvexCtxPort = {
       runQuery: async <TResult>() => undefined as TResult,
@@ -99,6 +105,39 @@ describe('convexRuntimeStore()', () => {
     expect(calls[0]).toMatchObject({
       ref: componentRef,
       args: { kind: 'task.enqueue' },
+    })
+  })
+
+  it('reports an actionable setup error for deployed components without deferred storage refs', async () => {
+    const ctx: ConvexCtxPort = {
+      runQuery: async <TResult>() => undefined as TResult,
+      runMutation: async <TResult>() => undefined as TResult,
+    }
+    const { deferred: _deferred, ...oldRuntime } = component.runtime
+    void _deferred
+    const store = convexRuntimeStore({
+      ctx,
+      component: {
+        runtime: {
+          ...oldRuntime,
+          composites: { run: {} },
+        },
+      },
+    })
+
+    await expect(
+      store.runComposite?.('defer.stage', {
+        namespace: 'tenant-a',
+        scopeId: 'scope_old_component' as DeferredScopeId,
+        intentId: 'intent_old_component' as DeferredIntentId,
+        leaseToken: 'lease_old_component' as LeaseToken,
+        leaseExpiresAt: new Date('2026-07-12T00:01:00.000Z'),
+        targetId: 'send-email' as RuntimeTargetId,
+        input: { messageId: '1' },
+      }),
+    ).rejects.toMatchObject({
+      code: 'SETUP_REQUIRED',
+      nextStep: expect.stringContaining('redeploy'),
     })
   })
 
@@ -195,13 +234,8 @@ describe('convexRuntimeStore()', () => {
     ).resolves.toEqual({ status: 200, outcome: 'processed' })
 
     const targetIndex = calls.findIndex((call) => call.ref === targetMarker)
-    expect(calls.slice(targetIndex + 1).map((call) => call.ref)).toEqual([
-      refs.composites.run,
-      refs.leases.release,
-    ])
-    expect(
-      calls.find((call) => call.ref === refs.composites.run),
-    ).toMatchObject({
+    expect(calls.slice(targetIndex + 1).map((call) => call.ref)).toEqual([refs.composites.run, refs.leases.release])
+    expect(calls.find((call) => call.ref === refs.composites.run)).toMatchObject({
       args: { kind: 'wake.complete' },
     })
   })

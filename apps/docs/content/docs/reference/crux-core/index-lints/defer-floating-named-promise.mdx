@@ -1,0 +1,26 @@
+---
+title: defer.floating_named_promise
+---
+
+## What it checks
+
+A named `defer(target, input)` call whose returned promise is not clearly
+consumed (awaited, returned, or chained) in a recognized composition form.
+
+## Why it matters
+
+Ignoring the promise can hide staging failures from local control flow even
+though the host `committed` barrier still fails strictly.
+
+## How to fix
+
+`await` the call, return it, or attach explicit error handling while remembering
+that catch cannot restore a successful response after `DEFER_COMMIT_FAILED`.
+
+## Rule metadata
+
+- Rule id: `defer.floating_named_promise`
+- Category: `runtime`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

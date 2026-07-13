@@ -1,0 +1,27 @@
+---
+title: DEFER_TARGET_INPUT_REQUIRED
+description: Named defer(target, input) was called without the required JSON input.
+---
+
+## What failed
+
+A branded Runtime task target was scheduled through `defer(target, input)`
+without a required input value (or with non-JSON input that fails validation).
+
+## Why
+
+V1 Runtime task targets accept JSON-safe input only. Omitting required input is
+rejected at compile time for TypeScript and at runtime for untyped JavaScript.
+
+## What still works
+
+- Inline `defer(callback)` (no target input)
+- Correctly typed `await defer(target, input)` with JSON-compatible payloads
+
+## Fix
+
+```ts
+await defer(sendEmail, { messageId: 'msg_1' })
+```
+
+Pass ids or storage keys for large blobs — do not embed non-JSON values.

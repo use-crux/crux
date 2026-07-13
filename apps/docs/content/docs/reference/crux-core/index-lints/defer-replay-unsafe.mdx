@@ -1,0 +1,23 @@
+---
+title: defer.replay_unsafe
+---
+
+## What it checks
+
+Public `defer()` called inside a proven replayable flow body or step.
+
+## Why it matters
+
+Replay would re-register side effects without stable occurrence identity.
+
+## How to fix
+
+Use `flow.defer(target, input)` for durable flow children.
+
+## Rule metadata
+
+- Rule id: `defer.replay_unsafe`
+- Category: `runtime`
+- Maturity: `preview`
+- Default profiles: `recommended`, `strict`
+- Default severity: `error`

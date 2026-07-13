@@ -60,8 +60,8 @@ describe('createTestRuntime()', () => {
       suspended.flowId as FlowId,
       { namespace: runtime.runtime.namespace },
     )
-    const deferredWorkId = snapshot?.scheduledEffects?.['defer:1']?.workId
-    const timerId = snapshot?.scheduledEffects?.['after:2']?.timerId
+    const deferredWorkId = snapshot?.scheduledWork?.['defer:1']?.workId
+    const timerId = snapshot?.scheduledWork?.['after:2']?.timerId
     expect(deferredWorkId).toEqual(expect.any(String))
     expect(timerId).toEqual(expect.any(String))
 

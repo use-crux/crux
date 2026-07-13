@@ -1,0 +1,53 @@
+---
+title: Node request-scoped defer
+description: Drain post-response work after Node HTTP response finish without a Runtime.
+---
+
+Use `@use-crux/core/defer/node` for single-process Node HTTP servers. Inline
+callbacks are process-local and start after `response` `finish`.
+
+```ts
+import { createServer } from 'node:http'
+import { defer } from '@use-crux/core'
+import {
+  createNodeDeferHost,
+  withNodeDefer,
+} from '@use-crux/core/defer/node'
+
+const deferHost = createNodeDeferHost()
+
+const server = createServer(
+  deferHost.wrap(async (_request, response) => {
+    defer(() => {
+      // analytics, cleanup, non-critical side work
+    })
+    response.statusCode = 200
+    response.end('ok')
+  }),
+)
+
+server.listen(3000)
+
+process.once('SIGTERM', async () => {
+  server.close()
+  await deferHost.shutdown()
+})
+```
+
+Convenience API for one module-local host:
+
+```ts
+const server = createServer(
+  withNodeDefer(async (_request, response) => {
+    defer(() => {})
+    response.end('ok')
+  }),
+)
+```
+
+## Notes
+
+- Completion class: `response-finished`
+- No Runtime required for inline work
+- Multiprocess deployments need named Runtime work for cross-worker durability
+- See [host matrix](/docs/guides/defer/hosts)
