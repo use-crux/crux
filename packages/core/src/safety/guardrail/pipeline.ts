@@ -36,7 +36,11 @@ export interface GuardrailPipeline {
   readonly runInput: (content: string, ctx: GuardrailContext) => Promise<GuardrailPipelineResult>
 
   /** Run output-phase guards on content. Throws GuardrailBlockedError on block. */
-  readonly runOutput: (content: string, ctx: GuardrailContext) => Promise<GuardrailPipelineResult>
+  readonly runOutput: (
+    content: string,
+    ctx: GuardrailContext,
+    opts?: { readonly parsed?: unknown },
+  ) => Promise<GuardrailPipelineResult>
 
   /** All guards in the pipeline. */
   readonly guards: readonly Guardrail[]
@@ -68,8 +72,12 @@ export function createGuardrailPipeline(
       return runGuards(inputGuards, content, ctx, 'input', config)
     },
 
-    async runOutput(content: string, ctx: GuardrailContext): Promise<GuardrailPipelineResult> {
-      return runGuards(outputGuards, content, ctx, 'output', config)
+    async runOutput(
+      content: string,
+      ctx: GuardrailContext,
+      opts?: { readonly parsed?: unknown },
+    ): Promise<GuardrailPipelineResult> {
+      return runGuards(outputGuards, content, ctx, 'output', config, opts?.parsed)
     },
   }
 }
@@ -82,6 +90,7 @@ async function runGuards(
   ctx: GuardrailContext,
   phase: 'input' | 'output',
   config?: GuardrailPipelineConfig,
+  parsed?: unknown,
 ): Promise<GuardrailPipelineResult> {
   return observe.span(
     {
@@ -94,7 +103,7 @@ async function runGuards(
         guardrailCount: guards.length,
       },
     },
-    async () => runGuardsInternal(guards, content, ctx, phase, config),
+    async () => runGuardsInternal(guards, content, ctx, phase, config, parsed),
   )
 }
 
@@ -104,6 +113,7 @@ async function runGuardsInternal(
   ctx: GuardrailContext,
   phase: 'input' | 'output',
   config?: GuardrailPipelineConfig,
+  parsed?: unknown,
 ): Promise<GuardrailPipelineResult> {
   let currentContent = content
   const entries: GuardrailAuditEntry[] = []
@@ -132,7 +142,10 @@ async function runGuardsInternal(
     try {
       result = validateGuardrailRunResult(
         await span.withContext(async () =>
-          guard.run(subjectForBoundary(boundary, currentContent) as never, runContext(guard, boundary, ctx) as never),
+          guard.run(
+            subjectForBoundary(boundary, currentContent, parsed) as never,
+            runContext(guard, boundary, ctx) as never,
+          ),
         ),
         {
           streaming: false,
@@ -340,8 +353,8 @@ function runContext<B extends BoundaryDef>(
   }
 }
 
-function subjectForBoundary(boundary: BoundaryDef, content: string): unknown {
-  if (boundary.id === 'model.output') return { text: content, object: undefined }
+function subjectForBoundary(boundary: BoundaryDef, content: string, parsed: unknown): unknown {
+  if (boundary.id === 'model.output') return { text: content, object: parsed }
   return content
 }
 

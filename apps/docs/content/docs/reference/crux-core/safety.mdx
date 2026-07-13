@@ -43,6 +43,14 @@ Policies bind to typed boundary descriptors:
 Boundary ids are stable decision/config ids. `boundary.stream.*` is not a
 public boundary family; streaming is configured on output guardrails.
 
+### Multimodal messages
+
+Input boundaries carry the `messageText()` projection of each user message.
+Text parts remain verbatim; media becomes a bounded descriptor containing its
+kind and MIME type plus the full URL or byte size and a 12-character SHA-256
+prefix. Payloads over 256KB use `sha256:omitted`, Blob hashes use
+`sha256:unavailable`, and file descriptors include the filename.
+
 ## Guardrails
 
 `guardrail(config)` creates a policy that can allow, block, warn, rewrite, or

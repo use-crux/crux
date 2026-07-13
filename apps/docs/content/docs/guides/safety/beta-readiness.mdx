@@ -74,5 +74,19 @@ These items were deliberately excluded from the beta contract:
 | Additional boundary targets | [#175](https://github.com/use-crux/crux/issues/175) |
 | Capture anonymizers and per-boundary capture overrides | [#176](https://github.com/use-crux/crux/issues/176) |
 
+### Multimodal limitations
+
+- Media content itself, including pixels, audio, and file bytes, is not
+  evaluated by any boundary. See the RFCs for
+  [media boundaries](https://github.com/use-crux/crux/issues/207),
+  [first-party media policy strategies](https://github.com/use-crux/crux/issues/208),
+  and a [multimodal classifier strategy](https://github.com/use-crux/crux/issues/210).
+- Output safety does not evaluate assistant-generated media, and non-text
+  stream parts pass through the safety transform ungated. See the
+  [output-media guarding RFC](https://github.com/use-crux/crux/issues/209).
+- Media in `tool.result` and `retrieval.result` subjects has no projection
+  contract; policies currently receive the raw values. See the
+  [tool and retrieval media projection RFC](https://github.com/use-crux/crux/issues/211).
+
 The current beta behavior stays fail-closed, provider-agnostic, and
 safe-by-default while those RFCs are resolved.

@@ -35,6 +35,7 @@ import { contentText, messageText } from '../content'
 import { getHooks } from '../runtime/runtime'
 import type { z } from 'zod'
 import type { BoundaryDef } from './boundary'
+import { SafetyResultError } from './errors'
 import { buildSafetyRegistry, type SafetyBinding } from './registry'
 import type { SafetyTuneOptions } from './tune'
 import type {
@@ -526,7 +527,7 @@ export function createSafety(options: SafetyCallOptions): Safety {
   ): Promise<SafetyOutput> {
     const outputGuards = phaseGuards('output')
     const pipeline = createGuardrailPipeline(outputGuards)
-    const result = await pipeline.runOutput(output.text, guardContext('output', messages))
+    const result = await pipeline.runOutput(output.text, guardContext('output', messages), { parsed: output.parsed })
     appendGuardrailAudit(result.audit)
     transcript.push({
       t: 'output.guard',
@@ -583,14 +584,19 @@ export function createSafety(options: SafetyCallOptions): Safety {
         actions.push(...result.audit.applied.map((entry) => entry.action))
 
         if (result.content !== originalContent) {
-          messages = messages.map((entry, entryIndex) =>
-            entryIndex === index
-              ? {
-                  ...entry,
-                  content: replaceProjectedContent(entry.content as MessageContent, originalContent, result.content),
-                }
-              : entry,
-          )
+          const content = applyProjectedRewrite(message.content as MessageContent, originalContent, result.content)
+          if (content === null) {
+            const policyId = latestRewritePolicyId(result.audit.applied) ?? 'unknown'
+            throw new SafetyResultError({
+              policyId,
+              boundary: 'user.input',
+              problem: 'rewrite could not be faithfully applied to multimodal message content',
+              message:
+                `Safety policy "${policyId}" rewrote a multimodal message projection that no longer aligns with its media placeholders. ` +
+                'Media placeholders must be preserved verbatim by rewrites; policies that need to act on media sources should block instead.',
+            })
+          }
+          messages = messages.map((entry, entryIndex) => (entryIndex === index ? { ...entry, content } : entry))
         }
       }
 
@@ -670,37 +676,41 @@ export function createSafety(options: SafetyCallOptions): Safety {
   }
 }
 
-function replaceProjectedContent(content: MessageContent, originalProjection: string, replacement: string): MessageContent {
+/**
+ * Re-apply a guarded projection rewrite to canonical message content.
+ *
+ * Media placeholders anchor the redistribution: every placeholder must
+ * survive the rewrite verbatim, in order, and outside every text segment.
+ * Returns `null` when the rewrite cannot be applied faithfully — the caller
+ * fails closed instead of silently dropping the rewrite or duplicating
+ * placeholder text into the prompt.
+ */
+function applyProjectedRewrite(
+  content: MessageContent,
+  originalProjection: string,
+  replacement: string,
+): MessageContent | null {
   if (typeof content === 'string') return replacement
-  if (contentText(content) !== originalProjection) return replaceFirstTextPart(content, replacement)
+  if (contentText(content) !== originalProjection) return null
 
-  const updatedTextParts = textPartReplacements(content, replacement)
-  if (!updatedTextParts) return replaceFirstTextPart(content, replacement)
-
-  let textIndex = 0
-  return content.map((part) => {
-    if (part.type !== 'text') return part
-    const text = updatedTextParts[textIndex] ?? ''
-    textIndex++
-    return { ...part, text }
-  })
-}
-
-function replaceFirstTextPart(content: Exclude<MessageContent, string>, replacement: string): MessageContent {
-  let replaced = false
-  return content.map((part) => {
-    if (part.type !== 'text') return part
-    if (!replaced) {
-      replaced = true
-      return { ...part, text: replacement }
-    }
-    return { ...part, text: '' }
-  })
-}
-
-function textPartReplacements(content: Exclude<MessageContent, string>, replacement: string): readonly string[] | null {
   const textCount = content.filter((part) => part.type === 'text').length
-  if (textCount === 0) return []
+  const placeholders = content.filter((part) => part.type !== 'text').map((part) => contentText([part]))
+
+  if (placeholders.length === 0) {
+    const text = replacement.startsWith('\n') ? replacement.slice(1) : replacement
+    let first = true
+    return content.map((part) => {
+      if (part.type !== 'text') return part
+      const value = first ? text : ''
+      first = false
+      return { ...part, text: value }
+    })
+  }
+  if (textCount === 0) return null
+  const spoofed = content.some(
+    (part) => part.type === 'text' && placeholders.some((placeholder) => part.text.includes(placeholder)),
+  )
+  if (spoofed) return null
 
   const out: string[] = []
   let cursor = 0
@@ -721,7 +731,16 @@ function textPartReplacements(content: Exclude<MessageContent, string>, replacem
   }
 
   assignTextChunk(out, pendingText, replacement.slice(cursor), false)
-  return out.length <= textCount ? out : null
+  if (out.length > textCount) return null
+  if (out.some((chunk) => placeholders.some((placeholder) => chunk.includes(placeholder)))) return null
+
+  let textIndex = 0
+  return content.map((part) => {
+    if (part.type !== 'text') return part
+    const text = out[textIndex] ?? ''
+    textIndex++
+    return { ...part, text }
+  })
 }
 
 function assignTextChunk(out: string[], pendingText: number, chunk: string, beforeMedia: boolean): void {
