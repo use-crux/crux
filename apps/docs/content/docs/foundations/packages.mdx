@@ -15,7 +15,7 @@ Crux is split into focused packages. Everyone needs `@use-crux/core`. Pick an ad
 
 | Package               | What it does                                                                                                                              | Install when                                           |
 | --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| `@use-crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability, request-scoped `defer()` | Always — this is the base                              |
+| `@use-crux/core`      | Prompts, contexts, memory, plans, tasks, compaction, scoring, agents, index contracts, lint contracts, runtime bridge, observability, request-scoped `defer()` | Always: this is the base                              |
 | `@use-crux/next`      | Next.js host wrapper for request-scoped `defer()` via `after()`                                                                           | Next.js App Router / route handlers using inline defer |
 | `@use-crux/react`     | React provider, hooks, transports, and SSE server helper                                                                                  | You render Crux plans/tasks/memory in React            |
 | `@use-crux/ai`        | Vercel AI SDK adapter (`generate`, `stream`), `@use-crux/ai/agent`, and stream integration for plans/tasks                                | You use `ai` / `@ai-sdk/*`                             |
@@ -78,7 +78,7 @@ await google.generate(prompt, { model: "gemini-2.5-flash", input });
 ```
 
 <Callout type="info">
-  You can use multiple adapters in the same project. Prompts are SDK-agnostic —
+  You can use multiple adapters in the same project. Prompts are SDK-agnostic:
   the same prompt works with any adapter.
 </Callout>
 

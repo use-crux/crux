@@ -1,6 +1,6 @@
 ---
 title: Troubleshooting observability
-description: Why deliveryHealth is unknown, runs are incomplete or conflicted, and definitions show no runs — truthful states, not silent bugs.
+description: "Why deliveryHealth is unknown, runs are incomplete or conflicted, and definitions show no runs: truthful states, not silent bugs."
 ---
 
 Most “broken” observability UI states are **accurate reports** of partial telemetry. Start from the state vocabulary, then check host flush and identity emission.
@@ -15,13 +15,13 @@ UI tooltip: *The server has not observed enough delivery evidence to call this r
 
 1. Did the run actually end (`run:end` ingested)?
 2. Is the host wrapper flushing before freeze/exit? See [Runtime setup](/docs/guides/observability/runtime-setup).
-3. Any `degraded` badge instead? Then some records were rejected — inspect local diagnostics / rejected counts, not client invention of healthy.
+3. Any `degraded` badge instead? Then some records were rejected: inspect local diagnostics / rejected counts, not client invention of healthy.
 
 `unknown` is **not** “healthy but unlabeled.” Never treat missing proof as success.
 
 ## Why is my run `incomplete`?
 
-UI copy: *Telemetry ended without a run:end record — the run may still be executing out of view, or its process exited before reporting a terminal status.* (Plus gap wording when sequence gaps exist.)
+UI copy: *Telemetry ended without a run:end record: the run may still be executing out of view, or its process exited before reporting a terminal status.* (Plus gap wording when sequence gaps exist.)
 
 **Common causes**
 
@@ -63,24 +63,24 @@ View Runs appears only when the activity rollup reports `runCount > 0`. An empty
 
 ## Why is Run Detail missing Catalog links?
 
-Links come from runtime `definitionRefs` on the run/span. If refs were never emitted (anonymous handle, non-instrumented path), there is nothing to link. If refs exist but the Project Index no longer contains the id, the row shows **unresolved** with: *Not found in the current Project Index — the source definition may have been renamed or deleted.*
+Links come from runtime `definitionRefs` on the run/span. If refs were never emitted (anonymous handle, non-instrumented path), there is nothing to link. If refs exist but the Project Index no longer contains the id, the row shows **unresolved** with: *Not found in the current Project Index: the source definition may have been renamed or deleted.*
 
 ## Why did stream completion miss usage / finish reason?
 
 First-party adapters now capture completion metadata on stream settle and surface completion failures as `CruxAdapterError`. If you still see empty finish/usage:
 
 - Confirm you are on the first-party adapter packages (not a custom dialect that skips the completion hook)
-- Confirm the provider actually returned usage (OpenAI streams need usage enabled — Crux requests it for OpenAI streams)
+- Confirm the provider actually returned usage (OpenAI streams need usage enabled; Crux requests it for OpenAI streams)
 - Distinguish **aborted** / **error** finishes from missing metadata
 
-Progressive tool-call argument fragments are **never** exposed — wait for completed tool calls on the stream completion.
+Progressive tool-call argument fragments are **never** exposed: wait for completed tool calls on the stream completion.
 
 ## Why don’t my OTel spans parent correctly?
 
 `withTelemetry()` activates a real SDK span around instrumented work. Requirements:
 
 - Register a `TracerProvider` **before** installing the plugin (standard path), or pass a lightweight `exporter`
-- Do not expect one OTel span object to survive `run:suspend` — resume starts a **new** root span sharing the Crux `traceId`
+- Do not expect one OTel span object to survive `run:suspend`; resume starts a **new** root span sharing the Crux `traceId`
 - Propagate across queues with `injectCruxPropagationCarrier` / `extractCruxPropagationCarrier` (W3C `traceparent` / `tracestate`)
 
 See [Telemetry](/docs/guides/observability/telemetry).

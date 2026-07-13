@@ -3,21 +3,7 @@ title: Retrieval & RAG
 description: Define knowledge bases, retrieve scored evidence, compose retrieval recipes, and validate grounded citations.
 ---
 
-Retrieval turns external knowledge into prompt-ready evidence. The beta API is built around one progressive path:
-
-```txt
-knowledgeBase() -> retriever() -> retrievalRecipe() -> grounding()
-```
-
-Each layer exposes the layer below it. Start with a knowledge base for normal RAG, drop down to a retriever for custom search, use a recipe when one search pass is not enough, and use grounding when an answer must cite allowed evidence.
-
-| Primitive | Job | Start here |
-| --- | --- | --- |
-| `knowledgeBase()` | Own indexing, storage, embeddings, lifecycle, retrieval, tools, and scoping. | [Querying](/docs/guides/retrieval/querying) |
-| `retriever()` | Query indexed knowledge or a custom backend and return scored hits. | [Querying](/docs/guides/retrieval/querying) |
-| `retrievalRecipe()` | Compose named query fanout, retrieval, reranking, parent expansion, and compression. | [Recipes](/docs/guides/retrieval/recipes) |
-| `grounding()` | Inject evidence, expose search tools, and validate citations. | [Grounding](/docs/guides/retrieval/grounding) |
-| `corpus()` / `indexer()` | Build lower-level write paths when you need direct control. | [Indexing](/docs/guides/retrieval/indexing) |
+Your model cannot answer questions about your own docs: it has never seen them, and pasting everything into the prompt does not scale. Retrieval fixes that by indexing your knowledge once and turning each question into prompt-ready, scored evidence.
 
 ## Minimal RAG
 
@@ -59,6 +45,24 @@ export const answerDocs = prompt({
   prompt: ({ input }) => input.question,
 })
 ```
+
+## When To Drop Down A Layer
+
+The beta API is built around one progressive path:
+
+```txt
+knowledgeBase() -> retriever() -> retrievalRecipe() -> grounding()
+```
+
+Each layer exposes the layer below it. Start with a knowledge base for normal RAG, drop down to a retriever for custom search, use a recipe when one search pass is not enough, and use grounding when an answer must cite allowed evidence.
+
+| Primitive | Job | Start here |
+| --- | --- | --- |
+| `knowledgeBase()` | Own indexing, storage, embeddings, lifecycle, retrieval, tools, and scoping. | [Querying](/docs/guides/retrieval/querying) |
+| `retriever()` | Query indexed knowledge or a custom backend and return scored hits. | [Querying](/docs/guides/retrieval/querying) |
+| `retrievalRecipe()` | Compose named query fanout, retrieval, reranking, parent expansion, and compression. | [Recipes](/docs/guides/retrieval/recipes) |
+| `grounding()` | Inject evidence, expose search tools, and validate citations. | [Grounding](/docs/guides/retrieval/grounding) |
+| `corpus()` / `indexer()` | Build lower-level write paths when you need direct control. | [Indexing](/docs/guides/retrieval/indexing) |
 
 ## Inspect And Replace Layers
 

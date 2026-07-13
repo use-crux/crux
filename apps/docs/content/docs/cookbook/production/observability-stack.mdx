@@ -16,7 +16,7 @@ This recipe layers Crux's three observability mechanisms into one stack: devtool
 
 - You're going to **production** and need real observability, not just dev devtools
 - You already have an **OTel-compatible APM** (Datadog, Honeycomb, Grafana, New Relic)
-- You want **app-specific metrics** that aren't standard OTel attributes — tenant ID, feature flag bucket, cost per request
+- You want **app-specific metrics** that aren't standard OTel attributes: tenant ID, feature flag bucket, cost per request
 
 ## Full code
 
@@ -181,7 +181,7 @@ export async function summarizeForTenant(tenantId: string, text: string) {
 
 `propagateAttributes` stamps `sessionId` / `userId` onto every record and projects
 `metadata` as `meta.<key>` attributes (for example `meta.tenantId`). It does not
-add graph nodes — only correlators.
+add graph nodes, only correlators.
 
 ## How it works
 
@@ -212,14 +212,14 @@ withCostTracker({
 
 ### Trace context propagation across services
 
-Use `@use-crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across Convex actions stay correlated through the hidden `__crux` context envelope. For custom queues, use W3C inject/extract helpers from `@use-crux/otel` — see [Telemetry](/docs/guides/observability/telemetry).
+Use `@use-crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across Convex actions stay correlated through the hidden `__crux` context envelope. For custom queues, use W3C inject/extract helpers from `@use-crux/otel`. See [Telemetry](/docs/guides/observability/telemetry).
 
 ## Where to next
 
 <Cards>
   <Card
     title="Observability guide"
-    description="Devtools, telemetry, plugins, middleware — overview."
+    description="Devtools, telemetry, plugins, middleware: overview."
     href="/docs/guides/observability"
   />
   <Card

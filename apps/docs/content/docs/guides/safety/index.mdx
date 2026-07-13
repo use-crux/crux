@@ -3,31 +3,22 @@ title: Safety
 description: Boundary-targeted guardrails, constraints, tool policies, validation retry, and prompt-injection-resistant patterns.
 ---
 
-Crux gives you boundary-targeted safety primitives that are easy to confuse:
+Four incidents, four different fixes:
 
-- **[Guardrails](/docs/guides/safety/guardrails)** — *filter, transform, redact, warn, or block* on typed boundaries.
-- **[Constraints](/docs/guides/safety/constraints)** — *validate output semantics and retry the model with feedback*. They improve good output on business-rule violations.
-- **Tool policies** — *block, request approval, or screen tool calls/results* through the Safety decision model.
-- **[Validation retry](/docs/guides/safety/validation-retry)** — *recover from schema-parse failures*. When the model returns malformed JSON or wrong types, Crux text-repairs first, then re-prompts with the Zod error.
+- **The model echoed a customer's email address into your logs.** That is a
+  **[guardrail](/docs/guides/safety/guardrails)**: filter, transform, redact,
+  warn, or block on typed boundaries.
+- **The output parsed cleanly but cited no sources.** That is a
+  **[constraint](/docs/guides/safety/constraints)**: validate output semantics
+  and retry the model with feedback on business-rule violations.
+- **A tool call tried to delete a production record.** That is a **tool
+  policy**: block, request approval, or screen tool calls/results through the
+  Safety decision model.
+- **The model returned broken JSON.** That is
+  **[validation retry](/docs/guides/safety/validation-retry)**: Crux
+  text-repairs first, then re-prompts with the Zod error.
 
-Separate concern: **[Security](/docs/guides/safety/security)** — patterns to make your prompts injection-resistant.
-
-## The boundary, plainly
-
-| | Guardrail | Constraint | Tool policy | Validation retry |
-|---|---|---|---|---|
-| **Runs on** | `boundary.input.*`, `boundary.output.*`, retrieval, memory, validation feedback | One output boundary | Tool call, tool result, approval request | Structured output parse/validation |
-| **What it catches** | Forbidden content, PII, secrets, injection, formatting | Semantic / business-rule violations | Unsafe tool execution or unsafe tool I/O | Schema-parse failures, wrong types |
-| **What happens on a hit** | Block, rewrite, warn, or report | Re-call the model with custom feedback | Block, request approval, report, or rewrite tool I/O | Text-repair first, then re-call with the Zod error |
-| **Knows about retries** | No — it is a policy pass | Yes — retry is the purpose | No, except approval suspension | Yes — bounded by `maxRetries` and `maxSteps` |
-| **You write** | `guardrail({ id, on, run })` | `constraint({ id, on, run })` | `toolPolicy({ id, match, action })` or `toolPolicy.args/result` | `validationRetry: { maxRetries }` |
-
-Rules of thumb:
-
-- **Schema parse failed?** That's *validation retry* — built-in, just enable it.
-- **Output parsed but business rule failed?** That's a *constraint* — write a `check`.
-- **Need to filter, redact, or transform content?** That's a *guardrail*.
-- **Need to gate tool execution?** That's a *tool policy*. Use tool middleware for execution plumbing.
+Separate concern: **[Security](/docs/guides/safety/security)**, patterns to make your prompts injection-resistant.
 
 ## Boundary targets
 
@@ -74,22 +65,24 @@ Built-in text guardrails such as `guardrail.pii()`, `guardrail.secrets()`, and
 `guardrail.injection()` default to sentence-level streaming checks. Classifier
 guardrails and object/path guardrails run at final output unless you tune them.
 
-## Beta limitations and roadmap
+## The boundary, plainly
 
-Safety beta deliberately ships the correctness-critical boundary model first.
-The following follow-ups are tracked as RFCs:
+A recap of the four primitives side by side:
 
-| Limitation | RFC |
-| --- | --- |
-| Stream release pacing and richer segmenters such as `Intl.Segmenter` | [#171](https://github.com/use-crux/crux/issues/171) |
-| Provisional stream emission with later patch/revision events | [#172](https://github.com/use-crux/crux/issues/172) |
-| Incremental structured-output path guardrails while object streams are still partial | [#173](https://github.com/use-crux/crux/issues/173) |
-| Per-boundary `safety.tune` and explicit policy replacement | [#174](https://github.com/use-crux/crux/issues/174) |
-| Additional boundaries such as system prompts, context injection, memory reads, tool definitions, and handoffs | [#175](https://github.com/use-crux/crux/issues/175) |
-| Capture anonymizer patterns and per-boundary capture overrides | [#176](https://github.com/use-crux/crux/issues/176) |
+| | Guardrail | Constraint | Tool policy | Validation retry |
+|---|---|---|---|---|
+| **Runs on** | `boundary.input.*`, `boundary.output.*`, retrieval, memory, validation feedback | One output boundary | Tool call, tool result, approval request | Structured output parse/validation |
+| **What it catches** | Forbidden content, PII, secrets, injection, formatting | Semantic / business-rule violations | Unsafe tool execution or unsafe tool I/O | Schema-parse failures, wrong types |
+| **What happens on a hit** | Block, rewrite, warn, or report | Re-call the model with custom feedback | Block, request approval, report, or rewrite tool I/O | Text-repair first, then re-call with the Zod error |
+| **Knows about retries** | No: it is a policy pass | Yes: retry is the purpose | No, except approval suspension | Yes: bounded by `maxRetries` and `maxSteps` |
+| **You write** | `guardrail({ id, on, run })` | `constraint({ id, on, run })` | `toolPolicy({ id, match, action })` or `toolPolicy.args/result` | `validationRetry: { maxRetries }` |
 
-For the release status and migration summary, see
-[Safety beta readiness](/docs/guides/safety/beta-readiness).
+Rules of thumb:
+
+- **Schema parse failed?** That's *validation retry*: built-in, just enable it.
+- **Output parsed but business rule failed?** That's a *constraint*: write a `check`.
+- **Need to filter, redact, or transform content?** That's a *guardrail*.
+- **Need to gate tool execution?** That's a *tool policy*. Use tool middleware for execution plumbing.
 
 ## When should I use a guardrail?
 
@@ -106,9 +99,9 @@ For the release status and migration summary, see
 
 ## When should I use neither?
 
-- The output is structurally invalid (won't parse) — Zod schema validation already handles that
-- The check needs to read external state (database, RAG) — use a tool call, not a guardrail
-- The check is about *who* is asking, not *what* — that's auth, not safety
+- The output is structurally invalid (won't parse): Zod schema validation already handles that
+- The check needs to read external state (database, RAG): use a tool call, not a guardrail
+- The check is about *who* is asking, not *what*: that's auth, not safety
 
 ## Inspect and test safety
 

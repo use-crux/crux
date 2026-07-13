@@ -231,7 +231,7 @@ Step order is checked at construction. Reserved internal ids such as `retrieve` 
 
 ## Reranking
 
-`rerank()` is the single recipe step for reordering hits. It requires an explicit `engine` — a named `Reranker`. The engine's `name` is the canonical `rag.reranker:<name>` identity the Project Index and runtime evidence join on, so there is no anonymous default: build a judge engine with `judgeReranker({ name, model })` or an adapter `reranker()` and pass it in.
+`rerank()` is the single recipe step for reordering hits. It requires an explicit `engine`, a named `Reranker`. The engine's `name` is the canonical `rag.reranker:<name>` identity the Project Index and runtime evidence join on, so there is no anonymous default: build a judge engine with `judgeReranker({ name, model })` or an adapter `reranker()` and pass it in.
 
 ```ts
 const recipe = retrievalRecipe({
@@ -365,6 +365,63 @@ export default evaluate({
 ```
 
 There is no standalone `ragEval` module.
+
+## Embedding governance
+
+`embedding()` (from `@use-crux/core/embedding`) owns the policies that affect how vectors are generated. The core option table lives in the [core reference](/docs/reference/crux-core#embedding); the governance options are:
+
+| Option              | Type                                                               | Behavior                                                                    |
+| ------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `batch`             | `{ maxSize?, concurrency? }`                                       | Chunking and parallelism inside one `embedMany()` call                      |
+| `preprocess`        | `EmbeddingPreprocessor \| EmbeddingPreprocessor[]`                 | Normalization before cache lookup and before the provider call              |
+| `truncate`          | `{ strategy: 'fail' } \| { strategy: 'chars'; maxChars: number }`  | Input-limit policy; `'fail'` is the default so truncation is never silent   |
+| `retry`             | `{ maxAttempts; baseDelayMs?; maxDelayMs?; shouldRetry? }`         | Provider batch retry policy                                                  |
+| `cache`             | `EmbeddingCache`                                                   | Policy-aware per-text vector cache                                           |
+| `rateLimit`         | `{ concurrency: number }`                                          | Caps provider calls across overlapping calls on the same embedding instance |
+
+`batch.concurrency` and `rateLimit.concurrency` differ in scope: `batch.concurrency` controls how many chunks one `embedMany()` call can run at once, while `rateLimit.concurrency` is stricter and caps provider calls across all concurrent callers of the same embedding instance.
+
+### Preprocessor fingerprints and cache identity
+
+The embedding cache is per normalized text, not per batch. Crux builds policy-aware cache keys from the embedding kind, name, dense dimensions, `maxInputTokens`, preprocessing fingerprints, truncation policy, and input hash. Changing any part of the policy creates different keys, so stale vectors are not reused accidentally.
+
+Custom preprocessors must declare a stable fingerprint so cache keys change when the behavior changes:
+
+```ts
+import { embeddingPreprocessor, normalizeText } from '@use-crux/core/embedding'
+
+const stripMarkdown = embeddingPreprocessor({
+  id: 'strip-markdown',
+  fingerprint: 'strip-markdown:v1',
+  run: (text) => text.replace(/[#*_`]/g, ''),
+})
+
+const dense = embedding({
+  // ...
+  preprocess: [
+    normalizeText({ trim: true, collapseWhitespace: true }),
+    stripMarkdown,
+  ],
+})
+```
+
+### Why there is no `kind: 'hybrid'`
+
+`embedding()` intentionally supports only `kind: 'dense' | 'sparse'`. Hybrid is not one vector shape:
+
+- dense output is `number[]`
+- sparse output is `{ indices, values }`
+- hybrid output is both, plus search-time fusion semantics
+
+If Crux modeled hybrid as an embedding kind, the primitive would have to own search orchestration concerns that belong in stores or retrievers. Instead, hybrid is a query strategy: one dense embedding plus one sparse embedding, combined at search time through `retriever()` or `VectorStore.search({ mode: 'hybrid' })`.
+
+This split is designed to hold as Crux grows:
+
+- retrieval APIs compose dense and sparse embeddings on top of `VectorStore.search()`
+- semantic cache and observational memory remain dense-oriented unless they gain a concrete sparse use case
+- store adapters can expose native capabilities without forcing every feature into a dense-only contract
+
+Future features get one clear place to reuse embedding configuration, batching, and telemetry without turning the embedding layer into the retrieval layer.
 
 ## Related
 

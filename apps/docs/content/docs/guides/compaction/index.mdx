@@ -3,11 +3,11 @@ title: Compaction
 description: Four primitives for keeping long conversations within token limits. Pick the one that matches your access pattern.
 ---
 
-LLM context windows are finite, and conversations grow. Compaction is how you keep the model's view of history small without losing the parts that matter. Crux gives you four primitives — pick the one that matches *how* you need to compact, not what.
+LLM context windows are finite, and conversations grow. Compaction is how you keep the model's view of history small without losing the parts that matter. Crux gives you four primitives: pick the one that matches *how* you need to compact, not what.
 
 ## What problem does this solve?
 
-Without compaction, a long-running chat or agent loop eventually overflows the context window. Naive solutions — drop the oldest messages, or summarize everything every N turns — either lose information or burn tokens summarizing things you didn't need to summarize.
+Without compaction, a long-running chat or agent loop eventually overflows the context window. Naive solutions (drop the oldest messages, or summarize everything every N turns) either lose information or burn tokens summarizing things you didn't need to summarize.
 
 Crux's four primitives target four different access patterns: stateful rolling compression, advisory pressure tracking, one-shot stateless summarization, and structured fact extraction. They compose: budget tracking *decides when* to call sliding window or extraction.
 
@@ -15,10 +15,10 @@ Crux's four primitives target four different access patterns: stateful rolling c
 
 | Primitive | Stateful? | Calls LLM? | Use when |
 |---|---|---|---|
-| **`createSlidingWindow()`** | Yes — keeps a running summary in store | Yes — summarizes evicted messages | Building a chat that needs auto-rolling history |
-| **`createBudgetManager()`** | No — pure tracker | No | You want to *decide* when to compact based on token pressure |
-| **`summarizeMessages()`** | No — pure function | Yes — one summarization call | Ad-hoc summarization of a batch of messages |
-| **`extractKeyFacts()`** | No — pure function | Yes — one structured-generation call | Pull typed objects (decisions, action items) out of a conversation |
+| **`createSlidingWindow()`** | Yes: keeps a running summary in store | Yes: summarizes evicted messages | Building a chat that needs auto-rolling history |
+| **`createBudgetManager()`** | No: pure tracker | No | You want to *decide* when to compact based on token pressure |
+| **`summarizeMessages()`** | No: pure function | Yes: one summarization call | Ad-hoc summarization of a batch of messages |
+| **`extractKeyFacts()`** | No: pure function | Yes: one structured-generation call | Pull typed objects (decisions, action items) out of a conversation |
 
 ```ts
 import {
@@ -43,19 +43,19 @@ import {
 
 **Summarize messages** is right when:
 - You have a **bounded batch** of messages and want one summary right now
-- You don't need a stateful pipeline — fire and forget
+- You don't need a stateful pipeline: fire and forget
 
 **Extract key facts** is right when:
 - You want **typed structured output** out of a conversation, not prose
-- You're capturing *decisions, action items, agreements* — discrete facts, not narrative
+- You're capturing *decisions, action items, agreements*: discrete facts, not narrative
 - The summary alone would lose structure you need to act on
 
 ## When should I NOT use compaction?
 
-- You're operating on an **already-compacted** message history — don't double-compact
-- You only ever have a handful of messages — token cost of compaction exceeds the savings
-- You need an **audit log** of every message — compaction by design loses detail; persist the original elsewhere
-- The dropped detail is **not recoverable from a summary** — consider [extracting key facts](/docs/guides/compaction/extraction) instead so structured data survives
+- You're operating on an **already-compacted** message history: don't double-compact
+- You only ever have a handful of messages: token cost of compaction exceeds the savings
+- You need an **audit log** of every message: compaction by design loses detail; persist the original elsewhere
+- The dropped detail is **not recoverable from a summary**: consider [extracting key facts](/docs/guides/compaction/extraction) instead so structured data survives
 
 ## How to combine them
 
@@ -65,13 +65,13 @@ In production chat apps you usually layer:
 2. When it crosses warning, **extract key facts** from older messages so structured info survives
 3. When it crosses critical, **sliding window** evicts and summarizes oldest messages
 
-This is more work than a single primitive, but the result is *targeted* compaction — extraction preserves the structure you'll need next turn; summarization compresses what's safe to lose.
+This is more work than a single primitive, but the result is *targeted* compaction: extraction preserves the structure you'll need next turn; summarization compresses what's safe to lose.
 
 ## How this fits with the rest of Crux
 
-- **[Token budget](/docs/guides/contexts/token-budget)** drops *contexts* under pressure. Compaction shortens *messages*. They compose — budget tracking can include both.
+- **[Token budget](/docs/guides/contexts/token-budget)** drops *contexts* under pressure. Compaction shortens *messages*. They compose: budget tracking can include both.
 - **[Memory](/docs/guides/memory)** stores entries permanently. Compaction operates on the message history fed to a single LLM call.
-- **[Eval](/docs/guides/eval)** can score compaction quality with `evaluateCompaction()` and pre-built judges.
+- **[Eval](/docs/guides/quality)** can score compaction quality with `evaluateCompaction()` and pre-built judges.
 
 ## Pick a topic
 

@@ -5,8 +5,8 @@ description: Cache expensive context resolvers and leverage LLM provider token c
 
 Context resolvers that call databases, RAG systems, or APIs run on every `prompt.resolve()` call. Crux names the two caching layers separately:
 
-1. **`memo: { ttl }`** — skip the resolver function when the same declared inputs produce the same output.
-2. **`cache: true`** — mark the resolved block for provider-level token caching.
+1. **`memo: { ttl }`**: skip the resolver function when the same declared inputs produce the same output.
+2. **`cache: true`**: mark the resolved block for provider-level token caching.
 
 ## Quick Start
 
@@ -26,7 +26,7 @@ const brand = context({
 });
 ```
 
-The first call runs the resolver and memoizes the result. Subsequent calls with the same `orgId` within 5 minutes skip the resolver entirely. The Anthropic adapter places one `cache_control: { type: 'ephemeral' }` marker at the end of Crux's stable provider-cache prefix.
+The first call runs the resolver and memoizes the result. Subsequent calls with the same `orgId` within 5 minutes skip the resolver entirely. Adapters mark the block for provider caching; see the [Anthropic adapter reference](/docs/reference/adapters/anthropic) for exact marker placement.
 
 ## Option Forms
 
@@ -56,7 +56,7 @@ const searchResults = context({
   memo: { ttl: 30_000 },
 });
 
-// Provider cache only — cheap to compute but stable across calls
+// Provider cache only, cheap to compute but stable across calls
 const rules = context({
   id: "rules",
   system: "## Rules\nAlways respond in JSON.",
@@ -79,16 +79,16 @@ When `memo.ttl > 0`:
 
 When `cache: true`:
 
-1. The resolution pipeline includes `systemBlocks` on `ResolvedPrompt` — one block per system contribution, each with a `providerCache` flag and a single `cacheBoundary` marker on the final cached block
+1. The resolution pipeline includes `systemBlocks` on `ResolvedPrompt`: one block per system contribution, each with a `providerCache` flag and a single `cacheBoundary` marker on the final cached block
 2. Cached contexts form a stable prefix after the prompt's own system text; uncached contexts form the droppable tail. Token budgets can drop only the uncached tail.
 3. **`@use-crux/anthropic`** converts blocks to Anthropic `TextBlockParam[]` with `cache_control: { type: 'ephemeral' }` on the `cacheBoundary` block
-4. **`@use-crux/google`** creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. A single CachedContent lifecycle handles creation, reuse, per-call TTL, concurrency dedup, and graceful error fallback automatically; configure it (TTL, max entries, `onError: 'throw'`, a custom cache port, or a fully custom lifecycle) via `createGoogle(client, { cachedContent })` — see the [`@use-crux/google` reference](/docs/reference/adapters/google).
+4. **`@use-crux/google`** creates server-side `CachedContent` objects for the cacheable system prefix via Google's caching API, then references them in `generateContent()` calls while sending any uncached remainder as `systemInstruction`. A single CachedContent lifecycle handles creation, reuse, per-call TTL, concurrency dedup, and graceful error fallback automatically; configure it (TTL, max entries, `onError: 'throw'`, a custom cache port, or a fully custom lifecycle) via `createGoogle(client, { cachedContent })`. See the [`@use-crux/google` reference](/docs/reference/adapters/google).
 5. **`@use-crux/ai` (Vercel AI SDK)** converts blocks to `SystemModelMessage[]` with `providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } }` on the `cacheBoundary` block when the model is Anthropic
-6. **OpenAI** prefix caching works automatically — Crux's deterministic context ordering already provides stable prefixes
+6. **OpenAI** prefix caching works automatically: Crux's deterministic context ordering already provides stable prefixes
 
 ## Requirements
 
-- **`id` is required** when `memo` is set — needed for cache key derivation. An error is thrown at definition time if missing.
+- **`id` is required** when `memo` is set: needed for cache key derivation. An error is thrown at definition time if missing.
 - **Static contexts cannot use `memo`** because there is no resolver call to memoize. Use `cache: true` on stable static content for provider prefix caching.
 - **Short memo with provider cache warns** when `cache: true` and `memo.ttl < 300000`, because the provider may reuse the block longer than your declared freshness tolerance.
 - **Dynamic prompt system with cached contexts warns** because provider cache prefixes must be byte-stable before the native breakpoint.

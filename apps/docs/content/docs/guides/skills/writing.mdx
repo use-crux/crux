@@ -3,7 +3,7 @@ title: Writing skills
 description: SKILL.md format, frontmatter fields, references directories, and tips for instructions an LLM will actually follow.
 ---
 
-A skill is a single Markdown file — `SKILL.md` — with YAML frontmatter for metadata and a body of instructions. Optionally, a sibling `references/` directory holds longer material the model can pull in on demand.
+A skill is a single Markdown file, `SKILL.md`, with YAML frontmatter for metadata and a body of instructions. Optionally, a sibling `references/` directory holds longer material the model can pull in on demand.
 
 ## SKILL.md Format
 
@@ -34,17 +34,17 @@ When asked to analyze content for SEO, follow these steps:
 | Field | Required | Used by Crux | Notes |
 |---|---|---|---|
 | `name` | yes | yes | Becomes the skill `id` and the index entry name |
-| `description` | yes | yes | One-line summary shown in the index — this is what the LLM sees when deciding to load |
+| `description` | yes | yes | One-line summary shown in the index, this is what the LLM sees when deciding to load |
 | `version` | no | yes | Surfaced in metadata and instrumentation |
 | `license` | no | yes | Surfaced in metadata |
 | `tags` | no | yes | Comma-separated; surfaced in metadata |
-| `allowed-tools`, `model`, `argument-hint`, `user-invocable` | — | no | Claude Code / IDE-specific fields; safely ignored |
+| `allowed-tools`, `model`, `argument-hint`, `user-invocable` | n/a | no | Claude Code / IDE-specific fields; safely ignored |
 
-The description does most of the work — it is the only thing the model sees before it decides whether the skill is relevant. Write it like a router prompt, not like a tagline.
+The description does most of the work, it is the only thing the model sees before it decides whether the skill is relevant. Write it like a router prompt, not like a tagline.
 
 ## References
 
-Long supporting material — examples, lookup tables, edge cases — does not belong in the main `SKILL.md`. Keep the main file focused on what the model needs to act, and put the rest in a sibling `references/` directory:
+Long supporting material, examples, lookup tables, edge cases, does not belong in the main `SKILL.md`. Keep the main file focused on what the model needs to act, and put the rest in a sibling `references/` directory:
 
 ```
 my-skill/
@@ -84,7 +84,7 @@ const seo = skill.inline({
 
 ## Writing Instructions the Model Will Follow
 
-A skill ends up at the **system prompt level** once loaded — it carries the same authority as the agent's main instructions. Two practical consequences:
+A skill ends up at the **system prompt level** once loaded, it carries the same authority as the agent's main instructions. Two practical consequences:
 
 **Be specific and operational.** Skill bodies should read like a runbook, not a manifesto. "Check the title tag (60 chars max, primary keyword near the front)" is better than "Make sure the title is SEO-friendly."
 
@@ -102,4 +102,4 @@ A skill ends up at the **system prompt level** once loaded — it carries the sa
 | `skill.fromFile()` from `@use-crux/core/skill/node` | Skills owned by your repo that benefit from version control, review, and reuse across agents. Read synchronously at import time. |
 | `skill.fromRegistry()` | Community skills from `skillsSh` or skills hosted on a custom registry value. Fetched lazily on first `prompt.resolve()` and cached in memory. See [Registries](/docs/guides/skills/registries). |
 
-You can mix all three in the same `use` array — the resolver treats them identically once loaded.
+You can mix all three in the same `use` array, the resolver treats them identically once loaded.

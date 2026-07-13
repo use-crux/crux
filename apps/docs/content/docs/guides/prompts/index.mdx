@@ -3,7 +3,7 @@ title: Prompts
 description: Define typed, composable prompts that run with any SDK adapter.
 ---
 
-`prompt()` is the main unit of LLM work in Crux. It describes what the model should see, what input the call accepts, what output shape it should return, and which reusable capabilities should be composed in.
+Prompt strings, input shapes, output schemas, and model settings tend to scatter across call sites and drift apart as an app grows. `prompt()` puts that whole call contract in one typed place: it is the main unit of LLM work in Crux, describing what the model should see, what input the call accepts, what output shape it should return, and which reusable capabilities should be composed in.
 
 The prompt does not call a model by itself. Adapters such as `@use-crux/ai`, `@use-crux/openai`, `@use-crux/google`, and `@use-crux/anthropic` execute the same prompt definition against their SDKs.
 

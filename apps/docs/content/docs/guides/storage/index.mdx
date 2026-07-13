@@ -3,27 +3,17 @@ title: Storage
 description: Choose the right Crux storage capability for records, vector search, and workspace files.
 ---
 
-Crux storage is three capabilities, not one overloaded interface.
-
-`RecordStore` stores JSON records. Use it for memory records, flow state, eval reports, workspace file metadata, cache entries, and any Crux state that needs `get`, `put`, `create`, `delete`, and prefix `list`.
-
-`VectorStore` stores dense, sparse, or hybrid vectors. Use it for indexing and retrieval, plus any custom feature that needs similarity search.
-
-`AssetStore` stores bytes. Use it for workspace PDFs, images, CSVs, generated files, uploads, and oversized text.
-
-Most production apps compose capabilities: a `RecordStore` for records, a `VectorStore` for retrieval, and an `AssetStore` for large files. For Convex-specific wiring, see the [Convex guide](/docs/guides/convex).
-
-That split keeps the API honest. A Redis adapter can be a `RecordStore` without pretending to be asset storage. Upstash Vector can be a `VectorStore` without owning JSON records. Convex can implement records and assets, and can expose vector search only when configured truthfully.
+You are wiring up memory, retrieval, a workspace, or flow state, and the feature asks for a store. Crux splits storage into three capabilities so each feature can ask for exactly what it needs. Most production apps compose all three: a `RecordStore` for records, a `VectorStore` for retrieval, and an `AssetStore` for large files. For Convex-specific wiring, see the [Convex guide](/docs/guides/convex).
 
 ## Which One Do I Need?
 
-Use `RecordStore` for structured Crux records:
+Use `RecordStore` for structured Crux records: memory records, flow state, eval reports, workspace file metadata, cache entries, and any Crux state that needs `get`, `put`, `create`, `delete`, and prefix `list`:
 
 ```ts
 workspace({ id: "files", namespace, records });
 ```
 
-Use `VectorStore` when a feature needs similarity search:
+Use `VectorStore` when a feature needs dense, sparse, or hybrid similarity search, such as indexing and retrieval:
 
 ```ts
 retriever({
@@ -36,7 +26,7 @@ retriever({
 });
 ```
 
-Use `AssetStore` when workspace content is binary or large:
+Use `AssetStore` when workspace content is binary or large: PDFs, images, CSVs, generated files, uploads, and oversized text:
 
 ```ts
 await files.write("/outputs/report.pdf", pdfBytes, {
@@ -77,6 +67,10 @@ Use `storage.scope()` when a user, tenant, session, or workspace should get isol
 ```ts
 const userStorage = storage.scope(appStorage, `user:${userId}`);
 ```
+
+## Why Three Capabilities?
+
+The split keeps the API honest. A Redis adapter can be a `RecordStore` without pretending to be asset storage. Upstash Vector can be a `VectorStore` without owning JSON records. Convex can implement records and assets, and can expose vector search only when configured truthfully.
 
 ## Migration Note
 

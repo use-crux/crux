@@ -481,6 +481,7 @@ export {
   raw,
   limit,
   wrap,
+  detectSuspiciousPatterns,
 } from "./shared/sanitize";
 export type { SuspiciousPatternWarning } from "./shared/sanitize";
 

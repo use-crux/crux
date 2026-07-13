@@ -1,5 +1,5 @@
 {
   "title": "Getting Started",
-  "description": "Per-framework walkthroughs to install Crux and ship your first prompt — Next.js, Node, Convex, Expo.",
+  "description": "Per-framework walkthroughs to install Crux and ship your first prompt: Next.js, Node, Convex, Expo.",
   "pages": ["index", "nextjs", "node", "convex", "expo"]
 }

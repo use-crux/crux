@@ -1,9 +1,9 @@
 ---
 title: "@use-crux/core"
-description: The base Crux package — package overview, config, registry API, and shared utilities.
+description: The base Crux package, package overview, config, registry API, and shared utilities.
 ---
 
-`@use-crux/core` is the base package — every Crux project depends on it. It contains all SDK-agnostic primitives organized into subpath exports. Pick the subpath page that matches what you need:
+`@use-crux/core` is the base package, every Crux project depends on it. It contains all SDK-agnostic primitives organized into subpath exports. Pick the subpath page that matches what you need:
 
 ## TypeScript compatibility
 
@@ -323,7 +323,7 @@ For defaults, stability notes, and every nested option, see [Config](/docs/refer
 | `observability`               | `CruxObservabilityConfig`  | Explicit observability export, capture policy, or custom transport behavior.         |
 | `plugins`                     | `CruxPlugin[]`             | Composable runtime extensions.                                                       |
 
-**Returns:** `Crux` — exposes the raw `.config`, lifecycle `.dispose()`, and compatibility registry methods. Source-discovered projects should use their authored prompt/context exports directly rather than looking them up through `config()`.
+**Returns:** `Crux`, exposes the raw `.config`, lifecycle `.dispose()`, and compatibility registry methods. Source-discovered projects should use their authored prompt/context exports directly rather than looking them up through `config()`.
 
 `config()` is one-config-per-process. Calling it again replaces the previous active installation
 before applying the new one, which keeps hot reload from stacking middleware or duplicating plugin
@@ -348,18 +348,6 @@ config({
 
 Both default to `true`. When disabled, matching artifacts keep `sizeBytes` and `hash` but omit inline previews.
 
-### `CruxEvalConfig`
-
-| Field          | Type                             | Default  | Description                                        |
-| -------------- | -------------------------------- | -------- | -------------------------------------------------- |
-| `include`      | `string \| string[]`             | required | Glob pattern(s) for prompt eval files              |
-| `flowInclude`  | `string \| string[]`             | —        | Glob pattern(s) for flow eval files                |
-| `ragInclude`   | `string \| string[]`             | —        | Glob pattern(s) for RAG eval files                 |
-| `suiteInclude` | `string \| string[]`             | —        | Glob pattern(s) for code or JSON suite files       |
-| `concurrency`  | `number`                         | `5`      | Max concurrent eval runs                           |
-| `timeout`      | `number`                         | `60_000` | Per-case timeout in ms                             |
-| `setup`        | `() => Promise<EvalSetupResult>` | required | Lazy loader for eval deps (use dynamic `import()`) |
-
 ## Plugin system
 
 ```ts
@@ -378,16 +366,16 @@ import { mergeHooks, applyPlugins } from "@use-crux/core";
 
 | Built-in plugin           | Package                                                 |
 | ------------------------- | ------------------------------------------------------- |
-| `withDevtools(options)`   | `@use-crux/core/observability` — name `'crux:devtools'` |
-| `withTelemetry(options?)` | `@use-crux/otel` — name `'crux:otel'`                   |
+| `withDevtools(options)`   | `@use-crux/core/observability`, name `'crux:devtools'` |
+| `withTelemetry(options?)` | `@use-crux/otel`, name `'crux:otel'`                   |
 
 ### `mergeHooks(base, patch)`
 
 Compose two hook states with fan-out semantics:
 
-- **Hooks** — both handlers fire for every event
-- **Middleware** — patch wraps base
-- **Collector** — last-write-wins
+- **Hooks**: both handlers fire for every event
+- **Middleware**: patch wraps base
+- **Collector**: last-write-wins
 
 ### `applyPlugins(plugins, initialHooks)`
 
@@ -705,8 +693,6 @@ import type {
   ErrorCategory,
   CruxConfig,
   Crux,
-  CruxEvalConfig,
-  EvalSetupResult,
   PromptRegistry,
   FlowScope,
   FlowResult,
@@ -721,6 +707,6 @@ import type {
 
 ## Related
 
-- Guide: [Foundations](/docs/foundations) — mental model and primitives tour
-- Reference: [Adapters](/docs/reference/adapters) — execution layer
-- Reference: [Storage](/docs/reference/storage) — persistent RecordStore, VectorStore, and AssetStore implementations
+- Guide: [Foundations](/docs/foundations), mental model and primitives tour
+- Reference: [Adapters](/docs/reference/adapters), execution layer
+- Reference: [Storage](/docs/reference/storage), persistent RecordStore, VectorStore, and AssetStore implementations

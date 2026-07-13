@@ -8,15 +8,15 @@ This recipe sets up a complete production-style RAG flow: ingest a directory of 
 ## Primitives used
 
 - `@use-crux/ingest` for document loading
-- `@use-crux/core/indexing` — `indexer()` for chunk + embed + write, `corpus()` for incremental sync
-- `@use-crux/core/retrieval` — `retriever()` and `retrievalRecipe()` for query-time evidence selection
-- `@use-crux/convex` and `@use-crux/upstash` — `convexRecordStore()` for JSON records and `upstashVectorStore()` for managed vector search
-- `embedding()` — one dense + one sparse embedding
+- `@use-crux/core/indexing`: `indexer()` for chunk + embed + write, `corpus()` for incremental sync
+- `@use-crux/core/retrieval`: `retriever()` and `retrievalRecipe()` for query-time evidence selection
+- `@use-crux/convex` and `@use-crux/upstash`: `convexRecordStore()` for JSON records and `upstashVectorStore()` for managed vector search
+- `embedding()`: one dense + one sparse embedding
 
 ## When to reach for this pattern
 
 - You need a **production-ready RAG** without managing vector infrastructure yourself
-- Your corpus is **document-shaped** — Markdown, HTML, files
+- Your corpus is **document-shaped**: Markdown, HTML, files
 - Both **semantic** and **keyword** matching matter (most real corpora benefit from hybrid)
 
 ## Full code
@@ -251,7 +251,7 @@ const urlGrounding = grounding({
 
 <Cards>
   <Card title="Local files RAG" description="The same retrieval stack with an in-memory local corpus." href="/docs/cookbook/rag/local-files-rag" />
-  <Card title="Retrieval guide" description="The full RAG architecture — embeddings, ingestion, indexing, retrieval." href="/docs/guides/retrieval" />
+  <Card title="Retrieval guide" description="The full RAG architecture: embeddings, ingestion, indexing, retrieval." href="/docs/guides/retrieval" />
   <Card title="Episodic recall" description="Auto-recall past chat turns instead of indexed docs." href="/docs/cookbook/rag/episodic-recall" />
   <Card title="@use-crux/upstash reference" description="Upstash VectorStore and Redis RecordStore APIs." href="/docs/reference/storage/upstash" />
 </Cards>

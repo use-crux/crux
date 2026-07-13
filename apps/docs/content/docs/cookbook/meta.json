@@ -1,5 +1,5 @@
 {
   "title": "Cookbook",
-  "description": "End-to-end working recipes — chat, extraction, multi-agent compositions, workflows with approval, RAG pipelines, production patterns.",
+  "description": "End-to-end working recipes: chat, extraction, multi-agent compositions, workflows with approval, RAG pipelines, production patterns.",
   "pages": ["index", "basics", "agents", "workflows", "rag", "runtime", "production"]
 }

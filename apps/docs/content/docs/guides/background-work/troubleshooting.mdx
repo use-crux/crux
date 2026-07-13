@@ -1,10 +1,11 @@
 ---
-title: Defer troubleshooting
+title: Troubleshooting
 description: Diagnose DEFER_* errors without guessing host capabilities.
 ---
 
-Public defer failures use `CruxDeferError` with a stable `code` and
-`docsUrl` (`https://cruxjs.dev/docs/errors/<CODE>`).
+Hit a `DEFER_*` error? Match the code below. Public defer failures use
+`CruxDeferError` with a stable `code` and `docsUrl`
+(`https://cruxjs.dev/docs/errors/<CODE>`).
 
 ```ts
 import { CruxDeferError, defer } from '@use-crux/core'
@@ -26,7 +27,7 @@ try {
 | [`DEFER_CAPABILITY_MISSING`](/docs/errors/DEFER_CAPABILITY_MISSING) | Scope exists but cannot support this overload (inline unsupported, missing waitUntil/after, named without durable finalization) |
 | [`DEFER_SCOPE_SEALED`](/docs/errors/DEFER_SCOPE_SEALED) | Registration after seal |
 | [`DEFER_LIMIT_EXCEEDED`](/docs/errors/DEFER_LIMIT_EXCEEDED) | Callback count/nesting/concurrency bounds |
-| [`DEFER_REPLAY_UNSAFE`](/docs/errors/DEFER_REPLAY_UNSAFE) | Public `defer()` inside a replayable flow — use `flow.defer()` |
+| [`DEFER_REPLAY_UNSAFE`](/docs/errors/DEFER_REPLAY_UNSAFE) | Public `defer()` inside a replayable flow, use `flow.defer()` |
 | [`DEFER_TARGET_INPUT_REQUIRED`](/docs/errors/DEFER_TARGET_INPUT_REQUIRED) | Named target called without required JSON input |
 | [`DEFER_COMMIT_FAILED`](/docs/errors/DEFER_COMMIT_FAILED) | Strict named staging/finalization failed; response discarded |
 
@@ -41,7 +42,7 @@ Runtime-bound failures still use Runtime codes such as
 3. For named work: is `config({ runtime })` present and is
    `durableFinalization: true` on the host lifetime?
 4. Inside flows: use `flow.defer()`, never public `defer()`.
-5. Catching a named `defer` promise does not undo `DEFER_COMMIT_FAILED` — fix
+5. Catching a named `defer` promise does not undo `DEFER_COMMIT_FAILED`; fix
    the staging failure or use the callback overload for best-effort work.
 
 ## Project Index lints
@@ -53,21 +54,22 @@ Static analysis reports:
 - `defer.missing_scope`
 
 Named calls without Runtime also reuse `runtime.missing_runtime_config` when
-provable. Host capability cannot always be proven statically; runtime still
-throws `DEFER_CAPABILITY_MISSING` when the live host cannot honor the call.
+the analyzer can tell for sure from your code. Static analysis cannot always
+determine host capability; the runtime still throws `DEFER_CAPABILITY_MISSING`
+when the live host cannot honor the call.
 
 ## Check project setup
 
 Run `crux setup` for a read-only aggregate check, or `crux setup --apply` to
 apply safe additive Runtime resources and recheck. The defer contributor reports
 missing host integrations and named-durability configuration with exact
-remediation and a privacy-safe coding-agent prompt. Dynamic lifetime capability
-is still verified at the live host boundary; an installed package alone is not
-treated as proof.
+remediation and a privacy-safe coding-agent prompt. Lifetime capability is
+still verified at the live host boundary; having a package installed does not
+by itself mean the host supports defer.
 
 See [Project setup](/docs/guides/setup) for modes and JSON output.
 
 ## Related
 
-- [Host matrix](/docs/guides/defer/hosts)
+- [Host matrix](/docs/guides/background-work/hosts)
 - [Error catalog](/docs/errors)

@@ -3,26 +3,26 @@ title: Budget manager
 description: Advisory token-pressure tracker. Decide when to compact; apply your own strategy.
 ---
 
-A budget manager tracks token usage across multiple sources (system, history, tools, retrieved context) and reports a pressure level: `normal`, `warning`, or `critical`. It does **no** compaction itself — it tells you *when* to act, not *how*.
+A budget manager tracks token usage across multiple sources (system, history, tools, retrieved context) and reports a pressure level: `normal`, `warning`, or `critical`. It does **no** compaction itself. It tells you *when* to act, not *how*.
 
 ## What problem does this solve?
 
 Different parts of a request consume tokens at different rates: a long-running chat history grows linearly, retrieved RAG context arrives in chunks, tools come and go between turns. To compact intelligently you need to know *what* is taking up the budget, not just that you're close to the limit.
 
-The budget manager gives you a pure tracker — no LLM calls, no state, no side effects. You report token counts as you build the request; you read pressure level when you need to decide what to drop or compress.
+The budget manager gives you a pure tracker: no LLM calls, no state, no side effects. You report token counts as you build the request; you read pressure level when you need to decide what to drop or compress.
 
 ## When should I use it?
 
 - You want **fine-grained pressure measurement** by source (system / history / tools / context)
 - You're **combining compaction strategies** (extract structured first, then summarize rest)
-- You need a **hook for telemetry** — emit a metric every time pressure crosses a threshold
+- You need a **hook for telemetry**: emit a metric every time pressure crosses a threshold
 - You want to make compaction **decisions in your code**, not via a built-in primitive
 
 ## When should I NOT use it?
 
-- You're happy with [sliding window](/docs/guides/compaction/sliding-window)'s "compact when N is exceeded" — it doesn't need pressure tracking
-- You don't have a token counter — without one, the budget manager has no inputs
-- You only have one source of tokens — you can compute pressure inline without the abstraction
+- You're happy with [sliding window](/docs/guides/compaction/sliding-window)'s "compact when N is exceeded", it doesn't need pressure tracking
+- You don't have a token counter: without one, the budget manager has no inputs
+- You only have one source of tokens: you can compute pressure inline without the abstraction
 
 ## Quick start
 
@@ -72,7 +72,7 @@ if (state.level === 'critical') {
 
 ## Hooks
 
-`onBudgetCheck` fires every time pressure level changes — handy for metrics:
+`onBudgetCheck` fires every time pressure level changes, handy for metrics:
 
 ```ts
 const budget = createBudgetManager({
@@ -89,7 +89,7 @@ The hook also flows through to devtools and OTel via the standard instrumentatio
 
 ## Choosing thresholds
 
-- **`warningThreshold: 0.8`** is a reasonable default — gives you headroom for the response itself
+- **`warningThreshold: 0.8`** is a reasonable default: gives you headroom for the response itself
 - **`criticalThreshold: 0.95`** leaves ~5% for safety; below this and you risk a 4xx from the provider
 - For models with reserved-output budgets, subtract the response budget from `limit` before passing in
 

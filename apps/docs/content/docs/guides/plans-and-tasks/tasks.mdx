@@ -3,7 +3,7 @@ title: Tasks
 description: Track structured work with dynamic or typed task ledgers.
 ---
 
-`tasks()` creates a task ledger. Ledgers can stand alone or attach to a plan handle or plan ID.
+When an agent works through multi-step jobs, you want to see which step is running, what finished, and what failed, without parsing chat history. `tasks()` creates a task ledger for exactly that. Ledgers can stand alone or attach to a plan handle or plan ID.
 
 ```ts
 import { z } from 'zod'
@@ -31,7 +31,7 @@ await work.progress('extract', 'Parsed 1,200 rows')
 await work.complete('extract', { rows: 1200 })
 ```
 
-Task IDs must be unique within the ledger. A duplicate `add()` rejects with `DuplicateTaskIdError`, including when concurrent writers race to add the same ID. Results and metadata must be JSON-safe.
+Task IDs must be unique within the ledger, and results and metadata must be JSON-safe.
 
 ## Defined Ledgers
 
@@ -108,6 +108,8 @@ try {
   }
 }
 ```
+
+A duplicate `add()` rejects with `DuplicateTaskIdError`, including when concurrent writers race to add the same ID.
 
 Common errors include `TaskListNotFoundError`, `TaskNotFoundError`, `DuplicateTaskIdError`, `TaskRemovedError`, `TaskListDiscardedError`, `InvalidTaskTransitionError`, `TaskResultValidationError`, and `TaskJsonValueError`.
 

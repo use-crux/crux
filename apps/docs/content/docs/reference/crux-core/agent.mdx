@@ -24,11 +24,11 @@ Bundle a prompt with optional model and tools into a frozen agent instance.
 | `model` | `AnyModel?` | Default model override (takes precedence over composition-level model) |
 | `tools` | `AnyToolSet?` | Default tools |
 
-**Returns:** `Agent<TOwnInput, TOutput, TContexts>` — frozen object with `_tag: 'Agent'`
+**Returns:** `Agent<TOwnInput, TOutput, TContexts>`, frozen object with `_tag: 'Agent'`
 
 ### `isAgent(value)`
 
-Type guard — returns `true` if the value is an `Agent` instance created by `agent()`.
+Type guard, returns `true` if the value is an `Agent` instance created by `agent()`.
 
 ### `parallel(options)`
 
@@ -47,7 +47,7 @@ Run multiple agents concurrently and return typed results as a named record.
 |-------|------|-------------|
 | `results` | `Record<name, AgentResult<typed>>` | Results keyed by agent name, typed from each agent's output schema |
 | `durationMs` | `number` | Total wall-clock duration |
-| `settled` | `Record<name, SettledResult>?` | Only present with `onError: 'continue'` — discriminated results for all agents |
+| `settled` | `Record<name, SettledResult>?` | Only present with `onError: 'continue'`, discriminated results for all agents |
 
 In `continue` mode, each entry in `settled` is a `SettledResult<AgentResult>`:
 - `{ status: 'success', value: AgentResult }`
@@ -193,7 +193,7 @@ Shared typed state for multi-agent coordination.
 | `.patch(partial)` | Merge partial update |
 | `.subscribe(callback)` | Listen for field changes: `(field, value) => void` |
 | `.asContext(opts?)` | Context (default priority: 70) |
-| `.asTools()` | Returns `{ readBlackboard, writeBlackboard, patchBlackboard, clearBlackboard }` — focused tools for LLM interaction |
+| `.asTools()` | Returns `{ readBlackboard, writeBlackboard, patchBlackboard, clearBlackboard }`, focused tools for LLM interaction |
 
 Use a board directly in prompt `use` when the agent should see and update shared state:
 
@@ -210,11 +210,11 @@ Use `board.asContext()` for context-only injection, and `board.asTools()` when y
 ```ts
 const board = blackboard({ id: 'shared', schema: mySchema, store })
 
-// Read-only agent — can observe shared state but not modify it
+// Read-only agent, can observe shared state but not modify it
 const { readBlackboard } = board.asTools()
 prompt({ tools: { readBlackboard } })
 
-// Full access agent — can read and write
+// Full access agent, can read and write
 prompt({ tools: board.asTools() })
 ```
 
@@ -249,7 +249,7 @@ Structured context transfer between agents. Supports stateless (in-process) and 
 | `outputSchema` | `ZodType` | Validates transformed data |
 | `transform` | `(input) => output` | Transform function (may be async) |
 | `summarize` | `{ generate, model, system? }?` | Optional LLM summarization |
-| `store` | `RecordStore?` | Persistent storage — enables `send()` and `receive()` for distributed agents |
+| `store` | `RecordStore?` | Persistent storage, enables `send()` and `receive()` for distributed agents |
 | `fromAgent` | `string?` | Name of sending agent (for devtools identification) |
 | `toAgent` | `string?` | Name of receiving agent (for devtools identification) |
 
@@ -276,16 +276,16 @@ Orchestration wrapper combining handoff + subagent execution.
 
 **Generic parameters:** `delegate<TArgs, THandoffInput, THandoffOutput, TCtx>`
 
-`TCtx` defaults to `unknown`. When specified, both `execute` and `.run()` enforce the typed context — useful for threading framework-specific data (action context, project IDs, etc.).
+`TCtx` defaults to `unknown`. When specified, both `execute` and `.run()` enforce the typed context, useful for threading framework-specific data (action context, project IDs, etc.).
 
 **Returns:** `Delegate<TArgs, TInput, TOutput, TCtx>`
 
 | Method | Description |
 |--------|-------------|
 | `.run(args, ctx)` | Execute: run subagent → validate via handoff → return `DelegateResult`. `ctx` is required and typed. |
-| `.asTools(opts?)` | Returns `{ delegate }` — focused tool for LLM interaction. For frameworks with custom tool shapes, use `.run()` directly. |
+| `.asTools(opts?)` | Returns `{ delegate }`, focused tool for LLM interaction. For frameworks with custom tool shapes, use `.run()` directly. |
 
-**Focused tools pattern.** `.asTools()` returns `{ delegate }` — a single focused tool for triggering the delegation. Override the description to match your domain:
+**Focused tools pattern.** `.asTools()` returns `{ delegate }`, a single focused tool for triggering the delegation. Override the description to match your domain:
 
 ```ts
 const researchDelegate = delegate({
@@ -319,7 +319,11 @@ prompt({
 | `summary` | `string?` | LLM summary if handoff configured one |
 | `durationMs` | `number` | Execution time |
 
-Three-layer validation: `argsSchema` → `handoff.inputSchema` → `handoff.outputSchema`
+**Three-layer validation.** Each delegation validates data at three points:
+
+1. `argsSchema`: validates what the LLM provides when calling the tool
+2. `handoff.inputSchema`: validates the subagent's return value
+3. `handoff.outputSchema`: transforms and validates the final data for the consumer
 
 ---
 
@@ -336,6 +340,8 @@ All primitives emit instrumentation events automatically:
 | `composition:start` | `parallel()`, `pipeline()`, `consensus()` | `compositionId`, `kind`, `agentIds` |
 | `composition:agent` | Each agent in a composition | `compositionId`, `agentId`, `index`, `status`, `durationMs`, `error?` |
 | `composition:end` | `parallel()`, `pipeline()`, `consensus()` | `compositionId`, `kind`, `status`, `durationMs`, `agentCount`, `successCount`, `errorCount`, `agreement?` |
+
+Events are correlated to the enclosing trace when emitted within a `generate()` or agent step. For handoffs, canonical traces also attach the validated handoff input to `inspection.input` and the prepared handoff payload to `inspection.output`.
 
 ### Types
 

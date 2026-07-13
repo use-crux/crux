@@ -3,7 +3,7 @@ title: Validation Retry
 description: Automatically retry structured output that fails Zod validation, feeding errors back to the model for self-correction.
 ---
 
-When using structured output (Zod schemas), models sometimes return invalid JSON or values that don't match your schema. `validationRetry` implements the Instructor pattern — it feeds the validation error back to the model so it can fix its own output.
+When using structured output (Zod schemas), models sometimes return invalid JSON or values that don't match your schema. `validationRetry` implements the Instructor pattern: it feeds the validation error back to the model so it can fix its own output.
 
 ```ts
 const result = await adapter.generate(prompt, {
@@ -17,9 +17,9 @@ If the model returns `{"name": "Alice", "age": "thirty"}` but the schema expects
 
 ## When do you need this?
 
-- **Structured output reliability** — when models occasionally return malformed JSON or wrong types
-- **Complex schemas** — enums, nested objects, and strict constraints that models sometimes violate
-- **Production reliability** — automatic recovery without manual error handling
+- **Structured output reliability**: when models occasionally return malformed JSON or wrong types
+- **Complex schemas**: enums, nested objects, and strict constraints that models sometimes violate
+- **Production reliability**: automatic recovery without manual error handling
 
 If your prompts always produce valid output or you don't use output schemas, you don't need `validationRetry`.
 
@@ -127,7 +127,7 @@ should be retried on the next fallback candidate.
 All composition patterns accept `validationRetry` as a top-level option:
 
 ```ts
-// Pipeline — default for all agent steps
+// Pipeline, default for all agent steps
 await pipeline({
   id: 'validation-retry-pipeline-1',
   context: { userId },
@@ -138,7 +138,7 @@ await pipeline({
   ],
 });
 
-// Parallel — all agents get validation retry
+// Parallel, all agents get validation retry
 await parallel({
   id: 'validation-retry-parallel-1',
   context: { document },
@@ -146,7 +146,7 @@ await parallel({
   validationRetry: { maxRetries: 2 },
 });
 
-// Swarm — each agent turn gets validation retry
+// Swarm, each agent turn gets validation retry
 await swarm({
   id: 'validation-retry-swarm-1',
   agents: { router: routerAgent, writer: writerAgent },
@@ -158,7 +158,7 @@ await swarm({
 
 ### Flows
 
-In flows, you call `generate()` directly inside `flow.step()` — pass `validationRetry` to your generate call:
+In flows, you call `generate()` directly inside `flow.step()`: pass `validationRetry` to your generate call:
 
 ```ts
 const extractData = flow(
@@ -178,7 +178,7 @@ const extractData = flow(
 const result = await extractData.run({ goal: "Extract data" });
 ```
 
-Flow steps also support `step.retry` for transient failures (network errors, rate limits). Both layers compose naturally — `step.retry` wraps the entire step, `validationRetry` operates inside `generate()`.
+Flow steps also support `step.retry` for transient failures (network errors, rate limits). Both layers compose naturally: `step.retry` wraps the entire step, `validationRetry` operates inside `generate()`.
 
 ## Hooks
 
@@ -200,8 +200,8 @@ validationRetry: {
 
 Retry events are also emitted to:
 
-- **Devtools** — visible in the trace timeline as retry attempt/exhaustion events
-- **OpenTelemetry** — spans with `crux.validation.*` attributes via `@use-crux/otel`
+- **Devtools**: visible in the trace timeline as retry attempt/exhaustion events
+- **OpenTelemetry**: spans with `crux.validation.*` attributes via `@use-crux/otel`
 
 ## Text repair utility
 

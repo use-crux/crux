@@ -1,6 +1,6 @@
 ---
 title: "@use-crux/anthropic"
-description: Anthropic SDK adapter — factory pattern with native options.
+description: Anthropic SDK adapter, factory pattern with native options.
 ---
 
 Peer dependency: `@anthropic-ai/sdk`
@@ -85,12 +85,12 @@ result.finalStep;
 
 **Returns:** normalized Crux generate result with:
 
-- `result.text` — extracted assistant text
-- `result.usage` — accumulated usage when every provider-call step reported usage
-- `result.cost` — provider-reported cost when available
-- `result.finalStep` — final provider-call text, usage, finish reason, response id, and actual model id
-- `result.raw` — raw Anthropic SDK response
-- `result._meta` — retained trace metadata for observability plumbing
+- `result.text`: extracted assistant text
+- `result.usage`: accumulated usage when every provider-call step reported usage
+- `result.cost`: provider-reported cost when available
+- `result.finalStep`: final provider-call text, usage, finish reason, response id, and actual model id
+- `result.raw`: raw Anthropic SDK response
+- `result._meta`: retained trace metadata for observability plumbing
 
 When the prompt has an `output` schema, Anthropic's parsed value remains available on `result.raw.parsed_output`.
 
@@ -118,9 +118,9 @@ Stream a prompt execution.
 
 **Returns:** `StreamResult<MessageStream>`:
 
-- `result.textStream` — provider-neutral text deltas
-- `result.raw` — raw Anthropic `MessageStream`
-- `result.completion` — promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
+- `result.textStream`: provider-neutral text deltas
+- `result.raw`: raw Anthropic `MessageStream`
+- `result.completion`: promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
 
 ### `adapter.prepare(prompt, options)`
 

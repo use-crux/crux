@@ -194,7 +194,7 @@ import { z } from "zod";
 const supportTools = contributor({
   id: "support-tools",
   input: z.object({ plan: z.string() }),
-  // Excluded with a recorded reason when false — visible in .inspect()
+  // Excluded with a recorded reason when false: visible in .inspect()
   // and devtools. contribute() is never called for excluded entries.
   when: (input) => input.plan !== "free",
   // Resolved BEFORE this contributor's own contribution.
@@ -211,7 +211,7 @@ const supportTools = contributor({
 | `id`         | `string`                   | Required. Appears in observability artifacts (`contributor:<id>`), exclusion records, and tool-collision errors.                                                                 |
 | `input`      | `ZodObject?`               | Fields merged into the prompt's input schema as required keys; typed in `contribute()`.                                                                                          |
 | `when`       | `(input) => boolean`       | Synchronous gate. Excluded entries record `{ source: 'contributor:<id>', reason: 'when() predicate returned false' }`.                                                           |
-| `use`        | `readonly ContextEntry[]?` | Nested entries resolved before the contribution — any entry kind, including other contributors.                                                                                  |
+| `use`        | `readonly ContextEntry[]?` | Nested entries resolved before the contribution: any entry kind, including other contributors.                                                                                  |
 | `contribute` | `(args) => Contribution`   | Async-capable. Returned `contexts`/`use` re-enter the pipeline; `tools` merge with collision detection; `constraints`, `guardrails`, and `metadata` land on the resolved prompt. |
 
 Entries created by `contributor()` resolve through the same compiled prompt pass as contexts, memory, skills, and blackboards.
@@ -415,7 +415,7 @@ const inspection = pass.inspect();
 fakes.observability.contributionPreviews("checked-not-included"); // exclusions, no transport needed
 ```
 
-Ports: `observability`, `skills`, `cache`, `clock`, `tokenizer`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `compilePrompt(config)` uses the same ambient pipeline as `prompt(config)`. `createResolverFakes()` builds a complete, deterministic set in one call (with each port also exposed as a named handle for assertions); the individual fakes — `recordingObservability`, `inMemorySkillSource`, `inMemoryContextCache`, `fixedClock`, `staticTokenizer`, `collectingDiagnostics`, `staticPolicy`, `recordingInstrumentation` — also ship from `@use-crux/core` when you want to substitute just one.
+Ports: `observability`, `skills`, `cache`, `clock`, `tokenizer`, `policy`, `diagnostics`, `instrumentation`. Omitted ports use the production runtime adapters, so `compilePrompt(config)` uses the same ambient pipeline as `prompt(config)`. `createResolverFakes()` builds a complete, deterministic set in one call (with each port also exposed as a named handle for assertions); the individual fakes (`recordingObservability`, `inMemorySkillSource`, `inMemoryContextCache`, `fixedClock`, `staticTokenizer`, `collectingDiagnostics`, `staticPolicy`, `recordingInstrumentation`) also ship from `@use-crux/core` when you want to substitute just one.
 
 The `tokenizer` port estimates every token count the pipeline reports (system parts, prompt text, dropped contexts), so a deterministic counter pins token-budget behavior without depending on the production chars/4 estimate. The `skills` port owns registry fetch, skill-index generation, and activation-session creation behind one seam.
 

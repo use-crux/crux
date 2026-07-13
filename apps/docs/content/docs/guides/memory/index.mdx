@@ -3,7 +3,66 @@ title: Memory
 description: Compose reusable memory blocks for recent context, working state, episodes, facts, procedures, and custom agent memory.
 ---
 
-Memory is not one feature. A useful agent needs several kinds of state: the last few messages, a typed scratchpad, searchable events, durable facts, and learned operating procedures. Crux keeps those concerns separate as blocks, then composes them with `memory()`.
+Every request to your agent starts from a blank slate: the model forgets the conversation, the task in progress, and everything it learned about the user. A useful agent needs several kinds of state, from the last few messages to a typed scratchpad, searchable events, durable facts, and learned operating procedures. Crux keeps those concerns separate as blocks, then composes them with `memory()`. Start with the two most common blocks:
+
+```ts
+import { memory, recentMessages, workingState } from "@use-crux/core/memory";
+import { z } from "zod";
+
+const userMemory = memory({
+  id: "assistant",
+  store,
+  namespace: ({ input }) => `user:${input.userId}`,
+  blocks: [
+    recentMessages({ id: "recent", maxMessages: 12 }),
+    workingState({
+      id: "state",
+      schema: z.object({
+        goal: z.string().optional(),
+        openQuestions: z.array(z.string()).default([]),
+      }),
+    }),
+  ],
+});
+```
+
+Use the composed memory directly in a prompt:
+
+```ts
+const assistantPrompt = prompt({
+  id: "assistant",
+  use: [userMemory],
+  input: z.object({ userId: z.string(), message: z.string() }),
+  system: "Use memory when it is relevant. Do not invent preferences.",
+  prompt: ({ input }) => input.message,
+});
+```
+
+On every call, Crux renders each block into prompt context. After the model finishes, the adapter captures the user and assistant turn, runs each block's capture logic, and flushes pending writes. Streaming works the same way after `stream().completion()`.
+
+`capture.mode` controls when capture work is awaited:
+
+- `inline` waits before `captureTurn()` or adapter generation resolves.
+- `afterResponse` starts capture after generation and hands the promise to `waitUntil` when one is configured.
+- `detached` starts capture in the background; call `flush()` when you need to await it.
+
+The older `processing` field is still accepted as a deprecated alias, but new code should use `capture`.
+
+## How to Think About Blocks
+
+`recentMessages()` is short-term continuity. It keeps the last N messages so the next response has enough local context without dragging in the full transcript.
+
+`workingState()` is task state. It is one typed value, validated by Zod, that the application or agent can overwrite as the task progresses.
+
+`episodes()` is an append-only event log. It is for things that happened: conversations, tool results, observations, decisions, and user actions. With a dense embedding it can recall related events. Use `retention` to document the real eviction window and `evict()` from your sweep job when entries age out.
+
+`facts()` is extracted knowledge. It is for conclusions such as user preferences or stable project details. By default facts are proposed before becoming active memory.
+
+`procedures()` is operating memory. It stores learned instructions and habits that should shape future behavior, such as "prefer direct answers before examples".
+
+`memoryBlock()` is the escape hatch. Use it when a product has its own memory domain, render format, tools, or approval workflow.
+
+A full composition combines all of these, with per-block priorities, semantic recall, proposed writes, and a shared token budget:
 
 ```ts
 import {
@@ -62,42 +121,6 @@ const userMemory = memory({
   ],
 });
 ```
-
-Use the composed memory directly in a prompt:
-
-```ts
-const assistantPrompt = prompt({
-  id: "assistant",
-  use: [userMemory],
-  input: z.object({ userId: z.string(), message: z.string() }),
-  system: "Use memory when it is relevant. Do not invent preferences.",
-  prompt: ({ input }) => input.message,
-});
-```
-
-On every call, Crux renders each block into prompt context. After the model finishes, the adapter captures the user and assistant turn, runs each block's capture logic, and flushes pending writes. Streaming works the same way after `stream().completion()`.
-
-`capture.mode` controls when capture work is awaited:
-
-- `inline` waits before `captureTurn()` or adapter generation resolves.
-- `afterResponse` starts capture after generation and hands the promise to `waitUntil` when one is configured.
-- `detached` starts capture in the background; call `flush()` when you need to await it.
-
-The older `processing` field is still accepted as a deprecated alias, but new code should use `capture`.
-
-## How to Think About Blocks
-
-`recentMessages()` is short-term continuity. It keeps the last N messages so the next response has enough local context without dragging in the full transcript.
-
-`workingState()` is task state. It is one typed value, validated by Zod, that the application or agent can overwrite as the task progresses.
-
-`episodes()` is an append-only event log. It is for things that happened: conversations, tool results, observations, decisions, and user actions. With a dense embedding it can recall related events. Use `retention` to document the real eviction window and `evict()` from your sweep job when entries age out.
-
-`facts()` is extracted knowledge. It is for conclusions such as user preferences or stable project details. By default facts are proposed before becoming active memory.
-
-`procedures()` is operating memory. It stores learned instructions and habits that should shape future behavior, such as "prefer direct answers before examples".
-
-`memoryBlock()` is the escape hatch. Use it when a product has its own memory domain, render format, tools, or approval workflow.
 
 ## Rendering and Budgets
 
@@ -202,45 +225,7 @@ const supportPolicy = memory({
 
 ## Observability
 
-Memory blocks emit `memory.read` and `memory.write` spans with `memoryType: 'block'`, `blockId`, `blockKind`, and a privacy-safe `namespaceHash`. Budgeted memory rendering also emits an inspectable `memory.read` observation for the composed memory context, including which blocks were included, trimmed, or dropped. Devtools groups memory in the Memory Explorer, the CLI includes it in memory stats, and `@use-crux/otel` adds block attributes to memory spans.
-
-The runtime keeps raw namespaces out of trace attributes. Use `namespaceHash` for correlation, then inspect the attached artifact for the safe summary:
-
-```ts title="memory-trace-shape.ts"
-{
-  primitive: "memory.read",
-  name: "supportMemory.render",
-  attributes: {
-    memoryId: "supportMemory",
-    memoryType: "memory",
-    operation: "render",
-    namespaceHash: "sha256:...",
-    budgetMaxTokens: 1200,
-    budgetIncludedBlocks: ["facts", "procedures"],
-    budgetTrimmedBlocks: ["facts"],
-    budgetDroppedBlocks: ["episodes"],
-  },
-}
-```
-
-The corresponding `memory.snapshot` preview carries the same render decision in a UI-friendly shape:
-
-```ts
-{
-  kind: "memory.snapshot",
-  memoryType: "memory",
-  operation: "render",
-  budget: {
-    maxTokens: 1200,
-    usedTokens: 1184,
-    includedBlocks: ["facts", "procedures"],
-    trimmedBlocks: ["facts"],
-    droppedBlocks: ["episodes"],
-  },
-}
-```
-
-Proposal writes also carry review state. A proposed fact write appears with `writeMode: "propose"` and `proposalStatus: "pending"`; approval or rejection updates the proposal record and later write observations can show `proposalStatus: "approved"` or `"rejected"` when that state is available.
+Every memory read, write, and budgeted render is observable: [devtools](/docs/guides/observability/devtools) groups activity in the Memory Explorer, including which blocks were included, trimmed, or dropped by the budget. See the [memory reference](/docs/reference/crux-core/memory#observability) for the span attributes, snapshot shape, and proposal review states.
 
 ## Embeddings
 
@@ -278,7 +263,7 @@ Read [Embeddings](/docs/guides/retrieval/embeddings) when you need the dense, sp
   <Card
     title="Facts and procedures"
     description="Long-term extracted knowledge and operating memory."
-    href="/docs/guides/memory/semantic"
+    href="/docs/guides/memory/facts-procedures"
   />
   <Card
     title="Storage"

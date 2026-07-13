@@ -3,6 +3,8 @@ title: Routing
 description: Choose, retry, split, escalate, and fail over between models with one receipt.
 ---
 
+Your primary provider starts returning 429s the morning you launch. Your best model is too expensive for easy support tickets. You want to send 5% of traffic to a new model before trusting it with everything. Routing covers all three with five composable primitives.
+
 Routing primitives are model values. Pass them as the `model` option to `generate()` or `stream()`, and Crux resolves them to one concrete provider model before the adapter call.
 
 ```package-install
@@ -91,17 +93,7 @@ The same receipt is available on stream completions and routing errors such as `
 
 ## Project Index
 
-The Project Index records authored routing definitions and folded child rows:
-
-| Definition         | Children                  |
-| ------------------ | ------------------------- |
-| `routing.router`   | `routing.router.route`    |
-| `routing.split`    | `routing.split.route`     |
-| `routing.retry`    | `routing.retry.target`    |
-| `routing.cascade`  | `routing.cascade.tier`    |
-| `routing.fallback` | `routing.fallback.option` |
-
-Stable `id` values let runtime spans, receipts, decision reports, and indexed source definitions join reliably.
+The Project Index records every authored routing definition with its folded child rows, and stable `id` values join those definitions to runtime spans, receipts, and decision reports: see [Routing definitions and catalog facts](/docs/reference/crux-core/project-index#routing-definitions-and-catalog-facts).
 
 <Cards>
   <Card

@@ -3,40 +3,11 @@ title: Observability context propagation
 description: How observability context and parentSpanId flow through your agents, flows, and across serverless action boundaries.
 ---
 
-When you run an agent that delegates work — to a subagent, a flow step, a parallel branch — the resulting run graph should reflect what actually happened: each child span nests under the specific span that triggered it. Getting that hierarchy right under concurrency, async fan-out, and serverless function boundaries (Convex, edge workers, Lambda) is the job of observability-context propagation.
+When you run an agent that delegates work, to a subagent, a flow step, a parallel branch, the resulting run graph should reflect what actually happened: each child span nests under the specific span that triggered it. Getting that hierarchy right under concurrency, async fan-out, and serverless function boundaries (Convex, edge workers, Lambda) is the job of observability-context propagation.
 
-Crux models this on W3C `traceparent`: every span records `parentSpanId` when it is created. The Go backend parents the child directly under that span — no heuristics, no time-window guessing.
+## Span hierarchy works automatically
 
-When one workflow intentionally owns several run roots, pass `traceId` to `observe.openRun()` for the child roots. Quality uses this for evaluation traces: the `eval.run` umbrella and every `eval.case` run share one trace while staying separate runs.
-
-## The contract
-
-Three rules keep the tree correct end-to-end:
-
-### 1. Boundary primitives open an observed span
-
-Every primitive that opens a boundary in the run graph — `tool`, `delegate`, `flow`, `handoff`, `composition`, `retrieval`, `embedding`, `compaction` — records a canonical span through `@use-crux/core/observability`:
-
-```ts
-import { observe } from '@use-crux/core/observability'
-
-return observe.span({
-  name: 'delegate',
-  primitive: 'delegate.invoke',
-  attributes: { delegateId },
-}, async () => {
-  const result = await execute(...)
-  return result
-})
-```
-
-`observe.span()` creates the `span:start` and `span:end` records, pushes the span id onto the active observability context for the duration of `fn`, and records errors automatically.
-
-You don't normally write this yourself — the built-in primitives do it. Only when authoring a **custom** boundary primitive do you need to follow the pattern.
-
-### 2. New runs and spans capture the current parent at creation
-
-The canonical observability runtime reads the active span stack when a `run` or `span` starts and writes the deepest open span as `parentSpanId` on `span:start`:
+You don't normally write any of this yourself. Every built-in boundary primitive (`tool`, `delegate`, `flow`, `handoff`, `composition`, `retrieval`, `embedding`, `compaction`) already records a canonical span, and every new span captures the currently active span as its `parentSpanId` at creation:
 
 ```ts
 import { observe } from '@use-crux/core/observability'
@@ -48,9 +19,15 @@ await observe.span({ name: 'handoff', primitive: 'handoff.prepare' }, async () =
 })
 ```
 
-In-process this works automatically via AsyncLocalStorage. You don't write code for this unless you are authoring a custom boundary primitive.
+In-process this works via AsyncLocalStorage, modeled on W3C `traceparent`: the backend parents the child directly under the recorded span, no heuristics, no time-window guessing. When AsyncLocalStorage is not available, such as in browser-like or edge runtimes, Crux still records run lifecycles and synchronous `withContext()` spans. Contextless `observe.event()`, `observe.artifact()`, and `observe.edge()` calls are skipped and counted in `observabilityDiagnostics().contextlessRecords` instead of throwing.
 
-When AsyncLocalStorage is not available, such as in browser-like or edge runtimes, Crux still records run lifecycles and synchronous `withContext()` spans. Contextless `observe.event()`, `observe.artifact()`, and `observe.edge()` calls are skipped and counted in `observabilityDiagnostics().contextlessRecords` instead of throwing.
+The full three-rule propagation contract and what the backend does with the records are documented in the [Observability reference](/docs/reference/crux-core/observability#context-propagation-contract).
+
+That leaves two things you actually do by hand: share a `traceId` across intentionally separate run roots, and pack/unpack context across serverless boundaries.
+
+## Share a traceId across multiple run roots
+
+When one workflow intentionally owns several run roots, pass `traceId` to `observe.openRun()` for the child roots. Quality uses this for evaluation traces: the `eval.run` umbrella and every `eval.case` run share one trace while staying separate runs.
 
 Correlators ride on the same context machinery but do not define execution parentage. Use
 `propagateAttributes({ sessionId, userId, metadata }, fn)` to group records by session or user
@@ -68,9 +45,9 @@ await propagateAttributes(
 Every record emitted inside the callback carries `sessionId` and `userId`. Metadata appears as
 attributes named `meta.plan`, `meta.<key>`, and so on, with values capped for transport safety.
 
-### 3. Cross-boundary transports pack and unpack the context explicitly
+## Pack and unpack context across serverless boundaries
 
-`AsyncLocalStorage` does **not** survive process boundaries — `ctx.runAction()` in Convex, edge-worker `fetch()`, AWS Lambda invocation, an HTTP call to another service. Cross-boundary transports must pack the captured observability context into the call payload and the receiving side must restore it before any SDK call.
+`AsyncLocalStorage` does **not** survive process boundaries, `ctx.runAction()` in Convex, edge-worker `fetch()`, AWS Lambda invocation, an HTTP call to another service. Cross-boundary transports must pack the captured observability context into the call payload and the receiving side must restore it before any SDK call.
 
 **`@use-crux/convex/server` does this automatically:**
 
@@ -111,25 +88,11 @@ export const runResearch = internalAction({
 
 The receiving side **must** seed the context before any SDK call. Anything that runs before the seed will record `parentSpanId: undefined` and fall back to inference.
 
-For scheduled serverless workflows that resume in a later invocation, do not persist `run.captureContext()` and restore it with `observe.withContext()` — `withContext()` is context-only and never resumes, suspends, or ends a run. A logical run that suspends across a physical worker boundary needs an explicit lifecycle owner: call `run.suspend({ reason })` (or `openedRun.suspend(...)`) to close the current execution segment and get back a serializable `CruxPropagationCarrier`, persist that carrier with your workflow state, and call `observe.resumeRun(carrier, { reason })` in the resumed worker to open a fresh segment on the same logical run before any child span/event records. Only the segment that actually completes the operation calls `.end()` / `.error()`. `@use-crux/convex` uses this shape for multi-action swarm runs (`packages/convex/src/swarm.ts`) so a resumed turn continues the same run in a new segment instead of either starting an unrelated run or reviving a stale in-memory context.
+For scheduled serverless workflows that resume in a later invocation, do not persist `run.captureContext()` and restore it with `observe.withContext()`, `withContext()` is context-only and never resumes, suspends, or ends a run. A logical run that suspends across a physical worker boundary needs an explicit lifecycle owner: call `run.suspend({ reason })` (or `openedRun.suspend(...)`) to close the current execution segment and get back a serializable `CruxPropagationCarrier`, persist that carrier with your workflow state, and call `observe.resumeRun(carrier, { reason })` in the resumed worker to open a fresh segment on the same logical run before any child span/event records. Only the segment that actually completes the operation calls `.end()` / `.error()`. `@use-crux/convex` uses this shape for multi-action swarm runs (`packages/convex/src/swarm.ts`) so a resumed turn continues the same run in a new segment instead of either starting an unrelated run or reviving a stale in-memory context.
 
-Detail-only spans can pass `implicitRun: false` when they should enrich an existing trace but must not create a standalone run. Router and cascade resolution use this so direct generations are not mislabeled as `router.resolve`; inside an active run those spans are still fully recorded and inspectable.
+## Advanced: authoring a custom boundary primitive
 
-## What the backend does with this
-
-The CLI/devtools backend builds the run graph from canonical records:
-
-1. `run:start` / `run:end` define the initiating run.
-2. `span:start` / `span:end` define timed work with `spanId` and `parentSpanId`.
-3. `span:event` records point-in-time details inside a span.
-4. `artifact` records carry bounded payload previews or references.
-5. `edge` records carry non-tree relationships such as handoff payloads, delegated invocations, retrieval results, citations, feedback, or replay links.
-
-Once every boundary primitive in your stack uses `observe.span()` and every async-context boundary propagates the captured context, sibling, parent-child, and many-to-many relationships can be rendered without client-side inference.
-
-## Authoring a custom boundary primitive
-
-If you build a primitive that wraps user work in a span the timeline should show, follow this template:
+Only when you build a primitive that wraps user work in a span the timeline should show do you need to write the span yourself. Follow this template:
 
 ```ts
 import { observe } from '@use-crux/core/observability'
@@ -145,6 +108,8 @@ export async function myBoundary<T>(input: Input, fn: () => Promise<T>): Promise
   )
 }
 ```
+
+`observe.span()` creates the `span:start` and `span:end` records, pushes the span id onto the active observability context for the duration of `fn`, and records errors automatically.
 
 For non-lexical lifetimes, use `observe.openSpan()`:
 
@@ -172,9 +137,11 @@ try {
 
 Custom primitive records must use canonical primitive names where possible, or `custom.operation` for app-specific work. The runtime derives span family from the primitive. The `span:start` and `span:end` records share the same span id; the Go backend uses that id to pair lifecycle records and resolve children that name this span as their parent.
 
+Detail-only spans can pass `implicitRun: false` when they should enrich an existing trace but must not create a standalone run. Router and cascade resolution use this so direct generations are not mislabeled as `router.resolve`; inside an active run those spans are still fully recorded and inspectable.
+
 ## Troubleshooting
 
-**My delegated child span shows up as a sibling, not a child.** Either (a) the spawning primitive doesn't emit a canonical span yet, (b) the async-context boundary loses the captured observability context, or (c) the receiving handler runs SDK code _before_ restoring context. Search for `parentSpanId` in the `span:start` record — if absent, the SDK never saw the parent.
+**My delegated child span shows up as a sibling, not a child.** Either (a) the spawning primitive doesn't emit a canonical span yet, (b) the async-context boundary loses the captured observability context, or (c) the receiving handler runs SDK code _before_ restoring context. Search for `parentSpanId` in the `span:start` record, if absent, the SDK never saw the parent.
 
 **Two adjacent spans both have `parentSpanId` but only one nests correctly.** Confirm the parent span exists in the same run graph and that the receiving side restored context before opening child spans.
 

@@ -849,7 +849,7 @@ Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 
 | Import                           | Area                                                                                                                                                                        |
 | -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `@use-crux/core`                 | Prompts, contexts, config, runtime helpers, common types.                                                                                                                   |
+| `@use-crux/core`                 | Prompts, contexts, config, runtime helpers, prompt-injection defense helpers (`safe`, `escapeXml`, `detectSuspiciousPatterns`), common types.                                |
 | `@use-crux/core/memory`          | Memory blocks, stores, capture, recall, and compaction hooks.                                                                                                               |
 | `@use-crux/core/retrieval`       | Retrievers, rerankers, grounding inputs, and RAG pipelines.                                                                                                                 |
 | `@use-crux/core/safety`          | Guardrails, constraints, safety plugins, and validation retry.                                                                                                              |

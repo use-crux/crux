@@ -3,11 +3,11 @@ title: Storage, Memory, Workspaces
 description: Use Convex Storage Beta adapters, memory blocks, blackboards, and Convex file storage from Convex functions.
 ---
 
-# Storage, Memory, Workspaces
-
-`convexRecordStore()` creates Convex-backed Crux records for memory, blackboards, plans, prompt cache entries, flow state, task state, and workspace metadata. Use `convexStorage()` when a feature also needs vectors or assets.
+Your agent's memory blocks, blackboards, plans, flow state, and workspace files need somewhere durable to live. If your app runs on Convex, `convexRecordStore()` keeps all of that Crux state in your Convex deployment, and `convexStorage()` adds vector search and file assets when a feature needs them.
 
 ## Shared Records
+
+Define one helper and reuse it everywhere a Crux primitive asks for records:
 
 ```ts title="convex/crux/storage.ts"
 import type { ActionCtx, MutationCtx } from "../_generated/server";
@@ -19,36 +19,11 @@ export function cruxRecords(ctx: ActionCtx | MutationCtx) {
 }
 ```
 
-The adapter writes current Crux records as `_cruxDoc` documents in the component `memories` table. TTL is stored in the JSON payload as `_expiresAt`; imperative reads hide expired records and clean them up lazily.
-
-The component query boundary stays Convex-native: `components.crux.memory.list` reads the `by_key` index with `prefix`, `limit`, and `cursor`, then returns `{ docs, cursor }`. Decoding, TTL suppression, dense vector score shaping, and top-level decoded-value filters stay in the shared store-document policy. Filtered `list()` calls with a `limit` read additional component pages until they can return up to that many matching entries.
-
-The same document boundary powers the HTTP devtools bridge and Convex React transport, so list filters, dense vector scores, expired-record behavior, and strict decoding stay consistent across server actions and reactive UI reads.
-
-For contract tests that should exercise server writes and React reads together, use
-`createInMemoryConvexStoreDocumentComponent()` instead of mocking individual
-component functions. It provides a local component, `ctx`, and `useQuery`
-substitute backed by one record set:
-
-```ts
-import {
-  convexRecordStore,
-  createInMemoryConvexStoreDocumentComponent,
-  createConvexTransport,
-} from "@use-crux/convex";
-
-const component = createInMemoryConvexStoreDocumentComponent();
-
-const records = convexRecordStore({ component, ctx: component.ctx });
-const transport = createConvexTransport({
-  api: component.refs,
-  useQuery: component.useQuery,
-});
-```
+Every example below passes `cruxRecords(ctx)` where a store is required. For the underlying document encoding, TTL and filter semantics, the component query boundary, and the in-memory test component (`createInMemoryConvexStoreDocumentComponent()`), see the [`@use-crux/convex` reference](/docs/reference/storage/convex).
 
 ## Memory Blocks
 
-Memory blocks do not need Convex-specific definitions. They need a durable store and a namespace.
+Memory blocks work unchanged on Convex. Give them the durable store and a namespace:
 
 ```ts title="convex/agent/memory.ts"
 import { episodes, facts, memory, workingState } from "@use-crux/convex/memory";

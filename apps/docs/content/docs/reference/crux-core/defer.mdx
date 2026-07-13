@@ -1,6 +1,6 @@
 ---
 title: defer()
-description: Request-scoped deferred work API — inline callbacks and named Runtime targets.
+description: Request-scoped deferred work API, inline callbacks and named Runtime targets.
 ---
 
 ```ts
@@ -32,10 +32,10 @@ they do not fail an already-committed response.
 
 Throws:
 
-- `DEFER_SCOPE_REQUIRED` — no active scope
-- `DEFER_CAPABILITY_MISSING` — scope lacks inline support
-- `DEFER_SCOPE_SEALED` / `DEFER_LIMIT_EXCEEDED` — lifecycle bounds
-- `DEFER_REPLAY_UNSAFE` — inside replayable flow execution
+- `DEFER_SCOPE_REQUIRED`: no active scope
+- `DEFER_CAPABILITY_MISSING`: scope lacks inline support
+- `DEFER_SCOPE_SEALED` / `DEFER_LIMIT_EXCEEDED`: lifecycle bounds
+- `DEFER_REPLAY_UNSAFE`: inside replayable flow execution
 
 ## `defer(target, input)`
 
@@ -78,6 +78,39 @@ Internal first-party SPI (not application API):
 - `@use-crux/core/internal/defer-host`
 - `@use-crux/core/internal/defer-lifecycle`
 
+## Host lifetime semantics
+
+### Completion classes
+
+Each host lifetime declares a completion class describing when inline deferred
+callbacks may start relative to the response:
+
+- `response-finished`: callbacks start only after the response has fully
+  finished (Node HTTP via `withNodeDefer`, Next.js via `after()`, per-process
+  multiprocess Node hosts).
+- `handler-returned`: callbacks may start as soon as the handler returns, and
+  may overlap a still-streaming response body (`waitUntil`-based hosts such as
+  Vercel Functions and Cloudflare Workers).
+- Named-only lifetimes (Lambda `withNamedOnlyDefer`, Convex bridge runs) have
+  no inline completion class; inline `defer(callback)` throws
+  `DEFER_CAPABILITY_MISSING`.
+
+### `durableFinalization` advertisement
+
+A host lifetime advertises `durableFinalization: true` only when it can await
+the named-defer commit barrier before committing the response. Named
+`await defer(target, input)` requires a configured Runtime plus a lifetime
+advertising durable finalization; raw Node hosts advertise
+`durableFinalization: false` unless the wrapper opts in (for example
+`withNamedOnlyDefer(handler, { durableFinalization: true })`).
+
+### Capability is explicit, never inferred
+
+Never infer host correctness from environment variable names (`VERCEL`, etc.).
+Capability comes only from the wrapper or platform hook that is explicitly
+installed (`waitUntil`, `after`, a lifetime port); an installed package or a
+recognizable environment alone is not treated as proof of a working lifetime.
+
 ## Diagnostics
 
 | Code | Docs |
@@ -98,7 +131,7 @@ Observed drain outcomes (not always thrown to the handler):
 
 ## Related
 
-- Guide: [Request-scoped defer](/docs/guides/defer)
-- Guide: [Hosts](/docs/guides/defer/hosts)
+- Guide: [Request-scoped defer](/docs/guides/background-work)
+- Guide: [Hosts](/docs/guides/background-work/hosts)
 - Reference: [Runtime Engine](/docs/reference/crux-core/runtime-engine)
 - Reference: [Flows](/docs/reference/crux-core/flow)

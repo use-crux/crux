@@ -5,21 +5,12 @@ description: Use adapter codecs, prepare/step/finish handles, or transport callb
 
 import { Callout } from "fumadocs-ui/components/callout";
 
-Crux adapters have four execution rungs. They all share the same prompt
-resolution, tool policy, validation, safety, memory, and observability pipeline;
-they only differ in who makes the provider call.
-
-| Rung        | You own                              | Crux owns                                                                                            | Use it when                                                                                  |
-| ----------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Codecs      | Control flow and provider wire calls | Translation only                                                                                     | You already have a custom loop and only need request/response conversion                     |
-| Handle      | Control flow and provider wire calls | Tool protocol, approvals, validation directives, typed tool context, memory, cost, and observability | You need a sans-I/O state machine for tests, queues, or nonstandard HTTP clients             |
-| `transport` | The wire callback                    | The full loop, including routing and timeouts                                                        | You want Crux to orchestrate while a proxy, recorder, or custom client performs each request |
-| Managed     | Nothing                              | Everything                                                                                           | You want the normal `generate()` or `stream()` path                                          |
-
-## Codecs
-
-Every first-party generation adapter exports `toParams()` and `fromResponse()`.
-They are translation helpers only.
+Sometimes you want Crux's prompt, tool, and safety pipeline but need to make the
+provider HTTP call yourself: a proxy that signs requests, a recorder that
+captures traffic, a queue that schedules calls, or a test harness that replays
+fixtures. Crux supports this without forking the pipeline. At the lightest
+level, every first-party adapter exports codecs that translate between resolved
+prompts and provider wire formats:
 
 ```ts
 const params = toParams(resolvedPrompt, {
@@ -30,6 +21,22 @@ const params = toParams(resolvedPrompt, {
 const response = await client.chat.completions.create(params);
 const facts = fromResponse(response);
 ```
+
+From there, Crux adapters have four execution rungs. They all share the same
+prompt resolution, tool policy, validation, safety, memory, and observability
+pipeline; they only differ in who makes the provider call.
+
+| Rung        | You own                              | Crux owns                                                                                            | Use it when                                                                                  |
+| ----------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| Codecs      | Control flow and provider wire calls | Translation only                                                                                     | You already have a custom loop and only need request/response conversion                     |
+| Handle      | Control flow and provider wire calls | Tool protocol, approvals, validation directives, typed tool context, memory, cost, and observability | You need a sans-I/O state machine for tests, queues, or nonstandard HTTP clients             |
+| `transport` | The wire callback                    | The full loop, including routing and timeouts                                                        | You want Crux to orchestrate while a proxy, recorder, or custom client performs each request |
+| Managed     | Nothing                              | Everything                                                                                           | You want the normal `generate()` or `stream()` path                                          |
+
+## Codecs
+
+Every first-party generation adapter exports `toParams()` and `fromResponse()`,
+shown above. They are translation helpers only.
 
 Use codecs when you own the loop. They do not execute tools, enforce approvals,
 validate `toolsContext`, retry structured output, write memory, or emit

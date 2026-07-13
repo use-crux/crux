@@ -3,21 +3,13 @@ title: Indexing Documents
 description: Turn documents into chunked, embedded retrieval records.
 ---
 
-Indexing is the write side of retrieval. Loaders produce documents, the indexer turns those documents into active chunks, and retrievers query those chunks later.
-
-The flow is:
+Before a retriever can answer anything, your source material has to be written somewhere searchable: split into chunks, embedded, and stored. Indexing is that write side of retrieval. Loaders produce documents, the indexer turns those documents into active chunks, and retrievers query those chunks later.
 
 ```txt
 loader.load() -> indexer.indexDocuments() -> chunker -> embedding() -> RecordStore + VectorStore
 ```
 
-In production you usually call that through `corpus.sync()` so Crux can skip unchanged sources and delete stale ones safely:
-
-```txt
-loader.load() -> corpus.sync() -> indexer() -> RecordStore + VectorStore
-```
-
-Use indexing when you have source material that should be searchable later. Use retrieval when a user asks a question over that indexed material.
+In production you usually call the indexer through `corpus.sync()` so Crux can skip unchanged sources and delete stale ones safely.
 
 The shortest useful version looks like this. The embeddings are defined once and shared by the indexer and retriever.
 
@@ -358,7 +350,7 @@ await docsIndexer.indexChunks([
 <Cards>
   <Card
     title="Chunkers"
-    description="Pick how documents are split before embedding — structured, plain text, parent-child, semantic, or custom."
+    description="Pick how documents are split before embedding: structured, plain text, parent-child, semantic, or custom."
     href="/docs/guides/retrieval/chunkers"
   />
   <Card

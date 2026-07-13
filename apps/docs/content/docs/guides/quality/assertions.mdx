@@ -3,9 +3,10 @@ title: Assertions
 description: Evaluation-level expect callbacks, Vitest-style matchers, and trace-backed signal assertions that fail honestly.
 ---
 
-Level 2 adds `expect:` — an assertion callback that runs for **every case**.
-It receives the case's full context and a bound, capability-typed `expect`
-surface:
+Scorers tell you how good an answer is; assertions tell you what is flatly
+wrong for a specific case. Add `expect:`, an assertion callback that runs for
+**every case**. It receives the case's full context and a bound,
+capability-typed `expect` surface:
 
 ```ts
 export default evaluate({
@@ -20,11 +21,11 @@ export default evaluate({
 })
 ```
 
-The evaluation-level callback is the primary assertion home — in practice
+The evaluation-level callback is the primary assertion home: in practice
 ~90% of per-case assertions are the same structure repeated, so write them
 once here. Cases may also carry their own `expect` for genuinely
 case-specific checks (evaluation-level runs first; both report
-independently). Cases with callbacks are not portable to datasets — keep
+independently). Cases with callbacks are not portable to datasets: keep
 case `expect` the exception.
 
 Use `afterScores:` when a check needs scorer results. It runs after all scorers,
@@ -53,13 +54,13 @@ export default evaluate({
 | Field                               | What it is                                                                            |
 | ----------------------------------- | ------------------------------------------------------------------------------------- |
 | `ctx.input` / `ctx.output`          | Typed from the task (zod schemas for prompts, signature for fns)                      |
-| `ctx.expected`                      | The case's `expected` payload, or `undefined` — opaque data, never matched implicitly |
+| `ctx.expected`                      | The case's `expected` payload, or `undefined`: opaque data, never matched implicitly |
 | `ctx.expect`                        | The bound assertion surface (below)                                                   |
 | `ctx.variant`                       | `{ name, params }` of the variant this cell ran under                                 |
 | `ctx.trial`                         | 0-based trial index                                                                   |
-| `ctx.recordScore(name, score, metadata?)` | Ad-hoc per-case score (0–1) — joins the same score model as scorers                   |
+| `ctx.recordScore(name, score, metadata?)` | Ad-hoc per-case score (0–1): joins the same score model as scorers                   |
 | `ctx.step(name, schema?)`           | Flow/agent step access with Standard Schema narrowing                                 |
-| `ctx.trace`                         | `{ id, url }` — the devtools deep link for this cell                                  |
+| `ctx.trace`                         | `{ id, url }`: the devtools deep link for this cell                                  |
 | `ctx.meta`                          | `{ durationMs, costUsd, usage }`                                                      |
 
 ## The post-score `afterScores` context
@@ -91,7 +92,7 @@ failure messages.
 `toBeNull`, `toBeTruthy`, `toBeFalsy`, `toBeOneOf`, `toBeInstanceOf`,
 `toBeTypeOf`, `toSatisfy`, and `.not`.
 
-Assertions **throw** on failure (Vitest semantics — later lines may rely on
+Assertions **throw** on failure (Vitest semantics: later lines may rely on
 earlier assertions having passed). The engine records every assertion that
 ran, so reports show position: `3 ran · 2 not evaluated`. New experiment
 records also include `assertions.outcomes`, an ordered ledger of passed,
@@ -139,12 +140,12 @@ expect: (ctx) => {
 ```
 
 All assertion outcomes lower into a per-cell `pass` score (`1` all passed,
-`0` any failed) — the default gate policy and `passRate` gates read it.
+`0` any failed): the default gate policy and `passRate` gates read it.
 
-## Signal namespaces — trace-backed, honest
+## Asserting on traces (tool calls, routing, safety)
 
 The differentiator: assertions over what the execution actually **did**, read
-from the observability trace — not guessed from output shapes.
+from the observability trace, not guessed from output shapes.
 
 Three namespaces always exist:
 
@@ -186,7 +187,7 @@ ctx.expect.modelCalls.count().toBeLessThanOrEqual(3)
 ```
 
 For trajectory assertions, prefer the outcome-first modes (`'subset'`,
-`'superset'`) over `'strict'`/`'unordered'` — exact trajectories are brittle;
+`'superset'`) over `'strict'`/`'unordered'`: exact trajectories are brittle;
 reserve `strict` for hard protocol checks.
 
 ## Decision report assertions
@@ -253,7 +254,7 @@ changing the machine contract.
 
 **Honest failure semantics:** asserting on a signal that was _not captured in
 this execution_ throws an `UncapturedSignalError` naming the signal and which
-task kinds capture it — never a vacuous pass. The type system prevents most
+task kinds capture it, never a vacuous pass. The type system prevents most
 of these at compile time; the runtime backstop covers variant task
 substitution and conditional capture.
 
@@ -276,5 +277,5 @@ expect: (ctx) => {
 
 ## Next
 
-[Scorers & gates](/docs/guides/quality/scorers-and-gates) — graded measures
+[Scorers & gates](/docs/guides/quality/scorers-and-gates): graded measures
 on top of binary assertions.

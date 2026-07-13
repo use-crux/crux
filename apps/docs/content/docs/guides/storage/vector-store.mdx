@@ -16,38 +16,6 @@ const vectors = inMemoryVectorStore()
 const appStorage = storage({ records, vectors })
 ```
 
-## Interface
-
-```ts
-import type { VectorStore } from '@use-crux/core/storage'
-
-const vectors: VectorStore = {
-  async upsert(records) {
-    // records: { key, dense?, sparse?, metadata? }[]
-  },
-
-  async delete(keys) {
-    // delete vector records by key
-  },
-
-  async search(query) {
-    // query.mode is 'dense', 'sparse', or 'hybrid'
-    return []
-  },
-
-  capabilities() {
-    return {
-      dense: true,
-      sparse: false,
-      hybrid: false,
-      fusion: [],
-      filter: 'pre',
-      consistency: 'strong',
-    }
-  },
-}
-```
-
 `search()` returns keys and scores. Crux hydrates full records through `RecordStore` when it needs document content or metadata.
 
 ## Dense, Sparse, Hybrid
@@ -170,7 +138,39 @@ See [Retrieval](/docs/guides/retrieval) for the user-facing retrieval APIs, [Ups
 
 ## Custom VectorStore
 
-Implement `VectorStore` when your vector database can upsert records by key and search them by dense, sparse, or hybrid query.
+Implement `VectorStore` when your vector database can upsert records by key and search them by dense, sparse, or hybrid query. This is the full contract:
+
+```ts
+import type { VectorStore } from '@use-crux/core/storage'
+
+const vectors: VectorStore = {
+  async upsert(records) {
+    // records: { key, dense?, sparse?, metadata? }[]
+  },
+
+  async delete(keys) {
+    // delete vector records by key
+  },
+
+  async search(query) {
+    // query.mode is 'dense', 'sparse', or 'hybrid'
+    return []
+  },
+
+  capabilities() {
+    return {
+      dense: true,
+      sparse: false,
+      hybrid: false,
+      fusion: [],
+      filter: 'pre',
+      consistency: 'strong',
+    }
+  },
+}
+```
+
+A vector-database-backed implementation:
 
 ```ts
 import type { VectorStore } from '@use-crux/core/storage'

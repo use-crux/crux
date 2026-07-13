@@ -16,14 +16,14 @@ This recipe builds a workflow that proposes a plan, suspends for human review, a
 
 - The agent's plan needs **human approval** before consequential action
 - The wait between plan and approval may be **minutes to days**
-- You want **server resources released** during the wait — no spinning
+- You want **server resources released** during the wait, no spinning
 
 ## Full code
 
 ### Backend
 
 ```ts
-import { plan, updatePlan } from '@use-crux/core/plan'
+import { plan } from '@use-crux/core/plan'
 import { flow } from '@use-crux/core/flow'
 import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
@@ -73,15 +73,15 @@ const writerFlow = flow('writer-flow', async (flow) => {
 
 ```ts
 import { signalFlow } from '@use-crux/core/flow'
-import { updatePlan } from '@use-crux/core/plan'
+import { plan } from '@use-crux/core/plan'
 
 export async function approvePlan(planId: string, flowId: string, revisions?: string) {
-  await updatePlan(planId, { metadata: { status: 'approved' } })
+  await plan.ref(planId).update({ metadata: { status: 'approved' } })
   await signalFlow(flowId, 'await-approval', { approved: true, revisions })
 }
 
 export async function rejectPlan(planId: string, flowId: string) {
-  await updatePlan(planId, { metadata: { status: 'rejected' } })
+  await plan.ref(planId).update({ metadata: { status: 'rejected' } })
   await signalFlow(flowId, 'await-approval', { approved: false })
 }
 ```
@@ -113,7 +113,7 @@ export function PlanReview({ planId, flowId }: { planId: string; flowId: string 
 1. **The flow drafts the plan and persists it.** The plan document lives in `RecordStore`; the UI subscribes via `usePlan()` and re-renders when the content changes.
 2. **`flow.suspend('await-approval', { schema, timeout })` releases the server.** The flow's state is checkpointed; nothing runs until a signal arrives. The schema validates the signal payload on resume.
 3. **The mutation signals the flow.** `signalFlow(flowId, name, payload)` writes to the store; on Convex, schedule the resume action from an app-local signal helper.
-4. **The flow resumes from after `suspend()`.** Earlier `flow.step()` results are cached — only the post-suspend work re-runs.
+4. **The flow resumes from after `suspend()`.** Earlier `flow.step()` results are cached: only the post-suspend work re-runs.
 
 ## Variations
 

@@ -1,6 +1,6 @@
 ---
 title: '@use-crux/otel'
-description: OpenTelemetry integration — spans for every instrumented Crux event.
+description: OpenTelemetry integration, spans for every instrumented Crux event.
 ---
 
 ```ts
@@ -28,8 +28,8 @@ config({
 | Field | Type | Default | Description |
 | --- | --- | --- | --- |
 | `serviceName` | `string` | `'@use-crux/otel'` | Tracer name for span identification |
-| `attributes` | `Record<string, string>` | — | Custom attributes added to every span |
-| `exporter` | `UrlExporter \| CallbackExporter` | — | Export strategy. Omit for standard OTel TracerProvider path |
+| `attributes` | `Record<string, string>` | n/a | Custom attributes added to every span |
+| `exporter` | `UrlExporter \| CallbackExporter` | n/a | Export strategy. Omit for standard OTel TracerProvider path |
 | `captureMessageContent` | `boolean` | `false` | Export GenAI input/output message attributes |
 | `semconvVersion` | `'genai-dev-2026-06'` | current table | Forward compatibility knob for semconv names |
 | `baggageAttributeAllowlist` | `readonly string[]` | unset | Baggage keys copied onto resumed root spans as `crux.baggage.*` |
@@ -107,7 +107,7 @@ See the [telemetry guide](/docs/guides/observability/telemetry#active-span-bridg
 
 ### `createUrlExporter(options)`
 
-Creates a `SpanExporter` that POSTs span batches to a URL. Fire-and-forget with 5-second timeout — failures are silently ignored.
+Creates a `SpanExporter` that POSTs span batches to a URL. Fire-and-forget with 5-second timeout, failures are silently ignored.
 
 ```ts
 const exporter = createUrlExporter({

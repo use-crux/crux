@@ -3,7 +3,7 @@ title: Swarm
 description: Dynamic peer-to-peer agent routing where the LLM decides which agent handles the next turn.
 ---
 
-`swarm()` runs a network of agents where each agent can hand off control to another by calling a `transfer_to_<id>` tool. The LLM decides when and where to route — no routing logic in your code. Use it for dynamic multi-specialist workflows like customer support triage, sales qualification, or content production pipelines where the path isn't fixed.
+`swarm()` runs a network of agents where each agent can hand off control to another by calling a `transfer_to_<id>` tool. The LLM decides when and where to route, no routing logic in your code. Use it for dynamic multi-specialist workflows like customer support triage, sales qualification, or content production pipelines where the path isn't fixed.
 
 ```ts title="support-routing.ts"
 import { swarm, agent } from '@use-crux/ai'
@@ -52,13 +52,13 @@ result.handoffCount // 2
 
 Each `transfer_to_<id>` tool has two parameters:
 
-- `reason` — why the handoff is happening (e.g., "customer has a billing issue")
-- `context` — what the next agent needs to know (e.g., "customer was charged twice on order #1234")
+- `reason`: why the handoff is happening (e.g., "customer has a billing issue")
+- `context`: what the next agent needs to know (e.g., "customer was charged twice on order #1234")
 
 The target agent's `description` field is used in the transfer tool's description, helping the LLM make good routing decisions.
 
 <Callout type="warn">
-  Agents can only hand off to targets listed in their `handoffs` array. This is validated when `swarm()` starts — all
+  Agents can only hand off to targets listed in their `handoffs` array. This is validated when `swarm()` starts, all
   handoff targets must exist in the `agents` map.
 </Callout>
 
@@ -79,7 +79,7 @@ const triage = agent({
 })
 ```
 
-The `when` string is appended to the transfer tool's description (`"Hand off to billing: Handles billing issues. Use when: Customer has a billing or payment issue"`). This is prompt-level guidance — it doesn't programmatically gate the handoff. Mix strings and objects freely in the same array.
+The `when` string is appended to the transfer tool's description (`"Hand off to billing: Handles billing issues. Use when: Customer has a billing or payment issue"`). This is prompt-level guidance, it doesn't programmatically gate the handoff. Mix strings and objects freely in the same array.
 
 ## Tool filtering
 
@@ -128,7 +128,7 @@ When agent A hands off to agent B, what does B receive as input? This is control
 
 ### transfer-only (default)
 
-Agent B gets the original input plus handoff metadata. Clean and cheap — the LLM naturally summarizes what B needs to know in the transfer tool's `context` parameter.
+Agent B gets the original input plus handoff metadata. Clean and cheap, the LLM naturally summarizes what B needs to know in the transfer tool's `context` parameter.
 
 ```ts
 await swarm({
@@ -196,7 +196,7 @@ Before threshold: raw `_previousOutput` is passed. After threshold: `_previousOu
 
 ## Cost tracking
 
-Swarms multiply API costs — each handoff is another LLM call. Track costs and abort if needed:
+Swarms multiply API costs, each handoff is another LLM call. Track costs and abort if needed:
 
 ```ts title="cost-control.ts"
 await swarm({
@@ -211,7 +211,7 @@ await swarm({
 
 `onCost` fires after each agent execution with accumulated usage across all agents. `abort()` stops the swarm cleanly and returns the last agent's result.
 
-**Dry run** — estimate costs without calling LLMs:
+**Dry run**, estimate costs without calling LLMs:
 
 ```ts
 const estimate = await swarm({
@@ -250,7 +250,7 @@ try {
 
 ### maxSteps
 
-Controls how many tool-use steps each agent can take per turn (default: `5`). This is separate from `maxHandoffs` — it limits the agent's internal tool loop, not the handoff chain. If an agent needs to call its own tools (search, database lookup) before deciding to hand off, `maxSteps` allows that.
+Controls how many tool-use steps each agent can take per turn (default: `5`). This is separate from `maxHandoffs`, it limits the agent's internal tool loop, not the handoff chain. If an agent needs to call its own tools (search, database lookup) before deciding to hand off, `maxSteps` allows that.
 
 ## Session tracking
 

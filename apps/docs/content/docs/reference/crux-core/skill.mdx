@@ -24,7 +24,7 @@ Create a skill from inline text.
 | `instructions` | `string`                  | **Required.** The skill's instruction content     |
 | `references`   | `Record<string, string>?` | Optional reference files (name -> content)        |
 
-**Returns:** `Skill` — frozen object with `_tag: 'Skill'`.
+**Returns:** `Skill`, frozen object with `_tag: 'Skill'`.
 
 ```ts
 const tone = skill.inline({
@@ -202,7 +202,18 @@ Helper for agent frameworks that manage their own tool loop (Convex Agent, Mastr
 | `resolveInput(baseInput)` | `(input) => Promise<input>`    | Enhances input with `_crux_activeSkills`     |
 | `getActiveIds()`          | `() => Promise<string[]>`      | Current active skill IDs                     |
 
-Only needed for external agent frameworks (Convex Agent, Mastra, etc.) that control their own tool loop. Not needed for `@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google`, or `@use-crux/ai` — those handle re-resolution automatically.
+Only needed for external agent frameworks (Convex Agent, Mastra, etc.) that control their own tool loop. Not needed for `@use-crux/anthropic`, `@use-crux/openai`, `@use-crux/google`, or `@use-crux/ai`, those handle re-resolution automatically.
+
+### `SkillActivationPersistence`
+
+The persistence port stores full `SkillActivationSnapshot` values (`activeSkillIds` and `injectedSkillIds`) for a target:
+
+| Method                   | Called when                                       | What it should do                                              |
+| ------------------------ | ------------------------------------------------- | -------------------------------------------------------------- |
+| `load(target)`           | Before pre-resolve and each `resolveInput()` call | Return a `SkillActivationSnapshot` or `null`                   |
+| `save(target, snapshot)` | After `LoadSkill` succeeds                        | Persist `activeSkillIds` and `injectedSkillIds` for the target |
+
+`load()` and `save()` must agree on the storage: they are called from the same conversation but at different points in the request lifecycle.
 
 See the [Agent framework integration guide](/docs/guides/skills/agent-frameworks) for a complete end-to-end example with Convex Agent.
 

@@ -3,11 +3,11 @@ title: Recipes
 description: Recommended Convex patterns and anti-patterns for Crux applications.
 ---
 
-# Convex Recipes
+Short, copyable patterns for common Crux-on-Convex situations: writing memory from mutations, putting flows behind auth, running child agent actions, and choosing between durable and immediate work.
 
-## Mutation Writes App-Specific Memory
+## Write App-Specific Memory From A Mutation
 
-Do not add app-table-specific helpers to `@use-crux/convex`. Keep them local:
+Mutations cannot run Crux actions, but they can still write memory records your app owns:
 
 ```ts title="convex/agent/memory/episodes.ts"
 interface DatabaseWriter {
@@ -49,6 +49,8 @@ await episodes({ id: "chat", embed }).record(
   { records: cruxRecords(ctx), namespace: `thread:${threadId}` },
 );
 ```
+
+Keep helpers like this local to your app instead of adding app-table-specific helpers to `@use-crux/convex`; table names, tenancy, and authorization are application policy.
 
 ## Public Flow With Auth
 

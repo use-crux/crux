@@ -17,9 +17,9 @@ Long-running chat loops eventually exceed the context window. Dropping oldest me
 
 ## When should I NOT use it?
 
-- You only need the last N messages and don't care about older ones — keep it simple, no summarizer needed
-- You need **structured data** out of older messages — use [extract key facts](/docs/guides/compaction/extraction) instead, possibly _before_ sliding-window evicts them
-- You're processing a **bounded batch** of messages — use [summarize messages](/docs/guides/compaction/summarization) one-shot
+- You only need the last N messages and don't care about older ones: keep it simple, no summarizer needed
+- You need **structured data** out of older messages: use [extract key facts](/docs/guides/compaction/extraction) instead, possibly _before_ sliding-window evicts them
+- You're processing a **bounded batch** of messages: use [summarize messages](/docs/guides/compaction/summarization) one-shot
 
 ## Quick start
 
@@ -28,7 +28,7 @@ import { generateTextFn } from "@use-crux/ai";
 import { createSlidingWindow } from "@use-crux/core/compaction";
 
 const window = createSlidingWindow({
-  id: "chat-1", // store key — same id reuses the running summary
+  id: "chat-1", // store key, same id reuses the running summary
   windowSize: 20, // keep last 20 messages verbatim
   generate: generateTextFn,
   model: cheapModel, // a fast/cheap model is fine for summarization
@@ -47,7 +47,7 @@ window.getStats();
 ```
 
 <Callout type="idea">
-  Use a cheap, fast model for `generate` here — summaries don't need your best
+  Use a cheap, fast model for `generate` here: summaries don't need your best
   model. `gpt-4o-mini`, `claude-haiku`, or `gemini-flash` keeps compaction fast
   and inexpensive.
 </Callout>
@@ -92,7 +92,7 @@ const window = createSlidingWindow({
 });
 ```
 
-The `id` becomes the record key prefix — different threads must use different ids.
+The `id` becomes the record key prefix: different threads must use different ids.
 
 ## Hooks
 
@@ -105,11 +105,11 @@ const window = createSlidingWindow({
 });
 ```
 
-`onCompactEnd` fires whenever a summarization round completes. It carries `tokensBefore`, `tokensAfter`, and `ratio` — useful for telemetry on how aggressive compaction is being.
+`onCompactEnd` fires whenever a summarization round completes. It carries `tokensBefore`, `tokensAfter`, and `ratio`, useful for telemetry on how aggressive compaction is being.
 
 ## Cost considerations
 
-Sliding window calls the LLM _only when the window overflows_. With `windowSize: 20`, summarization runs roughly every Nth turn (depending on message length). Each summarization call replaces the previous summary — there's no log-O(N) overhead.
+Sliding window calls the LLM _only when the window overflows_. With `windowSize: 20`, summarization runs roughly every Nth turn (depending on message length). Each summarization call replaces the previous summary. There's no log-O(N) overhead.
 
 For a typical chat with 5–10 sentence turns, expect summarization to fire every 15–25 turns. The cost stays bounded by `summaryBudget`.
 

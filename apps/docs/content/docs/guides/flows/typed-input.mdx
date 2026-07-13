@@ -3,7 +3,7 @@ title: Typed input and step composition
 description: Type the flow's input, share it with steps via flow.input, extract steps into reusable functions, and compose flows by nesting.
 ---
 
-`flow` infers typed input from the handler's second parameter. This lets you pass structured data into a flow at call time and access it directly in the flow body. The same input is also available on `flow.input` for reusable step helpers that receive the scope.
+You want to pass structured data into a flow at call time and keep it typed everywhere: in the flow body, in extracted step helpers, and across nested flows. `flow` infers typed input from the handler's second parameter, so you can access it directly in the flow body. The same input is also available on `flow.input` for reusable step helpers that receive the scope.
 
 ```ts
 import { flow } from '@use-crux/core'
@@ -26,12 +26,12 @@ const researchFlow = flow('research', async (flow, input: PipelineInput) => {
 const result = await researchFlow.run({ query: 'cloud migration', maxResults: 10 })
 ```
 
-## External Step Functions (Auto-Pass)
+## Reusable step functions
 
 When a step function accepts a `(flow: FlowScope)` parameter, `flow.step()` passes the flow scope automatically. This lets you extract steps into standalone functions that can access `flow.input` and `flow.results` without manual wiring:
 
 ```ts
-// External step function — receives flow automatically
+// External step function, receives flow automatically
 async function planStep(flow: FlowScope<PipelineInput>) {
   return generate(planner, { model, input: { query: flow.input.query } })
 }
@@ -45,7 +45,7 @@ await flow.step('plan', () => planStep(customArgs))
 
 The auto-pass pattern works when your step function signature is `(flow: FlowScope) => T`. If your function needs additional arguments, use the wrapper form `() => stepFn(args)`.
 
-## `flow.results` — Cross-Step Access
+## `flow.results`, Cross-Step Access
 
 After each step completes, its return value is stored in `flow.results` keyed by step name. This is useful when an external step function needs access to earlier step outputs:
 
@@ -65,7 +65,7 @@ const result = await researchFlow.run({ query: 'cloud migration', maxResults: 10
 ```
 
 <Callout type="info">
-**Prefer return-value assignment as your primary typed path.** Assigning `const plan = await flow.step('plan', ...)` gives you full type inference. Use `flow.results` as an escape hatch for external step functions that can't receive earlier step outputs as parameters — its values are typed as `Record<string, unknown>`, so you'll need type assertions.
+**Prefer return-value assignment as your primary typed path.** Assigning `const plan = await flow.step('plan', ...)` gives you full type inference. Use `flow.results` as an escape hatch for external step functions that can't receive earlier step outputs as parameters, its values are typed as `Record<string, unknown>`, so you'll need type assertions.
 </Callout>
 
 ## Nested Flows
@@ -110,10 +110,10 @@ Flow "content-pipeline"
 └── step:write        → trace-004
 ```
 
-This is useful when a step delegates to a complete sub-pipeline — the inner flow has its own retry, fallback, and tracing, while the parent flow sees it as a single step.
+This is useful when a step delegates to a complete sub-pipeline, the inner flow has its own retry, fallback, and tracing, while the parent flow sees it as a single step.
 
 ## Related
 
-- [Agent primitives in flows](/docs/guides/flows/agent-primitives) — using `handoff`, `delegate`, and `blackboard` inside steps
-- [Convex flows](/docs/guides/convex/flows) — typed input across action boundaries
-- [API reference](/docs/reference/crux-core/flow) — `FlowScope`, `FlowHandle`, `FlowResult`
+- [Agent primitives in flows](/docs/guides/flows/agent-primitives), using `handoff`, `delegate`, and `blackboard` inside steps
+- [Convex flows](/docs/guides/convex/flows), typed input across action boundaries
+- [API reference](/docs/reference/crux-core/flow), `FlowScope`, `FlowHandle`, `FlowResult`

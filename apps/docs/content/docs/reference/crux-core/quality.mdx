@@ -1,6 +1,6 @@
 ---
 title: Quality
-description: '@use-crux/core/quality — evaluate(), target, scorers, dataset(), cassette(), UncapturedSignalError, and the Experiment/Manifest/Baseline records.'
+description: '@use-crux/core/quality, evaluate(), target, scorers, dataset(), cassette(), UncapturedSignalError, and the Experiment/Manifest/Baseline records.'
 ---
 
 `@use-crux/core/quality` is the Quality system's public surface: five
@@ -56,7 +56,7 @@ records or CLI JSON.
 
 ## `evaluate(idOrOptions, options?)`
 
-Defines a runnable Evaluation. Two call forms — options only (id derived from
+Defines a runnable Evaluation. Two call forms, options only (id derived from
 the file path at discovery) or explicit id (required for baseline promotion):
 
 ```ts
@@ -72,14 +72,14 @@ optional reason via the case-level `skip: string`).
 
 | Key                         | Type / behavior                                                                                                                                                                                |
 | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `task`                      | The thing under test — the **sole inference anchor** for input/output types. Any `Prompt`, `FlowHandle`, agent, retriever, plain `(input, params) => output` function, or `target.*()` wrapper |
+| `task`                      | The thing under test, the **sole inference anchor** for input/output types. Any `Prompt`, `FlowHandle`, agent, retriever, plain `(input, params) => output` function, or `target.*()` wrapper |
 | `data`                      | `Case[]`, a `dataset()`, or a mixed array of both (concatenated)                                                                                                                               |
-| `expect`                    | Evaluation-level assertion callback over [`CaseContext`](#casecontext) — runs for every case, the primary assertion home                                                                       |
-| `afterScores`               | Evaluation-level post-score assertion callback over [`AssertContext`](#assertcontext) — runs after scorers and can assert typed score values                                              |
+| `expect`                    | Evaluation-level assertion callback over [`CaseContext`](#casecontext), runs for every case, the primary assertion home                                                                       |
+| `afterScores`               | Evaluation-level post-score assertion callback over [`AssertContext`](#assertcontext), runs after scorers and can assert typed score values                                              |
 | `scorers`                   | Scorer array (importable/shareable) or factory lambda `(s) => [...]` receiving the library pre-bound to the evaluation's types                                                                 |
-| `params`                    | Execution defaults — "variant zero"; same shape variants override                                                                                                                              |
+| `params`                    | Execution defaults, "variant zero"; same shape variants override                                                                                                                              |
 | `variants`                  | Named overrides of the task's parameter surface; entries may also swap the whole `task` (same I/O types required)                                                                              |
-| `baseline`                  | Reference variant name for paired comparison (`keyof variants` — autocompletes)                                                                                                                |
+| `baseline`                  | Reference variant name for paired comparison (`keyof variants`, autocompletes)                                                                                                                |
 | `trials`                    | Executions per cell (default 1; per-case `trials` wins; collapses to 1 under replay-strict)                                                                                                    |
 | `gates`                     | Declarative pass policy → exit code (see [Gates](#gates))                                                                                                                                      |
 | `replay`                    | `ReplayMode` or `{ mode, cassette? }`                                                                                                                                                          |
@@ -91,7 +91,7 @@ Timeouts are cooperative. Crux records a timeout cell and quarantines later
 trace, cassette, and score writes from that cell's async context; it does not
 forcibly kill arbitrary JavaScript user code.
 
-Inference contract: `data`, `scorers`, and `expect` are `NoInfer` positions —
+Inference contract: `data`, `scorers`, and `expect` are `NoInfer` positions, so
 a typo'd case key errors **on the case property**, never by widening the
 task's input type. Gate keys under `gates.scores` are literal-typed from an
 array spelling of `scorers`; with the factory spelling they are validated at
@@ -103,7 +103,7 @@ definition time instead (unknown key → immediate `TypeError`).
 {
   name?: string                  // stable identity; defaults to a content hash of input
   input: TInput                  // typed from the task
-  expected?: TExpected           // opaque data — delivered to scorers/expect, never matched implicitly
+  expected?: TExpected           // opaque data, delivered to scorers/expect, never matched implicitly
   expect?: (ctx) => void         // case-SPECIFIC assertions only (not portable to datasets)
   afterScores?: (ctx) => void    // case-SPECIFIC post-score assertions
   trials?: number                // wins over evaluation-level trials
@@ -123,7 +123,7 @@ explicit `name` (slugified), else `sha256(canonicalJson(input)).slice(0, 12)`.
 ## `target`
 
 A Target is a parameterized, signal-capturing task. Bare primitives passed to
-`task:` behave exactly as `target.<kind>(primitive)` with no defaults — use
+`task:` behave exactly as `target.<kind>(primitive)` with no defaults, use
 `target.*` only to set execution defaults or unlock variant parameters. Users
 never call a target; only the runner executes it.
 
@@ -142,15 +142,16 @@ target({ id?, run: (input, params) => output })                 // custom task w
 | `flow`      | `modelCalls`, `steps`, `toolCalls`, `routing`, `safety`, `memory`, `decisionReport`                                     |
 | `agent`     | `modelCalls`, `toolCalls`, `steps`, `handoffs`, `retrieval`, `citations`, `safety`, `memory`, `routing`, `decisionReport` |
 | `retriever` | `retrieval`                                                                                                             |
-| `fn`        | _(none — value matchers + always-on only)_                                                                              |
+| `fn`        | _(none, value matchers + always-on only)_                                                                              |
 
 Agent `tools:` mocks are keyed by tool name; values are a static result or
 `(args) => result`. `maxToolSteps` bounds the loop (default 15).
 
-`generate`/`model` resolution order: variant override → evaluation `params`
-→ target defaults. Bind live model work in eval code or eval-local helper
-modules. A model-backed task with no generate available is a definition error
-(exit 2).
+Effective params for a cell merge as: target defaults ← evaluation `params`
+("variant zero") ← the variant entry. Equivalently, `generate`/`model`
+resolution order is variant override → evaluation `params` → target defaults.
+Bind live model work in eval code or eval-local helper modules. A model-backed
+task with no generate available is a definition error (exit 2).
 
 ## `CaseContext`
 
@@ -211,22 +212,22 @@ thresholds such as `0.58 >= 0.7 => false` without parsing messages.
   (`toBeUnderUsd`, `tokens()`, `toHaveModel`, `toHaveNoFallback`), `errors`
   (`toHaveNone`, `toHaveRetriedAtMost`).
 - Capability namespaces (exist only when the task captures that signal):
-  - `toolCalls` — `toHaveCalled(tool, args?)`, `toHaveCalledAll`,
+  - `toolCalls`: `toHaveCalled(tool, args?)`, `toHaveCalledAll`,
     `not.toHaveCalled`, `toMatchTrajectory('strict' | 'unordered' | 'subset' | 'superset', […])`,
     `toHaveCalledBefore(first, second)`, `toHaveAllSucceeded`, `count()`
-  - `steps` — `toHaveRun`, `toHaveSucceeded`, `toHaveOrder(...names)` (subsequence), `count()`
-  - `handoffs` — `toHaveHandedOffTo`, `toHavePath(...agents)`, `count()`
-  - `retrieval` — `toContainHit({ sourceId?, chunkId?, namespace? })`, `toHaveTopHit`, `hits()`, `count()`
-  - `citations` — `toCite`, `toAllResolve`, `toHaveNoDangling`, `toQuoteOutput`, `count()`
-  - `safety` — `toHavePassedGuardrails`, `toHaveBlocked(id)`, `toHavePassedConstraint(id)`, `toHaveAllConstraintsPassed`
-  - `memory` — `toHaveRead(key?)`, `toHaveWritten(key?)`, `toHaveValue(key, value)`
-  - `routing` — `toHaveSelected(route)`, `toHaveClassifiedAs(label)`, `toHaveSelectedModel(id)`
-  - `modelCalls` — `count()`, `toHaveUsedModel(id)`, `toHaveNoFallback()`
-  - `decisionReport.safety` — `toHaveOutcome(policyId, outcome, { reasonCode? })`
+  - `steps`: `toHaveRun`, `toHaveSucceeded`, `toHaveOrder(...names)` (subsequence), `count()`
+  - `handoffs`: `toHaveHandedOffTo`, `toHavePath(...agents)`, `count()`
+  - `retrieval`: `toContainHit({ sourceId?, chunkId?, namespace? })`, `toHaveTopHit`, `hits()`, `count()`
+  - `citations`: `toCite`, `toAllResolve`, `toHaveNoDangling`, `toQuoteOutput`, `count()`
+  - `safety`: `toHavePassedGuardrails`, `toHaveBlocked(id)`, `toHavePassedConstraint(id)`, `toHaveAllConstraintsPassed`
+  - `memory`: `toHaveRead(key?)`, `toHaveWritten(key?)`, `toHaveValue(key, value)`
+  - `routing`: `toHaveSelected(route)`, `toHaveClassifiedAs(label)`, `toHaveSelectedModel(id)`
+  - `modelCalls`: `count()`, `toHaveUsedModel(id)`, `toHaveNoFallback()`
+  - `decisionReport.safety`: `toHaveOutcome(policyId, outcome, { reasonCode? })`
 
 Signals are read from the observability trace. Asserting on a signal that was
 not captured in this execution throws `UncapturedSignalError` (naming the
-signal and the task kinds that capture it) — never a vacuous pass. All
+signal and the task kinds that capture it), never a vacuous pass. All
 assertion outcomes lower into a per-cell `pass` score (1/0). New experiment
 records expose `ExperimentCell.assertions.outcomes`, an ordered ledger for
 passed, failed, uncaptured, and not-evaluated assertions. Consumers that need
@@ -330,7 +331,7 @@ scorers.rag.contextRecall({ generate: qualityRuntime.generate, model: qualityRun
 ```
 
 Via the factory spelling (`scorers: (s) => […]`) the same library arrives
-pre-bound to the evaluation's generics — `judge.select` is contextually typed
+pre-bound to the evaluation's generics, `judge.select` is contextually typed
 against the output. The `rag.*` scorers read retrieved context from captured
 retrieval signals (fallback: `input.context`) and return `score: null` when
 none exists.
@@ -347,16 +348,16 @@ gates: {
 }
 ```
 
-Zero-config default (no `gates`): **assertions gate, scores inform** — exit
+Zero-config default (no `gates`): **assertions gate, scores inform**, exit
 non-zero iff any cell errored or any expect failed. Declaring any gate
 replaces the default policy. Gates are false-safe (errored cells always
 fail); they evaluate per non-baseline variant; filtered runs demote them to
 informational. A `minDeltaVsBaseline` gate with no reference yet reports
-`passed: false, informational: true` — visible, never blocking.
+`passed: false, informational: true`, visible, never blocking.
 
 ## `dataset(path, { input, expected? })`
 
-Schema-validated file dataset — JSON, JSONL, or CSV by extension, validated
+Schema-validated file dataset, JSON, JSONL, or CSV by extension, validated
 with any Standard Schema library (zod, valibot, arktype). Resolved lazily by
 the runner; validation failure is a definition error. Rows are pure data (no
 `expect` callbacks).
@@ -377,7 +378,7 @@ cassette('support-agent', { mode?, match? })   // match: override the normalized
 
 Interception at the LoopRuntimePort/SdkGateway boundary; entry key = hash of
 (call kind, target id, prompt hash, model, canonicalized settings,
-tool-schema hash, input) — volatile fields excluded, so one cassette covers
+tool-schema hash, input), volatile fields excluded, so one cassette covers
 all variants and judge calls. Storage:
 `.crux/quality/cassettes/<name>.json` with `{ recordedAt, sdkVersion,
 models }` metadata and a staleness warning past 90 days. Redaction applies at
@@ -422,18 +423,18 @@ major): the **Experiment record**
 **Evaluation manifest** (`crux quality list --json`, devtools pre-run
 rendering; includes `covers` when explicit Project Index coverage targets are
 declared), and the **Baseline record**
-(`.crux/quality/baselines/<evaluationId>.json`, committed — how CI knows the
+(`.crux/quality/baselines/<evaluationId>.json`, committed, how CI knows the
 reference; `configFingerprint` drift demotes comparisons to informational).
 `crux quality run --json` emits a compact run summary that points at these
 records and failing-cell evidence commands. Manifest + Experiment record are the
 complete agent-facing contract: list evaluations, run one, read the assertion
-outcome ledger with `sourceRef` + `traceIds`, edit, rerun — no parsing of
+outcome ledger with `sourceRef` + `traceIds`, edit, rerun, no parsing of
 human-oriented output.
 
 ## Identity and discovery
 
 - Derived id = POSIX relative path from the quality root, eval suffix
-  stripped, `/` → `.` — `evals/support/refunds.eval.ts` →
+  stripped, `/` → `.`, `evals/support/refunds.eval.ts` →
   `evals.support.refunds`; multi-export files append `#<exportName>`
   (default export appends nothing).
 - Duplicate ids across the project are a collect-time definition error.

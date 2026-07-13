@@ -1,10 +1,11 @@
 ---
 title: Replay
-description: Deterministic, token-free runs — cassettes record model calls at the executor boundary and replay them by normalized call identity.
+description: "Deterministic, token-free runs: cassettes record model calls at the executor boundary and replay them by normalized call identity."
 ---
 
-Level 5 adds `replay:` — cassettes that intercept model calls at the adapter's
-executor boundary, record outcomes once, and replay them deterministically.
+Every CI run of a model-backed eval spends real tokens, takes minutes, and
+flakes when the provider hiccups. Cassettes fix that: add `replay:` and Crux
+records each model call once, then replays it deterministically on later runs.
 Strict replay runs with **zero live calls** and fails closed on anything
 unrecorded.
 
@@ -18,7 +19,7 @@ export default evaluate('support.agent-loop', {
 })
 ```
 
-`replay: 'replay-strict'` (just the mode string) is enough — the cassette is
+`replay: 'replay-strict'` (just the mode string) is enough: the cassette is
 then named after the evaluation id.
 
 ## Modes
@@ -26,7 +27,7 @@ then named after the evaluation id.
 | Mode | Behavior |
 | --- | --- |
 | `live` | No cassette I/O (the default) |
-| `record-new` | Replay hits, record misses — the incremental workflow |
+| `record-new` | Replay hits, record misses: the incremental workflow |
 | `replay-strict` | Replay only; a miss fails the cell closed with the missing key and a re-record hint |
 | `refresh` | Re-record every exercised key; unexercised entries are kept |
 
@@ -43,27 +44,30 @@ crux quality run --replay refresh              # refresh exercised entries
 
 ## How matching works
 
-Interception happens at the LoopRuntimePort/SdkGateway boundary — below
-prompts, flows, agents, tool loops, and judge scorers, so all of them replay
-transparently. Each call gets a normalized identity: a hash of (call kind,
-target id, prompt hash, model, canonicalized settings, tool-schema hash,
-input), with volatile fields (timestamps, request ids) excluded. That means:
+Recording happens below prompts, flows, agents, tool loops, and judge scorers,
+so all of them replay transparently. Each call gets a normalized identity
+derived from what actually shapes the request (prompt, model, settings, tool
+schemas, input), with volatile fields (timestamps, request ids) excluded. That
+means:
 
-- One cassette covers **all variants** — different params produce different
+- One cassette covers **all variants**: different params produce different
   keys, so a bakeoff replays every variant from the same file.
-- **Judge scorers replay too** — a strict CI run spends zero judge tokens.
+- **Judge scorers replay too**: a strict CI run spends zero judge tokens.
 - Changing the prompt/model/settings invalidates exactly the affected
   entries, nothing else.
 - Validation-retry sequences replay faithfully (invalid structured attempts
   are recorded with their errors).
 
+The exact interception boundary and hash composition are documented in the
+[Quality reference](/docs/reference/crux-core/quality#cassettename-opts-and-replay).
+
 ## Storage and hygiene
 
-Cassettes live in `.crux/quality/cassettes/<name>.json` — commit them.
+Cassettes live in `.crux/quality/cassettes/<name>.json`, commit them.
 Metadata records `recordedAt`, SDK version, and models; the reporter warns
 when a cassette is older than 90 days. Project `redact` dot-paths (plus
 always-on defaults like authorization headers and API keys) are applied at
-write time — secrets never reach disk. These paths are relative to the recorded
+write time, secrets never reach disk. These paths are relative to the recorded
 call/result payloads, so use domain paths such as `customer.email`; do not add
 authorization/API-key paths unless you have a non-standard field name outside
 the always-on set.
@@ -83,7 +87,7 @@ n times measures nothing.
 }
 ```
 
-- **CI** runs `crux quality run --ci --replay replay-strict` —
+- **CI** runs `crux quality run --ci --replay replay-strict`:
   deterministic, token-free, fails closed on unrecorded calls and on gate
   regressions against the committed baseline.
 - **Locally**, record new work with `--replay record-new` (or `refresh`
@@ -96,4 +100,4 @@ intentionally sets `quality.defaults.replay` in config.
 
 ## Next
 
-[Recipes](/docs/guides/quality/recipes) — the pattern for each primitive.
+[Recipes](/docs/guides/quality/recipes), the pattern for each primitive.

@@ -13,15 +13,7 @@ import { Callout } from "fumadocs-ui/components/callout";
 
 ## Overview
 
-Crux adapters translate between the SDK-agnostic prompt system and a specific AI provider's API. Every adapter does the same orchestration work:
-
-1. **Resolve** the prompt into system/messages/schema/settings
-2. **Convert** to SDK-specific format (messages, settings, tools)
-3. **Wrap** with middleware, timing, and hooks
-4. **Call** the SDK
-5. **Normalize** metadata for devtools, evals, and quality experiments
-
-Step 3 is identical across all adapters. Provider runtimes compile into a private execution facade, which wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. If your SDK has ordinary chat text/structured/stream calls, start with `defineSingleTurnProviderBundle()`; use `defineProviderRuntime()` only when you need the lower-level runtime compiler directly.
+Your SDK is not covered by the built-in adapters, and you want the full Crux pipeline around it anyway: `defineSingleTurnProviderBundle()` gets you a complete adapter from a handful of typed hooks, with Crux owning the orchestration and your package owning only the provider wire facts. Use `defineProviderRuntime()` only when you need the lower-level runtime compiler directly; see the [adapter reference](/docs/reference/adapters) for how runtimes compile into the shared execution facade.
 
 ## Fast path: native chat providers
 
@@ -148,7 +140,7 @@ const acmeDialect: ProviderTranscriptDialect<YourSDKMessage, AcmeResponse> = {
 export const acmeTranscript = defineProviderTranscriptCodec(acmeDialect);
 ```
 
-A dialect only ever sees neutral units (`ProviderToolCall`, `ProviderToolResult`) and SDK types — never raw `Message.metadata` — so the public `fromMessages()` and runtime tool-round appends cannot drift apart. Prefer this over a hand-written `NativeTranscriptCodec` for any tool-calling provider; reach for a bespoke `appendToolRound` only if the canonical transcript units genuinely cannot represent your wire format.
+A dialect only ever sees neutral units (`ProviderToolCall`, `ProviderToolResult`) and SDK types (never raw `Message.metadata`), so the public `fromMessages()` and runtime tool-round appends cannot drift apart. Prefer this over a hand-written `NativeTranscriptCodec` for any tool-calling provider; reach for a bespoke `appendToolRound` only if the canonical transcript units genuinely cannot represent your wire format.
 
 ## Request, response, and settings hooks
 

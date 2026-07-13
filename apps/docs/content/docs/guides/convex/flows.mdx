@@ -3,22 +3,11 @@ title: Flows
 description: Build durable Convex-aware flows with start, suspend, signal, and resume support.
 ---
 
-# Convex Flows
-
-Use `flow()` from `@use-crux/convex/server` when a Crux flow needs to cross Convex action boundaries, suspend, signal, or resume.
+Some AI work cannot finish inside one Convex action: a plan needs human approval, an external system must call back, or a pipeline outlives a single worker. `flow()` from `@use-crux/convex/server` makes that work durable: a flow can cross Convex action boundaries, suspend at a named point, receive a signal, and resume where it left off.
 
 ```ts
 import { action, flow } from '@use-crux/convex/server'
 ```
-
-The returned handle exposes:
-
-| Property                                         | Purpose                                            |
-| ------------------------------------------------ | -------------------------------------------------- |
-| `.action`                                        | Internal Convex action definition for start/resume |
-| `.handler`                                       | Convenience handler for app-owned public wrappers  |
-| `.args`                                          | Convex validators for user args                    |
-| `.signal(ctx, actionRef, flowId, name, payload)` | Write a signal and schedule resume                 |
 
 ## Define A Flow
 
@@ -59,6 +48,17 @@ export const writerFlow = flow({
   },
 })
 ```
+
+## The Flow Handle
+
+`flow()` returns a handle with everything needed to start, wrap, and signal the flow:
+
+| Property                                         | Purpose                                            |
+| ------------------------------------------------ | -------------------------------------------------- |
+| `.action`                                        | Internal Convex action definition for start/resume |
+| `.handler`                                       | Convenience handler for app-owned public wrappers  |
+| `.args`                                          | Convex validators for user args                    |
+| `.signal(ctx, actionRef, flowId, name, payload)` | Write a signal and schedule resume                 |
 
 ## Public Wrapper
 

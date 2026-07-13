@@ -1,5 +1,5 @@
 {
   "title": "Storage",
-  "description": "@use-crux/convex and @use-crux/upstash — persistent RecordStore, VectorStore, and AssetStore implementations.",
+  "description": "@use-crux/convex and @use-crux/upstash, persistent RecordStore, VectorStore, and AssetStore implementations.",
   "pages": ["convex", "upstash"]
 }

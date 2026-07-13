@@ -29,7 +29,7 @@ app.use(crux)
 export default app
 ```
 
-This creates the `crux` component namespace. The component manages its own tables — no schema definitions needed in your app.
+This creates the `crux` component namespace. The component manages its own tables: no schema definitions needed in your app.
 
 ## Recommended layout
 
@@ -92,7 +92,7 @@ export const respond = action({
 ```
 
 <Callout type="info">
-  Convex actions that import the AI SDK or OpenAI client need the `'use node'` directive — they run in a Node.js
+  Convex actions that import the AI SDK or OpenAI client need the `'use node'` directive, because they run in a Node.js
   runtime, not Convex's V8 isolate.
 </Callout>
 

@@ -22,7 +22,7 @@ The Vercel AI SDK is an excellent execution and UI toolkit. Crux integrates with
 | **Request setup**       | Owned by application code             | Prompt and context setup is reusable and inspectable           |
 | **Multi-provider**      | Provider-specific model imports       | Same prompt definition, adapter at execution boundary          |
 | **Quality**             | Not included                          | Suites, targets, experiments, cassettes, and baselines         |
-| **Memory**              | Not included                          | Working, episodic, semantic — with `asContext()` / `asTools()` |
+| **Memory**              | Not included                          | Working, episodic, semantic (with `asContext()` / `asTools()`) |
 | **Compaction**          | Not included                          | Sliding window, budget tracking, key facts extraction          |
 | **Debugging**           | Trace the model call                  | Inspect what was assembled around the call                     |
 
@@ -96,7 +96,7 @@ LangChain and LlamaIndex are broad orchestration and retrieval frameworks. They 
 | **Scope**       | Full orchestration (chains, agents, RAG, vector stores) | Building blocks around the SDK call (prompts, memory, retrieval, safety, evals, observability) |
 | **Execution**   | Own runtime with own abstractions                       | Delegates to AI SDK / OpenAI / Google / Anthropic directly                             |
 | **TypeScript**  | Ported from Python, partial type coverage               | TypeScript-first, full inference from Zod schemas                                      |
-| **API surface** | Large — many concepts, many ways to do things           | Small — ~10 core functions, consistent interfaces                                      |
+| **API surface** | Large: many concepts, many ways to do things           | Small: ~10 core functions, consistent interfaces                                      |
 | **Integration** | Use their patterns or fight the framework               | Compose into any existing architecture                                                 |
 | **Memory**      | Built-in vector store + retriever abstractions          | Block-based memory + pluggable stores                                                  |
 
@@ -107,7 +107,7 @@ LangChain and LlamaIndex are broad orchestration and retrieval frameworks. They 
 <Cards>
   <Card
     title="Get Started"
-    description="Try Crux with your stack — pick a framework and ship a prompt."
+    description="Try Crux with your stack: pick a framework and ship a prompt."
     href="/docs/getting-started"
   />
   <Card title="Thinking in Crux" description="The principles behind Crux's design." href="/docs/foundations/thinking-in-crux" />

@@ -6,7 +6,7 @@ description: Use Crux from an Expo or React Native app via a Node.js or Convex b
 Crux runs on the server, not on-device. From an Expo app, you call your backend (Node.js, Next.js Route Handler, or Convex action) which then calls Crux. This guide shows the recommended setup with each option.
 
 <Callout type="info">
-  **Why server-side?** Crux prompts compose contexts, manage memory, and call provider APIs — all of which require
+  **Why server-side?** Crux prompts compose contexts, manage memory, and call provider APIs, all of which require
   server-side credentials and persistent storage. The mobile app sends inputs and receives outputs.
 </Callout>
 
@@ -68,7 +68,7 @@ export function Summarize() {
 }
 ```
 
-For streaming responses, use the AI SDK's `useChat` and a streaming Route Handler — see the [Next.js guide](/docs/getting-started/nextjs#streaming-from-a-route-handler).
+For streaming responses, use the AI SDK's `useChat` and a streaming Route Handler. See the [Next.js guide](/docs/getting-started/nextjs#streaming-from-a-route-handler).
 
 ## Pattern 2: Expo + Convex backend
 

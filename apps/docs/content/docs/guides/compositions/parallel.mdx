@@ -3,7 +3,7 @@ title: Parallel
 description: Run multiple agents concurrently and get typed results as a named record.
 ---
 
-`parallel()` runs a named map of agents concurrently and returns all results as a typed record. Use it when agents are independent — reviewing content, analyzing from different angles, or gathering data from multiple sources.
+`parallel()` runs a named map of agents concurrently and returns all results as a typed record. Use it when agents are independent, reviewing content, analyzing from different angles, or gathering data from multiple sources.
 
 ```ts title="parallel-review.ts"
 import { parallel } from "@use-crux/ai";
@@ -30,7 +30,7 @@ result.durationMs; // total wall-clock time (= slowest agent)
 
 1. All agents start executing at the same time (`Promise.all`)
 2. Each agent receives the same `context`
-3. When all finish, results are returned as a `Record<name, AgentResult<typed>>` — each result is typed from the agent's output schema
+3. When all finish, results are returned as a `Record<name, AgentResult<typed>>`, each result is typed from the agent's output schema
 4. Each result is an `AgentResult` with `.agentId`, `.output`, `.durationMs`
 
 Total time is the duration of the **slowest** agent, not the sum.
@@ -58,7 +58,7 @@ const feedback = [
 
 ## Error handling
 
-By default, `parallel()` uses **fail-fast** semantics — if any agent throws, the entire composition fails immediately.
+By default, `parallel()` uses **fail-fast** semantics, if any agent throws, the entire composition fails immediately.
 
 For best-effort execution, use `onError: 'continue'`:
 
@@ -83,8 +83,8 @@ if (result.settled.b.status === "error") {
 
 In `continue` mode, `result.settled` contains a discriminated union for each agent:
 
-- `{ status: 'success', value: AgentResult }` — agent succeeded
-- `{ status: 'error', error: Error }` — agent failed
+- `{ status: 'success', value: AgentResult }`: agent succeeded
+- `{ status: 'error', error: Error }`: agent failed
 
 ## Fallback integration
 

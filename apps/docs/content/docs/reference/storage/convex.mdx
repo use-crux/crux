@@ -543,7 +543,7 @@ const transport = createConvexTransport({ api: api.crux, useQuery })
 ```
 
 <Callout type="info">
-  Plans, task lists, and tasks stored via Convex records are automatically reactive through the Convex transport —
+  Plans, task lists, and tasks stored via Convex records are automatically reactive through the Convex transport, with
   no polling or SSE needed. The transport consumes the component's `{ docs, cursor }` page shape and applies
   decoded-value filters locally.
 </Callout>

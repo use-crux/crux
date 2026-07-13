@@ -37,18 +37,7 @@ const docs = retriever({
 })
 ```
 
-Store-backed retrievers read indexed chunk and parent records written by `indexer()` or `knowledgeBase().index()`. If the retriever id differs from the writer id, pass `indexerId` so hydration uses the correct read-model keys.
-
-```ts
-const docs = retriever({
-  id: 'docs-search',
-  indexerId: 'docs',
-  namespace: 'product-docs',
-  records,
-  vectors,
-  dense,
-})
-```
+Store-backed retrievers read indexed chunk and parent records written by `indexer()` or `knowledgeBase().index()`.
 
 ## Search Modes
 
@@ -75,6 +64,21 @@ await docs.retrieve({
 ```
 
 Unsupported combinations fail clearly. Crux does not silently downgrade sparse or hybrid retrieval to dense-only search.
+
+<Callout type="info">
+If the retriever `id` differs from the `indexer()` id that wrote the records, pass `indexerId` so hydration uses the correct read-model keys:
+
+```ts
+const docs = retriever({
+  id: 'docs-search',
+  indexerId: 'docs',
+  namespace: 'product-docs',
+  records,
+  vectors,
+  dense,
+})
+```
+</Callout>
 
 ## Typed Filters
 

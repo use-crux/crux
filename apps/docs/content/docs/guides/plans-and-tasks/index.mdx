@@ -3,7 +3,9 @@ title: Plans & Tasks
 description: Give agents persistent intent documents and structured work ledgers.
 ---
 
-Plans & Tasks gives agents two durable coordination surfaces:
+Agents lose track of multi-step work. The plan lives in a context window that gets compacted, progress lives in chat history that the next process never sees, and nobody outside the conversation can inspect what the agent intends to do or how far it got. Plans & Tasks moves that state out of the transcript and into durable, inspectable records.
+
+It gives agents two coordination surfaces:
 
 - `plan()` stores the intent document: goal, approach, constraints, and revisions.
 - `tasks()` stores the work ledger: task IDs, statuses, progress messages, results, and errors.
@@ -51,6 +53,16 @@ await generate(
 
 const status = (await work.get())?.status
 ```
+
+## When To Use What
+
+Use `plan()` when the agent needs an inspectable intent document.
+
+Use `tasks()` when the user or another agent needs to see discrete work states.
+
+Use `flow()` when you need suspendable orchestration with named steps and resume semantics.
+
+Use an external durable runner when you need queues, retries, schedules, concurrency control, or long-running jobs.
 
 ## Imports
 
@@ -118,16 +130,6 @@ prompt({
   tools: writer.asTools(),
 })
 ```
-
-## When To Use What
-
-Use `plan()` when the agent needs an inspectable intent document.
-
-Use `tasks()` when the user or another agent needs to see discrete work states.
-
-Use `flow()` when you need suspendable orchestration with named steps and resume semantics.
-
-Use an external durable runner when you need queues, retries, schedules, concurrency control, or long-running jobs.
 
 ## Next Steps
 

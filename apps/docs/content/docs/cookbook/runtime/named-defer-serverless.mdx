@@ -12,8 +12,8 @@ The host must finalize successfully before the response commits.
 import { config, defer } from '@use-crux/core'
 import { durableTask, serverless } from '@use-crux/core/runtime'
 import { withNamedOnlyDefer } from '@use-crux/core/defer/serverless'
-// import { postgres } from '@use-crux/postgres'
-// import { qstash } from '@use-crux/upstash' // example wake adapter
+// import { postgres } from '@use-crux/postgres/runtime'
+// import { qstash } from '@use-crux/upstash/runtime' // example wake adapter
 
 const postProcess = durableTask('post-process', {
   run: async (input: { jobId: string }) => {
@@ -50,6 +50,6 @@ must not send a successful response. Catching the promise cannot restore success
 
 ## Related
 
-- [Request-scoped defer](/docs/guides/defer)
-- [Runtime Engine](/docs/guides/runtime)
+- [Request-scoped defer](/docs/guides/background-work)
+- [Runtime Engine](/docs/guides/durable-execution)
 - [`DEFER_COMMIT_FAILED`](/docs/errors/DEFER_COMMIT_FAILED)

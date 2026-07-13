@@ -3,7 +3,7 @@ title: Orchestration
 description: Compose plans, task ledgers, workers, flow, and external runners without turning tasks into a queue.
 ---
 
-Plans & Tasks records intent and progress. It does not schedule work. Choose the orchestration layer separately.
+Plans & Tasks tracks the work; something else has to run it. Depending on how much execution control you need, that something can be a single prompt, plain composition, a `flow()`, or an external durable runner. Here are the four patterns.
 
 ## Plan Then Execute
 

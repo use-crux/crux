@@ -3,6 +3,8 @@ title: Middleware & Hooks
 description: Global middleware and per-prompt lifecycle hooks for logging, timing, and error handling.
 ---
 
+You want to log, time, or wrap every model call in one place, without touching each prompt. Middleware gives you one global wrapper around every generation; per-prompt lifecycle hooks cover the cases where the logic belongs to a specific prompt.
+
 ## Middleware
 
 Middleware wraps every `generate()` and `stream()` call across all prompts. Use it for logging, timing, error handling, or custom retry logic.
@@ -67,76 +69,34 @@ prompt({
 
 ## Hook argument types
 
-Each lifecycle hook receives a typed argument object. Here are the full shapes:
-
-### PrepareHookArgs
-
-Passed to `onPrepare` after the prompt's system message and contexts are composed.
-
-```ts
-interface PrepareHookArgs {
-  promptId: string // ID of the prompt being prepared
-  systemTokens: number // total tokens in composed system message
-  droppedContexts: DroppedContext[] // contexts dropped due to token budget
-}
-```
-
-`droppedContexts` includes the `source` name and `tokens` count for each context that was trimmed. Use this to detect when important context is being lost.
-
-### GenerateHookArgs
-
-Passed to `onGenerate` after a successful generation completes.
-
-```ts
-interface GenerateHookArgs {
-  promptId: string // ID of the prompt that generated
-  durationMs: number // generation wall-clock time in milliseconds
-  result: unknown // the generation result (adapter-specific)
-}
-```
-
-The `result` type depends on your adapter — for Vercel AI SDK it will be the `generateText` or `generateObject` result, for OpenAI it will be the chat completion response.
-
-### ErrorHookArgs
-
-Passed to `onError` when an error occurs during preparation or generation.
-
-```ts
-interface ErrorHookArgs {
-  promptId: string // ID of the prompt that errored
-  error: unknown // the error that occurred
-  phase: 'prepare' | 'generate' // which phase the error happened in
-}
-```
-
-The `phase` field tells you whether the error occurred during context composition (`prepare`) or during the LLM call (`generate`), so you can handle each case differently.
+Each lifecycle hook receives a typed argument object: `onPrepare` gets `PrepareHookArgs` (`promptId`, `systemTokens`, `droppedContexts`), `onGenerate` gets `GenerateHookArgs` (`promptId`, `durationMs`, adapter-specific `result`), and `onError` gets `ErrorHookArgs` (`promptId`, `error`, and the `phase` that failed, so you can distinguish context-composition errors from LLM-call errors). Full shapes: [prompt lifecycle hook argument types](/docs/reference/crux-core/observability#prompt-lifecycle-hook-argument-types).
 
 ## Instrumentation hooks
 
-For deeper observability into memory, scoring, and agent operations, Crux provides `graph-record subscribers`. These are wired up when you explicitly enable a local devtools server/tunnel via `config({ devtools: { serverUrl } })` — you don't need to configure them manually.
+For deeper observability into memory, scoring, and agent operations, Crux provides `graph-record subscribers`. These are wired up when you explicitly enable a local devtools server/tunnel via `config({ devtools: { serverUrl } })`, you don't need to configure them manually.
 
 The instrumentation hooks cover three areas:
 
 ### Memory hooks
 
-- **`onMemoryRead`** — fired when a memory store is queried (includes the query and number of results)
-- **`onMemoryWrite`** — fired when new entries are written to memory
-- **`onCompactStart`** / **`onCompactEnd`** — fired around memory compaction operations, useful for tracking compaction duration and token savings
+- **`onMemoryRead`**: fired when a memory store is queried (includes the query and number of results)
+- **`onMemoryWrite`**: fired when new entries are written to memory
+- **`onCompactStart`** / **`onCompactEnd`**: fired around memory compaction operations, useful for tracking compaction duration and token savings
 
 ### Budget and context hooks
 
-- **`onBudgetCheck`** — fired during token budget evaluation, reports which contexts fit and which are candidates for dropping
-- **`onBlackboardUpdate`** — fired when a shared blackboard (cross-prompt state) is updated
+- **`onBudgetCheck`**: fired during token budget evaluation, reports which contexts fit and which are candidates for dropping
+- **`onBlackboardUpdate`**: fired when a shared blackboard (cross-prompt state) is updated
 
 ### Agent hooks
 
-- **`onHandoffPrepare`** — fired when an agent prepares to hand off to another agent or sub-prompt
-- **`onDelegateStart`** / **`onDelegateComplete`** — fired around agent delegation calls, tracking which sub-agent was invoked and its result
-- **`onJudgeResult`** — fired when an LLM judge returns a score, includes the metric ID, score, and reasoning
+- **`onHandoffPrepare`**: fired when an agent prepares to hand off to another agent or sub-prompt
+- **`onDelegateStart`** / **`onDelegateComplete`**: fired around agent delegation calls, tracking which sub-agent was invoked and its result
+- **`onJudgeResult`**: fired when an LLM judge returns a score, includes the metric ID, score, and reasoning
 
 <Callout type="info">
   Instrumentation hooks are designed for observability, not control flow. They cannot modify the data flowing through
-  them — use middleware if you need to transform args or results.
+  them, use middleware if you need to transform args or results.
 </Callout>
 
 ## Production logging
@@ -175,7 +135,7 @@ config({
 })
 ```
 
-This works with any logging service — Datadog, Sentry, Posthog, or a simple `console.log`. The `_meta` object on results contains normalized model, usage, and cost data regardless of which adapter you used.
+This works with any logging service, Datadog, Sentry, Posthog, or a simple `console.log`. The `_meta` object on results contains normalized model, usage, and cost data regardless of which adapter you used.
 
 <Callout type="info">
   This approach captures `generate()` and `stream()` calls. For full observability covering memory operations,
@@ -198,7 +158,7 @@ This works with any logging service — Datadog, Sentry, Posthog, or a simple `c
   <Card
     title="Scoring"
     description="LLM-as-a-judge scoring and pre-built quality metrics."
-    href="/docs/guides/eval/scoring"
+    href="/docs/guides/quality/scorers-and-gates"
   />
   <Card
     title="API Reference"

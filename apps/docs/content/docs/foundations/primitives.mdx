@@ -110,12 +110,12 @@ const hits = await docs.retrieve('How do deployments work?')
 
 ## Compaction
 
-When conversations get long, you need to compress. Crux gives you four primitives — pick the one that matches your access pattern:
+When conversations get long, you need to compress. Crux gives you four primitives, pick the one that matches your access pattern:
 
-- **`createSlidingWindow`** — stateful, manages its own summary, evicts oldest messages
-- **`createBudgetManager`** — advisory, no LLM calls, fires hooks at pressure thresholds
-- **`extractKeyFacts`** — one-shot structured extraction
-- **`summarizeMessages`** — stateless one-shot summarization
+- **`createSlidingWindow`**: stateful, manages its own summary, evicts oldest messages
+- **`createBudgetManager`**: advisory, no LLM calls, fires hooks at pressure thresholds
+- **`extractKeyFacts`**: one-shot structured extraction
+- **`summarizeMessages`**: stateless one-shot summarization
 
 → [Compaction guide](/docs/guides/compaction)
 
@@ -140,16 +140,16 @@ const researcher = agent({
 
 Combine multiple agents into structured workflows:
 
-- **`pipeline`** — sequential chaining with typed accumulation
-- **`parallel`** — concurrent agents, results keyed by name
-- **`consensus`** — parallel voting with a quorum threshold
-- **`swarm`** — peer-to-peer LLM-routed handoffs
+- **`pipeline`**: sequential chaining with typed accumulation
+- **`parallel`**: concurrent agents, results keyed by name
+- **`consensus`**: parallel voting with a quorum threshold
+- **`swarm`**: peer-to-peer LLM-routed handoffs
 
 → [Compositions guide](/docs/guides/compositions)
 
 ## Flows
 
-A flow is a suspendable, resumable orchestration. Each step is named and cached — when you resume, only steps after the suspension point re-run.
+A flow is a suspendable, resumable orchestration. Each step is named and cached: when you resume, only steps after the suspension point re-run.
 
 ```ts
 import { flow } from '@use-crux/core/flow'
@@ -214,14 +214,14 @@ Two distinct primitives for two distinct problems:
 - **`judge()`** for LLM-as-a-judge scoring with pre-built quality metrics
 - **Quality experiments** persist suites, variants, scores, and local comparison history
 
-→ [Quality guide](/docs/guides/eval)
+→ [Quality guide](/docs/guides/quality)
 
 ## Observability
 
-- **Devtools** — visual tracing UI in dev (`crux dev`)
-- **`@use-crux/otel`** — OpenTelemetry spans for prod (Datadog, Honeycomb, Grafana)
-- **Plugins** — composable runtime extensions via `CruxPlugin` interface
-- **Middleware** — global wrapper around every `generate()` / `stream()` call
+- **Devtools**: visual tracing UI in dev (`crux dev`)
+- **`@use-crux/otel`**: OpenTelemetry spans for prod (Datadog, Honeycomb, Grafana)
+- **Plugins**: composable runtime extensions via `CruxPlugin` interface
+- **Middleware**: global wrapper around every `generate()` / `stream()` call
 
 → [Observability guide](/docs/guides/observability)
 

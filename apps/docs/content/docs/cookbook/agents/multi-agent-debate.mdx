@@ -86,13 +86,13 @@ const decision = await consensus({
   model: openai('gpt-4o'),
   input: { proposal: 'Release auth v2 next Tuesday' },
   extract: (r) => r.output.position,   // pull the vote value from each agent's result
-  quorum: 'majority',                  // 'majority' | 'unanimous' | number — number = at least N votes
+  quorum: 'majority',                  // 'majority' | 'unanimous' | number, number = at least N votes
 })
 
-decision.result      // 'ship' | 'hold' | 'rework' — the winning position
-decision.votes       // { ship: 2, hold: 1 } — breakdown by value
-decision.agreement   // 0.67 — winner count / total
-decision.details     // AgentResult[] — every agent's full result with reasoning
+decision.result      // 'ship' | 'hold' | 'rework', the winning position
+decision.votes       // { ship: 2, hold: 1 }, breakdown by value
+decision.agreement   // 0.67, winner count / total
+decision.details     // AgentResult[], every agent's full result with reasoning
 ```
 
 ## How it works
@@ -100,7 +100,7 @@ decision.details     // AgentResult[] — every agent's full result with reasoni
 1. **Three agents, three stances.** Each has a system message that tilts its prior. Same input schema, same output schema (`VoteSchema`).
 2. **The blackboard is shared.** All three see the same `proposal` and accumulating `risks`. Because the prompt uses `use: [debateBoard]`, Crux also exposes focused blackboard tools so agents can surface risks for the next round.
 3. **`createConsensus()` runs them in parallel.** All three `generate()` calls happen concurrently; you wait for the slowest.
-4. **`extract` pulls the vote value** from each agent's result; consensus tallies them and applies the `quorum` rule. If quorum isn't met, `consensus()` throws `ConsensusError` with the vote breakdown — the caller decides whether to escalate, retry with different agents, or fall back.
+4. **`extract` pulls the vote value** from each agent's result; consensus tallies them and applies the `quorum` rule. If quorum isn't met, `consensus()` throws `ConsensusError` with the vote breakdown: the caller decides whether to escalate, retry with different agents, or fall back.
 
 ## Variations
 
@@ -132,5 +132,5 @@ Replace the discriminator vote with a numeric score, then reduce by averaging or
 
 <Cards>
   <Card title="Compositions: Consensus" description="Quorum semantics, executor signatures, error policies." href="/docs/guides/compositions/consensus" />
-  <Card title="Blackboards" description="Shared typed state across agents — set, patch, subscribe." href="/docs/guides/agents/blackboard" />
+  <Card title="Blackboards" description="Shared typed state across agents: set, patch, subscribe." href="/docs/guides/agents/blackboard" />
 </Cards>

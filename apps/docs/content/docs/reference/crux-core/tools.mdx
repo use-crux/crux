@@ -3,8 +3,6 @@ title: Tools
 description: SDK-agnostic Crux tool definitions for prompts, contexts, adapters, and runtime profiles.
 ---
 
-# Tools
-
 Use `tool()` from `@use-crux/core/tools` when you want an SDK-agnostic Crux tool definition:
 
 ```ts
@@ -111,6 +109,22 @@ export const answerQuestion = prompt({
   prompt: ({ input }) => input.question,
 })
 ```
+
+## Merge Order and Collisions
+
+Prompt-time tool names must be unique. During prompt resolution, Crux checks collisions across the prompt-owned sources in this order:
+
+1. **Skill tools**: loader tools from `skill()`
+2. **Context tools**: from `context({ tools })` collected via `use`
+3. **Contributor tools**: from `contributor()` and injected primitives
+4. **Blackboard tools**: focused tools from `blackboard()`
+5. **Prompt tools**: from `prompt({ tools })`
+
+If two of these owners contribute the same tool name, resolution throws. The error names both owners so a model cannot silently bind to the wrong implementation.
+
+Call-site tools from `generate(prompt, { tools })` and `stream(prompt, { tools })` are applied by the adapter after prompt resolution and intentionally override without a collision error. Passing a replacement tool at the call site is the supported override path.
+
+Contexts whose system text was dropped due to a token budget still contribute their tools; tool availability is independent of whether the context's system message fit within the budget.
 
 ## Runtime Profiles
 

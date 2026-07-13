@@ -3,7 +3,7 @@ title: Plans
 description: Store versioned intent documents and expose them as context or focused tools.
 ---
 
-Plans capture what the agent intends to do. They are freeform documents with title, content, metadata, timestamps, and a version that increments when title or content changes.
+Plans capture what the agent intends to do, outside its context window: human-reviewable intent before execution, a shared document that worker prompts can read, and traceable revisions to the objective or approach. They are freeform documents with title, content, metadata, timestamps, and a version that increments when title or content changes.
 
 ```ts
 import { plan } from '@use-crux/core/plan'
@@ -114,10 +114,6 @@ await roadmap.update({
 })
 ```
 
-## Use Plans For
+## Execution Lives Elsewhere
 
-- Human-reviewable agent intent before execution.
-- A shared document that worker prompts can read.
-- Traceable revisions to the objective or approach.
-
-Use `flow()` or an external durable runner for execution guarantees such as queues, retries, schedules, and resume behavior.
+Plans record intent; they do not run anything. Use `flow()` or an external durable runner for execution guarantees such as queues, retries, schedules, and resume behavior.

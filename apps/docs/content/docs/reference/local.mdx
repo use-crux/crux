@@ -105,14 +105,14 @@ crux cost --json     # Output as JSON
 
 Prints the total spend and event count, then per-model and per-prompt
 breakdowns, followed by any threshold `warn`/`limit` events. Requires
-`withCostTracking()` in your Crux config — without it, no cost events are
-recorded and the command says so.
+`withCostTracking()` in your Crux config (without it, no cost events are
+recorded and the command says so).
 
 ## `crux config`
 
 Render the **effective Crux configuration**: every domain `config()` accepts, with each value resolved
 and tagged by where it came from. `crux config inspect` imports your `crux.config.ts` in inert
-`CRUX_INDEX=1` mode (no runtime side effects — no observability transport, no bridge, no store) so the
+`CRUX_INDEX=1` mode (no runtime side effects: no observability transport, no bridge, no store) so the
 view reflects your explicit overrides, not just defaults. For the full option surface, see
 [Config](/docs/reference/crux-core/config).
 
@@ -132,20 +132,20 @@ crux config inspect --config crux.config.ts
 
 The view is organized by `config()` domain, in interface order:
 
-- `Project` — root and package name
-- `Config file` — the resolved file, how it was located, its load status, and any import error
-- `quality:` — `id`, `dir`, `include`, `exclude`, `redact`, and the run defaults `trials` /
+- `Project`: root and package name
+- `Config file`: the resolved file, how it was located, its load status, and any import error
+- `quality:` `id`, `dir`, `include`, `exclude`, `redact`, and the run defaults `trials` /
   `concurrency` / `timeoutMs` / `replay` (the full `QualityConfig` surface)
-- `generation:` — `autoEscape`, `securityWarnings`, and whether a `tokenizer` / `middleware` is bound
-- `indexer:` — extension `trust` mode and configured `extensions`
-- `observability:` — `enabled`, `serverUrl`, token presence, and whether a custom `transport` is bound
-- `devtools:` — `serverUrl` and whether a `bridge` is configured
-- `persistence:` — whether a global `store` is bound
-- `lint:` — selected `profile` and rule-override count
-- `plugins:` — installed plugin names
-- `Discovered` — a compact count of authored definitions / relations / evaluations (context, not config;
+- `generation:` `autoEscape`, `securityWarnings`, and whether a `tokenizer` / `middleware` is bound
+- `indexer:` extension `trust` mode and configured `extensions`
+- `observability:` `enabled`, `serverUrl`, token presence, and whether a custom `transport` is bound
+- `devtools:` `serverUrl` and whether a `bridge` is configured
+- `persistence:` whether a global `store` is bound
+- `lint:` selected `profile` and rule-override count
+- `plugins:` installed plugin names
+- `Discovered`: a compact count of authored definitions / relations / evaluations (context, not config;
   the full index lives behind [`crux index`](#crux-index))
-- `Diagnostics` — config-load and project-model findings
+- `Diagnostics`: config-load and project-model findings
 
 Every value carries a dim origin tag so a zero-config project reads as "these are the defaults Crux
 applied": `(default)` for a built-in default, `(config)` for an explicit value from `crux.config.ts`,
@@ -157,10 +157,40 @@ collapses to `~` and every other path is shown relative to it (`.crux/quality`, 
 On an interactive terminal an animated loader is shown while the config resolves; color and the loader
 are suppressed under `--no-color`, `NO_COLOR`, or a non-TTY pipe, and `--json` emits the machine-readable
 form (each setting as `{ value, origin }`, full absolute paths preserved). Worker lifecycle logs are
-silenced for this one-shot command — set `CRUX_STARTUP_DEBUG=1` to surface them when troubleshooting.
+silenced for this one-shot command. Set `CRUX_STARTUP_DEBUG=1` to surface them when troubleshooting.
 
 A broken config never makes inspection fail: an import error degrades to an all-defaults view with an
 `import-failed` config status and the error surfaced under `Diagnostics`.
+
+## `crux setup`
+
+Inspect project-level setup contributed by Crux subsystems and safely apply fixes.
+
+```bash
+crux setup                 # Read-only inspection (same as --check)
+crux setup --check
+crux setup --apply         # Apply safe-additive actions, then re-inspect
+crux setup --json          # Stable machine-readable report
+crux setup --cwd packages/backend
+```
+
+| Flag      | Description                                                                    |
+| --------- | ------------------------------------------------------------------------------ |
+| `--check` | Read-only inspection; the default when no mode is passed                      |
+| `--apply` | Apply planned actions classified as `safe-additive`, in plan order, then re-inspect |
+| `--json`  | Machine-readable report: findings, planned actions, and application results   |
+| `--cwd`   | Inspect another project root                                                   |
+
+Every planned action carries a classification, and apply mode runs only actions classified as
+`safe-additive`. It never automatically performs destructive migrations, paid provisioning,
+production mutations, or ambiguous edits; actions requiring approval remain findings with exact
+remediation steps. The command exits unsuccessfully when a contributor reports an error.
+
+Findings may include a docs URL, a copy-paste remediation, and a privacy-safe coding-agent prompt.
+They never include environment values, credentials, or connection strings.
+
+Safe-additive setup is idempotent. A failed later action does not roll back earlier successful
+actions; rerun `crux setup --apply` after correcting the reported problem.
 
 ## `crux index`
 
@@ -224,7 +254,7 @@ crux lint --json                   # Output as JSON
 | `--json`               | Output as JSON                                                         |
 
 Lists findings sorted by severity (`error` · `warning` · `info`), each with its
-rule id, target definition, source `file:line`, and — when available — the
+rule id, target definition, source `file:line`, and (when available) the
 problem, rationale, suggested fix, and docs link. With `--fail-on`, a matching
 finding sets exit code `1` so the command can gate CI.
 
@@ -302,7 +332,7 @@ or, under `--with-expected`, usable output are skipped with a reason.
 | `--changed-since <ref>` | Select evaluations affected by files changed since a git ref. If coverage cannot be proven, the command fails open by running the selected/all evaluation set      |
 | `--variant <name>`      | Run a variant subset; repeatable. Demotes gates unless the baseline variant is included                                                                           |
 | `--trials <n>`          | Override trials for this run                                                                                                                                      |
-| `--replay <mode>`       | `live` · `record-new` · `replay-strict` · `refresh` — overrides declaration/config                                                                                |
+| `--replay <mode>`       | `live` · `record-new` · `replay-strict` · `refresh`: overrides declaration/config                                                                                |
 | `--rescore`             | Reuse cached outputs, re-run scorers/expects only (token-free judge iteration)                                                                                    |
 | `--experiment <label>`  | Grouping label stored on the record(s)                                                                                                                            |
 | `--json`                | Suppress human stdout and write one machine-readable run summary object (verdict, record paths, failed cells, evidence commands, cost, duration)                  |
@@ -318,7 +348,7 @@ or, under `--with-expected`, usable output are skipped with a reason.
 | ---- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `0`  | All blocking gates passed (or a filtered run with no errored cells)                                                                                              |
 | `1`  | A blocking gate failed, an expect failed under the default policy, or any cell errored                                                                           |
-| `2`  | Definition/discovery error — unknown id, duplicate ids, dataset schema failure, missing `generate` for a model-backed task, invalid config. Nothing was executed |
+| `2`  | Definition/discovery error: unknown id, duplicate ids, dataset schema failure, missing `generate` for a model-backed task, invalid config. Nothing was executed |
 
 The reporter prints a per-evaluation tree with per-cell status; failures show
 the assertion diff, its `file:line` source ref, and the devtools trace deep
@@ -328,16 +358,16 @@ cassette key and the re-record command.
 
 ### Records on disk
 
-Experiment records persist to `.crux/quality/experiments/` (gitignored — the
+Experiment records persist to `.crux/quality/experiments/` (gitignored: the
 runner scaffolds the `.gitignore`); promoted baselines live in
-`.crux/quality/baselines/` and cassettes in `.crux/quality/cassettes/` — both
+`.crux/quality/baselines/` and cassettes in `.crux/quality/cassettes/`, both
 committed.
 
 ### `crux quality watch`
 
 Re-collects on changes to eval files, their imports, datasets, or cassettes.
 Unchanged cells (same case identity, task fingerprint, params, and replay
-mode) are served from the output cache and re-scored only — so a scorer or
+mode) are served from the output cache and re-scored only, so a scorer or
 `expect` edit reruns instantly without re-executing tasks. `evaluate.only` /
 case `only` narrow the watch set. The same engine is embedded in `crux dev`,
 streaming results to devtools.
@@ -419,7 +449,7 @@ crux quality promote <experimentId> --pin-id support.refunds  # pin a path-deriv
 ```
 
 Promotion requires an explicit evaluation id (use `--pin-id` and add the
-printed one-line id to your `evaluate()` call — the CLI never rewrites
+printed one-line id to your `evaluate()` call: the CLI never rewrites
 source) and refuses filtered runs: paired statistics need the full case
 population. Promote failures are usage errors (exit 2, nothing written).
 

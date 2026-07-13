@@ -49,7 +49,7 @@ const proposals = await agentMemory.proposals.list({
 await agentMemory.proposals.approve(proposals[0].id);
 ```
 
-Proposal transitions are strict. Approving, rejecting, or editing a terminal proposal throws instead of writing duplicate memory.
+Only pending proposals can be approved, rejected, or edited. Once a proposal is decided, trying to change it again is an error, so a decision cannot accidentally write duplicate memory.
 
 If your product has a safe write path, set `write: { mode: 'auto' }`. For example, a procedure extracted from an explicit settings screen can be auto-written; a preference inferred from a casual message should probably remain proposed.
 

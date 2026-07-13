@@ -3,13 +3,13 @@ title: Compositions
 description: Combine multiple agents into pipelines, parallel groups, voting consensus, or peer-to-peer swarms.
 ---
 
-A single agent answers a single prompt. A composition combines multiple agents into a structured workflow — sequential chains, parallel fan-out, voting, or LLM-routed handoffs. All four compositions are built on the same agent abstraction, so an agent that works on its own works inside any composition.
+A single agent answers a single prompt. A composition combines multiple agents into a structured workflow: sequential chains, parallel fan-out, voting, or LLM-routed handoffs. All four compositions are built on the same agent abstraction, so an agent that works on its own works inside any composition.
 
 ## What problem does this solve?
 
 Most real LLM workloads aren't one-shot. You want to *plan then execute*, *generate three drafts and pick one*, *fan out to specialists and merge*, or *let the model itself route the next step*. Hand-coding these patterns leads to ad-hoc orchestration that's hard to test, hard to instrument, and hard to swap.
 
-Crux gives you four named compositions with shared semantics — typed inputs, observable handoffs, instrumentation hooks, and `onError` policies. Switching from `pipeline` to `consensus` is a one-word change, not a rewrite.
+Crux gives you four named compositions with shared semantics: typed inputs, observable handoffs, instrumentation hooks, and `onError` policies. Switching from `pipeline` to `consensus` is a one-word change, not a rewrite.
 
 ## When should I use which?
 
@@ -24,7 +24,7 @@ Crux gives you four named compositions with shared semantics — typed inputs, o
 
 - You have **one agent**. Don't wrap a single agent in pipeline-of-one.
 - You need **fully dynamic, code-driven branching** that depends on application state, not LLM output. Use plain control flow.
-- You want **suspendable, resumable** orchestration with persistence across restarts — that's [Flows](/docs/guides/flows), not a composition.
+- You want **suspendable, resumable** orchestration with persistence across restarts: that's [Flows](/docs/guides/flows), not a composition.
 
 ## Quick example: pipeline
 

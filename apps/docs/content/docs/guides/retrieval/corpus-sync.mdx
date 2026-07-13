@@ -3,22 +3,28 @@ title: Syncing a Corpus
 description: Keep an indexed retrieval corpus up to date without rewriting every source.
 ---
 
-Use `corpus()` when indexing runs more than once.
+Your docs re-index nightly. Without sync state, every run re-embeds thousands of unchanged files, and you pay embedding cost and index churn for content that did not change. `corpus()` fixes that: it wraps an indexer with a source ledger that remembers what was indexed, so repeated ingestion jobs only reprocess sources that actually changed.
 
 ```txt
 indexer.indexDocuments() -> direct write
 corpus.sync()            -> repeated ingestion job
 ```
 
-A corpus wraps an indexer with a source ledger. The ledger stores source hashes, index fingerprints, status, chunk counts, pipeline stages, errors, and timestamps.
-
 ## Basic Sync
 
 ```ts
+import { embedding } from '@use-crux/core/embedding'
 import { corpus, indexer } from '@use-crux/core/indexing'
 import { inMemoryRecordStore, inMemoryVectorStore } from '@use-crux/core/storage'
 import { filesSource } from '@use-crux/ingest/files'
 
+const dense = embedding({
+  kind: 'dense',
+  name: 'text-embedding-3-small',
+  dimensions: 1536,
+  maxInputTokens: 8191,
+  embed: async (texts) => ({ embeddings: await embedDense(texts) }),
+})
 const records = inMemoryRecordStore()
 const vectors = inMemoryVectorStore()
 
@@ -28,7 +34,6 @@ const docsIndexer = indexer({
   records,
   vectors,
   dense,
-  sparse,
 })
 
 const docsCorpus = corpus({
@@ -50,6 +55,8 @@ const result = await docsCorpus.sync(source.load(), {
 
 console.log(result)
 ```
+
+Add a `sparse` embedding to the indexer when your retriever runs sparse or hybrid search. See [Embeddings](/docs/guides/retrieval/embeddings) for defining both.
 
 Typical result:
 
@@ -247,7 +254,7 @@ await docsCorpus.clearSources()
 
 ## What Counts As Changed
 
-Crux compares the source hash and the index hash.
+Content changes, stable-metadata changes, and indexer pipeline changes all trigger a reindex. Exclude volatile metadata that should not count as a change:
 
 ```ts
 const docsCorpus = corpus({
@@ -261,33 +268,11 @@ const docsCorpus = corpus({
 })
 ```
 
-Changing source content reindexes the source. Changing stable metadata reindexes the source. Changing the indexer fingerprint also reindexes the source, so versioned pipeline changes can intentionally rebuild unchanged content.
+See [change detection](/docs/reference/crux-core/indexing#change-detection) in the indexing reference for the exact hash and fingerprint rules.
 
 ## Observability
 
-Corpus sync emits:
-
-```txt
-corpus:sync:start
-corpus:source:added | changed | unchanged | skipped | failed | stale | deleted
-corpus:sync:end
-```
-
-Ingest parsing emits:
-
-```txt
-ingest:parse:start
-ingest:parse:end
-```
-
-Indexing emits:
-
-```txt
-index:start
-index:end
-```
-
-The same stage records flow through source records, devtools, CLI/TUI, and `@use-crux/otel`.
+Corpus sync, ingest parsing, and indexing each emit start/end and per-source lifecycle events, and the same stage records flow through source records, devtools, CLI/TUI, and `@use-crux/otel`. The full event lists live in the [indexing reference](/docs/reference/crux-core/indexing#hooks-emitted) and the [ingest reference](/docs/reference/ingest#observability).
 
 ## Related
 

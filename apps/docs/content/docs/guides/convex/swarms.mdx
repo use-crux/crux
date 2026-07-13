@@ -3,8 +3,6 @@ title: Swarms
 description: Experimental cross-action swarm routing for Convex.
 ---
 
-# Convex Swarms
-
 `createComponentSwarm()` from `@use-crux/convex/swarm` is experimental. It explores cross-action swarm routing by running one agent turn per scheduled action, storing state in the Crux component, and scheduling the next turn after a handoff.
 
 For launch-critical code, keep swarms as immediate adapter compositions inside one Crux-aware action. Use `flow()` from `@use-crux/convex/server` when you need durable Convex orchestration, external signals, or resumable multi-step work.

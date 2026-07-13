@@ -18,7 +18,7 @@ import {
 } from '@use-crux/core/adapter/tool'
 ```
 
-The tool lifecycle is one deep module. Middleware and approvals are **authored** as frozen objects; everything between "the model emitted tool calls" and "tool results are ready" is **executed** through a single per-call `ToolLifecycle` session that every adapter constructs internally — merge precedence, middleware chaining, the approval suspend/resume protocol, instrumentation, skill loads, and memory capture live in the session, never in adapter code. See [the ToolLifecycle session](#the-toollifecycle-session-adapter-authors) below.
+The tool lifecycle is one deep module. Middleware and approvals are **authored** as frozen objects; everything between "the model emitted tool calls" and "tool results are ready" is **executed** through a single per-call `ToolLifecycle` session that every adapter constructs internally, merge precedence, middleware chaining, the approval suspend/resume protocol, instrumentation, skill loads, and memory capture live in the session, never in adapter code. See [the ToolLifecycle session](#the-toollifecycle-session-adapter-authors) below.
 
 Tool middleware wraps tools before an adapter executes them. Use it for behavior that should apply across many tools: audit logging, timing, validation, matcher-based approval callbacks, and consistent error handling. Tool definitions themselves stay policy-free; explicit approval policy belongs on `context({ toolApproval })`, `prompt({ toolApproval })`, or call-site `generate()` / `stream()` options.
 
@@ -230,14 +230,14 @@ Use `toolApprovalResponseMessage()` when you want to construct the response mess
 
 ## The ToolLifecycle session (adapter authors)
 
-Apps never call this — both built-in dialect factories (`adapter()` for core-driven loops, `loopRuntimeAdapter()` for SDK-driven loops) construct one session per `generate()`/`stream()` call. You only need it when building a custom adapter outside the factories.
+Apps never call this, both built-in dialect factories (`adapter()` for core-driven loops, `loopRuntimeAdapter()` for SDK-driven loops) construct one session per `generate()`/`stream()` call. You only need it when building a custom adapter outside the factories.
 
 ```ts
 import { createToolLifecycle } from '@use-crux/core/adapter/tool'
 
 const lifecycle = createToolLifecycle({
   regime: 'core', // 'core' (you drive rounds) | 'sdk' (the SDK drives)
-  resolved, // the resolved prompt — tools, middleware, skills, memory
+  resolved, // the resolved prompt, tools, middleware, skills, memory
   call: { tools, toolMiddleware }, // per-call additions (highest precedence)
   promptId: prompt.id,
   input,
@@ -249,7 +249,7 @@ const lifecycle = createToolLifecycle({
 // Once, before the first provider call:
 let messages = (await lifecycle.resume(history)).messages
 
-// Core regime — drive rounds yourself:
+// Core regime, drive rounds yourself:
 const round = await lifecycle.executeRound(extracted, messages)
 if (round.kind === 'suspended') {
   // round.messages ends with the approval-request message plus one tool
@@ -257,7 +257,7 @@ if (round.kind === 'suspended') {
   // will not replay them). Persist as-is, return round.request.
 }
 
-// SDK regime — hand the armed map to the SDK instead:
+// SDK regime, hand the armed map to the SDK instead:
 const outcome = await sdk.runTextLoop({ tools: lifecycle.tools /* … */ })
 if (outcome.status === 'suspended') {
   const sealed = lifecycle.suspend(outcome.pendingApprovals, outcome.assistantResponse, outcome.messages)
@@ -270,7 +270,7 @@ const amendment = await lifecycle.applySkillLoads(step.toolCalls) // LoadSkill �
 await lifecycle.captureTurn({ messages, assistantText, toolCalls })
 ```
 
-The session owns: tool merge precedence (call tools shadow prompt tools), middleware chain order (prompt middleware before call middleware), the full approval protocol (deterministic `approval_<toolCallId>` ids, anti-forgery tokens, decision matching, idempotent resume replay), per-call instrumentation (canonical `tool.call` spans, consumed `tool.args`, raw and model-facing `tool.result` artifacts, and approval decision records), output normalization (`toModelOutput`, default shaping, rendering), the `LoadSkill` side effect, and memory-capture fan-out. Both regimes drive the same private gate → execute → settle verdict kernel, so live and resumed tool calls have the same observability contract whether core or the SDK drives the loop — the cross-dialect parity suite verifies it mechanically.
+The session owns: tool merge precedence (call tools shadow prompt tools), middleware chain order (prompt middleware before call middleware), the full approval protocol (deterministic `approval_<toolCallId>` ids, anti-forgery tokens, decision matching, idempotent resume replay), per-call instrumentation (canonical `tool.call` spans, consumed `tool.args`, raw and model-facing `tool.result` artifacts, and approval decision records), output normalization (`toModelOutput`, default shaping, rendering), the `LoadSkill` side effect, and memory-capture fan-out. Both regimes drive the same private gate → execute → settle verdict kernel, so live and resumed tool calls have the same observability contract whether core or the SDK drives the loop, the cross-dialect parity suite verifies it mechanically.
 
 `stream()` paths that never execute tools call `lifecycle.notifyDecisions(messages)` so `approvalMiddleware` `onApproved`/`onDenied` callbacks still fire for decisions found in history.
 
@@ -319,4 +319,4 @@ export type {
 }
 ```
 
-The authoring surface and approval helpers are also exported from the `@use-crux/core` root and `@use-crux/core/tool-middleware`. The former `@use-crux/core/tool-approvals` subpath is gone — import the same helpers from `@use-crux/core/adapter/tool` (or the root). The orchestration internals the session replaced (`applyToolMiddleware`, `notifyToolApprovalResponses`, `instrumentToolSet`, the approval id/token/message builders, resume scanning) are no longer exported anywhere — every removed call pattern is a session method now.
+The authoring surface and approval helpers are also exported from the `@use-crux/core` root and `@use-crux/core/tool-middleware`. The former `@use-crux/core/tool-approvals` subpath is gone, import the same helpers from `@use-crux/core/adapter/tool` (or the root). The orchestration internals the session replaced (`applyToolMiddleware`, `notifyToolApprovalResponses`, `instrumentToolSet`, the approval id/token/message builders, resume scanning) are no longer exported anywhere, every removed call pattern is a session method now.

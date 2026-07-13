@@ -3,18 +3,7 @@ title: Routing Receipts
 description: Inspect the concrete model and every routing decision for a call.
 ---
 
-A routed call produces one append-only `RoutingReceipt`.
-
-```ts
-interface RoutingReceipt {
-  model: string;
-  cost: number | undefined;
-  firstTokenAt?: number;
-  trace: RoutingStep[];
-}
-```
-
-`model` is always the final concrete provider model id. `trace` is ordered from outermost decision to nested decision. `firstTokenAt` is present for streams and records elapsed milliseconds from routed stream hand-off to the first emitted token.
+Which model actually ran, and what did it cost? When a call goes through a router, a fallback chain, and a retry wrapper, the answer is not obvious from the result text. Read `result.routing`:
 
 ```ts
 const result = await generate(prompt, {
@@ -27,6 +16,19 @@ console.log(result.routing?.model);
 console.log(result.routing?.trace);
 ```
 
+A routed call produces one append-only `RoutingReceipt`:
+
+```ts
+interface RoutingReceipt {
+  model: string;
+  cost: number | undefined;
+  firstTokenAt?: number;
+  trace: RoutingStep[];
+}
+```
+
+`model` is always the final concrete provider model id. `trace` is ordered from outermost decision to nested decision. `firstTokenAt` is present for streams and records elapsed milliseconds from routed stream hand-off to the first emitted token.
+
 Receipts are exposed on:
 
 - `result.routing` for `generate()`
@@ -35,4 +37,4 @@ Receipts are exposed on:
 - `CascadeExhaustedError.routing`
 - stream completion errors after mid-stream failure
 
-The outer observability artifact kind is `routing.report`. Its preview is exactly the same receipt object exposed to callers: the receipt itself has no `kind` property. Devtools shows TTFT, bounded attempt error text, and cascade evaluator note/budget from this shared shape.
+The same receipt is what devtools renders: each routed resolution attaches it as a `routing.report` observability artifact. See the [Observability reference](/docs/reference/crux-core/observability) for the artifact shape and how devtools presents TTFT, attempt errors, and cascade notes from it.

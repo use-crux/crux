@@ -3,15 +3,25 @@ title: Ingesting Text, Files, and URLs
 description: Use @use-crux/ingest to produce documents for indexing.
 ---
 
-`@use-crux/ingest` is the loading layer in Crux's retrieval stack. Its job is to take source material from the outside world and turn it into `IngestDocument` values that a corpus sync can consume.
+You have a folder of markdown docs, or a set of PDFs, HTML pages, and spreadsheets, and you want them searchable. `@use-crux/ingest` loads that source material and turns it into documents a corpus sync can consume. Indexing a folder takes a few lines:
 
-That sounds small, but it matters. Without a clear ingestion layer, every retrieval project ends up inventing slightly different loaders, slightly different document shapes, and slightly different answers to what counts as a source.
+```ts
+import { filesSource } from '@use-crux/ingest/files'
 
-## What ingest is for
+const loader = filesSource(
+  { directory: './docs', recursive: true },
+  { namespace: 'product-docs' },
+)
 
-Use `@use-crux/ingest` when you want a first-party path for text, local files, folders, globs, or URLs. If your documents already exist in memory, you may not need it at all. You can pass documents straight into `corpus.sync()` or `indexer.indexDocuments()` and skip the loading layer entirely.
+await docsCorpus.sync(loader.load(), {
+  sourceSet: 'complete',
+  stale: 'delete',
+})
+```
 
-That is an important part of the design. `@use-crux/ingest` is there to make the full retrieval story coherent, not to become mandatory ceremony.
+(`docsCorpus` is a `corpus()` wrapping an `indexer()`; the [wiring section](#wiring-into-indexing) below shows the full setup.)
+
+Use `@use-crux/ingest` when you want a first-party path for text, local files, folders, globs, or URLs. If your documents already exist in memory, you may not need it at all: pass documents straight into `corpus.sync()` or `indexer.indexDocuments()` and skip the loading layer entirely.
 
 ## Bundled loaders
 
@@ -26,19 +36,7 @@ Crux ships a small set of loaders that all return the same `SourceLoader` interf
 | `urlsSource()` | An explicit URL list. | Small web source sets where you already know the URLs. |
 | Custom loader | Any async iterable of load results. | Crawlers, CMS integrations, database sources, queues, or connector packages. |
 
-The common shape is what matters:
-
-```ts
-const loader = filesSource(
-  { directory: './docs', recursive: true },
-  { namespace: 'product-docs' },
-)
-
-await docsCorpus.sync(loader.load(), {
-  sourceSet: 'complete',
-  stale: 'delete',
-})
-```
+Every loader plugs into a corpus sync exactly like the `filesSource()` example above.
 
 Use `load()` for product jobs because one bad source becomes a failed source record instead of crashing the whole sync. Use `documents()` when a script or test should fail fast.
 
@@ -79,23 +77,7 @@ const loader = filesSource(
 
 ## The core contract
 
-Everything in `@use-crux/ingest` reduces to one small contract:
-
-```ts
-type IngestDocument = {
-  namespace: string
-  sourceId: string
-  parts: IngestPart[]
-  content: string
-  title?: string
-  metadata?: Record<string, unknown>
-}
-
-type SourceLoader = {
-  load(): AsyncIterable<IngestLoadResult>
-  documents(): AsyncIterable<IngestDocument>
-}
-```
+Everything in `@use-crux/ingest` reduces to two small types: `IngestDocument` (namespace, source ID, parsed `parts`, derived `content`, title, metadata) and `SourceLoader` (an async iterable exposing `load()` and `documents()`). The full type shapes live in the [ingest reference](/docs/reference/ingest#types).
 
 The async-iterable shape is the important part. It lets loaders stay simple for small cases while still supporting large corpora, streaming sources, and custom integrations without forcing everything through one giant array in memory.
 
@@ -243,9 +225,7 @@ The package stays small, and users do not get blocked.
 
 ## What `@use-crux/ingest` is not trying to be
 
-It is not a crawler, a connector marketplace, a CMS framework, or a document intelligence platform. It is the thin loading layer that makes the rest of the retrieval stack coherent.
-
-That restraint is part of the design quality. A smaller, clearer loading layer is easier for users to reason about and easier for Crux to evolve safely.
+It is not a crawler, a connector marketplace, a CMS framework, or a document intelligence platform; it is the thin loading layer that makes the rest of the retrieval stack coherent.
 
 ## Related
 
@@ -264,11 +244,6 @@ That restraint is part of the design quality. A smaller, clearer loading layer i
     title="Indexing"
     description="Turn loaded documents into retrieval chunks."
     href="/docs/guides/retrieval/indexing"
-  />
-  <Card
-    title="Corpus Sync"
-    description="Run ingestion repeatedly and keep stale sources safe."
-    href="/docs/guides/retrieval/corpus-sync"
   />
   <Card title="Ingest Reference" description="Full `@use-crux/ingest` API." href="/docs/reference/ingest" />
 </Cards>

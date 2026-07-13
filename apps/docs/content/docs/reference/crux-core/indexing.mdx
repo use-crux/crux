@@ -662,6 +662,29 @@ type SourceStageRecord = {
 }
 ```
 
+### Change detection
+
+`corpus.sync()` decides whether a source needs reindexing by comparing two hashes stored in the ledger:
+
+- the source hash, computed from source content plus stable metadata
+- the index hash, the indexer pipeline fingerprint recorded at last index time
+
+Changing source content reindexes the source. Changing stable metadata reindexes the source. Changing the indexer fingerprint also reindexes the source, so versioned pipeline changes can intentionally rebuild unchanged content.
+
+Volatile metadata fields should not count as changes. Exclude them through `hash.excludeMetadata`:
+
+```ts
+const docsCorpus = corpus({
+  id: 'docs',
+  namespace: 'product-docs',
+  records,
+  indexer: docsIndexer,
+  hash: {
+    excludeMetadata: ['mtimeMs', 'lastFetchedAt'],
+  },
+})
+```
+
 ## Replacement model
 
 `indexDocuments()` uses generation-aware replacement. New chunks and parent records are written with a fresh `generationId` and `active: true`. Only after the new generation succeeds does Crux mark previous records for that source inactive.

@@ -3,7 +3,7 @@ title: Production Telemetry
 description: Send Crux traces to Datadog, Honeycomb, Grafana, and other observability platforms via OpenTelemetry.
 ---
 
-Crux devtools is great for development, but production environments need traces in your existing observability stack. `@use-crux/otel` emits OpenTelemetry spans for every instrumented event — one integration covers Datadog, Honeycomb, Grafana, New Relic, and any OTel-compatible platform.
+Crux devtools is great for development, but production environments need traces in your existing observability stack. `@use-crux/otel` emits OpenTelemetry spans for every instrumented event: one integration covers Datadog, Honeycomb, Grafana, New Relic, and any OTel-compatible platform.
 
 ## Setup
 
@@ -49,7 +49,7 @@ sdk.start()
 ```ts title="crux.config.ts"
 import { withTelemetry } from '@use-crux/otel'
 
-// No exporter needed — uses the global TracerProvider
+// No exporter needed: uses the global TracerProvider
 config({
   plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
@@ -87,7 +87,7 @@ withTelemetry({
 })
 ```
 
-The URL exporter uses fire-and-forget HTTP POST (5-second timeout) — failures are silently ignored so telemetry never impacts your application.
+The URL exporter uses fire-and-forget HTTP POST (5-second timeout): failures are silently ignored so telemetry never impacts your application.
 
 `withTelemetry()` is safe to compose defensively: duplicate active installs warn once and become no-ops, and open span registries are bounded. Spans evicted because of registry pressure are force-ended with `crux.expired: true` and `UNSET` status.
 
@@ -140,8 +140,8 @@ events, deliberately configured destinations.
 | Option | Type | Default | Description |
 | --- | --- | --- | --- |
 | `serviceName` | `string` | `'@use-crux/otel'` | Tracer name / service identifier |
-| `attributes` | `Record<string, string>` | — | Custom attributes on every span |
-| `exporter` | `UrlExporter \| CallbackExporter` | — | Export strategy (omit for standard OTel path) |
+| `attributes` | `Record<string, string>` | n/a | Custom attributes on every span |
+| `exporter` | `UrlExporter \| CallbackExporter` | n/a | Export strategy (omit for standard OTel path) |
 | `captureMessageContent` | `boolean` | `false` | Export GenAI input/output message attributes |
 | `semconvVersion` | `'genai-dev-2026-06'` | current table | Forward compatibility knob for semconv names |
 | `baggageAttributeAllowlist` | `readonly string[]` | unset | Baggage keys copied onto resumed root spans as `crux.baggage.*` |
@@ -169,7 +169,7 @@ IDs as correlation attributes.
 
 ## Active span bridge and W3C propagation
 
-`withTelemetry()` activates a real OTel span around instrumented callbacks —
+`withTelemetry()` activates a real OTel span around instrumented callbacks:
 `trace.getActiveSpan()` resolves inside provider, tool, agent, and flow work, and
 nested spans parent correctly. This is not post-hoc span creation after the work
 already finished.
@@ -215,7 +215,7 @@ if (extracted.carrier) {
 
 Incoming carriers are untrusted: format/length limits and baggage caps apply.
 Baggage keys become `crux.baggage.*` span attributes only when listed in
-`withTelemetry({ baggageAttributeAllowlist: ['tenant', …] })` — nothing is
+`withTelemetry({ baggageAttributeAllowlist: ['tenant', …] })`; nothing is
 copied by default.
 
 `observe.flush()` / `observe.shutdown()` and the [host lifecycle wrappers](/docs/guides/observability/runtime-setup)
