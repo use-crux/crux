@@ -1,6 +1,6 @@
 ---
-"@use-crux/core": major
-"@use-crux/ai": major
+"@use-crux/core": minor
+"@use-crux/ai": minor
 "@use-crux/devtools": patch
 "@use-crux/indexer": minor
 "@use-crux/local": minor

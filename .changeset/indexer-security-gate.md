@@ -1,6 +1,6 @@
 ---
 "@use-crux/core": patch
-"@use-crux/indexer": major
+"@use-crux/indexer": minor
 "@use-crux/local": patch
 ---
 
