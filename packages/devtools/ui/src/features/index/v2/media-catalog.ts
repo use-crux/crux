@@ -28,7 +28,7 @@ export type MediaAuthoredOptions = Readonly<{
   seed?: number;
   timestamps?: string;
   diarization?: boolean;
-  taskType?: string;
+  task?: "transcribe" | "translate";
   voice?: string;
 }>;
 
@@ -212,8 +212,8 @@ function projectAuthoredOptions(value: unknown): MediaAuthoredOptions {
     ...(typeof record.diarization === "boolean"
       ? { diarization: record.diarization }
       : {}),
-    ...(stringValue(record.taskType)
-      ? { taskType: stringValue(record.taskType) }
+    ...(record.task === "transcribe" || record.task === "translate"
+      ? { task: record.task }
       : {}),
     ...(stringValue(record.voice) ? { voice: stringValue(record.voice) } : {}),
   });

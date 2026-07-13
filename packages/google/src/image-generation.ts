@@ -1,7 +1,6 @@
 import type {
-  GenerateImagesConfig,
+  EditImageResponse,
   GenerateImagesResponse,
-  GenerateContentConfig,
   GenerateContentResponse,
   GoogleGenAI,
   Part,
@@ -12,32 +11,20 @@ import {
   lowerImagePrompt,
   validateGenerateImageOptions,
   type GenerateImage,
-  type GenerateImageOptions,
-  type ImagePrompt,
-  type UnsupportedCapabilityIssue,
 } from "@use-crux/core";
 import {
   bindCompletedOperation,
   defineCompletedOperation,
 } from "@use-crux/core/adapter";
-
-/** Native Imagen controls, excluding portable fields owned by Crux. */
-export type GoogleImagenImageExtra = Omit<
-  GenerateImagesConfig,
-  "numberOfImages" | "aspectRatio" | "seed"
->;
-
-/** Native Gemini generation controls, excluding image lifecycle fields owned by Crux. */
-export type GoogleGeminiImageExtra = Omit<
-  GenerateContentConfig,
-  "abortSignal" | "responseModalities" | "imageConfig" | "seed"
->;
-
-/** Model-family-specific native image options. */
-export interface GoogleImageExtra {
-  readonly imagen?: GoogleImagenImageExtra;
-  readonly gemini?: GoogleGeminiImageExtra;
-}
+import { googleImagenEditReferences } from "./image-edit";
+import { googleImageIssues, isGeminiEndpoint } from "./image-support";
+import type { GoogleImageExtra, GoogleImageInput } from "./image-types";
+export type {
+  GoogleGeminiImageExtra,
+  GoogleImageExtra,
+  GoogleImagenEditExtra,
+  GoogleImagenImageExtra,
+} from "./image-types";
 
 /**
  * Flat Google image operation attached to a bound adapter.
@@ -51,31 +38,8 @@ export interface GoogleImageExtra {
 export type GoogleGenerateImage = GenerateImage<
   string,
   GoogleImageExtra,
-  GenerateImagesResponse | GenerateContentResponse
+  GenerateImagesResponse | GenerateContentResponse | EditImageResponse
 >;
-type GoogleImageInput = GenerateImageOptions<
-  string,
-  GoogleImageExtra,
-  ImagePrompt
->;
-
-const GOOGLE_IMAGE_OPERATION_SUPPORT = Object.freeze({
-  knownUnsupportedModels: Object.freeze(
-    new Set([
-      "gemini-2.0-flash",
-      "gemini-2.5-flash",
-      "gemini-2.5-pro",
-      "text-embedding-004",
-    ]),
-  ),
-  common: Object.freeze({
-    n: true,
-    aspectRatio: true,
-    seed: true,
-    size: false,
-  }),
-  edits: false,
-});
 
 /** Create one native Google image operation sharing the bound SDK client. */
 export function createGoogleGenerateImage(
@@ -98,15 +62,15 @@ export function createGoogleImageOperation(client: GoogleGenAI) {
         adapter: "google",
         model: options.model,
       });
-      const issues = googleImageIssues(options, prompt);
-      if (issues.length > 0) {
+      const [firstIssue, ...remainingIssues] = googleImageIssues(
+        options,
+        prompt,
+      );
+      if (firstIssue) {
         throw createUnsupportedCapabilityError({
           adapter: "google",
           model: options.model,
-          issues: issues as [
-            UnsupportedCapabilityIssue,
-            ...UnsupportedCapabilityIssue[],
-          ],
+          issues: [firstIssue, ...remainingIssues],
         });
       }
       return { options, prompt };
@@ -115,7 +79,9 @@ export function createGoogleImageOperation(client: GoogleGenAI) {
     async invoke(
       { options, prompt },
       { signal, call },
-    ): Promise<GenerateImagesResponse | GenerateContentResponse> {
+    ): Promise<
+      GenerateImagesResponse | GenerateContentResponse | EditImageResponse
+    > {
       if (isGeminiEndpoint(options.model)) {
         return call("image.generate", async () =>
           client.models.generateContent({
@@ -131,6 +97,27 @@ export function createGoogleImageOperation(client: GoogleGenAI) {
               ...(options.aspectRatio === undefined
                 ? {}
                 : { imageConfig: { aspectRatio: options.aspectRatio } }),
+            },
+          }),
+        );
+      }
+      if (prompt.images.length > 0) {
+        return call("image.generate", async () =>
+          client.models.editImage({
+            model: options.model,
+            prompt: prompt.text,
+            referenceImages: await googleImagenEditReferences(
+              prompt.images,
+              prompt.mask,
+            ),
+            config: {
+              ...options.extra?.edit,
+              abortSignal: signal,
+              ...(options.n === undefined ? {} : { numberOfImages: options.n }),
+              ...(options.aspectRatio === undefined
+                ? {}
+                : { aspectRatio: options.aspectRatio }),
+              ...(options.seed === undefined ? {} : { seed: options.seed }),
             },
           }),
         );
@@ -216,48 +203,11 @@ export function createGoogleImageOperation(client: GoogleGenAI) {
   return definition;
 }
 
-function googleImageIssues(
-  options: GoogleImageInput,
-  prompt: Awaited<ReturnType<typeof lowerImagePrompt>>,
-): UnsupportedCapabilityIssue[] {
-  const issues: UnsupportedCapabilityIssue[] = [];
-  if (
-    GOOGLE_IMAGE_OPERATION_SUPPORT.knownUnsupportedModels.has(options.model)
-  ) {
-    issues.push(issue("image.model"));
-  }
-  if (!GOOGLE_IMAGE_OPERATION_SUPPORT.common.size && options.size !== undefined)
-    issues.push(issue("image.size"));
-  if (!isGeminiEndpoint(options.model)) {
-    prompt.images.forEach((_asset, index) =>
-      issues.push(issue("image.edit.reference", `prompt.images[${index}]`)),
-    );
-    if (prompt.mask) issues.push(issue("image.edit.mask", "prompt.mask"));
-  }
-  if (
-    isGeminiEndpoint(options.model) &&
-    options.n !== undefined &&
-    options.n !== 1
-  )
-    issues.push(issue("image.n"));
-  if (isGeminiEndpoint(options.model) && options.extra?.imagen !== undefined)
-    issues.push(issue("image.extra.imagen", "extra.imagen"));
-  if (!isGeminiEndpoint(options.model) && options.extra?.gemini !== undefined)
-    issues.push(issue("image.extra.gemini", "extra.gemini"));
-  return issues;
-}
-
-function isGeminiEndpoint(model: string): boolean {
-  return model.startsWith("gemini-");
-}
-
 async function geminiPromptParts(
   prompt: Awaited<ReturnType<typeof lowerImagePrompt>>,
 ): Promise<Part[]> {
   const parts: Part[] = [{ text: prompt.text }];
   for (const asset of prompt.images) parts.push(await googleImagePart(asset));
-  if (prompt.mask)
-    parts.push({ text: "Mask image:" }, await googleImagePart(prompt.mask));
   return parts;
 }
 
@@ -285,14 +235,5 @@ async function googleImagePart(
       data: Buffer.from(bytes).toString("base64"),
       mimeType: asset.mediaType,
     },
-  };
-}
-
-function issue(capability: string, path?: string): UnsupportedCapabilityIssue {
-  return {
-    capability,
-    ...(path === undefined ? {} : { path }),
-    remediation:
-      "Use a native Imagen generation model and Google-supported generation controls.",
   };
 }

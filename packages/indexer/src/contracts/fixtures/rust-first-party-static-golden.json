@@ -5,12 +5,12 @@
   "fileSelection": "staticDefinitionFiles(root)",
   "projection": "canonicalStaticExtractionJson(definitions,relations,diagnostics,dependencies)",
   "totals": {
-    "files": 631,
-    "definitions": 46,
+    "files": 637,
+    "definitions": 62,
     "relations": 2,
-    "diagnostics": 9,
-    "dependencies": 1192,
-    "canonicalBytes": 140231
+    "diagnostics": 17,
+    "dependencies": 1202,
+    "canonicalBytes": 170719
   },
   "files": [
     {
@@ -78,20 +78,20 @@
     },
     {
       "file": "examples/node-basic/defer-http.example.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
+      "sha256": "5af6c5de61ab495e7e7312392dd590042afb6d1b0537c85a5c7c0fe8d9516afd",
+      "bytes": 1715,
+      "definitions": 1,
       "relations": 0,
       "diagnostics": 0,
       "dependencies": 0
     },
     {
       "file": "examples/node-basic/defer-named.example.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
+      "sha256": "47761cae2b62719aa0c08c25065f59a8b4232a8f1e0134cfbcb02426835c8646",
+      "bytes": 2151,
+      "definitions": 1,
       "relations": 0,
-      "diagnostics": 0,
+      "diagnostics": 1,
       "dependencies": 0
     },
     {
@@ -285,8 +285,8 @@
     },
     {
       "file": "packages/ai/src/image-generation.ts",
-      "sha256": "460b27a49190eacf5d74cb555f94fa2ce11b4c89cc49ed36deed23b15c70d421",
-      "bytes": 1056,
+      "sha256": "ba20696912087a7efe906ab4cb8578f1eee3356f9e213aae6bbcd6e30ec61124",
+      "bytes": 1057,
       "definitions": 1,
       "relations": 0,
       "diagnostics": 1,
@@ -456,11 +456,11 @@
     },
     {
       "file": "packages/ai/src/speech.ts",
-      "sha256": "ceccd3a13b72c0ab70d71af89d9a4759ea1e7bfa7b9bb106845a8c535fa5a5e2",
-      "bytes": 687,
+      "sha256": "26f46ad09853c3775014f434c86a2fc91796ae49daa5dceedeeb1eb8547d9efe",
+      "bytes": 1061,
       "definitions": 1,
       "relations": 0,
-      "diagnostics": 0,
+      "diagnostics": 1,
       "dependencies": 0
     },
     {
@@ -519,11 +519,11 @@
     },
     {
       "file": "packages/ai/src/transcription.ts",
-      "sha256": "af8ca20c42ecf56ec2a5f868f43924ed588b4cde410009fc60fe6f435e0fe01b",
-      "bytes": 680,
+      "sha256": "5f784b67833df2c65c36ddc14308f2384e1a88903b0898f813bb5611f747a64c",
+      "bytes": 1057,
       "definitions": 1,
       "relations": 0,
-      "diagnostics": 0,
+      "diagnostics": 1,
       "dependencies": 0
     },
     {
@@ -1356,20 +1356,20 @@
     },
     {
       "file": "packages/core/__type_tests__/defer-contract.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
+      "sha256": "5935af656ab9852fe2b37d934dafe82c09d26b843c48357a295cc5e8e4b93eae",
+      "bytes": 17817,
+      "definitions": 10,
       "relations": 0,
-      "diagnostics": 0,
+      "diagnostics": 4,
       "dependencies": 0
     },
     {
       "file": "packages/core/__type_tests__/defer-examples-contract.ts",
-      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
-      "bytes": 68,
-      "definitions": 0,
+      "sha256": "dd92365e7c3bda6efb1c58aaab68038f724ceb53de52e62ece902db5f68470b8",
+      "bytes": 7318,
+      "definitions": 4,
       "relations": 0,
-      "diagnostics": 0,
+      "diagnostics": 1,
       "dependencies": 0
     },
     {
@@ -3605,7 +3605,34 @@
       "dependencies": 1
     },
     {
+      "file": "packages/google/src/image-edit.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
       "file": "packages/google/src/image-generation.ts",
+      "sha256": "fbf2b3ac8652eccc999d0a296f1ff2c893a02d6a81e3e5e79179accbdda3f901",
+      "bytes": 156,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 2
+    },
+    {
+      "file": "packages/google/src/image-support.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/google/src/image-types.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,
@@ -4325,13 +4352,31 @@
       "dependencies": 13
     },
     {
-      "file": "packages/indexer/src/indexer/semantic/media-facts.ts",
-      "sha256": "7e87ca3851c946e96838ca935d209d1051194f0946b07091e387fc1b01a9c066",
-      "bytes": 511,
+      "file": "packages/indexer/src/indexer/semantic/media-call-evidence.ts",
+      "sha256": "74c9a85dac3253080886bf710f6c6196238e16de0c9ffe70f9469fb2fd328ca1",
+      "bytes": 256,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 7
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/src/indexer/semantic/media-fact-values.ts",
+      "sha256": "4e41bb8411970e6c916d037d53092a18bcb709f09c0dc7fb428548e322aeb609",
+      "bytes": 259,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 3
+    },
+    {
+      "file": "packages/indexer/src/indexer/semantic/media-facts.ts",
+      "sha256": "6c62cbc8ebf292941bd4476e099a74de3720b619e506b36d27813fbd1d980208",
+      "bytes": 581,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 8
     },
     {
       "file": "packages/indexer/src/indexer/semantic/media-lints.ts",
@@ -4992,12 +5037,12 @@
     },
     {
       "file": "packages/local-workers/bin/project-indexer.ts",
-      "sha256": "8d5886f24f20193bf9f8ff521c516bab44c1680b1dcea60fec1f6c72ae998f0a",
-      "bytes": 261,
+      "sha256": "5386bc21f01fe98a20c7d5cdcd49f4ff61d75306ab3af78bba8fe305aad22716",
+      "bytes": 323,
       "definitions": 0,
       "relations": 0,
       "diagnostics": 0,
-      "dependencies": 3
+      "dependencies": 4
     },
     {
       "file": "packages/local-workers/bin/project-runtime-indexer.ts",
@@ -5118,6 +5163,15 @@
     },
     {
       "file": "packages/local-workers/lib/quality-prompt-discovery.ts",
+      "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
+      "bytes": 68,
+      "definitions": 0,
+      "relations": 0,
+      "diagnostics": 0,
+      "dependencies": 0
+    },
+    {
+      "file": "packages/local-workers/lib/runtime-operation-kind.ts",
       "sha256": "2747591b30a9e76efcfc8226e340f5f9ef5afe733871f739035456acb5fa86e8",
       "bytes": 68,
       "definitions": 0,

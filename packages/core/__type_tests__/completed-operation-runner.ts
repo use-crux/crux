@@ -10,6 +10,8 @@ import type { Support } from "@use-crux/core/adapter";
 // @ts-expect-error - completed operations intentionally expose no cache contract.
 import type { CompletedOperationCache } from "@use-crux/core/adapter";
 
+const completedInput: Readonly<{ text: string }> = { text: "hello" };
+
 const definition = defineCompletedOperation({
   normalize: (input: Readonly<{ text: string }>) => ({
     text: input.text.trim(),
@@ -30,13 +32,13 @@ const definition = defineCompletedOperation({
   }),
   report: (result) => ({ textLength: result.text.length }),
   conformance: [
-    { name: "future model", model: "future-model", input: { text: "hello" } },
+    { name: "future model", model: "future-model", input: completedInput },
   ],
 });
 
-expectTypeOf(definition.normalize)
-  .parameter(0)
-  .toEqualTypeOf<Readonly<{ text: string }>>();
+expectTypeOf<Parameters<typeof definition.normalize>[0]>().toEqualTypeOf<
+  Readonly<{ text: string }>
+>();
 expectTypeOf(definition.support).returns.toEqualTypeOf<
   "supported" | "unsupported" | "unknown"
 >();

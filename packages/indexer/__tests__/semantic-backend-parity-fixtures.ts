@@ -2,6 +2,8 @@ export interface SemanticBackendParityFixture {
   readonly name: string;
   /** Run outside the workspace so package imports intentionally stay unresolved. */
   readonly externalRoot?: boolean;
+  /** Workspace packages linked into the fixture for real public import resolution. */
+  readonly workspacePackages?: readonly string[];
   readonly files: Readonly<Record<string, string>>;
   readonly expect: {
     readonly definitionIds?: readonly string[];
@@ -28,48 +30,68 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
   [
     {
       name: "authored-media-shared-analyzer",
-      externalRoot: true,
+      workspacePackages: ["ai", "core", "openai"],
       files: {
         "src/media.ts": `
-        import { generateImage as image } from '@use-crux/ai'
-        import { generate, router } from '@use-crux/core'
+        import { generate, generateImage as image, transcribe } from '@use-crux/ai'
+        import { prompt, router } from '@use-crux/core'
+        import { createOpenAI } from '@use-crux/openai'
+        import type { ImageModel, LanguageModel, TranscriptionModel } from 'ai'
+        import type OpenAI from 'openai'
 
+        declare const client: OpenAI
+        declare const imageModel: ImageModel
+        declare const languageModel: LanguageModel
+        declare const transcriptionModel: TranscriptionModel
+        declare const audioBytes: Uint8Array
+        declare const dynamicMessages: Parameters<typeof generate>[1]['messages']
+        const openai = createOpenAI(client)
         const render = image
-        const route = router({ id: 'vision-route' })
+        const visionPrompt = prompt({ id: 'vision-prompt' })
+        const route = router({
+          id: 'vision-route',
+          classify: () => 'vision' as const,
+          routes: { vision: languageModel, default: languageModel },
+        })
         const options = {
-          adapter: 'google',
-          model: route,
+          model: imageModel,
           n: 2,
           size: '1024x1024',
-          messages: [{ role: 'user', content: [{ type: 'image', source: {
-            type: 'provider-file', provider: 'openai', fileId: 'private-file-id'
-          } }] }],
         }
         export const cover = render(options)
-        export const unsafe = generate({
-          adapter: 'google',
+        export const unsafe = openai.generate(visionPrompt, {
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: [{ type: 'image', source: {
+            type: 'provider-file', provider: 'google', fileId: 'private-file-id'
+          } }] }],
+        })
+        export const routed = generate(visionPrompt, {
+          model: route,
           messages: [{ role: 'user', content: [{ type: 'image', source: {
             type: 'asset-ref', ref: { uri: 'private-ref' }
           } }] }],
         })
-        export const unsupported = image({ adapter: 'anthropic' })
-        export const retained = image({ adapter: 'google', observability: { metadata: { rawMedia: sourceImage } } })
-        export const unknown = generate({ messages: dynamicMessages })
+        export const transcript = transcribe({
+          model: transcriptionModel,
+          audio: audioBytes,
+          task: { type: 'translate', targetLanguage: 'SECRET_LANGUAGE' },
+        })
+        export const unknown = generate(visionPrompt, { model: route, messages: dynamicMessages })
       `,
       },
       expect: {
         definitionIds: [
           "media.operation:cover",
+          "media.operation:routed",
+          "media.operation:transcript",
           "media.operation:unsafe",
-          "media.operation:unsupported",
-          "media.operation:retained",
         ],
         definitionFacts: {
           "media.operation:cover": {
             kind: "media.operation",
             operation: "generateImage",
             outputModalities: ["image"],
-            adapter: "google",
+            adapter: "ai-sdk",
             execution: "unknown",
             authoredOptions: { n: 2, size: "1024x1024" },
           },
@@ -77,16 +99,22 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
             kind: "media.operation",
             operation: "generate",
             inputModalities: ["image"],
+            adapter: "openai",
+            model: "gpt-4o",
+          },
+          "media.operation:transcript": {
+            kind: "media.operation",
+            operation: "transcribe",
+            adapter: "ai-sdk",
+            authoredOptions: { task: "translate" },
           },
         },
-        relationTypes: ["media.uses_routing"],
+        relationTypes: ["media.uses_prompt", "media.uses_routing"],
         sourceRefRoles: ["config"],
         lintRuleIds: [
           "media.invalid-provider-file",
           "media.asset-ref-not-hydrated",
           "media.output-discarded",
-          "media.unsupported-capability",
-          "media.raw-retention",
         ],
       },
     },

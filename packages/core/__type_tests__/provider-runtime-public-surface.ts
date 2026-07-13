@@ -246,8 +246,7 @@ const loopMutualExclusion = {
 // @ts-expect-error - loop-owned ownership still forbids turn mechanics.
 defineProviderRuntime(loopMutualExclusion)
 
-// @ts-expect-error - provider runtime extensions cannot replace generated runtime members.
-defineProviderRuntime({
+const loopRuntimeCollision = {
   id: 'typed-loop-collision',
   loop: {
     describeModel(model: LoopModel): ModelInfo {
@@ -265,7 +264,9 @@ defineProviderRuntime({
       return 'extension generate'
     },
   }),
-})
+}
+// @ts-expect-error - provider runtime extensions cannot replace generated runtime members.
+defineProviderRuntime(loopRuntimeCollision)
 
 const loopRuntime = loopProvider.create(loopClient)
 expectTypeOf(loopRuntime).toMatchTypeOf<CruxExecutor<LoopModel, LoopRawResponse, LoopRawStream>>()

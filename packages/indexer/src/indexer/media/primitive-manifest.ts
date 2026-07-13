@@ -4,9 +4,24 @@ import type {
   MediaOperationFacts,
   ProjectIndexMediaModality,
 } from '@use-crux/core/project-index'
-import { facts, none, type ExtractContext, type IndexerExtension } from '../extensions'
-import { ingestSourceCallKinds, mediaOperationNames, mediaRelationDeclarations } from './manifest'
-export { authoredMediaPrimitiveManifest, mediaAuthoredOptionFields, mediaOperationNames } from './manifest'
+import {
+  facts,
+  none,
+  type ExtractContext,
+  type IndexerExtension,
+} from '../extensions'
+import {
+  ingestSourceCallKinds,
+  mediaOperationConfigArguments,
+  mediaOperationNames,
+  mediaRelationDeclarations,
+} from './manifest'
+export {
+  authoredMediaPrimitiveManifest,
+  mediaAuthoredOptionFields,
+  mediaOperationConfigArguments,
+  mediaOperationNames,
+} from './manifest'
 
 const routingKinds = [
   'routing.router',
@@ -16,18 +31,25 @@ const routingKinds = [
   'routing.fallback',
 ] as const
 
-const evaluationKinds = ['evaluation', 'eval.prompt', 'eval.flow', 'eval.rag', 'eval.quality'] as const
+const evaluationKinds = [
+  'evaluation',
+  'eval.prompt',
+  'eval.flow',
+  'eval.rag',
+  'eval.quality',
+] as const
 
 /** Immutable first-party authored-media primitive manifest. */
 export const mediaPrimitiveManifest: IndexerExtension = Object.freeze({
   name: '@use-crux/indexer/crux-core-media',
-  version: '1',
+  version: '2',
   extractors: [
     {
       name: 'media.operation',
       patterns: mediaOperationNames.map((name) => ({
         kind: 'call' as const,
         name,
+        configArg: mediaOperationConfigArguments[name],
       })),
       extract: extractMediaOperation,
     },
@@ -46,7 +68,11 @@ export const mediaPrimitiveManifest: IndexerExtension = Object.freeze({
     relation('media.uses_prompt', ['media.operation'], ['prompt']),
     relation('media.uses_routing', ['media.operation'], routingKinds),
     relation('media.derives_with', ['ingest.source'], ['media.operation']),
-    relation('media.targets_index', ['ingest.source'], ['rag.knowledgeBase', 'rag.pipeline']),
+    relation(
+      'media.targets_index',
+      ['ingest.source'],
+      ['rag.knowledgeBase', 'rag.pipeline'],
+    ),
     relation('media.targets_corpus', ['ingest.source'], ['rag.knowledgeBase']),
     relation('media.evaluation_target', ['media.operation'], evaluationKinds),
     relation('media.uses_storage', ['media.operation'], ['storage.assetStore']),
@@ -57,7 +83,11 @@ function extractMediaOperation(ctx: ExtractContext) {
   const operation = mediaOperationNames.find((name) => name === ctx.match.name)
   if (!operation) return none()
   const provenInput = mediaModalities(ctx.config?.json())
-  if ((operation === 'generate' || operation === 'stream') && provenInput.length === 0) return none()
+  if (
+    (operation === 'generate' || operation === 'stream') &&
+    provenInput.length === 0
+  )
+    return none()
 
   const definitionId = `media.operation:${ctx.source.safeId(ctx.source.variableName)}`
   const factsValue: MediaOperationFacts = {
@@ -78,7 +108,9 @@ function extractMediaOperation(ctx: ExtractContext) {
           kind: 'media.operation',
           name: ctx.source.variableName,
           metadata: {
-            ...(ctx.source.exported ? { exportName: ctx.source.variableName } : {}),
+            ...(ctx.source.exported
+              ? { exportName: ctx.source.variableName }
+              : {}),
             facts: factsValue,
             indexPresentation: presentation(ctx),
           },
@@ -90,16 +122,25 @@ function extractMediaOperation(ctx: ExtractContext) {
 }
 
 function extractIngestSource(ctx: ExtractContext) {
-  const declaredKind = ingestSourceCallKinds[ctx.match.name as keyof typeof ingestSourceCallKinds]
+  const declaredKind =
+    ingestSourceCallKinds[ctx.match.name as keyof typeof ingestSourceCallKinds]
   if (!declaredKind) return none()
   const sourceKind = ingestSourceKind(ctx, declaredKind)
-  const mediaKinds = allowedValues(ctx.config?.stringArray('mediaKinds') ?? [], mediaModalityOrder)
-  const attribution = allowedValues(ctx.config?.stringArray('attribution') ?? [], ['page', 'time'] as const)
+  const mediaKinds = allowedValues(
+    ctx.config?.stringArray('mediaKinds') ?? [],
+    mediaModalityOrder,
+  )
+  const attribution = allowedValues(
+    ctx.config?.stringArray('attribution') ?? [],
+    ['page', 'time'] as const,
+  )
   const factsValue: IngestSourceFacts = {
     kind: 'ingest.source',
     sourceKind,
     ...(mediaKinds.length ? { mediaKinds } : {}),
-    ...(ctx.config?.string('namespace') ? { namespace: ctx.config.string('namespace') } : {}),
+    ...(ctx.config?.string('namespace')
+      ? { namespace: ctx.config.string('namespace') }
+      : {}),
     ...(attribution.length ? { attribution } : {}),
   }
   const definitionId = `ingest.source:${ctx.source.safeId(ctx.source.variableName)}`
@@ -113,7 +154,9 @@ function extractIngestSource(ctx: ExtractContext) {
           kind: 'ingest.source',
           name: ctx.source.variableName,
           metadata: {
-            ...(ctx.source.exported ? { exportName: ctx.source.variableName } : {}),
+            ...(ctx.source.exported
+              ? { exportName: ctx.source.variableName }
+              : {}),
             facts: factsValue,
             indexPresentation: presentation(ctx),
           },
@@ -124,7 +167,13 @@ function extractIngestSource(ctx: ExtractContext) {
   })
 }
 
-const mediaModalityOrder = ['text', 'image', 'audio', 'video', 'document'] as const
+const mediaModalityOrder = [
+  'text',
+  'image',
+  'audio',
+  'video',
+  'document',
+] as const
 
 function mediaModalities(value: unknown): readonly ProjectIndexMediaModality[] {
   const found = new Set<ProjectIndexMediaModality>()
@@ -137,7 +186,9 @@ function mediaModalities(value: unknown): readonly ProjectIndexMediaModality[] {
     for (const [key, nested] of Object.entries(candidate)) {
       if ((key === 'type' || key === 'kind') && typeof nested === 'string') {
         const modality = nested === 'file' ? 'document' : nested
-        if (mediaModalityOrder.includes(modality as ProjectIndexMediaModality)) {
+        if (
+          mediaModalityOrder.includes(modality as ProjectIndexMediaModality)
+        ) {
           found.add(modality as ProjectIndexMediaModality)
         }
       }
@@ -170,18 +221,45 @@ function operationModalities(
   }
 }
 
-function literalIdentity(ctx: ExtractContext): Pick<MediaOperationFacts, 'adapter' | 'model'> {
-  const adapter = ctx.config?.string('adapter')
+function literalIdentity(
+  ctx: ExtractContext,
+): Pick<MediaOperationFacts, 'adapter' | 'model'> {
+  const adapter = adapterForModule(ctx.match.moduleSpecifier)
   const model = ctx.config?.string('model')
   return { ...(adapter ? { adapter } : {}), ...(model ? { model } : {}) }
 }
 
-function literalExecution(ctx: ExtractContext): MediaOperationFacts['execution'] | undefined {
-  const value = ctx.config?.string('execution')
-  return value === 'native' || value === 'composed' || value === 'unknown' ? value : undefined
+function adapterForModule(
+  moduleSpecifier: string | undefined,
+): string | undefined {
+  switch (moduleSpecifier) {
+    case '@use-crux/ai':
+      return 'ai-sdk'
+    case '@use-crux/openai':
+      return 'openai'
+    case '@use-crux/google':
+      return 'google'
+    case '@use-crux/anthropic':
+      return 'anthropic'
+    case '@use-crux/convex':
+      return 'convex'
+    default:
+      return undefined
+  }
 }
 
-function authoredOptions(ctx: ExtractContext): Pick<MediaOperationFacts, 'authoredOptions'> {
+function literalExecution(
+  ctx: ExtractContext,
+): MediaOperationFacts['execution'] | undefined {
+  const value = ctx.config?.string('execution')
+  return value === 'native' || value === 'composed' || value === 'unknown'
+    ? value
+    : undefined
+}
+
+function authoredOptions(
+  ctx: ExtractContext,
+): Pick<MediaOperationFacts, 'authoredOptions'> {
   const config = ctx.config
   if (!config) return {}
   const options: MediaOperationAuthoredOptions = {
@@ -190,23 +268,48 @@ function authoredOptions(ctx: ExtractContext): Pick<MediaOperationFacts, 'author
     ...optionalString('aspectRatio', config.string('aspectRatio')),
     ...optionalNumber('seed', config.number('seed')),
     ...optionalString('timestamps', config.string('timestamps')),
-    ...(config.boolean('diarization') === undefined ? {} : { diarization: config.boolean('diarization') }),
-    ...optionalString('taskType', config.string('taskType')),
+    ...(config.boolean('diarization') === undefined
+      ? {}
+      : { diarization: config.boolean('diarization') }),
+    ...optionalTranscriptionTask(config),
     ...optionalString('voice', config.string('voice')),
   }
   return Object.keys(options).length ? { authoredOptions: options } : {}
 }
 
+function optionalTranscriptionTask(
+  config: NonNullable<ExtractContext['config']>,
+): Pick<MediaOperationAuthoredOptions, 'task'> {
+  const task = config.string('task')
+  if (task === 'transcribe') return { task }
+  return config.object('task')?.string('type') === 'translate'
+    ? { task: 'translate' }
+    : {}
+}
+
 function relationReferences(ctx: ExtractContext) {
   return mediaRelationDeclarations.flatMap(([type, property]) => {
-    const target = property === 'owner' ? ctx.source.ownerVariableName : ctx.config?.reference(property)
+    const target =
+      type === 'media.owner'
+        ? ctx.source.ownerVariableName
+        : type === 'media.uses_prompt'
+          ? ctx.match.name === 'generate' || ctx.match.name === 'stream'
+            ? ctx.args.identifier(0)
+            : undefined
+          : type === 'media.uses_routing'
+            ? ctx.config?.reference('model')
+            : ctx.config?.reference(property)
     return target ? [ctx.ref.variable(type, target)] : []
   })
 }
 
 function presentation(ctx: ExtractContext) {
-  const nested = new RegExp(`^${ctx.match.name}-\\d+$`).test(ctx.source.variableName)
-  return nested ? { standalone: false, role: 'operation' as const } : { standalone: true }
+  const nested = new RegExp(`^${ctx.match.name}-\\d+$`).test(
+    ctx.source.variableName,
+  )
+  return nested
+    ? { standalone: false, role: 'operation' as const }
+    : { standalone: true }
 }
 
 function ingestSourceKind(
@@ -216,25 +319,39 @@ function ingestSourceKind(
   if (declared !== 'file') return declared
   if (ctx.args.string(0) !== undefined) return 'file'
   const value = ctx.args.json(0)
-  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) return 'file'
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string'))
+    return 'file'
   if (value && typeof value === 'object') return 'asset'
   return 'custom'
 }
 
-function allowedValues<const T extends string>(values: readonly string[], allowed: readonly T[]): readonly T[] {
+function allowedValues<const T extends string>(
+  values: readonly string[],
+  allowed: readonly T[],
+): readonly T[] {
   const set = new Set(values)
   return allowed.filter((value) => set.has(value))
 }
 
-function optionalString<K extends keyof MediaOperationAuthoredOptions>(key: K, value: string | undefined) {
+function optionalString<K extends keyof MediaOperationAuthoredOptions>(
+  key: K,
+  value: string | undefined,
+) {
   return value === undefined ? {} : { [key]: value }
 }
 
-function optionalNumber<K extends keyof MediaOperationAuthoredOptions>(key: K, value: number | undefined) {
+function optionalNumber<K extends keyof MediaOperationAuthoredOptions>(
+  key: K,
+  value: number | undefined,
+) {
   return value === undefined ? {} : { [key]: value }
 }
 
-function relation(type: string, fromKinds: readonly string[], toKinds: readonly string[]) {
+function relation(
+  type: string,
+  fromKinds: readonly string[],
+  toKinds: readonly string[],
+) {
   return {
     type,
     fromKinds,
@@ -245,7 +362,9 @@ function relation(type: string, fromKinds: readonly string[], toKinds: readonly 
   }
 }
 
-function sanitizedDefinition<T extends ReturnType<ExtractContext['define']['definition']>>(input: T): T {
+function sanitizedDefinition<
+  T extends ReturnType<ExtractContext['define']['definition']>,
+>(input: T): T {
   const { sourceSnippet: _sourceSnippet, ...definition } = input.definition
   return { ...input, definition } as T
 }

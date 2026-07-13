@@ -42,10 +42,11 @@ pub(crate) fn media_operation_facts(
     if let Some(output) = output {
         facts.insert("outputModalities".into(), output);
     }
-    for property in ["adapter", "model"] {
-        if let Some(value) = config.and_then(|value| direct_string_property(value, property)) {
-            facts.insert(property.into(), Value::String(value));
-        }
+    if let Some(adapter) = adapter_for_module(parts.callee_module_specifier) {
+        facts.insert("adapter".into(), Value::String(adapter.into()));
+    }
+    if let Some(model) = config.and_then(|value| direct_string_property(value, "model")) {
+        facts.insert("model".into(), Value::String(model));
     }
     facts.insert(
         "execution".into(),
@@ -89,6 +90,17 @@ pub(crate) fn media_operation_facts(
         media_relations(config, parts, context),
         Vec::new(),
     ))
+}
+
+fn adapter_for_module(module_specifier: Option<&str>) -> Option<&'static str> {
+    match module_specifier {
+        Some("@use-crux/ai") => Some("ai-sdk"),
+        Some("@use-crux/openai") => Some("openai"),
+        Some("@use-crux/google") => Some("google"),
+        Some("@use-crux/anthropic") => Some("anthropic"),
+        Some("@use-crux/convex") => Some("convex"),
+        _ => None,
+    }
 }
 
 fn media_modalities(
@@ -164,10 +176,13 @@ fn authored_options(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) 
             options.insert(property.into(), json!(value));
         }
     }
-    for property in ["size", "aspectRatio", "timestamps", "taskType", "voice"] {
+    for property in ["size", "aspectRatio", "timestamps", "voice"] {
         if let Some(value) = direct_string_property(config, property) {
             options.insert(property.into(), Value::String(value));
         }
+    }
+    if let Some(task) = transcription_task(config) {
+        options.insert("task".into(), Value::String(task.into()));
     }
     if let Some(StaticSyntaxValue::Literal {
         value: LiteralValue::Boolean(value),
@@ -176,6 +191,18 @@ fn authored_options(config: &StaticSyntaxValue, context: &PrimitiveContext<'_>) 
         options.insert("diarization".into(), Value::Bool(*value));
     }
     (!options.is_empty()).then_some(Value::Object(options))
+}
+
+fn transcription_task(config: &StaticSyntaxValue) -> Option<&'static str> {
+    match property_value(config, "task") {
+        Some(StaticSyntaxValue::Literal {
+            value: LiteralValue::String(task),
+        }) if task == "transcribe" => Some("transcribe"),
+        Some(task) if direct_string_property(task, "type").as_deref() == Some("translate") => {
+            Some("translate")
+        }
+        _ => None,
+    }
 }
 
 fn nested_operation(parts: &CallParts<'_>) -> bool {
@@ -196,9 +223,13 @@ fn media_relations(
     if let Some(owner) = parts.owner_variable_name {
         relations.push(json!({ "type": "media.owner", "toVariable": owner }));
     }
+    if matches!(parts.callee_name, "generate" | "stream") {
+        if let Some(StaticSyntaxValue::Identifier { name }) = parts.args.first() {
+            relations.push(json!({ "type": "media.uses_prompt", "toVariable": name }));
+        }
+    }
     for (relation, property) in [
-        ("media.uses_prompt", "prompt"),
-        ("media.uses_routing", "routing"),
+        ("media.uses_routing", "model"),
         ("media.evaluation_target", "evaluation"),
         ("media.uses_storage", "storage"),
     ] {

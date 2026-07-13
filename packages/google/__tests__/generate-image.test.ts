@@ -7,12 +7,14 @@ import { createGoogle } from "../src";
 function clientWith(response: unknown) {
   const generateImages = vi.fn(async (_args: unknown) => response);
   const generateContent = vi.fn(async (_args: unknown) => response);
+  const editImage = vi.fn(async (_args: unknown) => response);
   return {
     client: {
-      models: { generateImages, generateContent },
+      models: { generateImages, generateContent, editImage },
     } as unknown as GoogleGenAI,
     generateImages,
     generateContent,
+    editImage,
   };
 }
 
@@ -181,7 +183,9 @@ describe("Google image generation", () => {
   });
 
   it("rejects known unsupported models before client I/O", async () => {
-    const { client, generateImages } = clientWith({ generatedImages: [] });
+    const { client, editImage, generateContent, generateImages } = clientWith({
+      generatedImages: [],
+    });
     const google = createGoogle(client, { cachedContent: false });
 
     await expect(
@@ -190,6 +194,8 @@ describe("Google image generation", () => {
       code: "unsupported_capability",
     });
     expect(generateImages).not.toHaveBeenCalled();
+    expect(generateContent).not.toHaveBeenCalled();
+    expect(editImage).not.toHaveBeenCalled();
   });
 
   it("turns filtered/text-only successes into no-image errors and preserves native failures", async () => {

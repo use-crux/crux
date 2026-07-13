@@ -81,3 +81,8 @@ package exports native Imagen/Gemini `generateImage()` and native Gemini
 `transcribe()` is an honest one-call composition: it returns text with empty
 timing arrays and rejects word timing or diarization before I/O. Returned media
 is persisted only through an explicit application `assetStore.put()` call.
+Imagen prompts with data-asset references use the native `editImage()`
+endpoint; an optional portable mask becomes a user-provided mask reference.
+Put edit-only Google controls under `extra.edit`. Gemini reference-image
+generation remains native, while Gemini masks fail before provider I/O instead
+of being emulated.

@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { IndexPatchFacts } from '../src/indexer/patches'
@@ -116,23 +116,29 @@ describe('native semantic shared analyzer', () => {
   it('routes authored media through one complete shared analysis without partial direct facts', async () => {
     const root = await fixtureRoot()
     await writeTsconfig(root)
+    await linkWorkspacePackages(root, ['ai', 'core'])
     const file = join(root, 'src/media.ts')
     await writeFile(
       file,
       `
-        import { generateImage as image } from '@use-crux/ai'
-        import { generate, router } from '@use-crux/core'
+        import { generate, generateImage as image } from '@use-crux/ai'
+        import { prompt, router } from '@use-crux/core'
+        import type { ImageModel, LanguageModel } from 'ai'
 
+        declare const imageModel: ImageModel
+        declare const languageModel: LanguageModel
         const render = image
-        const route = router({ id: 'vision-route' })
+        const visionPrompt = prompt({ id: 'vision-prompt' })
+        const route = router({
+          id: 'vision-route',
+          classify: () => 'vision' as const,
+          routes: { vision: languageModel, default: languageModel },
+        })
         const options = {
-          adapter: 'google', model: route, n: 2,
-          messages: [{ role: 'user', content: [{ type: 'image', source: {
-            type: 'provider-file', provider: 'openai', fileId: 'private-file-id'
-          } }] }],
+          model: imageModel, n: 2,
         }
         export const cover = render(options)
-        export const unsafe = generate({ adapter: 'google', messages: [{
+        export const unsafe = generate(visionPrompt, { model: route, messages: [{
           role: 'user', content: [{ type: 'image', source: {
             type: 'asset-ref', ref: { uri: 'private-ref' }
           } }],
@@ -186,6 +192,26 @@ async function compareNativeToTypeScript(
     normalizedFacts(typescriptPatch.facts),
   )
   return { timingNames, coverageKinds, syntaxTraversals, extractorNames }
+}
+
+async function linkWorkspacePackages(
+  root: string,
+  packages: readonly string[],
+): Promise<void> {
+  const scope = join(root, 'node_modules/@use-crux')
+  await mkdir(scope, { recursive: true })
+  await Promise.all(
+    packages.map((name) =>
+      symlink(join(process.cwd(), `../${name}`), join(scope, name), 'dir'),
+    ),
+  )
+  if (packages.includes('ai')) {
+    await symlink(
+      join(process.cwd(), '../ai/node_modules/ai'),
+      join(root, 'node_modules/ai'),
+      'dir',
+    )
+  }
 }
 
 async function writeTsconfig(root: string): Promise<void> {

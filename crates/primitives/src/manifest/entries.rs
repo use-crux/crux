@@ -69,7 +69,7 @@ pub(crate) const FIRST_PARTY_PRIMITIVE_MANIFEST: &[FirstPartyPrimitive] = &[
             "seed",
             "timestamps",
             "diarization",
-            "taskType",
+            "task",
             "voice",
         ],
         Projector::CallParts(media_operation_facts),

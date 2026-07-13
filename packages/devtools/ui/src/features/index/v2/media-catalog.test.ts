@@ -16,6 +16,25 @@ const FORBIDDEN = [
 ];
 
 describe("media catalog projection", () => {
+  it("projects normalized transcription task without retaining target language", () => {
+    const view = projectMediaOperationCatalog({
+      id: "media.operation:translate",
+      name: "translate",
+      kind: "media.operation",
+      facts: {
+        kind: "media.operation",
+        operation: "transcribe",
+        authoredOptions: {
+          task: "translate",
+          targetLanguage: "SECRET_LANGUAGE",
+        },
+      },
+    });
+
+    expect(view?.authoredOptions).toEqual({ task: "translate" });
+    expect(JSON.stringify(view)).not.toContain("SECRET_LANGUAGE");
+  });
+
   it("projects media.operation cards with modalities, execution, and options", () => {
     const view = projectMediaOperationCatalog({
       id: "media.operation:cover",

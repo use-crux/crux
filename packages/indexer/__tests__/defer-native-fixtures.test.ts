@@ -15,7 +15,7 @@ describe('defer native projection', () => {
     const root = '/fixture'
     const file = '/fixture/src/api.ts'
     const source = [
-      "import { defer } from '@use-crux/core'",
+      "import { defer } from '@use-crux/core/defer'",
       'defer(() => undefined)',
       'defer(sendEmail, { id: 1 })',
     ].join('\n')

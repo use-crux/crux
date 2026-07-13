@@ -1,9 +1,13 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { IndexPatchFacts } from '../src/indexer/patches'
-import { createNativeSemanticBackend, createSemanticIndexService, createTypeScriptSemanticBackend } from '../src/indexer/semantic/service'
+import {
+  createNativeSemanticBackend,
+  createSemanticIndexService,
+  createTypeScriptSemanticBackend,
+} from '../src/indexer/semantic/service'
 import {
   semanticBackendParityFixtures,
   type SemanticBackendParityFixture,
@@ -13,14 +17,19 @@ const roots: string[] = []
 
 async function fixtureRoot(externalRoot = false): Promise<string> {
   const root = await mkdtemp(
-    join(externalRoot ? tmpdir() : process.cwd(), '.tmp-semantic-backend-parity-'),
+    join(
+      externalRoot ? tmpdir() : process.cwd(),
+      '.tmp-semantic-backend-parity-',
+    ),
   )
   roots.push(root)
   return root
 }
 
 afterEach(async () => {
-  await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
+  await Promise.all(
+    roots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  )
 })
 
 describe('semantic backend parity', () => {
@@ -37,18 +46,31 @@ describe('semantic backend parity', () => {
       expect(typescriptPatch.status).toBe('ok')
       expect(nativePatch.status).toBe('ok')
       assertFixtureCoverage(fixture, typescriptPatch.facts)
-      expect(normalizedFacts(nativePatch.facts)).toEqual(normalizedFacts(typescriptPatch.facts))
+      expect(normalizedFacts(nativePatch.facts)).toEqual(
+        normalizedFacts(typescriptPatch.facts),
+      )
       if (fixture.name === 'authored-media-shared-analyzer') {
-        expect(JSON.stringify(nativePatch.facts)).not.toMatch(/private-file-id|private-ref/)
+        expect(JSON.stringify(nativePatch.facts)).not.toMatch(
+          /private-file-id|private-ref|SECRET_LANGUAGE/,
+        )
       }
     }, 20_000)
 
     it(`matches TypeScript semantic facts through public cached indexing for ${fixture.name}`, async () => {
       const { root } = await writeFixture(fixture)
       const service = createSemanticIndexService()
-      const typescriptPatch = await service.indexProject({ root, semanticBackend: 'typescript' })
-      const nativePatch = await service.indexProject({ root, semanticBackend: { name: 'native' } })
-      const cachedTypescriptPatch = await service.indexProject({ root, semanticBackend: 'typescript' })
+      const typescriptPatch = await service.indexProject({
+        root,
+        semanticBackend: 'typescript',
+      })
+      const nativePatch = await service.indexProject({
+        root,
+        semanticBackend: { name: 'native' },
+      })
+      const cachedTypescriptPatch = await service.indexProject({
+        root,
+        semanticBackend: 'typescript',
+      })
       const cachedNativePatch = await service.indexProject({
         root,
         semanticBackend: { name: 'native' },
@@ -59,9 +81,15 @@ describe('semantic backend parity', () => {
       expect(cachedTypescriptPatch.status).toBe('ok')
       expect(cachedNativePatch.status).toBe('ok')
       assertFixtureCoverage(fixture, typescriptPatch.facts)
-      expect(normalizedFacts(nativePatch.facts)).toEqual(normalizedFacts(typescriptPatch.facts))
-      expect(normalizedFacts(cachedTypescriptPatch.facts)).toEqual(normalizedFacts(typescriptPatch.facts))
-      expect(normalizedFacts(cachedNativePatch.facts)).toEqual(normalizedFacts(typescriptPatch.facts))
+      expect(normalizedFacts(nativePatch.facts)).toEqual(
+        normalizedFacts(typescriptPatch.facts),
+      )
+      expect(normalizedFacts(cachedTypescriptPatch.facts)).toEqual(
+        normalizedFacts(typescriptPatch.facts),
+      )
+      expect(normalizedFacts(cachedNativePatch.facts)).toEqual(
+        normalizedFacts(typescriptPatch.facts),
+      )
     }, 30_000)
   }
 })
@@ -70,6 +98,29 @@ async function writeFixture(
   fixture: SemanticBackendParityFixture,
 ): Promise<{ readonly root: string; readonly files: readonly string[] }> {
   const root = await fixtureRoot(fixture.externalRoot)
+  if (fixture.workspacePackages?.length) {
+    const scope = join(root, 'node_modules/@use-crux')
+    await mkdir(scope, { recursive: true })
+    await Promise.all(
+      fixture.workspacePackages.map((name) =>
+        symlink(join(process.cwd(), `../${name}`), join(scope, name), 'dir'),
+      ),
+    )
+    if (fixture.workspacePackages.includes('ai')) {
+      await symlink(
+        join(process.cwd(), '../ai/node_modules/ai'),
+        join(root, 'node_modules/ai'),
+        'dir',
+      )
+    }
+    if (fixture.workspacePackages.includes('openai')) {
+      await symlink(
+        join(process.cwd(), '../openai/node_modules/openai'),
+        join(root, 'node_modules/openai'),
+        'dir',
+      )
+    }
+  }
   await writeFile(
     join(root, 'tsconfig.json'),
     JSON.stringify({
@@ -93,22 +144,46 @@ async function writeFixture(
   return { root, files }
 }
 
-function assertFixtureCoverage(fixture: SemanticBackendParityFixture, facts: IndexPatchFacts): void {
+function assertFixtureCoverage(
+  fixture: SemanticBackendParityFixture,
+  facts: IndexPatchFacts,
+): void {
   const coverage = semanticFactCoverage(facts)
-  expect(coverage.definitionIds).toEqual(expect.arrayContaining([...(fixture.expect.definitionIds ?? [])]))
-  expect(coverage.relationTypes).toEqual(expect.arrayContaining([...(fixture.expect.relationTypes ?? [])]))
-  expect(coverage.sourceRefRoles).toEqual(expect.arrayContaining([...(fixture.expect.sourceRefRoles ?? [])]))
-  expect(coverage.lintRuleIds).toEqual(expect.arrayContaining([...(fixture.expect.lintRuleIds ?? [])]))
-  for (const [definitionId, expectedFacts] of Object.entries(fixture.expect.definitionFacts ?? {})) {
-    const definition = (facts.definitions ?? []).find((candidate) => candidate.id === definitionId)
+  expect(coverage.definitionIds).toEqual(
+    expect.arrayContaining([...(fixture.expect.definitionIds ?? [])]),
+  )
+  expect(coverage.relationTypes).toEqual(
+    expect.arrayContaining([...(fixture.expect.relationTypes ?? [])]),
+  )
+  expect(coverage.sourceRefRoles).toEqual(
+    expect.arrayContaining([...(fixture.expect.sourceRefRoles ?? [])]),
+  )
+  expect(coverage.lintRuleIds).toEqual(
+    expect.arrayContaining([...(fixture.expect.lintRuleIds ?? [])]),
+  )
+  for (const [definitionId, expectedFacts] of Object.entries(
+    fixture.expect.definitionFacts ?? {},
+  )) {
+    const definition = (facts.definitions ?? []).find(
+      (candidate) => candidate.id === definitionId,
+    )
     expect(definition?.metadata?.facts).toMatchObject(expectedFacts)
   }
-  for (const [definitionId, absentKeys] of Object.entries(fixture.expect.definitionFactKeysAbsent ?? {})) {
-    const definition = (facts.definitions ?? []).find((candidate) => candidate.id === definitionId)
-    for (const key of absentKeys) expect(definition?.metadata?.facts ?? {}).not.toHaveProperty(key)
+  for (const [definitionId, absentKeys] of Object.entries(
+    fixture.expect.definitionFactKeysAbsent ?? {},
+  )) {
+    const definition = (facts.definitions ?? []).find(
+      (candidate) => candidate.id === definitionId,
+    )
+    for (const key of absentKeys)
+      expect(definition?.metadata?.facts ?? {}).not.toHaveProperty(key)
   }
-  for (const [definitionId, profile] of Object.entries(fixture.expect.definitionProfiles ?? {})) {
-    const definition = (facts.definitions ?? []).find((candidate) => candidate.id === definitionId)
+  for (const [definitionId, profile] of Object.entries(
+    fixture.expect.definitionProfiles ?? {},
+  )) {
+    const definition = (facts.definitions ?? []).find(
+      (candidate) => candidate.id === definitionId,
+    )
     expect(definition?.metadata?.profile).toEqual(profile)
   }
 }
@@ -120,10 +195,18 @@ function semanticFactCoverage(facts: IndexPatchFacts): {
   readonly lintRuleIds: readonly string[]
 } {
   return {
-    definitionIds: [...new Set((facts.definitions ?? []).map((definition) => definition.id))].sort(),
-    relationTypes: [...new Set((facts.relations ?? []).map((relation) => relation.type))].sort(),
-    sourceRefRoles: [...new Set((facts.sourceRefs ?? []).map((ref) => ref.ref.role))].sort(),
-    lintRuleIds: [...new Set((facts.lintFindings ?? []).map((finding) => finding.ruleId))].sort(),
+    definitionIds: [
+      ...new Set((facts.definitions ?? []).map((definition) => definition.id)),
+    ].sort(),
+    relationTypes: [
+      ...new Set((facts.relations ?? []).map((relation) => relation.type)),
+    ].sort(),
+    sourceRefRoles: [
+      ...new Set((facts.sourceRefs ?? []).map((ref) => ref.ref.role)),
+    ].sort(),
+    lintRuleIds: [
+      ...new Set((facts.lintFindings ?? []).map((finding) => finding.ruleId)),
+    ].sort(),
   }
 }
 
@@ -140,5 +223,9 @@ function normalizedFacts(facts: IndexPatchFacts): IndexPatchFacts {
 }
 
 function sortJsonRows<T>(rows: readonly T[] | undefined): T[] | undefined {
-  return rows ? [...rows].sort((left, right) => JSON.stringify(left).localeCompare(JSON.stringify(right))) : undefined
+  return rows
+    ? [...rows].sort((left, right) =>
+        JSON.stringify(left).localeCompare(JSON.stringify(right)),
+      )
+    : undefined
 }

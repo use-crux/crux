@@ -30,10 +30,11 @@ export interface StaticExtensionHostRuntime {
 export const cruxCoreCompilerProjections = [
   {
     name: 'deferred-work-containment',
-    version: '1',
+    version: '2',
     phase: 'resolve',
     reason:
       'Compiler-owned source ranges attach public deferred work only to proven enclosing indexed definitions.',
+    staticCallNames: ['defer'],
   },
   {
     name: 'source-ref-projection',

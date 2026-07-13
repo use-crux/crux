@@ -484,7 +484,8 @@ export interface MediaOperationAuthoredOptions {
   readonly seed?: number;
   readonly timestamps?: string;
   readonly diarization?: boolean;
-  readonly taskType?: string;
+  /** Normalized transcription mode; translation targets are intentionally not retained. */
+  readonly task?: "transcribe" | "translate";
   readonly voice?: string;
 }
 

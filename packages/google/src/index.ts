@@ -20,6 +20,7 @@ export type {
   GoogleGeminiImageExtra,
   GoogleGenerateImage,
   GoogleImageExtra,
+  GoogleImagenEditExtra,
   GoogleImagenImageExtra,
 } from "./image-generation";
 export type {

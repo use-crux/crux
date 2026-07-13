@@ -1,6 +1,12 @@
-import { ProjectDefinitionKindSchema, ProjectDefinitionMetadataSchema } from '@use-crux/core/project-index'
+import {
+  ProjectDefinitionKindSchema,
+  ProjectDefinitionMetadataSchema,
+} from '@use-crux/core/project-index'
 import { describe, expect, it } from 'vitest'
-import { createStaticExtraction, type SourceReader } from '../src/indexer/static/extraction/engine'
+import {
+  createStaticExtraction,
+  type SourceReader,
+} from '../src/indexer/static/extraction/engine'
 import {
   authoredMediaPrimitiveManifest,
   mediaAuthoredOptionFields,
@@ -11,8 +17,12 @@ import { createTypeScriptStaticSyntaxFrontend } from '../src/indexer/static-inde
 
 describe('authored media static indexing', () => {
   it('accepts media definitions and the operation presentation role', () => {
-    expect(ProjectDefinitionKindSchema.parse('media.operation')).toBe('media.operation')
-    expect(ProjectDefinitionKindSchema.parse('ingest.source')).toBe('ingest.source')
+    expect(ProjectDefinitionKindSchema.parse('media.operation')).toBe(
+      'media.operation',
+    )
+    expect(ProjectDefinitionKindSchema.parse('ingest.source')).toBe(
+      'ingest.source',
+    )
     expect(
       ProjectDefinitionMetadataSchema.parse({
         indexPresentation: { standalone: false, role: 'operation' },
@@ -27,13 +37,15 @@ describe('authored media static indexing', () => {
   it('indexes specialized operations and ingest sources without retaining private authored values', async () => {
     const source = [
       `export const cover = generateImage({ model: 'image-1', prompt: 'private prompt', n: 2, size: '1024x1024', seed: 7, extra: { providerFileId: 'secret' } })`,
-      `export const transcript = transcribe({ model: 'whisper-1', audio: 'https://secret.example/audio.mp3', timestamps: 'segment', diarization: true })`,
+      `export const transcript = transcribe({ model: 'whisper-1', audio: 'https://secret.example/audio.mp3', task: { type: 'translate', targetLanguage: 'SECRET_LANGUAGE' }, timestamps: 'segment', diarization: true })`,
       `export const speech = generateSpeech({ model: 'tts-1', text: 'private speech', voice: 'alloy' })`,
       `export const source = fileSource('/private/report.pdf', { namespace: 'manuals', mediaKinds: ['document'], attribution: ['page'], derivation: cover })`,
     ].join('\n')
     const extracted = await extract(source)
 
-    expect(extracted.definitions.map((definition) => definition.metadata?.facts)).toEqual([
+    expect(
+      extracted.definitions.map((definition) => definition.metadata?.facts),
+    ).toEqual([
       {
         kind: 'media.operation',
         operation: 'generateImage',
@@ -49,7 +61,11 @@ describe('authored media static indexing', () => {
         outputModalities: ['text'],
         model: 'whisper-1',
         execution: 'unknown',
-        authoredOptions: { timestamps: 'segment', diarization: true },
+        authoredOptions: {
+          timestamps: 'segment',
+          diarization: true,
+          task: 'translate',
+        },
       },
       {
         kind: 'media.operation',
@@ -72,6 +88,7 @@ describe('authored media static indexing', () => {
     expect(JSON.stringify(extracted)).not.toContain('secret.example')
     expect(JSON.stringify(extracted)).not.toContain('providerFileId')
     expect(JSON.stringify(extracted)).not.toContain('/private/report.pdf')
+    expect(JSON.stringify(extracted)).not.toContain('SECRET_LANGUAGE')
     expect(extracted.relations).toEqual([
       expect.objectContaining({
         type: 'media.derives_with',
@@ -84,9 +101,12 @@ describe('authored media static indexing', () => {
   it('indexes proven media generate calls and leaves dynamic calls unresolved', async () => {
     const extracted = await extract(
       [
-        `export const vision = generate({ messages: [{ role: 'user', content: [{ type: 'image', source: 'https://private.example/image.png' }] }] })`,
-        `export const dynamic = generate({ messages })`,
-        `export const plain = stream({ prompt: 'text only' })`,
+        `import { generate, stream } from '@use-crux/ai'`,
+        `import { prompt } from '@use-crux/core'`,
+        `const visionPrompt = prompt({ id: 'vision' })`,
+        `export const vision = generate(visionPrompt, { model: 'vision-model', messages: [{ role: 'user', content: [{ type: 'image', source: 'https://private.example/image.png' }] }] })`,
+        `export const dynamic = generate(visionPrompt, { model: 'vision-model', messages })`,
+        `export const plain = stream(visionPrompt, { model: 'vision-model' })`,
       ].join('\n'),
     )
 
@@ -100,6 +120,8 @@ describe('authored media static indexing', () => {
           operation: 'generate',
           inputModalities: ['image'],
           outputModalities: ['text'],
+          adapter: 'ai-sdk',
+          model: 'vision-model',
         },
       },
     })
@@ -117,14 +139,21 @@ describe('authored media static indexing', () => {
     )
 
     expect(extracted.definitions).toHaveLength(4)
-    expect(extracted.definitions.find((item) => item.name === 'reusable')?.metadata?.indexPresentation).toEqual({
+    expect(
+      extracted.definitions.find((item) => item.name === 'reusable')?.metadata
+        ?.indexPresentation,
+    ).toEqual({
       standalone: true,
     })
     expect(
-      extracted.definitions.find((item) => item.kind === 'media.operation' && item.name !== 'reusable')?.metadata
-        ?.indexPresentation,
+      extracted.definitions.find(
+        (item) => item.kind === 'media.operation' && item.name !== 'reusable',
+      )?.metadata?.indexPresentation,
     ).toEqual({ standalone: false, role: 'operation' })
-    expect(extracted.definitions.find((item) => item.name === 'dynamicSource')?.metadata?.facts).toMatchObject({
+    expect(
+      extracted.definitions.find((item) => item.name === 'dynamicSource')
+        ?.metadata?.facts,
+    ).toMatchObject({
       kind: 'ingest.source',
       sourceKind: 'custom',
     })
@@ -156,7 +185,7 @@ describe('authored media static indexing', () => {
       'seed',
       'timestamps',
       'diarization',
-      'taskType',
+      'task',
       'voice',
     ])
     expect(mediaPrimitiveManifest.relations?.map((item) => item.type)).toEqual([
@@ -168,6 +197,20 @@ describe('authored media static indexing', () => {
       'media.targets_corpus',
       'media.evaluation_target',
       'media.uses_storage',
+    ])
+    expect(
+      mediaPrimitiveManifest.extractors?.[0]?.patterns.map((pattern) =>
+        pattern.kind === 'call'
+          ? [pattern.name, pattern.configArg]
+          : [pattern.kind, undefined],
+      ),
+    ).toEqual([
+      ['generate', 1],
+      ['stream', 1],
+      ['generateImage', 0],
+      ['transcribe', 0],
+      ['generateSpeech', 0],
+      ['describe', 0],
     ])
     expect(authoredMediaPrimitiveManifest.nativeProjection).toEqual({
       static: { frontend: 'oxc', mode: 'manifest' },

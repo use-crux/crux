@@ -12,6 +12,18 @@ export const mediaOperationNames = [
   "describe",
 ] as const satisfies readonly MediaOperationFacts["operation"][];
 
+/** Positional config argument for each public media operation. */
+export const mediaOperationConfigArguments = Object.freeze({
+  generate: 1,
+  stream: 1,
+  generateImage: 0,
+  transcribe: 0,
+  generateSpeech: 0,
+  describe: 0,
+} as const satisfies Readonly<
+  Record<MediaOperationFacts["operation"], number>
+>);
+
 export const mediaAuthoredOptionFields = [
   "n",
   "size",
@@ -19,7 +31,7 @@ export const mediaAuthoredOptionFields = [
   "seed",
   "timestamps",
   "diarization",
-  "taskType",
+  "task",
   "voice",
 ] as const satisfies readonly (keyof MediaOperationAuthoredOptions)[];
 

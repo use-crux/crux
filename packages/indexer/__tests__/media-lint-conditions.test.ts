@@ -1,11 +1,14 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type {
   ProjectDefinition,
   ProjectRelation,
 } from "@use-crux/core/project-index";
-import { semanticIndexFacts } from "../src/indexer/semantic/evidence/facts";
+import {
+  createSemanticIndexService,
+  createTypeScriptSemanticBackend,
+} from "../src/indexer/semantic/service";
 import { mediaArchitectureLintFindings } from "../src/indexer/semantic/media-lints";
 
 const roots: string[] = [];
@@ -17,48 +20,75 @@ afterEach(async () =>
 );
 
 describe("deterministic media lint conditions", () => {
-  it("emits capability and raw-retention findings only for manifest-proven retained shapes", async () => {
+  it("emits media-input findings only from provider and source evidence", async () => {
     const root = await mkdtemp(join(process.cwd(), ".tmp-media-lints-"));
     roots.push(root);
+    const scope = join(root, "node_modules/@use-crux");
+    await mkdir(scope, { recursive: true });
+    await Promise.all(
+      ["ai", "core", "openai"].map((name) =>
+        symlink(join(process.cwd(), `../${name}`), join(scope, name), "dir"),
+      ),
+    );
+    await Promise.all([
+      symlink(
+        join(process.cwd(), "../ai/node_modules/ai"),
+        join(root, "node_modules/ai"),
+        "dir",
+      ),
+      symlink(
+        join(process.cwd(), "../openai/node_modules/openai"),
+        join(root, "node_modules/openai"),
+        "dir",
+      ),
+    ]);
+    await writeFile(
+      join(root, "tsconfig.json"),
+      JSON.stringify({
+        compilerOptions: {
+          module: "ESNext",
+          moduleResolution: "Bundler",
+          target: "ES2022",
+          noEmit: true,
+          skipLibCheck: true,
+        },
+        include: ["media.ts"],
+      }),
+    );
     const file = join(root, "media.ts");
     await writeFile(
       file,
       `
-      import { generate, generateImage } from '@use-crux/ai'
-      declare const image: unknown
-      export const unsupported = generateImage({ adapter: 'anthropic' })
-      export const retained = generateImage({ adapter: 'google', observability: { metadata: { rawMedia: image } } })
-      export const unknown = generateImage({ adapter: 'custom' })
-      export const notRetained = generateImage({ adapter: 'google', request: { rawMedia: image } })
-      export const matchingProvider = generate({ adapter: 'google', messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'provider-file', provider: 'google', fileId: 'safe-provider-file' } }] }] })
-      export const hydrated = generate({ adapter: 'google', messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'data', data: 'bounded-data' } }] }] })
-      void unsupported.content
-      void retained.content
-      void unknown.content
-      void notRetained.content
+      import { generate } from '@use-crux/ai'
+      import { prompt } from '@use-crux/core'
+      import { createOpenAI } from '@use-crux/openai'
+      import type { LanguageModel } from 'ai'
+      import type OpenAI from 'openai'
+      declare const client: OpenAI
+      declare const model: LanguageModel
+      const openai = createOpenAI(client)
+      const visionPrompt = prompt({ id: 'vision' })
+      export const mismatchedProvider = openai.generate(visionPrompt, { model: 'gpt-4o', messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'provider-file', provider: 'google', fileId: 'safe-provider-file' } }] }] })
+      export const matchingProvider = openai.generate(visionPrompt, { model: 'gpt-4o', messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'provider-file', provider: 'openai', fileId: 'safe-provider-file' } }] }] })
+      export const hydrated = generate(visionPrompt, { model, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'data', data: 'bounded-data' } }] }] })
+      export const unhydrated = generate(visionPrompt, { model, messages: [{ role: 'user', content: [{ type: 'image', source: { type: 'asset-ref', ref: { uri: 'private-ref' } } }] }] })
+      void mismatchedProvider.content
       void matchingProvider.content
       void hydrated.messages
     `,
     );
 
-    const rules = semanticIndexFacts(root, [file]).lintFindings?.map(
-      (finding) => [finding.ruleId, finding.primaryDefinitionId],
-    );
-    expect(rules).toContainEqual([
-      "media.unsupported-capability",
-      "media.operation:unsupported",
+    const patch = await createSemanticIndexService({
+      backend: createTypeScriptSemanticBackend({ cache: "disabled" }),
+    }).indexProject({ root, semanticBackend: "typescript" });
+    expect(patch.status).toBe("ok");
+    const rules = patch.facts.lintFindings?.map((finding) => [
+      finding.ruleId,
+      finding.primaryDefinitionId,
     ]);
     expect(rules).toContainEqual([
-      "media.raw-retention",
-      "media.operation:retained",
-    ]);
-    expect(rules).not.toContainEqual([
-      "media.unsupported-capability",
-      "media.operation:unknown",
-    ]);
-    expect(rules).not.toContainEqual([
-      "media.raw-retention",
-      "media.operation:notRetained",
+      "media.invalid-provider-file",
+      "media.operation:mismatchedProvider",
     ]);
     expect(rules).not.toContainEqual([
       "media.invalid-provider-file",
@@ -68,13 +98,17 @@ describe("deterministic media lint conditions", () => {
       "media.asset-ref-not-hydrated",
       "media.operation:hydrated",
     ]);
+    expect(rules).toContainEqual([
+      "media.asset-ref-not-hydrated",
+      "media.operation:unhydrated",
+    ]);
     expect(rules).not.toContainEqual([
       "media.output-discarded",
       "media.operation:matchingProvider",
     ]);
-    expect(rules).not.toContainEqual([
+    expect(rules).toContainEqual([
       "media.output-discarded",
-      "media.operation:hydrated",
+      "media.operation:unhydrated",
     ]);
   });
 
