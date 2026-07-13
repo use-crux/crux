@@ -103,6 +103,8 @@ The part kinds are `text`, `image`, and `file`. Media parts put their bytes, URL
 
 Use `contentText()` or `messageText()` whenever existing code needs a string. Text parts pass through verbatim, while images/files become bounded placeholders such as `[image image/png 210KB sha256:ab12...]`; raw base64 is never inlined into guardrails, compaction, memory, cache keys, or telemetry. `hasMediaParts()` is available for branching without parsing the projection.
 
+Safety input guardrails evaluate that text projection: URL placeholders expose the full URL, byte/data placeholders include size and a 12-character SHA-256 prefix (`sha256:omitted` over 256KB), Blob placeholders use `sha256:unavailable`, and file placeholders include the filename. `block` and `warn` apply normally. A `rewrite` may change only text segments and must preserve every media placeholder verbatim; Crux throws `SafetyResultError` if the rewrite targets a media-only message or cannot be faithfully written back around the original media.
+
 Malformed media throws `InvalidMediaSourceError`. Valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError` before the provider call.
 
 ## Quality Evaluations

@@ -103,6 +103,45 @@ boundary in the same guardrail is a configuration error. Duplicate policy ids
 across attached policies are also invalid; use one policy with multiple
 boundaries when the same policy should apply in several places.
 
+## Multimodal Input
+
+Input guardrails evaluate the text projection returned by `messageText()`.
+Text parts pass through verbatim. Media parts become bounded descriptors:
+
+- URL sources include the full URL, such as
+  `[image image/png https://example.com/chart.png]`.
+- Byte and data sources include their size and a 12-character SHA-256 prefix,
+  such as `[image image/png 3B sha256:ab12cd34ef56]`. Payloads over 256KB use
+  `sha256:omitted`.
+- Blob sources include their size and type with `sha256:unavailable`.
+- File descriptors include the filename, such as
+  `[file application/pdf "report.pdf" ...]`.
+
+For example, this guard receives both the text and the image URL:
+
+```ts
+const mediaSourceGuard = guardrail({
+  id: 'media-source',
+  on: boundary.input.text(),
+  run: async (subject) => {
+    // subject: "Describe this image\n[image image/png https://example.com/chart.png]"
+    return subject.includes('token=')
+      ? { action: 'block', reason: 'Media URL contains a token.' }
+      : { action: 'allow' }
+  },
+})
+```
+
+`block` and `warn` apply to the complete projection. `rewrite` applies only to
+text segments: every media placeholder must remain verbatim so Crux can write
+the rewritten text back around the original media parts. A rewrite fails
+closed with `SafetyResultError` if it changes a placeholder, targets a
+media-only message, or cannot be redistributed unambiguously. If a policy must
+act on a media source, such as a signed URL containing a token, use `block`
+instead. Media bytes, pixels, and other media content are not evaluated. See
+the [media rewrite actions RFC](https://github.com/use-crux/crux/issues/212)
+for planned media-specific rewrite behavior.
+
 ## Execution
 
 Adapters create one Safety session per `generate()` or `stream()` call. The

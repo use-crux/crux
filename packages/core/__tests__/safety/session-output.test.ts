@@ -191,6 +191,24 @@ describe('finalizeOutput — constraints', () => {
 // ── finalizeOutput: output guards ─────────────────────────────────
 
 describe('finalizeOutput — output guardrails', () => {
+  it('model.output guards receive the parsed object alongside the text', async () => {
+    const seen = vi.fn()
+    const inspector = guardrail({
+      id: 'inspect-output',
+      on: boundary.output.both(),
+      run: async (subject) => {
+        seen(subject)
+        return { action: 'allow' as const }
+      },
+    })
+    const safety = session({ call: { guardrails: [inspector] } })
+    const parsed = { answer: 42 }
+
+    await safety.finalizeOutput({ text: '{"answer":42}', parsed }, noRegen)
+
+    expect(seen).toHaveBeenCalledWith({ text: '{"answer":42}', object: parsed })
+  })
+
   it('redacts the final text via output guards after constraints pass', async () => {
     const redactor = guardrail({
       id: 'no-emails',

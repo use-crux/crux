@@ -11,11 +11,11 @@
  */
 
 import { afterEach, describe, it, expect, vi } from 'vitest'
-import { boundary, createSafety, GuardrailBlockedError } from '../../src/safety'
+import { boundary, createSafety, GuardrailBlockedError, SafetyResultError } from '../../src/safety'
 import { guardrail } from '../../src/safety/guardrail'
 import { resetHooks } from '../../src/runtime/runtime'
 import type { Message } from '../../src/generation/messages'
-import { messageText, textPart } from '../../src/content'
+import { contentText, messageText, textPart } from '../../src/content'
 
 afterEach(() => {
   resetHooks()
@@ -153,6 +153,122 @@ describe('guardInput — pipeline ordering and content flow', () => {
 
     expect(result.messages[0]?.content).toEqual([textPart('[X] caption'), image])
     expect(messageText(result.messages[0]!)).toMatch(/^\[X\] caption\n\[image image\/png 3B sha256:[a-f0-9]{12}\]$/)
+  })
+
+  it('drops join separators for leading empty text parts instead of retaining an artificial newline', async () => {
+    const redactor = guardrail({
+      id: 'redact-all-text',
+      on: boundary.input.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('secret', '[X]'),
+        rewrite: { kind: 'redact' as const },
+      }),
+    })
+    const safety = identity({ call: { guardrails: [redactor] } })
+
+    const result = await safety.guardInput({
+      messages: [{ role: 'user', content: [textPart(''), textPart(''), textPart('secret plan')] }],
+    })
+
+    expect(result.messages[0]?.content).toEqual([textPart('[X] plan'), textPart(''), textPart('')])
+  })
+
+  it('fails closed when a rewrite mutates a media placeholder', async () => {
+    const masker = guardrail({
+      id: 'mask-token',
+      on: boundary.input.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('sk-12345', '[MASKED]'),
+        rewrite: { kind: 'redact' as const },
+      }),
+    })
+    const safety = identity({ call: { guardrails: [masker] } })
+    const image = { type: 'image', source: new URL('https://cdn.example.com/img.png?token=sk-12345') }
+
+    const failing = safety.guardInput({
+      messages: [{ role: 'user', content: [textPart('caption'), image] }],
+    })
+
+    // The masked URL only exists in the projection — the actual image source
+    // would still carry the token, so the session must refuse to proceed.
+    await expect(failing).rejects.toBeInstanceOf(SafetyResultError)
+    await expect(failing).rejects.toThrow(/mask-token/)
+  })
+
+  it('fails closed when a rewrite targets a media-only message', async () => {
+    const rewriter = guardrail({
+      id: 'media-rewrite',
+      on: boundary.input.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: `${content} changed`,
+        rewrite: { kind: 'normalize' as const },
+      }),
+    })
+    const safety = identity({ call: { guardrails: [rewriter] } })
+
+    await expect(
+      safety.guardInput({
+        messages: [{ role: 'user', content: [{ type: 'image', source: new Uint8Array([1, 2, 3]) }] }],
+      }),
+    ).rejects.toBeInstanceOf(SafetyResultError)
+  })
+
+  it('fails closed when a text part spoofs a media placeholder', async () => {
+    const image = { type: 'image' as const, source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }
+    const placeholder = contentText([image])
+    const rewriter = guardrail({
+      id: 'spoof-rewrite',
+      on: boundary.input.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace(placeholder, 'caption'),
+        rewrite: { kind: 'normalize' as const },
+      }),
+    })
+    const safety = identity({ call: { guardrails: [rewriter] } })
+
+    await expect(
+      safety.guardInput({
+        messages: [{ role: 'user', content: [textPart(placeholder), image] }],
+      }),
+    ).rejects.toBeInstanceOf(SafetyResultError)
+  })
+
+  it('block and warn still apply to media-only messages', async () => {
+    const image = { type: 'image', source: new Uint8Array([1, 2, 3]) }
+    const blocker = identity({
+      call: {
+        guardrails: [
+          guardrail({
+            id: 'block-media',
+            on: boundary.input.text(),
+            run: async () => ({ action: 'block' as const, reason: 'blocked' }),
+          }),
+        ],
+      },
+    })
+    await expect(blocker.guardInput({ messages: [{ role: 'user', content: [image] }] })).rejects.toBeInstanceOf(
+      GuardrailBlockedError,
+    )
+
+    const warner = identity({
+      call: {
+        guardrails: [
+          guardrail({
+            id: 'warn-media',
+            on: boundary.input.text(),
+            run: async () => ({ action: 'warn' as const, reason: 'warning' }),
+          }),
+        ],
+      },
+    })
+    const result = await warner.guardInput({ messages: [{ role: 'user', content: [image] }] })
+
+    expect(result.messages[0]?.content).toEqual([image])
+    expect(warner.audit.guardrails?.applied).toContainEqual(expect.objectContaining({ action: 'warn' }))
   })
 })
 
