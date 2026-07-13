@@ -201,7 +201,7 @@ function semanticTargetForDefinitionExpression(
         kind: "rag.recipe",
       };
     }
-    if (callName === "reranker") {
+    if (callName === "reranker" || callName === "judgeReranker") {
       const name = object
         ? (semanticStringLiteralProperty(object, "id", view.syntax) ??
           semanticStringLiteralProperty(object, "name", view.syntax))

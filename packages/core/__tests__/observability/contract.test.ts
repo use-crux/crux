@@ -11,10 +11,27 @@ import {
   CRUX_PRIMITIVE_NAMES,
   CruxGraphRecordBatchSchema,
   CruxGraphRecordSchema,
+  CruxRunStartRecordSchema,
+  CruxRunResumeRecordSchema,
+  CruxRunSuspendRecordSchema,
   CruxSpanStartRecordSchema,
 } from '../../src/observability'
+import { validateRecordForEmission } from '../../src/observability/validate-record'
 
 describe('Crux observability graph contract', () => {
+  it('requires run:start to be the first record in a segment in both validators', () => {
+    const invalidStart = { ...fixture.records[0], segmentSeq: 2 }
+    expect(CruxRunStartRecordSchema.safeParse(invalidStart).success).toBe(false)
+
+    const previousNodeEnv = process.env.NODE_ENV
+    process.env.NODE_ENV = 'production'
+    try {
+      expect(validateRecordForEmission(invalidStart).ok).toBe(false)
+    } finally {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  })
+
   it('keeps presentation read-model exports out of the wire contract module', async () => {
     const contractSource = await readFile(
       new URL('../../src/observability/contract.ts', import.meta.url),
@@ -154,7 +171,8 @@ describe('Crux observability graph contract', () => {
 
     expect(spanStart).toMatchObject({
       runId: 'run_d202cd4d27c2073026a950af',
-      seq: 2,
+      segmentId: 'seg_d202cd4d27c2073026a950af',
+      segmentSeq: 2,
       spanId: '841e9c04c4d09a6e',
       family: 'generation',
       primitive: 'generation.call',
@@ -299,7 +317,8 @@ describe('Crux observability graph contract', () => {
         recordId: 'rec_1111111111111111_1',
         type: 'span',
         runId: 'run_111111111111111111111111',
-        seq: 1,
+        segmentId: 'seg_111111111111111111111111',
+        segmentSeq: 1,
         spanId: '1111111111111111',
         family: 'guardrail',
         primitive: 'guardrail.run',
@@ -316,7 +335,8 @@ describe('Crux observability graph contract', () => {
         recordId: 'rec_2222222222222222_2',
         type: 'span',
         runId: 'run_222222222222222222222222',
-        seq: 1,
+        segmentId: 'seg_222222222222222222222222',
+        segmentSeq: 1,
         spanId: '2222222222222222',
         parentSpanId: '3333333333333333',
         family: 'flow',
@@ -327,6 +347,41 @@ describe('Crux observability graph contract', () => {
         status: 'suspended',
       }).success,
     ).toBe(true)
+  })
+
+  it('validates explicit run suspension and fresh-segment resumption', () => {
+    const suspended = {
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: 'rec_suspend',
+      type: 'run:suspend',
+      runId: 'run_lifecycle',
+      segmentId: 'seg_lifecycle_a',
+      segmentSeq: 2,
+      traceId: '11111111111111111111111111111111',
+      suspendedAt: '2026-05-16T18:00:01.000Z',
+      reason: 'await-signal',
+      attributes: { boundary: 'approval' },
+    }
+    const resumed = {
+      schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+      recordId: 'rec_resume',
+      type: 'run:resume',
+      runId: 'run_lifecycle',
+      segmentId: 'seg_lifecycle_b',
+      segmentSeq: 1,
+      traceId: '11111111111111111111111111111111',
+      resumedAt: '2026-05-16T18:01:00.000Z',
+      reason: 'signal',
+      previousSegmentId: 'seg_lifecycle_a',
+    }
+
+    expect(CruxRunSuspendRecordSchema.parse(suspended)).toEqual(suspended)
+    expect(CruxRunResumeRecordSchema.parse(resumed)).toEqual(resumed)
+    expect(CruxGraphRecordSchema.safeParse(suspended).success).toBe(true)
+    expect(CruxGraphRecordSchema.safeParse(resumed).success).toBe(true)
+    expect(
+      CruxRunResumeRecordSchema.safeParse({ ...resumed, segmentSeq: 2 }).success,
+    ).toBe(false)
   })
 
   it('keeps primitive names mapped to their canonical families', () => {
@@ -342,7 +397,8 @@ describe('Crux observability graph contract', () => {
         recordId: 'rec_3333333333333333_3',
         type: 'span:start',
         runId: 'run_333333333333333333333333',
-        seq: 1,
+        segmentId: 'seg_333333333333333333333333',
+        segmentSeq: 1,
         spanId: '4444444444444444',
         family: 'tool',
         primitive: 'generation.call',

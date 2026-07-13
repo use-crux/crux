@@ -1,5 +1,10 @@
 import type { GenerateContentResponse } from "@google/genai";
-import type { StreamCompletionMetadata } from "@use-crux/core/adapter";
+import {
+  classifyProviderHttpError,
+  CruxAdapterError,
+  cruxProviderError,
+  type StreamCompletionMetadata,
+} from "@use-crux/core/adapter";
 import { googleTranscript } from "./message-codec";
 import { googleResponseMeta, googleResponseText } from "./response";
 
@@ -19,11 +24,52 @@ export function googleTextDelta(chunk: unknown): string | undefined {
   return typeof firstPart.text === "string" ? firstPart.text : undefined;
 }
 
+/** Stream wrapper that normalizes mid-stream provider iteration errors. */
+export class GoogleChatStream implements AsyncIterable<GenerateContentResponse> {
+  readonly #raw: AsyncIterable<GenerateContentResponse>;
+
+  constructor(raw: AsyncIterable<GenerateContentResponse>) {
+    this.#raw = raw;
+  }
+
+  async *[Symbol.asyncIterator](): AsyncIterator<GenerateContentResponse> {
+    try {
+      for await (const chunk of this.#raw) {
+        yield chunk;
+      }
+    } catch (error) {
+      throw new CruxAdapterError(
+        classifyProviderHttpError(error, "google") ??
+          cruxProviderError({
+            kind: "provider-error",
+            code: "google.stream_failed",
+            retryable: true,
+            message: error instanceof Error ? error.message : error,
+          }),
+        { cause: error },
+      );
+    }
+  }
+}
+
+/** Wrap a raw Google content stream so mid-stream errors are provider-normalized. */
+export function createGoogleStreamCapture(
+  raw: AsyncIterable<GenerateContentResponse>,
+): GoogleChatStream {
+  return new GoogleChatStream(raw);
+}
+
 /** Reconstruct exact completion facts from consumed Google stream chunks. */
 export async function googleStreamCompletion(
   chunks: readonly unknown[],
 ): Promise<StreamCompletionMetadata | undefined> {
   const responses = chunks.filter(isResponse);
+  return completionMetadataFromResponses(responses);
+}
+
+function completionMetadataFromResponses(
+  responses: readonly GenerateContentResponse[],
+): StreamCompletionMetadata | undefined {
   const last = responses.at(-1);
   if (!last) return undefined;
   const response = {

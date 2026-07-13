@@ -9,6 +9,7 @@
  */
 
 import { observe } from "../observability";
+import { workspaceDefinitionRef } from "../observability/definition-ref";
 import type { WorkspaceProvenance } from "./artifact-types";
 import type { WorkspaceOperation } from "./types";
 import type { WorkspaceVersionOperation } from "./version-types";
@@ -49,6 +50,8 @@ export function emitWorkspaceVersion(event: {
   const span = observe.openSpan({
     name: "workspace.version",
     primitive: "workspace.operation",
+    // `workspace()` requires `id`, so `workspaceId` is always the authored id.
+    definitionRefs: [workspaceDefinitionRef(event.workspaceId)],
     attributes,
   });
   span.end({ attributes: { ...attributes, status: "success" } });
@@ -73,6 +76,7 @@ export async function instrument<T>(
   const span = observe.openSpan({
     name: `workspace.${event.operation}`,
     primitive: "workspace.operation",
+    definitionRefs: [workspaceDefinitionRef(event.workspaceId)],
     attributes: {
       workspaceId: event.workspaceId,
       operation: event.operation,

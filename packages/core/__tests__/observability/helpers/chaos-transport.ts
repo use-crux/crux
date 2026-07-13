@@ -1,4 +1,9 @@
-import type { CruxGraphRecord, CruxObservabilityTransport } from '../../../src/observability'
+import {
+  acceptedDeliveryReceipt,
+  type CruxDeliveryReceipt,
+  type CruxGraphRecord,
+  type CruxObservabilityTransport,
+} from '../../../src/observability'
 
 export type ChaosTransportMode = 'hang' | 'sync-throw' | 'reject' | 'partial-chunk-fail' | 'slow' | 'flap' | 'http-400'
 
@@ -47,20 +52,21 @@ export function chaosTransport(mode: ChaosTransportMode): ChaosTransportControll
           return Promise.reject(new Error('chaos transport rejected'))
         case 'partial-chunk-fail':
           if (calls.length === 2) return Promise.reject(new Error('chaos transport chunk failed'))
-          return undefined
+          return acceptedDeliveryReceipt(batch)
         case 'slow':
-          return new Promise<void>((resolve) => {
-            slowResolvers.add(resolve)
+          return new Promise<CruxDeliveryReceipt>((resolve) => {
+            slowResolvers.add(() => resolve(acceptedDeliveryReceipt(batch)))
           })
         case 'flap':
           if (!failedFlap) {
             failedFlap = true
             return Promise.reject(new Error('chaos transport flap failed'))
           }
-          return undefined
+          return acceptedDeliveryReceipt(batch)
         case 'http-400':
           return Promise.reject(httpStatusError(400, 'chaos transport HTTP 400'))
       }
+      return acceptedDeliveryReceipt(batch)
     },
   }
 

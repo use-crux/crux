@@ -122,7 +122,7 @@ export function createSyntheticToolCallResponse(toolCalls: NonNullable<AdapterRe
     text: '',
     toolCalls,
     usage: undefined,
-    finishReason: 'tool_calls',
+    finishReason: 'tool-calls',
     responseId: undefined,
     actualModelId: undefined,
   }

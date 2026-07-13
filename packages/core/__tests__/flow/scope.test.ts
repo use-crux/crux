@@ -3,6 +3,12 @@ import { flow as makeFlow, createFlowId, signalFlow, type FlowScope } from '../.
 import { updateHooks, resetHooks } from '../../src/runtime/runtime'
 import { getExecutionContext, runWithExecutionContext, withSession } from '../../src/runtime/execution-context'
 import { inMemoryRecordStore } from '../../src/storage'
+import {
+  createInMemoryObservabilityTransport,
+  observe,
+  resetObservabilityRuntime,
+  setObservabilityTransport,
+} from '../../src/observability'
 
 describe('createFlowId', () => {
   it('returns a unique string starting with flow-', () => {
@@ -324,6 +330,40 @@ describe('nested flows', () => {
     expect(parentFlowIds[1]).toBe(flowIds[0])
     // Level 3's parent is level 2
     expect(parentFlowIds[2]).toBe(flowIds[1])
+  })
+
+  it('emits a causal edge from the ambient span to a nested flow run', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    await makeFlow('outer', async (outerFlow) => {
+      await outerFlow.step('delegate', async () => {
+        await makeFlow('inner', async () => {}).run()
+      })
+    }).run()
+    await observe.flush()
+    resetObservabilityRuntime()
+
+    const runStarts = transport.records.filter((record) => record.type === 'run:start')
+    expect(runStarts).toHaveLength(2)
+    const outerRunId = runStarts[0]?.type === 'run:start' ? runStarts[0].runId : undefined
+    const innerRunId = runStarts[1]?.type === 'run:start' ? runStarts[1].runId : undefined
+    expect(runStarts[1]?.traceId).toBe(runStarts[0]?.traceId)
+    expect(innerRunId).not.toBe(outerRunId)
+
+    const delegateSpan = transport.records.find(
+      (record) => record.type === 'span:start' && record.primitive === 'flow.step' && record.name === 'delegate',
+    )
+    const delegateSpanId = delegateSpan?.type === 'span:start' ? delegateSpan.spanId : undefined
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'edge',
+        edgeType: 'triggered',
+        runId: outerRunId,
+        from: { kind: 'span', id: delegateSpanId },
+        to: { kind: 'run', id: innerRunId },
+      }),
+    )
   })
 })
 

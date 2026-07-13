@@ -96,6 +96,8 @@ export type NavState =
       last?: 'all' | '1h' | '24h' | '7d' | '30d'
       has?: 'feedback' | 'experiment'
       search?: string
+      /** Pre-filter to runs whose DefinitionRefs include this Catalog definition (Phase 3 filter). */
+      definitionId?: string
     }
   | { view: 'runtime' }
   | { view: 'run-detail'; traceId: string; lens?: RunLens; spanId?: string; summary?: boolean }
@@ -154,6 +156,7 @@ export function pathFromState(state: NavState): string {
       if (state.last && state.last !== 'all') params.set('last', state.last)
       if (state.has) params.set('has', state.has)
       if (state.search) params.set('q', state.search)
+      if (state.definitionId) params.set('definitionId', state.definitionId)
       const qs = params.toString()
       return `/runs${qs ? `?${qs}` : ''}`
     }
@@ -321,6 +324,7 @@ export function stateFromPath(path: string, search?: string): NavState {
       const has = params.get('has')
       const hasValid = has === 'feedback' || has === 'experiment' ? has : undefined
       const search = params.get('q') ?? undefined
+      const definitionId = params.get('definitionId') ?? undefined
       return {
         view: 'runs',
         groupBy,
@@ -330,6 +334,7 @@ export function stateFromPath(path: string, search?: string): NavState {
         ...(lastValid !== 'all' ? { last: lastValid } : {}),
         ...(hasValid ? { has: hasValid } : {}),
         ...(search ? { search } : {}),
+        ...(definitionId ? { definitionId } : {}),
       }
     }
     case 'runtime':

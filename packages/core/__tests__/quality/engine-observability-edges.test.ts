@@ -114,6 +114,11 @@ describe('Quality runner observability graph edges', () => {
     expect(new Set(caseRuns.map((record) => record.traceId))).toEqual(
       new Set([evalRun!.traceId]),
     )
+    expect(experiment.observability).toEqual({
+      runId: evalRun!.runId,
+      traceId: evalRun!.traceId,
+      segmentId: evalRun!.segmentId,
+    })
     expect(caseEdges).toHaveLength(2)
     expect(caseEdges.map((edge) => edge.to)).toEqual([
       { kind: 'run', id: evalRun!.runId },

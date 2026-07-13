@@ -13,7 +13,9 @@ import type { MiddlewareResult } from "../../runtime/types";
 import { createSafety } from "../../safety/session";
 import { orchestrateStream } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
+import { normalizeAdapterCallError } from "../normalized-outcome";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
+import { assertProviderMediaSupported } from "../native-chat/media-hooks";
 import type { CallArgs, StreamHandle } from "../types";
 import { createToolLifecycle } from "../tool/session";
 import type { AdapterExecutionStreamArgs, CoreStepDialect } from "./types";
@@ -104,6 +106,14 @@ export async function streamCore<
   const providerMessages = await normalizeInvocationMessages(messages, {
     provider: modelInfo.provider,
   });
+  assertProviderMediaSupported(
+    { providerId: dialect.id, media: dialect.media },
+    {
+      provider: modelInfo.provider,
+      model: modelInfo.modelId,
+      messages: providerMessages,
+    },
+  );
 
   const callArgs: CallArgs<TExtra> = {
     model: modelInfo.modelId,
@@ -148,7 +158,13 @@ export async function streamCore<
           budget: "step",
           limitMs: args.timeout?.stepMs,
         },
-      );
+      ).catch((error: unknown) => {
+        throw normalizeAdapterCallError(error, {
+          providerId: modelInfo.provider,
+          signal: args.signal,
+          mapError: dialect.mapError,
+        });
+      });
     },
   );
 

@@ -178,10 +178,14 @@ func (c *Client) GetRaw(ctx context.Context, path string) (json.RawMessage, erro
 	return json.RawMessage(data), nil
 }
 
+// ObservabilityRuns loads the revisioned runs page and returns its rows for
+// list-oriented TUI and CLI rendering.
 func (c *Client) ObservabilityRuns(ctx context.Context) ([]ObservabilityRunSummary, error) {
-	var runs []ObservabilityRunSummary
-	err := c.GetJSON(ctx, "/api/observability/runs", &runs)
-	return runs, err
+	var page ObservabilityRunsPage
+	if err := c.GetJSON(ctx, "/api/observability/runs/page", &page); err != nil {
+		return nil, err
+	}
+	return page.Rows, nil
 }
 
 func (c *Client) ObservabilityRunDetail(ctx context.Context, runID string) (ObservabilityRunDetail, bool, error) {

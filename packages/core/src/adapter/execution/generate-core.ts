@@ -21,8 +21,10 @@ import { ValidationExhaustedError } from "../../generation/validation-retry";
 import { createSafety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
+import { normalizeAdapterCallError } from "../normalized-outcome";
 import { normalizeInvocationMessages } from "../../content/invocation-message";
-import { emitInputTokenEstimate } from './media-token-budget'
+import { assertProviderMediaSupported } from "../native-chat/media-hooks";
+import { emitInputTokenEstimate } from "./media-token-budget";
 import type { AdapterResponse, CallArgs } from "../types";
 import { responseContent } from "../assistant-output";
 import {
@@ -143,9 +145,41 @@ export async function generateCore<
 
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
-  const prepareProviderMessages = (canonical: readonly Message[]) =>
-    normalizeInvocationMessages(canonical, { provider: modelInfo.provider });
+  const prepareProviderMessages = async (canonical: readonly Message[]) => {
+    const normalized = await normalizeInvocationMessages(canonical, {
+      provider: modelInfo.provider,
+    });
+    assertProviderMediaSupported(
+      { providerId: dialect.id, media: dialect.media },
+      {
+        provider: modelInfo.provider,
+        model: modelInfo.modelId,
+        messages: normalized,
+      },
+    );
+    return normalized;
+  };
   messages = (await lifecycle.resume(messages)).messages;
+
+  /**
+   * Run exactly one provider call under the step budget, normalizing any thrown
+   * SDK/timeout/abort error into a {@link CruxAdapterError} so a failure surfaces
+   * as a classified outcome instead of a raw provider exception.
+   */
+  const callProvider = (callArgs: CallArgs<TExtra>) =>
+    withBudget(
+      (signal) =>
+        dialect.call(dialect.client, callArgs, {
+          signal: composeAbortSignals(args.signal, signal),
+        }),
+      { budget: "step", limitMs: args.timeout?.stepMs },
+    ).catch((error: unknown) => {
+      throw normalizeAdapterCallError(error, {
+        providerId: dialect.id,
+        signal: args.signal,
+        mapError: dialect.mapError,
+      });
+    });
 
   const generated = await orchestrateGenerate(
     {
@@ -173,6 +207,7 @@ export async function generateCore<
     async () => {
       messages = [...(await safety.guardInput({ messages })).messages];
       let lastCallArgs: CallArgs<TExtra> | undefined;
+      let suspendedApproval = false;
 
       for (let step = 0; step < maxSteps; step++) {
         steps++;
@@ -183,7 +218,7 @@ export async function generateCore<
           model: modelInfo.modelId,
           media: dialect.media,
           tokenBudget: args.tokenBudget,
-        })
+        });
         const callArgs: CallArgs<TExtra> = {
           model: modelInfo.modelId,
           system: currentSystem,
@@ -197,16 +232,7 @@ export async function generateCore<
         };
         lastCallArgs = callArgs;
 
-        const { raw, extracted } = await withBudget(
-          (signal) =>
-            dialect.call(dialect.client, callArgs, {
-              signal: composeAbortSignals(args.signal, signal),
-            }),
-          {
-            budget: "step",
-            limitMs: args.timeout?.stepMs,
-          },
-        );
+        const { raw, extracted } = await callProvider(callArgs);
         lastRaw = raw;
         lastExtracted = extracted;
 
@@ -265,10 +291,10 @@ export async function generateCore<
         const round = await lifecycle.executeRound(extracted, messages);
         messages = round.messages;
         if (round.kind === "suspended") {
-          lastExtracted = {
-            ...extracted,
-            finishReason: "tool_approval_required",
-          };
+          // Suspension is tracked separately; the provider-normalized finish
+          // reason on the tool-call turn (e.g. "tool-calls") stays truthful.
+          suspendedApproval = true;
+          lastExtracted = extracted;
           pendingApprovals = [round.request];
           rememberStep(lastExtracted);
           break;
@@ -293,8 +319,7 @@ export async function generateCore<
       }
 
       if (lastExtracted) {
-        const suspended =
-          lastExtracted.finishReason === "tool_approval_required";
+        const suspended = suspendedApproval;
         let parsed: unknown;
         if (resolved.schema && !suspended) {
           try {
@@ -310,18 +335,10 @@ export async function generateCore<
             messages = dialect.appendToolRound(messages, lastExtracted!, []);
             messages = [...messages, ...corrective];
             const providerMessages = await prepareProviderMessages(messages);
-            const regen = await withBudget(
-              (signal) =>
-                dialect.call(
-                  dialect.client,
-                  {
-                    ...lastCallArgs!,
-                    messages: providerMessages,
-                  },
-                  { signal: composeAbortSignals(args.signal, signal) },
-                ),
-              { budget: "step", limitMs: args.timeout?.stepMs },
-            );
+            const regen = await callProvider({
+              ...lastCallArgs!,
+              messages: providerMessages,
+            });
             lastRaw = regen.raw;
             lastExtracted = regen.extracted;
             steps++;
@@ -359,7 +376,9 @@ export async function generateCore<
 
       const meta: TraceMeta = safety.stamp({
         usage: lastExtracted?.usage,
-        finishReason: lastExtracted?.finishReason,
+        finishReason: suspendedApproval
+          ? "tool_approval_required"
+          : lastExtracted?.finishReason,
         stoppedBy,
         toolCalls: lastExtracted?.toolCalls?.map((tc) => ({
           id: tc.id,
@@ -370,10 +389,9 @@ export async function generateCore<
         actualModelId: lastExtracted?.actualModelId,
       });
 
-      const resultMessages =
-        lastExtracted?.finishReason === "tool_approval_required"
-          ? messages
-          : appendAssistantResultMessage(messages, lastExtracted);
+      const resultMessages = suspendedApproval
+        ? messages
+        : appendAssistantResultMessage(messages, lastExtracted);
 
       const accumulator = createResultAccumulator();
       for (const facts of stepFacts) accumulator.addStep(facts);
@@ -412,6 +430,9 @@ function stepFactsFromResponse(response: AdapterResponse): ResultStepFacts {
   return {
     content: responseContent(response),
     ...(response.usage !== undefined ? { usage: response.usage } : {}),
+    ...(response.toolCalls !== undefined
+      ? { toolCalls: response.toolCalls }
+      : {}),
     finishReason: response.finishReason,
     responseId: response.responseId,
     modelId: response.actualModelId,

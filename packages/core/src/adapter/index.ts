@@ -37,6 +37,23 @@ export type { ResolvedPromptCodecOptions } from "./codec";
 // Adapter specification interface (core-driven loop)
 export type { AdapterSpec } from "./spec";
 
+// Normalized, provider-neutral outcome taxonomy (finish reason + errors)
+export {
+  classifyProviderHttpError,
+  CruxAdapterError,
+  cruxProviderError,
+  isCruxAdapterError,
+  normalizeAdapterCallError,
+  redactProviderMessage,
+} from "./normalized-outcome";
+export type {
+  CruxFinishReason,
+  CruxProviderError,
+  CruxProviderErrorInput,
+  CruxProviderErrorKind,
+  NormalizeAdapterCallErrorOptions,
+} from "./normalized-outcome";
+
 // Factory + result/option types (core-driven loop)
 export { adapter } from "./define-adapter";
 export { createResultAccumulator } from "./result-accumulator";

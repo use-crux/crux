@@ -184,9 +184,9 @@ func TestDevServer_ingest_and_read(t *testing.T) {
 
 	baseURL := fmt.Sprintf("http://localhost:%d", port)
 
-	body := `{"records":[
-		{"schemaVersion":1,"recordId":"rec_run_start","type":"run:start","runId":"run-live","traceId":"trace-live","name":"live","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
-		{"schemaVersion":1,"recordId":"rec_run_end","type":"run:end","runId":"run-live","traceId":"trace-live","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok"}
+	body := `{"schemaVersion":2,"records":[
+		{"schemaVersion":2,"recordId":"rec_run_start","type":"run:start","runId":"run-live","segmentId":"seg-live","segmentSeq":1,"traceId":"trace-live","name":"live","rootPrimitive":"generation.call","startedAt":"2026-05-16T18:00:00.000Z","status":"running"},
+		{"schemaVersion":2,"recordId":"rec_run_end","type":"run:end","runId":"run-live","segmentId":"seg-live","segmentSeq":2,"traceId":"trace-live","endedAt":"2026-05-16T18:00:00.010Z","durationMs":10,"status":"ok"}
 	]}`
 	resp, err := http.Post(baseURL+"/api/observability/records", "application/json", strings.NewReader(body))
 	if err != nil {
@@ -197,17 +197,20 @@ func TestDevServer_ingest_and_read(t *testing.T) {
 		t.Fatalf("POST status = %d, want %d", resp.StatusCode, http.StatusAccepted)
 	}
 
-	resp, err = http.Get(baseURL + "/api/observability/runs")
+	resp, err = http.Get(baseURL + "/api/observability/runs/page")
 	if err != nil {
 		t.Fatalf("GET error: %v", err)
 	}
 	defer resp.Body.Close()
 
-	var runs []observability.RunSummary
-	if err := json.NewDecoder(resp.Body).Decode(&runs); err != nil {
-		t.Fatalf("decode runs: %v", err)
+	var page observability.RunsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&page); err != nil {
+		t.Fatalf("decode runs page: %v", err)
 	}
-	if len(runs) != 1 || runs[0].RunID != "run-live" || runs[0].Status != "ok" {
-		t.Errorf("runs = %#v, want run-live ok", runs)
+	if page.Revision == 0 {
+		t.Fatal("page.Revision was not populated")
+	}
+	if len(page.Rows) != 1 || page.Rows[0].RunID != "run-live" || page.Rows[0].Status != "ok" {
+		t.Errorf("page.Rows = %#v, want run-live ok", page.Rows)
 	}
 }

@@ -7,7 +7,13 @@ LLMs fail in subtle ways. The output looks fine but the model never saw the bran
 
 Crux gives you observability layers built on the same canonical graph-record spine:
 
-- **[Devtools](/docs/guides/observability/devtools)** — visual UI for development. Live trace timeline, prompt index, memory operations.
+- **[Devtools](/docs/guides/observability/devtools)** — visual UI for development. Live timeline, Catalog, Runs, Run Detail.
+- **[Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence)** — join authored definitions to live runs via `DefinitionRef`.
+- **[Runs and delivery health](/docs/guides/observability/runs-and-delivery)** — status vocabulary and delivery tri-state matching the UI.
+- **[Adapter outcomes](/docs/guides/observability/adapter-outcomes)** — normalized finish reasons, completed tool calls, and provider errors.
+- **[Runtime setup](/docs/guides/observability/runtime-setup)** — Node, serverless, Workers, and Convex host bindings.
+- **[Privacy](/docs/guides/observability/privacy)** — capture modes, redaction, sanitized definition sources.
+- **[Troubleshooting](/docs/guides/observability/troubleshooting)** — incomplete runs, unknown delivery health, empty Catalog activity.
 - **[Cost tracking](/docs/guides/observability/cost-tracking)** — per-call spend attribution, reports, and warn/limit budgets.
 - **[Telemetry](/docs/guides/observability/telemetry)** — `@use-crux/otel` emits OpenTelemetry spans for production (Datadog, Honeycomb, Grafana).
 - **Subscribers** — use `subscribeObservability()` or the `crux:observability` diagnostics channel to consume raw graph records.
@@ -36,6 +42,7 @@ Crux Local keeps that history bounded. The Go server reconciles abandoned runnin
 - **Production:** install `@use-crux/otel` if you have an existing OTel-compatible APM (Datadog, Honeycomb, Grafana, New Relic). Otherwise the lightweight HTTP/callback exporter works.
 - **Custom logic:** use `subscribeObservability()` for raw graph records, or a `CruxPlugin` when you need broader runtime composition.
 - **Per-call wrapping:** use middleware for things that wrap *every* generation — request logging, timing, multi-tenant scoping.
+- **Ephemeral hosts:** bind the host lifecycle wrappers in [Runtime setup](/docs/guides/observability/runtime-setup) so runs do not end as `incomplete` solely because the worker froze mid-flush.
 
 ## When should I NOT use middleware?
 
@@ -46,6 +53,12 @@ Crux Local keeps that history bounded. The Go server reconciles abandoned runnin
 
 <Cards>
   <Card title="Devtools" description="Visual tracing UI for development, with CLI and TUI dashboards." href="/docs/guides/observability/devtools" />
+  <Card title="Catalog runtime evidence" description="DefinitionRef join from Catalog to Runs and back." href="/docs/guides/observability/catalog-runtime-evidence" />
+  <Card title="Runs and delivery health" description="Status vocabulary and delivery tri-state matching the UI." href="/docs/guides/observability/runs-and-delivery" />
+  <Card title="Adapter outcomes" description="Normalized finish reasons, completed tool calls, and errors." href="/docs/guides/observability/adapter-outcomes" />
+  <Card title="Runtime setup" description="Node, serverless, Workers, and Convex flush bindings." href="/docs/guides/observability/runtime-setup" />
+  <Card title="Privacy" description="Capture modes, redaction, and sanitized definition sources." href="/docs/guides/observability/privacy" />
+  <Card title="Troubleshooting" description="Unknown delivery health, incomplete runs, empty Catalog activity." href="/docs/guides/observability/troubleshooting" />
   <Card title="Cost tracking" description="Attribute model spend to prompts, models, sessions, flows, and steps." href="/docs/guides/observability/cost-tracking" />
   <Card title="Telemetry" description="OpenTelemetry spans for production observability." href="/docs/guides/observability/telemetry" />
   <Card title="Plugins" description="Build a custom CruxPlugin or graph-record subscriber." href="/docs/guides/observability/plugins" />

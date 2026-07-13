@@ -161,6 +161,7 @@ export function createKnowledgeBaseRuntime(config: KnowledgeBaseRuntimeConfig): 
   ): Retriever<TFilter> {
     return retriever({
       id: config.id,
+      knowledgeBaseId: config.id,
       indexerId: config.id,
       namespace: config.namespace,
       records,

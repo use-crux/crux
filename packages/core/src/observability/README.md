@@ -16,7 +16,7 @@ Built-in edge types and artifact kinds are closed canonical lists. User-defined 
 
 `createCruxTraceId()` returns a W3C trace ID: 32 lowercase hexadecimal characters, never all zeroes. `createCruxSpanId()` returns a W3C span ID: 16 lowercase hexadecimal characters, never all zeroes.
 
-Run, record, event, edge, and artifact IDs keep Crux prefixes with crypto-random hex suffixes. Every graph record includes `seq`, a per-run monotonic number assigned at emit time and used by local storage/read paths for deterministic raw-record ordering.
+Run, segment, record, event, edge, and artifact IDs keep Crux prefixes with crypto-random hex suffixes. Every graph record includes `segmentId` plus a positive `segmentSeq`; the sequence is monotonic only inside that execution segment.
 
 ## Generation Metrics
 
@@ -46,6 +46,6 @@ Custom metric keys must use the `custom.*` namespace. Span families are derived 
 
 ## Transport Delivery
 
-`CruxObservabilityTransport.send()` is an at-least-once delivery boundary. Transports must be idempotent by `recordId`; the delivery engine may retry failed chunks while preserving chunks that were already accepted.
+`CruxObservabilityTransport.send()` is an at-least-once, per-record delivery boundary. Every call returns an indexed `CruxDeliveryReceipt`; missing, duplicate, or ID-mismatched dispositions are retried. Transports and collectors must be idempotent by immutable `recordId`.
 
-The engine owns batching and request chunking. `observability.delivery.scheduledDelayMs` controls the batching window, `observability.delivery.maxBatchSize` bounds each engine batch, and `transport.maxRecordsPerRequest` bounds each `send()` call. `observe.flush()` drains queued records and calls an optional transport `flush()` hook. `observe.shutdown()` drains queued records, calls optional `shutdown()`, and then disables the transport.
+The engine owns batching, exact UTF-8 request chunking, record/byte queue bounds, jittered retry backoff, and bounded diagnostics. `transport.maxRecordsPerRequest` and `transport.maxRequestBytes` bound each send. `observe.flush()` and `observe.shutdown()` return structured results with delivered, rejected, remaining, and deadline state; a deadline never clears retryable records silently.

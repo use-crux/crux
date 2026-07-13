@@ -10,43 +10,44 @@
 
 import {
   observe,
-  type CapturedObservabilityContext,
   type CruxSpanId,
-} from '../../observability'
-import type { JsonValue } from '../../storage'
-import type { WorkItem } from './work'
+  type CruxTraceId,
+} from "../../observability";
+import type { JsonValue } from "../../storage";
+import type { WorkItem } from "./work";
+
+const NAMED_DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS = 3_000;
 
 /** JSON-safe defer provenance persisted on intents and task.run work. */
 export interface RuntimeNamedDeferProvenance {
-  readonly mode: 'named'
-  readonly sequence: number
-  readonly completion: 'response-finished' | 'handler-returned'
-  readonly scopeId: string
-  readonly workId: string
-  readonly targetId: string
-  readonly scheduledAtMs?: number
-  readonly runId?: string
-  readonly traceId?: string
+  readonly mode: "named";
+  readonly sequence: number;
+  readonly completion: "response-finished" | "handler-returned";
+  readonly scopeId: string;
+  readonly workId: string;
+  readonly targetId: string;
+  readonly scheduledAtMs?: number;
+  readonly traceId?: string;
   /** Durable acceptance-span identity used for the later causal edge. */
-  readonly scheduledSpanId: string
+  readonly scheduledSpanId: string;
 }
 
 /** True when a JSON value looks like named defer provenance. */
 export function isRuntimeNamedDeferProvenance(
   value: unknown,
 ): value is RuntimeNamedDeferProvenance {
-  if (!value || typeof value !== 'object') return false
-  const record = value as Record<string, unknown>
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
   return (
-    record.mode === 'named' &&
-    typeof record.sequence === 'number' &&
-    (record.completion === 'response-finished' ||
-      record.completion === 'handler-returned') &&
-    typeof record.scopeId === 'string' &&
-    typeof record.workId === 'string' &&
-    typeof record.targetId === 'string' &&
-    typeof record.scheduledSpanId === 'string'
-  )
+    record.mode === "named" &&
+    typeof record.sequence === "number" &&
+    (record.completion === "response-finished" ||
+      record.completion === "handler-returned") &&
+    typeof record.scopeId === "string" &&
+    typeof record.workId === "string" &&
+    typeof record.targetId === "string" &&
+    typeof record.scheduledSpanId === "string"
+  );
 }
 
 /** Clone provenance into a plain JSON-safe object for durable storage. */
@@ -54,7 +55,7 @@ export function cloneNamedDeferProvenance(
   provenance: RuntimeNamedDeferProvenance,
 ): RuntimeNamedDeferProvenance {
   return Object.freeze({
-    mode: 'named' as const,
+    mode: "named" as const,
     sequence: provenance.sequence,
     completion: provenance.completion,
     scopeId: provenance.scopeId,
@@ -63,17 +64,16 @@ export function cloneNamedDeferProvenance(
     ...(provenance.scheduledAtMs !== undefined
       ? { scheduledAtMs: provenance.scheduledAtMs }
       : {}),
-    ...(provenance.runId ? { runId: provenance.runId } : {}),
     ...(provenance.traceId ? { traceId: provenance.traceId } : {}),
     scheduledSpanId: provenance.scheduledSpanId,
-  })
+  });
 }
 
 /** JSON-safe form suitable for intent/work rows. */
 export function namedDeferProvenanceAsJson(
   provenance: RuntimeNamedDeferProvenance,
 ): JsonValue {
-  return cloneNamedDeferProvenance(provenance) as unknown as JsonValue
+  return cloneNamedDeferProvenance(provenance) as unknown as JsonValue;
 }
 
 /**
@@ -84,36 +84,44 @@ export async function executeWithNamedDeferEvidence<T>(
   work: WorkItem,
   execute: () => Promise<T>,
 ): Promise<T> {
-  if (work.work.kind !== 'task.run' || !work.work.defer) {
-    return execute()
+  if (work.work.kind !== "task.run" || !work.work.defer) {
+    return execute();
   }
-  const provenance = work.work.defer
+  const provenance = work.work.defer;
   if (!isRuntimeNamedDeferProvenance(provenance)) {
-    return execute()
+    return execute();
   }
 
-  const scheduledAtMs = provenance.scheduledAtMs ?? Date.now()
-  const queueDelayMs = Math.max(0, Date.now() - scheduledAtMs)
-  const scheduledSpanId = provenance.scheduledSpanId
+  const scheduledAtMs = provenance.scheduledAtMs ?? Date.now();
+  const queueDelayMs = Math.max(0, Date.now() - scheduledAtMs);
+  const scheduledSpanId = provenance.scheduledSpanId;
 
-  const runContext: CapturedObservabilityContext | undefined =
-    provenance.runId && provenance.traceId
-      ? {
-          runId: provenance.runId as CapturedObservabilityContext['runId'],
-          traceId:
-            provenance.traceId as CapturedObservabilityContext['traceId'],
-          // Durable queued work may execute after its originating grouped run
-          // ended. Preserve causal run/trace identity, never temporal nesting.
-          spanStack: [],
-        }
-      : undefined
+  // Durable work may wake after its originating run is terminal. It therefore
+  // owns a fresh run and segment, while the trace and explicit edge preserve
+  // causality across the durable boundary.
+  const run = observe.openRun({
+    ...(provenance.traceId
+      ? { traceId: provenance.traceId as CruxTraceId }
+      : {}),
+    name: `defer named ${provenance.targetId}`,
+    rootPrimitive: "defer.run",
+    attributes: {
+      mode: "named",
+      completion: provenance.completion,
+      sequence: provenance.sequence,
+      targetId: provenance.targetId,
+      workId: provenance.workId,
+      scopeId: provenance.scopeId,
+      queueDelayMs,
+    },
+  });
 
-  const run = async (): Promise<T> => {
+  return run.withContext(async (): Promise<T> => {
     const span = observe.openSpan({
       name: `defer run named ${provenance.targetId}`,
-      primitive: 'defer.run',
+      primitive: "defer.run",
       attributes: {
-        mode: 'named',
+        mode: "named",
         completion: provenance.completion,
         sequence: provenance.sequence,
         targetId: provenance.targetId,
@@ -121,53 +129,100 @@ export async function executeWithNamedDeferEvidence<T>(
         scopeId: provenance.scopeId,
         queueDelayMs,
       },
-      // Restore a captured run when available; otherwise open a lightweight run.
-      ...(runContext ? { implicitRun: false as const } : {}),
-    })
+      implicitRun: false,
+    });
 
     observe.edge({
-      edgeType: 'triggered',
-      from: { kind: 'span', id: scheduledSpanId as CruxSpanId },
-      to: { kind: 'span', id: span.spanId },
-    })
+      edgeType: "triggered",
+      from: { kind: "span", id: scheduledSpanId as CruxSpanId },
+      to: { kind: "span", id: span.spanId },
+    });
 
+    let result: T;
     try {
-      const result = await span.withContext(execute)
-      span.end({
-        status: 'ok',
-        attributes: {
-          mode: 'named',
-          completion: provenance.completion,
-          sequence: provenance.sequence,
-          targetId: provenance.targetId,
-          workId: provenance.workId,
-          scopeId: provenance.scopeId,
-          queueDelayMs,
-          outcome: 'completed',
-        },
-      })
-      return result
+      result = await span.withContext(execute);
     } catch (error) {
       span.end({
-        status: 'error',
+        status: "error",
         error,
         attributes: {
-          mode: 'named',
+          mode: "named",
           completion: provenance.completion,
           sequence: provenance.sequence,
           targetId: provenance.targetId,
           workId: provenance.workId,
           scopeId: provenance.scopeId,
           queueDelayMs,
-          outcome: 'failed',
+          outcome: "failed",
         },
-      })
-      throw error
+      });
+      run.error(error, {
+        attributes: {
+          mode: "named",
+          completion: provenance.completion,
+          sequence: provenance.sequence,
+          targetId: provenance.targetId,
+          workId: provenance.workId,
+          scopeId: provenance.scopeId,
+          queueDelayMs,
+          outcome: "failed",
+        },
+      });
+      throw error;
     }
-  }
 
-  if (runContext) {
-    return observe.withContext(runContext, run) as Promise<T>
+    span.end({
+      status: "ok",
+      attributes: {
+        mode: "named",
+        completion: provenance.completion,
+        sequence: provenance.sequence,
+        targetId: provenance.targetId,
+        workId: provenance.workId,
+        scopeId: provenance.scopeId,
+        queueDelayMs,
+        outcome: "completed",
+      },
+    });
+    run.end({
+      status: "ok",
+      attributes: {
+        mode: "named",
+        completion: provenance.completion,
+        sequence: provenance.sequence,
+        targetId: provenance.targetId,
+        workId: provenance.workId,
+        scopeId: provenance.scopeId,
+        queueDelayMs,
+        outcome: "completed",
+      },
+    });
+    return result;
+  }) as Promise<T>;
+}
+
+/**
+ * Deliver named wake evidence after the kernel has persisted its outcome.
+ *
+ * Ordinary work is a no-op. Delivery failure never replaces the authoritative
+ * Runtime result, and the explicit deadline prevents a retained wake from
+ * retrying indefinitely.
+ */
+export async function flushNamedDeferEvidenceAfterCommit(
+  work: WorkItem,
+): Promise<void> {
+  if (
+    work.work.kind !== "task.run" ||
+    !isRuntimeNamedDeferProvenance(work.work.defer)
+  ) {
+    return;
   }
-  return run()
+  try {
+    await observe.flush({
+      timeoutMs: NAMED_DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS,
+    });
+  } catch {
+    // Delivery diagnostics retain the failure; persisted Runtime state is
+    // authoritative and must never be replaced by an observability error.
+  }
 }

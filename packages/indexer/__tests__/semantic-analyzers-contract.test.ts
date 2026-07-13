@@ -90,6 +90,42 @@ describe('semantic analyzer syntax contract', () => {
       ]),
     )
   })
+
+  it('discovers judgeReranker as the same rag.reranker definition primitive as reranker', () => {
+    const sourceFile = fakeSourceFile()
+    const providerObject = objectWithStringNameProperty(sourceFile, 'answer-ranker')
+    const judgeObject = objectWithStringNameProperty(sourceFile, 'Docs Judge!')
+    const providerCall = node({
+      kind: 'callExpression',
+      text: 'reranker',
+      arguments: [providerObject],
+      parent: sourceFile,
+    })
+    const judgeCall = node({
+      kind: 'callExpression',
+      text: 'judgeReranker',
+      arguments: [judgeObject],
+      parent: sourceFile,
+    })
+    link(sourceFile, { children: [providerCall, judgeCall] })
+
+    const candidates = semanticDefinitionCandidates(sourceFile, fakeSyntaxView)
+
+    expect(candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          definitionId: 'rag.reranker:answer-ranker',
+          kind: 'rag.reranker',
+          name: 'answer-ranker',
+        }),
+        expect.objectContaining({
+          definitionId: 'rag.reranker:Docs-Judge',
+          kind: 'rag.reranker',
+          name: 'Docs Judge!',
+        }),
+      ]),
+    )
+  })
 })
 
 const fakeSyntaxView: SemanticSyntaxView<FakeNode, FakeSourceFile> = {
@@ -240,6 +276,18 @@ function objectWithStringId(parent: FakeNode, id: string): FakeNode {
     parent,
   })
   return node({ kind: 'objectLiteral', properties: [idProperty], parent })
+}
+
+function objectWithStringNameProperty(parent: FakeNode, name: string): FakeNode {
+  const nameName = node({ kind: 'identifier', text: 'name', parent })
+  const nameValue = node({ kind: 'stringLiteral', text: name, parent })
+  const nameProperty = node({
+    kind: 'propertyAssignment',
+    name: nameName,
+    initializer: nameValue,
+    parent,
+  })
+  return node({ kind: 'objectLiteral', properties: [nameProperty], parent })
 }
 
 function link(target: FakeSourceFile, updates: Partial<FakeSourceFile>): void {

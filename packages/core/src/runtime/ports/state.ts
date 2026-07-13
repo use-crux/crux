@@ -41,6 +41,8 @@ export interface FlowSnapshot {
     | 'cancelled'
   /** JSON input captured at first run. */
   readonly input: JsonValue
+  /** Serializable observability carrier for the next execution segment. */
+  readonly continuation?: JsonValue
   /** Existing label-keyed step cache, unchanged by the runtime engine. */
   readonly completedSteps: Readonly<Record<string, JsonValue>>
   /** Ordered replay-structure labels observed so far. */

@@ -3,13 +3,13 @@ title: Observability stack
 description: withDevtools for dev + withTelemetry for OTel + a custom CruxPlugin for app-specific metrics.
 ---
 
-This recipe layers Crux's three observability mechanisms into one stack: devtools for development, OpenTelemetry spans for production, and a custom `CruxPlugin` to push app-specific metrics (cost per tenant, latency by region) to your monitoring backend.
+This recipe layers Crux's three observability mechanisms into one stack: devtools for development, OpenTelemetry spans for production, and a custom `CruxPlugin` that consumes the canonical graph-record stream for app-specific metrics (cost per tenant, latency by region).
 
 ## Primitives used
 
-- `withDevtools()` from `@use-crux/core/observability`
+- Local HTTP observability transport via `config({ observability })` (or `withDevtools()`)
 - `withTelemetry()` from `@use-crux/otel`
-- A custom `CruxPlugin` implementing `install(hooks)` with hooks
+- A custom `CruxPlugin` that installs via `subscribeObservability()` and cleans up in `dispose`
 - `config({ plugins: [...] })` to compose them
 
 ## When to reach for this pattern
@@ -23,43 +23,88 @@ This recipe layers Crux's three observability mechanisms into one stack: devtool
 ### `lib/ai/plugins/cost-tracker.ts`
 
 ```ts
-import type { CruxPlugin, CruxHooks } from '@use-crux/core'
+import type { CruxPlugin } from '@use-crux/core'
+import { subscribeObservability } from '@use-crux/core/observability'
 
 interface CostTrackerOptions {
   onCost: (event: {
-    promptId: string
-    modelId: string
+    promptId: string | undefined
+    modelId: string | undefined
     tenantId: string | undefined
     inputTokens: number
     outputTokens: number
     estimatedCost: number
-    durationMs: number
+    durationMs: number | undefined
   }) => void | Promise<void>
 }
 
 export function withCostTracker(options: CostTrackerOptions): CruxPlugin {
   return {
     name: 'app:cost-tracker',
-    install(hooks: Readonly<CruxHooks>) {
-      return {
-        observability subscribers: {
-          ...hooks.observability subscribers,
-          onGenerateEnd: async (event) => {
-            // Forward to existing handlers (fan-out)
-            await hooks.observability subscribers?.onGenerateEnd?.(event)
+    install() {
+      // Graph records are the only public instrumentation stream.
+      // `span:start` carries primitive/identity; `span:end` carries metrics.
+      // Join them by spanId rather than inventing per-event callback fields.
+      const openGenerations = new Map<
+        string,
+        { promptId?: string; modelId?: string; tenantId?: string }
+      >()
 
-            // Push cost metric
-            await options.onCost({
-              promptId: event.promptId,
-              modelId: event.modelId,
-              tenantId: event.metadata?.tenantId as string | undefined,
-              inputTokens: event.usage?.inputTokens ?? 0,
-              outputTokens: event.usage?.outputTokens ?? 0,
-              estimatedCost: event.usage?.totalCost ?? 0,
-              durationMs: event.durationMs,
-            })
-          },
-        },
+      const unsubscribe = subscribeObservability((record) => {
+        if (record.type === 'span:start') {
+          if (
+            record.primitive !== 'generation.call' &&
+            record.primitive !== 'generation.stream'
+          ) {
+            return
+          }
+          const attributes = record.attributes ?? {}
+          openGenerations.set(record.spanId, {
+            // Generation openSpan puts identity on attributes (and may also
+            // promote promptId/model onto top-level span fields when present).
+            promptId:
+              typeof record.promptId === 'string'
+                ? record.promptId
+                : typeof attributes.promptId === 'string'
+                  ? attributes.promptId
+                  : undefined,
+            modelId:
+              typeof record.model === 'string'
+                ? record.model
+                : typeof attributes.model === 'string'
+                  ? attributes.model
+                  : undefined,
+            // Correlator metadata is projected as meta.<key> attributes.
+            tenantId:
+              typeof attributes['meta.tenantId'] === 'string'
+                ? attributes['meta.tenantId']
+                : undefined,
+          })
+          return
+        }
+
+        if (record.type !== 'span:end') return
+        const start = openGenerations.get(record.spanId)
+        if (!start) return
+        openGenerations.delete(record.spanId)
+
+        const metrics = record.metrics ?? {}
+        void options.onCost({
+          promptId: start.promptId,
+          modelId: start.modelId,
+          tenantId: start.tenantId,
+          inputTokens: typeof metrics.inputTokens === 'number' ? metrics.inputTokens : 0,
+          outputTokens: typeof metrics.outputTokens === 'number' ? metrics.outputTokens : 0,
+          estimatedCost: typeof metrics.costUsd === 'number' ? metrics.costUsd : 0,
+          durationMs:
+            typeof metrics['gen.duration_ms'] === 'number'
+              ? metrics['gen.duration_ms']
+              : record.durationMs,
+        })
+      })
+
+      return {
+        dispose: unsubscribe,
       }
     },
   }
@@ -83,19 +128,27 @@ export default config({
     // OTel spans for production
     withTelemetry({
       serviceName: 'my-app',
-      serviceVersion: process.env.RELEASE_SHA,
-      attributes: { 'deployment.environment': process.env.NODE_ENV },
+      attributes: {
+        'deployment.environment': process.env.NODE_ENV ?? 'development',
+        ...(process.env.RELEASE_SHA ? { 'service.version': process.env.RELEASE_SHA } : {}),
+      },
     }),
 
     // Custom cost metric to your monitoring backend
     withCostTracker({
       onCost: async (event) => {
         await datadogClient.gauge('llm.cost', event.estimatedCost, {
-          tags: [`prompt:${event.promptId}`, `model:${event.modelId}`, `tenant:${event.tenantId ?? 'unknown'}`],
+          tags: [
+            `prompt:${event.promptId ?? 'unknown'}`,
+            `model:${event.modelId ?? 'unknown'}`,
+            `tenant:${event.tenantId ?? 'unknown'}`,
+          ],
         })
-        await datadogClient.histogram('llm.duration_ms', event.durationMs, {
-          tags: [`prompt:${event.promptId}`],
-        })
+        if (event.durationMs != null) {
+          await datadogClient.histogram('llm.duration_ms', event.durationMs, {
+            tags: [`prompt:${event.promptId ?? 'unknown'}`],
+          })
+        }
       },
     }),
   ],
@@ -105,30 +158,38 @@ export default config({
 ### Pass tenant context per request
 
 ```ts
-import { withSession, createSessionId } from '@use-crux/core'
-
+import { createSessionId } from '@use-crux/core'
 import { generate } from '@use-crux/ai'
 import { openai } from '@ai-sdk/openai'
+import { propagateAttributes } from '@use-crux/core/observability'
 import { summarize } from './prompts'
 
 export async function summarizeForTenant(tenantId: string, text: string) {
-  return withSession(createSessionId(), async () => {
-    return generate(summarize, {
-      model: openai('gpt-4o'),
-      input: { text },
-      metadata: { tenantId }, // appears in all instrumentation events
-    })
-  })
+  return propagateAttributes(
+    {
+      sessionId: createSessionId(),
+      metadata: { tenantId },
+    },
+    () =>
+      generate(summarize, {
+        model: openai('gpt-4o'),
+        input: { text },
+      }),
+  )
 }
 ```
 
+`propagateAttributes` stamps `sessionId` / `userId` onto every record and projects
+`metadata` as `meta.<key>` attributes (for example `meta.tenantId`). It does not
+add graph nodes — only correlators.
+
 ## How it works
 
-1. **`withDevtools()` + `withTelemetry()` + custom plugin compose.** Crux's plugin system fans out instrumentation hooks — every `onGenerateEnd` fires for _all_ installed plugins. None of them block each other.
+1. **Devtools transport + `withTelemetry()` + custom plugin compose.** Each plugin installs independently. OTel and your cost tracker both observe the same graph-record spine rather than separate per-event callback maps.
 2. **Devtools is explicit local/tunnel visibility.** When `observability.serverUrl` is set, Crux installs the HTTP observability transport. Leave it unset outside deliberate local or staging tunnel sessions.
-3. **`withTelemetry` emits OTel spans.** Every generate, memory op, compaction, judge, flow step, and tool call becomes a span with `crux.*` attributes. Your existing OTel collector ingests them.
-4. **Your custom plugin reads from the same hooks.** No need to instrument prompts manually — `onGenerateEnd` fires on every call with `usage`, `durationMs`, and `metadata` populated.
-5. **`metadata` flows from call site to plugin.** Pass `metadata: { tenantId, region, featureFlag }` to `generate()` and your plugin sees it in every event.
+3. **`withTelemetry` emits OTel spans.** Every generate, memory op, compaction, judge, flow step, and tool call becomes a span with `crux.*` / GenAI attributes. Your existing OTel collector ingests them.
+4. **Your custom plugin subscribes to graph records.** `subscribeObservability(['span:end'], …)` receives completed generation spans with metrics (tokens, cost, duration) already normalized.
+5. **Correlators group multi-tenant work.** Use `propagateAttributes({ sessionId, userId, metadata }, fn)` so tags stay attached across nested spans without inventing plugin-specific event fields.
 
 ## Variations
 
@@ -151,7 +212,7 @@ withCostTracker({
 
 ### Trace context propagation across services
 
-Use `@use-crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across Convex actions stay correlated through the hidden `__crux` context envelope.
+Use `@use-crux/convex/server` boundaries and `ctx.crux.runAction()` so spans across Convex actions stay correlated through the hidden `__crux` context envelope. For custom queues, use W3C inject/extract helpers from `@use-crux/otel` — see [Telemetry](/docs/guides/observability/telemetry).
 
 ## Where to next
 
@@ -163,12 +224,17 @@ Use `@use-crux/convex/server` boundaries and `ctx.crux.runAction()` so spans acr
   />
   <Card
     title="Plugins guide"
-    description="CruxPlugin interface and mergeHooks semantics."
+    description="CruxPlugin interface and subscribeObservability."
     href="/docs/guides/observability/plugins"
   />
   <Card
     title="Telemetry guide"
     description="@use-crux/otel setup, attributes, span hierarchy."
     href="/docs/guides/observability/telemetry"
+  />
+  <Card
+    title="Runtime setup"
+    description="Node, serverless, Workers, Convex flush bindings."
+    href="/docs/guides/observability/runtime-setup"
   />
 </Cards>

@@ -6,6 +6,23 @@ describe('observability service', () => {
     vi.unstubAllGlobals()
   })
 
+  it('loads the runs list only through the revisioned page contract', async () => {
+    vi.stubGlobal('window', { location: { origin: 'http://localhost:5173' } })
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ revision: 1, rows: [] })))
+    vi.stubGlobal('fetch', fetchMock)
+
+    // The bare-array list path is gone — Global Search and the Runs page share
+    // this one server-owned, revisioned read model.
+    expect(observabilityService).not.toHaveProperty('listRuns')
+
+    await observabilityService.listRunsPage({ status: ['ok'] })
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://localhost:5173/api/observability/runs/page?status=ok',
+      expect.anything(),
+    )
+  })
+
   it('fetches focused span events from the lazy endpoint with encoded ids', async () => {
     vi.stubGlobal('window', { location: { origin: 'http://localhost:5173' } })
     const fetchMock = vi.fn(async () => new Response(JSON.stringify([])))

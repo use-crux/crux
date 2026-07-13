@@ -6,23 +6,44 @@ import (
 	"strings"
 )
 
-const SchemaVersion = 1
+const SchemaVersion = 2
 
 type RecordType string
 
 const (
-	RecordRunStart  RecordType = "run:start"
-	RecordRunEnd    RecordType = "run:end"
-	RecordSpanStart RecordType = "span:start"
-	RecordSpanEnd   RecordType = "span:end"
-	RecordSpan      RecordType = "span"
-	RecordSpanEvent RecordType = "span:event"
-	RecordEdge      RecordType = "edge"
-	RecordArtifact  RecordType = "artifact"
+	RecordRunStart   RecordType = "run:start"
+	RecordRunSuspend RecordType = "run:suspend"
+	RecordRunResume  RecordType = "run:resume"
+	RecordRunEnd     RecordType = "run:end"
+	RecordSpanStart  RecordType = "span:start"
+	RecordSpanEnd    RecordType = "span:end"
+	RecordSpan       RecordType = "span"
+	RecordSpanEvent  RecordType = "span:event"
+	RecordEdge       RecordType = "edge"
+	RecordArtifact   RecordType = "artifact"
 )
 
 type Batch struct {
-	Records []Record `json:"records"`
+	SchemaVersion int           `json:"schemaVersion,omitempty"`
+	Records       []Record      `json:"records"`
+	SourceHealth  *SourceHealth `json:"sourceHealth,omitempty"`
+}
+
+// SourceHealth is a bounded cumulative delivery snapshot sent out of band
+// from canonical graph records.
+type SourceHealth struct {
+	SourceID            string             `json:"sourceId"`
+	Accepted            int64              `json:"accepted"`
+	Retried             int64              `json:"retried"`
+	PermanentlyRejected int64              `json:"permanentlyRejected"`
+	OverflowDropped     int64              `json:"overflowDropped"`
+	DeadlineDropped     int64              `json:"deadlineDropped"`
+	LastError           *SourceHealthError `json:"lastError,omitempty"`
+}
+
+type SourceHealthError struct {
+	Code    string `json:"code"`
+	Message string `json:"message,omitempty"`
 }
 
 type Record struct {
@@ -30,7 +51,8 @@ type Record struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	Payload       json.RawMessage `json:"-"`
 }
@@ -51,7 +73,8 @@ type RunStartRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SessionID     string          `json:"sessionId,omitempty"`
 	UserID        string          `json:"userId,omitempty"`
@@ -62,12 +85,40 @@ type RunStartRecord struct {
 	Attributes    json.RawMessage `json:"attributes,omitempty"`
 }
 
+type RunSuspendRecord struct {
+	SchemaVersion int             `json:"schemaVersion"`
+	RecordID      string          `json:"recordId"`
+	Type          RecordType      `json:"type"`
+	RunID         string          `json:"runId"`
+	SegmentID     string          `json:"segmentId"`
+	SegmentSeq    int             `json:"segmentSeq"`
+	TraceID       string          `json:"traceId,omitempty"`
+	SuspendedAt   string          `json:"suspendedAt"`
+	Reason        string          `json:"reason"`
+	Attributes    json.RawMessage `json:"attributes,omitempty"`
+}
+
+type RunResumeRecord struct {
+	SchemaVersion     int             `json:"schemaVersion"`
+	RecordID          string          `json:"recordId"`
+	Type              RecordType      `json:"type"`
+	RunID             string          `json:"runId"`
+	SegmentID         string          `json:"segmentId"`
+	SegmentSeq        int             `json:"segmentSeq"`
+	TraceID           string          `json:"traceId,omitempty"`
+	ResumedAt         string          `json:"resumedAt"`
+	Reason            string          `json:"reason"`
+	PreviousSegmentID string          `json:"previousSegmentId,omitempty"`
+	Attributes        json.RawMessage `json:"attributes,omitempty"`
+}
+
 type SpanStartRecord struct {
 	SchemaVersion int             `json:"schemaVersion"`
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	ParentSpanID  *string         `json:"parentSpanId,omitempty"`
@@ -94,7 +145,8 @@ type SpanRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	SpanID        string          `json:"spanId"`
 	ParentSpanID  *string         `json:"parentSpanId,omitempty"`
@@ -125,7 +177,8 @@ type ArtifactRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	ArtifactID    string          `json:"artifactId"`
 	SpanID        string          `json:"spanId,omitempty"`
@@ -145,7 +198,8 @@ type EdgeRecord struct {
 	RecordID      string          `json:"recordId"`
 	Type          RecordType      `json:"type"`
 	RunID         string          `json:"runId"`
-	Seq           int             `json:"seq,omitempty"`
+	SegmentID     string          `json:"segmentId,omitempty"`
+	SegmentSeq    int             `json:"segmentSeq,omitempty"`
 	TraceID       string          `json:"traceId,omitempty"`
 	EdgeID        string          `json:"edgeId"`
 	EdgeType      string          `json:"edgeType"`
@@ -299,13 +353,9 @@ var canonicalArtifactKinds = map[string]struct{}{
 }
 
 func ValidateRecord(record Record) error {
-	if record.SchemaVersion != SchemaVersion {
-		return fmt.Errorf("record %s schemaVersion %d is not supported", record.RecordID, record.SchemaVersion)
+	if err := ValidateRecordBase(record); err != nil {
+		return err
 	}
-	if record.RecordID == "" || record.RunID == "" {
-		return fmt.Errorf("record is missing required identity")
-	}
-
 	switch record.Type {
 	case RecordRunStart:
 		var run RunStartRecord
@@ -351,6 +401,22 @@ func ValidateRecord(record Record) error {
 		} else if span.Family != want {
 			return fmt.Errorf("span %s family %q does not match primitive %q", span.SpanID, span.Family, span.Primitive)
 		}
+	case RecordRunSuspend:
+		var suspended RunSuspendRecord
+		if err := json.Unmarshal(record.Payload, &suspended); err != nil {
+			return err
+		}
+		if suspended.SuspendedAt == "" || suspended.Reason == "" {
+			return fmt.Errorf("run:suspend record %s requires suspendedAt and reason", record.RecordID)
+		}
+	case RecordRunResume:
+		var resumed RunResumeRecord
+		if err := json.Unmarshal(record.Payload, &resumed); err != nil {
+			return err
+		}
+		if resumed.ResumedAt == "" || resumed.Reason == "" {
+			return fmt.Errorf("run:resume record %s requires resumedAt and reason", record.RecordID)
+		}
 	case RecordRunEnd, RecordSpanEnd, RecordSpanEvent:
 		return nil
 	default:
@@ -359,9 +425,25 @@ func ValidateRecord(record Record) error {
 	return nil
 }
 
+func ValidateRecordBase(record Record) error {
+	if record.SchemaVersion != SchemaVersion {
+		return fmt.Errorf("record %s schemaVersion %d is not supported", record.RecordID, record.SchemaVersion)
+	}
+	if record.RecordID == "" || record.RunID == "" {
+		return fmt.Errorf("record is missing required identity")
+	}
+	if record.SegmentID == "" || record.SegmentSeq <= 0 {
+		return fmt.Errorf("record %s is missing v2 segment identity", record.RecordID)
+	}
+	if (record.Type == RecordRunStart || record.Type == RecordRunResume) && record.SegmentSeq != 1 {
+		return fmt.Errorf("%s record %s must use segmentSeq 1", record.Type, record.RecordID)
+	}
+	return nil
+}
+
 func isKnownRecordType(recordType RecordType) bool {
 	switch recordType {
-	case RecordRunStart, RecordRunEnd, RecordSpanStart, RecordSpanEnd, RecordSpan, RecordSpanEvent, RecordEdge, RecordArtifact:
+	case RecordRunStart, RecordRunSuspend, RecordRunResume, RecordRunEnd, RecordSpanStart, RecordSpanEnd, RecordSpan, RecordSpanEvent, RecordEdge, RecordArtifact:
 		return true
 	default:
 		return false

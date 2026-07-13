@@ -6,6 +6,10 @@ import {
   classifyError,
   shouldAttemptFallback,
 } from "../src/generation/fallback";
+import {
+  CruxAdapterError,
+  cruxProviderError,
+} from "../src/adapter/normalized-outcome";
 import { ValidationExhaustedError } from "../src/generation/validation-retry";
 import { createGeneratedImageResult } from "../src/generation/image-result";
 import { createNoTranscriptError } from "../src/transcription/errors";
@@ -94,6 +98,20 @@ describe("isFallback()", () => {
 });
 
 describe("classifyError()", () => {
+  it("classifies normalized adapter failures without provider-specific status fields", () => {
+    expect(
+      classifyError(
+        new CruxAdapterError(
+          cruxProviderError({
+            kind: "rate-limit",
+            code: "ai-sdk.rate_limit",
+            retryable: true,
+          }),
+        ),
+      ),
+    ).toBe("rate_limit");
+  });
+
   it("classifies HTTP 429 as rate_limit", () => {
     const err = Object.assign(new Error("Too Many Requests"), { status: 429 });
     expect(classifyError(err)).toBe("rate_limit");

@@ -1,21 +1,15 @@
 import { useDeferredValue, useMemo } from 'react'
-import { useObservabilityRuns } from '@/features/observability/hooks/useObservabilityGraph'
+import { useObservabilityRunsPage } from '@/features/observability/hooks/useObservabilityGraph'
 import { useQualityRuns } from '@/shared/hooks/useQualityApi'
 import type { RunRow, RunsFilters } from '../types'
-import {
-  enrichRunRowFromObservability,
-  qualityOptionsFromFilters,
-  rowFromObservabilityRun,
-  rowFromQualityRun,
-  sinceFromLast,
-} from '../lib/run-mappers'
+import { annotateRunRowWithQuality, qualityAnnotationsByRunId, rowFromRunSummary, runsPageOptionsFromFilters } from '../lib/run-mappers'
 
 export interface UseRunsResult {
   allRows: readonly RunRow[]
   distinctTargets: readonly string[]
   distinctModels: readonly string[]
-  /** True while the underlying quality-runs query is fetching. Lets the
-   *  caller distinguish "loading the first batch" from "fetched, empty". */
+  /** True while the canonical Runs page is fetching. Lets the caller
+   *  distinguish "loading the first batch" from "fetched, empty". */
   loading: boolean
   /** True while the deferred filter inputs are still settling. UI can
    *  dim the table to communicate that results haven't caught up to the
@@ -23,88 +17,78 @@ export interface UseRunsResult {
   isFilterPending: boolean
 }
 
+/**
+ * The Runs feature's one row source (binding spec 04 §3): the joined,
+ * revisioned `/api/observability/runs/page` read model, decorated — never
+ * merged — with Quality's annotation-only metadata (feedback/score/cassette/
+ * diagnostics). Status and time-range filters run server-side; `target`/
+ * `model`/`search`/`has` are client-side refinement filters over that one
+ * bounded page, not a second independently-filtered row source.
+ */
 export function useRuns(filters: RunsFilters): UseRunsResult {
-  const observabilityRuns = useObservabilityRuns()
   // Defer the filter object so the local re-filter happens in a
   // transition rather than blocking the input. The server-side query
   // still uses the live filter (so the URL and server stay authoritative);
-  // only the client-side merge/filter pipeline reads the deferred view.
+  // only the client-side refinement-filter pipeline reads the deferred view.
   const deferredFilters = useDeferredValue(filters)
   const isFilterPending = filters !== deferredFilters
-  const qualityOpts = useMemo(() => qualityOptionsFromFilters(filters), [filters])
-  const qualityRuns = useQualityRuns(qualityOpts)
+
+  const pageOptions = useMemo(() => runsPageOptionsFromFilters(filters), [filters])
+  const runsPage = useObservabilityRunsPage(pageOptions)
+  // Quality is an annotation source only — its own filters would reintroduce
+  // a second, independently-filtered row set, so it's fetched unfiltered and
+  // joined onto the canonical rows below by runId.
+  const qualityRuns = useQualityRuns()
+  const qualityByRunId = useMemo(() => qualityAnnotationsByRunId(qualityRuns.data ?? []), [qualityRuns.data])
 
   const allRows = useMemo<readonly RunRow[]>(() => {
-    const observabilityByRunId = new Map(observabilityRuns.runs.map((run) => [run.runId, run]))
-    const qualityRows = (qualityRuns.data ?? []).map((run) =>
-      enrichRunRowFromObservability(rowFromQualityRun(run), observabilityByRunId.get(run.traceId)),
+    const rows = (runsPage.page?.rows ?? []).map((summary) =>
+      annotateRunRowWithQuality(rowFromRunSummary(summary), qualityByRunId.get(summary.runId)),
     )
-    const seen = new Set(qualityRows.map((r) => r.traceId))
-    const liveRows: RunRow[] = []
 
-    for (const run of observabilityRuns.runs) {
-      if (run.status !== 'running') continue
-      if (seen.has(run.runId)) continue
-      liveRows.push(rowFromObservabilityRun(run))
-    }
-
-    let live: readonly RunRow[] = liveRows
+    let filtered: readonly RunRow[] = rows
     if (deferredFilters.target && deferredFilters.target.length > 0) {
       const targets = new Set(deferredFilters.target)
-      live = live.filter((run) => targets.has(run.target))
-    }
-    if (deferredFilters.last && deferredFilters.last !== 'all') {
-      const since = sinceFromLast(deferredFilters.last)
-      if (since != null) live = live.filter((run) => run.startedAt >= since)
-    }
-    if (deferredFilters.search?.trim()) {
-      const query = deferredFilters.search.trim().toLowerCase()
-      live = live.filter((run) => `${run.traceId} ${run.target ?? ''} ${run.model ?? ''}`.toLowerCase().includes(query))
-    }
-
-    let merged: readonly RunRow[] = [...qualityRows, ...live]
-    if (deferredFilters.status && deferredFilters.status.length > 0) {
-      const statuses = new Set(deferredFilters.status)
-      merged = merged.filter((run) => statuses.has(run.status))
+      filtered = filtered.filter((run) => targets.has(run.target))
     }
     if (deferredFilters.model && deferredFilters.model.length > 0) {
       const models = new Set(deferredFilters.model)
-      merged = merged.filter((run) => run.model != null && models.has(run.model))
+      filtered = filtered.filter((run) => run.model != null && models.has(run.model))
+    }
+    if (deferredFilters.search?.trim()) {
+      const query = deferredFilters.search.trim().toLowerCase()
+      filtered = filtered.filter((run) =>
+        `${run.traceId} ${run.target ?? ''} ${run.model ?? ''}`.toLowerCase().includes(query),
+      )
     }
     if (deferredFilters.has === 'feedback') {
-      merged = merged.filter((run) => run.feedbackCount > 0)
+      filtered = filtered.filter((run) => run.feedbackCount > 0)
     }
-    return merged
-  }, [
-    qualityRuns.data,
-    observabilityRuns.runs,
-    deferredFilters,
-  ])
+    return filtered
+  }, [runsPage.page, qualityByRunId, deferredFilters])
 
   const distinctTargets = useMemo(() => {
     const values = new Set<string>()
-    for (const run of observabilityRuns.runs) {
+    for (const run of runsPage.page?.rows ?? []) {
       const name = run.name || run.rootPrimitive || run.runId
       if (name) values.add(name)
     }
     return Array.from(values).sort().slice(0, 50)
-  }, [observabilityRuns.runs])
+  }, [runsPage.page])
 
   const distinctModels = useMemo(() => {
     const values = new Set<string>()
-    for (const run of observabilityRuns.runs) {
+    for (const run of runsPage.page?.rows ?? []) {
       if (run.model) values.add(run.model)
     }
     return Array.from(values).sort().slice(0, 50)
-  }, [observabilityRuns.runs])
+  }, [runsPage.page])
 
   return {
     allRows,
     distinctTargets,
     distinctModels,
-    // qualityRuns is the canonical source; observability is push state
-    // and never "loading" in the spinner sense.
-    loading: qualityRuns.loading,
+    loading: runsPage.loading,
     isFilterPending,
   }
 }

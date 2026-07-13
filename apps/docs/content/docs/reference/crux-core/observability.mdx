@@ -42,6 +42,27 @@ Generation nodes and aggregating nodes can include `request?: CruxRunDetailReque
 
 Contextual retrieval, memory, and embedding spans fold into attached details when they are request-input evidence for a generation. Operational retrieval inside a tool, flow, composition, or agent boundary remains visible even when that branch lives under an agent generation stream; retrieval query/embed internals can still fold into the retrieval pipeline node.
 
+## DefinitionRef (runtime ↔ Project Index join)
+
+Runtime records may carry `definitionRefs?: DefinitionRef[]` on `run:start`,
+`span:start`, and full `span` records when the runtime already holds a compiled
+definition handle:
+
+```ts
+interface DefinitionRef {
+  id: string // matches store.ProjectDefinition.ID exactly
+  kind: ProjectDefinitionKind
+  role: DefinitionRefRole // e.g. resolved-prompt, invoked-agent, invoked-tool
+  source?: { file: string; line: number; column?: number } // repo-relative only
+}
+```
+
+Refs are omitted for anonymous handles — Crux never invents an id from a stack
+trace. `source` is root-redacted via `sanitizeDefinitionSource` (see the
+[privacy guide](/docs/guides/observability/privacy)). Catalog **View runs** and
+Run Detail Catalog links use this envelope; details in
+[Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence).
+
 ## Error evidence
 
 Thrown errors are represented with a shared normalized shape. `observe.span()` and `observe.openSpan().error()` attach:
@@ -288,20 +309,193 @@ await observe.flush({ timeout: 5000 });
 
 Observability delivery is queued into batches. The first delivery starts immediately for live devtools, and later records coalesce per microtask before being sent as bounded concurrent batches. This avoids head-of-line blocking when a collector, tunnel, or Convex network hop is slow. Failed batches retry on a capped backoff without waiting for another emitted record, while runtime reset and transport replacement count stale in-flight failures as dropped instead of requeueing them into a later transport. HTTP delivery normalizes unknown preview values into JSON-safe shapes, sends `observability.token` / `CRUX_DEVTOOLS_TOKEN` as bearer auth when configured, and isolates rejected records inside a failed batch, so one malformed or oversized detail artifact does not prevent terminal lifecycle records from reaching the backend. The Go observability backend reconciles out-of-order lifecycle records by stable ids and timestamps. The runtime never blocks user code on normal emits, but `flush()` and `shutdown()` wait for pending deliveries so serverless and Convex actions can preserve span starts, ends, artifacts, and events before the worker exits.
 
-Convex actions can use the helpers from `@use-crux/convex`:
+`createCruxConvex()`, `action`/`internalAction` from `@use-crux/convex/server`, and the agent/swarm wrappers all bind to a bounded final flush automatically — no per-function setup is required for first-party Crux Convex functions. The default budget is a short fixed window (`DEFAULT_CONVEX_OBSERVABILITY_FLUSH_TIMEOUT_MS`, 3 seconds), not the 20-second window from earlier releases: Convex exposes no per-invocation deadline API, so the bound must stay well under Convex's own action timeout instead of being derived from remaining host time. `flushObservability()` always returns a structured `ObservabilityFlushResult` (`status`, `delivered`, `rejected`, `remaining`, `deadlineExceeded`); pass `onDrain` to inspect it, or let the default reporter log a console warning whenever a drain does not fully complete so an incomplete flush is never silently discarded.
+
+A raw, hand-written Convex function (one not created through `action`/`internalAction`/`flow`) opts in once with `withObservabilityFlush` from `@use-crux/convex/observability`:
 
 ```ts
 import { withObservabilityFlush } from "@use-crux/convex/observability";
 
 export const run = internalAction({
   args: {},
-  handler: withObservabilityFlush(async (ctx, args) => {
-    // Crux work here
-  }),
+  handler: withObservabilityFlush(
+    async (ctx, args) => {
+      // Crux work here
+    },
+    { onDrain: (result) => console.log("crux drain", result) },
+  ),
 });
 ```
 
-`@use-crux/convex/server` actions flush automatically by default. Pass `observabilityFlushTimeoutMs: false` only when an outer serverless boundary already flushes.
+Pass `observabilityFlushTimeoutMs: false` on an `action`/`internalAction`/`flow` definition only when an outer serverless boundary already flushes.
+
+## Runs, execution segments, and delivery receipts
+
+A logical run can physically execute across more than one process, isolate, or invocation — a
+suspended Flow, a resumed Runtime Engine wake, a Convex action that hands off to another action, a
+Worker that answers a follow-up request. Three identities stay distinct so none of them has to be
+inferred from another:
+
+| Identity | Stability | Carried by |
+| --- | --- | --- |
+| `runId` | One user-visible logical operation. Begins once, may suspend/resume any number of times, ends once. | Every record |
+| `traceId` | Distributed causal correlation; interoperates with W3C `traceparent`. | Every record, propagation carrier |
+| `segmentId` | One contiguous execution in one process/isolate/invocation. Never survives a host boundary. | Every record, via `segmentId`/`segmentSeq` |
+
+`segmentSeq` is monotonic only within its `segmentId` — it is not a distributed total order and the
+backend never treats it as one. Ordering across segments is a partial order: exact edges and parent
+IDs first, then lifecycle boundaries, then `(segmentId, segmentSeq)`, then timestamp, then `recordId`
+as a stable tie-breaker. Concurrent segments are shown as concurrent, not collapsed into an invented
+wall-clock order.
+
+The lifecycle union is `run:start` (first segment), `run:suspend` (the current segment ends without
+terminalizing the run), `run:resume` (a fresh segment starts on the same logical run), and `run:end`
+(terminalizes the run exactly once; a duplicate byte-identical terminal record is idempotent, a
+conflicting one is diagnosed and never overwrites the first). Lifecycle mutation always goes through
+an explicit owner — `observe.openRun()`, the run/span handle's own `.suspend()` / `.end()` / `.error()`,
+or `observe.resumeRun(carrier, ...)` — never through restoring a captured context. `observe.withContext()`
+is context-only: it re-establishes the active span/attribute stack for a callback and cannot resume,
+suspend, or end a run by itself. See the [observability context guide](/docs/guides/observability/observability-context)
+for the full suspend/resume pattern used by Flow and Convex swarms.
+
+```ts
+import { observe } from "@use-crux/core/observability";
+
+const run = observe.openRun({ name: "import job", rootPrimitive: "flow.run" });
+// ... do work in this segment ...
+const carrier = run.suspend({ reason: "awaiting-approval" }); // CruxPropagationCarrier, JSON-safe
+
+// Persist `carrier` with your workflow state. In the invocation that resumes:
+const resumed = observe.resumeRun(carrier, { reason: "approval-received" });
+// ... a fresh segmentId; segmentSeq starts at 1 again ...
+resumed.end();
+```
+
+A host boundary alone is not a suspension. A request can end successfully and start a separately
+linked downstream run for queued or background work; only an operation that is truly the same logical
+continuation emits `run:suspend`/`run:resume`.
+
+Delivery success is per record, not per HTTP status. The transport treats a `2xx` response as complete
+only when every sent record has an accounted disposition (`accepted` or `rejected`, with a `retryable`
+flag); a malformed or partial receipt is retried in full rather than assumed successful. `recordId`
+identifies immutable content: the first occurrence persists, an exact duplicate is accepted
+idempotently without re-applying rollups, and a different payload under the same `recordId` is
+rejected permanently as a diagnosed conflict rather than overwriting the original. Bounded diagnostics
+(`observabilityDiagnostics()`) report accepted/retried/permanently-rejected/overflow-dropped/deadline-dropped
+counts and last-error state so a process that never reconnects can still report what it knows locally.
+
+### Host lifecycle adapters
+
+Core exposes a small provider-neutral host lifecycle port (context, `defer`, `deadline`) instead of
+importing any runtime. First-party wrappers bind it per host:
+
+| Runtime | Setup | Wrapper |
+| --- | --- | --- |
+| Long-lived Node | None for normal use; graceful shutdown remains recommended. | Background batching; call `observe.flush()`/`shutdown()` on exit. |
+| Generic serverless / Lambda | Use the wrapper, or call the documented drain in a custom handler. | `withObservableInvocation()` / `withNodeObservableInvocation()` (`@use-crux/core/observability`, `.../node`). |
+| Cloudflare Workers | Pass the Worker's `ExecutionContext` once. | `withWorkersObservableInvocation()` (`@use-crux/core/observability/workers`); binds `ctx.waitUntil()`, no `nodejs_compat` required. |
+| Convex | None — `createCruxConvex()`, `action`/`internalAction`, and agent/swarm wrappers bind automatically. | Bounded drain awaited before the action returns; see `@use-crux/convex/observability`. |
+
+Every wrapper reports a structured `ObservabilityFlushResult` (`status`, `delivered`, `rejected`,
+`remaining`, `deadlineExceeded`) instead of a boolean. Pass `onDrain` to inspect it; the default
+reporter logs a warning whenever a drain does not fully complete, so a truncated flush is never
+silently discarded. No configuration can keep an already-returned invocation alive if the adapter was
+never given the host's lifetime capability — a raw Worker handler or custom serverless entry point
+that never passes its `ExecutionContext`/deadline to a wrapper can still lose unflushed records exactly
+as it would without Crux.
+
+### OpenTelemetry bridge
+
+`@use-crux/otel`'s `withTelemetry()` plugin activates a real OTel span around the instrumented
+callback (`trace.getActiveSpan()` resolves correctly inside provider/tool/agent/flow work, and nested
+spans parent correctly), not just after the fact. `run:suspend` ends the segment's root OTel span;
+`run:resume` starts a fresh root span sharing the original `traceId` rather than reopening the old one
+— no SDK span object crosses a suspension boundary. Inject/extract helpers
+(`injectCruxPropagationCarrier()` / `extractCruxPropagationCarrier()`) round-trip the same
+`CruxPropagationCarrier` used for Crux-native resume through standard W3C `traceparent`/`tracestate`
+headers, and an explicit `baggageAttributeAllowlist` controls which baggage keys (if any) become span
+attributes — untrusted baggage is never copied by default. `observe.flush()`/`observe.shutdown()` and
+the host lifecycle wrappers above also force-flush the installed telemetry manager's exporter/processor
+work, bounded by the same deadline, so a serverless/Workers freeze does not orphan pending OTel export
+calls either.
+
+### Local development vs. production telemetry
+
+The HTTP transport and local SQLite read model described in this page are a **development** topology:
+`crux dev` (optionally tunneled) for one user's own machine. Production telemetry should go through an
+OTLP-compatible collector or platform-native tracing (`withTelemetry()`, or your platform's own OTel
+integration) rather than pointing production traffic at a local devtools server. Both can run at once —
+`observability.serverUrl` for local inspection, `withTelemetry()` for your production APM — since they
+are complementary sinks over the same graph-record spine, not competing sources of truth.
+
+### Pre-launch v2 migration
+
+The graph record schema is v2-only (`CRUX_OBSERVABILITY_SCHEMA_VERSION === 2`); there is no dual-read
+compatibility window. On first startup against an older local database, the Go backend transactionally
+discards pre-v2 observability rows — they carry no truthful execution-segment identity to migrate —
+and rebuilds the schema automatically. Every other SQLite table (Quality, workspace, etc.) is
+untouched, and you never need to delete `.crux` by hand.
+
+## Serverless and edge hosts
+
+A physical invocation can end before a background timer ever fires, so wrap
+handlers instead of relying on `observe.flush()` placement alone.
+
+`withObservableInvocation()` (from `@use-crux/core/observability`) wraps a
+generic async handler, binds one scoped host lifecycle per call, and awaits a
+bounded final drain before returning or rethrowing:
+
+```ts
+import { withObservableInvocation } from "@use-crux/core/observability";
+
+export const handler = withObservableInvocation(
+  async (event) => {
+    // Crux work here
+  },
+  (event) => ({ remainingTimeMs: 5000 }),
+);
+```
+
+`withNodeObservableInvocation()` (from `@use-crux/core/observability/node`)
+adapts this to Node Lambda-style `(event, context)` handlers, reading
+`context.getRemainingTimeInMillis()` automatically.
+
+### Cloudflare Workers
+
+Workers isolates can outlive the returned `Response` via
+`ExecutionContext.waitUntil`, so `withWorkersObservableInvocation()` (from
+`@use-crux/core/observability/workers`) registers the final drain with
+`ctx.waitUntil()` instead of awaiting it inline — telemetry drains in the
+background with no added response latency:
+
+```ts
+import { withWorkersObservableInvocation } from "@use-crux/core/observability/workers";
+
+const handleFetch = withWorkersObservableInvocation(
+  async (request, env, ctx) => {
+    // Crux work here
+    return new Response("ok");
+  },
+  (request, env, ctx) => ctx,
+  (ctx, request) => ({ flushTimeoutMs: 5000 }),
+);
+
+export default { fetch: handleFetch };
+```
+
+A raw Worker `fetch` handler must pass its `ExecutionContext` to the wrapper
+once, as shown above — `@use-crux/core/observability` has no way to discover
+`ctx` on its own. `@use-crux/core/observability/workers` never imports
+Cloudflare's runtime types and needs no `nodejs_compat` compatibility flag;
+`CruxExecutionContext` is a structural type satisfied by anything exposing
+`waitUntil(promise)`.
+
+Explicit propagation is the correctness path across Workers requests and
+isolates: use `observe.openRun(...).suspend({ reason })` to obtain a
+serializable `CruxPropagationCarrier`, hand it off (queue message, KV, a
+follow-up request body), and call `observe.resumeRun(carrier, { reason })` in
+the next request to continue the same logical run in a fresh segment. Neither
+call depends on `AsyncLocalStorage` or any state shared between isolates.
 
 Use `createHttpObservabilityTransport()` to send canonical batches to the local Crux backend endpoint:
 
@@ -390,6 +584,15 @@ The `observability` domain is explicit export configuration. `config()` with no 
 block does not install telemetry, cloud upload, or raw-content capture. Use `devtools` only for local
 UI/control/tunnel/bridge behavior.
 
-The HTTP transport posts `{ records }` to `/api/observability/records`. The Go backend owns validation, persistence, read-model building, filtering, search, and subscriptions. Devtools keeps terminal run-detail pages refreshing for a short grace window, which catches late Convex/serverless flushes that arrive after the terminal run update. Convex Agent container streams fold into details in the Go read model, while step-level streamed generation turns, tools, handoffs, and delegated flows render as chronological agent children. Promoted tool executions preserve `source.canonicalParentSpanId` and sort after their request generation by relation, even when Convex action timestamps arrive slightly out of order.
+The HTTP transport posts `{ records }` to `/api/observability/records`. The Go backend owns validation, persistence, read-model building, filtering, search, and subscriptions. It joins Quality annotations onto the same run identity server-side and publishes one monotonic revision per affected run after each ingest transaction commits; devtools never merges a second, independently-filtered list on the client. Web devtools polls an open run's detail once per second while it is live, then once every 5 seconds for the following 60 seconds after a terminal signal (catching a late Convex/serverless flush that lands after the terminal update), before stopping; the Runs list polls once per second while any row is live and once every 5 seconds otherwise, and is revision-gated so a WebSocket push only triggers a bounded catch-up or refetch when its revision is actually new. A reconnect after a dropped WebSocket sends the last known revision and performs a bounded catch-up, or a full invalidation when that revision has aged out of the server's retained change log. Convex Agent container streams fold into details in the Go read model, while step-level streamed generation turns, tools, handoffs, and delegated flows render as chronological agent children. Promoted tool executions preserve `source.canonicalParentSpanId` and sort after their request generation by relation, even when Convex action timestamps arrive slightly out of order.
+
+Runs and run detail distinguish `suspended` (a non-terminal boundary was observed — not an error) and
+`incomplete` (a stale segment with no suspend/end, most often a host crash or freeze) from ordinary
+success/error/cancelled terminal states, and `conflicted` when an immutable-identity or incompatible
+terminal-evidence conflict was diagnosed. A compact segment indicator on each row shows segment count
+and the active segment; run detail adds a reliability badge for sequence gaps, missing parents, partial
+ordering, and trace-alias conflicts when any of those are present — a normal single-segment run renders
+with no extra chrome. Delivery/export health is `unknown`, `healthy`, or `degraded`; `unknown` (no
+source has reported health yet, e.g. a process that never connected) is never presented as healthy.
 
 Live token visualization uses the same observability channel without turning every provider delta into a whole-run refetch. The SDK coalesces stream deltas into `span:event` records named `token.chunk`; the local server keeps a capped per-span ring, excludes those events from `RunDetail`, and broadcasts append-only `token.chunk` notifications keyed by `runId`, `spanId`, and `eventId`.

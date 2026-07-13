@@ -8,7 +8,15 @@ whenever graph records change.
 
 ## Current Version
 
-`CRUX_OBSERVABILITY_SCHEMA_VERSION` is `1`.
+`CRUX_OBSERVABILITY_SCHEMA_VERSION` is `2`.
+
+Version 2 is a clean pre-launch cutover. Graph records carry execution segment
+identity with `segmentId` and positive segment-local `segmentSeq`; the old
+process-local `seq` field is not retained or reinterpreted. The local SQLite
+runtime detects pre-v2 observability storage transactionally, drops only the
+observability raw/projection tables that cannot carry truthful segment identity,
+and recreates the v2 schema. Application tables and unrelated local state are
+not touched.
 
 ## When To Bump
 

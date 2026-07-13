@@ -68,7 +68,7 @@ describe('flow suspend', () => {
 })
 
 describe('flow signal + resume', () => {
-  it('emits canonical suspended status and resumes into the same run', async () => {
+  it('suspends a run segment and resumes the same run in a fresh segment', async () => {
     setupStore()
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
@@ -117,14 +117,28 @@ describe('flow signal + resume', () => {
         status: 'suspended',
       }),
     )
-    expect(transport.records).toContainEqual(
+    const suspendRecord = transport.records.find(
+      (record) => record.type === 'run:suspend' && record.runId === runId,
+    )
+    expect(suspendRecord).toMatchObject({
+      type: 'run:suspend',
+      runId,
+      reason: 'flow.suspend',
+    })
+    expect(transport.records).not.toContainEqual(
+      expect.objectContaining({ type: 'run:end', runId }),
+    )
+
+    const snapshot = await store.get(`crux:flow:${suspended.flowId}`)
+    expect(snapshot?.continuation).toEqual(
       expect.objectContaining({
-        type: 'run:end',
-        runId,
-        status: 'suspended',
+        crux: expect.objectContaining({ runId, previousSegmentId: suspendRecord?.segmentId }),
       }),
     )
 
+    // A fresh invocation has no in-memory lifecycle registry or active context.
+    resetObservabilityRuntime()
+    setObservabilityTransport(transport)
     const recordCountAfterSuspend = transport.records.length
     await signalFlow(suspended.flowId, 'approval', {})
     const completed = await reviewFlow.resume(suspended.flowId)
@@ -134,13 +148,19 @@ describe('flow signal + resume', () => {
     const recordsAfterResume = transport.records.slice(recordCountAfterSuspend)
     expect(recordsAfterResume).toContainEqual(
       expect.objectContaining({
-        type: 'span:start',
+        type: 'run:resume',
         runId,
-        name: 'observable-review',
-        primitive: 'flow.run',
+        previousSegmentId: suspendRecord?.segmentId,
       }),
     )
-    expect(recordsAfterResume).not.toContainEqual(expect.objectContaining({ type: 'run:start' }))
+    const resumeRecord = recordsAfterResume.find(
+      (record) => record.type === 'run:resume' && record.runId === runId,
+    )
+    expect(resumeRecord?.segmentId).not.toBe(suspendRecord?.segmentId)
+    expect(recordsAfterResume).toContainEqual(
+      expect.objectContaining({ type: 'run:end', runId, status: 'ok' }),
+    )
+    expect(transport.records.filter((record) => record.type === 'run:end' && record.runId === runId)).toHaveLength(1)
   })
 
     it('resumes a suspended flow, skips cached steps, and continues to completion', async () => {
@@ -336,6 +356,8 @@ describe('flow cancel', () => {
 
     it('cancels a suspended flow externally', async () => {
     setupStore()
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
 
     // Suspend
     const run = await makeFlow('ext-cancel', async (flow) => {
@@ -351,6 +373,68 @@ describe('flow cancel', () => {
     // Verify store was updated
     const snapshot = await store.get(`crux:flow:${run.flowId}`)
     expect(snapshot?.status).toBe('cancelled')
+    await observe.flush()
+    expect(transport.records.filter((record) => record.type === 'run:end')).toContainEqual(
+      expect.objectContaining({ status: 'cancelled' }),
+    )
+  })
+})
+
+describe('flow resume failure recovery', () => {
+  it('retries in the same process after a transient resume error', async () => {
+    setupStore()
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    let shouldFail = true
+    const retryFlow = makeFlow('retry-test', async (flow) => {
+      await flow.step('plan', async () => ({ planId: 'abc' }))
+      await flow.suspend('approval')
+      if (shouldFail) {
+        shouldFail = false
+        throw new Error('transient failure')
+      }
+      return flow.step('execute', async () => 'done')
+    })
+
+    const suspended = await retryFlow.run()
+    expect(suspended.status).toBe('suspended')
+    await signalFlow(suspended.flowId, 'approval')
+    await expect(retryFlow.resume(suspended.flowId)).rejects.toThrow('transient failure')
+
+    const snapshotAfterError = await store.get(`crux:flow:${suspended.flowId}`)
+    expect(snapshotAfterError?.status).toBe('suspended')
+    await expect(retryFlow.resume(suspended.flowId)).resolves.toMatchObject({ status: 'completed', output: 'done' })
+
+    await observe.flush()
+    expect(transport.records.filter((record) => record.type === 'run:end')).toEqual([
+      expect.objectContaining({ status: 'ok' }),
+    ])
+  })
+
+  it('cancels in the same process after a resume error', async () => {
+    setupStore()
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const cancelAfterErrorFlow = makeFlow('cancel-after-error', async (flow) => {
+      await flow.step('plan', async () => ({ planId: 'abc' }))
+      await flow.suspend('approval')
+      throw new Error('boom')
+    })
+
+    const suspended = await cancelAfterErrorFlow.run()
+    await signalFlow(suspended.flowId, 'approval')
+    await expect(cancelAfterErrorFlow.resume(suspended.flowId)).rejects.toThrow('boom')
+
+    const { cancelFlow } = await import('../../src/flow/scope')
+    await cancelFlow(suspended.flowId, 'Admin cancelled after error')
+    expect((await store.get(`crux:flow:${suspended.flowId}`))?.status).toBe('cancelled')
+
+    await observe.flush()
+    expect(transport.records.filter((record) => record.type === 'run:end')).toEqual([
+      expect.objectContaining({ status: 'cancelled' }),
+    ])
   })
 })
 
@@ -424,6 +508,8 @@ describe('flow timeout/expiration', () => {
 describe('multi-suspend lifecycle', () => {
   it('suspends, resumes, suspends again, resumes again, and completes', async () => {
     setupStore()
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
     const stepsExecuted: string[] = []
 
     const flowFn = async (flow: { flowId: string; step: any; suspend: any }) => {
@@ -474,6 +560,21 @@ describe('multi-suspend lifecycle', () => {
       expect(run3.output).toEqual({ published: true, draft: 'content' })
     }
     expect(stepsExecuted).toEqual(['publish'])
+    await observe.flush()
+
+    const lifecycle = transport.records.filter(
+      (record) => record.type.startsWith('run:') && record.runId === transport.records[0]?.runId,
+    )
+    expect(lifecycle.map((record) => record.type)).toEqual([
+      'run:start',
+      'run:suspend',
+      'run:resume',
+      'run:suspend',
+      'run:resume',
+      'run:end',
+    ])
+    expect(new Set(lifecycle.map((record) => record.segmentId))).toHaveLength(3)
+    expect(lifecycle.filter((record) => record.type === 'run:end')).toHaveLength(1)
   })
 
     it('each suspend point has independent signals', async () => {

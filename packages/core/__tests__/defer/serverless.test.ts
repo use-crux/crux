@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { defer, type CruxDeferError } from "@use-crux/core";
 import {
   createAfterDeferLifetime,
@@ -12,8 +12,18 @@ import {
 } from "@use-crux/core/defer/serverless";
 import { durableTask } from "@use-crux/core/runtime";
 import { createTestRuntime } from "@use-crux/core/runtime/testing";
+import {
+  createInMemoryObservabilityTransport,
+  resetObservabilityRuntime,
+  setObservabilityTransport,
+} from "../../src/observability";
+import { withWorkersObservableInvocation } from "../../src/observability/workers";
 
 describe("serverless defer hosts", () => {
+  afterEach(() => {
+    resetObservabilityRuntime();
+  });
+
   it("declares handler-returned waitUntil semantics and retains drain after the handler returns", async () => {
     const retained: Promise<void>[] = [];
     let releaseDrain!: () => void;
@@ -72,6 +82,128 @@ describe("serverless defer hosts", () => {
 
     await runAfter?.();
     expect(started).toHaveBeenCalledOnce();
+  });
+
+  it("flushes deferred evidence from the retained waitUntil task after an earlier Workers drain", async () => {
+    const transport = createInMemoryObservabilityTransport();
+    setObservabilityTransport(transport, { scheduledDelayMs: 60_000 });
+
+    const retained: Promise<unknown>[] = [];
+    let releaseCallback!: () => void;
+    const callbackGate = new Promise<void>((resolve) => {
+      releaseCallback = resolve;
+    });
+    const context = {
+      waitUntil(promise: Promise<unknown>) {
+        retained.push(promise);
+      },
+    };
+    const deferredHandler = withWaitUntilDefer(
+      async () => {
+        defer(async () => {
+          await callbackGate;
+        });
+        return "ok";
+      },
+      { waitUntil: context.waitUntil.bind(context) },
+    );
+    const handler = withWorkersObservableInvocation(
+      deferredHandler,
+      () => context,
+    );
+
+    await expect(handler()).resolves.toBe("ok");
+    expect(retained).toHaveLength(2);
+
+    // The wrapper-level drain can finish before deferred execution emits.
+    await retained[1];
+    const deferredRunStart = transport.records.find(
+      (record) =>
+        record.type === "span:start" && record.primitive === "defer.run",
+    );
+    expect(deferredRunStart).toBeDefined();
+    expect(
+      transport.records.some(
+        (record) =>
+          record.type === "span:end" &&
+          record.spanId === deferredRunStart?.spanId,
+      ),
+    ).toBe(false);
+
+    releaseCallback();
+    await retained[0];
+    expect(
+      transport.records.some(
+        (record) =>
+          record.type === "span:end" &&
+          record.spanId === deferredRunStart?.spanId,
+      ),
+    ).toBe(true);
+  });
+
+  it("flushes response-finished deferred evidence inside the after task", async () => {
+    const transport = createInMemoryObservabilityTransport();
+    setObservabilityTransport(transport, { scheduledDelayMs: 60_000 });
+
+    let runAfter: (() => void | Promise<void>) | undefined;
+    const handler = withAfterDefer(
+      async () => {
+        defer(() => {});
+        return "ok";
+      },
+      {
+        after(task) {
+          runAfter = task;
+        },
+      },
+    );
+
+    await expect(handler()).resolves.toBe("ok");
+    expect(transport.records).toHaveLength(0);
+    await runAfter?.();
+    expect(
+      transport.records.some(
+        (record) =>
+          record.type === "span:start" && record.primitive === "defer.run",
+      ),
+    ).toBe(true);
+  });
+
+  it("bounds the retained-task flush when delivery remains retryable", async () => {
+    setObservabilityTransport(
+      {
+        send() {
+          return { dispositions: [], retryAfterMs: 1_000 };
+        },
+      },
+      {
+        scheduledDelayMs: 60_000,
+        retryDelayMs: 1_000,
+        maxRetryDelayMs: 1_000,
+        retryJitterRatio: 0,
+      },
+    );
+    const retained: Promise<void>[] = [];
+    const handler = withWaitUntilDefer(
+      async () => {
+        defer(() => {});
+        return "ok";
+      },
+      {
+        waitUntil(promise) {
+          retained.push(promise);
+        },
+        limits: {
+          ...SERVERLESS_DEFER_POLICY,
+          maxDrainMs: 20,
+        },
+      },
+    );
+
+    await handler();
+    const startedAt = Date.now();
+    await retained[0];
+    expect(Date.now() - startedAt).toBeLessThan(500);
   });
 
   it("never infers a lifetime from platform environment names", async () => {

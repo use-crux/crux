@@ -12,8 +12,10 @@
  */
 
 import type { LanguageModel } from 'ai'
-import type { LoopRuntimePort } from '@use-crux/core/adapter'
+import { normalizeAdapterCallError } from '@use-crux/core/adapter'
+import type { ExecutorRequest, LoopRuntimePort } from '@use-crux/core/adapter'
 import type { SdkGateway } from './gateway'
+import { mapAiSdkError } from './normalized-outcome'
 import { createAiSdkCodec } from './sdk-codec'
 import type { SdkLoopResultLike, SdkStreamResultLike } from './sdk-codec'
 
@@ -45,7 +47,7 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
 
     async runTextLoop(request) {
       const call = codec.loop(request)
-      const raw = await gateway[call.method](call.args)
+      const raw = await runCall(() => gateway[call.method](call.args), request)
       return call.decode(raw)
     },
 
@@ -56,18 +58,47 @@ export function createAiSdkLoopRuntime(gateway: SdkGateway): AiSdkLoopRuntime {
       } catch (error) {
         const invalid = await call.decodeError(error)
         if (invalid) return invalid
-        throw error
+        throw normalize(error, request)
       }
     },
 
     async runStream(request) {
       const call = await codec.stream(request)
-      if (call.method === 'streamText') {
-        return call.attach(gateway.streamText(call.args))
-      }
-      return call.attach(gateway.streamObject(call.args))
+      return runCall(
+        () =>
+          call.method === 'streamText'
+            ? call.attach(gateway.streamText(call.args))
+            : call.attach(gateway.streamObject(call.args)),
+        request,
+      )
     },
 
     replayStream: codec.replayStream,
   }
+}
+
+/**
+ * Run one gateway call, normalizing any thrown provider/transport error into a
+ * `CruxAdapterError` at the `LoopRuntimePort` boundary. Core's loop-owned
+ * generate/stream path does not classify these itself (unlike the native
+ * single-turn path), so this is where AI SDK failures join the shared taxonomy.
+ */
+async function runCall<T>(
+  run: () => T | Promise<T>,
+  request: ExecutorRequest<LanguageModel>,
+): Promise<T> {
+  try {
+    return await run()
+  } catch (error) {
+    throw normalize(error, request)
+  }
+}
+
+/** Classify a thrown AI SDK call error via core's shared normalization path. */
+function normalize(error: unknown, request: ExecutorRequest<LanguageModel>): unknown {
+  return normalizeAdapterCallError(error, {
+    providerId: 'ai-sdk',
+    signal: request.abortSignal,
+    mapError: mapAiSdkError,
+  })
 }

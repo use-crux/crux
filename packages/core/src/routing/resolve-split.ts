@@ -10,6 +10,7 @@
 
 import type { Deadline } from "../generation/timeout";
 import { observe } from "../observability";
+import { routingDefinitionRef } from "../observability/definition-ref";
 import {
   emitRoutingReceiptReport,
   routingSpanAttributes,
@@ -78,6 +79,7 @@ export async function resolveSplit<M, R>({
     name: "split.resolve",
     primitive: "routing.split",
     implicitRun: false,
+    ...(config.id ? { definitionRefs: [routingDefinitionRef("split", config.id)] } : {}),
     attributes: {
       ...routingSpanAttributes("split", deadline),
       routeCount: routeKeys.length,

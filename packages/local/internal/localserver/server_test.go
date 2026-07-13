@@ -65,7 +65,7 @@ func TestNewMountsLocalRuntimeRouteGroups(t *testing.T) {
 	if runtimeIndexer.root != "/repo/runtime-routes" || runtimeIndexer.operation != "status" || !runtimeIndexer.includeDetails {
 		t.Fatalf("runtime call = %+v, want detailed status for project root", runtimeIndexer)
 	}
-	assertStatusAndClose(t, http.MethodPost, ts.URL+"/api/observability/records", []byte(`{"records":[]}`), http.StatusAccepted)
+	assertStatusAndClose(t, http.MethodPost, ts.URL+"/api/observability/records", []byte(`{"schemaVersion":2,"records":[]}`), http.StatusAccepted)
 	assertStatusAndClose(t, http.MethodDelete, ts.URL+"/api/quality/runs", []byte(`{"traceIds":[]}`), http.StatusBadRequest)
 	assertStatusAndClose(t, http.MethodPost, ts.URL+"/api/resolve-source", []byte(`{`), http.StatusBadRequest)
 	assertStatusAndClose(t, http.MethodGet, ts.URL+"/api/does-not-exist", nil, http.StatusNotFound)

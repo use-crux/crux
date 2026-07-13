@@ -198,3 +198,30 @@ fn hex_lower(bytes: &[u8]) -> String {
     }
     out
 }
+
+#[cfg(test)]
+mod tests {
+    use super::safe_id;
+
+    /// Known outputs shared by the TypeScript indexer (`safeId`/`fingerprint` in
+    /// `packages/indexer/src/indexer/definitions.ts`) and the core runtime
+    /// (`safeDefinitionId` in `packages/core/src/observability/definition-ref.ts`).
+    /// All three must be byte-identical or the runtime→index join breaks.
+    #[test]
+    fn safe_id_matches_indexer_fingerprint_for_empty_normalization() {
+        assert_eq!(safe_id("!!!"), "3614a738f9bd68a6");
+        assert_eq!(safe_id("@@@"), "0109b085b18e8995");
+        assert_eq!(safe_id("→→→"), "b446c7cc369e6b13");
+        assert_eq!(safe_id("   "), "7c1e8804d7423330");
+        assert_eq!(safe_id("()[]{}"), "171889b67faa6147");
+        assert_eq!(safe_id("日本語"), "d2b94e6e664483bb");
+        assert_eq!(safe_id("\t\n"), "1f1a1a4546fdcf8c");
+    }
+
+    #[test]
+    fn safe_id_keeps_non_empty_normalized_ids() {
+        assert_eq!(safe_id("..."), "...");
+        assert_eq!(safe_id("::"), "::");
+        assert_eq!(safe_id("a b"), "a-b");
+    }
+}

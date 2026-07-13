@@ -217,7 +217,13 @@ function normalizeRole(role: string): "system" | "user" | "assistant" | "tool" {
   return "user";
 }
 
-function safeParseJson(str: string): unknown {
+/**
+ * Parse an OpenAI tool-call `arguments` string into args, tolerating provider
+ * quirks. Falls back to the raw string when it is empty or malformed JSON, so
+ * generate and stream tool-call parsing produce identical args for the same
+ * wire input.
+ */
+export function safeParseJson(str: string): unknown {
   try {
     return JSON.parse(str);
   } catch {

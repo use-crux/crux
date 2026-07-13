@@ -80,7 +80,7 @@ function validateSource(part: ContentPart, path: string, issues: UnsupportedCapa
     )
     return
   }
-  if (part.type === 'file' && isAsset(source, 'url')) {
+  if (part.type === 'file' && isHttpsSource(source)) {
     issues.push(issue(part, path, 'Use byte data or upload the file to OpenAI and pass its provider file ID.'))
     return
   }
@@ -89,6 +89,17 @@ function validateSource(part: ContentPart, path: string, issues: UnsupportedCapa
     if (mediaType?.startsWith('audio/') && mediaType !== 'audio/wav' && mediaType !== 'audio/mpeg') {
       issues.push(issue(part, path, 'Use WAV or MP3 audio for OpenAI chat audio input.'))
     }
+  }
+}
+
+function isHttpsSource(value: unknown): boolean {
+  if (isAsset(value, 'url')) return true
+  if (value instanceof URL) return value.protocol === 'https:'
+  if (typeof value !== 'string') return false
+  try {
+    return new URL(value).protocol === 'https:'
+  } catch {
+    return false
   }
 }
 

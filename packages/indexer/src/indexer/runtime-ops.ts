@@ -20,11 +20,9 @@ import type {
   RuntimeOperationOptions,
   RuntimeOperationResult,
   RuntimePreflightMissingTarget,
-  RuntimeSetupOperationResult,
   RuntimeStatusCount,
 } from './runtime-ops-types'
 import type { RuntimeArtifactManifest } from '@use-crux/core/runtime'
-import { runRuntimeSetupOperation } from './setup-ops'
 
 export type {
   RuntimeCancelOperationResult,
@@ -33,7 +31,6 @@ export type {
   RuntimeOperationOptions,
   RuntimeOperationResult,
   RuntimeRetryOperationResult,
-  RuntimeSetupOperationResult,
   RuntimeStatusCount,
   RuntimeStatusOperationResult,
 } from './runtime-ops-types'
@@ -52,18 +49,6 @@ const WORK_STATUSES = [
 export async function runRuntimeOperation(
   options: RuntimeOperationOptions,
 ): Promise<RuntimeOperationResult> {
-  switch (options.operation) {
-    case 'setup-check':
-      return runtimeSetupResult(
-        'setup-check',
-        await runRuntimeSetupOperation({ root: options.root, mode: 'check' }),
-      )
-    case 'setup-apply':
-      return runtimeSetupResult(
-        'setup-apply',
-        await runRuntimeSetupOperation({ root: options.root, mode: 'apply' }),
-      )
-  }
   const runtimeDefinition = await loadRuntimeDefinition(options.root)
   switch (options.operation) {
     case 'preflight':
@@ -134,27 +119,6 @@ export async function runRuntimeOperation(
           }
         },
       )
-  }
-}
-
-function runtimeSetupResult(
-  operation: RuntimeSetupOperationResult['operation'],
-  report: Awaited<ReturnType<typeof runRuntimeSetupOperation>>,
-): RuntimeSetupOperationResult {
-  return {
-    operation,
-    ok: report.ok,
-    setup: {
-      ok: report.ok,
-      findings: report.findings.map(
-        ({ code, resource, message, remediation }) => ({
-          code,
-          resource,
-          message,
-          ...(remediation === undefined ? {} : { remediation }),
-        }),
-      ),
-    },
   }
 }
 

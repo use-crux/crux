@@ -21,6 +21,7 @@ import type {
 } from "./cascade";
 import { CascadeExhaustedError, createRoutingStreamError } from "./errors";
 import { observe } from "../observability";
+import { routingDefinitionRef } from "../observability/definition-ref";
 import {
   Deadline,
   composeAbortSignals,
@@ -273,6 +274,9 @@ async function resolveRouter<M, R>(
     name: "router.resolve",
     primitive: "routing.router",
     implicitRun: false,
+    // Anonymous routers fall back to the compile-time variable name in the
+    // indexer; only emit the ref when the authored `config.id` is in hand.
+    ...(config.id ? { definitionRefs: [routingDefinitionRef("router", config.id)] } : {}),
     attributes: {
       ...routingSpanAttributes("router", options.deadline),
       routeCount: availableRoutes.length,
@@ -409,6 +413,9 @@ async function resolveCascade<M, R>(
     name: "cascade.resolve",
     primitive: "routing.cascade",
     implicitRun: false,
+    ...(cascadeModel.config.id
+      ? { definitionRefs: [routingDefinitionRef("cascade", cascadeModel.config.id)] }
+      : {}),
     attributes: {
       ...routingSpanAttributes("cascade", options.deadline),
       totalTiers: tiers.length,

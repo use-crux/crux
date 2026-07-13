@@ -17,10 +17,60 @@ import type {
   StreamProgressHook,
   StreamStartHook,
 } from './middleware'
-import type { CruxObservabilityTransport, ObservabilityDeliveryOptions } from '../observability'
+import type { CruxAttributes, CruxObservabilityTransport, ObservabilityDeliveryOptions } from '../observability'
 import type { CruxObservabilityCapturePolicy } from '../observability/capture-policy'
+import type { CapturedObservabilityContext } from '../observability/context'
+import type { CruxPropagationCarrier } from '../observability/continuation'
 import type { RecordStore } from '../storage'
 import type { RuntimeEngineDefinition } from './api/runtime-definition'
+
+/**
+ * Activates the real execution context (e.g. an OTel span) around the actual
+ * callback for one observability span or run.
+ *
+ * Installed by telemetry plugins so `trace.getActiveSpan()` (or an equivalent
+ * host API) resolves correctly inside the instrumented work itself, not only
+ * inside a graph-record subscriber running downstream of it. `fn` may be sync
+ * or return a promise; the hook must return whatever `fn` returns unchanged.
+ */
+export type SpanActivationHook = <T>(context: CapturedObservabilityContext, fn: () => T) => T
+
+/** Bounds for {@link TelemetryFlushHook}. */
+export interface TelemetryFlushHookOptions {
+  /** Milliseconds remaining to flush, combining any explicit timeout with the active host deadline. Omit to wait unbounded. */
+  readonly deadlineMs?: number
+}
+
+/** Structured, non-throwing outcome of a telemetry manager's bounded flush. */
+export interface TelemetryFlushHookResult {
+  /** `false` when the flush could not complete (e.g. timed out) — never a thrown error. */
+  readonly ok: boolean
+  readonly timedOut?: boolean
+}
+
+/**
+ * Bounded, provider-neutral hook that flushes an installed telemetry
+ * manager's own exporter/processor work.
+ *
+ * `observe.flush()`/`observe.shutdown()` invoke this alongside the delivery
+ * engine's own drain, so real per-boundary flush points (host wrappers,
+ * Convex actions, explicit `observe.flush()` calls) also wait for standard
+ * and lightweight OTel exporter work, not only plugin teardown. Must never
+ * throw — failures are reported via `{ ok: false }`.
+ */
+export type TelemetryFlushHook = (options: TelemetryFlushHookOptions) => Promise<TelemetryFlushHookResult>
+
+/**
+ * Derives extra attributes to attach to a resumed run/segment from its
+ * propagation carrier (e.g. allowlisted W3C baggage members).
+ *
+ * Installed by telemetry plugins and invoked by `observe.resumeRun()` — the
+ * one first-party choke point every Flow and Convex resume boundary already
+ * funnels through — so baggage that crossed a suspend/resume boundary can be
+ * projected onto the resumed segment's root span. Returns `undefined` when
+ * there is nothing to add. Must never throw.
+ */
+export type TelemetryResumeAttributesHook = (carrier: CruxPropagationCarrier) => CruxAttributes | undefined
 
 /**
  * The set of global hooks and reporters that instrument Crux primitives.
@@ -57,6 +107,12 @@ export interface CruxHooks {
   observabilityDelivery?: ObservabilityDeliveryOptions
   /** Central policy for whether canonical observability artifacts include payload previews. */
   observabilityCapture?: CruxObservabilityCapturePolicy
+  /** Activates the real execution context (e.g. an OTel span) around observed span/run work. */
+  spanActivationHook?: SpanActivationHook
+  /** Bounded flush of an installed telemetry manager's own exporter/processor work. */
+  telemetryFlushHook?: TelemetryFlushHook
+  /** Derives extra attributes for a resumed run/segment from its propagation carrier. */
+  telemetryResumeAttributesHook?: TelemetryResumeAttributesHook
   /** Global record store for flow state persistence (suspend/resume). */
   records?: RecordStore
   /** Durable Runtime Engine composer configured for runtime-bound APIs. */

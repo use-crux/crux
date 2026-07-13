@@ -39,3 +39,5 @@ Tighten Project Index transport contracts by keeping WebSocket index messages an
 Prefer the packaged Rust/Oxc static-index worker for `/testing` fixture extraction when the matching platform package is resolvable, and fully flip the native AST gate to Rust-vs-golden validation with no TypeScript bundled baseline comparison.
 
 Update Crux Local native build baselines to Go 1.26.4 and Rust 1.96.1, and refresh the Rust/Oxc static syntax frontend dependency identity to Oxc 0.139.
+
+Align native and semantic definition identity with runtime observability joins: composition definitions now require and use their authored `id`, canonical ids remain byte-identical to the runtime `DefinitionRef` builders, and missing composition ids no longer fall back to a misleading local variable name.

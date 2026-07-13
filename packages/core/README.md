@@ -635,14 +635,14 @@ Generation, streaming, and tool spans emit canonical graph records with latency 
 
 Manual spans use an explicit terminal API: call `span.end({ attributes, metrics, status })` for terminal metadata, or `span.setAttributes(attributes)` for metadata discovered before the span closes. Raw attribute bags are not accepted by `span.end()`, so `{ error: value }` always means an error end instead of an ambiguous attribute object.
 
-Streaming spans close through a single finalizer. Raw stream drain and provider completion metadata are merged before the terminal `span:end` when both are available; if completion metadata is never awaited, the span closes after a bounded grace window with stream-derived metrics. Early stream cancellation ends the span as `cancelled`.
+Streaming spans close through a single finalizer, and only the stream's own terminal signal (drain, early return, or throw) ends the span - never a timer. The span closes immediately with stream-derived metrics; provider completion metadata that is still pending, or that arrives after, is attached as a linked `usage.observed` event and output artifact and never mutates the already-recorded duration/status. Early stream cancellation ends the span as `cancelled`.
 
 Metric objects may include optional expressions that evaluate to `undefined`. The observability runtime strips `undefined`, `NaN`, and infinite metric values before records reach subscribers, diagnostics-channel consumers, devtools transports, or OTel, so malformed metrics do not interrupt application code.
 Custom metric keys must use the `custom.*` namespace; built-in generation and token keys are typed.
 
 `observe.span()` derives the span family from its canonical `primitive`, so callers only pass `name`, `primitive`, optional `attributes`, and lifecycle settings. `subscribeObservability()` can subscribe to the whole graph stream or to a narrowed list of record types, with the callback type narrowed to those discriminants.
 
-Observability IDs are W3C-compatible at the trace/span boundary: `traceId` is 32 lowercase hex characters and `spanId` is 16 lowercase hex characters. Every graph record also carries a per-run monotonic `seq` used by transports and the local read model for deterministic ordering.
+Observability IDs are W3C-compatible at the trace/span boundary: `traceId` is 32 lowercase hex characters and `spanId` is 16 lowercase hex characters. Every graph record also carries `segmentId` plus a positive `segmentSeq`; the sequence is monotonic only within that execution segment, so consumers must not treat it as a distributed per-run order.
 
 The observability wire contract is governed by `packages/core/src/observability/VERSIONING.md`. TypeScript producer fixtures stay closed over known graph record types, while the Go local runtime preserves unknown record types and extra JSON fields as raw records so newer SDKs can degrade gracefully against older read models.
 

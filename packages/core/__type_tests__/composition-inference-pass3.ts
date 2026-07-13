@@ -40,6 +40,7 @@ async function pipelineDeep() {
   // pipeline didn't carry the typed Acc through that position. This file
   // exercises through position 10 — the new overloads added in this pass.
   const r10 = await pipeline({
+    id: 'deep-pipeline',
     context: { seed: 'go' },
     steps: [
       { name: 's1', fn: async () => ({ a: 1 }) },
@@ -65,6 +66,7 @@ void pipelineDeep
 // generics on the step params, literal step names are preserved.
 async function pipelineAccumulator() {
   const r = await pipeline({
+    id: 'accumulator-pipeline',
     context: { initial: 42 },
     steps: [
       { name: 'first', fn: async (ctx) => ({ doubled: ctx.initial * 2 }) },

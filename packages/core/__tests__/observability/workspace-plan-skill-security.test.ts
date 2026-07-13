@@ -371,6 +371,9 @@ description: Write clearly
           loader: "registry",
           identifier: "acme:brand-guidelines",
         }),
+        definitionRefs: [
+          { id: "skill:acme:brand-guidelines", kind: "skill", role: "loaded-skill" },
+        ],
       }),
     );
     expect(transport.records).toContainEqual(

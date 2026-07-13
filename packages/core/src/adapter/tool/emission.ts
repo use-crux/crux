@@ -12,6 +12,9 @@
 
 import { getHooks } from '../../runtime/runtime'
 import { currentObservabilityTransport, hasObservabilitySubscribers, observe } from '../../observability'
+import { toolDefinitionRef } from '../../observability/definition-ref'
+import { toolMiddlewareDefinitionRefs } from '../../tools/middleware'
+import type { DefinitionRef } from '../../observability/contract'
 import { redactSensitiveValue } from '../../shared/redaction'
 import { contentText } from '../../content'
 import type { ContentPart } from '../../types/content'
@@ -143,6 +146,7 @@ export function openToolCallSpan(
   toolName: string,
   toolCallId: string,
   args: unknown,
+  definitionRefs?: readonly DefinitionRef[],
 ): ReturnType<typeof observe.openSpan> {
   return observe.openSpan({
     name: toolName,
@@ -152,7 +156,31 @@ export function openToolCallSpan(
       toolCallId,
       inputSize: measureUnknown(args),
     },
+    ...(definitionRefs && definitionRefs.length > 0
+      ? { definitionRefs: [...definitionRefs] }
+      : {}),
   })
+}
+
+/**
+ * Canonical `invoked-tool` ref for a compiled tool handle, or `undefined` when
+ * the tool carries no authored `name`/`title`. The model-facing tool-map key is
+ * not the authored identity, so an unnamed tool (indexer would fall back to its
+ * local variable name) yields no ref rather than a guessed one.
+ */
+function toolCallDefinitionRefs(tool: unknown): DefinitionRef[] | undefined {
+  const authored = tool as { name?: unknown; title?: unknown } | null
+  const authoredName =
+    typeof authored?.name === 'string' && authored.name.length > 0
+      ? authored.name
+      : typeof authored?.title === 'string' && authored.title.length > 0
+        ? authored.title
+        : undefined
+  const refs = [
+    ...(authoredName ? [toolDefinitionRef(authoredName)] : []),
+    ...toolMiddlewareDefinitionRefs(tool),
+  ]
+  return refs.length > 0 ? refs : undefined
 }
 
 /** Emit a `tool.args` artifact consumed by the given span. */
@@ -353,6 +381,9 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
     }
     const originalExecute: ToolExecute = execute
     const originalToModelOutput = toolLike?.toModelOutput
+    // Compiled-handle-derived ref: read the authored name off the tool object
+    // once, so every call to this tool carries the same canonical invoked-tool ref.
+    const definitionRefs = toolCallDefinitionRefs(tool)
     const pending = new Map<string, PendingToolCall>()
     const rememberPending = (toolCallId: string, entry: PendingToolCall): void => {
       pending.set(toolCallId, entry)
@@ -386,7 +417,7 @@ export function instrumentToolSet<TTools extends Record<string, unknown>>(
           toolCallId,
         }
         const start = Date.now()
-        const span = openToolCallSpan(name, toolCallId, input)
+        const span = openToolCallSpan(name, toolCallId, input, definitionRefs)
         try {
           span.withContext(() => emitToolArgsArtifact(span.spanId, name, toolCallId, input))
           const result = await span.withContext(() => originalExecute.call(this, input, executionOptions))

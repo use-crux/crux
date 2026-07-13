@@ -72,8 +72,6 @@ export default defineSchema({
     pendingSuspends: v.any(),
     deliveredSuspends: v.optional(v.any()),
     scheduledWork: v.optional(v.any()),
-    /** @deprecated Read-only compatibility with pre-scheduledWork snapshots. */
-    scheduledEffects: v.optional(v.any()),
     updatedAt: v.number(),
   })
     .index('by_flow', ['namespace', 'flowId'])

@@ -78,6 +78,7 @@ describe('Google adapter via adapter', () => {
     const agent = makeAgent({ id: 'basic', prompt: simplePrompt })
 
     const result = await adapter.parallel({
+      id: 'executor.test-parallel-1',
       agents: { a: agent },
       context: {},
       model: 'gemini-2.0-flash',
@@ -104,6 +105,7 @@ describe('Google adapter via adapter', () => {
     })
 
     await adapter.parallel({
+      id: 'executor.test-parallel-2',
       agents: { a: agent },
       context: {},
       model: 'gemini-2.0-flash',

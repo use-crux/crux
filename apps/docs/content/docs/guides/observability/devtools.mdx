@@ -208,11 +208,13 @@ Aggregate metrics across all traces in the current session:
 - **Streaming** — average TTFT, throughput across streaming traces
 - **Activity** — memory read/write counts, retrieval stage counts/errors, handoffs, delegates
 
-### Project Index
+### Project Index and Catalog
 
 Browse discovered prompts, contexts, tools, suites, evals, storage definitions, source locations, snippets, authored paths, relations, and diagnostics before the first run. `crux dev` rebuilds this Go-owned read model from source files and `.crux/quality` JSON on startup; runtime snapshots only enrich it. Use `definition.source.file` for file-tree grouping and `definition.path` for user-authored prompt/context/tool tree grouping. Memory and blackboard definitions include authored store bindings and Zod schemas when the indexer can safely resolve them, including `workingState({ schema })` blocks nested in a `memory({ blocks })` definition. Storage definitions include record stores, vector stores, asset stores, storage bundles, scoped storage, backend/factory names, record/vector capabilities, source locations, primitive usage, and capability warnings when the indexer can infer them. `definition.metadata.runtimeJoin` is backend guidance for joining authored definitions to runtime spans: flow and flow-step joins use primitive/name or `stepLabel`, while runtime `flowId` and `stepId` remain execution correlation fields; memory blocks and blackboards join through the memory span shape. Click any item to inspect source metadata and relations. Use `crux index reindex` when you want to force a rebuild from the CLI.
 
-The Storage detail view is privacy-safe by default. It shows wiring, record/vector capabilities, warnings, and runtime operation summaries, but it does not display record values, vector contents, or asset bodies unless raw debug data is explicitly enabled by the application.
+Each Catalog definition detail includes an **Observability** section driven by the coverage manifest and a server activity rollup: direct run counts with **View N runs**, contributor “referenced by N runs” treatment, Quality-primary kinds, runtime-observed kinds whose records cannot yet join to an authored definition, or a truthful empty state. Run Detail links the other direction through runtime `DefinitionRef`s (resolved Catalog links, or an explicit **unresolved** mark when the definition was renamed or deleted). Full join semantics: [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence). Run lifecycle and delivery-health copy: [Runs and delivery health](/docs/guides/observability/runs-and-delivery).
+
+The Storage detail view is privacy-safe by default. It shows wiring, capabilities, warnings, and runtime operation summaries, but it does not display record values, vector contents, blob bodies, or signed URLs unless raw debug data is explicitly enabled by the application.
 
 While `crux dev` is running, source and config changes are picked up by the local watcher. Normal edits to known prompt, context, tool, suite, eval, and dependency-closure source files are planned incrementally, committed as AST/source patches first, and then enriched semantically in the background. Broad resolver changes such as `crux.config.*`, `package.json`, lockfiles, workspace files, unsafe deletions, unknown files, and incomplete graph evidence intentionally fall back to a full reindex. Inspect the latest watch decision at `GET /api/project/index/watch`; the response includes the run id, plan kind, fallback reason, affected counts, patch counts, queue coalescing counts, semantic status, and bounded phase timings.
 
@@ -327,8 +329,18 @@ Run lists and run details are intentionally different read paths. The web UI and
     href="/docs/guides/observability/telemetry"
   />
   <Card
+    title="Catalog runtime evidence"
+    description="DefinitionRef join from Catalog to Runs."
+    href="/docs/guides/observability/catalog-runtime-evidence"
+  />
+  <Card
+    title="Runs and delivery health"
+    description="Status vocabulary and delivery tri-state."
+    href="/docs/guides/observability/runs-and-delivery"
+  />
+  <Card
     title="Plugins"
-    description="Build a custom CruxPlugin to hook any instrumentation event."
+    description="Build a custom CruxPlugin with subscribeObservability()."
     href="/docs/guides/observability/plugins"
   />
   <Card

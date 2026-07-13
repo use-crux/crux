@@ -24,6 +24,7 @@ func buildRunDetailRoot(
 
 	if len(children) == 1 && rootMatchesRun(graph.Run, children[0].SpanSummary) {
 		root := children[0]
+		root.Status = graph.Run.Status
 		root.ID = "run:" + graph.Run.RunID
 		root.ParentID = ""
 		root.Path = []string{root.ID}

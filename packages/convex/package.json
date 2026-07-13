@@ -105,12 +105,14 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:observability:runtime": "vitest run __tests__/server.test.ts __tests__/server-flow.test.ts __tests__/swarm.test.ts __tests__/agent-lifecycle-observe.test.ts __tests__/runtime-engine-handlers.test.ts __tests__/observability-runtime.test.ts __tests__/observability-bundle.test.ts"
   },
   "devDependencies": {
     "@edge-runtime/vm": "^5.0.0",
     "@types/node": "^24.12.4",
     "convex-test": "^0.0.54",
+    "esbuild": "^0.28.0",
     "vitest": "^4.1.7"
   },
   "peerDependencies": {

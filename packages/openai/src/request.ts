@@ -29,7 +29,9 @@ export function openAIRequest(
 export function openAIStreamRequest(
   request: OpenAIChatRequest,
 ): OpenAIChatRequest {
-  return { ...request, stream: true };
+  // `include_usage` is required for OpenAI to emit the final usage chunk that
+  // the stream-completion metadata reads; without it, usage is never sent.
+  return { ...request, stream: true, stream_options: { include_usage: true } };
 }
 
 /** Map canonical generation settings onto OpenAI chat-completion fields. */

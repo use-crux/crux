@@ -11,26 +11,6 @@ import (
 	"github.com/use-crux/crux/packages/local/internal/output"
 )
 
-func newRuntimeSetupCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Command {
-	var check bool
-	var apply bool
-	cmd := &cobra.Command{
-		Use:   "setup (--check | --apply)",
-		Short: "Deprecated alias for crux setup",
-		Args:  cobra.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if check == apply {
-				return fmt.Errorf("choose exactly one of --check or --apply")
-			}
-			fmt.Fprintln(cmd.ErrOrStderr(), "warning: `crux runtime setup` is deprecated; use `crux setup` instead")
-			return runSetupCommand(cmd, f, opts.cwd, opts.jsonOutput, apply)
-		},
-	}
-	cmd.Flags().BoolVar(&check, "check", false, "Check project setup without mutating")
-	cmd.Flags().BoolVar(&apply, "apply", false, "Apply safe additive project setup")
-	return cmd
-}
-
 func newRuntimeStatusCmd(f *cli.Factory, opts *runtimeGenerateOptions) *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",

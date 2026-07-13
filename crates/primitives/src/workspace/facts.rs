@@ -1,10 +1,10 @@
 use std::collections::HashSet;
 
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::{
     context::{CallParts, PrimitiveContext},
-    definition::{safe_id, static_index_definition, NativeDefinitionInput},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
         direct_string_property, has_property, number_property, object_array_value,

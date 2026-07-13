@@ -8,14 +8,12 @@
  */
 
 import type { z } from "zod";
-import type {
-  TraceMeta,
-  TokenUsage,
-} from "../generation/types";
+import type { TraceMeta, TokenUsage } from "../generation/types";
 import type { RoutingReceipt } from "../routing/receipt";
 import type { SystemBlock } from "../resolver/types";
 import type { Message } from "../generation/messages";
 import type { ToolModelOutput } from "../types/tool";
+import type { CruxFinishReason } from "./normalized-outcome";
 import type { AssistantContentPart } from "../types/content";
 
 // ─────────────────────────────────────────────────────────────────
@@ -30,7 +28,8 @@ export interface AdapterResponse {
   toolCalls: Array<{ id: string; name: string; args: unknown }> | undefined;
   /** Provider-reported usage, omitted when the provider did not return enough counts to build a real usage record. */
   usage: TokenUsage | undefined;
-  finishReason: string | undefined;
+  /** Normalized, provider-neutral finish reason (adapters map their native value into this). */
+  finishReason: CruxFinishReason | undefined;
   responseId: string | undefined;
   actualModelId: string | undefined;
   /** Non-fatal provider warnings for this response. */

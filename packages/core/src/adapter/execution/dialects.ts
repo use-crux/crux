@@ -40,6 +40,7 @@ export function coreStepDialect<
     media: providerMediaHooksFor(spec),
     client,
     mapSettings: spec.mapSettings,
+    mapError: spec.mapError,
     call: spec.call,
     stream: spec.stream,
     toParams: spec.toParams,

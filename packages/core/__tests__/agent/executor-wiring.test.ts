@@ -63,6 +63,7 @@ describe('option threading', () => {
     const pipeline = createPipeline(executor)
 
     await pipeline({
+      id: 'executor-wiring.test-pipeline-1',
       context: { seed: 1 },
       model: 'pipe-model',
       steps: [
@@ -88,6 +89,7 @@ describe('option threading', () => {
     const parallel = createParallel(executor)
 
     await parallel({
+      id: 'executor-wiring.test-parallel-1',
       context: { content: 'hello' },
       model: 'par-model',
       agents: { scorer, tagger },
@@ -110,7 +112,7 @@ describe('error bubbling', () => {
     })
     const parallel = createParallel(executor)
 
-    await expect(parallel({ context: { content: 'x' }, agents: { scorer, tagger } })).rejects.toThrow(
+    await expect(parallel({ id: 'executor-wiring-parallel', context: { content: 'x' }, agents: { scorer, tagger } })).rejects.toThrow(
       'tagger failed',
     )
   })
@@ -122,6 +124,7 @@ describe('error bubbling', () => {
     const parallel = createParallel(executor)
 
     const result = await parallel({
+      id: 'executor-wiring.test-parallel-2',
       context: { content: 'x' },
       agents: { scorer, tagger },
       onError: 'continue',
@@ -140,6 +143,7 @@ describe('error bubbling', () => {
 
     await expect(
       pipeline({
+        id: 'executor-wiring.test-pipeline-2',
         context: {},
         steps: [
           { name: 'a', agent: scorer },
@@ -159,6 +163,7 @@ describe('error bubbling', () => {
 
     await expect(
       consensus({
+        id: 'executor-wiring.test-consensus-1',
         agents: [classifier, classifier],
         input: { text: 'x' },
         extract: (r) => r.output.category,
@@ -170,7 +175,7 @@ describe('error bubbling', () => {
     const executor = createFakeAgentExecutor({ agents: { triage: { throws: 'swarm crash' } } })
     const swarm = createSwarm(executor)
 
-    await expect(swarm({ agents: { triage }, startAgent: 'triage', input: {} })).rejects.toThrow('swarm crash')
+    await expect(swarm({ id: 'executor-wiring-swarm', agents: { triage }, startAgent: 'triage', input: {} })).rejects.toThrow('swarm crash')
   })
 })
 
@@ -182,6 +187,7 @@ describe('result accumulation', () => {
     const pipeline = createPipeline(executor)
 
     const result = await pipeline({
+      id: 'executor-wiring.test-pipeline-3',
       context: { x: 1 },
       steps: [
         { name: 'one', agent: scorer },
@@ -206,6 +212,7 @@ describe('result accumulation', () => {
     const parallel = createParallel(executor)
 
     const { results } = await parallel({
+      id: 'executor-wiring.test-parallel-3',
       context: { content: 'x' },
       agents: { rev: scorer, tag: tagger },
     })
@@ -228,6 +235,7 @@ describe('execution-context threading', () => {
     const parallel = createParallel(executor)
 
     await parallel({
+      id: 'executor-wiring.test-parallel-4',
       context: { content: 'x' },
       agents: { reviewer: scorer, checker: tagger },
     })
@@ -243,11 +251,12 @@ describe('execution-context threading', () => {
     const pipeline = createPipeline(executor)
 
     await pipeline({
+      id: 'executor-wiring.test-pipeline-4',
       context: { content: 'seed' },
       sessionId: 'sess-1',
       steps: [
         { name: 'outer', agent: scorer },
-        { name: 'fan', fn: async () => parallel({ context: { content: 'inner' }, agents: { inner: tagger } }) },
+        { name: 'fan', fn: async () => parallel({ id: 'executor-wiring-inner-parallel', context: { content: 'inner' }, agents: { inner: tagger } }) },
       ],
     })
 

@@ -1,11 +1,17 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { config, resetHooks } from '@use-crux/core'
-import { observe, resetObservabilityRuntime, subscribeObservability } from '@use-crux/core/observability'
+import {
+  observe,
+  observabilityTelemetryFlushFailures,
+  resetObservabilityRuntime,
+  subscribeObservability,
+} from '@use-crux/core/observability'
 import { SpanStatusCode, trace } from '@opentelemetry/api'
 import { BasicTracerProvider, InMemorySpanExporter, SimpleSpanProcessor } from '@opentelemetry/sdk-trace-base'
 import { withTelemetry } from '../src'
 import { createCallbackExporter, createUrlExporter } from '../src/exporter'
 import { __resetOpenTelemetryFallbackForTesting, createOpenTelemetrySpanManager } from '../src/otel-span-manager'
+import { createLightweightSpanManager } from '../src/span-manager'
 import type { TraceSpan } from '../src/types'
 
 function makeSpan(overrides?: Partial<TraceSpan>): TraceSpan {
@@ -120,6 +126,36 @@ describe('withTelemetry', () => {
     warn.mockRestore()
   })
 
+  it('binds forceFlush/shutdown to the registered TracerProvider forceFlush', async () => {
+    const exporter = new InMemorySpanExporter()
+    const provider = new BasicTracerProvider()
+    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    trace.setGlobalTracerProvider(provider)
+    const forceFlushSpy = vi.spyOn(provider, 'forceFlush')
+
+    const manager = createOpenTelemetrySpanManager('flush-binding')
+    expect(manager).toBeDefined()
+    const result = await manager?.forceFlush()
+
+    expect(forceFlushSpy).toHaveBeenCalled()
+    expect(result).toEqual({ flushed: 1, pending: 0, timedOut: false })
+
+    trace.disable()
+    await provider.shutdown()
+  })
+
+  it('exporter failure does not throw through withTelemetry dispose', async () => {
+    const installed = withTelemetry({
+      exporter: () => {
+        throw new Error('exporter is down')
+      },
+    }).install({})
+
+    await observe.span({ name: 'still works', primitive: 'tool.call' }, async () => {})
+
+    await expect(installed.dispose?.()).resolves.toBeUndefined()
+  })
+
   it('falls back to lightweight spans when no TracerProvider is registered', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const spans: TraceSpan[] = []
@@ -147,6 +183,190 @@ describe('withTelemetry', () => {
     expect(warn).toHaveBeenCalledOnce()
     expect(warn).toHaveBeenCalledWith(expect.stringContaining('No OpenTelemetry TracerProvider registered'))
     warn.mockRestore()
+  })
+})
+
+describe('observe.flush()/observe.shutdown() bind to the installed telemetry manager', () => {
+  beforeEach(() => {
+    resetHooks()
+    resetObservabilityRuntime()
+    __resetOpenTelemetryFallbackForTesting()
+    trace.disable()
+  })
+
+  it('observe.flush() (not only plugin dispose) awaits a slow lightweight exporter export', async () => {
+    const releaseExports: Array<() => void> = []
+    const exported: TraceSpan[] = []
+    const crux = config({
+      plugins: [
+        withTelemetry({
+          exporter: async (spans) => {
+            await new Promise<void>((resolve) => {
+              releaseExports.push(resolve)
+            })
+            exported.push(...spans)
+          },
+        }),
+      ],
+    })
+
+    // Opening the run explicitly (rather than an implicit run via
+    // observe.span alone) keeps this to exactly one export/one exporter call.
+    const run = observe.openRun({ name: 'flush-bound run', rootPrimitive: 'tool.call' })
+    await run.withContext(() =>
+      observe.span({ name: 'flush-bound export', primitive: 'tool.call', implicitRun: false }, async () => {}),
+    )
+    run.end()
+
+    let flushResolved = false
+    const flush = observe.flush().then((result) => {
+      flushResolved = true
+      return result
+    })
+
+    // The exporter promise has not settled yet — observe.flush() itself
+    // (not just crux.dispose()) must still be waiting on it.
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(flushResolved).toBe(false)
+    expect(exported).toHaveLength(0)
+
+    for (const release of releaseExports) release()
+    await flush
+
+    expect(flushResolved).toBe(true)
+    expect(exported.map((s) => s.name)).toContain('execute_tool flush-bound export')
+
+    await crux.dispose()
+  })
+
+  it('observe.shutdown() force-flushes the real OTel TracerProvider through provider.forceFlush', async () => {
+    const exporter = new InMemorySpanExporter()
+    const provider = new BasicTracerProvider()
+    provider.addSpanProcessor(new SimpleSpanProcessor(exporter))
+    trace.setGlobalTracerProvider(provider)
+    const forceFlushSpy = vi.spyOn(provider, 'forceFlush')
+
+    const crux = config({ plugins: [withTelemetry({ serviceName: 'flush-bound-otel' })] })
+    await observe.span({ name: 'standard flush', primitive: 'tool.call' }, async () => {})
+
+    await observe.shutdown()
+
+    expect(forceFlushSpy).toHaveBeenCalled()
+
+    await crux.dispose()
+    trace.disable()
+    await provider.shutdown()
+  })
+
+  it('bounds the flush to an explicit timeoutMs and reports failure without throwing', async () => {
+    const crux = config({
+      plugins: [
+        withTelemetry({
+          exporter: () => new Promise<void>(() => {}),
+        }),
+      ],
+    })
+    const before = observabilityTelemetryFlushFailures()
+
+    await observe.span({ name: 'never settles', primitive: 'tool.call' }, async () => {})
+
+    const result = await observe.flush({ timeoutMs: 10 })
+
+    expect(result).toBeDefined()
+    expect(observabilityTelemetryFlushFailures()).toBeGreaterThan(before)
+
+    await crux.dispose()
+  })
+
+  it('does not call the flush hook when no telemetry plugin is installed', async () => {
+    const before = observabilityTelemetryFlushFailures()
+    await expect(observe.flush()).resolves.toBeDefined()
+    expect(observabilityTelemetryFlushFailures()).toBe(before)
+  })
+})
+
+describe('lightweight span manager exporter promise tracking', () => {
+  it('flush waits for an outstanding slow export before resolving', async () => {
+    let releaseExport: (() => void) | undefined
+    const exported: TraceSpan[][] = []
+    const manager = createLightweightSpanManager({
+      export: async (spans) => {
+        await new Promise<void>((resolve) => {
+          releaseExport = resolve
+        })
+        exported.push([...spans])
+      },
+      shutdown: async () => {},
+    })
+
+    const ref = manager.startSpan('slow export')
+    manager.endSpan(ref)
+
+    let flushed = false
+    const flush = manager.forceFlush().then((result) => {
+      flushed = true
+      return result
+    })
+
+    // The exporter promise has not settled yet — flush must still be pending.
+    await new Promise((resolve) => setTimeout(resolve, 5))
+    expect(flushed).toBe(false)
+    expect(exported).toHaveLength(0)
+
+    releaseExport?.()
+    const result = await flush
+
+    expect(flushed).toBe(true)
+    expect(exported).toHaveLength(1)
+    expect(result).toEqual({ flushed: 1, pending: 0, timedOut: false })
+  })
+
+  it('bounded forceFlush reports timedOut and leaves the export pending past the deadline', async () => {
+    const manager = createLightweightSpanManager({
+      export: () => new Promise<void>(() => {}),
+      shutdown: async () => {},
+    })
+
+    const ref = manager.startSpan('never settles')
+    manager.endSpan(ref)
+
+    const result = await manager.forceFlush({ deadlineMs: 10 })
+
+    expect(result.timedOut).toBe(true)
+    expect(result.pending).toBe(1)
+    expect(result.flushed).toBe(0)
+  })
+
+  it('shutdown force-flushes pending exports before tearing down the exporter', async () => {
+    const exported: TraceSpan[][] = []
+    let shutdownCalled = false
+    const manager = createLightweightSpanManager({
+      export: async (spans) => {
+        await Promise.resolve()
+        exported.push([...spans])
+      },
+      shutdown: async () => {
+        shutdownCalled = true
+      },
+    })
+
+    const ref = manager.startSpan('flush before shutdown')
+    manager.endSpan(ref)
+    await manager.shutdown()
+
+    expect(exported).toHaveLength(1)
+    expect(shutdownCalled).toBe(true)
+  })
+
+  it('forceFlush is a no-op when nothing is pending', async () => {
+    const manager = createLightweightSpanManager({
+      export: () => {},
+      shutdown: async () => {},
+    })
+
+    const result = await manager.forceFlush()
+
+    expect(result).toEqual({ flushed: 0, pending: 0, timedOut: false })
   })
 })
 

@@ -17,10 +17,22 @@ pub(crate) fn evaluation_catalog_facts(
     initializers: &std::collections::HashMap<&str, &StaticInitializerRecord>,
 ) -> Map<String, Value> {
     let mut facts = Map::new();
-    insert_non_empty_array(&mut facts, "datasetPaths", dataset_paths(config, initializers));
-    insert_non_empty_array(&mut facts, "scorerNames", scorer_names(config, initializers));
+    insert_non_empty_array(
+        &mut facts,
+        "datasetPaths",
+        dataset_paths(config, initializers),
+    );
+    insert_non_empty_array(
+        &mut facts,
+        "scorerNames",
+        scorer_names(config, initializers),
+    );
     insert_non_empty_array(&mut facts, "gateKeys", gate_keys(config, initializers));
-    insert_non_empty_array(&mut facts, "variantNames", variant_names(config, initializers));
+    insert_non_empty_array(
+        &mut facts,
+        "variantNames",
+        variant_names(config, initializers),
+    );
     if let Some(trials) = number_property(config, "trials", initializers) {
         facts.insert("trials".to_string(), json!(trials));
     }
@@ -96,7 +108,10 @@ fn gate_keys(
         return Vec::new();
     };
     let mut keys = Vec::new();
-    for property in properties.iter().filter(|property| property.spread != Some(true)) {
+    for property in properties
+        .iter()
+        .filter(|property| property.spread != Some(true))
+    {
         if property.name == "scores" {
             if let StaticSyntaxValue::Object { properties, .. } =
                 resolve_static_value(&property.value, initializers, &mut HashSet::new())

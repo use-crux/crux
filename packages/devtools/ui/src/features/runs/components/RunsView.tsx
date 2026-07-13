@@ -167,6 +167,21 @@ export function RunsView({ groupBy, filters }: RunsProps) {
       }
     >
       <div>
+        {filters.definitionId && (
+          <div className="flex items-center gap-2 border-b border-(--qw-border) px-4 py-2 text-[11.5px]" style={{ color: 'var(--qw-fg-muted)' }}>
+            <Icon name="link" size={12} color="var(--qw-fg-faint)" />
+            <span>
+              Filtered to definition <span className="font-mono" style={{ color: 'var(--qw-fg)' }}>{filters.definitionId}</span>
+            </span>
+            <Btn
+              size="xs"
+              variant="soft"
+              onClick={() => updateFilters({ ...filters, definitionId: undefined })}
+            >
+              Clear
+            </Btn>
+          </div>
+        )}
         {selection.selected.size > 0 && (
           <BulkActionsBar
             count={selection.selected.size}

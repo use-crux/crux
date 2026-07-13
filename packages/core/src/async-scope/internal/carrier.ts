@@ -78,8 +78,14 @@ function getStorage(): AsyncLocalStorageLike<AsyncScopeFrame> | null {
   if (storageInitialized) return storage;
 
   storageInitialized = true;
-  const AsyncLocalStorage = (configuredResolver ?? resolveAsyncLocalStorage)();
-  storage = AsyncLocalStorage ? new AsyncLocalStorage<AsyncScopeFrame>() : null;
+  try {
+    const AsyncLocalStorage = (configuredResolver ?? resolveAsyncLocalStorage)();
+    storage = AsyncLocalStorage
+      ? new AsyncLocalStorage<AsyncScopeFrame>()
+      : null;
+  } catch {
+    storage = null;
+  }
   return storage;
 }
 

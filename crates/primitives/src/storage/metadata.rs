@@ -1,8 +1,8 @@
-use serde_json::{json, Map, Value};
+use serde_json::{Map, Value, json};
 
 use crate::storage::{
     capabilities::StorageFactoryDescriptor,
-    dependencies::{storage_dependency_map, StorageReference, StorageReferences},
+    dependencies::{StorageReference, StorageReferences, storage_dependency_map},
 };
 
 pub(crate) fn factory_metadata(

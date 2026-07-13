@@ -2,6 +2,8 @@ import { isAgent } from '../agent'
 import type { AgentResult } from '../executor'
 import { executeWithRetry } from '../../generation/retry'
 import { observe } from '../../observability'
+import type { DefinitionRef } from '../../observability'
+import { agentDefinitionRef } from '../../observability/definition-ref'
 import { runWithExecutionContext } from '../../runtime/execution-context'
 import type { ExecutionContext } from '../../runtime/execution-context'
 import type {
@@ -19,6 +21,7 @@ export async function executeAgent<TOutput>(
   compositionId: string,
   childContext: (input: CompositionStepContextInput) => ExecutionContext,
   input: CompositionAgentExecution<TOutput>,
+  childDefinitionRef?: DefinitionRef,
 ): Promise<AgentResult<TOutput>> {
   if (input.flowStep) {
     const stepId = `${compositionId}-${input.label}-${input.index}`
@@ -34,10 +37,10 @@ export async function executeAgent<TOutput>(
           kind: 'agent',
         },
       },
-      () => executeAgentRun(compositionId, childContext, input, stepId),
+      () => executeAgentRun(compositionId, childContext, input, stepId, childDefinitionRef),
     )
   }
-  return executeAgentRun(compositionId, childContext, input)
+  return executeAgentRun(compositionId, childContext, input, undefined, childDefinitionRef)
 }
 
 async function executeAgentRun<TOutput>(
@@ -45,6 +48,7 @@ async function executeAgentRun<TOutput>(
   childContext: (input: CompositionStepContextInput) => ExecutionContext,
   input: CompositionAgentExecution<TOutput>,
   stepId?: string,
+  childDefinitionRef?: DefinitionRef,
 ): Promise<AgentResult<TOutput>> {
   const startedAt = Date.now()
   const stepCtx = childContext({
@@ -52,6 +56,12 @@ async function executeAgentRun<TOutput>(
     stepId: input.stepId ?? stepId,
   })
   const agentId = agentIdFor(input)
+  // Only a compiled agent carries the authored identity the indexer joins on;
+  // a plain-function stage's `agentId` is the step label, so it emits no ref.
+  const definitionRefs = [
+    ...(isAgent(input.agent) ? [agentDefinitionRef(input.agent.id)] : []),
+    ...(childDefinitionRef ? [childDefinitionRef] : []),
+  ]
   const agentSpan = observe.openSpan({
     name: input.label,
     primitive: 'agent.run',
@@ -62,6 +72,7 @@ async function executeAgentRun<TOutput>(
       index: input.index,
       ...input.attributes,
     },
+    ...(definitionRefs.length > 0 ? { definitionRefs } : {}),
   })
 
   if (input.triggeredBy) {

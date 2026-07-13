@@ -149,7 +149,7 @@ export const docsAnswer = retrievalRecipe({
   id: 'product-docs-answer',
   retriever: docs,
   model: retrievalModel,
-  steps: [retrieve({ limit: 20 }), rerank({ topK: 5 })],
+  steps: [retrieve({ limit: 20 }), rerank({ engine: judgeReranker({ name: 'docs-judge', model: retrievalModel }), topK: 5 })],
 })
 
 const { hits, trace } = await docsAnswer.retrieveWithTrace('enterprise SSO setup')

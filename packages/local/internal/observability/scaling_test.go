@@ -229,16 +229,17 @@ func seedReconciledLifecycleRuns(b *testing.B, service *Service, count int) {
 func benchmarkIngestBatch(b *testing.B, iteration int) Batch {
 	b.Helper()
 	runID := fmt.Sprintf("run_bench_ingest_%06d", iteration)
+	segmentID := fmt.Sprintf("seg_bench_ingest_%06d_a", iteration)
 	traceID := fmt.Sprintf("trace_bench_ingest_%06d", iteration)
 	spanID := fmt.Sprintf("span_bench_ingest_%06d", iteration)
 	records := []string{
-		fmt.Sprintf(`{"schemaVersion":1,"recordId":"%s_start","seq":1,"type":"run:start","runId":%q,"traceId":%q,"name":"ingest","rootPrimitive":"generation.stream","startedAt":%q,"status":"running"}`, runID, runID, traceID, benchmarkTimestamp(iteration)),
-		fmt.Sprintf(`{"schemaVersion":1,"recordId":"%s_span","seq":2,"type":"span","runId":%q,"traceId":%q,"spanId":%q,"family":"generation","primitive":"generation.stream","name":"stream","startedAt":%q,"endedAt":%q,"durationMs":10,"status":"ok","metrics":{"inputTokens":1,"outputTokens":2,"costUsd":0.001}}`, runID, runID, traceID, spanID, benchmarkTimestamp(iteration), benchmarkTimestamp(iteration+1)),
+		fmt.Sprintf(`{"schemaVersion":2,"recordId":"%s_start","segmentSeq":1,"type":"run:start","runId":%q,"segmentId":%q,"traceId":%q,"name":"ingest","rootPrimitive":"generation.stream","startedAt":%q,"status":"running"}`, runID, runID, segmentID, traceID, benchmarkTimestamp(iteration)),
+		fmt.Sprintf(`{"schemaVersion":2,"recordId":"%s_span","segmentSeq":2,"type":"span","runId":%q,"segmentId":%q,"traceId":%q,"spanId":%q,"family":"generation","primitive":"generation.stream","name":"stream","startedAt":%q,"endedAt":%q,"durationMs":10,"status":"ok","metrics":{"inputTokens":1,"outputTokens":2,"costUsd":0.001}}`, runID, runID, segmentID, traceID, spanID, benchmarkTimestamp(iteration), benchmarkTimestamp(iteration+1)),
 	}
 	for i := 0; i < 509; i++ {
-		records = append(records, fmt.Sprintf(`{"schemaVersion":1,"recordId":"%s_event_%03d","seq":%d,"type":"span:event","runId":%q,"traceId":%q,"spanId":%q,"eventId":"event_%s_%03d","name":"usage.observed","timestamp":%q,"attributes":{"inputTokens":1,"outputTokens":1,"cost":0.001}}`, runID, i, i+3, runID, traceID, spanID, runID, i, benchmarkTimestamp(iteration+i)))
+		records = append(records, fmt.Sprintf(`{"schemaVersion":2,"recordId":"%s_event_%03d","segmentSeq":%d,"type":"span:event","runId":%q,"segmentId":%q,"traceId":%q,"spanId":%q,"eventId":"event_%s_%03d","name":"usage.observed","timestamp":%q,"attributes":{"inputTokens":1,"outputTokens":1,"cost":0.001}}`, runID, i, i+3, runID, segmentID, traceID, spanID, runID, i, benchmarkTimestamp(iteration+i)))
 	}
-	records = append(records, fmt.Sprintf(`{"schemaVersion":1,"recordId":"%s_end","seq":512,"type":"run:end","runId":%q,"traceId":%q,"endedAt":%q,"durationMs":20,"status":"ok"}`, runID, runID, traceID, benchmarkTimestamp(iteration+2)))
+	records = append(records, fmt.Sprintf(`{"schemaVersion":2,"recordId":"%s_end","segmentSeq":512,"type":"run:end","runId":%q,"segmentId":%q,"traceId":%q,"endedAt":%q,"durationMs":20,"status":"ok"}`, runID, runID, segmentID, traceID, benchmarkTimestamp(iteration+2)))
 	return mustBenchmarkBatch(b, records...)
 }
 

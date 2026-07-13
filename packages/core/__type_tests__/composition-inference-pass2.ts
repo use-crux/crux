@@ -51,6 +51,7 @@ const parallel = createParallel(executor)
 async function parallelSurface() {
   // Both agents see the same seed — context must satisfy both schemas.
   const { results } = await parallel({
+    id: 'fact-style-parallel',
     agents: { facts: factAgent, style: styleAgent },
     context: { claim: 'water boils at 100C', prose: 'a sentence' },
   })
@@ -65,6 +66,7 @@ async function parallelSurface() {
 
   // Missing fields rejected.
   await parallel({
+    id: 'fact-style-parallel',
     agents: { facts: factAgent, style: styleAgent },
     // @ts-expect-error — `prose` is required by styleAgent
     context: { claim: 'x' },
@@ -73,6 +75,7 @@ async function parallelSurface() {
   // Plain async functions get input/output inferred from their signature.
   const enrich = async (input: { topic: string }) => ({ enriched: input.topic.toUpperCase() })
   const { results: r2 } = await parallel({
+    id: 'enrich-parallel',
     agents: { enrich },
     context: { topic: 'ai' },
   })
@@ -91,6 +94,7 @@ async function consensusSurface() {
   const classifier2 = agent({ id: 'c2', prompt: factPrompt })
 
   const decision = await consensus({
+    id: 'classifier-consensus',
     agents: [classifier1, classifier2] as const,
     input: { claim: 'is water wet?' },
     extract: (result) => {
@@ -105,6 +109,7 @@ async function consensusSurface() {
 
   // Missing input fields rejected.
   await consensus({
+    id: 'classifier-consensus',
     agents: [classifier1] as const,
     // @ts-expect-error — `claim` is required by the voter agent
     input: {},
@@ -139,6 +144,7 @@ async function swarmSurface() {
 
   // input is typed from the start agent (`triage`'s `{ message }` schema).
   const result = await swarm({
+    id: 'triage-swarm',
     agents: { triage, billing },
     startAgent: 'triage',
     input: { message: 'hello' },
@@ -155,12 +161,13 @@ async function swarmSurface() {
   expectTypeOf(result.output).toMatchTypeOf<{ category: 'billing' | 'general' } | { resolved: boolean }>()
 
   // @ts-expect-error — `unknownAgent` is not in the agents map
-  await swarm({ agents: { triage, billing }, startAgent: 'unknownAgent', input: { message: 'x' } })
+  await swarm({ id: 'triage-swarm', agents: { triage, billing }, startAgent: 'unknownAgent', input: { message: 'x' } })
 
   // @ts-expect-error — start agent expects `{ message: string }`; this is wrong
-  await swarm({ agents: { triage, billing }, startAgent: 'triage', input: { amount: 5 } })
+  await swarm({ id: 'triage-swarm', agents: { triage, billing }, startAgent: 'triage', input: { amount: 5 } })
 
   await swarm({
+    id: 'triage-swarm',
     agents: { triage, billing },
     startAgent: 'triage',
     input: { message: 'x' },

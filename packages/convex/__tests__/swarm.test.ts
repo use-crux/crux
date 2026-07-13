@@ -287,6 +287,8 @@ describe('createComponentSwarm', () => {
   })
 
   it('resume() loads state and continues to completion', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
     const component = createMockComponent()
     const swarm = createComponentSwarm({
       component: component as any,
@@ -300,12 +302,26 @@ describe('createComponentSwarm', () => {
     const ctx = createMockCtx(component)
 
     // Start — triage hands off to billing
-    const { swarmRunId } = await swarm.start(ctx as any, {
-      agents: { triage, billing },
-      startAgent: 'triage',
-      input: {},
-      resumeAction: resumeRef,
-    })
+    const actionRun = observe.openRun({ name: 'convex action', rootPrimitive: 'runtime.convex.action' })
+    const { swarmRunId, state } = await actionRun.withContext(() =>
+      swarm.start(ctx as any, {
+        agents: { triage, billing },
+        startAgent: 'triage',
+        input: {},
+        resumeAction: resumeRef,
+      }),
+    )
+    actionRun.end()
+
+    expect(state.observability).toBeDefined()
+    const swarmStart = transport.records.find(
+      (record) => record.type === 'run:start' && record.rootPrimitive === 'composition.swarm',
+    )
+    const observedRunId = swarmStart?.type === 'run:start' ? swarmStart.runId : undefined
+    expect(observedRunId).toBeDefined()
+    expect(observedRunId).not.toBe(actionRun.runId)
+    expect(swarmStart?.traceId).toBe(actionRun.traceId)
+    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'run:suspend', runId: observedRunId }))
 
     // Resume — billing completes
     const finalState = await swarm.resume(ctx as any, swarmRunId, {
@@ -316,6 +332,10 @@ describe('createComponentSwarm', () => {
     expect(finalState).not.toBeNull()
     expect(finalState!.status).toBe('completed')
     expect(finalState!.output).toBe('billing resolved')
+    expect(transport.records).toContainEqual(expect.objectContaining({ type: 'run:resume', runId: observedRunId }))
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({ type: 'run:end', runId: observedRunId, status: 'ok' }),
+    )
   })
 
   it('getState() returns persisted state', async () => {

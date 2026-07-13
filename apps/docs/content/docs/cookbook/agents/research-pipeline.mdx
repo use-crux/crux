@@ -94,6 +94,7 @@ import { planner, searcher, writer } from './agents'
 const pipeline = createPipeline((agent, opts) => generate(agent.prompt, opts))
 
 const result = await pipeline({
+  id: 'research-pipeline-pipeline-1',
   context: { topic: 'agentic workflows in 2026' },
   model: openai('gpt-4o'),
   steps: [
@@ -134,6 +135,7 @@ const verifier = agent({
 })
 
 await pipeline({
+  id: 'research-pipeline-pipeline-2',
   context: { topic: '...' },
   model: openai('gpt-4o'),
   steps: [

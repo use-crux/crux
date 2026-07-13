@@ -1,0 +1,98 @@
+---
+title: Adapter outcomes
+description: Normalized finish reasons, completed tool calls, and provider errors across @use-crux/ai, openai, anthropic, and google.
+---
+
+Every first-party generation adapter maps completed calls into one closed outcome taxonomy. Callers and observability consumers see the same shapes whether the provider is OpenAI, Anthropic, Google, or the Vercel AI SDK via `@use-crux/ai`.
+
+```ts
+import type {
+  CruxFinishReason,
+  CruxProviderError,
+  CruxAdapterError,
+} from '@use-crux/core/adapter'
+```
+
+## What is normalized
+
+| Dimension | Behavior |
+| --- | --- |
+| **generate()** | Provider finish reasons map into `CruxFinishReason`. Usage, model, and response identity are captured when the provider returns them. |
+| **stream()** | Stream completion carries the same finish/usage/model fields as generate after the stream settles. Iteration and completion failures reject with `CruxAdapterError` instead of silent missing metadata. |
+| **Usage** | Honest omission when the provider omits counts — never invented zeros. |
+| **Completed tool calls** | Fully assembled name + arguments (and results on the generate path) appear on the completed step. |
+| **Errors** | Timeouts, aborts, rate limits, invalid requests, refusals/safety, and provider failures become `CruxProviderError` on a thrown `CruxAdapterError`. |
+| **Abort / timeout** | Caller `AbortSignal` and Crux budget timeouts are classified as `aborted` and `timeout`. |
+| **Retry** | Adapters **classify** retryability (`retryable: true \| false`). They do not own a second network retry loop — SDK clients keep their own `maxRetries`. |
+
+### Explicit non-goal: progressive tool-call deltas
+
+**No adapter exposes progressive tool-call argument streaming.** There is no `toolCallDelta` hook and no public partial-argument fragment surface. Streams may still yield text deltas; tool calls appear only after the call is fully assembled (generate completion or stream completion).
+
+This is intentional: partial JSON tool arguments are not a reliable product surface, and Crux keeps one completed-call contract for both `generate()` and `stream()`.
+
+## Finish reasons
+
+`AdapterResponse.finishReason` is `CruxFinishReason | undefined`:
+
+| Value | Meaning |
+| --- | --- |
+| `stop` | Natural completion |
+| `length` | Hit a max-token / length limit |
+| `tool-calls` | Model requested one or more completed tool calls |
+| `content-filter` | Provider safety / content filter blocked output (or blocked the prompt) |
+| `refusal` | Model refused (when the provider distinguishes refusal from filter) |
+| `error` | Provider reported an error finish |
+| `aborted` | Cooperative abort |
+| `unknown` | Unrecognized provider string clamped honestly |
+
+Raw provider strings (Anthropic `end_turn`, Google `SAFETY`, AI SDK `other`, …) never leak through as the public finish reason.
+
+## Errors
+
+```ts
+interface CruxProviderError {
+  readonly kind: CruxProviderErrorKind
+  /** Bounded, namespaced machine id — e.g. `openai.rate_limit`. */
+  readonly code: string
+  readonly retryable: boolean
+  /** Optional redacted human text — never a raw provider payload dump. */
+  readonly message?: string
+}
+
+type CruxProviderErrorKind =
+  | 'refusal'
+  | 'safety'
+  | 'content-filter'
+  | 'rate-limit'
+  | 'timeout'
+  | 'aborted'
+  | 'invalid-request'
+  | 'provider-error'
+  | 'unknown'
+```
+
+Failures throw `CruxAdapterError`, which carries `providerError` and keeps the original throw as `cause`. Optional `message` is routed through the shared observability redaction path (`toSafeJsonValue`) before retention — sensitive keys are stripped and long strings are truncated. See [Privacy](/docs/guides/observability/privacy).
+
+## Per-adapter notes
+
+| Package | Ownership | Stream completion | Tool calls | Errors |
+| --- | --- | --- | --- | --- |
+| `@use-crux/openai` | single-turn | Single-pass capture with `stream_options.include_usage`; completion metadata + completed tool calls | Completed only | HTTP status + SDK abort/timeout classes |
+| `@use-crux/anthropic` | single-turn | `finalMessage()` rejection surfaces as `CruxAdapterError` (not silent `undefined`) | Completed tool uses from the final message | Same closed taxonomy |
+| `@use-crux/google` | single-turn | Single-pass capture of usage/finish/model + completed function calls | Completed only | Status / client-error classes + safety block folding |
+| `@use-crux/ai` | loop-owned (AI SDK) | Stream iteration/completion failures normalize at the runtime boundary | SDK-assembled completed calls only | Shared taxonomy on the runtime path; public `CruxAIError` remains an optional user-boundary helper |
+
+All four packages exercise the same core conformance helper so generate success, stream completion with a finished tool call, refusal/content-filter (where the provider can express it), timeout, abort, and erroring iteration stay aligned.
+
+## What this is not
+
+- Not a progressive tool-argument protocol.
+- Not a Crux-owned network retry engine — `retryable` is classification only.
+- Not a second error taxonomy for observability graph records — span/run errors still use the graph's compact error summary + `exception` events; adapter failures that throw are also captured there after normalization.
+
+## Related
+
+- [Adapter interface](/docs/reference/adapters) — authoring surface
+- [Privacy](/docs/guides/observability/privacy) — what `code` / `message` retain
+- [Troubleshooting](/docs/guides/observability/troubleshooting) — interpreting finish reasons and failures in Runs

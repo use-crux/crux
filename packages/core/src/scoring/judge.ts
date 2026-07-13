@@ -11,6 +11,7 @@ import { z } from 'zod'
 import type { JudgeConfig, JudgeInstance, JudgeInput, JudgeResult, JudgeScoreOptions } from './types'
 import type { GenerateObjectFn } from '../compaction/types'
 import { observe } from '../observability'
+import { scorerDefinitionRef } from '../observability/definition-ref'
 import { getHooks } from '../runtime/runtime'
 
 /** Schema for structured judge output. The explanation is requested before the score. */
@@ -166,6 +167,7 @@ export function judge<TDetail = unknown>(config: JudgeConfig<TDetail>): JudgeIns
     const span = observe.openSpan({
       name: `judge.${config.id}`,
       primitive: 'scoring.judge',
+      definitionRefs: [scorerDefinitionRef(config.id)],
       attributes: {
         metricId: config.id,
         scaleMin: config.scale.min,

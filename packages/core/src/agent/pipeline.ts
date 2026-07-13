@@ -177,6 +177,12 @@ export function createPipeline(executor: AgentExecutor) {
     TCtx extends Record<string, unknown>,
     const S1 extends { name: string },
   >(options: {
+    /**
+     * Stable author-supplied definition id, used to join this composition
+     * with its Project Index definition and observability evidence. Distinct
+     * from the random per-execution composition id.
+     */
+    id: string
     context: TCtx
     model?: unknown
     sessionId?: string
@@ -190,6 +196,12 @@ export function createPipeline(executor: AgentExecutor) {
     const S1 extends { name: string },
     const S2 extends { name: string },
   >(options: {
+    /**
+     * Stable author-supplied definition id, used to join this composition
+     * with its Project Index definition and observability evidence. Distinct
+     * from the random per-execution composition id.
+     */
+    id: string
     context: TCtx
     model?: unknown
     sessionId?: string
@@ -204,6 +216,12 @@ export function createPipeline(executor: AgentExecutor) {
     const S2 extends { name: string },
     const S3 extends { name: string },
   >(options: {
+    /**
+     * Stable author-supplied definition id, used to join this composition
+     * with its Project Index definition and observability evidence. Distinct
+     * from the random per-execution composition id.
+     */
+    id: string
     context: TCtx
     model?: unknown
     sessionId?: string
@@ -223,6 +241,12 @@ export function createPipeline(executor: AgentExecutor) {
     const S3 extends { name: string },
     const S4 extends { name: string },
   >(options: {
+    /**
+     * Stable author-supplied definition id, used to join this composition
+     * with its Project Index definition and observability evidence. Distinct
+     * from the random per-execution composition id.
+     */
+    id: string
     context: TCtx
     model?: unknown
     sessionId?: string
@@ -244,6 +268,12 @@ export function createPipeline(executor: AgentExecutor) {
     const S4 extends { name: string },
     const S5 extends { name: string },
   >(options: {
+    /**
+     * Stable author-supplied definition id, used to join this composition
+     * with its Project Index definition and observability evidence. Distinct
+     * from the random per-execution composition id.
+     */
+    id: string
     context: TCtx
     model?: unknown
     sessionId?: string
@@ -267,6 +297,12 @@ export function createPipeline(executor: AgentExecutor) {
     const S5 extends { name: string },
     const S6 extends { name: string },
   >(options: {
+    /**
+     * Stable author-supplied definition id, used to join this composition
+     * with its Project Index definition and observability evidence. Distinct
+     * from the random per-execution composition id.
+     */
+    id: string
     context: TCtx
     model?: unknown
     sessionId?: string
@@ -292,6 +328,12 @@ export function createPipeline(executor: AgentExecutor) {
     const S6 extends { name: string },
     const S7 extends { name: string },
   >(options: {
+    /**
+     * Stable author-supplied definition id, used to join this composition
+     * with its Project Index definition and observability evidence. Distinct
+     * from the random per-execution composition id.
+     */
+    id: string
     context: TCtx
     model?: unknown
     sessionId?: string
@@ -319,6 +361,12 @@ export function createPipeline(executor: AgentExecutor) {
     const S7 extends { name: string },
     const S8 extends { name: string },
   >(options: {
+    /**
+     * Stable author-supplied definition id, used to join this composition
+     * with its Project Index definition and observability evidence. Distinct
+     * from the random per-execution composition id.
+     */
+    id: string
     context: TCtx
     model?: unknown
     sessionId?: string
@@ -348,6 +396,12 @@ export function createPipeline(executor: AgentExecutor) {
     const S8 extends { name: string },
     const S9 extends { name: string },
   >(options: {
+    /**
+     * Stable author-supplied definition id, used to join this composition
+     * with its Project Index definition and observability evidence. Distinct
+     * from the random per-execution composition id.
+     */
+    id: string
     context: TCtx
     model?: unknown
     sessionId?: string
@@ -379,6 +433,12 @@ export function createPipeline(executor: AgentExecutor) {
     const S9 extends { name: string },
     const S10 extends { name: string },
   >(options: {
+    /**
+     * Stable author-supplied definition id, used to join this composition
+     * with its Project Index definition and observability evidence. Distinct
+     * from the random per-execution composition id.
+     */
+    id: string
     context: TCtx
     model?: unknown
     sessionId?: string
@@ -401,6 +461,7 @@ export function createPipeline(executor: AgentExecutor) {
 
   // Fallback: 11+ steps
   function pipeline(options: {
+    id: string
     context: Record<string, unknown>
     model?: unknown
     sessionId?: string
@@ -411,13 +472,14 @@ export function createPipeline(executor: AgentExecutor) {
   // ── Implementation (must immediately follow overloads) ────────
 
   async function pipeline(options: {
+    id: string
     context: Record<string, unknown>
     model?: unknown
     steps: RuntimeStep[]
     sessionId?: string
     validationRetry?: import('../generation/validation-retry').ValidationRetryOptions
   }): Promise<PipelineResult<Record<string, unknown>>> {
-    const { context, model, steps, sessionId, validationRetry } = options
+    const { id, context, model, steps, sessionId, validationRetry } = options
 
     const pipelineStart = Date.now()
     const results: AgentResult[] = []
@@ -426,6 +488,7 @@ export function createPipeline(executor: AgentExecutor) {
     )
     const runtime = createCompositionRuntime({
       kind: 'pipeline',
+      id,
       agentIds,
       sessionId,
     })

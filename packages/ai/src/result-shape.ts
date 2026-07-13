@@ -10,44 +10,54 @@
  * @module
  */
 
-import type { AdapterResponse } from '@use-crux/core/adapter'
-import { normalizeUsage, type SdkUsageLike } from './meta'
-import { decodeAssistantContentFromAiSdkParts } from './assistant-content'
+import type { AdapterResponse } from "@use-crux/core/adapter";
+import { normalizeUsage, type SdkUsageLike } from "./meta";
+import { mapAiSdkFinishReason } from "./normalized-outcome";
+import { decodeAssistantContentFromAiSdkParts } from "./assistant-content";
 
 /** Structural shape of an AI SDK result that can be projected for core. */
 export interface SdkResponseLike {
-  text?: string
-  content?: readonly Record<string, unknown>[]
-  toolCalls?: Array<{ toolCallId: string; toolName: string; input?: unknown; args?: unknown }>
-  usage?: SdkUsageLike
-  totalUsage?: SdkUsageLike
-  finishReason?: string
-  response?: { id?: string; modelId?: string; messages?: readonly unknown[] }
-  warnings?: readonly unknown[]
-  providerMetadata?: unknown
+  text?: string;
+  content?: readonly Record<string, unknown>[];
+  toolCalls?: Array<{
+    toolCallId: string;
+    toolName: string;
+    input?: unknown;
+    args?: unknown;
+  }>;
+  usage?: SdkUsageLike;
+  totalUsage?: SdkUsageLike;
+  finishReason?: string;
+  response?: { id?: string; modelId?: string; messages?: readonly unknown[] };
+  warnings?: readonly unknown[];
+  providerMetadata?: unknown;
 }
 
 /** Normalize an AI SDK result into core's provider-agnostic response shape. */
 export function extractResponse(result: SdkResponseLike): AdapterResponse {
   const content = result.content
     ? decodeAssistantContentFromAiSdkParts(result.content)
-    : undefined
+    : undefined;
   return {
     ...(content !== undefined && (content.length > 0 || !result.text)
       ? { content }
       : {}),
-    text: result.text ?? '',
+    text: result.text ?? "",
     toolCalls:
       result.toolCalls && result.toolCalls.length > 0
-        ? result.toolCalls.map((tc) => ({ id: tc.toolCallId, name: tc.toolName, args: tc.input ?? tc.args }))
+        ? result.toolCalls.map((tc) => ({
+            id: tc.toolCallId,
+            name: tc.toolName,
+            args: tc.input ?? tc.args,
+          }))
         : undefined,
     usage: normalizeUsage(result.totalUsage ?? result.usage),
-    finishReason: result.finishReason,
+    finishReason: mapAiSdkFinishReason(result.finishReason),
     responseId: result.response?.id,
     actualModelId: result.response?.modelId,
     ...(result.warnings !== undefined ? { warnings: result.warnings } : {}),
     ...(result.providerMetadata !== undefined
       ? { providerMetadata: result.providerMetadata }
       : {}),
-  }
+  };
 }

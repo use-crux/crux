@@ -17,10 +17,15 @@ import {
   type CruxMetricKey,
   type CruxRecordId,
   type CruxRunId,
+  type CruxSegmentId,
   type CruxSpanEventId,
   type CruxSpanId,
   type CruxTraceId,
+  type DefinitionRef,
+  type DefinitionRefRole,
+  type SanitizedSourceRef,
 } from './contract'
+import { ProjectDefinitionKindSchema } from '../project-index'
 
 const nonEmptyString = z.string().min(1)
 const isoTimestamp = z.string().refine((value) => !Number.isNaN(Date.parse(value)), {
@@ -32,6 +37,7 @@ const allZeroHex = /^0+$/
 
 export const CruxRecordIdSchema = nonEmptyString.transform((value) => value as CruxRecordId)
 export const CruxRunIdSchema = nonEmptyString.transform((value) => value as CruxRunId)
+export const CruxSegmentIdSchema = nonEmptyString.transform((value) => value as CruxSegmentId)
 export const CruxTraceIdSchema = nonEmptyString
   .regex(w3cTraceId, 'Trace IDs must be 32 lowercase hexadecimal characters')
   .refine((value) => !allZeroHex.test(value), { message: 'Trace IDs must not be all zeroes' })
@@ -95,6 +101,45 @@ export const CruxSourceLocationSchema = z.object({
   function: nonEmptyString.optional(),
 })
 
+export const DefinitionRefRoleSchema = z.enum([
+  'resolved-prompt',
+  'resolved-context',
+  'invoked-tool',
+  'invoked-agent',
+  'invoked-flow',
+  'invoked-retriever',
+  'invoked-composition',
+  'invoked-blackboard',
+  'invoked-routing',
+  'loaded-skill',
+  'invoked-guardrail',
+  'invoked-constraint',
+  'invoked-task',
+  'invoked-workspace',
+  'invoked-memory',
+  'invoked-recipe',
+  'invoked-reranker',
+  'contributed-knowledge-base',
+  'contributed-tool-policy',
+  'invoked-flow-step',
+  'invoked-composition-branch',
+  'invoked-recipe-step',
+  'invoked-scorer',
+]) satisfies z.ZodType<DefinitionRefRole>
+
+export const SanitizedSourceRefSchema = z.object({
+  file: nonEmptyString,
+  line: z.number().int().positive(),
+  column: z.number().int().positive().optional(),
+}) satisfies z.ZodType<SanitizedSourceRef>
+
+export const DefinitionRefSchema = z.object({
+  id: nonEmptyString,
+  kind: ProjectDefinitionKindSchema,
+  role: DefinitionRefRoleSchema,
+  source: SanitizedSourceRefSchema.optional(),
+}) satisfies z.ZodType<DefinitionRef>
+
 export const CruxErrorSummarySchema = z.object({
   message: nonEmptyString,
   name: nonEmptyString.optional(),
@@ -103,17 +148,18 @@ export const CruxErrorSummarySchema = z.object({
   statusCode: z.number().int().optional(),
 })
 
-const BaseRecordSchema = z.object({
+const CruxRecordBaseSchema = z.object({
   schemaVersion: z.literal(CRUX_OBSERVABILITY_SCHEMA_VERSION),
   recordId: CruxRecordIdSchema,
   runId: CruxRunIdSchema,
-  seq: z.number().int().positive(),
+  segmentId: CruxSegmentIdSchema,
+  segmentSeq: z.number().int().positive(),
   sessionId: z.string().optional(),
   userId: z.string().optional(),
   traceId: CruxTraceIdSchema.optional(),
 })
 
-export const CruxRunStartRecordSchema = BaseRecordSchema.extend({
+export const CruxRunStartRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal('run:start'),
   name: nonEmptyString,
   rootPrimitive: CruxPrimitiveNameSchema,
@@ -121,9 +167,31 @@ export const CruxRunStartRecordSchema = BaseRecordSchema.extend({
   status: z.literal('running'),
   attributes: CruxAttributesSchema.optional(),
   source: CruxSourceLocationSchema.optional(),
+  definitionRefs: z.array(DefinitionRefSchema).optional(),
+}).refine((record) => record.segmentSeq === 1, {
+  message: 'run:start must be the first record in its segment',
+  path: ['segmentSeq'],
 })
 
-export const CruxRunEndRecordSchema = BaseRecordSchema.extend({
+export const CruxRunSuspendRecordSchema = CruxRecordBaseSchema.extend({
+  type: z.literal('run:suspend'),
+  suspendedAt: isoTimestamp,
+  reason: nonEmptyString,
+  attributes: CruxAttributesSchema.optional(),
+})
+
+export const CruxRunResumeRecordSchema = CruxRecordBaseSchema.extend({
+  type: z.literal('run:resume'),
+  resumedAt: isoTimestamp,
+  reason: nonEmptyString,
+  previousSegmentId: CruxSegmentIdSchema.optional(),
+  attributes: CruxAttributesSchema.optional(),
+}).refine((record) => record.segmentSeq === 1, {
+  message: 'run:resume must be the first record in its segment',
+  path: ['segmentSeq'],
+})
+
+export const CruxRunEndRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal('run:end'),
   endedAt: isoTimestamp,
   durationMs: z.number().nonnegative().optional(),
@@ -133,7 +201,7 @@ export const CruxRunEndRecordSchema = BaseRecordSchema.extend({
   attributes: CruxAttributesSchema.optional(),
 })
 
-export const CruxSpanStartRecordSchema = BaseRecordSchema.extend({
+export const CruxSpanStartRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal('span:start'),
   spanId: CruxSpanIdSchema,
   parentSpanId: CruxSpanIdSchema.nullable().optional(),
@@ -154,12 +222,13 @@ export const CruxSpanStartRecordSchema = BaseRecordSchema.extend({
   retrieverId: nonEmptyString.optional(),
   attributes: CruxAttributesSchema.optional(),
   source: CruxSourceLocationSchema.optional(),
+  definitionRefs: z.array(DefinitionRefSchema).optional(),
 }).refine((record) => CRUX_PRIMITIVE_FAMILY_BY_NAME[record.primitive] === record.family, {
   message: 'Span family must match primitive family',
   path: ['family'],
 })
 
-export const CruxSpanEndRecordSchema = BaseRecordSchema.extend({
+export const CruxSpanEndRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal('span:end'),
   spanId: CruxSpanIdSchema,
   endedAt: isoTimestamp,
@@ -170,7 +239,7 @@ export const CruxSpanEndRecordSchema = BaseRecordSchema.extend({
   attributes: CruxAttributesSchema.optional(),
 })
 
-export const CruxSpanRecordSchema = BaseRecordSchema.extend({
+export const CruxSpanRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal('span'),
   spanId: CruxSpanIdSchema,
   parentSpanId: CruxSpanIdSchema.nullable().optional(),
@@ -185,12 +254,13 @@ export const CruxSpanRecordSchema = BaseRecordSchema.extend({
   error: CruxErrorSummarySchema.optional(),
   attributes: CruxAttributesSchema.optional(),
   source: CruxSourceLocationSchema.optional(),
+  definitionRefs: z.array(DefinitionRefSchema).optional(),
 }).refine((record) => CRUX_PRIMITIVE_FAMILY_BY_NAME[record.primitive] === record.family, {
   message: 'Span family must match primitive family',
   path: ['family'],
 })
 
-export const CruxSpanEventRecordSchema = BaseRecordSchema.extend({
+export const CruxSpanEventRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal('span:event'),
   spanId: CruxSpanIdSchema,
   eventId: CruxSpanEventIdSchema,
@@ -205,7 +275,7 @@ export const CruxGraphNodeRefSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('artifact'), id: CruxArtifactIdSchema }),
 ])
 
-export const CruxEdgeRecordSchema = BaseRecordSchema.extend({
+export const CruxEdgeRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal('edge'),
   edgeId: CruxEdgeIdSchema,
   edgeType: CruxEdgeTypeSchema,
@@ -215,7 +285,7 @@ export const CruxEdgeRecordSchema = BaseRecordSchema.extend({
   attributes: CruxAttributesSchema.optional(),
 })
 
-export const CruxArtifactRecordSchema = BaseRecordSchema.extend({
+export const CruxArtifactRecordSchema = CruxRecordBaseSchema.extend({
   type: z.literal('artifact'),
   artifactId: CruxArtifactIdSchema,
   spanId: CruxSpanIdSchema.optional(),
@@ -232,6 +302,8 @@ export const CruxArtifactRecordSchema = BaseRecordSchema.extend({
 
 export const CruxGraphRecordSchema = z.discriminatedUnion('type', [
   CruxRunStartRecordSchema,
+  CruxRunSuspendRecordSchema,
+  CruxRunResumeRecordSchema,
   CruxRunEndRecordSchema,
   CruxSpanStartRecordSchema,
   CruxSpanEndRecordSchema,

@@ -27,9 +27,21 @@ interface RunsFilterBarProps {
   right?: ReactNode
 }
 
-// Full 9-state run status vocabulary the backend now filters on (canonical `ok`,
-// not `success`). Matches the design's status pill set.
-const STATUS_OPTIONS = ['running', 'ok', 'error', 'blocked', 'cancelled', 'suspended', 'skipped', 'incomplete', 'stale']
+// Full run/span status vocabulary the backend filters on (canonical `ok`, not
+// `success`). Matches the design's status pill set, plus `conflicted` (spec
+// 04 §1: an immutable-identity/terminal-evidence conflict on a logical run).
+const STATUS_OPTIONS = [
+  'running',
+  'ok',
+  'error',
+  'blocked',
+  'cancelled',
+  'suspended',
+  'skipped',
+  'incomplete',
+  'conflicted',
+  'stale',
+]
 const LAST_OPTIONS = [
   { value: 'all' as const, label: 'All time' },
   { value: '1h' as const, label: 'Last hour' },

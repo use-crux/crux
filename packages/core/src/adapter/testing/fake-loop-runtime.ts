@@ -188,7 +188,7 @@ export function fakeLoopRuntime(config: FakeLoopRuntimeConfig = {}): FakeLoopRun
           text: emission.text ?? '',
           toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
           usage: { ...FAKE_USAGE },
-          finishReason: toolCalls.length > 0 ? 'tool_calls' : 'stop',
+          finishReason: toolCalls.length > 0 ? 'tool-calls' : 'stop',
           responseId: `fake_${index}`,
           actualModelId: request.modelInfo.modelId,
         }

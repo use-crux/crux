@@ -218,17 +218,13 @@ function semanticDefinitionCandidateForCall<
       };
     }
     case "parallel":
-      return compositionCandidate("composition.parallel", object, variableName);
+      return compositionCandidate("composition.parallel", object, syntax);
     case "pipeline":
-      return compositionCandidate("composition.pipeline", object, variableName);
+      return compositionCandidate("composition.pipeline", object, syntax);
     case "swarm":
-      return compositionCandidate("composition.swarm", object, variableName);
+      return compositionCandidate("composition.swarm", object, syntax);
     case "consensus":
-      return compositionCandidate(
-        "composition.consensus",
-        object,
-        variableName,
-      );
+      return compositionCandidate("composition.consensus", object, syntax);
     case "router": {
       const name =
         semanticStringLiteralProperty(object, "id", syntax) ??
@@ -358,7 +354,8 @@ function semanticDefinitionCandidateForCall<
         object,
       };
     }
-    case "reranker": {
+    case "reranker":
+    case "judgeReranker": {
       const name =
         semanticStringLiteralProperty(object, "id", syntax) ??
         semanticStringLiteralProperty(object, "name", syntax) ??
@@ -392,16 +389,24 @@ function semanticDefinitionCandidateForCall<
       );
   }
 }
-function compositionCandidate<TNode extends SemanticSyntaxNode>(
+function compositionCandidate<
+  TNode extends SemanticSyntaxNode,
+  TSourceFile extends TNode & SemanticSyntaxSourceFile<TNode>,
+>(
   kind:
     | "composition.parallel"
     | "composition.pipeline"
     | "composition.swarm"
     | "composition.consensus",
   object: TNode,
-  variableName: string | undefined,
-): SemanticDefinitionCandidate<TNode, TNode> {
-  const name = variableName ?? "anonymous";
+  syntax: SemanticSyntaxView<TNode, TSourceFile>,
+): SemanticDefinitionCandidate<TNode, TNode> | undefined {
+  // `id` is a required authored field on every composition primitive. Without a
+  // direct string id there is no stable canonical identity for a runtime span to
+  // join back against, so emit no candidate (and therefore no misleading
+  // composition relations) rather than one keyed to the local variable name.
+  const name = semanticStringLiteralProperty(object, "id", syntax);
+  if (name === undefined) return undefined;
   return { definitionId: `${kind}:${safeId(name)}`, kind, name, object };
 }
 /**

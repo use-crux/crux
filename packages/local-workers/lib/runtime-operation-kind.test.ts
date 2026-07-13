@@ -4,8 +4,6 @@ import { isRuntimeOperationKind } from "./runtime-operation-kind";
 describe("isRuntimeOperationKind", () => {
   it("accepts every operation handled by the Runtime worker, including preflight", () => {
     for (const operation of [
-      "setup-check",
-      "setup-apply",
       "preflight",
       "status",
       "inspect",
@@ -17,6 +15,8 @@ describe("isRuntimeOperationKind", () => {
   });
 
   it("rejects unknown operations", () => {
-    expect(isRuntimeOperationKind("unknown")).toBe(false);
+    for (const operation of ["setup-check", "setup-apply", "unknown"]) {
+      expect(isRuntimeOperationKind(operation), operation).toBe(false);
+    }
   });
 });

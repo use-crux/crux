@@ -1,11 +1,11 @@
 import type OpenAI from "openai";
+import type { ChatCompletion } from "openai/resources/chat/completions";
+import {
+  classifyProviderHttpError,
+  defineSingleTurnProviderBundle,
+} from "@use-crux/core/adapter";
 import type {
-  ChatCompletion,
-  ChatCompletionChunk,
-} from "openai/resources/chat/completions";
-import type { Stream } from "openai/streaming";
-import { defineSingleTurnProviderBundle } from "@use-crux/core/adapter";
-import type {
+  CruxProviderError,
   NativeProviderPort,
   SingleTurnProviderBundleSpec,
 } from "@use-crux/core/adapter";
@@ -26,7 +26,12 @@ import {
   openAIStreamRequest,
 } from "./request";
 import { openAIResponseMeta, openAIResponseText } from "./response";
-import { openAIStreamCompletion, openAITextDelta } from "./stream";
+import {
+  createOpenAIStreamCapture,
+  OpenAIChatStream,
+  openAIStreamCompletion,
+  openAITextDelta,
+} from "./stream";
 import type { OpenAIChatRequest, OpenAIExtra } from "./types";
 import { createOpenAIImageOperation } from "./image-generation";
 import { createOpenAITranscriptionOperation } from "./transcription";
@@ -60,6 +65,7 @@ const openAI = defineSingleTurnProviderBundle({
       completion: (_stream, chunks, request) =>
         openAIStreamCompletion(chunks, request),
     },
+    mapError: mapOpenAIError,
     settings: openAISettings,
     outputSchema: openAIOutputSchema,
     transcript: openAITranscript,
@@ -68,7 +74,7 @@ const openAI = defineSingleTurnProviderBundle({
     OpenAI,
     OpenAIChatRequest,
     ChatCompletion,
-    Stream<ChatCompletionChunk>,
+    OpenAIChatStream,
     OpenAIExtra,
     Record<string, never>,
     OpenAI.ChatCompletionMessageParam
@@ -91,19 +97,28 @@ export const openaiProviderRuntime = openAI.runtime;
 /** Bind an OpenAI SDK client to the narrow native chat provider port. */
 function bindOpenAI(
   client: OpenAI,
-): NativeProviderPort<
-  OpenAIChatRequest,
-  ChatCompletion,
-  Stream<ChatCompletionChunk>
-> {
+): NativeProviderPort<OpenAIChatRequest, ChatCompletion, OpenAIChatStream> {
   return {
-    call: (request, mode) =>
+    call: (request, mode, options) =>
       mode === "structured"
-        ? client.chat.completions.parse(asOpenAINonStreamingParams(request))
-        : client.chat.completions.create(asOpenAINonStreamingParams(request)),
-    stream: (request) =>
-      client.chat.completions.create(asOpenAIStreamingParams(request)),
+        ? client.chat.completions.parse(asOpenAINonStreamingParams(request), {
+            signal: options?.signal,
+          })
+        : client.chat.completions.create(asOpenAINonStreamingParams(request), {
+            signal: options?.signal,
+          }),
+    stream: async (request, options) =>
+      createOpenAIStreamCapture(
+        await client.chat.completions.create(asOpenAIStreamingParams(request), {
+          signal: options?.signal,
+        }),
+      ),
   };
+}
+
+/** Classify an OpenAI SDK error into the normalized provider-error taxonomy. */
+function mapOpenAIError(error: unknown): CruxProviderError | undefined {
+  return classifyProviderHttpError(error, "openai");
 }
 
 /** Create an OpenAI adapter bound to a client instance. */

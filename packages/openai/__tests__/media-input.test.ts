@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { isInvalidMediaSourceError, isUnsupportedCapabilityError, prompt, tool } from '@use-crux/core'
+import { isCruxAdapterError } from '@use-crux/core/adapter'
 import {
   assertDirectMediaTranscriptIdentity,
   directMediaFixture,
@@ -239,10 +240,21 @@ describe('OpenAI native media input', () => {
     expect(transport).not.toHaveBeenCalled()
   })
 
-  it('passes actual OpenAI SDK failures through unchanged once I/O starts', async () => {
+  it('normalizes actual OpenAI SDK failures once I/O starts', async () => {
     const sdkError = new Error('native SDK failure')
     const adapter = createOpenAI(client({ create: vi.fn(async () => Promise.reject(sdkError)) }))
 
-    await expect(adapter.generate(mediaPrompt, { model: 'gpt-4o' })).rejects.toBe(sdkError)
+    await expect(adapter.generate(mediaPrompt, { model: 'gpt-4o' })).rejects.toSatisfy((error: unknown) => {
+      expect(isCruxAdapterError(error)).toBe(true)
+      expect(error).toMatchObject({
+        providerError: {
+          kind: 'provider-error',
+          code: 'openai.provider_error',
+          retryable: false,
+        },
+        cause: sdkError,
+      })
+      return true
+    })
   })
 })

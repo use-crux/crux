@@ -6,6 +6,7 @@
  */
 
 import { isValidationExhaustedError } from "./validation-retry";
+import { isCruxAdapterError } from "../adapter/normalized-outcome";
 import type {
   BoundOf,
   ComposedCtx,
@@ -146,6 +147,22 @@ export function classifyError(error: unknown): ErrorCategory | null {
 
   // Validation exhaustion (all retries failed on structured output)
   if (isValidationExhaustedError(error)) return "invalid_response";
+
+  // Adapter boundaries intentionally replace provider-specific status/error
+  // shapes with the shared closed taxonomy. Route on that normalized evidence
+  // before falling back to legacy SDK status/code inspection.
+  if (isCruxAdapterError(error)) {
+    const { kind, code } = error.providerError;
+    if (kind === "rate-limit") return "rate_limit";
+    if (kind === "timeout") return "timeout";
+    if (kind === "invalid-request" && code.endsWith(".authentication"))
+      return "auth_error";
+    if (kind === "provider-error" && code.includes("connection"))
+      return "connection_error";
+    if (kind === "provider-error" && error.providerError.retryable)
+      return "server_error";
+    return null;
+  }
 
   // Check HTTP status codes (works with OpenAI APIError, Anthropic errors, etc.)
   const errShape = error as {

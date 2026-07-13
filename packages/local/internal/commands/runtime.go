@@ -78,7 +78,6 @@ entry files. It does not create infrastructure or mutate runtime state.`,
 		},
 	}
 	cmd.AddCommand(generateCmd)
-	cmd.AddCommand(newRuntimeSetupCmd(f, opts))
 	cmd.AddCommand(newRuntimeStatusCmd(f, opts))
 	cmd.AddCommand(newRuntimeInspectCmd(f, opts))
 	cmd.AddCommand(newRuntimeRetryCmd(f, opts))

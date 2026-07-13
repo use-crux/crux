@@ -1,17 +1,17 @@
 use std::collections::HashSet;
 
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 use crate::{
-    context::{call_parts, PrimitiveContext},
-    definition::{safe_id, static_index_definition, NativeDefinitionInput},
+    context::{PrimitiveContext, call_parts},
+    definition::{NativeDefinitionInput, safe_id, static_index_definition},
     manifest::CustomProjectionInput,
     protocol::{LiteralValue, SourceLocation, SourceSnippet, StaticSourceMatch, StaticSyntaxValue},
     record_values::{direct_identifier, has_property, object_value, resolve_static_value},
     routing::output::extracted_facts,
     storage::{
-        capabilities::{storage_factory_descriptor, StorageFactoryDescriptor},
-        dependencies::{storage_config_references, storage_relation_refs, StorageReferences},
+        capabilities::{StorageFactoryDescriptor, storage_factory_descriptor},
+        dependencies::{StorageReferences, storage_config_references, storage_relation_refs},
         metadata::{bundle_metadata, factory_metadata, scope_metadata},
     },
 };

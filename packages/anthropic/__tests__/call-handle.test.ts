@@ -34,7 +34,7 @@ describe('Anthropic call handle', () => {
     expect(result.steps).toHaveLength(1)
     expect(result.finalStep).toMatchObject({
       text: 'hello',
-      finishReason: 'end_turn',
+      finishReason: 'stop',
       responseId: 'msg_1',
     })
   })

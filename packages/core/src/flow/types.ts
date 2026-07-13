@@ -200,7 +200,8 @@ export interface FlowSnapshot extends JsonObject {
    */
   deliveredSignals?: DeliveredFlowSignals
   traceContext: JsonObject
-  observabilityContext?: JsonObject
+  /** Serializable carrier used to resume this flow in a fresh run segment. */
+  continuation?: JsonObject
   createdAt: number
   updatedAt: number
   /** Unix timestamp recorded when the flow reaches `completed`. */

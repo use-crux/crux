@@ -25,6 +25,7 @@ export function sdkStepFacts(step: ExecutorStep): ResultStepFacts {
   return {
     content: step.content ?? [{ type: "text", text: step.text }],
     ...(step.usage !== undefined ? { usage: step.usage } : {}),
+    ...(step.toolCalls.length > 0 ? { toolCalls: [...step.toolCalls] } : {}),
     finishReason: step.finishReason,
     responseId: undefined,
     modelId: undefined,
@@ -42,6 +43,7 @@ export function sdkResponseFacts(
         ? responseContent(response)
         : [{ type: "text", text }],
     ...(response.usage !== undefined ? { usage: response.usage } : {}),
+    ...(response.toolCalls !== undefined ? { toolCalls: response.toolCalls } : {}),
     finishReason: response.finishReason,
     responseId: response.responseId,
     modelId: response.actualModelId,

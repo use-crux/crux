@@ -33,6 +33,7 @@ Run multiple agents concurrently on the same context. Results are returned as a 
 
 ```ts
 const { results, durationMs } = await parallel({
+  id: 'index-parallel-1',
   agents: { facts: factChecker, style: styleReviewer, seo: seoAnalyzer },
   context: { content: article },
   model,
@@ -52,6 +53,7 @@ Agents run one after another. Each step's `input` function receives all previous
 
 ```ts
 const result = await pipeline({
+  id: 'index-pipeline-1',
   steps: [
     { agent: researcher, name: 'research' },
     { agent: writer, name: 'write', input: (ctx) => ({ findings: ctx.research.output.sources }) },
@@ -72,6 +74,7 @@ Run multiple agents and count votes. Reduces single-agent errors for critical de
 
 ```ts
 const decision = await consensus({
+  id: 'index-consensus-1',
   agents: [classifier, classifier, classifier],
   context: { ticket: supportTicket },
   extract: (result) => result.output.category,
@@ -99,6 +102,7 @@ const billing = agent({
 })
 
 const result = await swarm({
+  id: 'index-swarm-1',
   agents: { triage, billing, refunds },
   startAgent: 'triage',
   input: { message: 'I was charged twice' },
@@ -223,6 +227,7 @@ const billing = agent({
 // Run the swarm with shared blackboard context
 await customerBoard.set('customerId', customerId)
 const result = await swarm({
+  id: 'index-swarm-2',
   agents: { triage, billing, shipping, refunds },
   startAgent: 'triage',
   input: { message: customerMessage },

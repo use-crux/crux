@@ -22,14 +22,14 @@ import {
 } from 'lucide-react'
 import { cn } from '@/shared/lib/utils'
 import { useNavigation, type NavState } from '@/app/navigation/useNavigation'
-import { useObservabilityRuns } from '@/features/observability/hooks/useObservabilityGraph'
+import { useObservabilityRunsPage } from '@/features/observability/hooks/useObservabilityGraph'
 import { useQualityInsights, useQualityExperiments } from '@/shared/hooks/useQualityApi'
 import { useIndex } from '@/features/index/hooks/useIndex'
 import { useJudgeEvents } from '@/app/runtime/runtimeStore'
+import { searchRuns } from '@/features/search/lib/search-runs'
 import type {
   ContextMeta,
   JudgeEventData,
-  ObservabilityRunSummary,
   PromptMeta,
   QualityInsightRecord,
   QualityExperimentSummary,
@@ -72,23 +72,6 @@ const CATEGORY_CONFIG: Record<ResultCategory, { label: string; icon: typeof Sear
 function matches(query: string, ...fields: (string | undefined | null)[]): boolean {
   const q = query.toLowerCase()
   return fields.some((f) => f != null && f.toLowerCase().includes(q))
-}
-
-function searchRuns(runs: ObservabilityRunSummary[], query: string): SearchResult[] {
-  const results: SearchResult[] = []
-  for (const run of runs) {
-    if (results.length >= MAX_PER_CATEGORY) break
-    if (matches(query, run.runId, run.traceId, run.promptId, run.model, run.name, run.rootPrimitive)) {
-      results.push({
-        category: 'traces',
-        id: run.runId,
-        label: run.promptId || run.name || run.runId.slice(0, 12),
-        meta: `${run.model || run.rootPrimitive} · ${run.status}`,
-        nav: { view: 'run-detail', traceId: run.runId },
-      })
-    }
-  }
-  return results
 }
 
 function searchPrompts(prompts: PromptMeta[], query: string): SearchResult[] {
@@ -233,7 +216,10 @@ export function GlobalSearch({
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const { navigate, nav } = useNavigation()
-  const { runs } = useObservabilityRuns()
+  // Same revisioned Runs-page read model as the Runs feature — not a second
+  // bare-array list source. Unfiltered page so palette matches recent runs.
+  const { page: runsPage } = useObservabilityRunsPage()
+  const runs = runsPage?.rows ?? []
   const { data: insightsData } = useQualityInsights()
   // Searches the newest page of experiments (server-paged); the palette doesn't
   // load the full record set.

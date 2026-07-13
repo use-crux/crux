@@ -3,13 +3,34 @@ package observability
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 )
 
-func (s *Service) Ingest(ctx context.Context, batch Batch) (err error) {
+func (s *Service) Ingest(ctx context.Context, batch Batch) error {
+	err := s.ingest(ctx, batch)
+	var conflict *recordIDConflictError
+	if err == nil || !errors.As(err, &conflict) {
+		return err
+	}
+	for _, record := range batch.Records {
+		if record.RecordID == conflict.recordID {
+			if healthErr := s.recordIngestConflictHealth(context.Background(), record); healthErr != nil {
+				return fmt.Errorf("%w; %v", err, healthErr)
+			}
+			break
+		}
+	}
+	return err
+}
+
+func (s *Service) ingest(ctx context.Context, batch Batch) (err error) {
 	ctx, cancel := s.mutationContext(ctx)
 	defer cancel()
+
+	s.mutationMu.Lock()
+	defer s.mutationMu.Unlock()
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -59,12 +80,24 @@ func (s *Service) Ingest(ctx context.Context, batch Batch) (err error) {
 			return err
 		}
 	}
+	if err := statements.reconcileAffected(ctx); err != nil {
+		return fmt.Errorf("reconcile observability run/segment lifecycle: %w", err)
+	}
+
+	affectedRunIDs := make([]string, 0, len(statements.affectedRuns))
+	for runID := range statements.affectedRuns {
+		affectedRunIDs = append(affectedRunIDs, runID)
+	}
+	revisions, err := bumpRunRevisions(ctx, tx, affectedRunIDs, s.revisionLogRetentionOrDefault())
+	if err != nil {
+		return fmt.Errorf("advance observability run revisions: %w", err)
+	}
 
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit observability ingest transaction: %w", err)
 	}
 	committed = true
-	s.publishIngestEvents(runTraceIDs, tokenChunks)
+	s.publishIngestEvents(runTraceIDs, tokenChunks, revisions)
 	return nil
 }
 
@@ -79,12 +112,18 @@ func tokenChunkRecord(record Record) (SpanEventRecord, bool) {
 	return event, event.Name == tokenChunkEventName
 }
 
-func (s *Service) publishIngestEvents(runTraceIDs map[string]string, tokenChunks []SpanEventRecord) {
+// publishIngestEvents runs only after the ingest transaction has committed,
+// so a subscriber never observes a revision or run id that references
+// projections it cannot yet query.
+func (s *Service) publishIngestEvents(runTraceIDs map[string]string, tokenChunks []SpanEventRecord, revisions map[string]int64) {
 	now := time.Now().UnixMilli()
 	for runID, traceID := range runTraceIDs {
-		payloadMap := map[string]any{"runId": runID}
+		payloadMap := map[string]any{"runId": runID, "entity": "run"}
 		if traceID != "" {
 			payloadMap["traceId"] = traceID
+		}
+		if revision, ok := revisions[runID]; ok {
+			payloadMap["revision"] = revision
 		}
 		payload, _ := json.Marshal(payloadMap)
 		s.events.Publish(Event{

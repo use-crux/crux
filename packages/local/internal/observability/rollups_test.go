@@ -24,7 +24,8 @@ func TestServiceMigratesPhase15RollupSchema(t *testing.T) {
 	} {
 		assertSQLiteColumn(t, service.db, "runs", column)
 	}
-	assertSQLiteColumn(t, service.db, "records", "seq")
+	assertSQLiteColumn(t, service.db, "records", "segment_id")
+	assertSQLiteColumn(t, service.db, "records", "segment_seq")
 
 	for _, index := range []string{
 		"idx_runs_session",
@@ -50,13 +51,13 @@ func TestServiceMaintainsRunRollupsDuringIngest(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)
 	batch := mustBatch(t,
-		`{"schemaVersion":1,"recordId":"rec_rollup_end","seq":6,"type":"run:end","runId":"run_ingest_rollups","traceId":"trace_ingest_rollups","endedAt":"2026-05-16T18:00:01.000Z","durationMs":1000,"status":"ok"}`,
-		`{"schemaVersion":1,"recordId":"rec_rollup_event","seq":4,"type":"span:event","runId":"run_ingest_rollups","traceId":"trace_ingest_rollups","spanId":"span_ingest_rollups","eventId":"evt_rollup_usage","name":"usage.observed","timestamp":"2026-05-16T18:00:00.800Z","attributes":{"inputTokens":3,"outputTokens":4,"cost":0.005}}`,
-		`{"schemaVersion":1,"recordId":"rec_rollup_start","seq":1,"type":"run:start","runId":"run_ingest_rollups","traceId":"trace_ingest_rollups","name":"rollups","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"rec_rollup_span","seq":2,"type":"span","runId":"run_ingest_rollups","traceId":"trace_ingest_rollups","spanId":"span_ingest_rollups","family":"generation","primitive":"generation.call","name":"generate","startedAt":"2026-05-16T18:00:00.100Z","endedAt":"2026-05-16T18:00:00.900Z","durationMs":800,"status":"ok","metrics":{"inputTokens":10,"outputTokens":12,"costUsd":0.02}}`,
-		`{"schemaVersion":1,"recordId":"rec_rollup_artifact","seq":3,"type":"artifact","runId":"run_ingest_rollups","traceId":"trace_ingest_rollups","spanId":"span_ingest_rollups","artifactId":"artifact_rollup","kind":"output","createdAt":"2026-05-16T18:00:00.700Z","contentType":"application/json","encoding":"reference","sizeBytes":42}`,
-		`{"schemaVersion":1,"recordId":"rec_rollup_edge","seq":5,"type":"edge","runId":"run_ingest_rollups","traceId":"trace_ingest_rollups","edgeId":"edge_rollup","edgeType":"produced","from":{"kind":"span","id":"span_ingest_rollups"},"to":{"kind":"artifact","id":"artifact_rollup"},"createdAt":"2026-05-16T18:00:00.710Z"}`,
-		`{"schemaVersion":1,"recordId":"rec_rollup_span_metrics","seq":7,"type":"span","runId":"run_ingest_rollups","traceId":"trace_ingest_rollups","spanId":"span_ingest_rollups_metrics","family":"generation","primitive":"generation.call","name":"generate metrics","startedAt":"2026-05-16T18:00:00.200Z","endedAt":"2026-05-16T18:00:00.950Z","durationMs":750,"status":"ok","metrics":{"inputTokens":10,"outputTokens":12,"costUsd":0.02}}`,
+		`{"schemaVersion":2,"recordId":"rec_rollup_end","segmentSeq":6,"type":"run:end","runId":"run_ingest_rollups","segmentId":"seg_ingest_rollups_a","traceId":"trace_ingest_rollups","endedAt":"2026-05-16T18:00:01.000Z","durationMs":1000,"status":"ok"}`,
+		`{"schemaVersion":2,"recordId":"rec_rollup_event","segmentSeq":4,"type":"span:event","runId":"run_ingest_rollups","segmentId":"seg_ingest_rollups_a","traceId":"trace_ingest_rollups","spanId":"span_ingest_rollups","eventId":"evt_rollup_usage","name":"usage.observed","timestamp":"2026-05-16T18:00:00.800Z","attributes":{"inputTokens":3,"outputTokens":4,"cost":0.005}}`,
+		`{"schemaVersion":2,"recordId":"rec_rollup_start","segmentSeq":1,"type":"run:start","runId":"run_ingest_rollups","segmentId":"seg_ingest_rollups_a","traceId":"trace_ingest_rollups","name":"rollups","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_rollup_span","segmentSeq":2,"type":"span","runId":"run_ingest_rollups","segmentId":"seg_ingest_rollups_a","traceId":"trace_ingest_rollups","spanId":"span_ingest_rollups","family":"generation","primitive":"generation.call","name":"generate","startedAt":"2026-05-16T18:00:00.100Z","endedAt":"2026-05-16T18:00:00.900Z","durationMs":800,"status":"ok","metrics":{"inputTokens":10,"outputTokens":12,"costUsd":0.02}}`,
+		`{"schemaVersion":2,"recordId":"rec_rollup_artifact","segmentSeq":3,"type":"artifact","runId":"run_ingest_rollups","segmentId":"seg_ingest_rollups_a","traceId":"trace_ingest_rollups","spanId":"span_ingest_rollups","artifactId":"artifact_rollup","kind":"output","createdAt":"2026-05-16T18:00:00.700Z","contentType":"application/json","encoding":"reference","sizeBytes":42}`,
+		`{"schemaVersion":2,"recordId":"rec_rollup_edge","segmentSeq":5,"type":"edge","runId":"run_ingest_rollups","segmentId":"seg_ingest_rollups_a","traceId":"trace_ingest_rollups","edgeId":"edge_rollup","edgeType":"produced","from":{"kind":"span","id":"span_ingest_rollups"},"to":{"kind":"artifact","id":"artifact_rollup"},"createdAt":"2026-05-16T18:00:00.710Z"}`,
+		`{"schemaVersion":2,"recordId":"rec_rollup_span_metrics","segmentSeq":7,"type":"span","runId":"run_ingest_rollups","segmentId":"seg_ingest_rollups_a","traceId":"trace_ingest_rollups","spanId":"span_ingest_rollups_metrics","family":"generation","primitive":"generation.call","name":"generate metrics","startedAt":"2026-05-16T18:00:00.200Z","endedAt":"2026-05-16T18:00:00.950Z","durationMs":750,"status":"ok","metrics":{"inputTokens":10,"outputTokens":12,"costUsd":0.02}}`,
 	)
 
 	if err := service.Ingest(ctx, batch); err != nil {
@@ -128,7 +129,7 @@ func TestServiceRollupsReserveRunRowsForOutOfOrderRecords(t *testing.T) {
 	service := newTestService(t)
 
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":1,"recordId":"rec_orphan_span","seq":1,"type":"span","runId":"run_orphan_rollup","traceId":"trace_orphan_rollup","spanId":"span_orphan_rollup","family":"generation","primitive":"generation.call","name":"generate","startedAt":"2026-05-16T18:00:00.100Z","endedAt":"2026-05-16T18:00:00.900Z","durationMs":800,"status":"ok","metrics":{"inputTokens":4,"outputTokens":5,"costUsd":0.01}}`,
+		`{"schemaVersion":2,"recordId":"rec_orphan_span","segmentSeq":1,"type":"span","runId":"run_orphan_rollup","segmentId":"seg_orphan_rollup_a","traceId":"trace_orphan_rollup","spanId":"span_orphan_rollup","family":"generation","primitive":"generation.call","name":"generate","startedAt":"2026-05-16T18:00:00.100Z","endedAt":"2026-05-16T18:00:00.900Z","durationMs":800,"status":"ok","metrics":{"inputTokens":4,"outputTokens":5,"costUsd":0.01}}`,
 	)); err != nil {
 		t.Fatal(err)
 	}

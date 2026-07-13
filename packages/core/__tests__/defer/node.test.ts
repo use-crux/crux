@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { defer } from "@use-crux/core";
 import { createNodeDeferHost } from "@use-crux/core/defer/node";
 import { classifyNodeOutcome } from "../../src/defer/node/host";
+import {
+  createInMemoryObservabilityTransport,
+  resetObservabilityRuntime,
+  setObservabilityTransport,
+} from "../../src/observability";
 
 function requestPair(): {
   readonly request: IncomingMessage;
@@ -16,6 +21,31 @@ function requestPair(): {
 describe("Node defer host", () => {
   afterEach(() => {
     vi.useRealTimers();
+    resetObservabilityRuntime();
+  });
+
+  it("flushes response-finished deferred evidence before shutdown completes", async () => {
+    const transport = createInMemoryObservabilityTransport();
+    setObservabilityTransport(transport, { scheduledDelayMs: 60_000 });
+    const host = createNodeDeferHost();
+    const listener = host.wrap((_request, _response) => {
+      defer(() => {});
+    });
+    const { request, response } = requestPair();
+
+    listener(request, response);
+    response.emit("finish");
+
+    await expect(host.shutdown()).resolves.toEqual({
+      completed: true,
+      pending: 0,
+    });
+    expect(
+      transport.records.some(
+        (record) =>
+          record.type === "span:start" && record.primitive === "defer.run",
+      ),
+    ).toBe(true);
   });
 
   it.each([

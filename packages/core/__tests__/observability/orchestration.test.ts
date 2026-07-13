@@ -66,6 +66,7 @@ describe('canonical orchestration observability', () => {
 
     const parallel = createParallel(executor)
     await parallel({
+      id: 'orchestration.test-parallel-1',
       context: { topic: 'observability' },
       agents: { research: researchAgent, critique: critiqueAgent },
     })
@@ -138,6 +139,7 @@ describe('canonical orchestration observability', () => {
     }))
 
     await pipeline({
+      id: 'orchestration.test-pipeline-1',
       context: { topic: 'observability' },
       steps: [
         { name: 'research', agent: researchAgent },
@@ -333,6 +335,7 @@ describe('canonical orchestration observability', () => {
     }))
 
     await consensus({
+      id: 'orchestration.test-consensus-1',
       agents: [researchAgent, critiqueAgent],
       input: { topic: 'observability' },
       extract: (result) => (result.output as { vote: string }).vote,
@@ -426,6 +429,7 @@ describe('canonical orchestration observability', () => {
     })
 
     await swarm({
+      id: 'orchestration.test-swarm-1',
       agents: { triage, billing },
       startAgent: 'triage',
       input: { topic: 'observability' },

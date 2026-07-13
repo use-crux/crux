@@ -16,6 +16,7 @@
 
 import { getHooks } from '../runtime/runtime'
 import { getExecutionContext } from '../runtime/execution-context'
+import type { DefinitionRef } from '../observability/contract'
 import { collectToolApprovals } from './internal/message-parsing'
 import {
   approvalDecisionKey,
@@ -46,11 +47,27 @@ interface ApprovalMetadata<TInput = unknown> {
 }
 
 const approvalMetadata = new WeakMap<object, ApprovalMetadata>()
+const middlewareDefinitionRefs = new WeakMap<object, readonly DefinitionRef[]>()
+const wrappedToolDefinitionRefs = new WeakMap<object, readonly DefinitionRef[]>()
 const handledApprovals = new Set<string>()
 
 type PartialToolExecutionOptions<TContext = never, TRuntimeContext = unknown> = Partial<
   ToolExecutionOptions<TContext, TRuntimeContext>
 >
+
+/** Associate canonical definition evidence with a middleware-created tool wrapper. @internal */
+export function withToolMiddlewareDefinitionRef(
+  middleware: ToolMiddleware,
+  definitionRef: DefinitionRef,
+): ToolMiddleware {
+  middlewareDefinitionRefs.set(middleware, [definitionRef])
+  return middleware
+}
+
+/** Read canonical contributor evidence propagated onto a wrapped tool. @internal */
+export function toolMiddlewareDefinitionRefs(tool: unknown): readonly DefinitionRef[] {
+  return tool !== null && typeof tool === 'object' ? (wrappedToolDefinitionRefs.get(tool) ?? []) : []
+}
 
 function completeExecutionOptions<TContext = never, TRuntimeContext = unknown>(
   options: PartialToolExecutionOptions<TContext, TRuntimeContext> | undefined,
@@ -220,10 +237,15 @@ export function applyToolMiddleware<TTools extends Record<string, unknown>>(
       continue
     }
 
-    wrapped[toolName] = chain.reduce<ToolLike>(
-      (current, item) => item.wrapTool(toolName, current),
-      tool,
-    )
+    wrapped[toolName] = chain.reduce<ToolLike>((current, item) => {
+      const next = item.wrapTool(toolName, current)
+      const refs = [
+        ...toolMiddlewareDefinitionRefs(current),
+        ...(middlewareDefinitionRefs.get(item) ?? []),
+      ]
+      if (refs.length > 0) wrappedToolDefinitionRefs.set(next, refs)
+      return next
+    }, tool)
   }
   return wrapped as TTools
 }

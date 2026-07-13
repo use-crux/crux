@@ -53,6 +53,22 @@ pre-1.0. Patch releases may add optional fields, diagnostics, helpers, and
 compatible behavior fixes. Host-specific integrations and adapters not covered
 by their package documentation may still be experimental.
 
+## Observability (`@use-crux/core/observability`, `@use-crux/otel`)
+
+Observability is **stable beta** for the v2 graph record contract (`schemaVersion: 2`, `runId` /
+`traceId` / `segmentId` / `segmentSeq`), the `run:start` / `run:suspend` / `run:resume` / `run:end`
+lifecycle and its explicit ownership API (`observe.openRun()`, `observe.resumeRun()`, the returned
+handle's `.suspend()` / `.end()` / `.error()`), the delivery receipt/idempotence contract, the host
+lifecycle port and its first-party Node/serverless/Workers/Convex wrappers, and `@use-crux/otel`'s
+active execution bridge and W3C propagation helpers. There is no v1 wire/storage compatibility: the
+pre-launch v2 cutover destructively removed pre-v2 local observability rows rather than carrying a
+dual-read window, so this beta line starts clean at v2.
+
+Real cross-runtime conformance (fresh-process Node, real workerd, a serverless freeze harness, and
+Convex bundle/runtime tests) backs this contract. See the current release's changeset and CHANGELOG
+for exact soak scope and known residual limitations before depending on it for a production release
+gate.
+
 ## Platform Floor
 
 Published Crux packages are ESM-only and require Node.js 22 or newer. Package

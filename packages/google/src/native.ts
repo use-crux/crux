@@ -3,8 +3,12 @@ import type {
   GenerateContentResponse,
   GoogleGenAI,
 } from "@google/genai";
-import { defineSingleTurnProviderBundle } from "@use-crux/core/adapter";
+import {
+  classifyProviderHttpError,
+  defineSingleTurnProviderBundle,
+} from "@use-crux/core/adapter";
 import type {
+  CruxProviderError,
   NativeProviderPort,
   SingleTurnProviderBundleSpec,
 } from "@use-crux/core/adapter";
@@ -32,7 +36,12 @@ import {
   googleSettings,
 } from "./request";
 import { googleResponseMeta, googleResponseText } from "./response";
-import { googleStreamCompletion, googleTextDelta } from "./stream";
+import {
+  createGoogleStreamCapture,
+  GoogleChatStream,
+  googleStreamCompletion,
+  googleTextDelta,
+} from "./stream";
 import type { GoogleExtra, GoogleRequest } from "./types";
 import { createGoogleImageOperation } from "./image-generation";
 import { createGoogleTranscriptionOperation } from "./transcription";
@@ -93,6 +102,7 @@ const google = defineSingleTurnProviderBundle({
       textDelta: googleTextDelta,
       completion: (_stream, chunks) => googleStreamCompletion(chunks),
     },
+    mapError: mapGoogleError,
     settings: googleSettings,
     outputSchema: googleOutputSchema,
     transcript: googleTranscript,
@@ -101,7 +111,7 @@ const google = defineSingleTurnProviderBundle({
     GoogleGenAI,
     GoogleRequest,
     GenerateContentResponse,
-    AsyncIterable<GenerateContentResponse>,
+    GoogleChatStream,
     GoogleExtra,
     GoogleNativeDeps,
     Content
@@ -141,16 +151,38 @@ function bindGoogle(
 ): NativeProviderPort<
   GoogleRequest,
   GenerateContentResponse,
-  AsyncIterable<GenerateContentResponse>
+  GoogleChatStream
 > {
   return {
-    call: (request) =>
-      client.models.generateContent(asGoogleGenerateContentParams(request)),
-    stream: (request) =>
-      client.models.generateContentStream(
-        asGoogleGenerateContentStreamParams(request),
+    call: (request, _mode, options) =>
+      client.models.generateContent(
+        asGoogleGenerateContentParams(
+          withAbortSignal(request, options?.signal),
+        ),
+      ),
+    stream: async (request, options) =>
+      createGoogleStreamCapture(
+        await client.models.generateContentStream(
+          asGoogleGenerateContentStreamParams(
+            withAbortSignal(request, options?.signal),
+          ),
+        ),
       ),
   };
+}
+
+/** Fold the caller's abort signal into Google's request config without mutating the caller's request. */
+function withAbortSignal(
+  request: GoogleRequest,
+  signal: AbortSignal | undefined,
+): GoogleRequest {
+  if (signal === undefined) return request;
+  return { ...request, config: { ...request.config, abortSignal: signal } };
+}
+
+/** Classify a Google GenAI SDK error into the normalized provider-error taxonomy. */
+function mapGoogleError(error: unknown): CruxProviderError | undefined {
+  return classifyProviderHttpError(error, "google");
 }
 
 /** Create a Google GenAI adapter bound to a client instance. */

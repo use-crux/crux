@@ -16,9 +16,12 @@ import {
   formatGraphCounts,
   formatLatency,
   graphCountsTitle,
+  hasReliabilityDetail,
   isLiveStatus,
   statusTone,
 } from '../lib/run-format'
+import { ReliabilityGlyph } from '@/shared/components/ReliabilityGlyph'
+import { DeliveryHealthBadge } from '@/shared/components/DeliveryHealthBadge'
 
 interface RunsTableProps {
   groups: readonly RunGroup[]
@@ -288,6 +291,12 @@ function DiagnosticsGlyph({ count, severity }: { count: number; severity?: strin
   )
 }
 
+/**
+ * Compact reliability indicator shown next to the status pill only for runs
+ * with non-trivial multi-segment/ordering/delivery state — normal
+ * single-segment runs stay visually calm (binding spec 04 §5). Plain-
+ * language detail lives in the run-detail context strip; this is a heads-up.
+ */
 function RunCell({ run, col, visibleSet }: { run: RunRow; col: ColumnId; visibleSet: ReadonlySet<ColumnId> }) {
   switch (col) {
     case 'kind':
@@ -310,6 +319,8 @@ function RunCell({ run, col, visibleSet }: { run: RunRow; col: ColumnId; visible
           <Chip tone={statusTone(run.status)} dot={!live}>
             {run.status}
           </Chip>
+          {run.deliveryHealth && <DeliveryHealthBadge status={run.deliveryHealth} />}
+          {hasReliabilityDetail(run) && <ReliabilityGlyph run={run} />}
         </span>
       )
     }

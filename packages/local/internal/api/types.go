@@ -34,6 +34,7 @@ type QualityTraceRecord struct {
 }
 
 type ObservabilityRunSummary = observability.RunSummary
+type ObservabilityRunsPage = observability.RunsResponse
 type ObservabilityGraph = observability.Graph
 type ObservabilityRunDetail = observability.RunDetail
 type ObservabilityRunDetailNode = observability.RunDetailNode

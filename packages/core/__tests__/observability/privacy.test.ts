@@ -377,6 +377,45 @@ describe('observability privacy capture policy', () => {
     )
     expect(observabilityDiagnostics().redactedRecords).toBe(2)
   })
+
+  it('bounds delivery diagnostics without retaining URLs, tokens, or payloads', async () => {
+    const snapshots: unknown[] = []
+    setObservabilityTransport(
+      {
+        send() {
+          throw new Error(
+            'https://collector.example/private Bearer secret-token OUTPUT-PRIVATE-PROMPT',
+          )
+        },
+      },
+      {
+        scheduledDelayMs: 0,
+        retryDelayMs: 0,
+        maxRetryDelayMs: 0,
+        onDiagnostics(snapshot) {
+          snapshots.push(snapshot)
+        },
+      },
+    )
+
+    observe.openRun({
+      name: 'private diagnostics',
+      rootPrimitive: 'custom.operation',
+    })
+    const result = await observe.flush()
+
+    expect(result.status).toBe('failed')
+    const serialized = JSON.stringify({
+      diagnostics: observabilityDiagnostics(),
+      snapshots,
+    })
+    expect(serialized).not.toContain('collector.example')
+    expect(serialized).not.toContain('secret-token')
+    expect(serialized).not.toContain('OUTPUT-PRIVATE-PROMPT')
+    expect(
+      observabilityDiagnostics().deliveryErrors.length,
+    ).toBeLessThanOrEqual(100)
+  })
 })
 
 const payloadStrings = [

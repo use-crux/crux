@@ -17,6 +17,7 @@ import { classifyError, shouldAttemptFallback } from "../generation/fallback";
 import { getMeta } from "../generation/result-meta";
 import { Deadline, withBudget } from "../generation/timeout";
 import { observe } from "../observability";
+import { routingDefinitionRef } from "../observability/definition-ref";
 import { FallbackExhaustedError } from "./errors";
 import { readRoutingFirstTokenAt } from "./first-token";
 import {
@@ -85,6 +86,9 @@ export async function resolveFallback<M, R>({
   const fallbackSpan = observe.openSpan({
     name: "fallback.resolve",
     primitive: "routing.fallback",
+    // The outer resolve span represents the fallback wrapper definition; the
+    // per-attempt spans below intentionally do not repeat the ref.
+    ...(options.id ? { definitionRefs: [routingDefinitionRef("fallback", options.id)] } : {}),
     attributes: {
       ...routingSpanAttributes("fallback", deadline),
       totalModels: models.length,

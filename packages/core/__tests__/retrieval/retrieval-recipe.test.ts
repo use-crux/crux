@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { fanout, retriever as makeRetriever, retrievalRecipe, retrievalStep, retrieve, rerank } from '../../src/retrieval'
+import { fanout, judgeReranker, retriever as makeRetriever, retrievalRecipe, retrievalStep, retrieve, rerank } from '../../src/retrieval'
 import type { RecipeTrace, RetrievalModel, RetrieverHit } from '../../src/retrieval'
 import { createIndexedKnowledgeStore } from '../../src/indexed-knowledge'
 import { inMemoryRecordStore } from '../../src/storage'
@@ -87,9 +87,9 @@ describe('retrievalRecipe', () => {
       retrievalRecipe({
         id: 'needs-model',
         retriever,
-        steps: [retrieve(), rerank()],
+        steps: [fanout(), retrieve()],
       }),
-    ).toThrow('Retrieval step "rerank" requires a model')
+    ).toThrow('Retrieval step "fanout" requires a model')
 
     expect(() =>
       retrievalRecipe({
@@ -273,7 +273,7 @@ describe('retrievalRecipe', () => {
       steps: [
         retrieve(),
         expandParents({ records, indexerId: 'docs' }),
-        rerank({ topK: 1 }),
+        rerank({ engine: judgeReranker({ name: 'judge', model }), topK: 1 }),
         compressToBudget({ tokens: 500 }),
       ],
     })

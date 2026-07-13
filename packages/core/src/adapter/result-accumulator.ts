@@ -33,6 +33,8 @@ export interface FinalStepInfo {
    * fabricates zeros for unmetered provider responses.
    */
   readonly usage?: TokenUsage;
+  /** Fully assembled tool calls reported by the final provider step. */
+  readonly toolCalls?: TraceMeta["toolCalls"];
   /** Provider finish reason for the final step, when reported. */
   readonly finishReason: string | undefined;
   /** Provider response id for the final step, when reported. */
@@ -118,6 +120,8 @@ export interface ResultStepFacts {
   readonly content: readonly AssistantContentPart[];
   /** Usage reported by this step, if any. */
   readonly usage?: TokenUsage;
+  /** Fully assembled tool calls reported by this step. */
+  readonly toolCalls?: TraceMeta["toolCalls"];
   /** Provider finish reason, if any. */
   readonly finishReason: string | undefined;
   /** Provider response id, if any. */
@@ -229,6 +233,7 @@ function finalStepInfo(step: ResultStepFacts | undefined): FinalStepInfo {
     content: Object.freeze([...step.content]),
     text: textFromAssistantContent(step.content),
     ...(step.usage !== undefined ? { usage: step.usage } : {}),
+    ...(step.toolCalls !== undefined ? { toolCalls: step.toolCalls } : {}),
     finishReason: step.finishReason,
     responseId: step.responseId,
     modelId: step.modelId,

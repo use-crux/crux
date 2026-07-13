@@ -22,7 +22,12 @@ pub(crate) fn composition_facts(
     }
     let kind = composition_kind(parts.callee_name)?;
     let config = parts.object_arg?;
-    let id = format!("{kind}:{}", safe_id(parts.variable_name));
+    // `id` is a required authored field on every composition primitive. Without a
+    // direct string id there is no stable canonical identity for a runtime span to
+    // join back against, so emit no composition definition rather than an
+    // anonymous one keyed to the local variable name.
+    let authored_id = direct_string_property(config, "id")?;
+    let id = format!("{kind}:{}", safe_id(&authored_id));
     let children = composition_child_definitions(context, parts, config, &id);
     let metadata_projection = composition_metadata(context, parts.callee_name, config);
     let metadata = parent_metadata(parts, kind, metadata_projection, &children);
@@ -33,7 +38,7 @@ pub(crate) fn composition_facts(
         static_index_definition(NativeDefinitionInput {
             id,
             kind,
-            name: parts.variable_name.to_string(),
+            name: authored_id,
             file: context.file,
             source: parts.source,
             snippet: parts.snippet,

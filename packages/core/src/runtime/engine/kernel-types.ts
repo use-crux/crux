@@ -158,6 +158,8 @@ export interface RuntimeSuspensionSnapshotInput {
   readonly input: JsonValue
   /** Existing label-keyed step cache. */
   readonly completedSteps: Readonly<Record<string, JsonValue>>
+  /** Serializable observability carrier for the next execution segment. */
+  readonly continuation?: JsonValue
   /** Ordered replay labels observed so far. */
   readonly fingerprint: readonly string[]
   /** Event cursors for already consumed suspend deliveries. */

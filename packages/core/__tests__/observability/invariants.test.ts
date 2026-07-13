@@ -245,6 +245,116 @@ describe('observability invariants', () => {
     })
     expect(transportArtifact).toMatchObject(subscriberArtifact)
   })
+
+  it('suspends and resumes a logical run through explicit segment owners', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+
+    const first = observe.openRun({
+      name: 'durable approval',
+      rootPrimitive: 'flow.run',
+    })
+    first.withContext(() =>
+      observe.openSpan({ name: 'before-suspend', primitive: 'flow.step' }).end(),
+    )
+    const continuation = first.suspend({
+      reason: 'await-signal',
+      attributes: { boundary: 'approval' },
+    })
+    first.end()
+
+    const resumed = observe.resumeRun(continuation, { reason: 'signal' })
+    resumed.withContext(() =>
+      observe.openSpan({ name: 'after-resume', primitive: 'flow.step' }).end(),
+    )
+    resumed.end()
+    resumed.error(new Error('ignored duplicate terminal'))
+    await observe.flush()
+
+    expect(resumed.runId).toBe(first.runId)
+    expect(resumed.traceId).toBe(first.traceId)
+    expect(resumed.segmentId).not.toBe(first.segmentId)
+    expect(transport.records.map((record) => record.type)).toEqual([
+      'run:start',
+      'span:start',
+      'span:end',
+      'run:suspend',
+      'run:resume',
+      'span:start',
+      'span:end',
+      'run:end',
+    ])
+    expect(transport.records).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'run:suspend',
+          segmentId: first.segmentId,
+          segmentSeq: 4,
+          reason: 'await-signal',
+          attributes: { boundary: 'approval' },
+        }),
+        expect.objectContaining({
+          type: 'run:resume',
+          segmentId: resumed.segmentId,
+          segmentSeq: 1,
+          previousSegmentId: first.segmentId,
+          reason: 'signal',
+        }),
+        expect.objectContaining({
+          type: 'run:end',
+          segmentId: resumed.segmentId,
+          segmentSeq: 4,
+        }),
+      ]),
+    )
+  })
+
+  it('keeps captured context lifecycle-neutral and ordinary run one-segment', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    const owner = observe.openRun({ name: 'neutral', rootPrimitive: 'custom.operation' })
+    const captured = owner.captureContext()
+
+    observe.withContext(captured, () =>
+      observe.openSpan({ name: 'context-only', primitive: 'custom.operation' }).end(),
+    )
+    await observe.flush()
+    expect(transport.records.map((record) => record.type)).toEqual([
+      'run:start',
+      'span:start',
+      'span:end',
+    ])
+    owner.end()
+    await observe.run(
+      { name: 'one segment', rootPrimitive: 'custom.operation' },
+      () => observe.event({ name: 'inside' }),
+    )
+    await observe.flush()
+
+    const ordinary = transport.records.slice(-2)
+    expect(ordinary.map((record) => record.type)).toEqual([
+      'run:start',
+      'run:end',
+    ])
+    expect(new Set(ordinary.map((record) => record.segmentId)).size).toBe(1)
+  })
+
+  it('does not reopen a locally terminal run from its continuation', () => {
+    const owner = observe.openRun({ name: 'terminal', rootPrimitive: 'flow.run' })
+    const continuation = owner.captureContinuation()
+    owner.end()
+
+    expect(() => observe.resumeRun(continuation, { reason: 'late signal' })).toThrow(
+      'Cannot resume a terminal observed run',
+    )
+  })
+
+  it('rejects empty lifecycle boundary reasons before closing an owner', () => {
+    const owner = observe.openRun({ name: 'validated', rootPrimitive: 'flow.run' })
+
+    expect(() => owner.suspend({ reason: '' })).toThrow('A suspension reason is required')
+    owner.end()
+  })
 })
 
 function hostileGetterAttributes(): CruxAttributes {

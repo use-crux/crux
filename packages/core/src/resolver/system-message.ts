@@ -18,6 +18,7 @@ import type {
   CruxContextContributionPreview,
 } from "../observability/contract";
 import type { ResolvedSystemContent } from "./contract";
+import { contextDefinitionRef } from "../observability/definition-ref";
 import {
   contextContributionKind,
   contextInjectedToolNames,
@@ -130,6 +131,12 @@ export async function buildSystemMessage(
           memoTtl: ctx.memoTtl,
           providerCache: ctx.providerCache,
         },
+        // Only authored context ids reconstruct the indexer's canonical
+        // `context:<safeId(id)>`; anonymous contexts fall back to the
+        // compile-time local name we cannot observe, so we omit the ref.
+        ...(ctx.id
+          ? { definitionRefs: [contextDefinitionRef(ctx.id)] }
+          : {}),
       },
       async () => {
         let resolvedContent: ResolvedSystemContent;

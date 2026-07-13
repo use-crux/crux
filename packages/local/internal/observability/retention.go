@@ -163,6 +163,14 @@ func (s *Service) runRetention(ctx context.Context, settings retentionSettings, 
 			_ = tx.Rollback()
 		}
 	}()
+	// Bump a tombstone revision before deleting, same as an explicit
+	// DeleteRuns call: retention runs in the background with no synchronous
+	// caller to notify, so this is what lets a client's next `/runs/delta`
+	// catch-up (or, if it's still watching, the next unrelated WS-triggered
+	// catch-up) discover the run is gone instead of caching it forever.
+	if _, err := bumpRunRevisions(ctx, tx, deleteIDs, s.revisionLogRetentionOrDefault()); err != nil {
+		return 0, fmt.Errorf("advance observability revision for retained-out runs: %w", err)
+	}
 	if err := deleteRunRows(ctx, tx, deleteIDs); err != nil {
 		return 0, err
 	}

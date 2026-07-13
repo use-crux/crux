@@ -31,6 +31,7 @@ describe('consensus', () => {
     const consensus = createConsensus(executor)
 
     const result = await consensus({
+      id: 'consensus.test-consensus-1',
       agents: [classifier, classifier, classifier],
       input: { text: 'refund request' },
       extract: (r) => r.output.category,
@@ -47,6 +48,7 @@ describe('consensus', () => {
     const consensus = createConsensus(executor)
 
     const result = await consensus({
+      id: 'consensus.test-consensus-2',
       agents: [classifier, classifier, classifier],
       input: { text: 'test' },
       extract: (r) => r.output.category,
@@ -62,6 +64,7 @@ describe('consensus', () => {
     const consensus = createConsensus(executor)
 
     const result = await consensus({
+      id: 'consensus.test-consensus-3',
       agents: [classifier, classifier, classifier],
       input: { text: 'test' },
       extract: (r) => r.output.category,
@@ -79,6 +82,7 @@ describe('consensus', () => {
 
     await expect(
       consensus({
+        id: 'consensus.test-consensus-4',
         agents: [classifier, classifier, classifier],
         input: { text: 'test' },
         extract: (r) => r.output.category,
@@ -92,6 +96,7 @@ describe('consensus', () => {
     const consensus = createConsensus(executor)
 
     const result = await consensus({
+      id: 'consensus.test-consensus-5',
       agents: [classifier, classifier, classifier],
       input: { text: 'test' },
       extract: (r) => r.output.category,
@@ -107,6 +112,7 @@ describe('consensus', () => {
 
     await expect(
       consensus({
+        id: 'consensus.test-consensus-6',
         agents: [classifier, classifier, classifier],
         input: { text: 'test' },
         extract: (r) => r.output.category,
@@ -121,6 +127,7 @@ describe('consensus', () => {
 
     await expect(
       consensus({
+        id: 'consensus.test-consensus-7',
         agents: [classifier, classifier],
         input: { text: 'test' },
         extract: (r) => r.output.category,
@@ -133,6 +140,7 @@ describe('consensus', () => {
     const consensus = createConsensus(executor)
 
     const result = await consensus({
+      id: 'consensus.test-consensus-8',
       agents: [classifier, classifier],
       input: { text: 'test' },
       extract: (r) => r.output.category,

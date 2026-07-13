@@ -17,6 +17,7 @@ import type {
   StreamHandle,
   ToolResultEntry,
 } from "./types";
+import type { CruxProviderError } from "./normalized-outcome";
 
 // ─────────────────────────────────────────────────────────────────
 // AdapterSpec Interface
@@ -77,6 +78,15 @@ export interface AdapterSpec<
 
   /** Map canonical GenerationSettings to provider-native field names. */
   mapSettings(settings: GenerationSettings): Record<string, unknown>;
+
+  /**
+   * Classify a thrown provider SDK error into the normalized taxonomy.
+   *
+   * Returning `undefined` defers to core's generic classification
+   * (timeout/abort/provider-error). Providers implement this to recognize
+   * their own rate-limit, invalid-request, refusal, and server errors.
+   */
+  mapError?(error: unknown): CruxProviderError | undefined;
 
   /** Post-process z.toJSONSchema() output for this provider (optional). */
   sanitizeToolSchema?(schema: Record<string, unknown>): Record<string, unknown>;

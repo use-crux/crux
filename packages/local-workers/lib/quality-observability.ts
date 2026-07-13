@@ -21,7 +21,7 @@ export interface QualityRunnerObservabilityCore<TTransport> {
 export interface QualityRunnerFlushCore {
   /** Core observability facade used to flush pending graph delivery. */
   observe: {
-    flush(options?: { readonly timeoutMs?: number }): Promise<boolean>
+    flush(options?: { readonly timeoutMs?: number }): Promise<unknown>
   }
 }
 

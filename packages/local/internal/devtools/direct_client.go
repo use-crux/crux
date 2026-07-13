@@ -100,12 +100,13 @@ func (c *DirectClient) getObservabilityJSON(ctx context.Context, path string, ta
 		return fmt.Errorf("observability service not configured")
 	}
 	route, limit := splitQuery(path)
-	if route == "/api/observability/runs" {
-		runs, err := c.observability.RunsWithOptions(ctx, observability.RunListOptions{Limit: limit})
+	// Match the HTTP surface: revisioned page envelope only (no bare array list).
+	if route == "/api/observability/runs/page" {
+		page, err := c.observability.RunsPage(ctx, observability.RunListOptions{Limit: limit})
 		if err != nil {
 			return err
 		}
-		return assignJSON(target, runs)
+		return assignJSON(target, page)
 	}
 	if family, ok := strings.CutPrefix(path, "/api/observability/resources/"); ok {
 		activity, err := c.observability.ResourceActivity(ctx, family)

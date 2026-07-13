@@ -135,6 +135,7 @@ describe('Quality runner observability operations', () => {
         observability: {
           runId: 'run_aaaaaaaaaaaaaaaaaaaaaaaa',
           traceId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+          segmentId: 'seg_aaaaaaaaaaaaaaaaaaaaaaaa',
         },
         cells: [runnerCompareCell('case-1', 1, true)],
       },
@@ -144,6 +145,7 @@ describe('Quality runner observability operations', () => {
         observability: {
           runId: 'run_bbbbbbbbbbbbbbbbbbbbbbbb',
           traceId: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          segmentId: 'seg_bbbbbbbbbbbbbbbbbbbbbbbb',
         },
         gates: { passed: false, informational: false, results: [] },
         passed: false,
@@ -156,6 +158,7 @@ describe('Quality runner observability operations', () => {
     const report = artifactRecords(transport.records).find((entry) => entry.kind === 'comparison.report')
     expect(report).toMatchObject({
       runId: 'run_bbbbbbbbbbbbbbbbbbbbbbbb',
+      segmentId: 'seg_bbbbbbbbbbbbbbbbbbbbbbbb',
       kind: 'comparison.report',
       preview: {
         kind: 'comparison.report',

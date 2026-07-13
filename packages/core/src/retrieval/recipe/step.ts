@@ -97,6 +97,7 @@ interface RetrieveStepConfig {
 
 const retrieveStepConfigs = new WeakMap<RetrievalStep, RetrieveStepConfig>()
 const internalStepIds = new WeakSet<RetrievalStep>()
+const rerankerDefinitionIds = new WeakMap<RetrievalStep, string>()
 
 /** Create a typed retrieval step. */
 export function retrievalStep<const TIn extends StepPhase, const TOut extends StepPhase>(
@@ -132,4 +133,18 @@ export function getRetrieveStepConfig(step: RetrievalStep): RetrieveStepConfig |
 /** Capture built-in retrieve-step options. Internal. */
 export function setRetrieveStepConfig(step: RetrievalStep, config: RetrieveStepConfig): void {
   retrieveStepConfigs.set(step, config)
+}
+
+/**
+ * Record the authored `rag.reranker` definition id (the engine name) a rerank
+ * step invokes, so the runtime `retrieval.step` span can attach a canonical
+ * `invoked-reranker` DefinitionRef. Internal.
+ */
+export function setRerankerDefinitionId(step: RetrievalStep, rerankerId: string): void {
+  rerankerDefinitionIds.set(step, rerankerId)
+}
+
+/** Return the authored reranker definition id for a rerank step. Internal. */
+export function getRerankerDefinitionId(step: RetrievalStep): string | undefined {
+  return rerankerDefinitionIds.get(step)
 }

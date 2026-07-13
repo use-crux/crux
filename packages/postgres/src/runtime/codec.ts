@@ -79,14 +79,11 @@ export function decodeFlowSnapshot(row: JsonRecord): FlowSnapshot {
           >,
         )
       : undefined,
-    scheduledWork:
-      (row.scheduled_work ?? row.scheduled_effects)
-        ? Object.freeze(
-            (row.scheduled_work ?? row.scheduled_effects) as NonNullable<
-              FlowSnapshot['scheduledWork']
-            >,
-          )
-        : undefined,
+    scheduledWork: row.scheduled_work
+      ? Object.freeze(
+          row.scheduled_work as NonNullable<FlowSnapshot['scheduledWork']>,
+        )
+      : undefined,
     updatedAt: new Date(row.updated_at as string),
   })
 }

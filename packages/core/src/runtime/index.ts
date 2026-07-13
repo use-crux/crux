@@ -52,7 +52,15 @@ export {
   setHooks,
   updateHooks,
 } from './runtime'
-export type { CruxHooks, HooksLayerToken } from './runtime'
+export type {
+  CruxHooks,
+  HooksLayerToken,
+  SpanActivationHook,
+  TelemetryFlushHook,
+  TelemetryFlushHookOptions,
+  TelemetryFlushHookResult,
+  TelemetryResumeAttributesHook,
+} from './runtime'
 
 // ─────────────────────────────────────────────────────────────────
 // Plugins

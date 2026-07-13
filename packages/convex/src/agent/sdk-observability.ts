@@ -114,6 +114,7 @@ export async function observeConvexAgentTextStream<T>(
         return await activeStep.span.withContext(async () => {
           await flushObservability({
             timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS,
+            terminal: false,
           })
           if (isPrepareStepCallback(userPrepareStep)) {
             return await userPrepareStep(options)
@@ -188,6 +189,7 @@ export async function observeConvexAgentTextStream<T>(
       emitConvexAgentMessagesArtifact(args, 'call-args')
       return flushObservability({
         timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS,
+        terminal: false,
       })
     })
     streamTiming.markStarted()
@@ -239,6 +241,7 @@ export async function observeConvexAgentGeneration<T>(
       async () => {
         await flushObservability({
           timeoutMs: CONVEX_AGENT_START_FLUSH_TIMEOUT_MS,
+          terminal: false,
         })
         emitConvexAgentMessagesArtifact(args, 'call-args')
         const result = await fn()

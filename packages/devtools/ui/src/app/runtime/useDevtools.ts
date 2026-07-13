@@ -29,7 +29,7 @@ import type {
 } from '@/types'
 import { useDevtoolsConnection } from './useDevtoolsConnection'
 import { qk } from '@/shared/query/queryClient'
-import { observabilityEventIds } from './observabilityEvents'
+import { isBlanketInvalidatableObservabilityQueryKey, observabilityEventIds } from './observabilityEvents'
 import { applyIndexDelta, normalizeProjectIndexData, type IndexDeltaMessage } from './indexDelta'
 
 export type { DevtoolsState } from './devtoolsReducer'
@@ -69,11 +69,17 @@ export function useDevtools(): void {
               detail: (msg as { event?: unknown }).event,
             }),
           )
-          // Any observability mutation invalidates canonical graph views.
-          // The run detail screen still reads the legacy quality projection,
-          // so also invalidate that exact run immediately instead of waiting
-          // for the compatibility quality event path.
-          void queryClient.invalidateQueries({ queryKey: qk.observability.all })
+          // Any observability mutation invalidates detail/resource
+          // observability views (run detail, span events, resource activity,
+          // definition activity) — but NOT the revisioned `runs-page` slice,
+          // which owns its own revision-gated invalidation and bounded
+          // catch-up (`useObservabilityRunsPage`); see
+          // `isBlanketInvalidatableObservabilityQueryKey`. Also invalidate
+          // the matching Quality run projection so run-detail annotations
+          // refresh without waiting on a separate quality event.
+          void queryClient.invalidateQueries({
+            predicate: (query) => isBlanketInvalidatableObservabilityQueryKey(query.queryKey),
+          })
           for (const id of ids) {
             void queryClient.invalidateQueries({ queryKey: qk.observability.run(id) })
             void queryClient.invalidateQueries({ queryKey: qk.quality.run(id) })

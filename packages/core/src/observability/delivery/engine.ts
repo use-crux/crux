@@ -1,44 +1,31 @@
 import type { CruxGraphRecord } from '../contract'
 import type { CruxObservabilityTransport } from '../transport'
+import { queuedRecordBytes } from './bytes'
+import { sendBatchInChunks } from './chunks'
+import { drainDeliveryState } from './drain'
 import {
-  defaultDeliveryOptions,
   normalizeDeliveryOptions,
   type NormalizedObservabilityDeliveryOptions,
   type ObservabilityDeliveryOptions,
   type ObservabilityFlushOptions,
+  type ObservabilityFlushResult,
 } from './options'
-import { sendBatchInChunks } from './chunks'
-import { runTransportHook, type TransportHook } from './hooks'
+import { clearDeliveryRetryTimer, scheduleDeliveryRetry } from './retry'
+import { activeHostLifecycle } from './host-scope'
 import {
-  clearDeliveryRetryTimer,
-  scheduleDeliveryRetry,
-  type DeliveryRetryState,
-} from './retry'
-import { deliveryTimeoutSignal } from './timeout'
+  deliveryDiagnosticsSnapshot,
+  initialDeliveryState,
+  notifySupersededChange,
+  publishDeliveryDiagnostics,
+  recordDeliveryError,
+  sanitizeTransportError,
+  sourceHealthSnapshot,
+  type DeliveryDiagnostic,
+  type DeliveryEngineDiagnostics,
+  type DeliveryState,
+} from './state'
 
-const DELIVERY_ERROR_RING_CAP = 100
-const FLUSH_FAILURE_RETRY_DELAY_MS = 25
-export interface DeliveryEngineDiagnostics {
-  readonly pendingDeliveries: number
-  readonly droppedRecords: number
-  readonly deliveryErrorCount: number
-  readonly deliveryErrors: readonly unknown[]
-}
-
-interface DeliveryState {
-  transport: CruxObservabilityTransport | undefined
-  options: NormalizedObservabilityDeliveryOptions
-  readonly pendingDeliveries: Set<Promise<void>>
-  pendingRecordCount: number
-  readonly deliveryErrors: unknown[]
-  readonly queuedRecords: CruxGraphRecord[]
-  retryTimer: DeliveryRetryState['retryTimer']
-  dispatchTimer: ReturnType<typeof setTimeout> | undefined
-  retryAttempt: number
-  droppedRecords: number
-  deliveryFailureCount: number
-  epoch: number
-}
+export type { DeliveryDiagnostic, DeliveryEngineDiagnostics } from './state'
 
 export interface DeliveryEngine {
   currentTransport(): CruxObservabilityTransport | undefined
@@ -47,39 +34,17 @@ export interface DeliveryEngine {
   configureDelivery(options: ObservabilityDeliveryOptions | undefined): void
   enqueue(record: CruxGraphRecord): void
   diagnostics(): DeliveryEngineDiagnostics
-  errors(): readonly unknown[]
+  errors(): readonly DeliveryDiagnostic[]
   reset(): void
-  flush(options?: ObservabilityFlushOptions): Promise<boolean>
-  shutdown(options?: ObservabilityFlushOptions): Promise<boolean>
+  flush(options?: ObservabilityFlushOptions): Promise<ObservabilityFlushResult>
+  shutdown(options?: ObservabilityFlushOptions): Promise<ObservabilityFlushResult>
 }
 
-/**
- * Create an isolated observability delivery engine.
- *
- * The engine keeps asynchronous transport failures behind a closure boundary:
- * callers enqueue validated records, configure the active transport, and ask
- * for flush/shutdown. Queue trimming, synchronous transport throw containment,
- * and drop accounting are handled without exposing transport failures to code
- * that emitted the records.
- */
+/** Create an isolated, bounded, receipt-aware delivery engine. */
 export function createDeliveryEngine(): DeliveryEngine {
-  const state: DeliveryState = {
-    transport: undefined,
-    options: defaultDeliveryOptions(),
-    pendingDeliveries: new Set<Promise<void>>(),
-    pendingRecordCount: 0,
-    deliveryErrors: [],
-    queuedRecords: [],
-    retryTimer: undefined,
-    dispatchTimer: undefined,
-    retryAttempt: 0,
-    droppedRecords: 0,
-    deliveryFailureCount: 0,
-    epoch: 0,
-  }
-
+  const state = initialDeliveryState()
   const scheduleDispatch = (): void => {
-    if (state.dispatchTimer) return
+    if (state.dispatchTimer || state.retryTimer || state.queue.length === 0) return
     if (state.options.scheduledDelayMs === 0) {
       dispatchQueuedRecords(state, scheduleDispatch)
       return
@@ -90,261 +55,250 @@ export function createDeliveryEngine(): DeliveryEngine {
     }, state.options.scheduledDelayMs)
     unrefTimer(state.dispatchTimer)
   }
+  const dispatch = () => dispatchQueuedRecords(state, scheduleDispatch)
 
   return {
-    currentTransport() {
-      return state.transport
-    },
-
+    currentTransport: () => state.transport,
     setTransport(transport) {
       advanceEpoch(state)
       state.transport = transport
+      state.accepting = true
     },
-
-    deliveryOptions() {
-      return state.options
-    },
-
+    deliveryOptions: () => state.options,
     configureDelivery(options) {
       state.options = normalizeDeliveryOptions(options)
-      trimQueuedRecordsToBound(state)
+      trimQueue(state)
+      publishDeliveryDiagnostics(state)
     },
-
     enqueue(record) {
-      if (!state.transport) return
-
-      state.queuedRecords.push(record)
-      trimQueuedRecordsToBound(state)
+      if (!state.transport || !state.accepting) return
+      const item = { record, bytes: queuedRecordBytes(record) }
+      state.queue.push(item)
+      state.queuedBytes += item.bytes
+      trimQueue(state)
       scheduleDispatch()
     },
-
-    diagnostics() {
-      return {
-        pendingDeliveries: state.pendingDeliveries.size,
-        droppedRecords: state.droppedRecords,
-        deliveryErrorCount: state.deliveryFailureCount,
-        deliveryErrors: state.deliveryErrors,
-      }
-    },
-
-    errors() {
-      return state.deliveryErrors
-    },
-
-    reset() {
-      resetDeliveryState(state)
-    },
-
-    async flush(options: ObservabilityFlushOptions = {}) {
-      return await flushDeliveryState(state, scheduleDispatch, 'flush', options)
-    },
-
-    async shutdown(options: ObservabilityFlushOptions = {}) {
-      const flushed = await flushDeliveryState(
-        state,
-        scheduleDispatch,
-        'shutdown',
-        options,
-      )
-      state.transport = undefined
-      return flushed
+    diagnostics: () => deliveryDiagnosticsSnapshot(state),
+    errors: () => state.errors,
+    reset: () => resetState(state),
+    flush: (options = {}) => drainDeliveryState(state, dispatch, 'flush', options),
+    async shutdown(options = {}) {
+      state.accepting = false
+      const result = await drainDeliveryState(state, dispatch, 'shutdown', options)
+      if (result.status === 'drained') state.transport = undefined
+      return result
     },
   }
 }
 
-function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
-  const maybeUnref = (timer as { unref?: unknown }).unref
-  if (typeof maybeUnref === 'function') maybeUnref.call(timer)
-}
+function dispatchQueuedRecords(state: DeliveryState, scheduleDispatch: () => void): void {
+  clearDispatchTimer(state)
+  if (!state.transport) return dropQueueForReconfiguration(state)
+  if (state.queue.length === 0 || state.pendingDeliveries.size >= state.options.maxPendingDeliveries) {
+    return
+  }
 
-function dispatchQueuedRecords(
-  state: DeliveryState,
-  scheduleDispatch: () => void,
-): void {
-  clearScheduledDispatch(state)
+  const items = state.queue.splice(0, Math.min(state.queue.length, state.options.maxBatchSize))
+  const bytes = items.reduce((sum, item) => sum + item.bytes, 0)
+  state.queuedBytes -= bytes
+  const records = items.map((item) => item.record)
+  const epoch = state.epoch
+  const generation = state.generation
   const transport = state.transport
-  if (!transport) {
-    dropQueuedRecords(state)
-    return
-  }
-  if (state.queuedRecords.length === 0) return
-  if (state.pendingDeliveries.size >= state.options.maxPendingDeliveries) return
-
-  const batch = state.queuedRecords.splice(
-    0,
-    Math.min(state.queuedRecords.length, state.options.maxBatchSize),
-  )
-  const capturedEpoch = state.epoch
-
-  let failed = false
   let delivery!: Promise<void>
-  const releasePendingBatch = () => {
-    if (state.pendingDeliveries.delete(delivery))
-      state.pendingRecordCount -= batch.length
+  const release = () => {
+    // `epoch` (not Set membership) decides the bucket: it stays valid even
+    // once this delivery's promise reference has been pruned from
+    // `supersededDeliveries` to keep that set bounded, so the aggregate
+    // counters are still decremented exactly once.
+    if (state.epoch === epoch) {
+      state.pendingDeliveries.delete(delivery)
+      state.pendingRecordCount -= records.length
+      state.pendingBytes -= bytes
+      return
+    }
+    state.supersededDeliveries.delete(delivery)
+    state.supersededRecordCount -= records.length
+    state.supersededBytes -= bytes
+    notifySupersededChange(state)
   }
-  delivery = sendBatchInChunks(transport, batch)
+  delivery = sendBatchInChunks(transport, records, {
+    sourceHealth: sourceHealthSnapshot(state),
+  })
     .then((result) => {
-      if (result.poisonDropped > 0) state.droppedRecords += result.poisonDropped
-      if (result.ok) return
-      failed = true
-      recordDeliveryError(state, result.error)
-      releasePendingBatch()
-      handleDeliveryFailure(
-        state,
-        result.failedRecords,
-        capturedEpoch,
-        scheduleDispatch,
-      )
-    })
-    .finally(() => {
-      if (!failed) releasePendingBatch()
-      if (!failed) {
-        state.retryAttempt = 0
-        if (state.queuedRecords.length > 0) scheduleDispatch()
+      // A full runtime reset happened after this delivery was dispatched.
+      // The state object was reused (not replaced), so without this guard a
+      // late settlement would still mutate the fresh runtime's counters.
+      if (state.generation !== generation) return
+      release()
+      if (state.epoch !== epoch) {
+        // The transport that produced this receipt has been replaced, but
+        // what it actually decided is still truthful: accepted/rejected
+        // records were genuinely delivered/refused by it. Only records it
+        // left retryable are truly lost to reconfiguration, because they
+        // will not be requeued against a transport they were never sent to.
+        state.accepted += result.accepted.length
+        state.permanentlyRejected += result.permanentlyRejected.length
+        state.reconfiguredDropped += result.retryable.length
+        publishDeliveryDiagnostics(state)
+        return
       }
+      state.accepted += result.accepted.length
+      state.permanentlyRejected += result.permanentlyRejected.length
+      if (result.permanentlyRejected.length > 0) {
+        recordDeliveryError(
+          state,
+          'permanent_rejection',
+          'collector permanently rejected observability records',
+          result.permanentlyRejected,
+        )
+      }
+      if (result.retryable.length > 0) {
+        state.retried += result.retryable.length
+        requeueFront(state, result.retryable)
+        clearDispatchTimer(state)
+        recordDeliveryError(state, 'delivery_retry', 'observability records will be retried', result.retryable)
+        scheduleDeliveryRetry(
+          state,
+          state.options,
+          () => dispatchQueuedRecords(state, scheduleDispatch),
+          result.retryAfterMs,
+          (wait) => deferToHostLifecycle(state, wait),
+        )
+        return
+      }
+      state.retryAttempt = 0
+      publishDeliveryDiagnostics(state)
+      if (state.queue.length > 0) scheduleDispatch()
     })
-
+    .catch((error: unknown) => {
+      if (state.generation !== generation) return
+      release()
+      if (state.epoch !== epoch) {
+        // This stale transport never produced a receipt for these records;
+        // reconfiguration truthfully drops them since they will not be
+        // requeued against a transport they were never sent to.
+        state.reconfiguredDropped += records.length
+        publishDeliveryDiagnostics(state)
+        return
+      }
+      state.retried += records.length
+      requeueFront(state, records)
+      recordDeliveryError(state, 'transport_error', sanitizeTransportError(error), records)
+      scheduleDeliveryRetry(
+        state,
+        state.options,
+        () => dispatchQueuedRecords(state, scheduleDispatch),
+        undefined,
+        (wait) => deferToHostLifecycle(state, wait),
+      )
+      publishDeliveryDiagnostics(state)
+    })
   state.pendingDeliveries.add(delivery)
-  state.pendingRecordCount += batch.length
-  trimQueuedRecordsToBound(state)
+  state.pendingRecordCount += records.length
+  state.pendingBytes += bytes
+  trimQueue(state)
+  deferToHostLifecycle(state, delivery)
 }
 
-function handleDeliveryFailure(
-  state: DeliveryState,
-  batch: readonly CruxGraphRecord[],
-  capturedEpoch: number,
-  scheduleDispatch: () => void,
-): void {
-  if (batch.length === 0) return
-  if (state.epoch !== capturedEpoch) {
-    state.droppedRecords += batch.length
-    return
+function deferToHostLifecycle(state: DeliveryState, delivery: Promise<void>): void {
+  try {
+    const hostLifecycle = activeHostLifecycle() ?? state.options.hostLifecycle
+    hostLifecycle?.defer?.(delivery)
+  } catch {
+    // Host defer failures never affect delivery; the promise still settles on its own.
   }
-  requeueFront(state, batch)
-  scheduleDeliveryRetry(state, state.options, () =>
-    dispatchQueuedRecords(state, scheduleDispatch),
-  )
 }
 
-function requeueFront(
-  state: DeliveryState,
-  records: readonly CruxGraphRecord[],
-): void {
-  state.queuedRecords.unshift(...records)
-  trimQueuedRecordsToBound(state)
+function requeueFront(state: DeliveryState, records: readonly CruxGraphRecord[]): void {
+  const items = records.map((record) => ({
+    record,
+    bytes: queuedRecordBytes(record),
+  }))
+  state.queue.unshift(...items)
+  state.queuedBytes += items.reduce((sum, item) => sum + item.bytes, 0)
+  trimQueue(state)
 }
 
-function trimQueuedRecordsToBound(state: DeliveryState): void {
+function trimQueue(state: DeliveryState): void {
+  let droppedAny = false
   while (
-    state.pendingRecordCount + state.queuedRecords.length >
-    state.options.maxQueuedRecords
+    state.pendingRecordCount + state.queue.length > state.options.maxQueuedRecords ||
+    state.pendingBytes + state.queuedBytes > state.options.maxQueuedBytes
   ) {
-    if (state.queuedRecords.shift() === undefined) return
-    state.droppedRecords += 1
+    const dropped = state.queue.shift()
+    if (!dropped) return
+    state.queuedBytes -= dropped.bytes
+    state.overflowDropped += 1
+    state.overflowDroppedBytes += dropped.bytes
+    droppedAny = true
   }
-}
-
-function dropQueuedRecords(state: DeliveryState): void {
-  state.droppedRecords += state.queuedRecords.length
-  state.queuedRecords.length = 0
-}
-
-function recordDeliveryError(state: DeliveryState, error: unknown): void {
-  state.deliveryFailureCount += 1
-  state.deliveryErrors.push(error)
-  if (state.deliveryErrors.length > DELIVERY_ERROR_RING_CAP) {
-    state.deliveryErrors.splice(
-      0,
-      state.deliveryErrors.length - DELIVERY_ERROR_RING_CAP,
-    )
-  }
-}
-
-function resetDeliveryState(state: DeliveryState): void {
-  const droppedOnReset = state.queuedRecords.length
-  advanceEpoch(state)
-  clearScheduledDispatch(state)
-  state.queuedRecords.length = 0
-  state.pendingDeliveries.clear()
-  state.pendingRecordCount = 0
-  state.deliveryErrors.length = 0
-  state.droppedRecords = droppedOnReset
-  state.deliveryFailureCount = 0
-  state.retryAttempt = 0
-  state.transport = undefined
-  state.options = defaultDeliveryOptions()
+  if (droppedAny) publishDeliveryDiagnostics(state)
 }
 
 function advanceEpoch(state: DeliveryState): void {
+  // In-flight deliveries from the superseded epoch are not dropped here and
+  // are not silently forgotten either: they move to `supersededDeliveries`,
+  // tracked apart from the new epoch's `pendingDeliveries` (so they never
+  // block the new transport's own maxPendingDeliveries budget) but still
+  // counted in `remainingRecords` and awaited by drain until each settles on
+  // its own and truthfully accounts itself (see `dispatchQueuedRecords`).
+  //
+  // The retained promise references are bounded by `maxPendingDeliveries` -
+  // the same cap that already bounds one epoch's own concurrent in-flight
+  // sends - so repeated reconfigurations against hung transports cannot grow
+  // this set without bound. Aggregate counters below stay exact regardless;
+  // `release()` decrements them by comparing captured epoch, not Set
+  // membership, so a pruned delivery is still accounted for truthfully once
+  // it settles (see `dispatchQueuedRecords`).
+  for (const delivery of state.pendingDeliveries) {
+    if (state.supersededDeliveries.size < state.options.maxPendingDeliveries) {
+      state.supersededDeliveries.add(delivery)
+    }
+  }
+  state.supersededRecordCount += state.pendingRecordCount
+  state.supersededBytes += state.pendingBytes
+  state.pendingDeliveries.clear()
+  state.pendingRecordCount = 0
+  state.pendingBytes = 0
   state.epoch += 1
   clearDeliveryRetryTimer(state)
-  clearScheduledDispatch(state)
+  clearDispatchTimer(state)
 }
 
-function clearScheduledDispatch(state: DeliveryState): void {
+function resetState(state: DeliveryState): void {
+  // A full runtime reset (unlike a transport reconfiguration) intentionally
+  // tears everything down, including any still-unsettled superseded sends;
+  // `fresh` below drops their tracking. Only the never-sent queue is counted
+  // here, matching prior reset accounting. Bumping `generation` makes any
+  // stale delivery that later settles a no-op against the fresh runtime
+  // reused in this same `state` object (see `dispatchQueuedRecords`).
+  const droppedOnReset = state.queue.length
+  const nextGeneration = state.generation + 1
+  advanceEpoch(state)
+  const fresh = initialDeliveryState()
+  Object.assign(state, fresh, {
+    sourceId: state.sourceId,
+    epoch: state.epoch,
+    generation: nextGeneration,
+    reconfiguredDropped: droppedOnReset,
+  })
+}
+
+function dropQueueForReconfiguration(state: DeliveryState): void {
+  state.reconfiguredDropped += state.queue.length
+  state.queue.length = 0
+  state.queuedBytes = 0
+  publishDeliveryDiagnostics(state)
+}
+
+function clearDispatchTimer(state: DeliveryState): void {
   if (!state.dispatchTimer) return
   clearTimeout(state.dispatchTimer)
   state.dispatchTimer = undefined
 }
 
-async function flushDeliveryState(
-  state: DeliveryState,
-  scheduleDispatch: () => void,
-  hook: TransportHook,
-  options: ObservabilityFlushOptions,
-): Promise<boolean> {
-  const deadline =
-    options.timeoutMs === undefined ? undefined : Date.now() + options.timeoutMs
-  let failuresThisFlush = 0
-
-  while (
-    state.queuedRecords.length > 0 ||
-    state.dispatchTimer ||
-    state.pendingDeliveries.size > 0
-  ) {
-    const failuresBefore = state.deliveryFailureCount
-    if (state.queuedRecords.length > 0 || state.dispatchTimer) {
-      dispatchQueuedRecords(state, scheduleDispatch)
-    }
-
-    const pending = Promise.all([...state.pendingDeliveries]).then(() => true)
-    const remaining =
-      deadline === undefined ? undefined : Math.max(0, deadline - Date.now())
-    let completed: boolean
-    if (remaining === undefined) {
-      completed = await pending
-    } else {
-      const timeout = deliveryTimeoutSignal(remaining)
-      try {
-        completed = await Promise.race([pending, timeout.promise])
-      } finally {
-        timeout.cancel()
-      }
-    }
-    if (!completed) return false
-
-    if (
-      state.deliveryFailureCount > failuresBefore &&
-      state.queuedRecords.length > 0
-    ) {
-      failuresThisFlush += state.deliveryFailureCount - failuresBefore
-      if (deadline === undefined && failuresThisFlush > 3) return false
-      const remainingAfterFailure =
-        deadline === undefined ? undefined : deadline - Date.now()
-      if (remainingAfterFailure !== undefined && remainingAfterFailure <= 0)
-        return false
-      await new Promise((resolve) =>
-        setTimeout(
-          resolve,
-          Math.min(
-            FLUSH_FAILURE_RETRY_DELAY_MS,
-            remainingAfterFailure ?? FLUSH_FAILURE_RETRY_DELAY_MS,
-          ),
-        ),
-      )
-    }
-  }
-  const hookError = await runTransportHook(state.transport, hook)
-  if (hookError !== undefined) recordDeliveryError(state, hookError)
-  return hookError === undefined
+function unrefTimer(timer: ReturnType<typeof setTimeout>): void {
+  const maybeUnref = (timer as { unref?: unknown }).unref
+  if (typeof maybeUnref === 'function') maybeUnref.call(timer)
 }

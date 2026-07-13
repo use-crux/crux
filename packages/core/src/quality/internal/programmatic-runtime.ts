@@ -111,8 +111,10 @@ export async function ensureProgrammaticObservability(): Promise<boolean> {
   const serverUrl = await resolveProgrammaticDevtoolsUrl()
   if (serverUrl === undefined) return false
 
-  setObservabilityTransport(createHttpObservabilityTransport({ serverUrl, timeoutMs: 1_000, retryAttempts: 1 }), {
+  setObservabilityTransport(createHttpObservabilityTransport({ serverUrl, timeoutMs: 1_000 }), {
     maxPendingDeliveries: 1,
+    retryDelayMs: 100,
+    maxRetryDelayMs: 100,
   })
   return true
 }

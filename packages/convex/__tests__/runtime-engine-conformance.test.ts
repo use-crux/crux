@@ -382,61 +382,6 @@ runStoreAdapterTests({
   },
 })
 
-it('reads legacy scheduledEffects documents and writes scheduledWork only', async () => {
-  const t = convexTest({ schema, modules })
-  await t.run(async (ctx) => {
-    await ctx.db.insert('runtimeSnapshots', {
-      flowId: 'flow_legacy',
-      workId: 'work_parent',
-      targetId: 'review',
-      namespace: 'tenant-a',
-      status: 'suspended',
-      input: {},
-      completedSteps: {},
-      fingerprint: [],
-      pendingSuspends: [],
-      scheduledEffects: { 'defer:1': { workId: 'work_child' } },
-      updatedAt: 1,
-    })
-  })
-  const ctx: ConvexCtxPort = {
-    runQuery: async <TResult>() => undefined as TResult,
-    runMutation: async <TResult>(ref: unknown, args: Record<string, unknown>) =>
-      t.mutation(
-        ref as FunctionReference<
-          'mutation',
-          'public',
-          Record<string, unknown>,
-          TResult
-        >,
-        args,
-      ),
-  }
-  const store = convexRuntimeStore({ ctx, component: runtimeComponent() })
-
-  await expect(
-    store.state.getSnapshot('flow_legacy' as FlowId, {
-      namespace: 'tenant-a',
-    }),
-  ).resolves.toMatchObject({
-    scheduledWork: { 'defer:1': { workId: 'work_child' } },
-  })
-
-  await store.state.putSnapshot(snapshotFixture('flow_new'))
-  const written = await t.run(async (database) =>
-    database.db
-      .query('runtimeSnapshots')
-      .withIndex('by_flow', (query) =>
-        query.eq('namespace', 'tenant-a').eq('flowId', 'flow_new'),
-      )
-      .first(),
-  )
-  expect(written?.scheduledWork).toEqual({
-    'defer:1': { workId: 'work_child' },
-  })
-  expect(written).not.toHaveProperty('scheduledEffects')
-})
-
 it('invariant: Convex rolls back runtime table writes when a mutation throws', async () => {
   const t = convexTest({ schema, modules })
 

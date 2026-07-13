@@ -31,6 +31,7 @@ const CRUX_SIGNAL_PATTERNS = [
   /\bretrieve\s*\(/,
   /\brerank\s*\(/,
   /\breranker\s*\(/,
+  /\bjudgeReranker\s*\(/,
   /\bexpandParents\s*\(/,
   /\bcompressToBudget\s*\(/,
   /\bworkspace\s*\(/,

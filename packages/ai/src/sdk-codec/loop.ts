@@ -7,6 +7,7 @@ import { extractCost, normalizeUsage } from "../meta";
 import { dropTrailingAssistant, fromResponseMessages } from "../messages";
 import { buildSystemArg } from "../provider-profile";
 import { extractResponse } from "../result-shape";
+import { mapAiSdkFinishReason } from "../normalized-outcome";
 import { canonicalBase, buildBaseArgs } from "./request-args";
 import { withToolCallRepair } from "./tool-call-repair";
 import { decodeAssistantContentFromAiSdkParts } from "../assistant-content";
@@ -209,7 +210,16 @@ function sdkStepFacts(
             ? ([{ type: "text", text: step.text }] as const)
             : [],
       ...(usage !== undefined ? { usage } : {}),
-      finishReason: step.finishReason,
+      ...(step.toolCalls && step.toolCalls.length > 0
+        ? {
+            toolCalls: step.toolCalls.map((call) => ({
+              id: call.toolCallId,
+              name: call.toolName,
+              args: call.input ?? call.args,
+            })),
+          }
+        : {}),
+      finishReason: mapAiSdkFinishReason(step.finishReason),
       responseId: step.response?.id,
       modelId: step.response?.modelId,
     };

@@ -20,6 +20,16 @@ import { observe } from '../observability'
  *
  * Only available in Node.js environments.
  *
+ * Deliberately does not attach a `skillDefinitionRef`/`definitionRefs` to its
+ * `skill.load` span. The `sourceId` in hand here is just the containing
+ * directory name, not the indexer's canonical composite `<registryName>:<path>`
+ * identifier (`skillDefinitionRef`/`skill:<safeId(identifier)>`) that
+ * `resolveRegistrySkill()` (`./registry.ts`) carries — the two loaders occupy
+ * different id spaces, and guessing a registry-shaped id from a bare directory
+ * name would be a fabricated, unverifiable join. `skill.load` runtime coverage
+ * is satisfied by the registry loader alone; this omission is intentional, not
+ * a gap.
+ *
  * @param filePath - Path to the SKILL.md file
  * @returns A frozen Skill object
  * @throws SkillLoadError if file not found, unreadable, or frontmatter invalid

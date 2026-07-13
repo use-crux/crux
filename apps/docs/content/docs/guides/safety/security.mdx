@@ -220,19 +220,27 @@ When devtools is enabled and `securityWarnings` is active, suspicious input patt
 
 ### How it works
 
-Security warnings are emitted from the devtools middleware with full trace correlation — each warning links to the `generate()` call that triggered it. The `onSecurityWarning` instrumentation hook is also available for custom integrations:
+Security warnings are emitted as canonical `security.warning` graph records
+(and related `security.report` artifacts) with full trace correlation — each
+warning links to the `generate()` call that triggered it. Subscribe to the graph
+stream for custom integrations:
 
 ```ts
-import { updateHooks } from '@use-crux/core'
+import { subscribeObservability } from '@use-crux/core/observability'
 
-updateHooks({
-  observability subscribers: {
-    onSecurityWarning: (event) => {
-      // event: { promptId, field, pattern, message, inputPreview }
-      myLogger.send(event)
-    },
-  },
+const unsubscribe = subscribeObservability((record) => {
+  // emitSecurityWarningSpan opens a real span (not a free-floating span:event).
+  if (record.type === 'span:start' && record.primitive === 'security.warning') {
+    // attributes: promptId, field, pattern, inputPreview
+    myLogger.send(record)
+  }
+  if (record.type === 'artifact' && record.kind === 'security.report') {
+    // JSON preview carries severity, message, field, pattern
+    myLogger.send(record)
+  }
 })
+
+// later: unsubscribe()
 ```
 
 ## Next steps

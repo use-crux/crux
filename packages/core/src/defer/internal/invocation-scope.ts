@@ -23,6 +23,7 @@ import {
   type DeferredScheduledObservation,
   type DeferEvidencePolicy,
 } from './observability'
+import { observe } from '../../observability'
 
 type InvocationState = 'open' | 'sealed'
 type DeferredCallbackOutcome =
@@ -30,6 +31,8 @@ type DeferredCallbackOutcome =
   | 'failed'
   | 'timed-out'
   | 'cancelled'
+
+const DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS = 3_000
 
 export interface InlineRegistration {
   readonly sequence: number
@@ -86,8 +89,8 @@ export function createInvocationDeferScope(
     completion: lifetime.completion,
   })
   const namedEvidenceHooks: DurableDeferEvidenceHooks = {
-    ensurePublicCorrelators() {
-      return evidence.ensurePublicCorrelators()
+    ensurePublicTraceId() {
+      return evidence.ensurePublicTraceId()
     },
     onStaged(input) {
       const observation = evidence.recordNamedScheduled({
@@ -219,7 +222,21 @@ export function createInvocationDeferScope(
             },
           })
           evidence.settle(result)
+          // Public settlement reports callback outcomes only. Host retention
+          // continues until ignored named acceptance/finalization has emitted
+          // terminal evidence and that complete graph has been drained.
           settlement.resolve(result)
+          await evidence.waitForClosure()
+          // The retained task is the only lifecycle boundary guaranteed to
+          // outlive deferred execution on every host. Flush after closing
+          // its graph so wrapper-level drains cannot race work emitted by
+          // waitUntil(), after(), or response-finished callbacks.
+          await observe.flush({
+            timeoutMs: Math.min(
+              lifetime.limits.maxDrainMs,
+              DEFER_OBSERVABILITY_FLUSH_TIMEOUT_MS,
+            ),
+          })
         },
         cancel(reason) {
           scope.cancel(reason)

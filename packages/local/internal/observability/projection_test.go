@@ -35,8 +35,8 @@ func TestProjectRunDetailUsesExplicitProjectionClock(t *testing.T) {
 	}
 
 	stale := ProjectRunDetail(graph, ProjectionOptions{Now: started.Add(61 * time.Second)})
-	if stale.Run.Status != "stale" || stale.Root.Status != "stale" {
-		t.Fatalf("stale statuses = %q/%q, want stale/stale", stale.Run.Status, stale.Root.Status)
+	if stale.Run.Status != "incomplete" || stale.Root.Status != "incomplete" {
+		t.Fatalf("stale statuses = %q/%q, want incomplete/incomplete", stale.Run.Status, stale.Root.Status)
 	}
 	if stale.Run.DurationMs != 61000 || stale.Root.DurationMs != 61000 {
 		t.Fatalf("stale durations = %f/%f, want 61000/61000", stale.Run.DurationMs, stale.Root.DurationMs)

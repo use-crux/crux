@@ -92,7 +92,18 @@ function structuralCheck(record: unknown): record is CruxGraphRecord {
   switch (record.type) {
     case 'run:start':
       return (
-        requiredString(record, 'name') && requiredString(record, 'rootPrimitive') && requiredString(record, 'startedAt')
+        record.segmentSeq === 1 &&
+        requiredString(record, 'name') &&
+        requiredString(record, 'rootPrimitive') &&
+        requiredString(record, 'startedAt')
+      )
+    case 'run:suspend':
+      return requiredString(record, 'suspendedAt') && requiredString(record, 'reason')
+    case 'run:resume':
+      return (
+        record.segmentSeq === 1 &&
+        requiredString(record, 'resumedAt') &&
+        requiredString(record, 'reason')
       )
     case 'run:end':
       return requiredString(record, 'endedAt') && requiredString(record, 'status')

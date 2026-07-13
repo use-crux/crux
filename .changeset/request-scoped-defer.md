@@ -11,8 +11,9 @@ explicit `@use-crux/core/defer/node` HTTP integration, and Runtime-backed named
 target staging through `await defer(target, input)`. Postgres and Convex Runtime
 stores now persist named deferred intents and recover their release through the
 existing transactional outbox. Public `defer()` is rejected during replayable
-flow execution, and Runtime snapshots migrate replay-visible child work from
-`scheduledEffects` to `scheduledWork` with compatibility reads for old rows.
+flow execution, and the Runtime snapshot field for replay-visible child work is
+hard-renamed from `scheduledEffects` to `scheduledWork` with no compatibility
+field or read path.
 Inline callbacks now isolate nested named commits per callback and report late
 commit failures without stopping sibling cleanup.
 Project Index now discovers public inline and named scheduling sites as stable
@@ -22,6 +23,9 @@ explicitly missing-Runtime diagnostics.
 Public deferred work emits `defer.scheduled` and `defer.run` observability
 spans with causal `triggered` edges, one lightweight grouped run when no
 originating Crux run exists, and quiet diagnostics-only internal composition.
+Inline retained tasks flush only after their full graph closes. Named wakes use
+fresh same-trace runs and segments with a causal edge, then flush only after the
+durable outcome commits.
 Devtools Catalog and Runs surface deferred-work kinds, lifecycle states, and
 honest handler-returned streaming notes.
 Provider-neutral serverless hosts live at `@use-crux/core/defer/serverless`

@@ -8,218 +8,12 @@ import (
 	"strings"
 )
 
-func (s *Service) migrate(ctx context.Context) error {
-	statements := []string{
-		`CREATE TABLE IF NOT EXISTS records (
-			record_id TEXT PRIMARY KEY,
-			run_id TEXT NOT NULL,
-			trace_id TEXT,
-			seq INTEGER NOT NULL DEFAULT 0,
-			type TEXT NOT NULL,
-			payload_json TEXT NOT NULL,
-			received_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_records_run_id ON records(run_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_records_run_received ON records(run_id, received_at, record_id)`,
-		`CREATE TABLE IF NOT EXISTS runs (
-			run_id TEXT PRIMARY KEY,
-			trace_id TEXT,
-			session_id TEXT,
-			user_id TEXT,
-			name TEXT,
-			root_primitive TEXT,
-			status TEXT,
-			started_at TEXT,
-			ended_at TEXT,
-			duration_ms REAL,
-			span_count INTEGER NOT NULL DEFAULT 0,
-			event_count INTEGER NOT NULL DEFAULT 0,
-			artifact_count INTEGER NOT NULL DEFAULT 0,
-			edge_count INTEGER NOT NULL DEFAULT 0,
-			record_count INTEGER NOT NULL DEFAULT 0,
-			total_input_tokens INTEGER NOT NULL DEFAULT 0,
-			total_output_tokens INTEGER NOT NULL DEFAULT 0,
-			total_cost_usd REAL NOT NULL DEFAULT 0,
-			last_activity_at TEXT,
-			lifecycle_status TEXT,
-			lifecycle_checked_at TEXT,
-			attributes_json TEXT,
-			metrics_json TEXT,
-			error_json TEXT
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_runs_trace_id ON runs(trace_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_runs_started_at ON runs(started_at DESC, run_id DESC)`,
-		`CREATE INDEX IF NOT EXISTS idx_runs_status ON runs(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_runs_root_primitive ON runs(root_primitive)`,
-		`CREATE TABLE IF NOT EXISTS spans (
-			span_id TEXT PRIMARY KEY,
-			run_id TEXT NOT NULL,
-			trace_id TEXT,
-			parent_span_id TEXT,
-			family TEXT,
-			primitive TEXT,
-			name TEXT,
-			status TEXT,
-			started_at TEXT,
-			ended_at TEXT,
-			duration_ms REAL,
-			model TEXT,
-			provider TEXT,
-			prompt_id TEXT,
-			context_id TEXT,
-			agent_id TEXT,
-			tool_name TEXT,
-			flow_id TEXT,
-			step_id TEXT,
-			memory_id TEXT,
-			retriever_id TEXT,
-			attributes_json TEXT,
-			metrics_json TEXT,
-			error_json TEXT
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_spans_run_id ON spans(run_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_spans_run_started ON spans(run_id, started_at, span_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_spans_run_parent ON spans(run_id, parent_span_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_spans_run_family ON spans(run_id, family)`,
-		`CREATE INDEX IF NOT EXISTS idx_spans_run_primitive ON spans(run_id, primitive)`,
-		`CREATE INDEX IF NOT EXISTS idx_spans_status ON spans(status)`,
-		`CREATE INDEX IF NOT EXISTS idx_spans_family_started ON spans(family, started_at)`,
-		`CREATE TABLE IF NOT EXISTS span_events (
-			event_id TEXT PRIMARY KEY,
-			run_id TEXT NOT NULL,
-			trace_id TEXT,
-			span_id TEXT NOT NULL,
-			name TEXT NOT NULL,
-			timestamp TEXT NOT NULL,
-			attributes_json TEXT
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_span_events_run_id ON span_events(run_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_span_events_run_span_time ON span_events(run_id, span_id, timestamp, event_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_span_events_run_time ON span_events(run_id, timestamp, event_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_span_events_usage ON span_events(name, run_id)`,
-		`CREATE TABLE IF NOT EXISTS artifacts (
-			artifact_id TEXT PRIMARY KEY,
-			run_id TEXT NOT NULL,
-			trace_id TEXT,
-			span_id TEXT,
-			kind TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			content_type TEXT NOT NULL,
-			encoding TEXT NOT NULL,
-			size_bytes INTEGER,
-			hash TEXT,
-			preview_json TEXT,
-			uri TEXT,
-			attributes_json TEXT
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_artifacts_run_id ON artifacts(run_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_artifacts_run_created ON artifacts(run_id, created_at, artifact_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_artifacts_run_span_kind ON artifacts(run_id, span_id, kind)`,
-		`CREATE INDEX IF NOT EXISTS idx_artifacts_span ON artifacts(span_id)`,
-		`CREATE TABLE IF NOT EXISTS edges (
-			edge_id TEXT PRIMARY KEY,
-			run_id TEXT NOT NULL,
-			trace_id TEXT,
-			edge_type TEXT NOT NULL,
-			from_kind TEXT NOT NULL,
-			from_id TEXT NOT NULL,
-			to_kind TEXT NOT NULL,
-			to_id TEXT NOT NULL,
-			created_at TEXT NOT NULL,
-			attributes_json TEXT
-		)`,
-		`CREATE INDEX IF NOT EXISTS idx_edges_run_id ON edges(run_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_edges_run_created ON edges(run_id, created_at, edge_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_edges_run_from ON edges(run_id, from_kind, from_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_edges_run_to ON edges(run_id, to_kind, to_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_id)`,
-		`CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_id)`,
-	}
-	for _, statement := range statements {
-		if _, err := s.db.ExecContext(ctx, statement); err != nil {
-			return fmt.Errorf("execute migration statement: %w", err)
-		}
-	}
-	if err := ensureColumn(ctx, s.db, "records", "seq", `ALTER TABLE records ADD COLUMN seq INTEGER NOT NULL DEFAULT 0`); err != nil {
-		return err
-	}
-	if err := ensureColumn(ctx, s.db, "runs", "session_id", `ALTER TABLE runs ADD COLUMN session_id TEXT`); err != nil {
-		return err
-	}
-	if err := ensureColumn(ctx, s.db, "runs", "user_id", `ALTER TABLE runs ADD COLUMN user_id TEXT`); err != nil {
-		return err
-	}
-	for _, column := range []struct {
-		name string
-		ddl  string
-	}{
-		{name: "span_count", ddl: `ALTER TABLE runs ADD COLUMN span_count INTEGER NOT NULL DEFAULT 0`},
-		{name: "event_count", ddl: `ALTER TABLE runs ADD COLUMN event_count INTEGER NOT NULL DEFAULT 0`},
-		{name: "artifact_count", ddl: `ALTER TABLE runs ADD COLUMN artifact_count INTEGER NOT NULL DEFAULT 0`},
-		{name: "edge_count", ddl: `ALTER TABLE runs ADD COLUMN edge_count INTEGER NOT NULL DEFAULT 0`},
-		{name: "record_count", ddl: `ALTER TABLE runs ADD COLUMN record_count INTEGER NOT NULL DEFAULT 0`},
-		{name: "total_input_tokens", ddl: `ALTER TABLE runs ADD COLUMN total_input_tokens INTEGER NOT NULL DEFAULT 0`},
-		{name: "total_output_tokens", ddl: `ALTER TABLE runs ADD COLUMN total_output_tokens INTEGER NOT NULL DEFAULT 0`},
-		{name: "total_cost_usd", ddl: `ALTER TABLE runs ADD COLUMN total_cost_usd REAL NOT NULL DEFAULT 0`},
-		{name: "last_activity_at", ddl: `ALTER TABLE runs ADD COLUMN last_activity_at TEXT`},
-		{name: "lifecycle_status", ddl: `ALTER TABLE runs ADD COLUMN lifecycle_status TEXT`},
-		{name: "lifecycle_checked_at", ddl: `ALTER TABLE runs ADD COLUMN lifecycle_checked_at TEXT`},
-	} {
-		if err := ensureColumn(ctx, s.db, "runs", column.name, column.ddl); err != nil {
-			return err
-		}
-	}
-	if _, err := s.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_records_run_seq ON records(run_id, seq, received_at, record_id)`); err != nil {
-		return fmt.Errorf("create records sequence index: %w", err)
-	}
-	if _, err := s.db.ExecContext(ctx, `CREATE INDEX IF NOT EXISTS idx_runs_session ON runs(session_id, started_at DESC)`); err != nil {
-		return fmt.Errorf("create runs session index: %w", err)
-	}
-	for _, index := range []struct {
-		name string
-		ddl  string
-	}{
-		{name: "idx_spans_status", ddl: `CREATE INDEX IF NOT EXISTS idx_spans_status ON spans(status)`},
-		{name: "idx_spans_family_started", ddl: `CREATE INDEX IF NOT EXISTS idx_spans_family_started ON spans(family, started_at)`},
-		{name: "idx_artifacts_span", ddl: `CREATE INDEX IF NOT EXISTS idx_artifacts_span ON artifacts(span_id)`},
-		{name: "idx_edges_from", ddl: `CREATE INDEX IF NOT EXISTS idx_edges_from ON edges(from_id)`},
-		{name: "idx_edges_to", ddl: `CREATE INDEX IF NOT EXISTS idx_edges_to ON edges(to_id)`},
-	} {
-		if _, err := s.db.ExecContext(ctx, index.ddl); err != nil {
-			return fmt.Errorf("create %s index: %w", index.name, err)
-		}
-	}
-	return nil
+type recordIDConflictError struct {
+	recordID string
 }
 
-func ensureColumn(ctx context.Context, db *sql.DB, table string, column string, ddl string) error {
-	rows, err := db.QueryContext(ctx, fmt.Sprintf(`PRAGMA table_info(%s)`, table))
-	if err != nil {
-		return fmt.Errorf("inspect columns for %s: %w", table, err)
-	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var cid int
-		var name string
-		var columnType string
-		var notNull int
-		var defaultValue sql.NullString
-		var pk int
-		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &pk); err != nil {
-			return fmt.Errorf("scan column info for %s: %w", table, err)
-		}
-		if name == column {
-			return nil
-		}
-	}
-	if err := rows.Err(); err != nil {
-		return fmt.Errorf("iterate columns for %s: %w", table, err)
-	}
-	if _, err := db.ExecContext(ctx, ddl); err != nil {
-		return fmt.Errorf("add %s.%s column: %w", table, column, err)
-	}
-	return nil
+func (e *recordIDConflictError) Error() string {
+	return fmt.Sprintf("record_id_conflict: record %s already exists with different canonical content", e.recordID)
 }
 
 func deleteRunRows(ctx context.Context, tx *sql.Tx, runIDs []string) error {
@@ -228,7 +22,30 @@ func deleteRunRows(ctx context.Context, tx *sql.Tx, runIDs []string) error {
 	for i, runID := range runIDs {
 		args[i] = runID
 	}
-	tables := []string{"records", "span_events", "artifacts", "edges", "spans", "runs"}
+	tables := []string{
+		"ingest_health",
+		"run_segments",
+		"records",
+		"span_events",
+		"artifacts",
+		"edges",
+		"spans",
+		// run_definition_activity is a derived projection with no independent
+		// retention/TTL: a run's activity rows must not survive that run's
+		// deletion, so they are removed in the same transaction as the run.
+		"run_definition_activity",
+		"runs",
+	}
+	// observability_run_revision_log is deliberately NOT purged here: it is
+	// the only durable record that a run was deleted. A reconnecting client
+	// presenting a revision from before the deletion must see the run as
+	// changed (binding spec 04 §4) so it fully invalidates instead of
+	// keeping a phantom row forever. Callers bump a fresh tombstone revision
+	// for these run IDs (via bumpRunRevisions) in the same transaction,
+	// before calling this function — see DeleteRuns and runRetention. The
+	// log has no foreign key on run_id, so rows referencing a now-deleted
+	// run are harmless history and still age out under the normal bounded
+	// retain-N-revisions prune in bumpRunRevisions/pruneRevisionLog.
 	for _, table := range tables {
 		if _, err := tx.ExecContext(ctx, "DELETE FROM "+table+" WHERE run_id IN ("+placeholders+")", args...); err != nil {
 			return fmt.Errorf("delete observability %s rows: %w", table, err)
@@ -265,39 +82,193 @@ func (s *Service) configureSQLite(ctx context.Context) error {
 }
 
 func upsertStoredRecord(ctx context.Context, statements *ingestStatements, record Record) (bool, error) {
-	result, err := statements.exec(ctx, `
-		INSERT INTO records (record_id, run_id, trace_id, seq, type, payload_json)
-		VALUES (?, ?, ?, ?, ?, ?)
-		ON CONFLICT(record_id) DO NOTHING
-	`, record.RecordID, record.RunID, nullIfEmpty(record.TraceID), record.Seq, record.Type, string(record.Payload))
+	canonicalPayload, err := canonicalJSON(record.Payload)
+	if err != nil {
+		return false, fmt.Errorf("canonicalize record payload: %w", err)
+	}
+	existing, exists, err := existingRecordPayload(ctx, statements, record.RecordID)
 	if err != nil {
 		return false, err
+	}
+	if exists {
+		existingCanonical, err := canonicalJSON([]byte(existing))
+		if err != nil {
+			return false, fmt.Errorf("canonicalize existing record payload %q: %w", record.RecordID, err)
+		}
+		if string(existingCanonical) != string(canonicalPayload) {
+			return false, &recordIDConflictError{recordID: record.RecordID}
+		}
+		return false, nil
+	}
+	if err := validateSegmentOwnership(ctx, statements, record); err != nil {
+		return false, err
+	}
+	result, err := statements.exec(ctx, `
+		INSERT INTO records (record_id, run_id, trace_id, segment_id, segment_seq, type, payload_json)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`, record.RecordID, record.RunID, nullIfEmpty(record.TraceID), record.SegmentID, record.SegmentSeq, record.Type, string(record.Payload))
+	if err != nil {
+		return false, classifySQLiteConstraintError(err, record)
 	}
 	inserted, err := rowsAffected(result)
 	if err != nil {
 		return false, err
 	}
 	if inserted {
+		if err := upsertRunSegment(ctx, statements, record); err != nil {
+			return false, err
+		}
 		return true, nil
-	}
-	if _, err := statements.exec(ctx, `
-		UPDATE records
-		SET
-			run_id = ?,
-			trace_id = ?,
-			seq = ?,
-			type = ?,
-			payload_json = ?
-		WHERE record_id = ?
-	`, record.RunID, nullIfEmpty(record.TraceID), record.Seq, record.Type, string(record.Payload), record.RecordID); err != nil {
-		return false, err
 	}
 	return false, nil
 }
 
-func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *ingestStatements, record Record) error {
+func validateSegmentOwnership(ctx context.Context, statements *ingestStatements, record Record) error {
+	var existingRunID string
+	err := statements.queryRow(ctx, `SELECT run_id FROM run_segments WHERE segment_id = ?`, record.SegmentID).Scan(&existingRunID)
+	if err == nil {
+		if existingRunID != record.RunID {
+			return fmt.Errorf("segment_ownership_conflict: segment %s already belongs to run %s", record.SegmentID, existingRunID)
+		}
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return fmt.Errorf("check segment ownership for %s: %w", record.SegmentID, err)
+	}
+	return nil
+}
+
+func classifySQLiteConstraintError(err error, record Record) error {
+	message := err.Error()
+	if strings.Contains(message, "idx_records_segment_seq_unique") ||
+		strings.Contains(message, "records.segment_id, records.segment_seq") {
+		return fmt.Errorf("segment_sequence_conflict: segment %s sequence %d already identifies a different record", record.SegmentID, record.SegmentSeq)
+	}
+	if strings.Contains(message, "records.record_id") {
+		return &recordIDConflictError{recordID: record.RecordID}
+	}
+	if strings.Contains(message, "run_segments.segment_id") {
+		return fmt.Errorf("segment_ownership_conflict: segment %s already belongs to another run", record.SegmentID)
+	}
+	return err
+}
+
+func upsertRunSegment(ctx context.Context, statements *ingestStatements, record Record) error {
+	fields := segmentProjectionFields(record)
+	_, err := statements.exec(ctx, `
+		INSERT INTO run_segments (
+			segment_id, run_id,
+			status, started_at, resumed_at, suspended_at, ended_at, reason, previous_segment_id,
+			first_segment_seq, last_segment_seq
+		)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		ON CONFLICT(segment_id) DO UPDATE SET
+			status = CASE
+				WHEN run_segments.status IN ('ok', 'error', 'blocked', 'cancelled') THEN run_segments.status
+				WHEN run_segments.status = 'suspended' AND excluded.status = 'running' THEN run_segments.status
+				WHEN excluded.status IN ('ok', 'error', 'blocked', 'cancelled', 'suspended') THEN excluded.status
+				ELSE coalesce(excluded.status, run_segments.status)
+			END,
+			started_at = coalesce(run_segments.started_at, excluded.started_at),
+			resumed_at = coalesce(run_segments.resumed_at, excluded.resumed_at),
+			suspended_at = coalesce(run_segments.suspended_at, excluded.suspended_at),
+			ended_at = CASE
+				WHEN run_segments.status IN ('ok', 'error', 'blocked', 'cancelled') THEN run_segments.ended_at
+				ELSE coalesce(run_segments.ended_at, excluded.ended_at)
+			END,
+			reason = coalesce(run_segments.reason, excluded.reason),
+			previous_segment_id = coalesce(run_segments.previous_segment_id, excluded.previous_segment_id),
+			first_segment_seq = CASE
+				WHEN run_segments.first_segment_seq = 0 OR excluded.first_segment_seq < run_segments.first_segment_seq THEN excluded.first_segment_seq
+				ELSE run_segments.first_segment_seq
+			END,
+			last_segment_seq = max(run_segments.last_segment_seq, excluded.last_segment_seq),
+			gap_count = max(0, max(run_segments.last_segment_seq, excluded.last_segment_seq) -
+				min(run_segments.first_segment_seq, excluded.first_segment_seq) + 1 -
+				(SELECT count(*) FROM records WHERE segment_id = excluded.segment_id)),
+			conflict_count = max(0,
+				(SELECT count(*) FROM records WHERE segment_id = excluded.segment_id AND type = 'run:end') - 1)
+	`, record.SegmentID, record.RunID, nullIfEmpty(fields.status), nullIfEmpty(fields.startedAt),
+		nullIfEmpty(fields.resumedAt), nullIfEmpty(fields.suspendedAt), nullIfEmpty(fields.endedAt),
+		nullIfEmpty(fields.reason), nullIfEmpty(fields.previousSegmentID), record.SegmentSeq, record.SegmentSeq)
+	return err
+}
+
+// reconcileSegmentCounts recomputes a segment's gap_count/conflict_count from
+// its stored records. Call once per distinct affected segment at the end of a
+// batch rather than after every record insert, since each call scans every
+// record belonging to the segment.
+func reconcileSegmentCounts(ctx context.Context, statements *ingestStatements, segmentID string) error {
+	_, err := statements.exec(ctx, `
+		UPDATE run_segments
+		SET gap_count = max(0, last_segment_seq - (SELECT count(*) FROM records WHERE segment_id = ?)),
+			conflict_count = max(0, (SELECT count(*) FROM records WHERE segment_id = ? AND type = 'run:end') - 1)
+		WHERE segment_id = ?
+	`, segmentID, segmentID, segmentID)
+	return err
+}
+
+func existingRecordPayload(ctx context.Context, statements *ingestStatements, recordID string) (string, bool, error) {
+	var payload string
+	if err := statements.queryRow(ctx, `SELECT payload_json FROM records WHERE record_id = ?`, recordID).Scan(&payload); err != nil {
+		if err == sql.ErrNoRows {
+			return "", false, nil
+		}
+		return "", false, fmt.Errorf("load existing record %q: %w", recordID, err)
+	}
+	return payload, true, nil
+}
+
+func canonicalJSON(raw []byte) ([]byte, error) {
+	var value any
+	if err := json.Unmarshal(raw, &value); err != nil {
+		return nil, err
+	}
+	return json.Marshal(value)
+}
+
+type segmentProjection struct {
+	status, startedAt, resumedAt, suspendedAt, endedAt, reason, previousSegmentID string
+}
+
+func segmentProjectionFields(record Record) segmentProjection {
+	var fields map[string]any
+	if err := json.Unmarshal(record.Payload, &fields); err != nil {
+		return segmentProjection{}
+	}
+	switch record.Type {
+	case RecordRunStart:
+		return segmentProjection{status: "running", startedAt: stringMapField(fields, "startedAt")}
+	case RecordRunSuspend:
+		return segmentProjection{status: "suspended", suspendedAt: stringMapField(fields, "suspendedAt"), endedAt: stringMapField(fields, "suspendedAt"), reason: stringMapField(fields, "reason")}
+	case RecordRunResume:
+		return segmentProjection{status: "running", startedAt: stringMapField(fields, "resumedAt"), resumedAt: stringMapField(fields, "resumedAt"), reason: stringMapField(fields, "reason"), previousSegmentID: stringMapField(fields, "previousSegmentId")}
+	case RecordRunEnd:
+		return segmentProjection{status: stringMapField(fields, "status"), endedAt: stringMapField(fields, "endedAt")}
+	default:
+		return segmentProjection{}
+	}
+}
+
+func stringMapField(fields map[string]any, key string) string {
+	value, _ := fields[key].(string)
+	return value
+}
+
+func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *ingestStatements, record Record) (err error) {
 	storedInserted, err := upsertStoredRecord(ctx, statements, record)
 	if err != nil {
+		return err
+	}
+	if !storedInserted {
+		return nil
+	}
+	statements.markAffected(record.RunID, record.SegmentID)
+	// Project the runtime↔definition join in the same transaction as the record
+	// ingest and the run-revision bump. A rollback undoes this write with
+	// everything else; a duplicate record never reaches here (storedInserted is
+	// false), so occurrence_count is not double-counted.
+	if err := projectDefinitionActivity(ctx, statements, record); err != nil {
 		return err
 	}
 	switch record.Type {
@@ -310,6 +281,24 @@ func (s *Service) ingestRecord(ctx context.Context, tx *sql.Tx, statements *inge
 			return err
 		}
 		return updateRunRollups(ctx, statements, rollupDeltaForRunStart(run, storedInserted))
+	case RecordRunSuspend:
+		var run RunSuspendRecord
+		if err := json.Unmarshal(record.Payload, &run); err != nil {
+			return fmt.Errorf("decode run suspend record: %w", err)
+		}
+		if err := upsertRunBoundary(ctx, statements, run.RunID, run.TraceID, run.Attributes); err != nil {
+			return err
+		}
+		return updateRunRollups(ctx, statements, runRollupDelta{runID: run.RunID, recordCount: 1, lastActivityAt: run.SuspendedAt})
+	case RecordRunResume:
+		var run RunResumeRecord
+		if err := json.Unmarshal(record.Payload, &run); err != nil {
+			return fmt.Errorf("decode run resume record: %w", err)
+		}
+		if err := upsertRunBoundary(ctx, statements, run.RunID, run.TraceID, run.Attributes); err != nil {
+			return err
+		}
+		return updateRunRollups(ctx, statements, runRollupDelta{runID: run.RunID, recordCount: 1, lastActivityAt: run.ResumedAt})
 	case RecordRunEnd:
 		var run RunEndRecord
 		if err := json.Unmarshal(record.Payload, &run); err != nil {
@@ -480,12 +469,28 @@ func upsertRunEnd(ctx context.Context, statements *ingestStatements, run RunEndR
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 		ON CONFLICT(run_id) DO UPDATE SET
 			trace_id = coalesce(excluded.trace_id, runs.trace_id),
-			status = excluded.status,
-			ended_at = excluded.ended_at,
-			duration_ms = excluded.duration_ms,
-			metrics_json = coalesce(excluded.metrics_json, runs.metrics_json),
-			error_json = coalesce(excluded.error_json, runs.error_json),
+			status = CASE
+				WHEN runs.status IN ('ok', 'error', 'blocked', 'cancelled') THEN runs.status
+				ELSE excluded.status
+			END,
+			ended_at = CASE
+				WHEN runs.status IN ('ok', 'error', 'blocked', 'cancelled') THEN runs.ended_at
+				ELSE excluded.ended_at
+			END,
+			duration_ms = CASE
+				WHEN runs.status IN ('ok', 'error', 'blocked', 'cancelled') THEN runs.duration_ms
+				ELSE excluded.duration_ms
+			END,
+			metrics_json = CASE
+				WHEN runs.status IN ('ok', 'error', 'blocked', 'cancelled') THEN runs.metrics_json
+				ELSE coalesce(excluded.metrics_json, runs.metrics_json)
+			END,
+			error_json = CASE
+				WHEN runs.status IN ('ok', 'error', 'blocked', 'cancelled') THEN runs.error_json
+				ELSE coalesce(excluded.error_json, runs.error_json)
+			END,
 				attributes_json = CASE
+					WHEN runs.status IN ('ok', 'error', 'blocked', 'cancelled') THEN runs.attributes_json
 					WHEN runs.attributes_json IS NOT NULL AND excluded.attributes_json IS NOT NULL THEN json_patch(runs.attributes_json, excluded.attributes_json)
 					ELSE coalesce(excluded.attributes_json, runs.attributes_json)
 				END

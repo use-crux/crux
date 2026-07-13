@@ -4,6 +4,12 @@ This file is read by any AI agent (Claude Code, Claude Agent SDK, custom
 copilots) before they touch this package. Keep it short, opinionated, and
 current — out-of-date instructions are worse than no instructions.
 
+**UI layout source of truth:** [`ui/AGENTS.md`](./ui/AGENTS.md). The SPA lives
+under `ui/src/` as `app/` · `pages/` · `features/` · `shared/`. Do **not** add
+new code under the legacy `ui/src/qw/shell/*` paths — that tree is residual and
+being drained. Prefer `features/<domain>/` for product work and `shared/` for
+generic primitives.
+
 Two pieces of background context every agent needs:
 
 - **What this is**: a self-contained Vite + React 19 SPA that ships
@@ -16,6 +22,7 @@ Two pieces of background context every agent needs:
 
 See also:
 
+- [`ui/AGENTS.md`](./ui/AGENTS.md) — current folder layout and feature conventions.
 - [`QUALITY_BACKEND_HANDOVER.md`](./QUALITY_BACKEND_HANDOVER.md) — the
   REST/WS contract the Go backend offers.
 - [`CLIENT_SERVER_BOUNDARY.md`](./CLIENT_SERVER_BOUNDARY.md) — what the
@@ -30,11 +37,11 @@ See also:
    No `useState<T>` paired with a tick counter for reload. If you find
    any in the codebase, migrate it as part of your change — see
    "Migration recipe" below.
-2. **WebSocket runtime state goes through the Zustand store.** Push-only
+2. **WebSocket runtime state goes through the app runtime store.** Push-only
    data that isn't backed by a REST endpoint (judge events, runtime
-   flow steps, in-flight tool events, span streams) is held by the
-   `useRuntimeStore` Zustand store in `hooks/runtimeStore.ts`. The
-   store's `dispatch` action wraps the pure `devtoolsReducer` so the
+   flow steps, in-flight tool events, span streams) lives under
+   `ui/src/app/runtime/` (store + `devtoolsReducer`). The
+   store's `dispatch` action wraps the pure reducer so the
    exhaustive `WsEvent` switch + immutability invariants are preserved.
    **Screens never read the whole store.** They subscribe to a single
    slice via a selector hook (`useConnected`, `useJudgeEvents`, etc.)
@@ -43,8 +50,8 @@ See also:
 3. **Local UI state is `useState`.** Selected span, expanded panel,
    active inner tab, hover targets — never lift these to the store
    or to Query. Per-component.
-4. **Navigation is hand-rolled.** `hooks/useNavigation.ts` has a typed
-   discriminated-union `NavState` synced to the URL. Don't import
+4. **Navigation is hand-rolled.** `ui/src/app/navigation/useNavigation.ts`
+   has a typed discriminated-union `NavState` synced to the URL. Don't import
    `react-router` — it was removed from `devDependencies` for a reason.
    When adding a new screen, extend `NavState` and the
    `pathFromState` / `stateFromPath` codec.
@@ -59,7 +66,7 @@ small. We are draining the queue, not deferring it.
 
 ### Step 1 — add the cache key
 
-In `ui/src/lib/queryClient.ts`, add the key under the right namespace:
+In `ui/src/shared/query/` (QueryClient + key namespaces), add the key under the right namespace:
 
 ```ts
 export const qk = {
@@ -81,7 +88,8 @@ invalidator can match by prefix.
 
 ### Step 2 — add the hook
 
-In `ui/src/qw/shell/useQualityApi.ts`, use this template verbatim:
+In `ui/src/shared/hooks/useQualityApi.ts` (or the feature-local hook that owns
+the fetch), use this template verbatim:
 
 ```ts
 export function useQualityCassettes(): FetchState<readonly QualityCassetteRecord[]> {
@@ -147,7 +155,7 @@ const q = useQuery<MyRecord, Error>({
 
 ### Step 3 — replace call sites
 
-Search every `runtime.<sliceName>` read across `ui/src/qw/screens/`
+Search every `runtime.<sliceName>` read across `ui/src/features/` and `ui/src/pages/`
 (and elsewhere) and replace it with the hook. The destructure stays
 the same:
 
@@ -162,7 +170,7 @@ time someone refactors.
 
 ### Step 4 — wire WebSocket invalidation
 
-In `ui/src/hooks/useDevtools.ts`, the WS `onMessage` handler already
+In `ui/src/app/runtime/` (devtools connection / WS handler), the WS `onMessage` handler already
 invalidates `qk.quality.all` on any `QualityEvent`. **Don't fan that
 out per-endpoint.** Prefix-based invalidation is intentional: any
 `['quality', ...]` cache entry refetches on a quality push, and Query
@@ -184,7 +192,7 @@ But that's an optimization — start with the prefix.
 
 ### Step 5 — delete the on-connect REST fan-out
 
-In `ui/src/hooks/useDevtools.ts`'s `onConnected` callback, remove the
+In the app-runtime connection bootstrap `onConnected` callback, remove the
 `fetch(...)` call for the endpoint you just migrated. Query handles
 initial fetch on hook mount; the on-connect block exists only for
 slices the reducer still owns.
@@ -196,7 +204,7 @@ delete:
 
 - The `SET_<SLICE>` action variant in `devtoolsReducer.ts`
 - The slice field from `DevtoolsState` / `INITIAL_STATE`
-- The slice from `flattenState()` in `qw/shell/viewState.ts`
+- The slice from `flattenState()` (or the current feature-local view-state helper)
 - The dispatch in `useDevtools.ts`
 
 `pnpm --filter @use-crux/devtools test` should still pass — `devtoolsReducer.test.ts` covers the remaining slices.
@@ -221,7 +229,7 @@ pnpm --filter @use-crux/devtools test -- --run
 
 ## Mutation pattern
 
-Mutations live in `ui/src/qw/shell/useQualityMutations.ts`. Use
+Mutations live in feature/shared Quality mutation hooks (not under `qw/shell`). Use
 `useMutation` with `onMutate` for optimistic updates and `onSettled` for
 the canonical refetch:
 
@@ -312,7 +320,7 @@ signal — bring it up before adding a new store.
 ### Current Query coverage
 
 Everything REST-shaped is on Query. The hooks live in
-`ui/src/qw/shell/useQualityApi.ts` and `ui/src/hooks/`:
+`ui/src/shared/hooks/useQualityApi.ts` and `ui/src/app/runtime/`:
 
 - `useQualityOverview`, `useQualityRuns`, `useQualityRunDetail`,
   `useQualitySuites`, `useQualitySuite`, `useQualityInsights`,
@@ -338,7 +346,7 @@ Everything REST-shaped is on Query. The hooks live in
   `useQualityEvaluationExperiments(evaluationId, limit?)`, not the flat list.
   Pass `status`/`evaluation`/`window` as filter opts; the backend computes the
   tab counts + evaluation dropdown facets.
-- `useObservabilityRuns`, `useObservabilityGraph`, `useObservabilityResourceActivity`
+- `useObservabilityRunsPage`, `useObservabilityGraph`, `useObservabilityResourceActivity`
 - `useIndex` (prompts/contexts/tools)
 
 ### What lives in the Zustand runtime store (and why)
@@ -400,12 +408,12 @@ and nobody catches it until it lands on someone's machine.
 
 Re-read whenever you touch any of:
 
-- `ui/src/hooks/useDevtools.ts`
-- `ui/src/hooks/devtoolsReducer.ts`
-- `ui/src/hooks/useNavigation.ts`
-- `ui/src/lib/queryClient.ts`
-- `ui/src/qw/shell/useQualityApi.ts`
-- `ui/src/qw/shell/useQualityMutations.ts`
+- `ui/AGENTS.md` — layout contract
+- `ui/src/app/runtime/` — connection, store, `devtoolsReducer`
+- `ui/src/app/navigation/useNavigation.ts`
+- `ui/src/shared/query/` — QueryClient + key namespaces
+- `ui/src/shared/hooks/useQualityApi.ts`
+- `ui/src/features/*` — product screens (runs, run-detail, index, …)
 
 If you find a rule here you broke for a good reason, **update this file
 in the same PR**. If you find a rule that doesn't make sense anymore,

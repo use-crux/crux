@@ -9,6 +9,7 @@ import type {
   CruxContextContributionPreview,
   CruxPromptBudgetPreview,
   CruxPromptInputPreview,
+  DefinitionRef,
 } from '../../src/observability/contract'
 import {
   createInMemoryObservabilityTransport,
@@ -374,7 +375,11 @@ describe('canonical context and safety observability', () => {
 
     expect(safety.audit.constraints?.allPassed).toBe(true)
     expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'constraint.check' })
-    const spanStarts = transport.records.filter((record) => record.type === 'span:start')
+    const spanStarts = transport.records.filter((record) => record.type === 'span:start') as Array<{
+      primitive?: string
+      name?: string
+      definitionRefs?: DefinitionRef[]
+    }>
     expect(spanStarts.filter((record) => record.primitive === 'constraint.check')).toHaveLength(3)
     expect(spanStarts).toContainEqual(
       expect.objectContaining({
@@ -382,6 +387,23 @@ describe('canonical context and safety observability', () => {
         attributes: expect.objectContaining({ failedCount: 1, nextAttempt: 1 }),
       }),
     )
+
+    // Each per-constraint `must-mention-ship` check span carries the canonical
+    // ref; the outer `constraints:<promptId>` grouping span carries none.
+    const checkSpans = spanStarts.filter((record) => record.name === 'must-mention-ship')
+    expect(checkSpans).toHaveLength(2)
+    for (const span of checkSpans) {
+      expect(span.definitionRefs).toEqual([
+        { id: 'constraint:must-mention-ship', kind: 'constraint', role: 'invoked-constraint' },
+      ])
+    }
+    const groupSpan = spanStarts.find((record) => record.name === 'constraints:safety-test')
+    expect(groupSpan?.definitionRefs).toBeUndefined()
+
+    const retrySpan = spanStarts.find((record) => record.primitive === 'constraint.retry')
+    expect(retrySpan?.definitionRefs).toEqual([
+      { id: 'constraint:must-mention-ship', kind: 'constraint', role: 'invoked-constraint' },
+    ])
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',
@@ -409,6 +431,50 @@ describe('canonical context and safety observability', () => {
     expect(transport.records).toContainEqual(expect.objectContaining({ type: 'edge', edgeType: 'constraint.retry' }))
   })
 
+  it('carries one ref per distinct constraint on a combined multi-constraint retry', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport)
+    let attempt = 0
+    const mustMentionShip = constraint({
+      id: 'must-mention-ship',
+      on: boundary.output.both(),
+      maxRetries: 1,
+      run: async () => (attempt > 0 ? { pass: true } : { pass: false, feedback: 'Mention ship.' }),
+    })
+    const mustMentionCrew = constraint({
+      id: 'must-mention-crew',
+      on: boundary.output.both(),
+      maxRetries: 1,
+      run: async () => (attempt > 0 ? { pass: true } : { pass: false, feedback: 'Mention crew.' }),
+    })
+
+    const safety = createSafety({
+      promptId: 'safety-test-multi',
+      model: undefined,
+      call: { constraints: [mustMentionShip, mustMentionCrew] },
+    })
+    await safety.finalizeOutput({ text: 'draft' }, async () => {
+      attempt += 1
+      return { text: 'fixed ship and crew' }
+    })
+    await observe.flush()
+
+    expect(safety.audit.constraints?.allPassed).toBe(true)
+    const spanStarts = transport.records.filter((record) => record.type === 'span:start') as Array<{
+      primitive?: string
+      name?: string
+      definitionRefs?: DefinitionRef[]
+    }>
+    const retrySpan = spanStarts.find((record) => record.primitive === 'constraint.retry')
+    expect(retrySpan?.definitionRefs).toEqual(
+      expect.arrayContaining([
+        { id: 'constraint:must-mention-ship', kind: 'constraint', role: 'invoked-constraint' },
+        { id: 'constraint:must-mention-crew', kind: 'constraint', role: 'invoked-constraint' },
+      ]),
+    )
+    expect(retrySpan?.definitionRefs).toHaveLength(2)
+  })
+
     it('records guardrail actions and blocked relations', async () => {
     const transport = createInMemoryObservabilityTransport()
     setObservabilityTransport(transport)
@@ -430,8 +496,26 @@ describe('canonical context and safety observability', () => {
     await observe.flush()
 
     expect(transport.records[0]).toMatchObject({ type: 'run:start', rootPrimitive: 'guardrail.run' })
-    const spanStarts = transport.records.filter((record) => record.type === 'span:start')
+    const spanStarts = transport.records.filter((record) => record.type === 'span:start') as Array<{
+      primitive?: string
+      name?: string
+      definitionRefs?: DefinitionRef[]
+    }>
     expect(spanStarts.filter((record) => record.primitive === 'guardrail.run')).toHaveLength(3)
+
+    // Each per-guard span carries its own canonical ref; the outer
+    // `${phase} guardrails` grouping span carries none.
+    const warnSpan = spanStarts.find((record) => record.name === 'warn-sensitive')
+    expect(warnSpan?.definitionRefs).toEqual([
+      { id: 'guardrail:warn-sensitive', kind: 'guardrail', role: 'invoked-guardrail' },
+    ])
+    const blockSpan = spanStarts.find((record) => record.name === 'block-secret')
+    expect(blockSpan?.definitionRefs).toEqual([
+      { id: 'guardrail:block-secret', kind: 'guardrail', role: 'invoked-guardrail' },
+    ])
+    const groupSpan = spanStarts.find((record) => record.name === 'input guardrails')
+    expect(groupSpan?.definitionRefs).toBeUndefined()
+
     expect(transport.records).toContainEqual(
       expect.objectContaining({
         type: 'artifact',

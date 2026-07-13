@@ -93,7 +93,6 @@ describe('durable deferred intents', () => {
       workId: 'pending',
       targetId: 'send-email',
       scheduledAtMs: 1_720_000_000_000,
-      runId: 'run_abc',
       traceId: 'trace_abc',
       scheduledSpanId: '0123456789abcdef',
     }
@@ -133,10 +132,18 @@ describe('durable deferred intents', () => {
         defer: expect.objectContaining({
           scheduledSpanId: '0123456789abcdef',
           workId: staged.workId,
-          runId: 'run_abc',
           traceId: 'trace_abc',
         }),
       },
+    })
+    const released = await store.state.getWork(staged.workId, {
+      namespace: 'tenant-a',
+    })
+    expect(released?.work).not.toMatchObject({
+      defer: expect.objectContaining({ segmentId: expect.any(String) }),
+    })
+    expect(released?.work).not.toMatchObject({
+      defer: expect.objectContaining({ runId: expect.any(String) }),
     })
   })
 

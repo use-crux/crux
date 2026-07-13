@@ -103,24 +103,28 @@ export function defineNativeChatProvider<
     > = {
       providerId: profile.providerId,
 
-      async call(client, args) {
+      async call(client, args, context) {
         const mode = callModeFor(args);
         const request = await profile.request(requestArgsFor(profile, args), {
           mode,
           deps,
         });
-        const raw = await bind(client).call(request, mode);
+        const raw = await bind(client).call(request, mode, {
+          signal: context?.signal,
+        });
         return { raw, extracted: responseFor(profile, raw, request) };
       },
 
-      async stream(client, args): Promise<StreamHandle<TRawStream>> {
+      async stream(client, args, context): Promise<StreamHandle<TRawStream>> {
         const mode = callModeFor(args);
         const request = await profile.request(requestArgsFor(profile, args), {
           mode,
           deps,
         });
         const streamRequest = profile.stream.request?.(request) ?? request;
-        const rawStream = await bind(client).stream(streamRequest);
+        const rawStream = await bind(client).stream(streamRequest, {
+          signal: context?.signal,
+        });
         const chunks: unknown[] = [];
         const trackedStream = trackStream(rawStream, chunks);
         return {
@@ -153,6 +157,7 @@ export function defineNativeChatProvider<
     if (profile.sanitizeToolSchema)
       spec.sanitizeToolSchema = profile.sanitizeToolSchema;
     if (profile.outputSchema) spec.wrapOutputSchema = profile.outputSchema;
+    if (profile.mapError) spec.mapError = profile.mapError;
     return attachProviderMediaHooks(spec, profile.media);
   }
 

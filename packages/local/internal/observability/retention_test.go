@@ -33,6 +33,7 @@ func TestServiceRetentionDeletesRunsByAgeAndCount(t *testing.T) {
 	}
 	assertRetentionRunIDs(t, service, []string{"run_old_running", "run_recent_2", "run_recent_3"})
 	assertRetentionTableCount(t, service, "records", 3)
+	assertRetentionTableCount(t, service, "run_segments", 3)
 }
 
 func TestServiceRetentionCapsArtifactPreviewAtIngest(t *testing.T) {
@@ -41,8 +42,8 @@ func TestServiceRetentionCapsArtifactPreviewAtIngest(t *testing.T) {
 	service.retentionSettings.PreviewMaxBytes = 12
 
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":1,"recordId":"rec_preview_run","type":"run:start","runId":"run_preview_cap","traceId":"trace_preview_cap","name":"preview","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"rec_preview_artifact","type":"artifact","runId":"run_preview_cap","traceId":"trace_preview_cap","artifactId":"artifact_preview_cap","spanId":"span_preview","kind":"output","createdAt":"2026-05-16T18:00:00.010Z","contentType":"application/json","encoding":"json","sizeBytes":2048,"hash":"sha256:abc","preview":{"text":"this preview is intentionally too large"}}`,
+		`{"schemaVersion":2,"recordId":"rec_preview_run","type":"run:start","runId":"run_preview_cap","segmentId":"seg_preview_cap_a","segmentSeq":1,"traceId":"trace_preview_cap","name":"preview","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_preview_artifact","type":"artifact","runId":"run_preview_cap","segmentId":"seg_preview_cap_a","segmentSeq":2,"traceId":"trace_preview_cap","artifactId":"artifact_preview_cap","spanId":"span_preview","kind":"output","createdAt":"2026-05-16T18:00:00.010Z","contentType":"application/json","encoding":"json","sizeBytes":2048,"hash":"sha256:abc","preview":{"text":"this preview is intentionally too large"}}`,
 	)); err != nil {
 		t.Fatal(err)
 	}
@@ -69,8 +70,8 @@ func TestServiceRetentionSanitizesLegacyMediaBeforeCaps(t *testing.T) {
 	service := newTestService(t)
 
 	if err := service.Ingest(ctx, mustBatch(t,
-		`{"schemaVersion":1,"recordId":"rec_media_run","type":"run:start","runId":"run_media_safe","traceId":"trace_media_safe","name":"media","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
-		`{"schemaVersion":1,"recordId":"rec_media_artifact","type":"artifact","runId":"run_media_safe","traceId":"trace_media_safe","artifactId":"artifact_media_safe","kind":"output","createdAt":"2026-05-16T18:00:00.010Z","contentType":"application/json","encoding":"json","preview":{"content":[{"type":"image","source":"data:image/png;base64,SECRET_BYTES","mediaType":"image/png","filename":"SECRET.png"},{"kind":"file","mediaType":"application/pdf","sizeBytes":42,"pageCount":2,"digestPrefix":"abcdef123456","sourceCategory":"asset-ref","ref":"asset://SECRET"}],"nested":{"signed":"https://example.com/file?SECRET_TOKEN=yes"}}}`,
+		`{"schemaVersion":2,"recordId":"rec_media_run","type":"run:start","runId":"run_media_safe","segmentId":"seg_media_safe_a","segmentSeq":1,"traceId":"trace_media_safe","name":"media","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_media_artifact","type":"artifact","runId":"run_media_safe","segmentId":"seg_media_safe_a","segmentSeq":2,"traceId":"trace_media_safe","artifactId":"artifact_media_safe","kind":"output","createdAt":"2026-05-16T18:00:00.010Z","contentType":"application/json","encoding":"json","preview":{"content":[{"type":"image","source":"data:image/png;base64,SECRET_BYTES","mediaType":"image/png","filename":"SECRET.png"},{"kind":"file","mediaType":"application/pdf","sizeBytes":42,"pageCount":2,"digestPrefix":"abcdef123456","sourceCategory":"asset-ref","ref":"asset://SECRET"}],"nested":{"signed":"https://example.com/file?SECRET_TOKEN=yes"}}}`,
 	)); err != nil {
 		t.Fatal(err)
 	}
@@ -106,9 +107,15 @@ func insertRetentionRunWithStatus(t *testing.T, service *Service, runID string, 
 		t.Fatal(err)
 	}
 	if _, err := service.db.Exec(`
-		INSERT INTO records (record_id, run_id, trace_id, seq, type, payload_json)
-		VALUES (?, ?, ?, 1, 'run:start', '{}')
-	`, "record_"+runID, runID, "trace_"+runID); err != nil {
+		INSERT INTO records (record_id, run_id, trace_id, segment_id, segment_seq, type, payload_json)
+		VALUES (?, ?, ?, ?, 1, 'run:start', '{}')
+	`, "record_"+runID, runID, "trace_"+runID, "seg_"+runID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.db.Exec(`
+		INSERT INTO run_segments (run_id, segment_id, status, started_at, first_segment_seq, last_segment_seq)
+		VALUES (?, ?, ?, ?, 1, 1)
+	`, runID, "seg_"+runID, status, timestamp); err != nil {
 		t.Fatal(err)
 	}
 }

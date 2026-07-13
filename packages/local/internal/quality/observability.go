@@ -83,20 +83,25 @@ func buildQualityRunsFromObservabilityWithOptions(ctx context.Context, obs *obse
 	return runs, nil
 }
 
+// qualityCorrelationKey is the one deterministic identifier used to join a
+// canonical observability run to Quality's trace-keyed metadata: the run's
+// TraceID, or its RunID only when the run genuinely has no distinct trace
+// identity. It must not be tried as a second, unconditional lookup after a
+// present TraceID simply has no match — that previously let an unrelated
+// run's RunID collide with this run's TraceID key space.
+func qualityCorrelationKey(summary observability.RunSummary) string {
+	if summary.TraceID != "" {
+		return summary.TraceID
+	}
+	return summary.RunID
+}
+
 func (metadata qualityObservabilityMetadata) apply(run qualityRunRecord, summary observability.RunSummary) qualityRunRecord {
-	run.FeedbackIDs = metadata.feedbackByTrace[summary.TraceID]
-	if len(run.FeedbackIDs) == 0 {
-		run.FeedbackIDs = metadata.feedbackByTrace[summary.RunID]
-	}
+	correlationKey := qualityCorrelationKey(summary)
+	run.FeedbackIDs = metadata.feedbackByTrace[correlationKey]
 	run.FeedbackCount = len(run.FeedbackIDs)
-	run.ExperimentIDs = metadata.experimentsByTrace[summary.TraceID]
-	if len(run.ExperimentIDs) == 0 {
-		run.ExperimentIDs = metadata.experimentsByTrace[summary.RunID]
-	}
-	if score, ok := metadata.scoresByTrace[summary.TraceID]; ok {
-		run.Score = score.Value
-		run.ScoreName = score.Name
-	} else if score, ok := metadata.scoresByTrace[summary.RunID]; ok {
+	run.ExperimentIDs = metadata.experimentsByTrace[correlationKey]
+	if score, ok := metadata.scoresByTrace[correlationKey]; ok {
 		run.Score = score.Value
 		run.ScoreName = score.Name
 	}
@@ -104,7 +109,7 @@ func (metadata qualityObservabilityMetadata) apply(run qualityRunRecord, summary
 	if run.PromptID != nil {
 		promptKey = *run.PromptID
 	}
-	for _, key := range []string{run.TargetID, promptKey, summary.RunID, summary.TraceID} {
+	for _, key := range []string{run.TargetID, promptKey, correlationKey} {
 		if key == "" {
 			continue
 		}

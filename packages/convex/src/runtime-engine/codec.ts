@@ -61,25 +61,16 @@ export function decodeWork(value: unknown): WorkItem {
 }
 
 export function encodeSnapshot(snapshot: object & { readonly updatedAt: Date }): Record<string, unknown> {
-  const { scheduledEffects, ...current } = snapshot as typeof snapshot & {
-    readonly scheduledEffects?: unknown
-  }
   return clean({
-    ...current,
-    scheduledWork:
-      'scheduledWork' in current
-        ? current.scheduledWork
-        : scheduledEffects,
+    ...snapshot,
     updatedAt: snapshot.updatedAt.getTime(),
   })
 }
 
 export function decodeSnapshot<T>(value: unknown): T {
   const record = objectRecord(value)
-  const { scheduledEffects, ...current } = record
   return clean({
-    ...current,
-    scheduledWork: current.scheduledWork ?? scheduledEffects,
+    ...record,
     updatedAt: requiredDate(record.updatedAt),
   }) as T
 }

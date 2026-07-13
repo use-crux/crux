@@ -8,6 +8,9 @@
  */
 
 import { Icon } from '@/qw/shell/Icon'
+import { explainRunReliability, reliabilityTone } from '@/shared/lib/run-reliability'
+import { ReliabilityGlyph } from '@/shared/components/ReliabilityGlyph'
+import { DeliveryHealthBadge } from '@/shared/components/DeliveryHealthBadge'
 import { StatStrip, StatusPill, type StatItem } from './atoms'
 
 /** Failure stepper — `‹ ⚠ n/N ›` that walks the shared selection through the
@@ -22,14 +25,34 @@ export interface ErrorStepper {
   onNext: () => void
 }
 
+/**
+ * Segment/ordering/alias uncertainty surfaced truthfully (binding spec 04
+ * §5), but only rendered by the caller when non-trivial — normal
+ * single-segment runs never see this badge (spec's "stay visually calm").
+ */
+export interface RunReliabilityDetail {
+  segmentCount?: number
+  activeSegmentId?: string
+  orderingConfidence?: string
+  gapCount?: number
+  traceAliasConflict?: boolean
+  /** Delivery/export health; "unknown" is distinct from "healthy" — see `deliveryHealthTone`. */
+  deliveryHealth?: string
+}
+
 export interface RunContextStripProps {
   status: string
   items: readonly StatItem[]
   diagnosticsCount: number
   errorStepper?: ErrorStepper
+  reliability?: RunReliabilityDetail
 }
 
-export function RunContextStrip({ status, items, diagnosticsCount, errorStepper }: RunContextStripProps) {
+export function RunContextStrip({ status, items, diagnosticsCount, errorStepper, reliability }: RunContextStripProps) {
+  // Plain-language explanation for suspended/incomplete/conflicted statuses and
+  // degraded delivery health — shares its wording and signal set with the Runs
+  // list's `ReliabilityGlyph` tooltip, just spelled out in full sentences.
+  const reliabilityMsg = reliability ? explainRunReliability({ ...reliability, status }) : undefined
   const isRunning = status === 'running'
   return (
     <div
@@ -38,7 +61,23 @@ export function RunContextStrip({ status, items, diagnosticsCount, errorStepper 
     >
       <div className="flex items-center gap-3.5 px-6 py-2.5">
         <StatusPill status={status} />
+        {reliability?.deliveryHealth && <DeliveryHealthBadge status={reliability.deliveryHealth} />}
         <StatStrip items={items} size={11.5} gap={14} />
+        {reliabilityMsg && reliability && (
+          <div
+            className="flex items-center gap-1.5 rounded-[6px] px-2.5 py-1"
+            style={{ background: `var(--qw-${reliabilityTone(reliability)}-soft)` }}
+            title={reliabilityMsg}
+          >
+            <ReliabilityGlyph run={reliability} />
+            <span
+              className="max-w-[420px] truncate text-[11px] font-medium"
+              style={{ color: `var(--qw-${reliabilityTone(reliability)})` }}
+            >
+              {reliabilityMsg}
+            </span>
+          </div>
+        )}
         <div className="flex-1" />
         {errorStepper && errorStepper.total > 0 && (
           <div

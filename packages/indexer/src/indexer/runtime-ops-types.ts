@@ -8,8 +8,6 @@ import type {
 
 /** Runtime operation command executed by Crux Local's TypeScript worker. */
 export type RuntimeOperationKind =
-  | 'setup-check'
-  | 'setup-apply'
   | 'preflight'
   | 'status'
   | 'inspect'
@@ -30,19 +28,11 @@ export interface RuntimeOperationOptions {
 
 /** JSON-safe result for one Runtime Engine operation. */
 export type RuntimeOperationResult =
-  | RuntimeSetupOperationResult
   | RuntimePreflightOperationResult
   | RuntimeStatusOperationResult
   | RuntimeInspectOperationResult
   | RuntimeRetryOperationResult
   | RuntimeCancelOperationResult
-
-/** Deprecated Runtime-only setup operation envelope retained for compatibility. */
-export interface RuntimeSetupOperationResult {
-  readonly operation: 'setup-check' | 'setup-apply'
-  readonly ok: boolean
-  readonly setup: Awaited<ReturnType<RuntimeSetupPort['check']>>
-}
 
 export interface RuntimePreflightOperationResult {
   readonly operation: 'preflight'

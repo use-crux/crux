@@ -52,6 +52,7 @@ export function createStreamResult<TRawStream, TOutput = unknown>(
       content: meta?.content?.length ? meta.content : [{ type: "text", text }],
       ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),
       finishReason: meta?.finishReason,
+      ...(meta?.toolCalls !== undefined ? { toolCalls: meta.toolCalls } : {}),
       responseId: meta?.responseId,
       modelId: meta?.actualModelId,
       ...(meta?.warnings !== undefined ? { warnings: meta.warnings } : {}),

@@ -5,6 +5,11 @@
  */
 
 import { observe } from '../../observability'
+import {
+  recipeDefinitionRef,
+  recipeStepDefinitionRef,
+  rerankerDefinitionRef,
+} from '../../observability/definition-ref'
 import { RetrievalRunError } from '../errors'
 import { emitRetrievalHitsArtifact } from '../observability'
 import {
@@ -15,6 +20,7 @@ import {
 import type { RetrieverHit } from '../types'
 import { runFederatedRetrieveStep } from './federation'
 import {
+  getRerankerDefinitionId,
   getRetrieveStepConfig,
   type PlannedQuery,
   type RetrievalSourceTrace,
@@ -51,6 +57,8 @@ export async function runRetrievalRecipe(
   const span = observe.openSpan({
     name: `${config.recipeId}.recipe`,
     primitive: 'retrieval.recipe',
+    // `retrievalRecipe()` requires `id`, so `recipeId` is always authored.
+    definitionRefs: [recipeDefinitionRef(config.recipeId)],
     attributes: {
       recipeId: config.recipeId,
       sourceRetrieverIds: config.sources.map((source) => source.retriever.id),
@@ -191,9 +199,17 @@ async function runOneStep(args: {
 }): Promise<RecipeState> {
   const startedAt = Date.now()
   const inputCounts = countStepPayload(args.state)
+  // A rerank step records the authored reranker id it invokes; other step
+  // kinds carry no `rag.reranker` evidence.
+  const rerankerId = getRerankerDefinitionId(args.step)
+  const definitionRefs = [
+    recipeStepDefinitionRef(args.config.recipeId, args.step.id),
+    ...(rerankerId ? [rerankerDefinitionRef(rerankerId)] : []),
+  ]
   const span = observe.openSpan({
     name: `${args.state.phase}:${args.step.id}`,
     primitive: 'retrieval.step',
+    definitionRefs,
     attributes: {
       recipeId: args.config.recipeId,
       stepId: args.step.id,

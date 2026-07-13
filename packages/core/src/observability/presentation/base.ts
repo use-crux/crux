@@ -27,6 +27,17 @@ export interface CruxPresentationAttributes {
   presentation?: CruxPresentationHint
 }
 
+/**
+ * "unknown" (no persisted correlation to any delivery/export health signal)
+ * is deliberately distinct from "healthy" — the server never invents a
+ * healthy status it cannot actually trace back to this run.
+ */
+export interface CruxRunDeliveryHealth {
+  status: 'unknown' | 'healthy' | 'degraded' | string
+  rejected?: number
+  lastKnownAt?: string
+}
+
 /** Run-level summary projected by the local observability read path. */
 export interface CruxRunSummaryView {
   runId: CruxRunId
@@ -45,6 +56,18 @@ export interface CruxRunSummaryView {
   eventCount: number
   artifactCount: number
   edgeCount: number
+  /** Number of physical execution segments observed for this logical run. */
+  segmentCount: number
+  /** The only live segment, omitted when none or more than one is live. */
+  activeSegmentId?: string
+  /** Whether the server could establish one causal display order. */
+  orderingConfidence: 'causal' | 'partial'
+  /** Missing segment-local sequence values and unresolved parent references. */
+  gapCount: number
+  /** True when a trace alias identifies more than one logical run. */
+  traceAliasConflict?: boolean
+  /** Delivery/export health; "unknown" is distinct from "healthy". */
+  deliveryHealth?: CruxRunDeliveryHealth
   attributes?: CruxAttributes | null
   metrics?: CruxParsedMetrics | null
   error?: CruxErrorSummary | string | null

@@ -7,6 +7,8 @@ export interface RunsFilters {
   last?: 'all' | '1h' | '24h' | '7d' | '30d'
   has?: 'feedback' | 'experiment'
   search?: string
+  /** Pre-filter to runs whose DefinitionRefs include this Catalog definition (Phase 3 filter). */
+  definitionId?: string
 }
 
 export interface RunsProps {
@@ -95,4 +97,18 @@ export interface RunRow {
   diagnosticsMaxSeverity?: string
   /** Short error preview, only meaningful when `status` is error-ish. */
   errorMessage?: string
+  /** Server-owned read-model revision this row was current as of. */
+  revision?: number
+  /** Number of physical execution segments observed for this logical run. */
+  segmentCount?: number
+  /** The only live segment, omitted when none or more than one is live. */
+  activeSegmentId?: string
+  /** Whether the server could establish one causal display order. */
+  orderingConfidence?: 'causal' | 'partial' | string
+  /** Missing segment-local sequence values and unresolved parent references. */
+  gapCount?: number
+  /** True when a trace alias identifies more than one logical run. */
+  traceAliasConflict?: boolean
+  /** Delivery/export health; "unknown" is distinct from "healthy". */
+  deliveryHealth?: 'unknown' | 'healthy' | 'degraded' | string
 }

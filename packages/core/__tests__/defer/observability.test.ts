@@ -392,6 +392,7 @@ describe('handler-returned completion class is recorded', () => {
 
 describe('named evidence lifecycle vs drain settlement', () => {
   afterEach(() => {
+    vi.useRealTimers()
     resetObservabilityRuntime()
   })
 
@@ -617,19 +618,91 @@ describe('named evidence lifecycle vs drain settlement', () => {
     expectBalancedGraph(transport.records)
   })
 
+  it('retains delivery until ignored named acceptance closes its terminal evidence', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    setObservabilityTransport(transport, { scheduledDelayMs: 60_000 })
+
+    let runRetained: (() => Promise<void>) | undefined
+    const { createInvocationDeferScope } =
+      await import('../../src/defer/internal/invocation-scope')
+    const scope = createInvocationDeferScope({
+      ...testLifetime((run) => {
+        runRetained = run
+      }),
+      durableFinalization: true,
+    })
+    let releaseAcceptance!: () => void
+    const acceptanceGate = new Promise<void>((resolve) => {
+      releaseAcceptance = resolve
+    })
+    const namedLifecycle = acceptanceGate.then(() => {
+      const input = {
+        sequence: 0,
+        targetId: 'ignored-named-acceptance',
+        workId: 'work_ignored_acceptance',
+        scopeId: 'scope_ignored_acceptance',
+        scheduledAtMs: Date.now(),
+        scheduledSpanId: '0000000000000006',
+      }
+      scope.namedEvidenceHooks.onStaged(input)
+      scope.namedEvidenceHooks.onTerminal([input], 'released')
+    })
+    scope.trackCommit(namedLifecycle)
+
+    const barriers = scope.seal('success')
+    const retained = runRetained?.()
+    let retainedDone = false
+    void retained?.then(() => {
+      retainedDone = true
+    })
+
+    // Public callback settlement remains independent from durable acceptance.
+    await expect(barriers.settled).resolves.toMatchObject({
+      timedOut: false,
+      cancelled: false,
+    })
+    expect(retainedDone).toBe(false)
+    expect(transport.records).toHaveLength(0)
+
+    releaseAcceptance()
+    await barriers.committed
+    await retained
+
+    const scheduled = transport.records.find(
+      (record) =>
+        record.type === 'span:start' &&
+        record.primitive === 'defer.scheduled' &&
+        record.attributes?.targetId === 'ignored-named-acceptance',
+    )
+    expect(scheduled).toBeDefined()
+    expect(transport.records).toContainEqual(
+      expect.objectContaining({
+        type: 'span:end',
+        spanId: scheduled?.spanId,
+        attributes: expect.objectContaining({ intentState: 'released' }),
+      }),
+    )
+    expect(
+      transport.records.filter((record) => record.type === 'run:end'),
+    ).toHaveLength(1)
+    expectBalancedGraph(transport.records)
+  })
+
   it('resolves public settled without waiting for named commit', async () => {
     let releaseCommit!: () => void
     const hangCommit = new Promise<void>((resolve) => {
       releaseCommit = resolve
     })
-    let settledDone = false
+    let retainedDone = false
+    let retained: Promise<void> | undefined
     let committedDone = false
     const lifetime: DeferLifetimeCapability = {
       ...testLifetime(() => {}),
       durableFinalization: true,
       schedule(task) {
-        void task.run().then(() => {
-          settledDone = true
+        retained = task.run()
+        void retained.then(() => {
+          retainedDone = true
         })
       },
     }
@@ -650,19 +723,18 @@ describe('named evidence lifecycle vs drain settlement', () => {
       },
     )
 
-    await vi.waitFor(() => {
-      expect(settledDone).toBe(true)
-    })
-    expect(committedDone).toBe(false)
     await expect(barriers.settled).resolves.toMatchObject({
       timedOut: false,
       cancelled: false,
     })
     expect(committedDone).toBe(false)
+    expect(retainedDone).toBe(false)
 
     releaseCommit()
     await barriers.committed
+    await retained
     expect(committedDone).toBe(true)
+    expect(retainedDone).toBe(true)
   })
 
   it('integration: named success ends scheduled as released with a balanced graph', async () => {
@@ -724,9 +796,10 @@ describe('named evidence lifecycle vs drain settlement', () => {
 
   it('emits defer.run when a named deferred target actually executes', async () => {
     const transport = createInMemoryObservabilityTransport()
-    setObservabilityTransport(transport)
-
+    const persistedStatusesAtDelivery: string[] = []
+    let terminalDeliveryAttempts = 0
     let executed = false
+    let workId: string | undefined
     const target = durableTask('named-run-execution', {
       run: async (input: { readonly id: string }) => {
         executed = true
@@ -734,9 +807,39 @@ describe('named evidence lifecycle vs drain settlement', () => {
       },
     })
     const testRuntime = createTestRuntime({ targets: [target] })
+    const accept = transport.send.bind(transport)
+    setObservabilityTransport(
+      {
+        ...transport,
+        async send(records) {
+          const terminalEvidence = records.some(
+            (record) =>
+              record.type === 'span:end' &&
+              record.attributes?.mode === 'named' &&
+              record.attributes?.outcome === 'completed',
+          )
+          if (terminalEvidence && workId) {
+            const persisted = await testRuntime.store.state.getWork(workId, {
+              namespace: 'local',
+            })
+            persistedStatusesAtDelivery.push(persisted?.status ?? 'missing')
+            terminalDeliveryAttempts += 1
+            if (terminalDeliveryAttempts === 1) {
+              return { dispositions: [], retryAfterMs: 1 }
+            }
+          }
+          return accept(records)
+        },
+      },
+      {
+        scheduledDelayMs: 60_000,
+        retryDelayMs: 1,
+        maxRetryDelayMs: 1,
+        retryJitterRatio: 0,
+      },
+    )
     try {
       let drain: (() => Promise<void>) | undefined
-      let workId: string | undefined
       let scheduledSpanId: string | undefined
 
       await runWithDeferInvocation(
@@ -787,11 +890,17 @@ describe('named evidence lifecycle vs drain settlement', () => {
           scheduledSpanId,
         }),
       })
+      expect(work?.work).not.toMatchObject({
+        defer: expect.objectContaining({ segmentId: expect.any(String) }),
+      })
+      expect(work?.work).not.toMatchObject({
+        defer: expect.objectContaining({ runId: expect.any(String) }),
+      })
 
       await testRuntime.settle()
-      await observe.flush()
 
       expect(executed).toBe(true)
+      expect(persistedStatusesAtDelivery).toEqual(['completed', 'completed'])
       const runStart = transport.records.find(
         (record): record is Extract<CruxGraphRecord, { type: 'span:start' }> =>
           record.type === 'span:start' &&
@@ -808,7 +917,9 @@ describe('named evidence lifecycle vs drain settlement', () => {
           sequence: 0,
         }),
       })
-      expect(runStart?.runId).toBe(scheduledStart?.runId)
+      expect(runStart?.runId).not.toBe(scheduledStart?.runId)
+      expect(runStart?.traceId).toBe(scheduledStart?.traceId)
+      expect(runStart?.segmentId).not.toBe(scheduledStart?.segmentId)
       expect(transport.records).toContainEqual(
         expect.objectContaining({
           type: 'edge',
@@ -818,6 +929,153 @@ describe('named evidence lifecycle vs drain settlement', () => {
         }),
       )
       expectBalancedGraph(transport.records)
+    } finally {
+      testRuntime.dispose()
+    }
+  })
+
+  it('flushes failed named wake evidence only after retry persistence', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    const persistedStatusesAtDelivery: string[] = []
+    let terminalDeliveryAttempts = 0
+    let workId: string | undefined
+    const target = durableTask('named-run-failure', {
+      run: async () => {
+        throw new Error('named target failed')
+      },
+    })
+    const testRuntime = createTestRuntime({ targets: [target] })
+    const accept = transport.send.bind(transport)
+    setObservabilityTransport(
+      {
+        ...transport,
+        async send(records) {
+          const terminalEvidence = records.some(
+            (record) =>
+              record.type === 'span:end' &&
+              record.attributes?.mode === 'named' &&
+              record.attributes?.outcome === 'failed',
+          )
+          if (terminalEvidence && workId) {
+            const persisted = await testRuntime.store.state.getWork(workId, {
+              namespace: 'local',
+            })
+            persistedStatusesAtDelivery.push(persisted?.status ?? 'missing')
+            terminalDeliveryAttempts += 1
+            if (terminalDeliveryAttempts === 1) {
+              return { dispositions: [], retryAfterMs: 1 }
+            }
+          }
+          return accept(records)
+        },
+      },
+      {
+        scheduledDelayMs: 60_000,
+        retryDelayMs: 1,
+        maxRetryDelayMs: 1,
+        retryJitterRatio: 0,
+      },
+    )
+    try {
+      let drain: (() => Promise<void>) | undefined
+      await runWithDeferInvocation(
+        async () => {
+          const reference = await defer(target, { id: 'failure-1' })
+          workId = reference.workId
+          return 'ok'
+        },
+        {
+          lifetime: {
+            ...testLifetime((run) => {
+              drain = run
+            }),
+            durableFinalization: true,
+          },
+          classifyOutcome: () => 'success',
+        },
+      )
+      await drain?.()
+      await observe.flush()
+
+      await testRuntime.tick()
+
+      expect(persistedStatusesAtDelivery).toEqual(['pending', 'pending'])
+      await expect(
+        testRuntime.store.state.getWork(workId!, { namespace: 'local' }),
+      ).resolves.toMatchObject({ status: 'pending', attempt: 2 })
+      expect(
+        transport.records.some(
+          (record) =>
+            record.type === 'span:end' &&
+            record.attributes?.mode === 'named' &&
+            record.attributes?.outcome === 'failed',
+        ),
+      ).toBe(true)
+      expectBalancedGraph(transport.records)
+    } finally {
+      testRuntime.dispose()
+    }
+  })
+
+  it('keeps a committed named wake authoritative when delivery hangs', async () => {
+    const transport = createInMemoryObservabilityTransport()
+    let terminalSendStarted = false
+    const accept = transport.send.bind(transport)
+    setObservabilityTransport(
+      {
+        ...transport,
+        send(records) {
+          if (
+            records.some(
+              (record) =>
+                record.type === 'span:end' &&
+                record.attributes?.mode === 'named' &&
+                record.attributes?.outcome === 'completed',
+            )
+          ) {
+            terminalSendStarted = true
+            return new Promise(() => {})
+          }
+          return accept(records)
+        },
+      },
+      { scheduledDelayMs: 60_000 },
+    )
+    const target = durableTask('named-run-hung-delivery', {
+      run: async () => undefined,
+    })
+    const testRuntime = createTestRuntime({ targets: [target] })
+    try {
+      let drain: (() => Promise<void>) | undefined
+      let workId: string | undefined
+      await runWithDeferInvocation(
+        async () => {
+          const reference = await defer(target, { id: 'hung-1' })
+          workId = reference.workId
+          return 'ok'
+        },
+        {
+          lifetime: {
+            ...testLifetime((run) => {
+              drain = run
+            }),
+            durableFinalization: true,
+          },
+          classifyOutcome: () => 'success',
+        },
+      )
+      await drain?.()
+      await observe.flush()
+
+      vi.useFakeTimers()
+      const wake = testRuntime.tick()
+      await vi.advanceTimersByTimeAsync(3_001)
+      await expect(wake).resolves.toBeDefined()
+
+      expect(terminalSendStarted).toBe(true)
+      await expect(
+        testRuntime.store.state.getWork(workId!, { namespace: 'local' }),
+      ).resolves.toMatchObject({ status: 'completed' })
     } finally {
       testRuntime.dispose()
     }
@@ -873,10 +1131,15 @@ describe('named evidence lifecycle vs drain settlement', () => {
         kind: 'task.run',
         defer: expect.objectContaining({
           scheduledSpanId: scheduledStart?.spanId,
-          runId: scheduledStart?.runId,
           traceId: scheduledStart?.traceId,
           workId,
         }),
+      })
+      expect(work?.work).not.toMatchObject({
+        defer: expect.objectContaining({ segmentId: expect.any(String) }),
+      })
+      expect(work?.work).not.toMatchObject({
+        defer: expect.objectContaining({ runId: expect.any(String) }),
       })
 
       // Durable work can execute after the originating grouped run has ended.
@@ -896,14 +1159,23 @@ describe('named evidence lifecycle vs drain settlement', () => {
       )
       expect(runStarts).toHaveLength(1)
       const runStart = runStarts[0]!
-      expect(runStart.runId).toBe(scheduledStart?.runId)
+      expect(runStart.runId).not.toBe(scheduledStart?.runId)
       expect(runStart.traceId).toBe(scheduledStart?.traceId)
-      expect(
-        transport.records.findIndex(
-          (record) =>
-            record.type === 'run:end' && record.runId === runStart.runId,
-        ),
-      ).toBeLessThan(transport.records.indexOf(runStart))
+      expect(runStart.segmentId).not.toBe(scheduledStart?.segmentId)
+      const executionRunStartIndex = transport.records.findIndex(
+        (record) =>
+          record.type === 'run:start' && record.runId === runStart.runId,
+      )
+      const executionRunEndIndex = transport.records.findIndex(
+        (record) =>
+          record.type === 'run:end' && record.runId === runStart.runId,
+      )
+      expect(executionRunStartIndex).toBeLessThan(
+        transport.records.indexOf(runStart),
+      )
+      expect(executionRunEndIndex).toBeGreaterThan(
+        transport.records.indexOf(runStart),
+      )
       expect(transport.records).toContainEqual(
         expect.objectContaining({
           type: 'edge',
@@ -1000,12 +1272,14 @@ describe('named evidence lifecycle vs drain settlement', () => {
           record.attributes?.mode === 'named',
       )
       expect(namedRun).toMatchObject({
-        runId: namedScheduled[0]?.runId,
+        traceId: namedScheduled[0]?.traceId,
         attributes: expect.objectContaining({
           targetId: 'nested-callback-named',
           workId,
         }),
       })
+      expect(namedRun?.runId).not.toBe(namedScheduled[0]?.runId)
+      expect(namedRun?.segmentId).not.toBe(namedScheduled[0]?.segmentId)
       expect(transport.records).toContainEqual(
         expect.objectContaining({
           type: 'edge',
@@ -1014,10 +1288,10 @@ describe('named evidence lifecycle vs drain settlement', () => {
           to: { kind: 'span', id: namedRun?.spanId },
         }),
       )
-      // One owned/originating grouped run only (no duplicate nested roots).
+      // Durable execution owns a fresh run on the same trace.
       expect(
         transport.records.filter((record) => record.type === 'run:start'),
-      ).toHaveLength(1)
+      ).toHaveLength(2)
       expectBalancedGraph(transport.records)
     } finally {
       testRuntime.dispose()

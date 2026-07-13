@@ -1,7 +1,12 @@
 import type Anthropic from "@anthropic-ai/sdk";
-import type { MessageStream } from "@anthropic-ai/sdk/lib/MessageStream";
-import { defineSingleTurnProviderBundle } from "@use-crux/core/adapter";
+import {
+  classifyProviderHttpError,
+  CruxAdapterError,
+  cruxProviderError,
+  defineSingleTurnProviderBundle,
+} from "@use-crux/core/adapter";
 import type {
+  CruxProviderError,
   NativeProviderPort,
   SingleTurnProviderBundleSpec,
 } from "@use-crux/core/adapter";
@@ -23,6 +28,7 @@ import {
 } from "./request-params";
 import { anthropicResponseMeta, anthropicResponseText } from "./response";
 import type { AnthropicParsedMessage } from "./response";
+import { AnthropicChatStream, createAnthropicStreamCapture } from "./stream";
 import type { AnthropicExtra, AnthropicRequest } from "./types";
 
 /** Configuration for `anthropic.retrievalModel()`. */
@@ -57,7 +63,24 @@ const anthropic = defineSingleTurnProviderBundle({
         return typeof delta.text === "string" ? delta.text : undefined;
       },
       completion: async (stream) => {
-        const finalMsg = await stream.finalMessage();
+        let finalMsg: AnthropicParsedMessage;
+        try {
+          finalMsg = await stream.finalMessage();
+        } catch (error) {
+          // A finalMessage() rejection means the stream errored/aborted/failed
+          // validation — surface it as a normalized error instead of silently
+          // discarding it as "no completion metadata".
+          const mapped = mapAnthropicError(error);
+          throw new CruxAdapterError(
+            cruxProviderError({
+              kind: mapped?.kind ?? "provider-error",
+              code: "anthropic.stream_completion_failed",
+              retryable: mapped?.retryable ?? true,
+              message: error instanceof Error ? error.message : error,
+            }),
+            { cause: error },
+          );
+        }
         const assistant = anthropicTranscript.readAssistant(finalMsg);
         const content =
           typeof assistant.content === "string"
@@ -73,6 +96,7 @@ const anthropic = defineSingleTurnProviderBundle({
         };
       },
     },
+    mapError: mapAnthropicError,
     settings: mapAnthropicSettings,
     outputSchema: anthropicOutputSchema,
     sanitizeToolSchema: stripDescriptions,
@@ -82,7 +106,7 @@ const anthropic = defineSingleTurnProviderBundle({
     Anthropic,
     AnthropicRequest,
     AnthropicParsedMessage,
-    MessageStream,
+    AnthropicChatStream,
     AnthropicExtra,
     Record<string, never>,
     Anthropic.MessageParam
@@ -102,15 +126,32 @@ export const anthropicProviderRuntime = anthropic.runtime;
 /** Bind an Anthropic SDK client to the narrow native chat provider port. */
 function bindAnthropic(
   client: Anthropic,
-): NativeProviderPort<AnthropicRequest, AnthropicParsedMessage, MessageStream> {
+): NativeProviderPort<
+  AnthropicRequest,
+  AnthropicParsedMessage,
+  AnthropicChatStream
+> {
   return {
-    call: (request, mode) =>
+    call: (request, mode, options) =>
       mode === "structured"
-        ? client.messages.parse(asAnthropicNonStreamingParams(request))
-        : client.messages.create(asAnthropicNonStreamingParams(request)),
-    stream: async (request) =>
-      client.messages.stream(asAnthropicStreamingParams(request)),
+        ? client.messages.parse(asAnthropicNonStreamingParams(request), {
+            signal: options?.signal,
+          })
+        : client.messages.create(asAnthropicNonStreamingParams(request), {
+            signal: options?.signal,
+          }),
+    stream: async (request, options) =>
+      createAnthropicStreamCapture(
+        client.messages.stream(asAnthropicStreamingParams(request), {
+          signal: options?.signal,
+        }),
+      ),
   };
+}
+
+/** Classify an Anthropic SDK error into the normalized provider-error taxonomy. */
+function mapAnthropicError(error: unknown): CruxProviderError | undefined {
+  return classifyProviderHttpError(error, "anthropic");
 }
 
 /** Create an Anthropic adapter bound to a client instance. */

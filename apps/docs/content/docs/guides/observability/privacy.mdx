@@ -1,0 +1,97 @@
+---
+title: Privacy and redaction
+description: What Crux telemetry keeps, redacts, or omits — including DefinitionRef.source and provider errors.
+---
+
+Crux observability is built to be **safe by default**: payloads are optional, sensitive keys are stripped on the shared redaction path, and join metadata never carries host filesystem roots or unbounded provider dumps.
+
+## Graph capture policy
+
+Configure capture once; every consumer (devtools HTTP transport, `subscribeObservability()`, diagnostics channel, `@use-crux/otel`) sees the same sanitized records:
+
+```ts
+import { config } from '@use-crux/core'
+
+export default config({
+  observability: {
+    recordInputs: 'off', // 'inline' | 'reference' | 'off'
+    recordOutputs: 'reference',
+    redactRecord: (record) => {
+      // return a replacement record, or null to drop fail-closed
+      return record
+    },
+  },
+})
+```
+
+- **`inline`** — embed bounded previews on the record
+- **`reference`** — keep identity/size pointers without full bodies where supported
+- **`off`** — omit payload-shaped content
+
+The emit path also strips payload-shaped attributes, converts JSON-hostile values, and drops invalid optional metrics before fan-out. Hook failures in `redactRecord` drop the record (fail-closed).
+
+Shared helper: `toSafeJsonValue()` from `@use-crux/core/observability` — truncates long strings (default 8000 chars) and redacts sensitive object keys.
+
+## DefinitionRef source
+
+Runtime records may attach:
+
+```ts
+definitionRefs?: Array<{
+  id: string
+  kind: ProjectDefinitionKind
+  role: DefinitionRefRole
+  source?: { file: string; line: number; column?: number }
+}>
+```
+
+`source` is a **`SanitizedSourceRef`**:
+
+- **Repo-relative only** — absolute host paths are never emitted on the wire
+- **No `..` traversal** — paths that escape the project root are dropped
+- **No function names** — stack-derived function fields are intentionally never emitted
+- **Omitted when unproven** — if the runtime cannot prove a safe relative path (missing project root, path outside root, bad line), `source` is absent entirely
+
+Built-in emitters usually omit `source` and let the current Project Index supply location at read time. When a site does hold a genuine compiled location, `sanitizeDefinitionSource(source, { projectRoot })` is the only supported conversion.
+
+## Provider errors
+
+Normalized adapter failures use:
+
+```ts
+interface CruxProviderError {
+  kind: CruxProviderErrorKind
+  code: string // bounded, namespaced machine id
+  retryable: boolean
+  message?: string // optional, redacted human text
+}
+```
+
+| Field | Retention rule |
+| --- | --- |
+| `kind` | Closed enum — classification only |
+| `code` | Short namespaced string (`openai.rate_limit`, `anthropic.stream_completion_failed`, `crux.timeout.generate`, …) — enough to debug without raw payloads |
+| `retryable` | Boolean classification only — does not trigger retries by itself |
+| `message` | Optional; always passed through `redactProviderMessage` / `toSafeJsonValue` before storage. Empty after redaction → omitted |
+
+There is no `providerEvidence` bag and no raw response-body field on the public error shape. Prefer `code` + `kind` in logs; treat `message` as best-effort, already-redacted text.
+
+## OpenTelemetry
+
+`@use-crux/otel` projects metadata from the same graph stream and drops known payload attribute keys (`text`, `query`, `messages`, `output`, …) by default.
+
+- GenAI **message content** attributes are **off** unless `captureMessageContent: true` or `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=true` (each content attribute capped at 32KB)
+- Tool spans record `toModelOutput()` **shape/size** only — not raw tool results
+- Corpus / ingest identifiers export as **hashes**, not raw paths or URLs
+- W3C **baggage** is untrusted input: nothing is copied onto spans unless listed in `baggageAttributeAllowlist`
+
+## Storage and Memory explorers
+
+DevTools Storage and related resource views show wiring, capabilities, and operation summaries. They do not display record values, vector contents, blob bodies, or signed URLs unless the application explicitly enables raw debug inspection.
+
+## Related
+
+- [Adapter outcomes](/docs/guides/observability/adapter-outcomes)
+- [Telemetry](/docs/guides/observability/telemetry)
+- [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence)
+- [Observability reference](/docs/reference/crux-core/observability)

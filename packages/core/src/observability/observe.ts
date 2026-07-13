@@ -11,9 +11,11 @@ import {
   type CruxPrimitiveName,
   type CruxRunId,
   type CruxRunStatus,
+  type CruxSegmentId,
   type CruxSpanStatus,
   type CruxSpanId,
   type CruxTraceId,
+  type DefinitionRef,
 } from './contract'
 import { channelHasSubscribers, publishObservabilityChannel } from './channel'
 import {
@@ -21,6 +23,7 @@ import {
   createCruxEdgeId,
   createCruxRecordId,
   createCruxRunId,
+  createCruxSegmentId,
   createCruxSpanEventId,
   createCruxSpanId,
   createCruxTraceId,
@@ -41,11 +44,18 @@ import {
 } from './subscribers'
 import type { CruxObservabilityTransport } from './transport'
 import { validateRecordForEmission } from './validate-record'
-import { createDeliveryEngine } from './delivery/engine'
+import {
+  createDeliveryEngine,
+  type DeliveryDiagnostic,
+} from './delivery/engine'
 import type {
   ObservabilityDeliveryOptions,
   ObservabilityFlushOptions,
+  ObservabilityFlushResult,
 } from './delivery/options'
+import { activeHostLifecycle, runWithHostLifecycle } from './delivery/host-scope'
+import { remainingHostDeadlineMs, type CruxHostLifecycle } from '../runtime/api/host-lifecycle'
+import { getHooks } from '../runtime/runtime'
 import {
   currentCruxCorrelators,
   currentObservabilityContext,
@@ -62,6 +72,11 @@ import {
   currentQualityObservabilityCaptureSession,
   shouldQuarantineQualityObservabilityWrite,
 } from './quality-capture-hooks'
+import {
+  continuationIdentity,
+  createPropagationCarrier,
+  type CruxPropagationCarrier,
+} from './continuation'
 
 export {
   subscribeObservability,
@@ -73,7 +88,9 @@ export type { CapturedObservabilityContext } from './context'
 export type {
   ObservabilityDeliveryOptions,
   ObservabilityFlushOptions,
+  ObservabilityFlushResult,
 } from './delivery/options'
+export type { DeliveryDiagnostic } from './delivery/engine'
 
 export interface ConfigureObservabilityOptions {
   transport?: CruxObservabilityTransport
@@ -89,6 +106,8 @@ export interface ConfigureObservabilityOptions {
 
 export interface ObservabilityDiagnostics {
   readonly pendingDeliveries: number
+  readonly queuedRecords: number
+  readonly queuedBytes: number
   readonly droppedRecords: number
   /**
    * Total delivery failures observed since the diagnostics were last reset.
@@ -100,13 +119,28 @@ export interface ObservabilityDiagnostics {
   readonly invalidRecords: number
   readonly redactedRecords: number
   readonly contextlessRecords: number
-  readonly deliveryErrors: readonly unknown[]
+  readonly deliveryErrors: readonly DeliveryDiagnostic[]
+  readonly acceptedRecords: number
+  readonly retriedRecords: number
+  readonly permanentlyRejectedRecords: number
+  readonly overflowDroppedRecords: number
+  readonly overflowDroppedBytes: number
+  readonly deadlineDroppedRecords: number
+  readonly reconfiguredDroppedRecords: number
+  /** Records still in flight to a transport superseded by reconfiguration; not yet settled. */
+  readonly reconfiguredRemainingRecords: number
+  /** Serialized bytes backing {@link reconfiguredRemainingRecords}. */
+  readonly reconfiguredRemainingBytes: number
+  /** Superseded delivery promises still retained for a drain to await, bounded by `maxPendingDeliveries`. */
+  readonly reconfiguredTrackedDeliveries: number
   readonly subscriberErrors: number
 }
 
 export interface OpenObservedSpan {
   readonly runId: CruxRunId
   readonly traceId: CruxTraceId
+  /** Segment that owns records emitted by this open span. */
+  readonly segmentId: CruxSegmentId
   readonly spanId: CruxSpanId
   readonly parentSpanId: CruxSpanId | null
   /**
@@ -137,13 +171,29 @@ export interface OpenObservedSpan {
 export interface OpenObservedRun {
   readonly runId: CruxRunId
   readonly traceId: CruxTraceId
+  /** Segment that owns records emitted by this open run. */
+  readonly segmentId: CruxSegmentId
   captureContext(): CapturedObservabilityContext
+  /** Capture serializable correlation without changing lifecycle state. */
+  captureContinuation(): CruxPropagationCarrier
   withContext<T>(fn: () => T | Promise<T>): T | Promise<T>
+  /** Close this physical segment without terminalizing its logical run. */
+  suspend(options: SuspendObservedRunOptions): CruxPropagationCarrier
   end(options?: EndObservedRunOptions): void
   error(
     error: unknown,
     options?: Omit<EndObservedRunOptions, 'status' | 'error'>,
   ): void
+}
+
+export interface SuspendObservedRunOptions {
+  reason: string
+  attributes?: CruxAttributes
+}
+
+export interface ResumeObservedRunOptions {
+  reason: string
+  attributes?: CruxAttributes
 }
 
 export interface ObserveRunOptions {
@@ -160,7 +210,7 @@ export interface ObserveRunOptions {
 }
 
 export interface EndObservedRunOptions {
-  status?: Exclude<CruxRunStatus, 'running'>
+  status?: Exclude<CruxRunStatus, 'running' | 'suspended'>
   metrics?: CruxMetrics
   error?: unknown
   attributes?: CruxAttributes
@@ -179,6 +229,13 @@ export interface ObserveSpanOptions<
   name: string
   primitive: P
   attributes?: AttributesFor<P>
+  /**
+   * Project Index definitions this span resolved or invoked. Emitted verbatim
+   * on the `span:start` record so the runtime→index join can attach evidence.
+   * Callers are responsible for canonical id construction and source
+   * sanitization (see `./definition-ref`).
+   */
+  definitionRefs?: DefinitionRef[]
   /**
    * When a span starts outside an active run, `observe.span()` normally opens
    * an implicit run so direct primitive calls remain inspectable. Detail
@@ -255,7 +312,45 @@ function currentContext(): ObservabilityContext | undefined {
 }
 
 function withContext<R>(context: ObservabilityContext, fn: () => R): R {
-  return withObservabilityContext(context, fn)
+  return withObservabilityContext(context, () => activateSpan(context, fn))
+}
+
+/**
+ * Run `fn` through the installed {@link SpanActivationHook}, if any.
+ *
+ * This is the single choke point every `withContext()` call passes through
+ * (`observe.run`, `observe.span`, `observe.openSpan().withContext`,
+ * `observe.openRun().withContext`, resumed segments), so a telemetry plugin
+ * that installs the hook activates its real span around the actual callback
+ * for every instrumented entry point without per-call-site wiring.
+ */
+function activateSpan<R>(context: ObservabilityContext, fn: () => R): R {
+  const hook = getHooks().spanActivationHook
+  if (!hook) return fn()
+  const currentSpanId = context.spanStack[context.spanStack.length - 1]
+  return hook(captureContextValue(context, context.spanStack, currentSpanId), fn)
+}
+
+/**
+ * Merge explicit resume attributes with any attributes an installed
+ * telemetry plugin derives from the propagation carrier (e.g. allowlisted
+ * W3C baggage). The hook never throws through app work; a throw or
+ * non-object return is treated as "nothing to add".
+ */
+function resumeAttributesFor(
+  carrier: CruxPropagationCarrier,
+  explicit: CruxAttributes | undefined,
+): CruxAttributes | undefined {
+  const hook = getHooks().telemetryResumeAttributesHook
+  if (!hook) return explicit
+  let derived: CruxAttributes | undefined
+  try {
+    derived = hook(carrier)
+  } catch {
+    derived = undefined
+  }
+  if (!derived || Object.keys(derived).length === 0) return explicit
+  return { ...derived, ...(explicit ?? {}) }
 }
 
 function now(): string {
@@ -426,6 +521,7 @@ function emitObservedErrorEvidence(
         recordId: createCruxRecordId(),
         type: 'span:event',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         eventId: createCruxSpanEventId(),
@@ -443,6 +539,7 @@ function emitObservedErrorEvidence(
           recordId: createCruxRecordId(),
           type: 'artifact',
           runId: context.runId,
+          segmentId: context.segmentId,
           traceId: context.traceId,
           spanId,
           artifactId: createCruxArtifactId(),
@@ -463,6 +560,7 @@ function emitObservedErrorEvidence(
         recordId: createCruxRecordId(),
         type: 'artifact',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         artifactId: createCruxArtifactId(),
@@ -498,6 +596,7 @@ function captureContextValue(
 ): CapturedObservabilityContext {
   return {
     runId: context.runId,
+    segmentId: context.segmentId,
     traceId: context.traceId,
     ...(context.startedAtMs !== undefined
       ? { startedAtMs: context.startedAtMs }
@@ -645,6 +744,7 @@ export function resetObservabilityRuntime(): void {
   endedRunStatuses.clear()
   recordSequencer.reset()
   defaultCorrelators = undefined
+  telemetryFlushFailures = 0
 }
 
 export function observabilityDeliveryErrors(): readonly unknown[] {
@@ -655,12 +755,25 @@ export function observabilityDiagnostics(): ObservabilityDiagnostics {
   const deliveryDiagnostics = deliveryEngine.diagnostics()
   return {
     pendingDeliveries: deliveryDiagnostics.pendingDeliveries,
+    queuedRecords: deliveryDiagnostics.queuedRecords,
+    queuedBytes: deliveryDiagnostics.queuedBytes,
     droppedRecords: deliveryDiagnostics.droppedRecords,
     deliveryErrorCount: deliveryDiagnostics.deliveryErrorCount,
     invalidRecords,
     redactedRecords,
     contextlessRecords,
     deliveryErrors: deliveryDiagnostics.deliveryErrors,
+    acceptedRecords: deliveryDiagnostics.acceptedRecords,
+    retriedRecords: deliveryDiagnostics.retriedRecords,
+    permanentlyRejectedRecords:
+      deliveryDiagnostics.permanentlyRejectedRecords,
+    overflowDroppedRecords: deliveryDiagnostics.overflowDroppedRecords,
+    overflowDroppedBytes: deliveryDiagnostics.overflowDroppedBytes,
+    deadlineDroppedRecords: deliveryDiagnostics.deadlineDroppedRecords,
+    reconfiguredDroppedRecords: deliveryDiagnostics.reconfiguredDroppedRecords,
+    reconfiguredRemainingRecords: deliveryDiagnostics.reconfiguredRemainingRecords,
+    reconfiguredRemainingBytes: deliveryDiagnostics.reconfiguredRemainingBytes,
+    reconfiguredTrackedDeliveries: deliveryDiagnostics.reconfiguredTrackedDeliveries,
     subscriberErrors: observabilitySubscriberErrorCount(),
   }
 }
@@ -669,15 +782,23 @@ export const observe = {
   openRun(options: ObserveRunOptions): OpenObservedRun {
     const runId = createCruxRunId()
     const traceId = options.traceId ?? createCruxTraceId()
+    const segmentId = createCruxSegmentId()
     const startedAtMs = Date.now()
     const context: ObservabilityContext = {
       runId,
       traceId,
+      segmentId,
       startedAtMs,
       spanStack: [],
       correlators: effectiveCorrelators(),
     }
-    let ended = false
+    let closed = false
+    const continuation = createPropagationCarrier({
+      runId,
+      traceId,
+      previousSegmentId: segmentId,
+      correlators: context.correlators,
+    })
 
     emitObserved(
       () => ({
@@ -685,6 +806,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'run:start',
         runId,
+        segmentId,
         traceId,
         name: options.name,
         rootPrimitive: options.rootPrimitive,
@@ -696,8 +818,8 @@ export const observe = {
     )
 
     const finish = (finishOptions: EndObservedRunOptions = {}): void => {
-      if (ended) return
-      ended = true
+      if (closed) return
+      closed = true
       const status =
         finishOptions.status ?? (finishOptions.error ? 'error' : 'ok')
       if (!rememberEndedRun(runId, status)) return
@@ -707,6 +829,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'run:end',
           runId,
+          segmentId,
           traceId,
           endedAt: now(),
           durationMs: durationSince(startedAtMs),
@@ -731,11 +854,35 @@ export const observe = {
     return {
       runId,
       traceId,
+      segmentId,
       captureContext(): CapturedObservabilityContext {
         return captureContextValue(context, [])
       },
+      captureContinuation(): CruxPropagationCarrier {
+        return continuation
+      },
       withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
         return withContext(context, fn)
+      },
+      suspend(options: SuspendObservedRunOptions): CruxPropagationCarrier {
+        if (!options.reason) throw new TypeError('A suspension reason is required')
+        if (closed) return continuation
+        closed = true
+        emitObserved(
+          () => ({
+            schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+            recordId: createCruxRecordId(),
+            type: 'run:suspend',
+            runId,
+            segmentId,
+            traceId,
+            suspendedAt: now(),
+            reason: options.reason,
+            ...(options.attributes ? { attributes: options.attributes } : {}),
+          }),
+          context.correlators ?? null,
+        )
+        return continuation
       },
       end(options?: EndObservedRunOptions): void {
         finish(options)
@@ -749,37 +896,110 @@ export const observe = {
     }
   },
 
-  endRun(
-    context: CapturedObservabilityContext,
-    options: EndObservedRunOptions = {},
-  ): void {
-    const status = options.status ?? (options.error ? 'error' : 'ok')
-    if (!rememberEndedRun(context.runId, status)) return
+  resumeRun(
+    carrier: CruxPropagationCarrier,
+    options: ResumeObservedRunOptions,
+  ): OpenObservedRun {
+    if (!options.reason) throw new TypeError('A resume reason is required')
+    const identity = continuationIdentity(carrier)
+    if (endedRunStatuses.has(identity.runId)) {
+      throw new Error('Cannot resume a terminal observed run')
+    }
+    const segmentId = createCruxSegmentId()
+    const startedAtMs = Date.now()
+    const context: ObservabilityContext = {
+      runId: identity.runId,
+      traceId: identity.traceId,
+      segmentId,
+      startedAtMs,
+      spanStack: [],
+      correlators: effectiveCorrelators(),
+    }
+    let closed = false
+    const continuation = createPropagationCarrier({
+      runId: identity.runId,
+      traceId: identity.traceId,
+      previousSegmentId: segmentId,
+      correlators: context.correlators,
+    })
+    const resumeAttributes = resumeAttributesFor(carrier, options.attributes)
+
     emitObserved(
       () => ({
         schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
         recordId: createCruxRecordId(),
-        type: 'run:end',
-        runId: context.runId,
-        traceId: context.traceId,
-        endedAt: now(),
-        ...(context.startedAtMs !== undefined
-          ? { durationMs: durationSince(context.startedAtMs) }
+        type: 'run:resume',
+        runId: identity.runId,
+        segmentId,
+        traceId: identity.traceId,
+        resumedAt: now(),
+        reason: options.reason,
+        ...(identity.previousSegmentId
+          ? { previousSegmentId: identity.previousSegmentId }
           : {}),
-        status,
-        ...(options.metrics ? { metrics: options.metrics } : {}),
-        ...(options.error !== undefined
-          ? {
-              error: observedErrorSummary(
-                options.error,
-                errorContext(options.attributes),
-              ),
-            }
-          : {}),
-        ...(options.attributes ? { attributes: options.attributes } : {}),
+        ...(resumeAttributes ? { attributes: resumeAttributes } : {}),
       }),
       context.correlators ?? null,
     )
+
+    const finish = (finishOptions: EndObservedRunOptions = {}): void => {
+      if (closed) return
+      closed = true
+      const status = finishOptions.status ?? (finishOptions.error ? 'error' : 'ok')
+      if (!rememberEndedRun(identity.runId, status)) return
+      emitObserved(
+        () => ({
+          schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+          recordId: createCruxRecordId(),
+          type: 'run:end',
+          runId: identity.runId,
+          segmentId,
+          traceId: identity.traceId,
+          endedAt: now(),
+          durationMs: durationSince(startedAtMs),
+          status,
+          ...(finishOptions.metrics ? { metrics: finishOptions.metrics } : {}),
+          ...(finishOptions.error !== undefined
+            ? { error: observedErrorSummary(finishOptions.error, errorContext(finishOptions.attributes)) }
+            : {}),
+          ...(finishOptions.attributes ? { attributes: finishOptions.attributes } : {}),
+        }),
+        context.correlators ?? null,
+      )
+    }
+
+    return {
+      runId: identity.runId,
+      traceId: identity.traceId,
+      segmentId,
+      captureContext: () => captureContextValue(context, []),
+      captureContinuation: () => continuation,
+      withContext: <T>(fn: () => T | Promise<T>) => withContext(context, fn),
+      suspend(suspendOptions: SuspendObservedRunOptions): CruxPropagationCarrier {
+        if (!suspendOptions.reason) throw new TypeError('A suspension reason is required')
+        if (closed) return continuation
+        closed = true
+        emitObserved(
+          () => ({
+            schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
+            recordId: createCruxRecordId(),
+            type: 'run:suspend',
+            runId: identity.runId,
+            segmentId,
+            traceId: identity.traceId,
+            suspendedAt: now(),
+            reason: suspendOptions.reason,
+            ...(suspendOptions.attributes ? { attributes: suspendOptions.attributes } : {}),
+          }),
+          context.correlators ?? null,
+        )
+        return continuation
+      },
+      end: finish,
+      error(error, finishOptions): void {
+        finish({ ...finishOptions, status: 'error', error })
+      },
+    }
   },
 
   async run<T>(
@@ -788,10 +1008,12 @@ export const observe = {
   ): Promise<T> {
     const runId = createCruxRunId()
     const traceId = options.traceId ?? createCruxTraceId()
+    const segmentId = createCruxSegmentId()
     const startedAtMs = Date.now()
     const context: ObservabilityContext = {
       runId,
       traceId,
+      segmentId,
       startedAtMs,
       spanStack: [],
       correlators: effectiveCorrelators(),
@@ -803,6 +1025,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'run:start',
         runId,
+        segmentId,
         traceId,
         name: options.name,
         rootPrimitive: options.rootPrimitive,
@@ -822,6 +1045,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'run:end',
           runId,
+          segmentId,
           traceId,
           endedAt: now(),
           durationMs: durationSince(startedAtMs),
@@ -838,6 +1062,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'run:end',
           runId,
+          segmentId,
           traceId,
           endedAt: now(),
           durationMs: durationSince(startedAtMs),
@@ -885,6 +1110,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'span:start',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         parentSpanId,
@@ -894,6 +1120,9 @@ export const observe = {
         startedAt: now(),
         status: 'running',
         ...(options.attributes ? { attributes: options.attributes } : {}),
+        ...(options.definitionRefs && options.definitionRefs.length > 0
+          ? { definitionRefs: options.definitionRefs }
+          : {}),
       }),
       context.correlators ?? null,
     )
@@ -906,6 +1135,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'span:end',
           runId: context.runId,
+          segmentId: context.segmentId,
           traceId: context.traceId,
           spanId,
           endedAt: now(),
@@ -923,6 +1153,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'span:end',
           runId: context.runId,
+          segmentId: context.segmentId,
           traceId: context.traceId,
           spanId,
           endedAt: now(),
@@ -947,10 +1178,12 @@ export const observe = {
       if (options.implicitRun === false) {
         const runId = createCruxRunId()
         const traceId = createCruxTraceId()
+        const segmentId = createCruxSegmentId()
         const spanId = createCruxSpanId()
         return {
           runId,
           traceId,
+          segmentId,
           spanId,
           parentSpanId: null,
           withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
@@ -966,6 +1199,7 @@ export const observe = {
       const implicitContext: ObservabilityContext = {
         runId: createCruxRunId(),
         traceId: createCruxTraceId(),
+        segmentId: createCruxSegmentId(),
         startedAtMs: implicitRunStartedAtMs,
         spanStack: [],
         correlators: effectiveCorrelators(),
@@ -977,6 +1211,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'run:start',
           runId: implicitContext.runId,
+          segmentId: implicitContext.segmentId,
           traceId: implicitContext.traceId,
           name: options.name,
           rootPrimitive: options.primitive,
@@ -1004,6 +1239,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'span:start',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         parentSpanId,
@@ -1013,6 +1249,9 @@ export const observe = {
         startedAt: now(),
         status: 'running',
         ...(options.attributes ? { attributes: options.attributes } : {}),
+        ...(options.definitionRefs && options.definitionRefs.length > 0
+          ? { definitionRefs: options.definitionRefs }
+          : {}),
       }),
       context.correlators ?? null,
     )
@@ -1049,6 +1288,7 @@ export const observe = {
           recordId: createCruxRecordId(),
           type: 'span:end',
           runId: spanContext.runId,
+          segmentId: spanContext.segmentId,
           traceId: spanContext.traceId,
           spanId,
           endedAt: now(),
@@ -1068,8 +1308,7 @@ export const observe = {
         spanContext.correlators ?? null,
       )
       if (openedImplicitRun) {
-        const runStatus: Exclude<CruxRunStatus, 'running'> =
-          status === 'skipped' ? 'ok' : status
+        const runStatus: EndedRunStatus = status === 'skipped' ? 'ok' : status
         if (!rememberEndedRun(spanContext.runId, runStatus)) return
         emitObserved(
           () => ({
@@ -1077,6 +1316,7 @@ export const observe = {
             recordId: createCruxRecordId(),
             type: 'run:end',
             runId: spanContext.runId,
+            segmentId: spanContext.segmentId,
             traceId: spanContext.traceId,
             endedAt: now(),
             durationMs: durationSince(implicitRunStartedAtMs),
@@ -1101,6 +1341,7 @@ export const observe = {
     return {
       runId: spanContext.runId,
       traceId: spanContext.traceId,
+      segmentId: spanContext.segmentId,
       spanId,
       parentSpanId,
       withContext<T>(fn: () => T | Promise<T>): T | Promise<T> {
@@ -1137,6 +1378,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'span:event',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         spanId,
         eventId: createCruxSpanEventId(),
@@ -1164,6 +1406,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'artifact',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         artifactId,
         ...(spanId ? { spanId } : {}),
@@ -1197,6 +1440,7 @@ export const observe = {
         recordId: createCruxRecordId(),
         type: 'edge',
         runId: context.runId,
+        segmentId: context.segmentId,
         traceId: context.traceId,
         edgeId: createCruxEdgeId(),
         edgeType: options.edgeType,
@@ -1225,6 +1469,7 @@ export const observe = {
       {
         runId: context.runId,
         traceId: context.traceId,
+        segmentId: context.segmentId,
         startedAtMs: context.startedAtMs,
         correlators: context.correlators,
         spanStack: [...context.spanStack],
@@ -1233,20 +1478,75 @@ export const observe = {
     )
   },
 
-  async flush(options: ObservabilityFlushOptions = {}): Promise<boolean> {
-    return await deliveryEngine.flush(options)
+  /**
+   * Bind a host lifecycle (defer/deadline) to `fn`'s call tree.
+   *
+   * Scopes delivery's defer/deadline usage to this invocation instead of the
+   * process-wide `setObservabilityTransport(transport, { hostLifecycle })`
+   * option, so concurrent physical invocations never see each other's host
+   * lifecycle. Requires AsyncLocalStorage for async `fn`; falls back to a
+   * synchronous-only scope where it is unavailable.
+   */
+  withHostLifecycle<T>(lifecycle: CruxHostLifecycle, fn: () => T): T {
+    return runWithHostLifecycle(lifecycle, fn)
   },
 
-  async shutdown(options: ObservabilityFlushOptions = {}): Promise<boolean> {
-    return await deliveryEngine.shutdown(options)
+  async flush(
+    options: ObservabilityFlushOptions = {},
+  ): Promise<ObservabilityFlushResult> {
+    const [result] = await Promise.all([
+      deliveryEngine.flush(options),
+      runTelemetryFlushHook(options),
+    ])
+    return result
   },
+
+  async shutdown(
+    options: ObservabilityFlushOptions = {},
+  ): Promise<ObservabilityFlushResult> {
+    const [result] = await Promise.all([
+      deliveryEngine.shutdown(options),
+      runTelemetryFlushHook(options),
+    ])
+    return result
+  },
+}
+
+let telemetryFlushFailures = 0
+
+/** Total non-throwing telemetry flush hook failures observed since the last reset. */
+export function observabilityTelemetryFlushFailures(): number {
+  return telemetryFlushFailures
+}
+
+/**
+ * Bound the telemetry flush hook's wait to the smaller of an explicit
+ * `timeoutMs` and the active host lifecycle's remaining deadline, mirroring
+ * the delivery engine's own deadline combination in `drainDeliveryState`.
+ */
+function telemetryFlushDeadlineMs(options: ObservabilityFlushOptions): number | undefined {
+  const hostRemainingMs = remainingHostDeadlineMs(activeHostLifecycle())
+  const explicitMs = options.timeoutMs === undefined ? undefined : Math.max(0, options.timeoutMs)
+  if (hostRemainingMs === undefined) return explicitMs
+  if (explicitMs === undefined) return hostRemainingMs
+  return Math.min(explicitMs, hostRemainingMs)
+}
+
+/** Run the installed telemetry flush hook, if any. Never throws through app work. */
+async function runTelemetryFlushHook(options: ObservabilityFlushOptions): Promise<void> {
+  const hook = getHooks().telemetryFlushHook
+  if (!hook) return
+  try {
+    const result = await hook({ deadlineMs: telemetryFlushDeadlineMs(options) })
+    if (!result?.ok) telemetryFlushFailures += 1
+  } catch {
+    telemetryFlushFailures += 1
+  }
 }
 
 function rememberEndedRun(runId: CruxRunId, status: EndedRunStatus): boolean {
   const previousStatus = endedRunStatuses.get(runId)
-  const resumedFromSuspension =
-    previousStatus === 'suspended' && status !== 'suspended'
-  if (previousStatus && !resumedFromSuspension) return false
+  if (previousStatus) return false
 
   endedRunStatuses.set(runId, status)
   if (endedRunStatuses.size <= maxEndedRunIds) return true

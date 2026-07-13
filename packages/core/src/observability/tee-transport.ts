@@ -1,13 +1,21 @@
 import type { CruxGraphRecord } from './contract'
-import type { CruxObservabilityTransport } from './transport'
+import {
+  acceptedDeliveryReceipt,
+  type CruxDeliveryAttemptContext,
+  type CruxDeliveryDisposition,
+  type CruxDeliveryReceipt,
+  type CruxObservabilityTransport,
+} from './transport'
+import { partitionDeliveryReceipt } from './delivery/receipt'
 
 /**
  * Create a transport that fans each batch out to multiple transports.
  *
  * All legs are attempted. Synchronous throws and asynchronous rejections from
  * one leg are isolated so another leg, such as local devtools, can still
- * receive the batch. If every configured leg fails, the tee rejects with the
- * first failure so the delivery engine can retry the whole batch later.
+ * receive the batch. A record is accepted when at least one leg accepts it;
+ * when no leg accepts it, the combined receipt remains retryable unless every
+ * leg permanently rejected that index.
  *
  * @param transports - Transport legs to receive each batch, in call order.
  * @returns A composable transport suitable for `setObservabilityTransport()` or `configureObservability()`.
@@ -29,25 +37,29 @@ export function teeObservabilityTransport(
   let warnedAboutPartialShutdownFailure = false
 
   return {
-    maxRecordsPerRequest: minMaxRecordsPerRequest(transports),
-    async send(records) {
-      if (transports.length === 0) return
+    maxRecordsPerRequest: minTransportLimit(transports, 'maxRecordsPerRequest'),
+    maxRequestBytes: minTransportLimit(transports, 'maxRequestBytes'),
+    async send(records, context) {
+      if (transports.length === 0) return acceptedDeliveryReceipt(records)
 
-      const results = await Promise.allSettled(transports.map((transport) => sendToTransport(transport, records)))
+      const results = await Promise.allSettled(
+        transports.map((transport) => sendToTransport(transport, records, context)),
+      )
       if (hasFulfilledAndRejected(results)) {
-        warnedAboutPartialSendFailure = warnOnceForPartialFailure(warnedAboutPartialSendFailure, firstRejection(results))
+        warnedAboutPartialSendFailure = warnOnceForPartialFailure(
+          warnedAboutPartialSendFailure,
+          firstRejection(results),
+        )
       }
-      if (results.some((result) => result.status === 'fulfilled')) return
-
-      const firstFailure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
-      throw firstFailure?.reason instanceof Error
-        ? firstFailure.reason
-        : new Error(`Crux observability tee transport failed: ${String(firstFailure?.reason)}`)
+      return combineReceipts(records, results)
     },
     async flush() {
       const results = await Promise.allSettled(transports.map((transport) => runTransportHook(transport, 'flush')))
       if (hasFulfilledAndRejected(results)) {
-        warnedAboutPartialFlushFailure = warnOnceForPartialFailure(warnedAboutPartialFlushFailure, firstRejection(results))
+        warnedAboutPartialFlushFailure = warnOnceForPartialFailure(
+          warnedAboutPartialFlushFailure,
+          firstRejection(results),
+        )
       }
       throwIfEveryLegFailed(results, 'flush')
     },
@@ -67,18 +79,60 @@ export function teeObservabilityTransport(
 function sendToTransport(
   transport: CruxObservabilityTransport,
   records: readonly CruxGraphRecord[],
-): Promise<void> {
+  context: CruxDeliveryAttemptContext | undefined,
+): Promise<CruxDeliveryReceipt> {
   try {
-    return Promise.resolve(transport.send(records))
+    return Promise.resolve(transport.send(records, context))
   } catch (error) {
     return Promise.reject(error)
   }
 }
 
-function runTransportHook(
-  transport: CruxObservabilityTransport,
-  hook: 'flush' | 'shutdown',
-): Promise<void> {
+function combineReceipts(
+  records: readonly CruxGraphRecord[],
+  results: readonly PromiseSettledResult<CruxDeliveryReceipt>[],
+): CruxDeliveryReceipt {
+  const partitions = results.map((result) =>
+    result.status === 'fulfilled'
+      ? partitionDeliveryReceipt(records, result.value)
+      : {
+          accepted: [],
+          permanentlyRejected: [],
+          retryable: records,
+          unaccounted: [],
+        },
+  )
+  const dispositions: CruxDeliveryDisposition[] = records.map((record, index) => {
+    const acceptedByAnyLeg = partitions.some((partition) => partition.accepted.includes(record))
+    const permanentlyRejected = results.every(
+      (result, resultIndex) =>
+        result.status === 'fulfilled' && partitions[resultIndex]!.permanentlyRejected.includes(record),
+    )
+    if (acceptedByAnyLeg) {
+      return {
+        index,
+        recordId: record.recordId,
+        outcome: 'accepted',
+        code: 'accepted',
+        retryable: false,
+      }
+    }
+    return {
+      index,
+      recordId: record.recordId,
+      outcome: 'rejected',
+      code: permanentlyRejected ? 'tee_permanent_rejection' : 'tee_retry',
+      retryable: !permanentlyRejected,
+    }
+  })
+  const retryAfterMs = Math.max(
+    0,
+    ...results.map((result) => (result.status === 'fulfilled' ? (result.value.retryAfterMs ?? 0) : 0)),
+  )
+  return { dispositions, ...(retryAfterMs > 0 ? { retryAfterMs } : {}) }
+}
+
+function runTransportHook(transport: CruxObservabilityTransport, hook: 'flush' | 'shutdown'): Promise<void> {
   try {
     return Promise.resolve(transport[hook]?.())
   } catch (error) {
@@ -86,21 +140,26 @@ function runTransportHook(
   }
 }
 
-function minMaxRecordsPerRequest(transports: readonly CruxObservabilityTransport[]): number | undefined {
+function minTransportLimit(
+  transports: readonly CruxObservabilityTransport[],
+  key: 'maxRecordsPerRequest' | 'maxRequestBytes',
+): number | undefined {
   let min: number | undefined
   for (const transport of transports) {
-    const configured = transport.maxRecordsPerRequest
+    const configured = transport[key]
     if (configured === undefined || !Number.isFinite(configured) || configured <= 0) continue
     min = min === undefined ? configured : Math.min(min, configured)
   }
   return min
 }
 
-function hasFulfilledAndRejected(results: readonly PromiseSettledResult<void>[]): boolean {
-  return results.some((result) => result.status === 'fulfilled') && results.some((result) => result.status === 'rejected')
+function hasFulfilledAndRejected<T>(results: readonly PromiseSettledResult<T>[]): boolean {
+  return (
+    results.some((result) => result.status === 'fulfilled') && results.some((result) => result.status === 'rejected')
+  )
 }
 
-function firstRejection(results: readonly PromiseSettledResult<void>[]): unknown {
+function firstRejection<T>(results: readonly PromiseSettledResult<T>[]): unknown {
   return results.find((result): result is PromiseRejectedResult => result.status === 'rejected')?.reason
 }
 

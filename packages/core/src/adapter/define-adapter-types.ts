@@ -109,6 +109,14 @@ export interface AdapterGenerateBaseOptions<
   safety?: SafetyTuneOptions;
   /** Structured timeout budgets for this managed call. */
   timeout?: TimeoutOptions;
+  /**
+   * Cooperative abort signal threaded into the underlying provider SDK call.
+   *
+   * When it fires, the provider call is cancelled and the failure surfaces as a
+   * normalized {@link CruxAdapterError} with `kind: 'aborted'`, distinct from a
+   * timeout (`kind: 'timeout'`).
+   */
+  signal?: AbortSignal;
   /** User-supplied provider call transport using this adapter's public codec params. */
   transport?: AdapterTransport<TParams, TRawResponse>;
 }

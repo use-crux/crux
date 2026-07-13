@@ -60,6 +60,7 @@ describe('OpenAI media call-mode parity', () => {
     expect(streamCalls[0]).toEqual({
       ...(managedCalls[0] as object),
       stream: true,
+      stream_options: { include_usage: true },
     })
   })
 })

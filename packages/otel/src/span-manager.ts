@@ -86,6 +86,16 @@ export interface SpanManager {
   endSpan(ref: SpanRef): void
 
   /**
+   * Run `fn` with this span activated as the real execution context (e.g. the
+   * OTel active span), so nested user/provider spans parent correctly and
+   * `trace.getActiveSpan()` resolves inside `fn`.
+   *
+   * Lightweight managers have no ambient execution context to activate and
+   * simply invoke `fn` unchanged.
+   */
+  runActive<T>(ref: SpanRef, fn: () => T): T
+
+  /**
    * Force-end a span evicted from bounded telemetry registries.
    *
    * Expired spans are exported with `crux.expired: true` and `UNSET` status so
@@ -93,8 +103,34 @@ export interface SpanManager {
    */
   expireSpan(ref: SpanRef): void
 
-  /** Shut down the span manager and flush any pending exports. */
+  /**
+   * Wait for queued exporter/processor work to settle, bounded by an optional
+   * deadline.
+   *
+   * Never throws: exporter failures are absorbed so telemetry cannot break
+   * application work. `timedOut` distinguishes "flushed everything" from
+   * "gave up at the deadline" for callers that report exporter health.
+   */
+  forceFlush(options?: SpanManagerFlushOptions): Promise<SpanManagerFlushResult>
+
+  /** Shut down the span manager. Internally force-flushes with a bounded budget first. */
   shutdown(): Promise<void>
+}
+
+/** Bounds for {@link SpanManager.forceFlush}. */
+export interface SpanManagerFlushOptions {
+  /** Milliseconds to wait for outstanding exports before giving up. Omit to wait unbounded. */
+  readonly deadlineMs?: number
+}
+
+/** Structured result of a bounded flush. */
+export interface SpanManagerFlushResult {
+  /** Exporter/processor units that settled before the deadline (or before flush was called, if already idle). */
+  readonly flushed: number
+  /** Units still outstanding when the deadline was reached. */
+  readonly pending: number
+  /** Whether the deadline was reached before everything settled. */
+  readonly timedOut: boolean
 }
 
 /**
@@ -109,9 +145,10 @@ export function createLightweightSpanManager(exporter: SpanExporter): SpanManage
     maxEntries: ACTIVE_SPAN_MAX_ENTRIES,
     maxAgeMs: ACTIVE_SPAN_MAX_AGE_MS,
     onEvict: (_spanId, span) => {
-      exportSpan(exporter, span, { expired: true, preserveUnsetStatus: true })
+      exportSpan(exporter, span, { expired: true, preserveUnsetStatus: true }, pendingExports)
     },
   })
+  const pendingExports = new Set<Promise<unknown>>()
 
   return {
     startSpan(name, attributes, parentSpanId, identity) {
@@ -177,26 +214,60 @@ export function createLightweightSpanManager(exporter: SpanExporter): SpanManage
       const span = activeSpans.delete(ref.spanId)
       if (!span) return
 
-      exportSpan(exporter, span, { expired: false, preserveUnsetStatus: false })
+      exportSpan(exporter, span, { expired: false, preserveUnsetStatus: false }, pendingExports)
+    },
+
+    runActive<T>(_ref: SpanRef, fn: () => T): T {
+      return fn()
     },
 
     expireSpan(ref) {
       const span = activeSpans.delete(ref.spanId)
       if (!span) return
-      exportSpan(exporter, span, { expired: true, preserveUnsetStatus: true })
+      exportSpan(exporter, span, { expired: true, preserveUnsetStatus: true }, pendingExports)
+    },
+
+    async forceFlush(options) {
+      return await flushPendingExports(pendingExports, options)
     },
 
     async shutdown() {
+      await flushPendingExports(pendingExports, { deadlineMs: SHUTDOWN_FLUSH_DEADLINE_MS })
       activeSpans.clear()
       await exporter.shutdown()
     },
   }
 }
 
+const SHUTDOWN_FLUSH_DEADLINE_MS = 5_000
+
+/** Await outstanding export promises, bounded by an optional deadline. Never throws. */
+async function flushPendingExports(
+  pending: ReadonlySet<Promise<unknown>>,
+  options?: SpanManagerFlushOptions,
+): Promise<SpanManagerFlushResult> {
+  const total = pending.size
+  if (total === 0) return { flushed: 0, pending: 0, timedOut: false }
+
+  const settleAll = Promise.allSettled([...pending]).then(() => false)
+  const deadlineMs = options?.deadlineMs
+  const timedOut = deadlineMs === undefined ? await settleAll : await raceDeadline(settleAll, deadlineMs)
+  const remaining = pending.size
+  return { flushed: total - remaining, pending: remaining, timedOut }
+}
+
+async function raceDeadline(settleAll: Promise<boolean>, deadlineMs: number): Promise<boolean> {
+  return await Promise.race([
+    settleAll,
+    new Promise<boolean>((resolve) => setTimeout(() => resolve(true), Math.max(0, deadlineMs))),
+  ])
+}
+
 function exportSpan(
   exporter: SpanExporter,
   span: MutableSpan,
   options: { readonly expired: boolean; readonly preserveUnsetStatus: boolean },
+  pendingExports: Set<Promise<unknown>>,
 ): void {
   const endTime = Date.now()
   const attributes = options.expired ? { ...span.attributes, 'crux.expired': true } : span.attributes
@@ -213,6 +284,7 @@ function exportSpan(
     events: span.events.length > 0 ? span.events : undefined,
   }
 
-  // Fire-and-forget.
-  exporter.export([traceSpan])
+  const exported = Promise.resolve(exporter.export([traceSpan])).catch(() => {})
+  pendingExports.add(exported)
+  void exported.finally(() => pendingExports.delete(exported))
 }

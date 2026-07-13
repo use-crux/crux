@@ -564,7 +564,7 @@ func stalePresentationGraphAt(graph Graph, now time.Time) Graph {
 	graph.Run = stalePresentationRunAt(graph.Run, len(protected) > 0, now)
 	for i := range graph.Spans {
 		_, protect := protected[graph.Spans[i].SpanID]
-		graph.Spans[i] = stalePresentationSpanAt(graph.Spans[i], protect, graph.Run.lastActivityAt, now)
+		graph.Spans[i] = stalePresentationSpanAt(graph.Spans[i], protect, graph.Run.LastActivityAt, now)
 	}
 	return graph
 }
@@ -574,8 +574,8 @@ func stalePresentationRun(run RunSummary, protectedByDeadline bool) RunSummary {
 }
 
 func stalePresentationRunAt(run RunSummary, protectedByDeadline bool, now time.Time) RunSummary {
-	if !protectedByDeadline && run.Status == "running" && run.EndedAt == "" && isStaleTimestampAt(staleTimestampAnchor(run.lastActivityAt, run.StartedAt), now) {
-		run.Status = "stale"
+	if !protectedByDeadline && run.Status == "running" && run.EndedAt == "" && isStaleTimestampAt(staleTimestampAnchor(run.LastActivityAt, run.StartedAt), now) {
+		run.Status = "incomplete"
 		run.DurationMs = durationSinceTimestampAt(run.StartedAt, now)
 	}
 	return run

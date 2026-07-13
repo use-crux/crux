@@ -39,6 +39,7 @@ Without `agent()`, you'd pass these separately to every composition call. With i
 import { parallel } from '@use-crux/ai'
 
 const { results } = await parallel({
+  id: 'agent-parallel-1',
   agents: { reviewer, factChecker, seoAnalyzer },
   context: { content: articleDraft },
   model: claude35,  // shared default — reviewer's gpt4mini overrides this
@@ -66,6 +67,7 @@ const writer = agent({
 })
 
 await pipeline({
+  id: 'agent-pipeline-1',
   steps: [
     { agent: classifier, name: 'classify' },
     { agent: writer, name: 'write', input: (ctx) => ({ topic: ctx.classify.output.category }) },
@@ -81,6 +83,7 @@ Composition utilities also accept plain async functions alongside agents. Use th
 
 ```ts title="escape-hatch.ts"
 const { results } = await parallel({
+  id: 'agent-parallel-2',
   agents: {
     reviewer: reviewerAgent,
     external: async (ctx) => {

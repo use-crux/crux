@@ -10,6 +10,7 @@
 
 import { getHooks, resolveRecords } from '../runtime/runtime'
 import type { JsonValue, RecordStore } from '../storage'
+import { observe, sanitizePropagationCarrier } from '../observability'
 import type { FlowSnapshot, ListFlowsOptions, FlowSummary } from './types'
 import { assertFlowJsonValue, assertFlowSnapshotMetadata } from './serialization'
 
@@ -174,4 +175,16 @@ export async function cancelFlow(flowId: string, reason?: string): Promise<void>
   } as FlowSnapshot
   assertFlowSnapshotMetadata(cancelledSnapshot)
   await store.put(`${FLOW_KEY_PREFIX}${flowId}`, cancelledSnapshot)
+
+  if (snapshot.continuation) {
+    const run = observe.resumeRun(sanitizePropagationCarrier(snapshot.continuation), {
+      reason: 'flow.cancel',
+      attributes: { flowId },
+    })
+    run.end({
+      status: 'cancelled',
+      ...(reason ? { attributes: { cancelReason: reason } } : {}),
+    })
+    await observe.flush()
+  }
 }

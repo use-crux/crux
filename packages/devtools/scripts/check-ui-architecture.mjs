@@ -24,12 +24,16 @@ const forbiddenImports = [
   '../../views',
 ]
 
+// Deliberate feature→feature edges only. Prefer shared/ for truly generic UI.
 const allowedFeatureImports = new Map([
-  ['run-detail', new Set(['observability'])],
+  // Run Detail reuses Catalog injection-state chips and observability graphs.
+  ['run-detail', new Set(['observability', 'index'])],
   ['runs', new Set(['observability'])],
   ['overview', new Set(['observability'])],
   ['search', new Set(['observability', 'index'])],
   ['index', new Set(['memory', 'plans', 'workspaces'])],
+  // Evaluations surface scorer-owned judge agreement reports in detail.
+  ['evaluations', new Set(['scorers'])],
 ])
 
 function walk(dir) {

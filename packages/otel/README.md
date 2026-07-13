@@ -87,8 +87,7 @@ Every instrumented Crux event produces a span:
 | Tool execution            | `execute_tool {name}`           | `gen_ai.operation.name`, `crux.tool.name`, `crux.tool.call_id`, `crux.tool.model_output.type`, `crux.tool.output.size`, `crux.tool.model_output.size`, `crux.tool.token_savings_estimate`, `crux.tool.estimated` |
 | `flow().run()`            | `invoke_workflow {name}`        | `gen_ai.operation.name`, `crux.flow.id`, `crux.flow.name`, `crux.flow.parent_id`                                |
 | `flow.step()`             | `crux.flow.step`                | `crux.step.id`, `crux.step.label`                                                                               |
-| `flow.suspend()`          | Event on `crux.flow` + span end | `crux.flow.suspend_point`                                                                                       |
-| Resume                    | `crux.flow.resume`              | `crux.flow.id`, `crux.flow.name` (fresh span, correlated by flow ID)                                            |
+| `flow.suspension` primitive | `crux.flow.suspension`        | intentional-wait marker linked to the causing step (recorded automatically, not a method you call)              |
 | Compositions              | `crux.composition.{kind}`       | `crux.composition.kind`, `crux.composition.agent_count`                                                         |
 | Agent in composition      | `crux.composition.agent.{id}`   | `crux.composition.id`                                                                                           |
 | Memory read               | `crux.memory.read`              | `crux.memory.type`, `crux.memory.operation`                                                                     |
@@ -96,6 +95,14 @@ Every instrumented Crux event produces a span:
 | Compaction                | `crux.compact`                  | `crux.compaction.ratio`                                                                                         |
 | Judge score               | `crux.judge`                    | `crux.judge.metric`, `crux.judge.score`                                                                         |
 | Delegation                | `crux.delegate`                 | `crux.delegate.id`                                                                                              |
+| Suspend                   | ends the segment's root span (status `OK`) | `crux.run.suspended`, `crux.run.suspend_reason`                                                      |
+| Resume                    | fresh root span, same `traceId` | `crux.run.resumed`, `crux.run.previous_segment_id`                                                              |
+
+`run:suspend` ends the current execution segment's root OTel span; it never stays open across a
+physical suspension boundary. `run:resume` always starts a brand-new root span rather than reopening
+the suspended one — that new span shares the original Crux `traceId` (real remote-parent correlation
+when no local parent span is found) so the suspend and resume spans are visibly the same distributed
+trace even though they are two separate SDK spans in two separate processes.
 
 Generate/stream spans follow the pinned `genai-dev-2026-06` GenAI semantic convention table.
 Crux generation span metrics are projected from the canonical graph metrics into seconds-based
@@ -122,6 +129,14 @@ interface TelemetryOptions {
 
   /** Forward compatibility knob for the pinned table. */
   semconvVersion?: typeof SEMCONV_VERSION
+
+  /**
+   * Baggage member keys (from an extracted W3C `baggage` header, or a Flow/Convex
+   * resume carrier) copied onto the resumed root span as `crux.baggage.<key>`
+   * attributes. Unset by default — baggage is untrusted input and nothing is
+   * copied unless explicitly allowlisted.
+   */
+  baggageAttributeAllowlist?: readonly string[]
 }
 ```
 
@@ -138,19 +153,47 @@ inline. Set `captureMessageContent: true` or
 `gen_ai.input.messages`, `gen_ai.output.messages`, and
 `gen_ai.system_instructions` from generation artifacts, capped at 32KB each.
 
+## Active execution bridge and propagation
+
+`withTelemetry()` makes the SDK span active around the real instrumented callback — `trace.getActiveSpan()`
+resolves correctly inside provider/tool/agent/flow work and nested spans parent correctly — rather than
+creating a span only after the work has already run. Resumed segments do not reuse an OTel span object
+across a suspension boundary: `run:suspend` ends the current segment's root span, and `run:resume` starts
+a new root span that shares the original Crux `traceId` for a real (not merely correlated-by-attribute)
+distributed-trace link.
+
+`injectCruxPropagationCarrier()` / `extractCruxPropagationCarrier()` round-trip the same
+`CruxPropagationCarrier` Flow/Convex use for in-process resume through standard W3C `traceparent` /
+`tracestate` headers, so a custom queue or RPC boundary can propagate trace correlation across a real
+wire hop without sharing memory. Incoming carriers are untrusted: format/length limits and baggage caps
+are enforced, and baggage keys only become `crux.baggage.*` span attributes when explicitly named in
+`baggageAttributeAllowlist`.
+
+`observe.flush()` / `observe.shutdown()` (and the `@use-crux/core/observability` host-lifecycle
+wrappers) force-flush the installed telemetry manager's exporter/processor work, not only the delivery
+queue: the lightweight manager tracks in-flight `exporter.export()` promises, and the standard OTel path
+calls through to the registered `TracerProvider`'s own `forceFlush()`. Both are bounded by the caller's
+deadline and, on a host that exposes one (Workers `waitUntil`, a serverless wrapper's remaining-time
+budget), registered with that host's lifecycle instead of blocking the return path.
+
 ## Coexistence with Devtools
 
 Both devtools and OTel can run simultaneously. The plugin system's fan-out semantics ensure both receive every event:
 
 ```ts
-import { withDevtools } from '@use-crux/core/observability'
 import { withTelemetry } from '@use-crux/otel'
+import { config } from '@use-crux/core'
 
 config({
-  prompts,
-  plugins: [withDevtools({ serverUrl: process.env.DEVTOOLS_URL }), withTelemetry({ serviceName: 'my-app' })],
+  observability: {
+    serverUrl: process.env.DEVTOOLS_URL,
+    token: process.env.CRUX_DEVTOOLS_TOKEN,
+  },
+  plugins: [withTelemetry({ serviceName: 'my-app' })],
 })
 ```
+
+Public docs: production telemetry guide under `apps/docs` (`guides/observability/telemetry`), plus privacy and runtime-setup pages for capture policy and host flush wrappers.
 
 ## Architecture
 
@@ -158,8 +201,9 @@ config({
 
 - **`withTelemetry()`** returns a `CruxPlugin` with name `'crux:otel'`
 - **`withTelemetry()`** subscribes to the canonical observability graph stream
-- **`createOtelRecordSubscriber()`** maps graph records to span lifecycle calls
-- **`SpanManager`** abstracts span lifecycle over both OTel tracer and lightweight `TraceSpan` tracking
+- **`createOtelRecordSubscriber()`** maps graph records to span lifecycle calls, including `run:suspend` (ends the segment root span) and `run:resume` (fresh root span, same `traceId`)
+- **`SpanManager`** abstracts span lifecycle over both OTel tracer and lightweight `TraceSpan` tracking, and exposes `runActive()` (activate a span around a callback) and a bounded, deadline-aware `forceFlush()`
+- **`propagation.ts`** implements `injectCruxPropagationCarrier()` / `extractCruxPropagationCarrier()` and the baggage-attribute allowlist projection
 - **Exporters**: `createUrlExporter()` (HTTP POST) and `createCallbackExporter()` (user function)
 
 The lightweight exporter path uses Crux W3C trace/span IDs directly for exported `TraceSpan` objects. The standard OTel provider path keeps provider-issued span context and records Crux IDs as attributes for correlation.

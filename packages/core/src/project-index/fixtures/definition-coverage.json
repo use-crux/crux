@@ -1,0 +1,717 @@
+{
+  "schemaVersion": 1,
+  "generatedFrom": "DEFINITION_KIND_COVERAGE",
+  "adapters": [
+    "@use-crux/openai",
+    "@use-crux/anthropic",
+    "@use-crux/google",
+    "@use-crux/ai"
+  ],
+  "cases": [
+    {
+      "kind": "prompt",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "prompt.resolve",
+        "prompt.budget"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "prompt:connected",
+        "kind": "prompt",
+        "role": "resolved-prompt"
+      }
+    },
+    {
+      "kind": "context",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "context.resolve",
+        "context.predicate",
+        "context.cache"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "context:connected",
+        "kind": "context",
+        "role": "resolved-context"
+      }
+    },
+    {
+      "kind": "tool",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "tool.call",
+        "tool.approval"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "tool:connected",
+        "kind": "tool",
+        "role": "invoked-tool"
+      }
+    },
+    {
+      "kind": "agent",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "agent.run"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "agent:connected",
+        "kind": "agent",
+        "role": "invoked-agent"
+      }
+    },
+    {
+      "kind": "flow",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "flow.run"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "flow:connected",
+        "kind": "flow",
+        "role": "invoked-flow"
+      }
+    },
+    {
+      "kind": "task",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "task.operation"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "task:connected",
+        "kind": "task",
+        "role": "invoked-task"
+      }
+    },
+    {
+      "kind": "composition.parallel",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "composition.parallel"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "composition.parallel:connected",
+        "kind": "composition.parallel",
+        "role": "invoked-composition"
+      }
+    },
+    {
+      "kind": "composition.pipeline",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "composition.pipeline"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "composition.pipeline:connected",
+        "kind": "composition.pipeline",
+        "role": "invoked-composition"
+      }
+    },
+    {
+      "kind": "composition.swarm",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "composition.swarm"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "composition.swarm:connected",
+        "kind": "composition.swarm",
+        "role": "invoked-composition"
+      }
+    },
+    {
+      "kind": "composition.consensus",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "composition.consensus"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "composition.consensus:connected",
+        "kind": "composition.consensus",
+        "role": "invoked-composition"
+      }
+    },
+    {
+      "kind": "routing.router",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "routing.router"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "routing.router:connected",
+        "kind": "routing.router",
+        "role": "invoked-routing"
+      }
+    },
+    {
+      "kind": "routing.split",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "routing.split"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "routing.split:connected",
+        "kind": "routing.split",
+        "role": "invoked-routing"
+      }
+    },
+    {
+      "kind": "routing.retry",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "routing.retry"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "routing.retry:connected",
+        "kind": "routing.retry",
+        "role": "invoked-routing"
+      }
+    },
+    {
+      "kind": "routing.cascade",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "routing.cascade"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "routing.cascade:connected",
+        "kind": "routing.cascade",
+        "role": "invoked-routing"
+      }
+    },
+    {
+      "kind": "routing.fallback",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "routing.fallback"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "routing.fallback:connected",
+        "kind": "routing.fallback",
+        "role": "invoked-routing"
+      }
+    },
+    {
+      "kind": "rag.recipe",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "retrieval.recipe"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "rag.recipe:connected",
+        "kind": "rag.recipe",
+        "role": "invoked-recipe"
+      }
+    },
+    {
+      "kind": "rag.reranker",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "retrieval.step"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "rag.reranker:connected",
+        "kind": "rag.reranker",
+        "role": "invoked-reranker"
+      }
+    },
+    {
+      "kind": "rag.retriever",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "retrieval.retrieve",
+        "retrieval.query"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "rag.retriever:connected",
+        "kind": "rag.retriever",
+        "role": "invoked-retriever"
+      }
+    },
+    {
+      "kind": "skill",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "skill.load"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "skill:connected",
+        "kind": "skill",
+        "role": "loaded-skill"
+      }
+    },
+    {
+      "kind": "memory",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "memory.read",
+        "memory.write"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "memory:connected",
+        "kind": "memory",
+        "role": "invoked-memory"
+      }
+    },
+    {
+      "kind": "workspace",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "workspace.operation"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "workspace:connected",
+        "kind": "workspace",
+        "role": "invoked-workspace"
+      }
+    },
+    {
+      "kind": "constraint",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "constraint.check",
+        "constraint.retry"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "constraint:connected",
+        "kind": "constraint",
+        "role": "invoked-constraint"
+      }
+    },
+    {
+      "kind": "guardrail",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "guardrail.run"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "guardrail:connected",
+        "kind": "guardrail",
+        "role": "invoked-guardrail"
+      }
+    },
+    {
+      "kind": "blackboard",
+      "primary": "directly-observed",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "memory.read",
+        "memory.write"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "blackboard:connected",
+        "kind": "blackboard",
+        "role": "invoked-blackboard"
+      }
+    },
+    {
+      "kind": "injectable",
+      "primary": "runtime-contributor",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "prompt.resolve",
+        "context.resolve"
+      ],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "rag.knowledgeBase",
+      "primary": "runtime-contributor",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "retrieval.retrieve",
+        "retrieval.query"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "rag.knowledgeBase:connected",
+        "kind": "rag.knowledgeBase",
+        "role": "contributed-knowledge-base"
+      }
+    },
+    {
+      "kind": "storage.recordStore",
+      "primary": "runtime-contributor",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "indexing.pipeline",
+        "ingest.parse",
+        "corpus.sync"
+      ],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "storage.vectorStore",
+      "primary": "runtime-contributor",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "embedding.call",
+        "retrieval.retrieve",
+        "retrieval.query"
+      ],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "storage.assetStore",
+      "primary": "runtime-contributor",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "ingest.parse",
+        "corpus.sync"
+      ],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "toolPolicy",
+      "primary": "runtime-contributor",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "tool.call",
+        "tool.approval"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "toolPolicy:connected",
+        "kind": "toolPolicy",
+        "role": "contributed-tool-policy"
+      }
+    },
+    {
+      "kind": "deferred-work",
+      "primary": "runtime-observed-unjoined",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "defer.scheduled",
+        "defer.run"
+      ],
+      "expectedTreatment": "runtime-unjoined",
+      "definitionRef": null
+    },
+    {
+      "kind": "media.operation",
+      "primary": "runtime-observed-unjoined",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "generation.call",
+        "generation.stream",
+        "media.generate_image",
+        "media.transcribe",
+        "media.generate_speech",
+        "media.describe"
+      ],
+      "expectedTreatment": "runtime-unjoined",
+      "definitionRef": null
+    },
+    {
+      "kind": "ingest.source",
+      "primary": "runtime-observed-unjoined",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "ingest.parse",
+        "corpus.sync"
+      ],
+      "expectedTreatment": "runtime-unjoined",
+      "definitionRef": null
+    },
+    {
+      "kind": "flow.step",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "flow.step"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "flow.step:connected:connected",
+        "kind": "flow.step",
+        "role": "invoked-flow-step"
+      }
+    },
+    {
+      "kind": "composition.parallel.branch",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "agent.run"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "composition.parallel:connected:branch:connected",
+        "kind": "composition.parallel.branch",
+        "role": "invoked-composition-branch"
+      }
+    },
+    {
+      "kind": "composition.pipeline.stage",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "parent-derived",
+      "definitionRef": null
+    },
+    {
+      "kind": "routing.router.route",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "parent-derived",
+      "definitionRef": null
+    },
+    {
+      "kind": "routing.split.route",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "parent-derived",
+      "definitionRef": null
+    },
+    {
+      "kind": "routing.retry.target",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "parent-derived",
+      "definitionRef": null
+    },
+    {
+      "kind": "routing.cascade.tier",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "parent-derived",
+      "definitionRef": null
+    },
+    {
+      "kind": "routing.fallback.option",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "parent-derived",
+      "definitionRef": null
+    },
+    {
+      "kind": "rag.recipe.step",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "retrieval.step"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "rag.recipe:connected:step:connected",
+        "kind": "rag.recipe.step",
+        "role": "invoked-recipe-step"
+      }
+    },
+    {
+      "kind": "rag.pipeline.stage",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "retrieval.stage"
+      ],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "memory.store",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "parent-derived",
+      "definitionRef": null
+    },
+    {
+      "kind": "memory.block",
+      "primary": "structural-child",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "parent-derived",
+      "definitionRef": null
+    },
+    {
+      "kind": "evaluation.case",
+      "primary": "structural-child",
+      "secondary": [
+        "quality-owned"
+      ],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "quality",
+      "definitionRef": null
+    },
+    {
+      "kind": "suite.case",
+      "primary": "structural-child",
+      "secondary": [
+        "quality-owned"
+      ],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "quality",
+      "definitionRef": null
+    },
+    {
+      "kind": "scorer",
+      "primary": "quality-owned",
+      "secondary": [
+        "direct-runtime"
+      ],
+      "runtimePrimitiveNames": [
+        "scoring.judge"
+      ],
+      "expectedTreatment": "definition-ref",
+      "definitionRef": {
+        "id": "scorer:connected",
+        "kind": "scorer",
+        "role": "invoked-scorer"
+      }
+    },
+    {
+      "kind": "dataset",
+      "primary": "quality-owned",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "quality",
+      "definitionRef": null
+    },
+    {
+      "kind": "evaluation",
+      "primary": "quality-owned",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "quality",
+      "definitionRef": null
+    },
+    {
+      "kind": "suite",
+      "primary": "quality-owned",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "quality",
+      "definitionRef": null
+    },
+    {
+      "kind": "eval.prompt",
+      "primary": "quality-owned",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "quality",
+      "definitionRef": null
+    },
+    {
+      "kind": "eval.flow",
+      "primary": "quality-owned",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "quality",
+      "definitionRef": null
+    },
+    {
+      "kind": "eval.rag",
+      "primary": "quality-owned",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "quality",
+      "definitionRef": null
+    },
+    {
+      "kind": "eval.quality",
+      "primary": "quality-owned",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "quality",
+      "definitionRef": null
+    },
+    {
+      "kind": "registry",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "storage.bundle",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "storage.scope",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "rag.pipeline",
+      "primary": "static-only",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    },
+    {
+      "kind": "unknown",
+      "primary": "fallback",
+      "secondary": [],
+      "runtimePrimitiveNames": [],
+      "expectedTreatment": "none",
+      "definitionRef": null
+    }
+  ]
+}

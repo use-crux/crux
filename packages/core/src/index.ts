@@ -314,6 +314,12 @@ export {
   runWithExecutionContext,
 } from "./runtime";
 export type { ExecutionContext } from "./runtime";
+export { remainingHostDeadlineMs } from "./runtime/api/host-lifecycle";
+export type {
+  CruxContextStorage,
+  CruxHostDeadlineOptions,
+  CruxHostLifecycle,
+} from "./runtime/api/host-lifecycle";
 export {
   flow,
   createFlowId,
@@ -425,7 +431,15 @@ export {
   restoreHooksLayer,
   resolveRecords,
 } from "./runtime";
-export type { CruxHooks, HooksLayerToken } from "./runtime";
+export type {
+  CruxHooks,
+  HooksLayerToken,
+  SpanActivationHook,
+  TelemetryFlushHook,
+  TelemetryFlushHookOptions,
+  TelemetryFlushHookResult,
+  TelemetryResumeAttributesHook,
+} from "./runtime";
 export type { PromptMiddleware, PromptMiddlewareArgs } from "./runtime";
 
 // Canonical observability graph contract.

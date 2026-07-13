@@ -23,7 +23,7 @@ const docsAnswer = retrievalRecipe({
     fanout({ maxQueries: 4 }),
     retrieve({ limit: 30 }),
     expandParents({ records, indexerId: 'docs', maxParentChars: 4000 }),
-    rerank({ topK: 8 }),
+    rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 }),
     compressToBudget({ tokens: 3500 }),
   ],
 })
@@ -40,7 +40,7 @@ Recipes move through two phases: planned queries, then hits. Query steps must co
 | `rewriteQuery()` | queries -> queries | Rewrites the original question with a model-backed query. |
 | `fanout()` | queries -> queries | Generates alternate queries and dedupes them. |
 | `retrieve()` | queries -> hits | Runs each planned query against the recipe source retriever or retrievers. |
-| `rerank()` | hits -> hits | Uses a model to reorder and optionally trim retrieved hits. |
+| `rerank()` | hits -> hits | Reorders and optionally trims hits with a required, named `Reranker` engine. |
 | `expandParents()` | hits -> hits | Reads parent records and attaches larger context while preserving child citations. |
 | `compressToBudget()` | hits -> hits | Keeps query-relevant verbatim excerpts inside a token budget. |
 | `retrievalStep()` | either phase | Adds a custom typed step. |
@@ -55,7 +55,7 @@ const recipe = retrievalRecipe({
   steps: [
     fanout({ maxQueries: 4 }),
     retrieve({ limit: 30 }),
-    rerank({ topK: 8, model: rankingModel }),
+    rerank({ engine: judgeReranker({ name: 'docs-judge', model: rankingModel }), topK: 8 }),
   ],
 })
 ```
@@ -64,16 +64,21 @@ If a model-backed step has no model in scope, recipe construction fails before t
 
 ## Reranking Engines
 
-There is one recipe step: `rerank()`. You can run it three ways.
+There is one recipe step: `rerank()`. It always takes an explicit, named `engine`; the engine's `name` is the `rag.reranker:<name>` identity the Project Index and runtime evidence join on, so there is no anonymous default path. You can build the engine two ways.
 
-Use the recipe model for the zero-config judge path:
+Use the shared judge implementation over a recipe/step model:
 
 ```ts
+import { judgeReranker } from '@use-crux/core/retrieval'
+
 const recipe = retrievalRecipe({
   id: 'docs-answer',
   retriever: docs.retriever(),
   model: retrievalModel,
-  steps: [retrieve({ limit: 30 }), rerank({ topK: 8 })],
+  steps: [
+    retrieve({ limit: 30 }),
+    rerank({ engine: judgeReranker({ name: 'docs-judge', model: retrievalModel }), topK: 8 }),
+  ],
 })
 ```
 
@@ -90,7 +95,7 @@ const recipe = retrievalRecipe({
   retriever: docs.retriever(),
   steps: [
     retrieve({ limit: 30 }),
-    rerank({ engine: anthropic.reranker({ model: 'claude-haiku-4-5' }), topK: 8 }),
+    rerank({ engine: anthropic.reranker({ name: 'anthropic-reranker', model: 'claude-haiku-4-5' }), topK: 8 }),
   ],
 })
 ```
@@ -106,7 +111,7 @@ const recipe = retrievalRecipe({
   retriever: docs.retriever(),
   steps: [
     retrieve({ limit: 30 }),
-    rerank({ engine: reranker({ model: cohere.reranking('rerank-v3.5') }), topK: 8 }),
+    rerank({ engine: reranker({ name: 'cohere-reranker', model: cohere.reranking('rerank-v3.5') }), topK: 8 }),
   ],
 })
 ```
@@ -148,7 +153,7 @@ const supportAndDocs = retrievalRecipe({
     { retriever: supportTickets, weight: 0.5 },
   ],
   onSourceError: 'skip-with-warning',
-  steps: [retrieve({ limit: 25 }), rerank({ topK: 8, model })],
+  steps: [retrieve({ limit: 25 }), rerank({ engine: judgeReranker({ name: 'docs-judge', model }), topK: 8 })],
 })
 ```
 

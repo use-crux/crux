@@ -47,7 +47,9 @@ export async function observeConvexToolExecution<T>(
     })
     throw error
   } finally {
-    await flushObservability()
+    // One tool call within a larger action/stream, not the action's own
+    // terminal drain — the enclosing boundary's final flush owns loss reporting.
+    await flushObservability({ terminal: false })
   }
 }
 

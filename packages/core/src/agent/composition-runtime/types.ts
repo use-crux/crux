@@ -21,6 +21,13 @@ export interface CompositionStepContextInput {
 export interface CompositionRuntimeConfig {
   /** Composition mode, used for spans and report primitives. */
   readonly kind: CompositionKind
+  /**
+   * Author-supplied definition identity, required on every composition's
+   * public options (matching `agent()`/`flow()`/`memory()`/`guardrail()`/
+   * `constraint()`/`blackboard()`). Identifies the *definition*, distinct
+   * from the random per-execution `compositionId`.
+   */
+  readonly id: string
   /** Agent ids declared by the composition. */
   readonly agentIds: readonly string[]
   /** Optional session id to install on every child execution context. */
@@ -106,8 +113,13 @@ export interface CompositionScope {
 
 /** Internal runtime that owns shared composition lifecycle mechanics. */
 export interface CompositionRuntime {
-  /** Unique id for this composition run. */
+  /** Unique id for this composition run. Random per execution. */
   readonly compositionId: string
+  /**
+   * Canonical Project Index definition id for this composition, in the
+   * `composition.<kind>:<id>` format matching `store.ProjectDefinition.ID`.
+   */
+  readonly definitionId: string
   /** Run mode-specific scheduling inside the shared lifecycle boundary. */
   run<T>(body: (scope: CompositionScope) => Promise<T>): Promise<T>
 }

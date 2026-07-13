@@ -225,6 +225,18 @@ export function RunDetailShell({ traceId, lens, spanId: navSpanId, summary }: Ru
           status={status}
           items={stripItems}
           diagnosticsCount={diagnosticsCount}
+          reliability={
+            run
+              ? {
+                  segmentCount: run.segmentCount,
+                  activeSegmentId: run.activeSegmentId,
+                  orderingConfidence: run.orderingConfidence,
+                  gapCount: run.gapCount,
+                  traceAliasConflict: run.traceAliasConflict,
+                  deliveryHealth: run.deliveryHealth?.status,
+                }
+              : undefined
+          }
           errorStepper={
             triage
               ? {

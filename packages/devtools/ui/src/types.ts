@@ -1104,6 +1104,39 @@ export interface Trace {
   };
 }
 
+/**
+ * Canonical run lifecycle status vocabulary (binding spec 04 §1/§3). `running`
+ * is the only currently-live state; `suspended` is a durable, non-terminal
+ * pause; the rest are terminal. Kept as a plain string union rather than a
+ * branded type since the server may add states this client doesn't know
+ * about yet — narrow at render sites, don't assume exhaustiveness.
+ */
+export type ObservabilityRunStatus =
+  | "running"
+  | "suspended"
+  | "ok"
+  | "error"
+  | "cancelled"
+  | "incomplete"
+  | "conflicted"
+  | string;
+
+/**
+ * "unknown" (no persisted correlation to any delivery/export health signal)
+ * is deliberately distinct from "healthy" — the server never invents a
+ * healthy status it cannot actually trace back to this run.
+ */
+export interface ObservabilityRunDeliveryHealth {
+  status: "unknown" | "healthy" | "degraded" | string;
+  rejected?: number;
+  lastKnownAt?: string;
+}
+
+// Mirrors `observability.RunSummary` (aliased as `api.ObservabilityRunSummary`)
+// in packages/local/internal/observability/service.go — see
+// packages/local/internal/observability/run_summary_contract_test.go for the
+// Go-side field-set guard. Keep this the one hand-maintained shape for the
+// Runs list/detail row; do not reintroduce a second, narrower duplicate.
 export interface ObservabilityRunSummary {
   runId: string;
   traceId: string;
@@ -1111,9 +1144,10 @@ export interface ObservabilityRunSummary {
   userId?: string;
   name: string;
   rootPrimitive: string;
-  status: string;
+  status: ObservabilityRunStatus;
   startedAt: string;
   endedAt: string;
+  lastActivityAt?: string;
   durationMs: number;
   model: string;
   provider: string;
@@ -1123,9 +1157,61 @@ export interface ObservabilityRunSummary {
   eventCount: number;
   artifactCount: number;
   edgeCount: number;
+  /** Number of physical execution segments observed for this logical run. */
+  segmentCount: number;
+  /** The only live segment, omitted when none or more than one is live. */
+  activeSegmentId?: string;
+  /** Whether the server could establish one causal display order. */
+  orderingConfidence: "causal" | "partial" | string;
+  /** Missing segment-local sequence values and unresolved parent references. */
+  gapCount: number;
+  /** True when a trace alias identifies more than one logical run. */
+  traceAliasConflict?: boolean;
+  /** Server-owned read-model revision this row was current as of. */
+  revision: number;
+  deliveryHealth?: ObservabilityRunDeliveryHealth;
   attributes?: Record<string, unknown> | null;
   metrics?: Record<string, unknown> | null;
   error?: Record<string, unknown> | string | null;
+}
+
+/** Mirrors `observability.RunsResponse` — the one joined, revisioned Runs page. */
+export interface ObservabilityRunsPage {
+  revision: number;
+  rows: ObservabilityRunSummary[];
+  nextCursor?: string;
+}
+
+/** Mirrors `observability.RunChange`. */
+export interface ObservabilityRunChange {
+  entity: string;
+  id: string;
+  revision: number;
+}
+
+/** Mirrors `observability.RunsDelta` — the bounded reconnect catch-up shape. */
+export interface ObservabilityRunsDelta {
+  revision: number;
+  changes: ObservabilityRunChange[];
+  expired: boolean;
+}
+
+export interface ObservabilityRunsPageOptions {
+  status?: readonly string[];
+  sessionId?: string;
+  since?: string;
+  until?: string;
+  cursor?: string;
+  limit?: number;
+  /** Restrict to runs whose DefinitionRefs include this definition id (Phase 3 filter). */
+  definitionId?: string;
+}
+
+/** Mirrors `observability.DefinitionActivitySummary` — the Catalog rollup for one definition. */
+export interface ObservabilityDefinitionActivitySummary {
+  definitionId: string;
+  runCount: number;
+  lastRun?: ObservabilityRunSummary;
 }
 
 export interface ObservabilitySpanSummary {

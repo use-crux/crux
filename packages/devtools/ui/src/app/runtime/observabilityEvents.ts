@@ -46,3 +46,39 @@ export function observabilityEventIds(messageOrEvent: unknown): string[] {
 
   return [...ids]
 }
+
+/**
+ * Extract the ingest-commit revision from an `ObservabilityEvent` payload, if
+ * present (binding spec 04 §4's `{ entity, id, revision }` push contract).
+ * `undefined` means the event carries no revision — callers should treat
+ * that conservatively (catch up), not as "nothing changed".
+ */
+export function observabilityEventRevision(messageOrEvent: unknown): number | undefined {
+  const event =
+    isRecord(messageOrEvent) && isRecord(messageOrEvent.event)
+      ? messageOrEvent.event
+      : isRecord(messageOrEvent)
+        ? messageOrEvent
+        : undefined
+  if (!event) return undefined
+  const payload = payloadValue(event.payload)
+  if (!isRecord(payload)) return undefined
+  const revision = payload.revision
+  return typeof revision === 'number' ? revision : undefined
+}
+
+/**
+ * True when a cached query key nested under the `['observability', ...]`
+ * prefix should be swept by a blanket `observability:event` WS
+ * invalidation.
+ *
+ * Excludes the revisioned `runs-page` slice (`qk.observability.runsPage`):
+ * that slice owns its own revision-gated invalidation and bounded
+ * `/runs/delta` catch-up (`useObservabilityRunsPage`,
+ * `shared/lib/runs-revision.ts`). Sweeping it here too would refetch it on
+ * every observability push regardless of revision, nullifying that logic
+ * and reintroducing the refetch storm the revision hook exists to avoid.
+ */
+export function isBlanketInvalidatableObservabilityQueryKey(queryKey: readonly unknown[]): boolean {
+  return queryKey[0] === 'observability' && queryKey[1] !== 'runs-page'
+}

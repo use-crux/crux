@@ -1,8 +1,18 @@
 # ADR 0001: Observability Event Spine
 
-Status: Accepted
+Status: Accepted; lifecycle, delivery, and OTel assumptions built on top of this spine are
+superseded by [ADR 0002](./0002-observability-runtime-reliability.md).
 
 Date: 2026-06-29
+
+> **2026-07-11 note:** the "one event birthplace: `emit()`" decision below still holds unchanged.
+> ADR 0002 replaces this document's implicit assumptions that a run/span is process-local (a
+> per-run monotonic `seq`, an OTel span object held open across a boundary, `response.ok` as
+> delivery success) with an explicit multi-invocation contract: logical runs vs. physical execution
+> segments, `run:suspend`/`run:resume`, per-record delivery receipts, and a host-lifecycle-aware
+> OTel bridge. Read ADR 0002 for anything about run lifecycle, delivery guarantees, or OTel span
+> activation; this document remains the source of truth for the subscriber/diagnostics-channel/
+> transport fan-out shape itself.
 
 ## Context
 

@@ -2,7 +2,12 @@ import type {
   ChatCompletion,
   ChatCompletionChunk,
 } from "openai/resources/chat/completions";
-import type { StreamCompletionMetadata } from "@use-crux/core/adapter";
+import {
+  classifyProviderHttpError,
+  CruxAdapterError,
+  cruxProviderError,
+  type StreamCompletionMetadata,
+} from "@use-crux/core/adapter";
 import { openAITranscript } from "./message-codec";
 import { openAIResponseMeta } from "./response";
 import type { OpenAIChatRequest } from "./types";
@@ -19,18 +24,63 @@ export function openAITextDelta(chunk: unknown): string | undefined {
 /** Compile-time alias used by native chat stream bindings. */
 export type OpenAIChatStreamChunk = ChatCompletionChunk;
 
+/** Stream wrapper that normalizes mid-stream provider iteration errors. */
+export class OpenAIChatStream implements AsyncIterable<ChatCompletionChunk> {
+  readonly #raw: AsyncIterable<ChatCompletionChunk>;
+
+  constructor(raw: AsyncIterable<ChatCompletionChunk>) {
+    this.#raw = raw;
+  }
+
+  async *[Symbol.asyncIterator](): AsyncIterator<ChatCompletionChunk> {
+    try {
+      for await (const chunk of this.#raw) {
+        yield chunk;
+      }
+    } catch (error) {
+      throw new CruxAdapterError(
+        classifyProviderHttpError(error, "openai") ??
+          cruxProviderError({
+            kind: "provider-error",
+            code: "openai.stream_failed",
+            retryable: true,
+            message: error instanceof Error ? error.message : error,
+          }),
+        { cause: error },
+      );
+    }
+  }
+}
+
+/** Wrap a raw OpenAI chat stream so mid-stream errors are provider-normalized. */
+export function createOpenAIStreamCapture(
+  raw: AsyncIterable<ChatCompletionChunk>,
+): OpenAIChatStream {
+  return new OpenAIChatStream(raw);
+}
+
 /** Reconstruct exact completion facts from consumed OpenAI chat chunks. */
 export async function openAIStreamCompletion(
   chunks: readonly unknown[],
   request?: OpenAIChatRequest,
 ): Promise<StreamCompletionMetadata | undefined> {
   const values = chunks.filter(isChunk);
+  return completionMetadataFromChunks(values, request);
+}
+
+function completionMetadataFromChunks(
+  values: readonly ChatCompletionChunk[],
+  request?: OpenAIChatRequest,
+): StreamCompletionMetadata | undefined {
   const last = values.at(-1);
   if (!last) return undefined;
   const lastChoice = lastStreamChoice(values);
   const text = values.flatMap((chunk) => textDelta(chunk)).join("");
+  const refusal = values.flatMap((chunk) => refusalDelta(chunk)).join("");
   const audioData = values.flatMap((chunk) => audioDelta(chunk)).join("");
-  const audioId = values.map((chunk) => audioIdDelta(chunk)).find((id) => id !== undefined);
+  const audioId = values
+    .map((chunk) => audioIdDelta(chunk))
+    .find((id) => id !== undefined);
   const toolCalls = collectToolCalls(values);
   const result = {
     id: last.id,
@@ -45,7 +95,7 @@ export async function openAIStreamCompletion(
         message: {
           role: "assistant",
           content: text || null,
-          refusal: null,
+          refusal: refusal || null,
           ...(audioData
             ? {
                 audio: {
@@ -91,6 +141,11 @@ function textDelta(chunk: ChatCompletionChunk): string[] {
   return typeof value === "string" ? [value] : [];
 }
 
+function refusalDelta(chunk: ChatCompletionChunk): string[] {
+  const value = chunk.choices[0]?.delta?.refusal;
+  return typeof value === "string" ? [value] : [];
+}
+
 function audioDelta(chunk: ChatCompletionChunk): string[] {
   const audio = (
     chunk.choices[0]?.delta as
@@ -106,7 +161,9 @@ function audioIdDelta(chunk: ChatCompletionChunk): string | undefined {
       | { readonly audio?: { readonly id?: unknown } }
       | undefined
   )?.audio;
-  return typeof audio?.id === "string" && audio.id !== "" ? audio.id : undefined;
+  return typeof audio?.id === "string" && audio.id !== ""
+    ? audio.id
+    : undefined;
 }
 
 function collectToolCalls(chunks: readonly ChatCompletionChunk[]) {

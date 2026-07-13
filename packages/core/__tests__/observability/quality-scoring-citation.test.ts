@@ -44,6 +44,9 @@ describe('canonical quality, scoring, and citation observability', () => {
         type: 'span:start',
         primitive: 'scoring.judge',
         name: 'judge.answer_quality',
+        definitionRefs: [
+          { id: 'scorer:answer_quality', kind: 'scorer', role: 'invoked-scorer' },
+        ],
         attributes: expect.objectContaining({
           metricId: 'answer_quality',
           evalId: 'eval-1',

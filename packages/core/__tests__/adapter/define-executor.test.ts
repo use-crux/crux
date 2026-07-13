@@ -320,6 +320,7 @@ describe("loopRuntimeAdapter — routing dispatch", () => {
     });
 
     const result = await executor.parallel({
+      id: 'define-executor.test-parallel-1',
       context: { instruction: "answer" },
       agents: { reviewer: supportAgent },
     });

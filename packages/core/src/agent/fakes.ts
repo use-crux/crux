@@ -22,7 +22,7 @@
  *   fallback: { output: null },
  * })
  * const parallel = createParallel(executor)
- * await parallel({ context: { content: 'x' }, agents: { reviewer } })
+ * await parallel({ id: 'review-parallel', context: { content: 'x' }, agents: { reviewer } })
  *
  * // Inspect exactly what the composition passed to the executor:
  * expect(executor.calls[0].options.input).toEqual({ content: 'x' })

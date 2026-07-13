@@ -47,7 +47,7 @@ describe('Crux observability identity', () => {
     expect(CruxSpanIdSchema.safeParse('0000000000000000').success).toBe(false)
   })
 
-  it('requires per-run sequence numbers on every graph record', () => {
+  it('requires segment identity on every graph record', () => {
     const record = {
       schemaVersion: CRUX_OBSERVABILITY_SCHEMA_VERSION,
       recordId: 'rec_1111111111111111_1',
@@ -61,10 +61,16 @@ describe('Crux observability identity', () => {
     }
 
     expect(CruxGraphRecordSchema.safeParse(record).success).toBe(false)
-    expect(CruxGraphRecordSchema.safeParse({ ...record, seq: 1 }).success).toBe(true)
+    expect(
+      CruxGraphRecordSchema.safeParse({
+        ...record,
+        segmentId: 'seg_111111111111111111111111',
+        segmentSeq: 1,
+      }).success,
+    ).toBe(true)
   })
 
-  it('emits per-run monotonic sequence numbers through the public runtime', async () => {
+  it('emits one segment with monotonic segment-local order through the public runtime', async () => {
     const records: CruxGraphRecord[] = []
     subscribeObservability((record) => {
       records.push(record)
@@ -96,6 +102,7 @@ describe('Crux observability identity', () => {
       'span:end',
       'run:end',
     ])
-    expect(records.map((record) => record.seq)).toEqual([1, 2, 3, 4, 5, 6, 7])
+    expect(new Set(records.map((record) => record.segmentId)).size).toBe(1)
+    expect(records.map((record) => record.segmentSeq)).toEqual([1, 2, 3, 4, 5, 6, 7])
   })
 })

@@ -32,12 +32,6 @@ Use `--cwd <path>` to inspect another project root. Findings may include a docs
 URL, a copy-paste remediation, and a privacy-safe coding-agent prompt. They do
 not include environment values, credentials, or connection strings.
 
-## Runtime compatibility alias
-
-`crux runtime setup --check` and `crux runtime setup --apply` remain available
-for one compatibility window. They print a deprecation warning; use
-`crux setup` for new automation.
-
 Safe additive Runtime setup is idempotent. A failed later action does not roll
 back earlier successful actions, so rerun `crux setup --apply` after correcting
 the reported problem.

@@ -27,7 +27,7 @@ import type {
 interface PersistedExperiment {
   readonly evaluationId: string
   readonly configFingerprint: string
-  readonly observability?: { readonly runId: string; readonly traceId: string }
+  readonly observability?: { readonly runId: string; readonly traceId: string; readonly segmentId: string }
   readonly filteredRun: boolean
   readonly variants: readonly { readonly name: string }[]
   readonly cells: readonly ExperimentCell[]

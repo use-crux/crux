@@ -15,6 +15,7 @@ import {
   type CruxBaselinePromotionPreview,
   type CruxComparisonReportPreview,
   type CruxRunId,
+  type CruxSegmentId,
   type CruxTraceId,
 } from '../../observability'
 import type { Comparison } from '../experiment'
@@ -24,6 +25,7 @@ import type { ExperimentDiff } from '../schema-types'
 export interface QualityObservabilityRunRef {
   readonly runId: string
   readonly traceId: string
+  readonly segmentId: string
 }
 
 /** Emit the comparison report hub artifact and its candidate/baseline edges. @internal */
@@ -205,8 +207,8 @@ export function emitEvalCaseOfEdge(input: { caseRunId: string; evalRunId: string
 
 /** Emit one replay relation from the current case run to the recorded run. @internal */
 export function emitReplayOfEdge(input: {
-  replay: QualityObservabilityRunRef
-  recorded: QualityObservabilityRunRef
+  replay: Pick<QualityObservabilityRunRef, 'runId'>
+  recorded: Pick<QualityObservabilityRunRef, 'runId'>
 }): void {
   const replayRunId = validCruxRunId(input.replay.runId)
   const recordedRunId = validCruxRunId(input.recorded.runId)
@@ -226,10 +228,15 @@ function validCruxTraceId(traceId: string): CruxTraceId | undefined {
   return /^[0-9a-f]{32}$/u.test(traceId) ? (traceId as CruxTraceId) : undefined
 }
 
+function validCruxSegmentId(segmentId: string): CruxSegmentId | undefined {
+  return /^seg_[0-9a-f]{24}$/u.test(segmentId) ? (segmentId as CruxSegmentId) : undefined
+}
+
 function observabilityContextFor(run: QualityObservabilityRunRef | undefined): CapturedObservabilityContext | undefined {
   if (run === undefined) return undefined
   const runId = validCruxRunId(run.runId)
   const traceId = validCruxTraceId(run.traceId)
-  if (runId === undefined || traceId === undefined) return undefined
-  return { runId, traceId, spanStack: [] }
+  const segmentId = validCruxSegmentId(run.segmentId)
+  if (runId === undefined || traceId === undefined || segmentId === undefined) return undefined
+  return { runId, traceId, segmentId, spanStack: [] }
 }

@@ -39,6 +39,7 @@ const writer = agent({ id: 'writer', prompt: writePrompt })
 const pipeline = createPipeline({ executor: (agent, opts) => generate(agent.prompt, opts) })
 
 const result = await pipeline({
+  id: 'index-pipeline-1',
   agents: [researcher, writer],
   model: openai('gpt-4o'),
   context: { topic: 'agentic workflows' },

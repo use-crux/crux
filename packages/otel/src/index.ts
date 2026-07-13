@@ -27,5 +27,12 @@ export type { TelemetryOptions, UrlExporter, CallbackExporter } from './plugin'
 export type { TraceSpan, SpanStatus } from './types'
 export { createUrlExporter, createCallbackExporter } from './exporter'
 export type { SpanExporter } from './exporter'
-export { createOtelRecordSubscriber } from './record-mapper'
+export { createOtelRecordSubscriber, createSpanRegistry } from './record-mapper'
+export type { OtelSpanRegistry } from './record-mapper'
 export * from './attributes'
+export {
+  injectCruxPropagationCarrier,
+  extractCruxPropagationCarrier,
+  baggageAttributesFromCarrier,
+} from './propagation'
+export type { ExtractCruxPropagationCarrierOptions, ExtractedCruxPropagationCarrier } from './propagation'

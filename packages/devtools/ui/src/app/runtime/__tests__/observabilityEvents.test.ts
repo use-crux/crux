@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { observabilityEventIds } from '../observabilityEvents'
+import { isBlanketInvalidatableObservabilityQueryKey, observabilityEventIds } from '../observabilityEvents'
 
 describe('observabilityEventIds', () => {
   it('extracts run and trace ids from observability WS events', () => {
@@ -29,5 +29,28 @@ describe('observabilityEventIds', () => {
         }),
       }),
     ).toEqual(['run_ref', 'run_payload', 'trace_payload'])
+  })
+})
+
+describe('isBlanketInvalidatableObservabilityQueryKey', () => {
+  it('excludes the revisioned runs-page slice from the blanket WS sweep', () => {
+    expect(isBlanketInvalidatableObservabilityQueryKey(['observability', 'runs-page', { status: undefined }])).toBe(
+      false,
+    )
+  })
+
+  it('still sweeps run detail, span events, resource activity, and definition activity', () => {
+    expect(isBlanketInvalidatableObservabilityQueryKey(['observability', 'run', 'run_1'])).toBe(true)
+    expect(isBlanketInvalidatableObservabilityQueryKey(['observability', 'span-events', 'run_1', 'span_1', null])).toBe(
+      true,
+    )
+    expect(isBlanketInvalidatableObservabilityQueryKey(['observability', 'resource', 'tool'])).toBe(true)
+    expect(isBlanketInvalidatableObservabilityQueryKey(['observability', 'definition-activity', 'prompt:greeting'])).toBe(
+      true,
+    )
+  })
+
+  it('never matches a query key outside the observability prefix', () => {
+    expect(isBlanketInvalidatableObservabilityQueryKey(['quality', 'runs'])).toBe(false)
   })
 })

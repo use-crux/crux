@@ -1657,6 +1657,7 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
   const evalRunRef: QualityObservabilityRunRef = {
     runId: evalRun.runId,
     traceId: evalRun.traceId,
+    segmentId: evalRun.segmentId,
   }
 
   const capture = installSignalCapture()
@@ -1700,7 +1701,7 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
           })
           if (replay.mode === 'replay-strict' && cassetteSession?.recorded !== undefined) {
             emitReplayOfEdge({
-              replay: { runId, traceId: evalRun.traceId },
+              replay: { runId },
               recorded: cassetteSession.recorded,
             })
           }

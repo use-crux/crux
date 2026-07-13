@@ -11,6 +11,7 @@ import type { SafetyDecision, SafetyRunContext } from '../decision'
 import type { BoundaryDef } from '../boundary'
 import { safeCaptureSummary } from '../errors'
 import { observe } from '../../observability'
+import { guardrailDefinitionRef } from '../../observability/definition-ref'
 
 // ── Pipeline Config ────────────────────────────────────────────────
 
@@ -114,6 +115,9 @@ async function runGuardsInternal(
       {
         name: guard.id,
         primitive: 'guardrail.run',
+        // `guardrail()` requires `id`, so this ref is always canonical. The
+        // outer `${phase} guardrails` group span covers many guards and gets none.
+        definitionRefs: [guardrailDefinitionRef(guard.id)],
         attributes: {
           guardrailName: guard.id,
           category: guard.category,

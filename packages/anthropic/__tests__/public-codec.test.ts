@@ -45,7 +45,7 @@ describe("public Anthropic codecs", () => {
 
     expect(facts).toMatchObject({
       text: "hello",
-      finishReason: "end_turn",
+      finishReason: "stop",
       responseId: "msg_codec",
       actualModelId: "claude-codec-actual",
       usage: { inputTokens: 3, outputTokens: 4, totalTokens: 7 },

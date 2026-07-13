@@ -170,6 +170,7 @@ describe("Anthropic adapter (adapter)", () => {
       });
 
       await adapter.parallel({
+        id: 'executor.test-parallel-1',
         agents: { a: agent },
         context: {},
         model: "claude-sonnet-4-20250514",
@@ -217,6 +218,7 @@ describe("Anthropic adapter (adapter)", () => {
       });
 
       await adapter.parallel({
+        id: 'executor.test-parallel-2',
         agents: { a: agent },
         context: {},
         model: "claude-sonnet-4-20250514",
@@ -233,6 +235,7 @@ describe("Anthropic adapter (adapter)", () => {
       const agent = makeAgent({ id: "basic", prompt: simplePrompt });
 
       const result = await adapter.parallel({
+        id: 'executor.test-parallel-3',
         agents: { a: agent },
         context: {},
         model: "claude-sonnet-4-20250514",
