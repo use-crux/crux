@@ -697,7 +697,18 @@ function applyProjectedRewrite(
   const placeholders = content.filter((part) => part.type !== 'text').map((part) => contentText([part]))
 
   if (placeholders.length === 0) {
-    const text = replacement.startsWith('\n') ? replacement.slice(1) : replacement
+    // Leading empty text parts contribute one '\n' join separator each to the
+    // projection — drop exactly those separators, never rewritten content.
+    let leadingEmpty = 0
+    for (const part of content) {
+      if (part.type !== 'text' || part.text !== '') break
+      leadingEmpty++
+    }
+    let text = replacement
+    while (leadingEmpty > 0 && text.startsWith('\n')) {
+      text = text.slice(1)
+      leadingEmpty--
+    }
     let first = true
     return content.map((part) => {
       if (part.type !== 'text') return part

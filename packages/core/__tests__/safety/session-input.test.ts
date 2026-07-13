@@ -155,6 +155,25 @@ describe('guardInput — pipeline ordering and content flow', () => {
     expect(messageText(result.messages[0]!)).toMatch(/^\[X\] caption\n\[image image\/png 3B sha256:[a-f0-9]{12}\]$/)
   })
 
+  it('drops join separators for leading empty text parts instead of retaining an artificial newline', async () => {
+    const redactor = guardrail({
+      id: 'redact-all-text',
+      on: boundary.input.text(),
+      run: async (content) => ({
+        action: 'rewrite' as const,
+        value: content.replace('secret', '[X]'),
+        rewrite: { kind: 'redact' as const },
+      }),
+    })
+    const safety = identity({ call: { guardrails: [redactor] } })
+
+    const result = await safety.guardInput({
+      messages: [{ role: 'user', content: [textPart(''), textPart(''), textPart('secret plan')] }],
+    })
+
+    expect(result.messages[0]?.content).toEqual([textPart('[X] plan'), textPart(''), textPart('')])
+  })
+
   it('fails closed when a rewrite mutates a media placeholder', async () => {
     const masker = guardrail({
       id: 'mask-token',
