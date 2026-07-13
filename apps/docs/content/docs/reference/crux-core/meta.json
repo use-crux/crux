@@ -1,6 +1,6 @@
 {
   "title": "@use-crux/core",
-  "description": "The base Crux package — prompts, contexts, memory, agents, flows, plans, tasks, skills, scoring, quality, safety, index, lint, runtime bridge, and observability.",
+  "description": "The base Crux package, prompts, contexts, memory, agents, flows, plans, tasks, skills, scoring, quality, safety, index, lint, runtime bridge, and observability.",
   "pages": [
     "index",
     "config",
@@ -16,6 +16,7 @@
     "cost",
     "memory",
     "compaction",
+    "cache",
     "agent",
     "flow",
     "defer",
@@ -28,7 +29,6 @@
     "quality",
     "storage",
     "store",
-    "ai-agent",
     "project-index",
     "lint",
     "index-lints",

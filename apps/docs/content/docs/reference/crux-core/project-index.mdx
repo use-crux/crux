@@ -168,6 +168,8 @@ The Project Index represents each authored routing policy as a parent plus first
 | `routing.cascade`  | `routing.cascade.tier`    | `cascade.includes_tier`    |
 | `routing.fallback` | `routing.fallback.option` | `fallback.includes_option` |
 
+Stable authored `id` values are the join key across the system: runtime spans, routing receipts, decision reports, and these indexed source definitions all correlate through them.
+
 Children remain searchable, lintable, directly inspectable graph definitions. Their `metadata.indexPresentation` hint tells catalog clients when to fold them under the parent and supplies role/order data; it does not remove them from `definitions` or `relations`. Target relations such as `router.route.uses_prompt`, `split.route.uses_prompt`, `retry.target.uses_prompt`, `cascade.tier.uses_fallback`, and `fallback.option.uses_agent` connect those children to index-visible prompts, agents, and nested routing policies.
 
 Semantic evidence for a router `classify` callback or split `seed` callback annotated with `RouteArgs` can add parent facts `routingContextType` and `routingContextRequired`. Context-free callbacks omit them, and the static syntax pass does not invent annotation-derived types. Router and split route call-profile objects can add a JSON-safe child `profile` containing literal settings such as `temperature`, `maxTokens`, or `weight`; `model` remains a target relation rather than a profile setting, and raw-model routes omit `profile`.

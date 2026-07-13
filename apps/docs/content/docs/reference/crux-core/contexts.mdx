@@ -113,7 +113,7 @@ Use this when the context is more than text. For example, a `supportContext` can
 
 ### Returns
 
-`Context<TInput>` — frozen instance.
+`Context<TInput>`: frozen instance.
 
 ## `when(predicate, ctx)`
 
@@ -130,9 +130,9 @@ prompt({
 });
 ```
 
-**Returns:** `ConditionalContext<TCtx>` — the wrapped context's input keys become `Partial<>` in the merged prompt input type.
+**Returns:** `ConditionalContext<TCtx>`: the wrapped context's input keys become `Partial<>` in the merged prompt input type.
 
-The default predicate parameter is typed as a partial view of the wrapped context's input, because wrapping makes those fields optional at the prompt level. Use the explicit generic form when the predicate reads prompt-owned fields. When the predicate returns `false`, the context is excluded entirely — same semantics as setting `when` on the context definition.
+The default predicate parameter is typed as a partial view of the wrapped context's input, because wrapping makes those fields optional at the prompt level. Use the explicit generic form when the predicate reads prompt-owned fields. When the predicate returns `false`, the context is excluded entirely, the same semantics as setting `when` on the context definition.
 
 ## `match(opts)`
 
@@ -160,7 +160,7 @@ prompt({
 
 Every input key declared by any branch is included in the prompt's merged input type as optional, because only the selected branch is active at runtime.
 
-**Returns:** `MatchSpec` — frozen instance.
+**Returns:** `MatchSpec`: frozen instance.
 
 ## `createContexts(tree)`
 
@@ -173,7 +173,7 @@ const contexts = createContexts({
 });
 
 contexts.brand.voice; // Context<...>
-contexts._all; // Context[] — flat list
+contexts._all; // Context[]: flat list
 ```
 
 ## How contexts merge
@@ -185,11 +185,11 @@ When a prompt is resolved, the pipeline:
 3. **Composes** the prompt's own system text first, then cached contexts (`cache: true`) as a stable prefix, then uncached contexts as the budget-droppable tail. Each group keeps `use` array order.
 4. **Drops under budget** if a token budget is set. Lowest-priority uncached contexts are dropped first, while the prompt's own system text and cached prefix are always kept.
 
-Priority controls token-budget degradation, not normal rendering order. Excluded contexts contribute _nothing_ — not system text, not tools, not tokens. Budget-dropped contexts still contribute their tools.
+Priority controls token-budget degradation, not normal rendering order. Excluded contexts contribute _nothing_: not system text, not tools, not tokens. Budget-dropped contexts still contribute their tools.
 
 ## Related
 
 - Guide: [Contexts](/docs/guides/contexts)
-- Reference: [Prompts](/docs/reference/crux-core/prompts) — how prompts compose contexts via `use`
-- Guide: [Caching](/docs/guides/contexts/caching) — resolver memoization and provider cache hints
-- Guide: [Token budget](/docs/guides/contexts/token-budget) — automatic context dropping
+- Reference: [Prompts](/docs/reference/crux-core/prompts): how prompts compose contexts via `use`
+- Guide: [Caching](/docs/guides/contexts/caching): resolver memoization and provider cache hints
+- Guide: [Token budget](/docs/guides/contexts/token-budget): automatic context dropping

@@ -3,7 +3,7 @@ title: Server Usage
 description: Use plan and task handles from server functions, route handlers, and durable workers.
 ---
 
-Plans and task ledgers persist through the configured `RecordStore`. Server code should pass IDs across process boundaries and rebind handles where work runs.
+You created a plan in one request and need it in another process: a route handler, a queue worker, a cron job. Because plans and task ledgers persist through the configured `RecordStore`, the pattern is simple: pass the ID across the process boundary and rebind a handle with `plan.ref()` or `tasks.ref()` where the work runs.
 
 ```ts
 import { plan } from '@use-crux/core/plan'

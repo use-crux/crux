@@ -3,7 +3,7 @@ title: Pipeline
 description: Chain agents sequentially with typed data flow between immediate steps.
 ---
 
-`pipeline()` chains agents sequentially — each step can access all previous outputs via a context accumulator. Use it for multi-step workflows like research-write-edit, or any process where each stage depends on earlier stages.
+`pipeline()` chains agents sequentially, each step can access all previous outputs via a context accumulator. Use it for multi-step workflows like research-write-edit, or any process where each stage depends on earlier stages.
 
 ```ts title="research-pipeline.ts"
 import { pipeline } from '@use-crux/ai'
@@ -35,15 +35,15 @@ result.durationMs   // total pipeline time
 
 ## How it works
 
-1. Steps execute **sequentially** — step 2 waits for step 1 to finish
+1. Steps execute **sequentially**: step 2 waits for step 1 to finish
 2. The first step receives the pipeline's `context` (seed data)
 3. Each subsequent step's `input` function receives a context object containing **all previous outputs** plus the seed data
-4. The context accumulates — step 3 can access outputs from both step 1 and step 2
+4. The context accumulates, step 3 can access outputs from both step 1 and step 2
 5. Returns the final output, accumulated context, and total duration
 
 ## Context accumulator
 
-The `input` function on each step receives the full accumulated context — all previous step outputs keyed by name, plus the original seed data:
+The `input` function on each step receives the full accumulated context, all previous step outputs keyed by name, plus the original seed data:
 
 ```ts
 {
@@ -62,7 +62,7 @@ The `input` function on each step receives the full accumulated context — all 
 If no `input` function is provided, the full context object is passed directly:
 
 ```ts
-// No transform — writer receives the entire context object as input
+// No transform, writer receives the entire context object as input
 { agent: writer, name: 'write' }
 ```
 
@@ -134,7 +134,7 @@ The error wraps the original error message so you can identify which step failed
 
 ## Single-step pipelines
 
-A pipeline with one step works — useful when you want the pipeline return shape (`{ finalOutput, context, durationMs }`) for consistency:
+A pipeline with one step works, useful when you want the pipeline return shape (`{ finalOutput, context, durationMs }`) for consistency:
 
 ```ts
 const result = await pipeline({
@@ -177,7 +177,7 @@ const result = await pipeline({
 })
 ```
 
-Each agent step's context entry gains a `_created` record keyed by tool name. This is populated automatically — no extra wiring needed. If the agent didn't invoke any creation tools, `_created` is an empty object.
+Each agent step's context entry gains a `_created` record keyed by tool name. This is populated automatically, no extra wiring needed. If the agent didn't invoke any creation tools, `_created` is an empty object.
 
 ## Devtools
 

@@ -1,6 +1,6 @@
 {
   "title": "Contexts",
-  "description": "context() — reusable system text, conditional inclusion, priority, caching, token budget.",
+  "description": "context(): reusable system text, conditional inclusion, priority, caching, token budget.",
   "pages": [
     "index",
     "caching",

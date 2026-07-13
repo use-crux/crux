@@ -13,7 +13,7 @@ This recipe builds a research pipeline: a planner produces a list of search quer
 
 ## When to reach for this pattern
 
-- The work has a **clear sequential shape** — A must finish before B starts
+- The work has a **clear sequential shape**: A must finish before B starts
 - Each step's output is **structured** and feeds the next as typed input
 - You want **per-step tracing** in devtools (each agent shows up as a labeled step)
 
@@ -106,7 +106,7 @@ const result = await pipeline({
 
 result.status       // 'completed' | 'suspended' | 'expired'
 if (result.status === 'completed') {
-  result.context    // { topic, plan, search, write } — every step's output keyed by name
+  result.context    // { topic, plan, search, write }, every step's output keyed by name
   result.finalOutput // the last step's output (write)
 }
 ```
@@ -129,7 +129,7 @@ const verifier = agent({
   id: 'verifier',
   prompt: prompt({
     input: SearchResultsSchema,
-    output: SearchResultsSchema, // same shape — drops unverified findings
+    output: SearchResultsSchema, // same shape, drops unverified findings
     // ...
   }),
 })
@@ -156,6 +156,6 @@ If the pipeline is long-running and may exceed your function timeout, wrap it in
 ## Where to next
 
 <Cards>
-  <Card title="Compositions" description="Pipeline, parallel, consensus, swarm — when to use which." href="/docs/guides/compositions" />
+  <Card title="Compositions" description="Pipeline, parallel, consensus, swarm: when to use which." href="/docs/guides/compositions" />
   <Card title="Long-running flow" description="Make this pipeline suspendable across action boundaries." href="/docs/cookbook/workflows/long-running-flow" />
 </Cards>

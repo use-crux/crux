@@ -1,6 +1,6 @@
 {
   "title": "Plugins",
-  "description": "@use-crux/otel — OpenTelemetry plugin for production observability.",
+  "description": "@use-crux/otel: OpenTelemetry plugin for production observability.",
   "pages": [
     "otel"
   ]

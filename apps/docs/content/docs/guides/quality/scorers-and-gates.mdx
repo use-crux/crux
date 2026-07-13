@@ -3,13 +3,14 @@ title: Scorers & gates
 description: Graded measures with the built-in scorer library, LLM judges, autoevals compatibility, datasets, and declarative pass policies.
 ---
 
-Level 3 adds **scorers** (graded 0–1 measures, reported with honest
-statistics) and **gates** (the declarative pass policy that drives the exit
-code).
+A pass/fail assertion cannot tell you that a prompt got 10% worse this week.
+**Scorers** can: graded 0–1 measures, reported with honest statistics.
+**Gates** turn those measures into the declarative pass policy that drives the
+exit code.
 
 ## Scorers
 
-A scorer is any autoevals-compatible function — `({ input, output, expected })
+A scorer is any autoevals-compatible function: `({ input, output, expected })
 → { name, score: 0–1 | null, label?, metadata? }`. The existing scorer
 ecosystem plugs in unchanged. `score: null` means "skipped / not applicable"
 and is excluded from aggregates.
@@ -17,10 +18,10 @@ and is excluded from aggregates.
 Two spellings:
 
 ```ts
-// Array form — importable, shareable (the default)
+// Array form: importable, shareable (the default)
 scorers: [scorers.exact(), scorers.levenshtein()],
 
-// Factory form — the library arrives pre-bound to this evaluation's types
+// Factory form: the library arrives pre-bound to this evaluation's types
 scorers: (s) => [
   s.judge({ name: 'helpful', rubric: 'Does the answer resolve the question?', select: (o) => o.answer }),
   s.levenshtein(),
@@ -50,7 +51,7 @@ eval-local helper):
 
 | Scorer | Measures |
 | --- | --- |
-| `scorers.judge({ name, rubric \| choiceScores, select?, generate, model, useCoT? })` | LLM-as-judge — free rubric (0–1) or classification with mapped scores |
+| `scorers.judge({ name, rubric \| choiceScores, select?, generate, model, useCoT? })` | LLM-as-judge: free rubric (0–1) or classification with mapped scores |
 | `scorers.embeddingSimilarity({ embed })` | Cosine similarity to `expected` |
 | `scorers.rag.faithfulness({ generate, model })` | Is the answer grounded in the retrieved context? |
 | `scorers.rag.answerRelevancy({ generate, model })` | Does the answer address the question? |
@@ -98,7 +99,7 @@ s.judge({
 ## Datasets
 
 Golden sets live in files, validated with any Standard Schema library (zod,
-valibot, arktype) — JSON, JSONL, or CSV by extension:
+valibot, arktype): JSON, JSONL, or CSV by extension:
 
 ```ts
 import { evaluate, dataset } from '@use-crux/core/quality'
@@ -119,13 +120,13 @@ export default evaluate('support.quality-bar', {
 
 `data:` accepts an inline case array, a dataset, or a mixed array of both
 (concatenated). Datasets resolve lazily at execute time; a schema failure is
-a definition error (exit 2). Dataset rows are pure data — they cannot carry
+a definition error (exit 2). Dataset rows are pure data: they cannot carry
 `expect` callbacks.
 
 ## Gates
 
 Without `gates`, the zero-config policy applies: **assertions gate, scores
-inform** — the run exits non-zero iff any cell errored or any `expect`
+inform**. The run exits non-zero iff any cell errored or any `expect`
 failed; scorer values are reported but never block. Declaring any gate
 **replaces** that policy:
 
@@ -133,7 +134,7 @@ failed; scorer values are reported but never block. Declaring any gate
 gates: {
   passRate: { min: 0.95 },                       // over the per-cell `pass` score
   scores: {
-    helpful: { min: 0.7 },                       // keyed by scorer name — autocompletes
+    helpful: { min: 0.7 },                       // keyed by scorer name, autocompletes
     levenshtein: { min: 0.6, max: 1 },
   },
   latency: { p95Ms: 5000 },
@@ -148,7 +149,7 @@ validated at definition time instead (an unknown key throws immediately).
 
 Gates are **false-safe**: errored cells always fail the run regardless of
 gate configuration. Filtered runs (`--case`, `--variant`, `only`) demote
-gates to informational — they print, but never fail CI — because partial case
+gates to informational (they print, but never fail CI) because partial case
 populations make the statistics dishonest.
 
 ## Statistics you can trust
@@ -161,5 +162,5 @@ case, not pooled.
 
 ## Next
 
-[Variants & baselines](/docs/guides/quality/variants-and-baselines) — compare
+[Variants & baselines](/docs/guides/quality/variants-and-baselines): compare
 candidates and protect against regressions.

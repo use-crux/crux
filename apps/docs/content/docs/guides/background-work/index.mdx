@@ -1,0 +1,74 @@
+---
+title: Background Work
+description: Run follow-up work after the response is sent, without making the user wait.
+---
+
+You have finished the work the user is waiting for, but there is still something to do afterward: send a confirmation email, write an analytics event, warm a cache, or clean up a temporary file. None of that should keep the user waiting.
+
+`defer()` registers a callback that runs **after** the response is sent, off the critical path. Your handler returns immediately; the deferred work starts once the response is on its way.
+
+```ts
+import { defer } from '@use-crux/core'
+
+async function handleSignup(input: SignupInput) {
+  const user = await createUser(input)
+
+  defer(async () => {
+    await sendWelcomeEmail(user.email)
+    await track('signup', { userId: user.id })
+  })
+
+  return user // returned now; the email and analytics run after
+}
+```
+
+- The callback is **not** awaited, so it never delays your response.
+- It is lazy: nothing runs until the response boundary is reached.
+- It runs in the same process, so it is fast and needs no extra infrastructure.
+
+## What you need for it to work
+
+`defer()` needs a host that can tell Crux when the response is finished. Most server environments provide this, and the right integration is wired up for you:
+
+- **Next.js** uses `after()`.
+- **Node HTTP servers** use the response `finish` event.
+- **Vercel and Cloudflare** use `waitUntil`.
+
+See the [host support matrix](/docs/guides/background-work/hosts) for the full list and how each one behaves. If no host lifetime is available, `defer()` throws a clear error rather than silently dropping your work. See [Troubleshooting](/docs/guides/background-work/troubleshooting).
+
+## Best-effort by default
+
+Inline `defer()` is process-local. It is perfect for work that is nice to complete but not catastrophic to lose: analytics, cache warming, non-critical notifications. If the process crashes before the callback finishes, that work is gone.
+
+For work that **must** happen even across a crash or restart, such as a payment receipt or an email you cannot drop, register durable named work instead. This needs [Durable Execution](/docs/guides/durable-execution) configured:
+
+```ts
+import { defer } from '@use-crux/core'
+import { durableTask } from '@use-crux/core/runtime'
+
+const sendReceipt = durableTask('send-receipt', {
+  run: async (input: { orderId: string }) => {
+    await emailReceipt(input.orderId)
+  },
+})
+
+// Awaited: resolves once the work is durably accepted, then survives restarts.
+await defer(sendReceipt, { orderId: order.id })
+```
+
+Design durable targets to be idempotent: after a crash, work can be retried, so running twice must be safe. The full semantics (durable acceptance, commit behavior, delivery guarantees) live in the [`defer()` API reference](/docs/reference/crux-core/defer).
+
+## Inside a flow
+
+`defer()` is for request handlers, not replayable flow bodies. Inside a [flow](/docs/guides/flows), use `flow.defer()`, which keeps a stable identity across replay:
+
+```ts
+await flow.defer(sendReceipt, { orderId: order.id })
+```
+
+## Related
+
+- [Host support matrix](/docs/guides/background-work/hosts): which environments support background work and how
+- [Troubleshooting](/docs/guides/background-work/troubleshooting): diagnose `DEFER_*` errors
+- [Durable Execution](/docs/guides/durable-execution): make background work survive restarts and retries
+- [`defer()` API reference](/docs/reference/crux-core/defer): full signatures and guarantees

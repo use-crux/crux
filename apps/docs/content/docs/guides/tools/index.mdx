@@ -3,20 +3,7 @@ title: Tools
 description: Declare tools on contexts and prompts, merged automatically by adapters.
 ---
 
-<Callout type="warn">
-  Tools are only available in text mode (prompts without an `output` schema).
-  Structured output prompts use the model's JSON mode instead of tool calling.
-</Callout>
-
-Prompt-time tool names must be unique. Crux checks collisions across these prompt-owned sources:
-
-1. **Skill tools** — loader tools from `skill()`
-2. **Context tools** — from `context({ tools })` via `use`
-3. **Contributor tools** — from `contributor()` and injected primitives
-4. **Blackboard tools** — focused tools from `blackboard()`
-5. **Prompt tools** — from `prompt({ tools })`
-
-Call-site tools from `generate(prompt, { tools })` and `stream(prompt, { tools })` are applied later and intentionally override.
+Your prompt needs to call functions: fetch data, search an index, save a result. Declare tools on the prompt itself, or on a shared context so every prompt that uses it inherits them. Adapters merge both sets and hand them to the model.
 
 ```ts title="agent.ts"
 import { context, maxSteps, prompt } from '@use-crux/core'
@@ -65,6 +52,11 @@ const result2 = await generate(agent, {
   activeTools: ['searchWeb', 'saveNote'],
 })
 ```
+
+<Callout type="warn">
+  Tools are only available in text mode (prompts without an `output` schema).
+  Structured output prompts use the model's JSON mode instead of tool calling.
+</Callout>
 
 ## Shape what the model sees
 
@@ -386,7 +378,7 @@ If `execute` throws, the model receives the error message as the tool result and
   />
   <Card
     title="API Reference"
-    description="Full @use-crux/core API — prompt tools, toolChoice, and stopWhen."
+    description="Full @use-crux/core API: prompt tools, toolChoice, and stopWhen."
     href="/docs/reference/crux-core"
   />
 </Cards>

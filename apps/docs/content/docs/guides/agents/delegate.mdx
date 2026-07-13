@@ -1,9 +1,9 @@
 ---
 title: Delegate
-description: Orchestration wrapper combining handoff validation with subagent execution, exposed as a callable tool.
+description: Call a subagent as a tool from an orchestrator, with the result validated and transformed through a handoff.
 ---
 
-A delegate wraps a [handoff](/docs/guides/agents/tools-and-handoffs) contract with an execution function. The orchestrating agent calls it as a tool, the subagent runs, and the result is validated and transformed through the handoff — all in one step.
+Your orchestrator agent needs to call a subagent as a tool and trust what comes back. A delegate does that in one step: it wraps a [handoff](/docs/guides/agents/handoff) contract with an execution function, so when the orchestrating agent calls the tool, the subagent runs and the result is validated and transformed through the handoff automatically.
 
 ```ts title="delegate.ts"
 import { delegate } from '@use-crux/core/agent'
@@ -17,68 +17,7 @@ const researchDelegate = delegate({
 })
 ```
 
-## Three-layer validation
-
-Each delegation validates data at three points:
-
-1. **`argsSchema`** — validates what the LLM provides when calling the tool
-2. **`handoff.inputSchema`** — validates the subagent's return value
-3. **`handoff.outputSchema`** — transforms and validates the final data for the consumer
-
-## Typed context
-
-The `TCtx` type parameter provides type-safe context threading for framework-specific data (action context, user IDs, project IDs, etc.):
-
-```ts title="typed-delegate.ts"
-import { delegate } from '@use-crux/core/agent'
-import { z } from 'zod'
-
-type DelegateCtx = {
-  actionCtx: ActionCtx
-  projectId: string
-  userId?: string
-}
-
-const researchDelegate = delegate({
-  id: 'delegate-research',
-  argsSchema: z.object({ query: z.string() }),
-  handoff: researchToWriter,
-  execute: async (args, ctx: DelegateCtx) => {
-    // ctx is fully typed — access framework-specific context
-    return await ctx.actionCtx.runAction(runResearch, {
-      projectId: ctx.projectId,
-      query: args.query,
-    })
-  },
-})
-```
-
-`TCtx` defaults to `unknown` for simple cases. When specified, both `execute` and `.run()` enforce the typed context.
-
-## Using with framework-specific tool factories
-
-For frameworks that have their own tool format, use `.run()` directly instead of `.asTools()`. In Convex Agent, prefer `createTool()` from `@use-crux/convex/agent` so nested delegate work stays observable:
-
-```ts title="convex-tool.ts"
-import { createTool } from '@use-crux/convex/agent'
-
-const research = createTool({
-  description: 'Delegate research to a specialist',
-  inputSchema: researchDelegate.argsSchema,
-  execute: async (toolCtx, args, options) => {
-    const result = await researchDelegate.run(args, {
-      actionCtx: ctx,
-      projectId,
-      userId,
-    })
-    return result.data
-  },
-})
-```
-
-This gives full control over how the framework context maps to the delegate context. See the [Convex Agent guide](/docs/guides/convex/agent-tools-skills) for the full Convex setup.
-
-## Using as a tool (simple cases)
+## Using as a tool
 
 For AI SDK-compatible tools where no framework context is needed, `.asTools()` returns focused tools:
 
@@ -95,6 +34,12 @@ When the agent calls the `research` tool, the delegate:
 2. Runs the subagent via `execute()`
 3. Passes the result through the handoff's `prepare()` for validation and transform
 4. Returns the transformed data as a JSON string
+
+<Callout type="info">
+  Each delegation validates data at three points: the LLM's tool args, the subagent's return value, and the final
+  transformed output. See the [API reference](/docs/reference/crux-core/agent#delegateconfig) for the
+  schema-by-schema breakdown.
+</Callout>
 
 ## Direct execution
 
@@ -125,8 +70,61 @@ result.summary // LLM-generated summary, if the handoff configured one
 result.durationMs // execution time
 ```
 
+## Typed context
+
+When your subagent needs framework-specific data (action context, user IDs, project IDs, etc.), type the delegate's context so `execute` and `.run()` both enforce it:
+
+```ts title="typed-delegate.ts"
+import { delegate } from '@use-crux/core/agent'
+import { z } from 'zod'
+
+type DelegateCtx = {
+  actionCtx: ActionCtx
+  projectId: string
+  userId?: string
+}
+
+const researchDelegate = delegate({
+  id: 'delegate-research',
+  argsSchema: z.object({ query: z.string() }),
+  handoff: researchToWriter,
+  execute: async (args, ctx: DelegateCtx) => {
+    // ctx is fully typed, access framework-specific context
+    return await ctx.actionCtx.runAction(runResearch, {
+      projectId: ctx.projectId,
+      query: args.query,
+    })
+  },
+})
+```
+
+See the [API reference](/docs/reference/crux-core/agent#delegateconfig) for the `TCtx` generic mechanics.
+
+## Using with framework-specific tool factories
+
+For frameworks that have their own tool format, use `.run()` directly instead of `.asTools()`. In Convex Agent, prefer `createTool()` from `@use-crux/convex/agent` so nested delegate work stays observable:
+
+```ts title="convex-tool.ts"
+import { createTool } from '@use-crux/convex/agent'
+
+const research = createTool({
+  description: 'Delegate research to a specialist',
+  inputSchema: researchDelegate.argsSchema,
+  execute: async (toolCtx, args, options) => {
+    const result = await researchDelegate.run(args, {
+      actionCtx: ctx,
+      projectId,
+      userId,
+    })
+    return result.data
+  },
+})
+```
+
+This gives full control over how the framework context maps to the delegate context. See the [Convex Agent guide](/docs/guides/convex/agent-tools-skills) for the full Convex setup.
+
 <Callout type="info">
-  All delegate executions are instrumented automatically — `delegate:start` and `delegate:complete` events appear in
+  All delegate executions are instrumented automatically: `delegate:start` and `delegate:complete` events appear in
   [Devtools](/docs/guides/observability/devtools) with input/output payload snapshots and duration.
 </Callout>
 
@@ -136,7 +134,7 @@ result.durationMs // execution time
   <Card
     title="Handoff"
     description="Structured context transfer between agents with validation."
-    href="/docs/guides/agents/tools-and-handoffs"
+    href="/docs/guides/agents/handoff"
   />
   <Card
     title="Blackboard"

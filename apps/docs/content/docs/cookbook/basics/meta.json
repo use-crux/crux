@@ -1,6 +1,6 @@
 {
   "title": "Basics",
-  "description": "Everyday recipes — chat with memory, structured extraction, streaming with tools.",
+  "description": "Everyday recipes: chat with memory, structured extraction, streaming with tools.",
   "pages": [
     "index",
     "chat-with-memory",

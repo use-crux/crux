@@ -66,7 +66,7 @@ await history.evict(staleKey, {
 });
 ```
 
-`evict()` removes the entry like `delete()` but emits an `evict` write carrying GC telemetry (`lastGcAt`, `lastGcEvicted`), so the sweep is attributable in devtools instead of a silent drop.
+`evict()` removes the entry like `delete()` but also records GC telemetry, so the sweep is attributable in devtools instead of a silent drop. See the [memory reference](/docs/reference/crux-core/memory) for the telemetry fields.
 
 ## How It Renders
 

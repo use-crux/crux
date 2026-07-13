@@ -3,7 +3,7 @@ title: Workers
 description: Bind an agent to one task with scoped context and lifecycle tools.
 ---
 
-A worker handle is created from a task ledger:
+When you hand a subagent a task, you want it to work on exactly that task, with tools that cannot touch the rest of the ledger. A worker handle gives you that binding, created from a task ledger:
 
 ```ts
 const worker = work.worker('research')

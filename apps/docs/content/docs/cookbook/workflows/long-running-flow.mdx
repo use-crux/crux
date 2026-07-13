@@ -1,9 +1,9 @@
 ---
 title: Long-running flow
-description: A flow that suspends and resumes across action boundaries — hours or days. Bounded by timeout, signaled to resume.
+description: A flow that suspends and resumes across action boundaries, hours or days. Bounded by timeout, signaled to resume.
 ---
 
-This recipe shows a flow that performs an LLM step, suspends to wait for an external event (webhook, cron, scheduled job), then resumes and continues. Server resources are released during the wait — only the final resume re-runs the suspended portion of the handler.
+This recipe shows a flow that performs an LLM step, suspends to wait for an external event (webhook, cron, scheduled job), then resumes and continues. Server resources are released during the wait: only the final resume re-runs the suspended portion of the handler.
 
 ## Primitives used
 
@@ -14,8 +14,8 @@ This recipe shows a flow that performs an LLM step, suspends to wait for an exte
 ## When to reach for this pattern
 
 - The work has a **wait point** longer than your function timeout (10s on Vercel, 5 min on Convex)
-- The wait is for an **external event** — a webhook, an inbox poll, a daily cron, a third-party callback
-- You want to **never lose progress** — pre-wait steps shouldn't re-run after resume
+- The wait is for an **external event**: a webhook, an inbox poll, a daily cron, a third-party callback
+- You want to **never lose progress**: pre-wait steps shouldn't re-run after resume
 
 ## Full code
 
@@ -71,12 +71,12 @@ const { flowId } = await handle.run({
 })
 // flowId is persisted; can be returned to the caller
 
-// Later — webhook fires when the user clicks the verification link
+// Later, webhook fires when the user clicks the verification link
 export async function handleEmailVerified(flowId: string, verifiedAt: string) {
   await signalFlow(flowId, 'email-verified', { verifiedAt })
 }
 
-// Resume happens automatically on the next handle.resume(flowId) — usually
+// Resume happens automatically on the next handle.resume(flowId), usually
 // scheduled by the platform (Convex can schedule the resume action from an app-local signal helper).
 ```
 
@@ -98,7 +98,7 @@ adapter or application code.
 
 ### Retry transient failures
 
-`flow.step('name', fn, { retry: { attempts: 3, backoff: 'exponential' } })` retries the step on failure. Combines with suspend — only steps within the retry succeed before suspend can save them.
+`flow.step('name', fn, { retry: { attempts: 3, backoff: 'exponential' } })` retries the step on failure. Combines with suspend: only steps within the retry succeed before suspend can save them.
 
 ### Cancel from outside
 

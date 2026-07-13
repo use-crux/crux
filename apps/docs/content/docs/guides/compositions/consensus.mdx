@@ -27,8 +27,8 @@ decision.details    // all 3 agent results
 
 1. All agents run in parallel (built on top of `parallel()` internally)
 2. `extract()` pulls a vote string from each agent's result
-3. Votes are counted — the most frequent value wins
-4. Quorum is validated — if not met, `ConsensusError` is thrown
+3. Votes are counted, the most frequent value wins
+4. Quorum is validated, if not met, `ConsensusError` is thrown
 5. Returns the winning value, vote breakdown, all results, and agreement ratio
 
 ## The extract function

@@ -3,9 +3,11 @@ title: Variants & baselines
 description: Bakeoffs with typed execution overrides, paired-difference statistics, explicit promotion, and CI regression gates.
 ---
 
-Level 4 turns one evaluation into a **bakeoff**: `variants` declares named
-execution overrides, `baseline` names the reference, and every variant runs
-the same cases so comparisons are paired per case.
+You have a candidate prompt (or a cheaper model) and need to know whether it
+beats what you ship today, without eyeballing outputs. `variants` turns one
+evaluation into a **bakeoff**: named execution overrides, `baseline` names the
+reference, and every variant runs the same cases so comparisons are paired per
+case.
 
 ```ts
 import { evaluate, target } from '@use-crux/core/quality'
@@ -25,32 +27,10 @@ export default evaluate('support.bakeoff', {
 })
 ```
 
-## Variants actually execute
-
-A variant entry is a **typed override of the task's parameter surface** —
-the same shape as `params:` ("variant zero"). For a prompt task that means
-`prompt` (a compile-checked compatible replacement), `model`, `settings`,
-`generate`; flows add per-`steps` overrides; agents add `tools` mocks and
-`maxToolSteps`. Effective params per cell merge as: target defaults ←
-`params` ← variant entry.
-
-Two compile-time guarantees:
-
-- A plain function task that ignores params **rejects every override** — you
-  cannot declare a variant that silently does nothing.
-- `baseline:` autocompletes from your variant names, and a replacement
-  `prompt` must be input/output-compatible with the original.
-
-A variant may swap the **whole task** (`task:` inside the entry) for
-harness-level comparisons — same input/output types required. Signal
-assertions are typed against the base task; if the substituted task doesn't
-capture a signal, the assertion fails honestly at runtime rather than
-passing vacuously.
-
 ## Paired comparison
 
 With a `baseline:` variant declared, the Experiment carries a `comparison`:
-question-level paired differences per (variant, score) — trials averaged per
+question-level paired differences per (variant, score), trials averaged per
 case, then candidate − baseline per case, reported as **mean Δ ± SEM** with
 the matched case count:
 
@@ -66,8 +46,8 @@ Cases present on only one side are excluded from the pairing and listed under
 ## Baselines: promotion is explicit
 
 A **Baseline** is a promoted experiment, written to
-`.crux/quality/baselines/<evaluationId>.json` and **committed to your repo**
-— that file is how CI knows the reference. Promotion never happens
+`.crux/quality/baselines/<evaluationId>.json` and **committed to your repo**.
+That file is how CI knows the reference. Promotion never happens
 implicitly:
 
 ```bash
@@ -84,7 +64,7 @@ const { baselineId } = await experiment.promote({ variant: 'current' })
 
 Promotion requires an **explicit evaluation id**. For a path-derived id the
 CLI prints the one-line `evaluate('your.id', …)` change to make (use
-`--pin-id <id>` in CI) — it never rewrites your source. If you promote and
+`--pin-id <id>` in CI), it never rewrites your source. If you promote and
 forget to pin, the next run fails with the same pin line (drift guard).
 Filtered runs are refused: paired statistics need the full case population.
 
@@ -101,7 +81,7 @@ reads "fail if `helpful` drops more than 0.02 below the baseline". Honest
 edge cases:
 
 - **No reference yet** (nothing promoted, no `baseline:` variant): the gate
-  reports `✗ informational` — visible, never blocking — so first runs stay
+  reports `✗ informational`, visible, never blocking, so first runs stay
   green and promotion bootstraps the gate.
 - **Drifted baseline** (the evaluation's cases/config changed since
   promotion): the comparison demotes to informational and the reporter says
@@ -109,14 +89,32 @@ edge cases:
 - A declared `baseline:` variant takes precedence over a committed baseline
   record for that run.
 
+## Variants actually execute
+
+A variant entry is a **typed override of the task's parameter surface**, the
+same shape as `params:` ("variant zero"): `prompt`, `model`, `settings`, and
+`generate` for prompt tasks, per-step overrides for flows, `tools` mocks and
+`maxToolSteps` for agents. A variant may also swap the **whole task** (`task:`
+inside the entry) for harness-level comparisons, same input/output types
+required.
+
+Overrides are compile-checked: a plain function task that ignores params
+rejects every override (you cannot declare a variant that silently does
+nothing), `baseline:` autocompletes from your variant names, and a replacement
+`prompt` must be input/output-compatible with the original. Signal assertions
+are typed against the base task; if a substituted task does not capture a
+signal, the assertion fails honestly at runtime rather than passing vacuously.
+The full per-task override surface and the params merge order live in the
+[Quality reference](/docs/reference/crux-core/quality#target).
+
 ## Trials
 
 `trials: 3` runs every cell three times (per-case `trials` wins; under
-`replay-strict` trials collapse to 1 — replays are deterministic). Aggregates
+`replay-strict` trials collapse to 1, replays are deterministic). Aggregates
 gain pass@k / pass^k, and `consistency` gates read them. Use trials when the
 task is genuinely stochastic and you need to distinguish flaky from broken.
 
 ## Next
 
-[Replay](/docs/guides/quality/replay) — make all of this deterministic and
+[Replay](/docs/guides/quality/replay), make all of this deterministic and
 token-free in CI.

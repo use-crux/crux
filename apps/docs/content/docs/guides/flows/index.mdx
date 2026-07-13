@@ -3,7 +3,7 @@ title: Flows
 description: Compose generate() calls into structured pipelines with named steps, automatic retries, fallbacks, and full observability.
 ---
 
-A single `generate()` call handles one prompt. Real applications chain multiple calls into pipelines — research then synthesize, plan then execute, draft then validate. `flow` makes those pipelines a first-class primitive: every step has a name, every retry is declarative, and every trace is grouped automatically.
+A single `generate()` call handles one prompt. Real applications chain multiple calls into pipelines: research then synthesize, plan then execute, draft then validate. `flow` makes those pipelines a first-class primitive: every step has a name, every retry is declarative, and every trace is grouped automatically.
 
 ```ts
 import { flow } from '@use-crux/core'
@@ -32,25 +32,25 @@ await researchFlow.run()
 
 Use `flow` when you see these signals in your code:
 
-- **Chaining outputs** — the result of one `generate()` feeds into the next as input
-- **Manual try/catch for retries** — you're wrapping `generate()` in retry loops yourself
-- **Human-in-the-loop gates** — your pipeline needs to pause for approval, review, or external input before continuing
-- **Cross-action tracing** — your pipeline spans multiple Convex actions, Lambda invocations, or API routes
-- **Eval↔runtime comparison** — you want to compare production step performance against eval baselines in devtools
+- **Chaining outputs**: the result of one `generate()` feeds into the next as input
+- **Manual try/catch for retries**: you're wrapping `generate()` in retry loops yourself
+- **Human-in-the-loop gates**: your pipeline needs to pause for approval, review, or external input before continuing
+- **Cross-action tracing**: your pipeline spans multiple Convex actions, Lambda invocations, or API routes
+- **Eval↔runtime comparison**: you want to compare production step performance against eval baselines in devtools
 
-If you're making a single `generate()` call, you don't need a flow — just call `generate()` directly. Flows are for multi-step pipelines where the steps have meaningful names and data dependencies.
+If you're making a single `generate()` call, you don't need a flow, just call `generate()` directly. Flows are for multi-step pipelines where the steps have meaningful names and data dependencies.
 
 ## What Flows Give You
 
-- **Named steps** — label each stage of your pipeline; thread data between steps naturally
-- **Automatic retries** — retry failed steps with configurable backoff, no manual try/catch
-- **Fallbacks** — switch to a cheaper model or alternative strategy when retries are exhausted
-- **Suspend/resume** — pause for human approval, external events, or async dependencies; resume later, even in a different process
-- **Structured tracing** — every `generate()` inside a step is tagged with `flowId`, `stepId`, and `stepLabel` automatically
-- **Devtools grouping** — the Timeline groups traces by flow and step instead of guessing from timing
-- **Quality↔runtime comparison** — flow step labels show up as typed `steps` signals in Quality evaluations, so test assertions and production traces speak the same names
-- **Cross-boundary** — works across Convex actions, microservices, or any multi-process setup by passing IDs
-- **Define once, run many** — `flow()` returns a frozen handle; call `.run()` repeatedly with different inputs
+- **Named steps**: label each stage of your pipeline; thread data between steps naturally
+- **Automatic retries**: retry failed steps with configurable backoff, no manual try/catch
+- **Fallbacks**: switch to a cheaper model or alternative strategy when retries are exhausted
+- **Suspend/resume**: pause for human approval, external events, or async dependencies; resume later, even in a different process
+- **Structured tracing**: every `generate()` inside a step is tagged with `flowId`, `stepId`, and `stepLabel` automatically
+- **Devtools grouping**: the Timeline groups traces by flow and step instead of guessing from timing
+- **Quality↔runtime comparison**: flow step labels show up as typed `steps` signals in Quality evaluations, so test assertions and production traces speak the same names
+- **Cross-boundary**: works across Convex actions, microservices, or any multi-process setup by passing IDs
+- **Define once, run many**: `flow()` returns a frozen handle; call `.run()` repeatedly with different inputs
 
 ## Basic Usage
 
@@ -66,7 +66,7 @@ const editPipeline = flow('edit-pipeline', async (flow) => {
 const result = await editPipeline.run()
 ```
 
-`flow` returns a `FlowHandle` with a `.run()` method that returns whatever the handler returns (wrapped in a `FlowResult`). Each `flow.step()` returns the result of its function — use it to thread data between steps. Step labels are durable replay identities for the Flows beta, so keep each label unique and stable. Dynamic labels are advanced; use them only when the generated label is deterministic across retries and resumes.
+`flow` returns a `FlowHandle` with a `.run()` method that returns whatever the handler returns (wrapped in a `FlowResult`). Each `flow.step()` returns the result of its function: use it to thread data between steps. Step labels are durable replay identities for the Flows beta, so keep each label unique and stable. Dynamic labels are advanced; use them only when the generated label is deterministic across retries and resumes.
 
 ## Sessions
 
@@ -94,7 +94,7 @@ await withSession(sessionId, async () => {
 
 ## Retry and Fallback
 
-LLM calls fail — rate limits, timeouts, malformed output. Instead of wrapping every step in try/catch, declare retry and fallback behavior:
+LLM calls fail: rate limits, timeouts, malformed output. Instead of wrapping every step in try/catch, declare retry and fallback behavior:
 
 ```ts
 await flow.step('search', () => generate(searcher, { model: primaryModel, input }), {
@@ -103,24 +103,24 @@ await flow.step('search', () => generate(searcher, { model: primaryModel, input 
 })
 ```
 
-This retries up to 3 times with exponential backoff (1s, 2s delays), then falls back to a cheaper model if all attempts fail. The step still returns its result transparently — callers don't need to know about the retry logic.
+This retries up to 3 times with exponential backoff (1s, 2s delays), then falls back to a cheaper model if all attempts fail. The step still returns its result transparently: callers don't need to know about the retry logic.
 
 | Option           | Type                        | Default    | Description                      |
 | ---------------- | --------------------------- | ---------- | -------------------------------- |
 | `retry.attempts` | `number`                    | `1`        | Max attempts including the first |
 | `retry.delay`    | `number`                    | `1000`     | Base delay between retries (ms)  |
 | `retry.backoff`  | `'linear' \| 'exponential'` | `'linear'` | Delay multiplier strategy        |
-| `fallback`       | `() => T`                   | —          | Runs if all retries fail         |
+| `fallback`       | `() => T`                   | n/a        | Runs if all retries fail         |
 
 You can use retry alone, fallback alone, or both together. Without either, errors propagate normally.
 
 Crux policy-terminal errors are not retried by default and do not run execution fallback: `GuardrailBlockedError`, `ConstraintViolationError`, and `ValidationExhaustedError`. This keeps safety, constraint, and validation decisions from being bypassed by a generic fallback. Use `shouldRetry` only when you intentionally want to override that policy.
 
 ```ts
-// Retry only — fail hard after 3 attempts
+// Retry only, fail hard after 3 attempts
 await flow.step('validate', () => generate(validator, { model, input }), { retry: { attempts: 3, delay: 500 } })
 
-// Fallback only — no retry, just switch strategy on first failure
+// Fallback only, no retry, just switch strategy on first failure
 await flow.step('summarize', () => generate(summarizer, { model: premiumModel, input }), {
   fallback: () => generate(summarizer, { model: cheapModel, input }),
 })
@@ -168,7 +168,7 @@ See the [Quality guide](/docs/guides/quality) for variants, gates, and replay.
 
 ## Signaling Handles
 
-Prefer `flowHandle.signal(flowId, name, payload)` on the flow handle. The bare `signalFlow()` export is a low-level primitive that only writes the signal payload — see [Suspend and resume](/docs/guides/flows/suspend-and-resume#signaling-a-suspended-flow) for the full picture.
+Prefer `flowHandle.signal(flowId, name, payload)` on the flow handle. The bare `signalFlow()` export is a low-level primitive that only writes the signal payload; see [Suspend and resume](/docs/guides/flows/suspend-and-resume#signaling-a-suspended-flow) for the full picture.
 
 ## Where to Next
 

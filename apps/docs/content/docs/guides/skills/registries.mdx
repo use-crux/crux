@@ -5,7 +5,7 @@ description: Load skills from skills.sh, from disk, or from your own private reg
 
 Skills can come from three places: inline in your code, a file on disk, or a remote registry. Registries are how you share skills across repos, teams, or the public community.
 
-## skills.sh — The Built-in Community Registry
+## skills.sh: The Built-in Community Registry
 
 [skills.sh](https://skills.sh) is the community registry for SKILL.md files. Crux exports it as the `skillsSh` registry value:
 
@@ -18,11 +18,11 @@ const research = skill.fromRegistry(skillsSh, 'owner/repo/skill-name')
 
 Registry skills use the same shape everywhere: pass a registry value and the skill path inside that registry.
 
-Content is fetched lazily on the first `prompt.resolve()` and cached in process memory for the lifetime of the runtime — subsequent resolves do not re-fetch.
+Content is fetched lazily on the first `prompt.resolve()` and cached in process memory for the lifetime of the runtime. Subsequent resolves do not re-fetch.
 
 ## Custom Registries
 
-Host your own skills on any HTTPS server that implements the `.well-known/agent-skills/` protocol. Useful for shared internal skills — brand voice, legal review, compliance checks — that you don't want to publish publicly.
+Host your own skills on any HTTPS server that implements the `.well-known/agent-skills/` protocol. Useful for shared internal skills (brand voice, legal review, compliance checks) that you don't want to publish publicly.
 
 ```ts
 import { skill, registry } from '@use-crux/core/skill'
@@ -42,7 +42,7 @@ const legal = skill.fromRegistry(internal, 'legal/disclosure-language')
 | Field     | Type                        | Description                                                                                                        |
 | --------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `name`    | `string`                    | Stable registry name used in skill ids and local Project Model output                                             |
-| `baseUrl` | `string`                    | Registry base URL — requests go to `<baseUrl>/.well-known/agent-skills/<path>`                                     |
+| `baseUrl` | `string`                    | Registry base URL: requests go to `<baseUrl>/.well-known/agent-skills/<path>`                                     |
 | `auth`    | `() => string \| undefined` | Optional callback returning a bearer token. Called per request, so it can read fresh env vars or refreshed tokens. |
 
 `registry()` returns a registry value. Pass that value to `skill.fromRegistry(internal, 'brand-guidelines')`; do not repeat registries in `crux.config.ts`. Crux does not scan project files at runtime to find custom registries, so create registry-backed skills from the registry value in the module that uses them.
@@ -60,7 +60,7 @@ const seo = skill.fromFile('./skills/seo-analysis/SKILL.md')
 
 This reads synchronously at import time and automatically picks up any sibling `references/*.md` files. See [Writing skills](/docs/guides/skills/writing) for the directory layout.
 
-Disk-loaded skills don't need a registry — they're already available the moment the module imports.
+Disk-loaded skills don't need a registry. They're already available the moment the module imports.
 
 ## Error Handling
 
@@ -93,4 +93,4 @@ try {
 
 ## Caching
 
-Registry fetches are cached in memory for the lifetime of the process, keyed by the full identifier. There is no TTL — if you publish a new version of a skill, restart the runtime to pick it up. The instrumentation hooks `onSkillCacheHit` and `onSkillCacheMiss` let you observe cache behavior in production (see the [API reference](/docs/reference/crux-core/skill#instrumentation-hooks)).
+Registry fetches are cached in memory for the lifetime of the process, keyed by the full identifier. There is no TTL: if you publish a new version of a skill, restart the runtime to pick it up. The instrumentation hooks `onSkillCacheHit` and `onSkillCacheMiss` let you observe cache behavior in production (see the [API reference](/docs/reference/crux-core/skill#instrumentation-hooks)).

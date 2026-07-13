@@ -3,7 +3,7 @@ title: Plugins
 description: Extend Crux with composable plugins for telemetry, logging, and custom instrumentation.
 ---
 
-Crux has a generic plugin system for extending the runtime. Plugins can install middleware, observability transports, reporters, and other cross-cutting concerns — all composable, all zero-overhead when not installed.
+Crux has a generic plugin system for extending the runtime. Plugins can install middleware, observability transports, reporters, and other cross-cutting concerns: all composable, all zero-overhead when not installed.
 
 ## Using plugins
 
@@ -80,7 +80,7 @@ without installing a Crux plugin.
 
 ## Writing a custom plugin
 
-Implement the `CruxPlugin` interface. Prefer **subscribing to graph records** for instrumentation —
+Implement the `CruxPlugin` interface. Prefer **subscribing to graph records** for instrumentation:
 `CruxHooks` is not a free-form per-event callback map. Use `subscribeObservability()` (or the
 diagnostics channel) for tool starts, generation ends, and similar signals.
 
@@ -114,11 +114,11 @@ export function createMyPlugin(options: { endpoint: string }): CruxPlugin {
 
 ### What `install()` receives
 
-`install(hooks)` receives a frozen snapshot of the current `CruxHooks` (everything installed by previous plugins). Most graph-only plugins ignore that snapshot and only return `dispose`. You never need to manually fan out prior handlers — the framework merges hook fields for you.
+`install(hooks)` receives a frozen snapshot of the current `CruxHooks` (everything installed by previous plugins). Most graph-only plugins ignore that snapshot and only return `dispose`. You never need to manually fan out prior handlers: the framework merges hook fields for you.
 
 ### What `install()` returns
 
-Return a `CruxPluginResult` — any subset of `CruxHooks` fields plus an optional `dispose` function. Observability-relevant fields:
+Return a `CruxPluginResult`: any subset of `CruxHooks` fields plus an optional `dispose` function. Observability-relevant fields:
 
 | Field | Type | Description |
 | --- | --- | --- |
@@ -138,30 +138,11 @@ Return a `CruxPluginResult` — any subset of `CruxHooks` fields plus an optiona
 `CruxHooks` also carries non-observability slots (`records`, `runtimeEngine`, global constraints/guardrails, …) that plugins may set; they are not free-form event maps.
 
 For raw graph consumption, call `subscribeObservability()` inside `install()` and return
-`dispose: unsubscribe` — do not invent parallel hook maps on `CruxHooks`.
+`dispose: unsubscribe`; do not invent parallel hook maps on `CruxHooks`.
 
 ## How composition works
 
-### Transport and middleware
-
-- **Middleware** — later plugins wrap earlier ones; the outer middleware controls when `next()` is called.
-- **Transports / capture / activation hooks** — merged according to `mergeHooks` rules (last writer or layered activation depending on the field). Prefer one observability transport plus OTel as a graph subscriber.
-
-```
-Plugin A middleware (inner)
-  ↕ wraps
-Plugin B middleware (outer)
-  ↕ wraps
-Adapter generate() call
-```
-
-### Graph-record fan-out
-
-Every installed subscriber, diagnostics-channel listener, HTTP transport, and `@use-crux/otel` projection observes the **same** sanitized record stream. Subscriber errors are isolated from user code and counted in `observabilityDiagnostics().subscriberErrors`.
-
-### Dispose order
-
-Plugin `dispose()` functions are called in **reverse** order during `registry.dispose()` — last installed, first disposed.
+Later plugins wrap earlier ones for middleware (the outer middleware controls when `next()` is called), other hook fields merge by `mergeHooks` rules, and `dispose()` runs in reverse install order. Every subscriber, diagnostics-channel listener, transport, and `@use-crux/otel` projection observes the same sanitized record stream, with subscriber errors isolated from user code. Details: [Plugin composition](/docs/reference/crux-core/observability#plugin-composition).
 
 ## Next steps
 

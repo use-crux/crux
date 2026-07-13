@@ -3,20 +3,13 @@ title: Function Boundaries
 description: Preserve Crux run/span context across Convex actions, queries, mutations, and scheduled work.
 ---
 
-# Function Boundaries
-
-Use `@use-crux/convex/server` for Convex functions that participate in a Crux execution graph.
+Convex runs each action, query, and mutation in its own worker, so Crux run/span context does not survive `ctx.runAction()`, `ctx.runQuery()`, or scheduled work. The drop-in wrappers in `@use-crux/convex/server` preserve it: they keep Convex's normal function shape while restoring incoming context, exposing `ctx.crux` helpers inside handlers, and flushing observability before action workers exit.
 
 ```ts
 import { action, internalAction, query, mutation } from '@use-crux/convex/server'
 ```
 
-The wrappers preserve Convex's normal function shape while adding:
-
-- a hidden optional `__crux` argument for context propagation
-- `ctx.crux` helpers inside handlers
-- automatic context restoration on the receiving side
-- bounded flush for actions and internal actions
+Context travels in a hidden optional `__crux` argument added by the wrappers; see the [`@use-crux/convex` reference](/docs/reference/storage/convex) for the propagation envelope details.
 
 ## Public Action Entrypoint
 

@@ -16,7 +16,7 @@ Move durable wakeable work into `durableTask("name", { run })` from
 `@use-crux/core/runtime` and schedule it with `flow.defer(target, input)`.
 
 For **request-scoped** (non-durable) post-response work outside flows, use public
-`defer(callback)` behind a host wrapper — see [Request-scoped defer](/docs/guides/defer).
+`defer(callback)` behind a host wrapper, see [Request-scoped defer](/docs/guides/background-work).
 
 ## When to suppress
 

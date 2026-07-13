@@ -1,6 +1,6 @@
 ---
 title: "@use-crux/google"
-description: Google GenAI SDK adapter — factory pattern with provider caching plus dense embedding helpers.
+description: Google GenAI SDK adapter, factory pattern with provider caching plus dense embedding helpers.
 ---
 
 Google message content supports native image, audio, video, and documents.
@@ -147,13 +147,13 @@ await adapter.generate(prompt, {
 
 **Returns:** normalized Crux generate result with:
 
-- `result.text` — extracted assistant text
-- `result.usage` — accumulated usage when every provider-call step reported usage
-- `result.cost` — provider-reported cost when available
-- `result.finalStep` — final provider-call text, usage, finish reason, response id, and actual model id
-- `result.raw` — raw Google SDK response
-- `result._meta` — retained trace metadata for observability plumbing
-- `result.usage?.inputTokenDetails.cacheReadTokens` — tokens served from cache when available
+- `result.text`: extracted assistant text
+- `result.usage`: accumulated usage when every provider-call step reported usage
+- `result.cost`: provider-reported cost when available
+- `result.finalStep`: final provider-call text, usage, finish reason, response id, and actual model id
+- `result.raw`: raw Google SDK response
+- `result._meta`: retained trace metadata for observability plumbing
+- `result.usage?.inputTokenDetails.cacheReadTokens`: tokens served from cache when available
 
 <Callout type="warn">
   Structured output is validated with Zod after generation. Invalid JSON from
@@ -184,9 +184,9 @@ Stream a prompt execution.
 
 **Returns:** `StreamResult<TRawStream>`:
 
-- `result.textStream` — provider-neutral text deltas
-- `result.raw` — raw Google GenAI stream
-- `result.completion` — promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
+- `result.textStream`: provider-neutral text deltas
+- `result.raw`: raw Google GenAI stream
+- `result.completion`: promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
 
 ### `toParams(resolved, options)` / `fromResponse(response)`
 

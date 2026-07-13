@@ -58,6 +58,18 @@ Built-in policy helpers:
 | `any([...])` | Compose policies with OR. |
 | `not(policy)` | Negate a policy. |
 
+## Policy Callbacks
+
+Custom `shouldLookup` and `shouldCache` callbacks receive the prompt id, operation, input, prepared provider arguments, tools presence, version, and threshold. `shouldCache` additionally receives the generated result on write.
+
+## Dense-Only Embeddings
+
+`createSemanticCache()` accepts a `DenseEmbedding` only; sparse and hybrid embeddings are rejected.
+
+Sparse and hybrid retrieval are supported elsewhere in Crux through `retriever()` and `VectorStore.search()`, and they are excellent for document search. Response caching has a different job: decide whether a completed prompt result can be reused. That decision needs a single threshold with predictable meaning. Hybrid retrieval introduces fusion choices and adapter-specific ranking behavior, which makes a default response-cache threshold misleading.
+
+If you need sparse or hybrid cache lookup, implement it as a custom cache or retrieval policy. Crux does not block that pattern; it only avoids presenting it as the default semantic response cache.
+
 ## Events
 
 Instrumentation hooks include:
@@ -87,3 +99,5 @@ store.capabilities().semanticCache.isolatedVectorNamespace === true
 This is deliberate. Semantic cache entries should live in a dedicated vector namespace/table/index. Shared memory or RAG indexes can cause unrelated vectors to rank ahead of cache entries before filters are applied.
 
 `inMemoryRecordStore()` supports this by default. Durable adapters opt in only when the configured backend is isolated. Plain Redis stores do not expose vector search unless product-specific vector hooks are configured.
+
+For Convex, `convexStorage({ semanticCache: { isolatedVectorNamespace: true } })` is an explicit safety declaration by the application, not a generic Convex limitation. Only pass it when the backing table/index is dedicated to semantic-cache entries. A shared memory/RAG index can create false misses because unrelated vectors may rank ahead of cache entries before filters are applied.

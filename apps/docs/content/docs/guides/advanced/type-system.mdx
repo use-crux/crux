@@ -3,6 +3,8 @@ title: Type System
 description: Input merging, conditional return types, and generation settings.
 ---
 
+Crux infers your prompt's input and output types from its schemas and contexts: input fields merge across `use` entries, conditional contexts become optional, and adapter return types change when a prompt declares `output`. This page explains the merging and inference rules you will hit in practice, plus the resolution and inspection APIs for checking what a prompt will actually send.
+
 ## Input merging
 
 When a prompt uses contexts with input schemas, all fields are merged into a single type:
@@ -35,7 +37,7 @@ If two contexts declare the same input key, `prompt` throws at definition time. 
 
 ### Conditional contexts and input types
 
-Conditional contexts — those wrapped with `when()`, placed inside `match()`, or using context-level `when` — have their input keys automatically wrapped as `Partial<>` in the merged type:
+Conditional contexts (those wrapped with `when()`, placed inside `match()`, or using context-level `when`) have their input keys automatically wrapped as `Partial<>` in the merged type:
 
 ```ts
 import { context, prompt, when } from "@use-crux/core";
@@ -52,8 +54,8 @@ const p = prompt({
 });
 
 // brandVoice is optional because the context is conditional
-p.resolve({ input: { instruction: "Edit this" } }); // OK — brandVoice omitted
-p.resolve({ input: { instruction: "Edit", brandVoice: "Pro" } }); // OK — brandVoice provided
+p.resolve({ input: { instruction: "Edit this" } }); // OK: brandVoice omitted
+p.resolve({ input: { instruction: "Edit", brandVoice: "Pro" } }); // OK: brandVoice provided
 ```
 
 The same applies to context-level `when`:
@@ -101,7 +103,7 @@ result.text // string
 
 Every prompt has `.resolve()` and `.inspect()` methods that work without executing any model call.
 
-**`.resolve()`** — returns the composed, SDK-agnostic prompt data:
+**`.resolve()`**: returns the composed, SDK-agnostic prompt data:
 
 ```ts
 const resolved = editDraft.resolve({
@@ -112,19 +114,19 @@ const resolved = editDraft.resolve({
 // → { system, prompt, schema, tools, settings }
 ```
 
-**`.inspect()`** — shows how the system message was assembled:
+**`.inspect()`**: shows how the system message was assembled:
 
 ```ts
 const debug = editDraft.inspect({ input: { ... }, tokenBudget: 2000 })
 
 debug.system.total         // the full assembled system text
-debug.system.parts         // InspectPart[] — source, text, tokens, skipped
+debug.system.parts         // InspectPart[]: source, text, tokens, skipped
 debug.system.totalTokens   // total system tokens
 debug.prompt               // { text, tokens } | undefined
 debug.totalTokens          // system + prompt tokens
-debug.droppedContexts      // DroppedContext[] — dropped by token budget
-debug.excludedContexts     // ExcludedContext[] — excluded by when/match conditions
-debug.tools                // string[] — resolved prompt-time tool names
+debug.droppedContexts      // DroppedContext[]: dropped by token budget
+debug.excludedContexts     // ExcludedContext[]: excluded by when/match conditions
+debug.tools                // string[]: resolved prompt-time tool names
 ```
 
 ## Introspection properties

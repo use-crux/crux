@@ -8,14 +8,14 @@ This recipe shows the canonical structured-output pattern: define a Zod schema, 
 ## Primitives used
 
 - `prompt()` with `output: z.object({...})`
-- `validationRetry` — text-repair + auto-retry on Zod-parse failure
+- `validationRetry`: text-repair + auto-retry on Zod-parse failure
 - Optional: `constraint()` for business-rule validation
-- `@use-crux/ai` `generate()` — the Vercel AI SDK adapter
+- `@use-crux/ai` `generate()`: the Vercel AI SDK adapter
 
 ## When to reach for this pattern
 
 - You have **unstructured text** (an email, a support ticket, a PDF page) and need a **typed object** out
-- Schema **occasionally fails** to parse — wrong types, missing fields, hallucinated enum values
+- Schema **occasionally fails** to parse: wrong types, missing fields, hallucinated enum values
 - You want **production reliability** without writing manual parse-and-retry logic
 
 ## Full code
@@ -88,9 +88,9 @@ const ticket = await classify(`
 1. **Zod schema as the contract.** `prompt({ output: TicketSchema })` tells Crux this is a structured-generation prompt. The adapter calls `generateObject()` (not `generateText()`) and validates the result against the schema.
 
 2. **Schema-failure recovery via `validationRetry`.** When the model returns malformed JSON or wrong types, Crux runs three tiers of recovery:
-   - **Text repair** (zero-cost) — strips markdown fences, trailing commas, extracts JSON from prose
-   - **Schema validation** — `safeParse()` against the Zod schema
-   - **Model retry** — appends the model's failed output + the Zod error as a corrective message and re-calls the model
+   - **Text repair** (zero-cost): strips markdown fences, trailing commas, extracts JSON from prose
+   - **Schema validation**: `safeParse()` against the Zod schema
+   - **Model retry**: appends the model's failed output + the Zod error as a corrective message and re-calls the model
 
 3. **`temperature: 0` for determinism.** Classification benefits from deterministic output. Bumping temperature here costs you reliability without buying creativity.
 
@@ -100,7 +100,7 @@ const ticket = await classify(`
 
 ### Add business-rule constraints
 
-`validationRetry` recovers from schema failures. To enforce _semantic_ rules — "summary must mention the affected area" — layer in a constraint:
+`validationRetry` recovers from schema failures. To enforce _semantic_ rules ("summary must mention the affected area"), layer in a constraint:
 
 ```ts
 import { boundary, constraint } from "@use-crux/core/safety";

@@ -3,7 +3,7 @@ title: Streaming with tools
 description: Stream a response while the model calls tools mid-stream, updating the UI as data arrives.
 ---
 
-This recipe shows how to stream model output to the client _and_ let the model call tools during the stream — for example, a search box that streams a draft answer and updates partial results as the model fetches additional context.
+This recipe shows how to stream model output to the client _and_ let the model call tools during the stream, for example a search box that streams a draft answer and updates partial results as the model fetches additional context.
 
 ## Primitives used
 
@@ -16,7 +16,7 @@ This recipe shows how to stream model output to the client _and_ let the model c
 
 - You're building a **chat or assistant UI** and need responsive streaming
 - The model needs to **call tools mid-stream** (search, fetch, compute) and the UI should reflect tool results
-- You want **type-safe tool inputs and outputs** — Zod schemas all the way through
+- You want **type-safe tool inputs and outputs**: Zod schemas all the way through
 
 ## Full code
 
@@ -31,7 +31,7 @@ export const searchDocs = tool({
   inputSchema: z.object({
     query: z
       .string()
-      .describe("The search query — what the user is asking about"),
+      .describe("The search query, what the user is asking about"),
     limit: z.number().int().min(1).max(10).default(5),
   }),
   execute: async ({ query, limit }) => {
@@ -146,7 +146,7 @@ export function DocsChat() {
 
 ## How it works
 
-1. **Tools come from a context, not the prompt.** Putting `searchDocs` and `fetchPage` on a `context()` means any prompt that uses `docsTools` inherits them. If you later add a `docsSummarizer` prompt that also needs these tools, you reuse the context — no copy-paste.
+1. **Tools come from a context, not the prompt.** Putting `searchDocs` and `fetchPage` on a `context()` means any prompt that uses `docsTools` inherits them. If you later add a `docsSummarizer` prompt that also needs these tools, you reuse the context, no copy-paste.
 
 2. **`stream()` returns a canonical stream result.** The handler immediately returns the `Response` from `createUIMessageStreamResponse(result)`. Tool calls happen mid-stream and the AI SDK pipes their input/output through the response as UI message parts the client renders.
 
@@ -158,7 +158,7 @@ export function DocsChat() {
 
 ### Constrain which tools can run together
 
-If `fetchPage` is expensive and you only want it called _after_ a search succeeded, write a guardrail or surface that constraint in the system prompt. Tools themselves don't enforce ordering — that's the model's job, guided by your `system` text.
+If `fetchPage` is expensive and you only want it called _after_ a search succeeded, write a guardrail or surface that constraint in the system prompt. Tools themselves don't enforce ordering: that's the model's job, guided by your `system` text.
 
 ### Stream a structured object instead
 
@@ -166,7 +166,7 @@ If you want a _typed_ progressive result (not free-form chat), use `streamObject
 
 ### Persist conversation across reloads
 
-Drop the [chat-with-memory](/docs/cookbook/basics/chat-with-memory) recipe alongside this one — episodic memory + sliding window keep the conversation alive across server restarts and reloads.
+Drop the [chat-with-memory](/docs/cookbook/basics/chat-with-memory) recipe alongside this one: episodic memory + sliding window keep the conversation alive across server restarts and reloads.
 
 ## Where to next
 

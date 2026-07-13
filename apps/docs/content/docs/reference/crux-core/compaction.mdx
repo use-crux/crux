@@ -75,7 +75,7 @@ Structured extraction from messages using a Zod schema.
 | `model`    | `unknown`          | Model to use                   |
 | `schema`   | `ZodType`          | Output schema                  |
 
-**Returns:** `Promise<T>` — typed object matching schema.
+**Returns:** `Promise<T>`: typed object matching schema.
 
 ### `summarizeMessages(config)`
 
@@ -89,7 +89,7 @@ Summarize messages into compact text.
 | `maxTokens` | `number?`        | Max summary tokens (default: 500)                            |
 | `focus`     | `string[]?`      | Aspects to prioritize (e.g. `['decisions', 'action-items']`) |
 
-**Returns:** `Promise<CompactionResult>` — `{ text, metrics: { inputTokens, outputTokens, compressionRatio } }`
+**Returns:** `Promise<CompactionResult>`: `{ text, metrics: { inputTokens, outputTokens, compressionRatio } }`
 
 ### Types
 

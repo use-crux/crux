@@ -3,16 +3,14 @@ title: Overview
 description: Composition patterns and coordination primitives for multi-agent AI applications.
 ---
 
-# Multi-Agent Orchestration
-
-You have a prompt that works. Now you need *two* prompts to work together — or three, or ten. Maybe a researcher feeds a writer, reviewers run in parallel, or a triage agent decides who handles a customer issue.
+You have a prompt that works. Now you need *two* prompts to work together, or three, or ten. Maybe a researcher feeds a writer, reviewers run in parallel, or a triage agent decides who handles a customer issue.
 
 Crux provides two categories of tools for multi-agent orchestration:
 
-- **Composition patterns** — proven workflows for common multi-agent scenarios
-- **Coordination primitives** — shared state, validated transfers, and step orchestration for everything else
+- **Composition patterns**: proven workflows for common multi-agent scenarios
+- **Coordination primitives**: shared state, validated transfers, and step orchestration for everything else
 
-These aren't layers — they're complementary. A customer support system might use `swarm()` for routing between specialists, `blackboard()` for sharing customer context, and `flow()` inside an agent's tool for a multi-step search workflow. Pick what you need.
+These aren't layers. They're complementary. A customer support system might use `swarm()` for routing between specialists, `blackboard()` for sharing customer context, and `flow()` inside an agent's tool for a multi-step search workflow. Pick what you need.
 
 ## Composition Patterns
 
@@ -27,7 +25,7 @@ import { parallel, pipeline, consensus, swarm } from '@use-crux/ai'
 Each SDK adapter (`@use-crux/ai`, `@use-crux/openai`, `@use-crux/anthropic`, `@use-crux/google`) re-exports pre-bound versions of all patterns. Import from your adapter, not from `@use-crux/core`.
 </Callout>
 
-### Parallel — independent tasks, typed results
+### Parallel: independent tasks, typed results
 
 Run multiple agents concurrently on the same context. Results are returned as a typed named record.
 
@@ -47,7 +45,7 @@ results.style.output.suggestions  // typed from styleReviewer's output schema
 
 [Deep dive →](/docs/guides/compositions/parallel)
 
-### Pipeline — sequential stages
+### Pipeline: sequential stages
 
 Agents run one after another. Each step's `input` function receives all previous outputs via a context accumulator.
 
@@ -68,7 +66,7 @@ const result = await pipeline({
 
 [Deep dive →](/docs/guides/compositions/pipeline)
 
-### Consensus — voting on a decision
+### Consensus: voting on a decision
 
 Run multiple agents and count votes. Reduces single-agent errors for critical decisions.
 
@@ -80,14 +78,14 @@ const decision = await consensus({
   extract: (result) => result.output.category,
   quorum: 'majority',
 })
-// decision.result: 'billing'  — 2 out of 3 agreed
+// decision.result: 'billing', 2 out of 3 agreed
 ```
 
-**Use when:** Classification, quality scoring, moderation — anywhere multiple opinions are cheap and a wrong answer is costly.
+**Use when:** Classification, quality scoring, moderation: anywhere multiple opinions are cheap and a wrong answer is costly.
 
 [Deep dive →](/docs/guides/compositions/consensus)
 
-### Swarm — dynamic, LLM-decided routing
+### Swarm: dynamic, LLM-decided routing
 
 A network of specialists where the LLM decides who handles the next turn by calling auto-generated `transfer_to_<agent>` tools.
 
@@ -111,7 +109,7 @@ const result = await swarm({
 // result.handoffPath: ['triage', 'billing']
 ```
 
-**Use when:** The path depends on the input — customer support routing, sales qualification, content production where specialists route work to each other.
+**Use when:** The path depends on the input: customer support routing, sales qualification, content production where specialists route work to each other.
 
 Swarm also supports [conditional handoffs](/docs/guides/compositions/swarm#conditional-handoffs), [tool filtering](/docs/guides/compositions/swarm#tool-filtering), [cost tracking with abort](/docs/guides/compositions/swarm#cost-tracking), [context summarization](/docs/guides/compositions/swarm#context-summarization), and [Convex cross-action routing](/docs/guides/compositions/swarm#session-tracking).
 
@@ -133,9 +131,9 @@ Swarm also supports [conditional handoffs](/docs/guides/compositions/swarm#condi
 
 ## Coordination Primitives
 
-These solve problems that composition patterns don't cover — shared state, validated data transfer, and step-level orchestration. Use them alongside compositions when you need them.
+These solve problems that composition patterns don't cover: shared state, validated data transfer, and step-level orchestration. Use them alongside compositions when you need them.
 
-### Flows — step-level orchestration
+### Flows: step-level orchestration
 
 Chain `generate()` calls into named steps with retries, fallbacks, and devtools tracing. Use alongside compositions for custom multi-step logic inside agent tools.
 
@@ -157,23 +155,23 @@ await deepSearch.run()
 
 [Deep dive →](/docs/guides/flows)
 
-### Blackboard — shared state
+### Blackboard: shared state
 
 A typed, schema-validated scratchpad that multiple agents can read and write. Expose as prompt context or as an LLM tool.
 
-**Use when:** Multiple agents need a shared workspace — research findings, task assignments, collaborative data gathering.
+**Use when:** Multiple agents need a shared workspace: research findings, task assignments, collaborative data gathering.
 
 [Deep dive →](/docs/guides/agents/blackboard)
 
-### Handoff — validated context transfer
+### Handoff: validated context transfer
 
 Schema-validated, optionally summarized transfer of context between agents. Ensures the receiving agent gets data in the exact format it expects.
 
 **Use when:** You need schema validation between agents, format transformation, or LLM summarization to compress large payloads.
 
-[Deep dive →](/docs/guides/agents/tools-and-handoffs)
+[Deep dive →](/docs/guides/agents/handoff)
 
-### Delegate — subagent as a tool
+### Delegate: subagent as a tool
 
 Wraps a handoff contract with a subagent execution function, exposed as a callable tool. The parent calls it, the subagent runs, results are validated through the handoff.
 
@@ -205,7 +203,7 @@ const billing = agent({
       description: 'Search customer invoices',
       parameters: z.object({ customerId: z.string() }),
       execute: async ({ customerId }) => {
-        // Flow inside a swarm agent's tool — retries + tracing
+        // Flow inside a swarm agent's tool, retries + tracing
         const invoiceLookup = flow('invoice-lookup', async (flow) => {
           const invoices = await flow.step('fetch', () =>
             fetchInvoices(customerId),
@@ -218,7 +216,7 @@ const billing = agent({
         return invoiceLookup.run()
       },
     },
-    // Blackboard exposed as focused tools — agent can read/write shared context
+    // Blackboard exposed as focused tools, agent can read/write shared context
     ...customerBoard.asTools(),
   },
   handoffs: ['triage', 'refunds'],

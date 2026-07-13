@@ -68,7 +68,7 @@ console.log(result.object)
 
 ## Batch processing
 
-The same prompt can be reused across many inputs in parallel. The adapter is just a function call — there's no setup overhead per request.
+The same prompt can be reused across many inputs in parallel. The adapter is just a function call: there's no setup overhead per request.
 
 ```ts title="src/batch.ts"
 import { generate } from '@use-crux/ai'
@@ -145,7 +145,7 @@ const result = await adapter.generate(classify, {
 ```
 
 <Callout type="info">
-  The same `classify` prompt definition works with all four adapters. That's the SDK-agnostic guarantee — you can switch
+  The same `classify` prompt definition works with all four adapters. That's the SDK-agnostic guarantee: you can switch
   providers (or use multiple) without touching prompt code.
 </Callout>
 

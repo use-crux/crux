@@ -30,7 +30,7 @@ interface DeferEvidence {
   readonly packages: Readonly<Record<string, string>>
 }
 
-const DOCS_URL = 'https://cruxjs.dev/docs/guides/defer/troubleshooting'
+const DOCS_URL = 'https://cruxjs.dev/docs/guides/background-work/troubleshooting'
 
 /** Create setup diagnostics for active request-scoped defer usage. */
 export function createDeferSetupContributor(options: DeferSetupOptions) {

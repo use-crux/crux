@@ -14,16 +14,16 @@ Contexts let you define a fragment once and compose it into any prompt via `use:
 ## When should I use a context?
 
 - The same instruction appears in **two or more prompts** (brand voice, terminology, output format conventions).
-- You need a piece of system text that **depends on input** — current date, mode flag, fetched brand profile.
-- You want **token-budget-aware degradation** — keep critical instructions, drop nice-to-haves under pressure.
-- You need to **share tools** across prompts — declare them on a context, every prompt that uses the context inherits them.
-- You want to **bundle other primitives** — [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [skills](/docs/guides/skills), [blackboards](/docs/guides/agents/blackboard), or other contexts can live inside a reusable context via `use`.
+- You need a piece of system text that **depends on input**: current date, mode flag, fetched brand profile.
+- You want **token-budget-aware degradation**: keep critical instructions, drop nice-to-haves under pressure.
+- You need to **share tools** across prompts: declare them on a context, every prompt that uses the context inherits them.
+- You want to **bundle other primitives**: [memory](/docs/guides/memory), [retrieval](/docs/guides/retrieval), [grounding](/docs/guides/retrieval/grounding), [skills](/docs/guides/skills), [blackboards](/docs/guides/agents/blackboard), or other contexts can live inside a reusable context via `use`.
 
 ## When should I NOT use a context?
 
-- The instruction is **specific to one prompt** and unlikely to be reused — keep it inline as the prompt's `system` text.
-- You only have one or two prompts in total — the indirection isn't worth it yet.
-- You only need **stateful recall** with no reusable policy around it — put [memory](/docs/guides/memory) directly in the prompt's `use` array. Use `context({ use: [memory] })` when you want to package memory with reusable instructions.
+- The instruction is **specific to one prompt** and unlikely to be reused: keep it inline as the prompt's `system` text.
+- You only have one or two prompts in total: the indirection isn't worth it yet.
+- You only need **stateful recall** with no reusable policy around it: put [memory](/docs/guides/memory) directly in the prompt's `use` array. Use `context({ use: [memory] })` when you want to package memory with reusable instructions.
 
 ## Quick example
 
@@ -31,13 +31,13 @@ Contexts let you define a fragment once and compose it into any prompt via `use:
 import { context, prompt } from '@use-crux/core'
 import { z } from 'zod'
 
-// Static — always contributes the same text
+// Static, always contributes the same text
 const rules = context({
   id: 'rules',
   system: '## Rules\nAlways respond in valid JSON.',
 })
 
-// Dynamic — text depends on input, skipped when input is missing
+// Dynamic, text depends on input, skipped when input is missing
 const brand = context({
   id: 'brand',
   priority: 30,
@@ -61,10 +61,10 @@ const reply = prompt({
 
 When a prompt resolves, contexts are processed in this order:
 
-1. **Conditional filtering** — drop contexts where `when()` returns false, or that are wrapped in `when()` / `match()` and don't match
-2. **Resolve in `use` order** — call each `system()` callback, including nested `context({ use })` entries before the context that owns them
-3. **Concatenate** — the prompt's own `system` text comes first, then active context blocks in `use` order
-4. **Token budget** — if a budget is set, drop lowest-priority contexts until the total fits. The prompt's own system text is always kept.
+1. **Conditional filtering**: drop contexts where `when()` returns false, or that are wrapped in `when()` / `match()` and don't match
+2. **Resolve in `use` order**: call each `system()` callback, including nested `context({ use })` entries before the context that owns them
+3. **Concatenate**: the prompt's own `system` text comes first, then active context blocks in `use` order
+4. **Token budget**: if a budget is set, drop lowest-priority contexts until the total fits. The prompt's own system text is always kept.
 
 Priority is `0–100` (default `50`). Higher priority means dropped later under token pressure. It does not reorder normal output. Use array order for ordering and priority for degradation. See [Best Practices](/docs/foundations/best-practices) for priority guidelines.
 

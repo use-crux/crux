@@ -1,10 +1,10 @@
 ---
 title: Recipes
-description: The evaluation pattern for each primitive — prompts, flows, agents, retrieval, RAG pipelines, and context bakeoffs.
+description: "The evaluation pattern for each primitive: prompts, flows, agents, retrieval, RAG pipelines, and context bakeoffs."
 ---
 
-Every recipe is the same three keys — `task`, `data`, and whichever levels you
-need — the primitive only changes what gets inferred and which signal
+Every recipe is the same three keys (`task`, `data`, and whichever levels you
+need); the primitive only changes what gets inferred and which signal
 namespaces exist.
 
 ## Prompt
@@ -54,7 +54,7 @@ export default evaluate('research.pipeline', {
 ## Agent
 
 Agents capture all nine signal families. `target.agent()` adds scripted tool
-results (`tools:` mocks — static values or `(args) => result` functions) and
+results (`tools:` mocks: static values or `(args) => result` functions) and
 a loop bound (`maxToolSteps`). Multi-turn cases use `turns`:
 
 ```ts
@@ -103,7 +103,7 @@ export default evaluate('docs.retrieval', {
 
 For end-to-end RAG, the task is your real pipeline (a function or flow that
 retrieves, then answers). The judge-backed `scorers.rag.*` read the retrieved
-context from the captured retrieval signals — no manual context plumbing —
+context from the captured retrieval signals (no manual context plumbing)
 and skip honestly (`score: null`) when nothing was retrieved:
 
 ```ts
@@ -154,7 +154,7 @@ export default evaluate('support.context-bakeoff', {
 
 ## Sharing cases
 
-Cases are plain data — export arrays and reuse them across evaluations. The
+Cases are plain data: export arrays and reuse them across evaluations. The
 one-annotation escape hatch for extracted arrays is `satisfies CaseOf<…>`:
 
 ```ts
@@ -167,7 +167,7 @@ export const sharedCases = [
 
 ## Vitest bridge and programmatic runs
 
-`evaluation.run(overrides?)` is the programmatic entry — embed an evaluation
+`evaluation.run(overrides?)` is the programmatic entry: embed an evaluation
 in any test suite as a one-liner, or drive subset runs while iterating:
 
 ```ts

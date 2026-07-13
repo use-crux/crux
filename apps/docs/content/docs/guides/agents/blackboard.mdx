@@ -3,7 +3,7 @@ title: Blackboard
 description: Shared typed scratchpad for multi-agent coordination.
 ---
 
-A blackboard gives multiple agents a shared, typed state object. One agent writes findings, another reads them — all validated per-field with Zod so each write is checked without requiring the full board.
+A blackboard gives multiple agents a shared, typed state object. One agent writes findings, another reads them, all validated per-field with Zod so each write is checked without requiring the full board.
 
 ```ts title="blackboard.ts"
 const board = blackboard({
@@ -31,7 +31,7 @@ const unsubscribe = board.subscribe((fields) => {
 ```
 
 <Callout type="warn">
-Board writes are in-process only. For cross-process coordination (e.g., separate serverless invocations), provide persistent `records` — see [Memory](/docs/guides/memory) for storage options.
+Board writes are in-process only. For cross-process coordination (e.g., separate serverless invocations), provide persistent `records`, see [Memory](/docs/guides/memory) for storage options.
 </Callout>
 
 ## Prompt and tool integration
@@ -77,6 +77,6 @@ prompt({ use: [research, writing] })
 
 <Cards>
   <Card title="Agents" description="Multi-agent coordination patterns at a glance." href="/docs/guides/agents" />
-  <Card title="Handoff" description="Structured context transfer between agents with validation." href="/docs/guides/agents/tools-and-handoffs" />
+  <Card title="Handoff" description="Structured context transfer between agents with validation." href="/docs/guides/agents/handoff" />
   <Card title="Recipes" description="Full working example of a multi-agent pipeline with blackboard." href="/docs/cookbook" />
 </Cards>

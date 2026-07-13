@@ -36,7 +36,7 @@ import { describeCruxAdapterConformance } from "@use-crux/core/adapter/testing/v
 
 ## Overview
 
-The adapter package provides the public authoring surface for AI provider adapters. `defineSingleTurnProviderBundle()` is the preferred helper for raw chat SDKs where Crux owns the provider step loop. `defineProviderRuntime()` remains the lower-level runtime compiler: `ownership: 'single-turn'` with `turn` compiles the same core-owned loop mechanics directly, and `ownership: 'loop-owned'` with `loop` covers SDKs that own the loop while Crux steers policy around it. Both branches compile into the same execution engine and share the same policy modules (validation retry, tool instrumentation, approvals) plus the same per-call [`Safety` session](/docs/reference/crux-core/safety), so behavior does not diverge between runtimes.
+The adapter package provides the public authoring surface for AI provider adapters. `defineSingleTurnProviderBundle()` is the preferred helper for raw chat SDKs where Crux owns the provider step loop. `defineProviderRuntime()` remains the lower-level runtime compiler: `ownership: 'single-turn'` with `turn` compiles the same core-owned loop mechanics directly, and `ownership: 'loop-owned'` with `loop` covers SDKs that own the loop while Crux steers policy around it. Both branches compile into the same execution engine and share the same policy modules (validation retry, tool instrumentation, approvals) plus the same per-call [`Safety` session](/docs/reference/crux-core/safety), so behavior does not diverge between runtimes. Provider runtimes compile into a private execution facade that wires prompt resolution, tool lifecycle, safety policy, retries, stream safety, metadata stamping, and memory capture around the SDK-specific call. Every adapter performs the same orchestration: resolve the prompt into system/messages/schema/settings, convert to the SDK-specific format, wrap with middleware, timing, and hooks, call the SDK, and normalize metadata for devtools, evals, and quality experiments; only the conversion and the SDK call are provider-specific.
 
 Built-in adapters are built on this abstraction: `@use-crux/openai`, `@use-crux/anthropic`, and `@use-crux/google` export single-turn provider runtimes, while `@use-crux/ai` exports a loop-owned provider runtime for the Vercel AI SDK. Native provider packages own a `NativeTranscriptCodec` for provider message conversion, assistant text/tool-call extraction, and provider-specific tool-round appends. Core injects transcript-produced `providerMessages` into request builders and composes `transcript.readAssistant(raw)` with response-level metadata. Core owns the canonical `Message[]`, `CallArgs`, `AdapterResponse`, `ToolResultEntry`, and small tool-output helpers those codecs share.
 
@@ -49,9 +49,38 @@ All first-party adapters map completed calls into one closed taxonomy from
 | --- | --- |
 | Finish reason | `CruxFinishReason` (`stop` / `length` / `tool-calls` / `content-filter` / `refusal` / `error` / `aborted` / `unknown`) |
 | Errors | `CruxAdapterError` carrying `CruxProviderError` (`kind` / `code` / `retryable` / optional redacted `message`) |
-| Tool calls | **Completed** name + arguments only — no progressive argument-delta streaming on any adapter |
+| Tool calls | **Completed** name + arguments only: no progressive argument-delta streaming on any adapter |
 | Stream completion | Usage / model / finish / completed tool calls after settle; failures reject instead of silent missing metadata |
 | Abort / timeout | Classified as `aborted` / `timeout`; `retryable` is classification only (SDK owns network retries) |
+
+Per-dimension behavior:
+
+| Dimension | Behavior |
+| --- | --- |
+| **generate()** | Provider finish reasons map into `CruxFinishReason`. Usage, model, and response identity are captured when the provider returns them. |
+| **stream()** | Stream completion carries the same finish/usage/model fields as generate after the stream settles. Iteration and completion failures reject with `CruxAdapterError` instead of silent missing metadata. |
+| **Usage** | Honest omission when the provider omits counts, never invented zeros. |
+| **Completed tool calls** | Fully assembled name + arguments (and results on the generate path) appear on the completed step. |
+| **Errors** | Timeouts, aborts, rate limits, invalid requests, refusals/safety, and provider failures become `CruxProviderError` on a thrown `CruxAdapterError`. |
+| **Abort / timeout** | Caller `AbortSignal` and Crux budget timeouts are classified as `aborted` and `timeout`. |
+| **Retry** | Adapters **classify** retryability (`retryable: true \| false`). They do not own a second network retry loop; SDK clients keep their own `maxRetries`. |
+
+### Explicit non-goal: progressive tool-call deltas
+
+**No adapter exposes progressive tool-call argument streaming.** There is no `toolCallDelta` hook and no public partial-argument fragment surface. Streams may still yield text deltas; tool calls appear only after the call is fully assembled (generate completion or stream completion). This is intentional: partial JSON tool arguments are not a reliable product surface, and Crux keeps one completed-call contract for both `generate()` and `stream()`.
+
+The normalized-outcome layer is also **not** a Crux-owned network retry engine (`retryable` is classification only), and **not** a second error taxonomy for observability graph records: span/run errors still use the graph's compact error summary plus `exception` events, and adapter failures that throw are captured there after normalization.
+
+### Per-adapter mapping notes
+
+| Package | Ownership | Stream completion | Tool calls | Errors |
+| --- | --- | --- | --- | --- |
+| `@use-crux/openai` | single-turn | Single-pass capture with `stream_options.include_usage`; completion metadata + completed tool calls | Completed only | HTTP status + SDK abort/timeout classes |
+| `@use-crux/anthropic` | single-turn | `finalMessage()` rejection surfaces as `CruxAdapterError` (not silent `undefined`) | Completed tool uses from the final message | Same closed taxonomy |
+| `@use-crux/google` | single-turn | Single-pass capture of usage/finish/model + completed function calls | Completed only | Status / client-error classes + safety block folding |
+| `@use-crux/ai` | loop-owned (AI SDK) | Stream iteration/completion failures normalize at the runtime boundary | SDK-assembled completed calls only | Shared taxonomy on the runtime path; public `CruxAIError` remains an optional user-boundary helper |
+
+All four packages exercise the same core conformance helper so generate success, stream completion with a finished tool call, refusal/content-filter (where the provider can express it), timeout, abort, and erroring iteration stay aligned.
 
 Guide: [Adapter outcomes](/docs/guides/observability/adapter-outcomes). Privacy of `code` / `message`: [Privacy](/docs/guides/observability/privacy).
 
@@ -90,7 +119,7 @@ Generated images are immediately usable data assets. Persistence stays explicit:
 | Runs its own multi-step tool loop (`generateText` with `stopWhen`, native tool execution) | `loop-owned`  | `loop`    | `@use-crux/ai`                                                |
 | Needs a bespoke non-chat boundary                                                         | n/a           | core IR   | custom provider                                               |
 
-Never implement more than one generation runtime for one SDK. In either branch, core owns the policy layer — prompt resolution, `router()`/`split()`/`retry()`/`fallback()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A provider runtime implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
+Never implement more than one generation runtime for one SDK. In either branch, core owns the policy layer: prompt resolution, `router()`/`split()`/`retry()`/`fallback()`/`cascade()` routing, validation retry, constraints, guardrails, the tool-approval protocol, instrumentation, timeouts, and observability. A provider runtime implements mechanics only, and should delegate to SDK-native capabilities wherever one exists.
 
 ## Routing wrapper support
 
@@ -105,9 +134,9 @@ Routing wrappers are authored in `@use-crux/core/routing` and resolved by the ma
 
 Under the hood, `turn` compiles to `AdapterSpec`: core calls `call()` once per loop turn and `appendToolRound()` formats results. `loop.bind()` compiles to a `LoopRuntimePort`: the SDK owns the loop and core steers each step through a `StepObserver`. `bind(client)` returns the client-dependent operations (`BoundLoopRuntime`), which core assembles with `id`, `describeModel`, and `mapSettings(settings, model)` into a gateway-closed `LoopRuntimePort`:
 
-- `runTextLoop()` runs the SDK loop, awaiting `observer.onStepEnd(step)` after every step and applying the returned `StepDirective` before the next one — `continue`, `stop`, or `amend` (swap system prompt/active tools mid-loop, optionally `refundStep` so bookkeeping steps like `LoadSkill` don't consume budget).
-- `runStructuredAttempt()` makes exactly ONE structured-output attempt and returns `invalid` as a value instead of throwing — core owns the corrective-retry loop.
-- `stream()` returns the SDK's stream result untouched plus a typed `completion()`. When `request.safety` is set (a [`SafetyStream`](/docs/reference/crux-core/safety) — text streams with streaming guardrails or constraints), the spec must drive it: feed every outgoing text delta, forward `emit` content, swallow `hold`s, surface a thrown `GuardrailBlockedError` as a stream error, and call `finish()` at end-of-stream, emitting the seal's `pending` tail. With the AI SDK this is one `experimental_transform`.
+- `runTextLoop()` runs the SDK loop, awaiting `observer.onStepEnd(step)` after every step and applying the returned `StepDirective` before the next one: `continue`, `stop`, or `amend` (swap system prompt/active tools mid-loop, optionally `refundStep` so bookkeeping steps like `LoadSkill` don't consume budget).
+- `runStructuredAttempt()` makes exactly ONE structured-output attempt and returns `invalid` as a value instead of throwing: core owns the corrective-retry loop.
+- `stream()` returns the SDK's stream result untouched plus a typed `completion()`. When `request.safety` is set (a [`SafetyStream`](/docs/reference/crux-core/safety), text streams with streaming guardrails or constraints), the spec must drive it: feed every outgoing text delta, forward `emit` content, swallow `hold`s, surface a thrown `GuardrailBlockedError` as a stream error, and call `finish()` at end-of-stream, emitting the seal's `pending` tail. With the AI SDK this is one `experimental_transform`.
 - Tool-approval needs surface as the `suspended` outcome; core mints approval ids/tokens and owns resume.
 
 Test provider runtimes with `providerRuntimeConformance()`. The suite binds the public runtime through `runtime.create(...)`, so it covers both `single-turn` and `loop-owned` adapters without pinning provider internals. Your harness should own only the remote SDK seam: translate abstract model emissions into SDK-shaped fakes, then expose captured request bodies for provider-specific assertions.
@@ -197,7 +226,7 @@ const google = defineSingleTurnProviderBundle({
 
 `defineProviderRuntime({ ownership: 'single-turn', turn })` is still available for lower-level compiler tests or unusual adapter packages that need to assemble the runtime object directly. Normal single-turn providers should use the bundle helper so `runtime`, `create()`, helper factories, dependency mapping, and extension checks are compiled consistently.
 
-Rather than hand-writing a `NativeTranscriptCodec`, compile one from a `ProviderTranscriptDialect` with `defineProviderTranscriptCodec()`. Core owns the canonical transcript semantics — extracting neutral `ProviderTranscriptUnit`s from `Message[]`, grouping adjacent tool results, rendering fallback text/error flags through shared `ToolResultEncodingHelpers`, and appending each tool round once via `appendCanonicalToolRound()` — while the dialect only encodes/decodes its SDK wire format and reads the assistant turn. A dialect never interprets raw `Message.metadata`, so `fromMessages()` and runtime tool-round appends cannot drift. See [Building adapters](/docs/guides/advanced/building-adapters) for a full dialect example; reach for a bespoke `appendToolRound` only when the canonical units cannot represent your wire format.
+Rather than hand-writing a `NativeTranscriptCodec`, compile one from a `ProviderTranscriptDialect` with `defineProviderTranscriptCodec()`. Core owns the canonical transcript semantics (extracting neutral `ProviderTranscriptUnit`s from `Message[]`, grouping adjacent tool results, rendering fallback text/error flags through shared `ToolResultEncodingHelpers`, and appending each tool round once via `appendCanonicalToolRound()`), while the dialect only encodes/decodes its SDK wire format and reads the assistant turn. A dialect never interprets raw `Message.metadata`, so `fromMessages()` and runtime tool-round appends cannot drift. See [Building adapters](/docs/guides/advanced/building-adapters) for a full dialect example; reach for a bespoke `appendToolRound` only when the canonical units cannot represent your wire format.
 
 Test transcript codecs directly with `transcriptCodecConformance()`:
 

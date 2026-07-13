@@ -1,6 +1,6 @@
 ---
 title: Chunkers
-description: Choose how documents are split before embedding — structured, plain text, parent-child, semantic, or custom.
+description: "Choose how documents are split before embedding: structured, plain text, parent-child, semantic, or custom."
 ---
 
 A chunker decides where to cut a document before each piece is embedded. The choice shapes recall quality more than almost any other indexing knob: cut too small and chunks lose context, cut too large and the embedding signal gets diluted.
@@ -149,6 +149,6 @@ Custom chunkers are best for domains with explicit boundaries: Markdown headings
 
 ## Related
 
-- [Indexing Documents](/docs/guides/retrieval/indexing) — how chunkers fit into the indexing pipeline
-- [Recipes](/docs/guides/retrieval/recipes) — `expandParents` and other retrieval-time transforms
-- [Reference: indexing](/docs/reference/crux-core/indexing) — full `chunker.*` API
+- [Indexing Documents](/docs/guides/retrieval/indexing): how chunkers fit into the indexing pipeline
+- [Recipes](/docs/guides/retrieval/recipes): `expandParents` and other retrieval-time transforms
+- [Reference: indexing](/docs/reference/crux-core/indexing): full `chunker.*` API

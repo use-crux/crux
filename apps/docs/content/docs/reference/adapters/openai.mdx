@@ -1,6 +1,6 @@
 ---
 title: "@use-crux/openai"
-description: OpenAI SDK adapter — factory pattern with native generation options plus dense embedding helpers.
+description: OpenAI SDK adapter, factory pattern with native generation options plus dense embedding helpers.
 ---
 
 Peer dependency: `openai`
@@ -111,12 +111,12 @@ await adapter.generate(describeChart, {
 
 **Returns:** normalized Crux generate result with:
 
-- `result.text` — extracted assistant text
-- `result.usage` — accumulated usage when every provider-call step reported usage
-- `result.cost` — provider-reported cost when available
-- `result.finalStep` — final provider-call text, usage, finish reason, response id, and actual model id
-- `result.raw` — raw OpenAI SDK response
-- `result._meta` — retained trace metadata for observability plumbing
+- `result.text`: extracted assistant text
+- `result.usage`: accumulated usage when every provider-call step reported usage
+- `result.cost`: provider-reported cost when available
+- `result.finalStep`: final provider-call text, usage, finish reason, response id, and actual model id
+- `result.raw`: raw OpenAI SDK response
+- `result._meta`: retained trace metadata for observability plumbing
 
 When the prompt has an `output` schema, the provider-parsed value remains available on `result.raw.choices[0].message.parsed`.
 
@@ -140,9 +140,9 @@ Stream a prompt execution.
 
 **Returns:** `StreamResult<TRawStream>`:
 
-- `result.textStream` — provider-neutral text deltas
-- `result.raw` — raw OpenAI SDK stream
-- `result.completion` — promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
+- `result.textStream`: provider-neutral text deltas
+- `result.raw`: raw OpenAI SDK stream
+- `result.completion`: promise resolving to the canonical completion envelope (`text`, optional `usage`, optional `cost`, `steps`, `finalStep`, `messages`, and pending approvals)
 
 ### `toParams(resolved, options)` / `fromResponse(response)`
 

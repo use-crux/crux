@@ -3,7 +3,7 @@ title: Runtime setup
 description: Bind observability drain correctly on Node, serverless, Cloudflare Workers, and Convex.
 ---
 
-The graph-record spine is non-blocking by default: emits never throw into user code, and delivery is batched in the background. That is correct for long-lived Node processes. On ephemeral hosts, the process or isolate can freeze or exit before the queue drains — wrap the physical invocation so Crux gets a **bounded final flush** tied to the host’s lifetime.
+Your code ran fine on Lambda or Workers, but the run shows up as `incomplete` in devtools: the host froze the moment your handler returned, before telemetry finished flushing. The fix is to wrap the invocation so Crux gets a **bounded final flush** tied to the host's lifetime. On long-lived Node processes you don't need this: emits never block user code and delivery is batched in the background.
 
 ## Choose a host binding
 
@@ -12,10 +12,10 @@ The graph-record spine is non-blocking by default: emits never throw into user c
 | Long-lived Node | Background batching is fine; flush on graceful shutdown. | `observe.flush()` / `observe.shutdown()` |
 | Generic serverless | Wrap each invocation; await a bounded drain before return. | `withObservableInvocation()` from `@use-crux/core/observability` |
 | Node Lambda-style | Same, with `context.getRemainingTimeInMillis()` derived automatically. | `withNodeObservableInvocation()` from `@use-crux/core/observability/node` |
-| Cloudflare Workers | Register drain with `ctx.waitUntil` — no added response latency; no `nodejs_compat` required. | `withWorkersObservableInvocation()` from `@use-crux/core/observability/workers` |
+| Cloudflare Workers | Register drain with `ctx.waitUntil` (no added response latency; no `nodejs_compat` required). | `withWorkersObservableInvocation()` from `@use-crux/core/observability/workers` |
 | Convex | First-party wrappers bind automatically. | `createCruxConvex()`, `action` / `internalAction` from `@use-crux/convex/server` |
 
-Every wrapper reports a structured `ObservabilityFlushResult` (`status`, `delivered`, `rejected`, `remaining`, `deadlineExceeded`). Pass `onDrain` to inspect it; the default reporter logs a console warning when a drain does not fully complete so incomplete flushes are never silent.
+Every wrapper reports a structured `ObservabilityFlushResult`. Pass `onDrain` to inspect it; the default reporter logs a console warning when a drain does not fully complete so incomplete flushes are never silent. Field breakdown: [host lifecycle adapters](/docs/reference/crux-core/observability#host-lifecycle-adapters).
 
 ## Node (long-lived)
 
@@ -76,16 +76,16 @@ const fetch = withWorkersObservableInvocation(
     // Crux work
     return new Response('ok')
   },
-  // resolveContext — return the ExecutionContext (structural { waitUntil })
+  // resolveContext: return the ExecutionContext (structural { waitUntil })
   (_request, _env, ctx) => ctx,
-  // resolveInvocation(ctx, ...args) — optional drain knobs
+  // resolveInvocation(ctx, ...args): optional drain knobs
   (_ctx) => ({ flushTimeoutMs: 5_000 }),
 )
 
 export default { fetch }
 ```
 
-Workers isolates may serve concurrent requests without ambient async storage. The Workers wrapper drains the shared delivery queue via `waitUntil` after the handler settles — coarser than per-request host scoping, but lossless for concurrent in-flight work. It does **not** call `observe.withHostLifecycle()` around the handler.
+Workers isolates may serve concurrent requests without ambient async storage. The Workers wrapper drains the shared delivery queue via `waitUntil` after the handler settles, coarser than per-request host scoping, but lossless for concurrent in-flight work. It does **not** call `observe.withHostLifecycle()` around the handler.
 
 Cross-request logical continuity still uses explicit suspend/resume carriers (`observe.openRun().suspend()` → persist carrier → `observe.resumeRun(carrier)`), not isolate-local ambient context.
 
@@ -122,11 +122,11 @@ Use `ctx.crux.runAction()` (not raw `ctx.runAction`) so child actions restore Cr
 | `observability.serverUrl` + token | Local / tunneled **devtools** ingest |
 | `withTelemetry()` from `@use-crux/otel` | Production OTLP / APM |
 
-Both can run together — they are complementary sinks over the same graph spine. Do not point production traffic at a developer laptop as the only telemetry path.
+Both can run together: they are complementary sinks over the same graph spine. Do not point production traffic at a developer laptop as the only telemetry path.
 
 ## Related
 
-- [Observability reference — host lifecycle](/docs/reference/crux-core/observability#host-lifecycle-adapters)
+- [Observability reference: host lifecycle](/docs/reference/crux-core/observability#host-lifecycle-adapters)
 - [Runs and delivery health](/docs/guides/observability/runs-and-delivery)
 - [Telemetry](/docs/guides/observability/telemetry)
 - [Convex observability](/docs/guides/convex/observability)

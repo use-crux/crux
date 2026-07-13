@@ -13,7 +13,7 @@ import { createRuntimeError } from '../engine/errors'
 import type { RuntimeEngineDefinition } from './runtime-definition'
 
 const RUNTIME_ADAPTER_GUIDE_URL =
-  'https://cruxjs.dev/docs/guides/runtime/custom-adapters'
+  'https://cruxjs.dev/docs/guides/durable-execution/custom-adapters'
 
 /** Throw `CAPABILITY_MISSING` when a runtime composer lacks required support. */
 export function assertRuntimeCapabilities(

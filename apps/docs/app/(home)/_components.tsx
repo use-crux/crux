@@ -277,7 +277,7 @@ export function CruxFooter() {
         { label: 'Memory', href: '/docs/guides/memory' },
         { label: 'Retrieval', href: '/docs/guides/retrieval' },
         { label: 'Guardrails', href: '/docs/guides/safety/guardrails' },
-        { label: 'Routing', href: '/docs/guides/advanced/routing' },
+        { label: 'Routing', href: '/docs/guides/routing' },
         { label: 'Quality', href: '/docs/guides/quality' },
         { label: 'Observability', href: '/observability' },
       ],

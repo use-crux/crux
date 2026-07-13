@@ -5,13 +5,13 @@ description: Common questions and troubleshooting for Crux.
 
 ## Why are my tools being ignored?
 
-Tools only work in text mode. If your prompt has an `output` schema, tools are silently skipped — the adapter uses structured generation instead of text generation.
+Tools only work in text mode. If your prompt has an `output` schema, tools are silently skipped: the adapter uses structured generation instead of text generation.
 
 ```ts
-// ✗ Tools ignored — output schema present
+// ✗ Tools ignored: output schema present
 prompt({ output: z.object({...}), tools: { search: ... } })
 
-// ✓ Tools work — no output schema
+// ✓ Tools work: no output schema
 prompt({ tools: { search: ... } })
 ```
 
@@ -19,9 +19,9 @@ prompt({ tools: { search: ... } })
 
 Three common causes:
 
-1. **Dynamic system returning empty string** — If a context's `system` function returns `''`, it's omitted. Check your conditional logic.
-2. **Dropped by token budget** — Contexts with lower `priority` are dropped first when the system message exceeds `tokenBudget`. Use `.inspect()` to check.
-3. **Not included in `use`** — The context must be listed in the prompt's `use` array.
+1. **Dynamic system returning empty string**: If a context's `system` function returns `''`, it's omitted. Check your conditional logic.
+2. **Dropped by token budget**: Contexts with lower `priority` are dropped first when the system message exceeds `tokenBudget`. Use `.inspect()` to check.
+3. **Not included in `use`**: The context must be listed in the prompt's `use` array.
 
 ```ts
 const debug = myPrompt.inspect({ input, tokenBudget: 4000 })
@@ -30,7 +30,7 @@ debug.droppedContexts // [{ id, reason, priority }]
 
 ## How do I use the same prompt with different SDKs?
 
-Prompts are SDK-agnostic — they don't import any adapter. Pass the prompt to whichever adapter you need:
+Prompts are SDK-agnostic: they don't import any adapter. Pass the prompt to whichever adapter you need:
 
 ```ts
 import { generate } from '@use-crux/ai'
@@ -70,7 +70,7 @@ Use `.inspect()` for token-level detail including which contexts were dropped.
 When a prompt uses contexts with `input` schemas, all schemas are merged. If two contexts define the same field with different types, `prompt` throws at definition time. Check for field name conflicts across your contexts.
 
 ```ts
-// These two contexts both define `name` — will throw
+// These two contexts both define `name`: will throw
 const a = context({ input: z.object({ name: z.string() }) })
 const b = context({ input: z.object({ name: z.number() }) })
 prompt({ use: [a, b], ... }) // ✗ Type conflict on `name`
@@ -110,7 +110,7 @@ See [Memory](/docs/guides/memory) for the block model.
 
 ## Why is my structured output failing with Google GenAI?
 
-The Google adapter validates structured output with Zod after generation. If the model returns invalid JSON, you'll get a Zod error — not a Google SDK error. Common fixes:
+The Google adapter validates structured output with Zod after generation. If the model returns invalid JSON, you'll get a Zod error, not a Google SDK error. Common fixes:
 
 - Simplify your output schema (fewer nested objects)
 - Add `.describe()` to Zod fields to help the model
@@ -140,14 +140,14 @@ const { system, prompt, schema, settings } = await myPrompt.resolve({ input })
 // Use system/prompt/schema with any SDK or API call
 ```
 
-The adapters are thin convenience layers — you don't need them.
+The adapters are thin convenience layers: you don't need them.
 
 ## Next steps
 
 <Cards>
   <Card
     title="Core Concepts"
-    description="Contexts, prompts, and adapters — the three building blocks."
+    description="Contexts, prompts, and adapters: the three building blocks."
     href="/docs/foundations/mental-model"
   />
   <Card

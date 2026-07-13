@@ -1,5 +1,0 @@
-{
-  "title": "Runtime Engine",
-  "description": "Deploy durable flows, event waits, timers, background tasks, and wake handlers.",
-  "pages": ["index", "next-vercel", "node", "convex", "testing", "custom-adapters"]
-}

@@ -30,8 +30,8 @@ define     ->     resolve     ->     adapt     ->     observe
 
 | Stage       | Where it happens                | Output                                                               |
 | ----------- | ------------------------------- | -------------------------------------------------------------------- |
-| **Define**  | At authoring time, in your code | Frozen `Prompt`, `Context`, `Agent`, etc. — pure data                |
-| **Resolve** | When you call an adapter        | SDK-agnostic `ResolvedPrompt` — system text, schema, tools, settings |
+| **Define**  | At authoring time, in your code | Frozen `Prompt`, `Context`, `Agent`, etc.: pure data                |
+| **Resolve** | When you call an adapter        | SDK-agnostic `ResolvedPrompt`: system text, schema, tools, settings |
 | **Adapt**   | Inside the adapter              | Provider-specific API call (OpenAI body, Anthropic messages, etc.)   |
 | **Observe** | Throughout                      | Events fan out to devtools, OTel, and custom plugins                 |
 
@@ -63,7 +63,7 @@ const reply = prompt({
 })
 ```
 
-The output of `prompt()` is a frozen `Prompt` — you can serialize it, list its contexts, inspect its input schema. You cannot execute it directly because it has no idea what model to call.
+The output of `prompt()` is a frozen `Prompt`: you can serialize it, list its contexts, inspect its input schema. You cannot execute it directly because it has no idea what model to call.
 
 ## 2. Resolve
 
@@ -85,11 +85,11 @@ What happens during resolution:
 
 1. **Validate input** against the prompt's merged Zod schema (prompt input + context inputs), adopting defaults and transforms
 2. **Sanitize input** with the optional prompt `sanitize` hook, then auto-escape top-level string fields (configurable)
-3. **Filter contexts** — drop ones with `when` returning false, falsy entries in `use`, and unmatched `match()` cases
-4. **Resolve contexts** — call each context's `system` function in `use` order, with resolver memoization when `memo.ttl` is configured
-5. **Build system blocks** — compose provider-cached contexts as a stable cached prefix before the uncached tail, attaching provider-cache markers per block
-6. **Apply token budget** — if a budget is set, drop lowest-priority contexts until total fits. The prompt's own system is always kept.
-7. **Merge tools and settings** — collect tools from active contexts + prompt + call-site; merge settings with later layers winning
+3. **Filter contexts**: drop ones with `when` returning false, falsy entries in `use`, and unmatched `match()` cases
+4. **Resolve contexts**: call each context's `system` function in `use` order, with resolver memoization when `memo.ttl` is configured
+5. **Build system blocks**: compose provider-cached contexts as a stable cached prefix before the uncached tail, attaching provider-cache markers per block
+6. **Apply token budget**: if a budget is set, drop lowest-priority contexts until total fits. The prompt's own system is always kept.
+7. **Merge tools and settings**: collect tools from active contexts + prompt + call-site; merge settings with later layers winning
 
 The result is the same regardless of which adapter you call next. **This is the portability layer and the point where Crux can show what made it into the request.**
 
@@ -141,7 +141,7 @@ spans such as `generation.call`, `tool.call`, `memory.read`, `flow.step`,
 
 Plugins and integrations observe that stream with `subscribeObservability()`,
 the Node `crux:observability` diagnostics channel, the HTTP devtools transport,
-or `@use-crux/otel` — all consumers see the same sanitized records. Custom metrics
+or `@use-crux/otel`, all consumers see the same sanitized records. Custom metrics
 plugins subscribe to graph records and clean up in `dispose`; they do not install
 per-event callback maps on `CruxHooks`.
 
@@ -158,7 +158,7 @@ config({
 })
 ```
 
-Devtools are zero-cost when disabled — instrumentation hooks are no-ops if no plugin installs them.
+Devtools are zero-cost when disabled: instrumentation hooks are no-ops if no plugin installs them.
 
 ## 5. Test
 
@@ -171,10 +171,10 @@ Today, those quality foundations can test outputs and many execution facts. More
 Once you see the four stages, the rest of Crux becomes legible:
 
 - **Memory** can add relevant state to the prompt and expose focused tools during a generation.
-- **Compaction** runs _before_ resolve — it summarizes or trims the message history that you'd then feed into the prompt's `messages`.
+- **Compaction** runs _before_ resolve: it summarizes or trims the message history that you'd then feed into the prompt's `messages`.
 - **Agents** are prompts with a defined identity, a model preference, and a list of allowed handoffs. Compositions (pipeline / parallel / consensus / swarm) are higher-order functions over agents.
 - **Flows** are suspendable/resumable wrappers over multi-step orchestration. A flow records its `step` results so a resume re-runs only the work after the suspension point.
-- **Plans / Tasks** are structured documents that persist via `RecordStore` — read by humans (UI), written by agents (tools).
+- **Plans / Tasks** are structured documents that persist via `RecordStore`: read by humans (UI), written by agents (tools).
 - **Quality** runs suites across targets, optionally scored by LLM judges, and uses the same prompt setup as production.
 - **Devtools / OTel** are plugins that subscribe to instrumentation hooks.
 
@@ -200,7 +200,7 @@ Every primitive should make the AI feature easier to understand, not harder.
   />
   <Card
     title="Get Started"
-    description="Apply the model — install Crux and ship a prompt."
+    description="Apply the model: install Crux and ship a prompt."
     href="/docs/getting-started"
   />
 </Cards>

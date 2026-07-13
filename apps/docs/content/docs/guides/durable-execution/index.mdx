@@ -1,0 +1,79 @@
+---
+title: Durable Execution
+description: The optional engine that makes flows and background work survive restarts, retries, and time.
+---
+
+By default, Crux runs everything in the current process, best-effort. That is fine while a request is in flight. It breaks down the moment work needs to outlive the process:
+
+- A flow suspends to wait for human approval, and you deploy before the approver clicks.
+- Background work needs to retry after a transient failure.
+- A step should run in two days, not now.
+- Work should be picked up by a different worker than the one that scheduled it.
+
+The **Runtime Engine** is the durable execution layer that makes those cases work. Configure it once and your flows resume after restarts, timers fire on schedule, background work retries, and waiting flows wake up on their own.
+
+## It is optional
+
+You do not need the Runtime Engine to get started. Plenty works without it:
+
+- Plain [prompts](/docs/guides/prompts), [agents](/docs/guides/agents), and [compositions](/docs/guides/compositions).
+- Object-bound [flows](/docs/guides/flows): `flow.suspend()`, `flow.signal()`, and `flow.run({ resume })` work when your code still holds the flow handle and resumes it explicitly.
+- Best-effort inline [background work](/docs/guides/background-work) with `defer(callback)`.
+
+You add the Runtime Engine when you need work to survive the process. These APIs require it:
+
+| API | What it does |
+| --- | --- |
+| `flow.waitFor(event)` | Suspend until an event arrives, even across restarts |
+| `flow.after(target, delay)` | Run work later, on a durable timer |
+| `flow.defer(target, input)` | Durable child work inside a flow |
+| `defer(target, input)` | Durable named background work from a request |
+| `crux.flows.signal(...)` | Resume a flow by name without holding its handle |
+
+## Turn it on
+
+Pick the runtime shape that matches where your code runs, and pass it to your Crux setup:
+
+| Shape | Use when |
+| --- | --- |
+| `node()` | Local development, tests, single-process demos |
+| `node({ store: postgres() })` | Long-lived Node processes that need state across restarts or multiple workers |
+| `serverless({ store: postgres(), wake: qstash() })` | Next.js or Vercel-style apps where a cold function needs an external wake |
+| `convex()` | Convex apps that run runtime work inside Convex functions and the scheduler |
+| `genericQueue()` | You own a queue and want to adapt it without a bundled Crux package |
+
+```ts
+import { node } from '@use-crux/core/runtime'
+import { postgres } from '@use-crux/postgres/runtime'
+
+const runtime = node({ store: postgres() })
+```
+
+Durable payloads must be JSON-compatible. Pass ids, URLs, or storage keys for large or complex values, not the values themselves.
+
+## Namespaces
+
+`serverless()` isolates durable state by namespace, resolved in this order: explicit `namespace`, a non-empty `CRUX_RUNTIME_NAMESPACE`, Vercel deployment inference (production resolves to `production`, previews to `preview-<sanitized branch>`), then `local` outside production. Other production hosts must set `namespace` or `CRUX_RUNTIME_NAMESPACE`, or composition throws `NAMESPACE_AMBIGUOUS`. `node()` keeps its `local` default.
+
+## Deploy it
+
+Each environment has a focused setup guide:
+
+<Cards>
+  <Card title="Next.js / Vercel" description="Serverless runtime with an external wake for cold functions." href="/docs/guides/durable-execution/next-vercel" />
+  <Card title="Long-lived Node" description="A persistent Node process with a Postgres store." href="/docs/guides/durable-execution/node" />
+  <Card title="Convex" description="Run runtime work inside Convex functions and the scheduler." href="/docs/guides/durable-execution/convex" />
+  <Card title="Testing" description="Drive durable flows deterministically in tests." href="/docs/guides/durable-execution/testing" />
+  <Card title="Custom adapters" description="Adapt a queue or store the built-in shapes do not cover." href="/docs/guides/durable-execution/custom-adapters" />
+</Cards>
+
+## Production tuning and internals
+
+Retention (how long settled records are kept), lease fencing (how a reclaimed worker is prevented from committing stale work), and the outbox delivery model are operational details rather than everyday API. They live in the [Runtime Engine API reference](/docs/reference/crux-core/runtime-engine), along with the store-adapter contract for building your own.
+
+## Related
+
+- [Flows](/docs/guides/flows): the orchestration primitive the Runtime Engine makes durable
+- [Background Work](/docs/guides/background-work): best-effort vs durable follow-up work
+- [Runtime Engine API reference](/docs/reference/crux-core/runtime-engine): composers, handlers, retention, and the store contract
+- [Runtime Recipes](/docs/cookbook/runtime): queue mappings for BullMQ, Inngest, Temporal, and Cloudflare

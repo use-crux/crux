@@ -3,66 +3,7 @@ title: Embeddings
 description: Dense, sparse, and hybrid retrieval in Crux without mixing vector generation and search orchestration.
 ---
 
-`embedding()` is the Crux primitive for turning text into vectors. It gives you one reusable place to define provider calls, batching, preprocessing, caching, retries, rate limits, cost metadata, and telemetry.
-
-Use it whenever Crux needs to embed text:
-
-```ts
-const dense = embedding({ kind: 'dense', ... })
-const sparse = embedding({ kind: 'sparse', ... })
-
-indexer({ dense, sparse })   // write-time vectors
-retriever({ dense, sparse }) // query-time vectors
-facts({ embed: dense })      // dense memory recall
-```
-
-It does not decide how retrieval works.
-
-That split is intentional:
-
-- embeddings generate vectors
-- stores execute vector search
-- higher-level features decide whether a query should be dense, sparse, or hybrid
-
-## Mental model
-
-| Layer | Responsibility | Typical examples |
-|-------|----------------|------------------|
-| `embedding()` | Generate dense or sparse vectors from text | OpenAI dense embeddings, BM25-style sparse vectors |
-| `VectorStore.search()` | Dense, sparse, or hybrid lookup | In-memory vector store, Upstash Vector |
-| Higher-level features | Pick the retrieval strategy | Memory today, retrievers and caches later |
-
-Hybrid is not an embedding kind in Crux. It is a query strategy that combines one dense vector and one sparse vector at search time.
-
-If you are new to these terms, the practical rule is:
-
-```ts
-// Natural-language similarity: "docs about login problems"
-const dense = embedding({ kind: 'dense', ... })
-
-// Exact terms, identifiers, product names: "ERR_AUTH_401"
-const sparse = embedding({ kind: 'sparse', ... })
-
-// Production docs search: use both, then retrieve in hybrid mode
-const docs = retriever({
-  records,
-  vectors,
-  dense,
-  sparse,
-  search: { mode: 'hybrid' },
-})
-```
-
-## Choose the right pattern
-
-| Goal | Use |
-|------|-----|
-| `episodes()`, `facts()`, `procedures()`, or dense similarity search | One dense embedding |
-| Keyword-weighted or BM25-style retrieval | One sparse embedding plus `vectors.search({ mode: 'sparse', sparse })` |
-| Upstash hybrid retrieval | One dense embedding, one sparse embedding, plus `vectors.search({ mode: 'hybrid', dense, sparse })` |
-| Store-specific or fully custom retrieval | Your own store or retriever logic |
-
-## Dense: semantic similarity
+You want to search your docs by meaning, so "docs about login problems" finds the SSO troubleshooting page even though it never says "login problems". That needs vectors, and `embedding()` is the Crux primitive that turns text into them:
 
 ```ts
 import { embedding } from '@use-crux/core/embedding'
@@ -83,7 +24,47 @@ const dense = embedding({
 })
 ```
 
-Dense embeddings expose:
+Define it once and reuse it everywhere Crux needs to embed text:
+
+```ts
+indexer({ dense, sparse })   // write-time vectors
+retriever({ dense, sparse }) // query-time vectors
+facts({ embed: dense })      // dense memory recall
+```
+
+The practical rule for picking a kind:
+
+```ts
+// Natural-language similarity: "docs about login problems"
+const dense = embedding({ kind: 'dense', ... })
+
+// Exact terms, identifiers, product names: "ERR_AUTH_401"
+const sparse = embedding({ kind: 'sparse', ... })
+
+// Production docs search: use both, then retrieve in hybrid mode
+const docs = retriever({
+  records,
+  vectors,
+  dense,
+  sparse,
+  search: { mode: 'hybrid' },
+})
+```
+
+One note on the architecture: `embedding()` only generates vectors. Stores execute vector search, and higher-level features such as retrievers and memory decide whether a query should be dense, sparse, or hybrid. That is why there is no `kind: 'hybrid'`; hybrid is a query strategy, not a vector shape. The [retrieval reference](/docs/reference/crux-core/retrieval#embedding-governance) covers the design rationale.
+
+## Choose the right pattern
+
+| Goal | Use |
+|------|-----|
+| `episodes()`, `facts()`, `procedures()`, or dense similarity search | One dense embedding |
+| Keyword-weighted or BM25-style retrieval | One sparse embedding plus `vectors.search({ mode: 'sparse', sparse })` |
+| Upstash hybrid retrieval | One dense embedding, one sparse embedding, plus `vectors.search({ mode: 'hybrid', dense, sparse })` |
+| Store-specific or fully custom retrieval | Your own store or retriever logic |
+
+## Dense: semantic similarity
+
+Dense embeddings, like the one defined above, expose:
 
 - `embed(text)` for one query
 - `embedMany(texts)` for indexing or batch ingestion
@@ -146,7 +127,7 @@ The same primitive owns the policies that affect how vectors are generated. Put 
 import { embedding, embeddingCache, normalizeText } from '@use-crux/core/embedding'
 import { inMemoryRecordStore } from '@use-crux/core/storage'
 
-const records = inMemoryRecordStore()
+const store = inMemoryRecordStore()
 
 const dense = embedding({
   kind: 'dense',
@@ -171,56 +152,14 @@ const dense = embedding({
 })
 ```
 
-Those options are intentionally boring:
+The behavior worth knowing day to day:
 
-```ts
-preprocess: normalizeText({ trim: true, collapseWhitespace: true })
-```
+- `preprocess` runs before cache lookup and before the provider call, so `" refund policy "` and `"refund   policy"` can share one cache entry when your policy says they are equivalent.
+- `truncate: { strategy: 'fail' }` is the default because silent truncation can make retrieval worse while looking successful. Opt in explicitly with `{ strategy: 'chars', maxChars: 8_000 }` if you want truncation.
+- `cache` stores one vector per normalized text, and cache keys change when the embedding policy changes, so stale vectors are never reused accidentally.
+- `batch.concurrency` limits chunks inside one `embedMany()` call; `rateLimit.concurrency` caps provider calls across overlapping calls on the same embedding instance.
 
-Preprocessing runs before cache lookup and before the provider call. That means `" refund policy "` and `"refund   policy"` can share one cache entry when your policy says they are equivalent.
-
-For custom normalization, give the policy a stable fingerprint so cache keys change when the behavior changes:
-
-```ts
-import { embeddingPreprocessor } from '@use-crux/core/embedding'
-
-const stripMarkdown = embeddingPreprocessor({
-  id: 'strip-markdown',
-  fingerprint: 'strip-markdown:v1',
-  run: (text) => text.replace(/[#*_`]/g, ''),
-})
-
-const dense = embedding({
-  // ...
-  preprocess: [
-    normalizeText({ trim: true, collapseWhitespace: true }),
-    stripMarkdown,
-  ],
-})
-```
-
-```ts
-truncate: { strategy: 'fail' }
-```
-
-Failing is the default because silent truncation can make retrieval worse while looking successful. If you want truncation, make it explicit:
-
-```ts
-truncate: { strategy: 'chars', maxChars: 8_000 }
-```
-
-```ts
-cache: embeddingCache({ store, namespace: 'embed-cache' })
-```
-
-The cache is per normalized text, not per batch. Crux builds policy-aware keys from the embedding kind, name, dense dimensions, `maxInputTokens`, preprocessing fingerprints, truncation policy, and input hash. Changing the policy creates different keys, so stale vectors do not get reused accidentally.
-
-```ts
-retry: { maxAttempts: 3, baseDelayMs: 250 }
-rateLimit: { concurrency: 3 }
-```
-
-`batch.concurrency` controls how many chunks one `embedMany()` call can run at once. `rateLimit.concurrency` is stricter: it caps provider calls across overlapping calls on the same embedding instance.
+For custom preprocessor fingerprints, the full cache-key composition, and the complete option table, see [Embedding governance](/docs/reference/crux-core/retrieval#embedding-governance) in the reference.
 
 ## Where embeddings plug in
 
@@ -303,12 +242,7 @@ const hybridResults = await vectors.search({
 })
 ```
 
-`VectorStore.search()` is the stable expansion point for future retrieval features because it can express:
-
-- dense only
-- sparse only
-- hybrid dense plus sparse
-- explicit failure when a store cannot support the requested mode
+A store that cannot support the requested mode fails explicitly instead of degrading to dense-only search.
 
 ## Upstash hybrid example
 
@@ -350,28 +284,6 @@ import { embedding as googleEmbedding } from '@use-crux/google'
 Provider packages export the same noun, `embedding()`, from their own package. Alias at import sites when a file uses multiple providers.
 
 `@use-crux/anthropic` stays generation-only on the direct SDK path, so pair Anthropic generation with one of the embedding helpers above when you need indexing or retrieval.
-
-## Why Crux does not support `kind: 'hybrid'`
-
-`embedding()` intentionally supports only `kind: 'dense' | 'sparse'`.
-
-That is the clean boundary because hybrid is not one vector shape:
-
-- dense output is `number[]`
-- sparse output is `{ indices, values }`
-- hybrid output is both, plus search-time fusion semantics
-
-If Crux modeled hybrid as an embedding kind, the primitive would have to own search orchestration concerns that belong in stores or retrievers.
-
-## Upcoming features
-
-This split is designed to hold as Crux grows:
-
-- retrieval APIs can compose dense and sparse embeddings on top of `VectorStore.search()`
-- semantic cache and observational memory remain dense-oriented unless they gain a concrete sparse use case
-- store adapters can expose native capabilities without forcing every feature into a dense-only contract
-
-That is the real value of the abstraction. It gives future features one clear place to reuse embedding configuration, batching, and telemetry without turning the embedding layer into the retrieval layer.
 
 ## Observability
 

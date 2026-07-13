@@ -55,4 +55,5 @@ export type {
 } from '../types/tool'
 export type { TaskListListOptions, TasksFactory } from '../plan/tasks'
 export type { TasksToolOptions } from '../plan/creation-tools'
+export type { TaskCompleteArgs } from '../plan/task-definition-types'
 export type { TaskLifecycleError, TaskLifecycleErrorDetails, TaskLifecycleErrorName } from '../plan/errors'

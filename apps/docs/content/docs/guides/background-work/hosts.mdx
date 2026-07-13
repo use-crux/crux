@@ -1,0 +1,112 @@
+---
+title: Host support
+description: Which environments support background work, and how each one behaves.
+---
+
+Where does `defer()` work? Find your platform below and add one wrapper. Application code always imports `defer` from `@use-crux/core`; the host package or wrapper only installs the lifetime boundary. On Next.js, the whole integration is one wrapper:
+
+```ts
+import { defer } from '@use-crux/core'
+import { withNextDefer } from '@use-crux/next'
+
+export const POST = withNextDefer(async () => {
+  defer(() => {
+    // After response finishes (Next after())
+  })
+  return Response.json({ ok: true })
+})
+```
+
+## Install patterns
+
+### Node
+
+```ts
+import { createServer } from 'node:http'
+import { defer } from '@use-crux/core'
+import { withNodeDefer } from '@use-crux/core/defer/node'
+
+const server = createServer(
+  withNodeDefer(async (_request, response) => {
+    defer(() => {
+      // After response finish
+    })
+    response.end('ok')
+  }),
+)
+```
+
+### waitUntil (Vercel / Cloudflare)
+
+```ts
+import { defer } from '@use-crux/core'
+import { withWaitUntilDefer } from '@use-crux/core/defer/serverless'
+// import { waitUntil } from '@vercel/functions'
+// or ctx.waitUntil.bind(ctx)
+
+export default withWaitUntilDefer(
+  async () => {
+    defer(() => {
+      // May overlap streaming body
+    })
+    return new Response('ok')
+  },
+  { waitUntil /* platform hook */ },
+)
+```
+
+### Named-only (Lambda / explicit)
+
+```ts
+import { defer } from '@use-crux/core'
+import { durableTask } from '@use-crux/core/runtime'
+import { withNamedOnlyDefer } from '@use-crux/core/defer/serverless'
+
+const work = durableTask('post-process', {
+  run: async (input: { id: string }) => input.id,
+})
+
+export const handler = withNamedOnlyDefer(
+  async (event: { id: string }) => {
+    // defer(() => {}) throws DEFER_CAPABILITY_MISSING
+    await defer(work, { id: event.id })
+    return { ok: true }
+  },
+  { host: 'lambda', durableFinalization: true },
+)
+```
+
+### Convex
+
+Convex bridge runs install a named-only lifetime automatically. Use
+`await defer(target, input)` with `runtime: convex()` configured. Inline
+`defer(callback)` throws `DEFER_CAPABILITY_MISSING`.
+
+## Reliability matrix
+
+| Environment | Integration | Completion class | Inline `defer(callback)` | Named `await defer(target, input)` |
+| --- | --- | --- | --- | --- |
+| Node HTTP | `@use-crux/core/defer/node` | `response-finished` | Yes (process-local) | Optional Runtime; raw Node advertises `durableFinalization: false` |
+| Next.js 15.1+ | `@use-crux/next` (`after`) | `response-finished` | Yes | Runtime + `durableFinalization: true` |
+| Vercel Functions | inject `waitUntil` into `@use-crux/core/defer/serverless` | `handler-returned` (may overlap stream) | Yes | Runtime + durable finalization |
+| Cloudflare Workers | inject `ctx.waitUntil` the same way | `handler-returned` | Yes | Runtime + durable finalization |
+| Generic serverless | explicit lifetime port only | Host-declared | Only when a port is installed | Runtime when durability is required |
+| AWS Lambda (no extension) | `withNamedOnlyDefer` | n/a for inline | **Unsupported**, throws | Runtime required |
+| Convex | automatic on `bridge.run` | n/a for inline | **Unsupported**, throws | Host-bound Runtime required |
+| Multiprocess Node | per-process Node host | `response-finished` | Process-local only | Shared Runtime store for cross-process durability |
+| Unknown / unmanaged | none | n/a | Throws | Throws unless a Runtime-capable scope is bound |
+
+For what the completion classes mean and how `durableFinalization` is advertised, see the [defer reference](/docs/reference/crux-core/defer#host-lifetime-semantics).
+
+## Platform behavior notes
+
+- Host capability is declared explicitly by the wrapper you install, never guessed from the environment. See the [defer reference](/docs/reference/crux-core/defer#host-lifetime-semantics) for why capability is never inferred from env var names.
+- Handler-returned hosts (Vercel, Cloudflare) may run deferred callbacks while the response body is still streaming. Document that to users and operators.
+- Multiprocess Node keeps **inline** work local to each worker. Use named Runtime work when execution must survive or cross workers.
+- Convex and Lambda do not pretend post-return closures are reliable: inline `defer(callback)` throws there, and named Runtime work is the supported path.
+
+## Related
+
+- [Request-scoped defer](/docs/guides/background-work)
+- [Troubleshooting](/docs/guides/background-work/troubleshooting)
+- [Runtime Engine](/docs/guides/durable-execution)

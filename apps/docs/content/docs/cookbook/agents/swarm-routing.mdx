@@ -3,7 +3,7 @@ title: Swarm routing
 description: A triage agent routes to specialists. The model itself decides who handles each turn.
 ---
 
-This recipe builds a customer-service swarm: a triage agent receives every incoming message, then transfers control to a billing, refunds, or technical agent based on what it sees. The model decides where to route — you don't write the if/else.
+This recipe builds a customer-service swarm: a triage agent receives every incoming message, then transfers control to a billing, refunds, or technical agent based on what it sees. The model decides where to route: you don't write the if/else.
 
 ## Primitives used
 
@@ -14,7 +14,7 @@ This recipe builds a customer-service swarm: a triage agent receives every incom
 
 - You have **specialists** with non-overlapping responsibilities
 - The **routing logic depends on the message content**, not metadata you have on the request
-- You want the **LLM to make the routing decision** — explainable, easy to add new specialists
+- You want the **LLM to make the routing decision**: explainable, easy to add new specialists
 
 ## Full code
 
@@ -85,7 +85,7 @@ const result = await swarm({
   history: 'transfer-only', // each agent only sees the original input + transfer history
 })
 
-result.finalAgent // 'billing' — who answered last
+result.finalAgent // 'billing', who answered last
 result.output // the final response
 result.transcript // full transfer history with reasoning
 ```

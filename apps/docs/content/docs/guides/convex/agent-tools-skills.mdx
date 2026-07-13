@@ -3,9 +3,7 @@ title: Agent, Tools, Skills
 description: Integrate Crux prompts, tools, blackboards, and skills with the Convex Agent component.
 ---
 
-# Agent, Tools, Skills
-
-Use the Convex profile imports when Crux runs through the Convex Agent component.
+Give your Convex Agent threads Crux prompts, memory, tools, and skills. `crux.convexAgent()` keeps the Convex Agent call shape while a Crux prompt supplies dynamic context, memory blocks, skills, and tools for every turn. All primitives import from the mirrored Convex profile subpaths:
 
 ```ts
 import { createCruxConvex, prompt } from '@use-crux/convex'
@@ -14,8 +12,6 @@ import { memory, recentMessages, workingState } from '@use-crux/convex/memory'
 import { skill } from '@use-crux/convex/skill'
 import { tool } from '@use-crux/convex/tools'
 ```
-
-Use `convexAgent()` or `crux.convexAgent()` when Crux should own the profile-backed prompt lifecycle. It keeps the Convex Agent call shape, but lets the Crux prompt define dynamic context, memory, skills, and tools. Use the lower-level `Agent` facade when you want the normal `@convex-dev/agent` constructor and method shape with Crux tool/runtime propagation and observability.
 
 ## Complete Agent
 
@@ -133,6 +129,10 @@ export const reply = action({
 ```
 
 TypeScript infers the `input` object from the prompt and its `use` entries. If `accountTier` is omitted, the call fails at compile time because `accountContext` contributes that input requirement.
+
+## Which Entry Point?
+
+Use `convexAgent()` or `crux.convexAgent()` when Crux should own the profile-backed prompt lifecycle, as above. Use the lower-level `Agent` facade when you want the normal `@convex-dev/agent` constructor and method shape with Crux tool/runtime propagation and observability; see [Manual Agent Setup](#manual-agent-setup) below.
 
 ## Context-Aware Preparation
 

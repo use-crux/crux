@@ -3,14 +3,14 @@ title: API Reference
 description: Hand-written API reference for every Crux package, organized by package.
 ---
 
-The reference is organized by package. Pick the package you're working with — each one has its own landing page with subpath-by-subpath documentation.
+The reference is organized by package. Pick the package you're working with, each one has its own landing page with subpath-by-subpath documentation.
 
 ## Packages
 
 <Cards>
   <Card
     title="@use-crux/core"
-    description="The base package — prompts, contexts, retrieval, indexing, memory, compaction, agents, flows, plans, tasks, skills, scoring, quality, safety, index, lint, runtime bridge, and observability."
+    description="The base package: prompts, contexts, retrieval, indexing, memory, compaction, agents, flows, plans, tasks, skills, scoring, quality, safety, index, lint, runtime bridge, and observability."
     href="/docs/reference/crux-core"
   />
   <Card
@@ -25,7 +25,7 @@ The reference is organized by package. Pick the package you're working with — 
   />
   <Card
     title="@use-crux/local"
-    description="The local Crux runtime — crux dev, Go services, web devtools hosting, TUI, evals, index, and lint."
+    description="The local Crux runtime: crux dev, Go services, web devtools hosting, TUI, evals, index, and lint."
     href="/docs/reference/local"
   />
   <Card
@@ -35,17 +35,17 @@ The reference is organized by package. Pick the package you're working with — 
   />
   <Card
     title="Adapters"
-    description="@use-crux/ai, @use-crux/anthropic, @use-crux/openai, @use-crux/google — and the adapter interface for custom providers."
+    description="@use-crux/ai, @use-crux/anthropic, @use-crux/openai, @use-crux/google, and the adapter interface for custom providers."
     href="/docs/reference/adapters"
   />
   <Card
     title="Storage"
-    description="@use-crux/convex, @use-crux/upstash — RecordStore, VectorStore, and AssetStore adapters."
+    description="@use-crux/convex, @use-crux/upstash: RecordStore, VectorStore, and AssetStore adapters."
     href="/docs/reference/storage"
   />
   <Card
     title="Plugins"
-    description="@use-crux/otel — OpenTelemetry integration for production observability."
+    description="@use-crux/otel: OpenTelemetry integration for production observability."
     href="/docs/reference/plugins/otel"
   />
   <Card
@@ -61,12 +61,12 @@ Package landing pages use package names. Pages inside a package use readable API
 
 Every reference page follows the same layout so you can scan quickly:
 
-1. **Overview** — what it is and when to reach for it
-2. **Signature** — the TypeScript signature of the export
-3. **Parameters** — table of options with types and defaults
-4. **Returns** — what comes back
-5. **Example** — a minimal working snippet
-6. **Hooks emitted** — instrumentation events the export fires (when applicable)
-7. **Related** — links to the relevant guide and cookbook recipes
+1. **Overview**: what it is and when to reach for it
+2. **Signature**: the TypeScript signature of the export
+3. **Parameters**: table of options with types and defaults
+4. **Returns**: what comes back
+5. **Example**: a minimal working snippet
+6. **Hooks emitted**: instrumentation events the export fires (when applicable)
+7. **Related**: links to the relevant guide and cookbook recipes
 
 If you want narrative how-to content with "when to use" guidance, look in [Guides](/docs/guides). If you want full working examples, look in [Cookbook](/docs/cookbook). The reference is for _what does this function do, exactly_.

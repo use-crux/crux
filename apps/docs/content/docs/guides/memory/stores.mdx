@@ -3,9 +3,7 @@ title: Memory Stores
 description: How memory blocks use RecordStore for persistence, recall, and production storage.
 ---
 
-Memory does not define its own storage system. Every memory block persists through [`RecordStore`](/docs/reference/crux-core/store).
-
-That means the same record adapter can back memory records, indexing metadata, plans, flows, blackboards, and workspace metadata.
+By default, memory lives in-process and vanishes when your server restarts. To keep it across sessions, pass a durable [`RecordStore`](/docs/reference/crux-core/store): every memory block persists through that one interface, so the same record adapter can back memory records, indexing metadata, plans, flows, blackboards, and workspace metadata.
 
 ```ts
 import { memory, workingState } from "@use-crux/core/memory";
@@ -154,6 +152,6 @@ For memory, choose storage based on the behavior you need:
   <Card
     title="Semantic memory"
     description="Persistent facts with confidence and decay."
-    href="/docs/guides/memory/semantic"
+    href="/docs/guides/memory/facts-procedures"
   />
 </Cards>

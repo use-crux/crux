@@ -3,15 +3,17 @@ title: Convex
 description: Recommended architecture for running Crux inside Convex actions, Agent threads, storage, flows, swarms, and devtools.
 ---
 
-# Crux on Convex
-
-Convex is a serverless runtime: actions can run in fresh workers, scheduled work resumes later, and `AsyncLocalStorage` does not survive `ctx.runAction()` or scheduler boundaries. Crux therefore treats Convex as infrastructure, not as an adapter. Core primitives stay in `@use-crux/core`; Convex-specific runtime boundaries live in `@use-crux/convex`.
+Run Crux agents inside Convex: define prompts, memory, and tools once, then execute them from Convex actions, Convex Agent threads, and durable flows with full trace continuity. Core primitives stay in `@use-crux/core`; Convex storage adapters, function wrappers, and Agent integration come from `@use-crux/convex`. Start with [Setup](/docs/guides/convex/setup) to install the component and create the shared store helper.
 
 <Callout type="info">
   Recommended rule: define prompts, contexts, memory, workspaces, skills, blackboards, and immediate compositions with
   `@use-crux/core`; run Convex actions, Convex Agent tools, durable flows, experimental cross-action swarms, and observability flushing
   through `@use-crux/convex`.
 </Callout>
+
+## Why Convex Needs Its Own Boundaries
+
+Convex is a serverless runtime: actions can run in fresh workers, scheduled work resumes later, and `AsyncLocalStorage` does not survive `ctx.runAction()` or scheduler boundaries. Crux therefore treats Convex as infrastructure, not as an adapter, and provides Crux-aware function wrappers that carry run/span context across those boundaries.
 
 ## Recommended Architecture
 

@@ -142,7 +142,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── types.ts        tool + middleware/approval public types
 │   └── internal/       private message parsers + stateless middleware helpers
 ├── shared/             Genuinely cross-domain, provider-agnostic utilities (kept small)
-│   ├── sanitize.ts     Injection-defense helpers (escapeXml, safe, raw, limit, wrap, userContent, truncate)
+│   ├── sanitize.ts     Injection-defense helpers (escapeXml, safe, raw, limit, wrap, userContent, truncate, detectSuspiciousPatterns)
 │   ├── tokenizer.ts    Pluggable token counter (countTokens/setTokenizer; default chars/4)
 │   └── schema-compat.ts  sanitizeJsonSchema() — provider JSON-schema sanitization (@internal)
 ├── observability/
@@ -227,7 +227,7 @@ compatibility shims, while every implementation lives in a domain folder.
 │   ├── agent.ts        internal plan/task context and tool helpers, ToolDef
 │   └── helpers.ts      deriveTaskListStatus(), key conventions
 ├── tasks/
-│   └── index.ts        Barrel: canonical @use-crux/core/tasks import (re-exports task APIs from plan/)
+│   └── index.ts        Barrel: canonical @use-crux/core/tasks import (re-exports task APIs and types, incl. TaskCompleteArgs, from plan/)
 ├── compaction/
 │   ├── types.ts        GenerateTextFn, GenerateObjectFn (SDK-agnostic)
 │   ├── summarize.ts    summarizeMessages() — stateless batch LLM summarization

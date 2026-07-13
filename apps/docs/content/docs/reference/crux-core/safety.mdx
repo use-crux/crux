@@ -220,9 +220,162 @@ Use Quality decision-report matchers for runtime behavior:
 ctx.expect.decisionReport.safety.toHaveOutcome('pii', 'rewrite')
 ```
 
+## Security Utilities
+
+Input sanitization helpers ship from the core root, not the safety subpath:
+
+```ts
+import {
+  safe,
+  raw,
+  limit,
+  wrap,
+  escapeXml,
+  truncate,
+  userContent,
+  detectSuspiciousPatterns,
+} from '@use-crux/core'
+```
+
+### `escapeXml(text)`
+
+Replaces the five characters that can break out of XML tag attributes or
+content:
+
+| Character | Replacement |
+| --------- | ----------- |
+| `&`       | `&amp;`     |
+| `<`       | `&lt;`      |
+| `>`       | `&gt;`      |
+| `"`       | `&quot;`    |
+| `'`       | `&apos;`    |
+
+### `truncate(text, maxLength?)`
+
+Truncates a string to a maximum length. Default `maxLength` is **10,000**. When
+the text exceeds the limit, the result is sliced and a `… [truncated]` suffix
+is appended:
+
+```ts
+import { truncate } from '@use-crux/core'
+
+truncate(longArticle) // → first 10,000 chars + "… [truncated]"
+truncate(userQuery, 500) // → first 500 chars + "… [truncated]"
+```
+
+### `raw(text)`
+
+Returns a `SafeWrapper` that `safe` will **not** escape. Use only inside `safe`
+templates, for content you have already sanitized or that comes from a trusted
+source:
+
+```ts
+safe`
+  System-generated HTML: ${raw(trustedHtml)}
+  User query: ${userQuery}
+`
+// trustedHtml is interpolated as-is; userQuery is escaped
+```
+
+`raw()` bypasses all escaping. Only use it when you are certain the content is
+safe.
+
+### `limit(text, maxLength?)`
+
+Combines `truncate` and `escapeXml` in a single call. Returns a `SafeWrapper`:
+use only inside `safe` templates:
+
+```ts
+safe`Query: ${limit(userQuery, 500)}`
+// userQuery is truncated to 500 chars, then XML-escaped
+```
+
+### `wrap(text, tag?)`
+
+Escapes the text and wraps it in `<user-input>` delimiters. Returns a
+`SafeWrapper`: use only inside `safe` templates. Delimiters make it clear to
+the model where user content starts and ends, reducing the chance of
+instruction following from injected content:
+
+```ts
+safe`Instruction: ${wrap(instruction)}`
+// → Instruction: <user-input>escaped content</user-input>
+
+safe`${wrap(feedback, 'customer-feedback')}`
+// → <customer-feedback>escaped content</customer-feedback>
+```
+
+Never use `wrap()` in regular template literals: it returns an object, not a
+string, so you get `[object Object]` in your prompt. Use `userContent()`
+instead for regular templates.
+
+### `userContent(text, tag?)`
+
+Standalone version of `wrap()` that returns a **plain string**. Escapes the
+text and wraps it in `<user-input>` delimiters. Use this in regular template
+literals or anywhere outside `safe` templates:
+
+```ts
+const prompt = `Instruction: ${userContent(instruction)}`
+// → Instruction: <user-input>escaped content</user-input>
+
+const prompt = `Feedback: ${userContent(feedback, 'customer-feedback')}`
+// → Feedback: <customer-feedback>escaped content</customer-feedback>
+```
+
+### `detectSuspiciousPatterns(text)`
+
+A dev-time heuristic that returns an array of warning strings. It checks for
+three categories of suspicious input:
+
+| Category                   | Examples detected                                                                                        |
+| -------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **Role injection**         | `</system>`, `</assistant>`, `<\|im_start\|>`: attempts to close or open model-level message delimiters |
+| **Instruction override**   | `ignore previous`, `disregard`, `new instructions`: attempts to override system-level instructions      |
+| **Delimiter manipulation** | `---`, `===`, `***`: attempts to inject visual separators that could confuse prompt structure           |
+
+```ts title="validation.ts"
+import { detectSuspiciousPatterns } from '@use-crux/core'
+
+const warnings = detectSuspiciousPatterns(userInput)
+if (warnings.length > 0) {
+  console.warn('Suspicious input:', warnings)
+}
+```
+
+`detectSuspiciousPatterns` is a heuristic, not a guarantee: treat it as an
+extra layer of defense, not the only one.
+
+### Security warning records
+
+When `generation.securityWarnings` is enabled (the default outside
+production), suspicious input patterns are emitted as canonical
+`security.warning` graph records (and related `security.report` artifacts)
+with full trace correlation: each warning links to the `generate()` call that
+triggered it. `emitSecurityWarningSpan` opens a real span, not a free-floating
+`span:event`. Subscribe to the graph stream for custom integrations:
+
+```ts
+import { subscribeObservability } from '@use-crux/core/observability'
+
+const unsubscribe = subscribeObservability((record) => {
+  // emitSecurityWarningSpan opens a real span (not a free-floating span:event).
+  if (record.type === 'span:start' && record.primitive === 'security.warning') {
+    // attributes: promptId, field, pattern, inputPreview
+    myLogger.send(record)
+  }
+  if (record.type === 'artifact' && record.kind === 'security.report') {
+    // JSON preview carries severity, message, field, pattern
+    myLogger.send(record)
+  }
+})
+
+// later: unsubscribe()
+```
+
 ## Related
 
 - Guide: [Safety](/docs/guides/safety)
 - Guide: [Guardrails](/docs/guides/safety/guardrails)
 - Guide: [Constraints](/docs/guides/safety/constraints)
-- Guide: [Safety beta readiness](/docs/guides/safety/beta-readiness)
+- Guide: [Security](/docs/guides/safety/security)

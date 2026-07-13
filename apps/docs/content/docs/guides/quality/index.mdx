@@ -1,23 +1,15 @@
 ---
 title: Quality
-description: Evaluate any Crux primitive — typed evaluations, trace-backed assertions, scorers, variants, baselines, and deterministic replay.
+description: "Evaluate any Crux primitive: typed evaluations, trace-backed assertions, scorers, variants, baselines, and deterministic replay."
 ---
 
-Quality is Crux's one evaluation system. You author an **Evaluation** with
-`evaluate()`, point its `task` at any Crux primitive (prompt, flow, agent,
-retriever) or a plain function, and give it `data` (cases). Running it
-produces an **Experiment** — a matrix of variants × cases × trials with
-statistically honest aggregates — and **gates** drive CI exit codes. A
-**Baseline** is an explicitly promoted experiment committed to your repo, so
-every later run auto-compares against it. **Cassettes** replay model calls
-deterministically at the executor boundary.
-
-Quality is **beta**: the authoring surface (`evaluate`, `target`, `scorers`,
-`dataset`, `cassette`), the experiment/manifest record schemas
-(`@use-crux/core/quality/schemas`), CLI JSON outputs, and exit codes are stable
-within 0.x minors. Breaking changes get a changeset `minor` and a migration
-note. The first-party `quality/internal/runner` facade is for Crux tooling and
-does not carry that stability guarantee.
+You changed a prompt yesterday and shipped it. Did the answers get better,
+worse, or just different? Without a repeatable check, you are burning tokens
+to find out in production: regressions surface as support tickets instead of
+failed CI. Quality is Crux's one evaluation system: write one `evaluate()`
+file, point its `task` at the prompt, flow, agent, or retriever you already
+ship (or any plain function), give it `data` (cases), and get a CI exit code
+plus statistics you can trust.
 
 ## First eval in 10 minutes
 
@@ -60,12 +52,12 @@ artifacts so agents can tell which source data produced a regression.
 ## The ladder
 
 Every feature is reachable from the previous level by **adding keys to the
-same object** — never by restructuring what you already wrote:
+same object**, never by restructuring what you already wrote:
 
 | Level | You want                   | You write                                               | New concept                                                         |
 | ----- | -------------------------- | ------------------------------------------------------- | ------------------------------------------------------------------- |
 | 0     | Smoke-check a prompt       | `tests:` cases on the prompt definition                 | none                                                                |
-| 1     | A real eval                | one `*.eval.ts` file: `evaluate({ task, data })`        | [Evaluation](#level-1--your-first-evaluation)                       |
+| 1     | A real eval                | one `*.eval.ts` file: `evaluate({ task, data })`        | [Evaluation](#level-1-your-first-evaluation)                        |
 | 2     | Deep, granular checks      | add `expect:`; wrap the task in `target.*` for defaults | [Assertions](/docs/guides/quality/assertions)                       |
 | 3     | Measured quality           | add `scorers:` and `gates:`                             | [Scorers & gates](/docs/guides/quality/scorers-and-gates)           |
 | 4     | Compare & protect          | add `variants:`, `baseline:`, `trials:`; promote        | [Variants & baselines](/docs/guides/quality/variants-and-baselines) |
@@ -75,10 +67,26 @@ Nothing on a level requires understanding the next one. This guide teaches in
 that order; [Recipes](/docs/guides/quality/recipes) shows the pattern for each
 primitive (flow, agent, retriever, RAG, context bakeoffs).
 
-## Level 0 — colocated prompt tests
+## Four terms, quickly
+
+- **Evaluation**: what you author with `evaluate()`: a `task` (any Crux
+  primitive or plain function) plus `data` (cases).
+- **Experiment**: what one run produces: a matrix of variants × cases × trials
+  with statistically honest aggregates. **Gates** over it drive CI exit codes.
+- **Baseline**: an explicitly promoted experiment committed to your repo, so
+  every later run auto-compares against it.
+- **Cassette**: a recording that replays model calls deterministically, so CI
+  spends zero tokens.
+
+Quality is **beta**. The exact stability contract (which authoring surfaces,
+record schemas, CLI JSON outputs, and exit codes are stable within 0.x minors,
+and what remains internal) lives in the
+[Quality reference](/docs/reference/crux-core/quality).
+
+## Level 0: colocated prompt tests
 
 The zero-ceremony entry point: declare data-only cases on the prompt itself.
-The runner lowers them into a `prompt:<id>` evaluation — output-schema
+The runner lowers them into a `prompt:<id>` evaluation: output-schema
 validation gates, `expected` is reported alongside results.
 
 ```ts
@@ -94,7 +102,7 @@ const triagePrompt = prompt({
 })
 ```
 
-## Level 1 — your first evaluation
+## Level 1: your first evaluation
 
 Create a file matched by the default Quality discovery globs:
 `evals/**/*.eval.ts` and `**/*.eval.ts`. A conventional project does not need
@@ -118,11 +126,11 @@ export default evaluate({
 
 Two things to know about the shape:
 
-- **`expected` is opaque data.** Nothing matches it implicitly — it is
+- **`expected` is opaque data.** Nothing matches it implicitly: it is
   delivered to your `expect` callback and to scorers, and you decide what it
   means. Declarative matching is an explicit scorer (`scorers.exact()`).
 - **Types flow from the task.** Case inputs and `ctx.output` are inferred
-  from the task — the function signature here, or a prompt's zod schemas:
+  from the task: the function signature here, or a prompt's zod schemas:
 
 ```ts title="evals/support.eval.ts"
 import { evaluate } from '@use-crux/core/quality'
@@ -137,7 +145,7 @@ export default evaluate('support.refunds', {
 })
 ```
 
-The id (`'support.refunds'`) is optional — without it the runner derives one
+The id (`'support.refunds'`) is optional: without it the runner derives one
 from the file path (`evals/support.eval.ts` → `evals.support`). Explicit ids
 are required once you promote baselines.
 
@@ -187,7 +195,7 @@ Exit codes are CI-ready: `0` all blocking gates passed, `1` a gate/assertion
 failed or a cell errored, `2` definition error (nothing executed). See the
 [CLI reference](/docs/reference/local#crux-quality).
 
-Or embed a run in any test — the Vitest bridge is one line:
+Or embed a run in any test: the Vitest bridge is one line:
 
 ```ts
 import supportEval from '../evals/support.eval'
@@ -215,11 +223,11 @@ regression never requires the CLI to understand:
   Index definition. Opening a cell shows a Failure Artifact panel with the
   dataset provenance (`path @ fingerprint`), cassette id, and the repro command.
 - **Judge trust.** A judge-class scorer row (and the evaluation detail) opens a
-  judge-report panel — agreement, a 2×2 confusion matrix, Cohen's kappa, and a
+  judge-report panel: agreement, a 2×2 confusion matrix, Cohen's kappa, and a
   disagreements table linking back to each cell. Label cells Pass/Fail from the
   cell evidence header to feed it (equivalent to `crux quality label`).
 - **Compare.** The experiment detail's Compare picker diffs the run against any
-  other run of the same evaluation — per-score and per-case deltas, unmatched
+  other run of the same evaluation: per-score and per-case deltas, unmatched
   cases, and a drift banner when the identities are no longer comparable.
 
 The TUI mirrors the essentials: fix-surface letters (`P R`) on failing cells and
@@ -301,9 +309,9 @@ that don't declare them.
 
 ## Next
 
-- [Assertions](/docs/guides/quality/assertions) — `expect`, trace-backed signals, honest failure semantics
-- [Scorers & gates](/docs/guides/quality/scorers-and-gates) — the built-in library, judges, pass policies
-- [Variants & baselines](/docs/guides/quality/variants-and-baselines) — bakeoffs, paired statistics, promotion
-- [Replay](/docs/guides/quality/replay) — cassettes and deterministic CI
-- [Recipes](/docs/guides/quality/recipes) — flows, agents, retrieval, RAG, context bakeoffs
+- [Assertions](/docs/guides/quality/assertions): `expect`, trace-backed signals, honest failure semantics
+- [Scorers & gates](/docs/guides/quality/scorers-and-gates): the built-in library, judges, pass policies
+- [Variants & baselines](/docs/guides/quality/variants-and-baselines): bakeoffs, paired statistics, promotion
+- [Replay](/docs/guides/quality/replay): cassettes and deterministic CI
+- [Recipes](/docs/guides/quality/recipes): flows, agents, retrieval, RAG, context bakeoffs
 - [API reference](/docs/reference/crux-core/quality)

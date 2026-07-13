@@ -68,11 +68,7 @@ For distributed agents that run in separate processes, actions, or serverless fu
 
 ## Instrumentation
 
-Handoff events appear in [Devtools](/docs/guides/observability/devtools) automatically:
-
-- **`handoff:prepare`** fires with `inputSize`, `outputSize`, `fromAgent`, `toAgent`, and payload snapshots
-- Canonical traces also attach the validated handoff input to `inspection.input` and the prepared handoff payload to `inspection.output`
-- Events are correlated to the enclosing trace when called within a `generate()` or agent step
+Handoff events show up in [Devtools](/docs/guides/observability/devtools) automatically; see the [instrumentation reference](/docs/reference/crux-core/agent#instrumentation) for the event payload fields.
 
 ## Next steps
 

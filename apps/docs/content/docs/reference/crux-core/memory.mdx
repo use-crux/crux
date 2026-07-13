@@ -208,7 +208,11 @@ Block memory emits `memory.read` and `memory.write` spans with:
 }
 ```
 
-Reads that return entries also attach `memory.recall` artifacts with `returned` and `blocks[]` summaries (`blockKind`, `key`, `preview`, and optional `score`). Empty reads emit the read span but do not attach `memory.recall`, which keeps devtools from showing empty recalled-block cards. Writes with inspectable before/after state attach `memory.diff` artifacts with `before`, `after`, and added/removed/updated block summaries. Write events may also include `writeMode` and `proposalStatus`.
+Reads that return entries also attach `memory.recall` artifacts with `returned` and `blocks[]` summaries (`blockKind`, `key`, `preview`, and optional `score`). Empty reads emit the read span but do not attach `memory.recall`, which keeps devtools from showing empty recalled-block cards. Writes with inspectable before/after state attach `memory.diff` artifacts with `before`, `after`, and added/removed/updated block summaries. Write events may also include `writeMode` and `proposalStatus`: a proposed fact write appears with `writeMode: "propose"` and `proposalStatus: "pending"`, and later write observations can show `proposalStatus: "approved"` or `"rejected"` once the proposal is resolved.
+
+The runtime keeps raw namespaces out of trace attributes. Use `namespaceHash` for correlation, then inspect the attached artifact for the safe summary.
+
+These spans flow through the standard observability surfaces: devtools groups memory in the Memory Explorer, the CLI includes it in memory stats, and `@use-crux/otel` adds block attributes to memory spans.
 
 Budgeted memory rendering emits a composed `memory.read` span with a `memory.snapshot` artifact that records `candidateBlocks`, `includedBlocks`, `trimmedBlocks`, `droppedBlocks`, `usedTokens`, and `maxTokens`.
 

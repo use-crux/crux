@@ -1,6 +1,6 @@
 ---
 title: File Loaders
-description: fileSource, filesSource — load IngestDocuments from individual files, globs, or directories.
+description: fileSource, filesSource, load IngestDocuments from individual files, globs, or directories.
 ---
 
 ```ts
@@ -107,7 +107,7 @@ filesSource({ glob: '**/*.md', cwd: './docs' }, { namespace: 'docs' })
 
 | Field  | Type                 | Default         | Description                                 |
 | ------ | -------------------- | --------------- | ------------------------------------------- |
-| `glob` | `string \| string[]` | required        | Glob pattern(s) — uses Node's `matchesGlob` |
+| `glob` | `string \| string[]` | required        | Glob pattern(s), uses Node's `matchesGlob` |
 | `cwd`  | `string?`            | `process.cwd()` | Base directory for the glob                 |
 
 ## Example
@@ -149,5 +149,5 @@ for await (const document of source.documents()) {
 ## Related
 
 - Reference: [@use-crux/ingest overview](/docs/reference/ingest)
-- Reference: [URLs](/docs/reference/ingest/urls) — load HTTP-fetched documents
-- Reference: [Indexing](/docs/reference/crux-core/indexing) — `indexer`
+- Reference: [URLs](/docs/reference/ingest/urls), load HTTP-fetched documents
+- Reference: [Indexing](/docs/reference/crux-core/indexing), `indexer`

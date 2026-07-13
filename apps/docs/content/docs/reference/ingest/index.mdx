@@ -1,6 +1,6 @@
 ---
 title: '@use-crux/ingest'
-description: Source loaders for inline text, files, and URLs — produce IngestDocument streams for corpus sync.
+description: Source loaders for inline text, files, and URLs, produce IngestDocument streams for corpus sync.
 ---
 
 ```ts
@@ -23,12 +23,12 @@ If your application already has a clean loading pipeline, you do not have to use
 <Cards>
   <Card
     title="Files"
-    description="fileSource, filesSource — single file, glob, directory loaders."
+    description="fileSource, filesSource, single file, glob, directory loaders."
     href="/docs/reference/ingest/files"
   />
   <Card
     title="URLs"
-    description="urlSource, urlsSource — fetch and extract HTML to plain text."
+    description="urlSource, urlsSource, fetch and extract HTML to plain text."
     href="/docs/reference/ingest/urls"
   />
 </Cards>
@@ -148,7 +148,7 @@ interface SourceLoader {
 
 Use `load()` for real sync jobs. It reports source-level failures as values, which lets `corpus.sync()` keep going and record failed sources in the ledger. Use `documents()` for scripts and tests where the first bad source should throw.
 
-## `textSource(input)` — inline documents
+## `textSource(input)`, inline documents
 
 For when you already have the text in hand:
 
@@ -267,6 +267,6 @@ It is not a crawler framework, connector marketplace, or full document-intellige
 
 ## Related
 
-- Reference: [Indexing](/docs/reference/crux-core/indexing) — `indexer` and `corpus`
-- Reference: [Retrieval](/docs/reference/crux-core/retrieval) — query the indexed corpus
-- Guide: [Retrieval](/docs/guides/retrieval) — the full RAG pipeline
+- Reference: [Indexing](/docs/reference/crux-core/indexing), `indexer` and `corpus`
+- Reference: [Retrieval](/docs/reference/crux-core/retrieval), query the indexed corpus
+- Guide: [Retrieval](/docs/guides/retrieval), the full RAG pipeline

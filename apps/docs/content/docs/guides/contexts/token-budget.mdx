@@ -3,7 +3,7 @@ title: Token Management
 description: Token-aware rendering and automatic context dropping under budget pressure.
 ---
 
-When the assembled system message exceeds a token budget, Crux preserves the prompt's own system text and any provider-cache prefix, then drops the lowest-priority uncached contexts first. Provider-specific adaptations let you tweak prompts per model without breaking portability.
+Assembled prompts can outgrow the model's context window or your cost budget. Set `tokenBudget` and Crux drops the least important contexts first: it preserves the prompt's own system text and any provider-cache prefix, then drops the lowest-priority uncached contexts until the total fits. Provider-specific adaptations let you tweak prompts per model without breaking portability.
 
 ```ts title="generate.ts"
 import { prompt, context } from '@use-crux/core'
@@ -26,14 +26,14 @@ const result = await generate(myPrompt, {
 ```
 
 <Callout type="info">
-  Use `.inspect()` to see exactly which contexts were kept, dropped, and why —
-  see [Type System](/docs/guides/advanced/type-system) for the full inspection
+  Use `.inspect()` to see exactly which contexts were kept, dropped, and why.
+  See [Type System](/docs/guides/advanced/type-system) for the full inspection
   API.
 </Callout>
 
 ## How it works
 
-1. **Conditional contexts are evaluated first** — `when` predicates, `when()` wrappers, and `match()` specs are resolved. Excluded contexts are never even resolved.
+1. **Conditional contexts are evaluated first**: `when` predicates, `when()` wrappers, and `match()` specs are resolved. Excluded contexts are never even resolved.
 2. The prompt's own system text is always included.
 3. Cached contexts (`cache: true`) form a stable prefix after the prompt's own system text and are never budget-dropped.
 4. Uncached context contributions stay in `use` order for rendering, then the lowest-priority uncached contexts are dropped until the total fits within budget.

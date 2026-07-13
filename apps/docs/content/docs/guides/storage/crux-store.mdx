@@ -18,41 +18,6 @@ const note = await records.get("notes:1");
 
 It is not a vector index and it is not an asset store. If a feature needs similarity search, give it a [`VectorStore`](/docs/guides/storage/vector-store). If a workspace needs binary files, give it an [`AssetStore`](/docs/guides/storage/asset-storage).
 
-## Interface
-
-```ts
-import type { JsonObject, RecordStore } from "@use-crux/core/storage";
-
-const records: RecordStore = {
-  async get(key) {
-    return null;
-  },
-
-  async put(key, value, options) {
-    // persist JsonObject
-  },
-
-  async create(key, value, options) {
-    // atomically insert only when absent
-    return true;
-  },
-
-  async delete(key) {
-    // delete record
-  },
-
-  async list(prefix, options) {
-    return { entries: [] };
-  },
-
-  capabilities() {
-    return { ttl: false, filter: false, watch: false, batch: false };
-  },
-};
-```
-
-Core features use namespaced keys internally. Preserve keys exactly and make prefix listing deterministic. If a consumer needs complete traversal, implement `scan()` or make sure repeated `list(prefix, { cursor })` calls exhaust all pages.
-
 ## Common Uses
 
 Workspace metadata uses records for paths, MIME types, sizes, timestamps, previews, and asset URIs:
@@ -165,7 +130,42 @@ Reactive UI adapters consume the same `RecordStore` records through a transport.
 
 ## Custom RecordStore
 
-A custom record store is straightforward if your database can read/write JSON records and list by key prefix.
+A custom record store is straightforward if your database can read/write JSON records and list by key prefix. This is the full contract:
+
+```ts
+import type { JsonObject, RecordStore } from "@use-crux/core/storage";
+
+const records: RecordStore = {
+  async get(key) {
+    return null;
+  },
+
+  async put(key, value, options) {
+    // persist JsonObject
+  },
+
+  async create(key, value, options) {
+    // atomically insert only when absent
+    return true;
+  },
+
+  async delete(key) {
+    // delete record
+  },
+
+  async list(prefix, options) {
+    return { entries: [] };
+  },
+
+  capabilities() {
+    return { ttl: false, filter: false, watch: false, batch: false };
+  },
+};
+```
+
+Core features use namespaced keys internally. Preserve keys exactly and make prefix listing deterministic. If a consumer needs complete traversal, implement `scan()` or make sure repeated `list(prefix, { cursor })` calls exhaust all pages.
+
+A database-backed implementation:
 
 ```ts
 import type { JsonObject, RecordStore } from "@use-crux/core/storage";

@@ -1,13 +1,13 @@
 ---
 title: Agent primitives in flows
-description: Compose flows with handoff, delegate, and blackboard — the building blocks that plug into steps for validation, sub-pipelines, and shared state.
+description: Compose flows with handoff, delegate, and blackboard, the building blocks that plug into steps for validation, sub-pipelines, and shared state.
 ---
 
-Flows are the orchestration layer. [Blackboard](/docs/guides/agents/blackboard), [Handoff](/docs/guides/agents/tools-and-handoffs), and [Delegate](/docs/guides/agents/delegate) are the building blocks that plug into steps. Used inside a flow, they give you validated data transfer between agents, callable sub-pipelines, and shared typed state across steps — all with the same retry, fallback, and tracing the rest of the flow gets.
+Your flow's steps need to pass validated data between agents, call sub-pipelines, or share state: here is how the three primitives slot in. [Handoff](/docs/guides/agents/handoff) gives you validated data transfer between agents, [Delegate](/docs/guides/agents/delegate) gives you callable sub-pipelines, and [Blackboard](/docs/guides/agents/blackboard) gives you shared typed state across steps, all with the same retry, fallback, and tracing the rest of the flow gets.
 
 ## Handoff Between Flows
 
-A handoff validates and transforms data between agents. Use it to connect the output of one flow to the input of another — the handoff sits *between* the two flows as a validated bridge.
+A handoff validates and transforms data between agents. Use it to connect the output of one flow to the input of another: the handoff sits *between* the two flows as a validated bridge.
 
 ```ts
 import { z } from 'zod'
@@ -84,7 +84,7 @@ The research flow produces raw findings, the handoff ensures they match the writ
 
 ## Delegate as a Step
 
-A delegate wraps a subagent with handoff validation. Use `.run()` inside a step when one step of your flow should execute a full subagent pipeline — the delegate handles args validation, execution, and output transformation in one call.
+A delegate wraps a subagent with handoff validation. Use `.run()` inside a step when one step of your flow should execute a full subagent pipeline: the delegate handles args validation, execution, and output transformation in one call.
 
 ```ts
 import { z } from 'zod'
@@ -95,7 +95,7 @@ import { openai } from '@ai-sdk/openai'
 
 const model = openai('gpt-4o')
 
-// Same handoff as above — validates/transforms research output for the writer
+// Same handoff as above, validates/transforms research output for the writer
 const researchToWriter = handoff({
   id: 'research-to-writer',
   inputSchema: z.object({
@@ -115,7 +115,7 @@ const researchDelegate = delegate({
   argsSchema: z.object({ query: z.string() }),
   handoff: researchToWriter,
   execute: async (args) => {
-    // This is the subagent — it can be as simple or complex as needed.
+    // This is the subagent, it can be as simple or complex as needed.
     // It must return data matching the handoff's inputSchema.
     const plan = await generate(researchPlanner, {
       model,
@@ -153,7 +153,7 @@ The delegate's three-layer validation (args → subagent output → handoff tran
 
 ## Blackboard Across Steps
 
-A blackboard is shared typed state that multiple steps can read and write. Use it when steps need to coordinate beyond simple data threading — for example, when a later step's behavior depends on an earlier step's confidence score.
+A blackboard is shared typed state that multiple steps can read and write. Use it when steps need to coordinate beyond simple data threading, for example, when a later step's behavior depends on an earlier step's confidence score.
 
 ```ts
 import { z } from 'zod'
@@ -188,7 +188,7 @@ const adaptiveResearch = flow('adaptive-research', async (flow) => {
     })
   })
 
-  // Conditional step — only runs if the first pass wasn't confident enough
+  // Conditional step, only runs if the first pass wasn't confident enough
   if (await board.get('needsMoreResearch')) {
     await flow.step('deep-search', async () => {
       const priorFindings = await board.get('findings')
@@ -204,7 +204,7 @@ const adaptiveResearch = flow('adaptive-research', async (flow) => {
     })
   }
 
-  // Final step always runs — reads whatever findings are on the board
+  // Final step always runs, reads whatever findings are on the board
   return flow.step('synthesize', async () => {
     const findings = await board.get('findings')
     return generate(researchSynthesizer, { model, input: { findings } })
@@ -217,11 +217,11 @@ await adaptiveResearch.run()
 You can also inject the blackboard directly into a prompt with `use: [board]`. Crux will add the current board state as context and expose focused tools so the agent can read or update it during generation. Use `board.asContext()` only when you want context without tools.
 
 <Callout type="info">
-All agent primitive events — blackboard updates, handoff preparations, delegate executions — are automatically correlated to the current flow step in devtools via observability context. No extra wiring needed.
+All agent primitive events, blackboard updates, handoff preparations, delegate executions, are automatically correlated to the current flow step in devtools via observability context. No extra wiring needed.
 </Callout>
 
 ## Related
 
-- [Agents overview](/docs/guides/agents) — the underlying agent primitives outside a flow context
-- [Handoff](/docs/guides/agents/tools-and-handoffs), [Delegate](/docs/guides/agents/delegate), [Blackboard](/docs/guides/agents/blackboard) — full guides per primitive
-- [Typed input and step composition](/docs/guides/flows/typed-input) — for nesting flows and threading typed data
+- [Agents overview](/docs/guides/agents), the underlying agent primitives outside a flow context
+- [Handoff](/docs/guides/agents/handoff), [Delegate](/docs/guides/agents/delegate), [Blackboard](/docs/guides/agents/blackboard), full guides per primitive
+- [Typed input and step composition](/docs/guides/flows/typed-input), for nesting flows and threading typed data

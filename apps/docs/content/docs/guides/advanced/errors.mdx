@@ -15,7 +15,7 @@ Every prompt passed to the legacy registry helper `configure()` must have an `id
 also required for stable local discovery and devtools joins.
 
 ```ts
-// Bad — missing id
+// Bad: missing id
 const broken = prompt({
   system: 'You are helpful.',
   prompt: ({ input }) => input.text,
@@ -35,7 +35,7 @@ Two or more prompts share the same `id`. Each prompt in a prompt bundle or legac
 must have a unique id.
 
 ```ts
-// Bad — both have id 'edit'
+// Bad: both have id 'edit'
 createPrompts({
   a: prompt({ id: 'edit', ... }),
   b: prompt({ id: 'edit', ... }), // duplicate
@@ -53,7 +53,7 @@ const crux = configure({ prompts })
 crux.get('nonexistent') // throws
 ```
 
-**Fix:** Use `crux.find(id)` if the prompt might not exist — it returns `undefined` instead of throwing. Or check `crux.list()` to see registered prompts.
+**Fix:** Use `crux.find(id)` if the prompt might not exist: it returns `undefined` instead of throwing. Or check `crux.list()` to see registered prompts.
 
 ## Prompt definition errors
 
@@ -62,7 +62,7 @@ crux.get('nonexistent') // throws
 A prompt can use either `messages` mode (for multi-turn/few-shot) or `system` + `prompt` mode, but not both.
 
 ```ts
-// Bad — both modes
+// Bad: both modes
 prompt({
   id: 'broken',
   system: 'You are helpful.', // system+prompt mode
@@ -72,7 +72,7 @@ prompt({
   ],
 })
 
-// Good — pick one
+// Good: pick one
 prompt({
   id: 'multi-turn',
   messages: ({ input }) => [
@@ -86,10 +86,10 @@ prompt({
 
 ### `Input key "{key}" is defined by both "{contextA}" and "{contextB}"`
 
-Two contexts in the same prompt declare the same input field name. Context input schemas are merged — keys must be unique across all contexts.
+Two contexts in the same prompt declare the same input field name. Context input schemas are merged: keys must be unique across all contexts.
 
 ```ts
-// Bad — both declare 'name'
+// Bad: both declare 'name'
 const ctxA = context({
   id: 'a',
   input: z.object({ name: z.string() }),
@@ -117,7 +117,7 @@ const draftPrompt = prompt({
   prompt: ({ input }) => `Hello ${input.name}`,
 })
 
-// Bad — missing required field
+// Bad: missing required field
 await generate(prompt, { model, input: {} })
 // Error: Input validation failed: [{"code":"invalid_type","expected":"string","received":"undefined","path":["name"],...}]
 
@@ -125,7 +125,7 @@ await generate(prompt, { model, input: {} })
 await generate(prompt, { model, input: { name: 'Henri' } })
 ```
 
-**Fix:** Check the error's `issues` array — it tells you exactly which fields are wrong and why. Common causes:
+**Fix:** Check the error's `issues` array: it tells you exactly which fields are wrong and why. Common causes:
 
 - Missing required fields
 - Wrong types (e.g. number where string expected)
@@ -138,7 +138,7 @@ await generate(prompt, { model, input: { name: 'Henri' } })
 A value in the tree passed to `createPrompts()` is not a `Prompt` instance or a nested object.
 
 ```ts
-// Bad — raw object instead of Prompt
+// Bad: raw object instead of Prompt
 createPrompts({
   editor: {
     edit: { system: 'Edit things' }, // not a Prompt
@@ -161,12 +161,12 @@ Same as above, but for `createContexts()`. Every leaf must be a `Context` instan
 
 ### `Judge "{id}": no generate function provided`
 
-You called `judge.score()` without providing a `generate` function — either in the judge config or in the `score()` call.
+You called `judge.score()` without providing a `generate` function, either in the judge config or in the `score()` call.
 
 ```ts
 import { judge } from '@use-crux/core/scoring'
 
-// Bad — no generate anywhere
+// Bad: no generate anywhere
 const missingGeneratorJudge = judge({
   id: 'quality',
   criteria: 'Does the output satisfy the quality bar?',
@@ -174,7 +174,7 @@ const missingGeneratorJudge = judge({
 })
 await missingGeneratorJudge.score({ input: '...', output: '...' }) // throws
 
-// Good — provide in config
+// Good: provide in config
 const configuredJudge = judge({
   id: 'quality',
   criteria: 'Does the output satisfy the quality bar?',
@@ -184,7 +184,7 @@ const configuredJudge = judge({
 })
 await configuredJudge.score({ input: '...', output: '...' })
 
-// Good — provide per-call
+// Good: provide per-call
 await missingGeneratorJudge.score({ input: '...', output: '...' }, { generate: generateObjectFn, model })
 ```
 
@@ -198,7 +198,7 @@ Same as above but for the `model` parameter. Provide it in the judge config or i
 
 An evaluation's `expect` callback asserted on a signal namespace (`steps`,
 `toolCalls`, `retrieval`, …) that the run never captured. The assertion fails
-loudly instead of passing vacuously — the message names the task kinds that
+loudly instead of passing vacuously: the message names the task kinds that
 capture the signal. **Fix:** point `task` at a primitive that emits the
 signal (e.g. a flow handle for `steps`), or drop the assertion.
 
@@ -211,7 +211,7 @@ commit the cassette.
 
 ### `QualityDefinitionError`
 
-A definition-time mistake — an unknown `gates.scores` key, an unknown variant
+A definition-time mistake: an unknown `gates.scores` key, an unknown variant
 name in `--variant`, a promotion on a derived id (pin an explicit id first),
 or non-live replay without an evaluation id or named cassette. These exit
 with code 2 before anything executes.
@@ -248,4 +248,4 @@ These are `console.warn` messages, not thrown errors. They appear when `generati
 [@use-crux/core] Suspicious pattern detected in input field "{field}": {description}
 ```
 
-Triggered when user input contains patterns that look like prompt injection attempts — XML closing tags, instruction overrides, or prompt extraction attempts. See [Security](/docs/guides/safety/security) for details on input sanitization.
+Triggered when user input contains patterns that look like prompt injection attempts: XML closing tags, instruction overrides, or prompt extraction attempts. See [Security](/docs/guides/safety/security) for details on input sanitization.

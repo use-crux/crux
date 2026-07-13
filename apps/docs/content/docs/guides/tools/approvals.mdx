@@ -3,9 +3,9 @@ title: Tool approvals
 description: Add human approval to dangerous tool calls in serverless-safe apps.
 ---
 
-Tool approval is middleware for human-in-the-loop execution. It is not an awaited modal on the server. Crux returns an approval request, your app renders the decision UI, and the next request resumes with the decision in message history.
+Some tool calls, like issuing a refund or sending an email, should not run without a human sign-off. Crux pauses the call and returns an approval request, your app renders the decision UI, and the next request resumes with the decision in message history.
 
-That return-and-resume shape works in serverless, Convex actions, CLI programs, React, Expo, OpenAI, Google, Anthropic, and the AI SDK adapter because the approval state is portable message data.
+That return-and-resume shape works in serverless, Convex actions, CLI programs, React, Expo, OpenAI, Google, Anthropic, and the AI SDK adapter because the approval state is portable message data, not an awaited modal on the server.
 
 ## Add an approval policy
 
@@ -66,7 +66,7 @@ The same shape works with `@use-crux/google` and `@use-crux/anthropic` because a
 
 `approvalToken` binds the decision to the exact server-issued request. Keep the original returned `messages` on the server or in trusted session storage, then append the user decision to that history. Do not accept arbitrary client-fabricated message history for tools that can mutate data or call external systems.
 
-The approval helpers are message-shape utilities and types only — safe to import in browser components. Keep `approvalMiddleware()` itself on the server with your prompt/tool definitions.
+The approval helpers are message-shape utilities and types only, safe to import in browser components. Keep `approvalMiddleware()` itself on the server with your prompt/tool definitions.
 
 ## AI SDK adapter
 
