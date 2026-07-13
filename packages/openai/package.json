@@ -1,6 +1,6 @@
 {
   "name": "@use-crux/openai",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "OpenAI SDK adapter for Crux — run Crux prompts and agents against OpenAI models.",
   "keywords": [
     "ai",

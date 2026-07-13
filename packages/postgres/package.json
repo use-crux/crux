@@ -1,6 +1,6 @@
 {
   "name": "@use-crux/postgres",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Postgres Runtime Engine store adapter for Crux.",
   "license": "Apache-2.0",
   "author": "Crux",

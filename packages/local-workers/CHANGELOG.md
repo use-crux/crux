@@ -1,5 +1,22 @@
 # @use-crux/local-workers
 
+## 0.5.0
+
+### Patch Changes
+
+- Updated dependencies [fd6edcc]
+- Updated dependencies [37ebe22]
+- Updated dependencies [cd3e235]
+- Updated dependencies [0c3ba08]
+- Updated dependencies [64a716b]
+- Updated dependencies [74f27bf]
+- Updated dependencies [2ab4bd9]
+- Updated dependencies [58edfa9]
+- Updated dependencies [089ba6f]
+- Updated dependencies [aa37b64]
+  - @use-crux/core@0.5.0
+  - @use-crux/indexer@0.5.0
+
 ## 0.4.0
 
 ### Patch Changes
