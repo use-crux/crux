@@ -278,10 +278,36 @@ describe("runtime operations", () => {
       ]),
     });
   }, 30_000);
+
+  it("reports a fallback namespace warning without failing runtime preflight", async () => {
+    const schema = `crux_runtime_ops_namespace_${Date.now()}`;
+    schemas.push(schema);
+    const root = await runtimeOpsFixtureRoot({ schema, serverless: true });
+
+    await runSetupOperation({ root, mode: "apply" });
+
+    await expect(
+      runRuntimeOperation({ root, operation: "preflight" }),
+    ).resolves.toMatchObject({
+      operation: "preflight",
+      ok: true,
+      setup: {
+        ok: true,
+        findings: [
+          expect.objectContaining({
+            code: "NAMESPACE_AMBIGUOUS",
+            severity: "warning",
+          }),
+        ],
+      },
+      missingTargets: [],
+    });
+  }, 30_000);
 });
 
 async function runtimeOpsFixtureRoot(options: {
   readonly schema: string;
+  readonly serverless?: boolean;
 }): Promise<string> {
   const root = await mkdtemp(
     join(dirname(fileURLToPath(import.meta.url)), ".tmp-runtime-ops-"),
@@ -297,7 +323,7 @@ async function runtimeOpsFixtureRoot(options: {
     join(root, "crux.config.ts"),
     [
       "import { config } from '@use-crux/core'",
-      "import { node } from '@use-crux/core/runtime'",
+      "import { genericQueue, node, serverless } from '@use-crux/core/runtime'",
       "import { postgres } from '@use-crux/postgres/runtime'",
       "import { Pool } from 'pg'",
       "",
@@ -307,7 +333,9 @@ async function runtimeOpsFixtureRoot(options: {
       "globalPools.__cruxRuntimeOpsPools.push(pool)",
       "",
       "export default config({",
-      `  runtime: node({ store: postgres({ pool, schema: ${JSON.stringify(options.schema)} }) }),`,
+      options.serverless
+        ? `  runtime: serverless({ store: postgres({ pool, schema: ${JSON.stringify(options.schema)} }), publicUrl: "https://app.example.com", env: {}, wake: genericQueue({ enqueue: async () => undefined }) }),`
+        : `  runtime: node({ store: postgres({ pool, schema: ${JSON.stringify(options.schema)} }) }),`,
       "})",
     ].join("\n"),
   );

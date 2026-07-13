@@ -11,6 +11,7 @@ import {
   type RuntimeSetupPort,
 } from '@use-crux/core/runtime'
 import { redactSetupText } from './redact'
+import { namespaceFallbackFinding } from './namespace-finding'
 
 const DOCS_URL = 'https://cruxjs.dev/docs/guides/setup#apply-safe-changes'
 
@@ -95,12 +96,15 @@ export function createRuntimeSetupContributor(
   runtime: RuntimeEngineDefinition,
 ) {
   const resolution = resolveSetup(runtime)
+  const namespaceFinding = namespaceFallbackFinding(runtime)
   return defineSetupContributor({
     id: 'runtime',
-    inspect: async (_project: SetupContext) =>
-      resolution.kind === 'port'
+    inspect: async (_project: SetupContext) => [
+      ...(resolution.kind === 'port'
         ? (await resolution.port.check()).findings.map(mapFinding)
-        : [resolution.finding],
+        : [resolution.finding]),
+      ...(namespaceFinding === undefined ? [] : [namespaceFinding]),
+    ],
     plan: async (_project: SetupContext) => {
       if (resolution.kind !== 'port') return []
       const result = await resolution.port.check()

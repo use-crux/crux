@@ -169,3 +169,50 @@ func TestRuntimeGeneratePreflightReportsMissingNonTerminalTargets(t *testing.T) 
 		t.Fatalf("preflight reported terminal blocked work:\n%s", text)
 	}
 }
+
+func TestRuntimeGeneratePreflightRendersPassingSetupWarnings(t *testing.T) {
+	oldRunner := runRuntimeOperationForCommand
+	defer func() { runRuntimeOperationForCommand = oldRunner }()
+
+	runRuntimeOperationForCommand = func(_ context.Context, _, operation, _ string) (json.RawMessage, error) {
+		switch operation {
+		case "preflight":
+			return json.RawMessage(`{
+			  "operation": "preflight",
+			  "ok": true,
+			  "setup": {
+			    "ok": true,
+			    "findings": [
+			      {
+			        "code": "NAMESPACE_AMBIGUOUS",
+			        "resource": "serverless:generic-queue",
+			        "message": "namespace resolved to local by fallback",
+			        "remediation": "Set CRUX_RUNTIME_NAMESPACE or pass namespace to the runtime composer."
+			      }
+			    ]
+			  },
+			  "missingTargets": []
+			}`), nil
+		default:
+			t.Fatalf("unexpected operation %q", operation)
+			return nil, nil
+		}
+	}
+
+	var out, errOut bytes.Buffer
+	io := output.NewTestIO(&out, &errOut, output.TestIOOptions{ColorEnabled: false})
+	printRuntimeGeneratePreflight(io, t.TempDir(), json.RawMessage(`{
+	  "manifest": { "targets": [] }
+	}`))
+
+	text := out.String()
+	if !strings.Contains(text, "NAMESPACE_AMBIGUOUS") {
+		t.Fatalf("preflight output missing namespace warning:\n%s", text)
+	}
+	if !strings.Contains(text, "Set CRUX_RUNTIME_NAMESPACE") {
+		t.Fatalf("preflight output missing namespace remediation:\n%s", text)
+	}
+	if !strings.Contains(text, "Runtime preflight passed") {
+		t.Fatalf("warning finding should not fail preflight:\n%s", text)
+	}
+}

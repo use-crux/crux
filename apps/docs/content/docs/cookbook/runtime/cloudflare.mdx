@@ -38,6 +38,10 @@ export default config({
 
 The worker receives Crux wake messages from Cloudflare Queues and forwards the signed body and headers exactly as produced by `genericQueue()`.
 
+## Production namespace
+
+Cloudflare is not a Vercel host, so `serverless()` cannot infer a production namespace. Set `CRUX_RUNTIME_NAMESPACE` (or pass `namespace` directly) for every production deployment. Otherwise composition throws `NAMESPACE_AMBIGUOUS` instead of falling back to `local`.
+
 ```ts
 export default {
   async queue(batch: MessageBatch<RuntimeWakeMessage>, env: Env) {

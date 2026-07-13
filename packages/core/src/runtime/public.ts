@@ -157,6 +157,7 @@ export type {
   ServerlessRuntimeEnvironment,
   ServerlessRuntimeOptions,
 } from './composers/serverless'
+export type { RuntimeNamespaceSource } from './composers/namespace'
 
 export { genericQueue } from './composers/generic-queue'
 export type { GenericQueueWakeOptions } from './composers/generic-queue'

@@ -15,10 +15,13 @@ import { createRuntimeError } from '../engine/errors'
 import type { InProcessRuntimeEngineDefinition } from '../api/runtime-definition'
 import type { RuntimeRetentionConfig } from '../engine/retention'
 import type { RuntimeWakeAdapter } from './wake-adapter'
+import {
+  resolveRuntimeNamespace,
+  type RuntimeNamespaceEnvironment,
+} from './namespace'
 
-/** Environment values used by serverless public URL resolution. */
-export interface ServerlessRuntimeEnvironment {
-  readonly NODE_ENV?: string
+/** Environment values used by serverless runtime resolution. */
+export interface ServerlessRuntimeEnvironment extends RuntimeNamespaceEnvironment {
   readonly CRUX_PUBLIC_URL?: string
   readonly VERCEL_PROJECT_PRODUCTION_URL?: string
   readonly VERCEL_URL?: string
@@ -36,7 +39,10 @@ export interface ServerlessRuntimeOptions<
   readonly endpoint?: string
   /** Explicit public base URL. Wins over environment inference. */
   readonly publicUrl?: string
-  /** Runtime namespace. Defaults to environment or `local`. */
+  /**
+   * Runtime namespace. Wins over environment configuration and host
+   * inference. Blank values are treated as unset.
+   */
   readonly namespace?: string
   /** Environment override for tests and non-Node hosts. */
   readonly env?: ServerlessRuntimeEnvironment
@@ -49,6 +55,10 @@ export function serverless<TStore extends RuntimeStoreAdapter>(
   options: ServerlessRuntimeOptions<TStore>,
 ): InProcessRuntimeEngineDefinition<TStore> {
   const env = options.env ?? readProcessEnv()
+  const namespace = resolveRuntimeNamespace({
+    namespace: options.namespace,
+    env,
+  })
   const endpoint = normalizeEndpoint(options.endpoint ?? '/api/crux')
   const url = resolveWakeUrl({
     endpoint,
@@ -61,15 +71,11 @@ export function serverless<TStore extends RuntimeStoreAdapter>(
     id: `serverless:${options.wake.id}`,
     store: options.store,
     capabilities: serverlessCapabilities(options),
-    namespace:
-      options.namespace ??
-      readStringEnv(env, 'CRUX_RUNTIME_NAMESPACE') ??
-      'local',
+    namespace: namespace.namespace,
+    namespaceSource: namespace.source,
     maintenance: { autoStart: false },
     ...(options.retention ? { retention: options.retention } : {}),
-    ...(options.wake.verify
-      ? { verifyWakeRequest: options.wake.verify }
-      : {}),
+    ...(options.wake.verify ? { verifyWakeRequest: options.wake.verify } : {}),
     createWake() {
       return options.wake.createWake({ url })
     },
@@ -90,8 +96,7 @@ function serverlessCapabilities(
       atLeastOnce: true,
       signed: options.wake.capabilities.signed,
       maxPayloadBytes:
-        options.wake.capabilities.maxPayloadBytes ??
-        MAX_WAKE_ENVELOPE_BYTES,
+        options.wake.capabilities.maxPayloadBytes ?? MAX_WAKE_ENVELOPE_BYTES,
     }),
     events: Object.freeze({ durable: true, cursorReads: true }),
     waiters: Object.freeze({ durable: true }),
@@ -166,12 +171,4 @@ function normalizeBaseUrl(url: string): string {
 
 function readProcessEnv(): ServerlessRuntimeEnvironment {
   return typeof process === 'undefined' ? {} : process.env
-}
-
-function readStringEnv(
-  env: ServerlessRuntimeEnvironment,
-  key: 'CRUX_RUNTIME_NAMESPACE',
-): string | undefined {
-  const record = env as Record<string, string | undefined>
-  return record[key]
 }
