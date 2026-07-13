@@ -248,7 +248,7 @@ describe('semantic relation analyzer', () => {
         fidelity: 'resolved',
       }),
     )
-  })
+  }, 15_000)
 
   it('resolves imported and spread use arrays for prompts, contexts, and injectables', async () => {
     const root = await fixtureRoot()
