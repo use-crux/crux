@@ -1,5 +1,93 @@
 # @use-crux/postgres
 
+## 0.5.0
+
+### Minor Changes
+
+- 0c3ba08: Add request-scoped `defer(callback)` with bounded host-lifetime execution, the
+  explicit `@use-crux/core/defer/node` HTTP integration, and Runtime-backed named
+  target staging through `await defer(target, input)`. Postgres and Convex Runtime
+  stores now persist named deferred intents and recover their release through the
+  existing transactional outbox. Public `defer()` is rejected during replayable
+  flow execution, and the Runtime snapshot field for replay-visible child work is
+  hard-renamed from `scheduledEffects` to `scheduledWork` with no compatibility
+  field or read path.
+  Inline callbacks now isolate nested named commits per callback and report late
+  commit failures without stopping sibling cleanup.
+  Project Index now discovers public inline and named scheduling sites as stable
+  `deferred-work` definitions, resolves their task and enclosing-definition
+  relations, and reports replay-unsafe, floating-promise, missing-scope, and
+  explicitly missing-Runtime diagnostics.
+  Public deferred work emits `defer.scheduled` and `defer.run` observability
+  spans with causal `triggered` edges, one lightweight grouped run when no
+  originating Crux run exists, and quiet diagnostics-only internal composition.
+  Inline retained tasks flush only after their full graph closes. Named wakes use
+  fresh same-trace runs and segments with a causal edge, then flush only after the
+  durable outcome commits.
+  Devtools Catalog and Runs surface deferred-work kinds, lifecycle states, and
+  honest handler-returned streaming notes.
+  Provider-neutral serverless hosts live at `@use-crux/core/defer/serverless`
+  (injected `waitUntil` / `after` / named-only). `@use-crux/next` binds Next.js
+  `after()` as response-finished. Convex bridge runs install a named-only lifetime
+  so inline callbacks fail with `DEFER_CAPABILITY_MISSING` while named Runtime work
+  remains supported.
+  Docs cover host reliability boundaries, completion classes, strict named commit,
+  at-least-once edges, cancellation limits, and the distinction from
+  `flow.defer()` / future Effects.
+
+  The defer setup contributor now participates in `crux setup`, reporting host
+  integration and named Runtime durability readiness without redefining the
+  shared `@use-crux/core/setup` contract.
+  Deferred intent stores now preserve the first terminal state across memory,
+  Postgres, and Convex, and setup distinguishes inline host wrapping from literal
+  named-work `durableFinalization: true` capability.
+
+- 74f27bf: Promote `@use-crux/core/runtime` and its store-adapter contract to stable beta while Crux remains pre-1.0.
+
+  Remove unused Runtime Engine dead port exports, validate `crux.flows.signal()` against the durable flow snapshot before emitting, warn once when a durable target name is re-registered with a different definition, and make production `createRuntimeHandler()` fail closed unless wake request verification is configured explicitly or supplied by the wake adapter.
+
+  Embed delivered event payloads in runtime flow snapshots so flow replay no longer scans the event log after delivery. Store adapters must persist the `payload` field passed to `state.markSnapshotDelivered()`.
+
+  Add Runtime Engine retention config and bounded maintenance pruning for events, terminal work, terminal snapshots, confirmed outbox rows, idempotency keys, settled timers, and settled waiters. The memory, Postgres, and Convex runtime stores implement the new prune contract and conformance coverage.
+
+  Fence Runtime Engine wake commits with lease tokens and heartbeat leases while target code runs. Stale workers now exit cleanly with `LEASE_LOST` instead of retrying, dead-lettering, or overwriting a reclaimed worker's result.
+
+  Add named Runtime Engine composite commits and the optional store-adapter `runComposite(kind, input)` override. Core keeps the default `transact()` runner, and the Convex runtime component now routes composites through one mutation for atomic host-bound commits.
+
+  Run the shared composite conformance cases against Convex's component-backed `runComposite` path, and encode composite Date payloads with Convex-valid object keys.
+
+  Use Convex-compatible filenames for internal Runtime Engine component modules so Convex codegen and deployment can discover them.
+
+  Make `config()` lifecycle-safe by installing one hook layer per active config, replacing the previous active config on repeat calls, and keeping independent layers such as imperative devtools intact when a config is disposed.
+
+  Hard-rename the global hook-store API from the runtime family to the hooks family: `CruxHooks`, `getHooks()`, `setHooks()`, `updateHooks()`, `resetHooks()`, and `mergeHooks()`. The old hook-store names are removed with no deprecated aliases so Runtime Engine terminology can stay unambiguous.
+
+  Rename the Runtime Engine task target factory from `task()` to `durableTask()` and remove the dead task output generic. Project Index runtime target discovery and lint guidance now recognize `durableTask()` declarations. Remove `createConvexRuntimeBridge` from the public `@use-crux/convex` root and package subpath; use `createCruxConvex().run()`, `.storage()`, and `.bridge()` as the single Convex entry point.
+
+  Add `createTestRuntime()` on `@use-crux/core/runtime/testing` for app-level Runtime Engine tests. The harness installs an in-memory runtime hook layer, provides a controllable clock for `flow.after()` and suspend timeouts, and exposes bounded `tick()`/`settle()` helpers without real timers.
+
+  Runtime Engine store adapters now honor the runtime clock when pending work is requeued, keeping `createTestRuntime()` timers deterministic even when the injected clock differs from wall time.
+
+  Bound Runtime Engine outbox dispatch to eight concurrent deliveries by default, add `RuntimeOutboxPort.listByWork()` for targeted orphan recovery, remove shared-counter event append hot spots and the unused `runtimeCounters` table from the Convex runtime component, require namespaces for maintenance scans, and remove `eval.run` plus stale bridge manifest fields from the runtime bridge command contract. Orphan requeue now treats any same-namespace pending wake for the work id as live, even when its idempotency key was refreshed.
+
+  Disable Runtime Engine lease heartbeat timers for Convex host bindings while preserving lease fencing, and make the default heartbeat scheduler a no-op when timer APIs are unavailable.
+
+  Remove unused exported idempotency helpers `flowSignalResumeKey()` and `watchDeliverKey()` from `@use-crux/core/runtime`.
+
+### Patch Changes
+
+- Updated dependencies [fd6edcc]
+- Updated dependencies [37ebe22]
+- Updated dependencies [cd3e235]
+- Updated dependencies [0c3ba08]
+- Updated dependencies [64a716b]
+- Updated dependencies [74f27bf]
+- Updated dependencies [2ab4bd9]
+- Updated dependencies [58edfa9]
+- Updated dependencies [089ba6f]
+- Updated dependencies [aa37b64]
+  - @use-crux/core@0.5.0
+
 ## 0.4.0
 
 ### Minor Changes
