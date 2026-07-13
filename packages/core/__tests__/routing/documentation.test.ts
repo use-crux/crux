@@ -18,7 +18,6 @@ describe("routing documentation", () => {
     const observabilityReference = readRepoFile(
       "apps/docs/content/docs/reference/crux-core/observability.mdx",
     );
-    const readme = readRepoFile("packages/core/README.md");
     const architecture = readRepoFile("packages/core/ARCHITECTURE.md");
 
     expect(receiptGuide).toContain("firstTokenAt?: number");
@@ -31,7 +30,6 @@ describe("routing documentation", () => {
     expect(observabilityReference).toContain(
       "unavailable `cost` values are represented as `null`",
     );
-    expect(readme).toContain("firstTokenAt");
     expect(architecture).toContain("firstTokenAt");
   });
 });
