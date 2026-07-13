@@ -27,7 +27,7 @@ describe('defer setup contributor', () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'DEFER_NEXT_INTEGRATION_MISSING',
-          docsUrl: expect.stringContaining('/defer/troubleshooting'),
+          docsUrl: expect.stringContaining('/background-work/troubleshooting'),
           remediation: 'pnpm add @use-crux/next',
         }),
         expect.objectContaining({
