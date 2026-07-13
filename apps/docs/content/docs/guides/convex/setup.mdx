@@ -37,6 +37,9 @@ Run Convex codegen after adding the component so `components.crux` exists:
 npx convex dev
 ```
 
+The packaged component already uses Convex-valid module paths, so no consumer-side
+rewriting is needed before codegen or deployment.
+
 ## Create A Record Helper
 
 Create one small helper and reuse it everywhere you need Crux records.

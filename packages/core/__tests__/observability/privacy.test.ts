@@ -20,6 +20,7 @@ const exemptArtifactKinds = new Set([
   'ingest.report',
   'corpus.report',
   'security.report',
+  'media.report',
 ])
 
 describe('observability privacy capture policy', () => {
@@ -175,10 +176,10 @@ describe('observability privacy capture policy', () => {
           encoding: 'json',
           preview: {
             content: [
-              { type: 'image-url', url: 'data:image/png;base64,AQID', mediaType: 'image/png' },
+              { type: 'image', source: 'data:image/png;base64,AQID', mediaType: 'image/png' },
               {
-                type: 'file-url',
-                url: 'data:application/pdf;base64,JVBERi0x',
+                type: 'file',
+                source: 'data:application/pdf;base64,JVBERi0x',
                 mediaType: 'application/pdf',
                 filename: 'report.pdf',
               },
@@ -195,12 +196,11 @@ describe('observability privacy capture policy', () => {
       kind: 'output',
       preview: {
         content: [
-          { type: 'image-url', url: '[image image/png data:image/png]', mediaType: 'image/png' },
+          { kind: 'image', sourceCategory: 'data', mediaType: 'image/png' },
           {
-            type: 'file-url',
-            url: '[file application/pdf "report.pdf" data:application/pdf]',
+            kind: 'file',
+            sourceCategory: 'data',
             mediaType: 'application/pdf',
-            filename: 'report.pdf',
           },
         ],
       },

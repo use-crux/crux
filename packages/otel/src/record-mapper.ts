@@ -96,8 +96,8 @@ export function createSpanRegistry(spanManager: SpanManager): OtelSpanRegistry {
  *
  * The returned subscriber is synchronous and safe to install with
  * `subscribeObservability()`. It keeps only open span/run references and
- * ignores unmatched end records, matching the old hook path's no-crash
- * behavior for duplicate or out-of-order end events.
+ * ignores unmatched end records so duplicate or out-of-order end events do
+ * not crash the subscriber.
  *
  * @param spanManager - Span lifecycle implementation used by the exporter.
  * @param options - Telemetry options whose custom attributes are attached to
@@ -363,7 +363,14 @@ function spanNameSubject(
   record: Extract<CruxGraphRecord, { type: 'span:start' | 'span' }>,
   operation: NonNullable<ReturnType<typeof genAiOperationName>>,
 ): string {
-  if (operation === 'chat' || operation === 'embeddings') {
+  if (
+    operation === 'chat' ||
+    operation === 'embeddings' ||
+    operation === 'generate_image' ||
+    operation === 'transcribe' ||
+    operation === 'generate_speech' ||
+    operation === 'generate_content'
+  ) {
     return (
       stringValue('model' in record ? record.model : undefined) ??
       stringValue(record.attributes?.model) ??

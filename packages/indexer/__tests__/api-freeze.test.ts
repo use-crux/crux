@@ -26,6 +26,7 @@ describe('API freeze guardrails', () => {
       'generateRuntimeArtifacts',
       'manifestFromDefinitions',
       'runRuntimeOperation',
+      'runSetupOperation',
       'resolveProjectModel',
       'inspectProjectConfig',
       'checkStaticRulesForProject',

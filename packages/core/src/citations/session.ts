@@ -48,8 +48,8 @@ export function createGroundingSession(args: { generationId?: string } = {}): Gr
 }
 
 /** Build the stable deduplication identity for a citeable hit. */
-export function groundingHitKey(hit: Pick<RetrieverHit, 'namespace' | 'sourceId' | 'chunkId'>): string {
-  return `${hit.namespace}:${hit.sourceId}:${hit.chunkId}`
+export function groundingHitKey(hit: Pick<RetrieverHit, 'namespace' | 'source' | 'chunkId'>): string {
+  return `${hit.namespace}:${hit.source.id}:${hit.chunkId}`
 }
 
 function createGenerationId(): string {

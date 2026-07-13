@@ -7,11 +7,13 @@ export type {
   IngestPagePart,
   IngestParser,
   IngestPart,
+  IngestSourceLocation,
+  IngestSourceFacts,
   IngestSheetPart,
   IngestTablePart,
   IngestTextPart,
   IngestWarning,
-  OcrHook,
+  IngestMediaOperations,
   ParseContext,
   ParseInput,
   ParseResult,
@@ -22,4 +24,5 @@ export { deriveContent } from './document'
 export { builtInParsers } from './parsers'
 export { textSource } from './text'
 export { fileSource, filesSource } from './files'
+export type { AssetFileInput, AssetFileSourceOptions, FileSourceOptions, FilesSourceOptions } from './files'
 export { urlSource, urlsSource } from './urls'

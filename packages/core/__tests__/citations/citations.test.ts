@@ -14,7 +14,7 @@ import type { Constraint } from '../../src/safety/constraint'
 function hit(overrides: Partial<RetrieverHit> = {}): RetrieverHit {
   return {
     namespace: 'docs',
-    sourceId: 'guide.md',
+    source: { id: 'guide.md' },
     chunkId: 'chunk-1',
     content: 'Hybrid search combines dense and sparse retrieval for better recall.',
     metadata: {},
@@ -53,8 +53,7 @@ describe('resolveCitations()', () => {
       ],
       [
         hit({
-          sourceUrl: 'https://example.com/guide',
-          sourcePath: '/docs/guide.md',
+          source: { id: 'guide.md', url: 'https://example.com/guide', path: '/docs/guide.md' },
           provenance: { page: 3 },
         }),
       ],

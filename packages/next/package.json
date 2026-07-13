@@ -1,0 +1,55 @@
+{
+  "name": "@use-crux/next",
+  "version": "0.4.0",
+  "description": "Next.js host integration for Crux request-scoped defer() via next/server after().",
+  "keywords": [
+    "next",
+    "nextjs",
+    "defer",
+    "after",
+    "crux"
+  ],
+  "license": "Apache-2.0",
+  "author": "Crux",
+  "private": true,
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "dependencies": {
+    "@use-crux/core": "workspace:*"
+  },
+  "peerDependencies": {
+    "next": ">=15.1.0"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.4",
+    "next": "^15.1.0",
+    "typescript": "5.9.3",
+    "vitest": "^4.1.7"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/use-crux/crux.git",
+    "directory": "packages/next"
+  },
+  "bugs": {
+    "url": "https://github.com/use-crux/crux/issues"
+  },
+  "homepage": "https://cruxjs.dev"
+}

@@ -2,114 +2,136 @@
  * Public single-turn provider bundle tests.
  */
 
-import { describe, expect, it } from 'vitest'
-import { prompt as makePrompt } from '../../src/prompt/prompt'
-import type { Message } from '../../src/generation/messages'
+import { describe, expect, it } from "vitest";
+import { prompt as makePrompt } from "../../src/prompt/prompt";
+import type { Message } from "../../src/generation/messages";
 import {
+  defineCompletedOperation,
   defineSingleTurnProviderBundle,
   type NativeResponseMetadata,
   type ProviderRuntimeExtender,
   type SingleTurnProviderRuntime,
-} from '../../src/adapter'
+} from "../../src/adapter";
 
 interface BundleProviderMessage {
-  readonly role: Message['role']
-  readonly text: string
+  readonly role: Message["role"];
+  readonly text: string;
 }
 
 interface BundleRequest {
-  readonly model: string
-  readonly mode: 'text' | 'structured'
-  readonly messages: readonly BundleProviderMessage[]
-  readonly depsTag: string
+  readonly model: string;
+  readonly mode: "text" | "structured";
+  readonly messages: readonly BundleProviderMessage[];
+  readonly depsTag: string;
 }
 
 interface BundleRawResponse {
-  readonly id: string
-  readonly model: string
-  readonly text: string
+  readonly id: string;
+  readonly model: string;
+  readonly text: string;
   readonly usage: {
-    readonly inputTokens: number
-    readonly outputTokens: number
-    readonly totalTokens: number
-  }
+    readonly inputTokens: number;
+    readonly outputTokens: number;
+    readonly totalTokens: number;
+  };
 }
 
-type BundleStream = AsyncIterable<never>
+type BundleStream = AsyncIterable<never>;
 type BundleRuntime = SingleTurnProviderRuntime<
   BundleClient,
   BundleRawResponse,
   BundleStream,
   Record<string, never>
->
+>;
 
 interface BundleClient {
-  readonly calls: BundleRequest[]
+  readonly calls: BundleRequest[];
 }
 
 interface BundleDeps extends Record<string, unknown> {
-  readonly tag: string
+  readonly tag: string;
 }
 
-describe('defineSingleTurnProviderBundle', () => {
-  it('compiles provider hooks into runtime create and helper factories with provider-owned deps', async () => {
-    const bundle = defineBundleTest()
+describe("defineSingleTurnProviderBundle", () => {
+  it("compiles provider hooks into runtime create and helper factories with provider-owned deps", async () => {
+    const bundle = defineBundleTest();
 
-    const client: BundleClient = { calls: [] }
-    const runtime = bundle.create(client, 'runtime-deps')
+    const client: BundleClient = { calls: [] };
+    const runtime = bundle.create(client, "runtime-deps");
 
     const result = await runtime.generate(
-      makePrompt({ id: 'bundle-runtime' }),
+      makePrompt({ id: "bundle-runtime" }),
       {
-        model: 'bundle-model',
+        model: "bundle-model",
       },
-    )
+    );
     const text = await bundle
-      .helpers('helper-deps')
-      .createGenerateTextFn(client, 'helper-model')({
-      model: 'ignored',
-      prompt: 'Write text',
-    })
+      .helpers("helper-deps")
+      .createGenerateTextFn(client, "helper-model")({
+      model: "ignored",
+      prompt: "Write text",
+    });
 
-    expect(bundle.id).toBe('bundle-test')
-    expect(bundle.ownership).toBe('single-turn')
-    expect(bundle.runtime.id).toBe('bundle-test')
-    expect(bundle.runtime.ownership).toBe('single-turn')
-    expect(runtime.providerId).toBe('bundle-test')
+    expect(bundle.id).toBe("bundle-test");
+    expect(bundle.ownership).toBe("single-turn");
+    expect(bundle.runtime.id).toBe("bundle-test");
+    expect(bundle.runtime.ownership).toBe("single-turn");
+    expect(runtime.providerId).toBe("bundle-test");
+    expect(await runtime.generateImage({ model: "image" })).toMatchObject({
+      raw: { kind: "image" },
+    });
+    expect(await runtime.transcribe({ model: "transcription" })).toMatchObject({
+      raw: { kind: "transcription" },
+    });
+    expect(await runtime.generateSpeech({ model: "speech" })).toMatchObject({
+      raw: { kind: "speech" },
+    });
     expect(result).toMatchObject({
-      text: 'bundle text',
-      _meta: { responseId: 'resp_1', actualModelId: 'bundle-actual' },
-    })
-    expect(text).toEqual({ text: 'bundle text' })
+      text: "bundle text",
+      _meta: { responseId: "resp_1", actualModelId: "bundle-actual" },
+    });
+    expect(text).toEqual({ text: "bundle text" });
     expect(client.calls).toEqual([
       {
-        model: 'bundle-model',
-        mode: 'text',
+        model: "bundle-model",
+        mode: "text",
         messages: [],
-        depsTag: 'runtime-deps',
+        depsTag: "runtime-deps",
       },
       {
-        model: 'helper-model',
-        mode: 'text',
-        messages: [{ role: 'user', text: 'Write text' }],
-        depsTag: 'helper-deps',
+        model: "helper-model",
+        mode: "text",
+        messages: [{ role: "user", text: "Write text" }],
+        depsTag: "helper-deps",
       },
-    ])
-  })
+    ]);
+  });
 
-    it('preserves generated runtime extension collision checks', () => {
+  it("preserves generated runtime extension collision checks", () => {
     const replaceGeneratedKey = (() => ({
       generate() {
-        return 'extension generate'
+        return "extension generate";
       },
-    })) as ProviderRuntimeExtender<BundleClient, BundleRuntime, object>
-    const bundle = defineBundleTest(replaceGeneratedKey)
+    })) as ProviderRuntimeExtender<BundleClient, BundleRuntime, object>;
+    const bundle = defineBundleTest(replaceGeneratedKey);
 
-    expect(() => bundle.create({ calls: [] }, 'runtime-deps')).toThrowError(
+    expect(() => bundle.create({ calls: [] }, "runtime-deps")).toThrowError(
       'Provider runtime "bundle-test" extension cannot replace generated runtime key "generate".',
-    )
-  })
-})
+    );
+
+    const replaceCompletedKey = (() => ({
+      generateImage() {
+        return "extension image";
+      },
+    })) as ProviderRuntimeExtender<BundleClient, BundleRuntime, object>;
+    const completedCollision = defineBundleTest(replaceCompletedKey);
+    expect(() =>
+      completedCollision.create({ calls: [] }, "runtime-deps"),
+    ).toThrowError(
+      'Provider runtime "bundle-test" extension cannot replace generated runtime key "generateImage".',
+    );
+  });
+});
 
 function defineBundleTest<TExtensions extends object = Record<string, never>>(
   extend?: ProviderRuntimeExtender<BundleClient, BundleRuntime, TExtensions>,
@@ -124,21 +146,30 @@ function defineBundleTest<TExtensions extends object = Record<string, never>>(
     BundleProviderMessage,
     readonly [tag: string],
     readonly [tag: string],
-    TExtensions
+    TExtensions,
+    BundleOperationFactory,
+    BundleOperationFactory,
+    BundleOperationFactory
   >({
-    id: 'bundle-test',
+    id: "bundle-test",
     bind: (client: BundleClient) => ({
       async call(request, mode) {
-        client.calls.push({ ...request, mode })
+        client.calls.push({ ...request, mode });
         return {
           id: `resp_${client.calls.length}`,
-          model: 'bundle-actual',
-          text: 'bundle text',
-          usage: { inputTokens: 1, outputTokens: 2, totalTokens: 3, inputTokenDetails: {}, outputTokenDetails: {} },
-        }
+          model: "bundle-actual",
+          text: "bundle text",
+          usage: {
+            inputTokens: 1,
+            outputTokens: 2,
+            totalTokens: 3,
+            inputTokenDetails: {},
+            outputTokenDetails: {},
+          },
+        };
       },
       async stream() {
-        return emptyStream()
+        return emptyStream();
       },
     }),
     profile: {
@@ -148,7 +179,7 @@ function defineBundleTest<TExtensions extends object = Record<string, never>>(
           mode,
           messages: args.providerMessages,
           depsTag: deps.tag,
-        }
+        };
       },
       response: {
         meta(raw): NativeResponseMetadata {
@@ -156,8 +187,8 @@ function defineBundleTest<TExtensions extends object = Record<string, never>>(
             usage: raw.usage,
             responseId: raw.id,
             actualModelId: raw.model,
-            finishReason: 'stop',
-          }
+            finishReason: "stop",
+          };
         },
       },
       stream: { textDelta: () => undefined },
@@ -182,25 +213,50 @@ function defineBundleTest<TExtensions extends object = Record<string, never>>(
       helpers: (tag: string): BundleDeps => ({ tag }),
     },
     extend,
-  })
+    image: () => bundleOperation("image"),
+    transcription: () => bundleOperation("transcription"),
+    speech: () => bundleOperation("speech"),
+  });
+}
+
+type BundleOperationFactory = (
+  client: BundleClient,
+) => ReturnType<typeof bundleOperation>;
+
+function bundleOperation(kind: "image" | "transcription" | "speech") {
+  return defineCompletedOperation({
+    normalize: (input: Readonly<{ model: string }>) => input,
+    support: () => "supported" as const,
+    invoke: async (_input, context) =>
+      context.call("media.test", async () => ({ kind })),
+    validate: (raw) => ({
+      warnings: [],
+      execution: { kind: "native" as const, calls: 1 },
+      raw,
+    }),
+    report: () => ({
+      kind: kind === "speech" ? ("audio" as const) : ("file" as const),
+    }),
+    conformance: [{ name: kind, model: kind, input: { model: kind } }],
+  });
 }
 
 function emptyStream(): BundleStream {
   return {
     async *[Symbol.asyncIterator]() {},
-  }
+  };
 }
 
 function isBundleProviderMessage(
   value: unknown,
 ): value is BundleProviderMessage {
-  if (typeof value !== 'object' || value === null) return false
-  const record = value as { readonly role?: unknown; readonly text?: unknown }
+  if (typeof value !== "object" || value === null) return false;
+  const record = value as { readonly role?: unknown; readonly text?: unknown };
   return (
-    (record.role === 'system' ||
-      record.role === 'user' ||
-      record.role === 'assistant' ||
-      record.role === 'tool') &&
-    typeof record.text === 'string'
-  )
+    (record.role === "system" ||
+      record.role === "user" ||
+      record.role === "assistant" ||
+      record.role === "tool") &&
+    typeof record.text === "string"
+  );
 }

@@ -554,7 +554,7 @@ export function createSwarm(executor: AgentExecutor) {
         // Accumulate metered agent usage and call onCost.
         if (result.usage) {
           meteredAgentFacts.push({
-            text: "",
+            content: [],
             usage: result.usage,
             finishReason: undefined,
             responseId: undefined,

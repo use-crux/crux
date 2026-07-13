@@ -193,7 +193,7 @@ type RunListOptions struct {
 	// Cursor requests the page strictly after this opaque, server-issued
 	// cursor (see RunsPage/NextCursor) instead of Offset. Cursor pagination is
 	// stable across concurrent inserts; Offset is not and remains only for
-	// legacy/maintenance callers.
+	// maintenance and internal callers.
 	Cursor string
 	// IncludeExpensiveRollups asks list reads to scan span/event metric JSON.
 	// UI list endpoints leave this off; single-run detail reads remain exact.

@@ -17,6 +17,7 @@ import { registerStoreCompositeTests } from './store-composites'
 import { registerStoreRecordTests } from './store-records'
 import { registerStoreRetentionTests } from './store-retention'
 import type { RunStoreAdapterTestsOptions } from './store-types'
+import { registerDeferredRecoveryTests } from './store-deferred-recovery'
 
 export type { RunStoreAdapterTestsOptions } from './store-types'
 
@@ -29,5 +30,6 @@ export function runStoreAdapterTests<TStore extends RuntimeStoreAdapter>(
     registerStoreRetentionTests(options)
     registerStoreCompositeTests(options)
     registerStoreCoordinationTests(options)
+    registerDeferredRecoveryTests(options)
   })
 }

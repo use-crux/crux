@@ -90,8 +90,8 @@ func TestDirectClientProjectIndexIncludesStorageReadModel(t *testing.T) {
 	if components["recordStoreId"] != "storage.recordStore:records" {
 		t.Fatalf("components = %+v, want record store id", components)
 	}
-	if !apiStorageWarningsInclude(storage, "storage.workspace_blob_missing") {
-		t.Fatalf("storage = %+v, want workspace missing blob warning", storage)
+	if !apiStorageWarningsInclude(storage, "storage.workspace_asset_missing") {
+		t.Fatalf("storage = %+v, want workspace missing asset warning", storage)
 	}
 }
 
@@ -104,11 +104,22 @@ func findAPIDefinition(definitions []api.ProjectDefinition, id string) *api.Proj
 	return nil
 }
 
-func apiMapValue(t *testing.T, data map[string]any, key string) map[string]any {
+func apiMapValue(t *testing.T, data any, key string) map[string]any {
 	t.Helper()
-	nested, ok := data[key].(map[string]any)
+	var values map[string]any
+	switch value := data.(type) {
+	case json.RawMessage:
+		if err := json.Unmarshal(value, &values); err != nil {
+			t.Fatalf("decode API metadata: %v", err)
+		}
+	case map[string]any:
+		values = value
+	default:
+		t.Fatalf("metadata = %T, want JSON object", data)
+	}
+	nested, ok := values[key].(map[string]any)
 	if !ok {
-		t.Fatalf("%s = %+v, want object", key, data[key])
+		t.Fatalf("%s = %+v, want object", key, values[key])
 	}
 	return nested
 }

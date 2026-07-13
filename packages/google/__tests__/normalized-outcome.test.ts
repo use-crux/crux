@@ -9,7 +9,7 @@ import {
 } from '@use-crux/core/adapter/testing'
 import { createGoogle } from '../src'
 import { mapGoogleFinishReason } from '../src/response'
-import { createGoogleStreamCapture } from '../src/stream'
+import { createGoogleStreamCapture, googleStreamCompletion } from '../src/stream'
 import { googleBehavioralHarness } from './normalized-outcome-behavior-harness'
 
 const textPrompt = makePrompt({ id: 'google-normalized', prompt: 'Hi' })
@@ -55,13 +55,14 @@ describe('GoogleChatStream (unit)', () => {
     }
 
     const captured = createGoogleStreamCapture(chunks())
-    for await (const _ of captured) void _
+    const responses: GenerateContentResponse[] = []
+    for await (const response of captured) responses.push(response)
 
-    const meta = captured.finalMeta()
-    expect(meta.finishReason).toBe('tool-calls')
-    expect(meta.actualModelId).toBe('gemini-actual')
-    expect(meta.usage?.totalTokens).toBe(7)
-    expect(meta.toolCalls).toEqual([{ id: 'call_1', name: 'lookup', args: { q: 'x' } }])
+    const meta = await googleStreamCompletion(responses)
+    expect(meta?.finishReason).toBe('tool-calls')
+    expect(meta?.actualModelId).toBe('gemini-actual')
+    expect(meta?.usage?.totalTokens).toBe(7)
+    expect(meta?.toolCalls).toEqual([{ id: 'call_1', name: 'lookup', args: { q: 'x' } }])
   })
 })
 

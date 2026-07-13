@@ -142,12 +142,11 @@ export type {
 } from "./resolver/contract";
 export {
   workspace,
-  memoryWorkspaceBlobStore,
   workspaceToolNames,
   retrieverWorkspaceMountSource,
 } from "./workspace";
 export {
-  inMemoryBlobStore,
+  inMemoryAssetStore,
   inMemoryRecordStore,
   inMemoryStorage,
   inMemoryVectorStore,
@@ -161,9 +160,6 @@ export type {
   WorkspaceArtifactsQuery,
   WorkspaceArtifactStatus,
   WorkspaceAppendOptions,
-  WorkspaceBlobReadResult,
-  WorkspaceBlobRef,
-  WorkspaceBlobStore,
   WorkspaceConfig,
   WorkspaceContent,
   WorkspaceContextOptions,
@@ -216,11 +212,15 @@ export type {
   WorkspaceRetrieverMountSourceOptions,
 } from "./workspace";
 export type {
-  BlobReadResult,
-  BlobRef,
-  BlobStore,
+  Asset,
+  AssetInfo,
+  AssetPutOptions,
+  AssetRef,
+  AssetStore,
+  DataAsset,
   ExactFilter,
   JsonObject,
+  ProviderFileAsset,
   RecordEntry,
   RecordListOptions,
   RecordPage,
@@ -228,8 +228,10 @@ export type {
   RecordStoreCapabilities,
   RecordWrite,
   RecordWriteOptions,
+  StoredAsset,
   Storage,
   StorageErrorCode,
+  UrlAsset,
   VectorHit,
   VectorRecord,
   VectorSearchQuery,
@@ -239,6 +241,45 @@ export { createPrompts } from "./prompt";
 export type { PromptTree, PromptTreeResult } from "./prompt";
 export { tool } from "./tools/define-tool";
 export type { NamedToolDef, ToolConfig } from "./tools/types";
+export {
+  createNoTranscriptError,
+  assertAudioMediaType,
+  detectAudioMediaType,
+  isNoTranscriptError,
+  normalizeAudioSource,
+  validateTranscribeOptions,
+  validateAudioBytes,
+  validateTranscriptionResult,
+} from './transcription'
+export type {
+  AudioSource,
+  NativeTranscriptionResult,
+  NoTranscriptError,
+  Transcribe,
+  TranscribeCommonOptions,
+  TranscribeOptions,
+  TranscriptionResult,
+  TranscriptInterval,
+} from './transcription'
+export {
+  createGenerateSpeechResult,
+  validateGenerateSpeechOptions,
+} from './speech'
+export type {
+  GenerateSpeech,
+  GenerateSpeechOptions,
+  GenerateSpeechResult,
+} from './speech'
+
+// Request-scoped deferred work
+export { defer, CruxDeferError, DEFER_ERROR_CODES } from "./defer";
+export type {
+  Awaitable,
+  CruxDeferErrorCode,
+  DeferredCallback,
+  DeferredWorkRef,
+  DeferErrorInput,
+} from "./defer";
 
 // Configuration + runtime domain (runtime/config/plugin/hook surface)
 export { config } from "./runtime";
@@ -449,10 +490,7 @@ export {
   isGuardrail,
   GuardrailBlockedError,
 } from "./safety/guardrail";
-export type {
-  Guardrail,
-  GuardrailConfig,
-} from "./safety/guardrail";
+export type { Guardrail, GuardrailConfig } from "./safety/guardrail";
 
 // Constraint
 export { constraint, isConstraint } from "./safety/constraint";
@@ -552,20 +590,56 @@ export type {
   ToolChoice,
 } from "./generation";
 export { hasToolCall, maxSteps } from "./generation";
-export type { ContentPart, MessageContent } from "./types/content";
 export {
-  UnsupportedContentError,
+  createGeneratedImageResult,
+  isNoImageGeneratedError,
+  lowerImagePrompt,
+  validateGenerateImageOptions,
+} from "./generation";
+export type {
+  GenerateImage,
+  GenerateImageCommonOptions,
+  GenerateImageOptions,
+  GenerateImageResult,
+  GenerateImageResultFields,
+  ImagePrompt,
+  ImagePromptContent,
+  ImagePromptLoweringContext,
+  LoweredImagePrompt,
+  NativeGeneratedImage,
+  NoImageGeneratedError,
+} from "./generation";
+export type {
+  CompletedOperationResult,
+  OperationExecution,
+  OperationTimeout,
+} from "./completed-operation";
+export type {
+  AssistantContentPart,
+  ContentPart,
+  MediaSource,
+  MessageContent,
+  ReasoningPart,
+  ToolCallPart,
+} from "./types/content";
+export {
+  createInvalidMediaSourceError,
+  createMediaMaterializationError,
+  createUnsupportedCapabilityError,
   contentText,
-  filePart,
   hasMediaParts,
-  imagePart,
+  isInvalidMediaSourceError,
+  isMediaMaterializationError,
+  isUnsupportedCapabilityError,
   messageText,
   textPart,
 } from "./content";
 export type {
-  FilePartInput,
-  ImagePartInput,
-  UnsupportedContentErrorOptions,
+  InvalidMediaSourceError,
+  MediaMaterializationError,
+  MediaMaterializationReason,
+  UnsupportedCapabilityError,
+  UnsupportedCapabilityIssue,
 } from "./content";
 export type { TokenizerFn } from "./shared/tokenizer";
 
@@ -641,6 +715,7 @@ export type {
   StepPhase,
   Retriever,
   RetrieverHit,
+  RetrieverSource,
   RetrieveOptions,
   RetrieverMode,
   RetrievalInjectMode,
@@ -682,6 +757,7 @@ export type {
   CorpusSyncResult,
   CruxDocument,
   CruxChunk,
+  CruxSourceFacts,
   ChunkingOptions,
   Chunker,
   ChunkTransform,

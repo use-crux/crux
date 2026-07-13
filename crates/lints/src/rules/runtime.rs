@@ -5,14 +5,16 @@ use std::collections::BTreeMap;
 use serde_json::{Map, Value, json};
 
 use crate::builder::{StaticIndexLintBuilder, StaticIndexLintFindingInput, definition_evidence};
-use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding};
+use crate::facts::{StaticIndexDefinition, StaticIndexLintFinding, StaticIndexPatchFacts};
 use crate::helpers::metadata_value;
+use crate::rules::defer::defer_lint_findings;
 
 pub(crate) fn runtime_lint_findings(
     builder: &StaticIndexLintBuilder,
-    definitions: &[StaticIndexDefinition],
+    facts: &StaticIndexPatchFacts,
     runtime_configured: Option<bool>,
 ) -> Vec<StaticIndexLintFinding> {
+    let definitions = &facts.definitions;
     let targets = runtime_targets(definitions);
     let flows = definitions
         .iter()
@@ -28,6 +30,7 @@ pub(crate) fn runtime_lint_findings(
         runtime_configured,
     ));
     findings.extend(flow_runtime_usage_findings(builder, &flows));
+    findings.extend(defer_lint_findings(builder, facts, runtime_configured));
     findings
 }
 

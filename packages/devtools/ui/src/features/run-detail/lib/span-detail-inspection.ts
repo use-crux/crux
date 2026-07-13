@@ -67,6 +67,7 @@ export function classifyPrimitive(primitive: string | undefined): PrimitiveKind 
   if (primitive === 'run') return 'run'
   if (primitive === 'flow.suspension') return 'suspension'
   if (primitive.startsWith('generation.')) return 'generation'
+  if (primitive.startsWith('media.')) return 'operation'
   if (primitive.startsWith('agent.')) return 'agent'
   if (primitive.startsWith('tool.')) return 'tool'
   if (primitive.startsWith('memory.')) return 'memory'

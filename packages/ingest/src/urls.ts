@@ -1,6 +1,7 @@
 import { errorFromUnknown, failed, narrowIngestErrorCode, ok, sourceLoader } from './document'
 import { parseDocument } from './parsers'
 import type { IngestFormat, ParserOptions, SourceLoader } from './types'
+import { inferMediaFormat } from './media-format'
 
 export interface UrlSourceOptions extends ParserOptions {
   namespace: string
@@ -31,7 +32,8 @@ export function urlsSource(urls: string[], options: UrlsSourceOptions): SourceLo
 }
 
 async function loadUrlResult(url: string, options: UrlSourceOptions) {
-  const sourceId = options.sourceId ?? url
+  const sourceUrl = safeSourceUrl(url)
+  const sourceId = options.sourceId ?? sourceUrl
 
   try {
     if (!options.namespace.trim()) {
@@ -45,7 +47,7 @@ async function loadUrlResult(url: string, options: UrlSourceOptions) {
 
     const response = await fetchImpl(url)
     if (!response.ok) {
-      throw new Error(`Failed to fetch "${url}": ${response.status} ${response.statusText}`)
+      throw new Error(`Failed to fetch URL source: ${response.status} ${response.statusText}`)
     }
 
     const contentType = response.headers.get('content-type')?.toLowerCase() ?? ''
@@ -57,8 +59,12 @@ async function loadUrlResult(url: string, options: UrlSourceOptions) {
       bytes,
       format,
       metadata: {
-        sourceUrl: url,
+        sourceUrl,
         contentType,
+      },
+      source: {
+        url: sourceUrl,
+        ...(safeMediaType(contentType) ? { mediaType: safeMediaType(contentType) } : {}),
       },
       options,
     })
@@ -75,13 +81,29 @@ async function loadUrlResult(url: string, options: UrlSourceOptions) {
           ? String((error as { parser: unknown }).parser)
           : undefined,
       ),
-      metadata: { sourceUrl: url },
+      metadata: { sourceUrl },
     })
   }
 }
 
+function safeMediaType(value: string): string | undefined {
+  const mediaType = value.split(';', 1)[0]?.trim().toLowerCase()
+  return mediaType?.includes('/') ? mediaType : undefined
+}
+
+function safeSourceUrl(value: string): string {
+  const url = new URL(value)
+  url.username = ''
+  url.password = ''
+  url.search = ''
+  url.hash = ''
+  return url.href
+}
+
 function inferFormat(contentType: string, url: string, bytes: Uint8Array): IngestFormat {
   const lowerUrl = url.toLowerCase()
+  const media = inferMediaFormat({ extension: lowerUrl, contentType, bytes })
+  if (media !== 'unknown') return media
   if (
     contentType.includes('application/pdf') ||
     lowerUrl.endsWith('.pdf') ||

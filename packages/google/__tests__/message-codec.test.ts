@@ -1,173 +1,217 @@
-import { describe, expect, it } from 'vitest'
-import type { Content, GenerateContentResponse } from '@google/genai'
-import type { Message } from '@use-crux/core'
-import { transcriptCodecConformance } from '@use-crux/core/adapter/testing'
-import type { ToolResultEntry } from '@use-crux/core/adapter'
-import { fromMessages, googleTranscript, toMessages } from '../src/message-codec'
+import { describe, expect, it } from "vitest";
+import type { Content, GenerateContentResponse } from "@google/genai";
+import type { Message } from "@use-crux/core";
+import { transcriptCodecConformance } from "@use-crux/core/adapter/testing";
+import type { ToolResultEntry } from "@use-crux/core/adapter";
+import {
+  fromMessages,
+  googleTranscript,
+  toMessages,
+} from "../src/message-codec";
 
-describe('google transcript wire encoding', () => {
-  it('encodes assistant function calls and function responses to Google contents', () => {
+describe("google transcript wire encoding", () => {
+  it("encodes assistant function calls and function responses to Google contents", () => {
     const contents = fromMessages([
-      { role: 'system', content: 'Be terse.' },
-      { role: 'user', content: 'Weather in Paris?' },
+      { role: "system", content: "Be terse." },
+      { role: "user", content: "Weather in Paris?" },
       {
-        role: 'assistant',
-        content: 'Checking',
+        role: "assistant",
+        content: [
+          { type: "text", text: "Checking" },
+          {
+            type: "tool-call",
+            toolCallId: "call_1",
+            toolName: "weather",
+            input: { city: "Paris" },
+          },
+        ],
         metadata: {
-          toolCalls: [{ id: 'call_1', name: 'weather', args: { city: 'Paris' } }],
+          toolCalls: [
+            { id: "call_1", name: "weather", args: { city: "Paris" } },
+          ],
         },
       },
-      toolMessage('call_1', 'weather', '{"temp":18}', {
-        type: 'json',
+      toolMessage("call_1", "weather", '{"temp":18}', {
+        type: "json",
         value: { temp: 18 },
       }),
-    ])
+    ]);
 
     expect(contents).toEqual([
-      { role: 'user', parts: [{ text: 'Weather in Paris?' }] },
+      { role: "user", parts: [{ text: "Weather in Paris?" }] },
       {
-        role: 'model',
+        role: "model",
         parts: [
-          { text: 'Checking' },
+          { text: "Checking" },
           {
             functionCall: {
-              id: 'call_1',
-              name: 'weather',
-              args: { city: 'Paris' },
+              id: "call_1",
+              name: "weather",
+              args: { city: "Paris" },
             },
           },
         ],
       },
       {
-        role: 'user',
+        role: "user",
         parts: [
           {
             functionResponse: {
-              id: 'call_1',
-              name: 'weather',
+              id: "call_1",
+              name: "weather",
               response: { output: { temp: 18 } },
             },
           },
         ],
       },
-    ])
-  })
+    ]);
+  });
 
-  it('maps content tool outputs to Google function responses with media parts', () => {
+  it("maps content tool outputs to Google function responses with media parts", () => {
     const contents = fromMessages([
       {
-        role: 'tool',
-        content: 'fallback',
+        role: "tool",
+        content: "fallback",
         metadata: {
-          toolCallId: 'call-1',
-          toolName: 'renderImage',
+          toolCallId: "call-1",
+          toolName: "renderImage",
           modelOutput: {
-            type: 'content',
+            type: "content",
             value: [
-              { type: 'text', text: 'Rendered image' },
-              { type: 'image-data', data: 'base64-image', mediaType: 'image/png' },
+              { type: "text", text: "Rendered image" },
+              {
+                type: "image",
+                source: {
+                  type: "data",
+                  data: new Uint8Array([1]),
+                  mediaType: "image/png",
+                },
+                mediaType: "image/png",
+              },
             ],
           },
         },
       },
-    ])
+    ]);
 
     expect(contents[0]).toEqual({
-      role: 'user',
+      role: "user",
       parts: [
         {
           functionResponse: {
-            id: 'call-1',
-            name: 'renderImage',
-            response: { output: 'Rendered image\n[image image/png 9B sha256:164794222647]' },
-            parts: [{ inlineData: { data: 'base64-image', mimeType: 'image/png' } }],
+            id: "call-1",
+            name: "renderImage",
+            response: {
+              output:
+                "Rendered image\n[image image/png 1B sha256:4bf5122f3445]",
+            },
+            parts: [{ inlineData: { data: "AQ==", mimeType: "image/png" } }],
           },
         },
       ],
-    })
-  })
-})
+    });
+  });
+});
 
-describe('google transcript conformance', () => {
-  it('passes the native transcript codec laws through one fixture', () => {
+describe("google transcript conformance", () => {
+  it("passes the native transcript codec laws through one fixture", () => {
     const canonicalMessages: Message[] = [
-      { role: 'user', content: 'Weather in Paris?' },
+      { role: "user", content: "Weather in Paris?" },
       {
-        role: 'assistant',
-        content: 'Checking',
+        role: "assistant",
+        content: [
+          { type: "text", text: "Checking" },
+          {
+            type: "tool-call",
+            toolCallId: "call_1",
+            toolName: "weather",
+            input: { city: "Paris" },
+          },
+        ],
         metadata: {
-          toolCalls: [{ id: 'call_1', name: 'weather', args: { city: 'Paris' } }],
+          toolCalls: [
+            { id: "call_1", name: "weather", args: { city: "Paris" } },
+          ],
         },
       },
-      toolMessage('call_1', 'weather', '{"temp":18}', {
-        type: 'json',
+      toolMessage("call_1", "weather", '{"temp":18}', {
+        type: "json",
         value: { temp: 18 },
       }),
-    ]
+    ];
     const providerMessages: Content[] = [
-      { role: 'user', parts: [{ text: 'Weather in Paris?' }] },
+      { role: "user", parts: [{ text: "Weather in Paris?" }] },
       {
-        role: 'model',
+        role: "model",
         parts: [
-          { text: 'Checking' },
+          { text: "Checking" },
           {
             functionCall: {
-              id: 'call_1',
-              name: 'weather',
-              args: { city: 'Paris' },
+              id: "call_1",
+              name: "weather",
+              args: { city: "Paris" },
             },
           },
         ],
       },
       {
-        role: 'user',
+        role: "user",
         parts: [
           {
             functionResponse: {
-              id: 'call_1',
-              name: 'weather',
+              id: "call_1",
+              name: "weather",
               response: { output: { temp: 18 } },
             },
           },
         ],
       },
-    ]
+    ];
     const decodedMessages: Message[] = [
-      { role: 'user', content: 'Weather in Paris?' },
+      { role: "user", content: "Weather in Paris?" },
       canonicalMessages[1]!,
       {
-        role: 'tool',
+        role: "tool",
         content: '{"output":{"temp":18}}',
-        metadata: { toolCallId: 'call_1', toolName: 'weather' },
+        metadata: { toolCallId: "call_1", toolName: "weather" },
       },
-    ]
+    ];
     const assistant = {
-      text: 'Checking',
-      toolCalls: [{ id: 'call_1', name: 'weather', args: { city: 'Paris' } }],
-    }
+      text: "Checking",
+      content: [
+        { type: "text" as const, text: "Checking" },
+        {
+          type: "tool-call" as const,
+          toolCallId: "call_1",
+          toolName: "weather",
+          input: { city: "Paris" },
+        },
+      ],
+      toolCalls: [{ id: "call_1", name: "weather", args: { city: "Paris" } }],
+    };
     const toolResults: ToolResultEntry[] = [
       {
-        toolCallId: 'call_1',
-        name: 'weather',
+        toolCallId: "call_1",
+        name: "weather",
         output: { temp: 18 },
-        modelOutput: { type: 'json', value: { temp: 18 } },
+        modelOutput: { type: "json", value: { temp: 18 } },
         content: '{"temp":18}',
         outputSize: 11,
         modelOutputSize: 11,
       },
-    ]
+    ];
 
     expect(
       transcriptCodecConformance({
-        name: 'google transcript',
+        name: "google transcript",
         transcript: googleTranscript,
         canonicalMessages,
         providerMessages,
         decodedMessages,
-        rawAssistant: rawResponse('Checking', {
-          id: 'call_1',
-          name: 'weather',
-          args: { city: 'Paris' },
+        rawAssistant: rawResponse("Checking", {
+          id: "call_1",
+          name: "weather",
+          args: { city: "Paris" },
         }),
         assistant,
         appendHistory: [canonicalMessages[0]!],
@@ -176,12 +220,12 @@ describe('google transcript conformance', () => {
           canonicalMessages[0]!,
           canonicalMessages[1]!,
           {
-            role: 'tool',
+            role: "tool",
             content: '{"temp":18}',
             metadata: {
-              toolCallId: 'call_1',
-              toolName: 'weather',
-              modelOutput: { type: 'json', value: { temp: 18 } },
+              toolCallId: "call_1",
+              toolName: "weather",
+              modelOutput: { type: "json", value: { temp: 18 } },
             },
           },
         ],
@@ -190,40 +234,60 @@ describe('google transcript conformance', () => {
           toMessages: toMessages(providerMessages),
         },
       }),
-    ).toEqual([])
-  })
-})
+    ).toEqual([]);
+  });
+});
 
-describe('google transcript wire decoding', () => {
-  it('decodes every functionResponse part in a grouped tool-results content', () => {
+describe("google transcript wire decoding", () => {
+  it("decodes every functionResponse part in a grouped tool-results content", () => {
     const messages = toMessages([
       {
-        role: 'user',
+        role: "user",
         parts: [
-          { functionResponse: { id: 'call_1', name: 'weather', response: { output: { temp: 18 } } } },
-          { functionResponse: { id: 'call_2', name: 'calendar', response: { output: 'busy' } } },
+          {
+            functionResponse: {
+              id: "call_1",
+              name: "weather",
+              response: { output: { temp: 18 } },
+            },
+          },
+          {
+            functionResponse: {
+              id: "call_2",
+              name: "calendar",
+              response: { output: "busy" },
+            },
+          },
         ],
       },
-    ] satisfies Content[])
+    ] satisfies Content[]);
 
     expect(messages).toEqual([
-      { role: 'tool', content: '{"output":{"temp":18}}', metadata: { toolCallId: 'call_1', toolName: 'weather' } },
-      { role: 'tool', content: '{"output":"busy"}', metadata: { toolCallId: 'call_2', toolName: 'calendar' } },
-    ])
-  })
-})
+      {
+        role: "tool",
+        content: '{"output":{"temp":18}}',
+        metadata: { toolCallId: "call_1", toolName: "weather" },
+      },
+      {
+        role: "tool",
+        content: '{"output":"busy"}',
+        metadata: { toolCallId: "call_2", toolName: "calendar" },
+      },
+    ]);
+  });
+});
 
 function toolMessage(
   toolCallId: string,
   toolName: string,
   content: string,
-  modelOutput: NonNullable<ToolResultEntry['modelOutput']>,
+  modelOutput: NonNullable<ToolResultEntry["modelOutput"]>,
 ): Message {
   return {
-    role: 'tool',
+    role: "tool",
     content,
     metadata: { toolCallId, toolName, modelOutput },
-  }
+  };
 }
 
 function rawResponse(
@@ -233,5 +297,5 @@ function rawResponse(
   return {
     text,
     candidates: [{ content: { parts: [{ text }, { functionCall }] } }],
-  } as unknown as GenerateContentResponse
+  } as unknown as GenerateContentResponse;
 }

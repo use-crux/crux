@@ -7,20 +7,24 @@
  * @module
  */
 
-import { storage as createStorage } from '@use-crux/core/storage'
-import type { RecordStore, Storage, VectorStore } from '@use-crux/core/storage'
-import { STORE_DOC_COMPONENT_SPEC } from './store-doc'
-import type { ConvexCtxPort, ConvexMemoryStoreConfig } from './store'
-import { convexComponentDocumentPort } from './store'
-import { isConvexStoreDocumentComponent } from './store-document-component'
-import { createStoreDocRecordStore, createStoreDocVectorStore } from './store-doc'
-import { convexWorkspaceBlobStore, type ConvexWorkspaceBlobStoreConfig } from './workspace'
+import { storage as createStorage } from "@use-crux/core/storage";
+import type { RecordStore, Storage, VectorStore } from "@use-crux/core/storage";
+import { STORE_DOC_COMPONENT_SPEC } from "./store-doc";
+import type { ConvexCtxPort, ConvexMemoryStoreConfig } from "./store";
+import { convexComponentDocumentPort } from "./store";
+import { isConvexStoreDocumentComponent } from "./store-document-component";
+import {
+  createStoreDocRecordStore,
+  createStoreDocVectorStore,
+} from "./store-doc";
+import { convexAssetStore, type ConvexAssetStoreConfig } from "./workspace";
 
 /** Configuration for {@link convexStorage}. */
-export interface ConvexStorageConfig<TCtx extends ConvexCtxPort = ConvexCtxPort>
-  extends ConvexMemoryStoreConfig<TCtx> {
-  /** Optional Convex file-storage binding for blob payloads. */
-  readonly blobs?: ConvexWorkspaceBlobStoreConfig
+export interface ConvexStorageConfig<
+  TCtx extends ConvexCtxPort = ConvexCtxPort,
+> extends ConvexMemoryStoreConfig<TCtx> {
+  /** Optional Convex file-storage binding for asset payloads. */
+  readonly assets?: ConvexAssetStoreConfig;
 }
 
 /** Create a Convex-backed beta `RecordStore`. */
@@ -30,7 +34,7 @@ export function convexRecordStore<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   return createStoreDocRecordStore({
     now: config.now,
     io: documentPort(config),
-  })
+  });
 }
 
 /** Create a dense-only Convex-backed beta `VectorStore`. */
@@ -40,7 +44,7 @@ export function convexVectorStore<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   return createStoreDocVectorStore({
     now: config.now,
     io: documentPort(config),
-  })
+  });
 }
 
 /** Create a Convex-backed beta `Storage` bundle. */
@@ -50,14 +54,18 @@ export function convexStorage<TCtx extends ConvexCtxPort = ConvexCtxPort>(
   return createStorage({
     records: convexRecordStore(config),
     vectors: convexVectorStore(config),
-    ...(config.blobs ? { blobs: convexWorkspaceBlobStore(config.blobs) } : {}),
-  })
+    ...(config.assets ? { assets: convexAssetStore(config.assets) } : {}),
+  });
 }
 
-function documentPort<TCtx extends ConvexCtxPort>(config: ConvexMemoryStoreConfig<TCtx>) {
+function documentPort<TCtx extends ConvexCtxPort>(
+  config: ConvexMemoryStoreConfig<TCtx>,
+) {
   return isConvexStoreDocumentComponent(config.component)
     ? config.component.io(config.ctx, {
-        vectorIndexName: config.vectorIndexName ?? STORE_DOC_COMPONENT_SPEC.defaultVectorIndexName,
+        vectorIndexName:
+          config.vectorIndexName ??
+          STORE_DOC_COMPONENT_SPEC.defaultVectorIndexName,
       })
-    : convexComponentDocumentPort(config)
+    : convexComponentDocumentPort(config);
 }

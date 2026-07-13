@@ -1,0 +1,25 @@
+---
+title: DEFER_SCOPE_SEALED
+description: defer() registration happened after the invocation was sealed.
+---
+
+## What failed
+
+`defer()` was called after the invocation scope sealed registration (the host
+already finalized the logical outcome and handed drain control to the lifetime).
+
+## Why
+
+Sealing linearizes registration versus response commitment. Late registration
+would race the host response and bounds.
+
+## What still works
+
+Callbacks already registered continue to drain under host limits. Nested
+registrations during an active drain wave remain allowed until nesting/count
+limits close them.
+
+## Fix
+
+Register deferred work during the handler body (or nested callbacks while the
+drain wave is open), not after the response path has sealed the scope.

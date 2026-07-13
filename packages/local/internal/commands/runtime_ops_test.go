@@ -23,16 +23,6 @@ func TestRuntimeOperationCommandsRouteToWorker(t *testing.T) {
 		workID    string
 	}{
 		{
-			name:      "setup check",
-			args:      []string{"--json", "--cwd", root, "setup", "--check"},
-			operation: "setup-check",
-		},
-		{
-			name:      "setup apply",
-			args:      []string{"--json", "--cwd", root, "setup", "--apply"},
-			operation: "setup-apply",
-		},
-		{
 			name:      "status",
 			args:      []string{"--json", "--cwd", root, "status"},
 			operation: "status",
@@ -103,16 +93,16 @@ func TestRuntimeOperationCommandsRouteToWorker(t *testing.T) {
 	}
 }
 
-func TestRuntimeSetupRequiresExactlyOneMode(t *testing.T) {
+func TestRuntimeSetupIsNotACommand(t *testing.T) {
 	cmd := NewRuntimeCmd(&cli.Factory{})
 	cmd.SetArgs([]string{"setup"})
 
 	err := cmd.Execute()
 	if err == nil {
-		t.Fatal("crux runtime setup without a mode succeeded")
+		t.Fatal("crux runtime setup unexpectedly succeeded")
 	}
-	if !strings.Contains(err.Error(), "choose exactly one of --check or --apply") {
-		t.Fatalf("error = %q", err.Error())
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("error = %q, want unknown command", err.Error())
 	}
 }
 

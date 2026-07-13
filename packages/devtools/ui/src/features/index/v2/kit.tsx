@@ -12,6 +12,19 @@ import type { ReactNode } from "react";
 import type { ProjectIndexingStatus } from "@/types";
 import { T, toneColor, type Tone } from "./tokens";
 import { CatIcon, Icon } from "./icons";
+export {
+  dominantInjectState,
+  InjectStateBar,
+  InjectStateChip,
+  injectStateMeta,
+  INJECT_STATE,
+  INJECT_STATE_ORDER,
+} from "@/shared/components/InjectionState";
+export type {
+  InjectState,
+  InjectStateCounts,
+  InjectStateMeta,
+} from "@/shared/components/InjectionState";
 
 // ── families ─────────────────────────────────────────────────────────────────
 export type FamilyId =
@@ -22,7 +35,8 @@ export type FamilyId =
   | "routing"
   | "state"
   | "safety"
-  | "quality";
+  | "quality"
+  | "media";
 
 export interface FamilyDef {
   label: string;
@@ -75,6 +89,12 @@ export const INDEX_FAMILIES: Record<FamilyId, FamilyDef> = {
     tone: "gold",
     blurb: "How behaviour is measured — scorers, datasets, suites and evals.",
   },
+  media: {
+    label: "Media",
+    tone: "blue",
+    blurb:
+      "Authored multimodal operations and ingest sources — images, audio, video, documents, and derivation.",
+  },
 };
 
 export const INDEX_FAMILY_ORDER: FamilyId[] = [
@@ -86,6 +106,7 @@ export const INDEX_FAMILY_ORDER: FamilyId[] = [
   "state",
   "safety",
   "quality",
+  "media",
 ];
 
 // ── kinds ────────────────────────────────────────────────────────────────────
@@ -108,6 +129,11 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     family: "orchestration",
     glyph: "step",
     child: true,
+  },
+  "deferred-work": {
+    label: "Deferred work",
+    family: "orchestration",
+    glyph: "step",
   },
   "composition.parallel": {
     label: "Parallel",
@@ -235,8 +261,8 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     glyph: "search",
     child: true,
   },
-  "storage.blobStore": {
-    label: "Blob store",
+  "storage.assetStore": {
+    label: "Asset store",
     family: "state",
     glyph: "folder",
     child: true,
@@ -247,6 +273,16 @@ export const INDEX_KINDS: Record<string, KindDef> = {
     glyph: "layers",
   },
   "storage.scope": { label: "Storage scope", family: "state", glyph: "grid" },
+  "media.operation": {
+    label: "Media operation",
+    family: "media",
+    glyph: "doc",
+  },
+  "ingest.source": {
+    label: "Ingest source",
+    family: "media",
+    glyph: "layers",
+  },
   constraint: { label: "Constraint", family: "safety", glyph: "lock" },
   guardrail: { label: "Guardrail", family: "safety", glyph: "shield" },
   scorer: { label: "Scorer", family: "quality", glyph: "gauge" },
@@ -914,201 +950,6 @@ export function InjectTag({
       {showB && (
         <span style={{ color: T.fgFaint, fontWeight: 400 }}>· {branch}</span>
       )}
-    </span>
-  );
-}
-
-// ── injection resolution state (the shared, cross-plane vocabulary) ──────────
-// What a RUN did with an injectable at resolution time — the fifth status
-// vocabulary and the one shared *across* planes (the catalog Observed layer
-// and the run-level Context pane render it identically). Authored certainty
-// (`InjectTag`) stays distinct from this observed state:
-//   active   → contributed to the assembled context
-//   checked  → predicate false / branch not taken — NOT a drop (`checked ≠ dropped`)
-//   dropped  → lost the token budget at assembly time
-//   disabled → inline-disabled for this run
-//   unknown  → older / partial telemetry; state not recorded
-export type InjectState =
-  | "active"
-  | "checked"
-  | "dropped"
-  | "disabled"
-  | "unknown";
-
-export interface InjectStateMeta {
-  tone: Tone;
-  label: string;
-  /** Solid fill (active) vs hollow ring (everything quieter). */
-  solid: boolean;
-  blurb: string;
-}
-
-export const INJECT_STATE: Record<InjectState, InjectStateMeta> = {
-  active: {
-    tone: "ok",
-    label: "active",
-    solid: true,
-    blurb: "Contributed to the assembled context.",
-  },
-  checked: {
-    tone: "warn",
-    label: "checked · not included",
-    solid: false,
-    blurb:
-      "Evaluated but its predicate was false / branch not taken — not a drop.",
-  },
-  dropped: {
-    tone: "danger",
-    label: "dropped · budget",
-    solid: false,
-    blurb: "Lost the token budget at assembly time.",
-  },
-  disabled: {
-    tone: "muted",
-    label: "disabled",
-    solid: false,
-    blurb: "Inline-disabled for this run.",
-  },
-  unknown: {
-    tone: "muted",
-    label: "unknown",
-    solid: false,
-    blurb: "Older or partial telemetry — state not recorded.",
-  },
-};
-
-export type InjectStateCounts = Partial<Record<InjectState, number>>;
-
-export const INJECT_STATE_ORDER: InjectState[] = [
-  "active",
-  "checked",
-  "dropped",
-  "disabled",
-  "unknown",
-];
-
-export function injectStateMeta(s?: string): InjectStateMeta {
-  return INJECT_STATE[(s as InjectState) ?? "unknown"] ?? INJECT_STATE.unknown;
-}
-
-/** The dominant (mode) state of a distribution — the one the footnote leads with. */
-export function dominantInjectState(counts: InjectStateCounts): InjectState {
-  let best: InjectState = "unknown";
-  let bestN = -1;
-  for (const s of INJECT_STATE_ORDER) {
-    const n = counts[s] ?? 0;
-    if (n > bestN) {
-      bestN = n;
-      best = s;
-    }
-  }
-  return best;
-}
-
-/** One resolution-state chip — dot + label; saturated fill only for `active`. */
-export function InjectStateChip({
-  state,
-  count,
-  size = "sm",
-}: {
-  state: string;
-  count?: number;
-  size?: "xs" | "sm";
-}) {
-  const m = injectStateMeta(state);
-  const c = toneColor(T, m.tone);
-  const fs = size === "xs" ? 9.5 : 10.5;
-  return (
-    <span
-      title={m.blurb}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 5,
-        padding: size === "xs" ? "1px 6px" : "2px 8px",
-        borderRadius: 4,
-        whiteSpace: "nowrap",
-        fontFamily: T.mono,
-        fontSize: fs,
-        letterSpacing: "0.02em",
-        color: m.solid ? c.fg : T.fgMuted,
-        background: m.solid ? c.soft : "transparent",
-        boxShadow: `inset 0 0 0 1px ${m.solid ? c.line : T.border}`,
-      }}
-    >
-      {m.solid ? (
-        <span
-          style={{
-            width: 4,
-            height: 4,
-            borderRadius: 99,
-            background: c.fg,
-            flex: "0 0 auto",
-          }}
-        />
-      ) : (
-        <span
-          style={{
-            width: 4,
-            height: 4,
-            borderRadius: 99,
-            background: "transparent",
-            boxShadow: `inset 0 0 0 1.5px ${c.fg}`,
-            flex: "0 0 auto",
-          }}
-        />
-      )}
-      {m.label}
-      {count != null && (
-        <span style={{ color: T.fgFaint, fontWeight: 600 }}>· {count}</span>
-      )}
-    </span>
-  );
-}
-
-/** A one-source distribution — the same tones stacked into a magnitude bar. */
-export function InjectStateBar({
-  counts,
-  height = 6,
-}: {
-  counts: InjectStateCounts;
-  height?: number;
-}) {
-  const total = INJECT_STATE_ORDER.reduce((n, s) => n + (counts[s] ?? 0), 0);
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        width: "100%",
-        height,
-        borderRadius: 99,
-        overflow: "hidden",
-        background: T.bgSubtle,
-        boxShadow: `inset 0 0 0 1px ${T.border}`,
-      }}
-      title={INJECT_STATE_ORDER.filter((s) => counts[s])
-        .map((s) => `${injectStateMeta(s).label}: ${counts[s]}`)
-        .join(" · ")}
-    >
-      {total > 0 &&
-        INJECT_STATE_ORDER.map((s) => {
-          const n = counts[s] ?? 0;
-          if (!n) return null;
-          const m = INJECT_STATE[s];
-          const c = toneColor(T, m.tone);
-          return (
-            <span
-              key={s}
-              style={{
-                width: `${(n / total) * 100}%`,
-                height: "100%",
-                // keep the quiet states legible against the track without shouting
-                background: m.solid ? c.fg : c.soft,
-                boxShadow: m.solid ? "none" : `inset 0 0 0 1px ${c.line}`,
-              }}
-            />
-          );
-        })}
     </span>
   );
 }

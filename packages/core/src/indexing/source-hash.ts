@@ -39,7 +39,7 @@ export function computeSourceHashes(
   const stableMetadata = selectMetadataForHash(document.metadata ?? {}, options)
   const input = options?.hashDocument
     ? options.hashDocument(document, { normalizedContent, stableMetadata })
-    : { content: normalizedContent, metadata: stableMetadata }
+    : { content: normalizedContent, metadata: { ...stableMetadata, ...(document.source ? { source: document.source } : {}) } }
   const contentHash = stableHash(input.content)
   const metadataHash = stableHash(input.metadata ?? {})
   return {

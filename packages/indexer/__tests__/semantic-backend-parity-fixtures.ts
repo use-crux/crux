@@ -8,6 +8,8 @@ export interface SemanticBackendParityFixture {
   readonly name: string;
   /** Run outside the workspace so package imports intentionally stay unresolved. */
   readonly externalRoot?: boolean;
+  /** Workspace packages linked into the fixture for real public import resolution. */
+  readonly workspacePackages?: readonly string[];
   readonly files: Readonly<Record<string, string>>;
   readonly expect: {
     readonly definitionIds?: readonly string[];
@@ -20,7 +22,9 @@ export interface SemanticBackendParityFixture {
       Record<string, readonly string[]>
     >;
     /** Exact profile objects emitted on named routing children. */
-    readonly definitionProfiles?: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+    readonly definitionProfiles?: Readonly<
+      Record<string, Readonly<Record<string, unknown>>>
+    >;
     readonly relationTypes?: readonly string[];
     readonly sourceRefRoles?: readonly string[];
     readonly lintRuleIds?: readonly string[];
@@ -87,6 +91,96 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           "rag.retriever.uses_record_store",
         ],
         sourceRefRoles: ["config"],
+      },
+    },
+    {
+      name: "authored-media-shared-analyzer",
+      workspacePackages: ["ai", "core", "openai"],
+      files: {
+        "src/media.ts": `
+        import { generate, generateImage as image, transcribe } from '@use-crux/ai'
+        import { prompt, router } from '@use-crux/core'
+        import { createOpenAI } from '@use-crux/openai'
+        import type { ImageModel, LanguageModel, TranscriptionModel } from 'ai'
+        import type OpenAI from 'openai'
+
+        declare const client: OpenAI
+        declare const imageModel: ImageModel
+        declare const languageModel: LanguageModel
+        declare const transcriptionModel: TranscriptionModel
+        declare const audioBytes: Uint8Array
+        declare const dynamicMessages: Parameters<typeof generate>[1]['messages']
+        const openai = createOpenAI(client)
+        const render = image
+        const visionPrompt = prompt({ id: 'vision-prompt' })
+        const route = router({
+          id: 'vision-route',
+          classify: () => 'vision' as const,
+          routes: { vision: languageModel, default: languageModel },
+        })
+        const options = {
+          model: imageModel,
+          n: 2,
+          size: '1024x1024',
+        }
+        export const cover = render(options)
+        export const unsafe = openai.generate(visionPrompt, {
+          model: 'gpt-4o',
+          messages: [{ role: 'user', content: [{ type: 'image', source: {
+            type: 'provider-file', provider: 'google', fileId: 'private-file-id'
+          } }] }],
+        })
+        export const routed = generate(visionPrompt, {
+          model: route,
+          messages: [{ role: 'user', content: [{ type: 'image', source: {
+            type: 'asset-ref', ref: { uri: 'private-ref' }
+          } }] }],
+        })
+        export const transcript = transcribe({
+          model: transcriptionModel,
+          audio: audioBytes,
+          task: { type: 'translate', targetLanguage: 'SECRET_LANGUAGE' },
+        })
+        export const unknown = generate(visionPrompt, { model: route, messages: dynamicMessages })
+      `,
+      },
+      expect: {
+        definitionIds: [
+          "media.operation:cover",
+          "media.operation:routed",
+          "media.operation:transcript",
+          "media.operation:unsafe",
+        ],
+        definitionFacts: {
+          "media.operation:cover": {
+            kind: "media.operation",
+            operation: "generateImage",
+            outputModalities: ["image"],
+            adapter: "ai-sdk",
+            execution: "unknown",
+            authoredOptions: { n: 2, size: "1024x1024" },
+          },
+          "media.operation:unsafe": {
+            kind: "media.operation",
+            operation: "generate",
+            inputModalities: ["image"],
+            adapter: "openai",
+            model: "gpt-4o",
+          },
+          "media.operation:transcript": {
+            kind: "media.operation",
+            operation: "transcribe",
+            adapter: "ai-sdk",
+            authoredOptions: { task: "translate" },
+          },
+        },
+        relationTypes: ["media.uses_prompt", "media.uses_routing"],
+        sourceRefRoles: ["config"],
+        lintRuleIds: [
+          "media.invalid-provider-file",
+          "media.asset-ref-not-hydrated",
+          "media.output-discarded",
+        ],
       },
     },
     {
@@ -267,7 +361,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
       files: {
         "src/storage.ts": `
         import {
-          inMemoryBlobStore,
+          inMemoryAssetStore,
           inMemoryRecordStore,
           inMemoryVectorStore,
           storage,
@@ -275,15 +369,15 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
 
         export const recordsAlias = inMemoryRecordStore()
         export const vectors = inMemoryVectorStore()
-        export const blobs = inMemoryBlobStore()
-        const bundleParts = { records: recordsAlias, vectors, blobs }
+        export const assets = inMemoryAssetStore()
+        const bundleParts = { records: recordsAlias, vectors, assets }
         export const appStorage = storage(bundleParts)
-        export const inlineStorage = { records: recordsAlias, vectors, blobs }
+        export const inlineStorage = { records: recordsAlias, vectors, assets }
         export const tenantStorage = storage.scope(appStorage, 'tenant-a')
       `,
         "src/usage.ts": `
         import { retriever, workspace } from '@use-crux/core'
-        import { appStorage, blobs, recordsAlias as docsRecords, tenantStorage, vectors } from './storage'
+        import { appStorage, assets, recordsAlias as docsRecords, tenantStorage, vectors } from './storage'
 
         const retrieverConfig = {
           id: 'docs',
@@ -297,7 +391,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
           id: 'scratch',
           storage: appStorage,
           records: docsRecords,
-          blobs,
+          assets,
         }
         export const scratch = workspace(workspaceConfig)
       `,
@@ -306,7 +400,7 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         definitionIds: [
           "storage.recordStore:recordsAlias",
           "storage.vectorStore:vectors",
-          "storage.blobStore:blobs",
+          "storage.assetStore:assets",
           "storage.bundle:appStorage",
           "storage.bundle:inlineStorage",
           "storage.scope:tenantStorage",
@@ -316,14 +410,14 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         relationTypes: [
           "storage.bundle.uses_record_store",
           "storage.bundle.uses_vector_store",
-          "storage.bundle.uses_blob_store",
+          "storage.bundle.uses_asset_store",
           "storage.scope.wraps_storage",
           "rag.retriever.uses_storage",
           "rag.retriever.uses_record_store",
           "rag.retriever.uses_vector_store",
           "workspace.uses_storage",
           "workspace.uses_record_store",
-          "workspace.uses_blob_store",
+          "workspace.uses_asset_store",
         ],
         sourceRefRoles: ["config"],
       },
@@ -430,10 +524,10 @@ export const semanticBackendParityFixtures: readonly SemanticBackendParityFixtur
         sourceRefRoles: ["config"],
       },
     },
-  {
-    name: "routing-context-and-call-profile",
-    externalRoot: true,
-    files: {
+    {
+      name: "routing-context-and-call-profile",
+      externalRoot: true,
+      files: {
         "src/routing.ts": `
         import { prompt } from '@use-crux/core'
         import { router, split, type RouteArgs } from '@use-crux/core/routing'

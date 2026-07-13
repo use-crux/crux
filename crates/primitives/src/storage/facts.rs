@@ -179,7 +179,7 @@ fn bundle_relation_refs(refs: &StorageReferences) -> Vec<Value> {
 fn has_bundle_fields(config: &StaticSyntaxValue) -> bool {
     has_property(config, "records")
         || has_property(config, "vectors")
-        || has_property(config, "blobs")
+        || has_property(config, "assets")
 }
 
 fn string_value(value: &StaticSyntaxValue, context: &PrimitiveContext<'_>) -> Option<String> {

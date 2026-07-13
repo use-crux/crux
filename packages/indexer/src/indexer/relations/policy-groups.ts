@@ -552,3 +552,83 @@ export const routingTargetRelationPolicies = [
     runtimeJoin: true,
   },
 ] satisfies IndexRelationPolicy[];
+
+/** Compiler-owned authored-media relation vocabulary. */
+export const mediaRelationPolicies = [
+  {
+    type: "media.owner",
+    fromKinds: ["media.operation"],
+    toKinds: [],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: false,
+  },
+  {
+    type: "media.uses_prompt",
+    fromKinds: ["media.operation"],
+    toKinds: ["prompt"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: false,
+  },
+  {
+    type: "media.uses_routing",
+    fromKinds: ["media.operation"],
+    toKinds: [
+      "routing.router",
+      "routing.split",
+      "routing.retry",
+      "routing.cascade",
+      "routing.fallback",
+    ],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: false,
+  },
+  {
+    type: "media.derives_with",
+    fromKinds: ["ingest.source"],
+    toKinds: ["media.operation"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: false,
+  },
+  {
+    type: "media.targets_index",
+    fromKinds: ["ingest.source"],
+    toKinds: ["rag.knowledgeBase", "rag.pipeline"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: false,
+  },
+  {
+    type: "media.targets_corpus",
+    fromKinds: ["ingest.source"],
+    toKinds: ["rag.knowledgeBase"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: false,
+  },
+  {
+    type: "media.evaluation_target",
+    fromKinds: ["media.operation"],
+    toKinds: [
+      "evaluation",
+      "eval.prompt",
+      "eval.flow",
+      "eval.rag",
+      "eval.quality",
+    ],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: false,
+  },
+  {
+    type: "media.uses_storage",
+    fromKinds: ["media.operation"],
+    toKinds: ["storage.assetStore"],
+    presentation: "both",
+    partial: true,
+    runtimeJoin: false,
+  },
+] satisfies IndexRelationPolicy[];

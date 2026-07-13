@@ -1,202 +1,73 @@
 import { describe, expect, it } from 'vitest'
-import type { Content, GenerateContentResponse } from '@google/genai'
-import type { Message } from '@use-crux/core'
-import { transcriptRoundTripConformance } from '@use-crux/core/adapter/testing'
-import { fromMessages, googleTranscript } from '../src/message-codec'
+import type { GenerateContentResponse } from '@google/genai'
+import { fromMessages, googleTranscript, toMessages } from '../src/message-codec'
 
 describe('google multimodal transcript encoding', () => {
-  it('serializes canonical user image content to Google parts', () => {
-    const messages = fromMessages([
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: 'Inspect this chart.' },
-          { type: 'image-data', data: 'base64-chart', mediaType: 'image/png' },
-        ],
-      },
-    ])
-
-    expect(messages).toEqual([
+  it('serializes final image and PDF content parts to Google parts', () => {
+    expect(
+      fromMessages([
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Inspect this chart.' },
+            { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
+            { type: 'file', source: 'https://example.com/q2.pdf', mediaType: 'application/pdf', filename: 'q2.pdf' },
+          ],
+        },
+      ]),
+    ).toEqual([
       {
         role: 'user',
         parts: [
           { text: 'Inspect this chart.' },
-          { inlineData: { data: 'base64-chart', mimeType: 'image/png' } },
+          { inlineData: { data: 'AQID', mimeType: 'image/png' } },
+          { fileData: { fileUri: 'https://example.com/q2.pdf', mimeType: 'application/pdf', displayName: 'q2.pdf' } },
         ],
       },
     ])
   })
 
-  it('passes the shared multimodal transcript round-trip fixtures', () => {
-    const fixtures = [
-      {
-        name: 'image-data',
-        canonicalMessages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Inspect this chart.' },
-              { type: 'image-data', data: 'base64-chart', mediaType: 'image/png' },
-            ],
-          },
-        ],
-        providerMessages: [
-          {
-            role: 'user',
-            parts: [
-              { text: 'Inspect this chart.' },
-              { inlineData: { data: 'base64-chart', mimeType: 'image/png' } },
-            ],
-          },
-        ],
-        decodedMessages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Inspect this chart.' },
-              { type: 'image-data', data: 'base64-chart', mediaType: 'image/png' },
-            ],
-          },
-        ],
-      },
-      {
-        name: 'image-url',
-        canonicalMessages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Inspect this chart.' },
-              { type: 'image-url', url: 'https://example.com/chart.png', mediaType: 'image/png' },
-            ],
-          },
-        ],
-        providerMessages: [
-          {
-            role: 'user',
-            parts: [
-              { text: 'Inspect this chart.' },
-              { fileData: { fileUri: 'https://example.com/chart.png', mimeType: 'image/png' } },
-            ],
-          },
-        ],
-        decodedMessages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'text', text: 'Inspect this chart.' },
-              { type: 'file-url', url: 'https://example.com/chart.png', mediaType: 'image/png' },
-            ],
-          },
-        ],
-      },
-      {
-        name: 'pdf-file-data',
-        canonicalMessages: [
-          {
-            role: 'user',
-            content: [{ type: 'file-data', data: 'base64-pdf', mediaType: 'application/pdf', filename: 'q2.pdf' }],
-          },
-        ],
-        providerMessages: [
-          {
-            role: 'user',
-            parts: [{ inlineData: { data: 'base64-pdf', mimeType: 'application/pdf', displayName: 'q2.pdf' } }],
-          },
-        ],
-        decodedMessages: [
-          {
-            role: 'user',
-            content: [{ type: 'file-data', data: 'base64-pdf', mediaType: 'application/pdf', filename: 'q2.pdf' }],
-          },
-        ],
-      },
-      {
-        name: 'pdf-file-url',
-        canonicalMessages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'file-url', url: 'https://example.com/q2.pdf', mediaType: 'application/pdf', filename: 'q2.pdf' },
-            ],
-          },
-        ],
-        providerMessages: [
-          {
-            role: 'user',
-            parts: [
-              { fileData: { fileUri: 'https://example.com/q2.pdf', mimeType: 'application/pdf', displayName: 'q2.pdf' } },
-            ],
-          },
-        ],
-        decodedMessages: [
-          {
-            role: 'user',
-            content: [
-              { type: 'file-url', url: 'https://example.com/q2.pdf', mediaType: 'application/pdf', filename: 'q2.pdf' },
-            ],
-          },
-        ],
-      },
-      {
-        name: 'url-without-media-type-degrades',
-        canonicalMessages: [
-          { role: 'user', content: [{ type: 'file-url', url: 'https://example.com/q2.pdf', filename: 'q2.pdf' }] },
-        ],
-        providerMessages: [
-          {
-            role: 'user',
-            parts: [{ text: '[file "q2.pdf" https://example.com/q2.pdf]' }],
-          },
-        ],
-        decodedMessages: [{ role: 'user', content: '[file "q2.pdf" https://example.com/q2.pdf]' }],
-      },
-      {
-        name: 'system-role-media-degrades',
-        canonicalMessages: [
-          {
-            role: 'system',
-            content: [
-              { type: 'text', text: 'System text.' },
-              { type: 'image-data', data: 'base64-chart', mediaType: 'image/png' },
-            ],
-          },
-        ],
-        providerMessages: [],
-        decodedMessages: [],
-      },
-    ] satisfies Array<{
-      name: string
-      canonicalMessages: Message[]
-      providerMessages: Content[]
-      decodedMessages: Message[]
-    }>
-
+  it('lowers dedicated audio/video parts through native inline/file data parts', () => {
     expect(
-      transcriptRoundTripConformance({
-        name: 'google multimodal transcript',
-        transcript: googleTranscript,
-        fixtures,
-      }),
-    ).toEqual([])
+      fromMessages([
+        {
+          role: 'user',
+          content: [
+            { type: 'audio', source: new Uint8Array([1, 2, 3]), mediaType: 'audio/mpeg' },
+            { type: 'video', source: 'https://example.com/clip.mp4', mediaType: 'video/mp4' },
+          ],
+        },
+      ]),
+    ).toEqual([
+      {
+        role: 'user',
+        parts: [
+          { inlineData: { data: 'AQID', mimeType: 'audio/mpeg' } },
+          { fileData: { fileUri: 'https://example.com/clip.mp4', mimeType: 'video/mp4' } },
+        ],
+      },
+    ])
   })
 
-  it('throws before encoding when strict mode sees unsupported content', () => {
+  it('fails before provider I/O for media URLs without a media type', () => {
     expect(() =>
-      googleTranscript.fromMessages(
-        [{ role: 'user', content: [{ type: 'file-url', url: 'https://example.com/q2.pdf' }] }],
-        { unsupportedContent: 'error' },
-      ),
-    ).toThrow('google does not support file-url for user messages')
+      googleTranscript.fromMessages([
+        {
+          role: 'user',
+          content: [{ type: 'file', source: 'https://example.com/q2.pdf' }],
+        },
+      ]),
+    ).toThrow('No provider request was made.')
   })
 
-  it('reads assistant inline data into canonical assistant content', () => {
+  it('reads assistant inline data into final content parts', () => {
     const turn = googleTranscript.readAssistant({
       candidates: [
         {
           content: {
             parts: [
               { text: 'Here is the chart.' },
-              { inlineData: { data: 'base64-chart', mimeType: 'image/png' } },
+              { inlineData: { data: 'AQID', mimeType: 'image/png' } },
             ],
           },
         },
@@ -204,12 +75,51 @@ describe('google multimodal transcript encoding', () => {
     } as unknown as GenerateContentResponse)
 
     expect(turn).toEqual({
-      text: 'Here is the chart.\n[image image/png 9B sha256:f488d587b7cd]',
+      text: 'Here is the chart.\n[image image/png 3B sha256:039058c6f2c0]',
       content: [
         { type: 'text', text: 'Here is the chart.' },
-        { type: 'image-data', data: 'base64-chart', mediaType: 'image/png' },
+        { type: 'image', source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }, mediaType: 'image/png' },
       ],
       toolCalls: undefined,
     })
+  })
+
+  it('round-trips assistant media with opaque thought continuation fields', () => {
+    const wire = [
+      {
+        role: 'model',
+        parts: [
+          {
+            text: 'Internal thought',
+            thought: true,
+            thoughtSignature: 'signed-text-thought',
+          },
+          {
+            inlineData: { data: 'AQID', mimeType: 'image/png', displayName: 'chart.png' },
+            thought: true,
+            thoughtSignature: 'signed-media-thought',
+          },
+          {
+            fileData: {
+              fileUri: 'https://example.com/report.pdf',
+              mimeType: 'application/pdf',
+              displayName: 'report.pdf',
+            },
+            thoughtSignature: 'signed-file-thought',
+          },
+        ],
+      },
+    ]
+
+    const canonical = toMessages(wire)
+    expect(canonical[0]?.content).toEqual(expect.arrayContaining([
+      expect.objectContaining({ type: 'reasoning', text: 'Internal thought' }),
+    ]))
+    expect(fromMessages(canonical)).toEqual(wire)
+
+    const turn = googleTranscript.readAssistant({
+      candidates: [{ content: wire[0] }],
+    } as unknown as GenerateContentResponse)
+    expect(turn.text).not.toContain('Internal thought')
   })
 })

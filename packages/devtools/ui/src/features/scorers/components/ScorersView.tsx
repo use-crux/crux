@@ -17,7 +17,7 @@ import { useNavigation } from '@/app/navigation/useNavigation'
 import { useConnected } from '@/app/runtime/runtimeStore'
 import { SkeletonRows } from '@/shared/components/Skeleton'
 import { QEmpty, ScoreStat, timeAgo } from '@/qw/shell/qualityKit'
-import { JudgeReportPanel } from './JudgeReportPanel'
+import { JudgeReportPanel } from '@/shared/quality/JudgeReportPanel'
 
 export function ScorersView() {
   const { navigate } = useNavigation()

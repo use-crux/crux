@@ -12,6 +12,8 @@ import type {
   RuntimeWaiter,
   WorkId,
   WorkItem,
+  RuntimeDeferredIntent,
+  RuntimeDeferredScope,
 } from '@use-crux/core/runtime'
 
 const COMPOSITE_DATE_TAG = '_cruxRuntimeDate'
@@ -46,23 +48,31 @@ export function encodeWork(work: WorkItem): Record<string, unknown> {
 
 export function decodeWork(value: unknown): WorkItem {
   const record = objectRecord(value)
-  return Object.freeze(clean({
-    ...record,
-    workId: record.workId as WorkId,
-    notBefore: numberDate(record.notBefore),
-    lastError: decodeLastError(record.lastError),
-    createdAt: requiredDate(record.createdAt),
-    updatedAt: requiredDate(record.updatedAt),
-  }) as WorkItem)
+  return Object.freeze(
+    clean({
+      ...record,
+      workId: record.workId as WorkId,
+      notBefore: numberDate(record.notBefore),
+      lastError: decodeLastError(record.lastError),
+      createdAt: requiredDate(record.createdAt),
+      updatedAt: requiredDate(record.updatedAt),
+    }) as WorkItem,
+  )
 }
 
 export function encodeSnapshot(snapshot: object & { readonly updatedAt: Date }): Record<string, unknown> {
-  return clean({ ...snapshot, updatedAt: snapshot.updatedAt.getTime() })
+  return clean({
+    ...snapshot,
+    updatedAt: snapshot.updatedAt.getTime(),
+  })
 }
 
 export function decodeSnapshot<T>(value: unknown): T {
   const record = objectRecord(value)
-  return clean({ ...record, updatedAt: requiredDate(record.updatedAt) }) as T
+  return clean({
+    ...record,
+    updatedAt: requiredDate(record.updatedAt),
+  }) as T
 }
 
 export function encodeEvent(event: object): Record<string, unknown> {
@@ -82,7 +92,10 @@ export function decodeEvent(value: unknown): RuntimeEvent {
 
 export function decodeWaiter(value: unknown): RuntimeWaiter {
   const record = objectRecord(value)
-  return clean({ ...record, timeoutAt: numberDate(record.timeoutAt) }) as RuntimeWaiter
+  return clean({
+    ...record,
+    timeoutAt: numberDate(record.timeoutAt),
+  }) as RuntimeWaiter
 }
 
 export function encodeWaiter(waiter: NewRuntimeWaiter): Record<string, unknown> {
@@ -98,7 +111,10 @@ export function encodeTimer(timer: object & { readonly fireAt: Date }): Record<s
 
 export function decodeTimer(value: unknown): RuntimeTimerRecord {
   const record = objectRecord(value)
-  return clean({ ...record, fireAt: requiredDate(record.fireAt) }) as RuntimeTimerRecord
+  return clean({
+    ...record,
+    fireAt: requiredDate(record.fireAt),
+  }) as RuntimeTimerRecord
 }
 
 export function encodeOutboxDate(date: Date): number {
@@ -107,7 +123,10 @@ export function encodeOutboxDate(date: Date): number {
 
 export function decodeOutbox(value: unknown): RuntimeOutboxItem {
   const record = objectRecord(value)
-  return clean({ ...record, nextAttemptAt: requiredDate(record.nextAttemptAt) }) as RuntimeOutboxItem
+  return clean({
+    ...record,
+    nextAttemptAt: requiredDate(record.nextAttemptAt),
+  }) as RuntimeOutboxItem
 }
 
 export function encodeIdempotency(record: IdempotencyRecord): Record<string, unknown> {
@@ -117,11 +136,53 @@ export function encodeIdempotency(record: IdempotencyRecord): Record<string, unk
 export function decodeLease(value: unknown): Lease | null {
   if (value === null) return null
   const record = objectRecord(value)
-  return clean({ ...record, expiresAt: requiredDate(record.expiresAt) }) as Lease
+  return clean({
+    ...record,
+    expiresAt: requiredDate(record.expiresAt),
+  }) as Lease
 }
 
 export function encodeLease(lease: Lease): Record<string, unknown> {
   return clean({ ...lease, expiresAt: lease.expiresAt.getTime() })
+}
+
+export function encodeDeferredScope(scope: RuntimeDeferredScope): Record<string, unknown> {
+  return {
+    ...scope,
+    leaseExpiresAt: scope.leaseExpiresAt.getTime(),
+    finalization: encodeCompositeValue(scope.finalization),
+    finalizationState: scope.finalization.state,
+    createdAt: scope.createdAt.getTime(),
+    updatedAt: scope.updatedAt.getTime(),
+  }
+}
+
+export function decodeDeferredScope(value: unknown): RuntimeDeferredScope {
+  const record = objectRecord(value)
+  return Object.freeze({
+    ...record,
+    finalization: decodeCompositeValue(record.finalization),
+    leaseExpiresAt: requiredDate(record.leaseExpiresAt),
+    createdAt: requiredDate(record.createdAt),
+    updatedAt: requiredDate(record.updatedAt),
+  }) as RuntimeDeferredScope
+}
+
+export function encodeDeferredIntent(intent: RuntimeDeferredIntent): Record<string, unknown> {
+  return {
+    ...intent,
+    createdAt: intent.createdAt.getTime(),
+    updatedAt: intent.updatedAt.getTime(),
+  }
+}
+
+export function decodeDeferredIntent(value: unknown): RuntimeDeferredIntent {
+  const record = objectRecord(value)
+  return Object.freeze({
+    ...record,
+    createdAt: requiredDate(record.createdAt),
+    updatedAt: requiredDate(record.updatedAt),
+  }) as RuntimeDeferredIntent
 }
 
 export function encodeWakeEnvelope(envelope: WakeEnvelope): Record<string, unknown> {
@@ -140,10 +201,7 @@ export function encodeCompositeValue(value: unknown): unknown {
     return value
   }
   return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [
-      key,
-      encodeCompositeValue(entry),
-    ]),
+    Object.entries(value as Record<string, unknown>).map(([key, entry]) => [key, encodeCompositeValue(entry)]),
   )
 }
 
@@ -160,18 +218,10 @@ function decodeCompositeUnknown(value: unknown): unknown {
     return value
   }
   const record = value as Record<string, unknown>
-  if (
-    Object.keys(record).length === 1 &&
-    typeof record[COMPOSITE_DATE_TAG] === 'number'
-  ) {
+  if (Object.keys(record).length === 1 && typeof record[COMPOSITE_DATE_TAG] === 'number') {
     return new Date(record[COMPOSITE_DATE_TAG])
   }
-  return Object.fromEntries(
-    Object.entries(record).map(([key, entry]) => [
-      key,
-      decodeCompositeUnknown(entry),
-    ]),
-  )
+  return Object.fromEntries(Object.entries(record).map(([key, entry]) => [key, decodeCompositeUnknown(entry)]))
 }
 
 function decodeLastError(value: unknown): WorkItem['lastError'] {

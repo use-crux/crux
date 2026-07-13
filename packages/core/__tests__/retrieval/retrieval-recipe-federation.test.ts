@@ -11,7 +11,7 @@ function sourceHit(
 ): RetrieverHit {
   return {
     namespace,
-    sourceId: id.split('/')[0] ?? id,
+    source: { id: id.split('/')[0] ?? id },
     chunkId: id.split('/')[1] ?? '0',
     content,
     metadata,
@@ -50,14 +50,14 @@ describe('retrievalRecipe federation', () => {
 
     const { hits, trace } = await recipe.retrieveWithTrace('refund')
 
-    expect(hits.map((item) => `${item.sourceId}/${item.chunkId}`)).toEqual([
+    expect(hits.map((item) => `${item.source.id}/${item.chunkId}`)).toEqual([
       'shared/a',
       'primary-only/b',
       'secondary-only/c',
     ])
     expect(hits[0]).toMatchObject({
       namespace: 'docs',
-      sourceId: 'shared',
+      source: { id: 'shared' },
       chunkId: 'a',
       score: expect.any(Number),
       provenance: {
@@ -105,7 +105,7 @@ describe('retrievalRecipe federation', () => {
 
     const { hits, trace } = await recipe.retrieveWithTrace('refund')
 
-    expect(hits).toEqual([expect.objectContaining({ sourceId: 'stable', chunkId: 'a' })])
+    expect(hits).toEqual([expect.objectContaining({ source: { id: 'stable' }, chunkId: 'a' })])
     expect(trace.warnings).toEqual([
       'Retrieval source "broken-docs" failed and was skipped: vector store unavailable',
     ])

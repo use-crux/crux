@@ -11,6 +11,7 @@ const firstPartySemanticCallNames = [
   "createTool",
   "cruxFlow",
   "evaluate",
+  "defer",
   "fallback",
   "flow",
   "fromRegistry",

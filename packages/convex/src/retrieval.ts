@@ -64,6 +64,7 @@ export type {
   RetrieveRequest,
   Retriever,
   RetrieverHit,
+  RetrieverSource,
   RetrieverMode,
   RetrieverTools,
   ScopedKnowledgeBase,

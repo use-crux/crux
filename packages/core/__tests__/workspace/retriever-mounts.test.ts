@@ -11,12 +11,12 @@ describe("workspace retriever mounts", () => {
       retrieve: async () => [
         {
           namespace: "thread:1",
-          sourceId: "brief",
+          source: { id: "brief", path: "brief.md" },
           chunkId: "intro",
           content: "alpha needle",
           metadata: { title: "Brief" },
           score: 0.9,
-          sourcePath: "brief.md",
+
         },
       ],
     });
@@ -65,12 +65,12 @@ describe("workspace retriever mounts", () => {
       retrieve: async () => [
         {
           namespace: "thread:1",
-          sourceId: "brief",
+          source: { id: "brief", path: "brief.md" },
           chunkId: "intro",
           content: "direct source",
           metadata: {},
           score: 0.9,
-          sourcePath: "brief.md",
+
         },
       ],
     });
@@ -104,12 +104,12 @@ describe("workspace retriever mounts", () => {
         return [
           {
             namespace: "thread:1",
-            sourceId: "brief",
+            source: { id: "brief", path: "brief.md" },
             chunkId: "intro",
             content: "alpha needle\nbeta",
             metadata: {},
             score: 0.9,
-            sourcePath: "brief.md",
+
           },
         ];
       },
@@ -156,12 +156,12 @@ describe("workspace retriever mounts", () => {
       retrieve: async () => [
         {
           namespace: "thread:1",
-          sourceId: "brief",
+          source: { id: "brief", path: "brief.md" },
           chunkId: "intro",
           content: "leak",
           metadata: {},
           score: 0.9,
-          sourcePath: "brief.md",
+
         },
       ],
     });
@@ -194,21 +194,21 @@ describe("workspace retriever mounts", () => {
         return [
           {
             namespace: "thread:1",
-            sourceId: "outside",
+            source: { id: "outside", path: "outside/a.md" },
             chunkId: "intro",
             content: "outside",
             metadata: {},
             score: 0.9,
-            sourcePath: "outside/a.md",
+
           },
           {
             namespace: "thread:1",
-            sourceId: "allowed",
+            source: { id: "allowed", path: "allowed/b.md" },
             chunkId: "intro",
             content: "allowed",
             metadata: {},
             score: 0.8,
-            sourcePath: "allowed/b.md",
+
           },
         ];
       },
@@ -247,21 +247,21 @@ describe("workspace retriever mounts", () => {
         return [
           {
             namespace: "thread:1",
-            sourceId: "no-match",
+            source: { id: "no-match", path: "a.md" },
             chunkId: "intro",
             content: "alpha",
             metadata: {},
             score: 0.9,
-            sourcePath: "a.md",
+
           },
           {
             namespace: "thread:1",
-            sourceId: "match",
+            source: { id: "match", path: "b.md" },
             chunkId: "intro",
             content: "beta needle",
             metadata: {},
             score: 0.8,
-            sourcePath: "b.md",
+
           },
         ];
       },

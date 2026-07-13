@@ -1,49 +1,120 @@
-import { describe, expect, it, vi } from 'vitest'
-import { convexWorkspaceBlobStore } from '../src/workspace'
+import { describe, expect, it, vi } from "vitest";
+import { convexAssetStore } from "../src/workspace";
 
-describe('convexWorkspaceBlobStore', () => {
-  it('stores and reads blobs through ctx.storage', async () => {
-    const stored = new Map<string, Blob>()
+describe("convexAssetStore", () => {
+  it("stores and reads data assets through ctx.storage", async () => {
+    const stored = new Map<string, Blob>();
     const storage = {
       store: vi.fn(async (blob: Blob) => {
-        stored.set('blob-1', blob)
-        return 'blob-1'
+        stored.set("asset-1", blob);
+        return "asset-1";
       }),
       get: vi.fn(async (id: string) => stored.get(id) ?? null),
       delete: vi.fn(async (id: string) => {
-        stored.delete(id)
+        stored.delete(id);
       }),
-    }
+    };
 
-    const blobs = convexWorkspaceBlobStore({ ctx: { storage } })
-    const ref = await blobs.put({
-      key: 'research/thread:1/outputs/report.pdf',
-      content: new Uint8Array([1, 2, 3]),
-      mimeType: 'application/pdf',
-      metadata: { workspaceId: 'research' },
-    })
+    const assets = convexAssetStore({ ctx: { storage } });
+    const asset = await assets.put(
+      {
+        type: "data",
+        data: new Uint8Array([1, 2, 3]),
+        mediaType: "application/pdf",
+        size: 3,
+      },
+      {
+        key: "research/thread:1/outputs/report.pdf",
+        metadata: { workspaceId: "research" },
+      },
+    );
 
-    expect(ref).toEqual({ uri: 'convex://blob-1', size: 3 })
-    expect(storage.store).toHaveBeenCalledWith(expect.any(Blob))
-    await expect(stored.get('blob-1')?.arrayBuffer()).resolves.toEqual(new Uint8Array([1, 2, 3]).buffer)
-    await expect(blobs.get(ref.uri)).resolves.toMatchObject({
-      mimeType: 'application/pdf',
+    expect(asset).toMatchObject({
+      type: "data",
+      mediaType: "application/pdf",
       size: 3,
-    })
+      ref: { uri: "convex://asset-1" },
+    });
+    expect(storage.store).toHaveBeenCalledWith(expect.any(Blob));
+    await expect(stored.get("asset-1")?.arrayBuffer()).resolves.toEqual(
+      new Uint8Array([1, 2, 3]).buffer,
+    );
+    await expect(assets.get(asset.ref)).resolves.toMatchObject({
+      type: "data",
+      mediaType: "application/pdf",
+      size: 3,
+    });
 
-    await blobs.delete?.(ref.uri)
-    expect(storage.delete).toHaveBeenCalledWith('blob-1')
-  })
+    await assets.delete(asset.ref);
+    expect(storage.delete).toHaveBeenCalledWith("asset-1");
+  });
 
-  it('throws clearly when get is unavailable in the current Convex runtime', async () => {
-    const blobs = convexWorkspaceBlobStore({
+  it("throws clearly when get is unavailable in the current Convex runtime", async () => {
+    const assets = convexAssetStore({
       ctx: {
         storage: {
-          store: vi.fn(async () => 'blob-1'),
+          store: vi.fn(async () => "asset-1"),
         },
       },
-    })
+    });
 
-    await expect(blobs.get('convex://blob-1')).rejects.toThrow(/requires ctx.storage.get/i)
-  })
-})
+    await expect(assets.get({ uri: "convex://asset-1" })).rejects.toThrow(
+      /requires ctx.storage.get/i,
+    );
+  });
+
+  it("rejects invalid data asset facts before storing", async () => {
+    const storage = {
+      store: vi.fn(async () => "asset-1"),
+    };
+    const assets = convexAssetStore({ ctx: { storage } });
+
+    await expect(
+      assets.put({
+        type: "data",
+        data: new Uint8Array([1]),
+        mediaType: "text/plain",
+        size: -1,
+      }),
+    ).rejects.toMatchObject({ code: "invalid_value" });
+    expect(storage.store).not.toHaveBeenCalled();
+  });
+
+  it("rejects Blob mediaType mismatches before storing", async () => {
+    const storage = {
+      store: vi.fn(async () => "asset-1"),
+    };
+    const assets = convexAssetStore({ ctx: { storage } });
+
+    await expect(
+      assets.put({
+        type: "data",
+        data: new Blob(["hello"], { type: "text/html" }),
+        mediaType: "text/plain",
+      }),
+    ).rejects.toMatchObject({ code: "invalid_value" });
+    expect(storage.store).not.toHaveBeenCalled();
+  });
+
+  it("returns only allowlisted StoredAsset fields", async () => {
+    const storage = {
+      store: vi.fn(async () => "asset-1"),
+    };
+    const assets = convexAssetStore({ ctx: { storage } });
+    const stored = await assets.put({
+      type: "data",
+      data: new Uint8Array([1]),
+      mediaType: "text/plain; charset=utf-8",
+      size: 1,
+      extraProviderField: "secret",
+    } as never);
+
+    expect(stored).toEqual({
+      type: "data",
+      data: expect.any(Blob),
+      mediaType: "text/plain",
+      size: 1,
+      ref: { uri: "convex://asset-1" },
+    });
+  });
+});

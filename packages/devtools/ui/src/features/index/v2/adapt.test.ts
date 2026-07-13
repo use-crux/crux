@@ -34,4 +34,22 @@ describe('kindMeta', () => {
     expect(kindMeta('evaluation')).toMatchObject({ label: 'Evaluation', family: 'quality' })
     expect(kindMeta('evaluation.case')).toMatchObject({ label: 'Evaluation case', family: 'quality', child: true })
   })
+
+  it('registers deferred-work definitions under orchestration', () => {
+    expect(kindMeta('deferred-work')).toMatchObject({
+      label: 'Deferred work',
+      family: 'orchestration',
+    })
+  })
+
+  it('registers media.operation and ingest.source in the media family', () => {
+    expect(kindMeta('media.operation')).toMatchObject({
+      label: 'Media operation',
+      family: 'media',
+    })
+    expect(kindMeta('ingest.source')).toMatchObject({
+      label: 'Ingest source',
+      family: 'media',
+    })
+  })
 })

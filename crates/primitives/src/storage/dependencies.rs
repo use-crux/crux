@@ -10,7 +10,7 @@ pub(crate) struct StorageReferences {
     pub storage: Option<StorageReference>,
     pub records: Option<StorageReference>,
     pub vectors: Option<StorageReference>,
-    pub blobs: Option<StorageReference>,
+    pub assets: Option<StorageReference>,
 }
 
 #[derive(Clone)]
@@ -30,7 +30,7 @@ pub(crate) fn storage_config_references(
         storage: storage_reference_property(config, "storage", initializers),
         records: storage_reference_property(config, "records", initializers),
         vectors: storage_reference_property(config, "vectors", initializers),
-        blobs: storage_reference_property(config, "blobs", initializers),
+        assets: storage_reference_property(config, "assets", initializers),
     }
 }
 
@@ -60,8 +60,8 @@ pub(crate) fn storage_relation_refs(owner: &str, refs: &StorageReferences) -> Ve
     );
     push_relation(
         &mut references,
-        format!("{owner}.uses_blob_store"),
-        refs.blobs.as_ref(),
+        format!("{owner}.uses_asset_store"),
+        refs.assets.as_ref(),
     );
     references
 }
@@ -70,7 +70,7 @@ pub(crate) fn has_storage_references(refs: &StorageReferences) -> bool {
     refs.storage.is_some()
         || refs.records.is_some()
         || refs.vectors.is_some()
-        || refs.blobs.is_some()
+        || refs.assets.is_some()
 }
 
 pub(crate) fn storage_dependency_map(refs: &StorageReferences) -> Map<String, Value> {
@@ -78,7 +78,7 @@ pub(crate) fn storage_dependency_map(refs: &StorageReferences) -> Map<String, Va
     insert_dependency(&mut dependencies, "storage", refs.storage.as_ref());
     insert_dependency(&mut dependencies, "recordStores", refs.records.as_ref());
     insert_dependency(&mut dependencies, "vectorStores", refs.vectors.as_ref());
-    insert_dependency(&mut dependencies, "blobStores", refs.blobs.as_ref());
+    insert_dependency(&mut dependencies, "assetStores", refs.assets.as_ref());
     dependencies
 }
 
@@ -153,10 +153,10 @@ fn storage_fallback_id(relation_type: &str, name: &str) -> Option<String> {
         | "workspace.uses_vector_store" => {
             Some(format!("storage.vectorStore:{}", safe_reference_id(name)))
         }
-        "storage.bundle.uses_blob_store"
-        | "rag.retriever.uses_blob_store"
-        | "workspace.uses_blob_store" => {
-            Some(format!("storage.blobStore:{}", safe_reference_id(name)))
+        "storage.bundle.uses_asset_store"
+        | "rag.retriever.uses_asset_store"
+        | "workspace.uses_asset_store" => {
+            Some(format!("storage.assetStore:{}", safe_reference_id(name)))
         }
         "storage.scope.wraps_storage" | "rag.retriever.uses_storage" | "workspace.uses_storage" => {
             Some(format!("storage.bundle:{}", safe_reference_id(name)))

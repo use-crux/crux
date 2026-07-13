@@ -179,10 +179,10 @@ export async function providerRuntimeConformance<
         "text generation",
         `expected "plain response", got "${result.text}"`,
       );
-    if (result.steps < 1)
+    if (result.steps.length < 1)
       fail(
         "text generation",
-        `expected at least one step, got ${result.steps}`,
+        `expected at least one step, got ${result.steps.length}`,
       );
     if (!result._meta.finishReason)
       fail("text generation", "finishReason was not normalized");
@@ -363,10 +363,10 @@ export async function providerRuntimeConformance<
           `expected "tool complete", got "${result.text}"`,
         );
       }
-      if (result.steps < 2)
+      if (result.steps.length < 2)
         fail(
           "tool-call continuation",
-          `expected at least 2 steps, got ${result.steps}`,
+          `expected at least 2 steps, got ${result.steps.length}`,
         );
       if (!result.messages.some((message) => message.role === "tool")) {
         fail(
@@ -546,10 +546,10 @@ export async function providerRuntimeConformance<
           "observer stop directive",
           `expected one observed step, got ${observed}`,
         );
-      if (result.steps !== 1)
+      if (result.steps.length !== 1)
         fail(
           "observer stop directive",
-          `expected one step, got ${result.steps}`,
+          `expected one step, got ${result.steps.length}`,
         );
       if (result.text !== "stop here") {
         fail(

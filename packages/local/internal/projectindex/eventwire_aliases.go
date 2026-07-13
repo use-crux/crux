@@ -18,6 +18,7 @@ const (
 	ProjectIndexArtifactStaticRuleCheck              = eventwire.ProjectIndexArtifactStaticRuleCheck
 	ProjectIndexArtifactRuntimeArtifacts             = eventwire.ProjectIndexArtifactRuntimeArtifacts
 	ProjectIndexArtifactRuntimeOperation             = eventwire.ProjectIndexArtifactRuntimeOperation
+	ProjectIndexArtifactSetupOperation               = eventwire.ProjectIndexArtifactSetupOperation
 )
 
 type ProjectIndexArtifactStreamOptions = eventwire.ProjectIndexArtifactStreamOptions

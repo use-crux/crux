@@ -20,6 +20,7 @@ pub(crate) struct MatchContext<'a, 'b> {
     pub(crate) view: &'a SourceView<'a>,
     pub(crate) initializer_index: &'b SemanticInitializerIndex<'b>,
     pub(crate) scope_id: ScopeId,
+    pub(crate) root_scope_id: ScopeId,
     pub(crate) imports: &'b SemanticImportIndex<'b>,
     pub(crate) call_matcher: &'b CalleeMatcher,
     pub(crate) constructor_matcher: &'b CalleeMatcher,
@@ -46,6 +47,7 @@ pub(crate) fn match_from_declarator(
     match init {
         Expression::ObjectExpression(object) => Some(StaticSourceMatch::Object {
             variable_name: variable_name.clone(),
+            owner_variable_name: None,
             local_name: fallback_local_name(context.root, context.file, &variable_name),
             exported,
             object: object_value(context.view, object, context.imports),
@@ -78,7 +80,9 @@ pub(crate) fn call_match(
     StaticSourceMatch::Call {
         local_name: fallback_local_name(context.root, context.file, &variable_name),
         variable_name,
+        owner_variable_name: None,
         exported,
+        eager_execution: context.scope_id == context.root_scope_id,
         callee,
         args: call_args(context.view, &call.arguments, context.imports),
         object_arg: object_arg(
@@ -108,6 +112,7 @@ pub(crate) fn new_match(
     Some(StaticSourceMatch::New {
         local_name: fallback_local_name(context.root, context.file, &variable_name),
         variable_name,
+        owner_variable_name: None,
         exported,
         callee,
         args: call_args(context.view, &new_expression.arguments, context.imports),

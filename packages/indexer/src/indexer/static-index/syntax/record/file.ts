@@ -32,6 +32,7 @@ import {
   isStaticSyntaxRecordIntegrityError,
   type StaticSyntaxRecordIntegrityError,
 } from "./provided-frontend";
+import { withDeferredWorkContainment } from "./defer-containment";
 
 /** Input for the syntax-record-backed static fact parser. */
 export interface StaticRecordFactParseInput {
@@ -134,11 +135,10 @@ export async function parseStaticFactsFromSyntaxRecords(
     nativeFactProjection === "native-only"
       ? []
       : staticRecordRuntimePrepareFacts(record);
-  const facts = [
-    ...exported.facts,
-    ...discovered.facts,
-    ...runtimePrepareFacts,
-  ];
+  const facts = withDeferredWorkContainment(
+    [...exported.facts, ...discovered.facts, ...runtimePrepareFacts],
+    [...exported.found, ...discovered.found],
+  );
   const foundForPathProjection = [...exported.found, ...discovered.found];
   const pathDefinitions = await withStaticExtractionTiming(
     input.instrumentation,
@@ -175,8 +175,10 @@ export async function parseStaticFactsFromSyntaxRecords(
     ...facts.flatMap((fact) => fact.diagnostics ?? []),
   ];
   const dependencies = [
-      ...new Set([
-      ...record.imports.flatMap((item) => (item.importKind === 'type' ? [] : (item.resolvedFile ?? []))),
+    ...new Set([
+      ...record.imports.flatMap((item) =>
+        item.importKind === "type" ? [] : (item.resolvedFile ?? []),
+      ),
       ...facts.flatMap((fact) =>
         (fact.dependencies ?? [])
           .filter((dependency) => dependency.kind === "source-file")

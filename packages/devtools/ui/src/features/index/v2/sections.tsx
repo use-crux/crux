@@ -358,13 +358,17 @@ export function IndexQuality({ def }: { def: ViewDef }) {
   )
 }
 
-// ── OBSERVABILITY (exhaustive coverage: direct / contributor / quality-primary / no-runtime) ──
+// ── OBSERVABILITY (exhaustive coverage: direct / contributor / runtime-unjoined / quality-primary / no-runtime) ──
 function coverageNote(state: ReturnType<typeof describeCatalogCoverage>): string {
   switch (state.treatment) {
     case 'no-runtime':
       return state.coverage.primary === 'static-only'
         ? 'Static/declarative — never the target or subject of a runtime primitive.'
         : 'No runtime evidence path is defined for this kind.'
+    case 'runtime-unjoined': {
+      const primitives = state.coverage.runtimePrimitiveNames?.join(', ')
+      return `Runtime-observed${primitives ? ` via ${primitives}` : ''}, but these records do not carry this definition’s canonical Catalog ID. Per-definition counts and View Runs are unavailable.`
+    }
     case 'contributor':
       if (state.parentDerived) {
         return state.runCount > 0
@@ -395,7 +399,8 @@ export function IndexObservability({ def }: { def: ViewDef }) {
   const parentDefinitionId = idx.parentOf(def.id)
   const { activity: parentActivity } = useDefinitionActivity(parentDefinitionId)
   const state = describeCatalogCoverage(def.kind, activity, parentActivity)
-  const displayedActivity = state.parentDerived ? parentActivity : activity
+  const displayedActivity =
+    state.treatment === 'runtime-unjoined' ? undefined : state.parentDerived ? parentActivity : activity
   const runsDefinitionId = state.parentDerived ? parentDefinitionId : def.id
   const rjn = def.runtimeJoin
   const note = coverageNote(state)

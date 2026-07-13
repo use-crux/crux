@@ -1,15 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { inMemoryBlobStore, inMemoryRecordStore, storage } from "../../src/storage";
+import {
+  inMemoryAssetStore,
+  inMemoryRecordStore,
+  storage,
+} from "../../src/storage";
+import type { AssetStore, StoredAsset } from "../../src/storage";
 import { workspace } from "../../src/workspace";
 
 describe("workspace read round-trips", () => {
-  it("reads blob-backed text as text content", async () => {
+  it("reads asset-backed text as text content", async () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
       storage: storage({
         records: inMemoryRecordStore(),
-        blobs: inMemoryBlobStore(),
+        assets: inMemoryAssetStore(),
       }),
       content: { inlineTextBelowBytes: 10 },
     });
@@ -27,13 +32,13 @@ describe("workspace read round-trips", () => {
     });
   });
 
-  it("reads blob-backed JSON as parsed JSON content", async () => {
+  it("reads asset-backed JSON as parsed JSON content", async () => {
     const ws = workspace({
       id: "research",
       namespace: "thread:1",
       storage: storage({
         records: inMemoryRecordStore(),
-        blobs: inMemoryBlobStore(),
+        assets: inMemoryAssetStore(),
       }),
       content: { inlineTextBelowBytes: 10 },
     });
@@ -125,4 +130,120 @@ describe("workspace read round-trips", () => {
       truncated: true,
     });
   });
+
+  it("rejects unbounded stream writes before AssetStore.put()", async () => {
+    const assets = recordingAssetStore();
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({
+        records: inMemoryRecordStore(),
+        assets: assets.store,
+      }),
+    });
+
+    await expect(
+      ws.write(
+        "/outputs/stream.bin",
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(new Uint8Array([1, 2, 3]));
+            controller.close();
+          },
+        }),
+        { mimeType: "application/octet-stream" },
+      ),
+    ).rejects.toThrow(/limits\.maxFileBytes/i);
+    expect(assets.putCalls).toBe(0);
+  });
+
+  it("stores bounded streams through AssetStore and hydrates DataAsset reads", async () => {
+    const assets = inMemoryAssetStore();
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({
+        records: inMemoryRecordStore(),
+        assets,
+      }),
+      limits: { maxFileBytes: 8 },
+    });
+
+    await ws.write(
+      "/outputs/stream.bin",
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array([1, 2]));
+          controller.enqueue(new Uint8Array([3]));
+          controller.close();
+        },
+      }),
+      { mimeType: "application/octet-stream" },
+    );
+
+    await expect(ws.read("/outputs/stream.bin")).resolves.toMatchObject({
+      kind: "binary",
+      path: "/outputs/stream.bin",
+      mimeType: "application/octet-stream",
+      size: 3,
+    });
+  });
+
+  it("rejects workspace hydration from URL or provider-file AssetStore results", async () => {
+    const assets = urlHydratingAssetStore();
+    const ws = workspace({
+      id: "research",
+      namespace: "thread:1",
+      storage: storage({
+        records: inMemoryRecordStore(),
+        assets,
+      }),
+      content: { inlineTextBelowBytes: 2 },
+    });
+
+    await ws.write("/workspace/big.txt", "large text");
+
+    await expect(ws.read("/workspace/big.txt")).rejects.toThrow(
+      /requires a data asset/i,
+    );
+  });
 });
+
+function recordingAssetStore(): {
+  readonly store: AssetStore;
+  readonly putCalls: number;
+} {
+  const inner = inMemoryAssetStore();
+  let putCalls = 0;
+  return {
+    get putCalls() {
+      return putCalls;
+    },
+    store: Object.freeze({
+      put: async (asset, options) => {
+        putCalls += 1;
+        return inner.put(asset, options);
+      },
+      get: inner.get,
+      delete: inner.delete,
+    }),
+  };
+}
+
+function urlHydratingAssetStore(): AssetStore {
+  let stored: StoredAsset | undefined;
+  return Object.freeze({
+    put: async (asset, options) => {
+      stored = await inMemoryAssetStore().put(asset, options);
+      return stored;
+    },
+    get: async (ref) => ({
+      type: "url",
+      url: new URL("https://example.com/private-download"),
+      mediaType: stored?.mediaType,
+      size: stored?.size,
+      ref,
+    }),
+    delete: async () => undefined,
+  });
+}

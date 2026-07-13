@@ -208,7 +208,7 @@ export async function answer(question: string) {
 2. **Hybrid retrieval combines two strengths.** Dense embeddings catch semantic similarity, while sparse embeddings catch exact terms and rare keywords. RRF (Reciprocal Rank Fusion) merges those rankings without needing manual score normalization.
 3. **The recipe sharpens the final shortlist.** Retrieval gets candidate chunks. Recipe steps can rerank, expand parents, compress evidence, and produce a structured trace.
 4. **`grounding()` runs retrieval at prompt-resolve time.** Every call to `answer()` re-runs retrieval with the user's question, injects the allowed evidence, and contributes a citation constraint.
-5. **Structured citations are validated.** Each citation captures `sourceId`, `chunkId`, and optional quotes. Crux validates that cited chunks came from the retrieved hit set, and your UI can resolve them back to source URLs or paths via metadata.
+5. **Structured citations are validated.** Each citation captures `sourceId`, `chunkId`, and optional quotes. Crux validates that cited chunks came from the retrieved hit set, whose `source` contains the allowed URL/path attribution.
 6. **The indexing ledger explains sync behavior.** Each source record stores transform, chunking, cache, duration, and chunk-count records. In devtools, CLI/TUI, and OTel this is the difference between "RAG feels stale" and knowing exactly which source changed.
 
 ## Variations
@@ -226,7 +226,7 @@ await docsCorpus.sync(
 
 ### Citations as URLs
 
-If your docs come from URLs (`urlsSource`), `metadata.sourceUrl` is set automatically. Override the grounding renderer to format the evidence with clickable labels:
+If your docs come from URLs (`urlsSource`), the hit carries `source.url`. Override the grounding renderer to format the evidence with clickable labels:
 
 ```ts
 const urlGrounding = grounding({
@@ -237,7 +237,7 @@ const urlGrounding = grounding({
     hits
       .map(
         (hit, index) =>
-          `[${index + 1}] ${hit.parent?.title ?? hit.sourceId} - ${hit.metadata.sourceUrl ?? hit.chunkId}\n${hit.content}`,
+          `[${index + 1}] ${hit.parent?.title ?? hit.source.id} - ${hit.source.url ?? hit.chunkId}\n${hit.content}`,
       )
       .join('\n\n'),
   citations: {

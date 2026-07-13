@@ -851,14 +851,14 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
         requireCaptured('retrieval')
         const pass = signals.retrievalHits.some(
           (hit) =>
-            (m.sourceId === undefined || hit.sourceId === m.sourceId) &&
+            (m.sourceId === undefined || hit.source.id === m.sourceId) &&
             (m.chunkId === undefined || hit.chunkId === m.chunkId) &&
             (m.namespace === undefined || hit.namespace === m.namespace),
         )
         assertOn(
           'retrieval.toContainHit',
           pass,
-          `expected a retrieval hit matching ${preview(m)}; hits: ${preview(signals.retrievalHits.map((h) => h.sourceId))}`,
+          `expected a retrieval hit matching ${preview(m)}; hits: ${preview(signals.retrievalHits.map((h) => h.source.id))}`,
           m,
           undefined,
           { spanIds: spanIdsFromSignals(signals.retrievalHits) },
@@ -870,10 +870,10 @@ export function createRuntimeBoundExpect<TOutput, TCaps extends Capability>(
         const top = sorted[0]
         assertOn(
           'retrieval.toHaveTopHit',
-          top?.sourceId === m.sourceId,
-          `expected the top hit to come from '${m.sourceId}', got '${top?.sourceId ?? '(none)'}'`,
+          top?.source.id === m.sourceId,
+          `expected the top hit to come from '${m.sourceId}', got '${top?.source.id ?? '(none)'}'`,
           m.sourceId,
-          top?.sourceId,
+          top?.source.id,
           { spanIds: top === undefined ? [] : [top.spanId] },
         )
       },

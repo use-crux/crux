@@ -155,7 +155,7 @@ describe('Google adapter via adapter', () => {
 
     expect(executeSpy).toHaveBeenCalledWith({ q: 'test' }, expect.objectContaining({ toolCallId: 'tc_0' }))
     expect(result.text).toBe('final answer')
-    expect(result.steps).toBe(2)
+    expect(result.steps).toHaveLength(2)
   })
 
   it('has all composition methods', () => {

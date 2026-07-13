@@ -21,7 +21,7 @@ const mem = memory({
 });
 ```
 
-For general store APIs, TTL, adapters, subscriptions, and custom database implementations, use the [store reference](/docs/reference/crux-core/store). For vector search, use the [VectorStore guide](/docs/guides/storage/vector-store). For workspace files and generated binary outputs, use `BlobStore`, not memory storage.
+For general store APIs, TTL, adapters, subscriptions, and custom database implementations, use the [store reference](/docs/reference/crux-core/store). For vector search, use the [VectorStore guide](/docs/guides/storage/vector-store). For workspace files and generated binary outputs, use `AssetStore`, not memory storage.
 
 ## What Memory Stores
 
@@ -125,13 +125,13 @@ See [React reference](/docs/reference/react) for exact hook and transport APIs.
 
 For memory, choose storage based on the behavior you need:
 
-| Need                                  | Use                                                                      |
-| ------------------------------------- | ------------------------------------------------------------------------ |
-| Tests and examples                    | `inMemoryRecordStore()`                                                    |
-| Convex app state and reactivity       | `convexRecordStore()` or `convexStorage()`                               |
-| Redis-backed key-value records        | `upstashRedisRecordStore()` from `@use-crux/upstash`                     |
-| Dense vector recall                   | `upstashVectorStore()` with an Upstash Vector index                      |
-| Workspace files and generated outputs | `BlobStore`, not memory storage                                          |
+| Need                                  | Use                                                  |
+| ------------------------------------- | ---------------------------------------------------- |
+| Tests and examples                    | `inMemoryRecordStore()`                              |
+| Convex app state and reactivity       | `convexRecordStore()` or `convexStorage()`           |
+| Redis-backed key-value records        | `upstashRedisRecordStore()` from `@use-crux/upstash` |
+| Dense vector recall                   | `upstashVectorStore()` with an Upstash Vector index  |
+| Workspace files and generated outputs | `AssetStore`, not memory storage                     |
 
 ## Related
 

@@ -13,31 +13,31 @@ This recipe gives the model:
 - approval middleware for writes.
 
 ```ts
-import { approvalMiddleware, prompt } from '@use-crux/core'
-import { inMemoryStorage, storage } from '@use-crux/core/storage'
-import { workspace, workspaceToolNames } from '@use-crux/core/workspace'
+import { approvalMiddleware, prompt } from "@use-crux/core";
+import { inMemoryStorage, storage } from "@use-crux/core/storage";
+import { workspace, workspaceToolNames } from "@use-crux/core/workspace";
 
 const files = workspace({
-  id: 'case-files',
-  namespace: 'case:demo',
+  id: "case-files",
+  namespace: "case:demo",
   storage: inMemoryStorage(),
   tools: {
-    prefix: 'case',
+    prefix: "case",
   },
-})
+});
 
-const names = workspaceToolNames({ prefix: 'case' })
+const names = workspaceToolNames({ prefix: "case" });
 
 const writeApproval = approvalMiddleware({
-  id: 'approve-file-writes',
+  id: "approve-file-writes",
   match: [names.writeFile, names.editFile],
   onRequest: async ({ input }) => {
-    console.log('File write requested:', input)
+    console.log("File write requested:", input);
   },
-})
+});
 
 export const writer = prompt({
-  id: 'case-writer',
+  id: "case-writer",
   use: [files],
   middleware: [writeApproval],
   system: `
@@ -47,7 +47,7 @@ Use /workspace for notes.
 Write the final user-facing deliverable to /outputs.
 Read existing files before editing them.
   `,
-})
+});
 ```
 
 The injected tools are prefixed:
@@ -63,14 +63,14 @@ Delete is not injected unless you explicitly enable it:
 
 ```ts
 const files = workspace({
-  id: 'case-files',
-  namespace: 'case:demo',
-  storage: storage({ records, blobs }),
+  id: "case-files",
+  namespace: "case:demo",
+  storage: storage({ records, assets }),
   tools: {
-    prefix: 'case',
+    prefix: "case",
     delete: true,
   },
-})
+});
 ```
 
 ## Production Storage
@@ -78,21 +78,21 @@ const files = workspace({
 For production, replace the in-memory stores with durable adapters.
 
 ```ts
-import { convexRecordStore, convexWorkspaceBlobStore } from '@use-crux/convex'
-import { storage } from '@use-crux/core/storage'
-import { workspace } from '@use-crux/core/workspace'
+import { convexRecordStore, convexAssetStore } from "@use-crux/convex";
+import { storage } from "@use-crux/core/storage";
+import { workspace } from "@use-crux/core/workspace";
 
 const files = workspace({
-  id: 'thread-files',
+  id: "thread-files",
   namespace: threadId,
   storage: storage({
     records: convexRecordStore({ component: components.crux, ctx }),
-    blobs: convexWorkspaceBlobStore({ ctx }),
+    assets: convexAssetStore({ ctx }),
   }),
-})
+});
 ```
 
-`records` keeps file metadata and small inline text. `blobs` keeps binary and large files. See [Storage](/docs/guides/storage) and [BlobStore](/docs/guides/storage/blob-storage) for custom S3/R2/GCS-style blob stores.
+`records` keeps file metadata and small inline text. `assets` keeps binary and large files. See [Storage](/docs/guides/storage) and [AssetStore](/docs/guides/storage/asset-storage) for custom S3/R2/GCS-style asset stores.
 
 For source material that already lives in a retriever, MCP server, project
 index, connected drive, or app document service, use a source-backed mount

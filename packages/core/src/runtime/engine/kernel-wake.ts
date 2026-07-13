@@ -18,12 +18,13 @@ import {
   wakeEnvelopeForWork,
 } from './kernel-shared'
 import { putWorkWithIdleAccounting } from './kernel-idle'
-import {
-  isLeaseLostError,
-  startLeaseExtensionHeartbeat,
-} from './kernel-leases'
+import { isLeaseLostError, startLeaseExtensionHeartbeat } from './kernel-leases'
 import { completeWork, failWork } from './kernel-wake-commits'
 import type { RuntimeCompositeDeps, RuntimeCompositeRunner } from './composites'
+import {
+  executeWithNamedDeferEvidence,
+  flushNamedDeferEvidenceAfterCommit,
+} from './named-defer-evidence'
 import { transition } from './work'
 
 /** Dependencies for wake handling. */
@@ -141,7 +142,9 @@ export async function handleWake(
       },
     )
     try {
-      const outcome = await target.execute({ work: leased, lease })
+      const outcome = await executeWithNamedDeferEvidence(leased, () =>
+        target.execute({ work: leased, lease }),
+      )
       await completeWork({
         runComposite: deps.runComposite,
         work: leased,
@@ -151,12 +154,13 @@ export async function handleWake(
         now: deps.now,
         newWorkId: deps.newWorkId,
       })
+      await flushNamedDeferEvidenceAfterCommit(leased)
       return { status: 200, outcome: 'processed' }
     } catch (error) {
       if (isLeaseLostError(error)) {
         return { status: 200, outcome: 'lease-lost' }
       }
-      return await failWork({
+      const result = await failWork({
         runComposite: deps.runComposite,
         work: leased,
         leaseToken: lease.token,
@@ -165,6 +169,10 @@ export async function handleWake(
         newWorkId: deps.newWorkId,
         rng: deps.rng,
       })
+      if (result.outcome !== 'lease-lost') {
+        await flushNamedDeferEvidenceAfterCommit(leased)
+      }
+      return result
     } finally {
       heartbeat.stop()
     }

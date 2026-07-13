@@ -3,8 +3,8 @@ use serde_json::{Map, Value, json};
 use crate::{
     context::{CallParts, PrimitiveContext},
     definition::{NativeDefinitionInput, folded_index_child, safe_id, static_index_definition},
-    eval::catalog::evaluation_catalog_facts,
     eval::assertions::assertion_sites_from_source,
+    eval::catalog::evaluation_catalog_facts,
     protocol::{LiteralValue, StaticSyntaxValue},
     record_values::{
         direct_identifier, direct_string_property, object_array_value, property_value,

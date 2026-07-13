@@ -39,7 +39,7 @@ describe('Google transport', () => {
     })
 
     expect(result.text).toBe('done')
-    expect(result.steps).toBe(2)
+    expect(result.steps).toHaveLength(2)
     expect(calls).toHaveLength(2)
     expect(calls[0]).toMatchObject({ stepIndex: 0, modelId: 'gemini-transport' })
     expect(JSON.stringify(calls[0]!.params)).toContain('"echo"')

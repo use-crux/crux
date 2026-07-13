@@ -39,6 +39,8 @@ export interface ProjectIndexWorkerRequest {
   readonly runtimeWorkId?: string
   /** Include bounded work/timer/outbox rows in runtime status responses. */
   readonly runtimeIncludeDetails?: boolean
+  /** Aggregate setup mode requested by `crux setup`. */
+  readonly setupMode?: 'check' | 'apply'
   /** Native compiler protocol version supported by a manifest-loading caller. */
   readonly nativeCompilerProtocolVersion?: LoadStaticExtensionHostManifestInput['nativeCompilerProtocolVersion']
   /** Static Index evidence jobs forwarded to the TypeScript compatibility host. */
@@ -74,7 +76,8 @@ async function assembleProjectIndexWorkerRequest(
   req: ProjectIndexWorkerRequest,
 ): Promise<ProjectIndexWorkerRequest | undefined> {
   if (!req.requestKind) return req
-  if (!req.requestId) throw new Error('chunked project index worker request requires requestId')
+  if (!req.requestId)
+    throw new Error('chunked project index worker request requires requestId')
   switch (req.requestKind) {
     case 'start': {
       chunkedRequests.set(req.requestId, {
@@ -93,39 +96,60 @@ async function assembleProjectIndexWorkerRequest(
       return undefined
     }
     case 'previousIndex:definitions': {
-      const pendingRequest = requirePendingProjectIndexRequest(chunkedRequests, req.requestId)
+      const pendingRequest = requirePendingProjectIndexRequest(
+        chunkedRequests,
+        req.requestId,
+      )
       const previousIndex = pendingRequest.request.previousIndex
-      if (!previousIndex) throw new Error(`project index worker request ${req.requestId} has no previousIndex header`)
+      if (!previousIndex)
+        throw new Error(
+          `project index worker request ${req.requestId} has no previousIndex header`,
+        )
       chunkedRequests.set(req.requestId, {
         ...pendingRequest,
         request: {
           ...pendingRequest.request,
           previousIndex: {
             ...previousIndex,
-            definitions: [...previousIndex.definitions, ...(req.previousIndexDefinitions ?? [])],
+            definitions: [
+              ...previousIndex.definitions,
+              ...(req.previousIndexDefinitions ?? []),
+            ],
           },
         },
       })
       return undefined
     }
     case 'previousIndex:sources': {
-      const pendingRequest = requirePendingProjectIndexRequest(chunkedRequests, req.requestId)
+      const pendingRequest = requirePendingProjectIndexRequest(
+        chunkedRequests,
+        req.requestId,
+      )
       const previousIndex = pendingRequest.request.previousIndex
-      if (!previousIndex) throw new Error(`project index worker request ${req.requestId} has no previousIndex header`)
+      if (!previousIndex)
+        throw new Error(
+          `project index worker request ${req.requestId} has no previousIndex header`,
+        )
       chunkedRequests.set(req.requestId, {
         ...pendingRequest,
         request: {
           ...pendingRequest.request,
           previousIndex: {
             ...previousIndex,
-            sources: [...previousIndex.sources, ...(req.previousIndexSources ?? [])],
+            sources: [
+              ...previousIndex.sources,
+              ...(req.previousIndexSources ?? []),
+            ],
           },
         },
       })
       return undefined
     }
     case 'done': {
-      const completed = requirePendingProjectIndexRequest(chunkedRequests, req.requestId)
+      const completed = requirePendingProjectIndexRequest(
+        chunkedRequests,
+        req.requestId,
+      )
       chunkedRequests.delete(req.requestId)
       return completed.request
     }
@@ -137,6 +161,7 @@ function requirePendingProjectIndexRequest(
   requestId: string,
 ): PendingProjectIndexWorkerRequest {
   const pendingRequest = chunkedRequests.get(requestId)
-  if (!pendingRequest) throw new Error(`project index worker request ${requestId} did not start`)
+  if (!pendingRequest)
+    throw new Error(`project index worker request ${requestId} did not start`)
   return pendingRequest
 }

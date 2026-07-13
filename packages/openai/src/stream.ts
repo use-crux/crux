@@ -1,129 +1,204 @@
-import type { ChatCompletionChunk } from 'openai/resources/chat/completions'
-import type { TraceMeta } from '@use-crux/core'
+import type {
+  ChatCompletion,
+  ChatCompletionChunk,
+} from "openai/resources/chat/completions";
 import {
   classifyProviderHttpError,
   CruxAdapterError,
   cruxProviderError,
-} from '@use-crux/core/adapter'
-import { safeParseJson } from './message-codec'
-import { mapOpenAIFinishReason, openAIUsage, type OpenAIUsageShape } from './response'
+  type StreamCompletionMetadata,
+} from "@use-crux/core/adapter";
+import { openAITranscript } from "./message-codec";
+import { openAIResponseMeta } from "./response";
+import type { OpenAIChatRequest } from "./types";
 
 /** Extract a text delta from an OpenAI chat-completion stream chunk. */
 export function openAITextDelta(chunk: unknown): string | undefined {
-  if (!isRecord(chunk) || !Array.isArray(chunk.choices)) return undefined
-  const firstChoice = chunk.choices[0]
-  if (!isRecord(firstChoice) || !isRecord(firstChoice.delta)) return undefined
-  const content = firstChoice.delta.content
-  return typeof content === 'string' ? content : undefined
+  if (!isRecord(chunk) || !Array.isArray(chunk.choices)) return undefined;
+  const firstChoice = chunk.choices[0];
+  if (!isRecord(firstChoice) || !isRecord(firstChoice.delta)) return undefined;
+  const content = firstChoice.delta.content;
+  return typeof content === "string" ? content : undefined;
 }
 
 /** Compile-time alias used by native chat stream bindings. */
-export type OpenAIChatStreamChunk = ChatCompletionChunk
+export type OpenAIChatStreamChunk = ChatCompletionChunk;
 
-/**
- * Single-pass OpenAI stream wrapper that captures completion metadata.
- *
- * OpenAI's chat stream is single-pass and its usage/finish-reason arrive in the
- * final chunk (and tool-call arguments arrive as deltas across chunks), so we
- * capture them while the stream is consumed rather than re-reading it after the
- * fact. `finalMeta()` then reports normalized usage/finish-reason/model and the
- * fully assembled — never partial — tool calls. Iteration errors are surfaced
- * as normalized {@link CruxAdapterError}s instead of raw provider exceptions.
- */
+/** Stream wrapper that normalizes mid-stream provider iteration errors. */
 export class OpenAIChatStream implements AsyncIterable<ChatCompletionChunk> {
-  readonly #raw: AsyncIterable<ChatCompletionChunk>
-  #usage: OpenAIUsageShape | undefined
-  #finishReason: string | undefined
-  #model: string | undefined
-  #responseId: string | undefined
-  readonly #toolCalls = new Map<number, { id?: string; name?: string; args: string }>()
+  readonly #raw: AsyncIterable<ChatCompletionChunk>;
 
   constructor(raw: AsyncIterable<ChatCompletionChunk>) {
-    this.#raw = raw
+    this.#raw = raw;
   }
 
   async *[Symbol.asyncIterator](): AsyncIterator<ChatCompletionChunk> {
     try {
       for await (const chunk of this.#raw) {
-        this.#observe(chunk)
-        yield chunk
+        yield chunk;
       }
     } catch (error) {
       throw new CruxAdapterError(
-        classifyProviderHttpError(error, 'openai') ??
+        classifyProviderHttpError(error, "openai") ??
           cruxProviderError({
-            kind: 'provider-error',
-            code: 'openai.stream_failed',
+            kind: "provider-error",
+            code: "openai.stream_failed",
             retryable: true,
             message: error instanceof Error ? error.message : error,
           }),
         { cause: error },
-      )
+      );
     }
-  }
-
-  /** Normalized completion metadata assembled from the consumed stream. */
-  finalMeta(): TraceMeta {
-    const usage = openAIUsage(this.#usage)
-    const toolCalls = this.#assembleToolCalls()
-    return {
-      ...(usage !== undefined ? { usage } : {}),
-      finishReason: mapOpenAIFinishReason(this.#finishReason),
-      responseId: this.#responseId,
-      actualModelId: this.#model,
-      ...(toolCalls.length > 0 ? { toolCalls } : {}),
-    }
-  }
-
-  #observe(chunk: ChatCompletionChunk): void {
-    if (!isRecord(chunk)) return
-    if (typeof chunk.model === 'string') this.#model = chunk.model
-    if (typeof chunk.id === 'string') this.#responseId = chunk.id
-    if (isRecord(chunk.usage)) this.#usage = chunk.usage as unknown as OpenAIUsageShape
-    const choice = Array.isArray(chunk.choices) ? chunk.choices[0] : undefined
-    if (!isRecord(choice)) return
-    if (typeof choice.finish_reason === 'string') this.#finishReason = choice.finish_reason
-    const delta = choice.delta
-    if (isRecord(delta) && Array.isArray(delta.tool_calls)) {
-      this.#observeToolCallDeltas(delta.tool_calls)
-    }
-  }
-
-  #observeToolCallDeltas(deltas: readonly unknown[]): void {
-    for (const raw of deltas) {
-      if (!isRecord(raw) || typeof raw.index !== 'number') continue
-      const current = this.#toolCalls.get(raw.index) ?? { args: '' }
-      if (typeof raw.id === 'string') current.id = raw.id
-      const fn = raw.function
-      if (isRecord(fn)) {
-        if (typeof fn.name === 'string') current.name = fn.name
-        if (typeof fn.arguments === 'string') current.args += fn.arguments
-      }
-      this.#toolCalls.set(raw.index, current)
-    }
-  }
-
-  #assembleToolCalls(): Array<{ id: string; name: string; args: unknown }> {
-    const assembled: Array<{ id: string; name: string; args: unknown }> = []
-    for (const [index, call] of [...this.#toolCalls.entries()].sort((a, b) => a[0] - b[0])) {
-      if (call.name === undefined) continue
-      assembled.push({
-        id: call.id ?? `call_${index}`,
-        name: call.name,
-        args: safeParseJson(call.args),
-      })
-    }
-    return assembled
   }
 }
 
-/** Wrap a raw OpenAI chat stream so completion metadata can be captured single-pass. */
+/** Wrap a raw OpenAI chat stream so mid-stream errors are provider-normalized. */
 export function createOpenAIStreamCapture(
   raw: AsyncIterable<ChatCompletionChunk>,
 ): OpenAIChatStream {
-  return new OpenAIChatStream(raw)
+  return new OpenAIChatStream(raw);
+}
+
+/** Reconstruct exact completion facts from consumed OpenAI chat chunks. */
+export async function openAIStreamCompletion(
+  chunks: readonly unknown[],
+  request?: OpenAIChatRequest,
+): Promise<StreamCompletionMetadata | undefined> {
+  const values = chunks.filter(isChunk);
+  return completionMetadataFromChunks(values, request);
+}
+
+function completionMetadataFromChunks(
+  values: readonly ChatCompletionChunk[],
+  request?: OpenAIChatRequest,
+): StreamCompletionMetadata | undefined {
+  const last = values.at(-1);
+  if (!last) return undefined;
+  const lastChoice = lastStreamChoice(values);
+  const text = values.flatMap((chunk) => textDelta(chunk)).join("");
+  const refusal = values.flatMap((chunk) => refusalDelta(chunk)).join("");
+  const audioData = values.flatMap((chunk) => audioDelta(chunk)).join("");
+  const audioId = values
+    .map((chunk) => audioIdDelta(chunk))
+    .find((id) => id !== undefined);
+  const toolCalls = collectToolCalls(values);
+  const result = {
+    id: last.id,
+    object: "chat.completion",
+    created: last.created,
+    model: last.model,
+    choices: [
+      {
+        index: 0,
+        finish_reason: lastChoice?.finish_reason ?? null,
+        logprobs: null,
+        message: {
+          role: "assistant",
+          content: text || null,
+          refusal: refusal || null,
+          ...(audioData
+            ? {
+                audio: {
+                  data: audioData,
+                  transcript: text,
+                  ...(audioId ? { id: audioId } : {}),
+                },
+              }
+            : {}),
+          ...(toolCalls.length > 0 ? { tool_calls: toolCalls } : {}),
+        },
+      },
+    ],
+    ...(last.usage ? { usage: last.usage } : {}),
+  } as unknown as ChatCompletion;
+  const assistant = openAITranscript.readAssistant(result, { request });
+  const content =
+    typeof assistant.content === "string"
+      ? [{ type: "text" as const, text: assistant.content }]
+      : assistant.content;
+  return {
+    ...openAIResponseMeta(result),
+    text: assistant.text,
+    ...(content !== undefined ? { content } : {}),
+    ...(assistant.toolCalls !== undefined
+      ? { toolCalls: [...assistant.toolCalls] }
+      : {}),
+  };
+}
+
+function lastStreamChoice(
+  chunks: readonly ChatCompletionChunk[],
+): ChatCompletionChunk.Choice | undefined {
+  for (let index = chunks.length - 1; index >= 0; index -= 1) {
+    const choice = chunks[index]?.choices[0];
+    if (choice) return choice;
+  }
+  return undefined;
+}
+
+function textDelta(chunk: ChatCompletionChunk): string[] {
+  const value = chunk.choices[0]?.delta?.content;
+  return typeof value === "string" ? [value] : [];
+}
+
+function refusalDelta(chunk: ChatCompletionChunk): string[] {
+  const value = chunk.choices[0]?.delta?.refusal;
+  return typeof value === "string" ? [value] : [];
+}
+
+function audioDelta(chunk: ChatCompletionChunk): string[] {
+  const audio = (
+    chunk.choices[0]?.delta as
+      | { readonly audio?: { readonly data?: unknown } }
+      | undefined
+  )?.audio;
+  return typeof audio?.data === "string" ? [audio.data] : [];
+}
+
+function audioIdDelta(chunk: ChatCompletionChunk): string | undefined {
+  const audio = (
+    chunk.choices[0]?.delta as
+      | { readonly audio?: { readonly id?: unknown } }
+      | undefined
+  )?.audio;
+  return typeof audio?.id === "string" && audio.id !== ""
+    ? audio.id
+    : undefined;
+}
+
+function collectToolCalls(chunks: readonly ChatCompletionChunk[]) {
+  const calls = new Map<
+    number,
+    { id: string; name: string; arguments: string }
+  >();
+  for (const chunk of chunks) {
+    const deltas = chunk.choices[0]?.delta?.tool_calls ?? [];
+    for (const delta of deltas) {
+      const current = calls.get(delta.index) ?? {
+        id: "",
+        name: "",
+        arguments: "",
+      };
+      calls.set(delta.index, {
+        id: current.id + (delta.id ?? ""),
+        name: current.name + (delta.function?.name ?? ""),
+        arguments: current.arguments + (delta.function?.arguments ?? ""),
+      });
+    }
+  }
+  return [...calls.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, call]) => ({
+      id: call.id,
+      type: "function" as const,
+      function: { name: call.name, arguments: call.arguments },
+    }));
+}
+
+function isChunk(value: unknown): value is ChatCompletionChunk {
+  return isRecord(value) && Array.isArray(value.choices);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

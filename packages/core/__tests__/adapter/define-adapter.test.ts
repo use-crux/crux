@@ -18,6 +18,7 @@ import type {
 import type { Message } from "../../src/generation/messages";
 import type { GenerationSettings, TraceMeta } from "../../src/generation/types";
 import { CruxAdapterError } from "../../src/adapter/normalized-outcome";
+import { isInvalidMediaSourceError } from "../../src/content";
 import { hasToolCall } from "../../src/generation/tool-control";
 import { prompt as makePrompt } from "../../src/prompt/prompt";
 import { agent as makeAgent } from "../../src/agent";
@@ -215,6 +216,83 @@ describe("adapter", () => {
       expect(result.raw).toEqual({ id: "raw_123", content: "hello" });
     });
 
+    it("normalizes direct media message sources before provider calls", async () => {
+      const callSpy = vi.fn().mockResolvedValue({
+        raw: { id: "raw", content: "ok" },
+        extracted: createMockResponse("ok"),
+      });
+      const spec = createMockSpec({ call: callSpy });
+      const adapter = makeAdapter(spec)(mockClient);
+      const prompt = createTestPrompt();
+
+      await adapter.generate(prompt, {
+        model: "test-model",
+        input: { instruction: "Describe media" },
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Describe this." },
+              {
+                type: "image",
+                source: new Uint8Array([1, 2, 3]),
+                mediaType: "image/png",
+              },
+            ],
+          },
+        ],
+      });
+
+      const callArgs = callSpy.mock.calls[0]?.[1] as CallArgs;
+      expect(callArgs.messages[0]?.content).toMatchObject([
+        { type: "text", text: "Describe this." },
+        {
+          type: "image",
+          source: {
+            type: "data",
+            mediaType: "image/png",
+            size: 3,
+          },
+        },
+      ]);
+    });
+
+    it("rejects malformed media sources before provider calls", async () => {
+      const callSpy = vi.fn().mockResolvedValue({
+        raw: { id: "raw", content: "ok" },
+        extracted: createMockResponse("ok"),
+      });
+      const spec = createMockSpec({ call: callSpy });
+      const adapter = makeAdapter(spec)(mockClient);
+      const prompt = createTestPrompt();
+
+      await adapter
+        .generate(prompt, {
+          model: "test-model",
+          input: { instruction: "Describe media" },
+          messages: [
+            {
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: "AQIDBAUGBwg=",
+                  mediaType: "image/png",
+                },
+              ],
+            },
+          ],
+        })
+        .catch((error: unknown) => {
+          expect(isInvalidMediaSourceError(error)).toBe(true);
+          expect(error instanceof Error ? error.message : "").toContain(
+            "messages[0].content[0].source",
+          );
+        });
+
+      expect(callSpy).not.toHaveBeenCalled();
+    });
+
     it("rejects with a normalized timeout when a provider step exceeds stepMs", async () => {
       vi.useFakeTimers();
       const spec = createMockSpec({
@@ -351,7 +429,7 @@ describe("adapter", () => {
         input: { instruction: "Say hello" },
       });
 
-      expect(result.steps).toBe(1);
+      expect(result.steps).toHaveLength(1);
     });
 
     it("passes model to call args", async () => {
@@ -467,7 +545,7 @@ describe("adapter", () => {
       expect(callSpy).toHaveBeenCalledTimes(2);
       expect(appendSpy).toHaveBeenCalledOnce();
       expect(result.text).toBe("The weather in Paris is sunny.");
-      expect(result.steps).toBe(2);
+      expect(result.steps).toHaveLength(2);
     });
 
     it("applies prompt and call-site tool middleware before executing native adapter tools", async () => {
@@ -628,7 +706,7 @@ describe("adapter", () => {
       });
 
       expect(callSpy).toHaveBeenCalledTimes(3);
-      expect(result.steps).toBe(3);
+      expect(result.steps).toHaveLength(3);
     });
 
     it("stops after a matching tool call stop condition completes its round", async () => {
@@ -666,7 +744,7 @@ describe("adapter", () => {
 
       expect(callSpy).toHaveBeenCalledTimes(1);
       expect(executeTool).toHaveBeenCalledOnce();
-      expect(result.steps).toBe(1);
+      expect(result.steps).toHaveLength(1);
       expect(result._meta.stoppedBy).toEqual({
         kind: "hasToolCall",
         tool: "my_tool",
@@ -987,7 +1065,7 @@ describe("adapter", () => {
       });
 
       await adapter.parallel({
-        id: 'define-adapter.test-parallel-1',
+        id: "define-adapter.test-parallel-1",
         context: { instruction: "review" },
         agents: { reviewer },
         model: "test-model",

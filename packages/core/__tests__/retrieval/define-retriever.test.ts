@@ -96,7 +96,7 @@ describe('retriever', () => {
 
     expect(hits).toEqual([
       expect.objectContaining({
-        sourceId: 'guide.md',
+        source: { id: 'guide.md' },
         content: 'Alpha',
       }),
     ])
@@ -148,7 +148,7 @@ describe('retriever', () => {
     expect(hits).toEqual([
       {
         namespace: 'docs',
-        sourceId: 'doc-1',
+        source: { id: 'doc-1' },
         chunkId: '0',
         content: 'Launch checklist',
         metadata: { topic: 'launch' },
@@ -195,7 +195,7 @@ describe('retriever', () => {
         filter: expect.objectContaining({ namespace: 'docs' }),
       }),
     )
-    expect(hits[0].sourceId).toBe('doc-2')
+    expect(hits[0].source.id).toBe('doc-2')
   })
 
     it('asContext renders retrieved hits from a static query', async () => {
@@ -205,7 +205,7 @@ describe('retriever', () => {
       retrieve: async () => [
         {
           namespace: 'docs',
-          sourceId: 'doc-1',
+          source: { id: 'doc-1' },
           chunkId: '0',
           content: 'Release notes',
           metadata: {},
@@ -232,7 +232,7 @@ describe('retriever', () => {
       retrieve: async () => [
         {
           namespace: 'docs',
-          sourceId: 'doc-1',
+          source: { id: 'doc-1' },
           chunkId: '0',
           content: 'Release notes',
           metadata: {},
@@ -259,7 +259,7 @@ describe('retriever', () => {
     const retrieve = vi.fn(async (query: string) => [
       {
         namespace: 'docs',
-        sourceId: 'doc-3',
+        source: { id: 'doc-3' },
         chunkId: '2',
         content: `Result for ${query}`,
         metadata: {},
@@ -294,14 +294,14 @@ describe('retriever', () => {
     await expect(retriever.asContext().systemFn({})).rejects.toThrow('requires a query')
   })
 
-    it('supports a fully custom retriever', async () => {
+  it('supports a fully custom retriever', async () => {
     const retriever = makeRetriever({
       id: 'r1',
       namespace: 'docs',
       retrieve: async (query) => [
         {
           namespace: 'docs',
-          sourceId: 'custom-source',
+          source: { id: 'custom-source' },
           chunkId: 'custom-chunk',
           content: `custom:${query}`,
           metadata: { provider: 'custom' },
@@ -314,6 +314,19 @@ describe('retriever', () => {
     const hits = await retriever.retrieve('alpha')
 
     expect(hits[0].content).toBe('custom:alpha')
+  })
+
+  it('omits invalid custom source narrowing instead of guessing', async () => {
+    const retriever = makeRetriever({
+      id: 'custom',
+      namespace: 'docs',
+      retrieve: async () => [{
+        namespace: 'docs', source: { id: 'audio', location: { type: 'time', unit: 'seconds', start: 3, end: 2 } } as never,
+        chunkId: 'a', content: 'audio', metadata: {}, score: 1,
+      }],
+    })
+
+    await expect(retriever.retrieve('audio')).resolves.toMatchObject([{ source: { id: 'audio' } }])
   })
 
     it('retrieves sparse hits through vectors.search', async () => {
@@ -457,7 +470,7 @@ describe('retriever', () => {
     const hits = await retriever.retrieve('pricing')
 
     expect(hits).toHaveLength(1)
-    expect(hits[0].sourceId).toBe('pricing-doc')
+    expect(hits[0].source.id).toBe('pricing-doc')
     expect(hits[0].parent).toEqual({ title: 'Pricing' })
   })
 

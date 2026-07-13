@@ -12,7 +12,7 @@ import {
 function hit(id: string, content: string, score = 1): RetrieverHit {
   return {
     namespace: 'docs',
-    sourceId: id.split('/')[0] ?? id,
+    source: { id: id.split('/')[0] ?? id },
     chunkId: id.split('/')[1] ?? '0',
     content,
     metadata: {},
@@ -47,7 +47,7 @@ describe('retrieval reranking', () => {
       hits: [hit('a/1', 'Alpha setup', 0.3), hit('b/2', 'Billing policy', 0.7), hit('c/3', 'Contact page', 0.2)],
     })
 
-    expect(hits.map((item) => item.sourceId)).toEqual(['b', 'a', 'c'])
+    expect(hits.map((item) => item.source.id)).toEqual(['b', 'a', 'c'])
     expect(hits[0]).toMatchObject({
       score: 0.91,
       provenance: { rawScore: 0.7, rerankScore: 0.91 },
@@ -79,11 +79,11 @@ describe('retrieval reranking', () => {
 
     expect(engine.rerank).toHaveBeenCalledWith({
       query: 'billing',
-      hits: expect.arrayContaining([expect.objectContaining({ sourceId: 'a' })]),
+      hits: expect.arrayContaining([expect.objectContaining({ source: { id: 'a' } })]),
     })
     expect(hits).toEqual([
       expect.objectContaining({
-        sourceId: 'b',
+        source: { id: 'b' },
         score: 0.92,
         provenance: expect.objectContaining({ rawScore: 0.7, rerankScore: 0.92 }),
       }),

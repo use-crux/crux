@@ -8,8 +8,9 @@
  * only ever referenced by an owner's span, some are structurally nested
  * under a parent kind, some are Quality-owned artifacts correlated through a
  * separate existing join, and a few are genuinely static/declarative and
- * never runtime-observable at all. This manifest is the single source of
- * truth for which of those five treatments applies to each kind, so Catalog
+ * never runtime-observable at all. A final group is observable at runtime but
+ * cannot yet carry its authored Catalog identity. This manifest is the single
+ * source of truth for which treatment applies to each kind, so Catalog
  * and the Go join projection classify every kind identically instead of
  * re-deriving the rule per call site.
  *
@@ -31,6 +32,9 @@ import type { ProjectDefinitionKind } from "./index";
  *   Catalog shows a top-level row with a working "View Runs" action.
  * - `runtime-contributor` — referenced by an owner's span/artifacts, but
  *   never itself the subject of one; Catalog shows "referenced by N runs".
+ * - `runtime-observed-unjoined` — the kind emits its own runtime spans, but
+ *   those spans do not carry the authored definition id; Catalog explains the
+ *   missing join without fabricating per-definition activity.
  * - `structural-child` — nested under a parent kind for Catalog display,
  *   per the mechanical `<parent>.<child>` rule where `parent` is itself a
  *   `ProjectDefinitionKind` member.
@@ -43,6 +47,7 @@ import type { ProjectDefinitionKind } from "./index";
 export type DefinitionKindCoveragePrimary =
   | "directly-observed"
   | "runtime-contributor"
+  | "runtime-observed-unjoined"
   | "structural-child"
   | "quality-owned"
   | "static-only"
@@ -60,7 +65,9 @@ export type DefinitionKindCoveragePrimary =
  *   Quality↔observability join (e.g. `evaluation.case`/`suite.case`, whose
  *   primary treatment is `structural-child` per the mechanical parent rule).
  */
-export type DefinitionKindCoverageSecondary = "direct-runtime" | "quality-owned";
+export type DefinitionKindCoverageSecondary =
+  | "direct-runtime"
+  | "quality-owned";
 
 /** Coverage classification for a single `ProjectDefinitionKind`. */
 export interface CoverageDescriptor {
@@ -71,9 +78,10 @@ export interface CoverageDescriptor {
   /**
    * `CRUX_PRIMITIVE_NAMES` values that carry runtime evidence for this kind
    * — the kind's own span name(s) for `directly-observed`/`direct-runtime`
-   * treatments, or the primitive(s) that reference it for
-   * `runtime-contributor` treatments. Omitted (or empty) when the kind has
-   * no runtime primitive mapping at all.
+   * treatments, the primitive(s) that reference it for
+   * `runtime-contributor` treatments, or the kind-level spans for
+   * `runtime-observed-unjoined`. Omitted (or empty) when the kind has no
+   * runtime primitive mapping at all.
    */
   readonly runtimePrimitiveNames?: readonly CruxPrimitiveName[];
   /**
@@ -88,7 +96,11 @@ export interface CoverageDescriptor {
    * Directly-observed kinds implicitly use `definition-ref`; static/fallback
    * kinds implicitly use `none`.
    */
-  readonly runtimeIdentity?: "definition-ref" | "parent-derived" | "quality" | "none";
+  readonly runtimeIdentity?:
+    | "definition-ref"
+    | "parent-derived"
+    | "quality"
+    | "none";
 }
 
 /**
@@ -98,43 +110,111 @@ export interface CoverageDescriptor {
  */
 export const DEFINITION_KIND_COVERAGE = {
   // Category A — directly observed execution owner (24 kinds).
-  prompt: { primary: "directly-observed", runtimePrimitiveNames: ["prompt.resolve", "prompt.budget"] },
+  prompt: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["prompt.resolve", "prompt.budget"],
+  },
   context: {
     primary: "directly-observed",
-    runtimePrimitiveNames: ["context.resolve", "context.predicate", "context.cache"],
+    runtimePrimitiveNames: [
+      "context.resolve",
+      "context.predicate",
+      "context.cache",
+    ],
   },
-  tool: { primary: "directly-observed", runtimePrimitiveNames: ["tool.call", "tool.approval"] },
+  tool: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["tool.call", "tool.approval"],
+  },
   agent: { primary: "directly-observed", runtimePrimitiveNames: ["agent.run"] },
   flow: { primary: "directly-observed", runtimePrimitiveNames: ["flow.run"] },
-  task: { primary: "directly-observed", runtimePrimitiveNames: ["task.operation"] },
-  "composition.parallel": { primary: "directly-observed", runtimePrimitiveNames: ["composition.parallel"] },
-  "composition.pipeline": { primary: "directly-observed", runtimePrimitiveNames: ["composition.pipeline"] },
-  "composition.swarm": { primary: "directly-observed", runtimePrimitiveNames: ["composition.swarm"] },
-  "composition.consensus": { primary: "directly-observed", runtimePrimitiveNames: ["composition.consensus"] },
-  "routing.router": { primary: "directly-observed", runtimePrimitiveNames: ["routing.router"] },
-  "routing.split": { primary: "directly-observed", runtimePrimitiveNames: ["routing.split"] },
-  "routing.retry": { primary: "directly-observed", runtimePrimitiveNames: ["routing.retry"] },
-  "routing.cascade": { primary: "directly-observed", runtimePrimitiveNames: ["routing.cascade"] },
-  "routing.fallback": { primary: "directly-observed", runtimePrimitiveNames: ["routing.fallback"] },
-  "rag.recipe": { primary: "directly-observed", runtimePrimitiveNames: ["retrieval.recipe"] },
-  "rag.reranker": { primary: "directly-observed", runtimePrimitiveNames: ["retrieval.step"] },
+  task: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["task.operation"],
+  },
+  "composition.parallel": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["composition.parallel"],
+  },
+  "composition.pipeline": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["composition.pipeline"],
+  },
+  "composition.swarm": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["composition.swarm"],
+  },
+  "composition.consensus": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["composition.consensus"],
+  },
+  "routing.router": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["routing.router"],
+  },
+  "routing.split": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["routing.split"],
+  },
+  "routing.retry": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["routing.retry"],
+  },
+  "routing.cascade": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["routing.cascade"],
+  },
+  "routing.fallback": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["routing.fallback"],
+  },
+  "rag.recipe": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["retrieval.recipe"],
+  },
+  "rag.reranker": {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["retrieval.step"],
+  },
   "rag.retriever": {
     primary: "directly-observed",
     runtimePrimitiveNames: ["retrieval.retrieve", "retrieval.query"],
   },
-  skill: { primary: "directly-observed", runtimePrimitiveNames: ["skill.load"] },
-  memory: { primary: "directly-observed", runtimePrimitiveNames: ["memory.read", "memory.write"] },
-  workspace: { primary: "directly-observed", runtimePrimitiveNames: ["workspace.operation"] },
-  constraint: { primary: "directly-observed", runtimePrimitiveNames: ["constraint.check", "constraint.retry"] },
-  guardrail: { primary: "directly-observed", runtimePrimitiveNames: ["guardrail.run"] },
+  skill: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["skill.load"],
+  },
+  memory: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["memory.read", "memory.write"],
+  },
+  workspace: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["workspace.operation"],
+  },
+  constraint: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["constraint.check", "constraint.retry"],
+  },
+  guardrail: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["guardrail.run"],
+  },
   // Rides the generic memory primitives (no dedicated `blackboard.*` primitive exists);
   // `config.id` is required and in hand at every span (`blackboard.ts`), stamped as
   // `sourceDefinitionId: blackboard:<id>`.
-  blackboard: { primary: "directly-observed", runtimePrimitiveNames: ["memory.read", "memory.write"] },
+  blackboard: {
+    primary: "directly-observed",
+    runtimePrimitiveNames: ["memory.read", "memory.write"],
+  },
 
   // Category B — runtime contributor/dependency (6 kinds). Referenced by an
   // owner's span, never itself the subject of one.
-  injectable: { primary: "runtime-contributor", runtimeIdentity: "none", runtimePrimitiveNames: ["prompt.resolve", "context.resolve"] },
+  injectable: {
+    primary: "runtime-contributor",
+    runtimeIdentity: "none",
+    runtimePrimitiveNames: ["prompt.resolve", "context.resolve"],
+  },
   "rag.knowledgeBase": {
     primary: "runtime-contributor",
     runtimeIdentity: "definition-ref",
@@ -148,37 +228,124 @@ export const DEFINITION_KIND_COVERAGE = {
   "storage.vectorStore": {
     primary: "runtime-contributor",
     runtimeIdentity: "none",
-    runtimePrimitiveNames: ["embedding.call", "retrieval.retrieve", "retrieval.query"],
+    runtimePrimitiveNames: [
+      "embedding.call",
+      "retrieval.retrieve",
+      "retrieval.query",
+    ],
   },
-  "storage.blobStore": {
+  "storage.assetStore": {
     primary: "runtime-contributor",
     runtimeIdentity: "none",
     runtimePrimitiveNames: ["ingest.parse", "corpus.sync"],
   },
-  toolPolicy: { primary: "runtime-contributor", runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["tool.call", "tool.approval"] },
+  toolPolicy: {
+    primary: "runtime-contributor",
+    runtimeIdentity: "definition-ref",
+    runtimePrimitiveNames: ["tool.call", "tool.approval"],
+  },
 
-  // Category C — structural child (14 kinds; `evaluation.case`/`suite.case`
+  // Category C — runtime-observed without a canonical authored join (3
+  // kinds). Their primitives exist in Runs, but do not carry the Catalog
+  // definition id required for per-definition counts or View Runs.
+  "deferred-work": {
+    primary: "runtime-observed-unjoined",
+    runtimeIdentity: "none",
+    runtimePrimitiveNames: ["defer.scheduled", "defer.run"],
+  },
+  "media.operation": {
+    primary: "runtime-observed-unjoined",
+    runtimeIdentity: "none",
+    runtimePrimitiveNames: [
+      "generation.call",
+      "generation.stream",
+      "media.generate_image",
+      "media.transcribe",
+      "media.generate_speech",
+      "media.describe",
+    ],
+  },
+  "ingest.source": {
+    primary: "runtime-observed-unjoined",
+    runtimeIdentity: "none",
+    runtimePrimitiveNames: ["ingest.parse", "corpus.sync"],
+  },
+
+  // Category D — structural child (14 kinds; `evaluation.case`/`suite.case`
   // are also Quality-owned via `secondary`). Classified mechanically: a
   // `<parent>.<child>` kind whose `parent` is itself a union member.
-  "flow.step": { primary: "structural-child", runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["flow.step"] },
-  "composition.parallel.branch": { primary: "structural-child", runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["agent.run"] },
-  "composition.pipeline.stage": { primary: "structural-child", runtimeIdentity: "parent-derived" },
-  "routing.router.route": { primary: "structural-child", runtimeIdentity: "parent-derived" },
-  "routing.split.route": { primary: "structural-child", runtimeIdentity: "parent-derived" },
-  "routing.retry.target": { primary: "structural-child", runtimeIdentity: "parent-derived" },
-  "routing.cascade.tier": { primary: "structural-child", runtimeIdentity: "parent-derived" },
-  "routing.fallback.option": { primary: "structural-child", runtimeIdentity: "parent-derived" },
-  "rag.recipe.step": { primary: "structural-child", runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["retrieval.step"] },
-  "rag.pipeline.stage": { primary: "structural-child", runtimeIdentity: "none", runtimePrimitiveNames: ["retrieval.stage"] },
-  "memory.store": { primary: "structural-child", runtimeIdentity: "parent-derived" },
-  "memory.block": { primary: "structural-child", runtimeIdentity: "parent-derived" },
-  "evaluation.case": { primary: "structural-child", secondary: ["quality-owned"], runtimeIdentity: "quality" },
-  "suite.case": { primary: "structural-child", secondary: ["quality-owned"], runtimeIdentity: "quality" },
+  "flow.step": {
+    primary: "structural-child",
+    runtimeIdentity: "definition-ref",
+    runtimePrimitiveNames: ["flow.step"],
+  },
+  "composition.parallel.branch": {
+    primary: "structural-child",
+    runtimeIdentity: "definition-ref",
+    runtimePrimitiveNames: ["agent.run"],
+  },
+  "composition.pipeline.stage": {
+    primary: "structural-child",
+    runtimeIdentity: "parent-derived",
+  },
+  "routing.router.route": {
+    primary: "structural-child",
+    runtimeIdentity: "parent-derived",
+  },
+  "routing.split.route": {
+    primary: "structural-child",
+    runtimeIdentity: "parent-derived",
+  },
+  "routing.retry.target": {
+    primary: "structural-child",
+    runtimeIdentity: "parent-derived",
+  },
+  "routing.cascade.tier": {
+    primary: "structural-child",
+    runtimeIdentity: "parent-derived",
+  },
+  "routing.fallback.option": {
+    primary: "structural-child",
+    runtimeIdentity: "parent-derived",
+  },
+  "rag.recipe.step": {
+    primary: "structural-child",
+    runtimeIdentity: "definition-ref",
+    runtimePrimitiveNames: ["retrieval.step"],
+  },
+  "rag.pipeline.stage": {
+    primary: "structural-child",
+    runtimeIdentity: "none",
+    runtimePrimitiveNames: ["retrieval.stage"],
+  },
+  "memory.store": {
+    primary: "structural-child",
+    runtimeIdentity: "parent-derived",
+  },
+  "memory.block": {
+    primary: "structural-child",
+    runtimeIdentity: "parent-derived",
+  },
+  "evaluation.case": {
+    primary: "structural-child",
+    secondary: ["quality-owned"],
+    runtimeIdentity: "quality",
+  },
+  "suite.case": {
+    primary: "structural-child",
+    secondary: ["quality-owned"],
+    runtimeIdentity: "quality",
+  },
 
-  // Category D — Quality-owned artifact (10 kinds total; `evaluation.case`/
+  // Category E — Quality-owned artifact (10 kinds total; `evaluation.case`/
   // `suite.case` above account for the other 2). `scorer` is dual-use:
   // Quality-primary, but must not omit live `scoring.judge` spans.
-  scorer: { primary: "quality-owned", secondary: ["direct-runtime"], runtimeIdentity: "definition-ref", runtimePrimitiveNames: ["scoring.judge"] },
+  scorer: {
+    primary: "quality-owned",
+    secondary: ["direct-runtime"],
+    runtimeIdentity: "definition-ref",
+    runtimePrimitiveNames: ["scoring.judge"],
+  },
   dataset: { primary: "quality-owned" },
   evaluation: { primary: "quality-owned" },
   suite: { primary: "quality-owned" },
@@ -186,8 +353,7 @@ export const DEFINITION_KIND_COVERAGE = {
   "eval.flow": { primary: "quality-owned" },
   "eval.rag": { primary: "quality-owned" },
   "eval.quality": { primary: "quality-owned" },
-
-  // Category E — genuinely static-only (4 kinds). Declarative/config; never
+  // Category F — genuinely static-only (4 kinds). Declarative/config; never
   // the target or subject of any runtime primitive.
   registry: { primary: "static-only" },
   "storage.bundle": { primary: "static-only" },
@@ -202,7 +368,7 @@ export const DEFINITION_KIND_COVERAGE = {
   // `structural-child` classification independent of this.
   "rag.pipeline": { primary: "static-only" },
 
-  // Category F — fallback sentinel (1, not a real category).
+  // Category G — fallback sentinel (1, not a real category).
   unknown: { primary: "fallback" },
 } as const satisfies Record<ProjectDefinitionKind, CoverageDescriptor>;
 

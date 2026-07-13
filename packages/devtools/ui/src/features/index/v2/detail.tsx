@@ -22,6 +22,7 @@ import { IndexDiagnostics, IndexObservability, IndexProvenance, IndexQuality } f
 import { CatContributesSection, CatObservedSection } from './observed'
 import { IndexHealthSection } from './health'
 import { IndexStorage } from './storage-section'
+import { IndexMedia } from './media-section'
 
 // ── relations block (two columns, full width) ────────────────────────────────
 function CatRelations({ def }: { def: ViewDef }) {
@@ -122,6 +123,7 @@ const INDEX_SECTION_COMP: Record<string, ComponentType<{ def: ViewDef }>> = {
   data: IndexData,
   deps: IndexDependencies,
   storage: IndexStorage,
+  media: IndexMedia,
   // observed-injection layer (prompt/context) + injectable "Contributes";
   // each returns null without data, so they are inert for every other kind.
   observed: CatObservedSection,
@@ -174,6 +176,8 @@ function indexSectionOrder(def: ViewDef): string[] {
   if (k.startsWith('rag.'))
     return ['hero', 'config', 'deps', 'data', 'source', 'observability', 'quality', 'relations', 'health']
   if (k.startsWith('storage.')) return ['hero', 'storage', 'source', 'observability', 'relations', 'health']
+  if (k === 'media.operation' || k === 'ingest.source')
+    return ['hero', 'media', 'source', 'observability', 'relations', 'health']
   if (k.startsWith('eval.')) return ['hero', 'quality', 'config', 'source', 'relations', 'health']
   if (k === 'memory' || k === 'blackboard')
     return ['hero', 'config', 'contract', 'data', 'source', 'observability', 'relations', 'health']

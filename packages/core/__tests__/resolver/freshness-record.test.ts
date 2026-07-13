@@ -107,7 +107,7 @@ describe('resolver freshness record layer', () => {
       retrieve: async (): Promise<RetrieverHit[]> => [
         {
           namespace: 'kb',
-          sourceId: 'guide',
+          source: { id: 'guide' },
           chunkId: 'intro',
           content: 'Install Crux with pnpm.',
           score: 0.9,

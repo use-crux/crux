@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { confusionGrid, formatKappa, formatRate } from './judge-report-format'
+import { confusionGrid, formatKappa, formatRate } from '@/shared/quality/judge-report-format'
 
 describe('confusionGrid', () => {
   it('lays out TP, FP, FN, TN in reading order with agreement flags', () => {

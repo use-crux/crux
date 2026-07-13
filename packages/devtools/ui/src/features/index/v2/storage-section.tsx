@@ -74,9 +74,6 @@ function capabilityRows(summary: StorageReadModelSummary): Row[] {
   push('vector', 'fusion', caps.vector?.fusion)
   push('vector', 'filter', caps.vector?.filter)
   push('vector', 'consistency', caps.vector?.consistency)
-  push('blob', 'multipart', caps.blob?.multipart)
-  push('blob', 'signedUrls', caps.blob?.signedUrls)
-  push('blob', 'maxBytes', caps.blob?.maxBytes)
   return rows
 }
 
@@ -103,7 +100,7 @@ function ComponentLinks({ summary }: { summary: StorageReadModelSummary }) {
   const entries = [
     ['record', summary.components.recordStoreId],
     ['vector', summary.components.vectorStoreId],
-    ['blob', summary.components.blobStoreId],
+    ['asset', summary.components.assetStoreId],
     ['base', summary.components.storageId],
   ].filter((entry): entry is [string, string] => Boolean(entry[1]))
   if (!entries.length) return null

@@ -4,7 +4,7 @@
  * Consumes the compiler-owned `DEFINITION_KIND_COVERAGE` manifest
  * (`@use-crux/core/project-index`) plus the per-definition activity rollup
  * (`GET /api/observability/definitions/{id}/activity`) to decide which of
- * the four Catalog Observability treatments a definition gets. This is
+ * the five Catalog Observability treatments a definition gets. This is
  * deliberately not a hand-rolled switch over `ProjectDefinitionKind` — every
  * branch below reads `primary`/`secondary`/`runtimePrimitiveNames` off the
  * manifest, so a newly-added kind is classified correctly the moment its
@@ -21,7 +21,12 @@ export function coverageForKind(kind: string): CoverageDescriptor {
   return (DEFINITION_KIND_COVERAGE as Record<string, CoverageDescriptor | undefined>)[kind] ?? FALLBACK_COVERAGE
 }
 
-export type CatalogCoverageTreatment = 'direct-activity' | 'contributor' | 'quality-primary' | 'no-runtime'
+export type CatalogCoverageTreatment =
+  | 'direct-activity'
+  | 'contributor'
+  | 'runtime-unjoined'
+  | 'quality-primary'
+  | 'no-runtime'
 
 /** The Catalog Observability section's read model for one definition. */
 export interface CatalogCoverageState {
@@ -43,6 +48,10 @@ export interface CatalogCoverageState {
  *   identity path (`definition-ref` or `parent-derived`). Canonical refs may
  *   show "referenced by N runs"; parent-derived children report the parent's
  *   activity as not independently observed. Never a top-level run subject.
+ * - `runtime-unjoined` — the kind emits runtime spans, but those records do
+ *   not carry this authored definition's canonical id. Catalog reports the
+ *   available primitive family without inventing a definition-level count or
+ *   exposing a dead "View Runs" link.
  * - `quality-primary` — `quality-owned` kinds (correlates through the
  *   Quality↔observability join elsewhere on the page). When `secondary`
  *   declares `direct-runtime` (e.g. `scorer`), the activity rollup still
@@ -76,6 +85,10 @@ export function describeCatalogCoverage(
 
   if (coverage.primary === 'directly-observed') {
     return { treatment: 'direct-activity', coverage, runCount, hasRuntimeEvidence: runCount > 0, parentDerived: false }
+  }
+
+  if (coverage.primary === 'runtime-observed-unjoined') {
+    return { treatment: 'runtime-unjoined', coverage, runCount: 0, hasRuntimeEvidence: false, parentDerived: false }
   }
 
   if (coverage.runtimeIdentity === 'none') {

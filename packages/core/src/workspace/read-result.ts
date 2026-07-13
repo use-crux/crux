@@ -2,32 +2,32 @@
  * Workspace read-result hydration.
  *
  * Converts persisted file records into public read results, including
- * out-of-line text/blob hydration and byte-bounded text windows.
+ * out-of-line asset hydration and byte-bounded text windows.
  *
  * @module
  */
 
-import type { BlobContent } from "../storage";
+import type { AssetStore } from "../storage";
 import type { JsonValue } from "../types/tool";
+import { dataAssetText, requireStoredDataAsset } from "./asset-content";
 import { recordArtifactFields } from "./content";
 import { workspaceTextByteWindow } from "./text-window";
 import {
   DEFAULT_INLINE_TEXT_BYTES,
-  type WorkspaceBlobStore,
   type WorkspaceFileRecord,
   type WorkspaceReadResult,
 } from "./types";
 
 export interface RecordToReadResultOptions {
-  /** Blob store used to hydrate text and JSON records stored out-of-line. */
-  readonly blobs?: WorkspaceBlobStore;
+  /** Asset store used to hydrate records stored out-of-line. */
+  readonly assets?: AssetStore;
   /** Maximum text bytes to return inline before windowing. */
   readonly maxInlineBytes?: number;
   /** Byte offset for text windowing. */
   readonly offset?: number;
 }
 
-/** Convert a stored record into a {@link WorkspaceReadResult}, hydrating textual blobs when needed. */
+/** Convert a stored record into a {@link WorkspaceReadResult}, hydrating assets when needed. */
 export async function recordToReadResult(
   record: WorkspaceFileRecord,
   options: RecordToReadResultOptions = {},
@@ -53,31 +53,37 @@ export async function recordToReadResult(
       ...(record.metadata ? { metadata: record.metadata } : {}),
     };
   }
-  if (record.storage === "blob" && isTextMime(record.mimeType)) {
-    if (!record.uri) {
+  if (record.storage === "asset") {
+    if (!record.assetRef) {
       throw new Error(
-        `workspace file "${record.path}" has blob storage but no URI.`,
+        `workspace file "${record.path}" has asset storage but no ref.`,
       );
     }
-    if (!options.blobs) {
+    if (!options.assets) {
       throw new Error(
-        `workspace.read(): text blob "${record.path}" requires a WorkspaceBlobStore.`,
+        `workspace.read(): asset-backed file "${record.path}" requires an AssetStore.`,
       );
     }
-    const blob = await options.blobs.get(record.uri);
-    const text = await blobContentToText(blob.content);
-    if (record.mimeType === "application/json") {
-      return {
-        kind: "json",
-        path: record.path,
-        ...recordArtifactFields(record),
-        mimeType: "application/json",
-        content: JSON.parse(text) as JsonValue,
-        size: record.size,
-        ...(record.metadata ? { metadata: record.metadata } : {}),
-      };
+    const stored = requireStoredDataAsset(
+      await options.assets.get(record.assetRef),
+      record.path,
+    );
+    if (isTextMime(record.mimeType)) {
+      const text = await dataAssetText(stored);
+      if (record.mimeType === "application/json") {
+        return {
+          kind: "json",
+          path: record.path,
+          ...recordArtifactFields(record),
+          mimeType: "application/json",
+          content: JSON.parse(text) as JsonValue,
+          size: record.size,
+          ...(record.metadata ? { metadata: record.metadata } : {}),
+        };
+      }
+      return textReadResult(record, text, maxInlineBytes, options.offset);
     }
-    return textReadResult(record, text, maxInlineBytes, options.offset);
+    return binaryReference(record, stored);
   }
   return binaryReference(record);
 }
@@ -102,56 +108,26 @@ function textReadResult(
   };
 }
 
-async function blobContentToText(content: BlobContent): Promise<string> {
-  if (typeof content === "string") return content;
-  if (content instanceof Uint8Array) return new TextDecoder().decode(content);
-  if (isBlob(content)) return content.text();
-
-  const reader = content.getReader();
-  const chunks: Uint8Array[] = [];
-  let totalLength = 0;
-  try {
-    while (true) {
-      const read = await reader.read();
-      if (read.done) break;
-      chunks.push(read.value);
-      totalLength += read.value.byteLength;
-    }
-  } finally {
-    reader.releaseLock();
-  }
-
-  const merged = new Uint8Array(totalLength);
-  let offset = 0;
-  for (const chunk of chunks) {
-    merged.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return new TextDecoder().decode(merged);
-}
-
 function binaryReference(
   record: WorkspaceFileRecord,
+  stored?: Extract<Awaited<ReturnType<AssetStore["get"]>>, { type: "data" }>,
 ): Extract<WorkspaceReadResult, { kind: "binary" }> {
-  if (!record.uri) {
+  const uri = stored?.ref.uri ?? record.assetRef?.uri;
+  if (!uri) {
     throw new Error(
-      `workspace file "${record.path}" has blob storage but no URI.`,
+      `workspace file "${record.path}" has asset storage but no ref.`,
     );
   }
   return {
     kind: "binary",
     path: record.path,
     ...recordArtifactFields(record),
-    mimeType: record.mimeType,
-    uri: record.uri,
-    size: record.size,
+    mimeType: stored?.mediaType ?? record.mimeType,
+    uri,
+    size: stored?.size ?? record.size,
     ...(record.preview ? { preview: record.preview } : {}),
     ...(record.metadata ? { metadata: record.metadata } : {}),
   };
-}
-
-function isBlob(value: unknown): value is Blob {
-  return typeof Blob !== "undefined" && value instanceof Blob;
 }
 
 function isTextMime(mimeType: string | undefined): boolean {

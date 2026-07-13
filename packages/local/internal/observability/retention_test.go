@@ -3,6 +3,7 @@ package observability
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -61,6 +62,33 @@ func TestServiceRetentionCapsArtifactPreviewAtIngest(t *testing.T) {
 	}
 	if graph.Artifacts[0].Hash != "sha256:abc" || graph.Artifacts[0].SizeBytes != 2048 {
 		t.Fatalf("artifact metadata = %#v, want hash/size preserved", graph.Artifacts[0])
+	}
+}
+
+func TestServiceRetentionSanitizesLegacyMediaBeforeCaps(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+
+	if err := service.Ingest(ctx, mustBatch(t,
+		`{"schemaVersion":2,"recordId":"rec_media_run","type":"run:start","runId":"run_media_safe","segmentId":"seg_media_safe_a","segmentSeq":1,"traceId":"trace_media_safe","name":"media","rootPrimitive":"agent.run","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_media_artifact","type":"artifact","runId":"run_media_safe","segmentId":"seg_media_safe_a","segmentSeq":2,"traceId":"trace_media_safe","artifactId":"artifact_media_safe","kind":"output","createdAt":"2026-05-16T18:00:00.010Z","contentType":"application/json","encoding":"json","preview":{"content":[{"type":"image","source":"data:image/png;base64,SECRET_BYTES","mediaType":"image/png","filename":"SECRET.png"},{"kind":"file","mediaType":"application/pdf","sizeBytes":42,"pageCount":2,"digestPrefix":"abcdef123456","sourceCategory":"asset-ref","ref":"asset://SECRET"}],"nested":{"signed":"https://example.com/file?SECRET_TOKEN=yes"}}}`,
+	)); err != nil {
+		t.Fatal(err)
+	}
+
+	graph, err := service.Graph(ctx, "run_media_safe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(graph.Artifacts[0].Preview)
+	for _, secret := range []string{"SECRET_BYTES", "SECRET.png", "asset://SECRET", "SECRET_TOKEN"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("preview leaked %q: %s", secret, got)
+		}
+	}
+	want := `{"content":[{"kind":"image","mediaType":"image/png","sourceCategory":"data"},{"digestPrefix":"abcdef123456","kind":"file","mediaType":"application/pdf","pageCount":2,"sizeBytes":42,"sourceCategory":"asset-ref"}],"nested":{"signed":"[url]"}}`
+	if got != want {
+		t.Fatalf("preview = %s, want %s", got, want)
 	}
 }
 

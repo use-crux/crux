@@ -2,6 +2,7 @@ import {
   injectableContributionRelationPolicies,
   injectableUseRelationPolicies,
   invocationAccessRelationPolicies,
+  mediaRelationPolicies,
   promptContextAccessRelationPolicies,
   routingTargetRelationPolicies,
 } from './policy-groups'
@@ -11,6 +12,23 @@ export const indexRelationPolicies = [
   ...injectableUseRelationPolicies,
   ...injectableContributionRelationPolicies,
   ...promptContextAccessRelationPolicies,
+  ...mediaRelationPolicies,
+  {
+    type: 'defer.contained_by',
+    fromKinds: ['deferred-work'],
+    toKinds: ['prompt', 'tool', 'agent', 'flow', 'flow.step'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
+  {
+    type: 'defer.targets_task',
+    fromKinds: ['deferred-work'],
+    toKinds: ['task'],
+    presentation: 'both',
+    partial: true,
+    runtimeJoin: true,
+  },
   {
     type: 'agent.uses_prompt',
     fromKinds: ['agent'],
@@ -246,7 +264,12 @@ export const indexRelationPolicies = [
   ...routingTargetRelationPolicies,
   {
     type: 'composition.uses_agent',
-    fromKinds: ['composition.parallel', 'composition.pipeline', 'composition.swarm', 'composition.consensus'],
+    fromKinds: [
+      'composition.parallel',
+      'composition.pipeline',
+      'composition.swarm',
+      'composition.consensus',
+    ],
     toKinds: ['agent'],
     presentation: 'both',
     partial: true,
@@ -254,7 +277,12 @@ export const indexRelationPolicies = [
   },
   {
     type: 'composition.uses_flow',
-    fromKinds: ['composition.parallel', 'composition.pipeline', 'composition.swarm', 'composition.consensus'],
+    fromKinds: [
+      'composition.parallel',
+      'composition.pipeline',
+      'composition.swarm',
+      'composition.consensus',
+    ],
     toKinds: ['flow'],
     presentation: 'both',
     partial: true,
@@ -262,7 +290,12 @@ export const indexRelationPolicies = [
   },
   {
     type: 'composition.uses_prompt',
-    fromKinds: ['composition.parallel', 'composition.pipeline', 'composition.swarm', 'composition.consensus'],
+    fromKinds: [
+      'composition.parallel',
+      'composition.pipeline',
+      'composition.swarm',
+      'composition.consensus',
+    ],
     toKinds: ['prompt'],
     presentation: 'both',
     partial: true,
@@ -270,7 +303,12 @@ export const indexRelationPolicies = [
   },
   {
     type: 'composition.uses_tool',
-    fromKinds: ['composition.parallel', 'composition.pipeline', 'composition.swarm', 'composition.consensus'],
+    fromKinds: [
+      'composition.parallel',
+      'composition.pipeline',
+      'composition.swarm',
+      'composition.consensus',
+    ],
     toKinds: ['tool'],
     presentation: 'both',
     partial: true,
@@ -509,9 +547,9 @@ export const indexRelationPolicies = [
     runtimeJoin: false,
   },
   {
-    type: 'rag.retriever.uses_blob_store',
+    type: 'rag.retriever.uses_asset_store',
     fromKinds: ['rag.retriever'],
-    toKinds: ['storage.blobStore'],
+    toKinds: ['storage.assetStore'],
     presentation: 'both',
     partial: true,
     runtimeJoin: false,
@@ -587,9 +625,9 @@ export const indexRelationPolicies = [
     runtimeJoin: false,
   },
   {
-    type: 'workspace.uses_blob_store',
+    type: 'workspace.uses_asset_store',
     fromKinds: ['workspace'],
-    toKinds: ['storage.blobStore'],
+    toKinds: ['storage.assetStore'],
     presentation: 'both',
     partial: true,
     runtimeJoin: false,
@@ -611,9 +649,9 @@ export const indexRelationPolicies = [
     runtimeJoin: false,
   },
   {
-    type: 'storage.bundle.uses_blob_store',
+    type: 'storage.bundle.uses_asset_store',
     fromKinds: ['storage.bundle'],
-    toKinds: ['storage.blobStore'],
+    toKinds: ['storage.assetStore'],
     presentation: 'both',
     partial: true,
     runtimeJoin: false,

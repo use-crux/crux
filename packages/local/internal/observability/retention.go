@@ -109,7 +109,9 @@ func cappedArtifactRecord(payload json.RawMessage, capBytes int) (ArtifactRecord
 	if err := json.Unmarshal(payload, &artifact); err != nil {
 		return ArtifactRecord{}, false, err
 	}
-	capped, changed := cappedArtifactPreview(artifact.Preview, capBytes)
+	sanitized, sanitizedChanged := sanitizedArtifactPreview(artifact.Preview)
+	capped, cappedChanged := cappedArtifactPreview(sanitized, capBytes)
+	changed := sanitizedChanged || cappedChanged
 	if changed {
 		artifact.Preview = capped
 	}

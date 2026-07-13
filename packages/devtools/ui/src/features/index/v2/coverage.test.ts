@@ -32,6 +32,18 @@ describe('describeCatalogCoverage', () => {
     })
   })
 
+  it.each(['deferred-work', 'media.operation', 'ingest.source'])(
+    'describes %s as runtime-observed but unjoined without accepting fabricated definition activity',
+    (kind) => {
+      expect(describeCatalogCoverage(kind, activity(8), activity(5))).toMatchObject({
+        treatment: 'runtime-unjoined',
+        runCount: 0,
+        hasRuntimeEvidence: false,
+        parentDerived: false,
+      })
+    },
+  )
+
   it('classifies a structural-child kind with declared runtime primitives (flow.step) as contributor', () => {
     expect(describeCatalogCoverage('flow.step', activity(2))).toMatchObject({
       treatment: 'contributor',

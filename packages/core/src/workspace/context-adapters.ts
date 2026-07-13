@@ -11,7 +11,7 @@ import { z } from "zod";
 import { context } from "../prompt/context";
 import type { Context } from "../prompt/context-types";
 import type { InternalPromptInjection } from "../prompt/internal-injection";
-import type { BlobStore, RecordStore } from "../storage";
+import type { AssetStore, RecordStore } from "../storage";
 import { renderWorkspaceManifest } from "./manifest";
 import type {
   NormalizedMount,
@@ -30,7 +30,7 @@ export interface WorkspaceContextAdaptersConfig<
 > {
   readonly workspaceId: string;
   readonly store: RecordStore;
-  readonly blobs?: BlobStore;
+  readonly assets?: AssetStore;
   readonly mounts: readonly NormalizedMount[];
   readonly resolveNamespace: (
     input?: Record<string, unknown>,
@@ -73,7 +73,7 @@ export function createWorkspaceContextAdapters<
       system: async ({ input }) =>
         renderWorkspaceManifest({
           store: config.store,
-          blobs: config.blobs,
+          assets: config.assets,
           workspaceId: config.workspaceId,
           mounts: config.mounts,
           namespace: await config.resolveNamespace(input),
@@ -97,7 +97,7 @@ export function createWorkspaceContextAdapters<
           system: () =>
             renderWorkspaceManifest({
               store: config.store,
-              blobs: config.blobs,
+              assets: config.assets,
               workspaceId: config.workspaceId,
               mounts: config.mounts,
               namespace,

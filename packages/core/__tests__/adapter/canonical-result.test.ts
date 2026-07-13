@@ -32,10 +32,17 @@ const finalStep: CanonicalResultStepExpectation = {
   modelId: "model-a",
 };
 
+const publicStep = (step: CanonicalResultStepExpectation) => ({
+  ...step,
+  content: step.text ? [{ type: "text" as const, text: step.text }] : [],
+  warnings: [],
+});
+
 describe("assertCanonicalResult", () => {
   it("accepts a canonical envelope with accumulated text, usage, and finalStep data", () => {
     const result = {
       text: "hello world",
+      content: [{ type: "text", text: "hello world" }],
       usage: {
         inputTokens: 6,
         outputTokens: 8,
@@ -44,9 +51,10 @@ describe("assertCanonicalResult", () => {
         outputTokenDetails: { reasoningTokens: 3 },
       },
       cost: 0.012,
-      steps: 2,
-      finalStep,
+      steps: [publicStep(firstStep), publicStep(finalStep)],
+      finalStep: publicStep(finalStep),
       messages: [{ role: "assistant", content: "hello world" }],
+      warnings: [],
       raw: { id: "raw_1" },
       _meta: { finishReason: "stop" },
     };
@@ -59,6 +67,7 @@ describe("assertCanonicalResult", () => {
   it("rejects fabricated detail token counts that no step reported", () => {
     const result = {
       text: "world",
+      content: [{ type: "text", text: "world" }],
       usage: {
         inputTokens: 4,
         outputTokens: 5,
@@ -66,15 +75,16 @@ describe("assertCanonicalResult", () => {
         inputTokenDetails: { cacheReadTokens: 0, cacheWriteTokens: 2 },
         outputTokenDetails: { reasoningTokens: 3 },
       },
-      steps: 1,
+      steps: [publicStep(finalStep)],
       finalStep: {
-        ...finalStep,
+        ...publicStep(finalStep),
         usage: {
           ...finalStep.usage,
           inputTokenDetails: { cacheReadTokens: 0, cacheWriteTokens: 2 },
         },
       },
       messages: [{ role: "assistant", content: "world" }],
+      warnings: [],
       raw: { id: "raw_1" },
       _meta: { finishReason: "stop" },
     };
@@ -87,9 +97,11 @@ describe("assertCanonicalResult", () => {
   it("accepts omitted accumulated usage when any expected step is unmetered", () => {
     const result = {
       text: "hello world",
-      steps: 2,
-      finalStep,
+      content: [{ type: "text", text: "hello world" }],
+      steps: [publicStep(firstStep), publicStep(finalStep)],
+      finalStep: publicStep(finalStep),
       messages: [{ role: "assistant", content: "hello world" }],
+      warnings: [],
       raw: { id: "raw_1" },
       _meta: { finishReason: "stop" },
     };

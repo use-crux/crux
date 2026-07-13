@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { setTokenizer } from '@use-crux/core'
+import { mediaConformanceFixture } from '@use-crux/core/adapter/testing'
 import { afterPreparedAgentCall } from '../src/agent/lifecycle-persistence'
-import { compactConversation, contentText, imagePart, messageText, textPart } from '../src'
+import { compactConversation, contentText, messageText, textPart } from '../src'
 
 afterEach(() => {
   setTokenizer((text) => Math.ceil(text.length / 4))
@@ -10,7 +11,7 @@ afterEach(() => {
 
 describe('@use-crux/convex multimodal content helpers', () => {
   it('re-exports the core content builders and projection helpers', () => {
-    const content = [textPart('chart'), imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' })]
+    const content = mediaConformanceFixture('convex-agent').supported[0]!.content
 
     expect(contentText(content)).toContain('[image image/png 3B sha256:')
     expect(messageText({ content })).toBe(contentText(content))
@@ -27,19 +28,19 @@ describe('@use-crux/convex multimodal content helpers', () => {
       evictedMessages: [
         {
           role: 'user',
-          content: [textPart('summarize this chart'), imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' })],
+          content: [textPart('summarize this chart'), { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }],
         },
       ],
       existingSummary: '',
       generate: async (args) => {
-        prompt = args.prompt
+        prompt = args.prompt ?? ''
         return { text: 'summary' }
       },
       model: 'summary-model',
     })
 
     expect(prompt).toContain('summarize this chart')
-    expect(prompt).toContain('[image image/png 3B sha256:')
+    expect(prompt).toContain('[image description] summary')
     expect(prompt).not.toContain('[object Object]')
     expect(prompt).not.toContain('AQID')
   })
@@ -61,7 +62,7 @@ describe('@use-crux/convex multimodal content helpers', () => {
       captureMessages: [
         {
           role: 'user',
-          content: [textPart('remember this chart'), imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' })],
+          content: [textPart('remember this chart'), { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }],
         },
       ],
     })

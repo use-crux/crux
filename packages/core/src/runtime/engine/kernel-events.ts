@@ -13,9 +13,9 @@ import type {
 } from '../store'
 import { flowEventResumeKey, taskRunKey } from './idempotency'
 import {
-  flushScheduledEffectsInTransaction,
-  mergeScheduledEffectRecords,
-} from './kernel-effects'
+  flushScheduledWorkInTransaction,
+  mergeScheduledWorkRecords,
+} from './kernel-scheduled-work'
 import type {
   EmitEventInput,
   EmitEventResult,
@@ -70,9 +70,9 @@ export async function recordSuspensionInTransaction(
     ],
     Promise.resolve([]),
   )
-  const flushedEffects = await flushScheduledEffectsInTransaction(
+  const flushedWork = await flushScheduledWorkInTransaction(
     tx,
-    input.scheduledEffects,
+    input.scheduledWork,
     deps.now,
   )
 
@@ -88,9 +88,9 @@ export async function recordSuspensionInTransaction(
     fingerprint: input.snapshot.fingerprint,
     pendingSuspends,
     deliveredSuspends: input.snapshot.deliveredSuspends,
-    scheduledEffects: mergeScheduledEffectRecords(
-      input.snapshot.scheduledEffects,
-      flushedEffects,
+    scheduledWork: mergeScheduledWorkRecords(
+      input.snapshot.scheduledWork,
+      flushedWork,
     ),
     updatedAt: deps.now(),
   })

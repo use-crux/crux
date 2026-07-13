@@ -1,16 +1,33 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ensureQualityGitignore, loadQualityProject, resolveQualityRunnerSettings } from './quality-config'
+import {
+  ensureQualityGitignore,
+  loadQualityProject,
+  resolveQualityRunnerSettings,
+} from './quality-config'
 
 describe('loadQualityProject', () => {
   it('loads a no-config package root as a source-discovered quality project', async () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'crux-quality-no-config-'))
     const evalRoot = join(projectRoot, 'evals')
     mkdirSync(evalRoot, { recursive: true })
-    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: '@acme/no-config-quality' }))
-    writeFileSync(join(evalRoot, 'smoke.eval.ts'), 'export const marker = true\n')
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ name: '@acme/no-config-quality' }),
+    )
+    writeFileSync(
+      join(evalRoot, 'smoke.eval.ts'),
+      'export const marker = true\n',
+    )
 
     const previousCwd = process.cwd()
     try {
@@ -27,12 +44,15 @@ describe('loadQualityProject', () => {
   })
 
   it('does not source-project prompt tests without config registration', async () => {
-    const fixtureRoot = join(__dirname, '__fixtures__/quality-config')
-    mkdirSync(fixtureRoot, { recursive: true })
-    const projectRoot = mkdtempSync(join(fixtureRoot, 'source-prompts-'))
+    const projectRoot = mkdtempSync(
+      join(tmpdir(), 'crux-quality-source-prompts-'),
+    )
     const srcRoot = join(projectRoot, 'src')
     mkdirSync(srcRoot, { recursive: true })
-    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: '@acme/source-prompt-quality' }))
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ name: '@acme/source-prompt-quality' }),
+    )
     writeFileSync(
       join(srcRoot, 'prompts.ts'),
       `
@@ -69,7 +89,9 @@ describe('ensureQualityGitignore', () => {
     await ensureQualityGitignore(dir)
 
     const content = readFileSync(join(dir, '.gitignore'), 'utf8')
-    const rules = content.split('\n').filter((line) => line.trim() !== '' && !line.startsWith('#'))
+    const rules = content
+      .split('\n')
+      .filter((line) => line.trim() !== '' && !line.startsWith('#'))
     expect(rules).toContain('experiments/')
     expect(rules).toContain('cache/')
     expect(rules).not.toContain('baselines/')
@@ -85,7 +107,12 @@ describe('ensureQualityGitignore', () => {
   })
 
   it('creates the directory when missing', async () => {
-    const dir = join(mkdtempSync(join(tmpdir(), 'crux-quality-gi-')), 'nested', '.crux', 'quality')
+    const dir = join(
+      mkdtempSync(join(tmpdir(), 'crux-quality-gi-')),
+      'nested',
+      '.crux',
+      'quality',
+    )
     await ensureQualityGitignore(dir)
 
     expect(existsSync(join(dir, '.gitignore'))).toBe(true)
@@ -105,7 +132,10 @@ describe('resolveQualityRunnerSettings', () => {
 
   it('derives the default quality id from the nearest package.json name', () => {
     const projectRoot = mkdtempSync(join(tmpdir(), 'crux-quality-package-id-'))
-    writeFileSync(join(projectRoot, 'package.json'), JSON.stringify({ name: '@acme/default-quality-id' }))
+    writeFileSync(
+      join(projectRoot, 'package.json'),
+      JSON.stringify({ name: '@acme/default-quality-id' }),
+    )
 
     const settings = resolveQualityRunnerSettings({}, projectRoot)
 

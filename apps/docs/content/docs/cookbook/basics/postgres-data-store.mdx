@@ -1,19 +1,19 @@
 ---
 title: Postgres Storage
-description: Implement durable Crux RecordStore, pgvector VectorStore, and bytea BlobStore adapters on Postgres.
+description: Implement durable Crux RecordStore, pgvector VectorStore, and bytea AssetStore adapters on Postgres.
 ---
 
 Use a `RecordStore` when Crux needs durable JSON records. Postgres is a good fit when your app already uses it for product data and you want corpus ledgers, retrieval chunks, workspace metadata, and other Storage Beta records in the same operational database.
 
-This recipe starts with a `RecordStore`, then shows optional Postgres-backed vector and blob storage. You can use only the pieces you need:
+This recipe starts with a `RecordStore`, then shows optional Postgres-backed vector and asset storage. You can use only the pieces you need:
 
 ```ts
-const records = postgresRecordStore(pool)
-const vectors = postgresVectorStore(pool) // optional, dense pgvector search
-const blobs = postgresBlobStore(pool)     // optional, modest bytea-backed files
+const records = postgresRecordStore(pool);
+const vectors = postgresVectorStore(pool); // optional, dense pgvector search
+const assets = postgresAssetStore(pool); // optional, modest bytea-backed files
 ```
 
-For large production files, object storage such as S3, R2, GCS, or Convex file storage is usually a better `BlobStore` than Postgres. Use the Postgres blob example when you deliberately want one operational database and the files are modest in size.
+For large production files, object storage such as S3, R2, GCS, or Convex file storage is usually a better `AssetStore` than Postgres. Use the Postgres asset example when you deliberately want one operational database and the files are modest in size.
 
 ## RecordStore
 
@@ -45,23 +45,23 @@ import type {
   RecordPage,
   RecordStore,
   RecordWriteOptions,
-} from '@use-crux/core/storage'
+} from "@use-crux/core/storage";
 
 type Row = {
-  key: string
-  value: JsonObject
-}
+  key: string;
+  value: JsonObject;
+};
 
 type Queryable = {
   query<T extends Record<string, unknown> = Record<string, unknown>>(
     sql: string,
     values?: readonly unknown[],
-  ): Promise<{ rows: T[] }>
-}
+  ): Promise<{ rows: T[] }>;
+};
 
 export function postgresRecordStore(pool: Queryable): RecordStore {
   return {
-    _tag: 'RecordStore',
+    _tag: "RecordStore",
 
     async get(key) {
       await pool.query(
@@ -69,7 +69,7 @@ export function postgresRecordStore(pool: Queryable): RecordStore {
         delete from crux_records
         where expires_at is not null and expires_at <= now()
         `,
-      )
+      );
 
       const row = await pool.query<Row>(
         `
@@ -80,16 +80,16 @@ export function postgresRecordStore(pool: Queryable): RecordStore {
         limit 1
         `,
         [key],
-      )
+      );
 
-      return row.rows[0]?.value ?? null
+      return row.rows[0]?.value ?? null;
     },
 
     async put(key, value, options?: RecordWriteOptions) {
       const expiresAt =
         options?.ttlMs !== undefined
           ? new Date(Date.now() + options.ttlMs)
-          : null
+          : null;
 
       await pool.query(
         `
@@ -101,14 +101,14 @@ export function postgresRecordStore(pool: Queryable): RecordStore {
               updated_at = now()
         `,
         [key, JSON.stringify(value), expiresAt],
-      )
+      );
     },
 
     async create(key, value, options?: RecordWriteOptions) {
       const expiresAt =
         options?.ttlMs !== undefined
           ? new Date(Date.now() + options.ttlMs)
-          : null
+          : null;
 
       const result = await pool.query<{ key: string }>(
         `
@@ -118,22 +118,22 @@ export function postgresRecordStore(pool: Queryable): RecordStore {
         returning key
         `,
         [key, JSON.stringify(value), expiresAt],
-      )
+      );
 
-      return result.rows.length === 1
+      return result.rows.length === 1;
     },
 
     async delete(key) {
-      await pool.query('delete from crux_records where key = $1', [key])
+      await pool.query("delete from crux_records where key = $1", [key]);
     },
 
     async list(prefix, options?: RecordListOptions): Promise<RecordPage> {
-      const limit = options?.limit ?? 100
-      if (limit === 0) return { entries: [] }
+      const limit = options?.limit ?? 100;
+      if (limit === 0) return { entries: [] };
 
-      const entries: { key: string; value: JsonObject }[] = []
-      let cursor = options?.cursor ?? null
-      let hasMore = false
+      const entries: { key: string; value: JsonObject }[] = [];
+      let cursor = options?.cursor ?? null;
+      let hasMore = false;
 
       while (entries.length < limit) {
         const rows = await pool.query<Row>(
@@ -148,42 +148,45 @@ export function postgresRecordStore(pool: Queryable): RecordStore {
           limit $3
           `,
           [`${escapeLike(prefix)}%`, cursor, Math.max(limit + 1, 100)],
-        )
+        );
 
-        const pageHasMore = rows.rows.length === Math.max(limit + 1, 100)
-        const scannedRows = pageHasMore ? rows.rows.slice(0, -1) : rows.rows
+        const pageHasMore = rows.rows.length === Math.max(limit + 1, 100);
+        const scannedRows = pageHasMore ? rows.rows.slice(0, -1) : rows.rows;
 
         for (let index = 0; index < scannedRows.length; index++) {
-          const row = scannedRows[index]!
-          cursor = row.key
-          if (!options?.filter || matchesTopLevelFilter(row.value, options.filter)) {
-            entries.push({ key: row.key, value: row.value })
+          const row = scannedRows[index]!;
+          cursor = row.key;
+          if (
+            !options?.filter ||
+            matchesTopLevelFilter(row.value, options.filter)
+          ) {
+            entries.push({ key: row.key, value: row.value });
           }
           if (entries.length >= limit) {
-            hasMore = pageHasMore || index < scannedRows.length - 1
-            break
+            hasMore = pageHasMore || index < scannedRows.length - 1;
+            break;
           }
         }
 
-        if (hasMore || !pageHasMore || scannedRows.length === 0) break
+        if (hasMore || !pageHasMore || scannedRows.length === 0) break;
       }
 
       return entries.length >= limit && hasMore
         ? { entries, cursor: cursor ?? undefined }
-        : { entries }
+        : { entries };
     },
 
     capabilities: () => ({
-      ttl: 'native',
-      filter: 'scan',
+      ttl: "native",
+      filter: "scan",
       watch: false,
       batch: false,
     }),
-  }
+  };
 }
 
 function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (match) => `\\${match}`)
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
 }
 
 function matchesTopLevelFilter(
@@ -191,9 +194,9 @@ function matchesTopLevelFilter(
   filter: ExactFilter,
 ): boolean {
   return Object.entries(filter).every(([key, expected]) => {
-    const actual = value[key]
-    return expected === null ? actual === null : actual === expected
-  })
+    const actual = value[key];
+    return expected === null ? actual === null : actual === expected;
+  });
 }
 ```
 
@@ -231,14 +234,14 @@ import type {
   VectorRecord,
   VectorSearchQuery,
   VectorStore,
-} from '@use-crux/core/storage'
+} from "@use-crux/core/storage";
 
 export function postgresVectorStore(pool: Queryable): VectorStore {
   return {
     async upsert(records: readonly VectorRecord[]) {
       for (const record of records) {
         if (!record.dense) {
-          throw new Error('postgresVectorStore() supports dense vectors only.')
+          throw new Error("postgresVectorStore() supports dense vectors only.");
         }
 
         await pool.query(
@@ -255,12 +258,12 @@ export function postgresVectorStore(pool: Queryable): VectorStore {
             toPgVector(record.dense),
             JSON.stringify(record.metadata ?? {}),
           ],
-        )
+        );
       }
     },
 
     async delete(keys: readonly string[]) {
-      if (keys.length === 0) return
+      if (keys.length === 0) return;
 
       await pool.query(
         `
@@ -268,22 +271,22 @@ export function postgresVectorStore(pool: Queryable): VectorStore {
         where key = any($1::text[])
         `,
         [keys],
-      )
+      );
     },
 
     async search(query: VectorSearchQuery): Promise<readonly VectorHit[]> {
-      if (query.mode !== 'dense') {
-        throw new Error('postgresVectorStore() supports dense search only.')
+      if (query.mode !== "dense") {
+        throw new Error("postgresVectorStore() supports dense search only.");
       }
 
-      const limit = query.limit ?? 10
-      const threshold = query.threshold ?? 0
-      const filter = query.filter ? JSON.stringify(query.filter) : null
+      const limit = query.limit ?? 10;
+      const threshold = query.threshold ?? 0;
+      const filter = query.filter ? JSON.stringify(query.filter) : null;
 
       const rows = await pool.query<{
-        key: string
-        score: number
-        metadata: Record<string, unknown>
+        key: string;
+        score: number;
+        metadata: Record<string, unknown>;
       }>(
         `
         select key,
@@ -297,13 +300,13 @@ export function postgresVectorStore(pool: Queryable): VectorStore {
         limit $4
         `,
         [toPgVector(query.dense), filter, threshold, limit],
-      )
+      );
 
       return rows.rows.map((row) => ({
         key: row.key,
         score: row.score,
         metadata: row.metadata,
-      }))
+      }));
     },
 
     capabilities() {
@@ -312,60 +315,60 @@ export function postgresVectorStore(pool: Queryable): VectorStore {
         sparse: false,
         hybrid: false,
         fusion: [],
-        filter: 'pre',
-        consistency: 'strong',
-      }
+        filter: "pre",
+        consistency: "strong",
+      };
     },
-  }
+  };
 }
 
 function toPgVector(vector: readonly number[]): string {
   if (vector.length === 0) {
-    throw new Error('Vector must not be empty.')
+    throw new Error("Vector must not be empty.");
   }
 
   for (const value of vector) {
     if (!Number.isFinite(value)) {
-      throw new Error('Vector contains a non-finite value.')
+      throw new Error("Vector contains a non-finite value.");
     }
   }
 
-  return `[${vector.join(',')}]`
+  return `[${vector.join(",")}]`;
 }
 ```
 
 Use it with indexing and retrieval:
 
 ```ts
-const records = postgresRecordStore(pool)
-const vectors = postgresVectorStore(pool)
+const records = postgresRecordStore(pool);
+const vectors = postgresVectorStore(pool);
 
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'docs',
+  id: "docs",
+  namespace: "docs",
   records,
   vectors,
   dense,
-})
+});
 
 const docs = retriever({
-  id: 'docs',
-  namespace: 'docs',
+  id: "docs",
+  namespace: "docs",
   records,
   vectors,
   dense,
-  search: { mode: 'dense', limit: 8 },
-})
+  search: { mode: "dense", limit: 8 },
+});
 ```
 
-## BlobStore With `bytea`
+## AssetStore With `bytea`
 
 Postgres can store binary content with `bytea`. This is convenient for tests, internal tools, and small generated files. It is usually not the best choice for large PDFs, images, or user uploads; object storage is cheaper and better at serving bytes.
 
 Schema:
 
 ```sql
-create table crux_blobs (
+create table crux_assets (
   uri text primary key,
   content bytea not null,
   mime_type text not null,
@@ -380,22 +383,25 @@ Implementation:
 
 ```ts
 import type {
-  BlobPutInput,
-  BlobReadResult,
-  BlobRef,
-  BlobStore,
-} from '@use-crux/core/storage'
+  Asset,
+  StoredAsset,
+  AssetRef,
+  AssetStore,
+} from "@use-crux/core/storage";
 
-export function postgresBlobStore(pool: Queryable): BlobStore {
+export function postgresAssetStore(pool: Queryable): AssetStore {
   return {
-    async put(input: BlobPutInput): Promise<BlobRef> {
-      const key = input.key ?? crypto.randomUUID()
-      const uri = `postgres://crux_blobs/${encodeURIComponent(key)}`
-      const bytes = await toUint8Array(input.content)
+    async put(asset: Asset, options): Promise<StoredAsset> {
+      if (asset.type !== "data") {
+        throw new Error("This example only persists data assets");
+      }
+      const key = options?.key ?? crypto.randomUUID();
+      const uri = `postgres://crux_assets/${encodeURIComponent(key)}`;
+      const bytes = await dataAssetBytes(asset.data);
 
       await pool.query(
         `
-        insert into crux_blobs (uri, content, mime_type, size, metadata, updated_at)
+        insert into crux_assets (uri, content, mime_type, size, metadata, updated_at)
         values ($1, $2, $3, $4, $5::jsonb, now())
         on conflict (uri) do update
           set content = excluded.content,
@@ -407,132 +413,111 @@ export function postgresBlobStore(pool: Queryable): BlobStore {
         [
           uri,
           Buffer.from(bytes),
-          input.mimeType,
-          bytes.byteLength,
-          JSON.stringify(input.metadata ?? {}),
+          asset.mediaType,
+          asset.size ?? bytes.byteLength,
+          JSON.stringify(options?.metadata ?? {}),
         ],
-      )
+      );
 
-      return { uri, size: bytes.byteLength }
+      return {
+        type: "data",
+        data: new Uint8Array(bytes),
+        mediaType: asset.mediaType,
+        size: asset.size ?? bytes.byteLength,
+        ref: { uri },
+      };
     },
 
-    async get(uri: string): Promise<BlobReadResult> {
+    async get(ref: AssetRef): Promise<StoredAsset> {
       const row = await pool.query<{
-        content: Buffer
-        mime_type: string
-        size: number
+        content: Buffer;
+        mime_type: string;
+        size: number;
       }>(
         `
         select content, mime_type, size
-        from crux_blobs
+        from crux_assets
         where uri = $1
         limit 1
         `,
-        [uri],
-      )
+        [ref.uri],
+      );
 
-      const blob = row.rows[0]
-      if (!blob) {
-        throw new Error(`Blob not found: ${uri}`)
+      const asset = row.rows[0];
+      if (!asset) {
+        throw new Error(`Asset not found: ${ref.uri}`);
       }
 
       return {
-        content: new Uint8Array(blob.content),
-        mimeType: blob.mime_type,
-        size: blob.size,
-      }
+        type: "data",
+        data: new Uint8Array(asset.content),
+        mediaType: asset.mime_type,
+        size: asset.size,
+        ref,
+      };
     },
 
-    async delete(uri: string) {
-      await pool.query('delete from crux_blobs where uri = $1', [uri])
+    async delete(ref: AssetRef) {
+      await pool.query("delete from crux_assets where uri = $1", [ref.uri]);
     },
-
-    capabilities() {
-      return {
-        multipart: false,
-        signedUrls: false,
-        maxBytes: 10 * 1024 * 1024,
-      }
-    },
-  }
+  };
 }
 
-async function toUint8Array(content: BlobPutInput['content']): Promise<Uint8Array> {
-  if (content instanceof Uint8Array) return content
-  if (typeof content === 'string') return new TextEncoder().encode(content)
-  if (content instanceof Blob) return new Uint8Array(await content.arrayBuffer())
-
-  const reader = content.getReader()
-  const chunks: Uint8Array[] = []
-
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    chunks.push(value)
-  }
-
-  const size = chunks.reduce((total, chunk) => total + chunk.byteLength, 0)
-  const result = new Uint8Array(size)
-  let offset = 0
-
-  for (const chunk of chunks) {
-    result.set(chunk, offset)
-    offset += chunk.byteLength
-  }
-
-  return result
+async function dataAssetBytes(data: Uint8Array | Blob): Promise<Uint8Array> {
+  if (data instanceof Uint8Array) return new Uint8Array(data);
+  return new Uint8Array(await data.arrayBuffer());
 }
 ```
 
 Wire it into a workspace:
 
 ```ts
-import { storage } from '@use-crux/core/storage'
-import { workspace } from '@use-crux/core/workspace'
+import { storage } from "@use-crux/core/storage";
+import { workspace } from "@use-crux/core/workspace";
 
 const files = workspace({
-  id: 'thread-files',
+  id: "thread-files",
   namespace: threadId,
   storage: storage({
     records: postgresRecordStore(pool),
-    blobs: postgresBlobStore(pool),
+    assets: postgresAssetStore(pool),
   }),
-})
+});
 
-await files.write('/outputs/report.pdf', pdfBytes, {
-  mimeType: 'application/pdf',
-})
+await files.write("/outputs/report.pdf", pdfBytes, {
+  mimeType: "application/pdf",
+});
 ```
 
 ## Use It
 
 ```ts
-import { indexer } from '@use-crux/core/indexing'
-import { retriever } from '@use-crux/core/retrieval'
-import { Pool } from 'pg'
+import { indexer } from "@use-crux/core/indexing";
+import { retriever } from "@use-crux/core/retrieval";
+import { Pool } from "pg";
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
-const records = postgresRecordStore(pool)
-const vectors = postgresVectorStore(pool)
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const records = postgresRecordStore(pool);
+const vectors = postgresVectorStore(pool);
 
 const docsIndexer = indexer({
-  id: 'docs',
-  namespace: 'docs',
+  id: "docs",
+  namespace: "docs",
   records,
   vectors,
   dense,
-})
+});
 
 const docs = retriever({
-  id: 'docs',
-  namespace: 'docs',
+  id: "docs",
+  namespace: "docs",
   records,
   vectors,
   dense,
-})
+});
 ```
 
-Postgres owns JSON record hydration. `VectorStore` owns similarity search. `BlobStore` owns bytes for workspaces. Keeping those capabilities separate makes each adapter simpler and avoids pretending Postgres is also object storage or vector infrastructure unless you explicitly add those capabilities.
+Postgres owns JSON record hydration. `VectorStore` owns similarity search. `AssetStore` owns bytes for workspaces. Keeping those capabilities separate makes each adapter simpler and avoids pretending Postgres is also object storage or vector infrastructure unless you explicitly add those capabilities.
 
 ## Production Notes
 
@@ -549,12 +534,24 @@ For high-write workloads, add indexes that match your app’s actual prefixes an
 
 For pgvector, benchmark `hnsw` vs `ivfflat` indexes with your corpus size and update pattern. For small corpora, exact scan can be acceptable; for larger corpora, use an ANN index and monitor recall.
 
-For blob storage, keep a hard size limit if you use Postgres `bytea`. Store large user uploads and generated artifacts in object storage and keep only metadata/URIs in Postgres.
+For asset storage, keep a hard size limit if you use Postgres `bytea`. Store large user uploads and generated artifacts in object storage and keep only metadata/URIs in Postgres.
 
 ## Related
 
 <Cards>
-  <Card title="RecordStore guide" description="The full RecordStore contract and adapter expectations." href="/docs/guides/storage/crux-store" />
-  <Card title="VectorStore guide" description="Pair Postgres records with vector search." href="/docs/guides/storage/vector-store" />
-  <Card title="BlobStore guide" description="Store workspace bytes in object storage." href="/docs/guides/storage/blob-storage" />
+  <Card
+    title="RecordStore guide"
+    description="The full RecordStore contract and adapter expectations."
+    href="/docs/guides/storage/crux-store"
+  />
+  <Card
+    title="VectorStore guide"
+    description="Pair Postgres records with vector search."
+    href="/docs/guides/storage/vector-store"
+  />
+  <Card
+    title="AssetStore guide"
+    description="Store workspace bytes in object storage."
+    href="/docs/guides/storage/asset-storage"
+  />
 </Cards>

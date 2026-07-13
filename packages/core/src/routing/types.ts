@@ -64,6 +64,62 @@ export type AnyRoutable = RoutingPhantom<
   string
 >;
 
+/**
+ * Recursive routing tree accepted by bounded media operations.
+ *
+ * Every reachable leaf must belong to `TModel`. Cascades are deliberately
+ * absent because their deferred result evaluation is a generation concern.
+ */
+export type CompletedOperationModel<TModel, TSelected = TModel> =
+  TSelected extends unknown
+    ? [CompletedOperationLeaves<TSelected>] extends [TModel]
+      ? TSelected
+      : never
+    : never;
+
+/** @internal Constraint helper that preserves call-site generic inference. */
+export type CompletedOperationModelGuard<TModel, TSelected> =
+  [CompletedOperationLeaves<TSelected>] extends [TModel] ? unknown : never;
+
+type CompletedOperationLeaves<T> = T extends Readonly<{
+  _tag: "crux.cascade";
+}>
+  ? CompletedOperationDeferredResult
+  : T extends Readonly<{ _tag: "crux.retry"; model: infer M }>
+    ? CompletedOperationLeaves<M>
+    : T extends Readonly<{
+          _tag: "crux.fallback";
+          models: readonly (infer M)[];
+        }>
+      ? CompletedOperationLeaves<M>
+      : T extends Readonly<{
+            _tag: "crux.router";
+            config: Readonly<{ routes: infer R }>;
+          }>
+        ? CompletedOperationLeaves<RouteModels<R>>
+        : T extends Readonly<{
+              _tag: "crux.split";
+              config: Readonly<{ routes: infer R }>;
+            }>
+          ? CompletedOperationLeaves<SplitModels<R>>
+          : T;
+
+type RouteModels<T> = T extends Readonly<Record<string, infer R>>
+  ? R extends Readonly<{ model: infer M }>
+    ? M
+    : R
+  : CompletedOperationDeferredResult;
+
+type SplitModels<T> = T extends Readonly<
+  Record<string, Readonly<{ model: infer M }>>
+>
+  ? M
+  : CompletedOperationDeferredResult;
+
+interface CompletedOperationDeferredResult {
+  readonly __completedOperation: "deferred-result-unsupported";
+}
+
 /** Per-route generation parameters wrapped around a model. */
 export type CallProfile<M = unknown> = {
   /** The model or routing wrapper selected by this route. */
@@ -77,7 +133,9 @@ export type CallProfileParams = Omit<CallProfile<unknown>, "model">;
 export type ModelOf<T> = T extends { readonly model: infer M } ? M : T;
 
 /** Context required by a model or routing tree. */
-export type CtxOf<T> = T extends { readonly __phantom: { readonly ctx: infer C extends object } }
+export type CtxOf<T> = T extends {
+  readonly __phantom: { readonly ctx: infer C extends object };
+}
   ? C
   : T extends { readonly model: infer M }
     ? CtxOf<M>
@@ -91,21 +149,27 @@ export type InOf<T> = T extends { readonly __phantom: { readonly in: infer I } }
     : never;
 
 /** Whether a model or routing tree can be used in `stream()`. */
-export type StreamOf<T> = T extends { readonly __phantom: { readonly stream: infer S extends boolean } }
+export type StreamOf<T> = T extends {
+  readonly __phantom: { readonly stream: infer S extends boolean };
+}
   ? S
   : T extends { readonly model: infer M }
     ? StreamOf<M>
     : true;
 
 /** Prompt binding carried by a model or routing tree. */
-export type BoundOf<T> = T extends { readonly __phantom: { readonly bound: infer B } }
+export type BoundOf<T> = T extends {
+  readonly __phantom: { readonly bound: infer B };
+}
   ? B
   : T extends { readonly model: infer M }
     ? BoundOf<M>
     : never;
 
 /** Top-level route override keys for a model or routing tree. */
-export type KeysOf<T> = T extends { readonly __phantom: { readonly keys: infer K extends string } }
+export type KeysOf<T> = T extends {
+  readonly __phantom: { readonly keys: infer K extends string };
+}
   ? K
   : never;
 
@@ -115,26 +179,28 @@ export type ComposedCtx<Own extends object, Children> = Prettify<
 >;
 
 /** A composed tree is streamable only when every child is streamable. */
-export type ComposedStream<Children> = false extends StreamOf<Children>
-  ? false
-  : true;
+export type ComposedStream<Children> =
+  false extends StreamOf<Children> ? false : true;
 
 /** Call-site routing options required by a model or routing tree. */
-export type RoutingCallOptions<M> = (
-  object extends CtxOf<M>
-    ? { readonly routing?: undefined }
-    : { readonly routing: Prettify<CtxOf<M>> }
-) &
-  ([KeysOf<M>] extends [never]
-    ? { readonly route?: undefined }
-    : { readonly route?: KeysOf<M> });
+export type RoutingCallOptions<M> = [M] extends [never]
+  ? { readonly routing?: undefined; readonly route?: undefined }
+  : (object extends CtxOf<M>
+      ? { readonly routing?: undefined }
+      : { readonly routing: Prettify<CtxOf<M>> }) &
+      ([KeysOf<M>] extends [never]
+        ? { readonly route?: undefined }
+        : { readonly route?: KeysOf<M> });
 
 /** Verify that a prompt input is compatible with routing callbacks. */
 export type InputOk<M, PIn> = [InOf<M>] extends [never]
   ? unknown
   : PIn extends UnionToIntersection<InOf<M>>
     ? unknown
-    : ["prompt input incompatible with routing input", UnionToIntersection<InOf<M>>];
+    : [
+        "prompt input incompatible with routing input",
+        UnionToIntersection<InOf<M>>,
+      ];
 
 /** Verify that a prompt-bound wrapper is used with its bound prompt. */
 export type BoundOk<M, P> = [BoundOf<M>] extends [never]
@@ -144,18 +210,21 @@ export type BoundOk<M, P> = [BoundOf<M>] extends [never]
     : ["model is bound to a different prompt", BoundOf<M>];
 
 /** Prompt input inferred from a real Crux prompt instance. */
-export type PromptInputOf<P> = P extends Prompt<infer TOwnInput, z.ZodType | undefined, infer TContexts>
-  ? MergedInput<TOwnInput, TContexts>
-  : never;
+export type PromptInputOf<P> =
+  P extends Prompt<infer TOwnInput, z.ZodType | undefined, infer TContexts>
+    ? MergedInput<TOwnInput, TContexts>
+    : never;
 
 /** Prompt output schema carried by a real Crux prompt instance. */
-export type PromptOutputSchemaOf<P> = P extends Prompt<z.ZodType, infer TOutput, readonly ContextEntry[]>
-  ? TOutput
-  : never;
+export type PromptOutputSchemaOf<P> =
+  P extends Prompt<z.ZodType, infer TOutput, readonly ContextEntry[]>
+    ? TOutput
+    : never;
 
 /** Structured object inferred from a prompt's output schema, or `unknown` for text prompts. */
-export type PromptOutputOf<P> = P extends Prompt<z.ZodType, infer TOutput, readonly ContextEntry[]>
-  ? TOutput extends z.ZodType
-    ? z.infer<TOutput>
-    : unknown
-  : unknown;
+export type PromptOutputOf<P> =
+  P extends Prompt<z.ZodType, infer TOutput, readonly ContextEntry[]>
+    ? TOutput extends z.ZodType
+      ? z.infer<TOutput>
+      : unknown
+    : unknown;

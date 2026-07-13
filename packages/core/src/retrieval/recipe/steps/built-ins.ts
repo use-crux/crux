@@ -194,14 +194,14 @@ export function compressToBudget(
             tokenBudget: config.tokens,
             maxCharsPerHit,
             hits: input.hits.map((hit) => ({
-              sourceId: hit.sourceId,
+              sourceId: hit.source.id,
               chunkId: hit.chunkId,
               content: hit.content,
             })),
           }),
           schema: outputSchema,
         })
-        const excerptsById = new Map(result.object.hits.map((item) => [sourceChunkIdentity(item), item.excerpts]))
+        const excerptsById = new Map(result.object.hits.map((item) => [flatSourceChunkIdentity(item), item.excerpts]))
         const compressed: RetrieverHit[] = []
         for (const hit of input.hits) {
           const excerpts = (excerptsById.get(sourceChunkIdentity(hit)) ?? [])
@@ -279,6 +279,10 @@ function withRerankProvenance(hit: RetrieverHit): RetrieverHit {
   }
 }
 
-function sourceChunkIdentity(hit: Pick<RetrieverHit, 'sourceId' | 'chunkId'>): string {
+function sourceChunkIdentity(hit: Pick<RetrieverHit, 'source' | 'chunkId'>): string {
+  return `${hit.source.id}/${hit.chunkId}`
+}
+
+function flatSourceChunkIdentity(hit: { sourceId: string; chunkId: string }): string {
   return `${hit.sourceId}/${hit.chunkId}`
 }

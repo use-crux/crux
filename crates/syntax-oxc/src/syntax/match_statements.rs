@@ -4,7 +4,9 @@ use oxc_semantic::Scoping;
 use crate::{
     protocol::StaticSourceMatch,
     syntax::match_build::{MatchContext, match_from_declarator, new_match, traversal_needles},
-    syntax::match_expressions::{visit_expression, visit_expression_call},
+    syntax::match_expressions::{
+        visit_expression, visit_expression_call, visit_expression_children,
+    },
     syntax::match_interests::CalleeMatcher,
     syntax::semantic_imports::SemanticImportIndex,
     syntax::semantic_initializers::SemanticInitializerIndex,
@@ -34,6 +36,7 @@ pub(crate) fn collect_matches(
                 view,
                 initializer_index,
                 scope_id: scoping.root_scope_id(),
+                root_scope_id: scoping.root_scope_id(),
                 imports,
                 call_matcher,
                 constructor_matcher,
@@ -75,6 +78,7 @@ pub(crate) fn visit_statement(
                 }
             }
         }
+        Statement::ClassDeclaration(class) => visit_class(context, class, matches),
         Statement::ExpressionStatement(statement) => {
             visit_expression(context, &statement.expression, matches);
         }
@@ -120,7 +124,30 @@ fn visit_declaration(
                 }
             }
         }
+        Declaration::ClassDeclaration(class) => visit_class(context, class, matches),
         _ => {}
+    }
+}
+
+fn visit_class(
+    context: MatchContext<'_, '_>,
+    class: &Class<'_>,
+    matches: &mut Vec<StaticSourceMatch>,
+) {
+    for element in &class.body.body {
+        match element {
+            ClassElement::PropertyDefinition(property) if property.r#static => {
+                if let Some(value) = &property.value {
+                    visit_expression(context, value, matches);
+                }
+            }
+            ClassElement::StaticBlock(block) => {
+                for statement in &block.body {
+                    visit_statement(context, statement, false, matches);
+                }
+            }
+            _ => {}
+        }
     }
 }
 
@@ -131,12 +158,47 @@ fn visit_variable_declarator(
     matches: &mut Vec<StaticSourceMatch>,
 ) {
     if let Some(match_record) = match_from_declarator(context, declarator, exported) {
+        let owner = match_variable_name(&match_record).to_string();
         matches.push(match_record);
+        let nested_start = matches.len();
+        if let Some(init) = &declarator.init {
+            visit_expression_children(context, init, matches);
+        }
+        for nested in &mut matches[nested_start..] {
+            set_owner_variable_name(nested, &owner);
+        }
         return;
     }
     visit_binding_pattern(context, &declarator.id, matches);
     if let Some(init) = &declarator.init {
         visit_expression(context, init, matches);
+    }
+}
+
+fn match_variable_name(source_match: &StaticSourceMatch) -> &str {
+    match source_match {
+        StaticSourceMatch::Call { variable_name, .. }
+        | StaticSourceMatch::New { variable_name, .. }
+        | StaticSourceMatch::Object { variable_name, .. } => variable_name,
+    }
+}
+
+fn set_owner_variable_name(source_match: &mut StaticSourceMatch, owner: &str) {
+    match source_match {
+        StaticSourceMatch::Call {
+            owner_variable_name,
+            ..
+        }
+        | StaticSourceMatch::New {
+            owner_variable_name,
+            ..
+        }
+        | StaticSourceMatch::Object {
+            owner_variable_name,
+            ..
+        } => {
+            *owner_variable_name = Some(owner.to_string());
+        }
     }
 }
 
@@ -199,6 +261,9 @@ fn visit_export_default(
                     visit_statement(context, statement, false, matches);
                 }
             }
+        }
+        ExportDefaultDeclarationKind::ClassDeclaration(class) => {
+            visit_class(context, class, matches);
         }
         _ => {}
     }

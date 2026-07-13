@@ -41,6 +41,7 @@ import { CassetteMissError, cassettePath, openCassetteSession, type CassetteSess
 import { ensureCassetteDispatcher, withCassetteSession } from './cassette-context'
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction, truncateOutput } from './redact'
+import { sanitizeMediaPreview } from '../../observability/media-preview'
 import { isFailureOutcome, redactAssertionOutcomes } from './assertion-outcomes'
 import { resolveAssertionSourceFrames, resolveSourceFrameFromSourceRef } from './source-frames'
 import { runAssertionCallbacks, type AssertionCallback } from './assertion-callbacks'
@@ -754,6 +755,11 @@ interface CellPlan {
   variant: VariantContext
 }
 
+/** Apply configured redaction, then replace all media with bounded descriptors. */
+function safeQualitySnapshot(value: unknown, redactPaths: readonly string[]): unknown {
+  return sanitizeMediaPreview(applyRedaction(value, redactPaths))
+}
+
 function skippedPlanCell(
   plan: CellPlan,
   reason: string,
@@ -766,7 +772,7 @@ function skippedPlanCell(
     trial: plan.trial,
     status: 'skipped',
     skipReason: reason,
-    input: applyRedaction(plan.resolved.raw.input, redactPaths),
+    input: safeQualitySnapshot(plan.resolved.raw.input, redactPaths),
     scores: [],
     assertions: { ran: 0, notEvaluated: 0, outcomes: [] },
     durationMs: 0,
@@ -1165,10 +1171,10 @@ async function assembleCell(args: {
     score: cellError !== undefined ? 0 : passed ? 1 : 0,
   })
 
-  const redactedOutput = truncateOutput(applyRedaction(output, input.redactPaths))
+  const redactedOutput = truncateOutput(safeQualitySnapshot(output, input.redactPaths))
 
   const metadata: Record<string, unknown> = {
-    ...(rawCase.metadata !== undefined ? rawCase.metadata : {}),
+    ...(rawCase.metadata !== undefined ? safeQualitySnapshot(rawCase.metadata, input.redactPaths) as Record<string, unknown> : {}),
     ...(redactedOutput.truncated ? { truncated: true } : {}),
     ...(cached ? { cached: true } : {}),
   }
@@ -1179,16 +1185,16 @@ async function assembleCell(args: {
     variantName: plan.variant.name,
     trial: plan.trial,
     status: cellError !== undefined ? 'errored' : passed ? 'passed' : 'failed',
-    input: applyRedaction(rawCase.input, input.redactPaths),
+    input: safeQualitySnapshot(rawCase.input, input.redactPaths),
     ...(cellError === undefined ? { output: redactedOutput.value } : {}),
-    ...(rawCase.expected !== undefined ? { expected: applyRedaction(rawCase.expected, input.redactPaths) } : {}),
-    scores,
+    ...(rawCase.expected !== undefined ? { expected: safeQualitySnapshot(rawCase.expected, input.redactPaths) } : {}),
+    scores: sanitizeMediaPreview(scores) as typeof scores,
     assertions: {
       ran: recorder.ran,
       notEvaluated,
-      outcomes,
+      outcomes: sanitizeMediaPreview(outcomes) as typeof outcomes,
     },
-    ...(cellError !== undefined ? { error: cellError } : {}),
+    ...(cellError !== undefined ? { error: sanitizeMediaPreview(cellError) as CellRuntimeError } : {}),
     durationMs,
     ...(signals.costUsd !== undefined ? { costUsd: signals.costUsd } : {}),
     ...(usageOf(signals) !== undefined ? { usage: usageOf(signals) } : {}),
@@ -1615,7 +1621,7 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
           trial: 0,
           status: 'skipped',
           ...(typeof skip === 'string' ? { skipReason: skip } : {}),
-          input: applyRedaction(resolved.raw.input, redactPaths),
+          input: safeQualitySnapshot(resolved.raw.input, redactPaths),
           scores: [],
           assertions: { ran: 0, notEvaluated: 0, outcomes: [] },
           durationMs: 0,
@@ -1819,7 +1825,7 @@ async function runEvaluationInner(definition: EvaluationDefinition, overrides?: 
       variants: variantContexts.map((context) => ({
         name: context.name,
         overrideKeys: context.overrideKeys,
-        ...(context.overrides !== undefined ? { overrides: context.overrides } : {}),
+        ...(context.overrides !== undefined ? { overrides: safeQualitySnapshot(context.overrides, redactPaths) as Record<string, unknown> } : {}),
       })),
       cells: cells,
       aggregates: { perVariant: aggregates },

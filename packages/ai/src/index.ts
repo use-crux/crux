@@ -44,7 +44,6 @@ import type {
   AnyPrompt,
   AnyToolSet,
   Context,
-  ResolvedPrompt,
   MergedInput,
   GenerationSettings,
   Message,
@@ -67,9 +66,7 @@ import type {
   GenerateResult,
   StreamResult,
 } from "@use-crux/core/adapter";
-import {
-  CruxTransportStreamUnsupportedError,
-} from "@use-crux/core/adapter";
+import { CruxTransportStreamUnsupportedError } from "@use-crux/core/adapter";
 import type { ToolApprovalMap, ToolMiddleware } from "@use-crux/core";
 import { resolveModel } from "@use-crux/core/routing";
 import type {
@@ -87,7 +84,12 @@ import type {
 import type { ValidationRetryOptions } from "@use-crux/core";
 import type { SdkGateway } from "./gateway";
 import { liveSdkGateway } from "./gateway";
-import type { AIExtra, AIGenerateOptions, AITransport } from "./options";
+import type {
+  AIExtra,
+  AIGenerateOptions,
+  AIMessageHistory,
+  AITransport,
+} from "./options";
 import type { SdkLoopResultLike } from "./executor";
 import type {
   AIEmbeddingConfig,
@@ -103,7 +105,10 @@ import {
   createManualAiSdkGatewayController,
   transportGateway,
 } from "./call-handle";
-import { normalizeAiSdkMessages } from "./messages";
+import { prepareAiSdkMessages } from "./native-messages";
+import type { AITranscribe } from "./transcription";
+import type { AIGenerateImage } from "./image-generation";
+import type { AIGenerateSpeech } from "./speech";
 export { fromResponse, toParams } from "./codec";
 export type { AiSdkCodecOptions } from "./codec";
 
@@ -111,7 +116,18 @@ export type { AiSdkCodecOptions } from "./codec";
 // Options Types
 // ─────────────────────────────────────────────────────────────────
 
-export type { AIExtra, AIGenerateOptions, AITransport, AITransportInfo } from "./options";
+export type {
+  AIExtra,
+  AIGenerateOptions,
+  AITransport,
+  AITransportInfo,
+} from "./options";
+export type { AIGenerateImage, AIImageExtra } from "./image-generation";
+export type {
+  AIGenerateSpeech,
+  AISpeechExtra,
+  AISpeechMetadata,
+} from "./speech";
 
 // ─────────────────────────────────────────────────────────────────
 // Result Types
@@ -132,7 +148,9 @@ export type ObjectStreamResult<T> = StreamObjectResult<
 export type GenerateReturn<TOutput extends z.ZodType | undefined> =
   TOutput extends z.ZodType<infer O>
     ? GenerateResult<GenerateObjectResult<O> | undefined, O>
-    : GenerateResult<GenerateTextResult<Record<string, never>, never> | undefined>;
+    : GenerateResult<
+        GenerateTextResult<Record<string, never>, never> | undefined
+      >;
 
 /** Return type for `stream()` — discriminates on the prompt's output schema. */
 export type StreamReturn<TOutput extends z.ZodType | undefined> =
@@ -227,6 +245,12 @@ export interface CruxAiOptions {
 
 /** The bound API surface returned by {@link createCruxAi}. */
 export interface CruxAi {
+  /** Run one stateless AI SDK image operation without entering a language loop. */
+  generateImage: AIGenerateImage;
+  /** Run one stateless AI SDK transcription operation. */
+  transcribe: AITranscribe;
+  /** Run one stateless AI SDK speech operation. */
+  generateSpeech: AIGenerateSpeech;
   /** See the package-level {@link generate}. */
   generate<
     TOwnInput extends z.ZodType,
@@ -295,7 +319,13 @@ export interface CruxAi {
       TRuntimeContext,
       TModel
     >,
-  ): Promise<CallHandle<Record<string, unknown>, SdkLoopResultLike, GenerateReturn<TOutput>>>;
+  ): Promise<
+    CallHandle<
+      Record<string, unknown>,
+      SdkLoopResultLike,
+      GenerateReturn<TOutput>
+    >
+  >;
   /** See the package-level {@link generateTextFn}. */
   generateTextFn: GenerateTextFn;
   /** See the package-level {@link generateObjectFn}. */
@@ -318,7 +348,7 @@ type CallOpts = Record<string, unknown> & {
   runtimeContext?: unknown;
   toolMiddleware?: ToolMiddleware | readonly ToolMiddleware[];
   toolApproval?: ToolApprovalMap;
-  messages?: ResolvedPrompt["messages"];
+  messages?: AIMessageHistory;
   maxSteps?: number;
   extra?: AIExtra;
   activeTools?: readonly string[];
@@ -400,6 +430,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       ...settings
     } = opts;
 
+    const messagePlan = prepareAiSdkMessages(messages);
     const executorOptions = {
       model,
       input,
@@ -410,7 +441,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       runtimeContext,
       toolMiddleware,
       toolApproval,
-      messages: messages ? normalizeAiSdkMessages(messages) : undefined,
+      messages: messagePlan.messages,
+      nativeMessages: messagePlan.nativeMessages,
       tokenBudget,
       timeout,
       validationRetry,
@@ -436,7 +468,11 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     opts: CallOpts,
   ): Promise<GenerateResult<SdkLoopResultLike | undefined>> {
     if (opts.transport) {
-      return runGenerate(aiSdkProviderRuntime.create(transportGateway(opts.transport)), prompt, opts);
+      return runGenerate(
+        aiSdkProviderRuntime.create(transportGateway(opts.transport)),
+        prompt,
+        opts,
+      );
     }
     return runGenerate(executor, prompt, opts);
   }
@@ -444,16 +480,27 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   async function prepareImpl(
     prompt: AnyPrompt,
     opts: CallOpts,
-  ): Promise<CallHandle<Record<string, unknown>, SdkLoopResultLike, GenerateResult<SdkLoopResultLike | undefined>>> {
+  ): Promise<
+    CallHandle<
+      Record<string, unknown>,
+      SdkLoopResultLike,
+      GenerateResult<SdkLoopResultLike | undefined>
+    >
+  > {
     const controller = createManualAiSdkGatewayController();
     const manualExecutor = aiSdkProviderRuntime.create({
+      generateImage: gateway.generateImage,
+      generateSpeech: gateway.generateSpeech,
+      transcribe: gateway.transcribe,
       generateText: (args) => controller.generateText(args),
       generateObject: (args) => controller.generateObject(args),
       streamText: () => {
         throw new TypeError("AI SDK call handles do not support streamText().");
       },
       streamObject: () => {
-        throw new TypeError("AI SDK call handles do not support streamObject().");
+        throw new TypeError(
+          "AI SDK call handles do not support streamObject().",
+        );
       },
       embedMany: gateway.embedMany,
       rerank: gateway.rerank,
@@ -497,6 +544,7 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 
     if (transport) throw new CruxTransportStreamUnsupportedError("ai-sdk");
 
+    const messagePlan = prepareAiSdkMessages(messages);
     const executorOptions = {
       model,
       input,
@@ -507,7 +555,8 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
       runtimeContext,
       toolMiddleware,
       toolApproval,
-      messages: messages ? normalizeAiSdkMessages(messages) : undefined,
+      messages: messagePlan.messages,
+      nativeMessages: messagePlan.nativeMessages,
       tokenBudget,
       timeout,
       constraints,
@@ -533,18 +582,28 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
     createStructuredGenerateObjectFn(gateway);
 
   const generateTextFnImpl: GenerateTextFn = async (options) => {
-    const run = async (model: LanguageModel, attemptOptions: { readonly signal?: AbortSignal } = {}) => {
+    const run = async (
+      model: LanguageModel,
+      attemptOptions: { readonly signal?: AbortSignal } = {},
+    ) => {
       const result = await gateway.generateText({
         model,
         system: options.system,
-        prompt: options.prompt,
-        ...(attemptOptions.signal ? { abortSignal: attemptOptions.signal } : {}),
+        ...(options.prompt !== undefined
+          ? { prompt: options.prompt }
+          : { messages: options.messages }),
+        ...(options.maxOutputTokens !== undefined
+          ? { maxOutputTokens: options.maxOutputTokens }
+          : {}),
+        ...(attemptOptions.signal
+          ? { abortSignal: attemptOptions.signal }
+          : {}),
       } as Parameters<SdkGateway["generateText"]>[0]);
       return { text: result.text };
     };
     return resolveModel<LanguageModel, { text: string }>(
       options.model as LanguageModel,
-      { prompt: options.prompt },
+      { prompt: options.prompt ?? "[messages]" },
       run,
       (model) => {
         const info = extractModelInfo(model);
@@ -555,6 +614,9 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
   };
 
   return {
+    generateImage: executor.generateImage,
+    generateSpeech: executor.generateSpeech,
+    transcribe: executor.transcribe,
     generate: generateFn,
     stream: streamFn,
     prepare: prepareFn,
@@ -571,6 +633,23 @@ export function createCruxAi(options: CruxAiOptions = {}): CruxAi {
 // ─────────────────────────────────────────────────────────────────
 
 const defaultAi = createCruxAi();
+
+/**
+ * Generate images through the AI SDK's native image operation.
+ *
+ * @example
+ * ```ts
+ * const result = await generateImage({ model: openai.image('gpt-image-1'), prompt: 'A quiet canal' })
+ * await assetStore.put(result.image) // optional, explicit persistence
+ * ```
+ */
+export const generateImage: AIGenerateImage = defaultAi.generateImage;
+
+/** Transcribe audio through exactly one native AI SDK transcription operation. */
+export const transcribe: AITranscribe = defaultAi.transcribe;
+
+/** Generate immediately usable speech audio through one native AI SDK operation. */
+export const generateSpeech: AIGenerateSpeech = defaultAi.generateSpeech;
 
 /**
  * Execute a prompt using the Vercel AI SDK.
@@ -695,6 +774,11 @@ export function reranker(config: AIRerankerConfig): Reranker {
 
 export { liveSdkGateway } from "./gateway";
 export type { SdkGateway } from "./gateway";
+export type {
+  AITranscribe,
+  AITranscriptionExtra,
+  AITranscriptionMetadata,
+} from "./transcription";
 export { createAiSdkLoopRuntime } from "./executor";
 export type {
   AiSdkLoopRuntime,

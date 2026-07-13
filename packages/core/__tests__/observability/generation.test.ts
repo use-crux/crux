@@ -10,7 +10,7 @@ import {
 } from '../../src/observability'
 import { resetHooks, updateHooks } from '../../src/runtime/runtime'
 import { expectBalancedGraph } from './helpers/expect-balanced-graph'
-import { imagePart, textPart } from '../../src/content'
+import { textPart } from '../../src/content'
 
 describe('generation observability', () => {
   afterEach(() => {
@@ -125,7 +125,7 @@ describe('generation observability', () => {
               role: 'user',
               content: [
                 textPart('inspect this chart'),
-                imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+                { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
               ],
             },
           ],
@@ -144,7 +144,13 @@ describe('generation observability', () => {
             role: 'user',
             content: [
               { type: 'text', text: 'inspect this chart' },
-              { type: 'image-data', data: expect.stringContaining('[image image/png 3B sha256:') },
+              {
+                kind: 'image',
+                mediaType: 'image/png',
+                sizeBytes: 3,
+                digestPrefix: expect.any(String),
+                sourceCategory: 'bytes',
+              },
             ],
           },
         ],

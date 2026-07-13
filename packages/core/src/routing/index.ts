@@ -27,6 +27,7 @@ export type {
   CallProfileParams,
   ComposedCtx,
   ComposedStream,
+  CompletedOperationModel,
   CtxOf,
   InOf,
   InputOk,

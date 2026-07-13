@@ -91,12 +91,11 @@ const searchApi = retriever({
 
     return results.map((result) => ({
       namespace: 'docs',
-      sourceId: result.documentId,
+      source: { id: result.documentId, url: result.url },
       chunkId: result.sectionId,
       content: result.text,
       metadata: result.metadata,
       score: result.score,
-      sourceUrl: result.url,
     }))
   },
 })

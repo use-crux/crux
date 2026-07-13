@@ -61,12 +61,12 @@ describe('aiSdkProviderRuntime', () => {
       reranker.rerank({
         query: 'needle',
         hits: [
-          { namespace: 'n', sourceId: 'a', chunkId: 'a1', content: 'first', metadata: {}, score: 0.1 },
-          { namespace: 'n', sourceId: 'b', chunkId: 'b1', content: 'second', metadata: {}, score: 0.2 },
+          { namespace: 'n', source: { id: 'a' }, chunkId: 'a1', content: 'first', metadata: {}, score: 0.1 },
+          { namespace: 'n', source: { id: 'b' }, chunkId: 'b1', content: 'second', metadata: {}, score: 0.2 },
         ],
       }),
     ).resolves.toEqual([
-      { namespace: 'n', sourceId: 'b', chunkId: 'b1', content: 'second', metadata: {}, score: 0.9 },
+      { namespace: 'n', source: { id: 'b' }, chunkId: 'b1', content: 'second', metadata: {}, score: 0.9 },
     ])
     expect(scripted.calls.embedMany[0]?.values).toEqual(['hello'])
     expect(scripted.calls.generateText[0]?.model).toBe('language-model')

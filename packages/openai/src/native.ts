@@ -1,16 +1,22 @@
-import type OpenAI from 'openai'
-import type { ChatCompletion } from 'openai/resources/chat/completions'
+import type OpenAI from "openai";
+import type { ChatCompletion } from "openai/resources/chat/completions";
 import {
   classifyProviderHttpError,
   defineSingleTurnProviderBundle,
-} from '@use-crux/core/adapter'
+} from "@use-crux/core/adapter";
 import type {
   CruxProviderError,
   NativeProviderPort,
   SingleTurnProviderBundleSpec,
-} from '@use-crux/core/adapter'
-import { judgeReranker, type Reranker, type RetrievalModel, type RetrieverHit } from '@use-crux/core/retrieval'
-import { openAITranscript } from './message-codec'
+} from "@use-crux/core/adapter";
+import {
+  judgeReranker,
+  type Reranker,
+  type RetrievalModel,
+  type RetrieverHit,
+} from "@use-crux/core/retrieval";
+import { openAITranscript } from "./message-codec";
+import { openAIMediaHooks } from "./media-preflight";
 import {
   asOpenAINonStreamingParams,
   asOpenAIStreamingParams,
@@ -18,26 +24,34 @@ import {
   openAIRequest,
   openAISettings,
   openAIStreamRequest,
-} from './request'
-import { openAIResponseMeta, openAIResponseText } from './response'
-import { createOpenAIStreamCapture, OpenAIChatStream, openAITextDelta } from './stream'
-import type { OpenAIChatRequest, OpenAIExtra } from './types'
+} from "./request";
+import { openAIResponseMeta, openAIResponseText } from "./response";
+import {
+  createOpenAIStreamCapture,
+  OpenAIChatStream,
+  openAIStreamCompletion,
+  openAITextDelta,
+} from "./stream";
+import type { OpenAIChatRequest, OpenAIExtra } from "./types";
+import { createOpenAIImageOperation } from "./image-generation";
+import { createOpenAITranscriptionOperation } from "./transcription";
+import { createOpenAISpeechOperation } from "./speech";
 
 /** Configuration for `openai.retrievalModel()`. */
 export interface OpenAIRetrievalModelConfig {
-  model: string
+  model: string;
 }
 
 /** Configuration for `openai.reranker()`. */
 export interface OpenAIRerankerConfig extends OpenAIRetrievalModelConfig {
-  name?: string
-  topN?: number
-  document?: (hit: RetrieverHit) => string
+  name?: string;
+  topN?: number;
+  document?: (hit: RetrieverHit) => string;
 }
 
 /** OpenAI single-turn provider bundle compiled by core. */
 const openAI = defineSingleTurnProviderBundle({
-  id: 'openai',
+  id: "openai",
   bind: bindOpenAI,
   profile: {
     request: openAIRequest,
@@ -48,12 +62,14 @@ const openAI = defineSingleTurnProviderBundle({
     stream: {
       request: openAIStreamRequest,
       textDelta: openAITextDelta,
-      completion: async (stream) => stream.finalMeta(),
+      completion: (_stream, chunks, request) =>
+        openAIStreamCompletion(chunks, request),
     },
     mapError: mapOpenAIError,
     settings: openAISettings,
     outputSchema: openAIOutputSchema,
     transcript: openAITranscript,
+    media: openAIMediaHooks,
   } satisfies SingleTurnProviderBundleSpec<
     OpenAI,
     OpenAIChatRequest,
@@ -62,9 +78,12 @@ const openAI = defineSingleTurnProviderBundle({
     OpenAIExtra,
     Record<string, never>,
     OpenAI.ChatCompletionMessageParam
-  >['profile'],
+  >["profile"],
+  image: createOpenAIImageOperation,
+  transcription: createOpenAITranscriptionOperation,
+  speech: createOpenAISpeechOperation,
   extend: ({ client }) => createOpenAIRuntimeExtensions(client),
-})
+});
 
 /**
  * Public OpenAI provider runtime.
@@ -73,7 +92,7 @@ const openAI = defineSingleTurnProviderBundle({
  * per turn, while Crux owns prompt resolution, tool loops, validation retry,
  * safety, observability, and memory capture.
  */
-export const openaiProviderRuntime = openAI.runtime
+export const openaiProviderRuntime = openAI.runtime;
 
 /** Bind an OpenAI SDK client to the narrow native chat provider port. */
 function bindOpenAI(
@@ -81,50 +100,78 @@ function bindOpenAI(
 ): NativeProviderPort<OpenAIChatRequest, ChatCompletion, OpenAIChatStream> {
   return {
     call: (request, mode, options) =>
-      mode === 'structured'
-        ? client.chat.completions.parse(asOpenAINonStreamingParams(request), { signal: options?.signal })
-        : client.chat.completions.create(asOpenAINonStreamingParams(request), { signal: options?.signal }),
+      mode === "structured"
+        ? client.chat.completions.parse(asOpenAINonStreamingParams(request), {
+            signal: options?.signal,
+          })
+        : client.chat.completions.create(asOpenAINonStreamingParams(request), {
+            signal: options?.signal,
+          }),
     stream: async (request, options) =>
       createOpenAIStreamCapture(
         await client.chat.completions.create(asOpenAIStreamingParams(request), {
           signal: options?.signal,
         }),
       ),
-  }
+  };
 }
 
 /** Classify an OpenAI SDK error into the normalized provider-error taxonomy. */
 function mapOpenAIError(error: unknown): CruxProviderError | undefined {
-  return classifyProviderHttpError(error, 'openai')
+  return classifyProviderHttpError(error, "openai");
 }
 
 /** Create an OpenAI adapter bound to a client instance. */
-export const createOpenAI = openAI.create
+export const createOpenAI = openAI.create;
 
 /** Lightweight helper factory generated from the OpenAI provider runtime. */
-export const openAIHelpers = openAI.helpers()
+export const openAIHelpers = openAI.helpers();
 
 function createOpenAIRuntimeExtensions(client: OpenAI): {
-  retrievalModel(config: OpenAIRetrievalModelConfig): RetrievalModel
-  reranker(config: OpenAIRerankerConfig): Reranker
+  retrievalModel(config: OpenAIRetrievalModelConfig): RetrievalModel;
+  reranker(config: OpenAIRerankerConfig): Reranker;
 } {
-  const retrievalModel = (config: OpenAIRetrievalModelConfig): RetrievalModel => {
-    const generateText = openAIHelpers.createGenerateTextFn(client, config.model)
-    const generateObject = openAIHelpers.createGenerateObjectFn(client, config.model)
+  const retrievalModel = (
+    config: OpenAIRetrievalModelConfig,
+  ): RetrievalModel => {
+    const generateText = openAIHelpers.createGenerateTextFn(
+      client,
+      config.model,
+    );
+    const generateObject = openAIHelpers.createGenerateObjectFn(
+      client,
+      config.model,
+    );
     return {
-      generateText: (args) => generateText({ ...args, model: config.model }),
-      generateObject: (args) => generateObject({ ...args, model: config.model }),
-    }
-  }
+      generateText: (args) =>
+        generateText(
+          args.messages
+            ? {
+                model: config.model,
+                system: args.system,
+                maxOutputTokens: args.maxOutputTokens,
+                messages: args.messages,
+              }
+            : {
+                model: config.model,
+                system: args.system,
+                maxOutputTokens: args.maxOutputTokens,
+                prompt: args.prompt ?? "",
+              },
+        ),
+      generateObject: (args) =>
+        generateObject({ ...args, model: config.model }),
+    };
+  };
   return {
     retrievalModel,
     reranker(config) {
       return judgeReranker({
         model: retrievalModel(config),
-        name: config.name ?? 'openai-judge',
+        name: config.name ?? "openai-judge",
         topN: config.topN,
         document: config.document,
-      })
+      });
     },
-  }
+  };
 }

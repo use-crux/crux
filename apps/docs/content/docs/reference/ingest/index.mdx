@@ -65,7 +65,10 @@ Parsers turn bytes into structured `parts`. The source decides the format from f
 | `text` | `txt`, `unknown` | `text` part | Plain text fallback. Unknown files/URLs are treated as text unless a custom parser overrides them. |
 | `markdown` | `md` | `text`, `table` parts | Parses Markdown + GFM. Preserves heading paths and table rows. |
 | `html` | `html` | `text`, `table` parts | Extracts title, headings, paragraphs, list items, code/pre blocks, and tables. |
-| `pdf` | `pdf` | `page` parts | Uses `pdfjs-dist`; image-only pages can call an OCR hook and otherwise emit warnings. |
+| `pdf` | `pdf` | `page` parts | Uses `pdfjs-dist`; visual-only pages can use the caller's `media.describe` operation. |
+| `image` | `image` | `text` parts | Uses the explicitly bound `media.describe` operation. |
+| `audio` | `audio` | `text` parts | Uses `media.transcribe` and preserves measured seconds intervals. |
+| `video` | `video` | `text` parts | Uses explicit visual description, soundtrack transcription, or both; never samples frames implicitly. |
 | `csv` | `csv` | `table` part | Produces one table with rows, columns, and row range metadata. |
 | `json` | `json` | `json` parts | Produces one part per JSON path, including nested objects and arrays. |
 | `docx` | `docx` | `text`, `table` parts | Converts DOCX to HTML with Mammoth, then uses the HTML parser. Mammoth warnings become ingest warnings. |
@@ -111,7 +114,7 @@ type IngestPart =
       role?: 'heading' | 'paragraph' | 'list' | 'code'
       headingPath?: string[]
     }
-  | { kind: 'page'; id: string; pageNumber: number; content: string; ocr?: boolean }
+  | { kind: 'page'; id: string; pageNumber: number; content: string; sourceLocation?: { type: 'page'; pageNumber: number } }
   | { kind: 'table'; id: string; rows: string[][]; columns?: string[]; content: string }
   | { kind: 'sheet'; id: string; sheetName: string; tables: IngestPart[]; content: string }
   | { kind: 'json'; id: string; path: string; valueType: string; content: string }
@@ -119,6 +122,7 @@ type IngestPart =
 interface IngestDocument {
   namespace: string
   sourceId: string
+  source?: { url?: string; path?: string; assetRef?: AssetRef; mediaType?: string }
   parts: IngestPart[]
   content: string
   title?: string
@@ -184,7 +188,7 @@ type IngestParser = {
 }
 ```
 
-Built-in parsers cover `txt`, `md`, `html`, `pdf`, `csv`, `json`, `docx`, and `xlsx`. Pass `parsers` to a source to override a built-in parser or add a source-local parser. Custom parsers win over built-ins for matching formats.
+Built-in parsers cover `txt`, `md`, `html`, `pdf`, `image`, `audio`, `video`, `csv`, `json`, `docx`, and `xlsx`. Pass `parsers` to a source to override a built-in parser or add a source-local parser. Custom parsers win over built-ins for matching formats.
 
 ```ts
 const loader = fileSource('./docs/manual.acme', {
@@ -201,7 +205,27 @@ const loader = fileSource('./docs/manual.acme', {
 })
 ```
 
-PDF parsing supports an OCR hook. Crux does not ship an OCR provider, but image-only pages can call your hook and mark the page part with `ocr: true`.
+Media derivation is application-bound and provider-neutral:
+
+```ts
+const media: IngestMediaOperations = {
+  describe: async ({ messages, maxOutputTokens, abortSignal }) => {
+    const result = await generate(describePrompt, {
+      model: visionModel,
+      input: {},
+      messages,
+      maxOutputTokens,
+      abortSignal,
+    })
+    return { text: result.text }
+  },
+  transcribe: ({ audio, abortSignal }) => transcribe({ model: audioModel, audio, abortSignal }),
+}
+
+const loader = fileSource('./docs/demo.mp4', { namespace: 'docs', media })
+```
+
+The application closes over provider and model choice. Ingest does not select a model, persist media, sample video frames, or expose a removed generation alias.
 
 ## Pattern: pipe into a corpus
 

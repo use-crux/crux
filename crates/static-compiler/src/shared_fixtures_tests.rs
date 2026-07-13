@@ -341,9 +341,19 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             "runtime.non_literal_target_name",
             "runtime.target_not_exported",
             "runtime.closure_defer",
+            "defer.replay_unsafe",
+            "defer.floating_named_promise",
+            "defer.missing_scope",
             "runtime.missing_runtime_config",
             "flow.nondeterministic_code",
-            "runtime.non_serializable_payload"
+            "runtime.non_serializable_payload",
+            "media.unsupported-capability",
+            "media.invalid-provider-file",
+            "media.asset-ref-not-hydrated",
+            "media.missing-derivation",
+            "media.missing-attribution",
+            "media.output-discarded",
+            "media.raw-retention"
         ]
     );
 
@@ -356,7 +366,7 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
             .iter()
             .any(|class| class == "dependencies")
     );
-    assert_eq!(coverage.identities.len(), 19);
+    assert_eq!(coverage.identities.len(), 22);
 
     // The Rust first-party projection manifest must cover exactly these
     // identities, with the same stable replacement identity it stamps when it
@@ -376,7 +386,13 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
         "first-party manifest must project exactly the covered extractor identities"
     );
     for identity in &manifest_identities {
-        assert_eq!(identity.extension, "@use-crux/indexer/crux-core");
+        let expected_extension =
+            if matches!(identity.extractor, "media.operation" | "ingest.source") {
+                "@use-crux/indexer/crux-core-media"
+            } else {
+                "@use-crux/indexer/crux-core"
+            };
+        assert_eq!(identity.extension, expected_extension);
         assert_eq!(
             identity.family, identity.extractor,
             "{} family",
@@ -385,12 +401,27 @@ fn shared_relation_rule_and_coverage_fixtures_decode() {
     }
 
     for identity in coverage.identities {
-        assert_eq!(identity.extension, "@use-crux/indexer/crux-core");
+        let media = matches!(
+            identity.extractor.as_str(),
+            "media.operation" | "ingest.source"
+        );
+        assert_eq!(
+            identity.extension,
+            if media {
+                "@use-crux/indexer/crux-core-media"
+            } else {
+                "@use-crux/indexer/crux-core"
+            }
+        );
         assert_eq!(identity.family, identity.extractor);
         assert!(identity.native_covered);
         assert_eq!(
             identity.parity_fixtures.negative,
-            "first-party-native-negative-fixtures.test.ts"
+            if media {
+                "media-native-static.test.ts"
+            } else {
+                "first-party-native-negative-fixtures.test.ts"
+            }
         );
         assert_eq!(
             identity.parity_fixtures.positive,
@@ -419,16 +450,22 @@ where
 fn fixture_text(name: &str) -> &'static str {
     match name {
         "static-index-protocol.json" => {
-            include_str!("../../../packages/indexer/src/contracts/fixtures/static-index-protocol.json")
+            include_str!(
+                "../../../packages/indexer/src/contracts/fixtures/static-index-protocol.json"
+            )
         }
         "static-index-protocol-cases.json" => include_str!(
             "../../../packages/indexer/src/contracts/fixtures/static-index-protocol-cases.json"
         ),
         "static-index-identity.json" => {
-            include_str!("../../../packages/indexer/src/contracts/fixtures/static-index-identity.json")
+            include_str!(
+                "../../../packages/indexer/src/contracts/fixtures/static-index-identity.json"
+            )
         }
         "static-syntax-records.json" => {
-            include_str!("../../../packages/indexer/src/contracts/fixtures/static-syntax-records.json")
+            include_str!(
+                "../../../packages/indexer/src/contracts/fixtures/static-syntax-records.json"
+            )
         }
         "static-syntax-record-cases.json" => include_str!(
             "../../../packages/indexer/src/contracts/fixtures/static-syntax-record-cases.json"

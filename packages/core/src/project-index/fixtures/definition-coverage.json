@@ -403,7 +403,7 @@
       "definitionRef": null
     },
     {
-      "kind": "storage.blobStore",
+      "kind": "storage.assetStore",
       "primary": "runtime-contributor",
       "secondary": [],
       "runtimePrimitiveNames": [
@@ -427,6 +427,43 @@
         "kind": "toolPolicy",
         "role": "contributed-tool-policy"
       }
+    },
+    {
+      "kind": "deferred-work",
+      "primary": "runtime-observed-unjoined",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "defer.scheduled",
+        "defer.run"
+      ],
+      "expectedTreatment": "runtime-unjoined",
+      "definitionRef": null
+    },
+    {
+      "kind": "media.operation",
+      "primary": "runtime-observed-unjoined",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "generation.call",
+        "generation.stream",
+        "media.generate_image",
+        "media.transcribe",
+        "media.generate_speech",
+        "media.describe"
+      ],
+      "expectedTreatment": "runtime-unjoined",
+      "definitionRef": null
+    },
+    {
+      "kind": "ingest.source",
+      "primary": "runtime-observed-unjoined",
+      "secondary": [],
+      "runtimePrimitiveNames": [
+        "ingest.parse",
+        "corpus.sync"
+      ],
+      "expectedTreatment": "runtime-unjoined",
+      "definitionRef": null
     },
     {
       "kind": "flow.step",

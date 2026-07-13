@@ -8,6 +8,8 @@ export type StaticSourceMatch = StaticCallSourceMatch | StaticNewSourceMatch | S
 export interface StaticSourceMatchBase {
   /** Authored binding name or deterministic fallback for call-site matches. */
   readonly variableName: string
+  /** Authored variable whose initializer lexically contains this nested match. */
+  readonly ownerVariableName?: string
   /** Project-relative deterministic fallback name. */
   readonly localName: string
   /** Whether the declaration was exported from this source file. */
@@ -23,6 +25,8 @@ export interface StaticSourceMatchBase {
 /** Factory call match such as `prompt({ ... })`. */
 export interface StaticCallSourceMatch extends StaticSourceMatchBase {
   readonly kind: 'call'
+  /** Whether syntax proves the call runs during eager module/class initialization. */
+  readonly eagerExecution?: boolean
   readonly callee: StaticCalleeRecord
   readonly args: readonly StaticSyntaxValue[]
   readonly objectArg?: StaticObjectValue

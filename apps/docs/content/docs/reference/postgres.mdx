@@ -1,12 +1,12 @@
 ---
-title: '@use-crux/postgres'
+title: "@use-crux/postgres"
 description: Postgres Runtime Engine store adapter for durable Crux work, flow snapshots, events, waiters, timers, leases, outbox rows, and setup checks.
 ---
 
 Peer dependency: `pg` >=8.22.0
 
 ```ts
-import { postgres } from '@use-crux/postgres/runtime'
+import { postgres } from "@use-crux/postgres/runtime";
 ```
 
 `@use-crux/postgres/runtime` provides the first-party durable store for the Runtime Engine. Use it with `node({ store })` for long-lived Node processes or with `serverless({ store, wake })` for HTTP-woken deployments.
@@ -14,38 +14,38 @@ import { postgres } from '@use-crux/postgres/runtime'
 ## `postgres(options?)`
 
 ```ts
-import { config } from '@use-crux/core'
-import { serverless } from '@use-crux/core/runtime'
-import { postgres } from '@use-crux/postgres/runtime'
-import { qstash } from '@use-crux/upstash/runtime'
+import { config } from "@use-crux/core";
+import { serverless } from "@use-crux/core/runtime";
+import { postgres } from "@use-crux/postgres/runtime";
+import { qstash } from "@use-crux/upstash/runtime";
 
 export default config({
   runtime: serverless({
     store: postgres({
       url: process.env.DATABASE_URL,
-      schema: 'crux_runtime',
+      schema: "crux_runtime",
     }),
     wake: qstash(),
   }),
-})
+});
 ```
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `url` | `string` | `DATABASE_URL` | Postgres connection URL. |
-| `schema` | `string` | `'crux_runtime'` | Dedicated schema for Crux-owned runtime tables and indexes. |
-| `pool` | `Pool` | created from `url` | Caller-supplied `pg` pool. |
+| Option       | Type                              | Default             | Description                                                     |
+| ------------ | --------------------------------- | ------------------- | --------------------------------------------------------------- |
+| `url`        | `string`                          | `DATABASE_URL`      | Postgres connection URL.                                        |
+| `schema`     | `string`                          | `'crux_runtime'`    | Dedicated schema for Crux-owned runtime tables and indexes.     |
+| `pool`       | `Pool`                            | created from `url`  | Caller-supplied `pg` pool.                                      |
 | `setup.mode` | `'verify' \| 'create-if-missing'` | production verifies | Controls whether setup may create missing Crux-owned resources. |
 
-The adapter stores work items, flow snapshots, durable events, waiters, timers, outbox rows, idempotency records, leases, and scoped-idle counters. Runtime payloads are JSON data; application blobs and large documents should stay in application storage.
+The adapter stores work items, flow snapshots, durable events, waiters, timers, outbox rows, idempotency records, leases, and scoped-idle counters. Runtime payloads are JSON data; application assets and large documents should stay in application storage.
 
 ## Setup
 
-`postgres()` exposes a setup port used by `crux runtime setup`:
+`postgres()` exposes a setup port used by `crux setup`:
 
 ```bash
-crux runtime setup --check
-crux runtime setup --apply
+crux setup --check
+crux setup --apply
 ```
 
 `--check` never mutates resources. `--apply` performs additive setup only: schema, tables, indexes, and advisory-lock migration state owned by Crux. Destructive migrations are not automatic.

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node", "vitest"],
+    "paths": {
+      "@use-crux/core": ["../core/src/index.ts"],
+      "@use-crux/core/defer/serverless": ["../core/src/defer/serverless.ts"],
+      "@use-crux/core/internal/defer-host": ["../core/src/defer/host.ts"],
+      "@use-crux/next": ["./src/index.ts"]
+    }
+  },
+  "include": ["src/**/*.ts", "__tests__/**/*.ts"],
+  "exclude": ["node_modules"]
+}

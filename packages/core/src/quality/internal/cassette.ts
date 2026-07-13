@@ -26,7 +26,7 @@ import type { InterceptedGeneration } from '../../adapter/interception'
 import type { NormalizedCall, ReplayMode } from '../replay'
 import { canonicalJson, sha256Hex } from './json'
 import { applyRedaction } from './redact'
-import { CASSETTE_CACHE_EPOCH, fingerprintSchema } from './cache-identity'
+import { CASSETTE_CACHE_EPOCH, fingerprintSchema, fingerprintValue } from './cache-identity'
 import { writeFileAtomic } from './fs-atomic'
 import { withFileLock } from './fs-lock'
 import { shouldQuarantineQualityWrite } from './capture-context'
@@ -65,12 +65,12 @@ export function cassettePath(dir: string, name: string): string {
  * by construction — they never reach {@link InterceptedGeneration}.
  */
 export function buildNormalizedCall(call: InterceptedGeneration): NormalizedCall {
-  const promptHash = sha256Hex(
-    canonicalJson({
+  const promptHash = fingerprintValue(
+    {
       system: call.system,
       prompt: call.prompt,
       messages: call.messages,
-    }),
+    },
   )
   return {
     epoch: CASSETTE_CACHE_EPOCH,
@@ -149,12 +149,13 @@ function toSerializable(value: unknown): unknown {
  */
 function projectResult(result: unknown): unknown {
   if (!isRecord(result)) return undefined
+  if (containsImplicitMedia(result)) return undefined
   if (result.status === 'complete') {
     return {
       status: 'complete',
       response: toSerializable(result.response),
       messages: toSerializable(result.messages) ?? [],
-      steps: typeof result.steps === 'number' ? result.steps : 1,
+      steps: Array.isArray(result.steps) ? result.steps.length : 1,
       meta: toSerializable(result.meta) ?? {},
     }
   }
@@ -176,8 +177,19 @@ function projectResult(result: unknown): unknown {
   return undefined
 }
 
+function containsImplicitMedia(value: unknown, seen = new WeakSet<object>()): boolean {
+  if (value instanceof Uint8Array || value instanceof ArrayBuffer || (typeof Blob !== 'undefined' && value instanceof Blob)) return true
+  if (!value || typeof value !== 'object') return false
+  if (seen.has(value)) return false
+  seen.add(value)
+  if ('type' in value && ['data', 'url', 'provider-file'].includes(String((value as { type?: unknown }).type))) return true
+  if (Array.isArray(value)) return value.some((entry) => containsImplicitMedia(entry, seen))
+  return Object.values(value as Record<string, unknown>).some((entry) => containsImplicitMedia(entry, seen))
+}
+
 /** Whole-value projection — the legacy `cassette.middleware()` path. */
 function projectValue(result: unknown): unknown {
+  if (containsImplicitMedia(result)) return undefined
   const value = toSerializable(result)
   if (value === undefined) return undefined
   return { status: 'value', value }

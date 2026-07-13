@@ -28,7 +28,13 @@ Create an adapter bound to an OpenAI client.
 
 `createOpenAI()` is `openaiProviderRuntime.create`. The package-owned `openAITranscript` owns message conversion plus assistant text/tool-call extraction; response metadata normalization, stream deltas, and settings/schema mapping stay in this package too. Crux still owns prompt resolution, tool loops, safety, validation retry, memory capture, and observability.
 
-OpenAI Chat content support maps image parts to `image_url`, wav/mp3 `file-data` parts to `input_audio`, and supported file data/file ids to OpenAI file parts. PDF URLs and unsupported role/content combinations degrade to deterministic placeholders unless strict unsupported-content mode is enabled. Assistant/user media returned in provider content arrays decodes back into canonical `ContentPart[]`. Chat Completions tool-result messages remain text-only, so non-text tool results become deterministic text references instead of raw base64.
+OpenAI Chat content support maps image parts to `image_url`, wav/mp3 `file` parts with data sources to `input_audio`, and supported file data/provider-file sources to OpenAI file parts. Unsupported model/content combinations throw after prompt resolution and before the client or custom transport runs. Assistant/user media returned in provider content arrays decodes back into canonical `ContentPart[]`. Chat Completions tool messages remain text-only; when a tool returns media, Crux sends the correlated text tool result followed by native media in a user content part on the same next turn.
+
+The package also exports native `generateImage()`, `transcribe()`, and
+`generateSpeech()` operations. Translation is selected through the
+transcription task union; requested timing/detail must match the selected
+endpoint. Returned image/audio assets are usable immediately and are never
+persisted implicitly. Typed `extra` records expose endpoint-specific controls.
 
 | Field    | Type     | Description                |
 | -------- | -------- | -------------------------- |
@@ -59,6 +65,31 @@ const result = await adapter.generate(editDraft, {
 result.text;
 result.usage;
 result.finalStep;
+```
+
+Media uses the same call and message list:
+
+```ts
+import { prompt } from "@use-crux/core";
+
+const describeChart = prompt({ id: "describe-chart" });
+
+await adapter.generate(describeChart, {
+  model: "gpt-4o",
+  messages: [
+    {
+      role: "user",
+      content: [
+        { type: "text", text: "Describe this chart." },
+        {
+          type: "image",
+          source: new URL("https://example.com/chart.png"),
+          providerOptions: { openai: { detail: "high" } },
+        },
+      ],
+    },
+  ],
+});
 ```
 
 ### `adapter.generate(prompt, options)`
@@ -179,7 +210,7 @@ Convert canonical `Message[]` to OpenAI `ChatCompletionMessageParam[]`.
 
 **Returns:** `ChatCompletionMessageParam[]`
 
-Assistant tool calls become OpenAI `tool_calls`; tool results become `tool` role messages with `tool_call_id`. Rich tool-result content is rendered to deterministic text parts because Chat Completions does not accept native image/PDF tool-result blocks.
+Assistant tool calls become OpenAI `tool_calls`; tool results become `tool` role messages with `tool_call_id`. For rich tool output, that correlated tool message keeps the safe text projection and a following user message carries the native media parts.
 
 `openAITranscript` is the lower-level `NativeTranscriptCodec` used by `createOpenAI()`. The public `toMessages()` and `fromMessages()` wrappers delegate to it.
 

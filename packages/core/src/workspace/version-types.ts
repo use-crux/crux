@@ -43,7 +43,7 @@ export type WorkspaceVersionOperation = "write" | "edit" | "append" | "undo";
 export interface WorkspaceVersioning {
   /**
    * Maximum number of versions to retain per file. When a write would exceed
-   * this count, the oldest snapshots (and their out-of-line blobs) are deleted.
+   * this count, the oldest snapshots (and their out-of-line assets) are deleted.
    * Defaults to unlimited — history is kept until explicitly bounded, so a file
    * never silently loses revisions.
    */
@@ -67,8 +67,8 @@ export interface WorkspaceVersion {
   readonly mimeType: string;
   /** Byte size of the revision's content. */
   readonly size: number;
-  /** Whether the revision's content is stored inline or in the blob store. */
-  readonly storage: "inline" | "blob";
+  /** Whether the revision's content is stored inline or in the asset store. */
+  readonly storage: "inline" | "asset";
   /** A short, redaction-safe text preview, when one is available. */
   readonly preview?: string;
   /** Epoch milliseconds when this revision was recorded. */
@@ -149,7 +149,7 @@ type WorkspaceVersionSnapshot = WorkspaceFileRecord & JsonObject;
  * Stored under a dedicated `version:` key prefix that never collides with the
  * live `file:` HEAD record, so listings and quota scans ignore history. The
  * embedded {@link WorkspaceFileRecord} is a frozen copy of the HEAD record as it
- * was at this version, including its version-scoped blob URI.
+ * was at this version, including its version-scoped asset URI.
  */
 export interface WorkspaceVersionRecord extends JsonObject {
   readonly _cruxWorkspaceVersion: true;

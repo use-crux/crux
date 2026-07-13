@@ -7,6 +7,7 @@ export const CRUX_CONTENT_DEGRADED_EVENT = "content.degraded" as const;
 export const CRUX_PRIMITIVE_FAMILIES = [
   "run",
   "generation",
+  "media",
   "prompt",
   "context",
   "agent",
@@ -37,6 +38,7 @@ export const CRUX_PRIMITIVE_FAMILIES = [
   "security",
   "feedback",
   "runtime",
+  "defer",
   "custom",
 ] as const;
 
@@ -44,6 +46,10 @@ export const CRUX_PRIMITIVE_NAMES = [
   "run",
   "generation.call",
   "generation.stream",
+  "media.generate_image",
+  "media.transcribe",
+  "media.generate_speech",
+  "media.describe",
   "prompt.resolve",
   "prompt.budget",
   "context.resolve",
@@ -103,6 +109,8 @@ export const CRUX_PRIMITIVE_NAMES = [
   "runtime.convex.schedule",
   "runtime.convex.resume",
   "runtime.convex.flush",
+  "defer.scheduled",
+  "defer.run",
   "custom.operation",
 ] as const;
 
@@ -127,6 +135,7 @@ export const CRUX_CANONICAL_EDGE_TYPES = [
   "eval.case_of",
   "comparison.baseline",
   "comparison.candidate",
+  "derived.from",
 ] as const;
 
 export const CRUX_CANONICAL_ARTIFACT_KINDS = [
@@ -168,12 +177,17 @@ export const CRUX_CANONICAL_ARTIFACT_KINDS = [
   "ingest.report",
   "corpus.report",
   "security.report",
+  "media.report",
 ] as const;
 
 export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   run: "run",
   "generation.call": "generation",
   "generation.stream": "generation",
+  "media.generate_image": "media",
+  "media.transcribe": "media",
+  "media.generate_speech": "media",
+  "media.describe": "media",
   "prompt.resolve": "prompt",
   "prompt.budget": "prompt",
   "context.resolve": "context",
@@ -233,6 +247,8 @@ export const CRUX_PRIMITIVE_FAMILY_BY_NAME = {
   "runtime.convex.schedule": "runtime",
   "runtime.convex.resume": "runtime",
   "runtime.convex.flush": "runtime",
+  "defer.scheduled": "defer",
+  "defer.run": "defer",
   "custom.operation": "custom",
 } as const satisfies Record<
   (typeof CRUX_PRIMITIVE_NAMES)[number],
@@ -263,7 +279,10 @@ export type CruxPrimitiveFamily = (typeof CRUX_PRIMITIVE_FAMILIES)[number];
 
 export type CruxPrimitiveName = (typeof CRUX_PRIMITIVE_NAMES)[number];
 
-export interface CruxContentDegradedEventAttributes extends Record<string, unknown> {
+export interface CruxContentDegradedEventAttributes extends Record<
+  string,
+  unknown
+> {
   partType: string;
   mediaType?: string;
   role: string;
@@ -359,7 +378,16 @@ export interface CruxPromptInputPreview {
 
 export interface CruxRetrievalHitPreview {
   rank: number;
-  sourceId: string;
+  source: {
+    id: string;
+    url?: string;
+    path?: string;
+    assetRef?: { uri: string };
+    mediaType?: string;
+    location?:
+      | { type: "page"; pageNumber: number }
+      | { type: "time"; unit: "seconds"; start: number; end: number };
+  };
   chunkId: string;
   score?: number;
   preview?: string;
@@ -946,10 +974,53 @@ export interface CruxPromptResolveAttributes {
   excludedContextCount?: number;
 }
 
+/**
+ * Attributes recorded when public deferred work is accepted.
+ *
+ * `intentState` is used for named durable work; inline registrations close
+ * immediately after acceptance and leave it unset.
+ *
+ * `definitionId` is reserved for a future compiler-runtime Catalog join. The
+ * Runtime acceptance path does not invent a definition id when none is known.
+ */
+export interface CruxDeferScheduledAttributes {
+  mode: "inline" | "named";
+  completion: "response-finished" | "handler-returned";
+  sequence: number;
+  definitionId?: string;
+  targetId?: string;
+  workId?: string;
+  intentState?: "staged" | "released" | "abandoned";
+  scopeId?: string;
+}
+
+/**
+ * Attributes recorded while a deferred callback or named target executes.
+ *
+ * Execution is causally linked to its `defer.scheduled` span rather than
+ * temporally nested under a closed response span.
+ *
+ * `definitionId` is reserved for a future compiler-runtime Catalog join and is
+ * not fabricated by Runtime wake evidence.
+ */
+export interface CruxDeferRunAttributes {
+  mode: "inline" | "named";
+  completion: "response-finished" | "handler-returned";
+  sequence: number;
+  definitionId?: string;
+  targetId?: string;
+  workId?: string;
+  scopeId?: string;
+  outcome?: "completed" | "failed" | "timed-out" | "cancelled";
+  queueDelayMs?: number;
+}
+
 export type CruxSpanAttributesByPrimitive = {
   "generation.call": CruxGenerationCallAttributes;
   "generation.stream": CruxGenerationStreamAttributes;
   "prompt.resolve": CruxPromptResolveAttributes;
+  "defer.scheduled": CruxDeferScheduledAttributes;
+  "defer.run": CruxDeferRunAttributes;
   "custom.operation": CruxAttributes;
 };
 
@@ -1033,7 +1104,7 @@ export type CruxRunLifecycleRecord =
   | CruxRunStartRecord
   | CruxRunSuspendRecord
   | CruxRunResumeRecord
-  | CruxRunEndRecord
+  | CruxRunEndRecord;
 
 export interface CruxSpanStartRecord extends CruxRecordBase {
   type: "span:start";

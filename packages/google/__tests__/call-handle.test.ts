@@ -32,7 +32,7 @@ describe('Google call handle', () => {
     const result = await call.finish(googleResponse({ text: 'hello' }, 1))
 
     expect(result.text).toBe('hello')
-    expect(result.steps).toBe(1)
+    expect(result.steps).toHaveLength(1)
     expect(result.finalStep).toMatchObject({
       text: 'hello',
       finishReason: 'stop',
@@ -77,8 +77,59 @@ describe('Google call handle', () => {
 
     const result = await first.next.finish(googleResponse({ text: 'done' }, 2))
     expect(result.text).toBe('done')
-    expect(result.steps).toBe(2)
+    expect(result.steps).toHaveLength(2)
     expect(result.messages.some((message) => message.role === 'tool')).toBe(true)
+  })
+
+  it('replays thought signatures and assistant media through an actual tool loop', async () => {
+    const google = createGoogle(noNetworkClient())
+    const p = prompt({
+      id: 'google-handle-native-continuation',
+      prompt: 'Use the echo tool.',
+      tools: {
+        echo: tool({
+          description: 'Echo text.',
+          input: z.object({ value: z.string() }),
+          execute: ({ value }) => `echo:${value}`,
+        }),
+      },
+    })
+    const call = await google.prepare!(p, { model: 'gemini-handle', maxSteps: 3 })
+    const response = googleResponse(
+      { text: '', toolCalls: [{ id: 'call_echo', name: 'echo', args: { value: 'hello' } }] },
+      1,
+    )
+    response.candidates![0]!.content!.parts = [
+      {
+        inlineData: { data: 'AQID', mimeType: 'image/png' },
+        thought: true,
+        thoughtSignature: 'signed-media-thought',
+      },
+      {
+        functionCall: { id: 'call_echo', name: 'echo', args: { value: 'hello' } },
+        thoughtSignature: 'signed-tool-thought',
+      },
+    ]
+
+    const first = await call.step(response)
+
+    expect(first.done).toBe(false)
+    if (first.done) throw new Error('expected another provider call')
+    const nextParams = first.next.params as { readonly contents: readonly unknown[] }
+    expect(nextParams.contents).toContainEqual({
+      role: 'model',
+      parts: [
+        {
+          inlineData: { data: 'AQID', mimeType: 'image/png' },
+          thought: true,
+          thoughtSignature: 'signed-media-thought',
+        },
+        {
+          functionCall: { id: 'call_echo', name: 'echo', args: { value: 'hello' } },
+          thoughtSignature: 'signed-tool-thought',
+        },
+      ],
+    })
   })
 })
 

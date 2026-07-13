@@ -71,11 +71,11 @@ await ws.write("/outputs/report.md", "# Final report");
 
 This convention is intentionally simple:
 
-| Path | Use it for |
-| --- | --- |
-| `/workspace` | Notes, plans, intermediate files, extracted data, draft fragments |
-| `/outputs` | User-facing deliverables, generated downloads, published artifacts |
-| `/sources` | Optional mounted reference files from uploads, retrievers, MCP, or app data |
+| Path         | Use it for                                                                  |
+| ------------ | --------------------------------------------------------------------------- |
+| `/workspace` | Notes, plans, intermediate files, extracted data, draft fragments           |
+| `/outputs`   | User-facing deliverables, generated downloads, published artifacts          |
+| `/sources`   | Optional mounted reference files from uploads, retrievers, MCP, or app data |
 
 Outputs are regular files under `/outputs`. Mark generated deliverables with
 `status` and `kind` when the app needs an artifact view:
@@ -116,7 +116,7 @@ await ws.write("/workspace/notes.md", "# Notes", { namespace: "thread:123" });
 ## Production Shape
 
 For production, pass durable storage. `records` holds metadata and small inline
-text or JSON. `blobs` holds binary and large payloads:
+text or JSON. `assets` holds binary and large payloads:
 
 ```ts
 import { storage } from "@use-crux/core/storage";
@@ -126,7 +126,7 @@ workspace({
   namespace,
   storage: storage({
     records,
-    blobs,
+    assets,
   }),
   content: {
     inlineTextBelowBytes: 64_000,
@@ -144,7 +144,7 @@ calls can pass an override:
 const ws = workspace({
   id: "research",
   namespace: ({ input }) => `thread:${input.threadId}`,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
 });
 
 await ws.write("/workspace/notes.md", "# Notes", { namespace: "thread:123" });
@@ -185,7 +185,7 @@ resolution.
   />
   <Card
     title="Storage and limits"
-    description="Choose records and blobs, configure TTL, quotas, inline thresholds, and namespace isolation."
+    description="Choose records and assets, configure TTL, quotas, inline thresholds, and namespace isolation."
     href="/docs/guides/workspaces/storage-and-limits"
   />
 </Cards>

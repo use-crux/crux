@@ -4,24 +4,30 @@ description: Sliding window, budget tracking, summarization, and key facts extra
 ---
 
 ```ts
-import { createSlidingWindow, createBudgetManager, extractKeyFacts, summarizeMessages } from '@use-crux/core/compaction'
+import {
+  createSlidingWindow,
+  createBudgetManager,
+  extractKeyFacts,
+  summarizeMessages,
+} from "@use-crux/core/compaction";
 ```
 
 <Callout type="info">
-  For usage patterns and when to use each primitive, see the [Compaction guide](/docs/guides/compaction).
+  For usage patterns and when to use each primitive, see the [Compaction
+  guide](/docs/guides/compaction).
 </Callout>
 
 ### `createSlidingWindow(config)`
 
 Rolling window that keeps recent messages and summarizes older ones.
 
-| Field           | Type             | Description                     |
-| --------------- | ---------------- | ------------------------------- |
-| `windowSize`    | `number`         | Max messages to keep verbatim   |
-| `generate`      | `GenerateTextFn` | Text generation function        |
-| `model`         | `unknown`        | Model for summarization         |
-| `summaryBudget` | `number?`        | Max tokens for summary          |
-| `store`         | `RecordStore?`     | Persistent storage for messages |
+| Field           | Type             | Description                         |
+| --------------- | ---------------- | ----------------------------------- |
+| `windowSize`    | `number`         | Max messages to keep verbatim       |
+| `generate`      | `GenerateTextFn` | Text generation function            |
+| `model`         | `unknown`        | Model for summarization             |
+| `summaryBudget` | `number?`        | Max tokens for summary              |
+| `storage`       | `Storage?`       | Persistent records and media assets |
 
 **Returns:** `SlidingWindow`
 
@@ -98,15 +104,19 @@ import type {
   BudgetManager,
   BudgetConfig,
   BudgetState,
-} from '@use-crux/core/compaction'
+} from "@use-crux/core/compaction";
 
-type GenerateTextFn = (opts: { model: unknown; system?: string; prompt: string }) => Promise<{ text: string }>
+type GenerateTextFn = (opts: {
+  model: unknown;
+  system?: string;
+  prompt: string;
+}) => Promise<{ text: string }>;
 type GenerateObjectFn = <T>(opts: {
-  model: unknown
-  system?: string
-  prompt: string
-  schema: ZodType<T>
-}) => Promise<{ object: T }>
+  model: unknown;
+  system?: string;
+  prompt: string;
+  schema: ZodType<T>;
+}) => Promise<{ object: T }>;
 ```
 
 ### `createGenerateObjectFnFromGenerate(generate, options?)`
@@ -116,12 +126,12 @@ Create a `GenerateObjectFn` backed by a full adapter `generate()` function. The 
 Use this when a compaction, scoring, retrieval, or quality API needs the `GenerateObjectFn` shape and the call should still run through adapter runtime behavior such as prompt hooks, validation retry, safety, cassettes, memory, or instrumentation.
 
 ```ts
-import { createGenerateObjectFnFromGenerate } from '@use-crux/core/compaction'
-import { generate } from '@use-crux/ai'
+import { createGenerateObjectFnFromGenerate } from "@use-crux/core/compaction";
+import { generate } from "@use-crux/ai";
 
 const generateObject = createGenerateObjectFnFromGenerate(generate, {
-  promptId: 'scoring.judge',
-})
+  promptId: "scoring.judge",
+});
 ```
 
 ## Related

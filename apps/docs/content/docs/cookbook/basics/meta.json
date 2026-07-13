@@ -10,6 +10,7 @@
     "workspace-source-mounts",
     "workspace-editable-source-mounts",
     "postgres-data-store",
+    "request-scoped-defer-node",
     "tool-approval-react",
     "tool-approval-cli",
     "tool-approval-expo"

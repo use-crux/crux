@@ -9,6 +9,7 @@
  */
 
 import type { CruxChunk, CruxDocument, CruxParentChunk } from './types'
+import { projectSourceFacts } from './source-facts'
 
 /** Validate every document belongs to the namespace and has a source id. */
 export function validateDocuments(documents: CruxDocument[], namespace: string): void {
@@ -18,6 +19,9 @@ export function validateDocuments(documents: CruxDocument[], namespace: string):
     }
     if (!document.sourceId.trim()) {
       throw new Error('Document sourceId must be non-empty.')
+    }
+    if (document.source && !projectSourceFacts(document.source)) {
+      throw new Error('Document source facts must contain at least one valid allowlisted field.')
     }
   }
 }
@@ -43,6 +47,7 @@ export function normalizeChunk(chunk: CruxChunk, namespace: string): CruxChunk {
     throw new Error(`Chunk namespace "${chunk.namespace}" does not match indexer namespace "${namespace}".`)
   }
 
+  const source = projectSourceFacts(chunk.source)
   return {
     namespace,
     sourceId: chunk.sourceId,
@@ -52,6 +57,7 @@ export function normalizeChunk(chunk: CruxChunk, namespace: string): CruxChunk {
     ordinal: chunk.ordinal,
     content: chunk.content,
     metadata: chunk.metadata ?? {},
+    ...(source ? { source } : {}),
     ...(chunk.parent ? { parent: chunk.parent } : {}),
     ...(chunk.provenance ? { provenance: chunk.provenance } : {}),
   }
@@ -68,6 +74,7 @@ export function normalizeParentChunk(parent: CruxParentChunk, namespace: string)
   if (!parent.parentId.trim()) {
     throw new Error('Parent chunk parentId must be non-empty.')
   }
+  const source = projectSourceFacts(parent.source)
   return {
     namespace,
     sourceId: parent.sourceId,
@@ -77,6 +84,7 @@ export function normalizeParentChunk(parent: CruxParentChunk, namespace: string)
     ordinal: parent.ordinal,
     content: parent.content,
     metadata: parent.metadata ?? {},
+    ...(source ? { source } : {}),
     ...(parent.provenance ? { provenance: parent.provenance } : {}),
   }
 }

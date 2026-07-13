@@ -218,6 +218,10 @@ var primitiveFamilyByName = map[string]string{
 	"run":                     "run",
 	"generation.call":         "generation",
 	"generation.stream":       "generation",
+	"media.generate_image":    "media",
+	"media.transcribe":        "media",
+	"media.generate_speech":   "media",
+	"media.describe":          "media",
 	"prompt.resolve":          "prompt",
 	"prompt.budget":           "prompt",
 	"context.resolve":         "context",
@@ -277,6 +281,8 @@ var primitiveFamilyByName = map[string]string{
 	"security.warning":        "security",
 	"cost.record":             "cost",
 	"feedback.record":         "feedback",
+	"defer.scheduled":         "defer",
+	"defer.run":               "defer",
 	"custom.operation":        "custom",
 }
 
@@ -301,6 +307,7 @@ var canonicalEdgeTypes = map[string]struct{}{
 	"eval.case_of":         {},
 	"comparison.baseline":  {},
 	"comparison.candidate": {},
+	"derived.from":         {},
 }
 
 var canonicalArtifactKinds = map[string]struct{}{
@@ -342,6 +349,7 @@ var canonicalArtifactKinds = map[string]struct{}{
 	"corpus.report":        {},
 	"security.report":      {},
 	"validation.feedback":  {},
+	"media.report":         {},
 }
 
 func ValidateRecord(record Record) error {

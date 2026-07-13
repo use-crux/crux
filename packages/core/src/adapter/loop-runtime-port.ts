@@ -24,6 +24,7 @@ import type { z } from 'zod'
 import type { ModelInfo } from '../types'
 import type { GenerationSettings } from '../generation/types'
 import type { AdapterSpec } from './spec'
+import type { ProviderMediaHooks } from './native-chat/media-hooks'
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -86,6 +87,9 @@ export interface CachedStreamPayload {
 export interface LoopRuntimePort<TModel, TRawResponse = unknown, TRawStream = unknown> {
   /** Runtime identifier used in observability and provider matching (e.g. `'ai-sdk'`). */
   readonly id: string
+
+  /** Provider-authored media validation consumed privately before SDK I/O. */
+  readonly media?: ProviderMediaHooks
 
   /**
    * Extract provider/model identity from an SDK model reference.

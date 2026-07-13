@@ -34,6 +34,8 @@ This workstream closes both without redesigning either plane.
 - `runtime-contributor` — referenced by an owner span, never itself the subject of a run. Catalog
   copy depends on `runtimeIdentity` (below), not a single "referenced by N runs" promise for every
   contributor
+- `runtime-observed-unjoined` — emits its own runtime primitives, but those records do not carry the
+  authored definition id; Catalog names that limitation and withholds per-definition activity
 - `structural-child` — nested under a parent for Catalog display; identity may be direct or parent-derived
 - `quality-owned` — primary evidence is the Quality↔observability join
 - `static-only` — declarative; truthful empty runtime state
@@ -41,7 +43,7 @@ This workstream closes both without redesigning either plane.
 
 Secondary treatments (`direct-runtime`, `quality-owned`) cover dual cases such as `scorer`
 (Quality-primary with live `scoring.judge` secondary evidence). Catalog and DevTools derive treatment
-from this manifest; they do not hard-code a six-family subset.
+from this manifest; they do not hard-code a subset of definition kinds.
 
 `runtimeIdentity` refines how Catalog obtains activity for non-owner kinds:
 
@@ -50,8 +52,10 @@ from this manifest; they do not hard-code a six-family subset.
 - `parent-derived` — only the indexed structural parent is directly observed; Catalog reports the
   parent's activity and labels the child *not independently observed*
 - `quality` — the existing Quality correlation is authoritative
-- `none` — no truthful live identity path (e.g. injectables, storage ports); Catalog keeps a
-  zero-runtime / non-independent state and never selects an arbitrary owner or invents run counts
+- `none` — no truthful definition-level identity path. Injectables and storage ports keep a
+  zero-runtime / non-independent state; deferred work, media operations, and ingest sources retain
+  their kind-level runtime primitives under `runtime-observed-unjoined`. Neither case selects an
+  arbitrary owner or invents per-definition run counts.
 
 ### DefinitionRef envelope
 
@@ -73,7 +77,9 @@ policies attach contributor refs to their owner spans; executed flow steps, para
 steps, and authored scorers attach child/scorer refs when their canonical identity is present. A
 structural child without such runtime identity derives activity only from its indexed parent and is
 labelled explicitly as not independently observed. Static-only kinds retain zero runtime activity.
-The runtime never fabricates a child id or derives one from display text.
+Deferred work, media operations, and ingest sources are runtime-observed but remain unjoined until
+their emitters can carry canonical authored ids. The runtime never fabricates an id or derives one
+from display text.
 
 Compositions (`parallel` / `pipeline` / `swarm` / `consensus`) take a **required** authored `id`; the
 random per-execution `compositionId` remains a separate execution identity. Recipe rerankers require
@@ -149,8 +155,8 @@ this workstream owns.
 
 - Unit/integration: DefinitionRef emission, kind coverage exhaustiveness, Go activity
   projection/filter/rebuild/retention, adapter normalized-outcome conformance for all four packages.
-- Connected fixture: generated from every manifest entry with direct, contributor, child,
-  parent-derived, Quality, and zero-runtime treatments; multi-segment healthy run, degraded delivery
+- Connected fixture: generated from every manifest entry with direct, contributor, runtime-unjoined,
+  child, parent-derived, Quality, and zero-runtime treatments; multi-segment healthy run, degraded delivery
   via record-id conflict, filtered Runs, revision catch-up, and real Quality experiment correlation
   (`TestConnectedFixtureDefinitionJoinDeliveryAndCatchup`).
 - Quality: nested triggered-run closure so flow step matchers capture under `eval.case` cells.

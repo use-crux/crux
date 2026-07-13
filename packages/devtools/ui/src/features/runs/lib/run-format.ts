@@ -21,6 +21,7 @@ export const KIND_TONE: Record<RunKind, ChipTone> = {
   retrieval: 'ok',
   generate: 'warn',
   resolve: 'muted',
+  defer: 'crux',
   trace: 'muted',
 }
 
@@ -33,6 +34,7 @@ export const KIND_DOT_COLOR: Record<RunKind, string> = {
   retrieval: 'var(--qw-ok)',
   generate: 'var(--qw-warn)',
   resolve: 'var(--qw-fg-muted)',
+  defer: 'var(--qw-crux)',
   trace: 'var(--qw-fg-muted)',
 }
 

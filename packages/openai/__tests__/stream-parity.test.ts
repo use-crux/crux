@@ -1,13 +1,27 @@
 import { describe, expect, it } from "vitest";
-import type { ChatCompletion, ChatCompletionChunk } from "openai/resources/chat/completions";
+import type {
+  ChatCompletion,
+  ChatCompletionChunk,
+} from "openai/resources/chat/completions";
 import { openAIResponse } from "../src/response";
-import { createOpenAIStreamCapture } from "../src/stream";
+import {
+  createOpenAIStreamCapture,
+  openAIStreamCompletion,
+} from "../src/stream";
 
 describe("OpenAI tool-call argument parity between generate() and stream()", () => {
   const cases: Array<{ label: string; raw: string; expected: unknown }> = [
     { label: "empty arguments", raw: "", expected: "" },
-    { label: "malformed JSON arguments", raw: "{not-json", expected: "{not-json" },
-    { label: "valid JSON arguments", raw: '{"city":"Paris"}', expected: { city: "Paris" } },
+    {
+      label: "malformed JSON arguments",
+      raw: "{not-json",
+      expected: "{not-json",
+    },
+    {
+      label: "valid JSON arguments",
+      raw: '{"city":"Paris"}',
+      expected: { city: "Paris" },
+    },
   ];
 
   for (const { label, raw, expected } of cases) {
@@ -16,13 +30,39 @@ describe("OpenAI tool-call argument parity between generate() and stream()", () 
       expect(generated.toolCalls?.[0]?.args).toEqual(expected);
 
       const streamed = createOpenAIStreamCapture(toolCallStream(raw));
-      for await (const _ of streamed) void _;
-      const streamMeta = streamed.finalMeta();
-      expect(streamMeta.toolCalls?.[0]?.args).toEqual(expected);
+      const chunks: ChatCompletionChunk[] = [];
+      for await (const chunk of streamed) chunks.push(chunk);
+      const streamMeta = await openAIStreamCompletion(chunks);
+      expect(streamMeta?.toolCalls?.[0]?.args).toEqual(expected);
 
-      expect(streamMeta.toolCalls?.[0]?.args).toEqual(generated.toolCalls?.[0]?.args);
+      expect(streamMeta?.toolCalls?.[0]?.args).toEqual(
+        generated.toolCalls?.[0]?.args,
+      );
     });
   }
+});
+
+it("preserves a streamed refusal in normalized completion metadata", async () => {
+  const chunks: ChatCompletionChunk[] = [
+    {
+      id: "chatcmpl_refusal",
+      object: "chat.completion.chunk",
+      created: 0,
+      model: "gpt-actual",
+      choices: [
+        {
+          index: 0,
+          delta: { refusal: "I cannot help with that." },
+          finish_reason: "stop",
+          logprobs: null,
+        },
+      ],
+    } as ChatCompletionChunk,
+  ];
+
+  await expect(openAIStreamCompletion(chunks)).resolves.toMatchObject({
+    finishReason: "refusal",
+  });
 });
 
 function toolCallCompletion(rawArgs: string): ChatCompletion {
@@ -39,7 +79,11 @@ function toolCallCompletion(rawArgs: string): ChatCompletion {
           content: null,
           refusal: null,
           tool_calls: [
-            { id: "call_1", type: "function", function: { name: "lookup", arguments: rawArgs } },
+            {
+              id: "call_1",
+              type: "function",
+              function: { name: "lookup", arguments: rawArgs },
+            },
           ],
         },
         finish_reason: "tool_calls",
@@ -57,7 +101,15 @@ function toolCallStream(rawArgs: string): AsyncIterable<ChatCompletionChunk> {
       choices: [
         {
           index: 0,
-          delta: { tool_calls: [{ index: 0, id: "call_1", function: { name: "lookup", arguments: "" } }] },
+          delta: {
+            tool_calls: [
+              {
+                index: 0,
+                id: "call_1",
+                function: { name: "lookup", arguments: "" },
+              },
+            ],
+          },
           finish_reason: null,
         },
       ],
@@ -68,7 +120,9 @@ function toolCallStream(rawArgs: string): AsyncIterable<ChatCompletionChunk> {
         choices: [
           {
             index: 0,
-            delta: { tool_calls: [{ index: 0, function: { arguments: rawArgs } }] },
+            delta: {
+              tool_calls: [{ index: 0, function: { arguments: rawArgs } }],
+            },
             finish_reason: null,
           },
         ],

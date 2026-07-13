@@ -7,7 +7,7 @@ import {
   pruneTerminalWorkRows,
   readIdle,
   updateIdle,
-} from './state-helpers'
+} from './state_helpers'
 import { limitRows } from './shared'
 
 const WORK_STATUSES = ['pending', 'leased', 'suspended', 'completed', 'cancelled', 'blocked', 'dead-letter'] as const

@@ -88,8 +88,8 @@ pub(crate) fn workspace_facts(
     }
     if let Some(config) = config {
         metadata.insert(
-            "hasBlobStorage".to_string(),
-            Value::Bool(has_property(config, "blobs") || has_property(config, "storage")),
+            "hasAssetStorage".to_string(),
+            Value::Bool(has_property(config, "assets") || has_property(config, "storage")),
         );
     }
     if let Some(intelligence) = workspace_intelligence(

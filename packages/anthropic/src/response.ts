@@ -1,15 +1,23 @@
-import type Anthropic from '@anthropic-ai/sdk'
-import type { TraceMeta } from '@use-crux/core'
-import type { AdapterResponse, CruxFinishReason } from '@use-crux/core/adapter'
-import type { NativeAssistantTurn, NativeResponseMetadata } from '@use-crux/core/adapter'
-import { anthropicTranscript } from './message-codec'
+import type Anthropic from "@anthropic-ai/sdk";
+import type { TraceMeta } from "@use-crux/core";
+import type {
+  AdapterResponse,
+  CruxFinishReason,
+  NativeAssistantTurn,
+  NativeResponseMetadata,
+} from "@use-crux/core/adapter";
+import { anthropicTranscript } from "./message-codec";
 
 /** Anthropic message shape returned by `messages.parse()`. */
-export type AnthropicParsedMessage = Anthropic.Message & { readonly parsed_output?: unknown }
+export type AnthropicParsedMessage = Anthropic.Message & {
+  readonly parsed_output?: unknown;
+};
 
 /** Extract plain assistant text from Anthropic content blocks. */
-export function extractText(message: Pick<Anthropic.Message, 'content'>): string {
-  return anthropicTranscript.readAssistant(message).text
+export function extractText(
+  message: Pick<Anthropic.Message, "content">,
+): string {
+  return anthropicTranscript.readAssistant(message).text;
 }
 
 /**
@@ -19,21 +27,33 @@ export function extractText(message: Pick<Anthropic.Message, 'content'>): string
  * the response-level metadata that does not belong to transcript translation:
  * parsed structured output, token usage, finish reason, ids, and model ids.
  */
-export function extractAdapterResponse(result: AnthropicParsedMessage): AdapterResponse {
-  const assistant = anthropicTranscript.readAssistant(result)
+export function extractAdapterResponse(
+  result: AnthropicParsedMessage,
+): AdapterResponse {
+  const assistant = anthropicTranscript.readAssistant(result);
+  const text = anthropicResponseText(result, assistant);
+  const content =
+    text !== assistant.text
+      ? [{ type: "text" as const, text }]
+      : typeof assistant.content === "string"
+        ? [{ type: "text" as const, text: assistant.content }]
+        : assistant.content;
 
   return {
     ...anthropicResponseMeta(result),
-    text: anthropicResponseText(result, assistant),
+    text,
+    ...(content !== undefined ? { content } : {}),
     toolCalls: assistant.toolCalls,
-  }
+  };
 }
 
 /** Read response metadata that is not owned by Anthropic transcript conversion. */
-export function anthropicResponseMeta(result: AnthropicParsedMessage): NativeResponseMetadata {
-  const usage = result.usage
-  const inputTokens = usage?.input_tokens
-  const outputTokens = usage?.output_tokens
+export function anthropicResponseMeta(
+  result: AnthropicParsedMessage,
+): NativeResponseMetadata {
+  const usage = result.usage;
+  const inputTokens = usage?.input_tokens;
+  const outputTokens = usage?.output_tokens;
 
   return {
     usage:
@@ -43,18 +63,27 @@ export function anthropicResponseMeta(result: AnthropicParsedMessage): NativeRes
             outputTokens,
             totalTokens: inputTokens + outputTokens,
             inputTokenDetails: {
-              ...optionalTokenDetail('cacheReadTokens', nullableNumber(usage.cache_read_input_tokens)),
-              ...optionalTokenDetail('cacheWriteTokens', nullableNumber(usage.cache_creation_input_tokens)),
+              ...optionalTokenDetail(
+                "cacheReadTokens",
+                nullableNumber(usage.cache_read_input_tokens),
+              ),
+              ...optionalTokenDetail(
+                "cacheWriteTokens",
+                nullableNumber(usage.cache_creation_input_tokens),
+              ),
             },
             outputTokenDetails: {
-              ...optionalTokenDetail('reasoningTokens', nullableNumber(usage.output_tokens_details?.thinking_tokens)),
+              ...optionalTokenDetail(
+                "reasoningTokens",
+                nullableNumber(usage.output_tokens_details?.thinking_tokens),
+              ),
             },
           }
         : undefined,
     finishReason: mapAnthropicStopReason(result.stop_reason),
     responseId: result.id,
     actualModelId: result.model,
-  }
+  };
 }
 
 /**
@@ -71,18 +100,18 @@ export function mapAnthropicStopReason(
   switch (stopReason) {
     case null:
     case undefined:
-      return undefined
-    case 'end_turn':
-    case 'stop_sequence':
-      return 'stop'
-    case 'max_tokens':
-      return 'length'
-    case 'tool_use':
-      return 'tool-calls'
-    case 'refusal':
-      return 'refusal'
+      return undefined;
+    case "end_turn":
+    case "stop_sequence":
+      return "stop";
+    case "max_tokens":
+      return "length";
+    case "tool_use":
+      return "tool-calls";
+    case "refusal":
+      return "refusal";
     default:
-      return 'unknown'
+      return "unknown";
   }
 }
 
@@ -93,29 +122,47 @@ export function mapAnthropicStopReason(
  * final message so the shared stream path captures the same tool-call shape a
  * non-streaming `generate()` would have produced — no partial fragments.
  */
-export function anthropicStreamCompletionMeta(result: AnthropicParsedMessage): TraceMeta {
-  const assistant = anthropicTranscript.readAssistant(result)
+export function anthropicStreamCompletionMeta(
+  result: AnthropicParsedMessage,
+): TraceMeta {
+  const assistant = anthropicTranscript.readAssistant(result);
   return {
     ...anthropicResponseMeta(result),
     ...(assistant.toolCalls
-      ? { toolCalls: assistant.toolCalls.map((call) => ({ id: call.id, name: call.name, args: call.args })) }
+      ? {
+          toolCalls: assistant.toolCalls.map((call) => ({
+            id: call.id,
+            name: call.name,
+            args: call.args,
+          })),
+        }
       : {}),
-  }
+  };
 }
 
 function nullableNumber(value: number | null | undefined): number | undefined {
-  return value === null ? undefined : value
+  return value === null ? undefined : value;
 }
 
-function optionalTokenDetail<K extends string>(key: K, value: number | undefined): Partial<Record<K, number>> {
-  return value === undefined ? {} : ({ [key]: value } as Record<K, number>)
+function optionalTokenDetail<K extends string>(
+  key: K,
+  value: number | undefined,
+): Partial<Record<K, number>> {
+  return value === undefined ? {} : ({ [key]: value } as Record<K, number>);
 }
 
 /** Prefer Anthropic parsed structured output over transcript text when present. */
-export function anthropicResponseText(result: AnthropicParsedMessage, assistant: NativeAssistantTurn): string {
-  return result.parsed_output != null ? parsedOutputText(result.parsed_output) : assistant.text
+export function anthropicResponseText(
+  result: AnthropicParsedMessage,
+  assistant: NativeAssistantTurn,
+): string {
+  return result.parsed_output != null
+    ? parsedOutputText(result.parsed_output)
+    : assistant.text;
 }
 
 function parsedOutputText(parsedOutput: unknown): string {
-  return typeof parsedOutput === 'string' ? parsedOutput : JSON.stringify(parsedOutput)
+  return typeof parsedOutput === "string"
+    ? parsedOutput
+    : JSON.stringify(parsedOutput);
 }

@@ -90,7 +90,10 @@ import { retrievalEntries } from '../lib/span-detail-retrieval'
 import { collectToolRequests, resolveToolPayload } from '../lib/span-detail-tool'
 import { memoryRenderBudgetDecision } from '../lib/memory-span-detail'
 import { AgentCard, CompositionCard, EvalCard, EvalRunCard, FlowCard, OperationReportCard } from './PrimitiveCards'
+import { DeferredWorkCard } from './DeferredWorkCard'
 import { GenerationDetail } from './GenerationDetail'
+import { MediaRunPanel } from './MediaRunPanel'
+import { projectMediaRunFromNode } from '../lib/media-run-from-node'
 import { RunInsight } from './explain/RunInsight'
 import { collectTurnReports } from '@/features/run-detail/lib/explain/rollup'
 import { ContextComposition, hasContextContributions } from './ContextComposition'
@@ -2363,7 +2366,10 @@ function RetrievalSpanTab({ node }: { node: ObservabilityRunDetailNode }) {
 /** design `ChunkHit` atom — #rank · sourceId · chunkId · 2-line preview · score chip. */
 function ChunkHitRow({ hit, rank }: { hit: Record<string, unknown>; rank: number }) {
   const { navigate } = useNavigation()
-  const sourceId = typeof hit.sourceId === 'string' ? hit.sourceId : undefined
+  const source = hit.source && typeof hit.source === 'object' && !Array.isArray(hit.source)
+    ? hit.source as Record<string, unknown>
+    : undefined
+  const sourceId = typeof source?.id === 'string' ? source.id : undefined
   const chunkId =
     typeof hit.chunkId === 'string' ? hit.chunkId : typeof hit.id === 'string' ? (hit.id as string) : undefined
   const score = typeof hit.score === 'number' ? (hit.score as number) : undefined
@@ -2872,6 +2878,56 @@ function ChildrenTab({ node, onSelect }: { node: ObservabilityRunDetailNode; onS
   )
 }
 
+// ─── Multimodal completed-operation detail ──────────────────────────
+
+/**
+ * Live Runs media panel. Passes the complete run-detail graph plus the exact
+ * selected media span identity so lineage includes relation-connected
+ * ingest/index/retrieval nodes outside the media subtree. Catalog join is
+ * resolved inside `projectMediaRunFromNode` from exact recorded `definitionId`
+ * attributes only; when identity is absent the panel shows unavailable.
+ */
+function MediaRunDetailSection({
+  node,
+  detail,
+  kind,
+  isRoot,
+  trace,
+}: {
+  node: ObservabilityRunDetailNode
+  detail: ObservabilityRunDetail
+  kind: PrimitiveKind
+  isRoot: boolean
+  trace: Trace | undefined
+}) {
+  const { navigate } = useNavigation()
+  const selectedMediaSpanId =
+    typeof node.spanId === 'string' && node.spanId.length > 0 ? node.spanId : node.id
+  const mediaView = projectMediaRunFromNode(detail.root, selectedMediaSpanId)
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
+      <div className="flex-1 overflow-auto px-4 py-4">
+        <SectionErrorBoundary title="Media" compact resetKey={node.id}>
+          {mediaView ? (
+            <MediaRunPanel
+              view={mediaView}
+              onOpenCatalog={
+                mediaView.catalogJoin.status === 'joined'
+                  ? (definitionId) =>
+                      navigate({ view: 'library-index', promptId: definitionId })
+                  : undefined
+              }
+            />
+          ) : (
+            <OperationReportCard node={node} />
+          )}
+        </SectionErrorBoundary>
+      </div>
+    </div>
+  )
+}
+
 // ─── Header + KPI strip ─────────────────────────────────────────────
 
 function SelectedSpanHeader({
@@ -3251,6 +3307,24 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
     )
   }
 
+  // Multimodal completed operations get a purpose-built panel: summary,
+  // safe descriptors, attempts, transcript/absence, and lineage. Never
+  // falls through to generic JSON / media playback surfaces.
+  // Catalog join is resolved from exact recorded definition identity on the
+  // media span (definitionId); when absent, the panel shows an explicit
+  // unavailable state — completed-media capture does not invent Catalog ids.
+  if (node.primitive?.startsWith('media.')) {
+    return (
+      <MediaRunDetailSection
+        node={node}
+        detail={detail}
+        kind={kind}
+        isRoot={isRoot}
+        trace={trace}
+      />
+    )
+  }
+
   // Agent gets its own detail — instructions · tools · nested loop, no tab strip
   // or Output (design `CardAgent`). Sub-header carries the identity/metrics.
   if (kind === 'agent') {
@@ -3275,6 +3349,21 @@ export function SpanDetailPanel({ detail, selectedNodeId, onSelectSpan, trace, j
         <div className="flex-1 overflow-auto px-4 py-4">
           <SectionErrorBoundary title="Flow" compact resetKey={node.id}>
             <FlowCard node={node} onSelect={(id) => onSelectSpan?.(id)} />
+          </SectionErrorBoundary>
+        </div>
+      </div>
+    )
+  }
+
+  // Deferred work keeps lifecycle and host completion class on one card so
+  // handler-returned streaming overlap stays explicit.
+  if (node.primitive === 'defer.scheduled' || node.primitive === 'defer.run') {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <SelectedSpanHeader node={node} detail={detail} kind={kind} isRoot={isRoot} trace={trace} />
+        <div className="flex-1 overflow-auto px-4 py-4">
+          <SectionErrorBoundary title="Deferred work" compact resetKey={node.id}>
+            <DeferredWorkCard node={node} />
           </SectionErrorBoundary>
         </div>
       </div>

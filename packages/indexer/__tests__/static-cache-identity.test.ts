@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ProjectDefinitionKind } from "@use-crux/core/project-index";
@@ -37,11 +37,11 @@ describe("static cache identity", () => {
     );
 
     expect(STATIC_PARSE_CACHE_EPOCH).toBe(identity.staticParseCacheEpoch);
-    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v57");
+    expect(STATIC_PARSE_CACHE_EPOCH).toBe("static-parse-v61");
   });
 
   it("takes the pre-launch semantic facts cache migration epoch", () => {
-    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v23");
+    expect(SEMANTIC_FACTS_CACHE_EPOCH).toBe("semantic-facts-v27");
   });
 
   it("projects static host manifest facets into extraction identity", () => {
@@ -209,6 +209,33 @@ describe("static cache identity", () => {
         root,
         files: [file],
         compilerInputs: changedPrimitiveInputs,
+      }),
+    ).resolves.toMatchObject({ cacheHits: [], cacheMisses: [file] });
+  });
+
+  it("does not load a pre-media static cache namespace", async () => {
+    const root = await fixtureRoot();
+    const file = join(root, "media.ts");
+    await writeFile(
+      file,
+      "export const cover = generateImage({ prompt: 'private' })",
+    );
+    const extraction = createStaticExtraction({
+      root,
+      syntaxFrontend: createTypeScriptStaticSyntaxFrontend,
+    });
+    await extraction.extractFile(file);
+    const cacheRoot = join(root, ".crux", "cache", "index");
+    await rename(
+      join(cacheRoot, STATIC_PARSE_CACHE_EPOCH),
+      join(cacheRoot, "static-parse-v60"),
+    );
+
+    await expect(
+      staticParseCacheManifestStatus({
+        root,
+        files: [file],
+        compilerInputs: extraction.identity.cacheInputs,
       }),
     ).resolves.toMatchObject({ cacheHits: [], cacheMisses: [file] });
   });

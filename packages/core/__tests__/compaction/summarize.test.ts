@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { summarizeMessages, formatTranscript } from '../../src/compaction/summarize'
 import type { Message } from '../../src/generation/messages'
 import type { GenerateTextFn } from '../../src/compaction/types'
-import { imagePart, textPart } from '../../src/content'
+import { textPart } from '../../src/content'
 
 const sampleMessages: Message[] = [
   { role: 'user', content: 'What is the capital of France?' },
@@ -38,7 +38,7 @@ describe('formatTranscript', () => {
     const result = formatTranscript([
       {
         role: 'user',
-        content: [textPart('Summarize this chart'), imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' })],
+        content: [textPart('Summarize this chart'), { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }],
       },
     ])
 
@@ -50,6 +50,31 @@ describe('formatTranscript', () => {
 })
 
 describe('summarizeMessages', () => {
+  it('describes media through the configured generator before summarizing an ephemeral copy', async () => {
+    const original = {
+      role: 'user' as const,
+      content: [
+        { type: 'text' as const, text: 'What is shown?' },
+        { type: 'image' as const, source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
+      ],
+    }
+    const calls: Parameters<GenerateTextFn>[0][] = []
+    const generate: GenerateTextFn = async (options) => {
+      calls.push(options)
+      return { text: calls.length === 1 ? 'A rising revenue chart.' : 'Chart discussed.' }
+    }
+
+    const result = await summarizeMessages({ messages: [original], generate, model: 'summary-model' })
+
+    expect(result.summary).toBe('Chart discussed.')
+    expect(calls).toHaveLength(2)
+    expect(calls[0]).toMatchObject({ model: 'summary-model', maxOutputTokens: 1000 })
+    expect('messages' in calls[0]!).toBe(true)
+    expect(calls[1]).toMatchObject({ model: 'summary-model' })
+    expect((calls[1] as { prompt: string }).prompt).toContain('A rising revenue chart.')
+    expect(original.content[1]).toMatchObject({ type: 'image', source: new Uint8Array([1, 2, 3]) })
+  })
+
   it('returns summary from generate function', async () => {
     const result = await summarizeMessages({
       messages: sampleMessages,
@@ -60,7 +85,7 @@ describe('summarizeMessages', () => {
     expect(result.summary).toBe('User asked about European capitals. France: Paris, Germany: Berlin.')
   })
 
-    it('computes token metrics', async () => {
+  it('computes token metrics', async () => {
     const result = await summarizeMessages({
       messages: sampleMessages,
       generate: mockGenerate,
@@ -71,6 +96,19 @@ describe('summarizeMessages', () => {
     expect(result.tokensAfter).toBeGreaterThan(0)
     expect(result.ratio).toBeGreaterThan(0)
     expect(result.ratio).toBeLessThanOrEqual(1)
+  })
+
+  it('accounts for unknown media conservatively in compaction metrics', async () => {
+    const result = await summarizeMessages({
+      messages: [{
+        role: 'user',
+        content: [textPart('Inspect'), { type: 'image', source: new Uint8Array([1]), mediaType: 'image/png' }],
+      }],
+      generate: async () => ({ text: 'summary' }),
+      model: 'custom-model',
+    })
+
+    expect(result.tokensBefore).toBeGreaterThan(4096)
   })
 
     it('returns empty result for empty messages', async () => {

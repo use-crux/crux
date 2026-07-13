@@ -1,9 +1,9 @@
 ---
 title: Catalog runtime evidence
-description: How Catalog and Project Index join authored definitions to live Runs via DefinitionRef activity.
+description: How Catalog and Project Index join authored definitions to live Runs—and explain runtime kinds that cannot yet join—without guessing identity.
 ---
 
-The Project Index answers *what is authored*. The observability graph answers *what ran*. Catalog joins them without mixing the two planes: runtime evidence is a derived rollup over graph records, never part of the compiler snapshot or cache identity.
+The Project Index answers *what is authored*. The observability graph answers *what ran*. Catalog relates them without mixing the two planes: runtime evidence is a derived rollup over graph records, never part of the compiler snapshot or cache identity. When runtime records lack a canonical authored id, Catalog says so instead of guessing from a kind or display name.
 
 ## Two planes, one join key
 
@@ -32,7 +32,7 @@ The coverage manifest also declares `runtimeIdentity` for definitions that are n
 - `definition-ref`: the runtime holds the exact authored identity and records it directly.
 - `parent-derived`: the index gives a structural child one exact containment parent; Catalog reports that parent's activity and says the child was not independently observed. Contributors without canonical runtime identity remain truthful zero-runtime states rather than selecting an arbitrary owner.
 - `quality`: the existing Quality correlation is authoritative.
-- `none`: no truthful live identity path exists.
+- `none`: no truthful definition-level identity path exists. The kind may still emit runtime spans; the manifest's primary treatment distinguishes that case from genuinely static definitions.
 
 ## Catalog Observability section
 
@@ -42,8 +42,9 @@ Open a definition in Catalog / Index. The **Observability** section is classifie
 | --- | --- | --- |
 | **Direct activity** | `directly-observed` | Latest status / time / delivery badge when present; **View N runs** when `N > 0`. Zero activity: *No runs have referenced this definition yet.* |
 | **Contributor** | `runtime-contributor` or structural child with a live identity path | Canonical contributor/child refs (`runtimeIdentity: definition-ref`) show *Referenced by N runs*. Parent-derived definitions show *Parent ran in N runs; this definition is not independently observed.* No count is inferred from a display name. |
+| **Runtime-observed, unjoined** | `runtime-observed-unjoined` | The kind's primitives appear in Runs, but records do not carry this authored definition's canonical Catalog id. Catalog names the relevant primitives and explicitly withholds per-definition counts and **View Runs**. |
 | **Quality-primary** | `quality-owned` (and dual-tagged cases) | *Quality-primary — correlates through the Quality ↔ observability join…*; secondary direct runtime (e.g. live `scoring.judge` for `scorer`) still surfaces when present |
-| **No runtime** | `static-only` / fallback / `runtimeIdentity: none` | *Static/declarative — never the target or subject of a runtime primitive.* (or *No runtime evidence path is defined for this kind.*) — no fabricated counts, no dead View Runs link, no arbitrary owner selection |
+| **No runtime** | `static-only` / fallback, or other kinds with no runtime path | *Static/declarative — never the target or subject of a runtime primitive.* (or *No runtime evidence path is defined for this kind.*) — no fabricated counts, no dead View Runs link, no arbitrary owner selection |
 
 Zero activity is a real state, not a broken link. **View N runs** appears only when the activity rollup reports `runCount > 0`.
 
@@ -66,6 +67,7 @@ Not every Project Index kind is a top-level run subject. Examples of truthful no
 - Other structural children inherit evidence from an indexed parent and are labelled *not independently observed*.
 - Knowledge bases and tool policies have canonical contributor refs on their owner spans (`runtimeIdentity: definition-ref`).
 - Injectables and storage ports do not expose canonical runtime ids (`runtimeIdentity: none`). Catalog shows truthful zero-runtime / non-independent evidence for them — it must not select an arbitrary indexed owner or claim owner-derived run counts.
+- Deferred work, media operations, and ingest sources emit real runtime primitives, but those records do not carry the authored definition id. Catalog labels them runtime-observed but unjoined and does not turn kind-level activity into a per-definition count.
 - Scorers remain Quality-primary; an authored `judge({ id })` also attaches a scorer ref to its live `scoring.judge` span.
 - File-loaded skills without a registry composite id do not invent a join key; registry-loaded skills do emit `DefinitionRef`.
 - Compositions (`parallel` / `pipeline` / `swarm` / `consensus`) require an authored `id` so runtime and index share `composition.<kind>:<id>`.

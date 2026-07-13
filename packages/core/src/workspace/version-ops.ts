@@ -9,7 +9,7 @@
  * @module
  */
 
-import type { RecordStore } from "../storage";
+import type { AssetStore, RecordStore } from "../storage";
 import { computeWorkspaceDiff } from "./diff";
 import { instrument } from "./observability";
 import { mountForPath, normalizePath } from "./path";
@@ -25,7 +25,6 @@ import {
 } from "./version-store";
 import type {
   NormalizedMount,
-  WorkspaceBlobStore,
   WorkspaceContent,
   WorkspaceFile,
   WorkspaceFileRecord,
@@ -47,7 +46,7 @@ import type {
 export interface WorkspaceVersionOpsConfig {
   readonly workspaceId: string;
   readonly store: RecordStore;
-  readonly blobs?: WorkspaceBlobStore;
+  readonly assets?: AssetStore;
   readonly mounts: readonly NormalizedMount[];
   readonly resolveNamespace: () => Promise<string>;
   /** The shared write path, used to append a restored version on `undo`. */
@@ -182,7 +181,7 @@ export function createWorkspaceVersionOps(
           );
         }
         const snapshot = previous.snapshot;
-        const content = await snapshotContent(snapshot, config.blobs);
+        const content = await snapshotContent(snapshot, config.assets);
         return config.write(
           namespace,
           path,
@@ -207,7 +206,7 @@ export function createWorkspaceVersionOps(
   ): Promise<WorkspaceReadResult> {
     const record = await resolveVersionRecord(namespace, path, version);
     return recordToReadResult(record, {
-      blobs: config.blobs,
+      assets: config.assets,
       ...(options.maxInlineBytes !== undefined
         ? { maxInlineBytes: options.maxInlineBytes }
         : {}),
@@ -251,7 +250,7 @@ export function createWorkspaceVersionOps(
       (head.headVersion ?? 1) === version
         ? head
         : await resolveVersionRecord(namespace, path, version);
-    return snapshotText(record, config.blobs);
+    return snapshotText(record, config.assets);
   }
 
   async function requireHead(

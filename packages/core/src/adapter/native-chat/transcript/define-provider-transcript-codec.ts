@@ -63,10 +63,12 @@ export function defineProviderTranscriptCodec<TProviderMessage, TRawResponse>(
 
   return {
     fromMessages: (messages, options = {}) =>
-      messagesToTranscriptUnits(messages).flatMap((unit) => toArray(encodeUnit(unit, options))),
+      messagesToTranscriptUnits(messages, {
+        preserveAssistantReasoning: dialect.preserveAssistantReasoning,
+      }).flatMap((unit) => toArray(encodeUnit(unit, options))),
     toMessages: (messages) =>
       transcriptUnitsToMessages(messages.flatMap((message) => toArray(dialect.decodeMessage(message)))),
-    readAssistant: (raw) => dialect.readAssistant(raw),
+    readAssistant: (raw, context) => dialect.readAssistant(raw, context),
     appendToolRound: appendCanonicalToolRound,
   }
 }

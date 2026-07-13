@@ -12,9 +12,8 @@
 
 import type { z } from "zod";
 import type {
-  BlobReadResult,
-  BlobRef,
-  BlobStore,
+  AssetRef,
+  AssetStore,
   JsonObject,
   RecordStore,
   Storage,
@@ -262,7 +261,7 @@ export interface WorkspaceMount {
   readonly source?: WorkspaceMountSource;
 }
 
-/** Inline-vs-blob content thresholds. */
+/** Inline-vs-asset content thresholds. */
 export interface WorkspaceContentOptions {
   readonly inlineTextBelowBytes?: number;
 }
@@ -293,7 +292,7 @@ export interface WorkspaceConfig {
         promptId?: string;
       }) => string | Promise<string>);
   readonly records?: RecordStore;
-  readonly blobs?: BlobStore;
+  readonly assets?: AssetStore;
   readonly storage?: Storage;
   readonly mounts?: readonly WorkspaceMount[];
   readonly content?: WorkspaceContentOptions;
@@ -361,7 +360,7 @@ export interface WorkspaceEditOptions extends WorkspaceNamespaceOption {
 
 /** Options for {@link Workspace.delete}. */
 export interface WorkspaceDeleteOptions extends WorkspaceNamespaceOption {
-  readonly deleteBlob?: boolean;
+  readonly deleteAsset?: boolean;
 }
 
 /** A file entry in a workspace listing. */
@@ -375,7 +374,7 @@ export interface WorkspaceFile {
   readonly size: number;
   readonly mount: string;
   /** Byte ownership for listing/stat; `virtual` means the bytes live behind a mount source. */
-  readonly storage: "inline" | "blob" | "virtual";
+  readonly storage: "inline" | "asset" | "virtual";
   readonly uri?: string;
   readonly preview?: string;
   readonly metadata?: Record<string, JsonValue>;
@@ -466,13 +465,6 @@ export type WorkspaceTransaction = Pick<
   | "artifacts"
   | "finalize"
 >;
-
-/** Re-export of the store blob reference type, for workspace consumers. */
-export type WorkspaceBlobRef = BlobRef;
-/** Re-export of the store blob read-result type, for workspace consumers. */
-export type WorkspaceBlobReadResult = BlobReadResult;
-/** Re-export of the store blob store type, for workspace consumers. */
-export type WorkspaceBlobStore = BlobStore;
 
 /** A durable, path-addressed workspace instance. */
 export interface Workspace<
@@ -599,7 +591,7 @@ export interface Workspace<
    * are discarded and the live namespace is not updated. When the callback
    * returns, touched paths are committed to the live namespace and the callback's
    * return value is preserved. If committing touched paths fails partway
-   * through, previously applied live paths, version records, and blobs are
+   * through, previously applied live paths, version records, and assets are
    * rolled back to their pre-commit state.
    *
    * @param run - Function that performs staged workspace mutations.
@@ -643,10 +635,11 @@ export interface WorkspaceFileRecord {
   readonly mount: string;
   readonly mimeType: string;
   readonly size: number;
-  readonly storage: "inline" | "blob";
+  readonly storage: "inline" | "asset";
   readonly inlineText?: string;
   readonly inlineJson?: JsonValue;
-  readonly uri?: string;
+  readonly assetRef?: AssetRef;
+  readonly sha256?: string;
   readonly preview?: string;
   readonly metadata?: Record<string, JsonValue>;
   readonly status?: WorkspaceArtifactStatus;
@@ -679,5 +672,5 @@ export interface ContentAnalysis {
   readonly size: number;
   readonly text?: string;
   readonly json?: JsonValue;
-  readonly binary?: Uint8Array | Blob | ReadableStream<Uint8Array>;
+  readonly binary?: Uint8Array | Blob;
 }

@@ -6,10 +6,34 @@ import { CruxAdapterError, isCruxAdapterError } from "@use-crux/core/adapter";
 import { createAnthropic } from "../src";
 
 describe("Anthropic stream handling", () => {
+  it("preserves exact final content and canonical messages", async () => {
+    const client = {
+      messages: { stream: () => completedStream() },
+    } as unknown as Anthropic;
+    const result = await createAnthropic(client).stream(
+      makePrompt({ id: "anthropic-stream-content", prompt: "Inspect this." }),
+      { model: "claude-sonnet-4-5-20250929" },
+    );
+
+    for await (const _ of result.textStream) {
+      /* consume */
+    }
+    const completion = await result.completion;
+    expect(completion.content.map((part) => part.type)).toEqual([
+      "text",
+      "tool-call",
+    ]);
+    expect(completion.messages.at(-1)).toMatchObject({
+      role: "assistant",
+      content: completion.content,
+    });
+  });
+
   it("surfaces a finalMessage() rejection as a normalized error instead of swallowing it", async () => {
+    const finalMessageError = new Error("stream closed before final message");
     const client = {
       messages: {
-        stream: () => failingCompletionStream(),
+        stream: () => failingCompletionStream(finalMessageError),
       },
     } as unknown as Anthropic;
 
@@ -114,31 +138,57 @@ describe("Anthropic stream handling", () => {
   });
 });
 
-function erroringIterationStream(): MessageStream {
+function completedStream(): MessageStream {
+  const message = {
+    id: "msg_stream",
+    type: "message",
+    role: "assistant",
+    model: "claude-actual",
+    content: [
+      { type: "text", text: "Checking" },
+      { type: "tool_use", id: "tc_1", name: "inspect", input: { page: 1 } },
+    ],
+    stop_reason: "tool_use",
+    stop_sequence: null,
+    usage: { input_tokens: 2, output_tokens: 3 },
+  } as unknown as Anthropic.Message;
+  return {
+    async *[Symbol.asyncIterator]() {
+      yield {
+        type: "content_block_delta",
+        delta: { type: "text_delta", text: "Checking" },
+      };
+    },
+    finalMessage: async () => message,
+  } as unknown as MessageStream;
+}
+
+function failingCompletionStream(error: Error): MessageStream {
   return {
     async *[Symbol.asyncIterator]() {
       yield {
         type: "content_block_delta",
         delta: { type: "text_delta", text: "partial" },
       };
-      throw new Error("connection reset");
     },
     finalMessage: async () => {
-      throw new Error("connection reset");
+      throw error;
     },
   } as unknown as MessageStream;
 }
 
-function failingCompletionStream(): MessageStream {
+function erroringIterationStream(): MessageStream {
+  const error = new Error("connection reset");
   return {
     async *[Symbol.asyncIterator]() {
       yield {
         type: "content_block_delta",
         delta: { type: "text_delta", text: "partial" },
       };
+      throw error;
     },
     finalMessage: async () => {
-      throw new Error("stream closed before final message");
+      throw error;
     },
   } as unknown as MessageStream;
 }
@@ -149,7 +199,11 @@ function succeedingStream(
     readonly stop_reason: string;
     readonly usage: { input_tokens: number; output_tokens: number };
     readonly model: string;
-    readonly toolUse?: { id: string; name: string; input: Record<string, unknown> };
+    readonly toolUse?: {
+      id: string;
+      name: string;
+      input: Record<string, unknown>;
+    };
   },
 ): MessageStream {
   const content: unknown[] = [{ type: "text", text: chunks.join("") }];
@@ -164,7 +218,10 @@ function succeedingStream(
   return {
     async *[Symbol.asyncIterator]() {
       for (const text of chunks) {
-        yield { type: "content_block_delta", delta: { type: "text_delta", text } };
+        yield {
+          type: "content_block_delta",
+          delta: { type: "text_delta", text },
+        };
       }
     },
     finalMessage: async () => ({

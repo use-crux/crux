@@ -24,9 +24,11 @@ type runtimeGenerateOptions struct {
 
 type runtimeArtifactGenerateFunc func(ctx context.Context, root string) (json.RawMessage, error)
 type runtimeOperationFunc func(ctx context.Context, root, operation, workID string) (json.RawMessage, error)
+type setupOperationFunc func(ctx context.Context, root, mode string) (json.RawMessage, error)
 
 var generateRuntimeArtifactsForCommand runtimeArtifactGenerateFunc = generateRuntimeArtifactsWithWorker
 var runRuntimeOperationForCommand runtimeOperationFunc = runRuntimeOperationWithWorker
+var runSetupOperationForCommand setupOperationFunc = runSetupOperationWithWorker
 
 const runtimeGenerateTimeout = 120 * time.Second
 
@@ -76,7 +78,6 @@ entry files. It does not create infrastructure or mutate runtime state.`,
 		},
 	}
 	cmd.AddCommand(generateCmd)
-	cmd.AddCommand(newRuntimeSetupCmd(f, opts))
 	cmd.AddCommand(newRuntimeStatusCmd(f, opts))
 	cmd.AddCommand(newRuntimeInspectCmd(f, opts))
 	cmd.AddCommand(newRuntimeRetryCmd(f, opts))
@@ -119,6 +120,17 @@ func runRuntimeOperationWithWorker(ctx context.Context, root, operation, workID 
 		defer cancel()
 	}
 	return worker.RunRuntimeOperation(ctx, root, operation, workID, false)
+}
+
+func runSetupOperationWithWorker(ctx context.Context, root, mode string) (json.RawMessage, error) {
+	worker := assets.NewEmbeddedProjectIndexer("")
+	defer worker.Close()
+	if _, ok := ctx.Deadline(); !ok {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, runtimeGenerateTimeout)
+		defer cancel()
+	}
+	return worker.RunSetupOperation(ctx, root, mode)
 }
 
 func printRuntimeGenerateResult(io *output.IO, raw json.RawMessage) error {

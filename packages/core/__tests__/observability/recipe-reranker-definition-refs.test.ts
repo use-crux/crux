@@ -32,7 +32,7 @@ function startRecords(transport: Transport, primitive: string) {
 function hit(id: string, content: string, score = 1): RetrieverHit {
   return {
     namespace: 'docs',
-    sourceId: id,
+    source: { id },
     chunkId: '0',
     content,
     metadata: {},

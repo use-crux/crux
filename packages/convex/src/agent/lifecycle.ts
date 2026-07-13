@@ -1,13 +1,16 @@
 import type { LanguageModelV3 } from '@ai-sdk/provider'
-import { prompt as definePrompt } from '@use-crux/core'
-import type { ContextEntry, ResolveOptions } from '@use-crux/core'
-import type { RecordStore, Storage } from '@use-crux/core/storage'
-import type { z } from 'zod'
 import { runWithConvexCruxRuntime, type ConvexRuntimeTarget } from '../runtime'
-import { afterPreparedAgentCall, readPersistedSkillIds } from './lifecycle-persistence'
+import { afterPreparedAgentCall } from './lifecycle-persistence'
+import { prepareAgentCallArgsForNativeMedia } from './lifecycle-media'
 import { observeAgentRun } from './lifecycle-observability'
 import { defaultConvexAgentStorage } from './lifecycle-store'
 import { agentOptionsFromConfig } from './lifecycle-config'
+import {
+  inputWithPersistedSkills,
+  normalizeStorage,
+  promptWithRuntimeUse,
+  resolvePreparedPrompt,
+} from './lifecycle-prepare'
 import {
   prepareMessagesFromSnapshot,
   targetFromContextSnapshot,
@@ -21,7 +24,6 @@ import type {
   AgentThreadRequest,
   AgentTurnRequest,
   AnyConvexPrompt,
-  AnyConvexPromptConfig,
   ConvexAgentCallArgs,
   ConvexAgentOperation,
   PreparedAgentCall,
@@ -92,6 +94,15 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
     void _input
     void _tokenBudget
 
+    const callArgs = await prepareAgentCallArgsForNativeMedia(ctx, {
+      ...rest,
+      ...(resolved.system ? { system: resolved.system } : {}),
+      ...(resolved.prompt ? { prompt: resolved.prompt } : {}),
+      ...(resolved.messages ? { messages: resolved.messages } : {}),
+      ...(resolved.schema ? { schema: resolved.schema } : {}),
+      tools: convexToolSet,
+    })
+
     return {
       session: config.driver.create({
         component: config.components.agent,
@@ -106,14 +117,7 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
       input,
       persistence: config.persistence,
       captureMessages: prepared?.captureMessages,
-      callArgs: {
-        ...rest,
-        ...(resolved.system ? { system: resolved.system } : {}),
-        ...(resolved.prompt ? { prompt: resolved.prompt } : {}),
-        ...(resolved.messages ? { messages: resolved.messages } : {}),
-        ...(resolved.schema ? { schema: resolved.schema } : {}),
-        tools: convexToolSet,
-      },
+      callArgs,
     }
   }
 
@@ -243,7 +247,8 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
                   preparedTarget,
                   config.observe,
                   async (recordPrepared) => {
-                    const prepared = withThreadCallArgs(
+                    const prepared = await prepareThreadAgentCall(
+                      request.ctx,
                       await prepareAgentCall(
                         request.ctx,
                         preparedTarget,
@@ -269,38 +274,14 @@ export function createProfileBackedAgentLifecycle<TPrompt extends AnyConvexPromp
   }
 }
 
-function normalizeStorage(value: Storage | RecordStore): Storage {
-  return 'records' in value ? value : { records: value }
-}
-
-async function inputWithPersistedSkills(input: Record<string, unknown>): Promise<Record<string, unknown>> {
-  const activeSkillIds = await readPersistedSkillIds()
-  if (activeSkillIds.length === 0) return input
+async function prepareThreadAgentCall(
+  ctx: unknown,
+  prepared: PreparedAgentCall,
+  convexCallArgs: Record<string, unknown>,
+): Promise<PreparedAgentCall> {
+  const merged = withThreadCallArgs(prepared, convexCallArgs)
   return {
-    ...input,
-    _crux_activeSkills: activeSkillIds,
+    ...merged,
+    callArgs: await prepareAgentCallArgsForNativeMedia(ctx, merged.callArgs),
   }
-}
-
-function promptWithRuntimeUse<TPrompt extends AnyConvexPrompt>(
-  basePrompt: TPrompt,
-  runtimeUse: readonly ContextEntry[] | undefined,
-): AnyConvexPrompt {
-  if (!runtimeUse || runtimeUse.length === 0) return basePrompt
-  const baseConfig = basePrompt.config as AnyConvexPromptConfig
-  return definePrompt({
-    ...baseConfig,
-    use: [...basePrompt.contexts, ...runtimeUse],
-  })
-}
-
-async function resolvePreparedPrompt(
-  activePrompt: AnyConvexPrompt,
-  input: Record<string, unknown>,
-  tokenBudget: number | undefined,
-) {
-  return await activePrompt.resolve({
-    input,
-    tokenBudget,
-  } as unknown as ResolveOptions<z.ZodType, readonly ContextEntry[]>)
 }

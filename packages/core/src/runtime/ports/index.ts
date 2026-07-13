@@ -14,6 +14,8 @@ export type {
   RuntimeEvent,
 } from './events'
 export type {
+  DeferredIntentId,
+  DeferredScopeId,
   EventCursor,
   FlowId,
   LeaseToken,
@@ -23,6 +25,16 @@ export type {
   WaiterId,
   WorkId,
 } from './ids'
+export type {
+  ListRuntimeDeferredIntentsOptions,
+  ListRuntimeDeferredScopesOptions,
+  RuntimeDeferredIntent,
+  RuntimeDeferredIntentState,
+  RuntimeDeferredScope,
+  RuntimeDeferredStorePort,
+  RuntimeDeferFinalization,
+  RuntimeDeferInvocationOutcome,
+} from './deferred'
 export type { ClaimOptions, Lease, LeasePort, LeaseResource } from './leases'
 export type { RuntimePruneOptions, RuntimePruneResult } from './retention'
 export type {

@@ -55,7 +55,7 @@ export interface RetryModel<M = unknown>
  * })
  * ```
  */
-export function retry<M>(model: M, options: RetryOptions): RetryModel<M> {
+export function retry<const M>(model: M, options: RetryOptions): RetryModel<M> {
   if (!Number.isInteger(options.attempts) || options.attempts < 1) {
     throw new Error("retry() requires attempts to be a positive integer");
   }

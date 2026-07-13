@@ -61,8 +61,8 @@ pub(crate) fn bundle_metadata(
                     .map(|reference| Value::String(reference.name)),
             ),
             (
-                "blobsVariable",
-                refs.blobs
+                "assetsVariable",
+                refs.assets
                     .clone()
                     .map(|reference| Value::String(reference.name)),
             ),
@@ -183,8 +183,8 @@ fn storage_facts(
     );
     insert_string(
         &mut facts,
-        "blobs",
-        refs.blobs.map(|reference| reference.name),
+        "assets",
+        refs.assets.map(|reference| reference.name),
     );
     insert_string(
         &mut facts,

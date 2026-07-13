@@ -57,7 +57,7 @@ Guide: [Adapter outcomes](/docs/guides/observability/adapter-outcomes). Privacy 
 
 ## Multimodal Content Support
 
-All first-party generation adapters accept canonical `Message.content` values as either strings or readonly `ContentPart[]`. Each adapter uses one provider-local content part table for managed calls, public codecs, headless handles, transport mode, and rich tool-result encoding. Unsupported parts degrade to deterministic text placeholders with a diagnostics warning and a `content.degraded` span event, or throw `UnsupportedContentError` before the provider call when `unsupportedContent: "error"` is set.
+All first-party generation adapters accept canonical `Message.content` values as either strings or readonly `ContentPart[]`. Each adapter uses one provider-local content part table for managed calls, public codecs, headless handles, transport mode, and rich tool-result encoding. Model calls validate and normalize media sources before provider I/O; malformed media throws `InvalidMediaSourceError`, and valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError`.
 
 | Capability | `@use-crux/ai` | `@use-crux/anthropic` | `@use-crux/openai` Chat | `@use-crux/google` |
 | --- | --- | --- | --- | --- |
@@ -69,6 +69,18 @@ All first-party generation adapters accept canonical `Message.content` values as
 | Tool-result media | SDK parts where supported | image/PDF native blocks | deterministic text references | function-response parts |
 
 `GenerateResult.text` and `StreamResult.textStream` remain string-shaped. Assistant-returned media is available in `result.messages`.
+
+Image generation is a separate flat operation, projected from the same internal five-adapter conformance fixture used by adapter tests:
+
+| Adapter | `generateImage` binding |
+| --- | --- |
+| ai-sdk | native |
+| anthropic | absent |
+| convex | exact AI SDK re-export |
+| google | native |
+| openai | native |
+
+Generated images are immediately usable data assets. Persistence stays explicit: call `assetStore.put(result.image)` later when durable storage is needed.
 
 ## Which contract do I implement?
 

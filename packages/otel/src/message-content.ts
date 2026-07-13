@@ -8,7 +8,6 @@
  */
 
 import type { CruxGraphRecord } from '@use-crux/core/observability'
-import { contentText, type ContentPart, type MessageContent } from '@use-crux/core'
 import type { OtelAttributes } from './attribute-mapper'
 import {
   GEN_AI_INPUT_MESSAGES,
@@ -117,48 +116,54 @@ function textFromRecord(record: Record<string, unknown>): string | undefined {
   for (const key of ['content', 'text', 'answer', 'value', 'output']) {
     const value = record[key]
     if (typeof value === 'string' && value.length > 0) return value
-    if (isMessageContent(value)) {
-      const text = contentText(value)
+    if (Array.isArray(value)) {
+      const text = safeContentText(value)
       if (text.length > 0) return text
     }
   }
   return undefined
 }
 
-function isMessageContent(value: unknown): value is MessageContent {
-  return typeof value === 'string' || (Array.isArray(value) && value.every(isContentPart))
+function safeContentText(value: readonly unknown[]): string {
+  return value.flatMap((part) => safePartText(part)).join('\n')
 }
 
-function isContentPart(value: unknown): value is ContentPart {
-  if (!isRecord(value) || typeof value.type !== 'string') return false
-  switch (value.type) {
-    case 'text':
-      return typeof value.text === 'string'
-    case 'image-data':
-      return typeof value.data === 'string' && typeof value.mediaType === 'string'
-    case 'image-url':
-      return typeof value.url === 'string' && optionalString(value.mediaType)
-    case 'image-file-id':
-      return typeof value.fileId === 'string' || isStringRecord(value.fileId)
-    case 'file-data':
-      return typeof value.data === 'string' && typeof value.mediaType === 'string' && optionalString(value.filename)
-    case 'file-url':
-      return typeof value.url === 'string' && optionalString(value.mediaType) && optionalString(value.filename)
-    case 'file-id':
-      return typeof value.fileId === 'string' || isStringRecord(value.fileId)
-    case 'custom':
-      return true
-    default:
-      return false
-  }
+function safePartText(value: unknown): readonly string[] {
+  if (!isRecord(value)) return []
+  if (value.type === 'text' && typeof value.text === 'string') return [value.text]
+  if (!isSafeMediaDescriptor(value)) return []
+  const facts = [
+    value.kind,
+    typeof value.mediaType === 'string' ? value.mediaType : undefined,
+    typeof value.sizeBytes === 'number' ? `${value.sizeBytes}B` : undefined,
+    typeof value.digestPrefix === 'string' ? `sha256:${value.digestPrefix}` : undefined,
+  ].filter((item): item is string => item !== undefined)
+  return [`[${facts.join(' ')}]`]
 }
 
-function optionalString(value: unknown): boolean {
-  return value === undefined || typeof value === 'string'
-}
+const SAFE_SOURCE_CATEGORIES = new Set([
+  'data',
+  'url',
+  'provider-file',
+  'asset-ref',
+  'bytes',
+  'blob',
+  'unknown',
+])
 
-function isStringRecord(value: unknown): value is Record<string, string> {
-  return isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string')
+function isSafeMediaDescriptor(value: Record<string, unknown>): boolean {
+  return (
+    (value.kind === 'image' ||
+      value.kind === 'audio' ||
+      value.kind === 'video' ||
+      value.kind === 'file') &&
+    typeof value.sourceCategory === 'string' &&
+    SAFE_SOURCE_CATEGORIES.has(value.sourceCategory) &&
+    !('source' in value) &&
+    !('data' in value) &&
+    !('url' in value) &&
+    !('fileId' in value)
+  )
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -19,6 +19,8 @@ import {
   createBudgetSignal,
   type BudgetSignal,
 } from "../../generation/timeout";
+import { normalizeInvocationMessages } from "../../content/invocation-message";
+import { assertProviderMediaSupported } from "../native-chat/media-hooks";
 import type {
   ExecutorOutcome,
   ExecutorRequest,
@@ -52,6 +54,7 @@ import {
   withSkillActivationInput,
 } from "./shared";
 import { generateSdkStructured } from "./generate-sdk-structured";
+import { emitInputTokenEstimate } from './media-token-budget'
 
 /** Regeneration is deliberately unavailable after tool-approval suspension. */
 const unreachableRegenerate = (): Promise<never> => {
@@ -103,7 +106,10 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
   });
 
   let { messages, promptText } = initialMessageState(resolved, args.messages);
-  messages = (await lifecycle.resume(messages)).messages;
+  let nativeMessages = args.nativeMessages;
+  const resumed = await lifecycle.resume(messages);
+  messages = resumed.messages;
+  if (resumed.replayed > 0) nativeMessages = undefined;
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
   const maxSteps =
@@ -157,29 +163,48 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
     },
   };
 
-  const buildRequest = (
+  const buildRequest = async (
     signal: AbortSignal | undefined,
-  ): ExecutorRequest<TModel> => ({
-    model: args.model,
-    modelInfo,
-    system: currentSystem,
-    systemBlocks: currentSystemBlocks,
-    prompt: promptText,
-    messages,
-    settings: mappedSettings,
-    unsupportedContent: resolved.settings.unsupportedContent,
-    tools: lifecycle.tools,
-    toolApproval: (call) =>
-      lifecycle.requiresApproval(
-        { id: call.toolCallId, name: call.toolName, args: call.input },
-        call.messages ?? messages,
-      ),
-    activeTools: args.activeTools,
-    maxSteps,
-    observer: loopObserver,
-    abortSignal: composeAbortSignals(args.signal, signal),
-    extra: args.extra,
-  });
+  ): Promise<ExecutorRequest<TModel>> => {
+    const providerMessages =
+      messages.length > 0
+        ? await normalizeInvocationMessages(messages, {
+            provider: modelInfo.provider,
+          })
+        : undefined;
+    assertProviderMediaSupported(
+      { providerId: dialect.id, media: dialect.media },
+      { provider: modelInfo.provider, model: modelInfo.modelId, messages: providerMessages ?? [] },
+    );
+    emitInputTokenEstimate({
+      messages: providerMessages ?? [],
+      provider: modelInfo.provider,
+      model: modelInfo.modelId,
+      media: dialect.media,
+      tokenBudget: args.tokenBudget,
+    })
+    return {
+      model: args.model,
+      modelInfo,
+      system: currentSystem,
+      systemBlocks: currentSystemBlocks,
+      prompt: promptText,
+      messages: providerMessages,
+      nativeMessages,
+      settings: mappedSettings,
+      tools: lifecycle.tools,
+      toolApproval: (call) =>
+        lifecycle.requiresApproval(
+          { id: call.toolCallId, name: call.toolName, args: call.input },
+          call.messages ?? messages,
+        ),
+      activeTools: args.activeTools,
+      maxSteps,
+      observer: loopObserver,
+      abortSignal: composeAbortSignals(args.signal, signal),
+      extra: args.extra,
+    };
+  };
 
   const generated = await orchestrateGenerate<
     Record<string, unknown>,
@@ -213,13 +238,14 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           messages,
           prompt: promptText,
         });
+        if (guardedInput.messages !== messages) nativeMessages = undefined;
         messages = [...guardedInput.messages];
         promptText = guardedInput.prompt;
         const result = resolved.schema
           ? await generateSdkStructured({
               dialect,
               args,
-              request: buildRequest(undefined),
+              request: await buildRequest(undefined),
               schema: resolved.schema,
               safety,
               retryId,
@@ -232,7 +258,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
                 budget: "step",
                 limitMs: args.timeout?.stepMs,
               });
-              return generateLoop(buildRequest(stepBudget.signal));
+              return generateLoop(await buildRequest(stepBudget.signal));
             })();
         result._meta = safety.stamp(result._meta);
         return result;
@@ -307,6 +333,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
           ...request,
           prompt: undefined,
           messages: regenMessages,
+          nativeMessages: undefined,
           maxSteps: 1,
           observer: undefined,
         };
@@ -319,7 +346,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
             const previous = resultStepFacts[resultStepFacts.length - 1]!;
             resultStepFacts[resultStepFacts.length - 1] = {
               ...previous,
-              text: "",
+              content: [],
             };
           }
           finalText = regen.response.text;
@@ -340,7 +367,7 @@ export async function generateSdk<TModel, TRawResponse, TRawStream>(
         const previous = resultStepFacts[resultStepFacts.length - 1]!;
         resultStepFacts[resultStepFacts.length - 1] = {
           ...previous,
-          text: finalText,
+          content: [{ type: "text", text: finalText }],
         };
       }
     }

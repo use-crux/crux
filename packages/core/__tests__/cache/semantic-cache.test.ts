@@ -7,7 +7,7 @@ import { inMemoryStorage } from '../../src/storage'
 import { applyPlugins } from '../../src/runtime/plugin'
 import { getHooks, resetHooks, setHooks } from '../../src/runtime/runtime'
 import { orchestrateGenerate, orchestrateStream } from '../../src/generation/orchestrate'
-import { imagePart, textPart } from '../../src/content'
+import { textPart } from '../../src/content'
 import { resolveQueryText } from '../../src/cache/query'
 
 function denseEmbedding() {
@@ -113,7 +113,7 @@ describe('createSemanticCache', () => {
               role: 'user',
               content: [
                 textPart('cache this chart'),
-                imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+                { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
               ],
             },
           ],

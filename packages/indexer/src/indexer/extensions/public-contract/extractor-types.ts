@@ -1,4 +1,8 @@
-import type { IndexDiagnostic, ProjectDefinition, ProjectSourceRef } from '@use-crux/core/project-index'
+import type {
+  IndexDiagnostic,
+  ProjectDefinition,
+  ProjectSourceRef,
+} from '@use-crux/core/project-index'
 import type { StaticRelationRef } from '../../types'
 import type {
   DefinitionBuilder,
@@ -164,6 +168,10 @@ export interface ExtractMatch {
   readonly kind: ExtractPattern['kind']
   /** Matched call or constructor name. */
   readonly name: string
+  /** Public package specifier that supplied a directly imported callable. */
+  readonly moduleSpecifier?: string
+  /** Exported callable name before local import aliasing. */
+  readonly importedName?: string
 }
 
 /**
@@ -184,6 +192,8 @@ export interface SourceView {
    * compiler supplies a deterministic fallback name.
    */
   readonly variableName: string
+  /** Authored binding that lexically contains this call-site match, when statically known. */
+  readonly ownerVariableName?: string
   /** Whether this match comes from a top-level named export in the source file. */
   readonly exported?: boolean
   /**

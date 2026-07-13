@@ -22,6 +22,7 @@ const component = {
     timers: {},
     outbox: {},
     leases: {},
+    deferred: {},
   },
 } satisfies ConvexRuntimeComponent
 
@@ -170,7 +171,10 @@ describe('createConvexRuntimeHandlers()', () => {
       token: 'lease_heartbeat_1' as LeaseToken,
       expiresAt: new Date('2026-07-07T12:01:00.000Z'),
     }
-    const calls: Array<{ readonly ref: unknown; readonly args: Record<string, unknown> }> = []
+    const calls: Array<{
+      readonly ref: unknown
+      readonly args: Record<string, unknown>
+    }> = []
     const ctx = {
       scheduler: { runAfter: vi.fn(async () => undefined) },
       runQuery: vi.fn(async () => undefined),
@@ -188,11 +192,9 @@ describe('createConvexRuntimeHandlers()', () => {
         return null
       }),
     }
-    const setIntervalSpy = vi
-      .spyOn(globalThis, 'setInterval')
-      .mockImplementation(() => {
-        throw new Error('setInterval unavailable in Convex isolate')
-      })
+    const setIntervalSpy = vi.spyOn(globalThis, 'setInterval').mockImplementation(() => {
+      throw new Error('setInterval unavailable in Convex isolate')
+    })
     const envelope: WakeEnvelope = {
       v: 1,
       ns: 'tenant-a',

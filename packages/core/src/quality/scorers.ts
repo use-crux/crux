@@ -33,6 +33,8 @@ import {
 } from './internal/rag-metrics'
 import { MissingQualityModelBindingError } from './internal/errors'
 import type { GenerateFn, ModelRef } from './target'
+import type { Asset } from '../asset'
+import type { ContentPart } from '../types/content'
 
 // ─────────────────────────────────────────────────────────────────
 // Core contracts
@@ -58,6 +60,9 @@ export interface Score {
   /** Free-form diagnostics; judge rationale lives here. */
   metadata?: Record<string, unknown>
 }
+
+/** Content that may be supplied directly to the existing model judge. */
+export type JudgeContent = string | Asset | readonly ContentPart[]
 
 /**
  * A scoring function. Any `({ input, output, expected }) => Score` works —
@@ -137,7 +142,9 @@ export interface JudgeOptionsBase<N extends string> {
  * structured-output evaluations using text judges are a compile error, not
  * silently stringified JSON). @internal
  */
-export type JudgeSelect<O> = [O] extends [string] ? { select?: (output: O) => string } : { select: (output: O) => string }
+export type JudgeSelect<O> = [O] extends [JudgeContent]
+  ? { select?: (output: O) => JudgeContent }
+  : { select: (output: O) => JudgeContent }
 
 // ─────────────────────────────────────────────────────────────────
 // Library interfaces (standalone + evaluation-bound)
@@ -396,7 +403,7 @@ export function jsonSimilarity(actual: unknown, expected: unknown): number {
 // The library
 // ─────────────────────────────────────────────────────────────────
 
-function judgeScorer(opts: JudgeOptionsBase<string> & { select?: (output: never) => string }): AnyScorerFn & {
+function judgeScorer(opts: JudgeOptionsBase<string> & { select?: (output: never) => JudgeContent }): AnyScorerFn & {
   scorerName?: string
   costClass?: 'code' | 'model'
 } {
@@ -608,7 +615,7 @@ interface ExpectedSource {
 
 /** A ranked retrieval hit, from the task output or captured retrieval signals. */
 interface RankedHit {
-  sourceId?: string
+  source?: { id?: string }
   chunkId?: string
   rank?: number
 }
@@ -626,7 +633,7 @@ function parseExpectedSources(expected: unknown, name: string): ExpectedSource[]
 
 /**
  * Derive the ranked hit list a retrieval scorer measures: the task output
- * when it is hit-shaped (an array of `{ sourceId }` records, or `{ hits }`),
+ * when it is hit-shaped (an array of `{ source: { id } }` records, or `{ hits }`),
  * sorted by `rank` when every entry carries one.
  */
 function rankedHitsFromOutput(output: unknown): RankedHit[] | undefined {
@@ -640,7 +647,7 @@ function rankedHitsFromOutput(output: unknown): RankedHit[] | undefined {
 }
 
 function hitMatches(hit: RankedHit, source: ExpectedSource): boolean {
-  return hit.sourceId === source.sourceId && (source.chunkId === undefined || hit.chunkId === source.chunkId)
+  return hit.source?.id === source.sourceId && (source.chunkId === undefined || hit.chunkId === source.chunkId)
 }
 
 /**
@@ -658,7 +665,7 @@ function retrievalScorer<N extends string>(name: N, metric: (hits: readonly Rank
         name,
         score: null,
         metadata: {
-          reason: 'output is not a ranked hit list (expected an array of { sourceId } or { hits })',
+          reason: 'output is not a ranked hit list (expected an array of { source: { id } } or { hits })',
         },
       }
     }

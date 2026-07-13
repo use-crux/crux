@@ -56,8 +56,8 @@ describe('AI SDK multimodal messages', () => {
       content: [
         { type: 'text', text: 'see attached' },
         {
-          type: 'file-data',
-          data: 'JVBERi0x',
+          type: 'file',
+          source: { type: 'data', data: new Uint8Array(Buffer.from('JVBERi0x', 'base64')), mediaType: 'application/pdf' },
           mediaType: 'application/pdf',
           filename: 'report.pdf',
           providerOptions: { openai: { fileId: 'file_123' } },
@@ -66,32 +66,34 @@ describe('AI SDK multimodal messages', () => {
     })
   })
 
-  it('normalizes SDK-shaped message history before building SDK call args', async () => {
-    const scripted = scriptedGateway({ generateText: [{ text: 'ok' }] })
-    const ai = createCruxAi({ gateway: scripted.gateway })
-
-    await ai.generate(textPrompt, {
-      model: model(),
-      input: { message: 'ignored when messages are provided' },
-      messages: [
-        {
-          role: 'user',
-          content: [
-            { type: 'text', text: 'Look.' },
-            { type: 'image', image: 'AQID', mediaType: 'image/png' },
-          ],
-        },
-      ] as never,
-    })
-
-    expect(scripted.calls.generateText[0]!.messages).toEqual([
+  it('decodes native audio and video files from every AI SDK data shape', () => {
+    const audioBytes = new Uint8Array([1, 2, 3])
+    const videoBlob = new Blob([new Uint8Array([4, 5])], { type: 'video/webm' })
+    const messages = fromResponseMessages([
       {
-        role: 'user',
+        role: 'assistant',
         content: [
-          { type: 'text', text: 'Look.' },
-          { type: 'image', image: 'AQID', mediaType: 'image/png' },
+          { type: 'file', data: 'AQID', mediaType: 'audio/mpeg' },
+          { type: 'file', data: audioBytes, mediaType: 'audio/wav' },
+          { type: 'file', data: new URL('https://example.com/clip.mp4'), mediaType: 'video/mp4' },
+          { type: 'file', data: videoBlob, mediaType: 'video/webm' },
         ],
       },
+    ])
+
+    expect(messages[0]?.content).toEqual([
+      {
+        type: 'audio',
+        source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'audio/mpeg' },
+        mediaType: 'audio/mpeg',
+      },
+      { type: 'audio', source: audioBytes, mediaType: 'audio/wav' },
+      {
+        type: 'video',
+        source: new URL('https://example.com/clip.mp4'),
+        mediaType: 'video/mp4',
+      },
+      { type: 'video', source: videoBlob, mediaType: 'video/webm' },
     ])
   })
 
@@ -102,7 +104,7 @@ describe('AI SDK multimodal messages', () => {
           role: 'tool',
           content: [
             { type: 'text', text: 'Screenshot captured.' },
-            { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+            { type: 'image', source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' } },
           ],
           metadata: { toolCallId: 'call_1', toolName: 'screenshot' },
         },
@@ -119,7 +121,7 @@ describe('AI SDK multimodal messages', () => {
               type: 'content',
               value: [
                 { type: 'text', text: 'Screenshot captured.' },
-                { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+                { type: 'image', source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' } },
               ],
             },
           },
@@ -135,7 +137,12 @@ describe('AI SDK multimodal messages', () => {
           role: 'assistant',
           content: [
             { type: 'text', text: 'I inspected the image.' },
-            { type: 'file-data', data: 'JVBERi0x', mediaType: 'application/pdf', filename: 'report.pdf' },
+            {
+              type: 'file',
+              source: { type: 'data', data: new Uint8Array(Buffer.from('JVBERi0x', 'base64')), mediaType: 'application/pdf' },
+              mediaType: 'application/pdf',
+              filename: 'report.pdf',
+            },
           ],
           metadata: {
             toolCalls: [{ id: 'call_1', name: 'summarize', args: { id: 'report' } }],
@@ -147,8 +154,35 @@ describe('AI SDK multimodal messages', () => {
         role: 'assistant',
         content: [
           { type: 'text', text: 'I inspected the image.' },
-          { type: 'file', data: 'JVBERi0x', mediaType: 'application/pdf', filename: 'report.pdf' },
+          {
+            type: 'file',
+            data: new Uint8Array(Buffer.from('JVBERi0x', 'base64')),
+            mediaType: 'application/pdf',
+            filename: 'report.pdf',
+          },
           { type: 'tool-call', toolCallId: 'call_1', toolName: 'summarize', input: { id: 'report' } },
+        ],
+      },
+    ])
+  })
+
+  it('lowers dedicated audio/video content through native file parts', () => {
+    expect(
+      toModelMessages([
+        {
+          role: 'user',
+          content: [
+            { type: 'audio', source: new Uint8Array([1, 2, 3]), mediaType: 'audio/mpeg' },
+            { type: 'video', source: new URL('https://example.com/clip.mp4'), mediaType: 'video/mp4' },
+          ],
+        },
+      ]),
+    ).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'file', data: new Uint8Array([1, 2, 3]), mediaType: 'audio/mpeg' },
+          { type: 'file', data: new URL('https://example.com/clip.mp4'), mediaType: 'video/mp4' },
         ],
       },
     ])
@@ -201,7 +235,7 @@ describe('AI SDK multimodal messages', () => {
                 type: 'content',
                 value: [
                   { type: 'text', text: 'Screenshot captured.' },
-                  { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+                  { type: 'image', source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' } },
                 ],
               },
             },
@@ -213,7 +247,7 @@ describe('AI SDK multimodal messages', () => {
         role: 'tool',
         content: [
           { type: 'text', text: 'Screenshot captured.' },
-          { type: 'image-data', data: 'AQID', mediaType: 'image/png' },
+          { type: 'image', source: { type: 'data', data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' } },
         ],
         metadata: { toolCallId: 'call_1', toolName: 'screenshot' },
       },

@@ -20,6 +20,7 @@ import type {
   TraceMeta,
 } from "../src/generation/types";
 import { TimeoutError } from "../src/generation/timeout";
+import type { AssistantContentPart } from "../src/types/content";
 
 type AssertEqual<T, U> =
   (<G>() => G extends T ? 1 : 2) extends <G>() => G extends U ? 1 : 2
@@ -123,7 +124,6 @@ type _GenerationSettingsKeys = Expect<
     | "maxSteps"
     | "frequencyPenalty"
     | "presencePenalty"
-    | "unsupportedContent"
   >
 >;
 type _SeedSetting = Expect<
@@ -154,12 +154,15 @@ type _GenerateResultKeys = Expect<
       { readonly ok: true }
     >,
     | "text"
+    | "content"
     | "object"
     | "usage"
     | "cost"
     | "steps"
     | "finalStep"
     | "messages"
+    | "warnings"
+    | "providerMetadata"
     | "routing"
     | "pendingApprovals"
     | "raw"
@@ -170,6 +173,18 @@ type _GenerateResultRaw = Expect<
   AssertEqual<
     TargetGenerateResult<{ readonly provider: "raw" }>["raw"],
     { readonly provider: "raw" }
+  >
+>;
+type _GenerateResultContent = Expect<
+  AssertEqual<
+    TargetGenerateResult<unknown>["content"],
+    readonly AssistantContentPart[]
+  >
+>;
+type _GenerateResultSteps = Expect<
+  AssertEqual<
+    TargetGenerateResult<unknown>["steps"],
+    readonly FinalStepInfo[]
   >
 >;
 type _GenerateResultObject = Expect<

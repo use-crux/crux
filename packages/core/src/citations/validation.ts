@@ -84,7 +84,7 @@ export function createArtifact(args: {
     ...(args.query ? { query: args.query } : {}),
     allowedHits: args.hits.map((hit) => ({
       namespace: hit.namespace,
-      sourceId: hit.sourceId,
+      sourceId: hit.source.id,
       chunkId: hit.chunkId,
       score: hit.score,
     })),

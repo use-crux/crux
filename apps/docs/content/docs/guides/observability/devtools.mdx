@@ -28,12 +28,13 @@ config({
     bridge: true, // optional live-runtime command plane for local Node apps
     sessionId: process.env.CRUX_DEVTOOLS_SESSION_ID,
   },
-})
+});
 ```
 
 <Callout type="idea">
-  The `devtools` key is for local UI/control/tunnel/bridge behavior. Production telemetry and remote collectors stay
-  explicit through `observability` config or telemetry plugins.
+  The `devtools` key is for local UI/control/tunnel/bridge behavior. Production
+  telemetry and remote collectors stay explicit through `observability` config
+  or telemetry plugins.
 </Callout>
 
 `devtools.sessionId` is applied as a default observability correlator. Every record emitted while the
@@ -52,7 +53,7 @@ queries bounded, including latest-500 caps for full-history devtools pulls and r
 - Agent model calls via `@use-crux/ai/agent`
 - Quality experiments — every evaluation cell opens an observed run with full trace links
 - Memory operations — every read/write across all memory types
-- Storage operations — record, vector, and blob operation counts, latency, errors, result counts, and safe byte metrics where available
+- Storage operations — record, vector, and asset operation counts, latency, errors, result counts, and safe byte metrics where available
 - Compaction events — sliding window evictions with compression stats
 - Budget checks — pressure level transitions
 - Blackboard updates — field-level change tracking
@@ -157,8 +158,8 @@ Click a trace in the timeline to see its full execution:
 
 ### Explain tab — the turn read-out
 
-Select a generation turn and the **Explain** tab answers, in one place, *why this
-model call behaved the way it did*. It is a read-out: it summarises the turn and
+Select a generation turn and the **Explain** tab answers, in one place, _why this
+model call behaved the way it did_. It is a read-out: it summarises the turn and
 links into the existing Context / Routing / Cache / Guardrail / Security /
 Constraint / Compaction tabs rather than duplicating them. It is backed by the
 deterministic [`TurnDecisionReport`](/docs/reference/crux-core/observability#turn-explanation-decisionreport)
@@ -173,8 +174,8 @@ scannable body:
   with its disposition (`checked` / `dropped` / `disabled`) and reason
   (predicate false, budget, compaction, stale-rejected, …).
 - **Freshness & cache** — two deliberately separate columns. Freshness answers
-  *was the evidence current enough for this turn?* (`fresh` / `refreshed` /
-  `stale-used` / `stale-rejected`); cache answers *what did reuse save?*
+  _was the evidence current enough for this turn?_ (`fresh` / `refreshed` /
+  `stale-used` / `stale-rejected`); cache answers _what did reuse save?_
   (`hit` / `miss` / `write`). They are never merged into "cache freshness".
 - **Decisions** — routing, fallback, guardrail, security, constraint, cache, and
   compaction outcomes, each linking to its deep tab.
@@ -209,9 +210,9 @@ Aggregate metrics across all traces in the current session:
 
 ### Project Index and Catalog
 
-Browse discovered prompts, contexts, tools, suites, evals, storage definitions, source locations, snippets, authored paths, relations, and diagnostics before the first run. `crux dev` rebuilds this Go-owned read model from source files and `.crux/quality` JSON on startup; runtime snapshots only enrich it. Use `definition.source.file` for file-tree grouping and `definition.path` for user-authored prompt/context/tool tree grouping. Memory and blackboard definitions include authored store bindings and Zod schemas when the indexer can safely resolve them, including `workingState({ schema })` blocks nested in a `memory({ blocks })` definition. Storage definitions include record stores, vector stores, blob stores, storage bundles, scoped storage, backend/factory names, capabilities, source locations, primitive usage, and capability warnings when the indexer can infer them. `definition.metadata.runtimeJoin` is backend guidance for joining authored definitions to runtime spans: flow and flow-step joins use primitive/name or `stepLabel`, while runtime `flowId` and `stepId` remain execution correlation fields; memory blocks and blackboards join through the memory span shape. Click any item to inspect source metadata and relations. Use `crux index reindex` when you want to force a rebuild from the CLI.
+Browse discovered prompts, contexts, tools, suites, evals, storage definitions, source locations, snippets, authored paths, relations, and diagnostics before the first run. `crux dev` rebuilds this Go-owned read model from source files and `.crux/quality` JSON on startup; runtime snapshots only enrich it. Use `definition.source.file` for file-tree grouping and `definition.path` for user-authored prompt/context/tool tree grouping. Memory and blackboard definitions include authored store bindings and Zod schemas when the indexer can safely resolve them, including `workingState({ schema })` blocks nested in a `memory({ blocks })` definition. Storage definitions include record stores, vector stores, asset stores, storage bundles, scoped storage, backend/factory names, record/vector capabilities, source locations, primitive usage, and capability warnings when the indexer can infer them. `definition.metadata.runtimeJoin` is backend guidance for joining authored definitions to runtime spans: flow and flow-step joins use primitive/name or `stepLabel`, while runtime `flowId` and `stepId` remain execution correlation fields; memory blocks and blackboards join through the memory span shape. Click any item to inspect source metadata and relations. Use `crux index reindex` when you want to force a rebuild from the CLI.
 
-Each Catalog definition detail includes an **Observability** section driven by the coverage manifest and a server activity rollup: direct run counts with **View N runs**, contributor “referenced by N runs” treatment, Quality-primary kinds, or a truthful empty state when nothing has run yet. Run Detail links the other direction through runtime `DefinitionRef`s (resolved Catalog links, or an explicit **unresolved** mark when the definition was renamed or deleted). Full join semantics: [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence). Run lifecycle and delivery-health copy: [Runs and delivery health](/docs/guides/observability/runs-and-delivery).
+Each Catalog definition detail includes an **Observability** section driven by the coverage manifest and a server activity rollup: direct run counts with **View N runs**, contributor “referenced by N runs” treatment, Quality-primary kinds, runtime-observed kinds whose records cannot yet join to an authored definition, or a truthful empty state. Run Detail links the other direction through runtime `DefinitionRef`s (resolved Catalog links, or an explicit **unresolved** mark when the definition was renamed or deleted). Full join semantics: [Catalog runtime evidence](/docs/guides/observability/catalog-runtime-evidence). Run lifecycle and delivery-health copy: [Runs and delivery health](/docs/guides/observability/runs-and-delivery).
 
 The Storage detail view is privacy-safe by default. It shows wiring, capabilities, warnings, and runtime operation summaries, but it does not display record values, vector contents, blob bodies, or signed URLs unless raw debug data is explicitly enabled by the application.
 
@@ -289,13 +290,13 @@ Failed spans expose an `errors` inspection section built by the Go backend from 
 For Convex, bind the bridge once from `convex/http.ts`:
 
 ```ts
-import { setup } from '@use-crux/convex'
-import crux from '../crux.config'
-import { components } from './_generated/api'
+import { setup } from "@use-crux/convex";
+import crux from "../crux.config";
+import { components } from "./_generated/api";
 
 setup(http, crux, {
   component: components.crux,
-})
+});
 ```
 
 During `crux dev`, the Go server auto-discovers that HTTP peer from `CRUX_BRIDGE_URL`, `CONVEX_SITE_URL`, or Convex cloud URL variables such as `CONVEX_URL` / `NEXT_PUBLIC_CONVEX_URL` in the shell or project `.env.local` / `.env`. If only a `.convex.cloud` URL is present, Crux derives the matching `.convex.site/crux/bridge` URL before fetching the manifest.

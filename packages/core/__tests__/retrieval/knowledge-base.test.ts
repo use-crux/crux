@@ -48,7 +48,7 @@ describe('knowledgeBase', () => {
     await expect(docs.retriever().retrieve('pricing', { limit: 1 })).resolves.toEqual([
       expect.objectContaining({
         namespace: 'docs',
-        sourceId: 'pricing',
+        source: { id: 'pricing' },
         content: 'Pricing guide',
         metadata: { topic: 'pricing' },
       }),
@@ -163,7 +163,7 @@ describe('knowledgeBase', () => {
     await expect(grounded.resolve({ question: 'pricing' })).resolves.toMatchObject({
       groundingId: 'grounding:docs',
       retrieverId: 'docs',
-      hits: [expect.objectContaining({ sourceId: 'pricing', content: 'Pricing guide' })],
+      hits: [expect.objectContaining({ source: { id: 'pricing' }, content: 'Pricing guide' })],
     })
   })
 
@@ -194,7 +194,7 @@ describe('knowledgeBase', () => {
 
     await expect(docs.retriever().retrieve('pricing', { limit: 5, threshold: 0.5 })).resolves.toEqual([])
     await expect(docs.retriever().retrieve('support', { limit: 5, threshold: 0.5 })).resolves.toEqual([
-      expect.objectContaining({ sourceId: 'support', content: 'Support handbook' }),
+      expect.objectContaining({ source: { id: 'support' }, content: 'Support handbook' }),
     ])
     expect(docs.inspect().lifecycle).toMatchObject({
       indexedSources: 1,
@@ -283,7 +283,7 @@ describe('knowledgeBase', () => {
     })
 
     await expect(docs.retriever().retrieve('pricing', { threshold: 0.5 })).resolves.toEqual([
-      expect.objectContaining({ sourceId: 'pricing', content: 'Pricing guide' }),
+      expect.objectContaining({ source: { id: 'pricing' }, content: 'Pricing guide' }),
     ])
     await expect(corpus.getSource('pricing')).resolves.toMatchObject({
       sourceId: 'pricing',

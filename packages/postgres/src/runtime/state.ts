@@ -205,7 +205,7 @@ export function createPostgresStatePort(
       await db.query(
         `INSERT INTO ${snapshotTable}
           (namespace, flow_id, work_id, target_id, status, input,
-           completed_steps, fingerprint, pending_suspends, delivered_suspends, scheduled_effects, updated_at)
+           completed_steps, fingerprint, pending_suspends, delivered_suspends, scheduled_work, updated_at)
          VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::jsonb, $12)
          ON CONFLICT (namespace, flow_id) DO UPDATE SET
            work_id = EXCLUDED.work_id,
@@ -216,7 +216,7 @@ export function createPostgresStatePort(
            fingerprint = EXCLUDED.fingerprint,
            pending_suspends = EXCLUDED.pending_suspends,
            delivered_suspends = EXCLUDED.delivered_suspends,
-           scheduled_effects = EXCLUDED.scheduled_effects,
+           scheduled_work = EXCLUDED.scheduled_work,
            updated_at = EXCLUDED.updated_at`,
         [
           snapshot.namespace,
@@ -231,8 +231,8 @@ export function createPostgresStatePort(
           snapshot.deliveredSuspends
             ? encodeJson(snapshot.deliveredSuspends)
             : null,
-          snapshot.scheduledEffects
-            ? encodeJson(snapshot.scheduledEffects)
+          snapshot.scheduledWork
+            ? encodeJson(snapshot.scheduledWork)
             : null,
           snapshot.updatedAt,
         ],

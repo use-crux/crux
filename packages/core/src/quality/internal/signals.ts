@@ -84,7 +84,7 @@ export interface RetrievalHitSignal {
   /** Observability span that produced this signal. */
   spanId: string
   rank?: number
-  sourceId?: string
+  source: { id: string }
   chunkId?: string
   namespace?: string
   score?: number

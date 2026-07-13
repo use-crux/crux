@@ -16,7 +16,7 @@ import { createLightweightSpanManager } from '../src/span-manager'
 import type { TraceSpan } from '../src/types'
 import { resetHooks, updateHooks } from '../../core/src/runtime/runtime'
 import { messageContentAttributesForArtifact } from '../src/message-content'
-import { imagePart, textPart } from '@use-crux/core'
+import { textPart } from '@use-crux/core'
 
 describe('GenAI semconv projection', () => {
   afterEach(() => {
@@ -118,6 +118,27 @@ describe('GenAI semconv projection', () => {
     ])
   })
 
+  it('exports request-scoped defer lifecycle spans with stable names', () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+
+    observe.openSpan({ name: 'scheduled', primitive: 'defer.scheduled' }).end()
+    observe.openSpan({ name: 'run', primitive: 'defer.run' }).end()
+    installed.dispose?.()
+
+    expect(
+      spans
+        .filter((span) =>
+          String(span.attributes['crux.primitive.name']).startsWith('defer.'),
+        )
+        .map((span) => span.name),
+    ).toEqual(['crux.defer.scheduled', 'crux.defer.run'])
+  })
+
   it('exports generation message content only when explicitly enabled', async () => {
     const defaultSpans: TraceSpan[] = []
     const defaultInstall = withTelemetry({
@@ -200,7 +221,13 @@ describe('GenAI semconv projection', () => {
               role: 'user',
               content: [
                 textPart('inspect this chart'),
-                imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+                {
+                  kind: 'image',
+                  mediaType: 'image/png',
+                  sizeBytes: 3,
+                  digestPrefix: '039058c6f2c0',
+                  sourceCategory: 'bytes',
+                },
               ],
             },
           ],
@@ -222,6 +249,91 @@ describe('GenAI semconv projection', () => {
       },
     ])
     expect(JSON.stringify(inputMessages)).not.toContain('AQID')
+  })
+
+  it('rejects non-canonical sourceCategory values as unsafe descriptors', () => {
+    const attributes = messageContentAttributesForArtifact(
+      {
+        ...messageArtifact('fallback'),
+        preview: {
+          messages: [
+            {
+              role: 'user',
+              content: [
+                textPart('inspect'),
+                {
+                  kind: 'image',
+                  mediaType: 'image/png',
+                  sourceCategory: 'data-url',
+                },
+                {
+                  kind: 'image',
+                  mediaType: 'image/png',
+                  sourceCategory: 'arbitrary-locator',
+                },
+                {
+                  kind: 'image',
+                  mediaType: 'image/png',
+                  sizeBytes: 3,
+                  sourceCategory: 'data',
+                },
+              ],
+            },
+          ],
+        },
+      },
+      { captureMessageContent: true },
+    )
+
+    const inputMessages = JSON.parse(String(attributes['gen_ai.input.messages']))
+    expect(inputMessages).toEqual([
+      {
+        role: 'user',
+        parts: [
+          {
+            type: 'text',
+            content: 'inspect\n[image image/png 3B]',
+          },
+        ],
+      },
+    ])
+    expect(JSON.stringify(inputMessages)).not.toContain('data-url')
+    expect(JSON.stringify(inputMessages)).not.toContain('arbitrary-locator')
+  })
+
+  it('receives only sanitized media descriptors from the graph stream', async () => {
+    const spans: TraceSpan[] = []
+    const installed = withTelemetry({
+      captureMessageContent: true,
+      exporter: (batch) => {
+        spans.push(...batch)
+      },
+    }).install({})
+    const span = observe.openSpan({ name: 'safe media', primitive: 'generation.call' })
+    await span.withContext(async () => {
+      observe.artifact({
+        kind: 'messages',
+        contentType: 'application/json',
+        encoding: 'json',
+        preview: {
+          messages: [{
+            role: 'user',
+            content: [
+              textPart('inspect'),
+              { type: 'image', source: 'data:image/png;base64,SECRET_MEDIA_BYTES', mediaType: 'image/png' },
+            ],
+          }],
+        },
+      })
+    })
+    span.end()
+    installed.dispose?.()
+
+    const serialized = JSON.stringify(spans)
+    expect(serialized).not.toContain('SECRET_MEDIA_BYTES')
+    expect(serialized).not.toContain('data:image')
+    const generation = spans.find((candidate) => candidate.attributes['crux.primitive.name'] === 'generation.call')
+    expect(String(generation?.attributes['gen_ai.input.messages'])).toContain('inspect\\n[image image/png]')
   })
 
   it('continues to fallback text fields when structured content projects empty', () => {

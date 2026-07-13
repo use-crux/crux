@@ -10,6 +10,7 @@
  */
 
 import type { TraceMeta } from "../../generation/types";
+import type { Message } from "../../generation/messages";
 import {
   findTriggeredStopCondition,
   normalizeStopConditions,
@@ -21,7 +22,11 @@ import { createSafety } from "../../safety/session";
 import { orchestrateGenerate } from "../../generation/orchestrate";
 import { composeAbortSignals, withBudget } from "../../generation/timeout";
 import { normalizeAdapterCallError } from "../normalized-outcome";
+import { normalizeInvocationMessages } from "../../content/invocation-message";
+import { assertProviderMediaSupported } from "../native-chat/media-hooks";
+import { emitInputTokenEstimate } from "./media-token-budget";
 import type { AdapterResponse, CallArgs } from "../types";
+import { responseContent } from "../assistant-output";
 import {
   createResultAccumulator,
   type ResultStepFacts,
@@ -140,6 +145,20 @@ export async function generateCore<
 
   let currentSystem = resolved.system;
   let currentSystemBlocks = resolved.systemBlocks;
+  const prepareProviderMessages = async (canonical: readonly Message[]) => {
+    const normalized = await normalizeInvocationMessages(canonical, {
+      provider: modelInfo.provider,
+    });
+    assertProviderMediaSupported(
+      { providerId: dialect.id, media: dialect.media },
+      {
+        provider: modelInfo.provider,
+        model: modelInfo.modelId,
+        messages: normalized,
+      },
+    );
+    return normalized;
+  };
   messages = (await lifecycle.resume(messages)).messages;
 
   /**
@@ -171,7 +190,6 @@ export async function generateCore<
         system: currentSystem,
         systemBlocks: currentSystemBlocks,
         messages,
-        unsupportedContent: resolved.settings.unsupportedContent,
         settings: mappedSettings,
         schema: resolved.schema,
         schemaParams,
@@ -193,12 +211,19 @@ export async function generateCore<
 
       for (let step = 0; step < maxSteps; step++) {
         steps++;
+        const providerMessages = await prepareProviderMessages(messages);
+        emitInputTokenEstimate({
+          messages: providerMessages,
+          provider: modelInfo.provider,
+          model: modelInfo.modelId,
+          media: dialect.media,
+          tokenBudget: args.tokenBudget,
+        });
         const callArgs: CallArgs<TExtra> = {
           model: modelInfo.modelId,
           system: currentSystem,
           systemBlocks: currentSystemBlocks,
-          messages,
-          unsupportedContent: resolved.settings.unsupportedContent,
+          messages: providerMessages,
           settings: mappedSettings,
           schema: resolved.schema,
           schemaParams,
@@ -309,7 +334,11 @@ export async function generateCore<
             replaceLastStep({ ...lastExtracted!, text: "" });
             messages = dialect.appendToolRound(messages, lastExtracted!, []);
             messages = [...messages, ...corrective];
-            const regen = await callProvider({ ...lastCallArgs!, messages });
+            const providerMessages = await prepareProviderMessages(messages);
+            const regen = await callProvider({
+              ...lastCallArgs!,
+              messages: providerMessages,
+            });
             lastRaw = regen.raw;
             lastExtracted = regen.extracted;
             steps++;
@@ -399,11 +428,17 @@ export async function generateCore<
 
 function stepFactsFromResponse(response: AdapterResponse): ResultStepFacts {
   return {
-    text: response.text,
+    content: responseContent(response),
     ...(response.usage !== undefined ? { usage: response.usage } : {}),
-    ...(response.toolCalls !== undefined ? { toolCalls: response.toolCalls } : {}),
+    ...(response.toolCalls !== undefined
+      ? { toolCalls: response.toolCalls }
+      : {}),
     finishReason: response.finishReason,
     responseId: response.responseId,
     modelId: response.actualModelId,
+    ...(response.warnings !== undefined ? { warnings: response.warnings } : {}),
+    ...(response.providerMetadata !== undefined
+      ? { providerMetadata: response.providerMetadata }
+      : {}),
   };
 }

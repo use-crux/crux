@@ -15,7 +15,7 @@ import { boundary, createSafety, GuardrailBlockedError } from '../../src/safety'
 import { guardrail } from '../../src/safety/guardrail'
 import { resetHooks } from '../../src/runtime/runtime'
 import type { Message } from '../../src/generation/messages'
-import { imagePart, messageText, textPart } from '../../src/content'
+import { messageText, textPart } from '../../src/content'
 
 afterEach(() => {
   resetHooks()
@@ -124,7 +124,7 @@ describe('guardInput — pipeline ordering and content flow', () => {
     const safety = identity({ call: { guardrails: [inspector] } })
     const content = [
       textPart('review this chart'),
-      imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }),
+      { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' },
     ]
 
     await safety.guardInput({ messages: [{ role: 'user', content }] })
@@ -145,7 +145,7 @@ describe('guardInput — pipeline ordering and content flow', () => {
       }),
     })
     const safety = identity({ call: { guardrails: [redactor] } })
-    const image = imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: 'image/png' })
+    const image = { type: 'image', source: new Uint8Array([1, 2, 3]), mediaType: 'image/png' }
 
     const result = await safety.guardInput({
       messages: [{ role: 'user', content: [textPart('secret caption'), image] }],

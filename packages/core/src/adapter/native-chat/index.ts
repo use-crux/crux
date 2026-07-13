@@ -24,6 +24,7 @@ export type {
 } from './transcript'
 export type {
   NativeAssistantTurn,
+  NativeAssistantReadContext,
   NativeCallMode,
   NativeChatHelpers,
   NativeChatProfile,

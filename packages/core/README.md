@@ -62,7 +62,11 @@ That is a complete Crux program: typed input, typed output, and your SDK still m
 Crux messages share one canonical content vocabulary across core, adapters, tool results, observability, and Convex mirrors. `Message.content` accepts either the existing string form or a readonly `ContentPart[]`:
 
 ```ts
-import { filePart, imagePart, messageText, prompt, textPart } from "@use-crux/core";
+import {
+  messageText,
+  prompt,
+  textPart,
+} from "@use-crux/core";
 import { generate } from "@use-crux/ai";
 import { z } from "zod";
 
@@ -74,12 +78,13 @@ const inspectDashboard = prompt({
       role: "user",
       content: [
         textPart(input.note),
-        imagePart({ data: dashboardPng, mediaType: "image/png" }),
-        filePart({
-          url: "https://example.com/q2.pdf",
+        { type: "image", source: dashboardPng, mediaType: "image/png" },
+        {
+          type: "file",
+          source: "https://example.com/q2.pdf",
           mediaType: "application/pdf",
           filename: "q2.pdf",
-        }),
+        },
       ],
     },
   ],
@@ -94,11 +99,11 @@ result.text; // string envelope, unchanged
 result.messages; // assistant media round-trips here as ContentPart[]
 ```
 
-The part kinds are `text`, `image-data`, `image-url`, `image-file-id`, `file-data`, `file-url`, `file-id`, and `custom`. Bytes are JSON-safe base64 strings; `imagePart()` and `filePart()` also accept `Uint8Array`, `ArrayBuffer`, and `URL` values and normalize them immediately.
+The part kinds are `text`, `image`, and `file`. Media parts put their bytes, URL, `Asset`, or `Blob` directly on `source`; model calls normalize and validate that media before provider I/O, and normal generation does not persist it.
 
 Use `contentText()` or `messageText()` whenever existing code needs a string. Text parts pass through verbatim, while images/files become bounded placeholders such as `[image image/png 210KB sha256:ab12...]`; raw base64 is never inlined into guardrails, compaction, memory, cache keys, or telemetry. `hasMediaParts()` is available for branching without parsing the projection.
 
-Unsupported provider content degrades deliberately: the adapter sends the placeholder text, emits a diagnostics warning, and records a `content.degraded` span event. Pass `unsupportedContent: "error"` in generation settings when unsupported content should throw `UnsupportedContentError` before the provider call.
+Malformed media throws `InvalidMediaSourceError`. Valid media that the selected adapter or model cannot send throws `UnsupportedCapabilityError` before the provider call.
 
 ## Quality Evaluations
 
@@ -116,7 +121,12 @@ import { evaluate, scorers } from "@use-crux/core/quality";
 
 export default evaluate({
   task: classify,
-  data: [{ input: { text: "This is incredible." }, expected: { sentiment: "positive" } }],
+  data: [
+    {
+      input: { text: "This is incredible." },
+      expected: { sentiment: "positive" },
+    },
+  ],
   scorers: [scorers.exact()],
   expect: (ctx) => {
     ctx.expect(ctx.output.sentiment).toBeDefined();
@@ -386,7 +396,7 @@ Now the call has memory, retrieval, input screening, structured output, retryabl
 
 Use `workspace()` when an agent needs durable scratch files and generated outputs.
 Workspaces are namespace-scoped, path-addressed file trees backed by a `RecordStore`
-for metadata and small text/JSON, plus an optional `BlobStore` for binary and
+for metadata and small text/JSON, plus an optional `AssetStore` for binary and
 oversized payloads.
 
 ```ts
@@ -466,7 +476,7 @@ const artifact = await ws.transaction(
 Injected workspaces add a bounded manifest plus file tools for list, read, write,
 edit, rename, and grep. Programmatic methods also include `exists`, `stat`,
 `append`, `move`, `copy`, `delete`, `history`, `diff`, `undo`, `artifacts`,
-`finalize`, and `transaction`. Blob-backed text and JSON read back as text/JSON;
+`finalize`, and `transaction`. Asset-backed text and JSON read back as text/JSON;
 binary files return a URI for app-side fetching. Every operation accepts a
 `{ namespace }` override for direct calls and manually created tools.
 
@@ -541,7 +551,7 @@ Workspace operations are visible in devtools, OTel, and Project Index without
 exporting raw paths to OTel. OTel receives `crux.workspace.operation` and
 `crux.workspace.path_hash`; devtools use a stable `hash:<pathHash>` label when
 no local-only raw path is available. Project Index records mounts, generated
-tool names, blob-storage posture, retention TTL, quota limits, and workspace
+tool names, asset-storage posture, retention TTL, quota limits, and workspace
 read/write relations from indexed owners. Workspace-specific Project Index
 data-access facts preserve exact operations such as `grep`, `history`, `diff`,
 `undo`, `artifacts`, `rename`, `move`, `copy`, and `finalize`.
@@ -552,7 +562,7 @@ data-access facts preserve exact operations such as `grep`, `history`, `diff`,
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Prompt definitions | Typed `prompt()` objects with input/output schemas, settings, tags, tests, and provider overrides.                                   |
 | Composable context | `context()` blocks and custom `contributor()` entries for brand voice, policies, retrieved docs, formatting rules, and shared tools. |
-| Workspaces         | Durable namespace-scoped files, generated artifacts, blob-backed outputs, and model-safe file tools.                                 |
+| Workspaces         | Durable namespace-scoped files, generated artifacts, asset-backed outputs, and model-safe file tools.                                |
 | Memory             | Recent messages, working state, episodes, facts, procedures, proposals, policies, and pluggable stores.                              |
 | Retrieval          | Indexers, corpora, retrievers, rerankers, grounding, citations, and custom RAG pipelines.                                            |
 | Tools              | Prompt tools, context tools, middleware, approval flows, and audit events.                                                           |
@@ -812,6 +822,10 @@ kernel-owned named composite atomically in their native substrate. Ordinary
 stores can omit it and use the default `transact()` wrapper; host-bound adapters
 such as Convex use it to run the same core composite bodies inside one component
 mutation.
+
+The shipped Convex component uses Convex-valid module path segments for its
+Runtime Engine sources, and adapter conformance coverage guards that constraint
+so codegen and deployment can discover every module without consumer rewrites.
 
 Runtime diagnostics throw `CruxRuntimeError` with stable codes:
 `RUNTIME_REQUIRED`, `CAPABILITY_MISSING`, `TARGET_NOT_FOUND`,

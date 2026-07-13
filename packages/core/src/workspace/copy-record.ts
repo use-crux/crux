@@ -4,15 +4,16 @@
  * @module
  */
 
-import { analyzeContent, byteLength, createFileRecord } from "./content";
+import { analyzeContent, createFileRecord } from "./content";
+import type { AssetStore } from "../storage";
 import type {
   ContentAnalysis,
-  WorkspaceBlobStore,
   WorkspaceContent,
   WorkspaceFileRecord,
   WorkspacePath,
   WorkspaceReadResult,
 } from "./types";
+import { byteLength } from "./text-utils";
 
 /** Create a fresh stored file record from a source-backed read result. */
 export async function createFileRecordFromReadResult(input: {
@@ -22,7 +23,7 @@ export async function createFileRecordFromReadResult(input: {
   readonly mount: WorkspacePath;
   readonly result: WorkspaceReadResult;
   readonly inlineTextBelowBytes: number;
-  readonly blobs: WorkspaceBlobStore | undefined;
+  readonly assets: AssetStore | undefined;
 }): Promise<WorkspaceFileRecord> {
   const analysis = await readResultToContentAnalysis(input.result);
   return createFileRecord({
@@ -39,7 +40,7 @@ export async function createFileRecordFromReadResult(input: {
     now: Date.now(),
     version: 1,
     inlineTextBelowBytes: input.inlineTextBelowBytes,
-    blobs: input.blobs,
+    assets: input.assets,
   });
 }
 

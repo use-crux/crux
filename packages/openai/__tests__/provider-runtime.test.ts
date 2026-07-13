@@ -84,13 +84,13 @@ describe('OpenAI provider runtime', () => {
       adapter.reranker({ model: 'gpt-4o' }).rerank({
         query: 'needle',
         hits: [
-          { namespace: 'n', sourceId: 'a', chunkId: 'a1', content: 'first', metadata: {}, score: 0.1 },
-          { namespace: 'n', sourceId: 'b', chunkId: 'b1', content: 'second', metadata: {}, score: 0.2 },
+          { namespace: 'n', source: { id: 'a' }, chunkId: 'a1', content: 'first', metadata: {}, score: 0.1 },
+          { namespace: 'n', source: { id: 'b' }, chunkId: 'b1', content: 'second', metadata: {}, score: 0.2 },
         ],
       }),
     ).resolves.toEqual([
-      expect.objectContaining({ sourceId: 'b', score: 0.88, provenance: { rerankScore: 0.88 } }),
-      expect.objectContaining({ sourceId: 'a', score: 0.1 }),
+      expect.objectContaining({ source: { id: 'b' }, score: 0.88, provenance: { rerankScore: 0.88 } }),
+      expect.objectContaining({ source: { id: 'a' }, score: 0.1 }),
     ])
   })
 })

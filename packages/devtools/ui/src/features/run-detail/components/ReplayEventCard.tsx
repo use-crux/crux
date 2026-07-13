@@ -306,7 +306,8 @@ function RetrievalPayload({ payload }: { payload: Extract<ReplayEventPayload, { 
           <div className="flex flex-col gap-1.5">
             {hits.slice(0, 8).map((hit: unknown, i: number) => {
               const h = (hit ?? {}) as Record<string, unknown>
-              const id = String(h.id ?? h.chunkId ?? h.sourceId ?? h.path ?? `hit-${i}`)
+              const source = typeof h.source === 'object' && h.source !== null ? h.source as Record<string, unknown> : undefined
+              const id = String(h.id ?? h.chunkId ?? source?.id ?? h.path ?? `hit-${i}`)
               const score = typeof h.score === 'number' ? h.score : undefined
               const preview =
                 typeof h.contentPreview === 'string'
@@ -511,7 +512,8 @@ function BodyRenderer({ kind, body }: { kind: string; body: unknown }) {
       <div className="mt-2 flex flex-col gap-1">
         {body.slice(0, 8).map((hit: unknown, i: number) => {
           const h = (hit ?? {}) as Record<string, unknown>
-          const id = String(h.id ?? h.chunkId ?? h.sourceId ?? h.path ?? `hit-${i}`)
+          const source = typeof h.source === 'object' && h.source !== null ? h.source as Record<string, unknown> : undefined
+          const id = String(h.id ?? h.chunkId ?? source?.id ?? h.path ?? `hit-${i}`)
           const score = typeof h.score === 'number' ? h.score : undefined
           const preview =
             typeof h.contentPreview === 'string'

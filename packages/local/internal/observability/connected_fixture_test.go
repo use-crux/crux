@@ -15,9 +15,10 @@ type connectedCoverageFixture struct {
 }
 
 type connectedCoverageCase struct {
-	Kind              string         `json:"kind"`
-	ExpectedTreatment string         `json:"expectedTreatment"`
-	DefinitionRef     *DefinitionRef `json:"definitionRef"`
+	Kind                  string         `json:"kind"`
+	ExpectedTreatment     string         `json:"expectedTreatment"`
+	RuntimePrimitiveNames []string       `json:"runtimePrimitiveNames"`
+	DefinitionRef         *DefinitionRef `json:"definitionRef"`
 }
 
 func loadConnectedCoverageFixture(t *testing.T) connectedCoverageFixture {
@@ -68,8 +69,39 @@ func TestConnectedFixtureDefinitionJoinDeliveryAndCatchup(t *testing.T) {
 		`{"schemaVersion":2,"recordId":"cf_h_ai","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":6,"spanId":"sp_cf_ai","family":"generation","primitive":"generation.call","name":"ai-sdk","startedAt":"2026-07-01T12:00:02.660Z","status":"ok","provider":"ai-sdk","attributes":{"adapterPackage":"@use-crux/ai"}}`,
 		// Secondary direct-runtime evidence for Quality-primary scorer (scoring.judge span).
 		`{"schemaVersion":2,"recordId":"cf_h_judge","type":"span","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":7,"spanId":"sp_cf_judge","family":"scoring","primitive":"scoring.judge","name":"judge","startedAt":"2026-07-01T12:00:02.700Z","status":"ok","definitionRefs":[{"id":"scorer:connected","kind":"scorer","role":"invoked-scorer"}]}`,
-		`{"schemaVersion":2,"recordId":"cf_h_end","type":"run:end","runId":"run_cf_healthy","traceId":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","segmentId":"seg_cf_b","segmentSeq":8,"endedAt":"2026-07-01T12:00:03.000Z","durationMs":3000,"status":"ok"}`,
 	)
+
+	// Runtime-observed/unjoined kinds must remain visible in Run Detail while
+	// carrying no DefinitionRef that could fabricate per-definition activity.
+	unjoinedPrimitives := make(map[string]struct{})
+	segmentSeq := 8
+	for _, entry := range fixture.Cases {
+		if entry.ExpectedTreatment != "runtime-unjoined" {
+			continue
+		}
+		if entry.DefinitionRef != nil {
+			t.Fatalf("runtime-unjoined treatment for %s fabricated a ref: %+v", entry.Kind, entry.DefinitionRef)
+		}
+		if len(entry.RuntimePrimitiveNames) == 0 {
+			t.Fatalf("runtime-unjoined treatment for %s has no primitives", entry.Kind)
+		}
+		for _, primitive := range entry.RuntimePrimitiveNames {
+			family, ok := primitiveFamilyByName[primitive]
+			if !ok {
+				t.Fatalf("runtime-unjoined kind %s declares unknown primitive %q", entry.Kind, primitive)
+			}
+			mustIngest(t, service, fmt.Sprintf(
+				`{"schemaVersion":2,"recordId":"cf_h_unjoined_%d","type":"span","runId":"run_cf_healthy","traceId":%q,"segmentId":"seg_cf_b","segmentSeq":%d,"spanId":"sp_cf_unjoined_%d","family":%q,"primitive":%q,"name":"connected unjoined evidence","startedAt":"2026-07-01T12:00:02.800Z","status":"ok"}`,
+				segmentSeq, traceHealthy, segmentSeq, segmentSeq, family, primitive,
+			))
+			unjoinedPrimitives[primitive] = struct{}{}
+			segmentSeq++
+		}
+	}
+	mustIngest(t, service, fmt.Sprintf(
+		`{"schemaVersion":2,"recordId":"cf_h_end","type":"run:end","runId":"run_cf_healthy","traceId":%q,"segmentId":"seg_cf_b","segmentSeq":%d,"endedAt":"2026-07-01T12:00:03.000Z","durationMs":3000,"status":"ok"}`,
+		traceHealthy, segmentSeq,
+	))
 
 	// ── 2. Deliberately degraded sibling run (record-id conflict → ingest_health) ─
 	mustIngest(t, service,
@@ -84,6 +116,15 @@ func TestConnectedFixtureDefinitionJoinDeliveryAndCatchup(t *testing.T) {
 	// ── 3. Activity: every connected definition has ≥1 run ───────────────────
 	for _, entry := range fixture.Cases {
 		if entry.DefinitionRef == nil {
+			if entry.ExpectedTreatment == "runtime-unjoined" {
+				summary, err := service.DefinitionActivitySummary(ctx, entry.Kind+":connected")
+				if err != nil {
+					t.Fatalf("zero activity summary for %s: %v", entry.Kind, err)
+				}
+				if summary.RunCount != 0 || summary.LastRun != nil {
+					t.Fatalf("runtime-unjoined kind %s fabricated definition activity: %+v", entry.Kind, summary)
+				}
+			}
 			continue
 		}
 		summary, err := service.DefinitionActivitySummary(ctx, entry.DefinitionRef.ID)
@@ -143,6 +184,19 @@ func TestConnectedFixtureDefinitionJoinDeliveryAndCatchup(t *testing.T) {
 	for _, adapter := range fixture.Adapters {
 		if !containsJSONText(detailJSON, adapter) {
 			t.Fatalf("run detail does not retain adapter evidence for %q", adapter)
+		}
+	}
+	graph, err := service.Graph(ctx, "run_cf_healthy")
+	if err != nil {
+		t.Fatalf("load connected graph: %v", err)
+	}
+	observedPrimitives := make(map[string]struct{}, len(graph.Spans))
+	for _, span := range graph.Spans {
+		observedPrimitives[span.Primitive] = struct{}{}
+	}
+	for primitive := range unjoinedPrimitives {
+		if _, ok := observedPrimitives[primitive]; !ok {
+			t.Fatalf("runtime-unjoined primitive %q is absent from Run Detail graph", primitive)
 		}
 	}
 

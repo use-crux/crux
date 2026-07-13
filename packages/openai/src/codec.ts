@@ -39,7 +39,6 @@ export function toParams(
   const callArgs = callArgsFromResolvedPrompt(resolved, {
       model: options.model,
       settings,
-      unsupportedContent: generationSettings.unsupportedContent,
       extra: options.extra,
       messages: options.messages,
       tools: options.tools ? [...options.tools] : undefined,
@@ -47,9 +46,7 @@ export function toParams(
     })
   const request = openAIRequest({
     ...callArgs,
-    providerMessages: openAITranscript.fromMessages(callArgs.messages, {
-      unsupportedContent: callArgs.unsupportedContent,
-    }),
+    providerMessages: openAITranscript.fromMessages(callArgs.messages),
   })
   return asOpenAINonStreamingParams(request)
 }

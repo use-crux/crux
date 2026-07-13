@@ -27,6 +27,7 @@ export type {
   AdapterResponse,
   CallArgs,
   StreamHandle,
+  StreamCompletionMetadata,
   ToolResultEntry,
   StatusDelta,
 } from "./types";
@@ -58,11 +59,6 @@ export { adapter } from "./define-adapter";
 export { createResultAccumulator } from "./result-accumulator";
 export { CruxIncompleteCallError, CruxStaleHandleError } from "./call-handle";
 export { CruxTransportStreamUnsupportedError } from "./transport";
-export { degradeContentPart, degradeContentToText } from "./content-degradation";
-export type {
-  ContentDegradationContext,
-  DegradedContentPart,
-} from "./content-degradation";
 export type {
   CruxAdapter,
   AdapterGenerateOptions,
@@ -86,6 +82,7 @@ export type {
 // Native single-turn provider contracts
 export type {
   NativeAssistantTurn,
+  NativeAssistantReadContext,
   NativeChatHelpers,
   NativeChatRequestArgs,
   NativeProviderPort,
@@ -131,6 +128,23 @@ export type {
 // Provider runtime authoring layer
 export { defineProviderRuntime } from "./provider-runtime";
 export { defineSingleTurnProviderBundle } from "./provider-runtime";
+export {
+  bindCompletedOperation,
+  defineCompletedOperation,
+  runCompletedMediaOperation,
+} from "./completed-operation";
+export type {
+  BindCompletedOperationOptions,
+  BoundCompletedOperation,
+  CompletedOperationCall,
+  CompletedOperationModel,
+  CompletedOperationConformanceCase,
+  CompletedOperationContext,
+  CompletedOperationDefinition,
+  CompletedOperationInvokeContext,
+  CompletedOperationReport,
+  RunCompletedMediaOperationOptions,
+} from "./completed-operation";
 export type {
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
@@ -140,6 +154,8 @@ export type {
   LoopOwnedRuntimeBindContext,
   LoopOwnedRuntimeContract,
   ProviderOwnership,
+  ProviderCompletedOperationFactories,
+  ProviderCompletedOperationFactory,
   ProviderRuntimeDepsArg,
   ProviderRuntimeKind,
   ProviderRuntimeExtension,

@@ -4,19 +4,23 @@
  * @module
  */
 
-export { defineProviderRuntime } from './define'
-export { defineSingleTurnProviderBundle } from './single-turn-bundle'
+export { defineProviderRuntime } from "./define";
+export { defineSingleTurnProviderBundle } from "./single-turn-bundle";
+export type {
+  ProviderCompletedOperationFactories,
+  ProviderCompletedOperationFactory,
+} from "./completed-operations";
 export type {
   ProviderRuntimeExtension,
   ProviderRuntimeExtensionCollisionKeys,
   ProviderRuntimeExtensionContext,
   ProviderRuntimeExtender,
-} from './extension-types'
+} from "./extension-types";
 export type {
   DefinedSingleTurnProviderBundle,
   SingleTurnProviderBundleDeps,
   SingleTurnProviderBundleSpec,
-} from './single-turn-bundle-types'
+} from "./single-turn-bundle-types";
 export type {
   DefinedProviderRuntime,
   DefinedSingleTurnProviderRuntime,
@@ -30,4 +34,4 @@ export type {
   ProviderRuntimeSpec,
   SingleTurnRuntimeContract,
   SingleTurnProviderRuntimeSpec,
-} from './types'
+} from "./types";

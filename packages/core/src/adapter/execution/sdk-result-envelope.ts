@@ -11,6 +11,7 @@
 import type { TraceMeta } from "../../generation/types";
 import type { Message } from "../../generation/messages";
 import type { AdapterResponse } from "../types";
+import { responseContent } from "../assistant-output";
 import type { ExecutorStep } from "../executor-types";
 import type { ApprovalRequestInfo } from "../tool/approval";
 import {
@@ -22,7 +23,7 @@ import type { AdapterExecutionGenerateResult } from "./types";
 /** Convert an observed SDK-loop step into accumulator facts. */
 export function sdkStepFacts(step: ExecutorStep): ResultStepFacts {
   return {
-    text: step.text,
+    content: step.content ?? [{ type: "text", text: step.text }],
     ...(step.usage !== undefined ? { usage: step.usage } : {}),
     ...(step.toolCalls.length > 0 ? { toolCalls: [...step.toolCalls] } : {}),
     finishReason: step.finishReason,
@@ -37,12 +38,19 @@ export function sdkResponseFacts(
   text: string = response.text,
 ): ResultStepFacts {
   return {
-    text,
+    content:
+      text === response.text
+        ? responseContent(response)
+        : [{ type: "text", text }],
     ...(response.usage !== undefined ? { usage: response.usage } : {}),
     ...(response.toolCalls !== undefined ? { toolCalls: response.toolCalls } : {}),
     finishReason: response.finishReason,
     responseId: response.responseId,
     modelId: response.actualModelId,
+    ...(response.warnings !== undefined ? { warnings: response.warnings } : {}),
+    ...(response.providerMetadata !== undefined
+      ? { providerMetadata: response.providerMetadata }
+      : {}),
   };
 }
 

@@ -73,3 +73,10 @@ Anthropic provider-history conversion is owned inside this package. The public `
 Anthropic has no native `tool` role, so canonical Crux tool messages become `user` messages with `tool_result` content blocks. Assistant tool calls become ordered `tool_use` blocks alongside optional text. Rich tool outputs keep native Anthropic image and PDF blocks where supported, and unsupported media falls back to deterministic text references.
 
 See the [`@use-crux/core` reference](https://cruxjs.dev/docs/reference/crux-core) and the [Crux docs](https://cruxjs.dev) for the full API.
+
+## Media boundary
+
+Anthropic messages support native image and PDF/document content, including
+supported tool output. Audio and video reject before provider I/O. The package
+structurally omits `generateImage()`, `transcribe()`, and `generateSpeech()`;
+there are no throwing stubs or runtime capability query.

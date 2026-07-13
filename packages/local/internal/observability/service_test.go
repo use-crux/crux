@@ -1791,6 +1791,42 @@ func TestServiceBuildsResourceActivityReadModel(t *testing.T) {
 	}
 }
 
+func TestServiceBuildsDeferResourceActivityReadModel(t *testing.T) {
+	ctx := context.Background()
+	service := newTestService(t)
+	batch := mustBatch(t,
+		`{"schemaVersion":2,"recordId":"rec_defer_run_start","type":"run:start","runId":"run_defer","segmentId":"seg_defer_a","segmentSeq":1,"traceId":"trace_defer","name":"deferred work","rootPrimitive":"defer.scheduled","startedAt":"2026-05-16T18:00:00.000Z","status":"running"}`,
+		`{"schemaVersion":2,"recordId":"rec_defer_scheduled","type":"span","runId":"run_defer","segmentId":"seg_defer_a","segmentSeq":2,"traceId":"trace_defer","spanId":"span_defer_scheduled","family":"defer","primitive":"defer.scheduled","name":"defer named send-email","startedAt":"2026-05-16T18:00:00.001Z","endedAt":"2026-05-16T18:00:00.002Z","durationMs":1,"status":"ok","attributes":{"mode":"named","completion":"handler-returned","sequence":0,"workId":"work_abc","targetId":"task:send-email","intentState":"released","definitionId":"deferred-work:named:app.ts:deadbeef:1"}}`,
+		`{"schemaVersion":2,"recordId":"rec_defer_run","type":"span","runId":"run_defer","segmentId":"seg_defer_a","segmentSeq":3,"traceId":"trace_defer","spanId":"span_defer_run","family":"defer","primitive":"defer.run","name":"defer run #0","startedAt":"2026-05-16T18:00:00.010Z","endedAt":"2026-05-16T18:00:00.020Z","durationMs":10,"status":"ok","attributes":{"mode":"named","completion":"handler-returned","sequence":0,"workId":"work_abc","outcome":"completed"}}`,
+		`{"schemaVersion":2,"recordId":"rec_defer_edge","type":"edge","runId":"run_defer","segmentId":"seg_defer_a","segmentSeq":4,"traceId":"trace_defer","edgeId":"edge_defer","edgeType":"triggered","from":{"kind":"span","id":"span_defer_scheduled"},"to":{"kind":"span","id":"span_defer_run"},"createdAt":"2026-05-16T18:00:00.010Z"}`,
+	)
+
+	if err := service.Ingest(ctx, batch); err != nil {
+		t.Fatal(err)
+	}
+
+	activity, err := service.ResourceActivity(ctx, "defer")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(activity) != 2 {
+		t.Fatalf("defer activity = %d, want 2", len(activity))
+	}
+	if activity[0].ResourceID != "work_abc" && activity[1].ResourceID != "work_abc" {
+		t.Fatalf("expected work_abc resource id, got %#v %#v", activity[0].ResourceID, activity[1].ResourceID)
+	}
+	byPrimitive := map[string]ResourceActivity{}
+	for _, item := range activity {
+		byPrimitive[item.Primitive] = item
+	}
+	if byPrimitive["defer.scheduled"].ResourceID != "work_abc" {
+		t.Fatalf("scheduled activity = %#v", byPrimitive["defer.scheduled"])
+	}
+	if byPrimitive["defer.run"].ResourceID != "work_abc" {
+		t.Fatalf("run activity = %#v", byPrimitive["defer.run"])
+	}
+}
+
 func TestServiceResourceActivityLimitsLatestWithAttachments(t *testing.T) {
 	ctx := context.Background()
 	service := newTestService(t)

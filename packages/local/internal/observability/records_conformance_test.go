@@ -3,7 +3,6 @@ package observability
 import (
 	"context"
 	"encoding/json"
-	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -199,22 +198,20 @@ func loadConformanceFixtures(t *testing.T) []conformanceFixture {
 	files := globCoreObservabilityFixtures(t, "*.json")
 	fixtures := make([]conformanceFixture, 0, len(files))
 	for _, file := range files {
-		if filepath.Base(file) == "taxonomy.json" {
+		name := filepath.Base(file)
+		if name == "taxonomy.json" {
 			continue
 		}
-		if filepath.Base(file) == "v2-contract-cases.json" {
+		if name == "v2-contract-cases.json" {
 			continue
 		}
-		raw, err := os.ReadFile(file)
-		if err != nil {
-			t.Fatal(err)
-		}
+		raw := readCoreObservabilityFixture(t, name)
 		var batch Batch
 		if err := json.Unmarshal(raw, &batch); err != nil {
 			t.Fatalf("%s failed decode: %v", file, err)
 		}
 		fixtures = append(fixtures, conformanceFixture{
-			Name:  filepath.Base(file),
+			Name:  name,
 			Batch: batch,
 		})
 	}

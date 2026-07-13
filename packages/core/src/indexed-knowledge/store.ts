@@ -114,6 +114,7 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
     return {
       parentId: record.parentId,
       sourceId: record.sourceId,
+      ...(record.source ? { source: record.source } : {}),
       content: record.content,
       metadata: record.metadata,
     }
@@ -124,9 +125,9 @@ export function createIndexedKnowledgeStore(config: IndexedKnowledgeStoreConfig)
     const parentId = hit.parent?.parentId
     if (!key && !parentId) return hit
 
-    const parent = await getParent({ sourceId: hit.sourceId, parentId, key })
+    const parent = await getParent({ sourceId: hit.source.id, parentId, key })
     if (!parent) {
-      const warning = `parentExpand could not find parent record "${key ?? parentId}" for ${hit.sourceId}/${hit.chunkId}.`
+      const warning = `parentExpand could not find parent record "${key ?? parentId}" for ${hit.source.id}/${hit.chunkId}.`
       if (options.missing === 'error') throw new Error(warning)
       return hit
     }

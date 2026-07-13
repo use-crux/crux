@@ -1,0 +1,37 @@
+---
+title: DEFER_CAPABILITY_MISSING
+description: The active scope cannot honor this defer() overload.
+---
+
+## What failed
+
+An active Crux scope exists, but it cannot support the requested `defer()` form.
+
+Common cases:
+
+- Inline `defer(callback)` on Convex or Lambda named-only hosts
+- Missing `waitUntil` / `after` port
+- Named work on a host with `durableFinalization: false`
+- Async scope without a lifetime capability facet
+
+## Why
+
+Crux refuses to advertise reliability a host cannot provide. Inline closures are
+not durable; named work needs durable finalization before response commit.
+
+## What still works
+
+- The other overload when the host supports it (named on Convex/Lambda with Runtime)
+- Hosts with full lifetime ports for inline work
+- `flow.defer()` for replay-safe durable flow children
+
+## Fix
+
+1. **Inline unsupported:** switch to `await defer(target, input)` with Runtime, or
+   move the work to a host that supports inline drain.
+2. **Missing port:** pass an explicit `waitUntil` / `after` into
+   `@use-crux/core/defer/serverless` or use `@use-crux/next`.
+3. **Named without durability:** enable `durableFinalization: true` on a Runtime-
+   capable host integration and configure `config({ runtime })`.
+
+See [hosts](/docs/guides/defer/hosts) and [troubleshooting](/docs/guides/defer/troubleshooting).

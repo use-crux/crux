@@ -37,7 +37,7 @@ import { kindMeta, type FamilyId, type LintSeverity } from "./kit";
 
 /** Structural/containment relation types — a child rolls up under `from`. */
 const CONTAINMENT_RE =
-  /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|uses_store|storage\.bundle\.uses_(record|vector|blob)_store|storage\.scope\.wraps_storage/;
+  /includes_case|includes_step|includes_route|includes_tier|includes_option|includes_block|uses_store|storage\.bundle\.uses_(record|vector|asset)_store|storage\.scope\.wraps_storage/;
 
 // ── schema field tree (JSON Schema → typed field nodes) ──────────────────────
 export interface SchemaField {
@@ -212,7 +212,7 @@ export interface IndexFacts {
   capabilities?: IndexedStorageCapabilities;
   records?: string;
   vectors?: string;
-  blobs?: string;
+  assets?: string;
   storage?: string;
   prefix?: string;
   // workspace
@@ -1165,20 +1165,14 @@ export function indexFactChips(def: ViewDef): Array<[string, string | number]> {
       );
       push("filter", f.capabilities?.vector?.filter);
       break;
-    case "storage.blobStore":
+    case "storage.assetStore":
       push("backend", f.backend);
       push("variable", f.variableName);
-      push(
-        "signed urls",
-        f.capabilities?.blob?.signedUrls === true
-          ? "yes"
-          : f.capabilities?.blob?.signedUrls,
-      );
       break;
     case "storage.bundle":
       push("records", f.records);
       push("vectors", f.vectors);
-      push("blobs", f.blobs);
+      push("assets", f.assets);
       break;
     case "storage.scope":
       push("storage", f.storage);

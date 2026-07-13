@@ -11,6 +11,10 @@ import { adapter } from "../define-adapter";
 import type { AdapterSpec } from "../spec";
 import type { AdapterResponse, CallArgs, StreamHandle } from "../types";
 import { appendNativeToolRound } from "./tool-round";
+import {
+  assertProviderMediaSupported,
+  attachProviderMediaHooks,
+} from "./media-hooks";
 import type {
   NativeCallMode,
   NativeChatRequestArgs,
@@ -25,7 +29,9 @@ import type {
 interface HelperCallArgs<TExtra extends Record<string, unknown>> {
   readonly model: string;
   readonly system: string | undefined;
-  readonly prompt: string;
+  readonly prompt?: string;
+  readonly messages?: readonly Message[];
+  readonly maxOutputTokens?: number;
   readonly schema: z.ZodType | undefined;
   readonly schemaParams: Record<string, unknown> | undefined;
   readonly extra: TExtra;
@@ -88,7 +94,13 @@ export function defineNativeChatProvider<
     ...depsArg: NativeProviderDepsArg<TDeps>
   ): AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TRequest> {
     const deps = resolveDeps(depsArg);
-    const spec: AdapterSpec<TClient, TRawResponse, TRawStream, TExtra, TRequest> = {
+    const spec: AdapterSpec<
+      TClient,
+      TRawResponse,
+      TRawStream,
+      TExtra,
+      TRequest
+    > = {
       providerId: profile.providerId,
 
       async call(client, args, context) {
@@ -100,7 +112,7 @@ export function defineNativeChatProvider<
         const raw = await bind(client).call(request, mode, {
           signal: context?.signal,
         });
-        return { raw, extracted: responseFor(profile, raw) };
+        return { raw, extracted: responseFor(profile, raw, request) };
       },
 
       async stream(client, args, context): Promise<StreamHandle<TRawStream>> {
@@ -113,11 +125,14 @@ export function defineNativeChatProvider<
         const rawStream = await bind(client).stream(streamRequest, {
           signal: context?.signal,
         });
+        const chunks: unknown[] = [];
+        const trackedStream = trackStream(rawStream, chunks);
         return {
           raw: rawStream,
-          rawStream,
+          rawStream: trackedStream,
           extractTextDelta: profile.stream.textDelta,
-          completion: async () => profile.stream.completion?.(rawStream),
+          completion: async () =>
+            profile.stream.completion?.(rawStream, chunks, streamRequest),
         };
       },
       toParams(args) {
@@ -143,7 +158,7 @@ export function defineNativeChatProvider<
       spec.sanitizeToolSchema = profile.sanitizeToolSchema;
     if (profile.outputSchema) spec.wrapOutputSchema = profile.outputSchema;
     if (profile.mapError) spec.mapError = profile.mapError;
-    return spec;
+    return attachProviderMediaHooks(spec, profile.media);
   }
 
   function createFor<TClient>(
@@ -170,7 +185,10 @@ export function defineNativeChatProvider<
           const args = helperCallArgs<TExtra>({
             model,
             system: options.system,
-            prompt: options.prompt,
+            ...(options.prompt !== undefined
+              ? { prompt: options.prompt }
+              : { messages: options.messages }),
+            maxOutputTokens: options.maxOutputTokens,
             schema: undefined,
             schemaParams: undefined,
             extra: {} as TExtra,
@@ -219,6 +237,20 @@ export function defineNativeChatProvider<
   return Object.freeze({ profile, specFor, createFor, helpers });
 }
 
+function trackStream<TStream extends AsyncIterable<unknown>>(
+  stream: TStream,
+  chunks: unknown[],
+): TStream {
+  return {
+    async *[Symbol.asyncIterator]() {
+      for await (const chunk of stream) {
+        chunks.push(chunk);
+        yield chunk;
+      }
+    },
+  } as unknown as TStream;
+}
+
 function callModeFor<TExtra extends Record<string, unknown>>(
   args: CallArgs<TExtra>,
 ): NativeCallMode {
@@ -234,13 +266,18 @@ function resolveDeps<TDeps extends Record<string, unknown>>(
 function helperCallArgs<TExtra extends Record<string, unknown>>(
   args: HelperCallArgs<TExtra>,
 ): CallArgs<TExtra> {
-  const messages: Message[] = [{ role: "user", content: args.prompt }];
+  const messages: Message[] = args.messages
+    ? args.messages.map((message) => ({ ...message }))
+    : [{ role: "user", content: args.prompt ?? "" }];
   return {
     model: args.model,
     system: args.system,
     systemBlocks: undefined,
     messages,
-    settings: {},
+    settings:
+      args.maxOutputTokens === undefined
+        ? {}
+        : { maxTokens: args.maxOutputTokens },
     schema: args.schema,
     schemaParams: args.schemaParams,
     tools: undefined,
@@ -265,15 +302,17 @@ function requestArgsFor<
       TDeps,
       TProviderMessage
     >,
-    "transcript"
+    "media" | "providerId" | "transcript"
   >,
   args: CallArgs<TExtra>,
 ): NativeChatRequestArgs<TExtra, TProviderMessage> {
+  assertProviderMediaSupported(profile, {
+    model: args.model,
+    messages: args.messages,
+  });
   return {
     ...args,
-    providerMessages: providerMessagesFor(profile, args.messages, {
-      unsupportedContent: args.unsupportedContent,
-    }),
+    providerMessages: providerMessagesFor(profile, args.messages),
   };
 }
 
@@ -282,9 +321,8 @@ function providerMessagesFor<TProviderMessage, TRawResponse>(
     readonly transcript: NativeTranscriptCodec<TProviderMessage, TRawResponse>;
   },
   messages: readonly Message[],
-  options: { readonly unsupportedContent?: CallArgs["unsupportedContent"] },
 ): readonly TProviderMessage[] {
-  return profile.transcript.fromMessages(messages, options);
+  return profile.transcript.fromMessages(messages);
 }
 
 function responseFor<
@@ -307,11 +345,22 @@ function responseFor<
     "providerId" | "response" | "transcript"
   >,
   raw: TRawResponse,
+  request?: TRequest,
 ): AdapterResponse {
-  const assistant = profile.transcript.readAssistant(raw);
+  const assistant = profile.transcript.readAssistant(raw, { request });
+  const text = profile.response.text?.(raw, assistant) ?? assistant.text;
+  const content =
+    text !== assistant.text
+      ? [{ type: "text" as const, text }]
+      : assistant.content === undefined
+        ? undefined
+        : typeof assistant.content === "string"
+          ? [{ type: "text" as const, text: assistant.content }]
+          : assistant.content;
   return {
     ...profile.response.meta(raw),
-    text: profile.response.text?.(raw, assistant) ?? assistant.text,
+    ...(content !== undefined ? { content } : {}),
+    text,
     toolCalls: assistant.toolCalls,
   };
 }

@@ -32,6 +32,7 @@ export function canonicalPrimitiveKind(primitive: string): RunKind {
   if (primitive.startsWith('retrieval.')) return 'retrieval'
   if (primitive.startsWith('generation.')) return 'generate'
   if (primitive.startsWith('flow.')) return 'flow'
+  if (primitive === 'defer' || primitive.startsWith('defer.')) return 'defer'
   return 'trace'
 }
 

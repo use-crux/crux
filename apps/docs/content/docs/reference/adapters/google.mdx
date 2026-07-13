@@ -3,6 +3,13 @@ title: "@use-crux/google"
 description: Google GenAI SDK adapter — factory pattern with provider caching plus dense embedding helpers.
 ---
 
+Google message content supports native image, audio, video, and documents.
+Specialized exports include Imagen/Gemini-native `generateImage()`, native
+Gemini `generateSpeech()` (including two-speaker configuration), and composed
+`transcribe()`. Composed transcription returns text with no word timing or
+diarization and rejects those requests before I/O. Endpoint-specific options
+stay separated in typed `extra` records.
+
 Peer dependency: `@google/genai` (`^1.0.0 || ^2.0.0`)
 
 ```ts
@@ -28,7 +35,7 @@ Create an adapter bound to a Google GenAI client with optional CachedContent con
 
 `createGoogle()` is the package's mapped single-turn bundle factory: it resolves the CachedContent option into a single `GoogleCachedContentLifecycle`, passes it into the provider runtime, and returns the bound adapter. The lifecycle owns prefix detection, cache keying/reuse, SDK cache operations, and fallback policy, and returns a request-ready config patch that both `generate()` and `stream()` merge. The package-owned `googleTranscript` owns `Content[]` conversion plus assistant text/function-call extraction. The Google package still owns the SDK request shape, function-call normalization, and response metadata normalization; the provider runtime supplies the adapter shell and default tool-round formatting.
 
-Google content support maps image/file data to `inlineData` and URL-backed image/file parts to `fileData` when `mediaType` is present. URL-backed parts without a MIME type degrade before the provider call unless strict unsupported-content mode is enabled. Assistant inline/file media decodes back into canonical content, and function-response media uses the same part table as messages.
+Google content support maps image/file data to `inlineData` and URL-backed image/file parts to `fileData` when `mediaType` is present. URL-backed parts without a MIME type fail before the provider call. Assistant inline/file media decodes back into canonical content, and function-response media uses the same part table as messages.
 
 | Field                | Type                                                         | Description                                                                                                |
 | -------------------- | ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |

@@ -113,15 +113,19 @@ function completionFromMeta(
   const accumulator = createResultAccumulator();
   const text = meta?.text ?? "";
   accumulator.addStep({
-    text,
+    content: meta?.content ?? [{ type: "text", text }],
     ...(meta?.usage !== undefined ? { usage: meta.usage } : {}),
     ...(meta?.toolCalls !== undefined ? { toolCalls: meta.toolCalls } : {}),
     finishReason: mapAiSdkFinishReason(meta?.finishReason),
     responseId: meta?.responseId,
     modelId: meta?.actualModelId,
+    ...(meta?.warnings !== undefined ? { warnings: meta.warnings } : {}),
+    ...(meta?.providerMetadata !== undefined
+      ? { providerMetadata: meta.providerMetadata }
+      : {}),
   });
   return accumulator.finalizeCompletion({
-    messages: [],
+    messages: meta?.messages ? [...meta.messages] : [],
     ...(meta?.cost !== undefined ? { cost: meta.cost } : {}),
     ...(routing !== undefined ? { routing } : {}),
   });

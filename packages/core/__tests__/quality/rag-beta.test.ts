@@ -6,7 +6,7 @@ import { runEvaluationWithRunner as run } from './runner-harness'
 function hit(sourceId: string, chunkId: string, score: number): RetrieverHit {
   return {
     namespace: 'docs',
-    sourceId,
+    source: { id: sourceId },
     chunkId,
     content: `${sourceId}/${chunkId}`,
     metadata: {},
@@ -160,7 +160,7 @@ describe('evaluate() over retrieval recipes', () => {
     const experiment = await run(evaluation)
     expect(experiment.passed).toBe(true)
     expect(experiment.cells[0]!.output).toEqual(
-      expect.arrayContaining([expect.objectContaining({ sourceId: 'refunds' })]),
+      expect.arrayContaining([expect.objectContaining({ source: { id: 'refunds' } })]),
     )
     expect(experiment.cells[0]!.scores).toEqual(
       expect.arrayContaining([

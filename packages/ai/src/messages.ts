@@ -12,9 +12,13 @@
  * @module
  */
 
-import type { ContentPart, Message } from '@use-crux/core'
+import type { ContentPart, Message, MessageContent } from '@use-crux/core'
 import type { AiSdkContentPartOptions } from './content-parts'
-import { decodeContentFromAiSdkParts, encodeContentForAiSdk } from './content-parts'
+import {
+  decodeContentFromAiSdkParts,
+  encodeContentForAiSdk,
+} from './content-parts'
+import { decodeAssistantContentFromAiSdkParts } from './assistant-content'
 import { isRecord, readString } from './object-utils'
 
 interface CanonicalToolCall {
@@ -68,7 +72,14 @@ export function toModelMessages(
               ? [{ type: 'text', text: encodedContent }]
               : []
             : [...encodedContent]
+        const encodedToolCallIds = new Set(
+          parts
+            .filter((part) => part.type === 'tool-call')
+            .map((part) => readString(part, 'toolCallId'))
+            .filter((id): id is string => id !== undefined),
+        )
         for (const toolCall of toolCalls) {
+          if (encodedToolCallIds.has(toolCall.id)) continue
           parts.push({
             type: 'tool-call',
             toolCallId: toolCall.id,
@@ -94,7 +105,7 @@ type AiSdkToolResultOutput =
   | { readonly type: 'text'; readonly value: string }
   | { readonly type: 'content'; readonly value: readonly ContentPart[] }
 
-function toolResultOutputFromContent(content: Message['content']): AiSdkToolResultOutput {
+function toolResultOutputFromContent(content: MessageContent): AiSdkToolResultOutput {
   return typeof content === 'string'
     ? { type: 'text', value: content }
     : { type: 'content', value: content }
@@ -140,7 +151,7 @@ export function fromResponseMessages(responseMessages: readonly unknown[]): Mess
 
     if (message.role === 'assistant') {
       const toolCallParts = message.content.filter((p) => p.type === 'tool-call')
-      const content = decodeContentFromAiSdkParts(message.content as Record<string, unknown>[])
+      const content = decodeAssistantContentFromAiSdkParts(message.content as Record<string, unknown>[])
       result.push({
         role: 'assistant',
         content,
@@ -195,7 +206,7 @@ export function dropTrailingAssistant(messages: readonly Message[]): Message[] {
  * in the `metadata` field.
  */
 export function normalizeAiSdkMessages(
-  sdkMessages: Array<{
+  sdkMessages: ReadonlyArray<{
     role: string
     content: unknown
     [key: string]: unknown
@@ -275,7 +286,7 @@ function normalizeRole(role: string): Message['role'] {
   return 'user'
 }
 
-function toolResultContentFromResponsePart(part: ResponseMessagePart): Message['content'] {
+function toolResultContentFromResponsePart(part: ResponseMessagePart): MessageContent {
   const value = part.output?.value
   if (typeof value === 'string') return value
   if (Array.isArray(value)) return decodeContentFromAiSdkParts(value.filter(isRecord))

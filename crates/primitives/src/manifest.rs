@@ -51,9 +51,10 @@ pub const FIRST_PARTY_PRIMITIVE_MANIFEST_NAME: &str = "crux-first-party-primitiv
 ///
 /// Bump this whenever the declared first-party projection contract changes and
 /// update the Static Index primitive-manifest cache identity in the same change.
-pub const FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION: &str = "8";
+pub const FIRST_PARTY_PRIMITIVE_MANIFEST_VERSION: &str = "11";
 
 const CRUX_CORE_EXTENSION: &str = "@use-crux/indexer/crux-core";
+const CRUX_MEDIA_EXTENSION: &str = "@use-crux/indexer/crux-core-media";
 
 /// A local reference form a projector can resolve from Static Syntax evidence.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,8 +70,12 @@ pub(crate) enum LocalReferenceForm {
 /// Raw inputs handed to a handler that owns its own match handling.
 pub(crate) struct CustomProjectionInput<'a> {
     pub file: &'a str,
+    pub relative_path: &'a str,
+    pub source_text: &'a str,
     pub imports: &'a [StaticImportRecord],
     pub local_initializers: &'a [StaticInitializerRecord],
+    pub matches: &'a [StaticSourceMatch],
+    pub match_index: usize,
     pub source_match: &'a StaticSourceMatch,
     pub records_by_file: Option<&'a HashMap<String, StaticSyntaxFileRecord>>,
 }
@@ -163,6 +168,30 @@ const fn first_party(
         local_reference_forms,
         projector,
         skip_legacy_indirect,
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+const fn media_party(
+    extractor: &'static str,
+    call_names: &'static [&'static str],
+    definition_kinds: &'static [&'static str],
+    definition_id_prefixes: &'static [&'static str],
+    schema_properties: &'static [&'static str],
+    projector: Projector,
+) -> FirstPartyPrimitive {
+    FirstPartyPrimitive {
+        extension: CRUX_MEDIA_EXTENSION,
+        extractor,
+        family: extractor,
+        call_names,
+        constructor_names: &[],
+        definition_kinds,
+        definition_id_prefixes,
+        schema_properties,
+        local_reference_forms: &[],
+        projector,
+        skip_legacy_indirect: false,
     }
 }
 

@@ -7,7 +7,7 @@
  * @module
  */
 
-import { byteLength } from "./content";
+import { byteLength } from "./text-utils";
 
 /** Select a UTF-8-safe byte window from a text payload. */
 export function workspaceTextByteWindow(

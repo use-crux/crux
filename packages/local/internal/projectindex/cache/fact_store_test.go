@@ -3,10 +3,69 @@ package cache
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/use-crux/crux/packages/local/internal/store"
 )
+
+func TestSnapshotEpoch30IgnoresEpoch29ThenReindexesAndReloads(t *testing.T) {
+	root := t.TempDir()
+	ctx := context.Background()
+	stalePatch := IndexPatch{
+		SchemaVersion: 1,
+		Phase:         PhaseAST,
+		Project:       store.ProjectIdentity{Root: root, Name: "media"},
+		FinishedAt:    "2026-07-12T00:00:01Z",
+		Status:        "ok",
+		Invalidates:   &IndexPatchInvalidation{All: true},
+		Facts: IndexPatchFacts{Definitions: []store.ProjectDefinition{
+			{ID: "media.operation:stale", Kind: "media.operation", Name: "stale", Fidelity: "resolved", Status: "active"},
+		}},
+	}
+	if err := NewSQLiteIndexFactStore().CommitPhase(ctx, FactTransactionFromPatch(stalePatch)); err != nil {
+		t.Fatalf("seed epoch 30 store before downgrade: %v", err)
+	}
+
+	currentDir := filepath.Dir(projectIndexFactStoreDBFile(root))
+	staleDir := filepath.Join(root, ".crux", "cache", "index-v2", "epoch-29")
+	if err := os.Rename(currentDir, staleDir); err != nil {
+		t.Fatalf("move seeded cache to epoch 29: %v", err)
+	}
+	staleDB := filepath.Join(staleDir, "index.db")
+
+	facts := NewSQLiteIndexFactStore()
+	if index, ok, err := facts.LoadSnapshot(ctx, root, "media", time.Now()); err != nil {
+		t.Fatalf("restart load with only epoch 29: %v", err)
+	} else if ok {
+		t.Fatalf("restart loaded stale epoch 29 snapshot: %+v", index.Definitions)
+	}
+
+	freshPatch := stalePatch
+	freshPatch.FinishedAt = "2026-07-12T00:01:01Z"
+	freshPatch.Facts.Definitions = []store.ProjectDefinition{
+		{ID: "media.operation:fresh", Kind: "media.operation", Name: "fresh", Fidelity: "resolved", Status: "active"},
+	}
+	if err := facts.CommitPhase(ctx, FactTransactionFromPatch(freshPatch)); err != nil {
+		t.Fatalf("reindex into epoch 30: %v", err)
+	}
+
+	reloaded, ok, err := NewSQLiteIndexFactStore().LoadSnapshot(ctx, root, "media", time.Now())
+	if err != nil {
+		t.Fatalf("reload epoch 30 after reindex: %v", err)
+	}
+	if !ok || findTestDefinition(reloaded.Definitions, "media.operation:fresh") == nil {
+		t.Fatalf("reloaded definitions = %+v, want fresh epoch 30 fact", reloaded.Definitions)
+	}
+	if findTestDefinition(reloaded.Definitions, "media.operation:stale") != nil {
+		t.Fatalf("reloaded stale epoch 29 fact: %+v", reloaded.Definitions)
+	}
+	if _, err := os.Stat(staleDB); err != nil {
+		t.Fatalf("epoch 29 cache was deleted during migration: %v", err)
+	}
+}
 
 func TestSQLiteIndexFactStoreProjectsCommittedPhaseFacts(t *testing.T) {
 	root := t.TempDir()

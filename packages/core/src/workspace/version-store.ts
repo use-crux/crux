@@ -5,18 +5,19 @@
  * HEAD record, directory listings, and quota scans never see them. Each
  * content mutation appends one {@link WorkspaceVersionRecord}; retention
  * ({@link WorkspaceVersioning.maxVersions}) and deletion GC the oldest
- * snapshots together with their out-of-line blobs.
+ * snapshots together with their out-of-line assets.
  *
  * @module
  */
 
-import type { JsonObject, RecordStore, RecordWriteOptions } from "../storage";
-import { emitWorkspaceVersion } from "./observability";
 import type {
-  WorkspaceBlobStore,
-  WorkspaceFileRecord,
-  WorkspacePath,
-} from "./types";
+  AssetStore,
+  JsonObject,
+  RecordStore,
+  RecordWriteOptions,
+} from "../storage";
+import { emitWorkspaceVersion } from "./observability";
+import type { WorkspaceFileRecord, WorkspacePath } from "./types";
 import {
   VERSION_RECORD_SCHEMA,
   type WorkspaceVersion,
@@ -50,11 +51,11 @@ export function versionKey(
  * when {@link WorkspaceVersioning.maxVersions} is exceeded.
  *
  * The snapshot's version number is taken from `record.headVersion`, so callers
- * persist the HEAD record (with its version-scoped blob URI) first.
+ * persist the HEAD record (with its version-scoped asset URI) first.
  */
 export async function recordFileVersion(input: {
   readonly store: RecordStore;
-  readonly blobs?: WorkspaceBlobStore;
+  readonly assets?: AssetStore;
   readonly workspaceId: string;
   readonly namespace: string;
   readonly path: WorkspacePath;
@@ -89,7 +90,7 @@ export async function recordFileVersion(input: {
   if (maxVersions !== undefined && maxVersions > 0) {
     await gcVersions({
       store: input.store,
-      blobs: input.blobs,
+      assets: input.assets,
       workspaceId: input.workspaceId,
       namespace: input.namespace,
       path: input.path,
@@ -137,48 +138,48 @@ export async function listVersionRecords(
     : records;
 }
 
-/** Delete every version snapshot for a path, along with its out-of-line blobs. */
+/** Delete every version snapshot for a path, along with its out-of-line assets. */
 export async function purgeVersions(
   store: RecordStore,
-  blobs: WorkspaceBlobStore | undefined,
+  assets: AssetStore | undefined,
   workspaceId: string,
   namespace: string,
   path: WorkspacePath,
   options: {
-    readonly currentBlobUri?: string;
-    readonly deleteBlob?: boolean;
+    readonly currentAssetUri?: string;
+    readonly deleteAsset?: boolean;
   } = {},
 ): Promise<void> {
   const records = await listVersionRecords(store, workspaceId, namespace, path);
-  const deletedBlobUris = new Set<string>();
-  const blobStore = options.deleteBlob === false ? undefined : blobs;
+  const deletedAssetUris = new Set<string>();
+  const assetStore = options.deleteAsset === false ? undefined : assets;
   for (const record of records) {
     await deleteVersion(
       store,
-      blobStore,
+      assetStore,
       workspaceId,
       namespace,
       path,
       record,
       {
-        deletedBlobUris,
+        deletedAssetUris,
       },
     );
   }
   if (
-    options.deleteBlob !== false &&
-    options.currentBlobUri &&
-    blobs?.delete &&
-    !deletedBlobUris.has(options.currentBlobUri)
+    options.deleteAsset !== false &&
+    options.currentAssetUri &&
+    assets?.delete &&
+    !deletedAssetUris.has(options.currentAssetUri)
   ) {
-    await blobs.delete(options.currentBlobUri);
+    await assets.delete({ uri: options.currentAssetUri });
   }
 }
 
-/** Drop the oldest snapshots (and their blobs) beyond `maxVersions`. */
+/** Drop the oldest snapshots (and their assets) beyond `maxVersions`. */
 async function gcVersions(input: {
   readonly store: RecordStore;
-  readonly blobs?: WorkspaceBlobStore;
+  readonly assets?: AssetStore;
   readonly workspaceId: string;
   readonly namespace: string;
   readonly path: WorkspacePath;
@@ -193,7 +194,7 @@ async function gcVersions(input: {
   for (const stale of records.slice(input.maxVersions)) {
     await deleteVersion(
       input.store,
-      input.blobs,
+      input.assets,
       input.workspaceId,
       input.namespace,
       input.path,
@@ -204,25 +205,25 @@ async function gcVersions(input: {
 
 async function deleteVersion(
   store: RecordStore,
-  blobs: WorkspaceBlobStore | undefined,
+  assets: AssetStore | undefined,
   workspaceId: string,
   namespace: string,
   path: WorkspacePath,
   record: WorkspaceVersionRecord,
-  options: { readonly deletedBlobUris?: Set<string> } = {},
+  options: { readonly deletedAssetUris?: Set<string> } = {},
 ): Promise<void> {
   await store.delete(versionKey(workspaceId, namespace, path, record.version));
-  const uri = record.snapshot.uri;
-  // Each version owns a version-scoped blob, so deleting it never orphans the
+  const uri = record.snapshot.assetRef?.uri;
+  // Each version owns a version-scoped asset, so deleting it never orphans the
   // HEAD or a retained snapshot.
   if (
-    record.snapshot.storage === "blob" &&
+    record.snapshot.storage === "asset" &&
     uri &&
-    blobs?.delete &&
-    !options.deletedBlobUris?.has(uri)
+    assets?.delete &&
+    !options.deletedAssetUris?.has(uri)
   ) {
-    await blobs.delete(uri);
-    options.deletedBlobUris?.add(uri);
+    await assets.delete({ uri });
+    options.deletedAssetUris?.add(uri);
   }
 }
 

@@ -1,6 +1,12 @@
 import type { RuntimeSetupFinding } from '@use-crux/core/runtime'
 import type { PgExecutor } from './sql'
 import { advisoryLockKey, table } from './sql'
+import {
+  DEFERRED_POSTGRES_TABLES,
+  DEFERRED_REQUIRED_COLUMNS,
+  DEFERRED_REQUIRED_INDEXES,
+  deferredDdlStatements,
+} from './ddl-deferred'
 
 export const DEFAULT_POSTGRES_SCHEMA = 'crux_runtime'
 
@@ -14,11 +20,14 @@ const TABLES = [
   'idempotency',
   'leases',
   'idle_counters',
+  ...DEFERRED_POSTGRES_TABLES,
 ] as const
 
 export type RuntimePostgresTable = (typeof TABLES)[number]
 
-export const REQUIRED_COLUMNS: Readonly<Record<RuntimePostgresTable, readonly string[]>> = {
+export const REQUIRED_COLUMNS: Readonly<
+  Record<RuntimePostgresTable, readonly string[]>
+> = {
   work: [
     'namespace',
     'work_id',
@@ -46,7 +55,7 @@ export const REQUIRED_COLUMNS: Readonly<Record<RuntimePostgresTable, readonly st
     'fingerprint',
     'pending_suspends',
     'delivered_suspends',
-    'scheduled_effects',
+    'scheduled_work',
     'updated_at',
   ],
   events: [
@@ -94,6 +103,7 @@ export const REQUIRED_COLUMNS: Readonly<Record<RuntimePostgresTable, readonly st
   idempotency: ['namespace', 'key', 'completed_at'],
   leases: ['resource', 'token', 'expires_at', 'owner_id'],
   idle_counters: ['namespace', 'scope', 'count'],
+  ...DEFERRED_REQUIRED_COLUMNS,
 }
 
 export function createSchemaSql(schema: string): string {
@@ -141,10 +151,12 @@ export function ddlStatements(schema: string): readonly string[] {
 	      fingerprint jsonb NOT NULL,
 	      pending_suspends jsonb NOT NULL,
 	      delivered_suspends jsonb,
-	      scheduled_effects jsonb,
+	      scheduled_work jsonb,
 	      updated_at timestamptz NOT NULL,
 	      PRIMARY KEY (namespace, flow_id)
 	    )`,
+    `ALTER TABLE ${snapshots}
+	      ADD COLUMN IF NOT EXISTS scheduled_work jsonb`,
     `ALTER TABLE ${snapshots}
 	      ADD COLUMN IF NOT EXISTS delivered_suspends jsonb`,
     `CREATE TABLE IF NOT EXISTS ${events} (
@@ -215,6 +227,7 @@ export function ddlStatements(schema: string): readonly string[] {
       count integer NOT NULL,
       PRIMARY KEY (namespace, scope)
     )`,
+    ...deferredDdlStatements(schema),
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_event_id_idx')}
       ON ${events} (namespace, event_id)`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'events_namespace_appended_at_idx')}
@@ -253,7 +266,7 @@ export function ddlStatements(schema: string): readonly string[] {
       ON ${outbox} (namespace, confirmed_at) WHERE state = 'confirmed'`,
     `CREATE INDEX IF NOT EXISTS ${quoteIndex(schema, 'idempotency_completed_at_idx')}
       ON ${idempotency} (namespace, completed_at)`,
-	  ]
+  ]
 }
 
 export async function applyDdl(
@@ -331,6 +344,7 @@ export async function checkDdl(
     'outbox_work_pending_idx',
     'outbox_confirmed_at_idx',
     'idempotency_completed_at_idx',
+    ...DEFERRED_REQUIRED_INDEXES,
   ]
   const missingIndexes = requiredIndexes.filter(
     (name) => !existingIndexes.has(name),
@@ -370,7 +384,7 @@ function setupFinding(
     code: 'SETUP_REQUIRED',
     resource,
     message,
-    remediation: `Run crux runtime setup --apply or call postgres({ schema: ${JSON.stringify(schema)} }).setup.apply().`,
+    remediation: `Run crux setup --apply or call postgres({ schema: ${JSON.stringify(schema)} }).setup.apply().`,
   }
 }
 

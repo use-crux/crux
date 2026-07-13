@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { compilePrompt } from "../../src/resolver/compile";
 import { context } from "../../src/prompt/context";
 import type { AnyPromptConfig } from "../../src/prompt/prompt-types";
-import { imagePart, textPart } from "../../src/content";
+import { textPart } from "../../src/content";
 
 describe("resolver provider adaptation contract", () => {
   it("messages mode never re-emits system after adaptation", async () => {
@@ -76,7 +76,7 @@ describe("resolver provider adaptation contract", () => {
           role: "system" as const,
           content: [
             textPart("Existing message system."),
-            imagePart({ data: new Uint8Array([1, 2, 3]), mediaType: "image/png" }),
+            { type: "image", source: new Uint8Array([1, 2, 3]), mediaType: "image/png" },
           ],
         },
         { role: "user" as const, content: "Draft the reply." },

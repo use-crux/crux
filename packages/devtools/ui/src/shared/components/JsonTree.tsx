@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { isMediaContentDescriptor, MediaContentPreview } from './MediaContentPreview'
 
 interface JsonTreeProps {
   data: unknown
@@ -85,6 +86,9 @@ function JsonTreeNode({ data, depth = 0, label }: JsonTreeProps): ReactNode {
   }
 
   if (typeof data === 'object') {
+    if (isMediaContentDescriptor(data)) {
+      return <MediaContentPreview descriptor={data} label={label} />
+    }
     const entries = Object.entries(data as Record<string, unknown>)
     if (entries.length === 0) {
       return (

@@ -54,6 +54,7 @@ import type {
 import { createGuardrailPipeline } from './guardrail/pipeline'
 import { createSafetyStream } from './stream/engine'
 import { resyncStructuredText } from './structured'
+import { guardOutputTextParts as guardCompletionTextParts } from './output-text-parts'
 
 // ─────────────────────────────────────────────────────────────────
 // Public types
@@ -221,6 +222,17 @@ export interface Safety {
     regenerate: (corrective: readonly Message[]) => Promise<SafetyOutput>,
     opts?: { readonly suspended?: boolean; readonly messages?: readonly Message[]; readonly schema?: z.ZodType },
   ): Promise<SafetyOutput>
+
+  /**
+   * Guard provider-completed text slots independently and in order.
+   *
+   * This completion-only path runs output guardrails and records their audit,
+   * but never evaluates constraints or regenerates. Streaming constraints stay
+   * owned by {@link SafetyStream.finish} over the aggregate emitted text.
+   *
+   * @internal Adapter execution only.
+   */
+  guardOutputTextParts(parts: readonly string[]): Promise<readonly string[]>
 
   /** Audits accumulated so far (exact `GuardrailAudit` / `ConstraintAudit` shapes). */
   readonly audit: { readonly guardrails?: GuardrailAudit; readonly constraints?: ConstraintAudit }
@@ -573,7 +585,10 @@ export function createSafety(options: SafetyCallOptions): Safety {
         if (result.content !== originalContent) {
           messages = messages.map((entry, entryIndex) =>
             entryIndex === index
-              ? { ...entry, content: replaceProjectedContent(entry.content, originalContent, result.content) }
+              ? {
+                  ...entry,
+                  content: replaceProjectedContent(entry.content as MessageContent, originalContent, result.content),
+                }
               : entry,
           )
         }
@@ -618,6 +633,16 @@ export function createSafety(options: SafetyCallOptions): Safety {
       }
       await applyReportConstraints(current)
       return current
+    },
+
+    async guardOutputTextParts(parts) {
+      return guardCompletionTextParts({
+        guards: phaseGuards('output'),
+        parts,
+        context: guardContext('output', lastMessages),
+        appendAudit: appendGuardrailAudit,
+        transcript,
+      })
     },
 
     get audit() {

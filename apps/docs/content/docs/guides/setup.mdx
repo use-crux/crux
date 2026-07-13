@@ -1,0 +1,37 @@
+---
+title: Project setup
+description: Check and safely apply setup contributed by Crux subsystems.
+---
+
+# Project setup
+
+`crux setup` is the single project-level setup command. Running it without a
+mode is read-only and equivalent to `--check`:
+
+```bash
+crux setup
+crux setup --check
+```
+
+The command exits unsuccessfully when a contributor reports an error. Use
+`--json` for CI and coding-agent workflows; its stable report includes findings,
+planned actions, and application results.
+
+## Apply safe changes
+
+```bash
+crux setup --apply
+```
+
+Apply mode runs only actions classified as `safe-additive`, in plan order, and
+then inspects the project again. It never automatically performs destructive
+migrations, paid provisioning, production mutations, or ambiguous edits.
+Actions requiring approval remain findings with exact remediation.
+
+Use `--cwd <path>` to inspect another project root. Findings may include a docs
+URL, a copy-paste remediation, and a privacy-safe coding-agent prompt. They do
+not include environment values, credentials, or connection strings.
+
+Safe additive Runtime setup is idempotent. A failed later action does not roll
+back earlier successful actions, so rerun `crux setup --apply` after correcting
+the reported problem.

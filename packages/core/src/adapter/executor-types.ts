@@ -13,10 +13,11 @@
 
 import type { z } from "zod";
 import type { ModelInfo } from "../types";
-import type { GenerationSettings, TraceMeta } from "../generation/types";
+import type { TraceMeta } from "../generation/types";
 import type { SystemBlock } from "../resolver/types";
 import type { DiagnosticsPort } from "../resolver/ports";
 import type { Message } from "../generation/messages";
+import type { AssistantContentPart } from "../types/content";
 import type { JsonValue } from "../types/tool";
 import type { ResultStepFacts } from "./result-accumulator";
 import type { AdapterResponse } from "./types";
@@ -56,10 +57,14 @@ export interface ExecutorRequest<TModel> {
   readonly prompt: string | undefined;
   /** Conversation history in canonical Crux `Message` format. */
   readonly messages: readonly Message[] | undefined;
+  /**
+   * SDK-native conversation history for loop-owned runtimes that support a
+   * native message edge. Core keeps `messages` as the policy/result copy and
+   * never inspects this adapter-private payload.
+   */
+  readonly nativeMessages?: readonly unknown[];
   /** Provider-native settings, already mapped via `mapSettings()`. */
   readonly settings: Record<string, unknown>;
-  /** Canonical unsupported-content policy kept out of provider-native settings. */
-  readonly unsupportedContent?: NonNullable<GenerationSettings["unsupportedContent"]>;
   /**
    * Merged + instrumented tool map. Values keep whatever shape the caller
    * provided (AI SDK `tool()` objects pass through untouched); the factory
@@ -145,6 +150,8 @@ export interface ExecutorStep {
   readonly index: number;
   /** Assistant text produced in this step (may be empty for pure tool steps). */
   readonly text: string;
+  /** Exact ordered output for this step, when the SDK exposes it. */
+  readonly content?: readonly AssistantContentPart[];
   /** Tool calls the model requested this step. */
   readonly toolCalls: ReadonlyArray<{
     readonly id: string;
@@ -339,6 +346,14 @@ export type StructuredAttempt<TRawResponse> =
 export interface ExecutorStreamMeta extends TraceMeta {
   /** Final assistant text, when the stream produced text. */
   readonly text?: string;
+  /** Exact final assistant output buffered by the SDK stream. */
+  readonly content?: readonly AssistantContentPart[];
+  /** Complete canonical transcript buffered by the SDK stream. */
+  readonly messages?: readonly Message[];
+  /** Non-fatal native warnings reported when the stream completed. */
+  readonly warnings?: readonly unknown[];
+  /** Provider-owned completion metadata. */
+  readonly providerMetadata?: unknown;
   /** Stream timing metrics measured by the executor. */
   readonly streaming?: {
     /** Time to first token in milliseconds. */

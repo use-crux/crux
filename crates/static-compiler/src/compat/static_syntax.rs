@@ -66,15 +66,19 @@ fn prune_native_fact_match(
     match source_match {
         StaticSourceMatch::Call {
             variable_name,
+            owner_variable_name,
             local_name,
             exported,
+            eager_execution,
             callee,
             source,
             ..
         } if prune_call_names.contains(&callee.name) => StaticSourceMatch::Call {
             variable_name,
+            owner_variable_name,
             local_name,
             exported,
+            eager_execution,
             callee,
             args: Vec::new(),
             object_arg: None,

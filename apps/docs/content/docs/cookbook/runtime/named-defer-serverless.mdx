@@ -1,0 +1,55 @@
+---
+title: Named defer on serverless / Convex
+description: Stage durable post-response work with await defer(target, input) and Runtime.
+---
+
+Named `defer` stages durable Runtime work and returns only after acceptance.
+The host must finalize successfully before the response commits.
+
+## Serverless / Lambda-style
+
+```ts
+import { config, defer } from '@use-crux/core'
+import { durableTask, serverless } from '@use-crux/core/runtime'
+import { withNamedOnlyDefer } from '@use-crux/core/defer/serverless'
+// import { postgres } from '@use-crux/postgres'
+// import { qstash } from '@use-crux/upstash' // example wake adapter
+
+const postProcess = durableTask('post-process', {
+  run: async (input: { jobId: string }) => {
+    // wakeable target body
+    return input.jobId
+  },
+})
+
+// config({
+//   runtime: serverless({ store: postgres(), wake: qstash() }),
+// })
+
+export const handler = withNamedOnlyDefer(
+  async (event: { jobId: string }) => {
+    const ref = await defer(postProcess, { jobId: event.jobId })
+    return { accepted: true, workId: ref.workId }
+  },
+  { host: 'lambda', durableFinalization: true },
+)
+```
+
+Inline `defer(callback)` throws `DEFER_CAPABILITY_MISSING` on named-only hosts.
+
+## Convex
+
+Configure `runtime: convex()` and run work through the Convex Crux bridge.
+Bridge runs install a named-only lifetime automatically: use
+`await defer(target, input)` and keep targets JSON-safe and exported for wake.
+
+## Strict commit
+
+If staging or finalization fails, the host receives `DEFER_COMMIT_FAILED` and
+must not send a successful response. Catching the promise cannot restore success.
+
+## Related
+
+- [Request-scoped defer](/docs/guides/defer)
+- [Runtime Engine](/docs/guides/runtime)
+- [`DEFER_COMMIT_FAILED`](/docs/errors/DEFER_COMMIT_FAILED)

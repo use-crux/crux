@@ -81,7 +81,10 @@ describe("DEFINITION_KIND_COVERAGE", () => {
     for (const kind of categoryA) {
       const descriptor = DEFINITION_KIND_COVERAGE[kind];
       expect(descriptor.primary, kind).toBe("directly-observed");
-      expect((descriptor.runtimePrimitiveNames ?? []).length, kind).toBeGreaterThan(0);
+      expect(
+        (descriptor.runtimePrimitiveNames ?? []).length,
+        kind,
+      ).toBeGreaterThan(0);
     }
   });
 
@@ -91,19 +94,46 @@ describe("DEFINITION_KIND_COVERAGE", () => {
       "rag.knowledgeBase",
       "storage.recordStore",
       "storage.vectorStore",
-      "storage.blobStore",
+      "storage.assetStore",
       "toolPolicy",
     ];
     expect(categoryB).toHaveLength(6);
     for (const kind of categoryB) {
-      expect(DEFINITION_KIND_COVERAGE[kind].primary, kind).toBe("runtime-contributor");
+      expect(DEFINITION_KIND_COVERAGE[kind].primary, kind).toBe(
+        "runtime-contributor",
+      );
     }
     expect(DEFINITION_KIND_COVERAGE.injectable.runtimeIdentity).toBe("none");
-    expect(DEFINITION_KIND_COVERAGE["rag.knowledgeBase"].runtimeIdentity).toBe("definition-ref");
-    expect(DEFINITION_KIND_COVERAGE.toolPolicy.runtimeIdentity).toBe("definition-ref");
-    expect(DEFINITION_KIND_COVERAGE["storage.recordStore"].runtimeIdentity).toBe("none");
-    expect(DEFINITION_KIND_COVERAGE["storage.vectorStore"].runtimeIdentity).toBe("none");
-    expect(DEFINITION_KIND_COVERAGE["storage.blobStore"].runtimeIdentity).toBe("none");
+    expect(DEFINITION_KIND_COVERAGE["rag.knowledgeBase"].runtimeIdentity).toBe(
+      "definition-ref",
+    );
+    expect(DEFINITION_KIND_COVERAGE.toolPolicy.runtimeIdentity).toBe(
+      "definition-ref",
+    );
+    expect(
+      DEFINITION_KIND_COVERAGE["storage.recordStore"].runtimeIdentity,
+    ).toBe("none");
+    expect(
+      DEFINITION_KIND_COVERAGE["storage.vectorStore"].runtimeIdentity,
+    ).toBe("none");
+    expect(DEFINITION_KIND_COVERAGE["storage.assetStore"].runtimeIdentity).toBe(
+      "none",
+    );
+  });
+
+  it("classifies runtime-observed definitions without canonical join identity separately from contributors", () => {
+    const unjoinedKinds: Array<keyof typeof DEFINITION_KIND_COVERAGE> = [
+      "deferred-work",
+      "media.operation",
+      "ingest.source",
+    ];
+
+    for (const kind of unjoinedKinds) {
+      const descriptor = DEFINITION_KIND_COVERAGE[kind];
+      expect(descriptor.primary, kind).toBe("runtime-observed-unjoined");
+      expect(descriptor.runtimeIdentity, kind).toBe("none");
+      expect(descriptor.runtimePrimitiveNames?.length, kind).toBeGreaterThan(0);
+    }
   });
 
   it("classifies dotted structural-child kinds whose parent is itself a ProjectDefinitionKind member", () => {
@@ -125,28 +155,52 @@ describe("DEFINITION_KIND_COVERAGE", () => {
     ];
     expect(structuralChildren).toHaveLength(14);
     for (const kind of structuralChildren) {
-      expect(DEFINITION_KIND_COVERAGE[kind].primary, kind).toBe("structural-child");
+      expect(DEFINITION_KIND_COVERAGE[kind].primary, kind).toBe(
+        "structural-child",
+      );
     }
   });
 
   it("marks evaluation.case and suite.case as also quality-owned via the secondary channel", () => {
-    expect(DEFINITION_KIND_COVERAGE["evaluation.case"].secondary).toContain("quality-owned");
-    expect(DEFINITION_KIND_COVERAGE["suite.case"].secondary).toContain("quality-owned");
+    expect(DEFINITION_KIND_COVERAGE["evaluation.case"].secondary).toContain(
+      "quality-owned",
+    );
+    expect(DEFINITION_KIND_COVERAGE["suite.case"].secondary).toContain(
+      "quality-owned",
+    );
   });
 
   it("distinguishes directly referenced children from parent-derived children", () => {
-    expect(DEFINITION_KIND_COVERAGE["flow.step"].runtimeIdentity).toBe("definition-ref");
-    expect(DEFINITION_KIND_COVERAGE["composition.parallel.branch"].runtimeIdentity).toBe("definition-ref");
-    expect(DEFINITION_KIND_COVERAGE["rag.recipe.step"].runtimeIdentity).toBe("definition-ref");
-    expect(DEFINITION_KIND_COVERAGE["composition.pipeline.stage"].runtimeIdentity).toBe("parent-derived");
-    expect(DEFINITION_KIND_COVERAGE["routing.router.route"].runtimeIdentity).toBe("parent-derived");
-    expect(DEFINITION_KIND_COVERAGE["rag.pipeline.stage"].runtimeIdentity).toBe("none");
-    expect(DEFINITION_KIND_COVERAGE["evaluation.case"].runtimeIdentity).toBe("quality");
-    expect(DEFINITION_KIND_COVERAGE["suite.case"].runtimeIdentity).toBe("quality");
+    expect(DEFINITION_KIND_COVERAGE["flow.step"].runtimeIdentity).toBe(
+      "definition-ref",
+    );
+    expect(
+      DEFINITION_KIND_COVERAGE["composition.parallel.branch"].runtimeIdentity,
+    ).toBe("definition-ref");
+    expect(DEFINITION_KIND_COVERAGE["rag.recipe.step"].runtimeIdentity).toBe(
+      "definition-ref",
+    );
+    expect(
+      DEFINITION_KIND_COVERAGE["composition.pipeline.stage"].runtimeIdentity,
+    ).toBe("parent-derived");
+    expect(
+      DEFINITION_KIND_COVERAGE["routing.router.route"].runtimeIdentity,
+    ).toBe("parent-derived");
+    expect(DEFINITION_KIND_COVERAGE["rag.pipeline.stage"].runtimeIdentity).toBe(
+      "none",
+    );
+    expect(DEFINITION_KIND_COVERAGE["evaluation.case"].runtimeIdentity).toBe(
+      "quality",
+    );
+    expect(DEFINITION_KIND_COVERAGE["suite.case"].runtimeIdentity).toBe(
+      "quality",
+    );
   });
 
   it("keeps scorer Quality-primary while declaring canonical direct runtime identity", () => {
-    expect(DEFINITION_KIND_COVERAGE.scorer.runtimeIdentity).toBe("definition-ref");
+    expect(DEFINITION_KIND_COVERAGE.scorer.runtimeIdentity).toBe(
+      "definition-ref",
+    );
   });
 
   it("classifies genuinely static-only category-E kinds with no runtime primitive mapping", () => {
@@ -168,7 +222,11 @@ describe("DEFINITION_KIND_COVERAGE", () => {
     // Refuted category-A claim — see the manifest's `rag.pipeline` comment.
     // `rag.pipeline.stage` keeps its own mechanical structural-child
     // classification independently of this.
-    expect(DEFINITION_KIND_COVERAGE["rag.pipeline"].primary).toBe("static-only");
-    expect(DEFINITION_KIND_COVERAGE["rag.pipeline.stage"].primary).toBe("structural-child");
+    expect(DEFINITION_KIND_COVERAGE["rag.pipeline"].primary).toBe(
+      "static-only",
+    );
+    expect(DEFINITION_KIND_COVERAGE["rag.pipeline.stage"].primary).toBe(
+      "structural-child",
+    );
   });
 });

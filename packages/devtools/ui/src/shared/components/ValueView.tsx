@@ -1,6 +1,6 @@
 /**
  * ValueView — smart renderer for an arbitrary value (input/output/expected
- * blobs, baseline outputs, …).
+ * payloads, baseline outputs, …).
  *
  * It sniffs the content and picks a sensible default view, with a small toggle
  * to switch:

@@ -24,7 +24,12 @@ import {
   nativeFinalizeFactsFromRuleOutput,
   type StaticExtensionNativeFinalizeFacts,
 } from './host-facts'
-import type { ExtensionIdentity, IndexDependency, IndexerExtension, IndexerExtensionConfig } from '../../../extensions/public-contract/types'
+import type {
+  ExtensionIdentity,
+  IndexDependency,
+  IndexerExtension,
+  IndexerExtensionConfig,
+} from '../../../extensions/public-contract/types'
 
 /** Phase 8 TypeScript host method names. */
 export type StaticExtensionHostMethod =
@@ -190,7 +195,8 @@ export async function loadStaticExtensionHostManifest(
       started: reasons.length > 0,
       reasons,
     },
-    nativeOnlyEligible: reasons.length === 0 && runtime.manifest.staticHost.nativeOnlyEligible,
+    nativeOnlyEligible:
+      reasons.length === 0 && runtime.manifest.staticHost.nativeOnlyEligible,
     nativeOnlyReasons: reasons,
     ruleDescriptors: runtime.ruleDescriptors,
   }
@@ -213,7 +219,12 @@ export async function extractStaticEvidenceBatch(
       root: input.root,
       record: evidenceRecord(job),
       match: job.evidence,
-      onlyExtractors: [{ extension: job.extractor.extension.name, extractor: job.extractor.name }],
+      onlyExtractors: [
+        {
+          extension: job.extractor.extension.name,
+          extractor: job.extractor.name,
+        },
+      ],
     }),
   }))
 
@@ -221,7 +232,9 @@ export async function extractStaticEvidenceBatch(
     method: 'extractStaticEvidenceBatch',
     root: input.root,
     results,
-    facts: nativeFinalizeFactsFromExtractionResults(results.map((item) => item.result)),
+    facts: nativeFinalizeFactsFromExtractionResults(
+      results.map((item) => item.result),
+    ),
     diagnostics: [...diagnostics, ...runtime.manifest.diagnostics],
   }
 }
@@ -232,7 +245,9 @@ export async function extractStaticEvidenceBatch(
  * Rules see definitions and relations only after native finalization has
  * performed relation policy validation and canonical edge construction.
  */
-export async function checkStaticRules(input: CheckStaticRulesInput): Promise<CheckStaticRulesResult> {
+export async function checkStaticRules(
+  input: CheckStaticRulesInput,
+): Promise<CheckStaticRulesResult> {
   const { runtime, diagnostics } = await createStaticExtensionHostRuntime(input)
   const ruleResult = runtime.checkRules({
     definitions: input.graph.definitions,
@@ -254,25 +269,39 @@ export async function checkStaticRules(input: CheckStaticRulesInput): Promise<Ch
   }
 }
 
-async function createStaticExtensionHostRuntime(input: StaticExtensionHostRuntimeInput): Promise<{
+async function createStaticExtensionHostRuntime(
+  input: StaticExtensionHostRuntimeInput,
+): Promise<{
   readonly runtime: ReturnType<typeof createIndexerExtensionRuntime>
   readonly diagnostics: readonly IndexDiagnostic[]
 }> {
   const loaded = input.config
-    ? await loadIndexerExtensionReferences({ root: input.root, config: input.config })
+    ? await loadIndexerExtensionReferences({
+        root: input.root,
+        config: input.config,
+      })
     : { extensions: [], diagnostics: [] as readonly IndexDiagnostic[] }
-  const extensions = [...(input.extensions ?? []), ...loaded.extensions.map((entry) => entry.extension)]
+  const extensions = [
+    ...(input.extensions ?? []),
+    ...loaded.extensions.map((entry) => entry.extension),
+  ]
   return {
     runtime: createIndexerExtensionRuntime({ extensions }),
     diagnostics: loaded.diagnostics,
   }
 }
 
-function evidenceRecord(job: StaticExtensionEvidenceJob): StaticSyntaxFileRecord {
+function evidenceRecord(
+  job: StaticExtensionEvidenceJob,
+): StaticSyntaxFileRecord {
   return {
     schemaVersion: 1,
-    frontend: job.frontend ?? { name: 'typescript', version: 'static-extension-host-evidence' },
+    frontend: job.frontend ?? {
+      name: 'typescript',
+      version: 'static-extension-host-evidence',
+    },
     file: job.file,
+    relativePath: job.file,
     sourceHash: job.sourceHash,
     imports: job.imports ?? [],
     matches: [job.evidence],
@@ -286,9 +315,12 @@ function hostNodeReasons(
   diagnostics: readonly IndexDiagnostic[],
 ): readonly StaticExtensionHostNodeReason[] {
   const reasons: StaticExtensionHostNodeReason[] = []
-  if (manifest.staticHost.requiresTypeScriptHostForExtensions) reasons.push('typescript-extension-extractors')
-  if (manifest.staticHost.requiresTypeScriptHostForRules) reasons.push('typescript-rules')
-  if (manifest.staticHost.requiresCompatibilityEvidence) reasons.push('compatibility-evidence')
+  if (manifest.staticHost.requiresTypeScriptHostForExtensions)
+    reasons.push('typescript-extension-extractors')
+  if (manifest.staticHost.requiresTypeScriptHostForRules)
+    reasons.push('typescript-rules')
+  if (manifest.staticHost.requiresCompatibilityEvidence)
+    reasons.push('compatibility-evidence')
   if (diagnostics.length > 0) reasons.push('extension-host-diagnostics')
   return reasons
 }

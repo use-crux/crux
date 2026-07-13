@@ -10,14 +10,22 @@
  * @module
  */
 
-import type { Message } from '../../../generation/messages'
-import type { ContentPart } from '../../../types/content'
-import type { ToolModelOutput } from '../../../types/tool'
-import { contentText } from '../../../content'
-import { toolModelOutputFromMetadata } from '../../tool/emission'
-import type { ToolResultEntry } from '../../types'
-import type { NativeAssistantTurn } from '../types'
-import type { ProviderToolCall, ProviderToolResult, ProviderTranscriptUnit, ToolResultEncodingHelpers } from './units'
+import type { Message } from "../../../generation/messages";
+import type { ContentPart } from "../../../types/content";
+import type { ToolModelOutput } from "../../../types/tool";
+import { contentText } from "../../../content";
+import { toolModelOutputFromMetadata } from "../../tool/emission";
+import type { ToolResultEntry } from "../../types";
+import type { NativeAssistantTurn } from "../types";
+import {
+  assistantContentWithToolCalls,
+  assistantTranscript,
+} from "./canonical-assistant";
+import type {
+  ProviderToolResult,
+  ProviderTranscriptUnit,
+  ToolResultEncodingHelpers,
+} from "./units";
 
 /**
  * Extract neutral transcript units from a canonical Crux transcript.
@@ -30,40 +38,53 @@ import type { ProviderToolCall, ProviderToolResult, ProviderTranscriptUnit, Tool
  * @param messages - Canonical transcript to read.
  * @returns Neutral units in transcript order.
  */
-export function messagesToTranscriptUnits(messages: readonly Message[]): ProviderTranscriptUnit[] {
-  const units: ProviderTranscriptUnit[] = []
-  let pendingResults: ProviderToolResult[] | undefined
+export function messagesToTranscriptUnits(
+  messages: readonly Message[],
+  options: { readonly preserveAssistantReasoning?: boolean } = {},
+): ProviderTranscriptUnit[] {
+  const units: ProviderTranscriptUnit[] = [];
+  let pendingResults: ProviderToolResult[] | undefined;
 
   const flushResults = (): void => {
     if (pendingResults) {
-      units.push({ kind: 'tool-results', results: pendingResults })
-      pendingResults = undefined
+      units.push({ kind: "tool-results", results: pendingResults });
+      pendingResults = undefined;
     }
-  }
+  };
 
   for (const message of messages) {
-    if (message.role === 'tool') {
-      const result = toolResultFromMessage(message)
-      if (result) (pendingResults ??= []).push(result)
-      continue
+    if (message.role === "tool") {
+      const result = toolResultFromMessage(message);
+      if (result) (pendingResults ??= []).push(result);
+      continue;
     }
 
-    flushResults()
+    flushResults();
 
-    if (message.role === 'assistant') {
-      const toolCalls = toolCallsFromMetadata(message.metadata?.toolCalls)
+    if (message.role === "assistant") {
+      const assistant = assistantTranscript(
+        message.content,
+        message.metadata?.toolCalls,
+        options.preserveAssistantReasoning,
+      );
       units.push({
-        kind: 'assistant',
-        content: message.content,
-        ...(toolCalls.length > 0 ? { toolCalls } : {}),
-      })
+        kind: "assistant",
+        content: assistant.content,
+        ...(assistant.toolCalls.length > 0
+          ? { toolCalls: assistant.toolCalls }
+          : {}),
+      });
     } else {
-      units.push({ kind: 'content', role: message.role, content: message.content })
+      units.push({
+        kind: "content",
+        role: message.role,
+        content: message.content,
+      });
     }
   }
 
-  flushResults()
-  return units
+  flushResults();
+  return units;
 }
 
 /**
@@ -76,27 +97,34 @@ export function messagesToTranscriptUnits(messages: readonly Message[]): Provide
  * @param units - Neutral units to materialize.
  * @returns Canonical messages in unit order.
  */
-export function transcriptUnitsToMessages(units: readonly ProviderTranscriptUnit[]): Message[] {
+export function transcriptUnitsToMessages(
+  units: readonly ProviderTranscriptUnit[],
+): Message[] {
   return units.flatMap((unit): Message[] => {
     switch (unit.kind) {
-      case 'content':
-        return [{ role: unit.role, content: unit.content }]
-      case 'assistant':
+      case "content":
+        return [{ role: unit.role, content: unit.content }];
+      case "assistant":
         return [
           {
-            role: 'assistant',
-            content: unit.content,
-            ...(unit.toolCalls && unit.toolCalls.length > 0 ? { metadata: { toolCalls: [...unit.toolCalls] } } : {}),
+            role: "assistant",
+            content: assistantContentWithToolCalls(
+              unit.content,
+              unit.toolCalls,
+            ),
+            ...(unit.toolCalls && unit.toolCalls.length > 0
+              ? { metadata: { toolCalls: [...unit.toolCalls] } }
+              : {}),
           },
-        ]
-      case 'tool-results':
+        ];
+      case "tool-results":
         return unit.results.map((result) => ({
-          role: 'tool',
+          role: "tool",
           content: result.text,
           metadata: toolResultMetadata(result),
-        }))
+        }));
     }
-  })
+  });
 }
 
 /**
@@ -118,28 +146,33 @@ export function appendCanonicalToolRound(
   assistant: NativeAssistantTurn,
   results: readonly ToolResultEntry[],
 ): Message[] {
-  const toolCalls = assistant.toolCalls
+  const toolCalls = assistant.toolCalls;
   return [
     ...history,
     {
-      role: 'assistant',
+      role: "assistant",
       content: assistant.content ?? assistant.text,
       ...(toolCalls && toolCalls.length > 0 ? { metadata: { toolCalls } } : {}),
     },
     ...results.map(
       (result): Message => ({
-        role: 'tool',
-        content: result.content,
+        role: "tool",
+        content:
+          result.modelOutput?.type === "content"
+            ? result.modelOutput.value
+            : result.content,
         metadata: {
           toolCallId: result.toolCallId,
           toolName: result.name,
           modelOutput: result.modelOutput,
           ...(result.isError !== undefined ? { isError: result.isError } : {}),
-          ...(result.modelOutputError !== undefined ? { modelOutputError: result.modelOutputError } : {}),
+          ...(result.modelOutputError !== undefined
+            ? { modelOutputError: result.modelOutputError }
+            : {}),
         },
       }),
     ),
-  ]
+  ];
 }
 
 /**
@@ -154,8 +187,9 @@ export function createToolResultEncodingHelpers(): ToolResultEncodingHelpers {
   return {
     plainText: (result) => result.text,
     contentParts: (result) => contentPartsOf(result.modelOutput),
-    errorFlag: (result) => result.isError === true || isErrorModelOutput(result.modelOutput),
-  }
+    errorFlag: (result) =>
+      result.isError === true || isErrorModelOutput(result.modelOutput),
+  };
 }
 
 /**
@@ -164,48 +198,54 @@ export function createToolResultEncodingHelpers(): ToolResultEncodingHelpers {
  * cannot be correlated on the wire, so it is dropped rather than emitted with a
  * fabricated empty id that would produce invalid provider output.
  */
-function toolResultFromMessage(message: Message): ProviderToolResult | undefined {
-  const metadata = message.metadata
-  const toolCallId = metadata?.toolCallId
-  if (typeof toolCallId !== 'string' || toolCallId === '') return undefined
+function toolResultFromMessage(
+  message: Message,
+): ProviderToolResult | undefined {
+  const metadata = message.metadata;
+  const toolCallId = metadata?.toolCallId;
+  if (typeof toolCallId !== "string" || toolCallId === "") return undefined;
 
-  const modelOutput = toolModelOutputFromMetadata(metadata)
+  const modelOutput = toolModelOutputFromMetadata(metadata);
   return {
     toolCallId,
-    ...(typeof metadata?.toolName === 'string' ? { toolName: metadata.toolName } : {}),
+    ...(typeof metadata?.toolName === "string"
+      ? { toolName: metadata.toolName }
+      : {}),
     text: contentText(message.content),
     ...(modelOutput ? { modelOutput } : {}),
-    ...(typeof metadata?.isError === 'boolean' ? { isError: metadata.isError } : {}),
-    ...(typeof metadata?.modelOutputError === 'string' ? { modelOutputError: metadata.modelOutputError } : {}),
-  }
+    ...(typeof metadata?.isError === "boolean"
+      ? { isError: metadata.isError }
+      : {}),
+    ...(typeof metadata?.modelOutputError === "string"
+      ? { modelOutputError: metadata.modelOutputError }
+      : {}),
+  };
 }
 
-function toolResultMetadata(result: ProviderToolResult): Record<string, unknown> {
+function toolResultMetadata(
+  result: ProviderToolResult,
+): Record<string, unknown> {
   return {
     toolCallId: result.toolCallId,
     ...(result.toolName !== undefined ? { toolName: result.toolName } : {}),
-    ...(result.modelOutput !== undefined ? { modelOutput: result.modelOutput } : {}),
+    ...(result.modelOutput !== undefined
+      ? { modelOutput: result.modelOutput }
+      : {}),
     ...(result.isError !== undefined ? { isError: result.isError } : {}),
-    ...(result.modelOutputError !== undefined ? { modelOutputError: result.modelOutputError } : {}),
-  }
+    ...(result.modelOutputError !== undefined
+      ? { modelOutputError: result.modelOutputError }
+      : {}),
+  };
 }
 
-function toolCallsFromMetadata(value: unknown): ProviderToolCall[] {
-  if (!Array.isArray(value)) return []
-  return value.flatMap((item): ProviderToolCall[] => {
-    if (!isRecord(item) || typeof item.id !== 'string' || typeof item.name !== 'string') return []
-    return [{ id: item.id, name: item.name, args: item.args }]
-  })
-}
-
-function contentPartsOf(modelOutput: ToolModelOutput | undefined): readonly ContentPart[] | undefined {
-  return modelOutput?.type === 'content' ? modelOutput.value : undefined
+function contentPartsOf(
+  modelOutput: ToolModelOutput | undefined,
+): readonly ContentPart[] | undefined {
+  return modelOutput?.type === "content" ? modelOutput.value : undefined;
 }
 
 function isErrorModelOutput(modelOutput: ToolModelOutput | undefined): boolean {
-  return modelOutput?.type === 'error-text' || modelOutput?.type === 'error-json'
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return (
+    modelOutput?.type === "error-text" || modelOutput?.type === "error-json"
+  );
 }

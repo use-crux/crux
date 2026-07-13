@@ -245,6 +245,14 @@ export interface ObserveSpanOptions<
    * @default true
    */
   implicitRun?: boolean
+  /**
+   * Optional predetermined span id for durable correlation.
+   *
+   * Named defer stages a JSON-safe `scheduledSpanId` before wake so a later
+   * process can emit a `triggered` edge to the acceptance span. Callers must
+   * supply a valid Crux span id (16 lowercase hex characters).
+   */
+  spanId?: CruxSpanId
 }
 
 export interface ObserveEventOptions {
@@ -1215,7 +1223,7 @@ export const observe = {
       )
     }
 
-    const spanId = createCruxSpanId()
+    const spanId = options.spanId ?? createCruxSpanId()
     const parentSpanId = context.spanStack[context.spanStack.length - 1] ?? null
     const spanContext: ObservabilityContext = {
       ...context,

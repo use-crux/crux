@@ -80,7 +80,7 @@ describe('canonical quality, scoring, and citation observability', () => {
     const hits: RetrieverHit[] = [
       {
         namespace: 'docs',
-        sourceId: 'refund',
+        source: { id: 'refund' },
         chunkId: 'policy',
         content: 'Refunds are available within 14 days.',
         score: 0.94,

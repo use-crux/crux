@@ -64,8 +64,11 @@ export function primitiveFamily(primitive: string | undefined): PrimitiveFamily 
   if (p === 'tool.approval' || p.startsWith('approval')) return 'routing'
   if (hasPrefix(p, ['routing.', 'fallback.'])) return 'routing'
   if (hasPrefix(p, ['agent.', 'delegate.'])) return 'agents'
-  if (hasPrefix(p, ['composition.', 'flow'])) return 'orchestration'
+  if (hasPrefix(p, ['composition.', 'flow', 'defer.'])) return 'orchestration'
+  if (p === 'defer') return 'orchestration'
   if (hasPrefix(p, ['generation.', 'compaction.'])) return 'generation'
+  // Multimodal completed operations read as generation-adjacent (warn tone).
+  if (hasPrefix(p, ['media.'])) return 'generation'
   if (hasPrefix(p, ['retrieval.', 'embedding.', 'tool.', 'cache.'])) return 'capabilities'
   if (
     p === 'operation' ||
@@ -119,6 +122,8 @@ const TAG_LABEL_OVERRIDES: Record<string, string> = {
   'composition.parallel': 'parallel',
   'composition.consensus': 'consensus',
   'tool.approval': 'approval',
+  'defer.scheduled': 'scheduled',
+  'defer.run': 'deferred',
 }
 
 export function primitiveTagLabel(primitive: string | undefined): string {

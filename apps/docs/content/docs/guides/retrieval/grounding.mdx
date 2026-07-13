@@ -131,7 +131,7 @@ const groundedDocs = grounding({
   render: ({ hits }) =>
     hits
       .map((hit, index) => {
-        const label = `${hit.sourceId}/${hit.chunkId}`
+        const label = `${hit.source.id}/${hit.chunkId}`
         return `[${index + 1}] ${label}\n${hit.content}`
       })
       .join('\n\n'),

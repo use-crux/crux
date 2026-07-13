@@ -35,13 +35,13 @@ files throw. `undo` reverts the last content change without rewriting history.
 
 Versioning is on by default with unlimited retention. Bound it per file with
 `versioning.maxVersions`, which garbage collects the oldest snapshots and their
-blobs:
+assets:
 
 ```ts
 const ws = workspace({
   id: "research",
   namespace,
-  storage: storage({ records, blobs }),
+  storage: storage({ records, assets }),
   versioning: { maxVersions: 20 },
 });
 ```

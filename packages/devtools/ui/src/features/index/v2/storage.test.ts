@@ -60,6 +60,7 @@ describe('index storage view model', () => {
             capabilities: {
               record: { ttl: 'lazy', filter: 'scan', watch: true, batch: false },
               vector: { dense: true, sparse: false, hybrid: false, fusion: [], filter: 'post' },
+              asset: { multipart: false, signedUrls: false },
             },
             usedBy: [
               {
@@ -137,6 +138,7 @@ describe('index storage view model', () => {
     const bundle = inventory.find((item) => item.id === 'storage.bundle:appStorage')
     expect(bundle?.components.vectorStoreId).toBe('storage.vectorStore:vectors')
     expect(bundle?.capabilities?.vector?.filter).toBe('post')
+    expect(bundle?.capabilities).not.toHaveProperty('asset')
     expect(bundle?.usedBy.map((use) => use.definitionId)).toEqual(['rag.retriever:docs'])
     expect(storageWarningsForDef(idx.byId('storage.bundle:appStorage')!)).toEqual([
       expect.objectContaining({ code: 'storage.vector_filter_not_prefiltered' }),

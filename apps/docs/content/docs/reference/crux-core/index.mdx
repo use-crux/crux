@@ -39,7 +39,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   />
   <Card
     title="Multimodal Content"
-    description="ContentPart, builders, text projection, and unsupported-content behavior."
+    description="ContentPart, media sources, text projection, and media errors."
     href="/docs/reference/crux-core/multimodal"
   />
   <Card
@@ -124,7 +124,7 @@ The public type surface is kept compatible with TypeScript 5.5 so projects do no
   />
   <Card
     title="Storage"
-    description="RecordStore, VectorStore, BlobStore, and storage bundles."
+    description="RecordStore, VectorStore, AssetStore, and storage bundles."
     href="/docs/reference/crux-core/storage"
   />
   <Card
@@ -161,9 +161,7 @@ import {
   when,
   match,
   contentText,
-  filePart,
   hasMediaParts,
-  imagePart,
   messageText,
   textPart,
 } from "@use-crux/core";
@@ -725,4 +723,4 @@ import type {
 
 - Guide: [Foundations](/docs/foundations) — mental model and primitives tour
 - Reference: [Adapters](/docs/reference/adapters) — execution layer
-- Reference: [Storage](/docs/reference/storage) — persistent RecordStore, VectorStore, and BlobStore implementations
+- Reference: [Storage](/docs/reference/storage) — persistent RecordStore, VectorStore, and AssetStore implementations

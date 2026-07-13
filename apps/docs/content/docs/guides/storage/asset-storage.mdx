@@ -1,0 +1,210 @@
+---
+title: AssetStore
+description: Store binary and oversized workspace files with asset storage.
+---
+
+`AssetStore` stores bytes for [`workspace()`](/docs/guides/workspaces).
+
+Use it for generated PDFs, images, CSVs, spreadsheets, uploaded files, and large text that should not live inside a JSON record.
+
+```ts
+import { storage } from "@use-crux/core/storage";
+import { workspace } from "@use-crux/core/workspace";
+
+const files = workspace({
+  id: "thread-files",
+  namespace: threadId,
+  storage: storage({ records, assets }),
+});
+```
+
+The workspace stores file metadata in `RecordStore`: path, MIME type, size, timestamps, preview, and asset URI. The asset store keeps the actual bytes.
+
+## Bundled Asset Stores
+
+Use `inMemoryAssetStore()` for tests and demos:
+
+```ts
+import { inMemoryAssetStore } from "@use-crux/core/storage";
+
+const assets = inMemoryAssetStore();
+```
+
+Use `convexAssetStore()` in Convex apps. See the [Convex guide](/docs/guides/convex) for the complete workspace wiring.
+
+## Read And Write Behavior
+
+Small text and JSON can be stored inline:
+
+```ts
+await files.write("/workspace/notes.md", "# Notes");
+```
+
+Binary files go to asset storage:
+
+```ts
+await files.write("/outputs/report.pdf", pdfBytes, {
+  mimeType: "application/pdf",
+});
+```
+
+Reading binary files returns metadata and a URI, not raw bytes in the prompt:
+
+```ts
+const file = await files.read("/outputs/report.pdf");
+
+if (file.kind === "binary") {
+  console.log(file.uri, file.mimeType, file.size);
+}
+```
+
+That keeps model context small and lets your app or devtools fetch the actual bytes when needed.
+
+## Interface
+
+```ts
+import type {
+  Asset,
+  AssetRef,
+  AssetStore,
+  StoredAsset,
+} from "@use-crux/core/storage";
+
+const assets: AssetStore = {
+  async put(asset: Asset, options): Promise<StoredAsset> {
+    if (asset.type !== "data") {
+      throw new Error("This example only stores data assets");
+    }
+    // store the asset using options?.key when your backend supports stable keys
+    const ref: AssetRef = {
+      uri: `s3://bucket/${options?.key ?? crypto.randomUUID()}`,
+    };
+    const bytes = await dataAssetBytes(asset.data);
+    await saveBytes(ref.uri, bytes, asset.mediaType);
+    return {
+      type: "data",
+      data: new Uint8Array(bytes),
+      mediaType: asset.mediaType,
+      size: asset.size ?? bytes.byteLength,
+      ref,
+    };
+  },
+
+  async get(ref): Promise<StoredAsset> {
+    // return the original asset plus the same ref
+    return {
+      type: "data",
+      data: await loadBytes(ref.uri),
+      mediaType: "application/octet-stream",
+      ref,
+    };
+  },
+
+  async delete(ref) {
+    // hard delete
+    await deleteBytes(ref.uri);
+  },
+};
+
+async function dataAssetBytes(data: Uint8Array | Blob): Promise<Uint8Array> {
+  if (data instanceof Uint8Array) return new Uint8Array(data);
+  return new Uint8Array(await data.arrayBuffer());
+}
+```
+
+`put()` receives a model-usable asset plus optional storage-only `key` and `metadata`. Return a stable ref URI such as `convex://...`, `s3://...`, `r2://...`, or `file://...`.
+
+## Custom S3/R2/GCS Store
+
+Use this shape for S3, R2, GCS, Azure Asset Storage, local disk, or an app-owned file service:
+
+```ts
+import type { Asset, AssetStore, StoredAsset } from "@use-crux/core/storage";
+
+export function s3AssetStore(bucket: string): AssetStore {
+  return {
+    async put(asset: Asset, options): Promise<StoredAsset> {
+      if (asset.type !== "data")
+        throw new Error("S3 example only stores data assets");
+      const key = options?.key ?? crypto.randomUUID();
+      const bytes = await dataAssetBytes(asset.data);
+
+      await s3.putObject({
+        Bucket: bucket,
+        Key: key,
+        Body: bytes,
+        ContentType: asset.mediaType,
+      });
+
+      return {
+        type: "data",
+        data: new Uint8Array(bytes),
+        mediaType: asset.mediaType,
+        size: asset.size ?? bytes.byteLength,
+        ref: { uri: `s3://${bucket}/${key}` },
+      };
+    },
+
+    async get(ref): Promise<StoredAsset> {
+      const { bucket, key } = parseS3Uri(ref.uri);
+      const object = await s3.getObject({ Bucket: bucket, Key: key });
+
+      return {
+        type: "data",
+        data: await object.Body.transformToByteArray(),
+        mediaType: object.ContentType ?? "application/octet-stream",
+        ref,
+      };
+    },
+
+    async delete(ref) {
+      const { bucket, key } = parseS3Uri(ref.uri);
+      await s3.deleteObject({ Bucket: bucket, Key: key });
+    },
+  };
+}
+
+async function dataAssetBytes(data: Uint8Array | Blob): Promise<Uint8Array> {
+  if (data instanceof Uint8Array) return new Uint8Array(data);
+  return new Uint8Array(await data.arrayBuffer());
+}
+```
+
+Keep these rules:
+
+1. Return a stable `ref` from `put()`.
+2. Make `get(ref)` return a usable `StoredAsset`.
+3. Preserve `mediaType`.
+4. Implement `delete(ref)`; beta asset stores require a lifecycle delete operation.
+5. Do not expose provider credentials or private object-store locators to the model.
+
+## Security Notes
+
+Asset URIs are application references, not automatic public URLs. Prefer stable internal URIs such as `convex://...`, `s3://...`, or `r2://...`.
+
+If your app needs a public download URL, generate it in app code after authorization. Do not make URL generation part of the public `AssetStore` contract.
+
+## Cookbook
+
+<Cards>
+  <Card
+    title="Workspace files"
+    description="Use a workspace for notes, generated outputs, and approval-gated writes."
+    href="/docs/cookbook/basics/workspace-files"
+  />
+  <Card
+    title="Postgres storage"
+    description="A bytea-backed AssetStore example for modest files."
+    href="/docs/cookbook/basics/postgres-data-store"
+  />
+  <Card
+    title="Workspaces guide"
+    description="Understand mounts, file tools, prefixes, and devtools visibility."
+    href="/docs/guides/workspaces"
+  />
+  <Card
+    title="RecordStore"
+    description="Understand JSON record storage and custom database adapters."
+    href="/docs/guides/storage/crux-store"
+  />
+</Cards>

@@ -18,10 +18,10 @@ pub(crate) fn storage_factory_descriptor(name: &str) -> Option<StorageFactoryDes
             backend: "inMemoryVectorStore",
             capabilities: Some(in_memory_vector_capabilities()),
         },
-        "inMemoryBlobStore" => StorageFactoryDescriptor {
-            kind: "storage.blobStore",
-            backend: "inMemoryBlobStore",
-            capabilities: Some(in_memory_blob_capabilities()),
+        "inMemoryAssetStore" => StorageFactoryDescriptor {
+            kind: "storage.assetStore",
+            backend: "inMemoryAssetStore",
+            capabilities: None,
         },
         "inMemoryStorage" => StorageFactoryDescriptor {
             kind: "storage.bundle",
@@ -29,7 +29,6 @@ pub(crate) fn storage_factory_descriptor(name: &str) -> Option<StorageFactoryDes
             capabilities: Some(json!({
                 "record": in_memory_record_capabilities()["record"],
                 "vector": in_memory_vector_capabilities()["vector"],
-                "blob": in_memory_blob_capabilities()["blob"],
             })),
         },
         "convexRecordStore" => StorageFactoryDescriptor {
@@ -53,10 +52,10 @@ pub(crate) fn storage_factory_descriptor(name: &str) -> Option<StorageFactoryDes
                 }
             })),
         },
-        "convexWorkspaceBlobStore" => StorageFactoryDescriptor {
-            kind: "storage.blobStore",
-            backend: "convexWorkspaceBlobStore",
-            capabilities: Some(json!({ "blob": { "multipart": false, "signedUrls": false } })),
+        "convexAssetStore" => StorageFactoryDescriptor {
+            kind: "storage.assetStore",
+            backend: "convexAssetStore",
+            capabilities: None,
         },
         "convexStorage" => StorageFactoryDescriptor {
             kind: "storage.bundle",
@@ -70,8 +69,7 @@ pub(crate) fn storage_factory_descriptor(name: &str) -> Option<StorageFactoryDes
                     "fusion": [],
                     "filter": "post",
                     "consistency": "strong"
-                },
-                "blob": { "multipart": false, "signedUrls": false },
+                }
             })),
         },
         "upstashRedisRecordStore" => StorageFactoryDescriptor {
@@ -115,8 +113,4 @@ fn in_memory_vector_capabilities() -> Value {
             "consistency": "strong"
         }
     })
-}
-
-fn in_memory_blob_capabilities() -> Value {
-    json!({ "blob": { "multipart": false, "signedUrls": false } })
 }

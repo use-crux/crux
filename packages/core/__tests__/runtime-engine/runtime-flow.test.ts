@@ -57,7 +57,7 @@ describe('runtime-backed flows', () => {
       suspended.flowId as FlowId,
       { namespace: 'tenant-a' },
     )
-    const deferredWorkId = snapshot?.scheduledEffects?.['defer:1']?.workId
+    const deferredWorkId = snapshot?.scheduledWork?.['defer:1']?.workId
     expect(deferredWorkId).toEqual(expect.any(String))
     expect(snapshot?.continuation).toEqual(
       expect.objectContaining({
@@ -76,7 +76,7 @@ describe('runtime-backed flows', () => {
       }),
     ).resolves.toMatchObject({
       status: 'completed',
-      scheduledEffects: {
+      scheduledWork: {
         'defer:1': { workId: deferredWorkId },
       },
     })
@@ -115,7 +115,7 @@ describe('runtime-backed flows', () => {
       suspended.flowId as FlowId,
       { namespace: 'tenant-a' },
     )
-    expect(snapshot?.scheduledEffects?.['after:1']?.timerId).toEqual(expect.any(String))
+    expect(snapshot?.scheduledWork?.['after:1']?.timerId).toEqual(expect.any(String))
 
     await resolvedRuntime.maintenance.tick({
       now: new Date(Date.now() + 1_100),
